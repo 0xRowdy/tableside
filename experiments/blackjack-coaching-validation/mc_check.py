@@ -55,7 +55,7 @@ def total_of(cards):
 
 
 def run(args_tuple):
-    (cont, pairs, h17, c1, c2, up, action, resplit, trials, seed) = args_tuple
+    (cont, pairs, h17, c1, c2, up, action, resplit, trials, seed, max_hands) = args_tuple
     rng = random.Random(seed)
     base = [c for c in range(1, 11) for _ in range(96 if c == 10 else 24)]
     for c in (c1, c2, up):
@@ -92,7 +92,7 @@ def run(args_tuple):
                 else:
                     is_pair = two and cards[0] == cards[1]
                     act = None
-                    if is_pair and len(hands) < 4 and not (h[2] and cards[0] == 1):
+                    if is_pair and len(hands) < max_hands and not (h[2] and cards[0] == 1):
                         if resplit == "always" or (resplit == "basic" and pairs[(cards[0], up)] == "P"):
                             act = "P"
                     if act is None:
@@ -154,12 +154,15 @@ def main():
     ap.add_argument("--trials", type=int, default=1000000)
     ap.add_argument("--seed", type=int, default=1)
     ap.add_argument("--workers", type=int, default=8)
+    ap.add_argument("--max-hands", type=int, default=4,
+                    help="maximum number of split hands (launch rule: 4); larger values only for diagnosis")
     args = ap.parse_args()
     cont = load_continuation(args.continuation)
     pairs = load_pairs(args.basic)
     c1, c2 = (int(x) for x in args.hand.split(","))
     per = args.trials // args.workers
-    jobs = [(cont, pairs, bool(args.h17), c1, c2, args.up, args.action, args.resplit, per, args.seed * 1000 + k)
+    jobs = [(cont, pairs, bool(args.h17), c1, c2, args.up, args.action, args.resplit, per, args.seed * 1000 + k,
+             args.max_hands)
             for k in range(args.workers)]
     with Pool(args.workers) as pool:
         res = pool.map(run, jobs)
@@ -169,7 +172,8 @@ def main():
     mean = total / kept
     var = total_sq / kept - mean * mean
     se = (var / kept) ** 0.5
-    print(f"{'H17' if args.h17 else 'S17'} {c1},{c2} vs {args.up} action {args.action} resplit {args.resplit}: "
+    print(f"{'H17' if args.h17 else 'S17'} {c1},{c2} vs {args.up} action {args.action} resplit {args.resplit}"
+          f"{'' if args.max_hands == 4 else f' max-hands {args.max_hands}'}: "
           f"mean {mean:+.6f} se {se:.6f} kept {kept} of {per * args.workers}")
 
 

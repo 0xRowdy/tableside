@@ -4,23 +4,23 @@
 # taught total-dependent continuation "tdb"), then aggregate by integer true
 # count under the accepted convention.
 #
-#   bash run_indices.sh <states.json> <tag> [modes]      e.g. p75_n0 "cdz tdb"
+#   bash run_indices.sh <states.json> <tag> [modes] [rules]   e.g. p75_n0 "cdz tdb" "S17 H17"
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 WORK=${WORK:-/tmp/bjwork}
 WORKERS=${WORKERS:-8}
-STATES="$1"; TAG="$2"; MODES="${3:-cdz tdb}"
+STATES="$1"; TAG="$2"; MODES="${3:-cdz tdb}"; RULES="${4:-S17 H17}"
 python3 "$HERE/evaluate_indices.py" prepare "$STATES" "$WORK/comps_$TAG.txt" "$WORK/hands.txt"
 for MODE in $MODES; do
-  if [ "$MODE" = tdb ]; then
-    python3 "$HERE/run_driver_parallel.py" "$WORK/farmer_driver" "$WORK/comps_$TAG.txt" "$WORK/idx_${TAG}_S17_tdb.csv" "$WORKERS" --mode tdb --table "$HERE/continuation_S17.csv" --hands "$WORK/hands.txt"
-    python3 "$HERE/run_driver_parallel.py" "$WORK/farmer_driver" "$WORK/comps_$TAG.txt" "$WORK/idx_${TAG}_H17_tdb.csv" "$WORKERS" --mode tdb --table "$HERE/continuation_H17.csv" --h17 --hands "$WORK/hands.txt"
-  else
-    python3 "$HERE/run_driver_parallel.py" "$WORK/farmer_driver" "$WORK/comps_$TAG.txt" "$WORK/idx_${TAG}_S17_$MODE.csv" "$WORKERS" --mode "$MODE" --hands "$WORK/hands.txt"
-    python3 "$HERE/run_driver_parallel.py" "$WORK/farmer_driver" "$WORK/comps_$TAG.txt" "$WORK/idx_${TAG}_H17_$MODE.csv" "$WORKERS" --mode "$MODE" --h17 --hands "$WORK/hands.txt"
-  fi
-  python3 "$HERE/evaluate_indices.py" aggregate "$STATES" "$WORK/idx_${TAG}_S17_$MODE.csv" S17 "$HERE/indices_${TAG}_S17_$MODE" > "$WORK/agg_${TAG}_S17_$MODE.txt"
-  python3 "$HERE/evaluate_indices.py" aggregate "$STATES" "$WORK/idx_${TAG}_H17_$MODE.csv" H17 "$HERE/indices_${TAG}_H17_$MODE" > "$WORK/agg_${TAG}_H17_$MODE.txt"
+  for R in $RULES; do
+    if [ "$R" = H17 ]; then H17FLAG=--h17; else H17FLAG=; fi
+    if [ "$MODE" = tdb ]; then
+      python3 "$HERE/run_driver_parallel.py" "$WORK/farmer_driver" "$WORK/comps_$TAG.txt" "$WORK/idx_${TAG}_${R}_tdb.csv" "$WORKERS" --mode tdb --table "$HERE/continuation_$R.csv" $H17FLAG --hands "$WORK/hands.txt"
+    else
+      python3 "$HERE/run_driver_parallel.py" "$WORK/farmer_driver" "$WORK/comps_$TAG.txt" "$WORK/idx_${TAG}_${R}_$MODE.csv" "$WORKERS" --mode "$MODE" $H17FLAG --hands "$WORK/hands.txt"
+    fi
+    python3 "$HERE/evaluate_indices.py" aggregate "$STATES" "$WORK/idx_${TAG}_${R}_$MODE.csv" "$R" "$HERE/indices_${TAG}_${R}_$MODE" > "$WORK/agg_${TAG}_${R}_$MODE.txt"
+  done
 done
 python3 "$HERE/evaluate_indices.py" insurance "$STATES" ALL "$HERE/indices_${TAG}" > "$WORK/agg_${TAG}_insurance.txt"
 echo "indices done for $TAG"

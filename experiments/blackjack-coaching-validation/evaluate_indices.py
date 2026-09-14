@@ -37,6 +37,7 @@ import sys
 from collections import defaultdict
 
 TAG = {1: -1, 2: 1, 3: 1, 4: 1, 5: 1, 6: 1, 7: 0, 8: 0, 9: 0, 10: -1}
+TOL = 0.001  # proposed absolute tolerance, expected net return per original bet
 SIT_HARD = {
     16: [(10, 6), (9, 7)],
     15: [(10, 5), (9, 6), (8, 7)],
@@ -209,17 +210,34 @@ def aggregate(states_path, driver_path, rules, out_prefix, min_n=200):
             means[tc] = (m, se, cnt, w)
             detail_rows.append([rules, cur, name, tc, f"{m:+.6f}", f"{se:.6f}", cnt, f"{w:.1f}"])
         usable = [tc for tc in sorted(means) if means[tc][2] >= min_n]
-        threshold = None
+        threshold = threshold_tol = None
         if usable:
-            # smallest t such that all usable bins >= t have mean >= 0
+            # Raw rule: smallest t such that all usable bins >= t have mean >= 0.
             for t in usable:
                 if all(means[u][0] >= 0 for u in usable if u >= t):
                     threshold = t
+                    break
+            # Tolerance rule (proposal): a bin is decisive for the deviation
+            # only if its mean advantage exceeds max(TOL, 2*SE); decisive
+            # against it if below -max(TOL, 2*SE); otherwise a tie, resolved
+            # toward the basic action.  Threshold = smallest t whose bin is
+            # decisive for the deviation with no decisive-against bin above.
+            def cls(u):
+                m, se, _, _ = means[u]
+                lim = max(TOL, 2 * se) if se == se else TOL
+                return 1 if m > lim else -1 if m < -lim else 0
+            for t in usable:
+                if cls(t) == 1 and all(cls(u) != -1 for u in usable if u > t):
+                    threshold_tol = t
                     break
             if threshold is not None and threshold == usable[0]:
                 threshold = f"<={threshold}"  # deviation preferred at every supported bin
             elif threshold is None:
                 threshold = f">{usable[-1]}"
+            if threshold_tol is not None and threshold_tol == usable[0]:
+                threshold_tol = f"<={threshold_tol}"
+            elif threshold_tol is None:
+                threshold_tol = f">{usable[-1]}"
         # sign breakdown for bins -1..1
         signs = []
         for tc in (-1, 0, 1):
@@ -227,17 +245,20 @@ def aggregate(states_path, driver_path, rules, out_prefix, min_n=200):
                 sb = sign_bins.get((tc, s))
                 if sb and sb[2] >= 20:
                     signs.append(f"tc{tc:+d}/rc{'-0+'[s + 1]}:{sb[1] / sb[0]:+.4f}(n={sb[2]})")
-        results.append([rules, cur, name, dev, alt, threshold, " ".join(signs)])
+        near = " ".join(f"{u:+d}:{means[u][0]:+.4f}±{means[u][1]:.4f}" for u in usable
+                        if isinstance(threshold_tol, int) and abs(u - threshold_tol) <= 1)
+        results.append([rules, cur, name, dev, alt, threshold, threshold_tol, near, " ".join(signs)])
     with open(out_prefix + "_bins.csv", "w", newline="") as f:
         w = csv.writer(f)
-        w.writerow(["rules", "curriculum", "situation", "tc", "mean_diff", "se", "n", "weight"])
+        w.writerow(["rules", "curriculum", "situation", "tc", "mean_diff", "se", "n_states", "weight"])
         w.writerows(detail_rows)
     with open(out_prefix + "_thresholds.csv", "w", newline="") as f:
         w = csv.writer(f)
-        w.writerow(["rules", "curriculum", "situation", "deviation", "alternative", "threshold", "rc_sign_breakdown"])
+        w.writerow(["rules", "curriculum", "situation", "deviation", "alternative", "threshold_raw",
+                    "threshold_tolerance", "bins_near_threshold", "rc_sign_breakdown"])
         w.writerows(results)
     for r in results:
-        print(f"{r[0]} {r[1]:4s} {r[2]:22s} {str(r[5]):>5s}   {r[6]}")
+        print(f"{r[0]} {r[1]:4s} {r[2]:22s} raw {str(r[5]):>5s} tol {str(r[6]):>5s}  {r[7]}  {r[8]}")
 
 
 def insurance(states_path, rules, out_prefix, min_n=200):
