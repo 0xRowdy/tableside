@@ -1,0 +1,88 @@
+source,rules,situation,published,meaning,count_convention_stated
+Wizard/Schlesinger,S17 (six decks; simulation allowed resplit aces),Insurance,+3,take insurance if TC >= 3,"divide RC by decks remaining; example 7/4=1.75 rounded to 2; simulation rounded decks to nearest half deck"
+Wizard/Schlesinger,S17,16 vs 10,+0,stand if TC >= 0 else hit,same
+Wizard/Schlesinger,S17,15 vs 10,+4,stand if TC >= 4 else hit,same
+Wizard/Schlesinger,S17,"T,T vs 5",+5,split if TC >= 5 else stand,same
+Wizard/Schlesinger,S17,"T,T vs 6",+4,split if TC >= 4 else stand,same
+Wizard/Schlesinger,S17,10 vs 10,+4,double if TC >= 4 else hit,same
+Wizard/Schlesinger,S17,12 vs 3,+2,stand if TC >= 2 else hit,same
+Wizard/Schlesinger,S17,12 vs 2,+3,stand if TC >= 3 else hit,same
+Wizard/Schlesinger,S17,11 vs A,+1,double if TC >= 1 else hit,same
+Wizard/Schlesinger,S17,9 vs 2,+1,double if TC >= 1 else hit,same
+Wizard/Schlesinger,S17,10 vs A,+4,double if TC >= 4 else hit,same
+Wizard/Schlesinger,S17,9 vs 7,+3,double if TC >= 3 else hit,same
+Wizard/Schlesinger,S17,16 vs 9,+5,stand if TC >= 5 else hit,same
+Wizard/Schlesinger,S17,13 vs 2,-1,stand if TC >= -1 else hit,same
+Wizard/Schlesinger,S17,12 vs 4,0,stand if TC >= 0 else hit,same
+Wizard/Schlesinger,S17,12 vs 5,-2,stand if TC >= -2 else hit,same
+Wizard/Schlesinger,S17,12 vs 6,-1,stand if TC >= -1 else hit,same
+Wizard/Schlesinger,S17,13 vs 3,-2,stand if TC >= -2 else hit,same
+Wizard/Schlesinger,S17,14 vs 10 surrender,+3,surrender if TC >= 3,same
+Wizard/Schlesinger,S17,15 vs 10 surrender,+0,surrender if TC >= 0,same
+Wizard/Schlesinger,S17,15 vs 9 surrender,+2,surrender if TC >= 2,same
+Wizard/Schlesinger,S17,15 vs A surrender,+1,surrender if TC >= 1,same
+BJA 2018,S17,Insurance,3+,take at TC >= 3,"tutorial example -7/2 shown as -3 (consistent with truncation); '0+'/'0-' refer to running-count sign"
+BJA 2018,S17,16 vs 10,0+,stand at any positive running count (RC > 0); base hit,same
+BJA 2018,S17,16 vs 9,4+,stand at TC >= 4; base hit,same
+BJA 2018,S17,16 vs A,H,no index (hit),same
+BJA 2018,S17,15 vs 10,4+,stand at TC >= 4; base hit,same
+BJA 2018,S17,15 vs A,H,no index (hit),same
+BJA 2018,S17,"T,T vs 4",6+,split at TC >= 6,same
+BJA 2018,S17,"T,T vs 5",5+,split at TC >= 5,same
+BJA 2018,S17,"T,T vs 6",4+,split at TC >= 4,same
+BJA 2018,S17,10 vs 10,4+,double at TC >= 4; base hit,same
+BJA 2018,S17,10 vs A,4+,double at TC >= 4; base hit,same
+BJA 2018,S17,11 vs A,1+,double at TC >= 1; base hit,same
+BJA 2018,S17,9 vs 2,1+,double at TC >= 1; base hit,same
+BJA 2018,S17,9 vs 7,3+,double at TC >= 3; base hit,same
+BJA 2018,S17,8 vs 6,2+,double at TC >= 2; base hit,same
+BJA 2018,S17,12 vs 2,3+,stand at TC >= 3; base hit,same
+BJA 2018,S17,12 vs 3,2+,stand at TC >= 2; base hit,same
+BJA 2018,S17,12 vs 4,0-,hit at any negative running count (RC < 0); base stand,same
+BJA 2018,S17,12 vs 5,S,no index (stand),same
+BJA 2018,S17,12 vs 6,S,no index (stand),same
+BJA 2018,S17,13 vs 2,-1-,hit at TC <= -1; base stand,same
+BJA 2018,S17,13 vs 3,S,no index (stand),same
+BJA 2018,S17,"A,8 vs 4",3+,double at TC >= 3; base stand,same
+BJA 2018,S17,"A,8 vs 5",1+,double at TC >= 1; base stand,same
+BJA 2018,S17,"A,8 vs 6",1+,double at TC >= 1; base stand,same
+BJA 2018,S17,"A,6 vs 2",1+,double at TC >= 1; base hit,same
+BJA 2018,S17,16 vs 8 surrender,4+,surrender at TC >= 4,same
+BJA 2018,S17,16 vs 9 surrender,-1-,do not surrender at TC <= -1; base surrender,same
+BJA 2018,S17,16 vs 10 surrender,SUR,always surrender,same
+BJA 2018,S17,16 vs A surrender,SUR,always surrender,same
+BJA 2018,S17,15 vs 9 surrender,2+,surrender at TC >= 2,same
+BJA 2018,S17,15 vs 10 surrender,0-,do not surrender at any negative running count; base surrender,same
+BJA 2018,S17,15 vs A surrender,2+,surrender at TC >= 2,same
+BJA 2018,S17,14 vs 10 surrender,(none),not on chart,same
+BJA 2018,H17,16 vs 10,0+,stand at RC > 0; base hit,same
+BJA 2018,H17,16 vs 9,4+,stand at TC >= 4,same
+BJA 2018,H17,16 vs A,3+,stand at TC >= 3; base hit,same
+BJA 2018,H17,15 vs 10,4+,stand at TC >= 4,same
+BJA 2018,H17,15 vs A,5+,stand at TC >= 5; base hit,same
+BJA 2018,H17,"T,T vs 4",6+,split at TC >= 6,same
+BJA 2018,H17,"T,T vs 5",5+,split at TC >= 5,same
+BJA 2018,H17,"T,T vs 6",4+,split at TC >= 4,same
+BJA 2018,H17,10 vs 10,4+,double at TC >= 4,same
+BJA 2018,H17,10 vs A,3+,double at TC >= 3,same
+BJA 2018,H17,11 vs A,D,basic double (no index),same
+BJA 2018,H17,9 vs 2,1+,double at TC >= 1,same
+BJA 2018,H17,9 vs 7,3+,double at TC >= 3,same
+BJA 2018,H17,8 vs 6,2+,double at TC >= 2,same
+BJA 2018,H17,12 vs 2,3+,stand at TC >= 3,same
+BJA 2018,H17,12 vs 3,2+,stand at TC >= 2,same
+BJA 2018,H17,12 vs 4,0-,hit at RC < 0; base stand,same
+BJA 2018,H17,13 vs 2,-1-,hit at TC <= -1; base stand,same
+BJA 2018,H17,"A,8 vs 4",3+,double at TC >= 3; base stand,same
+BJA 2018,H17,"A,8 vs 5",1+,double at TC >= 1; base stand,same
+BJA 2018,H17,"A,8 vs 6",0-,stand at RC < 0; base double (H17 basic doubles soft 19 vs 6),same
+BJA 2018,H17,"A,6 vs 2",1+,double at TC >= 1,same
+BJA 2018,H17,16 vs 8 surrender,4+,surrender at TC >= 4,same
+BJA 2018,H17,16 vs 9 surrender,-1-,do not surrender at TC <= -1,same
+BJA 2018,H17,16 vs 10 surrender,SUR,always surrender,same
+BJA 2018,H17,16 vs A surrender,SUR,always surrender,same
+BJA 2018,H17,15 vs 9 surrender,2+,surrender at TC >= 2,same
+BJA 2018,H17,15 vs 10 surrender,0-,do not surrender at RC < 0,same
+BJA 2018,H17,15 vs A surrender,-1+,surrender at TC >= -1,same
+BJA 2018,H17,17 vs A surrender,SUR,always surrender,same
+BJA 2018,H17,"8,8 vs A",Y,split (no surrender shown),same
