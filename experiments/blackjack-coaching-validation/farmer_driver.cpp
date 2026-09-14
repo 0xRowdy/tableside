@@ -33,6 +33,9 @@
 //                    is hard|soft, action/fallback in {S,H,D}.
 //   --hands FILE     optional list of "c1 c2 up" triples to print instead of
 //                    every hand (still one full calculator build per shoe).
+//   --multihands FILE  optional list of "up c1 c2 c3 ..." lines (three or
+//                    more player cards); prints id,c1-c2-c3...,up,stand,hit
+//                    (double is not offered on three or more cards).
 //   --nodas          disable doubling after splitting (used only to compare
 //                    with the comparator's DAS=No column; launch rules use DAS)
 //   --dealer         reserved; currently prints nothing extra.
@@ -115,7 +118,7 @@ private:
 
 int main(int argc, char **argv) {
     bool h17 = false, printDealer = false, das = true;
-    std::string mode = "cdz", tablePath, handsPath;
+    std::string mode = "cdz", tablePath, handsPath, multiPath;
     for (int i = 1; i < argc; ++i) {
         if (!strcmp(argv[i], "--h17")) h17 = true;
         else if (!strcmp(argv[i], "--nodas")) das = false;
@@ -123,6 +126,7 @@ int main(int argc, char **argv) {
         else if (!strcmp(argv[i], "--mode") && i + 1 < argc) mode = argv[++i];
         else if (!strcmp(argv[i], "--table") && i + 1 < argc) tablePath = argv[++i];
         else if (!strcmp(argv[i], "--hands") && i + 1 < argc) handsPath = argv[++i];
+        else if (!strcmp(argv[i], "--multihands") && i + 1 < argc) multiPath = argv[++i];
         else { std::fprintf(stderr, "unknown argument %s\n", argv[i]); return 2; }
     }
     TdbTable table;
@@ -135,6 +139,17 @@ int main(int argc, char **argv) {
         std::ifstream in(handsPath);
         int a, b, u;
         while (in >> a >> b >> u) { std::vector<int> v; v.push_back(a); v.push_back(b); v.push_back(u); hands.push_back(v); }
+    }
+    std::vector<std::vector<int> > multi;  // each: up, c1, c2, c3, ...
+    if (!multiPath.empty()) {
+        std::ifstream in(multiPath);
+        std::string l;
+        while (std::getline(in, l)) {
+            std::stringstream ss(l);
+            std::vector<int> v; int x;
+            while (ss >> x) v.push_back(x);
+            if (v.size() >= 4) multi.push_back(v);
+        }
     }
 
     // Accepted launch rules: double any two cards, DAS, resplit non-aces to
@@ -169,6 +184,28 @@ int main(int argc, char **argv) {
         else player->reset(shoe, rules, *strategy, progress);
         if (printDealer) {
             // Not needed for the report; reserved for future checks.
+        }
+        if (!multi.empty()) {
+            for (size_t k = 0; k < multi.size(); ++k) {
+                int u = multi[k][0];
+                int need[11] = {0};
+                need[u]++;
+                for (size_t j = 1; j < multi[k].size(); ++j) need[multi[k][j]]++;
+                bool feasible = true;
+                for (int c = 1; c <= 10; ++c) if (cards[c] < need[c]) feasible = false;
+                if (!feasible) continue;
+                BJHand h;
+                std::string label;
+                for (size_t j = 1; j < multi[k].size(); ++j) {
+                    h.deal(multi[k][j]);
+                    if (j > 1) label += "-";
+                    label += std::to_string(multi[k][j]);
+                }
+                if (h.getCount() > 21) continue;
+                std::printf("%s,%s,%d,%.9f,%.9f\n", id.c_str(), label.c_str(), u,
+                    player->getValueStand(h, u), player->getValueHit(h, u));
+            }
+            if (hands.empty()) continue;
         }
         if (!hands.empty()) {
             for (size_t k = 0; k < hands.size(); ++k) {

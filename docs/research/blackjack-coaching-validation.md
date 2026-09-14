@@ -141,6 +141,21 @@ Validation status: **generated from independently validated values**; the balanc
 
 `continuation_S17.csv` and `continuation_H17.csv` give the total-dependent action (S/H/D with S/H fallback) for hard 4–21 and soft 12–21 used as the teaching continuation (Proposal 2) by the driver's `tdb` mode, the sampler and the Monte Carlo simulator. Regenerating the basic tables with the `tdb` values instead of CDZ- values changes no cell (fixed point).
 
+### Multi-card totals
+
+The teaching tables and the index situations are total-dependent, but a hand reached by hitting has a composition the two-card aggregation does not see. On a fresh shoe under the taught continuation (`multihands_fresh_S17.csv`, `multihands_fresh_H17.csv`; stand minus hit, per original bet):
+
+| Total vs up | Three- and four-card compositions | Range of stand − hit | Two-card cell |
+| --- | --- | ---: | --- |
+| 16 vs T | 10-3-3, 10-4-2, 9-4-3, 9-5-2, 8-4-4, 8-5-3, 8-6-2, 7-5-4, 7-6-3, 6-5-5, 6-6-4, 5-5-3-3, 4-4-4-4 | −0.0044 to +0.0102; positive for 9 of 13, negative when the hand holds a 6 or is 10-3-3 | hit by 0.0063 (S17) |
+| 16 vs 9 | six compositions | −0.031 to −0.026 | hit by 0.038 |
+| 15 vs T | six compositions | −0.039 to −0.027 | hit by 0.036 |
+| 12 vs 4 | six compositions | +0.0058 to +0.0115 (S17); +0.0111 to +0.0174 (H17) | stand by 0.0027 (S17) |
+| 13 vs 2 | four compositions | +0.020 (S17); +0.027 (H17) | stand by 0.015 |
+| 13 vs 3 | three compositions | +0.044 to +0.048 (S17) | stand by 0.031 |
+
+So the basic hit/stand teaching for these totals also holds for multi-card hands, and for the zero-index situations (16 vs T, 12 vs 4) multi-card hands favour the deviation action slightly earlier than two-card hands. The generated thresholds below use two-card compositions only; multi-card occurrences are **not** weighted into them (see Remaining work).
+
 ## Index thresholds
 
 [INDEX SECTION PENDING]

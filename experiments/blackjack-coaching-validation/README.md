@@ -43,7 +43,14 @@ removal). The accepted True Count conversion is implemented in
 | `run_sampling.sh` | Runs the sampler for the default configuration and four stability configurations. |
 | `evaluate_indices.py` | Prepares compositions/hand lists for the driver and aggregates action-value differences by integer true count under the accepted convention; also the insurance index. |
 | `run_driver_parallel.py` | Runs the driver over a large composition file in parallel chunks. |
-| `run_indices.sh` | Full index pipeline for one sampled configuration. |
+| `run_indices.sh` | Full index pipeline for one sampled configuration (modes and rule sets selectable). |
+| `subsample_states.py` | Caps a sampled-states file per stratum while keeping population counts. |
+| `run_all_indices.sh`, `chain_indices.sh`, `chain_mc2.sh` | Orchestration used for the long runs (main configuration at cap 1200, stability configurations at cap 400; second Monte Carlo batch after the first). |
+| `run_split_checks2.sh` | Resplit-cap diagnosis with the Monte Carlo simulator (`--max-hands` 2, 3, 8, 1000). |
+| `insurance_sim.py` | Independent empirical insurance check: hole-card outcomes by true count at the insurance decision, no calculator involved. |
+| `compare_indices.py` | Consolidates generated thresholds across rules, continuations and configurations with the published values into one Markdown table. |
+| `diff_presets.py` | Lists teaching cells that differ between presets. |
+| `multihands.txt`, `multihands_fresh_S17.csv`, `multihands_fresh_H17.csv` | Three- and four-card compositions of the index totals evaluated on a fresh shoe (driver `--multihands`). |
 | `published_indices.csv` | Published I18/F4 values (Wizard/Schlesinger) and BJA 2018 chart entries with their stated meanings, for comparison. |
 | `wizard_appendix9_6deck.csv` | Parsed comparator values (source: Wizard of Odds, retrieved 2026-09-14). |
 | `basic_*.csv`, `tables_*.md`, `continuation_*.csv` | Generated launch reference tables (see report for status). |
@@ -67,6 +74,10 @@ bash run_indices.sh /tmp/bjwork/states_p50_n0.json p50_n0 cdz
 bash run_indices.sh /tmp/bjwork/states_p80_n0.json p80_n0 cdz
 bash run_indices.sh /tmp/bjwork/states_p75_n4.json p75_n4 cdz
 bash run_indices.sh /tmp/bjwork/states_h17nols_p75_n0.json h17nols_p75_n0 cdz
+# or, as actually run: SHOES=400000 CAP=2500 bash run_sampling.sh; bash run_all_indices.sh
+python3 compare_indices.py .
+python3 insurance_sim.py --basic basic_S17_LS.csv --shoes 300000 --penetration 0.75 --players 0 --seed 5
+/tmp/bjwork/farmer_driver --mode tdb --table continuation_S17.csv --multihands multihands.txt < /tmp/bjwork/fresh.txt
 ```
 
 Intermediate driver outputs (hundreds of MB) stay in `/tmp/bjwork`; only the
