@@ -1,198 +1,2479 @@
-[
-  {
+{
+ "rates_checked": "2026-09-14",
+ "rates": {
+  "supabase_pro_month": 25.0,
+  "supabase_compute_credit": 10.0,
+  "micro_hour": 0.01344,
+  "small_hour": 0.0206,
+  "disk_included_gb": 8.0,
+  "disk_gb_month": 0.125,
+  "disk_min_provisioned_gb": 8.0,
+  "disk_provision_factor": 1.2,
+  "egress_included_gb": 250.0,
+  "egress_gb": 0.09,
+  "edge_included": 2000000,
+  "edge_per_million": 2.0,
+  "realtime_conn_included": 500,
+  "realtime_conn_package": 1000,
+  "realtime_conn_package_price": 10.0,
+  "realtime_msg_included": 5000000,
+  "realtime_msg_package": 1000000,
+  "realtime_msg_package_price": 2.5,
+  "realtime_capped_pro_connections_limit": 500,
+  "realtime_uncapped_pro_connections_limit": 10000,
+  "auth_mau_included": 100000,
+  "auth_mau": 0.00325,
+  "pitr_7d_month": 100.0,
+  "log_drain_month": 60.0,
+  "pro_log_retention_days": 7,
+  "workers_paid_month": 5.0,
+  "workers_req_included": 10000000,
+  "workers_req_per_million": 0.3,
+  "workers_cpu_ms_included": 30000000,
+  "workers_cpu_ms_per_million": 0.02,
+  "workers_logs_included": 20000000,
+  "workers_logs_per_million": 0.6,
+  "lambda_req_per_million": 0.2,
+  "lambda_gb_second": 1.66667e-05,
+  "lambda_free_requests": 1000000,
+  "lambda_free_gb_seconds": 400000,
+  "cloudwatch_ingest_gb": 0.5,
+  "cloudwatch_storage_gb_month": 0.03,
+  "cloudwatch_free_gb": 5.0,
+  "cloudwatch_insights_scan_gb": 0.005,
+  "aws_dto_free_gb": 100.0,
+  "aws_dto_gb": 0.09,
+  "posthog_free_events": 1000000,
+  "posthog_anonymous_tiers": [
+   [
+    2000000,
+    5e-05
+   ],
+   [
+    15000000,
+    3.43e-05
+   ],
+   [
+    50000000,
+    2.95e-05
+   ]
+  ],
+  "posthog_identified_tiers": [
+   [
+    2000000,
+    0.000198
+   ],
+   [
+    15000000,
+    6.97e-05
+   ],
+   [
+    50000000,
+    3.6e-05
+   ]
+  ],
+  "posthog_free_exceptions": 100000,
+  "posthog_exception": 0.00037,
+  "revenuecat_mtr_threshold": 2500.0,
+  "revenuecat_rate": 0.01,
+  "premium_monthly_usd": 5.99,
+  "premium_annual_usd": 39.99,
+  "resend_free_month": 3000,
+  "resend_free_day": 100,
+  "resend_pro_month": 20.0,
+  "resend_pro_included": 50000,
+  "b2_tb_month": 6.95,
+  "b2_free_gb": 10.0,
+  "b2_egress_free_multiple": 3.0,
+  "b2_egress_gb": 0.01
+ },
+ "illustrative": {
+  "subscriber_fraction": 0.1,
+  "emails_per_mau": 2,
+  "events_per_session": 10,
+  "ops_events_month": 3000,
+  "retry_factor": 1.2,
+  "bootstrap_fraction": 0.1,
+  "download_all_fraction": 0.01,
+  "reconcile_response_bytes": 600,
+  "hint_bytes": 200,
+  "probe_response_bytes": 300,
+  "lambda_seconds": 0.1,
+  "lambda_memory_gib": 0.125,
+  "log_bytes_per_request": 1024
+ },
+ "measured": {
+  "source": "measured (../backend-workload-feasibility/results.json, 2026-09-14T22:54:33Z)",
+  "disk_ratio": {
+   "10000": 0.33715825184593895,
+   "100000": 0.23281534369312615,
+   "1000000": 0.2157002107249819
+  },
+  "gzip_ratio": {
+   "10000": 5.42,
+   "100000": 6.31,
+   "1000000": 6.61
+  },
+  "wal_ratio": {
+   "10000": 0.3592097385751347,
+   "100000": 0.24208515829683405,
+   "1000000": 0.22131021356397124
+  },
+  "serialized_bytes": {
+   "10000": 10022,
+   "100000": 100002,
+   "1000000": 1000356
+  },
+  "summary_bytes": 269,
+  "receipt_bytes": 116,
+  "feed_bytes": 92,
+  "snapshot_row_bytes_serialized": 141.73272,
+  "snapshot_gzip_ratio": 12.673151103838622,
+  "fixed_bytes_per_result": 477
+ },
+ "scenarios": {
+  "mau1000_dev1_payload10000_identified": {
+   "inputs": {
     "mau": 1000,
     "devices": 1,
-    "backend_calls_before_pages_chunks": 599724,
-    "calls_by_operation": {
-      "reconcile": 480000,
-      "open_reconnect": 24000,
-      "auth_refresh": 12000,
-      "result_acceptance": 24000,
-      "grant_transfer_withdrawal": 12132,
-      "notification_fetch": 41184,
-      "billing_webhook_ingress": 240,
-      "store_verification_job": 5040,
-      "export_and_bootstrap_create": 240,
-      "deletion_request_and_cleanup": 24,
-      "hourly_expiry_sweep": 864
-    },
-    "primary_probe_attempts": 984000,
-    "messages": 82368,
+    "payload_bytes": 10000,
+    "sessions": 20000,
+    "minutes": 400000,
+    "subscribers_illustrative": 100,
+    "identified_events": true,
+    "compression_as_measured": true
+   },
+   "calls_by_operation": {
+    "reconcile_60s": 480000,
+    "open_reconnect": 24000,
+    "auth_refresh": 12000,
+    "result_acceptance": 24000,
+    "grant_transfer_withdrawal": 12132,
+    "notification_fetch": 41184,
+    "billing_webhook_ingress": 240,
+    "store_verification_job": 5040,
+    "export_and_bootstrap_create": 240,
+    "bootstrap_pages_and_detail": 360,
+    "deletion_request_and_cleanup": 24,
+    "hourly_expiry_sweep": 864
+   },
+   "backend_calls": 600084,
+   "probe_attempts": 984000,
+   "realtime": {
     "peak_connections": 100,
-    "email_attempts": 2400,
-    "analytics_events": 243600,
-    "costs_before_disk_storage_egress_edge_other": {
-      "supabase_pro_micro": 25,
-      "workers_at_1ms_cpu_per_probe": 5.0,
-      "realtime_peak": 0,
-      "realtime_messages": 0.0,
-      "resend_capacity": 0,
-      "posthog_analytics_starting_rate": 0.0,
-      "posthog_errors_at_1000_per_month": 0,
-      "lambda_1pct_fallback_remaining_free": 0.0,
-      "revenuecat_all_monthly": 0
-    },
-    "subtotal": 30.0,
-    "all_backend_calls_through_edge_increment": 0,
-    "lambda_all_primary_failed_remaining_free": 0.0,
-    "lambda_all_primary_failed_no_free": 0.9883,
-    "lambda_1second_all_primary_failed_remaining_free": 0.0,
-    "workers_10ms_increment": 0.0,
-    "new_result_gb_per_month": {
-      "10000": 0.2,
-      "100000": 2.0,
-      "1000000": 20.0
-    },
+    "messages_postgres_changes": 41184,
+    "messages_broadcast": 82368,
+    "exceeds_capped_pro_connection_limit": false
+   },
+   "emails": 2400,
+   "email_per_day_average": 80.0,
+   "analytics_events": 243600,
+   "disk": {
+    "bytes_per_result_on_disk": 3372,
+    "raw_payload_gb_month": 0.2,
+    "on_disk_gb_month": 0.067,
+    "wal_gb_month": 0.072,
+    "db_gb_month12": 0.81,
+    "provisioned_gb_month12": 8.0,
+    "cost_month12": 0.0,
+    "db_gb_month60": 4.05,
+    "provisioned_gb_month60": 8.0,
+    "cost_month60": 0.0,
+    "year1_average_monthly_cost": 0.0
+   },
+   "egress": {
+    "uncached_gb": 0.681,
+    "probe_gb_workers_free": 0.295,
+    "bootstrap_bytes_per_new_device": 634016,
+    "download_all_bytes_5_year": 12000000
+   },
+   "costs": {
+    "supabase_pro_with_micro": 25.0,
+    "supabase_disk_month12_at_growth_rate": 0.0,
+    "supabase_egress": 0.0,
+    "supabase_realtime_peak_connections": 0.0,
+    "supabase_realtime_messages": 0.0,
+    "workers_paid_probes_1ms": 5.0,
+    "workers_logs_one_per_probe": 0.0,
+    "lambda_1pct_fallback": 0.0,
+    "resend": 0.0,
+    "posthog_events_identified": 0.0,
+    "posthog_errors_under_100k": 0.0,
+    "revenuecat_all_monthly_plans": 0.0
+   },
+   "subtotal_month": 30.0,
+   "subtotal_plus_disk_month60": 30.0,
+   "gap_vs_50": 0.0,
+   "sensitivities": {
+    "supabase_edge_if_all_calls_use_edge_functions": 0.0,
+    "posthog_events_other_rate": 0.0,
     "revenuecat_annual_cohort": {
-      "mtr": 3999.0,
-      "charge": 39.99
-    }
+     "mtr": 3999.0,
+     "charge": 39.99
+    },
+    "lambda_all_primary_failed": 0.0,
+    "lambda_all_primary_failed_no_free_tier": 0.9883,
+    "lambda_1s_all_primary_failed": 0.0,
+    "workers_10ms_cpu_increment": 0.0,
+    "realtime_messages_if_broadcast": 0.0,
+    "disk_cost_month12_no_toast_compression": 0.0
+   }
   },
-  {
+  "mau1000_dev1_payload10000_anonymous": {
+   "inputs": {
+    "mau": 1000,
+    "devices": 1,
+    "payload_bytes": 10000,
+    "sessions": 20000,
+    "minutes": 400000,
+    "subscribers_illustrative": 100,
+    "identified_events": false,
+    "compression_as_measured": true
+   },
+   "calls_by_operation": {
+    "reconcile_60s": 480000,
+    "open_reconnect": 24000,
+    "auth_refresh": 12000,
+    "result_acceptance": 24000,
+    "grant_transfer_withdrawal": 12132,
+    "notification_fetch": 41184,
+    "billing_webhook_ingress": 240,
+    "store_verification_job": 5040,
+    "export_and_bootstrap_create": 240,
+    "bootstrap_pages_and_detail": 360,
+    "deletion_request_and_cleanup": 24,
+    "hourly_expiry_sweep": 864
+   },
+   "backend_calls": 600084,
+   "probe_attempts": 984000,
+   "realtime": {
+    "peak_connections": 100,
+    "messages_postgres_changes": 41184,
+    "messages_broadcast": 82368,
+    "exceeds_capped_pro_connection_limit": false
+   },
+   "emails": 2400,
+   "email_per_day_average": 80.0,
+   "analytics_events": 243600,
+   "disk": {
+    "bytes_per_result_on_disk": 3372,
+    "raw_payload_gb_month": 0.2,
+    "on_disk_gb_month": 0.067,
+    "wal_gb_month": 0.072,
+    "db_gb_month12": 0.81,
+    "provisioned_gb_month12": 8.0,
+    "cost_month12": 0.0,
+    "db_gb_month60": 4.05,
+    "provisioned_gb_month60": 8.0,
+    "cost_month60": 0.0,
+    "year1_average_monthly_cost": 0.0
+   },
+   "egress": {
+    "uncached_gb": 0.681,
+    "probe_gb_workers_free": 0.295,
+    "bootstrap_bytes_per_new_device": 634016,
+    "download_all_bytes_5_year": 12000000
+   },
+   "costs": {
+    "supabase_pro_with_micro": 25.0,
+    "supabase_disk_month12_at_growth_rate": 0.0,
+    "supabase_egress": 0.0,
+    "supabase_realtime_peak_connections": 0.0,
+    "supabase_realtime_messages": 0.0,
+    "workers_paid_probes_1ms": 5.0,
+    "workers_logs_one_per_probe": 0.0,
+    "lambda_1pct_fallback": 0.0,
+    "resend": 0.0,
+    "posthog_events_anonymous": 0.0,
+    "posthog_errors_under_100k": 0.0,
+    "revenuecat_all_monthly_plans": 0.0
+   },
+   "subtotal_month": 30.0,
+   "subtotal_plus_disk_month60": 30.0,
+   "gap_vs_50": 0.0,
+   "sensitivities": {
+    "supabase_edge_if_all_calls_use_edge_functions": 0.0,
+    "posthog_events_other_rate": 0.0,
+    "revenuecat_annual_cohort": {
+     "mtr": 3999.0,
+     "charge": 39.99
+    },
+    "lambda_all_primary_failed": 0.0,
+    "lambda_all_primary_failed_no_free_tier": 0.9883,
+    "lambda_1s_all_primary_failed": 0.0,
+    "workers_10ms_cpu_increment": 0.0,
+    "realtime_messages_if_broadcast": 0.0,
+    "disk_cost_month12_no_toast_compression": 0.0
+   }
+  },
+  "mau1000_dev1_payload100000_identified": {
+   "inputs": {
+    "mau": 1000,
+    "devices": 1,
+    "payload_bytes": 100000,
+    "sessions": 20000,
+    "minutes": 400000,
+    "subscribers_illustrative": 100,
+    "identified_events": true,
+    "compression_as_measured": true
+   },
+   "calls_by_operation": {
+    "reconcile_60s": 480000,
+    "open_reconnect": 24000,
+    "auth_refresh": 12000,
+    "result_acceptance": 24000,
+    "grant_transfer_withdrawal": 12132,
+    "notification_fetch": 41184,
+    "billing_webhook_ingress": 240,
+    "store_verification_job": 5040,
+    "export_and_bootstrap_create": 240,
+    "bootstrap_pages_and_detail": 360,
+    "deletion_request_and_cleanup": 24,
+    "hourly_expiry_sweep": 864
+   },
+   "backend_calls": 600084,
+   "probe_attempts": 984000,
+   "realtime": {
+    "peak_connections": 100,
+    "messages_postgres_changes": 41184,
+    "messages_broadcast": 82368,
+    "exceeds_capped_pro_connection_limit": false
+   },
+   "emails": 2400,
+   "email_per_day_average": 80.0,
+   "analytics_events": 243600,
+   "disk": {
+    "bytes_per_result_on_disk": 23282,
+    "raw_payload_gb_month": 2.0,
+    "on_disk_gb_month": 0.466,
+    "wal_gb_month": 0.484,
+    "db_gb_month12": 5.59,
+    "provisioned_gb_month12": 8.0,
+    "cost_month12": 0.0,
+    "db_gb_month60": 27.94,
+    "provisioned_gb_month60": 33.53,
+    "cost_month60": 3.19,
+    "year1_average_monthly_cost": 0.0
+   },
+   "egress": {
+    "uncached_gb": 3.273,
+    "probe_gb_workers_free": 0.295,
+    "bootstrap_bytes_per_new_device": 6034016,
+    "download_all_bytes_5_year": 120000000
+   },
+   "costs": {
+    "supabase_pro_with_micro": 25.0,
+    "supabase_disk_month12_at_growth_rate": 0.0,
+    "supabase_egress": 0.0,
+    "supabase_realtime_peak_connections": 0.0,
+    "supabase_realtime_messages": 0.0,
+    "workers_paid_probes_1ms": 5.0,
+    "workers_logs_one_per_probe": 0.0,
+    "lambda_1pct_fallback": 0.0,
+    "resend": 0.0,
+    "posthog_events_identified": 0.0,
+    "posthog_errors_under_100k": 0.0,
+    "revenuecat_all_monthly_plans": 0.0
+   },
+   "subtotal_month": 30.0,
+   "subtotal_plus_disk_month60": 33.19,
+   "gap_vs_50": 0.0,
+   "sensitivities": {
+    "supabase_edge_if_all_calls_use_edge_functions": 0.0,
+    "posthog_events_other_rate": 0.0,
+    "revenuecat_annual_cohort": {
+     "mtr": 3999.0,
+     "charge": 39.99
+    },
+    "lambda_all_primary_failed": 0.0,
+    "lambda_all_primary_failed_no_free_tier": 0.9883,
+    "lambda_1s_all_primary_failed": 0.0,
+    "workers_10ms_cpu_increment": 0.0,
+    "realtime_messages_if_broadcast": 0.0,
+    "disk_cost_month12_no_toast_compression": 2.62
+   }
+  },
+  "mau1000_dev1_payload100000_anonymous": {
+   "inputs": {
+    "mau": 1000,
+    "devices": 1,
+    "payload_bytes": 100000,
+    "sessions": 20000,
+    "minutes": 400000,
+    "subscribers_illustrative": 100,
+    "identified_events": false,
+    "compression_as_measured": true
+   },
+   "calls_by_operation": {
+    "reconcile_60s": 480000,
+    "open_reconnect": 24000,
+    "auth_refresh": 12000,
+    "result_acceptance": 24000,
+    "grant_transfer_withdrawal": 12132,
+    "notification_fetch": 41184,
+    "billing_webhook_ingress": 240,
+    "store_verification_job": 5040,
+    "export_and_bootstrap_create": 240,
+    "bootstrap_pages_and_detail": 360,
+    "deletion_request_and_cleanup": 24,
+    "hourly_expiry_sweep": 864
+   },
+   "backend_calls": 600084,
+   "probe_attempts": 984000,
+   "realtime": {
+    "peak_connections": 100,
+    "messages_postgres_changes": 41184,
+    "messages_broadcast": 82368,
+    "exceeds_capped_pro_connection_limit": false
+   },
+   "emails": 2400,
+   "email_per_day_average": 80.0,
+   "analytics_events": 243600,
+   "disk": {
+    "bytes_per_result_on_disk": 23282,
+    "raw_payload_gb_month": 2.0,
+    "on_disk_gb_month": 0.466,
+    "wal_gb_month": 0.484,
+    "db_gb_month12": 5.59,
+    "provisioned_gb_month12": 8.0,
+    "cost_month12": 0.0,
+    "db_gb_month60": 27.94,
+    "provisioned_gb_month60": 33.53,
+    "cost_month60": 3.19,
+    "year1_average_monthly_cost": 0.0
+   },
+   "egress": {
+    "uncached_gb": 3.273,
+    "probe_gb_workers_free": 0.295,
+    "bootstrap_bytes_per_new_device": 6034016,
+    "download_all_bytes_5_year": 120000000
+   },
+   "costs": {
+    "supabase_pro_with_micro": 25.0,
+    "supabase_disk_month12_at_growth_rate": 0.0,
+    "supabase_egress": 0.0,
+    "supabase_realtime_peak_connections": 0.0,
+    "supabase_realtime_messages": 0.0,
+    "workers_paid_probes_1ms": 5.0,
+    "workers_logs_one_per_probe": 0.0,
+    "lambda_1pct_fallback": 0.0,
+    "resend": 0.0,
+    "posthog_events_anonymous": 0.0,
+    "posthog_errors_under_100k": 0.0,
+    "revenuecat_all_monthly_plans": 0.0
+   },
+   "subtotal_month": 30.0,
+   "subtotal_plus_disk_month60": 33.19,
+   "gap_vs_50": 0.0,
+   "sensitivities": {
+    "supabase_edge_if_all_calls_use_edge_functions": 0.0,
+    "posthog_events_other_rate": 0.0,
+    "revenuecat_annual_cohort": {
+     "mtr": 3999.0,
+     "charge": 39.99
+    },
+    "lambda_all_primary_failed": 0.0,
+    "lambda_all_primary_failed_no_free_tier": 0.9883,
+    "lambda_1s_all_primary_failed": 0.0,
+    "workers_10ms_cpu_increment": 0.0,
+    "realtime_messages_if_broadcast": 0.0,
+    "disk_cost_month12_no_toast_compression": 2.62
+   }
+  },
+  "mau1000_dev1_payload1000000_identified": {
+   "inputs": {
+    "mau": 1000,
+    "devices": 1,
+    "payload_bytes": 1000000,
+    "sessions": 20000,
+    "minutes": 400000,
+    "subscribers_illustrative": 100,
+    "identified_events": true,
+    "compression_as_measured": true
+   },
+   "calls_by_operation": {
+    "reconcile_60s": 480000,
+    "open_reconnect": 24000,
+    "auth_refresh": 12000,
+    "result_acceptance": 24000,
+    "grant_transfer_withdrawal": 12132,
+    "notification_fetch": 41184,
+    "billing_webhook_ingress": 240,
+    "store_verification_job": 5040,
+    "export_and_bootstrap_create": 240,
+    "bootstrap_pages_and_detail": 360,
+    "deletion_request_and_cleanup": 24,
+    "hourly_expiry_sweep": 864
+   },
+   "backend_calls": 600084,
+   "probe_attempts": 984000,
+   "realtime": {
+    "peak_connections": 100,
+    "messages_postgres_changes": 41184,
+    "messages_broadcast": 82368,
+    "exceeds_capped_pro_connection_limit": false
+   },
+   "emails": 2400,
+   "email_per_day_average": 80.0,
+   "analytics_events": 243600,
+   "disk": {
+    "bytes_per_result_on_disk": 215700,
+    "raw_payload_gb_month": 20.0,
+    "on_disk_gb_month": 4.314,
+    "wal_gb_month": 4.426,
+    "db_gb_month12": 51.77,
+    "provisioned_gb_month12": 62.12,
+    "cost_month12": 6.77,
+    "db_gb_month60": 258.84,
+    "provisioned_gb_month60": 310.61,
+    "cost_month60": 37.83,
+    "year1_average_monthly_cost": 3.24
+   },
+   "egress": {
+    "uncached_gb": 29.193,
+    "probe_gb_workers_free": 0.295,
+    "bootstrap_bytes_per_new_device": 60034016,
+    "download_all_bytes_5_year": 1200000000
+   },
+   "costs": {
+    "supabase_pro_with_micro": 25.0,
+    "supabase_disk_month12_at_growth_rate": 6.77,
+    "supabase_egress": 0.0,
+    "supabase_realtime_peak_connections": 0.0,
+    "supabase_realtime_messages": 0.0,
+    "workers_paid_probes_1ms": 5.0,
+    "workers_logs_one_per_probe": 0.0,
+    "lambda_1pct_fallback": 0.0,
+    "resend": 0.0,
+    "posthog_events_identified": 0.0,
+    "posthog_errors_under_100k": 0.0,
+    "revenuecat_all_monthly_plans": 0.0
+   },
+   "subtotal_month": 36.77,
+   "subtotal_plus_disk_month60": 67.83,
+   "gap_vs_50": 0.0,
+   "sensitivities": {
+    "supabase_edge_if_all_calls_use_edge_functions": 0.0,
+    "posthog_events_other_rate": 0.0,
+    "revenuecat_annual_cohort": {
+     "mtr": 3999.0,
+     "charge": 39.99
+    },
+    "lambda_all_primary_failed": 0.0,
+    "lambda_all_primary_failed_no_free_tier": 0.9883,
+    "lambda_1s_all_primary_failed": 0.0,
+    "workers_10ms_cpu_increment": 0.0,
+    "realtime_messages_if_broadcast": 0.0,
+    "disk_cost_month12_no_toast_compression": 35.02
+   }
+  },
+  "mau1000_dev1_payload1000000_anonymous": {
+   "inputs": {
+    "mau": 1000,
+    "devices": 1,
+    "payload_bytes": 1000000,
+    "sessions": 20000,
+    "minutes": 400000,
+    "subscribers_illustrative": 100,
+    "identified_events": false,
+    "compression_as_measured": true
+   },
+   "calls_by_operation": {
+    "reconcile_60s": 480000,
+    "open_reconnect": 24000,
+    "auth_refresh": 12000,
+    "result_acceptance": 24000,
+    "grant_transfer_withdrawal": 12132,
+    "notification_fetch": 41184,
+    "billing_webhook_ingress": 240,
+    "store_verification_job": 5040,
+    "export_and_bootstrap_create": 240,
+    "bootstrap_pages_and_detail": 360,
+    "deletion_request_and_cleanup": 24,
+    "hourly_expiry_sweep": 864
+   },
+   "backend_calls": 600084,
+   "probe_attempts": 984000,
+   "realtime": {
+    "peak_connections": 100,
+    "messages_postgres_changes": 41184,
+    "messages_broadcast": 82368,
+    "exceeds_capped_pro_connection_limit": false
+   },
+   "emails": 2400,
+   "email_per_day_average": 80.0,
+   "analytics_events": 243600,
+   "disk": {
+    "bytes_per_result_on_disk": 215700,
+    "raw_payload_gb_month": 20.0,
+    "on_disk_gb_month": 4.314,
+    "wal_gb_month": 4.426,
+    "db_gb_month12": 51.77,
+    "provisioned_gb_month12": 62.12,
+    "cost_month12": 6.77,
+    "db_gb_month60": 258.84,
+    "provisioned_gb_month60": 310.61,
+    "cost_month60": 37.83,
+    "year1_average_monthly_cost": 3.24
+   },
+   "egress": {
+    "uncached_gb": 29.193,
+    "probe_gb_workers_free": 0.295,
+    "bootstrap_bytes_per_new_device": 60034016,
+    "download_all_bytes_5_year": 1200000000
+   },
+   "costs": {
+    "supabase_pro_with_micro": 25.0,
+    "supabase_disk_month12_at_growth_rate": 6.77,
+    "supabase_egress": 0.0,
+    "supabase_realtime_peak_connections": 0.0,
+    "supabase_realtime_messages": 0.0,
+    "workers_paid_probes_1ms": 5.0,
+    "workers_logs_one_per_probe": 0.0,
+    "lambda_1pct_fallback": 0.0,
+    "resend": 0.0,
+    "posthog_events_anonymous": 0.0,
+    "posthog_errors_under_100k": 0.0,
+    "revenuecat_all_monthly_plans": 0.0
+   },
+   "subtotal_month": 36.77,
+   "subtotal_plus_disk_month60": 67.83,
+   "gap_vs_50": 0.0,
+   "sensitivities": {
+    "supabase_edge_if_all_calls_use_edge_functions": 0.0,
+    "posthog_events_other_rate": 0.0,
+    "revenuecat_annual_cohort": {
+     "mtr": 3999.0,
+     "charge": 39.99
+    },
+    "lambda_all_primary_failed": 0.0,
+    "lambda_all_primary_failed_no_free_tier": 0.9883,
+    "lambda_1s_all_primary_failed": 0.0,
+    "workers_10ms_cpu_increment": 0.0,
+    "realtime_messages_if_broadcast": 0.0,
+    "disk_cost_month12_no_toast_compression": 35.02
+   }
+  },
+  "mau1000_dev2_payload10000_identified": {
+   "inputs": {
     "mau": 1000,
     "devices": 2,
-    "backend_calls_before_pages_chunks": 1156908,
-    "calls_by_operation": {
-      "reconcile": 960000,
-      "open_reconnect": 48000,
-      "auth_refresh": 24000,
-      "result_acceptance": 24000,
-      "grant_transfer_withdrawal": 12132,
-      "notification_fetch": 82368,
-      "billing_webhook_ingress": 240,
-      "store_verification_job": 5040,
-      "export_and_bootstrap_create": 240,
-      "deletion_request_and_cleanup": 24,
-      "hourly_expiry_sweep": 864
-    },
-    "primary_probe_attempts": 1968000,
-    "messages": 123552,
+    "payload_bytes": 10000,
+    "sessions": 20000,
+    "minutes": 400000,
+    "subscribers_illustrative": 100,
+    "identified_events": true,
+    "compression_as_measured": true
+   },
+   "calls_by_operation": {
+    "reconcile_60s": 960000,
+    "open_reconnect": 48000,
+    "auth_refresh": 24000,
+    "result_acceptance": 24000,
+    "grant_transfer_withdrawal": 12132,
+    "notification_fetch": 82368,
+    "billing_webhook_ingress": 240,
+    "store_verification_job": 5040,
+    "export_and_bootstrap_create": 240,
+    "bootstrap_pages_and_detail": 360,
+    "deletion_request_and_cleanup": 24,
+    "hourly_expiry_sweep": 864
+   },
+   "backend_calls": 1157268,
+   "probe_attempts": 1968000,
+   "realtime": {
     "peak_connections": 200,
-    "email_attempts": 2400,
-    "analytics_events": 243600,
-    "costs_before_disk_storage_egress_edge_other": {
-      "supabase_pro_micro": 25,
-      "workers_at_1ms_cpu_per_probe": 5.0,
-      "realtime_peak": 0,
-      "realtime_messages": 0.0,
-      "resend_capacity": 0,
-      "posthog_analytics_starting_rate": 0.0,
-      "posthog_errors_at_1000_per_month": 0,
-      "lambda_1pct_fallback_remaining_free": 0.0,
-      "revenuecat_all_monthly": 0
-    },
-    "subtotal": 30.0,
-    "all_backend_calls_through_edge_increment": 0,
-    "lambda_all_primary_failed_remaining_free": 0.1936,
-    "lambda_all_primary_failed_no_free": 1.9766,
-    "lambda_1second_all_primary_failed_remaining_free": 0.1936,
-    "workers_10ms_increment": 0.0,
-    "new_result_gb_per_month": {
-      "10000": 0.2,
-      "100000": 2.0,
-      "1000000": 20.0
-    },
+    "messages_postgres_changes": 82368,
+    "messages_broadcast": 123552,
+    "exceeds_capped_pro_connection_limit": false
+   },
+   "emails": 2400,
+   "email_per_day_average": 80.0,
+   "analytics_events": 243600,
+   "disk": {
+    "bytes_per_result_on_disk": 3372,
+    "raw_payload_gb_month": 0.2,
+    "on_disk_gb_month": 0.067,
+    "wal_gb_month": 0.072,
+    "db_gb_month12": 0.81,
+    "provisioned_gb_month12": 8.0,
+    "cost_month12": 0.0,
+    "db_gb_month60": 4.05,
+    "provisioned_gb_month60": 8.0,
+    "cost_month60": 0.0,
+    "year1_average_monthly_cost": 0.0
+   },
+   "egress": {
+    "uncached_gb": 1.066,
+    "probe_gb_workers_free": 0.59,
+    "bootstrap_bytes_per_new_device": 634016,
+    "download_all_bytes_5_year": 12000000
+   },
+   "costs": {
+    "supabase_pro_with_micro": 25.0,
+    "supabase_disk_month12_at_growth_rate": 0.0,
+    "supabase_egress": 0.0,
+    "supabase_realtime_peak_connections": 0.0,
+    "supabase_realtime_messages": 0.0,
+    "workers_paid_probes_1ms": 5.0,
+    "workers_logs_one_per_probe": 0.0,
+    "lambda_1pct_fallback": 0.0,
+    "resend": 0.0,
+    "posthog_events_identified": 0.0,
+    "posthog_errors_under_100k": 0.0,
+    "revenuecat_all_monthly_plans": 0.0
+   },
+   "subtotal_month": 30.0,
+   "subtotal_plus_disk_month60": 30.0,
+   "gap_vs_50": 0.0,
+   "sensitivities": {
+    "supabase_edge_if_all_calls_use_edge_functions": 0.0,
+    "posthog_events_other_rate": 0.0,
     "revenuecat_annual_cohort": {
-      "mtr": 3999.0,
-      "charge": 39.99
-    }
+     "mtr": 3999.0,
+     "charge": 39.99
+    },
+    "lambda_all_primary_failed": 0.1936,
+    "lambda_all_primary_failed_no_free_tier": 1.9766,
+    "lambda_1s_all_primary_failed": 0.1936,
+    "workers_10ms_cpu_increment": 0.0,
+    "realtime_messages_if_broadcast": 0.0,
+    "disk_cost_month12_no_toast_compression": 0.0
+   }
   },
-  {
+  "mau1000_dev2_payload10000_anonymous": {
+   "inputs": {
+    "mau": 1000,
+    "devices": 2,
+    "payload_bytes": 10000,
+    "sessions": 20000,
+    "minutes": 400000,
+    "subscribers_illustrative": 100,
+    "identified_events": false,
+    "compression_as_measured": true
+   },
+   "calls_by_operation": {
+    "reconcile_60s": 960000,
+    "open_reconnect": 48000,
+    "auth_refresh": 24000,
+    "result_acceptance": 24000,
+    "grant_transfer_withdrawal": 12132,
+    "notification_fetch": 82368,
+    "billing_webhook_ingress": 240,
+    "store_verification_job": 5040,
+    "export_and_bootstrap_create": 240,
+    "bootstrap_pages_and_detail": 360,
+    "deletion_request_and_cleanup": 24,
+    "hourly_expiry_sweep": 864
+   },
+   "backend_calls": 1157268,
+   "probe_attempts": 1968000,
+   "realtime": {
+    "peak_connections": 200,
+    "messages_postgres_changes": 82368,
+    "messages_broadcast": 123552,
+    "exceeds_capped_pro_connection_limit": false
+   },
+   "emails": 2400,
+   "email_per_day_average": 80.0,
+   "analytics_events": 243600,
+   "disk": {
+    "bytes_per_result_on_disk": 3372,
+    "raw_payload_gb_month": 0.2,
+    "on_disk_gb_month": 0.067,
+    "wal_gb_month": 0.072,
+    "db_gb_month12": 0.81,
+    "provisioned_gb_month12": 8.0,
+    "cost_month12": 0.0,
+    "db_gb_month60": 4.05,
+    "provisioned_gb_month60": 8.0,
+    "cost_month60": 0.0,
+    "year1_average_monthly_cost": 0.0
+   },
+   "egress": {
+    "uncached_gb": 1.066,
+    "probe_gb_workers_free": 0.59,
+    "bootstrap_bytes_per_new_device": 634016,
+    "download_all_bytes_5_year": 12000000
+   },
+   "costs": {
+    "supabase_pro_with_micro": 25.0,
+    "supabase_disk_month12_at_growth_rate": 0.0,
+    "supabase_egress": 0.0,
+    "supabase_realtime_peak_connections": 0.0,
+    "supabase_realtime_messages": 0.0,
+    "workers_paid_probes_1ms": 5.0,
+    "workers_logs_one_per_probe": 0.0,
+    "lambda_1pct_fallback": 0.0,
+    "resend": 0.0,
+    "posthog_events_anonymous": 0.0,
+    "posthog_errors_under_100k": 0.0,
+    "revenuecat_all_monthly_plans": 0.0
+   },
+   "subtotal_month": 30.0,
+   "subtotal_plus_disk_month60": 30.0,
+   "gap_vs_50": 0.0,
+   "sensitivities": {
+    "supabase_edge_if_all_calls_use_edge_functions": 0.0,
+    "posthog_events_other_rate": 0.0,
+    "revenuecat_annual_cohort": {
+     "mtr": 3999.0,
+     "charge": 39.99
+    },
+    "lambda_all_primary_failed": 0.1936,
+    "lambda_all_primary_failed_no_free_tier": 1.9766,
+    "lambda_1s_all_primary_failed": 0.1936,
+    "workers_10ms_cpu_increment": 0.0,
+    "realtime_messages_if_broadcast": 0.0,
+    "disk_cost_month12_no_toast_compression": 0.0
+   }
+  },
+  "mau1000_dev2_payload100000_identified": {
+   "inputs": {
+    "mau": 1000,
+    "devices": 2,
+    "payload_bytes": 100000,
+    "sessions": 20000,
+    "minutes": 400000,
+    "subscribers_illustrative": 100,
+    "identified_events": true,
+    "compression_as_measured": true
+   },
+   "calls_by_operation": {
+    "reconcile_60s": 960000,
+    "open_reconnect": 48000,
+    "auth_refresh": 24000,
+    "result_acceptance": 24000,
+    "grant_transfer_withdrawal": 12132,
+    "notification_fetch": 82368,
+    "billing_webhook_ingress": 240,
+    "store_verification_job": 5040,
+    "export_and_bootstrap_create": 240,
+    "bootstrap_pages_and_detail": 360,
+    "deletion_request_and_cleanup": 24,
+    "hourly_expiry_sweep": 864
+   },
+   "backend_calls": 1157268,
+   "probe_attempts": 1968000,
+   "realtime": {
+    "peak_connections": 200,
+    "messages_postgres_changes": 82368,
+    "messages_broadcast": 123552,
+    "exceeds_capped_pro_connection_limit": false
+   },
+   "emails": 2400,
+   "email_per_day_average": 80.0,
+   "analytics_events": 243600,
+   "disk": {
+    "bytes_per_result_on_disk": 23282,
+    "raw_payload_gb_month": 2.0,
+    "on_disk_gb_month": 0.466,
+    "wal_gb_month": 0.484,
+    "db_gb_month12": 5.59,
+    "provisioned_gb_month12": 8.0,
+    "cost_month12": 0.0,
+    "db_gb_month60": 27.94,
+    "provisioned_gb_month60": 33.53,
+    "cost_month60": 3.19,
+    "year1_average_monthly_cost": 0.0
+   },
+   "egress": {
+    "uncached_gb": 3.658,
+    "probe_gb_workers_free": 0.59,
+    "bootstrap_bytes_per_new_device": 6034016,
+    "download_all_bytes_5_year": 120000000
+   },
+   "costs": {
+    "supabase_pro_with_micro": 25.0,
+    "supabase_disk_month12_at_growth_rate": 0.0,
+    "supabase_egress": 0.0,
+    "supabase_realtime_peak_connections": 0.0,
+    "supabase_realtime_messages": 0.0,
+    "workers_paid_probes_1ms": 5.0,
+    "workers_logs_one_per_probe": 0.0,
+    "lambda_1pct_fallback": 0.0,
+    "resend": 0.0,
+    "posthog_events_identified": 0.0,
+    "posthog_errors_under_100k": 0.0,
+    "revenuecat_all_monthly_plans": 0.0
+   },
+   "subtotal_month": 30.0,
+   "subtotal_plus_disk_month60": 33.19,
+   "gap_vs_50": 0.0,
+   "sensitivities": {
+    "supabase_edge_if_all_calls_use_edge_functions": 0.0,
+    "posthog_events_other_rate": 0.0,
+    "revenuecat_annual_cohort": {
+     "mtr": 3999.0,
+     "charge": 39.99
+    },
+    "lambda_all_primary_failed": 0.1936,
+    "lambda_all_primary_failed_no_free_tier": 1.9766,
+    "lambda_1s_all_primary_failed": 0.1936,
+    "workers_10ms_cpu_increment": 0.0,
+    "realtime_messages_if_broadcast": 0.0,
+    "disk_cost_month12_no_toast_compression": 2.62
+   }
+  },
+  "mau1000_dev2_payload100000_anonymous": {
+   "inputs": {
+    "mau": 1000,
+    "devices": 2,
+    "payload_bytes": 100000,
+    "sessions": 20000,
+    "minutes": 400000,
+    "subscribers_illustrative": 100,
+    "identified_events": false,
+    "compression_as_measured": true
+   },
+   "calls_by_operation": {
+    "reconcile_60s": 960000,
+    "open_reconnect": 48000,
+    "auth_refresh": 24000,
+    "result_acceptance": 24000,
+    "grant_transfer_withdrawal": 12132,
+    "notification_fetch": 82368,
+    "billing_webhook_ingress": 240,
+    "store_verification_job": 5040,
+    "export_and_bootstrap_create": 240,
+    "bootstrap_pages_and_detail": 360,
+    "deletion_request_and_cleanup": 24,
+    "hourly_expiry_sweep": 864
+   },
+   "backend_calls": 1157268,
+   "probe_attempts": 1968000,
+   "realtime": {
+    "peak_connections": 200,
+    "messages_postgres_changes": 82368,
+    "messages_broadcast": 123552,
+    "exceeds_capped_pro_connection_limit": false
+   },
+   "emails": 2400,
+   "email_per_day_average": 80.0,
+   "analytics_events": 243600,
+   "disk": {
+    "bytes_per_result_on_disk": 23282,
+    "raw_payload_gb_month": 2.0,
+    "on_disk_gb_month": 0.466,
+    "wal_gb_month": 0.484,
+    "db_gb_month12": 5.59,
+    "provisioned_gb_month12": 8.0,
+    "cost_month12": 0.0,
+    "db_gb_month60": 27.94,
+    "provisioned_gb_month60": 33.53,
+    "cost_month60": 3.19,
+    "year1_average_monthly_cost": 0.0
+   },
+   "egress": {
+    "uncached_gb": 3.658,
+    "probe_gb_workers_free": 0.59,
+    "bootstrap_bytes_per_new_device": 6034016,
+    "download_all_bytes_5_year": 120000000
+   },
+   "costs": {
+    "supabase_pro_with_micro": 25.0,
+    "supabase_disk_month12_at_growth_rate": 0.0,
+    "supabase_egress": 0.0,
+    "supabase_realtime_peak_connections": 0.0,
+    "supabase_realtime_messages": 0.0,
+    "workers_paid_probes_1ms": 5.0,
+    "workers_logs_one_per_probe": 0.0,
+    "lambda_1pct_fallback": 0.0,
+    "resend": 0.0,
+    "posthog_events_anonymous": 0.0,
+    "posthog_errors_under_100k": 0.0,
+    "revenuecat_all_monthly_plans": 0.0
+   },
+   "subtotal_month": 30.0,
+   "subtotal_plus_disk_month60": 33.19,
+   "gap_vs_50": 0.0,
+   "sensitivities": {
+    "supabase_edge_if_all_calls_use_edge_functions": 0.0,
+    "posthog_events_other_rate": 0.0,
+    "revenuecat_annual_cohort": {
+     "mtr": 3999.0,
+     "charge": 39.99
+    },
+    "lambda_all_primary_failed": 0.1936,
+    "lambda_all_primary_failed_no_free_tier": 1.9766,
+    "lambda_1s_all_primary_failed": 0.1936,
+    "workers_10ms_cpu_increment": 0.0,
+    "realtime_messages_if_broadcast": 0.0,
+    "disk_cost_month12_no_toast_compression": 2.62
+   }
+  },
+  "mau1000_dev2_payload1000000_identified": {
+   "inputs": {
+    "mau": 1000,
+    "devices": 2,
+    "payload_bytes": 1000000,
+    "sessions": 20000,
+    "minutes": 400000,
+    "subscribers_illustrative": 100,
+    "identified_events": true,
+    "compression_as_measured": true
+   },
+   "calls_by_operation": {
+    "reconcile_60s": 960000,
+    "open_reconnect": 48000,
+    "auth_refresh": 24000,
+    "result_acceptance": 24000,
+    "grant_transfer_withdrawal": 12132,
+    "notification_fetch": 82368,
+    "billing_webhook_ingress": 240,
+    "store_verification_job": 5040,
+    "export_and_bootstrap_create": 240,
+    "bootstrap_pages_and_detail": 360,
+    "deletion_request_and_cleanup": 24,
+    "hourly_expiry_sweep": 864
+   },
+   "backend_calls": 1157268,
+   "probe_attempts": 1968000,
+   "realtime": {
+    "peak_connections": 200,
+    "messages_postgres_changes": 82368,
+    "messages_broadcast": 123552,
+    "exceeds_capped_pro_connection_limit": false
+   },
+   "emails": 2400,
+   "email_per_day_average": 80.0,
+   "analytics_events": 243600,
+   "disk": {
+    "bytes_per_result_on_disk": 215700,
+    "raw_payload_gb_month": 20.0,
+    "on_disk_gb_month": 4.314,
+    "wal_gb_month": 4.426,
+    "db_gb_month12": 51.77,
+    "provisioned_gb_month12": 62.12,
+    "cost_month12": 6.77,
+    "db_gb_month60": 258.84,
+    "provisioned_gb_month60": 310.61,
+    "cost_month60": 37.83,
+    "year1_average_monthly_cost": 3.24
+   },
+   "egress": {
+    "uncached_gb": 29.578,
+    "probe_gb_workers_free": 0.59,
+    "bootstrap_bytes_per_new_device": 60034016,
+    "download_all_bytes_5_year": 1200000000
+   },
+   "costs": {
+    "supabase_pro_with_micro": 25.0,
+    "supabase_disk_month12_at_growth_rate": 6.77,
+    "supabase_egress": 0.0,
+    "supabase_realtime_peak_connections": 0.0,
+    "supabase_realtime_messages": 0.0,
+    "workers_paid_probes_1ms": 5.0,
+    "workers_logs_one_per_probe": 0.0,
+    "lambda_1pct_fallback": 0.0,
+    "resend": 0.0,
+    "posthog_events_identified": 0.0,
+    "posthog_errors_under_100k": 0.0,
+    "revenuecat_all_monthly_plans": 0.0
+   },
+   "subtotal_month": 36.77,
+   "subtotal_plus_disk_month60": 67.83,
+   "gap_vs_50": 0.0,
+   "sensitivities": {
+    "supabase_edge_if_all_calls_use_edge_functions": 0.0,
+    "posthog_events_other_rate": 0.0,
+    "revenuecat_annual_cohort": {
+     "mtr": 3999.0,
+     "charge": 39.99
+    },
+    "lambda_all_primary_failed": 0.1936,
+    "lambda_all_primary_failed_no_free_tier": 1.9766,
+    "lambda_1s_all_primary_failed": 0.1936,
+    "workers_10ms_cpu_increment": 0.0,
+    "realtime_messages_if_broadcast": 0.0,
+    "disk_cost_month12_no_toast_compression": 35.02
+   }
+  },
+  "mau1000_dev2_payload1000000_anonymous": {
+   "inputs": {
+    "mau": 1000,
+    "devices": 2,
+    "payload_bytes": 1000000,
+    "sessions": 20000,
+    "minutes": 400000,
+    "subscribers_illustrative": 100,
+    "identified_events": false,
+    "compression_as_measured": true
+   },
+   "calls_by_operation": {
+    "reconcile_60s": 960000,
+    "open_reconnect": 48000,
+    "auth_refresh": 24000,
+    "result_acceptance": 24000,
+    "grant_transfer_withdrawal": 12132,
+    "notification_fetch": 82368,
+    "billing_webhook_ingress": 240,
+    "store_verification_job": 5040,
+    "export_and_bootstrap_create": 240,
+    "bootstrap_pages_and_detail": 360,
+    "deletion_request_and_cleanup": 24,
+    "hourly_expiry_sweep": 864
+   },
+   "backend_calls": 1157268,
+   "probe_attempts": 1968000,
+   "realtime": {
+    "peak_connections": 200,
+    "messages_postgres_changes": 82368,
+    "messages_broadcast": 123552,
+    "exceeds_capped_pro_connection_limit": false
+   },
+   "emails": 2400,
+   "email_per_day_average": 80.0,
+   "analytics_events": 243600,
+   "disk": {
+    "bytes_per_result_on_disk": 215700,
+    "raw_payload_gb_month": 20.0,
+    "on_disk_gb_month": 4.314,
+    "wal_gb_month": 4.426,
+    "db_gb_month12": 51.77,
+    "provisioned_gb_month12": 62.12,
+    "cost_month12": 6.77,
+    "db_gb_month60": 258.84,
+    "provisioned_gb_month60": 310.61,
+    "cost_month60": 37.83,
+    "year1_average_monthly_cost": 3.24
+   },
+   "egress": {
+    "uncached_gb": 29.578,
+    "probe_gb_workers_free": 0.59,
+    "bootstrap_bytes_per_new_device": 60034016,
+    "download_all_bytes_5_year": 1200000000
+   },
+   "costs": {
+    "supabase_pro_with_micro": 25.0,
+    "supabase_disk_month12_at_growth_rate": 6.77,
+    "supabase_egress": 0.0,
+    "supabase_realtime_peak_connections": 0.0,
+    "supabase_realtime_messages": 0.0,
+    "workers_paid_probes_1ms": 5.0,
+    "workers_logs_one_per_probe": 0.0,
+    "lambda_1pct_fallback": 0.0,
+    "resend": 0.0,
+    "posthog_events_anonymous": 0.0,
+    "posthog_errors_under_100k": 0.0,
+    "revenuecat_all_monthly_plans": 0.0
+   },
+   "subtotal_month": 36.77,
+   "subtotal_plus_disk_month60": 67.83,
+   "gap_vs_50": 0.0,
+   "sensitivities": {
+    "supabase_edge_if_all_calls_use_edge_functions": 0.0,
+    "posthog_events_other_rate": 0.0,
+    "revenuecat_annual_cohort": {
+     "mtr": 3999.0,
+     "charge": 39.99
+    },
+    "lambda_all_primary_failed": 0.1936,
+    "lambda_all_primary_failed_no_free_tier": 1.9766,
+    "lambda_1s_all_primary_failed": 0.1936,
+    "workers_10ms_cpu_increment": 0.0,
+    "realtime_messages_if_broadcast": 0.0,
+    "disk_cost_month12_no_toast_compression": 35.02
+   }
+  },
+  "mau5000_dev1_payload10000_identified": {
+   "inputs": {
     "mau": 5000,
     "devices": 1,
-    "backend_calls_before_pages_chunks": 2995164,
-    "calls_by_operation": {
-      "reconcile": 2400000,
-      "open_reconnect": 120000,
-      "auth_refresh": 60000,
-      "result_acceptance": 120000,
-      "grant_transfer_withdrawal": 60660,
-      "notification_fetch": 205920,
-      "billing_webhook_ingress": 1200,
-      "store_verification_job": 25200,
-      "export_and_bootstrap_create": 1200,
-      "deletion_request_and_cleanup": 120,
-      "hourly_expiry_sweep": 864
-    },
-    "primary_probe_attempts": 4920000,
-    "messages": 411840,
+    "payload_bytes": 10000,
+    "sessions": 100000,
+    "minutes": 2000000,
+    "subscribers_illustrative": 500,
+    "identified_events": true,
+    "compression_as_measured": true
+   },
+   "calls_by_operation": {
+    "reconcile_60s": 2400000,
+    "open_reconnect": 120000,
+    "auth_refresh": 60000,
+    "result_acceptance": 120000,
+    "grant_transfer_withdrawal": 60660,
+    "notification_fetch": 205920,
+    "billing_webhook_ingress": 1200,
+    "store_verification_job": 25200,
+    "export_and_bootstrap_create": 1200,
+    "bootstrap_pages_and_detail": 1800,
+    "deletion_request_and_cleanup": 120,
+    "hourly_expiry_sweep": 864
+   },
+   "backend_calls": 2996964,
+   "probe_attempts": 4920000,
+   "realtime": {
     "peak_connections": 500,
-    "email_attempts": 12000,
-    "analytics_events": 1203600,
-    "costs_before_disk_storage_egress_edge_other": {
-      "supabase_pro_micro": 25,
-      "workers_at_1ms_cpu_per_probe": 5.0,
-      "realtime_peak": 0,
-      "realtime_messages": 0.0,
-      "resend_capacity": 20,
-      "posthog_analytics_starting_rate": 10.18,
-      "posthog_errors_at_1000_per_month": 0,
-      "lambda_1pct_fallback_remaining_free": 0.0,
-      "revenuecat_all_monthly": 29.95
-    },
-    "subtotal": 90.13,
-    "all_backend_calls_through_edge_increment": 2,
-    "lambda_all_primary_failed_remaining_free": 0.784,
-    "lambda_all_primary_failed_no_free": 4.9416,
-    "lambda_1second_all_primary_failed_remaining_free": 4.3673,
-    "workers_10ms_increment": 0.384,
-    "new_result_gb_per_month": {
-      "10000": 1.0,
-      "100000": 10.0,
-      "1000000": 100.0
-    },
+    "messages_postgres_changes": 205920,
+    "messages_broadcast": 411840,
+    "exceeds_capped_pro_connection_limit": false
+   },
+   "emails": 12000,
+   "email_per_day_average": 400.0,
+   "analytics_events": 1203600,
+   "disk": {
+    "bytes_per_result_on_disk": 3372,
+    "raw_payload_gb_month": 1.0,
+    "on_disk_gb_month": 0.337,
+    "wal_gb_month": 0.359,
+    "db_gb_month12": 4.05,
+    "provisioned_gb_month12": 8.0,
+    "cost_month12": 0.0,
+    "db_gb_month60": 20.23,
+    "provisioned_gb_month60": 24.28,
+    "cost_month60": 2.03,
+    "year1_average_monthly_cost": 0.0
+   },
+   "egress": {
+    "uncached_gb": 3.407,
+    "probe_gb_workers_free": 1.476,
+    "bootstrap_bytes_per_new_device": 634016,
+    "download_all_bytes_5_year": 12000000
+   },
+   "costs": {
+    "supabase_pro_with_micro": 25.0,
+    "supabase_disk_month12_at_growth_rate": 0.0,
+    "supabase_egress": 0.0,
+    "supabase_realtime_peak_connections": 0.0,
+    "supabase_realtime_messages": 0.0,
+    "workers_paid_probes_1ms": 5.0,
+    "workers_logs_one_per_probe": 0.0,
+    "lambda_1pct_fallback": 0.0,
+    "resend": 20.0,
+    "posthog_events_identified": 40.31,
+    "posthog_errors_under_100k": 0.0,
+    "revenuecat_all_monthly_plans": 29.95
+   },
+   "subtotal_month": 120.26,
+   "subtotal_plus_disk_month60": 122.29,
+   "gap_vs_50": 70.26,
+   "sensitivities": {
+    "supabase_edge_if_all_calls_use_edge_functions": 2.0,
+    "posthog_events_other_rate": 10.18,
     "revenuecat_annual_cohort": {
-      "mtr": 19995.0,
-      "charge": 199.95
-    }
+     "mtr": 19995.0,
+     "charge": 199.95
+    },
+    "lambda_all_primary_failed": 0.784,
+    "lambda_all_primary_failed_no_free_tier": 4.9416,
+    "lambda_1s_all_primary_failed": 4.3673,
+    "workers_10ms_cpu_increment": 0.384,
+    "realtime_messages_if_broadcast": 0.0,
+    "disk_cost_month12_no_toast_compression": 0.89
+   }
   },
-  {
+  "mau5000_dev1_payload10000_anonymous": {
+   "inputs": {
+    "mau": 5000,
+    "devices": 1,
+    "payload_bytes": 10000,
+    "sessions": 100000,
+    "minutes": 2000000,
+    "subscribers_illustrative": 500,
+    "identified_events": false,
+    "compression_as_measured": true
+   },
+   "calls_by_operation": {
+    "reconcile_60s": 2400000,
+    "open_reconnect": 120000,
+    "auth_refresh": 60000,
+    "result_acceptance": 120000,
+    "grant_transfer_withdrawal": 60660,
+    "notification_fetch": 205920,
+    "billing_webhook_ingress": 1200,
+    "store_verification_job": 25200,
+    "export_and_bootstrap_create": 1200,
+    "bootstrap_pages_and_detail": 1800,
+    "deletion_request_and_cleanup": 120,
+    "hourly_expiry_sweep": 864
+   },
+   "backend_calls": 2996964,
+   "probe_attempts": 4920000,
+   "realtime": {
+    "peak_connections": 500,
+    "messages_postgres_changes": 205920,
+    "messages_broadcast": 411840,
+    "exceeds_capped_pro_connection_limit": false
+   },
+   "emails": 12000,
+   "email_per_day_average": 400.0,
+   "analytics_events": 1203600,
+   "disk": {
+    "bytes_per_result_on_disk": 3372,
+    "raw_payload_gb_month": 1.0,
+    "on_disk_gb_month": 0.337,
+    "wal_gb_month": 0.359,
+    "db_gb_month12": 4.05,
+    "provisioned_gb_month12": 8.0,
+    "cost_month12": 0.0,
+    "db_gb_month60": 20.23,
+    "provisioned_gb_month60": 24.28,
+    "cost_month60": 2.03,
+    "year1_average_monthly_cost": 0.0
+   },
+   "egress": {
+    "uncached_gb": 3.407,
+    "probe_gb_workers_free": 1.476,
+    "bootstrap_bytes_per_new_device": 634016,
+    "download_all_bytes_5_year": 12000000
+   },
+   "costs": {
+    "supabase_pro_with_micro": 25.0,
+    "supabase_disk_month12_at_growth_rate": 0.0,
+    "supabase_egress": 0.0,
+    "supabase_realtime_peak_connections": 0.0,
+    "supabase_realtime_messages": 0.0,
+    "workers_paid_probes_1ms": 5.0,
+    "workers_logs_one_per_probe": 0.0,
+    "lambda_1pct_fallback": 0.0,
+    "resend": 20.0,
+    "posthog_events_anonymous": 10.18,
+    "posthog_errors_under_100k": 0.0,
+    "revenuecat_all_monthly_plans": 29.95
+   },
+   "subtotal_month": 90.13,
+   "subtotal_plus_disk_month60": 92.16,
+   "gap_vs_50": 40.13,
+   "sensitivities": {
+    "supabase_edge_if_all_calls_use_edge_functions": 2.0,
+    "posthog_events_other_rate": 40.31,
+    "revenuecat_annual_cohort": {
+     "mtr": 19995.0,
+     "charge": 199.95
+    },
+    "lambda_all_primary_failed": 0.784,
+    "lambda_all_primary_failed_no_free_tier": 4.9416,
+    "lambda_1s_all_primary_failed": 4.3673,
+    "workers_10ms_cpu_increment": 0.384,
+    "realtime_messages_if_broadcast": 0.0,
+    "disk_cost_month12_no_toast_compression": 0.89
+   }
+  },
+  "mau5000_dev1_payload100000_identified": {
+   "inputs": {
+    "mau": 5000,
+    "devices": 1,
+    "payload_bytes": 100000,
+    "sessions": 100000,
+    "minutes": 2000000,
+    "subscribers_illustrative": 500,
+    "identified_events": true,
+    "compression_as_measured": true
+   },
+   "calls_by_operation": {
+    "reconcile_60s": 2400000,
+    "open_reconnect": 120000,
+    "auth_refresh": 60000,
+    "result_acceptance": 120000,
+    "grant_transfer_withdrawal": 60660,
+    "notification_fetch": 205920,
+    "billing_webhook_ingress": 1200,
+    "store_verification_job": 25200,
+    "export_and_bootstrap_create": 1200,
+    "bootstrap_pages_and_detail": 1800,
+    "deletion_request_and_cleanup": 120,
+    "hourly_expiry_sweep": 864
+   },
+   "backend_calls": 2996964,
+   "probe_attempts": 4920000,
+   "realtime": {
+    "peak_connections": 500,
+    "messages_postgres_changes": 205920,
+    "messages_broadcast": 411840,
+    "exceeds_capped_pro_connection_limit": false
+   },
+   "emails": 12000,
+   "email_per_day_average": 400.0,
+   "analytics_events": 1203600,
+   "disk": {
+    "bytes_per_result_on_disk": 23282,
+    "raw_payload_gb_month": 10.0,
+    "on_disk_gb_month": 2.328,
+    "wal_gb_month": 2.421,
+    "db_gb_month12": 27.94,
+    "provisioned_gb_month12": 33.53,
+    "cost_month12": 3.19,
+    "db_gb_month60": 139.69,
+    "provisioned_gb_month60": 167.63,
+    "cost_month60": 19.95,
+    "year1_average_monthly_cost": 1.35
+   },
+   "egress": {
+    "uncached_gb": 16.367,
+    "probe_gb_workers_free": 1.476,
+    "bootstrap_bytes_per_new_device": 6034016,
+    "download_all_bytes_5_year": 120000000
+   },
+   "costs": {
+    "supabase_pro_with_micro": 25.0,
+    "supabase_disk_month12_at_growth_rate": 3.19,
+    "supabase_egress": 0.0,
+    "supabase_realtime_peak_connections": 0.0,
+    "supabase_realtime_messages": 0.0,
+    "workers_paid_probes_1ms": 5.0,
+    "workers_logs_one_per_probe": 0.0,
+    "lambda_1pct_fallback": 0.0,
+    "resend": 20.0,
+    "posthog_events_identified": 40.31,
+    "posthog_errors_under_100k": 0.0,
+    "revenuecat_all_monthly_plans": 29.95
+   },
+   "subtotal_month": 123.45,
+   "subtotal_plus_disk_month60": 140.21,
+   "gap_vs_50": 73.45,
+   "sensitivities": {
+    "supabase_edge_if_all_calls_use_edge_functions": 2.0,
+    "posthog_events_other_rate": 10.18,
+    "revenuecat_annual_cohort": {
+     "mtr": 19995.0,
+     "charge": 199.95
+    },
+    "lambda_all_primary_failed": 0.784,
+    "lambda_all_primary_failed_no_free_tier": 4.9416,
+    "lambda_1s_all_primary_failed": 4.3673,
+    "workers_10ms_cpu_increment": 0.384,
+    "realtime_messages_if_broadcast": 0.0,
+    "disk_cost_month12_no_toast_compression": 17.09
+   }
+  },
+  "mau5000_dev1_payload100000_anonymous": {
+   "inputs": {
+    "mau": 5000,
+    "devices": 1,
+    "payload_bytes": 100000,
+    "sessions": 100000,
+    "minutes": 2000000,
+    "subscribers_illustrative": 500,
+    "identified_events": false,
+    "compression_as_measured": true
+   },
+   "calls_by_operation": {
+    "reconcile_60s": 2400000,
+    "open_reconnect": 120000,
+    "auth_refresh": 60000,
+    "result_acceptance": 120000,
+    "grant_transfer_withdrawal": 60660,
+    "notification_fetch": 205920,
+    "billing_webhook_ingress": 1200,
+    "store_verification_job": 25200,
+    "export_and_bootstrap_create": 1200,
+    "bootstrap_pages_and_detail": 1800,
+    "deletion_request_and_cleanup": 120,
+    "hourly_expiry_sweep": 864
+   },
+   "backend_calls": 2996964,
+   "probe_attempts": 4920000,
+   "realtime": {
+    "peak_connections": 500,
+    "messages_postgres_changes": 205920,
+    "messages_broadcast": 411840,
+    "exceeds_capped_pro_connection_limit": false
+   },
+   "emails": 12000,
+   "email_per_day_average": 400.0,
+   "analytics_events": 1203600,
+   "disk": {
+    "bytes_per_result_on_disk": 23282,
+    "raw_payload_gb_month": 10.0,
+    "on_disk_gb_month": 2.328,
+    "wal_gb_month": 2.421,
+    "db_gb_month12": 27.94,
+    "provisioned_gb_month12": 33.53,
+    "cost_month12": 3.19,
+    "db_gb_month60": 139.69,
+    "provisioned_gb_month60": 167.63,
+    "cost_month60": 19.95,
+    "year1_average_monthly_cost": 1.35
+   },
+   "egress": {
+    "uncached_gb": 16.367,
+    "probe_gb_workers_free": 1.476,
+    "bootstrap_bytes_per_new_device": 6034016,
+    "download_all_bytes_5_year": 120000000
+   },
+   "costs": {
+    "supabase_pro_with_micro": 25.0,
+    "supabase_disk_month12_at_growth_rate": 3.19,
+    "supabase_egress": 0.0,
+    "supabase_realtime_peak_connections": 0.0,
+    "supabase_realtime_messages": 0.0,
+    "workers_paid_probes_1ms": 5.0,
+    "workers_logs_one_per_probe": 0.0,
+    "lambda_1pct_fallback": 0.0,
+    "resend": 20.0,
+    "posthog_events_anonymous": 10.18,
+    "posthog_errors_under_100k": 0.0,
+    "revenuecat_all_monthly_plans": 29.95
+   },
+   "subtotal_month": 93.32,
+   "subtotal_plus_disk_month60": 110.08,
+   "gap_vs_50": 43.32,
+   "sensitivities": {
+    "supabase_edge_if_all_calls_use_edge_functions": 2.0,
+    "posthog_events_other_rate": 40.31,
+    "revenuecat_annual_cohort": {
+     "mtr": 19995.0,
+     "charge": 199.95
+    },
+    "lambda_all_primary_failed": 0.784,
+    "lambda_all_primary_failed_no_free_tier": 4.9416,
+    "lambda_1s_all_primary_failed": 4.3673,
+    "workers_10ms_cpu_increment": 0.384,
+    "realtime_messages_if_broadcast": 0.0,
+    "disk_cost_month12_no_toast_compression": 17.09
+   }
+  },
+  "mau5000_dev1_payload1000000_identified": {
+   "inputs": {
+    "mau": 5000,
+    "devices": 1,
+    "payload_bytes": 1000000,
+    "sessions": 100000,
+    "minutes": 2000000,
+    "subscribers_illustrative": 500,
+    "identified_events": true,
+    "compression_as_measured": true
+   },
+   "calls_by_operation": {
+    "reconcile_60s": 2400000,
+    "open_reconnect": 120000,
+    "auth_refresh": 60000,
+    "result_acceptance": 120000,
+    "grant_transfer_withdrawal": 60660,
+    "notification_fetch": 205920,
+    "billing_webhook_ingress": 1200,
+    "store_verification_job": 25200,
+    "export_and_bootstrap_create": 1200,
+    "bootstrap_pages_and_detail": 1800,
+    "deletion_request_and_cleanup": 120,
+    "hourly_expiry_sweep": 864
+   },
+   "backend_calls": 2996964,
+   "probe_attempts": 4920000,
+   "realtime": {
+    "peak_connections": 500,
+    "messages_postgres_changes": 205920,
+    "messages_broadcast": 411840,
+    "exceeds_capped_pro_connection_limit": false
+   },
+   "emails": 12000,
+   "email_per_day_average": 400.0,
+   "analytics_events": 1203600,
+   "disk": {
+    "bytes_per_result_on_disk": 215700,
+    "raw_payload_gb_month": 100.0,
+    "on_disk_gb_month": 21.57,
+    "wal_gb_month": 22.131,
+    "db_gb_month12": 258.84,
+    "provisioned_gb_month12": 310.61,
+    "cost_month12": 37.83,
+    "db_gb_month60": 1294.2,
+    "provisioned_gb_month60": 1553.04,
+    "cost_month60": 193.13,
+    "year1_average_monthly_cost": 20.03
+   },
+   "egress": {
+    "uncached_gb": 145.967,
+    "probe_gb_workers_free": 1.476,
+    "bootstrap_bytes_per_new_device": 60034016,
+    "download_all_bytes_5_year": 1200000000
+   },
+   "costs": {
+    "supabase_pro_with_micro": 25.0,
+    "supabase_disk_month12_at_growth_rate": 37.83,
+    "supabase_egress": 0.0,
+    "supabase_realtime_peak_connections": 0.0,
+    "supabase_realtime_messages": 0.0,
+    "workers_paid_probes_1ms": 5.0,
+    "workers_logs_one_per_probe": 0.0,
+    "lambda_1pct_fallback": 0.0,
+    "resend": 20.0,
+    "posthog_events_identified": 40.31,
+    "posthog_errors_under_100k": 0.0,
+    "revenuecat_all_monthly_plans": 29.95
+   },
+   "subtotal_month": 158.09,
+   "subtotal_plus_disk_month60": 313.39,
+   "gap_vs_50": 108.09,
+   "sensitivities": {
+    "supabase_edge_if_all_calls_use_edge_functions": 2.0,
+    "posthog_events_other_rate": 10.18,
+    "revenuecat_annual_cohort": {
+     "mtr": 19995.0,
+     "charge": 199.95
+    },
+    "lambda_all_primary_failed": 0.784,
+    "lambda_all_primary_failed_no_free_tier": 4.9416,
+    "lambda_1s_all_primary_failed": 4.3673,
+    "workers_10ms_cpu_increment": 0.384,
+    "realtime_messages_if_broadcast": 0.0,
+    "disk_cost_month12_no_toast_compression": 179.09
+   }
+  },
+  "mau5000_dev1_payload1000000_anonymous": {
+   "inputs": {
+    "mau": 5000,
+    "devices": 1,
+    "payload_bytes": 1000000,
+    "sessions": 100000,
+    "minutes": 2000000,
+    "subscribers_illustrative": 500,
+    "identified_events": false,
+    "compression_as_measured": true
+   },
+   "calls_by_operation": {
+    "reconcile_60s": 2400000,
+    "open_reconnect": 120000,
+    "auth_refresh": 60000,
+    "result_acceptance": 120000,
+    "grant_transfer_withdrawal": 60660,
+    "notification_fetch": 205920,
+    "billing_webhook_ingress": 1200,
+    "store_verification_job": 25200,
+    "export_and_bootstrap_create": 1200,
+    "bootstrap_pages_and_detail": 1800,
+    "deletion_request_and_cleanup": 120,
+    "hourly_expiry_sweep": 864
+   },
+   "backend_calls": 2996964,
+   "probe_attempts": 4920000,
+   "realtime": {
+    "peak_connections": 500,
+    "messages_postgres_changes": 205920,
+    "messages_broadcast": 411840,
+    "exceeds_capped_pro_connection_limit": false
+   },
+   "emails": 12000,
+   "email_per_day_average": 400.0,
+   "analytics_events": 1203600,
+   "disk": {
+    "bytes_per_result_on_disk": 215700,
+    "raw_payload_gb_month": 100.0,
+    "on_disk_gb_month": 21.57,
+    "wal_gb_month": 22.131,
+    "db_gb_month12": 258.84,
+    "provisioned_gb_month12": 310.61,
+    "cost_month12": 37.83,
+    "db_gb_month60": 1294.2,
+    "provisioned_gb_month60": 1553.04,
+    "cost_month60": 193.13,
+    "year1_average_monthly_cost": 20.03
+   },
+   "egress": {
+    "uncached_gb": 145.967,
+    "probe_gb_workers_free": 1.476,
+    "bootstrap_bytes_per_new_device": 60034016,
+    "download_all_bytes_5_year": 1200000000
+   },
+   "costs": {
+    "supabase_pro_with_micro": 25.0,
+    "supabase_disk_month12_at_growth_rate": 37.83,
+    "supabase_egress": 0.0,
+    "supabase_realtime_peak_connections": 0.0,
+    "supabase_realtime_messages": 0.0,
+    "workers_paid_probes_1ms": 5.0,
+    "workers_logs_one_per_probe": 0.0,
+    "lambda_1pct_fallback": 0.0,
+    "resend": 20.0,
+    "posthog_events_anonymous": 10.18,
+    "posthog_errors_under_100k": 0.0,
+    "revenuecat_all_monthly_plans": 29.95
+   },
+   "subtotal_month": 127.96,
+   "subtotal_plus_disk_month60": 283.26,
+   "gap_vs_50": 77.96,
+   "sensitivities": {
+    "supabase_edge_if_all_calls_use_edge_functions": 2.0,
+    "posthog_events_other_rate": 40.31,
+    "revenuecat_annual_cohort": {
+     "mtr": 19995.0,
+     "charge": 199.95
+    },
+    "lambda_all_primary_failed": 0.784,
+    "lambda_all_primary_failed_no_free_tier": 4.9416,
+    "lambda_1s_all_primary_failed": 4.3673,
+    "workers_10ms_cpu_increment": 0.384,
+    "realtime_messages_if_broadcast": 0.0,
+    "disk_cost_month12_no_toast_compression": 179.09
+   }
+  },
+  "mau5000_dev2_payload10000_identified": {
+   "inputs": {
     "mau": 5000,
     "devices": 2,
-    "backend_calls_before_pages_chunks": 5781084,
-    "calls_by_operation": {
-      "reconcile": 4800000,
-      "open_reconnect": 240000,
-      "auth_refresh": 120000,
-      "result_acceptance": 120000,
-      "grant_transfer_withdrawal": 60660,
-      "notification_fetch": 411840,
-      "billing_webhook_ingress": 1200,
-      "store_verification_job": 25200,
-      "export_and_bootstrap_create": 1200,
-      "deletion_request_and_cleanup": 120,
-      "hourly_expiry_sweep": 864
-    },
-    "primary_probe_attempts": 9840000,
-    "messages": 617760,
+    "payload_bytes": 10000,
+    "sessions": 100000,
+    "minutes": 2000000,
+    "subscribers_illustrative": 500,
+    "identified_events": true,
+    "compression_as_measured": true
+   },
+   "calls_by_operation": {
+    "reconcile_60s": 4800000,
+    "open_reconnect": 240000,
+    "auth_refresh": 120000,
+    "result_acceptance": 120000,
+    "grant_transfer_withdrawal": 60660,
+    "notification_fetch": 411840,
+    "billing_webhook_ingress": 1200,
+    "store_verification_job": 25200,
+    "export_and_bootstrap_create": 1200,
+    "bootstrap_pages_and_detail": 1800,
+    "deletion_request_and_cleanup": 120,
+    "hourly_expiry_sweep": 864
+   },
+   "backend_calls": 5782884,
+   "probe_attempts": 9840000,
+   "realtime": {
     "peak_connections": 1000,
-    "email_attempts": 12000,
-    "analytics_events": 1203600,
-    "costs_before_disk_storage_egress_edge_other": {
-      "supabase_pro_micro": 25,
-      "workers_at_1ms_cpu_per_probe": 5.0,
-      "realtime_peak": 10,
-      "realtime_messages": 0.0,
-      "resend_capacity": 20,
-      "posthog_analytics_starting_rate": 10.18,
-      "posthog_errors_at_1000_per_month": 0,
-      "lambda_1pct_fallback_remaining_free": 0.0,
-      "revenuecat_all_monthly": 29.95
-    },
-    "subtotal": 100.13,
-    "all_backend_calls_through_edge_increment": 8,
-    "lambda_all_primary_failed_remaining_free": 4.1135,
-    "lambda_all_primary_failed_no_free": 9.8831,
-    "lambda_1second_all_primary_failed_remaining_free": 17.9469,
-    "workers_10ms_increment": 1.368,
-    "new_result_gb_per_month": {
-      "10000": 1.0,
-      "100000": 10.0,
-      "1000000": 100.0
-    },
+    "messages_postgres_changes": 411840,
+    "messages_broadcast": 617760,
+    "exceeds_capped_pro_connection_limit": true
+   },
+   "emails": 12000,
+   "email_per_day_average": 400.0,
+   "analytics_events": 1203600,
+   "disk": {
+    "bytes_per_result_on_disk": 3372,
+    "raw_payload_gb_month": 1.0,
+    "on_disk_gb_month": 0.337,
+    "wal_gb_month": 0.359,
+    "db_gb_month12": 4.05,
+    "provisioned_gb_month12": 8.0,
+    "cost_month12": 0.0,
+    "db_gb_month60": 20.23,
+    "provisioned_gb_month60": 24.28,
+    "cost_month60": 2.03,
+    "year1_average_monthly_cost": 0.0
+   },
+   "egress": {
+    "uncached_gb": 5.332,
+    "probe_gb_workers_free": 2.952,
+    "bootstrap_bytes_per_new_device": 634016,
+    "download_all_bytes_5_year": 12000000
+   },
+   "costs": {
+    "supabase_pro_with_micro": 25.0,
+    "supabase_disk_month12_at_growth_rate": 0.0,
+    "supabase_egress": 0.0,
+    "supabase_realtime_peak_connections": 10.0,
+    "supabase_realtime_messages": 0.0,
+    "workers_paid_probes_1ms": 5.0,
+    "workers_logs_one_per_probe": 0.0,
+    "lambda_1pct_fallback": 0.0,
+    "resend": 20.0,
+    "posthog_events_identified": 40.31,
+    "posthog_errors_under_100k": 0.0,
+    "revenuecat_all_monthly_plans": 29.95
+   },
+   "subtotal_month": 130.26,
+   "subtotal_plus_disk_month60": 132.29,
+   "gap_vs_50": 80.26,
+   "sensitivities": {
+    "supabase_edge_if_all_calls_use_edge_functions": 8.0,
+    "posthog_events_other_rate": 10.18,
     "revenuecat_annual_cohort": {
-      "mtr": 19995.0,
-      "charge": 199.95
-    }
+     "mtr": 19995.0,
+     "charge": 199.95
+    },
+    "lambda_all_primary_failed": 4.1135,
+    "lambda_all_primary_failed_no_free_tier": 9.8831,
+    "lambda_1s_all_primary_failed": 17.9469,
+    "workers_10ms_cpu_increment": 1.368,
+    "realtime_messages_if_broadcast": 0.0,
+    "disk_cost_month12_no_toast_compression": 0.89
+   }
+  },
+  "mau5000_dev2_payload10000_anonymous": {
+   "inputs": {
+    "mau": 5000,
+    "devices": 2,
+    "payload_bytes": 10000,
+    "sessions": 100000,
+    "minutes": 2000000,
+    "subscribers_illustrative": 500,
+    "identified_events": false,
+    "compression_as_measured": true
+   },
+   "calls_by_operation": {
+    "reconcile_60s": 4800000,
+    "open_reconnect": 240000,
+    "auth_refresh": 120000,
+    "result_acceptance": 120000,
+    "grant_transfer_withdrawal": 60660,
+    "notification_fetch": 411840,
+    "billing_webhook_ingress": 1200,
+    "store_verification_job": 25200,
+    "export_and_bootstrap_create": 1200,
+    "bootstrap_pages_and_detail": 1800,
+    "deletion_request_and_cleanup": 120,
+    "hourly_expiry_sweep": 864
+   },
+   "backend_calls": 5782884,
+   "probe_attempts": 9840000,
+   "realtime": {
+    "peak_connections": 1000,
+    "messages_postgres_changes": 411840,
+    "messages_broadcast": 617760,
+    "exceeds_capped_pro_connection_limit": true
+   },
+   "emails": 12000,
+   "email_per_day_average": 400.0,
+   "analytics_events": 1203600,
+   "disk": {
+    "bytes_per_result_on_disk": 3372,
+    "raw_payload_gb_month": 1.0,
+    "on_disk_gb_month": 0.337,
+    "wal_gb_month": 0.359,
+    "db_gb_month12": 4.05,
+    "provisioned_gb_month12": 8.0,
+    "cost_month12": 0.0,
+    "db_gb_month60": 20.23,
+    "provisioned_gb_month60": 24.28,
+    "cost_month60": 2.03,
+    "year1_average_monthly_cost": 0.0
+   },
+   "egress": {
+    "uncached_gb": 5.332,
+    "probe_gb_workers_free": 2.952,
+    "bootstrap_bytes_per_new_device": 634016,
+    "download_all_bytes_5_year": 12000000
+   },
+   "costs": {
+    "supabase_pro_with_micro": 25.0,
+    "supabase_disk_month12_at_growth_rate": 0.0,
+    "supabase_egress": 0.0,
+    "supabase_realtime_peak_connections": 10.0,
+    "supabase_realtime_messages": 0.0,
+    "workers_paid_probes_1ms": 5.0,
+    "workers_logs_one_per_probe": 0.0,
+    "lambda_1pct_fallback": 0.0,
+    "resend": 20.0,
+    "posthog_events_anonymous": 10.18,
+    "posthog_errors_under_100k": 0.0,
+    "revenuecat_all_monthly_plans": 29.95
+   },
+   "subtotal_month": 100.13,
+   "subtotal_plus_disk_month60": 102.16,
+   "gap_vs_50": 50.13,
+   "sensitivities": {
+    "supabase_edge_if_all_calls_use_edge_functions": 8.0,
+    "posthog_events_other_rate": 40.31,
+    "revenuecat_annual_cohort": {
+     "mtr": 19995.0,
+     "charge": 199.95
+    },
+    "lambda_all_primary_failed": 4.1135,
+    "lambda_all_primary_failed_no_free_tier": 9.8831,
+    "lambda_1s_all_primary_failed": 17.9469,
+    "workers_10ms_cpu_increment": 1.368,
+    "realtime_messages_if_broadcast": 0.0,
+    "disk_cost_month12_no_toast_compression": 0.89
+   }
+  },
+  "mau5000_dev2_payload100000_identified": {
+   "inputs": {
+    "mau": 5000,
+    "devices": 2,
+    "payload_bytes": 100000,
+    "sessions": 100000,
+    "minutes": 2000000,
+    "subscribers_illustrative": 500,
+    "identified_events": true,
+    "compression_as_measured": true
+   },
+   "calls_by_operation": {
+    "reconcile_60s": 4800000,
+    "open_reconnect": 240000,
+    "auth_refresh": 120000,
+    "result_acceptance": 120000,
+    "grant_transfer_withdrawal": 60660,
+    "notification_fetch": 411840,
+    "billing_webhook_ingress": 1200,
+    "store_verification_job": 25200,
+    "export_and_bootstrap_create": 1200,
+    "bootstrap_pages_and_detail": 1800,
+    "deletion_request_and_cleanup": 120,
+    "hourly_expiry_sweep": 864
+   },
+   "backend_calls": 5782884,
+   "probe_attempts": 9840000,
+   "realtime": {
+    "peak_connections": 1000,
+    "messages_postgres_changes": 411840,
+    "messages_broadcast": 617760,
+    "exceeds_capped_pro_connection_limit": true
+   },
+   "emails": 12000,
+   "email_per_day_average": 400.0,
+   "analytics_events": 1203600,
+   "disk": {
+    "bytes_per_result_on_disk": 23282,
+    "raw_payload_gb_month": 10.0,
+    "on_disk_gb_month": 2.328,
+    "wal_gb_month": 2.421,
+    "db_gb_month12": 27.94,
+    "provisioned_gb_month12": 33.53,
+    "cost_month12": 3.19,
+    "db_gb_month60": 139.69,
+    "provisioned_gb_month60": 167.63,
+    "cost_month60": 19.95,
+    "year1_average_monthly_cost": 1.35
+   },
+   "egress": {
+    "uncached_gb": 18.292,
+    "probe_gb_workers_free": 2.952,
+    "bootstrap_bytes_per_new_device": 6034016,
+    "download_all_bytes_5_year": 120000000
+   },
+   "costs": {
+    "supabase_pro_with_micro": 25.0,
+    "supabase_disk_month12_at_growth_rate": 3.19,
+    "supabase_egress": 0.0,
+    "supabase_realtime_peak_connections": 10.0,
+    "supabase_realtime_messages": 0.0,
+    "workers_paid_probes_1ms": 5.0,
+    "workers_logs_one_per_probe": 0.0,
+    "lambda_1pct_fallback": 0.0,
+    "resend": 20.0,
+    "posthog_events_identified": 40.31,
+    "posthog_errors_under_100k": 0.0,
+    "revenuecat_all_monthly_plans": 29.95
+   },
+   "subtotal_month": 133.45,
+   "subtotal_plus_disk_month60": 150.21,
+   "gap_vs_50": 83.45,
+   "sensitivities": {
+    "supabase_edge_if_all_calls_use_edge_functions": 8.0,
+    "posthog_events_other_rate": 10.18,
+    "revenuecat_annual_cohort": {
+     "mtr": 19995.0,
+     "charge": 199.95
+    },
+    "lambda_all_primary_failed": 4.1135,
+    "lambda_all_primary_failed_no_free_tier": 9.8831,
+    "lambda_1s_all_primary_failed": 17.9469,
+    "workers_10ms_cpu_increment": 1.368,
+    "realtime_messages_if_broadcast": 0.0,
+    "disk_cost_month12_no_toast_compression": 17.09
+   }
+  },
+  "mau5000_dev2_payload100000_anonymous": {
+   "inputs": {
+    "mau": 5000,
+    "devices": 2,
+    "payload_bytes": 100000,
+    "sessions": 100000,
+    "minutes": 2000000,
+    "subscribers_illustrative": 500,
+    "identified_events": false,
+    "compression_as_measured": true
+   },
+   "calls_by_operation": {
+    "reconcile_60s": 4800000,
+    "open_reconnect": 240000,
+    "auth_refresh": 120000,
+    "result_acceptance": 120000,
+    "grant_transfer_withdrawal": 60660,
+    "notification_fetch": 411840,
+    "billing_webhook_ingress": 1200,
+    "store_verification_job": 25200,
+    "export_and_bootstrap_create": 1200,
+    "bootstrap_pages_and_detail": 1800,
+    "deletion_request_and_cleanup": 120,
+    "hourly_expiry_sweep": 864
+   },
+   "backend_calls": 5782884,
+   "probe_attempts": 9840000,
+   "realtime": {
+    "peak_connections": 1000,
+    "messages_postgres_changes": 411840,
+    "messages_broadcast": 617760,
+    "exceeds_capped_pro_connection_limit": true
+   },
+   "emails": 12000,
+   "email_per_day_average": 400.0,
+   "analytics_events": 1203600,
+   "disk": {
+    "bytes_per_result_on_disk": 23282,
+    "raw_payload_gb_month": 10.0,
+    "on_disk_gb_month": 2.328,
+    "wal_gb_month": 2.421,
+    "db_gb_month12": 27.94,
+    "provisioned_gb_month12": 33.53,
+    "cost_month12": 3.19,
+    "db_gb_month60": 139.69,
+    "provisioned_gb_month60": 167.63,
+    "cost_month60": 19.95,
+    "year1_average_monthly_cost": 1.35
+   },
+   "egress": {
+    "uncached_gb": 18.292,
+    "probe_gb_workers_free": 2.952,
+    "bootstrap_bytes_per_new_device": 6034016,
+    "download_all_bytes_5_year": 120000000
+   },
+   "costs": {
+    "supabase_pro_with_micro": 25.0,
+    "supabase_disk_month12_at_growth_rate": 3.19,
+    "supabase_egress": 0.0,
+    "supabase_realtime_peak_connections": 10.0,
+    "supabase_realtime_messages": 0.0,
+    "workers_paid_probes_1ms": 5.0,
+    "workers_logs_one_per_probe": 0.0,
+    "lambda_1pct_fallback": 0.0,
+    "resend": 20.0,
+    "posthog_events_anonymous": 10.18,
+    "posthog_errors_under_100k": 0.0,
+    "revenuecat_all_monthly_plans": 29.95
+   },
+   "subtotal_month": 103.32,
+   "subtotal_plus_disk_month60": 120.08,
+   "gap_vs_50": 53.32,
+   "sensitivities": {
+    "supabase_edge_if_all_calls_use_edge_functions": 8.0,
+    "posthog_events_other_rate": 40.31,
+    "revenuecat_annual_cohort": {
+     "mtr": 19995.0,
+     "charge": 199.95
+    },
+    "lambda_all_primary_failed": 4.1135,
+    "lambda_all_primary_failed_no_free_tier": 9.8831,
+    "lambda_1s_all_primary_failed": 17.9469,
+    "workers_10ms_cpu_increment": 1.368,
+    "realtime_messages_if_broadcast": 0.0,
+    "disk_cost_month12_no_toast_compression": 17.09
+   }
+  },
+  "mau5000_dev2_payload1000000_identified": {
+   "inputs": {
+    "mau": 5000,
+    "devices": 2,
+    "payload_bytes": 1000000,
+    "sessions": 100000,
+    "minutes": 2000000,
+    "subscribers_illustrative": 500,
+    "identified_events": true,
+    "compression_as_measured": true
+   },
+   "calls_by_operation": {
+    "reconcile_60s": 4800000,
+    "open_reconnect": 240000,
+    "auth_refresh": 120000,
+    "result_acceptance": 120000,
+    "grant_transfer_withdrawal": 60660,
+    "notification_fetch": 411840,
+    "billing_webhook_ingress": 1200,
+    "store_verification_job": 25200,
+    "export_and_bootstrap_create": 1200,
+    "bootstrap_pages_and_detail": 1800,
+    "deletion_request_and_cleanup": 120,
+    "hourly_expiry_sweep": 864
+   },
+   "backend_calls": 5782884,
+   "probe_attempts": 9840000,
+   "realtime": {
+    "peak_connections": 1000,
+    "messages_postgres_changes": 411840,
+    "messages_broadcast": 617760,
+    "exceeds_capped_pro_connection_limit": true
+   },
+   "emails": 12000,
+   "email_per_day_average": 400.0,
+   "analytics_events": 1203600,
+   "disk": {
+    "bytes_per_result_on_disk": 215700,
+    "raw_payload_gb_month": 100.0,
+    "on_disk_gb_month": 21.57,
+    "wal_gb_month": 22.131,
+    "db_gb_month12": 258.84,
+    "provisioned_gb_month12": 310.61,
+    "cost_month12": 37.83,
+    "db_gb_month60": 1294.2,
+    "provisioned_gb_month60": 1553.04,
+    "cost_month60": 193.13,
+    "year1_average_monthly_cost": 20.03
+   },
+   "egress": {
+    "uncached_gb": 147.892,
+    "probe_gb_workers_free": 2.952,
+    "bootstrap_bytes_per_new_device": 60034016,
+    "download_all_bytes_5_year": 1200000000
+   },
+   "costs": {
+    "supabase_pro_with_micro": 25.0,
+    "supabase_disk_month12_at_growth_rate": 37.83,
+    "supabase_egress": 0.0,
+    "supabase_realtime_peak_connections": 10.0,
+    "supabase_realtime_messages": 0.0,
+    "workers_paid_probes_1ms": 5.0,
+    "workers_logs_one_per_probe": 0.0,
+    "lambda_1pct_fallback": 0.0,
+    "resend": 20.0,
+    "posthog_events_identified": 40.31,
+    "posthog_errors_under_100k": 0.0,
+    "revenuecat_all_monthly_plans": 29.95
+   },
+   "subtotal_month": 168.09,
+   "subtotal_plus_disk_month60": 323.39,
+   "gap_vs_50": 118.09,
+   "sensitivities": {
+    "supabase_edge_if_all_calls_use_edge_functions": 8.0,
+    "posthog_events_other_rate": 10.18,
+    "revenuecat_annual_cohort": {
+     "mtr": 19995.0,
+     "charge": 199.95
+    },
+    "lambda_all_primary_failed": 4.1135,
+    "lambda_all_primary_failed_no_free_tier": 9.8831,
+    "lambda_1s_all_primary_failed": 17.9469,
+    "workers_10ms_cpu_increment": 1.368,
+    "realtime_messages_if_broadcast": 0.0,
+    "disk_cost_month12_no_toast_compression": 179.09
+   }
+  },
+  "mau5000_dev2_payload1000000_anonymous": {
+   "inputs": {
+    "mau": 5000,
+    "devices": 2,
+    "payload_bytes": 1000000,
+    "sessions": 100000,
+    "minutes": 2000000,
+    "subscribers_illustrative": 500,
+    "identified_events": false,
+    "compression_as_measured": true
+   },
+   "calls_by_operation": {
+    "reconcile_60s": 4800000,
+    "open_reconnect": 240000,
+    "auth_refresh": 120000,
+    "result_acceptance": 120000,
+    "grant_transfer_withdrawal": 60660,
+    "notification_fetch": 411840,
+    "billing_webhook_ingress": 1200,
+    "store_verification_job": 25200,
+    "export_and_bootstrap_create": 1200,
+    "bootstrap_pages_and_detail": 1800,
+    "deletion_request_and_cleanup": 120,
+    "hourly_expiry_sweep": 864
+   },
+   "backend_calls": 5782884,
+   "probe_attempts": 9840000,
+   "realtime": {
+    "peak_connections": 1000,
+    "messages_postgres_changes": 411840,
+    "messages_broadcast": 617760,
+    "exceeds_capped_pro_connection_limit": true
+   },
+   "emails": 12000,
+   "email_per_day_average": 400.0,
+   "analytics_events": 1203600,
+   "disk": {
+    "bytes_per_result_on_disk": 215700,
+    "raw_payload_gb_month": 100.0,
+    "on_disk_gb_month": 21.57,
+    "wal_gb_month": 22.131,
+    "db_gb_month12": 258.84,
+    "provisioned_gb_month12": 310.61,
+    "cost_month12": 37.83,
+    "db_gb_month60": 1294.2,
+    "provisioned_gb_month60": 1553.04,
+    "cost_month60": 193.13,
+    "year1_average_monthly_cost": 20.03
+   },
+   "egress": {
+    "uncached_gb": 147.892,
+    "probe_gb_workers_free": 2.952,
+    "bootstrap_bytes_per_new_device": 60034016,
+    "download_all_bytes_5_year": 1200000000
+   },
+   "costs": {
+    "supabase_pro_with_micro": 25.0,
+    "supabase_disk_month12_at_growth_rate": 37.83,
+    "supabase_egress": 0.0,
+    "supabase_realtime_peak_connections": 10.0,
+    "supabase_realtime_messages": 0.0,
+    "workers_paid_probes_1ms": 5.0,
+    "workers_logs_one_per_probe": 0.0,
+    "lambda_1pct_fallback": 0.0,
+    "resend": 20.0,
+    "posthog_events_anonymous": 10.18,
+    "posthog_errors_under_100k": 0.0,
+    "revenuecat_all_monthly_plans": 29.95
+   },
+   "subtotal_month": 137.96,
+   "subtotal_plus_disk_month60": 293.26,
+   "gap_vs_50": 87.96,
+   "sensitivities": {
+    "supabase_edge_if_all_calls_use_edge_functions": 8.0,
+    "posthog_events_other_rate": 40.31,
+    "revenuecat_annual_cohort": {
+     "mtr": 19995.0,
+     "charge": 199.95
+    },
+    "lambda_all_primary_failed": 4.1135,
+    "lambda_all_primary_failed_no_free_tier": 9.8831,
+    "lambda_1s_all_primary_failed": 17.9469,
+    "workers_10ms_cpu_increment": 1.368,
+    "realtime_messages_if_broadcast": 0.0,
+    "disk_cost_month12_no_toast_compression": 179.09
+   }
   }
-]
+ },
+ "beta_overlap": {
+  "overlap_days": 30,
+  "cleanup_days_after_shutdown": 7,
+  "testers": 50,
+  "second_micro_project_compute": 11.93,
+  "second_project_disk_included_gb": 8.0,
+  "beta_notice_emails": 100,
+  "notice_days_needed_at_free_daily_cap": 1,
+  "beta_export_burst_gb": 1.2,
+  "beta_egress_cost": 0.0,
+  "shutdown_fencing_and_cleanup_jobs": "compute only; within the second project's Micro hours above",
+  "total_overlap_cost": 11.93,
+  "per_extra_overlap_day": 0.323,
+  "note": "Separate RevenueCat sandbox, PostHog project, Resend domain, Workers/Lambda routes add no listed charge; cleanup retention of provider copies is a qualification task, not a priced item."
+ },
+ "post_mvp": {
+  "launch_10KB_year1": {
+   "db_gb": 0.81,
+   "dump_ratio": 6.31,
+   "dump_gb": 0.128,
+   "source_transfer_gb_month": 3.85,
+   "b2_stored_gb": 0.385,
+   "b2_storage": 0.0,
+   "b2_restore_egress": 0.0,
+   "supabase_egress_for_dumps": 0.36,
+   "supabase_egress_note": "charged only beyond the shared 250 GB uncached allowance; shown at full rate as the worst case",
+   "executor_lambda_illustrative": 0.0,
+   "restore_exercise_compute": "unpriced: isolated restore target (a Supabase branch at $0.01344/h or a second project) for the exercise duration",
+   "pitr_alternative_if_ever_adopted": 105.04,
+   "ai_operations": "unpriced: model/agent hosting and token costs depend on an unselected implementation",
+   "subtotal_priced": 0.0
+  },
+  "launch_100KB_year1": {
+   "db_gb": 5.59,
+   "dump_ratio": 6.31,
+   "dump_gb": 0.886,
+   "source_transfer_gb_month": 26.58,
+   "b2_stored_gb": 2.658,
+   "b2_storage": 0.0,
+   "b2_restore_egress": 0.0,
+   "supabase_egress_for_dumps": 2.43,
+   "supabase_egress_note": "charged only beyond the shared 250 GB uncached allowance; shown at full rate as the worst case",
+   "executor_lambda_illustrative": 0.0,
+   "restore_exercise_compute": "unpriced: isolated restore target (a Supabase branch at $0.01344/h or a second project) for the exercise duration",
+   "pitr_alternative_if_ever_adopted": 105.04,
+   "ai_operations": "unpriced: model/agent hosting and token costs depend on an unselected implementation",
+   "subtotal_priced": 0.0
+  },
+  "growth_100KB_year1": {
+   "db_gb": 27.94,
+   "dump_ratio": 6.31,
+   "dump_gb": 4.428,
+   "source_transfer_gb_month": 132.84,
+   "b2_stored_gb": 13.284,
+   "b2_storage": 0.0228,
+   "b2_restore_egress": 0.0,
+   "supabase_egress_for_dumps": 11.97,
+   "supabase_egress_note": "charged only beyond the shared 250 GB uncached allowance; shown at full rate as the worst case",
+   "executor_lambda_illustrative": 0.0,
+   "restore_exercise_compute": "unpriced: isolated restore target (a Supabase branch at $0.01344/h or a second project) for the exercise duration",
+   "pitr_alternative_if_ever_adopted": 105.04,
+   "ai_operations": "unpriced: model/agent hosting and token costs depend on an unselected implementation",
+   "subtotal_priced": 0.02
+  },
+  "growth_100KB_year5": {
+   "db_gb": 139.69,
+   "dump_ratio": 6.31,
+   "dump_gb": 22.138,
+   "source_transfer_gb_month": 664.14,
+   "b2_stored_gb": 66.414,
+   "b2_storage": 0.3921,
+   "b2_restore_egress": 0.0,
+   "supabase_egress_for_dumps": 59.85,
+   "supabase_egress_note": "charged only beyond the shared 250 GB uncached allowance; shown at full rate as the worst case",
+   "executor_lambda_illustrative": 0.0,
+   "restore_exercise_compute": "unpriced: isolated restore target (a Supabase branch at $0.01344/h or a second project) for the exercise duration",
+   "pitr_alternative_if_ever_adopted": 105.04,
+   "ai_operations": "unpriced: model/agent hosting and token costs depend on an unselected implementation",
+   "subtotal_priced": 0.39
+  }
+ },
+ "fit_ladder_growth": [
+  {
+   "step": "growth base: 5,000 MAU, two devices, 100 KB results, identified analytics events",
+   "subtotal": 133.45
+  },
+  {
+   "step": "send only anonymous analytics events (no person profiles)",
+   "subtotal": 103.32
+  },
+  {
+   "step": "one Realtime connection per player (background device disconnects) keeps peak within 500",
+   "subtotal": 93.32
+  },
+  {
+   "step": "transactional email stays within Resend free tier (needs <= 3,000/month and <= 100/day; illustrative 2/MAU exceeds it)",
+   "subtotal": 73.32
+  },
+  {
+   "step": "treat RevenueCat's 1% of MTR as revenue-linked cost outside the fixed backend target (policy decision required)",
+   "subtotal": 43.37
+  },
+  {
+   "step": "month-1 rather than month-12 disk (history accumulates; this is timing, not a saving)",
+   "subtotal": 40.18
+  }
+ ],
+ "crossing_1_device_100KB_identified": {
+  "alert_40_mau": 1500,
+  "target_50_mau": 1500,
+  "points": [
+   {
+    "mau": 1000,
+    "subtotal": 30.0
+   },
+   {
+    "mau": 1250,
+    "subtotal": 30.05
+   },
+   {
+    "mau": 1500,
+    "subtotal": 50.26
+   },
+   {
+    "mau": 1750,
+    "subtotal": 50.47
+   },
+   {
+    "mau": 2000,
+    "subtotal": 50.68
+   },
+   {
+    "mau": 2250,
+    "subtotal": 50.89
+   },
+   {
+    "mau": 2500,
+    "subtotal": 51.1
+   },
+   {
+    "mau": 2750,
+    "subtotal": 51.3
+   },
+   {
+    "mau": 3000,
+    "subtotal": 51.51
+   },
+   {
+    "mau": 3250,
+    "subtotal": 51.72
+   },
+   {
+    "mau": 3500,
+    "subtotal": 51.93
+   },
+   {
+    "mau": 3750,
+    "subtotal": 52.14
+   },
+   {
+    "mau": 4000,
+    "subtotal": 52.35
+   },
+   {
+    "mau": 4250,
+    "subtotal": 82.69
+   },
+   {
+    "mau": 4500,
+    "subtotal": 96.28
+   },
+   {
+    "mau": 4750,
+    "subtotal": 109.86
+   },
+   {
+    "mau": 5000,
+    "subtotal": 123.45
+   }
+  ]
+ },
+ "crossing_2_devices_100KB_identified": {
+  "alert_40_mau": 1500,
+  "target_50_mau": 1500,
+  "points": [
+   {
+    "mau": 1000,
+    "subtotal": 30.0
+   },
+   {
+    "mau": 1250,
+    "subtotal": 30.05
+   },
+   {
+    "mau": 1500,
+    "subtotal": 50.26
+   },
+   {
+    "mau": 1750,
+    "subtotal": 50.47
+   },
+   {
+    "mau": 2000,
+    "subtotal": 50.68
+   },
+   {
+    "mau": 2250,
+    "subtotal": 50.89
+   },
+   {
+    "mau": 2500,
+    "subtotal": 51.1
+   },
+   {
+    "mau": 2750,
+    "subtotal": 61.3
+   },
+   {
+    "mau": 3000,
+    "subtotal": 61.51
+   },
+   {
+    "mau": 3250,
+    "subtotal": 61.72
+   },
+   {
+    "mau": 3500,
+    "subtotal": 61.93
+   },
+   {
+    "mau": 3750,
+    "subtotal": 62.14
+   },
+   {
+    "mau": 4000,
+    "subtotal": 62.35
+   },
+   {
+    "mau": 4250,
+    "subtotal": 92.69
+   },
+   {
+    "mau": 4500,
+    "subtotal": 106.28
+   },
+   {
+    "mau": 4750,
+    "subtotal": 119.86
+   },
+   {
+    "mau": 5000,
+    "subtotal": 133.45
+   }
+  ]
+ }
+}
