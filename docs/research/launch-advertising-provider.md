@@ -1,0 +1,33 @@
+# Launch advertising provider: initial policy findings
+
+Research date: 2026-09-10. Supports issue #35; planning evidence only, not a provider selection or completed release review. Scope: US simulated casino training, accepted 13+ audience, React Native/Expo. No SDK integration, provisioning, or live traffic was performed.
+
+## Eligibility and ad content
+
+**AdMob is the stronger initial candidate, subject to review of the actual app and SDK configuration.** Google's publisher online-gambling restriction describes real-value wagering; it does not establish a blanket prohibition on monetizing simulated training with ordinary ads. This is an inference from the policy boundary, not approval of True Count. Buying Google Ads to promote a social casino app is a separate matter: that advertiser policy requires certification and adult targeting. [Publisher restrictions](https://support.google.com/admob/answer/10437795?hl=en), [advertiser gambling policy](https://support.google.com/adspolicy/answer/15132179?hl=en).
+
+**Real-money gambling ads must be blocked for this Play launch, including for adults.** Play requires apps carrying these ads not to provide simulated gambling or gambling companion functionality (including wagering, payouts, and participation-fund management). An adult-only advertising segment does not remove these content conditions. [Play gambling ads requirements](https://support.google.com/googleplay/android-developer/answer/9877032?hl=en).
+
+Google's teen protections also restrict social casino ads and guides to succeeding at casino games, casino hotels, contests, dating, and other sensitive categories. Its social-casino ad category is normally enabled by default, so inspect explicit dashboard category blocks rather than assuming training content is protected. [Teen protections](https://support.google.com/admob/answer/12171027?hl=en), [social casino category](https://support.google.com/admob/answer/6166400?hl=en).
+
+AppLovin treats gambling/casino content as restricted, with discretionary monetization and account-team notification if a property contains or may contain restricted content or collects information about it. Public policy does not clearly settle whether this training app falls inside that category. It also prohibits SDK initialization for any user qualifying as a child under applicable law, and requires applicable platform age features. This is not simply a universal under-13 threshold. [Publisher policy, updated June 18, 2026](https://legal.applovin.com/policies-publishers/).
+
+## Age and data controls
+
+Current Google docs expose `AgeRestrictedTreatment.TEEN`: it disables personalized ads/remarketing and applies teen protections. `CHILD` additionally disables third-party ad vendor requests and AAID/IDFA transmission. `UNSPECIFIED` is the default, not an unknown-age safety promise. TFCD/TFUA are now deprecated in favor of TFAT. The chosen React Native wrapper and native SDK versions must expose the required controls before release; do not copy an older TFUA recipe as a universal teen implementation. [Age-treatment policy](https://support.google.com/admob/answer/6219315), [Android targeting and adapter versions](https://developers.google.com/admob/android/targeting).
+
+Google nonpersonalized ads still use cookies/mobile advertising identifiers for frequency caps and aggregated reporting. Limited ads still use IP addresses for delivery; programmatic limited ads additionally use fraud-detection storage. Neither label means anonymous processing or eliminates all disclosure/consent analysis. [Ad serving modes](https://developers.google.com/admob/android/privacy/ad-serving-modes), [limited ads](https://support.google.com/admob/answer/10105530?hl=en).
+
+Google's default Android SDK disclosures include IP address, app/ad interactions, diagnostics, advertising ID, app set ID, and potentially signed-in-account identifiers. Removing AAID permission alone does not remove all identifiers. These are default capabilities, not a verified list for the eventual restricted configuration. The fetched page identifies SDK 25.4.0 and bears a 2026-09-11 update stamp, later than this research date; pin and verify the actual available dependency before relying on version-specific behavior. [Android disclosure](https://developers.google.com/admob/android/privacy/play-data-disclosure).
+
+AppLovin offers consent and do-not-sell flags, which must be set before initialization; its former age-restricted-user flag is unsupported because it does not permit SDK use for children. Consent/opt-out propagation covers only supported partners and versions; some integrations require independent handling. [React Native privacy guide](https://support.applovin.com/en/max/react-native/overview/privacy).
+
+AppLovin's privacy policy describes IP addresses, advertising/vendor/app-set identifiers, device/app/session information and advertising interactions; optional publisher-provided identifiers must not be mistaken for required inputs. Partners are generally independent controllers, and retention is typically up to two years with exceptions. The published policy does not establish an identifier-free contextual configuration. [Privacy policy, August 6, 2026](https://legal.applovin.com/privacy/).
+
+## Initial recommendation and remaining checks
+
+Recommend investigating AdMob with no additional mediation SDKs and no app-authored audience/profile payloads. This reduces the integration and review scope; it does not prove that the provider has no downstream advertising recipients. Prefer contextual-only launch behavior for simplicity; optional adult personalization is a separate product decision, not needed for provider eligibility.
+
+Before selecting the final configuration, verify the React Native/Expo native build and wrapper support; age handling before initialization; identifiers remaining under each mode; Google demand/third-party buyer settings; content category exclusions and appropriate rating ceiling; and consent, opt-out, ATT, retention/deletion and recipient/processing-location disclosures. Unknown or unusable eligibility/privacy state should produce no ad request as the proposed conservative failure behavior, rather than silently requesting default ads. Preserve the accepted post-results placement, ten-minute cap, offline continuation, and premium ad-free boundary.
+
+AppLovin remains an alternative requiring a clearer publisher eligibility determination and teen/unknown-state handling before it can be recommended. No account-team contact was made. Revenue/fill expectations and a complete release checklist remain unresolved; this initial comparison does not close #35.
