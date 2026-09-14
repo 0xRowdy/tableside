@@ -1,0 +1,198 @@
+[
+  {
+    "mau": 1000,
+    "devices": 1,
+    "backend_calls_before_pages_chunks": 599724,
+    "calls_by_operation": {
+      "reconcile": 480000,
+      "open_reconnect": 24000,
+      "auth_refresh": 12000,
+      "result_acceptance": 24000,
+      "grant_transfer_withdrawal": 12132,
+      "notification_fetch": 41184,
+      "billing_webhook_ingress": 240,
+      "store_verification_job": 5040,
+      "export_and_bootstrap_create": 240,
+      "deletion_request_and_cleanup": 24,
+      "hourly_expiry_sweep": 864
+    },
+    "primary_probe_attempts": 984000,
+    "messages": 82368,
+    "peak_connections": 100,
+    "email_attempts": 2400,
+    "analytics_events": 243600,
+    "costs_before_disk_storage_egress_edge_other": {
+      "supabase_pro_micro": 25,
+      "workers_at_1ms_cpu_per_probe": 5.0,
+      "realtime_peak": 0,
+      "realtime_messages": 0.0,
+      "resend_capacity": 0,
+      "posthog_analytics_starting_rate": 0.0,
+      "posthog_errors_at_1000_per_month": 0,
+      "lambda_1pct_fallback_remaining_free": 0.0,
+      "revenuecat_all_monthly": 0
+    },
+    "subtotal": 30.0,
+    "all_backend_calls_through_edge_increment": 0,
+    "lambda_all_primary_failed_remaining_free": 0.0,
+    "lambda_all_primary_failed_no_free": 0.9883,
+    "lambda_1second_all_primary_failed_remaining_free": 0.0,
+    "workers_10ms_increment": 0.0,
+    "new_result_gb_per_month": {
+      "10000": 0.2,
+      "100000": 2.0,
+      "1000000": 20.0
+    },
+    "revenuecat_annual_cohort": {
+      "mtr": 3999.0,
+      "charge": 39.99
+    }
+  },
+  {
+    "mau": 1000,
+    "devices": 2,
+    "backend_calls_before_pages_chunks": 1156908,
+    "calls_by_operation": {
+      "reconcile": 960000,
+      "open_reconnect": 48000,
+      "auth_refresh": 24000,
+      "result_acceptance": 24000,
+      "grant_transfer_withdrawal": 12132,
+      "notification_fetch": 82368,
+      "billing_webhook_ingress": 240,
+      "store_verification_job": 5040,
+      "export_and_bootstrap_create": 240,
+      "deletion_request_and_cleanup": 24,
+      "hourly_expiry_sweep": 864
+    },
+    "primary_probe_attempts": 1968000,
+    "messages": 123552,
+    "peak_connections": 200,
+    "email_attempts": 2400,
+    "analytics_events": 243600,
+    "costs_before_disk_storage_egress_edge_other": {
+      "supabase_pro_micro": 25,
+      "workers_at_1ms_cpu_per_probe": 5.0,
+      "realtime_peak": 0,
+      "realtime_messages": 0.0,
+      "resend_capacity": 0,
+      "posthog_analytics_starting_rate": 0.0,
+      "posthog_errors_at_1000_per_month": 0,
+      "lambda_1pct_fallback_remaining_free": 0.0,
+      "revenuecat_all_monthly": 0
+    },
+    "subtotal": 30.0,
+    "all_backend_calls_through_edge_increment": 0,
+    "lambda_all_primary_failed_remaining_free": 0.1936,
+    "lambda_all_primary_failed_no_free": 1.9766,
+    "lambda_1second_all_primary_failed_remaining_free": 0.1936,
+    "workers_10ms_increment": 0.0,
+    "new_result_gb_per_month": {
+      "10000": 0.2,
+      "100000": 2.0,
+      "1000000": 20.0
+    },
+    "revenuecat_annual_cohort": {
+      "mtr": 3999.0,
+      "charge": 39.99
+    }
+  },
+  {
+    "mau": 5000,
+    "devices": 1,
+    "backend_calls_before_pages_chunks": 2995164,
+    "calls_by_operation": {
+      "reconcile": 2400000,
+      "open_reconnect": 120000,
+      "auth_refresh": 60000,
+      "result_acceptance": 120000,
+      "grant_transfer_withdrawal": 60660,
+      "notification_fetch": 205920,
+      "billing_webhook_ingress": 1200,
+      "store_verification_job": 25200,
+      "export_and_bootstrap_create": 1200,
+      "deletion_request_and_cleanup": 120,
+      "hourly_expiry_sweep": 864
+    },
+    "primary_probe_attempts": 4920000,
+    "messages": 411840,
+    "peak_connections": 500,
+    "email_attempts": 12000,
+    "analytics_events": 1203600,
+    "costs_before_disk_storage_egress_edge_other": {
+      "supabase_pro_micro": 25,
+      "workers_at_1ms_cpu_per_probe": 5.0,
+      "realtime_peak": 0,
+      "realtime_messages": 0.0,
+      "resend_capacity": 20,
+      "posthog_analytics_starting_rate": 10.18,
+      "posthog_errors_at_1000_per_month": 0,
+      "lambda_1pct_fallback_remaining_free": 0.0,
+      "revenuecat_all_monthly": 29.95
+    },
+    "subtotal": 90.13,
+    "all_backend_calls_through_edge_increment": 2,
+    "lambda_all_primary_failed_remaining_free": 0.784,
+    "lambda_all_primary_failed_no_free": 4.9416,
+    "lambda_1second_all_primary_failed_remaining_free": 4.3673,
+    "workers_10ms_increment": 0.384,
+    "new_result_gb_per_month": {
+      "10000": 1.0,
+      "100000": 10.0,
+      "1000000": 100.0
+    },
+    "revenuecat_annual_cohort": {
+      "mtr": 19995.0,
+      "charge": 199.95
+    }
+  },
+  {
+    "mau": 5000,
+    "devices": 2,
+    "backend_calls_before_pages_chunks": 5781084,
+    "calls_by_operation": {
+      "reconcile": 4800000,
+      "open_reconnect": 240000,
+      "auth_refresh": 120000,
+      "result_acceptance": 120000,
+      "grant_transfer_withdrawal": 60660,
+      "notification_fetch": 411840,
+      "billing_webhook_ingress": 1200,
+      "store_verification_job": 25200,
+      "export_and_bootstrap_create": 1200,
+      "deletion_request_and_cleanup": 120,
+      "hourly_expiry_sweep": 864
+    },
+    "primary_probe_attempts": 9840000,
+    "messages": 617760,
+    "peak_connections": 1000,
+    "email_attempts": 12000,
+    "analytics_events": 1203600,
+    "costs_before_disk_storage_egress_edge_other": {
+      "supabase_pro_micro": 25,
+      "workers_at_1ms_cpu_per_probe": 5.0,
+      "realtime_peak": 10,
+      "realtime_messages": 0.0,
+      "resend_capacity": 20,
+      "posthog_analytics_starting_rate": 10.18,
+      "posthog_errors_at_1000_per_month": 0,
+      "lambda_1pct_fallback_remaining_free": 0.0,
+      "revenuecat_all_monthly": 29.95
+    },
+    "subtotal": 100.13,
+    "all_backend_calls_through_edge_increment": 8,
+    "lambda_all_primary_failed_remaining_free": 4.1135,
+    "lambda_all_primary_failed_no_free": 9.8831,
+    "lambda_1second_all_primary_failed_remaining_free": 17.9469,
+    "workers_10ms_increment": 1.368,
+    "new_result_gb_per_month": {
+      "10000": 1.0,
+      "100000": 10.0,
+      "1000000": 100.0
+    },
+    "revenuecat_annual_cohort": {
+      "mtr": 19995.0,
+      "charge": 199.95
+    }
+  }
+]
