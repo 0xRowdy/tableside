@@ -1,0 +1,26 @@
+2 seconds per test
+O_DIRECT supported on this platform for open_datasync and open_sync.
+
+Compare file sync methods using one 8kB write:
+(in "wal_sync_method" preference order, except fdatasync is Linux's default)
+        open_datasync                       435.585 ops/sec    2296 usecs/op
+        fdatasync                           445.716 ops/sec    2244 usecs/op
+        fsync                               188.710 ops/sec    5299 usecs/op
+        fsync_writethrough                              n/a
+        open_sync                           220.593 ops/sec    4533 usecs/op
+
+Compare file sync methods using two 8kB writes:
+(in "wal_sync_method" preference order, except fdatasync is Linux's default)
+        open_datasync                       163.938 ops/sec    6100 usecs/op
+        fdatasync                           339.706 ops/sec    2944 usecs/op
+        fsync                               187.879 ops/sec    5323 usecs/op
+        fsync_writethrough                              n/a
+        open_sync                            97.802 ops/sec   10225 usecs/op
+
+Compare open_sync with different write sizes:
+(This is designed to compare the cost of writing 16kB in different write
+open_sync sizes.)
+         1 * 16kB open_sync write           166.938 ops/sec    5990 usecs/op
+         2 *  8kB open_sync writes           94.314 ops/sec   10603 usecs/op
+         4 *  4kB open_sync writes           51.265 ops/sec   19507 usecs/op
+         8 *  2kB open_sync writes    pg_test_fsync: error: write failed: Invalid argument

@@ -1,0 +1,1587 @@
+{
+ "assertions": [
+  {
+   "name": "acceptance 10000B: rows result=receipt=feed per op",
+   "passed": true,
+   "detail": "2000/2000/2000"
+  },
+  {
+   "name": "acceptance 100000B: rows result=receipt=feed per op",
+   "passed": true,
+   "detail": "500/500/500"
+  },
+  {
+   "name": "acceptance 1000000B: rows result=receipt=feed per op",
+   "passed": true,
+   "detail": "100/100/100"
+  },
+  {
+   "name": "retry x200 creates no result/receipt/feed rows",
+   "passed": true,
+   "detail": "{'result': 1, 'receipt': 1, 'feed': 1, 'allowance': 0, 'contribution': 0, 'stage': 0, 'result_chunk': 0, 'manifest': 0} -> {'result': 1, 'receipt': 1, 'feed': 1, 'allowance': 0, 'contribution': 0, 'stage': 0, 'result_chunk': 0, 'manifest': 0}"
+  },
+  {
+   "name": "mismatched content under same identity is rejected",
+   "passed": true,
+   "detail": "identity-content mismatch"
+  },
+  {
+   "name": "retry storm (1,600 retries of 20 ops, 32 threads) creates nothing",
+   "passed": true,
+   "detail": "{'result': 21, 'receipt': 21, 'feed': 21, 'allowance': 0, 'contribution': 0, 'stage': 0, 'result_chunk': 0, 'manifest': 0} -> {'result': 21, 'receipt': 21, 'feed': 21, 'allowance': 0, 'contribution': 0, 'stage': 0, 'result_chunk': 0, 'manifest': 0}"
+  },
+  {
+   "name": "16 concurrent grant requests -> exactly one allowance row",
+   "passed": true,
+   "detail": "rows=1 dispositions={'existing-grant': 15, 'accepted': 1}"
+  },
+  {
+   "name": "16 concurrent redeliveries of one grant op -> one seq, one receipt",
+   "passed": true,
+   "detail": "[('accepted', False, 1), ('accepted', True, 1), ('accepted', True, 1)]"
+  },
+  {
+   "name": "200 accounts x 2 racing transfers -> exactly one accepted each, generation advanced once",
+   "passed": true,
+   "detail": "generation=2 rows: 200"
+  },
+  {
+   "name": "100 accounts x 2 devices concurrent grants -> 100 allowance rows",
+   "passed": true,
+   "detail": "100"
+  },
+  {
+   "name": "withdrawal race: no contribution publicly visible afterwards",
+   "passed": true,
+   "detail": "accepted-before-withdrawal=6 revoked=2 stored(private)=6 visible=0"
+  },
+  {
+   "name": "withdrawal race: every contribution either accepted-then-covered or revoked",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "re-enable starts a new period; stale enable conflicts",
+   "passed": true,
+   "detail": "period=11 stale=period-conflict"
+  },
+  {
+   "name": "retry of old withdrawal returns receipt and does not revoke new period",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "old-period result cannot become public under new period",
+   "passed": true,
+   "detail": "new=accepted old=revoked-period visible=1"
+  },
+  {
+   "name": "snapshot 1_year: rows == total == watermark-consistent",
+   "passed": true,
+   "detail": "rows=240 total=240 watermark=240"
+  },
+  {
+   "name": "snapshot 5_year: rows == total == watermark-consistent",
+   "passed": true,
+   "detail": "rows=1200 total=1200 watermark=1200"
+  },
+  {
+   "name": "snapshot heavy_100000: rows == total == watermark-consistent",
+   "passed": true,
+   "detail": "rows=100000 total=100000 watermark=100000"
+  },
+  {
+   "name": "writer on other account not blocked by heavy snapshot",
+   "passed": true,
+   "detail": "105.9 ms vs snapshot 3262.6 ms"
+  },
+  {
+   "name": "same-account writer serialized after snapshot watermark",
+   "passed": true,
+   "detail": "seq=100001 watermark=100000 (ordering serialized either way; no torn snapshot)"
+  },
+  {
+   "name": "second heavy snapshot row count equals its own watermark total",
+   "passed": true,
+   "detail": "100000 vs 100000"
+  },
+  {
+   "name": "two devices' concurrent snapshots both coherent",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "export 5_year: resumed after interruption with no gaps or duplicates",
+   "passed": true,
+   "detail": "rows=1200 unique=1200 expected=1200 interrupted_at=600"
+  },
+  {
+   "name": "export heavy_100000: resumed after interruption with no gaps or duplicates",
+   "passed": true,
+   "detail": "rows=100000 unique=100000 expected=100000 interrupted_at=25000"
+  },
+  {
+   "name": "10 MB chunked: one result, receipt and feed row; chunks durable; staging cleared",
+   "passed": true,
+   "detail": "{'result': 1, 'receipt': 1, 'feed': 1, 'allowance': 0, 'contribution': 0, 'stage': 0, 'result_chunk': 11, 'manifest': 1}"
+  },
+  {
+   "name": "10 MB chunked: completion retry returns receipt, no second result",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "aborted staging: completion rejected; no result/receipt; 4 parts staged",
+   "passed": true,
+   "detail": "incomplete staging: 4 of 11 parts, 4000000 of 10094030 bytes"
+  },
+  {
+   "name": "tampered chunk bytes under same part identity rejected",
+   "passed": true,
+   "detail": "chunk hash mismatch"
+  },
+  {
+   "name": "identical chunk resend is idempotent",
+   "passed": true,
+   "detail": "already-staged"
+  },
+  {
+   "name": "expiry sweep removes abandoned staging after 24 h",
+   "passed": true,
+   "detail": "{'stage': 4, 'export': 0, 'snapshot': 0}"
+  },
+  {
+   "name": "resend after expiry creates exactly one result",
+   "passed": true,
+   "detail": "{'result': 2, 'receipt': 2, 'feed': 2, 'allowance': 0, 'contribution': 0, 'stage': 0, 'result_chunk': 22, 'manifest': 2}"
+  },
+  {
+   "name": "100 MB chunked result accepted atomically",
+   "passed": true,
+   "detail": "{'result': 3, 'receipt': 3, 'feed': 3, 'allowance': 0, 'contribution': 0, 'stage': 0, 'result_chunk': 126, 'manifest': 3}"
+  },
+  {
+   "name": "deletion 5_year: access denied immediately, publicly suppressed, deletion receipt idempotent",
+   "passed": true,
+   "detail": "account unavailable"
+  },
+  {
+   "name": "deletion 5_year: cleanup removed all rows; ID cannot be reused",
+   "passed": true,
+   "detail": "account id 3001 is tombstoned"
+  },
+  {
+   "name": "deletion heavy_100000: access denied immediately, publicly suppressed, deletion receipt idempotent",
+   "passed": true,
+   "detail": "account unavailable"
+  },
+  {
+   "name": "deletion heavy_100000: cleanup removed all rows; ID cannot be reused",
+   "passed": true,
+   "detail": "account id 3002 is tombstoned"
+  },
+  {
+   "name": "deletion chunked: access denied immediately, publicly suppressed, deletion receipt idempotent",
+   "passed": true,
+   "detail": "account unavailable"
+  },
+  {
+   "name": "deletion chunked: cleanup removed all rows; ID cannot be reused",
+   "passed": true,
+   "detail": "account id 3100 is tombstoned"
+  },
+  {
+   "name": "expiry sweep removes 100 expired bootstrap snapshots",
+   "passed": true,
+   "detail": "{'stage': 0, 'export': 0, 'snapshot': 100}"
+  }
+ ],
+ "scenarios": {
+  "acceptance_sweep": {
+   "10000": {
+    "operations": 2000,
+    "serialized_bytes": 10022,
+    "gzip6_bytes": 1850,
+    "gzip_ratio": 5.42,
+    "sequential_latency": {
+     "n": 2000,
+     "mean_ms": 4.812,
+     "p50_ms": 4.392,
+     "p95_ms": 7.552,
+     "p99_ms": 11.094,
+     "max_ms": 22.675,
+     "min_ms": 2.056
+    },
+    "lock_precommit": {
+     "n": 2000,
+     "mean_ms": 0.541,
+     "p50_ms": 0.384,
+     "p95_ms": 1.157,
+     "p99_ms": 2.646,
+     "max_ms": 6.132,
+     "min_ms": 0.322
+    },
+    "sequential_ops_per_s": 207.8,
+    "growth_per_op": {
+     "result": {
+      "rows": 1,
+      "heap_bytes": 176,
+      "index_bytes": 61,
+      "toast_bytes": 2781,
+      "total_bytes": 3043
+     },
+     "receipt": {
+      "rows": 1,
+      "heap_bytes": 135,
+      "index_bytes": 61,
+      "toast_bytes": 0,
+      "total_bytes": 209
+     },
+     "feed": {
+      "rows": 1,
+      "heap_bytes": 70,
+      "index_bytes": 45,
+      "toast_bytes": 0,
+      "total_bytes": 127
+     },
+     "account_head": {
+      "rows": 0,
+      "heap_bytes": 0,
+      "index_bytes": 0,
+      "toast_bytes": 0,
+      "total_bytes": 0
+     }
+    },
+    "database_growth_bytes": 6758400,
+    "database_growth_per_op": 3379,
+    "result_total_bytes_per_op": 3043,
+    "on_disk_over_serialized": 0.3,
+    "wal_bytes_per_op": 3600,
+    "concurrent_8_workers": {
+     "operations": 1000,
+     "seconds": 1.254,
+     "ops_per_s": 797.5
+    },
+    "peak_memory": {
+     "postgres_rss_sum_bytes": 698363904,
+     "postgres_pss_sum_bytes": 193640448,
+     "postgres_backends": 17,
+     "harness_rss_bytes": 46665728
+    }
+   },
+   "100000": {
+    "operations": 500,
+    "serialized_bytes": 100002,
+    "gzip6_bytes": 15841,
+    "gzip_ratio": 6.31,
+    "sequential_latency": {
+     "n": 500,
+     "mean_ms": 11.831,
+     "p50_ms": 11.486,
+     "p95_ms": 16.827,
+     "p99_ms": 18.745,
+     "max_ms": 22.281,
+     "min_ms": 6.005
+    },
+    "lock_precommit": {
+     "n": 500,
+     "mean_ms": 5.072,
+     "p50_ms": 5.285,
+     "p95_ms": 8.924,
+     "p99_ms": 10.872,
+     "max_ms": 11.57,
+     "min_ms": 2.545
+    },
+    "sequential_ops_per_s": 84.5,
+    "growth_per_op": {
+     "result": {
+      "rows": 1,
+      "heap_bytes": 147,
+      "index_bytes": 49,
+      "toast_bytes": 22725,
+      "total_bytes": 22954
+     },
+     "receipt": {
+      "rows": 1,
+      "heap_bytes": 131,
+      "index_bytes": 49,
+      "toast_bytes": 0,
+      "total_bytes": 197
+     },
+     "feed": {
+      "rows": 1,
+      "heap_bytes": 66,
+      "index_bytes": 33,
+      "toast_bytes": 0,
+      "total_bytes": 115
+     },
+     "account_head": {
+      "rows": 0,
+      "heap_bytes": 0,
+      "index_bytes": 0,
+      "toast_bytes": 0,
+      "total_bytes": 16
+     }
+    },
+    "database_growth_bytes": 11640832,
+    "database_growth_per_op": 23282,
+    "result_total_bytes_per_op": 22954,
+    "on_disk_over_serialized": 0.23,
+    "wal_bytes_per_op": 24209,
+    "concurrent_8_workers": {
+     "operations": 250,
+     "seconds": 0.897,
+     "ops_per_s": 278.6
+    },
+    "peak_memory": {
+     "postgres_rss_sum_bytes": 709607424,
+     "postgres_pss_sum_bytes": 197123072,
+     "postgres_backends": 17,
+     "harness_rss_bytes": 49225728
+    }
+   },
+   "1000000": {
+    "operations": 100,
+    "serialized_bytes": 1000356,
+    "gzip6_bytes": 151272,
+    "gzip_ratio": 6.61,
+    "sequential_latency": {
+     "n": 100,
+     "mean_ms": 70.011,
+     "p50_ms": 68.033,
+     "p95_ms": 94.751,
+     "p99_ms": 101.858,
+     "max_ms": 106.342,
+     "min_ms": 36.12
+    },
+    "lock_precommit": {
+     "n": 100,
+     "mean_ms": 54.312,
+     "p50_ms": 51.198,
+     "p95_ms": 76.291,
+     "p99_ms": 81.332,
+     "max_ms": 85.12,
+     "min_ms": 25.167
+    },
+    "sequential_ops_per_s": 14.3,
+    "growth_per_op": {
+     "result": {
+      "rows": 1,
+      "heap_bytes": 246,
+      "index_bytes": 0,
+      "toast_bytes": 215368,
+      "total_bytes": 215695
+     },
+     "receipt": {
+      "rows": 1,
+      "heap_bytes": 0,
+      "index_bytes": 0,
+      "toast_bytes": 0,
+      "total_bytes": 0
+     },
+     "feed": {
+      "rows": 1,
+      "heap_bytes": 82,
+      "index_bytes": 0,
+      "toast_bytes": 0,
+      "total_bytes": 82
+     },
+     "account_head": {
+      "rows": 0,
+      "heap_bytes": 0,
+      "index_bytes": 0,
+      "toast_bytes": 0,
+      "total_bytes": 0
+     }
+    },
+    "database_growth_bytes": 21577728,
+    "database_growth_per_op": 215777,
+    "result_total_bytes_per_op": 215695,
+    "on_disk_over_serialized": 0.22,
+    "wal_bytes_per_op": 221389,
+    "concurrent_8_workers": {
+     "operations": 50,
+     "seconds": 1.097,
+     "ops_per_s": 45.6
+    },
+    "peak_memory": {
+     "postgres_rss_sum_bytes": 755621888,
+     "postgres_pss_sum_bytes": 240684032,
+     "postgres_backends": 17,
+     "harness_rss_bytes": 68001792
+    }
+   },
+   "_scenario_seconds": 27.46
+  },
+  "retry_semantics": {
+   "retry_latency": {
+    "n": 200,
+    "mean_ms": 2.869,
+    "p50_ms": 2.578,
+    "p95_ms": 5.325,
+    "p99_ms": 6.28,
+    "max_ms": 7.964,
+    "min_ms": 1.678
+   },
+   "retry_wal_bytes_total_200": "19248",
+   "storm": {
+    "retries": 1600,
+    "threads": 32,
+    "seconds": 5.365,
+    "retries_per_s": 298.2
+   },
+   "mismatch_error": "identity-content mismatch",
+   "peak_memory": {
+    "postgres_rss_sum_bytes": 1343442944,
+    "postgres_pss_sum_bytes": 240684032,
+    "postgres_backends": 41,
+    "harness_rss_bytes": 68001792
+   },
+   "_scenario_seconds": 6.23
+  },
+  "grant_transfer_concurrency": {
+   "same_account_16_threads": {
+    "allowance_rows": 1,
+    "dispositions": {
+     "existing-grant": 15,
+     "accepted": 1
+    }
+   },
+   "transfer_race_200x2": {
+    "seconds": 0.892,
+    "ops_per_s": 448.3,
+    "lock_precommit": {
+     "n": 400,
+     "mean_ms": 7.517,
+     "p50_ms": 4.353,
+     "p95_ms": 22.126,
+     "p99_ms": 25.434,
+     "max_ms": 31.742,
+     "min_ms": 1.137
+    },
+    "all_exactly_one_accepted": true
+   },
+   "grant_100x2_devices": {
+    "allowance_rows": 100,
+    "accepted": 100
+   },
+   "peak_memory": {
+    "postgres_rss_sum_bytes": 1343442944,
+    "postgres_pss_sum_bytes": 240684032,
+    "postgres_backends": 41,
+    "harness_rss_bytes": 68001792
+   },
+   "_scenario_seconds": 1.65
+  },
+  "withdrawal_contribution_race": {
+   "race": {
+    "accepted_before_withdrawal": 6,
+    "revoked": 2,
+    "stored_private": 6,
+    "visible_public": 0
+   },
+   "new_period": 11,
+   "peak_memory": {
+    "postgres_rss_sum_bytes": 1343442944,
+    "postgres_pss_sum_bytes": 240684032,
+    "postgres_backends": 41,
+    "harness_rss_bytes": 68001792
+   },
+   "_scenario_seconds": 0.14
+  },
+  "histories_snapshots": {
+   "seed_1_year": {
+    "results": 240,
+    "payload_bytes": 10010,
+    "apply_latency": {
+     "n": 240,
+     "mean_ms": 5.073,
+     "p50_ms": 4.939,
+     "p95_ms": 7.313,
+     "p99_ms": 9.468,
+     "max_ms": 13.171,
+     "min_ms": 2.393
+    },
+    "seconds": 1.22
+   },
+   "seed_5_year": {
+    "results": 1200,
+    "payload_bytes": 10010,
+    "apply_latency": {
+     "n": 1200,
+     "mean_ms": 5.131,
+     "p50_ms": 4.715,
+     "p95_ms": 7.994,
+     "p99_ms": 10.803,
+     "max_ms": 22.856,
+     "min_ms": 2.358
+    },
+    "seconds": 6.16
+   },
+   "seed_heavy_100000": {
+    "results": 100000,
+    "seconds": 30.21,
+    "path": "bulk INSERT ... generate_series (seeding only)"
+   },
+   "growth_1y_5y_at_10KB": {
+    "account_head": {
+     "rows": 0,
+     "heap_bytes": 0,
+     "index_bytes": 0,
+     "toast_bytes": 0,
+     "total_bytes": 0
+    },
+    "allowance": {
+     "rows": 0,
+     "heap_bytes": 0,
+     "index_bytes": 0,
+     "toast_bytes": 0,
+     "total_bytes": 0
+    },
+    "contribution": {
+     "rows": 0,
+     "heap_bytes": 0,
+     "index_bytes": 0,
+     "toast_bytes": 0,
+     "total_bytes": 0
+    },
+    "export_job": {
+     "rows": 0,
+     "heap_bytes": 0,
+     "index_bytes": 0,
+     "toast_bytes": 0,
+     "total_bytes": 0
+    },
+    "feed": {
+     "rows": 1440,
+     "heap_bytes": 81920,
+     "index_bytes": 40960,
+     "toast_bytes": 0,
+     "total_bytes": 122880
+    },
+    "manifest": {
+     "rows": 0,
+     "heap_bytes": 0,
+     "index_bytes": 0,
+     "toast_bytes": 0,
+     "total_bytes": 0
+    },
+    "receipt": {
+     "rows": 1440,
+     "heap_bytes": 188416,
+     "index_bytes": 65536,
+     "toast_bytes": 0,
+     "total_bytes": 253952
+    },
+    "result": {
+     "rows": 1440,
+     "heap_bytes": 237568,
+     "index_bytes": 57344,
+     "toast_bytes": 3997696,
+     "total_bytes": 4292608
+    },
+    "result_chunk": {
+     "rows": 0,
+     "heap_bytes": 0,
+     "index_bytes": 0,
+     "toast_bytes": 0,
+     "total_bytes": 0
+    },
+    "snapshot": {
+     "rows": 0,
+     "heap_bytes": 0,
+     "index_bytes": 0,
+     "toast_bytes": 0,
+     "total_bytes": 0
+    },
+    "snapshot_row": {
+     "rows": 0,
+     "heap_bytes": 0,
+     "index_bytes": 0,
+     "toast_bytes": 0,
+     "total_bytes": 0
+    },
+    "stage": {
+     "rows": 0,
+     "heap_bytes": 0,
+     "index_bytes": 0,
+     "toast_bytes": 0,
+     "total_bytes": 0
+    },
+    "tombstone": {
+     "rows": 0,
+     "heap_bytes": 0,
+     "index_bytes": 0,
+     "toast_bytes": 0,
+     "total_bytes": 0
+    },
+    "_database_bytes": 4669440
+   },
+   "growth_heavy_summaries_only": {
+    "account_head": {
+     "rows": 0,
+     "heap_bytes": 0,
+     "index_bytes": 0,
+     "toast_bytes": 0,
+     "total_bytes": 0
+    },
+    "allowance": {
+     "rows": 0,
+     "heap_bytes": 0,
+     "index_bytes": 0,
+     "toast_bytes": 0,
+     "total_bytes": 0
+    },
+    "contribution": {
+     "rows": 0,
+     "heap_bytes": 0,
+     "index_bytes": 0,
+     "toast_bytes": 0,
+     "total_bytes": 0
+    },
+    "export_job": {
+     "rows": 0,
+     "heap_bytes": 0,
+     "index_bytes": 0,
+     "toast_bytes": 0,
+     "total_bytes": 0
+    },
+    "feed": {
+     "rows": 100000,
+     "heap_bytes": 6021120,
+     "index_bytes": 3153920,
+     "toast_bytes": 0,
+     "total_bytes": 9175040
+    },
+    "manifest": {
+     "rows": 0,
+     "heap_bytes": 0,
+     "index_bytes": 0,
+     "toast_bytes": 0,
+     "total_bytes": 0
+    },
+    "receipt": {
+     "rows": 100000,
+     "heap_bytes": 6823936,
+     "index_bytes": 4743168,
+     "toast_bytes": 0,
+     "total_bytes": 11567104
+    },
+    "result": {
+     "rows": 100000,
+     "heap_bytes": 22142976,
+     "index_bytes": 4743168,
+     "toast_bytes": 0,
+     "total_bytes": 26886144
+    },
+    "result_chunk": {
+     "rows": 0,
+     "heap_bytes": 0,
+     "index_bytes": 0,
+     "toast_bytes": 0,
+     "total_bytes": 0
+    },
+    "snapshot": {
+     "rows": 0,
+     "heap_bytes": 0,
+     "index_bytes": 0,
+     "toast_bytes": 0,
+     "total_bytes": 0
+    },
+    "snapshot_row": {
+     "rows": 0,
+     "heap_bytes": 0,
+     "index_bytes": 0,
+     "toast_bytes": 0,
+     "total_bytes": 0
+    },
+    "stage": {
+     "rows": 0,
+     "heap_bytes": 0,
+     "index_bytes": 0,
+     "toast_bytes": 0,
+     "total_bytes": 0
+    },
+    "tombstone": {
+     "rows": 0,
+     "heap_bytes": 0,
+     "index_bytes": 0,
+     "toast_bytes": 0,
+     "total_bytes": 0
+    },
+    "_database_bytes": 47628288
+   },
+   "per_summary_bytes_heavy": {
+    "account_head": 0,
+    "allowance": 0,
+    "contribution": 0,
+    "export_job": 0,
+    "feed": 92,
+    "manifest": 0,
+    "receipt": 116,
+    "result": 269,
+    "result_chunk": 0,
+    "snapshot": 0,
+    "snapshot_row": 0,
+    "stage": 0,
+    "tombstone": 0
+   },
+   "snapshot_1_year": {
+    "watermark": 240,
+    "total": 240,
+    "lock_precommit_ms": 6.472,
+    "create_total_ms": 15.408,
+    "rows": 240,
+    "page_size": 500,
+    "page_calls": 2,
+    "paging_total_ms": 0.955,
+    "serialized_bytes": 21140,
+    "gzip6_bytes": 705,
+    "peak_memory": {
+     "postgres_rss_sum_bytes": 539680768,
+     "postgres_pss_sum_bytes": 179855360,
+     "postgres_backends": 9,
+     "harness_rss_bytes": 59109376
+    }
+   },
+   "snapshot_5_year": {
+    "watermark": 1200,
+    "total": 1200,
+    "lock_precommit_ms": 34.102,
+    "create_total_ms": 44.638,
+    "rows": 1200,
+    "page_size": 500,
+    "page_calls": 4,
+    "paging_total_ms": 14.073,
+    "serialized_bytes": 106980,
+    "gzip6_bytes": 3354,
+    "peak_memory": {
+     "postgres_rss_sum_bytes": 539901952,
+     "postgres_pss_sum_bytes": 179855360,
+     "postgres_backends": 9,
+     "harness_rss_bytes": 59109376
+    }
+   },
+   "snapshot_heavy_100000": {
+    "watermark": 100000,
+    "total": 100000,
+    "lock_precommit_ms": 3911.831,
+    "create_total_ms": 3921.967,
+    "rows": 100000,
+    "page_size": 1000,
+    "page_calls": 101,
+    "paging_total_ms": 1332.544,
+    "serialized_bytes": 14173272,
+    "gzip6_bytes": 1118370,
+    "peak_memory": {
+     "postgres_rss_sum_bytes": 675074048,
+     "postgres_pss_sum_bytes": 190764032,
+     "postgres_backends": 10,
+     "harness_rss_bytes": 88936448
+    }
+   },
+   "heavy_snapshot_with_concurrent_writers": {
+    "snapshot_lock_precommit_ms": 3245.816,
+    "snapshot_total_ms": 3262.6,
+    "same_account_writer_ms": 3217.62,
+    "other_account_writer_ms": 105.919,
+    "snapshot_watermark": 100000,
+    "same_writer_seq": 100001
+   },
+   "accounts": {
+    "1_year": 3000,
+    "5_year": 3001,
+    "heavy": 3002
+   },
+   "_scenario_seconds": 47.96
+  },
+  "export_resume": {
+   "5_year": {
+    "rows": 1200,
+    "page_size": 200,
+    "calls_including_cursor_reads": 14,
+    "interrupted_after_rows": 600,
+    "seconds": 0.054
+   },
+   "heavy_100000": {
+    "rows": 100000,
+    "page_size": 1000,
+    "calls_including_cursor_reads": 202,
+    "interrupted_after_rows": 25000,
+    "seconds": 1.298
+   },
+   "detail_90_day_5_year": {
+    "results": 60,
+    "serialized_bytes": 600600,
+    "gzip6_bytes": 6799,
+    "ms": 5.174,
+    "calls": 1
+   },
+   "download_all_history_5_year": {
+    "serialized_bytes": 12012000,
+    "calls": 25,
+    "ms": 101.223
+   },
+   "peak_memory": {
+    "postgres_rss_sum_bytes": 675074048,
+    "postgres_pss_sum_bytes": 190764032,
+    "postgres_backends": 11,
+    "harness_rss_bytes": 92274688
+   },
+   "_scenario_seconds": 1.57
+  },
+  "chunked_upload": {
+   "ten_mb": {
+    "bytes": 10094030,
+    "gzip6_bytes": 1506260,
+    "parts": 11,
+    "part_bytes": 1000000,
+    "stage_part_latency": {
+     "n": 11,
+     "mean_ms": 60.998,
+     "p50_ms": 64.293,
+     "p95_ms": 85.952,
+     "p99_ms": 94.06,
+     "max_ms": 96.087,
+     "min_ms": 8.237
+    },
+    "upload_total_ms": 671.0,
+    "complete_total_ms": 128.699,
+    "complete_lock_precommit_ms": 13.165,
+    "growth": {
+     "result_chunk": {
+      "rows": 11,
+      "heap_bytes": 8192,
+      "index_bytes": 8192,
+      "toast_bytes": 2154496,
+      "total_bytes": 2195456
+     },
+     "stage": {
+      "rows": 0,
+      "heap_bytes": 8192,
+      "index_bytes": 16384,
+      "toast_bytes": 2154496,
+      "total_bytes": 2203648
+     },
+     "result": {
+      "rows": 1,
+      "heap_bytes": 0,
+      "index_bytes": 0,
+      "toast_bytes": 0,
+      "total_bytes": 0
+     },
+     "manifest": {
+      "rows": 1,
+      "heap_bytes": 8192,
+      "index_bytes": 8192,
+      "toast_bytes": 0,
+      "total_bytes": 16384
+     }
+    },
+    "database_growth_bytes": 4415488,
+    "on_disk_over_serialized": 0.22,
+    "wal_bytes": "4498136",
+    "peak_memory": {
+     "postgres_rss_sum_bytes": 571072512,
+     "postgres_pss_sum_bytes": 181400576,
+     "postgres_backends": 9,
+     "harness_rss_bytes": 131481600
+    }
+   },
+   "aborted_then_swept": {
+    "sweep_ms": 4.575,
+    "swept": {
+     "stage": 4,
+     "export": 0,
+     "snapshot": 0
+    },
+    "premature_completion_error": "incomplete staging: 4 of 11 parts, 4000000 of 10094030 bytes"
+   },
+   "resend_after_expiry": {
+    "upload_total_ms": 845.5,
+    "results_now": 2
+   },
+   "hundred_mb_harness_max": {
+    "bytes": 103863312,
+    "parts": 104,
+    "stage_part_latency": {
+     "n": 104,
+     "mean_ms": 72.573,
+     "p50_ms": 69.438,
+     "p95_ms": 96.321,
+     "p99_ms": 108.626,
+     "max_ms": 255.191,
+     "min_ms": 41.925
+    },
+    "upload_total_ms": 7547.6,
+    "complete_total_ms": 1266.568,
+    "complete_lock_precommit_ms": 589.484,
+    "database_growth_bytes": 43917312,
+    "wal_bytes": "45835912",
+    "peak_memory": {
+     "postgres_rss_sum_bytes": 594083840,
+     "postgres_pss_sum_bytes": 181460992,
+     "postgres_backends": 9,
+     "harness_rss_bytes": 751071232
+    }
+   },
+   "account": 3100,
+   "_scenario_seconds": 45.11
+  },
+  "deletion_cleanup": {
+   "5_year": {
+    "phase1_total_ms": 289.531,
+    "phase1_lock_precommit_ms": 0.435,
+    "cleanup_total_ms": 103.665,
+    "cleanup_lock_precommit_ms": 91.654,
+    "removed": {
+     "results": 1200,
+     "feed": 1201,
+     "chunks": 0,
+     "snapshot_rows": 3600
+    },
+    "other_account_writer_ms_during_cleanup": 40.866,
+    "database_bytes_before": 237680319,
+    "database_bytes_after_cleanup": 237696703,
+    "database_bytes_after_vacuum": 234477247,
+    "vacuum_ms": 1294.7,
+    "wal_bytes_cleanup": "582456",
+    "peak_memory": {
+     "postgres_rss_sum_bytes": 609308672,
+     "postgres_pss_sum_bytes": 186803200,
+     "postgres_backends": 9,
+     "harness_rss_bytes": 104017920
+    }
+   },
+   "heavy_100000": {
+    "phase1_total_ms": 3.359,
+    "phase1_lock_precommit_ms": 0.33,
+    "cleanup_total_ms": 4215.431,
+    "cleanup_lock_precommit_ms": 4173.61,
+    "removed": {
+     "results": 100001,
+     "feed": 100002,
+     "chunks": 0,
+     "snapshot_rows": 200000
+    },
+    "other_account_writer_ms_during_cleanup": 16.344,
+    "database_bytes_before": 234477247,
+    "database_bytes_after_cleanup": 234477247,
+    "database_bytes_after_vacuum": 158908943,
+    "vacuum_ms": 703.0,
+    "wal_bytes_cleanup": "28167912",
+    "peak_memory": {
+     "postgres_rss_sum_bytes": 644857856,
+     "postgres_pss_sum_bytes": 188352512,
+     "postgres_backends": 10,
+     "harness_rss_bytes": 104013824
+    }
+   },
+   "chunked": {
+    "phase1_total_ms": 2.871,
+    "phase1_lock_precommit_ms": 0.324,
+    "cleanup_total_ms": 60.138,
+    "cleanup_lock_precommit_ms": 30.432,
+    "removed": {
+     "results": 3,
+     "feed": 4,
+     "chunks": 126,
+     "snapshot_rows": 0
+    },
+    "other_account_writer_ms_during_cleanup": 32.796,
+    "database_bytes_before": 158908943,
+    "database_bytes_after_cleanup": 159069887,
+    "database_bytes_after_vacuum": 133142207,
+    "vacuum_ms": 206.7,
+    "wal_bytes_cleanup": "770088",
+    "peak_memory": {
+     "postgres_rss_sum_bytes": 649089024,
+     "postgres_pss_sum_bytes": 188416000,
+     "postgres_backends": 10,
+     "harness_rss_bytes": 104013824
+    }
+   },
+   "_scenario_seconds": 7.5
+  },
+  "connected_clients": {
+   "seed_500_accounts_x20": {
+    "operations": 10000,
+    "seconds": 11.05,
+    "ops_per_s": 904.6
+   },
+   "reconnect_burst_c100_pool15_dev1": {
+    "client_connections": 100,
+    "pool_size": 15,
+    "burst_seconds": 0.141,
+    "db_calls": 300,
+    "client_latency_incl_wait": {
+     "n": 100,
+     "mean_ms": 33.184,
+     "p50_ms": 30.915,
+     "p95_ms": 67.6,
+     "p99_ms": 77.181,
+     "max_ms": 81.775,
+     "min_ms": 7.429
+    },
+    "pool_wait": {
+     "n": 100,
+     "mean_ms": 18.212,
+     "p50_ms": 16.884,
+     "p95_ms": 56.235,
+     "p99_ms": 67.908,
+     "max_ms": 70.515,
+     "min_ms": 0.006
+    },
+    "feed_rows_fetched": 2000,
+    "peak_memory": {
+     "postgres_rss_sum_bytes": 624340992,
+     "postgres_pss_sum_bytes": 186840064,
+     "postgres_backends": 9,
+     "harness_rss_bytes": 103010304
+    }
+   },
+   "reconnect_burst_c100_pool15_dev2": {
+    "client_connections": 200,
+    "pool_size": 15,
+    "burst_seconds": 0.183,
+    "db_calls": 500,
+    "client_latency_incl_wait": {
+     "n": 200,
+     "mean_ms": 20.428,
+     "p50_ms": 17.641,
+     "p95_ms": 49.467,
+     "p99_ms": 85.046,
+     "max_ms": 89.038,
+     "min_ms": 0.583
+    },
+    "pool_wait": {
+     "n": 200,
+     "mean_ms": 11.251,
+     "p50_ms": 3.539,
+     "p95_ms": 42.225,
+     "p99_ms": 68.393,
+     "max_ms": 83.262,
+     "min_ms": 0.004
+    },
+    "feed_rows_fetched": 4226,
+    "peak_memory": {
+     "postgres_rss_sum_bytes": 1087688704,
+     "postgres_pss_sum_bytes": 225172480,
+     "postgres_backends": 24,
+     "harness_rss_bytes": 103010304
+    }
+   },
+   "reconnect_burst_c100_pool60_dev1": {
+    "client_connections": 100,
+    "pool_size": 60,
+    "burst_seconds": 0.188,
+    "db_calls": 300,
+    "client_latency_incl_wait": {
+     "n": 100,
+     "mean_ms": 32.586,
+     "p50_ms": 27.097,
+     "p95_ms": 91.826,
+     "p99_ms": 94.406,
+     "max_ms": 100.331,
+     "min_ms": 8.521
+    },
+    "pool_wait": {
+     "n": 100,
+     "mean_ms": 0.008,
+     "p50_ms": 0.008,
+     "p95_ms": 0.011,
+     "p99_ms": 0.016,
+     "max_ms": 0.019,
+     "min_ms": 0.006
+    },
+    "feed_rows_fetched": 2200,
+    "peak_memory": {
+     "postgres_rss_sum_bytes": 624340992,
+     "postgres_pss_sum_bytes": 186840064,
+     "postgres_backends": 66,
+     "harness_rss_bytes": 101986304
+    }
+   },
+   "reconnect_burst_c100_pool60_dev2": {
+    "client_connections": 200,
+    "pool_size": 60,
+    "burst_seconds": 0.145,
+    "db_calls": 500,
+    "client_latency_incl_wait": {
+     "n": 200,
+     "mean_ms": 15.436,
+     "p50_ms": 11.901,
+     "p95_ms": 37.428,
+     "p99_ms": 43.054,
+     "max_ms": 49.205,
+     "min_ms": 1.03
+    },
+    "pool_wait": {
+     "n": 200,
+     "mean_ms": 0.007,
+     "p50_ms": 0.007,
+     "p95_ms": 0.009,
+     "p99_ms": 0.013,
+     "max_ms": 0.02,
+     "min_ms": 0.004
+    },
+    "feed_rows_fetched": 4601,
+    "peak_memory": {
+     "postgres_rss_sum_bytes": 624340992,
+     "postgres_pss_sum_bytes": 186840064,
+     "postgres_backends": 9,
+     "harness_rss_bytes": 101986304
+    }
+   },
+   "reconnect_burst_c500_pool15_dev1": {
+    "client_connections": 500,
+    "pool_size": 15,
+    "burst_seconds": 0.545,
+    "db_calls": 1500,
+    "client_latency_incl_wait": {
+     "n": 500,
+     "mean_ms": 84.244,
+     "p50_ms": 59.464,
+     "p95_ms": 234.138,
+     "p99_ms": 296.597,
+     "max_ms": 341.348,
+     "min_ms": 5.082
+    },
+    "pool_wait": {
+     "n": 500,
+     "mean_ms": 71.235,
+     "p50_ms": 47.591,
+     "p95_ms": 224.155,
+     "p99_ms": 289.305,
+     "max_ms": 325.52,
+     "min_ms": 0.006
+    },
+    "feed_rows_fetched": 10400,
+    "peak_memory": {
+     "postgres_rss_sum_bytes": 1182941184,
+     "postgres_pss_sum_bytes": 225462272,
+     "postgres_backends": 24,
+     "harness_rss_bytes": 104722432
+    }
+   },
+   "reconnect_burst_c500_pool15_dev2": {
+    "client_connections": 1000,
+    "pool_size": 15,
+    "burst_seconds": 0.586,
+    "db_calls": 2500,
+    "client_latency_incl_wait": {
+     "n": 1000,
+     "mean_ms": 64.83,
+     "p50_ms": 43.858,
+     "p95_ms": 206.948,
+     "p99_ms": 279.549,
+     "max_ms": 382.218,
+     "min_ms": 0.237
+    },
+    "pool_wait": {
+     "n": 1000,
+     "mean_ms": 56.771,
+     "p50_ms": 36.171,
+     "p95_ms": 197.759,
+     "p99_ms": 265.005,
+     "max_ms": 381.088,
+     "min_ms": 0.004
+    },
+    "feed_rows_fetched": 21996,
+    "peak_memory": {
+     "postgres_rss_sum_bytes": 1190064128,
+     "postgres_pss_sum_bytes": 226408448,
+     "postgres_backends": 24,
+     "harness_rss_bytes": 105426944
+    }
+   },
+   "reconnect_burst_c500_pool60_dev1": {
+    "client_connections": 500,
+    "pool_size": 60,
+    "burst_seconds": 0.388,
+    "db_calls": 1500,
+    "client_latency_incl_wait": {
+     "n": 500,
+     "mean_ms": 35.196,
+     "p50_ms": 33.208,
+     "p95_ms": 59.04,
+     "p99_ms": 73.751,
+     "max_ms": 93.126,
+     "min_ms": 10.091
+    },
+    "pool_wait": {
+     "n": 500,
+     "mean_ms": 3.447,
+     "p50_ms": 0.008,
+     "p95_ms": 20.518,
+     "p99_ms": 41.61,
+     "max_ms": 69.029,
+     "min_ms": 0.006
+    },
+    "feed_rows_fetched": 11400,
+    "peak_memory": {
+     "postgres_rss_sum_bytes": 1411481600,
+     "postgres_pss_sum_bytes": 228086784,
+     "postgres_backends": 69,
+     "harness_rss_bytes": 102010880
+    }
+   },
+   "reconnect_burst_c500_pool60_dev2": {
+    "client_connections": 1000,
+    "pool_size": 60,
+    "burst_seconds": 0.582,
+    "db_calls": 2500,
+    "client_latency_incl_wait": {
+     "n": 1000,
+     "mean_ms": 32.19,
+     "p50_ms": 27.587,
+     "p95_ms": 81.939,
+     "p99_ms": 116.615,
+     "max_ms": 142.185,
+     "min_ms": 0.502
+    },
+    "pool_wait": {
+     "n": 1000,
+     "mean_ms": 5.989,
+     "p50_ms": 0.007,
+     "p95_ms": 29.797,
+     "p99_ms": 79.531,
+     "max_ms": 120.371,
+     "min_ms": 0.004
+    },
+    "feed_rows_fetched": 23838,
+    "peak_memory": {
+     "postgres_rss_sum_bytes": 624340992,
+     "postgres_pss_sum_bytes": 186840064,
+     "postgres_backends": 69,
+     "harness_rss_bytes": 102019072
+    }
+   },
+   "reconcile_fetch_2500_calls_pool15": {
+    "calls": 2500,
+    "seconds": 0.575,
+    "calls_per_s": 4350.7,
+    "latency": {
+     "n": 2500,
+     "mean_ms": 10.69,
+     "p50_ms": 3.052,
+     "p95_ms": 89.369,
+     "p99_ms": 103.677,
+     "max_ms": 106.847,
+     "min_ms": 0.193
+    },
+    "required_calls_per_s_growth_500_players_60s": 8.33
+   },
+   "bootstrap_burst_50_accounts_pool15": {
+    "accounts": 50,
+    "burst_seconds": 0.173,
+    "db_calls": 150,
+    "serialized_bytes_total": 14136700,
+    "client_latency": {
+     "n": 50,
+     "mean_ms": 38.55,
+     "p50_ms": 37.404,
+     "p95_ms": 62.661,
+     "p99_ms": 68.432,
+     "max_ms": 72.652,
+     "min_ms": 18.33
+    },
+    "snapshot_lock_precommit": {
+     "n": 50,
+     "mean_ms": 2.755,
+     "p50_ms": 0.95,
+     "p95_ms": 8.176,
+     "p99_ms": 11.936,
+     "max_ms": 13.235,
+     "min_ms": 0.515
+    },
+    "peak_memory": {
+     "postgres_rss_sum_bytes": 624340992,
+     "postgres_pss_sum_bytes": 186841088,
+     "postgres_backends": 9,
+     "harness_rss_bytes": 104099840
+    }
+   },
+   "bootstrap_burst_50_accounts_pool60": {
+    "accounts": 50,
+    "burst_seconds": 0.195,
+    "db_calls": 150,
+    "serialized_bytes_total": 14136700,
+    "client_latency": {
+     "n": 50,
+     "mean_ms": 53.001,
+     "p50_ms": 48.885,
+     "p95_ms": 85.388,
+     "p99_ms": 99.17,
+     "max_ms": 102.569,
+     "min_ms": 24.999
+    },
+    "snapshot_lock_precommit": {
+     "n": 50,
+     "mean_ms": 14.2,
+     "p50_ms": 11.377,
+     "p95_ms": 31.868,
+     "p99_ms": 48.001,
+     "max_ms": 56.175,
+     "min_ms": 0.732
+    },
+    "peak_memory": {
+     "postgres_rss_sum_bytes": 624340992,
+     "postgres_pss_sum_bytes": 186841088,
+     "postgres_backends": 9,
+     "harness_rss_bytes": 104460288
+    }
+   },
+   "fan_out_model": {
+    "feed_rows_created_for_500_accounts": 12400,
+    "hints_at_1_device": 12400,
+    "hints_at_2_devices": 24800,
+    "note": "modelled: Realtime delivery not measured locally"
+   },
+   "sweep_after_bursts": {
+    "ms": 17.732,
+    "swept": {
+     "stage": 0,
+     "export": 0,
+     "snapshot": 100
+    }
+   },
+   "_scenario_seconds": 18.17
+  }
+ },
+ "environment": {
+  "postgres_version": "PostgreSQL 18.6 on x86_64-pc-linux-gnu, compiled by gcc (Debian 12.2.0-14+deb12u1) 12.2.0, 64-bit",
+  "settings": {
+   "shared_buffers": "128MB",
+   "work_mem": "4MB",
+   "fsync": "on",
+   "synchronous_commit": "on",
+   "wal_level": "replica",
+   "max_connections": "250",
+   "data_checksums": "on",
+   "default_toast_compression": "pglz",
+   "wal_compression": "off",
+   "checkpoint_timeout": "5min",
+   "max_wal_size": "1GB",
+   "random_page_cost": "4",
+   "effective_cache_size": "4GB",
+   "autovacuum": "on"
+  },
+  "python": "3.14.7",
+  "psycopg": "3.3.5",
+  "libpq": 180006,
+  "psycopg_impl": "binary",
+  "psutil": "7.2.2",
+  "platform": "Linux-7.2.3-arch1-3-x86_64-with-glibc2.44",
+  "cpu": "Intel(R) Core(TM) i7-7700K CPU @ 4.20GHz",
+  "cpus": 8,
+  "memory_total_bytes": 33581617152,
+  "pgdata": "/data/dev/MMGJ/.tc-workload-scratch/pgdata",
+  "dsn": "host=/tmp/tc-pg port=54329 user=tc dbname=tc",
+  "quick": false,
+  "started_utc": "2026-09-14T22:54:33Z",
+  "total_seconds": 156.3
+ },
+ "sizes_start": {
+  "account_head": {
+   "rows": 0,
+   "heap_bytes": 0,
+   "index_bytes": 8192,
+   "toast_bytes": 0,
+   "total_bytes": 8192
+  },
+  "allowance": {
+   "rows": 0,
+   "heap_bytes": 0,
+   "index_bytes": 8192,
+   "toast_bytes": 0,
+   "total_bytes": 8192
+  },
+  "contribution": {
+   "rows": 0,
+   "heap_bytes": 0,
+   "index_bytes": 8192,
+   "toast_bytes": 8192,
+   "total_bytes": 16384
+  },
+  "export_job": {
+   "rows": 0,
+   "heap_bytes": 0,
+   "index_bytes": 24576,
+   "toast_bytes": 8192,
+   "total_bytes": 32768
+  },
+  "feed": {
+   "rows": 0,
+   "heap_bytes": 0,
+   "index_bytes": 8192,
+   "toast_bytes": 8192,
+   "total_bytes": 16384
+  },
+  "manifest": {
+   "rows": 0,
+   "heap_bytes": 0,
+   "index_bytes": 8192,
+   "toast_bytes": 8192,
+   "total_bytes": 16384
+  },
+  "receipt": {
+   "rows": 0,
+   "heap_bytes": 0,
+   "index_bytes": 8192,
+   "toast_bytes": 8192,
+   "total_bytes": 16384
+  },
+  "result": {
+   "rows": 0,
+   "heap_bytes": 0,
+   "index_bytes": 8192,
+   "toast_bytes": 8192,
+   "total_bytes": 16384
+  },
+  "result_chunk": {
+   "rows": 0,
+   "heap_bytes": 0,
+   "index_bytes": 8192,
+   "toast_bytes": 8192,
+   "total_bytes": 16384
+  },
+  "snapshot": {
+   "rows": 0,
+   "heap_bytes": 0,
+   "index_bytes": 24576,
+   "toast_bytes": 8192,
+   "total_bytes": 32768
+  },
+  "snapshot_row": {
+   "rows": 0,
+   "heap_bytes": 0,
+   "index_bytes": 8192,
+   "toast_bytes": 8192,
+   "total_bytes": 16384
+  },
+  "stage": {
+   "rows": 0,
+   "heap_bytes": 0,
+   "index_bytes": 16384,
+   "toast_bytes": 8192,
+   "total_bytes": 24576
+  },
+  "tombstone": {
+   "rows": 0,
+   "heap_bytes": 0,
+   "index_bytes": 8192,
+   "toast_bytes": 0,
+   "total_bytes": 8192
+  },
+  "_database_bytes": 8091327,
+  "_wal_lsn": "0/4A71A0C8"
+ },
+ "sizes_end": {
+  "account_head": {
+   "rows": 958,
+   "heap_bytes": 327680,
+   "index_bytes": 40960,
+   "toast_bytes": 0,
+   "total_bytes": 401408
+  },
+  "allowance": {
+   "rows": 102,
+   "heap_bytes": 8192,
+   "index_bytes": 16384,
+   "toast_bytes": 0,
+   "total_bytes": 24576
+  },
+  "contribution": {
+   "rows": 7,
+   "heap_bytes": 8192,
+   "index_bytes": 16384,
+   "toast_bytes": 8192,
+   "total_bytes": 32768
+  },
+  "export_job": {
+   "rows": 0,
+   "heap_bytes": 8192,
+   "index_bytes": 49152,
+   "toast_bytes": 8192,
+   "total_bytes": 65536
+  },
+  "feed": {
+   "rows": 17196,
+   "heap_bytes": 2138112,
+   "index_bytes": 3432448,
+   "toast_bytes": 8192,
+   "total_bytes": 5611520
+  },
+  "manifest": {
+   "rows": 0,
+   "heap_bytes": 8192,
+   "index_bytes": 16384,
+   "toast_bytes": 8192,
+   "total_bytes": 32768
+  },
+  "receipt": {
+   "rows": 17196,
+   "heap_bytes": 7593984,
+   "index_bytes": 5070848,
+   "toast_bytes": 8192,
+   "total_bytes": 12705792
+  },
+  "result": {
+   "rows": 16565,
+   "heap_bytes": 3923968,
+   "index_bytes": 5038080,
+   "toast_bytes": 93536256,
+   "total_bytes": 102580224
+  },
+  "result_chunk": {
+   "rows": 0,
+   "heap_bytes": 0,
+   "index_bytes": 16384,
+   "toast_bytes": 303104,
+   "total_bytes": 352256
+  },
+  "snapshot": {
+   "rows": 1,
+   "heap_bytes": 16384,
+   "index_bytes": 49152,
+   "toast_bytes": 8192,
+   "total_bytes": 98304
+  },
+  "snapshot_row": {
+   "rows": 240,
+   "heap_bytes": 884736,
+   "index_bytes": 16007168,
+   "toast_bytes": 8192,
+   "total_bytes": 16932864
+  },
+  "stage": {
+   "rows": 0,
+   "heap_bytes": 0,
+   "index_bytes": 32768,
+   "toast_bytes": 319488,
+   "total_bytes": 385024
+  },
+  "tombstone": {
+   "rows": 3,
+   "heap_bytes": 8192,
+   "index_bytes": 16384,
+   "toast_bytes": 0,
+   "total_bytes": 24576
+  },
+  "_database_bytes": 147289791,
+  "_wal_lsn": "0/5F8B3E98"
+ },
+ "wal_bytes_total": "354000336",
+ "pgdata_du_bytes": 556563022,
+ "peak_memory_overall": {
+  "postgres_rss_sum_bytes": 624406528,
+  "postgres_pss_sum_bytes": 186906624,
+  "postgres_backends": 9,
+  "harness_rss_bytes": 104460288
+ },
+ "assertion_summary": {
+  "passed": 39,
+  "failed": 0
+ }
+}
