@@ -10,11 +10,20 @@ The rules and betting constraints governing a simulated game, used to determine 
 **Rule preset**:
 A named starting configuration of table conditions that a player can customize within the supported choices.
 
+**Bet selector**:
+A named-wager interface for choosing a wager, its applicable numbers, and its stake, equivalent to selecting wagers on the graphical table. Both presentations operate the same practice session.
+
 **Strategy**:
 A system prescribing a player's actions or bets under particular game conditions. A strategy is the reference for coaching and adherence measurement.
 
 **Guided practice**:
 Simulated play against a selected strategy, with corrections offered before a deviating move is executed. The player can retry or explicitly override the correction.
+
+**Tutorial lesson**:
+A replayable explanation of a game, strategy, counting skill, or app operation, optionally including a worked example. Completion records finishing the lesson, not assessed proficiency or a prerequisite for play.
+
+**Worked example**:
+A fixed demonstration with a bounded set of scripted interactions, freely replayable without consuming training allowance. Starting guided practice or a counting challenge from an example starts a separate training activity.
 
 **Blackjack training mode**:
 A combination of the playing decisions being practiced and responsibility for maintaining the count. Basic and deviation practice can use app-supplied conditions, while counting modes require the player to maintain the count.
@@ -70,6 +79,9 @@ A manually recorded period of real casino play at one game, bounded the same way
 **Rebuy**:
 An additional buy-in recorded within a session before its final cash-out. A session's net result sums all its buy-ins, including rebuys, against the one final cash-out.
 
+**Practice funding**:
+Simulated buy-ins and rebuys supplied to an ordinary practice session, rather than drawn from a shared spendable wallet. It is separate from the daily training bankroll and from casino-session balances.
+
 **Visit**:
 An automatic grouping of casino sessions that share the same casino name and date, used only to present a rolled-up view of a night's play. A visit has no identity, record, or fields of its own beyond that shared casino name and date.
 
@@ -82,14 +94,23 @@ A tracked balance allocated to play, rather than money held or wagered by True C
 **Community strategy**:
 A strategy submitted by an authenticated user with a profile for others to practice and rate. Its popularity and reported performance are distinct measures.
 
+**Community profile**:
+A player's public identity for publishing and rating community strategies, including a display name. It is separate from their private sign-in information and is not required for private practice or casino-session tracking.
+
+**Sharing period**:
+A span during which an account has enabled sharing of eligible practice results. Disabling sharing invalidates that period; enabling it again starts a new period for future sessions.
+
 **Standardized simulation**:
 An app-run evaluation of a strategy revision under defined comparison conditions. It supplies evidence for public performance comparisons, separate from community practice and self-reported casino results.
+
+**Standardized evaluation**:
+One authoritative standardized simulation and its evidence, shared by strategy revisions with identical normalized executable instructions and matching evaluation conditions. Reusing it preserves the original random allocation and does not supply additional independent evidence.
 
 **Benchmark profile**:
 A defined set of table conditions, starting bankroll, base betting unit, and session length used to compare strategy revisions through standardized simulation.
 
 **Session drawdown**:
-The fall from a session's previous balance peak, with outstanding stakes valued at their original amount until resolution. Maximum session drawdown is the largest such fall during the session, including final settlement.
+The fall from a session's previous balance peak, adjusted so rebuys do not reduce the drawdown and outstanding stakes retain their original value until resolution. Maximum session drawdown is the largest such fall during the session, including final settlement.
 
 **Strategy rating**:
 A player's assessment of a community strategy's practice usefulness and clarity, tied to the revision they practiced. It is distinct from the strategy's financial performance.
@@ -101,13 +122,16 @@ A separately published strategy derived from another strategy revision, retainin
 The win, loss, or push of an individual resolved wager, determined by its net result after applicable commissions. It is distinct from the combined result of simultaneous wagers or an entire session.
 
 **Offline game selection**:
-The single game a free account selects for offline play. Premium accounts can access all three launch games offline.
+The account's selected game for free offline play, retained as a fallback while premium provides all three launch games offline.
 
 **Premium account**:
 A subscription tier with full training access, all three launch games available offline, and no advertising.
 
 **Counting challenge**:
 A short, replayable exercise in card-value recognition, running counts, true-count conversion, or counting during simulated table play. Progress rewards accuracy before speed.
+
+**Challenge attempt**:
+One run of a counting challenge from its first exercise content through completion or an early ending, including abandonment or insufficient funds. Resuming preserves the attempt; restarting with fresh randomized content creates another.
 
 **Learn variant**:
 A counting challenge that provides immediate explanations and retries. Its accuracy preserves the learner's first answer even after correction.
@@ -124,6 +148,9 @@ A counting challenge in which simulated players make the playing and betting dec
 **Play table challenge**:
 A counting challenge in which the learner also makes playing decisions, with optional bet-schedule practice.
 
+**Challenge balance**:
+The finite simulated funds available to the learner during one Play table-challenge attempt. It is separate from ordinary practice funding and daily training allowances.
+
 **Count checkpoint**:
 A point in a counting challenge at which the learner submits a running count, true count, or both for assessment.
 
@@ -133,5 +160,29 @@ An earned indication that a learner met the counting-accuracy standard for a par
 **Training allowance**:
 The daily amount of guided practice or counting challenges available to a free account. Guided-practice allowances may be measured by time, turns, or a training bankroll.
 
+**Allowance policy**:
+The assigned method and daily amounts governing a free account's guided practice and counting challenges. Different policies may be compared through training-allowance experiments.
+
+**Allowance device**:
+The device designated to hold an account's free training allowance. Unused allowance can move to another device after the original device reconciles its usage.
+
+**Allowance grant**:
+A day's training allowance obtained online for an account's designated allowance device under its assigned allowance policy. Transferring unused allowance moves the remainder without replenishing that day's budget.
+
+**Training turn**:
+One blackjack round including its split hands, one craps roll, or one roulette spin, used to measure guided-practice allowance. Multiple wagers and their individual outcomes remain within that turn.
+
 **Training bankroll**:
-A daily simulated balance used to limit guided practice under a bankroll-based allowance. It is separate from saved practice and casino balances.
+A daily simulated balance shared across games to limit guided practice under a bankroll-based allowance. It is separate from saved practice and casino balances and from counting-challenge attempts.
+
+**Event cue**:
+An optional sound or haptic marking that something happened in play or a challenge, such as a card dealt, a wager settled, or an answer accepted, without judging the learner. It never carries information unavailable in the visible presentation.
+_Avoid_: notification, alert
+
+**Feedback cue**:
+An optional sound or haptic carrying a judgment about the learner's answer or decision, such as correct, incorrect, or a correction offered. Check attempts withhold feedback cues until results, exactly as they withhold on-screen feedback.
+_Avoid_: reward sound, success sound
+
+**Casino atmosphere**:
+Optional looping ambient sound played alongside table play, controlled separately from event and feedback cues. It never carries game information and never replaces a cue.
+_Avoid_: background music, soundtrack
