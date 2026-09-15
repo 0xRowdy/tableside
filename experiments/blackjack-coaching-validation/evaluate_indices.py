@@ -157,6 +157,62 @@ def prepare(states_path, comps_path, hands_path):
     print(f"wrote {len(data['states'])} compositions and {len(seen)} hand/up triples")
 
 
+def classify_bin(m, se):
+    """Accepted tolerance rule: a bin is decisive for the deviation (+1) only
+    if its mean advantage exceeds max(TOL, 2*SE), decisive against it (-1)
+    below -max(TOL, 2*SE), otherwise a tie (0), resolved toward the basic
+    action by compute_thresholds."""
+    lim = max(TOL, 2 * se) if se == se else TOL
+    return 1 if m > lim else -1 if m < -lim else 0
+
+
+def compute_thresholds(means, usable, basic):
+    """Raw and tolerance thresholds for one situation.
+
+    means: {tc: (mean_diff, se, n, weight)} with mean_diff = deviation minus
+    alternative; usable: sorted bins with adequate support inside the
+    searched range; basic: "alt" when the alternative is the basic action
+    (deviate at/above the threshold) or "dev" when the at/above action is
+    itself basic (depart below the threshold).  Returns (raw, tolerance),
+    each an int or "<=lowest" / ">highest" when no crossover is inside the
+    usable range.  (None, None) without usable bins.
+    """
+    threshold = threshold_tol = None
+    if not usable:
+        return threshold, threshold_tol
+    # Raw rule: smallest t such that all usable bins >= t have mean >= 0.
+    for t in usable:
+        if all(means[u][0] >= 0 for u in usable if u >= t):
+            threshold = t
+            break
+
+    def cls(u):
+        return classify_bin(means[u][0], means[u][1])
+    if basic == "alt":
+        # deviation taken at/above t: bin t must be decisive for it,
+        # ties at t push the threshold up, ties above are harmless
+        for t in usable:
+            if cls(t) == 1 and all(cls(u) != -1 for u in usable if u > t):
+                threshold_tol = t
+                break
+    else:
+        # the "at/above" action is basic: keep it wherever the bin is
+        # not decisive against it (ties resolve toward basic)
+        for t in usable:
+            if all(cls(u) != -1 for u in usable if u >= t):
+                threshold_tol = t
+                break
+    if threshold is not None and threshold == usable[0]:
+        threshold = f"<={threshold}"  # deviation preferred at every supported bin
+    elif threshold is None:
+        threshold = f">{usable[-1]}"
+    if threshold_tol is not None and threshold_tol == usable[0]:
+        threshold_tol = f"<={threshold_tol}"
+    elif threshold_tol is None:
+        threshold_tol = f">{usable[-1]}"
+    return threshold, threshold_tol
+
+
 def value(row, spec):
     if spec == "R":
         return -0.5
@@ -240,44 +296,7 @@ def aggregate(states_path, driver_path, rules, out_prefix, min_n=200):
         # outside the taught range (e.g. standing on 15 vs A above +14) must
         # not break the one-sided threshold.
         usable = [tc for tc in sorted(means) if means[tc][2] >= min_n and -8 <= tc <= 8]
-        threshold = threshold_tol = None
-        if usable:
-            # Raw rule: smallest t such that all usable bins >= t have mean >= 0.
-            for t in usable:
-                if all(means[u][0] >= 0 for u in usable if u >= t):
-                    threshold = t
-                    break
-            # Tolerance rule (proposal): a bin is decisive for the deviation
-            # only if its mean advantage exceeds max(TOL, 2*SE); decisive
-            # against it if below -max(TOL, 2*SE); otherwise a tie, resolved
-            # toward the basic action.  Threshold = smallest t whose bin is
-            # decisive for the deviation with no decisive-against bin above.
-            def cls(u):
-                m, se, _, _ = means[u]
-                lim = max(TOL, 2 * se) if se == se else TOL
-                return 1 if m > lim else -1 if m < -lim else 0
-            if basic_of(name, rules) == "alt":
-                # deviation taken at/above t: bin t must be decisive for it,
-                # ties at t push the threshold up, ties above are harmless
-                for t in usable:
-                    if cls(t) == 1 and all(cls(u) != -1 for u in usable if u > t):
-                        threshold_tol = t
-                        break
-            else:
-                # the "at/above" action is basic: keep it wherever the bin is
-                # not decisive against it (ties resolve toward basic)
-                for t in usable:
-                    if all(cls(u) != -1 for u in usable if u >= t):
-                        threshold_tol = t
-                        break
-            if threshold is not None and threshold == usable[0]:
-                threshold = f"<={threshold}"  # deviation preferred at every supported bin
-            elif threshold is None:
-                threshold = f">{usable[-1]}"
-            if threshold_tol is not None and threshold_tol == usable[0]:
-                threshold_tol = f"<={threshold_tol}"
-            elif threshold_tol is None:
-                threshold_tol = f">{usable[-1]}"
+        threshold, threshold_tol = compute_thresholds(means, usable, basic_of(name, rules))
         # sign breakdown for bins -1..1
         signs = []
         for tc in (-1, 0, 1):

@@ -36,6 +36,12 @@
 //   --multihands FILE  optional list of "up c1 c2 c3 ..." lines (three or
 //                    more player cards); prints id,c1-c2-c3...,up,stand,hit
 //                    (double is not offered on three or more cards).
+//   --perline        each input line carries its own hand:
+//                        <id> <A> <2> ... <T> <up> <c1> <c2> [<c3> ...]
+//                    and prints id,c1-c2[-c3...],up,stand,hit,double,split
+//                    (double only for two-card hands, split only for pairs).
+//                    One calculator build per line; used for the sampled
+//                    decision occurrences (multi-card and post-split hands).
 //   --nodas          disable doubling after splitting (used only to compare
 //                    with the comparator's DAS=No column; launch rules use DAS)
 //   --dealer         reserved; currently prints nothing extra.
@@ -117,11 +123,12 @@ private:
 }  // namespace
 
 int main(int argc, char **argv) {
-    bool h17 = false, printDealer = false, das = true;
+    bool h17 = false, printDealer = false, das = true, perLine = false;
     std::string mode = "cdz", tablePath, handsPath, multiPath;
     for (int i = 1; i < argc; ++i) {
         if (!strcmp(argv[i], "--h17")) h17 = true;
         else if (!strcmp(argv[i], "--nodas")) das = false;
+        else if (!strcmp(argv[i], "--perline")) perLine = true;
         else if (!strcmp(argv[i], "--dealer")) printDealer = true;
         else if (!strcmp(argv[i], "--mode") && i + 1 < argc) mode = argv[++i];
         else if (!strcmp(argv[i], "--table") && i + 1 < argc) tablePath = argv[++i];
@@ -167,7 +174,8 @@ int main(int argc, char **argv) {
     else { std::fprintf(stderr, "unknown mode %s\n", mode.c_str()); return 2; }
     BJProgress progress;
 
-    std::printf("id,c1,c2,up,stand,hit,double,split\n");
+    if (perLine) std::printf("id,hand,up,stand,hit,double,split\n");
+    else std::printf("id,c1,c2,up,stand,hit,double,split\n");
     char line[4096];
     BJPlayer *player = 0;
     while (std::fgets(line, sizeof line, stdin)) {
@@ -179,11 +187,43 @@ int main(int argc, char **argv) {
         bool ok = true;
         for (int c = 1; c <= 10; ++c) if (!(ss >> cards[c])) ok = false;
         if (!ok) { std::fprintf(stderr, "bad line: %s", line); continue; }
+        std::vector<int> own;  // per-line hand: up card first, then the player's cards
+        if (perLine) {
+            int x;
+            while (ss >> x) own.push_back(x);
+            if (own.size() < 3) { std::fprintf(stderr, "bad perline hand: %s", line); continue; }
+            int need[11] = {0};
+            for (size_t j = 0; j < own.size(); ++j) need[own[j]]++;
+            for (int c = 1; c <= 10; ++c) if (cards[c] < need[c]) ok = false;
+            if (!ok) { std::fprintf(stderr, "hand not in composition: %s", line); continue; }
+        }
         BJShoe shoe(cards);
         if (!player) player = new BJPlayer(shoe, rules, *strategy, progress);
         else player->reset(shoe, rules, *strategy, progress);
         if (printDealer) {
             // Not needed for the report; reserved for future checks.
+        }
+        if (perLine) {
+            // The composition on this line is the unseen pool (physical shoe
+            // plus the concealed hole card) with the player's cards and the up
+            // card still in it; the calculator removes them itself.
+            int u = own[0];
+            BJHand h;
+            std::string label;
+            for (size_t j = 1; j < own.size(); ++j) {
+                h.deal(own[j]);
+                if (j > 1) label += "-";
+                label += std::to_string(own[j]);
+            }
+            if (h.getCount() > 21) { std::fprintf(stderr, "bust hand: %s", line); continue; }
+            std::printf("%s,%s,%d,%.9f,%.9f,", id.c_str(), label.c_str(), u,
+                player->getValueStand(h, u), player->getValueHit(h, u));
+            if (own.size() == 3) std::printf("%.9f", player->getValueDoubleDown(h, u));
+            std::printf(",");
+            if (own.size() == 3 && own[1] == own[2]) std::printf("%.9f", player->getValueSplit(own[1], u));
+            std::printf("\n");
+            std::fflush(stdout);
+            continue;
         }
         if (!multi.empty()) {
             for (size_t k = 0; k < multi.size(); ++k) {

@@ -55,10 +55,10 @@ def total_of(cards):
 
 
 def run(args_tuple):
-    (cont, pairs, h17, c1, c2, up, action, resplit, trials, seed, max_hands) = args_tuple
+    (cont, pairs, h17, initial, up, action, resplit, trials, seed, max_hands) = args_tuple
     rng = random.Random(seed)
     base = [c for c in range(1, 11) for _ in range(96 if c == 10 else 24)]
-    for c in (c1, c2, up):
+    for c in list(initial) + [up]:
         base.remove(c)
     total = 0.0
     total_sq = 0.0
@@ -71,7 +71,7 @@ def run(args_tuple):
             continue
         kept += 1
         # hands: list of [cards, bet, from_split, split_aces, done]
-        hands = [[[c1, c2], 1, False, False, False]]
+        hands = [[list(initial), 1, False, False, False]]
         i = 0
         first = True
         while i < len(hands):
@@ -147,7 +147,7 @@ def main():
     ap.add_argument("--continuation", required=True)
     ap.add_argument("--basic", required=True)
     ap.add_argument("--h17", type=int, default=0)
-    ap.add_argument("--hand", required=True, help="c1,c2 with A=1, T=10")
+    ap.add_argument("--hand", required=True, help="c1,c2[,c3...] with A=1, T=10 (three or more cards: stand/hit only)")
     ap.add_argument("--up", type=int, required=True)
     ap.add_argument("--action", required=True, choices=["S", "H", "D", "P"])
     ap.add_argument("--resplit", default="always", choices=["always", "basic", "never"])
@@ -159,9 +159,11 @@ def main():
     args = ap.parse_args()
     cont = load_continuation(args.continuation)
     pairs = load_pairs(args.basic)
-    c1, c2 = (int(x) for x in args.hand.split(","))
+    initial = tuple(int(x) for x in args.hand.split(","))  # two or more cards
+    if len(initial) > 2 and args.action in ("D", "P"):
+        sys.exit("double and split are only available on two-card hands")
     per = args.trials // args.workers
-    jobs = [(cont, pairs, bool(args.h17), c1, c2, args.up, args.action, args.resplit, per, args.seed * 1000 + k,
+    jobs = [(cont, pairs, bool(args.h17), initial, args.up, args.action, args.resplit, per, args.seed * 1000 + k,
              args.max_hands)
             for k in range(args.workers)]
     with Pool(args.workers) as pool:
@@ -172,7 +174,7 @@ def main():
     mean = total / kept
     var = total_sq / kept - mean * mean
     se = (var / kept) ** 0.5
-    print(f"{'H17' if args.h17 else 'S17'} {c1},{c2} vs {args.up} action {args.action} resplit {args.resplit}"
+    print(f"{'H17' if args.h17 else 'S17'} {','.join(str(c) for c in initial)} vs {args.up} action {args.action} resplit {args.resplit}"
           f"{'' if args.max_hands == 4 else f' max-hands {args.max_hands}'}: "
           f"mean {mean:+.6f} se {se:.6f} kept {kept} of {per * args.workers}")
 
