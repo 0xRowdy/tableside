@@ -94,12 +94,38 @@ SITUATIONS = [
 ]
 
 
+# Basic (fresh-shoe) action per situation; "dev" means the deviation action
+# listed in SITUATIONS is itself the basic action (the departure happens
+# below the index), "alt" means the alternative is basic.  Rules-dependent
+# entries are given per rule set.  Ties resolve toward the basic action.
+BASIC = {
+    "13 vs 2 stand": "dev", "12 vs 4 stand": "dev", "12 vs 5 stand": "dev",
+    "12 vs 6 stand": "dev", "13 vs 3 stand": "dev",
+    "15 vs 10 surrender": "dev", "16 vs 9 surrender": "dev",
+    "16 vs 10 surrender": "dev", "16 vs A surrender": "dev",
+    "11 vs A double": {"S17": "alt", "H17": "dev"},
+    "A,8 vs 6 double": {"S17": "alt", "H17": "dev"},
+    "15 vs A surrender": {"S17": "alt", "H17": "dev"},
+    "8,8 vs A surrender": {"S17": "alt", "H17": "dev"},
+    "17 vs A surrender": {"S17": "alt", "H17": "dev"},
+}
+CONVENTION = "trunc"  # or "round": half away from zero (comparator convention)
+
+
 def divisor(physical):
     return max(0.5, ((physical + 13) // 26) / 2)
 
 
 def tc_of(rc, physical):
-    return int(rc / divisor(physical))
+    q = rc / divisor(physical)
+    if CONVENTION == "round":
+        return int(math.floor(abs(q) + 0.5)) * (1 if q >= 0 else -1)
+    return int(q)
+
+
+def basic_of(name, rules):
+    b = BASIC.get(name, "alt")
+    return b[rules] if isinstance(b, dict) else b
 
 
 def state_pool(state):
@@ -209,7 +235,11 @@ def aggregate(states_path, driver_path, rules, out_prefix, min_n=200):
             se = math.sqrt(var) if cnt > 1 else float("nan")
             means[tc] = (m, se, cnt, w)
             detail_rows.append([rules, cur, name, tc, f"{m:+.6f}", f"{se:.6f}", cnt, f"{w:.1f}"])
-        usable = [tc for tc in sorted(means) if means[tc][2] >= min_n]
+        # Threshold search is confined to the curriculum range |TC| <= 8; the
+        # far tails are reported in the bins file but a second crossover far
+        # outside the taught range (e.g. standing on 15 vs A above +14) must
+        # not break the one-sided threshold.
+        usable = [tc for tc in sorted(means) if means[tc][2] >= min_n and -8 <= tc <= 8]
         threshold = threshold_tol = None
         if usable:
             # Raw rule: smallest t such that all usable bins >= t have mean >= 0.
@@ -226,10 +256,20 @@ def aggregate(states_path, driver_path, rules, out_prefix, min_n=200):
                 m, se, _, _ = means[u]
                 lim = max(TOL, 2 * se) if se == se else TOL
                 return 1 if m > lim else -1 if m < -lim else 0
-            for t in usable:
-                if cls(t) == 1 and all(cls(u) != -1 for u in usable if u > t):
-                    threshold_tol = t
-                    break
+            if basic_of(name, rules) == "alt":
+                # deviation taken at/above t: bin t must be decisive for it,
+                # ties at t push the threshold up, ties above are harmless
+                for t in usable:
+                    if cls(t) == 1 and all(cls(u) != -1 for u in usable if u > t):
+                        threshold_tol = t
+                        break
+            else:
+                # the "at/above" action is basic: keep it wherever the bin is
+                # not decisive against it (ties resolve toward basic)
+                for t in usable:
+                    if all(cls(u) != -1 for u in usable if u >= t):
+                        threshold_tol = t
+                        break
             if threshold is not None and threshold == usable[0]:
                 threshold = f"<={threshold}"  # deviation preferred at every supported bin
             elif threshold is None:
@@ -321,6 +361,9 @@ def insurance(states_path, rules, out_prefix, min_n=200):
 
 
 if __name__ == "__main__":
+    if "--round" in sys.argv:
+        sys.argv.remove("--round")
+        CONVENTION = "round"
     cmd = sys.argv[1]
     if cmd == "prepare":
         prepare(*sys.argv[2:5])

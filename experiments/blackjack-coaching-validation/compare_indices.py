@@ -57,8 +57,8 @@ def main():
             situations.append(name)
     order = {"I18": 0, "F4": 1, "supp": 2}
     situations.sort(key=lambda n: order.get(gen[("p75_n0", "S17", "cdz", n)]["curriculum"], 9))
-    print("| Situation | Set | Schlesinger | BJA S17 | BJA H17 | S17 cdz | S17 tdb | H17 cdz | H17 tdb | S17 cdz at p50 / p80 / 4 others | H17 cdz, H17/noLS sampling |")
-    print("|---|---|---|---|---|---|---|---|---|---|---|")
+    print("| Situation | Set | Schlesinger | BJA S17 | BJA H17 | S17 cdz | S17 tdb | H17 cdz | H17 tdb | S17 cdz at p50 / p80 / 4 others | H17 cdz, H17/noLS sampling | S17 / H17 cdz, rounded TC |")
+    print("|---|---|---|---|---|---|---|---|---|---|---|---|")
     for name in situations:
         k = key_of(name)
         r0 = gen[("p75_n0", "S17", "cdz", name)]
@@ -68,8 +68,9 @@ def main():
             cells.append(fmt(r["threshold_tolerance"]) + (f" (raw {r['threshold_raw']})" if r and r["threshold_raw"] != r["threshold_tolerance"] else "") if r else "—")
         stab = " / ".join(fmt(gen.get((t, "S17", "cdz", name), {}).get("threshold_tolerance")) for t in ("p50_n0", "p80_n0", "p75_n4"))
         stab_h = fmt(gen.get(("h17nols_p75_n0", "H17", "cdz", name), {}).get("threshold_tolerance"))
+        rnd = " / ".join(fmt(gen.get(("p75_n0_round", r, "cdz", name), {}).get("threshold_tolerance")) for r in ("S17", "H17"))
         print(f"| {name} | {r0['curriculum']} | {fmt(pub.get(('Schlesinger', k)))} | {fmt(pub.get(('BJA S17', k)))} | "
-              f"{fmt(pub.get(('BJA H17', k)))} | {' | '.join(cells)} | {stab} | {stab_h} |")
+              f"{fmt(pub.get(('BJA H17', k)))} | {' | '.join(cells)} | {stab} | {stab_h} | {rnd} |")
     print()
     print("Bins near the tolerance threshold (S17 cdz, default configuration): mean advantage of the deviation ± SE")
     print()
