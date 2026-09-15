@@ -50,6 +50,9 @@ removal). The accepted True Count conversion is implemented in
 | `insurance_sim.py` | Independent empirical insurance check: hole-card outcomes by true count at the insurance decision, no calculator involved. |
 | `compare_indices.py` | Consolidates generated thresholds across rules, continuations and configurations with the published values into one Markdown table. |
 | `diff_presets.py` | Lists teaching cells that differ between presets. |
+| `diagnose_bins.py` | Pipeline diagnostics: RC = 0 bin means by depth and mean exact quotient per integer bin. |
+| `stability_detail.py` | Raw and tolerance thresholds with nearby bins across configurations for selected situations. |
+| `reaggregate_all.sh` | Re-runs every aggregation from saved driver outputs (including the rounding-convention variants and insurance). |
 | `multihands.txt`, `multihands_fresh_S17.csv`, `multihands_fresh_H17.csv` | Three- and four-card compositions of the index totals evaluated on a fresh shoe (driver `--multihands`). |
 | `published_indices.csv` | Published I18/F4 values (Wizard/Schlesinger) and BJA 2018 chart entries with their stated meanings, for comparison. |
 | `wizard_appendix9_6deck.csv` | Parsed comparator values (source: Wizard of Odds, retrieved 2026-09-14). |
@@ -82,3 +85,19 @@ python3 insurance_sim.py --basic basic_S17_LS.csv --shoes 300000 --penetration 0
 
 Intermediate driver outputs (hundreds of MB) stay in `/tmp/bjwork`; only the
 aggregated CSVs are committed.
+
+## Measured runtimes (8-core Linux workstation, 2026-09-14)
+
+| Step | Runtime |
+| --- | --- |
+| One engine build (fresh or depleted six-deck shoe) | about 0.22 s per composition per core |
+| `run_fresh.sh` (12 fresh-shoe runs + comparison) | about 5 s |
+| `mc_check.py`, 8,000,000 rounds, 8 workers | 2–3 min per cell (longer when sharing the machine) |
+| `run_sampling.sh`, 400,000 shoes per configuration, five configurations in parallel | about 10 min |
+| Index driver pass, 34,967 compositions, 81 hand/up triples, 8 workers | 13–16 min per rule set and continuation (about 35 min while the Monte Carlo batch shared the machine) |
+| Stability passes (7,356 + 14,077 + 11,622 + 12,593 compositions) | about 20 min total |
+| `evaluate_indices.py aggregate` on one driver output | about 1 min |
+| `insurance_sim.py`, 300,000 shoes | about 6 min |
+
+Random seeds: sampler 101–105 (see `run_sampling.sh`), subsampling 11–15,
+Monte Carlo seed 1 (worker seeds 1000–1007), insurance simulation seed 5.
