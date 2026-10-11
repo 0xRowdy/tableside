@@ -114,3 +114,7 @@ Before the automated responder is implemented: essential actionable alerts go di
 ## Account-deletion timing amendment
 
 Apply the accepted [30-day undo window](authentication-account-lifecycle.md#accepted-amendment--30-day-deletion-undo-window). Scheduling deletion immediately deactivates access and hides public content but preserves account data for undo. Irreversible deletion acceptance, device wiping and the seven-day active cleanup target begin at the scheduled deadline or accepted Delete permanently now action. Protect the current scheduled/canceled/permanent state during replay and recovery; old jobs cannot finalize a canceled schedule or undo permanent deletion. This does not extend temporary-file TTLs or establish purchase-lineage retention.
+
+## Growth budget amendment
+
+Accepted in [Growth backend budget and cost-policy limits](growth-backend-budget-cost-policy.md). The $50 target and $40 alert become the launch stage; a growth stage of $70 with a $56 alert follows by team decision. RevenueCat's revenue-linked fee sits outside both and is reported separately. Projected spend is computed from billed meters with per-meter 80% warnings, not from MAU. The 30-day routine and 90-day incident records are kept in app-managed tables with a cleanup job and failure alert; no log drain. Responses remain human-decided.

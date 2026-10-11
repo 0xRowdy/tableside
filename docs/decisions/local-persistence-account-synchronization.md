@@ -2,6 +2,10 @@
 
 Accepted through the live Q1–Q15 discussion, including the integrated design and explicit follow-ups. The resolution on [Local persistence and account synchronization architecture](https://github.com/0xRowdy/true-count/issues/21#issuecomment-5565344184), part of the [MVP decision map](https://github.com/0xRowdy/true-count/issues/1), is canonical; this file preserves the reviewed decision for repository readers. This is a planning resolution, not implemented software or proof that native acceptance checks have passed.
 
+## Realtime connection policy amendment
+
+Accepted in [Growth backend budget and cost-policy limits](growth-backend-budget-cost-policy.md). A device holds its private Realtime subscription only while foregrounded. When another device of the same player is foregrounded, the newest device takes the live connection and the other relies on the 60-second reconciliation; a connection refused at the capacity limit falls back silently to the same reconciliation. Multi-device support and every synchronization contract are unchanged.
+
 ## Accepted in this session
 
 - **Q1 — Hosting:** use a managed backend/database service; application synchronization rules remain our responsibility.
