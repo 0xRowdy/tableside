@@ -129,10 +129,7 @@ describe('practice funding', () => {
     await fireEvent.press(screen.getByRole('button', { name: 'Rebuy' }));
     await fireEvent.press(await screen.findByRole('button', { name: 'Add 1,000 to this session' }));
     await screen.findByLabelText('Session balance 1,600');
-    // Straight-up bets are among the bets a number opens on the felt.
-    await fireEvent.press(screen.getByRole('button', { name: '0, green' }));
     await tap('1', /^Straight 0,/, 3);
-    await fireEvent.press(screen.getByRole('button', { name: '1, red' }));
     await tap('5', /^Straight 1,/);
     await spin('1,700');
 

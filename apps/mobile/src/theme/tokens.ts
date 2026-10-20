@@ -84,8 +84,6 @@ export const essentialPairs: readonly {
   { use: 'focused spot or chip ring on the felt', kind: 'graphic', foreground: 'ring', background: 'feltDeep' },
   { use: 'outside spot label and payout on the felt', kind: 'text', foreground: 'onImage', background: 'felt' },
   { use: 'wagered outside spot outline on the felt', kind: 'graphic', foreground: 'foreground', background: 'felt' },
-  { use: 'bet loupe row boundary', kind: 'graphic', foreground: 'controlBorder', background: 'popover' },
-  { use: 'wagered bet loupe row outline', kind: 'graphic', foreground: 'foreground', background: 'popover' },
   { use: 'selected wheel choice outline', kind: 'graphic', foreground: 'primary', background: 'card' },
   { use: 'focused chip ring on the rail', kind: 'graphic', foreground: 'ring', background: 'rail' },
   { use: 'chip rack caption', kind: 'text', foreground: 'foreground', background: 'rail' },
