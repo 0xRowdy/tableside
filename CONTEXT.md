@@ -111,6 +111,13 @@ A prescribed action or adjustment waiting to execute, distinct from a game outco
 A period of simulated play at one game, explicitly started and explicitly ended by stopping, resetting, or switching games. It has its own performance history, simulated balance, and departure log.
 _Avoid_: session (unqualified), game
 
+**Quarantine**:
+The setting aside of practice sessions whose pinned engine, rule, strategy or reference identities a proven defect affected, as named by the quarantine list shipped with the app. A completed session's quarantine is derived on every read, never stored; quarantined sessions are explained and left out of totals and adherence.
+
+**Incomplete practice session**:
+An unfinished practice session found unusable (quarantined, or its saved state damaged) and so marked incomplete instead of being resumed or given an invented result.
+_Avoid_: failed session, cancelled session
+
 **Final settlement**:
 The automatic resolution of outstanding wagers when a practice session ends, after legally removable wagers are returned. No new bets are placed during it.
 

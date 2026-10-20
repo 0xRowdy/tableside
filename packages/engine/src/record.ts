@@ -346,8 +346,20 @@ export type QuarantineStatus = { readonly quarantined: false } | { readonly quar
 
 const sameIdentity = (a: VersionedIdentity | null, b: VersionedIdentity) => a !== null && a.id === b.id && a.version === b.version;
 
-/** Whether a record's pinned identities fall under the list; derived on every read, never stored. */
-export function quarantineStatus(record: Pick<CompletedPracticeSessionRecord, 'identities'>, list: QuarantineList): QuarantineStatus {
+/** The pinned identities quarantine is judged on: a completed record's, or an unfinished activity's. */
+export interface QuarantinableIdentities {
+  readonly engine: string;
+  readonly rules: VersionedIdentity;
+  readonly strategy: VersionedIdentity | null;
+  readonly reference: VersionedIdentity | null;
+}
+
+/**
+ * Whether a completed record's, or an unfinished activity's, pinned identities
+ * fall under the list; derived on every read, never stored. An unfinished
+ * activity that does is unusable: it is marked incomplete, never given a result.
+ */
+export function quarantineStatus(record: { readonly identities: QuarantinableIdentities }, list: QuarantineList): QuarantineStatus {
   const { identities } = record;
   for (const entry of list.entries) {
     const { engine, rules, strategy, reference } = entry.match;

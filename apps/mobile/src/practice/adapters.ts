@@ -1,7 +1,7 @@
 // The practice controller's substitute-able adapters: clock, secure entropy,
 // identifiers and the access supervisor port.
 
-import type { EntropySource, Phase } from '@tableside/engine';
+import type { EntropySource, Phase, QuarantineList } from '@tableside/engine';
 
 import type { ActivityStore, CompletedPracticeSession, MeteringBasis } from './store';
 
@@ -116,6 +116,8 @@ export interface PracticeAdapters {
   /** Originating device and account owner, recorded on each activity. */
   readonly device: string;
   readonly owner: string;
+  /** The quarantine list shipped with the app (#80); an unfinished activity it names is marked incomplete. */
+  readonly quarantine: QuarantineList;
   /**
    * The post-result hook (spec 5's ads, Amendment 4 §D): called when the player
    * leaves a result this process just produced, whose record is durably saved.
