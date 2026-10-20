@@ -9,7 +9,7 @@ import type { AdherenceMeasure, BetCorrection, CycleEnd, Explanation, PendingStr
 import { crapsTargetName } from './craps-text';
 import { targetName } from './roulette-text';
 import type { TurnWord } from './strategy-text';
-import { formatUnits } from './units';
+import { capitalize, formatUnits, totalStake } from './units';
 
 /** How a game words its wagers and its turns. */
 export interface CoachWords {
@@ -33,7 +33,6 @@ const listed = (items: readonly string[]) => (items.length < 2 ? items.join('') 
 export const betsText = (bets: readonly Wager[], words: CoachWords = ROULETTE_WORDS) =>
   listed(bets.map((bet) => `${formatUnits(bet.amount)} on ${words.targetName(bet.target)}`));
 
-const total = (bets: readonly Wager[]) => bets.reduce((sum, bet) => sum + BigInt(bet.amount), 0n).toString();
 
 /** The prescription in one sentence: what the strategy does now, or why it places nothing. */
 export function prescriptionLine(strategyName: string, explanation: Explanation, words: CoachWords = ROULETTE_WORDS): string {
@@ -47,7 +46,7 @@ export function prescriptionLine(strategyName: string, explanation: Explanation,
     case 'paused':
       switch (prescription.reason) {
         case 'unfunded-group':
-          return `${strategyName} places no new bets: its ${bets(prescription.unavailable)} needs ${formatUnits(total(prescription.unavailable))}, and ${formatUnits(explanation.situation.available)} is available.`;
+          return `${strategyName} places no new bets: its ${bets(prescription.unavailable)} needs ${formatUnits(totalStake(prescription.unavailable))}, and ${formatUnits(explanation.situation.available)} is available.`;
         case 'limit':
           return `${strategyName} places no new bets: ${bets(prescription.unavailable)} is outside the table limits.`;
         case 'cap':
@@ -101,7 +100,6 @@ export type DecisionUnit = 'spin' | 'roll' | 'decision' | 'round';
 
 const measureText = (measure: AdherenceMeasure, unit: DecisionUnit) =>
   measure.decisions === 0 ? `no strategy ${unit}s yet` : `followed ${measure.followed} of ${measure.decisions} ${measure.decisions === 1 ? unit : `${unit}s`}`;
-const capitalized = (text: string) => `${text.charAt(0).toUpperCase()}${text.slice(1)}`;
 
 /**
  * Adherence in words, kept apart from winnings. A strategy that assesses both
@@ -111,7 +109,7 @@ export function adherenceText(adherence: StrategyView['adherence'], unit: Decisi
   const { betting, playing } = adherence;
   if (betting && playing) return `Playing: ${measureText(playing, 'decision')} · Betting: ${measureText(betting, 'round')}`;
   const only = playing ?? betting;
-  return only ? capitalized(measureText(only, unit)) : 'Nothing assessed yet';
+  return only ? capitalize(measureText(only, unit)) : 'Nothing assessed yet';
 }
 
 /** The words a correction pause shows, whatever the game. */
@@ -162,7 +160,7 @@ export const pendingWaiting = (pending: PendingStrategyAction, words: CoachWords
 export function pendingBlocked(pending: PendingStrategyAction, available: string): string {
   switch (pending.reason) {
     case 'unfunded-group':
-      return `Blocked: not enough chips (${formatUnits(available)} of ${formatUnits(total(pending.unavailable))})`;
+      return `Blocked: not enough chips (${formatUnits(available)} of ${formatUnits(totalStake(pending.unavailable))})`;
     case 'limit':
       return 'Blocked: outside the table limits';
     case 'cap':

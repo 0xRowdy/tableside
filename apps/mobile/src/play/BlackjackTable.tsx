@@ -63,7 +63,7 @@ import { betCorrectionCopy, BLACKJACK_WORDS } from './coaching-text';
 import { CorrectionPanel, GuidedStrip, StopStrategyDialog, type TableNow } from './Guidance';
 import { RebuySheet } from './RebuySheet';
 import { AccessStopBanner, PhaseStepper, SessionStrip, TableTopBar, type PhaseStep } from './TableChrome';
-import { formatSigned, formatUnits, totalOnTable } from './units';
+import { capitalize, formatSigned, formatUnits, halfUnits, sumUnits, totalOnTable } from './units';
 
 type ActiveSnapshot = Active<BlackjackPermittedView>;
 
@@ -152,7 +152,7 @@ export function BlackjackTable({ snapshot }: { snapshot: ActiveSnapshot }) {
     });
   }, [controller]);
 
-  const addChip = () => void controller.placeWager(HAND, (BigInt(wager ?? '0') + BigInt(chip)).toString());
+  const addChip = () => void controller.placeWager(HAND, sumUnits(wager ?? '0', chip));
   const deal = () => {
     if (wager) setLastBet(wager);
     void controller.beginTurn();
@@ -526,8 +526,6 @@ function SplitHand({ view, hand, index, last }: { view: BlackjackPermittedView; 
   );
 }
 
-const capitalize = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
-
 function PlayingCard({ card, small = false }: { card: Card | null; small?: boolean }) {
   if (card === null) {
     return (
@@ -594,9 +592,6 @@ function unavailable(action: TableAction, view: BlackjackPermittedView): string 
   }
 }
 
-/** Half of a canonical amount, exactly. */
-const half = (amount: string) => encodeMoney(mul(decodeMoney(amount), money(1n, 2n)));
-
 function PlayActions({ view, enabled, onPlay }: { view: BlackjackPermittedView; enabled: boolean; onPlay: (action: BlackjackAction) => void }) {
   const offered = (action: BlackjackAction) => view.playActions.includes(action);
   // Surrender shows only at tables that offer it.
@@ -625,7 +620,7 @@ function PlayActions({ view, enabled, onPlay }: { view: BlackjackPermittedView; 
       {offered('surrender') && stake && (
         <Text maxFontSizeMultiplier={textScale.body} style={styles.hint}>
           {round?.dealer.peek === 'no-blackjack' ? 'The dealer checked for blackjack and has none. ' : ''}
-          Late surrender is only on your first two cards. Surrendering returns half your bet ({formatUnits(half(stake))}) and ends the hand.
+          Late surrender is only on your first two cards. Surrendering returns half your bet ({formatUnits(halfUnits(stake))}) and ends the hand.
         </Text>
       )}
     </View>

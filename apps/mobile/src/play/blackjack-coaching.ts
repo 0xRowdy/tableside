@@ -10,7 +10,7 @@ import type { BlackjackCount, BlackjackDeviation, Card, DeviationPlay, PlayChoic
 
 import { cardRank, PLAY_NOUN, signed, SUIT_GLYPH, totalText } from './blackjack-text';
 import type { CorrectionCopy } from './coaching-text';
-import { formatUnits } from './units';
+import { formatUnits, halfUnits } from './units';
 
 /** "A♥": a card as the table shows it. */
 export const cardShort = (card: Card) => `${cardRank(card)}${SUIT_GLYPH[card.suit]}`;
@@ -126,7 +126,7 @@ export function deviationsAtCount(deviations: readonly BlackjackDeviation[], tru
 function unavailableLine(play: PlayChoice, reason: 'rule' | 'balance', explanation: PlayExplanation): string {
   const { situation } = explanation;
   if (reason === 'balance') {
-    if (play === 'insure') return `Insurance needs ${formatUnits(halfOf(situation.stake))} and your balance is ${formatUnits(situation.available)}, so you can't take it.`;
+    if (play === 'insure') return `Insurance needs ${formatUnits(halfUnits(situation.stake))} and your balance is ${formatUnits(situation.available)}, so you can't take it.`;
     return `${play === 'split' ? 'Splitting' : 'Doubling'} needs another ${formatUnits(situation.stake)} and your balance is ${formatUnits(situation.available)}, so you can't ${play}.`;
   }
   switch (play) {
@@ -139,8 +139,6 @@ function unavailableLine(play: PlayChoice, reason: 'rule' | 'balance', explanati
   }
 }
 
-/** Half a whole-unit stake, exactly: "12.5" for 25. */
-const halfOf = (stake: string) => (BigInt(stake) % 2n === 0n ? (BigInt(stake) / 2n).toString() : `${(BigInt(stake) / 2n).toString()}.5`);
 
 /** The moves as words: "your stand", "your insurance of 5". */
 const moveName = (correction: PlayCorrection) =>

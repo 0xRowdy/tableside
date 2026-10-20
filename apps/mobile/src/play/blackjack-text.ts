@@ -17,7 +17,7 @@ import {
   type Suit,
 } from '@tableside/engine';
 
-import { formatUnits } from './units';
+import { capitalize, formatUnits } from './units';
 
 /** "+2", "0", "−1": a count as a signed whole number. */
 export const signed = (value: number) => (value > 0 ? `+${value}` : value < 0 ? `−${-value}` : '0');
@@ -162,7 +162,6 @@ export function seatSummary(seat: number, hand: BlackjackHandView, index: number
   return `${name}: ${hand.cards.map(cardName).join(', ')}. ${capitalize(handTotalText(hand))}, ${state}`;
 }
 
-const capitalize = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
 
 /** "Seat 3" for a simulated player's hand target ("seat-3-hand-1"), or null for one of the learner's. */
 const seatOf = (target: string) => /^seat-(\d+)-/.exec(target)?.[1] ?? null;

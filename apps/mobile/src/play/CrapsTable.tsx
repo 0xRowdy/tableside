@@ -29,8 +29,7 @@ import { CorrectionPanel, CycleResultPanel, GuidedStrip, PendingPanel, StopStrat
 import { RebuySheet } from './RebuySheet';
 import { commitmentText, crapsStatus, crapsTargetName, describeCrapsFacts, puckText, workingText } from './craps-text';
 import { ChipRack } from './RouletteTable';
-import { totalOnTable } from './roulette-text';
-import { formatUnits } from './units';
+import { formatUnits, sumUnits, totalOnTable } from './units';
 import { AccessStopBanner, PhaseStepper, SessionStrip, TableTopBar, type PhaseStep } from './TableChrome';
 
 type ActiveSnapshot = ActivePracticeSnapshot & { readonly view: PermittedView };
@@ -120,8 +119,7 @@ export function CrapsTable({ snapshot }: { snapshot: ActiveSnapshot }) {
   const stakeOn = (target: string) => view.wagers.find((wager) => wager.target === target)?.amount;
   const placeable = (target: string) => table.placements.some((placement) => placement.target === target);
   const addChip = (target: string) => {
-    const total = BigInt(stakeOn(target) ?? '0') + BigInt(chip);
-    void controller.placeWager(target, total.toString());
+    void controller.placeWager(target, sumUnits(stakeOn(target) ?? '0', chip));
   };
   const canPlace = legal('place-wager');
   // The stake editor sets the stake, then the working option (design frame
@@ -249,7 +247,7 @@ export function CrapsTable({ snapshot }: { snapshot: ActiveSnapshot }) {
                 <PendingPanel
                   strategy={strategy}
                   pending={strategy.pending}
-                  available={(BigInt(view.balance) + BigInt(totalOnTable(view))).toString()}
+                  available={sumUnits(view.balance, totalOnTable(view))}
                   canRebuy={view.legalCommands.includes('rebuy') ? legal('rebuy') : null}
                   canOverride={legal('place-wager')}
                   canCollect={legal('collect-instead')}
@@ -545,11 +543,10 @@ function WagerList({
 
 function EndingSteps({ snapshot }: { snapshot: ActiveSnapshot }) {
   const { view } = snapshot;
-  let returned = 0n;
-  for (const fact of snapshot.facts) if (fact.kind === 'wager-returned') returned += BigInt(fact.amount);
+  const returned = sumUnits(...snapshot.facts.flatMap((fact) => (fact.kind === 'wager-returned' ? [fact.amount] : [])));
   const contracts = view.wagers.map((wager) => `${crapsTargetName(wager.target)} ${formatUnits(wager.amount)}`).join(' · ');
   const steps = [
-    { title: 'Removable wagers returned', detail: returned > 0n ? `+${formatUnits(returned.toString())} to your balance` : 'Nothing removable was on the table', state: 'done' },
+    { title: 'Removable wagers returned', detail: returned !== '0' ? `+${formatUnits(returned)} to your balance` : 'Nothing removable was on the table', state: 'done' },
     {
       title: 'Contracts settle automatically',
       detail: contracts ? `Rolling on for ${contracts}. No new bets, odds or presses.` : 'Nothing left to settle.',

@@ -12,7 +12,7 @@ import { Button } from '@/components/Button';
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/theme/tokens';
 
-import { formatUnits } from './roulette-text';
+import { formatUnits, sumUnits } from './units';
 
 /** Above this text scale the sheet becomes a full-screen page. */
 const FULL_SCREEN_FONT_SCALE = 1.35;
@@ -56,8 +56,8 @@ export function RebuySheet({
   const [openedAt] = useState(sequence);
   const amount = parseDraft(draft);
   const refused = sequence > openedAt && wasRefused(facts, amount);
-  const rebuysSoFar = funding.rebuys.reduce((sum, rebuy) => sum + BigInt(rebuy), 0n).toString();
-  const after = amount === null ? null : (BigInt(funding.cumulative) + BigInt(amount)).toString();
+  const rebuysSoFar = sumUnits(...funding.rebuys);
+  const after = amount === null ? null : sumUnits(funding.cumulative, amount);
   const label = amount === null ? 'Add to this session' : `Add ${formatUnits(amount)} to this session`;
 
   const add = () => {

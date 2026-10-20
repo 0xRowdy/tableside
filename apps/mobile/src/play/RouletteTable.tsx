@@ -2,7 +2,7 @@
 // the engine's permitted view and forwards taps to the practice controller;
 // it never advances the game or decides what is legal.
 
-import { add, decodeMoney, encodeMoney, isPlayCorrection, type CycleTurn, type RoulettePermittedView as PermittedView, type RoulettePocket } from '@tableside/engine';
+import { isPlayCorrection, type CycleTurn, type RoulettePermittedView as PermittedView, type RoulettePocket } from '@tableside/engine';
 import { useEffect, useMemo, useState } from 'react';
 import { AccessibilityInfo, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -21,7 +21,8 @@ import { DraftBar, PresentationSwitch, type Presentation } from './bet-selector/
 import { EndSessionDialog } from './EndSessionDialog';
 import { RebuySheet } from './RebuySheet';
 import { rouletteCatalog, roulettePlacedWagers } from './roulette-catalog';
-import { describeFacts, describePocket, formatUnits, POCKET_TOKEN, pocketColor, STATUS, targetName, totalOnTable } from './roulette-text';
+import { describeFacts, describePocket, POCKET_TOKEN, pocketColor, STATUS, targetName } from './roulette-text';
+import { capitalize, formatUnits, sumUnits, totalOnTable } from './units';
 import { RouletteFelt } from './RouletteFelt';
 import { AccessStopBanner, PhaseStepper, SessionStrip, TableTopBar, type PhaseStep } from './TableChrome';
 
@@ -109,8 +110,7 @@ export function RouletteTable({ snapshot }: { snapshot: ActiveSnapshot }) {
 
   const wagerOn = (target: string) => view.wagers.find((wager) => wager.target === target)?.amount;
   const addChip = (target: string) => {
-    const total = BigInt(wagerOn(target) ?? '0') + BigInt(chip);
-    void controller.placeWager(target, total.toString());
+    void controller.placeWager(target, sumUnits(wagerOn(target) ?? '0', chip));
   };
   const canPlace = legal('place-wager');
   const wagersText = view.wagers.length === 0 ? 'nothing' : view.wagers.map((wager) => `${targetName(wager.target)} ${formatUnits(wager.amount)}`).join(' · ');
@@ -208,7 +208,7 @@ export function RouletteTable({ snapshot }: { snapshot: ActiveSnapshot }) {
                 <PendingPanel
                   strategy={strategy}
                   pending={strategy.pending}
-                  available={encodeMoney(add(decodeMoney(view.balance), decodeMoney(totalOnTable(view))))}
+                  available={sumUnits(view.balance, totalOnTable(view))}
                   canRebuy={view.legalCommands.includes('rebuy') ? legal('rebuy') : null}
                   canOverride={legal('place-wager')}
                   canStop={legal('stop-strategy')}
@@ -307,8 +307,6 @@ const WHEEL_NAMES: Record<PermittedView['table']['wheel'], string> = { 'single-z
 
 const SAVE_FAILED_ANNOUNCEMENT = "Couldn't save. Play is paused and will retry automatically.";
 
-const capitalize = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
-
 export function ChipRack({ chip, onChoose }: { chip: string; onChoose: (value: string) => void }) {
   return (
     <View style={styles.rack}>
@@ -344,10 +342,9 @@ function Chip({ option, selected, onPress }: { option: (typeof CHIPS)[number]; s
 }
 
 function EndingSteps({ snapshot }: { snapshot: ActivePracticeSnapshot }) {
-  let returned = 0n;
-  for (const fact of snapshot.facts) if (fact.kind === 'wager-returned') returned += BigInt(fact.amount);
+  const returned = sumUnits(...snapshot.facts.flatMap((fact) => (fact.kind === 'wager-returned' ? [fact.amount] : [])));
   const steps = [
-    { title: 'Removable wagers returned', detail: returned > 0n ? `+${formatUnits(returned.toString())} to your balance` : 'Nothing was on the table', state: 'done' },
+    { title: 'Removable wagers returned', detail: returned !== '0' ? `+${formatUnits(returned)} to your balance` : 'Nothing was on the table', state: 'done' },
     { title: 'Final settlement', detail: 'Runs on its own. No more bets.', state: 'current' },
     { title: 'Session result', detail: '', state: 'upcoming' },
   ] as const;

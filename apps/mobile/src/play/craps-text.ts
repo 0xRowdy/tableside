@@ -5,7 +5,7 @@
 import { FUNDING_CEILING, type CrapsPermittedView, type DomainFact, type IllegalActionReason, type Phase } from '@tableside/engine';
 
 import { strategyFactSentence } from './strategy-text';
-import { formatUnits } from './units';
+import { capitalize, formatUnits } from './units';
 
 const BASE_NAMES: Record<string, string> = { pass: 'Pass line', 'dont-pass': "Don't pass", come: 'Come', 'dont-come': "Don't come" };
 
@@ -35,7 +35,6 @@ export function crapsTargetName(target: string): string {
   return odds ? `${name} odds` : name;
 }
 
-const capitalize = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
 
 /** "Rolled 3 and 3: 6, the hard way." Pairs of 2 to 5 make the hardway numbers. */
 export function rollSentence(dice: readonly [number, number]): string {

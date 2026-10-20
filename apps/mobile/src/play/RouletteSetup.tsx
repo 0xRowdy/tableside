@@ -29,7 +29,8 @@ import { usePractice } from '@/practice/PracticeProvider';
 import { space } from '@/theme/tokens';
 
 import { betsText, ROULETTE_WORDS } from './coaching-text';
-import { formatUnits, targetName } from './roulette-text';
+import { targetName } from './roulette-text';
+import { formatUnits, smallerUnits, totalStake } from './units';
 import { FundingSection, useFunding, type Opening } from './setup/Funding';
 import { GroupFields, LimitsBanner, useLimits } from './setup/Limits';
 import type { LimitGroup } from './setup/limit-drafts';
@@ -59,11 +60,9 @@ function strategyOpening(strategy: StrategyDefinition, parameters: Record<string
   const explained = explainPrescription(strategy, parameters, situation, initialProgress(strategy));
   if (!explained.ok || explained.explanation.prescription.status !== 'prescribed') return null;
   const { bets } = explained.explanation.prescription;
-  const amount = bets.reduce((sum, bet) => sum + BigInt(bet.amount), 0n).toString();
-  return { kind: 'strategy', amount, strategyName: strategy.name, bets: betsText(bets) };
+  return { kind: 'strategy', amount: totalStake(bets), strategyName: strategy.name, bets: betsText(bets) };
 }
 
-const smaller = (a: string, b: string) => (BigInt(a) < BigInt(b) ? a : b);
 
 export function RouletteSetup({
   problem,
@@ -89,7 +88,7 @@ export function RouletteSetup({
   // Compatibility is judged at the table as edited, once its limits are good.
   const fit = guided && rules ? strategyTableCompatibility(strategy, choices, rules) : null;
   let opening: Opening | null = null;
-  if (rules && !guided) opening = { kind: 'table', amount: smaller(rules.limits.inside.min, rules.limits.outside.min) };
+  if (rules && !guided) opening = { kind: 'table', amount: smallerUnits(rules.limits.inside.min, rules.limits.outside.min) };
   if (rules && fit?.compatible) opening = strategyOpening(strategy, choices, { wheel, limits: rules.limits });
   const funding = useFunding('roulette', opening);
   const chooseStrategy = (next: StrategyDefinition) => {

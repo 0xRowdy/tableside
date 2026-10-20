@@ -8,7 +8,7 @@ import type { PlacementKind, RoulettePermittedView as PermittedView, RoulettePoc
 
 import type { PlacedWager, WagerCatalog, WagerChoice, WagerKind } from './bet-selector/catalog';
 import { ORDINAL, targetName, wheelZeros } from './roulette-text';
-import { formatUnits } from './units';
+import { capitalize, formatUnits } from './units';
 
 type Placement = PermittedView['table']['placements'][number];
 type Wheel = PermittedView['table']['wheel'];
@@ -20,7 +20,6 @@ interface KindDescriptor {
   readonly detail: (pays: string, wheel: Wheel) => string;
 }
 
-const capitalize = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
 const losesOnZero = (pays: string, wheel: Wheel) => `${capitalize(pays)} · loses on ${wheel === 'double-zero' ? '0 and 00' : '0'}`;
 
 type Paired = 'red' | 'black' | 'odd' | 'even' | 'low' | 'high';

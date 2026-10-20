@@ -1,7 +1,7 @@
 // Amounts on screen and aloud, for every table. Plain units (no currency
 // symbol); formatting never changes a ledger value.
 
-import { add, decodeMoney, encodeMoney, money, type Wager } from '@tableside/engine';
+import { add, compare, decodeMoney, encodeMoney, money, mul, type Wager } from '@tableside/engine';
 
 /**
  * Canonical money text with thousands separators: "1000" → "1,000",
@@ -53,6 +53,24 @@ export function speakSigned(amount: string): string {
   return amount === '0' ? '0' : `plus ${formatUnits(amount)}`;
 }
 
+/** The exact sum of canonical amounts, fractions included ("2045/2" + "10" is "2065/2"). */
+export const sumUnits = (...amounts: readonly string[]): string =>
+  encodeMoney(amounts.reduce((sum, amount) => add(sum, decodeMoney(amount)), money(0n)));
+
+/** The exact total a list of bets stakes. */
+export const totalStake = (bets: readonly Wager[]): string => sumUnits(...bets.map((bet) => bet.amount));
+
 /** The exact total of the stakes on the table, as canonical money text. */
-export const totalOnTable = (view: { readonly wagers: readonly Wager[] }): string =>
-  encodeMoney(view.wagers.reduce((sum, wager) => add(sum, decodeMoney(wager.amount)), money(0n)));
+export const totalOnTable = (view: { readonly wagers: readonly Wager[] }): string => totalStake(view.wagers);
+
+/** Half an amount, exactly: "25" is "25/2" (read as 12.5). */
+export const halfUnits = (amount: string): string => encodeMoney(mul(decodeMoney(amount), money(1n, 2n)));
+
+/** Whether a is less than b. */
+export const lessUnits = (a: string, b: string): boolean => compare(decodeMoney(a), decodeMoney(b)) < 0;
+
+/** The smaller of two amounts. */
+export const smallerUnits = (a: string, b: string): string => (lessUnits(b, a) ? b : a);
+
+/** "Hello" from "hello": a sentence's first letter in capitals. */
+export const capitalize = (text: string): string => text.charAt(0).toUpperCase() + text.slice(1);
