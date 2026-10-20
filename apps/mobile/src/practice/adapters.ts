@@ -12,7 +12,12 @@ export interface Clock {
 }
 
 export type AccessDecision =
-  | { readonly status: 'allowed'; readonly provenance: string }
+  | {
+      readonly status: 'allowed';
+      readonly provenance: string;
+      /** Before a turn only: the allowance this turn uses, charged once with the turn's beginning. */
+      readonly turnCharge?: { readonly grant: string; readonly amount: string };
+    }
   | { readonly status: 'denied' | 'uncertain'; readonly provenance: string; readonly disposition: 'stop' | 'suspend' | 'suspend-at-turn-boundary' };
 
 /** Asked before a new activity and before each turn. The real policy is spec 5's. */

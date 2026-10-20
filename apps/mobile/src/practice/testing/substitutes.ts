@@ -5,11 +5,14 @@
 import type { EntropySource } from '@tableside/engine';
 
 import { alwaysAllowed, type Clock, type PracticeAdapters } from '../adapters';
+import { SAVE_RETRY_MS } from '../controller';
 import { MemoryActivityStore } from '../memory-store';
 
 /**
- * A clock that only moves when told. With `auto`, every sleep resolves at once
- * and moves time forward by its length.
+ * A clock that only moves when told. With `auto`, every sleep shorter than
+ * `autoLimitMs` (by default, the pacing of automatic steps) resolves at once and
+ * moves time forward by its length; the save retry's wait and longer ones wait
+ * for `advance`, so a failing save never retries in a tight loop.
  */
 export class FakeClock implements Clock {
   private time: number;
@@ -18,6 +21,7 @@ export class FakeClock implements Clock {
   constructor(
     start = 1_790_000_000_000,
     private readonly auto = false,
+    private readonly autoLimitMs = SAVE_RETRY_MS,
   ) {
     this.time = start;
   }
@@ -27,7 +31,7 @@ export class FakeClock implements Clock {
   }
 
   sleep(ms: number): Promise<void> {
-    if (this.auto) {
+    if (this.auto && ms < this.autoLimitMs) {
       this.time += ms;
       return Promise.resolve();
     }

@@ -12,7 +12,6 @@ export {
   encodeCheckpoint,
   readPermittedView,
   ActivitySpecificationError,
-  FUNDING_CEILING,
   STATE_SCHEMA_VERSION,
   type ActivitySpecification,
   type ActivityState,
@@ -31,6 +30,16 @@ export {
   type VersionedIdentity,
   type Wager,
 } from './activity';
+export {
+  cumulativeFunding,
+  FUNDING_CEILING,
+  fundingHeadroom,
+  summarizeFunding,
+  type Funding,
+  type FundingResult,
+  type FundingSource,
+  type RebuyRefusal,
+} from './funding';
 
 export {
   oneSpinOutcomeTable,

@@ -53,7 +53,7 @@ export const activityCases: TestCase[] = [
         reference: null,
         random: STREAM,
       });
-      t.equal(state.schema, 1);
+      t.equal(state.schema, 2);
       t.equal([state.phase, state.turn, state.balance, state.wagers], ['open-decision', 0, '1000', []]);
       // The state is plain data: it survives a JSON round trip unchanged.
       t.equal(JSON.parse(JSON.stringify(state)), state);
@@ -65,7 +65,7 @@ export const activityCases: TestCase[] = [
       const state = createActivity(SPEC, STREAM);
       t.equal(
         Object.keys(state).sort(),
-        ['activity', 'balance', 'identities', 'outcome', 'phase', 'random', 'receipts', 'rules', 'schema', 'sequence', 'turn', 'wagers'],
+        ['activity', 'balance', 'funding', 'identities', 'outcome', 'phase', 'random', 'receipts', 'rules', 'schema', 'sequence', 'turn', 'wagers'],
       );
       t.equal(state.receipts, []);
     },
@@ -273,14 +273,14 @@ export const activityCases: TestCase[] = [
       t.equal(
         [open, revealing, settledOutcome, final, completed].map((state) => [state.phase, legal(state)]),
         [
-          ['open-decision', ['place-wager', 'begin-turn', 'request-stop']],
+          ['open-decision', ['place-wager', 'begin-turn', 'request-stop', 'rebuy']],
           ['revealing-outcome', ['settle-turn', 'request-stop']],
-          ['settled-outcome', ['place-wager', 'begin-turn', 'request-stop']],
+          ['settled-outcome', ['place-wager', 'begin-turn', 'request-stop', 'rebuy']],
           ['final-settlement', ['advance-final-settlement']],
           ['completed', []],
         ],
       );
-      const all = [place('red', '10'), BEGIN, SETTLE, STOP, FINAL];
+      const all: Command[] = [place('red', '10'), BEGIN, SETTLE, STOP, FINAL, { kind: 'rebuy', amount: '100' }];
       for (const state of [open, revealing, settledOutcome, final, completed]) {
         const accepted = all.filter((command) => advanceActivity(state, envelope(state, command, 'probe')).status === 'committed');
         t.equal(accepted.map((command) => command.kind), legal(state));
@@ -339,7 +339,7 @@ export const activityCases: TestCase[] = [
       collect(readPermittedView(step(a, BEGIN).state));
       t.equal(keys.filter((key) => ['random', 'key', 'session', 'block', 'lane', 'identities', 'receipts'].includes(key)), []);
       t.equal(Object.keys(readPermittedView(a)).sort(), [
-        'activityId', 'balance', 'legalCommands', 'outcome', 'phase', 'sequence', 'table', 'turn', 'wagers', 'wagersCommitted',
+        'activityId', 'balance', 'funding', 'legalCommands', 'outcome', 'phase', 'sequence', 'table', 'turn', 'wagers', 'wagersCommitted',
       ]);
       // readPermittedView takes the state alone: no caller flag can widen it.
       t.equal(readPermittedView.length, 1);
@@ -457,7 +457,7 @@ export const activityCases: TestCase[] = [
         return JSON.stringify(value);
       };
       const unsupported = [
-        edit((v) => ((v as Record<string, unknown>).schema = 2)),
+        edit((v) => ((v as Record<string, unknown>).schema = 1)),
         edit((v) => (v.identities!.engine = '9.9.9')),
         edit((v) => (v.identities!.game = 'blackjack')),
         edit((v) => (v.identities!.rules = { id: 'roulette-triple-zero', version: 1 })),
