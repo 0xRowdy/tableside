@@ -22,7 +22,7 @@ export interface WagerChoice {
   readonly step: string;
   /** "35:1". */
   readonly payout: string;
-  /** An on/off option set with the stake, in the game's words (craps: "Working on the come-out"). */
+  /** An on/off option set with the stake, in the game's words. */
   readonly toggle?: WagerToggle;
 }
 
@@ -85,6 +85,8 @@ export interface PlacedWager {
   readonly committedReason?: string;
   /** The current value of its choice's toggle, when it has one. */
   readonly toggled?: boolean;
+  /** A short state shown and spoken with it, in the game's words ("Working"). */
+  readonly status?: string;
 }
 
 /**

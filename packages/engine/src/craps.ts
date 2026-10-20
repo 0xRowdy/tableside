@@ -112,7 +112,7 @@ export type CrapsDomainFact =
   | { readonly kind: 'wager-moved'; readonly turn: number; readonly from: string; readonly to: string; readonly amount: string }
   /** A don't bet's bar-12 standoff: no money moves and the wager stays on the table. */
   | { readonly kind: 'wager-pushed'; readonly turn: number; readonly target: string; readonly stake: string }
-  /** A working instruction was given: the wager now works (or is off) whatever the puck says. */
+  /** A working instruction was given or cleared: the wager's status on a come-out roll from now on. */
   | { readonly kind: 'working-changed'; readonly target: string; readonly working: boolean };
 
 export interface CrapsWagerStatus {
@@ -140,6 +140,11 @@ export interface CrapsPlacement {
   readonly payout: string;
   /** What a win's commission is charged on: the stake (buy) or the gross win (lay). Absent when no commission applies. */
   readonly commission?: 'stake' | 'win';
+  /**
+   * For a wager that takes a working instruction: whether it works on a
+   * come-out roll without one. The instruction it takes is the opposite.
+   */
+  readonly usualOnComeOut?: boolean;
 }
 
 export interface CrapsTable {
@@ -693,7 +698,16 @@ function placements(state: State): CrapsPlacement[] {
     // The largest whole multiple of the increment within the cap.
     const max = (cap.n / cap.d / increment) * increment;
     if (max < increment) continue;
-    out.push({ target: `${wager.target}-odds`, kind: 'odds', min: increment.toString(), max: max.toString(), increment: increment.toString(), payout: ratioText(ratio) });
+    const odds = lineInfo(`${wager.target}-odds`);
+    out.push({
+      target: odds.target,
+      kind: 'odds',
+      min: increment.toString(),
+      max: max.toString(),
+      increment: increment.toString(),
+      payout: ratioText(ratio),
+      ...(isSwitchable(odds) ? { usualOnComeOut: worksByDefault(odds, null) } : {}),
+    });
   }
   // Every other wager can be made, changed or taken down whenever bets are open.
   for (const target of TARGETS) {
@@ -708,6 +722,7 @@ function placements(state: State): CrapsPlacement[] {
       increment: limits.increment.toString(),
       payout: statedPayout(target),
       ...(target.family === 'buy' ? { commission: 'stake' as const } : target.family === 'lay' ? { commission: 'win' as const } : {}),
+      ...(isSwitchable(target) ? { usualOnComeOut: worksByDefault(target, null) } : {}),
     });
   }
   return sorted(out);

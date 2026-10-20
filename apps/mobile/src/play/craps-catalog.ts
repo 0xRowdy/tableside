@@ -23,8 +23,8 @@ function payoutText(placement: Placement): string {
   return placement.payout;
 }
 
-function choice(placement: Placement): WagerChoice {
-  const toggle = workingToggle(placement.target);
+function choice(view: PermittedView, placement: Placement): WagerChoice {
+  const toggle = workingToggle(view, placement.target);
   return {
     target: placement.target,
     label: shortLabel(placement.target),
@@ -39,7 +39,7 @@ function choice(placement: Placement): WagerChoice {
 
 /** The value of a placed wager's working toggle: its instruction, else the usual come-out status. */
 export function placedToggle(view: PermittedView, target: string): boolean | undefined {
-  const toggle = workingToggle(target);
+  const toggle = workingToggle(view, target);
   const status = view.table.wagers.find((item) => item.target === target);
   return toggle && status ? (status.instruction ?? toggle.usual) : undefined;
 }
@@ -63,7 +63,7 @@ export function crapsCatalog(view: PermittedView): WagerCatalog {
   const { placements, limits, point, variant, odds, field } = view.table;
   const rules = { ...variant, odds, field };
   const edge = (wager: CrapsWager, stake?: string) => crapsHouseEdge(wager, rules, stake).percent;
-  const of = (kind: Placement['kind']) => placements.filter((p) => p.kind === kind).map(choice);
+  const of = (kind: Placement['kind']) => placements.filter((p) => p.kind === kind).map((p) => choice(view, p));
   const kinds: WagerKind[] = [];
   const line = of('line');
   if (line.length > 0) {
@@ -147,7 +147,13 @@ export function crapsPlacedWagers(view: PermittedView): PlacedWager[] {
     const status = view.table.wagers.find((item) => item.target === wager.target);
     const working = `${workingText(view, wager.target)}.`;
     const toggled = placedToggle(view, wager.target);
-    const placed = { target: wager.target, amount: wager.amount, name: crapsTargetName(wager.target), ...(toggled === undefined ? {} : { toggled }) };
+    const placed = {
+      target: wager.target,
+      amount: wager.amount,
+      name: crapsTargetName(wager.target),
+      status: status?.working === false ? 'Off' : 'Working',
+      ...(toggled === undefined ? {} : { toggled }),
+    };
     if (view.wagersCommitted) return { ...placed, committed: true, committedReason: `${ROLLING} ${working}` };
     if (status?.removable === false) return { ...placed, committed: true, committedReason: `${working} ${commitmentText(wager.target, view.table.point)}` };
     return { ...placed, committed: false };

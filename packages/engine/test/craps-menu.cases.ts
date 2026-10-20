@@ -105,6 +105,16 @@ export const crapsMenuCases: TestCase[] = [
           ['horn', '4', '400', '4', '30:1/15:1', 'no commission'],
         ],
       );
+      // Wagers that take a working instruction say how they usually stand on a come-out roll.
+      t.equal(
+        placements.filter((p) => p.usualOnComeOut !== undefined).map((p) => `${p.target} ${p.usualOnComeOut ? 'works' : 'off'}`),
+        [
+          'place-4 off', 'place-5 off', 'place-6 off', 'place-8 off', 'place-9 off', 'place-10 off',
+          'buy-4 off', 'buy-5 off', 'buy-6 off', 'buy-8 off', 'buy-9 off', 'buy-10 off',
+          'lay-4 works', 'lay-5 works', 'lay-6 works', 'lay-8 works', 'lay-9 works', 'lay-10 works',
+          'hard-4 works', 'hard-6 works', 'hard-8 works', 'hard-10 works',
+        ],
+      );
       // Once a point is on, come bets replace pass bets and every other wager stays open.
       const pointOn = view(run(craps(4), [place('pass', '10'), ...roll()]).state).table.placements.map((p) => p.target);
       t.equal([pointOn.slice(0, 3), pointOn.length], [['pass-odds', 'come', 'dont-come'], 33]);

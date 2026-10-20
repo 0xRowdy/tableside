@@ -9,8 +9,8 @@ import { useEffect, useRef, useState } from 'react';
 import { AccessibilityInfo, Pressable, StyleSheet, Text, TextInput, View, type HostInstance } from 'react-native';
 
 import { Button } from '@/components/Button';
+import { SwitchRow } from '@/components/SwitchRow';
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
-import { SwitchRow } from '@/settings/SettingsParts';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/theme/tokens';
 
 import { formatUnits } from '../units';
@@ -312,6 +312,7 @@ function StakeEditor(props: BetSelectorProps & { choice: WagerChoice }) {
             title={choice.toggle.title}
             detail={choice.toggle.detail}
             value={toggled}
+            disabled={!canPlace}
             onChange={(value) => onDraftChange({ ...draft, toggled: value, submittedAt: null })}
           />
         </View>
@@ -360,10 +361,15 @@ function YourWagers({ catalog, wagers, canPlace, onRemove, openEditor }: BetSele
         const name = found?.choice.name ?? wager.name ?? wager.target;
         return (
           <View key={wager.target} style={styles.wager}>
-            <View accessible accessibilityLabel={`${name}, ${formatUnits(wager.amount)}, ${wager.committed ? 'committed' : 'removable'}`} style={styles.wagerText}>
+            <View
+              accessible
+              accessibilityLabel={[name, formatUnits(wager.amount), wager.committed ? 'committed' : 'removable', wager.status].filter(Boolean).join(', ')}
+              style={styles.wagerText}
+            >
               <Text maxFontSizeMultiplier={textScale.body} style={styles.rowTitle}>{name}</Text>
               <Text maxFontSizeMultiplier={textScale.body} style={styles.rowTitle}>{formatUnits(wager.amount)}</Text>
               <Text maxFontSizeMultiplier={textScale.body} style={styles.tag}>{wager.committed ? 'Committed' : 'Removable'}</Text>
+              {wager.status && <Text maxFontSizeMultiplier={textScale.body} style={styles.tag}>{wager.status}</Text>}
             </View>
             {explaining === wager.target && wager.committed && (
               <Text maxFontSizeMultiplier={textScale.body} style={styles.rowDetail}>{wager.committedReason ?? COMMITTED}</Text>

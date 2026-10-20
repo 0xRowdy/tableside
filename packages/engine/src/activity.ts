@@ -138,7 +138,11 @@ export type StateOf<G extends GameId> = Extract<ActivityState, { readonly identi
 export type Command =
   /** Sets the stake on a target; amount "0" takes the wager down. */
   | { readonly kind: 'place-wager'; readonly target: string; readonly amount: string }
-  /** A per-bet working instruction (craps): the wager works, or is off, until told otherwise. */
+  /**
+   * A per-bet working instruction (craps), as the wager's status on a come-out
+   * roll: place, buy and come odds can be told to work on the come-out (true),
+   * lays, hardways and don't come odds to be off (false). The usual value clears it.
+   */
   | { readonly kind: 'set-working'; readonly target: string; readonly working: boolean }
   | { readonly kind: 'begin-turn' }
   /** A blackjack playing action for the hand awaiting a decision. */

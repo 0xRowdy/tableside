@@ -175,7 +175,7 @@ describe('craps free play', () => {
     expect(announcements).toContain('Pass line odds 125 on the table, ON. Balance 850.');
     // The contract is committed in the bet list too, by name, and says why.
     const yours = within(screen.getByTestId('your-wagers'));
-    expect(yours.getByLabelText('Pass line, 25, committed')).toBeOnTheScreen();
+    expect(yours.getByLabelText('Pass line, 25, committed, Working')).toBeOnTheScreen();
     await fireEvent.press(yours.getByRole('button', { name: "Why can't I change Pass line?" }));
     expect(yours.getByText(/^ON\. Pass line is a contract now: it stays on the table until it wins on 8 or loses on 7/)).toBeOnTheScreen();
   });
@@ -338,10 +338,10 @@ describe('craps free play', () => {
     expect(screen.getByLabelText('Place 6 24, OFF, removable')).toBeOnTheScreen();
     await fireEvent.press(screen.getByRole('button', { name: 'Set Place 6 to 24' }));
 
-    await waitFor(() => expect(announcements).toContain('Place 6 now works on the come-out roll too.'));
+    await waitFor(() => expect(announcements).toContain('Place 6 24 now works on the come-out roll too.'));
     expect(screen.getByLabelText('Place 6 24, ON, removable')).toBeOnTheScreen();
     expect(screen.getByRole('switch', { name: 'Working on the come-out' })).toBeChecked();
-    // The bet list rows show working status but offer no switch of their own.
+    // Your wagers show working status but offer no switch of their own.
     expect(within(screen.getByTestId('wager-place-6')).queryByRole('button', { name: /^Turn / })).toBeNull();
   });
 
@@ -355,9 +355,10 @@ describe('craps free play', () => {
     await fireEvent.press(screen.getByRole('switch', { name: 'Working' }));
     await fireEvent.press(screen.getByRole('button', { name: 'Set Lay 4 to 20' }));
 
-    await waitFor(() => expect(announcements).toContain('Lay 4 is now OFF until you turn it on.'));
+    await waitFor(() => expect(announcements).toContain('Lay 4 20 is now OFF until you turn it on.'));
     expect(announcements).toContain('Lay 4 20 on the table, ON. Balance 980.');
     expect(screen.getByLabelText('Lay 4 20, OFF, removable')).toBeOnTheScreen();
+    expect(within(screen.getByTestId('your-wagers')).getByLabelText('Lay 4, 20, removable, Off')).toBeOnTheScreen();
   });
 
   it('announces place bets going off for the come-out roll when the point is made', async () => {

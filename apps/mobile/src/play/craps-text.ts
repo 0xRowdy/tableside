@@ -65,12 +65,13 @@ const TOGGLE_DETAIL: Record<string, string> = {
  * lays, hardways and don't come odds can be told to be off. Other wagers
  * always work and offer none.
  */
-export function workingToggle(target: string): { title: string; detail: string; usual: boolean } | undefined {
-  const family = /^(place|buy|lay|hard)-\d+$/.exec(target)?.[1] ?? /^(dont|come)-(?:come-)?\d+-odds$/.exec(target)?.[1];
-  if (!family) return undefined;
-  const detail = TOGGLE_DETAIL[family] as string;
-  const comeOutOff = family === 'place' || family === 'buy' || family === 'come';
-  return comeOutOff ? { title: 'Working on the come-out', detail, usual: false } : { title: 'Working', detail, usual: true };
+export function workingToggle(view: CrapsPermittedView, target: string): { title: string; detail: string; usual: boolean } | undefined {
+  const usual = view.table.placements.find((p) => p.target === target)?.usualOnComeOut;
+  if (usual === undefined) return undefined;
+  // The engine says which wagers take an instruction; the family only picks the words.
+  const family = /^(place|buy|lay|hard|dont|come)-/.exec(target)?.[1] ?? '';
+  const detail = TOGGLE_DETAIL[family] ?? (usual ? 'On by default, on every roll.' : 'Off by default on the come-out roll.');
+  return usual ? { title: 'Working', detail, usual } : { title: 'Working on the come-out', detail, usual };
 }
 
 /** The puck, in words: never color alone. */
@@ -144,12 +145,14 @@ function illegalMessage(reason: IllegalActionReason, target: string | null, view
   }
 }
 
-/** A working instruction, in words: what changed against the wager's usual come-out status. */
-function workingSentence(target: string, working: boolean): string {
-  const name = crapsTargetName(target);
-  if (workingToggle(target)?.usual === false) {
-    return working ? `${name} now works on the come-out roll too.` : `${name} is off on the come-out roll again, as usual.`;
-  }
+/** A working instruction, in words, with the stake: what changed against the wager's usual come-out status. */
+function workingSentence(target: string, working: boolean, view: CrapsPermittedView): string {
+  const stake = view.wagers.find((wager) => wager.target === target)?.amount;
+  const name = stake === undefined ? crapsTargetName(target) : `${crapsTargetName(target)} ${formatUnits(stake)}`;
+  const status = view.table.wagers.find((wager) => wager.target === target);
+  // An instruction is the opposite of the usual status; none means this is the usual status.
+  const usual = status?.instruction === null || status?.instruction === undefined ? working : !status.instruction;
+  if (!usual) return working ? `${name} now works on the come-out roll too.` : `${name} is off on the come-out roll again, as usual.`;
   return working ? `${name} is working again.` : `${name} is now OFF until you turn it on.`;
 }
 
@@ -190,7 +193,7 @@ export function describeCrapsFacts(facts: readonly DomainFact[], view: CrapsPerm
         parts.push(rollSentence(fact.dice));
         break;
       case 'working-changed':
-        parts.push(workingSentence(fact.target, fact.working));
+        parts.push(workingSentence(fact.target, fact.working, view));
         break;
       case 'point-changed':
         parts.push(fact.point === null ? 'Puck OFF. The next roll is a come-out roll.' : `The point is ${fact.point}. Puck ON.`);
