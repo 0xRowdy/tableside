@@ -13,6 +13,7 @@ import { drawCases } from './draws.cases';
 import { engineCases } from './engine.cases';
 import { fundingCases } from './funding.cases';
 import { hashCases } from './hash.cases';
+import { limitCases } from './limits.cases';
 import { moneyCases } from './money.cases';
 import { randomCases } from './random.cases';
 import { recordCases } from './record.cases';
@@ -33,6 +34,7 @@ export const engineSuite: Suite = {
     ...hashCases,
     ...activityCases,
     ...fundingCases,
+    ...limitCases,
     ...rouletteCases,
     ...crapsCases,
     ...crapsMenuCases,

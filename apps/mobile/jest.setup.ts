@@ -23,3 +23,16 @@ jest.mock('@/feedback/device-ports', () => {
   };
   return mock;
 });
+
+// The setup preferences file is native too. `jest.requireMock('@/play/setup/device-storage')`
+// holds the storage the app created most recently (`latest`) and what is already on
+// the device at the next launch (`stored`).
+jest.mock('@/play/setup/device-storage', () => {
+  const { MemorySettingsStorage } = jest.requireActual('@/feedback/testing/substitutes') as typeof import('@/feedback/testing/substitutes');
+  const mock = {
+    latest: null as InstanceType<typeof MemorySettingsStorage> | null,
+    stored: null as string | null,
+    createSetupStorage: () => (mock.latest = new MemorySettingsStorage(mock.stored)),
+  };
+  return mock;
+});
