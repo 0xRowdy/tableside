@@ -60,6 +60,10 @@ export const REVEAL_MS = 1500;
 export const ENDING_STEP_MS = 1000;
 /** How long play stays paused after a failed save before it retries by itself. */
 export const SAVE_RETRY_MS = 5000;
+/** Under time metering, active training time is checkpointed about this often (Amendment 4 A4). */
+export const TIME_CHECKPOINT_MS = 1000;
+/** The allowance effect a time-usage checkpoint records: its amount is active milliseconds. */
+export const TIME_USAGE = 'time-usage';
 
 export type StartProblem = 'invalid-buy-in' | 'strategy-incompatible' | 'save-failed' | 'access-denied' | 'access-uncertain';
 
@@ -246,9 +250,15 @@ export class PracticeController {
   /** The last report given to the timed-metering hook, so only changes are reported. */
   private lastReport: string | null = null;
   /** The failed save the pending automatic retry is for, if one is waiting. */
-  private retryFor: Pending | null = null;
+  private retryFor: Pending | readonly AllowanceEffect[] | null = null;
   /** A start whose creation wasn't acknowledged, reused by the retry so it recovers the same activity. */
   private unacknowledgedStart: { request: StartRequest; activity: NewActivity } | null = null;
+  /** Time metering: the active stretch being timed, from `since`; null while time doesn't count. */
+  private meter: { readonly activityId: string; readonly grant: string; since: number } | null = null;
+  /** The next time-usage checkpoint's index for this activity; null until the recorded ones are counted. */
+  private timeIndex: number | null = null;
+  /** Time-usage checkpoints that failed to save: training is paused until a retry records them. */
+  private unsavedTime: readonly AllowanceEffect[] | null = null;
 
   constructor(private readonly adapters: PracticeAdapters) {}
 
@@ -302,6 +312,7 @@ export class PracticeController {
         provenance: access.provenance,
         meteringBasis: access.meteringBasis,
         ...(access.allowancePolicyVersion === undefined ? {} : { allowancePolicyVersion: access.allowancePolicyVersion }),
+        ...(access.timeGrant === undefined ? {} : { timeGrant: access.timeGrant }),
       };
 
       let activity: NewActivity;
@@ -350,7 +361,8 @@ export class PracticeController {
         return this.showNone('save-failed');
       }
       this.unacknowledgedStart = null;
-      this.adopt(stored, []);
+      // Timing starts only once the table shows, so a newly created activity has no time checkpoints yet.
+      this.adopt(stored, [], stored.sequence === 0 ? 0 : null);
     });
   }
 
@@ -581,6 +593,10 @@ export class PracticeController {
   /** Retries the save that failed, then carries on with any automatic steps. */
   async retrySave(): Promise<void> {
     await this.exclusive(async () => {
+      if (this.unsavedTime) {
+        if (!(await this.retryTime())) return;
+        if (!this.pending) return this.drive();
+      }
       const pending = this.pending;
       if (!pending) return;
       if (pending.kind === 'completion') return this.complete();
@@ -591,6 +607,9 @@ export class PracticeController {
         if (this.pendingIsUnknown) return;
         // It never committed: drop it. Nothing is revealed, settled or charged; resuming re-derives the step or asks again.
         this.pending = null;
+        // The active time it carried was still spent: record it on its own.
+        const time = pending.effects.filter((effect) => effect.kind === TIME_USAGE);
+        if (time.length > 0) await this.writeTime(time);
         this.publish();
         return this.drive();
       }
@@ -642,7 +661,7 @@ export class PracticeController {
     } finally {
       this.busy = false;
       this.publish();
-      if (this.pending) this.scheduleRetry();
+      if (this.pending || this.unsavedTime) this.scheduleRetry();
       if (this.resumeQueued) {
         this.resumeQueued = false;
         void this.resume();
@@ -729,7 +748,7 @@ export class PracticeController {
    * it succeeds. A wait for a failure that has since been retried is dropped.
    */
   private scheduleRetry(): void {
-    const failed = this.pending;
+    const failed = this.pending ?? this.unsavedTime;
     if (!failed || this.retryFor === failed) return;
     this.retryFor = failed;
     void this.adapters.clock
@@ -781,9 +800,12 @@ export class PracticeController {
 
   /** Durability steps 2-4 for one command, identified by the sequence it was issued at. */
   private async send(command: Command, effects: readonly AllowanceEffect[] = []): Promise<CommitResult> {
-    if (this.pending) return 'not-saved';
+    // A time-usage checkpoint that isn't saved pauses training, automatic steps included.
+    if (this.pending || this.unsavedTime) return 'not-saved';
     const state = this.requireState();
-    return this.commit({ envelope: { sequence: state.sequence, commandId: `${state.activity.id}/${state.sequence}`, command }, effects });
+    // Each action carries the active time since the last checkpoint with its transition.
+    const time = this.takeTime();
+    return this.commit({ envelope: { sequence: state.sequence, commandId: `${state.activity.id}/${state.sequence}`, command }, effects: time ? [...effects, time] : effects });
   }
 
   private async commit(outbound: Outbound): Promise<CommitResult> {
@@ -978,9 +1000,15 @@ export class PracticeController {
     return this.adapters.quarantine.entries.find((entry) => entry.id === reason.entry)?.explanation ?? null;
   }
 
-  private adopt(stored: StoredActivity, facts: readonly DomainFact[]): void {
+  private adopt(stored: StoredActivity, facts: readonly DomainFact[], timeIndex: number | null = null): void {
     const decoded = decodeCheckpoint(stored.checkpoint);
     if (!decoded.ok) throw new Error(`activity ${stored.activityId} can't be resumed: ${decoded.error.message}`);
+    if (this.activity?.activityId !== stored.activityId) {
+      this.meter = null;
+      this.unsavedTime = null;
+      // A new activity has no checkpoints; one found in the store has them counted before time is next taken.
+      this.timeIndex = timeIndex;
+    }
     this.activity = stored;
     this.state = decoded.state;
     this.facts = facts;
@@ -989,6 +1017,81 @@ export class PracticeController {
     // Final settlement already started: the stop path is under way and play never reopens.
     this.stopping = decoded.state.phase === 'final-settlement' ? (this.stopping ?? 'stop') : null;
     this.publish();
+  }
+
+  // ---- time-usage checkpoints (Amendment 4 A4) ---------------------------------
+
+  /**
+   * Starts or stops timing as the metered state changes. Only a time-metered
+   * admission with a grant is timed. Stopping records the stretch just ended.
+   */
+  private timeWhile(timed: boolean): void {
+    const admission = this.activity?.admission;
+    const grant = admission?.meteringBasis === 'time' ? admission.timeGrant : undefined;
+    if (timed && grant && this.activity && !this.meter) {
+      const meter = { activityId: this.activity.activityId, grant, since: this.adapters.clock.now() };
+      this.meter = meter;
+      void this.checkpointEvery(meter);
+    } else if (!timed && this.meter) {
+      const time = this.takeTime();
+      this.meter = null;
+      if (time) void this.writeTime([time]);
+    }
+  }
+
+  /** About every second while this stretch is timed: one checkpoint through the store's single writer. */
+  private async checkpointEvery(meter: NonNullable<PracticeController['meter']>): Promise<void> {
+    while (this.meter === meter) {
+      await this.adapters.clock.sleep(TIME_CHECKPOINT_MS);
+      if (this.meter !== meter) return;
+      if (this.timeIndex === null) {
+        const recorded = await this.adapters.store.readEffects(meter.activityId).catch(() => null);
+        if (recorded && this.timeIndex === null) this.timeIndex = recorded.filter((effect) => effect.kind === TIME_USAGE).length;
+      }
+      const time = this.takeTime();
+      if (time) await this.writeTime([time]);
+    }
+  }
+
+  /** The active time since the last checkpoint, as the next checkpoint; null when none (or its index isn't known yet). */
+  private takeTime(): AllowanceEffect | null {
+    const meter = this.meter;
+    if (!meter || this.timeIndex === null) return null;
+    const now = this.adapters.clock.now();
+    const amount = now - meter.since;
+    if (amount <= 0) return null;
+    meter.since = now;
+    const sequence = this.timeIndex++;
+    return { effectId: { grant: meter.grant, activity: meter.activityId, sequence }, kind: TIME_USAGE, amount: String(amount) };
+  }
+
+  /** Records checkpoints; a failure pauses training until a retry records them (only recorded time is charged). */
+  private async writeTime(effects: readonly AllowanceEffect[]): Promise<void> {
+    const activityId = effects[0]?.effectId.activity;
+    if (!activityId) return;
+    try {
+      await this.adapters.store.recordEffects(activityId, effects);
+    } catch {
+      if (this.activity?.activityId !== activityId) return;
+      this.unsavedTime = [...(this.unsavedTime ?? []), ...effects];
+      this.publish();
+      if (!this.busy) this.scheduleRetry();
+    }
+  }
+
+  /** Retries the unsaved checkpoints; true once they are recorded, and training resumes. */
+  private async retryTime(): Promise<boolean> {
+    const unsaved = this.unsavedTime;
+    const activityId = unsaved?.[0]?.effectId.activity;
+    if (!unsaved || !activityId) return true;
+    try {
+      await this.adapters.store.recordEffects(activityId, unsaved);
+    } catch {
+      return false;
+    }
+    if (this.unsavedTime === unsaved) this.unsavedTime = null;
+    this.publish();
+    return true;
   }
 
   private requireState(): ActivityState {
@@ -1014,7 +1117,7 @@ export class PracticeController {
       view,
       facts: this.facts,
       busy: this.busy,
-      save: this.pending ? 'failed' : 'saved',
+      save: this.pending || this.unsavedTime ? 'failed' : 'saved',
       suspension: this.suspension,
       ending: isAccessStop(this.stopping) ? this.stopping : null,
     };
@@ -1025,13 +1128,14 @@ export class PracticeController {
       suspended,
       // A failed save pauses training, and the stop path is never metered. Nor is a
       // pending strategy action: the table waits on the player in an open decision.
-      timed: TIMED_PHASES.has(this.state.phase) && !view.strategy?.pending && !suspended && !this.pending && this.stopping === null,
+      timed: TIMED_PHASES.has(this.state.phase) && !view.strategy?.pending && !suspended && !this.pending && !this.unsavedTime && this.stopping === null,
     });
     this.notify();
   }
 
   /** The timed-metering hook (Amendment 4 A4): reports each change, unused by the spec 1 stub. */
   private report(report: PhaseReport): void {
+    this.timeWhile(report.timed);
     const key = JSON.stringify(report);
     if (key === this.lastReport) return;
     this.lastReport = key;
@@ -1044,7 +1148,7 @@ export class PracticeController {
 }
 
 const sameAdmission = (a: NewActivity['admission'], b: NewActivity['admission']) =>
-  a.provenance === b.provenance && a.meteringBasis === b.meteringBasis && a.allowancePolicyVersion === b.allowancePolicyVersion;
+  a.provenance === b.provenance && a.meteringBasis === b.meteringBasis && a.allowancePolicyVersion === b.allowancePolicyVersion && a.timeGrant === b.timeGrant;
 
 /** The stop path's first command; the player's plain stop carries no cause. */
 const stopCommand = (cause: StopCause): Command => (cause === 'stop' ? { kind: 'request-stop' } : { kind: 'request-stop', cause });

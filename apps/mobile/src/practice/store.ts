@@ -30,6 +30,8 @@ export interface NewActivity {
     readonly meteringBasis: MeteringBasis;
     /** The allowance-policy version in force, when the supervisor names one (Amendment 3 §4). */
     readonly allowancePolicyVersion?: string;
+    /** Time metering only: the grant each time-usage checkpoint draws on (Amendment 4 A4). */
+    readonly timeGrant?: string;
   };
   readonly specification: ActivitySpecification;
   /** The random identity, recorded before any content is generated from it. */

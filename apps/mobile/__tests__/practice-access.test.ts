@@ -684,3 +684,69 @@ describe('a failed save that begins a turn', () => {
     expect(await store.readEffects('activity-1')).toHaveLength(1);
   });
 });
+
+describe('time-usage checkpoints (Amendment 4 A4)', () => {
+  const TIME = { status: 'allowed', provenance: 'test', meteringBasis: 'time', timeGrant: 'time-grant-1' } as const;
+  const usage = (sequence: number, amount: string) => ({ effectId: { grant: 'time-grant-1', activity: 'activity-1', sequence }, kind: 'time-usage', amount });
+
+  async function timed() {
+    const context = setup({ autoClock: false });
+    context.next.admission = TIME;
+    await context.controller.load();
+    await context.controller.start({ game: 'roulette', buyIn: '1000' });
+    return context;
+  }
+
+  /** Lets the clock's sleepers and the store's writes run. */
+  const settle = async () => {
+    for (let i = 0; i < 20; i++) await new Promise((resolve) => setImmediate(resolve));
+  };
+
+  it('records active time about every second, and with each action, through the store', async () => {
+    const { controller, store, clock } = await timed();
+    await settle();
+    clock.advance(1000);
+    await settle();
+    clock.advance(1000);
+    await settle();
+    expect(await store.readEffects('activity-1')).toEqual([usage(0, '1000'), usage(1, '1000')]);
+
+    // An action commits the time since the last checkpoint with its transition.
+    clock.advance(400);
+    await controller.placeWager('red', '10');
+    expect(await store.readEffects('activity-1')).toEqual([usage(0, '1000'), usage(1, '1000'), usage(2, '400')]);
+  });
+
+  it('charges nothing while suspended, and nothing under another metering basis', async () => {
+    const { controller, store, clock } = await timed();
+    await settle();
+    controller.suspend('navigation');
+    await settle();
+    clock.advance(5000);
+    await settle();
+    expect(await store.readEffects('activity-1')).toEqual([]);
+
+    const untimed = setup({ autoClock: false });
+    await untimed.controller.load();
+    await untimed.controller.start({ game: 'roulette', buyIn: '1000' });
+    await settle();
+    untimed.clock.advance(3000);
+    await settle();
+    expect(await untimed.store.readEffects('activity-1')).toEqual([]);
+  });
+
+  it('pauses training when a checkpoint fails to save, and records it once the retry succeeds', async () => {
+    const { controller, store, clock, reports } = await timed();
+    await settle();
+    store.failNext('recordEffects', 'before');
+    clock.advance(1000);
+    await settle();
+    expect(active(controller.snapshot())).toMatchObject({ save: 'failed' });
+    expect(reports.at(-1)).toMatchObject({ timed: false });
+    clock.advance(SAVE_RETRY_MS);
+    await settle();
+    expect(active(controller.snapshot())).toMatchObject({ save: 'saved' });
+    expect(await store.readEffects('activity-1')).toEqual([usage(0, '1000')]);
+    expect(reports.at(-1)).toMatchObject({ timed: true });
+  });
+});

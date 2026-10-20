@@ -37,8 +37,11 @@ export type AccessDecision<Allowed extends object = object> =
   | ({ readonly status: 'allowed'; readonly provenance: string } & Allowed)
   | AccessDenial;
 
-/** The admission answer carries how the activity is metered (spec 5). */
-export type AdmissionDecision = AccessDecision<{ readonly meteringBasis: MeteringBasis; readonly allowancePolicyVersion?: string }>;
+/**
+ * The admission answer carries how the activity is metered (spec 5). A
+ * time-metered admission names the grant its time-usage checkpoints draw on.
+ */
+export type AdmissionDecision = AccessDecision<{ readonly meteringBasis: MeteringBasis; readonly allowancePolicyVersion?: string; readonly timeGrant?: string }>;
 
 /** Before a turn only: the allowance this turn uses, charged once with the turn's beginning. */
 export type TurnDecision = AccessDecision<{ readonly turnCharge?: { readonly grant: string; readonly amount: string } }>;
