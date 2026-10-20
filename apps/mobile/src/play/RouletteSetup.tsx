@@ -8,7 +8,7 @@ import { StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { Button } from '@/components/Button';
 import { Screen } from '@/components/Screen';
-import type { StartProblem } from '@/practice/controller';
+import { RECONNECT_TO_VERIFY, type StartProblem } from '@/practice/controller';
 import { usePractice } from '@/practice/PracticeProvider';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/theme/tokens';
 
@@ -21,10 +21,11 @@ const MAX_BUY_IN_DIGITS = 13;
 const PROBLEMS: Record<StartProblem, string> = {
   'invalid-buy-in': 'Enter whole units from 1 to 1,000,000,000.',
   'save-failed': "The session couldn't be saved, so it hasn't started. Try again.",
-  'access-not-allowed': "This session can't start right now.",
+  'access-denied': "This session can't start right now.",
+  'access-uncertain': `${RECONNECT_TO_VERIFY}. Nothing has started and nothing was used.`,
 };
 
-export function RouletteSetup({ problem, busy }: { problem: StartProblem | null; busy: boolean }) {
+export function RouletteSetup({ problem, problemReason = null, busy }: { problem: StartProblem | null; problemReason?: string | null; busy: boolean }) {
   const { controller } = usePractice();
   const [draft, setDraft] = useState(formatUnits(DEFAULT_BUY_IN));
   const [notWhole, setNotWhole] = useState(false);
@@ -36,7 +37,7 @@ export function RouletteSetup({ problem, busy }: { problem: StartProblem | null;
     setNotWhole(!whole);
     if (whole) void controller.start({ game: 'roulette', buyIn: BigInt(digits).toString() });
   };
-  const error = notWhole ? PROBLEMS['invalid-buy-in'] : problem && PROBLEMS[problem];
+  const error = notWhole ? PROBLEMS['invalid-buy-in'] : problem && (problem === 'access-denied' && problemReason ? problemReason : PROBLEMS[problem]);
 
   return (
     <Screen>

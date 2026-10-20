@@ -4,6 +4,11 @@
 // decides legality, payouts or settlement; the engine does. Automatic steps
 // (settling a revealed spin, final settlement, completion) are driven here,
 // never by a tap or an animation callback.
+//
+// Access: the supervisor port is asked before a new activity, before each turn,
+// before resuming and on lifecycle events. Its dispositions and the direct
+// suspend live here, outside the engine, so suspending never adds a command:
+// a suspended-then-resumed session commits exactly the trace it would have.
 
 import {
   advanceActivity,
@@ -21,10 +26,11 @@ import {
   type DomainFact,
   type FundingSource,
   type PermittedView,
+  type Phase,
 } from '@tableside/engine';
 import { SINGLE_ZERO_ROULETTE } from '@tableside/definitions';
 
-import type { PracticeAdapters } from './adapters';
+import type { AccessDecision, AccessDenial, LifecycleEvent, PhaseReport, PracticeAdapters } from './adapters';
 import type { AllowanceEffect, CommitOutcome, CommittedTransition, CompletedPracticeSession, NewActivity, StoredActivity } from './store';
 
 /** How long the landed ball stays on screen before the automatic settle step. */
@@ -34,11 +40,43 @@ export const ENDING_STEP_MS = 1000;
 /** How long play stays paused after a failed save before it retries by itself. */
 export const SAVE_RETRY_MS = 5000;
 
-export type StartProblem = 'invalid-buy-in' | 'save-failed' | 'access-not-allowed';
+export type StartProblem = 'invalid-buy-in' | 'save-failed' | 'access-denied' | 'access-uncertain';
+
+/** Shown whenever access can't be confirmed at a start or a resume (Amendment 5 A1). */
+export const RECONNECT_TO_VERIFY = 'Reconnect to verify access';
+
+/**
+ * Why the session is suspended. "navigation", "app-lifecycle" and "sign-out"
+ * are the direct suspend; "interrupted" is a session found unfinished at
+ * launch; "access" is a supervisor disposition.
+ */
+export type SuspendCause = 'navigation' | 'app-lifecycle' | 'sign-out' | 'interrupted' | 'access';
+
+export interface Suspension {
+  readonly cause: SuspendCause;
+  /** "immediate": paused in the committed phase. "turn-boundary": a turn in progress finishes first. */
+  readonly kind: 'immediate' | 'turn-boundary';
+  /** False while a turn-boundary suspend waits for the turn in progress to finish. */
+  readonly reached: boolean;
+  /** The supervisor's reason, for an access suspension. */
+  readonly reason: string | null;
+  /** Why the last resume was blocked; the activity is unchanged. */
+  readonly resumeBlocked: string | null;
+  /** End session works from here: suspended between turns, never mid-round (Amendment 5 A3). */
+  readonly canEnd: boolean;
+  /** Why the last End session was refused (spec 2's gate states). */
+  readonly endBlocked: string | null;
+}
 
 export type PracticeSnapshot =
   | { readonly status: 'loading' }
-  | { readonly status: 'none'; readonly problem: StartProblem | null; readonly busy: boolean }
+  | {
+      readonly status: 'none';
+      readonly problem: StartProblem | null;
+      /** The supervisor's reason for a denied start, if it gave one. */
+      readonly problemReason: string | null;
+      readonly busy: boolean;
+    }
   | {
       readonly status: 'active';
       readonly view: PermittedView;
@@ -48,7 +86,10 @@ export type PracticeSnapshot =
       readonly busy: boolean;
       /** "failed": the last transition isn't saved and play is paused until a retry succeeds. */
       readonly save: 'saved' | 'failed';
-      readonly accessNotAllowed: boolean;
+      /** Null while play is open. */
+      readonly suspension: Suspension | null;
+      /** "access-ended": the stop path runs because access or allowance ended. */
+      readonly ending: 'access-ended' | null;
     }
   | { readonly status: 'completed'; readonly result: CompletedPracticeSession };
 
@@ -79,6 +120,18 @@ type CommitResult = 'committed' | 'adopted' | 'not-saved' | 'rejected';
 /** Whether automatic steps may carry on after a command. */
 const settled = (result: CommitResult) => result === 'committed' || result === 'adopted';
 
+/** Phases in which a turn is under way: it finishes before a turn boundary is reached. */
+const TURN_PHASES: ReadonlySet<Phase> = new Set(['revealing-outcome']);
+
+/** Phases whose time counts as active training (Amendment 4 A4); every other phase is excluded. */
+const TIMED_PHASES: ReadonlySet<Phase> = new Set(['open-decision', 'revealing-outcome', 'settled-outcome']);
+
+/** Suspensions that end by themselves when the player comes back to the table. */
+const RESUMES_ON_RETURN: ReadonlySet<SuspendCause> = new Set(['navigation', 'app-lifecycle']);
+
+/** Whether coming back to the table lifts this suspension by itself (it still asks the supervisor). */
+export const resumesOnReturn = (suspension: Suspension): boolean => RESUMES_ON_RETURN.has(suspension.cause);
+
 export class PracticeController {
   private current: PracticeSnapshot = { status: 'loading' };
   private readonly listeners = new Set<() => void>();
@@ -87,7 +140,13 @@ export class PracticeController {
   private facts: readonly DomainFact[] = [];
   private busy = false;
   private pending: Pending | null = null;
-  private accessNotAllowed = false;
+  private suspension: Suspension | null = null;
+  /** Set once the stop path must run: by the player, or because access ended. */
+  private stopping: 'player' | 'access-ended' | null = null;
+  /** A resume asked for while other work was in flight; it runs when that work ends. */
+  private resumeQueued = false;
+  /** The last report given to the timed-metering hook, so only changes are reported. */
+  private lastReport: string | null = null;
   /** The failed save the pending automatic retry is for, if one is waiting. */
   private retryFor: Pending | null = null;
   /** A start whose creation wasn't acknowledged, reused by the retry so it recovers the same activity. */
@@ -102,13 +161,13 @@ export class PracticeController {
     return () => this.listeners.delete(listener);
   };
 
-  /** Finds the unfinished session, if any, and resumes it in its committed phase. */
+  /** Finds the unfinished session, if any. It waits, suspended in its committed phase, until resumed. */
   async load(): Promise<void> {
     await this.exclusive(async () => {
       const stored = await this.adapters.store.findUnfinished();
       if (!stored) return this.showNone(null);
       this.adopt(stored, []);
-      await this.drive();
+      this.suspendNow('interrupted', null);
     });
   }
 
@@ -126,15 +185,21 @@ export class PracticeController {
       if (unfinished) {
         this.unacknowledgedStart = null;
         this.adopt(unfinished, []);
-        return this.drive();
+        this.suspendNow('interrupted', null);
+        return this.resumeSuspended();
       }
 
+      // Uncertain or denied: nothing is created, drawn or charged.
       const access = await this.adapters.access.beforeActivity({ game: request.game });
-      if (access.status !== 'allowed') return this.showNone('access-not-allowed');
+      if (access.status !== 'allowed') {
+        return access.status === 'uncertain' ? this.showNone('access-uncertain') : this.showNone('access-denied', access.reason ?? null);
+      }
+      const admission = { provenance: access.provenance, meteringBasis: access.meteringBasis };
 
       let activity: NewActivity;
-      if (this.unacknowledgedStart && sameRequest(this.unacknowledgedStart.request, request)) {
-        activity = this.unacknowledgedStart.activity;
+      const retry = this.unacknowledgedStart;
+      if (retry && sameRequest(retry.request, request) && sameAdmission(retry.activity.admission, admission)) {
+        activity = retry.activity;
       } else {
         const activityId = this.adapters.newId();
         const random = streamIdentityFromEntropy(this.adapters.entropy);
@@ -156,7 +221,7 @@ export class PracticeController {
           if (error instanceof ActivitySpecificationError) return this.showNone('invalid-buy-in');
           throw error;
         }
-        activity = { activityId, specification, random, checkpoint: encodeCheckpoint(initial), createdAt: this.adapters.clock.now() };
+        activity = { activityId, admission, specification, random, checkpoint: encodeCheckpoint(initial), createdAt: this.adapters.clock.now() };
       }
 
       let stored: StoredActivity | null;
@@ -177,6 +242,7 @@ export class PracticeController {
   /** Sets the total stake on a target; "0" takes the wager down. The engine judges legality. */
   async placeWager(target: string, amount: string): Promise<void> {
     await this.exclusive(async () => {
+      if (!this.playOpen()) return;
       // A wager never starts an automatic step itself, but an adopted later state may.
       if (settled(await this.send({ kind: 'place-wager', target, amount }))) await this.drive();
     });
@@ -185,10 +251,16 @@ export class PracticeController {
   /** Begins a turn (the spin), then settles it automatically after the reveal. */
   async spin(): Promise<void> {
     await this.exclusive(async () => {
+      if (!this.playOpen()) return;
       const state = this.requireState();
       const access = await this.adapters.access.beforeTurn({ activityId: state.activity.id, turn: state.turn + 1 });
-      this.accessNotAllowed = access.status !== 'allowed';
-      if (access.status !== 'allowed') return this.publish();
+      if (access.status !== 'allowed') {
+        // No turn starts: the stop path runs, or the session suspends here, at the boundary.
+        this.applyDenial(access);
+        return this.drive();
+      }
+      // Left the table while the supervisor answered: no turn starts.
+      if (!this.playOpen()) return this.drive();
       // A turn charge (spec 5) commits atomically with the transition that begins the turn.
       const charge = access.turnCharge;
       const effects: AllowanceEffect[] = charge
@@ -204,15 +276,82 @@ export class PracticeController {
    */
   async rebuy(amount: string): Promise<void> {
     await this.exclusive(async () => {
+      if (!this.playOpen()) return;
       if (settled(await this.send({ kind: 'rebuy', amount }))) await this.drive();
     });
   }
 
-  /** Ends the session: removable wagers come back, committed ones settle automatically, then one final result. */
+  /**
+   * Ends the session: removable wagers come back, committed ones settle
+   * automatically, then one final result. While suspended it works only between
+   * turns and when the gate states allow it (Amendment 5 A3); it then runs
+   * offline and never asks for access. A session suspended mid-round must resume
+   * to finish the round first.
+   */
   async endSession(): Promise<void> {
     await this.exclusive(async () => {
-      if (settled(await this.send({ kind: 'request-stop' }))) await this.drive();
+      if (!this.state || this.current.status !== 'active') return;
+      const suspension = this.suspension;
+      if (suspension) {
+        if (!suspension.canEnd) return;
+        const gate = await this.adapters.access.beforeEndWhileSuspended({ activityId: this.state.activity.id });
+        if (this.suspension !== suspension) return;
+        if (gate.status === 'blocked') {
+          this.suspension = { ...suspension, endBlocked: gate.reason };
+          return this.publish();
+        }
+        this.suspension = null;
+      }
+      // Mid-spin, the engine keeps the committed wagers for final settlement.
+      if (TURN_PHASES.has(this.state.phase)) {
+        if (!settled(await this.send({ kind: 'request-stop' }))) return;
+      } else {
+        this.stopping ??= 'player';
+      }
+      await this.drive();
     });
+  }
+
+  /**
+   * The direct suspend, for leaving the table, app lifecycle and sign-out. It
+   * takes effect at once, even while a command is saving: that commit finishes,
+   * then nothing further is revealed, settled, drawn or charged until a resume.
+   */
+  suspend(cause: 'navigation' | 'app-lifecycle' | 'sign-out' = 'navigation'): void {
+    if (!this.state || this.current.status !== 'active') return;
+    this.resumeQueued = false;
+    this.suspendNow(cause, null);
+  }
+
+  /** Asks the supervisor, then resumes the exact committed phase. A blocked resume changes nothing. */
+  async resume(): Promise<void> {
+    if (!this.suspension) return;
+    if (this.busy) {
+      this.resumeQueued = true;
+      return;
+    }
+    await this.exclusive(() => this.resumeSuspended());
+  }
+
+  /** Coming back to the table: resumes a suspension that came from leaving it, and no other. */
+  async resumeOnReturn(): Promise<void> {
+    if (this.suspension && resumesOnReturn(this.suspension)) await this.resume();
+  }
+
+  /**
+   * An app lifecycle or access event. Backgrounding and sign-out suspend at once;
+   * every event is put to the supervisor, and its denial is applied.
+   */
+  async lifecycle(event: LifecycleEvent): Promise<void> {
+    if (!this.state || this.current.status !== 'active') return;
+    if (event === 'backgrounded') this.suspend('app-lifecycle');
+    if (event === 'signed-out') this.suspend('sign-out');
+    const activityId = this.state.activity.id;
+    const decision = await this.adapters.access.onLifecycle({ activityId, event });
+    if (decision.status === 'allowed' || this.state?.activity.id !== activityId || this.current.status !== 'active') return;
+    this.applyDenial(decision);
+    // Work in flight picks the disposition up at its next step; otherwise apply it now.
+    if (!this.busy) await this.exclusive(() => this.drive());
   }
 
   /** Retries the save that failed, then carries on with any automatic steps. */
@@ -230,6 +369,7 @@ export class PracticeController {
     if (this.current.status !== 'completed' || this.busy) return;
     this.activity = null;
     this.state = null;
+    this.lastReport = null;
     this.showNone(null);
   }
 
@@ -246,7 +386,75 @@ export class PracticeController {
       this.busy = false;
       this.publish();
       if (this.pending) this.scheduleRetry();
+      if (this.resumeQueued) {
+        this.resumeQueued = false;
+        void this.resume();
+      }
     }
+  }
+
+  /** Interactive play is open: not suspended and not ending. */
+  private playOpen(): boolean {
+    return this.suspension === null && this.stopping === null;
+  }
+
+  private suspendNow(cause: SuspendCause, reason: string | null, kind: Suspension['kind'] = 'immediate'): void {
+    const previous = this.suspension;
+    if (previous) {
+      // A turn-boundary suspend never loosens one already in place.
+      if (kind === 'turn-boundary') return;
+      // Leaving the table never replaces a suspension that coming back can't lift.
+      if (previous.kind === 'immediate' && RESUMES_ON_RETURN.has(cause)) return;
+    }
+    this.suspension = { cause, kind, reached: false, reason, resumeBlocked: null, canEnd: false, endBlocked: null };
+    this.markBoundary();
+  }
+
+  /** Marks the suspension reached once it applies: at once, or when no turn is under way. */
+  private markBoundary(): void {
+    const suspension = this.suspension;
+    if (!suspension || !this.state) return;
+    const betweenTurns = !TURN_PHASES.has(this.state.phase);
+    const reached = suspension.kind === 'immediate' || betweenTurns;
+    if (reached !== suspension.reached || (reached && betweenTurns) !== suspension.canEnd) {
+      this.suspension = { ...suspension, reached, canEnd: reached && betweenTurns };
+    }
+    this.publish();
+  }
+
+  private applyDenial(denial: AccessDenial): void {
+    switch (denial.disposition) {
+      case 'stop':
+        this.stopping = 'access-ended';
+        return this.publish();
+      case 'suspend':
+        return this.suspendNow('access', denial.reason ?? null);
+      case 'suspend-at-turn-boundary':
+        return this.suspendNow('access', denial.reason ?? null, 'turn-boundary');
+    }
+  }
+
+  /** The resume question (Amendment 5 A2): allowed resumes the committed phase; anything else changes nothing. */
+  private async resumeSuspended(): Promise<void> {
+    const suspension = this.suspension;
+    const state = this.state;
+    if (!suspension || !state) return;
+    let decision: AccessDecision;
+    try {
+      decision = await this.adapters.access.beforeResume({ activityId: state.activity.id, phase: state.phase });
+    } catch {
+      decision = { status: 'uncertain', provenance: 'unanswered', disposition: 'suspend' };
+    }
+    // Suspended again while asking: stay suspended.
+    if (this.suspension !== suspension) return;
+    if (decision.status !== 'allowed') {
+      const resumeBlocked = decision.status === 'uncertain' ? RECONNECT_TO_VERIFY : (decision.reason ?? "This session can't resume right now.");
+      this.suspension = { ...suspension, resumeBlocked };
+      return this.publish();
+    }
+    this.suspension = null;
+    this.publish();
+    await this.drive();
   }
 
   /**
@@ -269,20 +477,33 @@ export class PracticeController {
       .catch(() => undefined);
   }
 
-  /** The automatic, no-tap steps: settle a revealed spin, run final settlement, complete. */
+  /**
+   * The automatic, no-tap steps: settle a revealed spin, run the stop path and
+   * final settlement, complete. A suspension stops them where it applies.
+   */
   private async drive(): Promise<void> {
     for (;;) {
       if (this.pending) return;
       const phase = this.requireState().phase;
+      if (this.suspension) {
+        this.markBoundary();
+        if (this.suspension.reached) return;
+      }
       if (phase === 'revealing-outcome') {
         await this.adapters.clock.sleep(REVEAL_MS);
+        // Suspended during the reveal: the settle waits for the resume.
+        if (this.suspension?.kind === 'immediate') return;
         if (!settled(await this.send({ kind: 'settle-turn' }))) return;
       } else if (phase === 'final-settlement') {
         await this.adapters.clock.sleep(ENDING_STEP_MS);
+        if (this.suspension) return;
         if (!settled(await this.send({ kind: 'advance-final-settlement' }))) return;
       } else if (phase === 'completed') {
         await this.complete();
         return;
+      } else if (this.stopping) {
+        // The stop path, between turns: removable wagers come back, then final settlement.
+        if (!settled(await this.send({ kind: 'request-stop' }))) return;
       } else {
         return;
       }
@@ -377,7 +598,12 @@ export class PracticeController {
       this.publish();
       return 'not-saved';
     }
+    const { suspension, stopping } = this;
     this.adopt(stored, []);
+    // Another writer moved the activity on; this session's suspension and stop still hold.
+    this.suspension = suspension;
+    this.stopping ??= stopping;
+    this.markBoundary();
     return 'adopted';
   }
 
@@ -407,6 +633,7 @@ export class PracticeController {
         reference: state.identities.reference,
       },
       fundingSource: funding.source,
+      meteringBasis: activity.admission.meteringBasis,
       buyIn: funding.buyIn,
       rebuys: funding.rebuys,
       cumulativeFunding: funding.cumulativeFunding,
@@ -427,7 +654,10 @@ export class PracticeController {
       return false;
     }
     this.pending = null;
+    this.suspension = null;
+    this.stopping = null;
     this.current = { status: 'completed', result };
+    this.report({ activityId: result.activityId, phase: 'completed', suspended: false, timed: false });
     this.notify();
     return true;
   }
@@ -439,7 +669,9 @@ export class PracticeController {
     this.state = decoded.state;
     this.facts = facts;
     this.pending = null;
-    this.accessNotAllowed = false;
+    this.suspension = null;
+    // Final settlement already started: the stop path is under way and play never reopens.
+    this.stopping = decoded.state.phase === 'final-settlement' ? (this.stopping ?? 'player') : null;
     this.publish();
   }
 
@@ -448,8 +680,8 @@ export class PracticeController {
     return this.state;
   }
 
-  private showNone(problem: StartProblem | null): void {
-    this.current = { status: 'none', problem, busy: this.busy };
+  private showNone(problem: StartProblem | null, problemReason: string | null = null): void {
+    this.current = { status: 'none', problem, problemReason, busy: this.busy };
     this.notify();
   }
 
@@ -457,7 +689,7 @@ export class PracticeController {
   private publish(): void {
     if (this.current.status === 'completed') return;
     if (!this.state || !this.activity) {
-      if (this.current.status === 'none') this.showNone(this.current.problem);
+      if (this.current.status === 'none') this.showNone(this.current.problem, this.current.problemReason);
       return;
     }
     this.current = {
@@ -466,14 +698,34 @@ export class PracticeController {
       facts: this.facts,
       busy: this.busy,
       save: this.pending ? 'failed' : 'saved',
-      accessNotAllowed: this.accessNotAllowed,
+      suspension: this.suspension,
+      ending: this.stopping === 'access-ended' ? 'access-ended' : null,
     };
+    const suspended = this.suspension?.reached ?? false;
+    this.report({
+      activityId: this.state.activity.id,
+      phase: this.state.phase,
+      suspended,
+      // A failed save pauses training, and the stop path is never metered.
+      timed: TIMED_PHASES.has(this.state.phase) && !suspended && !this.pending && this.stopping === null,
+    });
     this.notify();
+  }
+
+  /** The timed-metering hook (Amendment 4 A4): reports each change, unused by the spec 1 stub. */
+  private report(report: PhaseReport): void {
+    const key = JSON.stringify(report);
+    if (key === this.lastReport) return;
+    this.lastReport = key;
+    this.adapters.access.phaseChanged(report);
   }
 
   private notify(): void {
     for (const listener of this.listeners) listener();
   }
 }
+
+const sameAdmission = (a: NewActivity['admission'], b: NewActivity['admission']) =>
+  a.provenance === b.provenance && a.meteringBasis === b.meteringBasis;
 
 const sameRequest = (a: StartRequest, b: StartRequest) => a.game === b.game && a.buyIn === b.buyIn && a.fundingSource === b.fundingSource;

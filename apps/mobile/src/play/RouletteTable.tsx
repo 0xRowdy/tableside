@@ -117,9 +117,20 @@ export function RouletteTable({ snapshot }: { snapshot: ActiveSnapshot }) {
             <Button label="Retry now" variant="secondary" disabled={busy} onPress={() => void controller.retrySave()} />
           </View>
         )}
-        {snapshot.accessNotAllowed && (
+        {snapshot.ending === 'access-ended' && (
+          <View style={styles.banner} testID="access-ended">
+            <Text accessibilityRole="alert" maxFontSizeMultiplier={textScale.body} style={styles.bannerTitle}>{ACCESS_ENDED}</Text>
+            <Text maxFontSizeMultiplier={textScale.body} style={styles.bannerText}>
+              Your bets settle automatically, then you&apos;ll see the session result.
+            </Text>
+          </View>
+        )}
+        {snapshot.suspension?.kind === 'turn-boundary' && !snapshot.suspension.reached && (
           <View style={styles.banner}>
-            <Text accessibilityRole="alert" maxFontSizeMultiplier={textScale.body} style={styles.bannerTitle}>This spin can&apos;t start right now.</Text>
+            <Text accessibilityRole="alert" maxFontSizeMultiplier={textScale.body} style={styles.bannerTitle}>Pausing after this spin</Text>
+            <Text maxFontSizeMultiplier={textScale.body} style={styles.bannerText}>
+              {snapshot.suspension.reason ?? 'This spin finishes normally. No new spin starts until the session resumes.'}
+            </Text>
           </View>
         )}
 
@@ -201,6 +212,9 @@ export function RouletteTable({ snapshot }: { snapshot: ActiveSnapshot }) {
 const POCKET_TOKEN = { red: 'pocketRed', black: 'pocketBlack', green: 'pocketGreen' } as const;
 
 const WHEEL_NAMES: Record<PermittedView['table']['wheel'], string> = { 'single-zero': 'Single zero' };
+
+/** The access-ended stop (spec 5, Amendment 4 D). */
+export const ACCESS_ENDED = 'Training ended — settling existing bets; no further allowance used';
 
 const SAVE_FAILED_ANNOUNCEMENT = "Couldn't save. Play is paused and will retry automatically.";
 
@@ -357,16 +371,18 @@ function EndingSteps({ snapshot }: { snapshot: ActiveSnapshot }) {
   );
 }
 
-function EndSessionDialog({
+export function EndSessionDialog({
   visible,
   view,
   onCancel,
   onConfirm,
+  cancelLabel = 'Keep playing',
 }: {
   visible: boolean;
   view: PermittedView;
   onCancel: () => void;
   onConfirm: () => void;
+  cancelLabel?: string;
 }) {
   const removable = view.wagersCommitted ? [] : view.wagers;
   return (
@@ -394,7 +410,7 @@ function EndSessionDialog({
               </View>
             ))}
             <Button label="End session" stretch onPress={onConfirm} />
-            <Button label="Keep playing" variant="secondary" stretch onPress={onCancel} />
+            <Button label={cancelLabel} variant="secondary" stretch onPress={onCancel} />
           </View>
         </ScrollView>
       </View>
