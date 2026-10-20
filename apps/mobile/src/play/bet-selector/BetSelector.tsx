@@ -344,7 +344,7 @@ function YourWagers({ catalog, wagers, canPlace, onRemove, openEditor }: BetSele
       )}
       {wagers.map((wager) => {
         const found = findChoice(catalog, wager.target);
-        const name = found?.choice.name ?? wager.target;
+        const name = found?.choice.name ?? wager.name ?? wager.target;
         return (
           <View key={wager.target} style={styles.wager}>
             <View accessible accessibilityLabel={`${name}, ${formatUnits(wager.amount)}, ${wager.committed ? 'committed' : 'removable'}`} style={styles.wagerText}>
@@ -413,7 +413,10 @@ function illegalExplanation(reason: IllegalActionReason, choice: WagerChoice, { 
   const max = formatUnits(choice.max);
   switch (reason) {
     case 'not-whole-units':
+    case 'odds-increment':
       return `Use ${increments(choice)}, from ${min} to ${max}. Your draft is kept and nothing on the table changed.`;
+    case 'above-odds-cap':
+      return `Over the odds this table allows. ${choice.name} can be at most ${max}. Your draft is kept.`;
     case 'below-minimum':
       return `${choice.name} needs at least ${min}. Your draft is kept.`;
     case 'above-maximum':

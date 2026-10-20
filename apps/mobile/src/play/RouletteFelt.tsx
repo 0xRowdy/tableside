@@ -6,7 +6,7 @@
 // Placements and payouts come from the engine's permitted view; nothing here
 // decides coverage or legality.
 
-import type { PermittedView, RoulettePocket } from '@tableside/engine';
+import type { RoulettePermittedView as PermittedView, RoulettePocket } from '@tableside/engine';
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View, type LayoutChangeEvent, type StyleProp, type ViewStyle } from 'react-native';
 

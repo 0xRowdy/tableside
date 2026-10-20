@@ -5,6 +5,8 @@ import { AppState } from 'react-native';
 import { Button } from '@/components/Button';
 import { Placeholder } from '@/components/Placeholder';
 import { findGame } from '@/games';
+import { CrapsSetup } from '@/play/CrapsSetup';
+import { CrapsTable } from '@/play/CrapsTable';
 import { RouletteSetup } from '@/play/RouletteSetup';
 import { RouletteTable } from '@/play/RouletteTable';
 import { SessionResult } from '@/play/SessionResult';
@@ -39,7 +41,11 @@ export default function Play() {
       if (suspension?.waitsForPlayer) {
         return <SuspendedSession snapshot={snapshot} suspension={suspension} />;
       }
-      return <RouletteTable snapshot={snapshot} />;
+      return snapshot.view.game === 'craps' ? (
+        <CrapsTable snapshot={{ ...snapshot, view: snapshot.view }} />
+      ) : (
+        <RouletteTable snapshot={{ ...snapshot, view: snapshot.view }} />
+      );
     }
     case 'completed':
       return (
@@ -47,7 +53,7 @@ export default function Play() {
           result={snapshot.result}
           onNewSession={() => {
             controller.dismissResult();
-            router.setParams({ game: 'roulette' });
+            router.setParams({ game: snapshot.result.game });
           }}
           onHome={() => {
             controller.dismissResult();
@@ -60,6 +66,7 @@ export default function Play() {
   }
 
   if (game?.id === 'roulette') return <RouletteSetup problem={snapshot.problem} problemReason={snapshot.problemReason} busy={snapshot.busy} />;
+  if (game?.id === 'craps') return <CrapsSetup problem={snapshot.problem} problemReason={snapshot.problemReason} busy={snapshot.busy} />;
   if (game) {
     return <Placeholder title={`${game.title} setup`} message="Rule presets, table limits and your buy-in come next." />;
   }

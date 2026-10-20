@@ -3,9 +3,15 @@
 // pure. The state is plain JSON-safe data (money as canonical strings), so the
 // checkpoint is just its canonical JSON. Validate definitions and Explain
 // prescription arrive with the strategy interpreter (#74).
+//
+// The protocol owns envelopes, sequences, receipts, phases and checkpoints.
+// Everything game-specific (rules, legal targets, outcomes, settlement, the
+// game's part of the view and of checkpoint validation) sits behind a
+// GameModule, one per game, chosen by the activity's pinned game identity.
 
 import { canonicalJson } from './canonical';
-import { spinRoulette, type RoulettePocket, type RouletteWheel } from './draws';
+import { CRAPS, type CrapsActivityState, type CrapsDomainFact, type CrapsIllegalActionReason, type CrapsRuleSet, type CrapsTable, type CrapsOutcome } from './craps';
+import type { RoulettePocket } from './draws';
 import {
   addRebuy,
   cumulativeFunding,
@@ -19,55 +25,25 @@ import {
   type Funding,
   type FundingSource,
 } from './funding';
-import { add, compare, decodeMoney, encodeMoney, money, sub, type Money } from './money';
+import { add, decodeMoney, encodeMoney, type Money } from './money';
 import { RANDOM_PROTOCOL_VERSION, RandomStream, type RandomStreamIdentity, type RandomStreamState } from './random';
-import {
-  isPocket,
-  netResult,
-  placementFor,
-  placementOrder,
-  ROULETTE_RULE_SETS,
-  rouletteLayout,
-  type LimitClass,
-  type PlacementKind,
-  type RoulettePlacement,
-} from './roulette';
+import { ROULETTE, type RouletteActivityState, type RouletteRuleSet, type RouletteTable } from './roulette';
 import { sha256Hex } from './sha256';
+import { hasExactKeys, isCount, isIdentity, isRecord, isText, parseMoney, type VersionedIdentity } from './shape';
 import { ENGINE_VERSION } from './version';
+
+export type { Limit, VersionedIdentity } from './shape';
 
 /** The state-schema version, kept apart from engine, rule and protocol identities. */
 export const STATE_SCHEMA_VERSION = 2 as const;
 
-/** Ceiling for configurable base-wager limits, in units. */
-const BASE_WAGER_CEILING = 1_000_000n;
-/** Longest accepted id or amount text; anything longer is malformed. */
-const MAX_TEXT = 128;
-
-export interface VersionedIdentity {
-  readonly id: string;
-  readonly version: number;
-}
-
-export interface Limit {
-  /** Canonical whole-unit amounts. */
-  readonly min: string;
-  readonly max: string;
-}
-
-export interface RouletteRuleSet extends VersionedIdentity {
-  readonly wheel: RouletteWheel;
-  readonly limits: { readonly inside: Limit; readonly outside: Limit };
-}
-
-/** Everything an activity pins at creation. */
-export interface ActivitySpecification {
+/** Fields every activity specification has, whatever the game. */
+interface SpecificationBase {
   readonly activityId: string;
   /** Account owner; a local placeholder until accounts exist. */
   readonly owner: string;
   /** Originating device. */
   readonly device: string;
-  readonly game: 'roulette';
-  readonly rules: RouletteRuleSet;
   /** Null in free play. */
   readonly strategy: VersionedIdentity | null;
   /** Null for games without a coaching reference. */
@@ -77,6 +53,22 @@ export interface ActivitySpecification {
   /** Opening balance (buy-in or training-bankroll allocation): canonical positive whole units within the funding ceiling. */
   readonly funding: string;
 }
+
+/** A roulette activity: the wheel and its limits. */
+export interface RouletteActivitySpecification extends SpecificationBase {
+  readonly game: 'roulette';
+  readonly rules: RouletteRuleSet;
+}
+
+export interface CrapsActivitySpecification extends SpecificationBase {
+  readonly game: 'craps';
+  readonly rules: CrapsRuleSet;
+}
+
+/** Everything an activity pins at creation. */
+export type ActivitySpecification = RouletteActivitySpecification | CrapsActivitySpecification;
+
+export type GameId = ActivitySpecification['game'];
 
 export type Phase = 'open-decision' | 'revealing-outcome' | 'settled-outcome' | 'final-settlement' | 'completed';
 
@@ -94,19 +86,18 @@ export interface Receipt {
   readonly disposition: 'applied' | 'assessed';
 }
 
-export interface ActivityState {
+/** The state every game's activity has. A game adds its pinned rules, its outcome and any table state. */
+export interface ActivityStateBase<G extends GameId> {
   readonly schema: typeof STATE_SCHEMA_VERSION;
   readonly activity: { readonly id: string; readonly owner: string; readonly device: string };
   readonly identities: {
     readonly engine: string;
-    readonly game: 'roulette';
+    readonly game: G;
     readonly rules: VersionedIdentity;
     readonly strategy: VersionedIdentity | null;
     readonly reference: VersionedIdentity | null;
     readonly random: RandomStreamIdentity;
   };
-  /** The pinned rule content, not a pointer to current definitions. */
-  readonly rules: Pick<RouletteRuleSet, 'wheel' | 'limits'>;
   /** The sequence the next command must carry. */
   readonly sequence: number;
   readonly phase: Phase;
@@ -116,13 +107,13 @@ export interface ActivityState {
   readonly balance: string;
   /** Buy-in, rebuys and drawdown tracking (shared with every game). */
   readonly funding: Funding;
-  /** Stakes on the table in layout order: removable in a decision, committed once a turn begins. */
+  /** Stakes on the table in layout order. */
   readonly wagers: readonly Wager[];
-  /** The latest turn's generated outcome. */
-  readonly outcome: { readonly turn: number; readonly pocket: RoulettePocket } | null;
   readonly random: RandomStreamState;
   readonly receipts: readonly Receipt[];
 }
+
+export type ActivityState = RouletteActivityState | CrapsActivityState;
 
 export type Command =
   /** Sets the stake on a target; amount "0" takes the wager down. */
@@ -134,6 +125,9 @@ export type Command =
   | { readonly kind: 'advance-final-settlement' }
   /** Adds funds to a practice-funding session while it waits for input. Never places or settles anything. */
   | { readonly kind: 'rebuy'; readonly amount: string };
+
+/** The commands a game module applies; the protocol itself handles funding. */
+export type GameCommand = Exclude<Command, { readonly kind: 'rebuy' }>;
 
 export type CommandKind = Command['kind'];
 
@@ -153,7 +147,8 @@ export type IllegalActionReason =
   | 'insufficient-funds'
   | 'no-wager-to-remove'
   | 'no-wager'
-  | 'over-funding-ceiling';
+  | 'over-funding-ceiling'
+  | CrapsIllegalActionReason;
 
 export type DomainFact =
   | { readonly kind: 'wager-changed'; readonly target: string; readonly amount: string; readonly previous: string }
@@ -165,17 +160,19 @@ export type DomainFact =
       readonly turn: number;
       readonly target: string;
       readonly stake: string;
-      readonly result: 'win' | 'loss';
-      /** Net result: payout on a win, minus the stake on a loss. */
+      /** A push returns the stake with no win or loss (craps odds that are off). */
+      readonly result: 'win' | 'loss' | 'push';
+      /** Net result: payout on a win, minus the stake on a loss, 0 on a push. */
       readonly net: string;
-      /** Paid back to the balance: stake plus payout, or 0. */
+      /** Paid back to the balance: stake plus payout, the stake on a push, or 0. */
       readonly returned: string;
     }
   | { readonly kind: 'stop-requested'; readonly phase: Phase }
   | { readonly kind: 'wager-returned'; readonly target: string; readonly amount: string }
   /** A rebuy: funds added, not a win. */
   | { readonly kind: 'funding-added'; readonly amount: string; readonly cumulative: string; readonly balance: string }
-  | { readonly kind: 'activity-completed'; readonly balance: string };
+  | { readonly kind: 'activity-completed'; readonly balance: string }
+  | CrapsDomainFact;
 
 export type RejectionReason = 'malformed' | 'stale' | 'not-legal-in-phase' | 'conflicting-command-id';
 
@@ -186,7 +183,7 @@ export type AdvanceResult =
   /** An invalid envelope: no transition, no receipt. */
   | { readonly status: 'rejected'; readonly reason: RejectionReason; readonly message: string };
 
-export interface PermittedView {
+interface PermittedViewBase {
   readonly activityId: string;
   readonly phase: Phase;
   readonly sequence: number;
@@ -195,7 +192,6 @@ export interface PermittedView {
   readonly wagers: readonly Wager[];
   /** True while stakes are committed to a turn and can't be changed or taken down. */
   readonly wagersCommitted: boolean;
-  readonly outcome: { readonly turn: number; readonly pocket: RoulettePocket } | null;
   readonly legalCommands: readonly CommandKind[];
   readonly funding: {
     readonly source: FundingSource;
@@ -205,20 +201,21 @@ export interface PermittedView {
     /** How much a rebuy may still add. */
     readonly headroom: string;
   };
-  readonly table: {
-    readonly wheel: RouletteWheel;
-    /** Every legal placement on the layout, in canonical order. */
-    readonly placements: readonly {
-      target: string;
-      kind: PlacementKind;
-      covers: readonly RoulettePocket[];
-      limitClass: LimitClass;
-      min: string;
-      max: string;
-      payout: string;
-    }[];
-  };
 }
+
+export interface RoulettePermittedView extends PermittedViewBase {
+  readonly game: 'roulette';
+  readonly outcome: { readonly turn: number; readonly pocket: RoulettePocket } | null;
+  readonly table: RouletteTable;
+}
+
+export interface CrapsPermittedView extends PermittedViewBase {
+  readonly game: 'craps';
+  readonly outcome: CrapsOutcome | null;
+  readonly table: CrapsTable;
+}
+
+export type PermittedView = RoulettePermittedView | CrapsPermittedView;
 
 export type CheckpointResult =
   | { readonly ok: true; readonly state: ActivityState }
@@ -231,6 +228,41 @@ export class ActivitySpecificationError extends Error {
   }
 }
 
+// ---- game modules -------------------------------------------------------
+
+/** The state fields a transition may change. */
+export type Change<S extends ActivityState> = Partial<Omit<S, 'schema' | 'activity' | 'identities' | 'rules' | 'sequence' | 'receipts'>>;
+
+/** A command's effect: a change with its facts, or the reason a meaningful action is illegal. */
+export type Step<S extends ActivityState> = { change: Change<S>; facts: DomainFact[] } | { illegal: IllegalActionReason };
+
+/** Everything the protocol needs from one game. */
+export interface GameModule<S extends ActivityState, V extends PermittedView> {
+  /** The rule sets this build runs, each pinned by id and version. */
+  readonly ruleSets: readonly VersionedIdentity[];
+  /** Game state fields beyond the common ones (and their initial values). */
+  readonly extra: Omit<S, keyof ActivityStateBase<GameId> | 'rules' | 'outcome'>;
+  /** The rule content to pin from a specification's rules, or why they can't run. */
+  pinRules(rules: Record<string, unknown>): S['rules'] | string;
+  /** Applies a command already known to be well formed and legal in the phase. */
+  apply(state: S, command: GameCommand): Step<S>;
+  /** The game's part of the permitted view. */
+  view(state: S): Pick<V, 'game' | 'outcome' | 'table'>;
+  /** The first problem with the game's part of a checkpoint (rules, wagers, outcome, table state), if any. */
+  damage(value: Record<string, unknown>): string | undefined;
+}
+
+// The registry casts each module to the union: a module only ever receives states of its own game.
+const GAMES: Record<GameId, GameModule<ActivityState, PermittedView>> = {
+  roulette: ROULETTE as unknown as GameModule<ActivityState, PermittedView>,
+  craps: CRAPS as unknown as GameModule<ActivityState, PermittedView>,
+};
+
+const gameFor = (game: unknown): GameModule<ActivityState, PermittedView> | undefined =>
+  typeof game === 'string' && Object.hasOwn(GAMES, game) ? GAMES[game as GameId] : undefined;
+
+const moduleOf = (state: ActivityState) => GAMES[state.identities.game];
+
 /** Rebuys are offered only while the activity waits for input, and only with practice funding. */
 const legalCommands = (state: ActivityState): readonly CommandKind[] =>
   rebuysOffered(state.funding) ? LEGAL[state.phase] : LEGAL[state.phase].filter((kind) => kind !== 'rebuy');
@@ -242,50 +274,6 @@ const LEGAL: Record<Phase, readonly CommandKind[]> = {
   'final-settlement': ['advance-final-settlement'],
   completed: [],
 };
-
-// ---- shape checks -------------------------------------------------------
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
-
-const hasExactKeys = (value: unknown, keys: readonly string[]): value is Record<string, unknown> =>
-  isRecord(value) && Object.keys(value).sort().join() === [...keys].sort().join();
-
-const isText = (value: unknown): value is string => typeof value === 'string' && value.length > 0 && value.length <= MAX_TEXT;
-
-const isCount = (value: unknown): value is number => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
-
-const isIdentity = (value: unknown): value is VersionedIdentity =>
-  hasExactKeys(value, ['id', 'version']) && isText(value.id) && isCount(value.version);
-
-/** A canonical money value, or undefined. */
-function parseMoney(value: unknown): Money | undefined {
-  if (typeof value !== 'string' || value.length > MAX_TEXT) return undefined;
-  try {
-    return decodeMoney(value);
-  } catch {
-    return undefined;
-  }
-}
-
-const isWholeIn = (amount: Money | undefined, low: bigint, high: bigint): amount is Money =>
-  amount !== undefined && amount.d === 1n && amount.n >= low && amount.n <= high;
-
-function isLimit(value: unknown): value is Limit {
-  if (!hasExactKeys(value, ['min', 'max'])) return false;
-  const min = parseMoney(value.min);
-  const max = parseMoney(value.max);
-  return isWholeIn(min, 1n, BASE_WAGER_CEILING) && isWholeIn(max, 1n, BASE_WAGER_CEILING) && compare(min, max) <= 0;
-}
-
-const isWheel = (value: unknown): value is RouletteWheel => value === 'single-zero' || value === 'double-zero';
-
-/** True when the id, version and wheel name one of the rule sets this engine runs. */
-const isRuleSet = (value: Record<string, unknown>): boolean =>
-  isWheel(value.wheel) && value.id === ROULETTE_RULE_SETS[value.wheel].id && value.version === ROULETTE_RULE_SETS[value.wheel].version;
-
-const isLimits = (value: unknown): value is RouletteRuleSet['limits'] =>
-  hasExactKeys(value, ['inside', 'outside']) && isLimit(value.inside) && isLimit(value.outside);
 
 function isCommand(value: unknown): value is Command {
   if (!isRecord(value)) return false;
@@ -321,10 +309,10 @@ export function createActivity(spec: ActivitySpecification, random: RandomStream
   };
   if (!isRecord(spec)) fail('the specification must be an object');
   if (!isText(spec.activityId) || !isText(spec.owner) || !isText(spec.device)) fail('activity id, owner and device are required');
-  if (spec.game !== 'roulette') fail(`unsupported game ${String(spec.game)}`);
-  const rules = spec.rules;
-  if (!isRecord(rules) || !isRuleSet(rules)) fail('unsupported roulette rules');
-  if (!isLimits(rules.limits)) fail(`limits must be whole units from 1 to ${BASE_WAGER_CEILING} with min <= max`);
+  const game = gameFor(spec.game) ?? fail(`unsupported game ${String(spec.game)}`);
+  if (!isRecord(spec.rules)) fail('rules are required');
+  const rules = game.pinRules(spec.rules as unknown as Record<string, unknown>);
+  if (typeof rules === 'string') return fail(rules);
   if (spec.strategy !== null && !isIdentity(spec.strategy)) fail('strategy must be null or an id and version');
   if (spec.reference !== null && !isIdentity(spec.reference)) fail('reference must be null or an id and version');
   const funding = openFunding(spec.fundingSource, parseMoney(spec.funding));
@@ -341,19 +329,14 @@ export function createActivity(spec: ActivitySpecification, random: RandomStream
     activity: { id: spec.activityId, owner: spec.owner, device: spec.device },
     identities: {
       engine: ENGINE_VERSION,
-      game: 'roulette',
-      rules: { id: rules.id, version: rules.version },
+      game: spec.game,
+      // pinRules accepted these, so they name one of the game's rule sets.
+      rules: { id: spec.rules.id, version: spec.rules.version },
       strategy: spec.strategy && { id: spec.strategy.id, version: spec.strategy.version },
       reference: spec.reference && { id: spec.reference.id, version: spec.reference.version },
       random: { protocol: position.protocol, key: position.key, session: position.session },
     },
-    rules: {
-      wheel: rules.wheel,
-      limits: {
-        inside: { min: rules.limits.inside.min, max: rules.limits.inside.max },
-        outside: { min: rules.limits.outside.min, max: rules.limits.outside.max },
-      },
-    },
+    rules,
     sequence: 0,
     phase: 'open-decision',
     turn: 0,
@@ -363,13 +346,11 @@ export function createActivity(spec: ActivitySpecification, random: RandomStream
     outcome: null,
     random: position,
     receipts: [],
-  };
+    ...game.extra,
+  } as ActivityState;
 }
 
 // ---- advance ------------------------------------------------------------
-
-type Change = Partial<Pick<ActivityState, 'phase' | 'turn' | 'balance' | 'funding' | 'wagers' | 'outcome' | 'random'>>;
-type Step = { change: Change; facts: DomainFact[] } | { illegal: IllegalActionReason };
 
 const reject = (reason: RejectionReason, message: string): AdvanceResult => ({ status: 'rejected', reason, message });
 
@@ -397,7 +378,7 @@ export function advanceActivity(state: ActivityState, envelope: CommandEnvelope)
     return reject('not-legal-in-phase', `${command.kind} is not legal in ${state.phase}`);
   }
 
-  const step = apply(state, command);
+  const step = command.kind === 'rebuy' ? rebuy(state, command.amount) : moduleOf(state).apply(state, command);
   const receipt: Receipt = {
     commandId: envelope.commandId,
     sequence: state.sequence,
@@ -406,7 +387,7 @@ export function advanceActivity(state: ActivityState, envelope: CommandEnvelope)
   };
   const change = 'illegal' in step ? {} : step.change;
   const facts: DomainFact[] = 'illegal' in step ? [{ kind: 'illegal-action', command, reason: step.illegal }] : step.facts;
-  const next = { ...state, ...change };
+  const next = { ...state, ...change } as ActivityState;
   return {
     status: 'committed',
     state: {
@@ -421,117 +402,24 @@ export function advanceActivity(state: ActivityState, envelope: CommandEnvelope)
   };
 }
 
-function apply(state: ActivityState, command: Command): Step {
-  switch (command.kind) {
-    case 'place-wager':
-      return placeWager(state, command.target, decodeMoney(command.amount));
-    case 'begin-turn': {
-      if (state.wagers.length === 0) return { illegal: 'no-wager' };
-      const stream = RandomStream.restore(state.random);
-      const pocket = spinRoulette(stream, state.rules.wheel);
-      const turn = state.turn + 1;
-      return {
-        change: { phase: 'revealing-outcome', turn, outcome: { turn, pocket }, random: stream.state() },
-        facts: [
-          { kind: 'turn-began', turn, wagers: state.wagers },
-          { kind: 'outcome-generated', turn, pocket },
-        ],
-      };
-    }
-    case 'settle-turn': {
-      const { balance, facts } = settle(state);
-      return { change: { phase: 'settled-outcome', balance, wagers: [] }, facts };
-    }
-    case 'request-stop': {
-      const facts: DomainFact[] = [{ kind: 'stop-requested', phase: state.phase }];
-      // A spin in progress keeps its committed wagers for final settlement;
-      // otherwise every wager is still removable and goes back.
-      if (state.phase === 'revealing-outcome') return { change: { phase: 'final-settlement' }, facts };
-      let balance = decodeMoney(state.balance);
-      for (const wager of state.wagers) {
-        balance = add(balance, decodeMoney(wager.amount));
-        facts.push({ kind: 'wager-returned', target: wager.target, amount: wager.amount });
-      }
-      return { change: { phase: 'final-settlement', balance: encodeMoney(balance), wagers: [] }, facts };
-    }
-    case 'advance-final-settlement': {
-      const { balance, facts } = settle(state);
-      facts.push({ kind: 'activity-completed', balance });
-      return { change: { phase: 'completed', balance, wagers: [] }, facts };
-    }
-    case 'rebuy': {
-      const amount = decodeMoney(command.amount);
-      const refusal = rebuyRefusal(state.funding, amount);
-      if (refusal) return { illegal: refusal };
-      const funding = addRebuy(state.funding, amount);
-      const balance = encodeMoney(add(decodeMoney(state.balance), amount));
-      return {
-        change: { balance, funding },
-        facts: [{ kind: 'funding-added', amount: command.amount, cumulative: encodeMoney(cumulativeFunding(funding)), balance }],
-      };
-    }
-  }
+/** A rebuy adds funds without placing or settling anything, whatever the game. */
+function rebuy(state: ActivityState, text: string): Step<ActivityState> {
+  const amount = decodeMoney(text);
+  const refusal = rebuyRefusal(state.funding, amount);
+  if (refusal) return { illegal: refusal };
+  const funding = addRebuy(state.funding, amount);
+  const balance = encodeMoney(add(decodeMoney(state.balance), amount));
+  return {
+    change: { balance, funding },
+    facts: [{ kind: 'funding-added', amount: text, cumulative: encodeMoney(cumulativeFunding(funding)), balance }],
+  };
 }
 
 /** Funds off the table plus outstanding stakes at their original value. */
 const sessionValue = (state: Pick<ActivityState, 'balance' | 'wagers'>): Money =>
   state.wagers.reduce((sum, wager) => add(sum, decodeMoney(wager.amount)), decodeMoney(state.balance));
 
-function placeWager(state: ActivityState, target: string, amount: Money): Step {
-  const wheel = state.rules.wheel;
-  const placement = placementFor(wheel, target);
-  if (!placement) return { illegal: 'unknown-target' };
-  const existing = state.wagers.find((wager) => wager.target === target);
-  const previous = existing ? decodeMoney(existing.amount) : money(0n);
-  if (amount.n === 0n && !existing) return { illegal: 'no-wager-to-remove' };
-  if (amount.n !== 0n) {
-    const limit = state.rules.limits[placement.limitClass];
-    if (amount.d !== 1n) return { illegal: 'not-whole-units' };
-    if (compare(amount, decodeMoney(limit.min)) < 0) return { illegal: 'below-minimum' };
-    if (compare(amount, decodeMoney(limit.max)) > 0) return { illegal: 'above-maximum' };
-  }
-  const balance = sub(decodeMoney(state.balance), sub(amount, previous));
-  if (balance.n < 0n) return { illegal: 'insufficient-funds' };
-  const others = state.wagers.filter((wager) => wager.target !== target);
-  const wagers = amount.n === 0n ? others : [...others, { target, amount: encodeMoney(amount) }];
-  wagers.sort((a, b) => placementOrder(wheel, a.target) - placementOrder(wheel, b.target));
-  return {
-    change: { phase: 'open-decision', balance: encodeMoney(balance), wagers },
-    facts: [{ kind: 'wager-changed', target, amount: encodeMoney(amount), previous: encodeMoney(previous) }],
-  };
-}
-
-/** Settles every committed wager against the latest outcome. With no wagers, nothing is settled. */
-function settle(state: ActivityState): { balance: string; facts: DomainFact[] } {
-  let balance = decodeMoney(state.balance);
-  const facts: DomainFact[] = [];
-  if (state.wagers.length === 0) return { balance: state.balance, facts };
-  // Wagers exist outside a decision only once a turn has generated its outcome.
-  const outcome = state.outcome as NonNullable<ActivityState['outcome']>;
-  for (const wager of state.wagers) {
-    // Every stored target is a layout placement (placeWager and decode both check).
-    const placement = placementFor(state.rules.wheel, wager.target) as RoulettePlacement;
-    const stake = decodeMoney(wager.amount);
-    const net = netResult(placement, stake, outcome.pocket);
-    const won = net.n > 0n;
-    const returned = won ? add(stake, net) : money(0n);
-    balance = add(balance, returned);
-    facts.push({
-      kind: 'wager-settled',
-      turn: outcome.turn,
-      target: wager.target,
-      stake: wager.amount,
-      result: won ? 'win' : 'loss',
-      net: encodeMoney(net),
-      returned: encodeMoney(returned),
-    });
-  }
-  return { balance: encodeMoney(balance), facts };
-}
-
 // ---- read permitted view ------------------------------------------------
-
-const payoutText = (payout: bigint) => `${payout.toString()}:1`;
 
 /**
  * What the stored phase permits the player to see. It never contains random
@@ -546,7 +434,6 @@ export function readPermittedView(state: ActivityState): PermittedView {
     balance: state.balance,
     wagers: state.wagers.map((wager) => ({ target: wager.target, amount: wager.amount })),
     wagersCommitted: state.wagers.length > 0 && (state.phase === 'revealing-outcome' || state.phase === 'final-settlement'),
-    outcome: state.outcome && { turn: state.outcome.turn, pocket: state.outcome.pocket },
     legalCommands: [...legalCommands(state)],
     funding: {
       source: state.funding.source,
@@ -555,19 +442,8 @@ export function readPermittedView(state: ActivityState): PermittedView {
       cumulative: encodeMoney(cumulativeFunding(state.funding)),
       headroom: encodeMoney(fundingHeadroom(state.funding)),
     },
-    table: {
-      wheel: state.rules.wheel,
-      placements: rouletteLayout(state.rules.wheel).map((placement) => ({
-        target: placement.target,
-        kind: placement.kind,
-        covers: [...placement.covers],
-        limitClass: placement.limitClass,
-        min: state.rules.limits[placement.limitClass].min,
-        max: state.rules.limits[placement.limitClass].max,
-        payout: payoutText(placement.payout),
-      })),
-    },
-  };
+    ...moduleOf(state).view(state),
+  } as PermittedView;
 }
 
 // ---- checkpoints --------------------------------------------------------
@@ -601,9 +477,10 @@ function unsupportedVersion(value: unknown): string | undefined {
   const { identities } = value;
   if (typeof value.schema === 'number' && value.schema !== STATE_SCHEMA_VERSION) return `unsupported state schema ${value.schema}`;
   if (typeof identities.engine === 'string' && identities.engine !== ENGINE_VERSION) return `unsupported engine ${identities.engine}`;
-  if (typeof identities.game === 'string' && identities.game !== 'roulette') return `unsupported game ${identities.game}`;
+  const game = gameFor(identities.game);
+  if (typeof identities.game === 'string' && !game) return `unsupported game ${identities.game}`;
   const rules = identities.rules;
-  if (isIdentity(rules) && !Object.values(ROULETTE_RULE_SETS).some((set) => set.id === rules.id && set.version === rules.version)) {
+  if (game && isIdentity(rules) && !game.ruleSets.some((set) => set.id === rules.id && set.version === rules.version)) {
     return `unsupported rules ${rules.id} v${rules.version}`;
   }
   const random = identities.random;
@@ -628,20 +505,19 @@ function isCanonicalCommand(text: unknown): boolean {
 
 /** A description of the first structural or invariant problem, if any. */
 function stateDamage(value: unknown): string | undefined {
-  if (!hasExactKeys(value, STATE_KEYS)) return 'the checkpoint does not have the state fields';
+  const game = isRecord(value) && isRecord(value.identities) ? gameFor(value.identities.game) : undefined;
+  if (!game) return 'damaged identities';
+  if (!hasExactKeys(value, [...STATE_KEYS, ...Object.keys(game.extra)])) return 'the checkpoint does not have the state fields';
   if (value.schema !== STATE_SCHEMA_VERSION) return 'missing state schema';
-  const { activity, identities, rules } = value;
+  const { activity, identities } = value as Record<string, Record<string, unknown>>;
   if (!hasExactKeys(activity, ['id', 'owner', 'device']) || !isText(activity.id) || !isText(activity.owner) || !isText(activity.device)) {
     return 'damaged activity identity';
   }
   if (!hasExactKeys(identities, ['engine', 'game', 'rules', 'strategy', 'reference', 'random'])) return 'damaged identities';
-  if (identities.engine !== ENGINE_VERSION || identities.game !== 'roulette' || !isIdentity(identities.rules)) return 'damaged identities';
+  if (identities.engine !== ENGINE_VERSION || !isIdentity(identities.rules)) return 'damaged identities';
   if (identities.strategy !== null && !isIdentity(identities.strategy)) return 'damaged strategy identity';
   if (identities.reference !== null && !isIdentity(identities.reference)) return 'damaged reference identity';
   if (!hasExactKeys(identities.random, ['protocol', 'key', 'session'])) return 'damaged random identity';
-  if (!hasExactKeys(rules, ['wheel', 'limits']) || !isWheel(rules.wheel) || !isLimits(rules.limits)) return 'damaged rules';
-  if (!isRuleSet({ ...identities.rules, wheel: rules.wheel })) return 'the rules do not match their recorded identity';
-  const wheel = rules.wheel;
 
   let random: RandomStreamState;
   try {
@@ -654,29 +530,15 @@ function stateDamage(value: unknown): string | undefined {
     return 'the random stream does not match its recorded identity';
   }
 
-  const { sequence, phase, turn, wagers, outcome, receipts } = value;
+  const { sequence, phase, turn, receipts } = value;
   if (!isCount(sequence) || !isCount(turn)) return 'damaged sequence or turn';
   if (typeof phase !== 'string' || !Object.keys(LEGAL).includes(phase)) return 'unknown phase';
   const balance = parseMoney(value.balance);
   if (balance === undefined || balance.n < 0n) return 'damaged balance';
   const funding = fundingDamage(value.funding, parseMoney);
   if (funding) return funding;
-  if (!Array.isArray(wagers)) return 'damaged wagers';
-  let order = -1;
-  for (const wager of wagers as unknown[]) {
-    if (!hasExactKeys(wager, ['target', 'amount']) || typeof wager.target !== 'string') return 'damaged wager';
-    const amount = parseMoney(wager.amount);
-    if (amount === undefined || amount.n <= 0n || placementOrder(wheel, wager.target) <= order) return 'damaged wager';
-    order = placementOrder(wheel, wager.target);
-  }
-  if (outcome !== null && !(hasExactKeys(outcome, ['turn', 'pocket']) && isCount(outcome.turn) && outcome.turn >= 1 && outcome.turn === turn && isPocket(wheel, outcome.pocket))) {
-    return 'damaged outcome';
-  }
-  if ((outcome === null) !== (turn === 0)) return 'the outcome does not match the turn count';
-  const committed = phase === 'revealing-outcome' || (phase === 'final-settlement' && wagers.length > 0 && outcome !== null);
-  if (phase === 'revealing-outcome' && wagers.length === 0) return 'a revealing turn has no committed wagers';
-  if ((phase === 'settled-outcome' || phase === 'completed') && wagers.length > 0) return 'wagers remain after settlement';
-  if (phase === 'final-settlement' && wagers.length > 0 && !committed) return 'damaged final settlement';
+  const gameDamage = game.damage(value);
+  if (gameDamage) return gameDamage;
   if (!Array.isArray(receipts) || receipts.length !== sequence) return 'receipts do not match the sequence';
   const ids = new Set<string>();
   for (const [index, receipt] of (receipts as unknown[]).entries()) {

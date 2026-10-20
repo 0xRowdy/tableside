@@ -2,7 +2,7 @@
 // activity (and its double-zero twin) with the launch default limits (#3: inside 1-100, outside 10-1,000).
 import {
   advanceActivity,
-  type ActivitySpecification,
+  type RouletteActivitySpecification,
   type ActivityState,
   type AdvanceResult,
   type Command,
@@ -11,7 +11,7 @@ import {
 
 import { PI } from './fixtures';
 
-export const SPEC: ActivitySpecification = {
+export const SPEC: RouletteActivitySpecification = {
   activityId: 'activity-1',
   owner: 'local',
   device: 'device-1',
@@ -29,7 +29,7 @@ export const SPEC: ActivitySpecification = {
 };
 
 /** The double-zero rule set at the same launch default limits. */
-export const DOUBLE_ZERO: ActivitySpecification['rules'] = { ...SPEC.rules, id: 'roulette-double-zero', wheel: 'double-zero' };
+export const DOUBLE_ZERO: RouletteActivitySpecification['rules'] = { ...SPEC.rules, id: 'roulette-double-zero', wheel: 'double-zero' };
 
 /** The Random123 "pi digits" stream: its first single-zero spins are 27, 0, 25, 31, 9 (draws.cases). */
 export const STREAM = PI;

@@ -2,7 +2,7 @@
 // the engine's permitted view and forwards taps to the practice controller;
 // it never advances the game or decides what is legal.
 
-import type { PermittedView } from '@tableside/engine';
+import type { RoulettePermittedView as PermittedView } from '@tableside/engine';
 import { useEffect, useMemo, useState } from 'react';
 import { AccessibilityInfo, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -23,6 +23,7 @@ import { describeFacts, describePocket, formatUnits, POCKET_TOKEN, pocketColor, 
 import { RouletteFelt } from './RouletteFelt';
 import { PhaseStepper, SessionStrip, TableTopBar, type PhaseStep } from './TableChrome';
 
+type ActiveSnapshot = ActivePracticeSnapshot & { readonly view: PermittedView };
 
 /** Above this text scale, a wide window stacks the felt and the controls so text has room. */
 const SIDE_BY_SIDE_MAX_FONT_SCALE = 1.35;
@@ -53,7 +54,7 @@ function limitsText(view: PermittedView): string {
   return `${WHEEL_NAMES[view.table.wheel]} · inside ${limit('inside')} · outside ${limit('outside')}`;
 }
 
-export function RouletteTable({ snapshot }: { snapshot: ActivePracticeSnapshot }) {
+export function RouletteTable({ snapshot }: { snapshot: ActiveSnapshot }) {
   const { controller } = usePractice();
   const insets = useSafeAreaInsets();
   const { width, height, fontScale } = useWindowDimensions();
@@ -90,7 +91,7 @@ export function RouletteTable({ snapshot }: { snapshot: ActivePracticeSnapshot }
     let failed = initial.status === 'active' && initial.save === 'failed';
     return controller.subscribe(() => {
       const latest = controller.snapshot();
-      if (latest.status !== 'active') return;
+      if (latest.status !== 'active' || latest.view.game !== 'roulette') return;
       const nowFailed = latest.save === 'failed';
       if (nowFailed && !failed) AccessibilityInfo.announceForAccessibility(SAVE_FAILED_ANNOUNCEMENT);
       failed = nowFailed;
@@ -257,7 +258,7 @@ const SAVE_FAILED_ANNOUNCEMENT = "Couldn't save. Play is paused and will retry a
 
 const capitalize = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
 
-function ChipRack({ chip, onChoose }: { chip: string; onChoose: (value: string) => void }) {
+export function ChipRack({ chip, onChoose }: { chip: string; onChoose: (value: string) => void }) {
   return (
     <View style={styles.rack}>
       <View accessibilityRole="radiogroup" accessibilityLabel="Chip value" style={styles.chips}>

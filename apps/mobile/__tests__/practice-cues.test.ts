@@ -121,6 +121,34 @@ describe('cues during roulette play', () => {
   });
 });
 
+describe('cues during craps play', () => {
+  it('throws the dice on every roll and gives one net-result cue for a roll that settles several wagers', async () => {
+    const { controller, ports } = await setup();
+    await controller.endSession();
+    controller.dismissResult();
+    ports.sound.played.length = 0;
+    ports.haptics.fired.length = 0;
+    await controller.start({ game: 'craps', odds: '3-4-5x', buyIn: '1000' });
+
+    // Pi stream rolls: 8 sets the point; 11 wins the come bet; then the 6 sends a come bet to 6.
+    await controller.placeWager('pass', '10');
+    await controller.beginTurn();
+    await controller.placeWager('pass-odds', '10');
+    await controller.placeWager('come', '10');
+    await controller.beginTurn();
+
+    expect(ports.sound.played.map((play) => play.cue)).toEqual([
+      'stake-set',
+      'dice-thrown',
+      'stake-set',
+      'stake-set',
+      'dice-thrown',
+      'net-win',
+    ]);
+    expect(ports.haptics.fired).toEqual(['selection', 'impact-medium', 'selection', 'selection', 'impact-medium', 'success']);
+  });
+});
+
 describe('sound and haptics off', () => {
   it('produce the same states at the same times as both on', async () => {
     const on = await setup();

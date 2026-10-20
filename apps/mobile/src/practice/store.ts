@@ -5,7 +5,7 @@
 // write may or may not have happened), which the caller resolves by reading.
 // Every implementation must pass the contract suite in testing/store-contract.ts.
 
-import type { ActivitySpecification, DomainFact, FundingSource, RandomStreamIdentity, Receipt, VersionedIdentity } from '@tableside/engine';
+import type { ActivitySpecification, DomainFact, FundingSource, GameId, RandomStreamIdentity, Receipt, VersionedIdentity } from '@tableside/engine';
 
 /**
  * An allowance effect (spec 5): a turn charge committed with the transition that
@@ -73,7 +73,7 @@ export interface CommittedTransition {
 /** The completed practice session record (its full field set grows with #79). */
 export interface CompletedPracticeSession {
   readonly activityId: string;
-  readonly game: 'roulette';
+  readonly game: GameId;
   readonly mode: 'free-play';
   readonly identities: {
     readonly engine: string;

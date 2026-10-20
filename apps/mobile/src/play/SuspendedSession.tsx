@@ -14,21 +14,32 @@ import type { ActivePracticeSnapshot, Suspension } from '@/practice/controller';
 import { usePractice } from '@/practice/PracticeProvider';
 import { fonts, palette, radius, space, textScale } from '@/theme/tokens';
 
+import { crapsStatus } from './craps-text';
 import { EndSessionDialog } from './EndSessionDialog';
 import { formatUnits, STATUS, totalOnTable } from './roulette-text';
 
-const WHY: Record<Suspension['cause'], string> = {
-  interrupted: "Tableside closed during your roulette session. It's saved exactly as it was. Nothing was spun or settled while you were away.",
-  navigation: "Your roulette session is suspended. It's saved exactly as it was.",
-  'app-lifecycle': "Your roulette session was suspended when Tableside went to the background. It's saved exactly as it was.",
-  'sign-out': "Your roulette session was suspended when you signed out. It's saved exactly as it was.",
-  access: "Your roulette session is suspended. It's saved exactly as it was, and nothing was spun or settled since.",
-};
+/** How each game's session and turn read in this screen's copy. */
+const WORDS = {
+  roulette: { game: 'roulette', title: 'Roulette', turn: 'spin', drawn: 'spun', same: 'Same rules, wheel and spins as before.' },
+  craps: { game: 'craps', title: 'Craps', turn: 'roll', drawn: 'rolled', same: 'Same rules, point and dice as before.' },
+} as const;
+
+type Words = (typeof WORDS)[keyof typeof WORDS];
+
+const why = (words: Words): Record<Suspension['cause'], string> => ({
+  interrupted: `Tableside closed during your ${words.game} session. It's saved exactly as it was. Nothing was ${words.drawn} or settled while you were away.`,
+  navigation: `Your ${words.game} session is suspended. It's saved exactly as it was.`,
+  'app-lifecycle': `Your ${words.game} session was suspended when Tableside went to the background. It's saved exactly as it was.`,
+  'sign-out': `Your ${words.game} session was suspended when you signed out. It's saved exactly as it was.`,
+  access: `Your ${words.game} session is suspended. It's saved exactly as it was, and nothing was ${words.drawn} or settled since.`,
+});
 
 export function SuspendedSession({ snapshot, suspension }: { snapshot: ActivePracticeSnapshot; suspension: Suspension }) {
   const { controller } = usePractice();
   const [confirming, setConfirming] = useState(false);
   const { view, busy } = snapshot;
+  const words = WORDS[view.game];
+  const status = view.game === 'craps' ? crapsStatus(view) : STATUS[view.phase];
 
   return (
     <Screen>
@@ -36,7 +47,7 @@ export function SuspendedSession({ snapshot, suspension }: { snapshot: ActivePra
         Pick up where you left off
       </Text>
       <Text maxFontSizeMultiplier={textScale.body} style={styles.body}>
-        {suspension.reason ?? WHY[suspension.cause]}
+        {suspension.reason ?? why(words)[suspension.cause]}
       </Text>
 
       {suspension.resumeBlocked && (
@@ -48,15 +59,15 @@ export function SuspendedSession({ snapshot, suspension }: { snapshot: ActivePra
 
       <View style={styles.card} testID="suspended-session">
         <View style={styles.cardHead}>
-          <Text maxFontSizeMultiplier={textScale.body} style={styles.cardTitle}>Roulette · free play</Text>
+          <Text maxFontSizeMultiplier={textScale.body} style={styles.cardTitle}>{words.title} · free play</Text>
           <View style={styles.tag}>
             <Text maxFontSizeMultiplier={textScale.body} style={styles.tagText}>Suspended</Text>
           </View>
         </View>
-        <Row label="Where you were" value={`${STATUS[view.phase]}${view.turn > 0 && view.phase !== 'final-settlement' ? `, spin ${view.turn}` : ''}`} />
+        <Row label="Where you were" value={`${status}${view.turn > 0 && view.phase !== 'final-settlement' ? `, ${words.turn} ${view.turn}` : ''}`} />
         <Row label="Session balance" value={formatUnits(view.balance)} />
         <Row label="On table" value={formatUnits(totalOnTable(view))} />
-        <Text maxFontSizeMultiplier={textScale.body} style={styles.caption}>Same rules, wheel and spins as before.</Text>
+        <Text maxFontSizeMultiplier={textScale.body} style={styles.caption}>{words.same}</Text>
       </View>
 
       <Button label="Resume session" stretch disabled={busy} onPress={() => void controller.resume()} />
@@ -64,7 +75,7 @@ export function SuspendedSession({ snapshot, suspension }: { snapshot: ActivePra
         <Button label="End session" variant="secondary" stretch disabled={busy} onPress={() => setConfirming(true)} />
       ) : (
         <Text maxFontSizeMultiplier={textScale.body} style={styles.caption}>
-          A spin is under way. Resume to finish it before ending the session.
+          A {words.turn} is under way. Resume to finish it before ending the session.
         </Text>
       )}
       <Text maxFontSizeMultiplier={textScale.body} style={styles.caption}>

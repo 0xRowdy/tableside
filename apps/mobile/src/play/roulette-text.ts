@@ -1,7 +1,16 @@
 // How roulette sessions read on screen and aloud. Amounts are plain units (no
 // currency symbol); formatting never changes a ledger value.
 
-import { FUNDING_CEILING, type DomainFact, type IllegalActionReason, type PermittedView, type Phase, type PlacementKind, type RoulettePocket, type RouletteWheel } from '@tableside/engine';
+import {
+  FUNDING_CEILING,
+  type DomainFact,
+  type IllegalActionReason,
+  type Phase,
+  type PlacementKind,
+  type RoulettePermittedView as PermittedView,
+  type RoulettePocket,
+  type RouletteWheel,
+} from '@tableside/engine';
 
 import { formatUnits } from './units';
 
@@ -77,8 +86,8 @@ export function targetName(target: string): string {
 /** "35:1" → "35 to 1", as screen readers should say it. */
 export const spokenPayout = (payout: string) => payout.replace(':', ' to ');
 
-export const totalOnTable = (view: PermittedView): string =>
-  // Roulette stakes are whole units, so a plain integer sum is exact.
+export const totalOnTable = (view: { readonly wagers: readonly { readonly amount: string }[] }): string =>
+  // Table stakes are whole units, so a plain integer sum is exact.
   view.wagers.reduce((sum, wager) => sum + BigInt(wager.amount), 0n).toString();
 
 export const STATUS: Record<Phase, string> = {
@@ -107,8 +116,8 @@ function illegalMessage(reason: IllegalActionReason, target: string | null, view
       return 'Place a wager before you spin.';
     case 'not-whole-units':
       return target ? 'Stakes are whole units. Nothing was placed.' : 'Rebuys are whole units. Nothing was added.';
-    case 'no-wager-to-remove':
-    case 'unknown-target':
+    // no-wager-to-remove, unknown-target, and reasons only other games produce.
+    default:
       return `${name} can't be changed. Nothing was placed.`;
   }
 }

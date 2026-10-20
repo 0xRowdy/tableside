@@ -2,18 +2,18 @@
 // (#3): inside 1-100, outside 10-1,000 units per placement, with no aggregate
 // table cap. Editable limits arrive with #72.
 
-import { ROULETTE_RULE_SETS, type ActivitySpecification, type PlacementKind, type RouletteWheel, type VersionedIdentity } from '@tableside/engine';
+import { ROULETTE_RULE_SETS, type PlacementKind, type RouletteRuleSet, type RouletteWheel, type VersionedIdentity } from '@tableside/engine';
 
-const LAUNCH_LIMITS: ActivitySpecification['rules']['limits'] = {
+const LAUNCH_LIMITS: RouletteRuleSet['limits'] = {
   inside: { min: '1', max: '100' },
   outside: { min: '10', max: '1000' },
 };
 
-export const SINGLE_ZERO_ROULETTE: ActivitySpecification['rules'] = { ...ROULETTE_RULE_SETS['single-zero'], limits: LAUNCH_LIMITS };
+export const SINGLE_ZERO_ROULETTE: RouletteRuleSet = { ...ROULETTE_RULE_SETS['single-zero'], limits: LAUNCH_LIMITS };
 
-export const DOUBLE_ZERO_ROULETTE: ActivitySpecification['rules'] = { ...ROULETTE_RULE_SETS['double-zero'], limits: LAUNCH_LIMITS };
+export const DOUBLE_ZERO_ROULETTE: RouletteRuleSet = { ...ROULETTE_RULE_SETS['double-zero'], limits: LAUNCH_LIMITS };
 
-export const ROULETTE_PRESETS: Readonly<Record<RouletteWheel, ActivitySpecification['rules']>> = {
+export const ROULETTE_PRESETS: Readonly<Record<RouletteWheel, RouletteRuleSet>> = {
   'single-zero': SINGLE_ZERO_ROULETTE,
   'double-zero': DOUBLE_ZERO_ROULETTE,
 };

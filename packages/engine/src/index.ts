@@ -15,6 +15,12 @@ export {
   STATE_SCHEMA_VERSION,
   type ActivitySpecification,
   type ActivityState,
+  type CrapsActivitySpecification,
+  type CrapsPermittedView,
+  type GameId,
+  type Limit,
+  type RouletteActivitySpecification,
+  type RoulettePermittedView,
   type AdvanceResult,
   type CheckpointResult,
   type Command,
@@ -26,7 +32,6 @@ export {
   type Receipt,
   type IllegalActionReason,
   type RejectionReason,
-  type RouletteRuleSet,
   type VersionedIdentity,
   type Wager,
 } from './activity';
@@ -40,7 +45,21 @@ export {
   type FundingSource,
   type RebuyRefusal,
 } from './funding';
-
+export {
+  CRAPS_POINTS,
+  ODDS_CAPS,
+  STANDARD_CRAPS,
+  type CrapsActivityState,
+  type CrapsDomainFact,
+  type CrapsIllegalActionReason,
+  type CrapsOutcome,
+  type CrapsPlacement,
+  type CrapsPoint,
+  type CrapsRuleSet,
+  type CrapsTable,
+  type CrapsWagerStatus,
+  type OddsCap,
+} from './craps';
 export {
   oneSpinOutcomeTable,
   ROULETTE_RULE_SETS,
@@ -48,7 +67,10 @@ export {
   type LimitClass,
   type OneSpinOutcome,
   type PlacementKind,
+  type RouletteActivityState,
   type RoulettePlacement,
+  type RouletteRuleSet,
+  type RouletteTable,
 } from './roulette';
 export { philox4x32 } from './philox';
 export {

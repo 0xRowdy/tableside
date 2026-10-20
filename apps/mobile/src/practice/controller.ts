@@ -20,21 +20,23 @@ import {
   readPermittedView,
   streamIdentityFromEntropy,
   summarizeFunding,
+  type ActivitySpecification,
   type ActivityState,
   type Command,
   type CommandEnvelope,
   type DomainFact,
   type FundingSource,
+  type OddsCap,
   type PermittedView,
   type Phase,
   type RouletteWheel,
 } from '@tableside/engine';
-import { ROULETTE_PRESETS } from '@tableside/definitions';
+import { ROULETTE_PRESETS, standardCraps } from '@tableside/definitions';
 
 import type { AccessDecision, AccessDenial, LifecycleEvent, PhaseReport, PracticeAdapters } from './adapters';
 import type { AllowanceEffect, CommitOutcome, CommittedTransition, CompletedPracticeSession, NewActivity, StoredActivity } from './store';
 
-/** How long the landed ball stays on screen before the automatic settle step. */
+/** How long the landed ball or the dice stay on screen before the automatic settle step. */
 export const REVEAL_MS = 1500;
 /** The pause between the ending steps, so each is seen and announced. */
 export const ENDING_STEP_MS = 1000;
@@ -98,15 +100,20 @@ export type PracticeSnapshot =
     }
   | { readonly status: 'completed'; readonly result: CompletedPracticeSession };
 
-export interface StartRequest {
-  readonly game: 'roulette';
+interface StartRequestBase {
   /** Whole units, as canonical decimal text: the buy-in, or the whole training bankroll allocated to the session. */
   readonly buyIn: string;
-  /** The wheel's rule preset; single zero when omitted. */
-  readonly wheel?: RouletteWheel;
   /** Practice funding unless spec 5 starts the session from the training bankroll. */
   readonly fundingSource?: FundingSource;
 }
+
+export type StartRequest =
+  | (StartRequestBase & {
+      readonly game: 'roulette';
+      /** The wheel's rule preset; single zero when omitted. */
+      readonly wheel?: RouletteWheel;
+    })
+  | (StartRequestBase & { readonly game: 'craps'; readonly odds: OddsCap });
 
 /** A command as sent to the store, with the allowance effects that commit with it. */
 interface Outbound {
@@ -129,9 +136,10 @@ const settled = (result: CommitResult) => result === 'committed' || result === '
 
 /**
  * Phases in which a turn is under way: it finishes before a turn boundary is
- * reached, and a session suspended in one can't end until it resumes. Roulette's
- * turn is the spin; each game that adds phases (a blackjack round, a craps roll)
- * must list its mid-turn ones here.
+ * reached, and a session suspended in one can't end until it resumes. A
+ * roulette spin and a craps roll both run begin-turn → revealing-outcome →
+ * settle-turn, so this one phase covers both; each game that adds phases (a
+ * blackjack round) must list its mid-turn ones here.
  */
 const TURN_PHASES: ReadonlySet<Phase> = new Set(['revealing-outcome']);
 
@@ -223,17 +231,19 @@ export class PracticeController {
       } else {
         const activityId = this.adapters.newId();
         const random = streamIdentityFromEntropy(this.adapters.entropy);
-        const specification = {
+        const base = {
           activityId,
           owner: this.adapters.owner,
           device: this.adapters.device,
-          game: request.game,
-          rules: ROULETTE_PRESETS[wheelOf(request)],
           strategy: null,
           reference: null,
           fundingSource: request.fundingSource,
           funding: request.buyIn,
         };
+        const specification: ActivitySpecification =
+          request.game === 'craps'
+            ? { ...base, game: 'craps', rules: standardCraps(request.odds) }
+            : { ...base, game: 'roulette', rules: ROULETTE_PRESETS[wheelOf(request)] };
         let initial: ActivityState;
         try {
           initial = createActivity(specification, random);
@@ -268,8 +278,8 @@ export class PracticeController {
     });
   }
 
-  /** Begins a turn (the spin), then settles it automatically after the reveal. */
-  async spin(): Promise<void> {
+  /** Begins a turn (a spin or a roll), then settles it automatically after the reveal. */
+  async beginTurn(): Promise<void> {
     await this.exclusive(async () => {
       if (!this.playOpen()) return;
       const state = this.requireState();
@@ -301,6 +311,9 @@ export class PracticeController {
       if (settled(await this.send({ kind: 'rebuy', amount }))) await this.drive();
     });
   }
+
+  /** Spins the wheel: a roulette turn. */
+  spin = (): Promise<void> => this.beginTurn();
 
   /**
    * Ends the session: removable wagers come back, committed ones settle
@@ -515,8 +528,9 @@ export class PracticeController {
   }
 
   /**
-   * The automatic, no-tap steps: settle a revealed spin, run the stop path and
-   * final settlement, complete. A suspension stops them where it applies.
+   * The automatic, no-tap steps: settle a revealed spin or roll, run the stop
+   * path and final settlement (craps rolls on, one committed step per roll,
+   * until its contracts settle), complete. A suspension stops them where it applies.
    */
   private async drive(): Promise<void> {
     for (;;) {
@@ -765,7 +779,11 @@ export class PracticeController {
 const sameAdmission = (a: NewActivity['admission'], b: NewActivity['admission']) =>
   a.provenance === b.provenance && a.meteringBasis === b.meteringBasis;
 
-const wheelOf = (request: StartRequest): RouletteWheel => request.wheel ?? 'single-zero';
+const wheelOf = (request: Extract<StartRequest, { game: 'roulette' }>): RouletteWheel => request.wheel ?? 'single-zero';
 
-const sameRequest = (a: StartRequest, b: StartRequest) =>
-  a.game === b.game && a.buyIn === b.buyIn && a.fundingSource === b.fundingSource && wheelOf(a) === wheelOf(b);
+/** Whether a retried start asks for the same table, so it may recover the unacknowledged activity. */
+function sameRequest(a: StartRequest, b: StartRequest): boolean {
+  if (a.buyIn !== b.buyIn || a.fundingSource !== b.fundingSource) return false;
+  if (a.game === 'craps') return b.game === 'craps' && a.odds === b.odds;
+  return b.game === 'roulette' && wheelOf(a) === wheelOf(b);
+}

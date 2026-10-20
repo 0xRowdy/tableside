@@ -4,7 +4,7 @@
 // choose a wager"), plus "Find by number", which lists every inside bet
 // covering a number (the design's bet loupe, "Wagers on 17").
 
-import type { PermittedView, PlacementKind, RoulettePocket } from '@tableside/engine';
+import type { PlacementKind, RoulettePermittedView as PermittedView, RoulettePocket } from '@tableside/engine';
 
 import type { PlacedWager, WagerCatalog, WagerChoice, WagerKind } from './bet-selector/catalog';
 import { ORDINAL, targetName, wheelZeros } from './roulette-text';

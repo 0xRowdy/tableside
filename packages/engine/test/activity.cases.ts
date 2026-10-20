@@ -18,6 +18,7 @@ import {
   type ActivityState,
   type Command,
   type DomainFact,
+  type RoulettePermittedView,
 } from '../src';
 
 import { DOUBLE_ZERO, run, SPEC, status, step, STREAM } from './activity.fixtures';
@@ -339,7 +340,7 @@ export const activityCases: TestCase[] = [
       collect(readPermittedView(step(a, BEGIN).state));
       t.equal(keys.filter((key) => ['random', 'key', 'session', 'block', 'lane', 'identities', 'receipts'].includes(key)), []);
       t.equal(Object.keys(readPermittedView(a)).sort(), [
-        'activityId', 'balance', 'funding', 'legalCommands', 'outcome', 'phase', 'sequence', 'table', 'turn', 'wagers', 'wagersCommitted',
+        'activityId', 'balance', 'funding', 'game', 'legalCommands', 'outcome', 'phase', 'sequence', 'table', 'turn', 'wagers', 'wagersCommitted',
       ]);
       // readPermittedView takes the state alone: no caller flag can widen it.
       t.equal(readPermittedView.length, 1);
@@ -352,7 +353,7 @@ export const activityCases: TestCase[] = [
       t.equal(placements.length, 157);
       t.equal(placements[0], { target: 'straight-0', kind: 'straight', covers: [0], limitClass: 'inside', min: '1', max: '100', payout: '35:1' });
       t.equal(placements.at(-1), { target: 'column-3', kind: 'column', covers: [3, 6, 9, 12, 15, 18, 21, 24, 27, 30, 33, 36], limitClass: 'outside', min: '10', max: '1000', payout: '2:1' });
-      const doubleZero = readPermittedView(createActivity({ ...SPEC, rules: DOUBLE_ZERO }, STREAM)).table;
+      const doubleZero = (readPermittedView(createActivity({ ...SPEC, rules: DOUBLE_ZERO }, STREAM)) as RoulettePermittedView).table;
       t.equal([doubleZero.wheel, doubleZero.placements.length], ['double-zero', 161]);
       t.equal(doubleZero.placements.find((p) => p.kind === 'basket'), {
         target: 'basket-0-00-1-2-3', kind: 'basket', covers: [0, '00', 1, 2, 3], limitClass: 'inside', min: '1', max: '100', payout: '6:1',
