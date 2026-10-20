@@ -1,7 +1,7 @@
 // The practice controller's substitute-able adapters: clock, secure entropy,
 // identifiers and the access supervisor port.
 
-import type { EntropySource, Phase } from '@tableside/engine';
+import type { EntropySource, Phase, QuarantineList } from '@tableside/engine';
 
 import type { ActivityStore, CompletedPracticeSession, MeteringBasis } from './store';
 
@@ -50,6 +50,27 @@ export interface PhaseReport {
 }
 
 /**
+ * How a new session of a game is funded under the account's policy (spec 5):
+ * practice funding (a fresh buy-in, with rebuys), or the whole available
+ * training bankroll (no buy-in field, no rebuys; Amendment 4 §B).
+ */
+export type SetupFunding =
+  | { readonly source: 'practice-funding' }
+  | { readonly source: 'training-bankroll'; /** Whole units, canonical: the bankroll the session would be allocated. */ readonly available: string };
+
+/** What setup shows for a game before anything starts (Amendment 4 §D). Asking never charges. */
+export interface SetupTerms {
+  readonly funding: SetupFunding;
+  /** The allowance line for the active method (time, turns or bankroll), or the premium line; null when there is none. */
+  readonly allowance: { readonly title: string; readonly text: string } | null;
+  /** Whether setup may link to See premium. Nothing promotes premium during play. */
+  readonly seePremium: boolean;
+}
+
+/** Setup's terms when the policy has nothing to add: practice funding, no allowance line. */
+export const PRACTICE_FUNDING_TERMS: SetupTerms = { funding: { source: 'practice-funding' }, allowance: null, seePremium: false };
+
+/**
  * The access supervisor port. The real policy is spec 5's (with spec 2's gate
  * states); spec 1 ships the always-allowed stub below.
  */
@@ -69,6 +90,8 @@ export interface AccessSupervisor {
   beforeEndWhileSuspended(context: { readonly activityId: string }): Promise<{ readonly status: 'allowed' } | { readonly status: 'blocked'; readonly reason: string }>;
   /** The timed-metering hook: called on every change of the metered state. */
   phaseChanged(report: PhaseReport): void;
+  /** Setup's funding source and allowance line for a game (spec 5). Without it, setup offers practice funding. */
+  setupTerms?(context: { readonly game: string }): Promise<SetupTerms>;
 }
 
 const STUB = 'spec-1-stub';
@@ -93,6 +116,8 @@ export interface PracticeAdapters {
   /** Originating device and account owner, recorded on each activity. */
   readonly device: string;
   readonly owner: string;
+  /** The quarantine list shipped with the app (#80); an unfinished activity it names is marked incomplete. */
+  readonly quarantine: QuarantineList;
   /**
    * The post-result hook (spec 5's ads, Amendment 4 §D): called when the player
    * leaves a result this process just produced, whose record is durably saved.

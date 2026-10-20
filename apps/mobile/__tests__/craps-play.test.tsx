@@ -74,8 +74,10 @@ describe('craps free play', () => {
     expect(screen.getAllByRole('radio', { name: /odds$/ }).map((radio) => radio.props.accessibilityLabel)).toEqual([
       '1x odds', '2x odds', '3-4-5x odds', '5x odds', '10x odds',
     ]);
-    expect(screen.getByText('Pass, come, place, buy, lay and field 10–1,000 units')).toBeOnTheScreen();
-    expect(screen.getByText('Hardways and propositions 1–100 units')).toBeOnTheScreen();
+    expect(screen.getByLabelText('Pass, come, place, buy, lay, field minimum, in units')).toHaveProp('value', '10');
+    expect(screen.getByLabelText('Pass, come, place, buy, lay, field maximum, in units')).toHaveProp('value', '1,000');
+    expect(screen.getByLabelText('Hardways and propositions minimum, in units')).toHaveProp('value', '1');
+    expect(screen.getByLabelText('Hardways and propositions maximum, in units')).toHaveProp('value', '100');
     expect(screen.getByText(/Pass and come 1\.41% · Don't pass and don't come 1\.36% · Odds 0%/)).toBeOnTheScreen();
     expect(screen.getByText(/With full 3-4-5x odds: pass 0\.37%, don't pass 0\.27%/)).toBeOnTheScreen();
 

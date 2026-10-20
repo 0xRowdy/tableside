@@ -24,6 +24,7 @@ import {
   decodeCheckpoint,
   encodeCheckpoint,
   INSURANCE_TARGET,
+  quarantineStatus,
   readPermittedView,
   StrategySpecificationError,
   streamIdentityFromEntropy,
@@ -37,17 +38,20 @@ import {
   type DomainFact,
   type FieldPayout,
   type FundingSource,
+  type GameId,
   type OddsCap,
   type PermittedView,
   type Phase,
+  type CrapsRuleSet,
+  type RouletteRuleSet,
   type RouletteWheel,
   type StopCause,
   type StrategySelection,
 } from '@tableside/engine';
-import { ROULETTE_PRESETS, standardCraps } from '@tableside/definitions';
+import { rouletteRules, standardCraps } from '@tableside/definitions';
 
-import type { AccessDecision, AccessDenial, LifecycleEvent, PhaseReport, PracticeAdapters } from './adapters';
-import type { AllowanceEffect, CommitOutcome, CommittedTransition, CompletedPracticeSession, NewActivity, StoredActivity } from './store';
+import { PRACTICE_FUNDING_TERMS, type AccessDecision, type AccessDenial, type LifecycleEvent, type PhaseReport, type PracticeAdapters, type SetupTerms } from './adapters';
+import type { AllowanceEffect, CommitOutcome, CommittedTransition, CompletedPracticeSession, IncompleteReason, NewActivity, StoredActivity } from './store';
 
 /** How long the landed ball or the dice stay on screen before the automatic settle step. */
 export const REVEAL_MS = 1500;
@@ -88,6 +92,19 @@ export interface Suspension {
 
 export type ActivePracticeSnapshot = Extract<PracticeSnapshot, { status: 'active' }>;
 
+/** An unfinished session found unusable and marked incomplete (#80), as its explanation shows it. */
+export interface IncompleteSessionSummary {
+  readonly game: GameId;
+  readonly buyIn: string;
+  /** Turns committed before it became unusable; null when the checkpoint can't be read. */
+  readonly turnsRecorded: number | null;
+  /** The pinned engine identity; null when the checkpoint can't be read. */
+  readonly engine: string | null;
+  readonly reason: IncompleteReason;
+  /** A quarantine entry's explanation, from the shipped list; null for a damaged checkpoint. */
+  readonly explanation: string | null;
+}
+
 export type PracticeSnapshot =
   | { readonly status: 'loading' }
   | {
@@ -112,7 +129,14 @@ export type PracticeSnapshot =
       readonly ending: 'access-ended' | null;
     }
   /** The result just produced and durably saved in this process. */
-  | { readonly status: 'completed'; readonly result: CompletedPracticeSession };
+  | { readonly status: 'completed'; readonly result: CompletedPracticeSession }
+  /** The unfinished session is unusable (quarantined or damaged): marked incomplete, never given a result. */
+  | { readonly status: 'incomplete'; readonly session: IncompleteSessionSummary }
+  /**
+   * The unfinished session was saved by a later build this one can't run (a
+   * rollback): it is never reopened and waits, untouched, for the app to be updated.
+   */
+  | { readonly status: 'needs-update'; readonly game: GameId };
 
 export type ActiveSnapshot<V extends PermittedView = PermittedView> = Extract<PracticeSnapshot, { status: 'active' }> & { readonly view: V };
 
@@ -130,12 +154,16 @@ export type StartRequest =
       readonly game: 'roulette';
       /** The wheel's rule preset; single zero when omitted. */
       readonly wheel?: RouletteWheel;
+      /** The limits chosen at setup; the launch limits when omitted. */
+      readonly limits?: RouletteRuleSet['limits'];
     })
   | (StartRequestBase & {
       readonly game: 'craps';
       readonly odds: OddsCap;
       /** What a field 12 pays; triple when omitted. */
       readonly field?: FieldPayout;
+      /** The limits chosen at setup; the launch limits when omitted. */
+      readonly limits?: CrapsRuleSet['limits'];
     })
   | (StartRequestBase & { readonly game: 'blackjack'; /** The chosen preset and penetration. */ readonly rules: BlackjackRuleSet });
 
@@ -227,9 +255,15 @@ export class PracticeController {
     await this.exclusive(async () => {
       const stored = await this.adapters.store.findUnfinished();
       if (!stored) return this.showNone(null);
-      this.adopt(stored, []);
-      this.suspendNow('interrupted', null);
+      if (await this.openUnfinished(stored)) this.suspendNow('interrupted', null);
     });
+  }
+
+  /** What setup shows for a game: its funding source and allowance line. Asking never charges or starts anything. */
+  async setupTerms(game: string): Promise<SetupTerms> {
+    const { access } = this.adapters;
+    if (!access.setupTerms) return PRACTICE_FUNDING_TERMS;
+    return access.setupTerms({ game }).catch(() => PRACTICE_FUNDING_TERMS);
   }
 
   /** Durability step 1: creates the activity and its random identity, then shows the table. */
@@ -245,7 +279,7 @@ export class PracticeController {
       }
       if (unfinished) {
         this.unacknowledgedStart = null;
-        this.adopt(unfinished, []);
+        if (!(await this.openUnfinished(unfinished))) return;
         this.suspendNow('interrupted', null);
         return this.resumeSuspended();
       }
@@ -279,10 +313,10 @@ export class PracticeController {
         };
         const specification: ActivitySpecification =
           request.game === 'craps'
-            ? { ...base, game: 'craps', rules: standardCraps(request.odds, request.field) }
+            ? { ...base, game: 'craps', rules: standardCraps(request.odds, request.field, request.limits) }
             : request.game === 'blackjack'
               ? { ...base, game: 'blackjack', rules: request.rules }
-              : { ...base, game: 'roulette', rules: ROULETTE_PRESETS[wheelOf(request)] };
+              : { ...base, game: 'roulette', rules: rouletteRules(wheelOf(request), request.limits) };
         let initial: ActivityState;
         try {
           initial = createActivity(specification, random);
@@ -525,6 +559,11 @@ export class PracticeController {
       if (pending.kind === 'completion') return this.complete();
       if (settled(await this.retryTransition(pending))) await this.drive();
     });
+  }
+
+  /** Leaves an incomplete session's explanation; Play then offers setup. */
+  dismissIncomplete(): void {
+    if (this.current.status === 'incomplete') this.showNone(null);
   }
 
   /** Leaves a completed session's result; Play then offers setup. */
@@ -837,6 +876,56 @@ export class PracticeController {
     return true;
   }
 
+  /**
+   * Takes up the unfinished activity found in the store, unless it is unusable
+   * (#80). One a later build saved is left untouched; one whose checkpoint is
+   * damaged, or whose pinned identities the shipped quarantine list names, is
+   * marked incomplete and explained, never resumed or given a result.
+   * True when it was taken up.
+   */
+  private async openUnfinished(stored: StoredActivity): Promise<boolean> {
+    const decoded = decodeCheckpoint(stored.checkpoint);
+    const game = stored.specification.game;
+    this.activity = null;
+    this.state = null;
+    if (!decoded.ok && decoded.error.kind === 'unsupported') {
+      this.current = { status: 'needs-update', game };
+      this.notify();
+      return false;
+    }
+    const quarantine = decoded.ok ? quarantineStatus(decoded.state, this.adapters.quarantine) : null;
+    const reason: IncompleteReason | null = !decoded.ok
+      ? { kind: 'damaged', detail: decoded.error.message }
+      : quarantine?.quarantined
+        ? { kind: 'quarantined', entry: quarantine.entry, listVersion: this.adapters.quarantine.version }
+        : null;
+    if (!reason) {
+      this.adopt(stored, []);
+      return true;
+    }
+    // Unsaved, the mark is made again the next time the activity is found; either way nothing is resumed.
+    const marked = (await this.adapters.store.markIncomplete(stored.activityId, reason).catch(() => null))?.incomplete ?? reason;
+    this.current = {
+      status: 'incomplete',
+      session: {
+        game,
+        buyIn: stored.specification.funding,
+        turnsRecorded: decoded.ok ? decoded.state.turn : null,
+        engine: decoded.ok ? decoded.state.identities.engine : null,
+        reason: marked,
+        explanation: this.explanationOf(marked),
+      },
+    };
+    this.notify();
+    return false;
+  }
+
+  /** The shipped list's explanation for a quarantine mark (entries are never removed, so it is always there). */
+  private explanationOf(reason: IncompleteReason): string | null {
+    if (reason.kind !== 'quarantined') return null;
+    return this.adapters.quarantine.entries.find((entry) => entry.id === reason.entry)?.explanation ?? null;
+  }
+
   private adopt(stored: StoredActivity, facts: readonly DomainFact[]): void {
     const decoded = decodeCheckpoint(stored.checkpoint);
     if (!decoded.ok) throw new Error(`activity ${stored.activityId} can't be resumed: ${decoded.error.message}`);
@@ -914,7 +1003,7 @@ const wheelOf = (request: Extract<StartRequest, { game: 'roulette' }>): Roulette
 function sameRequest(a: StartRequest, b: StartRequest): boolean {
   if (a.buyIn !== b.buyIn || a.fundingSource !== b.fundingSource) return false;
   if (canonicalJson(a.strategy ?? null) !== canonicalJson(b.strategy ?? null)) return false;
-  if (a.game === 'craps') return b.game === 'craps' && a.odds === b.odds && standardCraps(a.odds, a.field).field === standardCraps(b.odds, b.field).field;
+  if (a.game === 'craps') return b.game === 'craps' && canonicalJson(standardCraps(a.odds, a.field, a.limits)) === canonicalJson(standardCraps(b.odds, b.field, b.limits));
   if (a.game === 'blackjack') return b.game === 'blackjack' && canonicalJson(a.rules) === canonicalJson(b.rules);
-  return b.game === 'roulette' && wheelOf(a) === wheelOf(b);
+  return b.game === 'roulette' && canonicalJson(rouletteRules(wheelOf(a), a.limits)) === canonicalJson(rouletteRules(wheelOf(b), b.limits));
 }

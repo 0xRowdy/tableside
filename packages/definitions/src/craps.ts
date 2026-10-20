@@ -26,13 +26,24 @@ import {
   type VersionedIdentity,
 } from '@tableside/engine';
 
-/** A standard craps table with the launch limits, the chosen odds cap (default 3-4-5x) and field payout (default 12 pays triple). */
-export const standardCraps = (odds: OddsCap = STANDARD_CRAPS.defaults.odds, field: FieldPayout = STANDARD_CRAPS.defaults.field): CrapsRuleSet => ({
+/** The launch limits: flat wagers 10-1,000 per wager or number, hardways and propositions 1-100 per component. */
+export const CRAPS_LIMITS: CrapsRuleSet['limits'] = { flat: { min: '10', max: '1000' }, props: { min: '1', max: '100' } };
+
+/**
+ * A standard craps table with the chosen odds cap (default 3-4-5x), field
+ * payout (default 12 pays triple) and limits (default the launch limits; setup
+ * may edit them before a session).
+ */
+export const standardCraps = (
+  odds: OddsCap = STANDARD_CRAPS.defaults.odds,
+  field: FieldPayout = STANDARD_CRAPS.defaults.field,
+  limits: CrapsRuleSet['limits'] = CRAPS_LIMITS,
+): CrapsRuleSet => ({
   id: STANDARD_CRAPS.id,
   version: STANDARD_CRAPS.version,
   odds,
   field,
-  limits: { flat: { min: '10', max: '1000' }, props: { min: '1', max: '100' } },
+  limits: { flat: { ...limits.flat }, props: { ...limits.props } },
 });
 
 export type CrapsLineWager = 'pass' | 'dont-pass' | 'come' | 'dont-come' | 'odds';

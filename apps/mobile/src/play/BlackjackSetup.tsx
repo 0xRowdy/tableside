@@ -1,216 +1,112 @@
-// Minimal blackjack session setup (design frame S1-02, free play only): the
-// four rule presets, penetration, other players at the table and a fresh
-// buy-in. Guided modes and editable limits arrive with #72, #77 and #78.
+// Blackjack session setup (design frame S1-02 i1tnq, free play): the four
+// named presets, which the dealer and surrender switches also set; penetration
+// and other players as steppers; editable initial-wager limits; the house edge
+// of these rules; and a fresh buy-in. Guided modes arrive with #77 and #78.
 
-import { blackjackHouseEdge, blackjackRules, DEFAULT_PENETRATION, type BlackjackPreset } from '@tableside/definitions';
+import { BLACKJACK_LIMITS, blackjackHouseEdge, blackjackRules, DEFAULT_PENETRATION, type BlackjackPreset } from '@tableside/definitions';
 import { MAX_OTHER_PLAYERS, PENETRATIONS } from '@tableside/engine';
+import { router } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useWindowDimensions } from 'react-native';
 
 import { Button } from '@/components/Button';
 import { Screen } from '@/components/Screen';
-import { useFeedback } from '@/feedback/FeedbackProvider';
-import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
-import { RECONNECT_TO_VERIFY, type StartProblem } from '@/practice/controller';
+import { SwitchRow } from '@/components/SwitchRow';
+import type { StartProblem } from '@/practice/controller';
 import { usePractice } from '@/practice/PracticeProvider';
-import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/theme/tokens';
 
 import { otherPlayersText } from './blackjack-text';
-import { formatUnits } from './units';
+import { FundingSection, useFunding, type Opening } from './setup/Funding';
+import { GroupFields, LimitsBanner, useLimits } from './setup/Limits';
+import type { LimitGroup } from './setup/limit-drafts';
+import { ChoiceGroup, FieldLabel, Help, Section, SetupHeader, Stepper } from './setup/SetupParts';
 
-const DEFAULT_BUY_IN = '1000';
-/** Longest buy-in text accepted before the engine judges the amount (the ceiling has 10 digits). */
-const MAX_BUY_IN_DIGITS = 13;
+const PRESETS: readonly { preset: BlackjackPreset; label: string }[] = [
+  { preset: 'S17_LS', label: 'S17 · surrender' },
+  { preset: 'S17_noLS', label: 'S17' },
+  { preset: 'H17_LS', label: 'H17 · surrender' },
+  { preset: 'H17_noLS', label: 'H17' },
+];
 
-const PROBLEMS: Record<StartProblem, string> = {
-  'invalid-buy-in': 'Enter whole units from 1 to 1,000,000,000.',
-  'save-failed': "The session couldn't be saved, so it hasn't started. Try again.",
-  'access-denied': "This session can't start right now.",
-  'access-uncertain': `${RECONNECT_TO_VERIFY}. Nothing has started and nothing was used.`,
-  'strategy-incompatible': "This strategy doesn't fit your table.",
-};
+const GROUPS: readonly LimitGroup<'initial'>[] = [
+  { key: 'initial', label: 'Initial wager', help: 'Whole units of 1 or more. Insurance, splits and doubles can go over the maximum.' },
+];
+
+/** Above this text scale the preset chips become a list (annotation V0ckk). */
+const CHIPS_MAX_FONT_SCALE = 1.35;
 
 export function BlackjackSetup({ problem, problemReason = null, busy }: { problem: StartProblem | null; problemReason?: string | null; busy: boolean }) {
   const { controller } = usePractice();
-  const feedback = useFeedback();
-  const [dealer, setDealer] = useState<'S17' | 'H17'>('S17');
-  const [surrender, setSurrender] = useState(true);
+  const { fontScale } = useWindowDimensions();
+  const [preset, setPreset] = useState<BlackjackPreset>('S17_LS');
   const [penetration, setPenetration] = useState(DEFAULT_PENETRATION);
   const [others, setOthers] = useState(0);
-  const [draft, setDraft] = useState(formatUnits(DEFAULT_BUY_IN));
-  const [notWhole, setNotWhole] = useState(false);
-  const preset: BlackjackPreset = `${dealer}_${surrender ? 'LS' : 'noLS'}`;
-  const rules = blackjackRules(preset, penetration, others);
+  const limits = useLimits(GROUPS, BLACKJACK_LIMITS);
+  const hits = preset.startsWith('H17');
+  const surrender = preset.endsWith('_LS');
+  const setRules = (dealerHits: boolean, lateSurrender: boolean) => setPreset(`${dealerHits ? 'H17' : 'S17'}_${lateSurrender ? 'LS' : 'noLS'}`);
+  const accepted = limits.accepted;
+  const opening: Opening | null = accepted ? { kind: 'table', amount: accepted.initial.min } : null;
+  const funding = useFunding('blackjack', opening);
+  const step = PENETRATIONS.indexOf(penetration);
 
   const start = () => {
-    const digits = draft.replace(/[,\s]/g, '');
-    const whole = /^\d+$/.test(digits) && digits.length <= MAX_BUY_IN_DIGITS;
-    setNotWhole(!whole);
-    if (whole) void controller.start({ game: 'blackjack', buyIn: BigInt(digits).toString(), rules });
-    else feedback.cue('input-rejected');
+    if (!accepted) return;
+    void funding.start((funds) => controller.start({ game: 'blackjack', ...funds, rules: blackjackRules(preset, penetration, others, accepted) }));
   };
-  const error = notWhole ? PROBLEMS['invalid-buy-in'] : problem && (problem === 'access-denied' && problemReason ? problemReason : PROBLEMS[problem]);
 
   return (
     <Screen>
-      <View style={styles.titles}>
-        <Text accessibilityRole="header" maxFontSizeMultiplier={textScale.display} style={styles.title}>
-          Blackjack
-        </Text>
-        <Text maxFontSizeMultiplier={textScale.body} style={styles.subtitle}>New session · free play · 6 decks · 3:2</Text>
-      </View>
+      <SetupHeader title="Blackjack" subtitle="New session · free play" onBack={() => router.navigate('/')} />
 
-      <Choices
-        label="DEALER"
-        options={[
-          { label: 'Stands on all 17s (S17)', selected: dealer === 'S17', onPress: () => setDealer('S17') },
-          { label: 'Hits soft 17 (H17)', selected: dealer === 'H17', onPress: () => setDealer('H17') },
-        ]}
-      />
-      <Choices
-        label="LATE SURRENDER"
-        help="After the peek, on your first two cards only."
-        options={[
-          { label: 'Late surrender on', short: 'On', selected: surrender, onPress: () => setSurrender(true) },
-          { label: 'Late surrender off', short: 'Off', selected: !surrender, onPress: () => setSurrender(false) },
-        ]}
-      />
-      <Choices
-        label="PENETRATION"
-        help="How much of the shoe is dealt before the cut card. The round that reaches it is finished; then a fresh shoe."
-        options={PENETRATIONS.map((value) => ({
-          label: `Penetration ${value}%`,
-          short: `${value}%`,
-          selected: value === penetration,
-          onPress: () => setPenetration(value),
-        }))}
-      />
-      <Choices
-        label="OTHER PLAYERS AT THE TABLE"
-        help="0–4 · they play basic strategy at the table minimum, before you, and their cards count toward the shoe."
-        options={Array.from({ length: MAX_OTHER_PLAYERS + 1 }, (_, count) => ({
-          label: otherPlayersText(count),
-          short: String(count),
-          selected: count === others,
-          onPress: () => setOthers(count),
-        }))}
-      />
+      <Section label="TABLE RULES">
+        <ChoiceGroup
+          label="Rule preset"
+          stacked={fontScale > CHIPS_MAX_FONT_SCALE}
+          options={PRESETS.map((option) => ({ label: option.label, selected: option.preset === preset, onPress: () => setPreset(option.preset) }))}
+        />
+        <SwitchRow
+          title="Dealer hits soft 17"
+          detail={hits ? 'On: dealer hits soft 17' : 'Off: dealer stands on all 17s'}
+          value={hits}
+          onChange={(on) => setRules(on, surrender)}
+        />
+        <SwitchRow title="Late surrender" detail="After the peek, on your first two cards only" value={surrender} onChange={(on) => setRules(hits, on)} />
+        <Stepper
+          label="Shoe penetration"
+          value={`${penetration}%`}
+          detail="dealt before the shuffle · 50–80% in steps of 5"
+          decrementLabel="Less shoe penetration"
+          incrementLabel="More shoe penetration"
+          onDecrement={step > 0 ? () => setPenetration(PENETRATIONS[step - 1] as number) : null}
+          onIncrement={step < PENETRATIONS.length - 1 ? () => setPenetration(PENETRATIONS[step + 1] as number) : null}
+        />
+        <Stepper
+          label="Other players at the table"
+          value={`${others} player${others === 1 ? '' : 's'}`}
+          spoken={otherPlayersText(others)}
+          detail="0–4 · they play basic strategy at the table minimum, before you; their cards count toward the shoe"
+          decrementLabel="Fewer other players"
+          incrementLabel="More other players"
+          onDecrement={others > 0 ? () => setOthers(others - 1) : null}
+          onIncrement={others < MAX_OTHER_PLAYERS ? () => setOthers(others + 1) : null}
+        />
+        <Help>Fixed for every preset: 6 decks · blackjack pays 3:2 · dealer peeks · double any two cards, including after splits · split to 4 hands.</Help>
+      </Section>
 
-      <View style={styles.section}>
-        <Text maxFontSizeMultiplier={textScale.body} style={styles.label}>TABLE</Text>
-        <Text maxFontSizeMultiplier={textScale.body} style={styles.value}>
-          Initial wager {formatUnits(rules.limits.initial.min)}–{formatUnits(rules.limits.initial.max)} units
-        </Text>
-        <Text maxFontSizeMultiplier={textScale.body} style={styles.help}>
-          Edge with basic strategy: {blackjackHouseEdge(preset).percent}% (this preset)
-        </Text>
-        <Text maxFontSizeMultiplier={textScale.body} style={styles.help}>
-          Fixed for every preset: 6 decks · blackjack pays 3:2 · dealer peeks · double any two cards, including after splits · split to 4 hands.
-        </Text>
-      </View>
+      <Section label="TABLE LIMITS · INITIAL WAGER">
+        <GroupFields limits={limits} group={GROUPS[0] as LimitGroup<'initial'>} />
+      </Section>
 
-      <View style={styles.section}>
-        <Text maxFontSizeMultiplier={textScale.body} style={styles.label}>BUY-IN</Text>
-        <View style={[styles.field, error && styles.fieldError]}>
-          <TextInput
-            accessibilityLabel="Starting chips for this session, in units"
-            value={draft}
-            onChangeText={setDraft}
-            keyboardType="number-pad"
-            maxFontSizeMultiplier={textScale.body}
-            style={styles.input}
-          />
-          <Text maxFontSizeMultiplier={textScale.body} style={styles.unit}>units</Text>
-        </View>
-        {error ? (
-          <Text accessibilityRole="alert" maxFontSizeMultiplier={textScale.body} style={styles.error}>
-            {error}
-          </Text>
-        ) : (
-          <Text maxFontSizeMultiplier={textScale.body} style={styles.help}>Each session starts fresh.</Text>
-        )}
-      </View>
+      <Section label="HOUSE EDGE">
+        <FieldLabel>House edge with basic strategy: {blackjackHouseEdge(preset).percent}%</FieldLabel>
+        <Help>Off the top of a fresh six-deck shoe. A property of these rules, not a prediction of your results.</Help>
+      </Section>
 
-      <Button label="Start free play" stretch disabled={busy} onPress={start} />
+      <FundingSection funding={funding} opening={opening} problem={problem} problemReason={problemReason} />
+      <LimitsBanner limits={limits} />
+
+      <Button label="Start free play" stretch disabled={busy || !accepted || funding.short} onPress={start} />
     </Screen>
   );
 }
-
-interface Choice {
-  label: string;
-  short?: string;
-  selected: boolean;
-  onPress: () => void;
-}
-
-function Choices({ label, help, options }: { label: string; help?: string; options: readonly Choice[] }) {
-  return (
-    <View style={styles.section}>
-      <Text maxFontSizeMultiplier={textScale.body} style={styles.label}>{label}</Text>
-      <View accessibilityRole="radiogroup" accessibilityLabel={label.toLowerCase()} style={styles.choices}>
-        {options.map((option) => (
-          <ChoiceButton key={option.label} choice={option} />
-        ))}
-      </View>
-      {help && <Text maxFontSizeMultiplier={textScale.body} style={styles.help}>{help}</Text>}
-    </View>
-  );
-}
-
-function ChoiceButton({ choice }: { choice: Choice }) {
-  const { focused, focusProps } = useKeyboardFocus();
-  return (
-    <Pressable
-      accessibilityRole="radio"
-      accessibilityLabel={choice.label}
-      accessibilityState={{ checked: choice.selected }}
-      onPress={choice.onPress}
-      {...focusProps}
-      style={[styles.choice, choice.selected && styles.choiceSelected, focused && styles.focused]}
-    >
-      <Text maxFontSizeMultiplier={textScale.body} style={[styles.choiceText, choice.selected && styles.choiceTextSelected]}>
-        {choice.selected ? '✓ ' : ''}
-        {choice.short ?? choice.label}
-      </Text>
-    </Pressable>
-  );
-}
-
-const styles = StyleSheet.create({
-  titles: { gap: 2 },
-  title: { fontFamily: fonts.display, fontSize: 30, color: palette.foreground },
-  subtitle: { fontFamily: fonts.ui, fontSize: 14, color: palette.mutedForeground },
-  section: { gap: space[1] },
-  label: { fontFamily: fonts.uiBold, fontSize: 12, letterSpacing: 0.5, color: palette.mutedForeground },
-  value: { fontFamily: fonts.uiMedium, fontSize: 15, color: palette.foreground },
-  help: { fontFamily: fonts.ui, fontSize: 13, color: palette.mutedForeground },
-  choices: { flexDirection: 'row', flexWrap: 'wrap', gap: space[2] },
-  choice: {
-    minHeight: MIN_TOUCH_TARGET,
-    minWidth: MIN_TOUCH_TARGET,
-    justifyContent: 'center',
-    paddingHorizontal: space[3],
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: palette.controlBorder,
-    backgroundColor: palette.card,
-  },
-  choiceSelected: { borderColor: palette.primary, borderWidth: 2, backgroundColor: palette.secondary },
-  focused: { borderColor: palette.ring, borderWidth: 2 },
-  choiceText: { fontFamily: fonts.uiMedium, fontSize: 14, color: palette.foreground },
-  choiceTextSelected: { fontFamily: fonts.uiBold },
-  field: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    minHeight: MIN_TOUCH_TARGET,
-    paddingHorizontal: space[3],
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: palette.controlBorder,
-    backgroundColor: palette.card,
-  },
-  fieldError: { borderColor: palette.destructive, borderWidth: 2 },
-  input: { flex: 1, minHeight: MIN_TOUCH_TARGET, fontFamily: fonts.uiMedium, fontSize: 17, color: palette.foreground },
-  unit: { fontFamily: fonts.ui, fontSize: 14, color: palette.mutedForeground },
-  error: { fontFamily: fonts.uiMedium, fontSize: 13, color: palette.destructive },
-});

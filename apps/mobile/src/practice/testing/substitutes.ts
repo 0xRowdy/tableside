@@ -2,11 +2,14 @@
 // deterministic entropy and sequential ids, over the in-memory store and the
 // always-allowed access supervisor.
 
-import type { EntropySource } from '@tableside/engine';
+import { QUARANTINE_LIST } from '@tableside/definitions';
+import { canonicalJson, type EntropySource } from '@tableside/engine';
+import type { RecordedCheckpoint } from '@tableside/engine/recorded-checkpoints';
 
 import { alwaysAllowed, type Clock, type PracticeAdapters } from '../adapters';
 import { SAVE_RETRY_MS } from '../controller';
-import { MemoryActivityStore } from '../memory-store';
+import { MemoryActivityStore, MemoryDisk } from '../memory-store';
+import type { StoredActivity } from '../store';
 
 /**
  * A clock that only moves when told. With `auto`, every sleep shorter than
@@ -83,5 +86,37 @@ export function substituteAdapters(options: { clock?: FakeClock; words?: readonl
     newId: () => `activity-${++next}`,
     device: 'test-device',
     owner: 'local',
+    quarantine: QUARANTINE_LIST,
   };
+}
+
+/** A store holding activities exactly as an earlier build left them in durable storage (#80). */
+export function storeHolding(...activities: StoredActivity[]): MemoryActivityStore {
+  const disk = new MemoryDisk();
+  for (const activity of activities) {
+    disk.rows.set(activity.activityId, { activity: JSON.stringify(activity), transitions: new Map(), effects: new Map() });
+  }
+  return new MemoryActivityStore(disk);
+}
+
+/** The store row an earlier build left beside one of its recorded checkpoints (or another checkpoint text). */
+export function leftBy(recorded: RecordedCheckpoint, checkpoint = recorded.checkpoint): StoredActivity {
+  const specification = recorded.specification as StoredActivity['specification'];
+  return {
+    activityId: specification.activityId,
+    admission: { provenance: 'earlier-build', meteringBasis: 'free-play' },
+    specification,
+    random: recorded.random as StoredActivity['random'],
+    checkpoint,
+    sequence: (JSON.parse(checkpoint) as { sequence: number }).sequence,
+    createdAt: 1_790_000_000_000,
+    completion: null,
+    incomplete: null,
+  };
+}
+
+/** A recorded checkpoint as a later build would write it, with a newer state schema: what a rollback finds. */
+export function fromLaterBuild(recorded: RecordedCheckpoint): string {
+  const value = JSON.parse(recorded.checkpoint) as { schema: number };
+  return canonicalJson({ ...value, schema: value.schema + 1 });
 }
