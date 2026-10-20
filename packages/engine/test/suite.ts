@@ -3,10 +3,13 @@
 // must be synchronous and deterministic. Every engine ticket adds its cases here.
 import type { Suite } from '@tableside/harness';
 
+import { drawCases } from './draws.cases';
 import { engineCases } from './engine.cases';
+import { moneyCases } from './money.cases';
+import { randomCases } from './random.cases';
 import { runtimeCases } from './runtime.cases';
 
 export const engineSuite: Suite = {
   name: 'engine',
-  cases: [...runtimeCases, ...engineCases],
+  cases: [...runtimeCases, ...engineCases, ...randomCases, ...drawCases, ...moneyCases],
 };
