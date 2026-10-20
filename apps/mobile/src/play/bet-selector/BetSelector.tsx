@@ -414,6 +414,7 @@ function illegalExplanation(reason: IllegalActionReason, choice: WagerChoice, { 
   switch (reason) {
     case 'not-whole-units':
     case 'odds-increment':
+    case 'stake-increment':
       return `Use ${increments(choice)}, from ${min} to ${max}. Your draft is kept and nothing on the table changed.`;
     case 'above-odds-cap':
       return `Over the odds this table allows. ${choice.name} can be at most ${max}. Your draft is kept.`;
@@ -428,6 +429,8 @@ function illegalExplanation(reason: IllegalActionReason, choice: WagerChoice, { 
         ? `More than you have. With a balance of ${formatUnits(balance)} you can set up to ${formatUnits(cap)}${choice.step === '1' ? '' : ` (${increments(choice)})`}${rebuy}. Your draft is kept.`
         : `More than you have. With a balance of ${formatUnits(balance)} you can't cover the minimum of ${min}${rebuy}. Your draft is kept.`;
     }
+    case 'commission-unfunded':
+      return `Your balance after this stake can't cover the commission ${choice.name} charges when it wins. Set a smaller stake. Your draft is kept.`;
     default:
       return `${choice.name} can't be set to that. Your draft is kept.`;
   }

@@ -25,6 +25,7 @@ import {
   type Command,
   type CommandEnvelope,
   type DomainFact,
+  type FieldPayout,
   type FundingSource,
   type OddsCap,
   type PermittedView,
@@ -113,7 +114,12 @@ export type StartRequest =
       /** The wheel's rule preset; single zero when omitted. */
       readonly wheel?: RouletteWheel;
     })
-  | (StartRequestBase & { readonly game: 'craps'; readonly odds: OddsCap });
+  | (StartRequestBase & {
+      readonly game: 'craps';
+      readonly odds: OddsCap;
+      /** What a field 12 pays; triple when omitted. */
+      readonly field?: FieldPayout;
+    });
 
 /** A command as sent to the store, with the allowance effects that commit with it. */
 interface Outbound {
@@ -242,7 +248,7 @@ export class PracticeController {
         };
         const specification: ActivitySpecification =
           request.game === 'craps'
-            ? { ...base, game: 'craps', rules: standardCraps(request.odds) }
+            ? { ...base, game: 'craps', rules: standardCraps(request.odds, request.field ?? 'triple-12') }
             : { ...base, game: 'roulette', rules: ROULETTE_PRESETS[wheelOf(request)] };
         let initial: ActivityState;
         try {
@@ -275,6 +281,14 @@ export class PracticeController {
       if (!this.playOpen()) return;
       // A wager never starts an automatic step itself, but an adopted later state may.
       if (settled(await this.send({ kind: 'place-wager', target, amount }))) await this.drive();
+    });
+  }
+
+  /** A per-bet working instruction (craps): the wager works, or is off, until told otherwise. */
+  async setWorking(target: string, working: boolean): Promise<void> {
+    await this.exclusive(async () => {
+      if (!this.playOpen()) return;
+      if (settled(await this.send({ kind: 'set-working', target, working }))) await this.drive();
     });
   }
 
@@ -784,6 +798,6 @@ const wheelOf = (request: Extract<StartRequest, { game: 'roulette' }>): Roulette
 /** Whether a retried start asks for the same table, so it may recover the unacknowledged activity. */
 function sameRequest(a: StartRequest, b: StartRequest): boolean {
   if (a.buyIn !== b.buyIn || a.fundingSource !== b.fundingSource) return false;
-  if (a.game === 'craps') return b.game === 'craps' && a.odds === b.odds;
+  if (a.game === 'craps') return b.game === 'craps' && a.odds === b.odds && (a.field ?? 'triple-12') === (b.field ?? 'triple-12');
   return b.game === 'roulette' && wheelOf(a) === wheelOf(b);
 }

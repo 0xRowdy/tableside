@@ -277,6 +277,9 @@ function apply(state: State, command: GameCommand): Step<State> {
   switch (command.kind) {
     case 'place-wager':
       return placeWager(state, command.target, decodeMoney(command.amount));
+    case 'set-working':
+      // Never offered: every roulette wager works on every spin.
+      return { illegal: 'working-fixed' };
     case 'begin-turn': {
       if (state.wagers.length === 0) return { illegal: 'no-wager' };
       const stream = RandomStream.restore(state.random);

@@ -118,6 +118,8 @@ export type ActivityState = RouletteActivityState | CrapsActivityState;
 export type Command =
   /** Sets the stake on a target; amount "0" takes the wager down. */
   | { readonly kind: 'place-wager'; readonly target: string; readonly amount: string }
+  /** A per-bet working instruction (craps): the wager works, or is off, until told otherwise. */
+  | { readonly kind: 'set-working'; readonly target: string; readonly working: boolean }
   | { readonly kind: 'begin-turn' }
   /** The automatic settle step after the reveal; the controller issues it, never a tap. */
   | { readonly kind: 'settle-turn' }
@@ -164,8 +166,12 @@ export type DomainFact =
       readonly result: 'win' | 'loss' | 'push';
       /** Net result: payout on a win, minus the stake on a loss, 0 on a push. */
       readonly net: string;
-      /** Paid back to the balance: stake plus payout, the stake on a push, or 0. */
+      /** Paid back to the balance: stake plus payout, the stake on a push, or 0. A craps place, buy, lay or hardway win stays up, so only its net comes back. */
       readonly returned: string;
+      /** A craps horn part (2, 3, 11 or 12): each part of one wager settles as its own bet. */
+      readonly component?: number;
+      /** Commission withheld from a winning craps buy or lay; already taken out of net. */
+      readonly commission?: string;
     }
   | { readonly kind: 'stop-requested'; readonly phase: Phase }
   | { readonly kind: 'wager-returned'; readonly target: string; readonly amount: string }
@@ -250,6 +256,8 @@ export interface GameModule<S extends ActivityState, V extends PermittedView> {
   view(state: S): Pick<V, 'game' | 'outcome' | 'table'>;
   /** The first problem with the game's part of a checkpoint (rules, wagers, outcome, table state), if any. */
   damage(value: Record<string, unknown>): string | undefined;
+  /** True when the game takes per-bet working instructions (craps); set-working is offered only then. */
+  readonly workingInstructions?: true;
 }
 
 // The registry casts each module to the union: a module only ever receives states of its own game.
@@ -263,14 +271,19 @@ const gameFor = (game: unknown): GameModule<ActivityState, PermittedView> | unde
 
 const moduleOf = (state: ActivityState) => GAMES[state.identities.game];
 
-/** Rebuys are offered only while the activity waits for input, and only with practice funding. */
+/**
+ * Rebuys are offered only while the activity waits for input, and only with
+ * practice funding; working instructions only in games that take them.
+ */
 const legalCommands = (state: ActivityState): readonly CommandKind[] =>
-  rebuysOffered(state.funding) ? LEGAL[state.phase] : LEGAL[state.phase].filter((kind) => kind !== 'rebuy');
+  LEGAL[state.phase].filter(
+    (kind) => (kind !== 'rebuy' || rebuysOffered(state.funding)) && (kind !== 'set-working' || moduleOf(state).workingInstructions === true),
+  );
 
 const LEGAL: Record<Phase, readonly CommandKind[]> = {
-  'open-decision': ['place-wager', 'begin-turn', 'request-stop', 'rebuy'],
+  'open-decision': ['place-wager', 'set-working', 'begin-turn', 'request-stop', 'rebuy'],
   'revealing-outcome': ['settle-turn', 'request-stop'],
-  'settled-outcome': ['place-wager', 'begin-turn', 'request-stop', 'rebuy'],
+  'settled-outcome': ['place-wager', 'set-working', 'begin-turn', 'request-stop', 'rebuy'],
   'final-settlement': ['advance-final-settlement'],
   completed: [],
 };
@@ -282,6 +295,8 @@ function isCommand(value: unknown): value is Command {
       const amount = parseMoney(value.amount);
       return hasExactKeys(value, ['kind', 'target', 'amount']) && isText(value.target) && amount !== undefined && amount.n >= 0n;
     }
+    case 'set-working':
+      return hasExactKeys(value, ['kind', 'target', 'working']) && isText(value.target) && typeof value.working === 'boolean';
     case 'rebuy': {
       const amount = parseMoney(value.amount);
       return hasExactKeys(value, ['kind', 'amount']) && amount !== undefined && amount.n > 0n;

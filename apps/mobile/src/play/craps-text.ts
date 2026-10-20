@@ -8,14 +8,46 @@ import { formatUnits } from './units';
 
 const BASE_NAMES: Record<string, string> = { pass: 'Pass line', 'dont-pass': "Don't pass", come: 'Come', 'dont-come': "Don't come" };
 
-/** "Pass line", "Come 6", "Don't come 4 odds". */
+const MENU_NAMES: Record<string, string> = {
+  field: 'Field',
+  'any-seven': 'Any seven',
+  'any-craps': 'Any craps',
+  'prop-2': 'Two (aces)',
+  'prop-3': 'Three (ace-deuce)',
+  'prop-11': 'Eleven (yo)',
+  'prop-12': 'Twelve (boxcars)',
+  horn: 'Horn',
+};
+
+const NUMBER_WORDS: Record<number, string> = { 2: 'two', 3: 'three', 4: 'four', 5: 'five', 6: 'six', 7: 'seven', 8: 'eight', 9: 'nine', 10: 'ten', 11: 'eleven', 12: 'twelve' };
+
+/** "Pass line", "Come 6", "Don't come 4 odds", "Place 6", "Buy 4", "Lay 10", "Hard 8", "Eleven (yo)". */
 export function crapsTargetName(target: string): string {
+  const menu = MENU_NAMES[target];
+  if (menu) return menu;
+  const box = /^(place|buy|lay|hard)-(\d+)$/.exec(target);
+  if (box) return `${capitalize(box[1] as string)} ${box[2]}`;
   const odds = target.endsWith('-odds');
   const base = odds ? target.slice(0, -'-odds'.length) : target;
   const traveled = /^(dont-come|come)-(\d+)$/.exec(base);
   const name = traveled ? `${BASE_NAMES[traveled[1] as string]} ${traveled[2]}` : (BASE_NAMES[base] ?? target);
   return odds ? `${name} odds` : name;
 }
+
+const capitalize = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
+
+/** "Rolled 3 and 3: 6, the hard way." Pairs of 2 to 5 make the hardway numbers. */
+export function rollSentence(dice: readonly [number, number]): string {
+  const total = dice[0] + dice[1];
+  const hard = dice[0] === dice[1] && total >= 4 && total <= 10 ? ', the hard way' : '';
+  return `Rolled ${dice[0]} and ${dice[1]}: ${total}${hard}.`;
+}
+
+/** "six the hard way", for a hardway's long name. */
+export const hardwayWords = (n: number) => `${NUMBER_WORDS[n] ?? n} the hard way`;
+
+/** Wagers whose working status follows the puck unless the player gives an instruction. */
+const followsPuck = (target: string) => /^(place|buy)-\d+$/.test(target);
 
 /** The puck, in words: never color alone. */
 export const puckText = (point: number | null) => (point === null ? 'Puck OFF · no point yet' : `Puck ON · point ${point}`);
@@ -47,12 +79,18 @@ export function commitmentText(target: string, point: number | null): string {
 function illegalMessage(reason: IllegalActionReason, target: string | null, view: CrapsPermittedView): string {
   const name = target ? crapsTargetName(target) : 'That wager';
   const placement = target ? view.table.placements.find((p) => p.target === target) : undefined;
-  const { line } = view.table.limits;
+  const { flat } = view.table.limits;
   switch (reason) {
     case 'below-minimum':
-      return `${name} needs at least ${formatUnits(line.min)}. Nothing was placed.`;
+      return `${name} needs at least ${formatUnits(placement?.min ?? flat.min)}. Nothing was placed.`;
     case 'above-maximum':
-      return `${name} allows at most ${formatUnits(line.max)}. Nothing was placed.`;
+      return `${name} allows at most ${formatUnits(placement?.max ?? flat.max)}. Nothing was placed.`;
+    case 'stake-increment':
+      return `${name} goes in multiples of ${formatUnits(placement?.increment ?? '1')}. Nothing was placed.`;
+    case 'commission-unfunded':
+      return `${name} charges a commission when it wins, and your balance after the stake can't cover it. Nothing was placed.`;
+    case 'working-fixed':
+      return `${name} always works. It can't be turned off.`;
     case 'above-odds-cap':
       return `${name} allows at most ${formatUnits(placement?.max ?? '0')} at ${view.table.odds} odds. Nothing was placed.`;
     case 'odds-increment':
@@ -82,6 +120,18 @@ function illegalMessage(reason: IllegalActionReason, target: string | null, view
   }
 }
 
+/** One settled wager: its result, any commission, a horn part, and whether a winning standing bet stays up. */
+function settledSentence(fact: Extract<DomainFact, { kind: 'wager-settled' }>): string {
+  const name = fact.component === undefined ? crapsTargetName(fact.target) : `Horn ${fact.component} part`;
+  const stake = formatUnits(fact.stake);
+  if (fact.result === 'push') return `${name} ${stake} was off and comes back.`;
+  if (fact.result === 'loss') return `${name} ${stake} loses.`;
+  const commission = fact.commission === undefined ? '' : `, after commission ${formatUnits(fact.commission)}`;
+  // A standing bet that wins is paid and stays up: only the win came back.
+  const staysUp = fact.returned === fact.net ? ' It stays up.' : '';
+  return `${name} ${stake} wins ${formatUnits(fact.net)}${commission}.${staysUp}`;
+}
+
 /**
  * What the latest committed transition changed, in one message for the screen
  * and for screen readers: every wager with its working status, the roll, the
@@ -101,10 +151,13 @@ export function describeCrapsFacts(facts: readonly DomainFact[], view: CrapsPerm
         balanceChanged = true;
         break;
       case 'illegal-action':
-        parts.push(illegalMessage(fact.reason, fact.command.kind === 'place-wager' ? fact.command.target : null, view));
+        parts.push(illegalMessage(fact.reason, 'target' in fact.command ? fact.command.target : null, view));
         break;
       case 'dice-rolled':
-        parts.push(`Rolled ${fact.dice[0]} and ${fact.dice[1]}: ${fact.dice[0] + fact.dice[1]}.`);
+        parts.push(rollSentence(fact.dice));
+        break;
+      case 'working-changed':
+        parts.push(`${crapsTargetName(fact.target)} is now ${fact.working ? 'ON' : 'OFF'}${fact.working ? ', working on every roll' : ' until you turn it on'}.`);
         break;
       case 'point-changed':
         parts.push(fact.point === null ? 'Puck OFF. The next roll is a come-out roll.' : `The point is ${fact.point}. Puck ON.`);
@@ -116,13 +169,7 @@ export function describeCrapsFacts(facts: readonly DomainFact[], view: CrapsPerm
         parts.push(`${crapsTargetName(fact.target)} ${formatUnits(fact.stake)} pushes on 12 and stays.`);
         break;
       case 'wager-settled':
-        parts.push(
-          fact.result === 'win'
-            ? `${crapsTargetName(fact.target)} ${formatUnits(fact.stake)} wins ${formatUnits(fact.net)}.`
-            : fact.result === 'push'
-              ? `${crapsTargetName(fact.target)} ${formatUnits(fact.stake)} was off and comes back.`
-              : `${crapsTargetName(fact.target)} ${formatUnits(fact.stake)} loses.`,
-        );
+        parts.push(settledSentence(fact));
         balanceChanged = true;
         break;
       case 'stop-requested':
@@ -142,10 +189,14 @@ export function describeCrapsFacts(facts: readonly DomainFact[], view: CrapsPerm
         break;
     }
   }
-  // Come odds go off for a come-out roll and back on with the next point: say so when the puck moves.
+  // Come odds, place and buy bets go off for a come-out roll and back on with the next point: say so when the puck moves.
   const puck = facts.find((fact) => fact.kind === 'point-changed');
-  if (puck && view.table.wagers.some((wager) => /^come-\d+-odds$/.test(wager.target))) {
+  const following = (pattern: (target: string) => boolean) => view.table.wagers.some((wager) => pattern(wager.target) && wager.instruction === null);
+  if (puck && following((target) => /^come-\d+-odds$/.test(target))) {
     parts.push(puck.point === null ? 'Come odds are OFF for the come-out roll.' : 'Come odds are ON again.');
+  }
+  if (puck && following(followsPuck)) {
+    parts.push(puck.point === null ? 'Place and buy bets are OFF for the come-out roll.' : 'Place and buy bets are ON again.');
   }
   if (parts.length === 0) return null;
   if (balanceChanged) parts.push(`Balance ${formatUnits(view.balance)}.`);
