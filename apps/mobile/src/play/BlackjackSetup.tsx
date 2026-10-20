@@ -27,6 +27,7 @@ const PROBLEMS: Record<StartProblem, string> = {
   'save-failed': "The session couldn't be saved, so it hasn't started. Try again.",
   'access-denied': "This session can't start right now.",
   'access-uncertain': `${RECONNECT_TO_VERIFY}. Nothing has started and nothing was used.`,
+  'strategy-incompatible': "This strategy doesn't fit your table.",
 };
 
 export function BlackjackSetup({ problem, problemReason = null, busy }: { problem: StartProblem | null; problemReason?: string | null; busy: boolean }) {

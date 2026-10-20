@@ -28,7 +28,17 @@ export {
 
 export { blackjackRules, DEFAULT_BLACKJACK_PRESET, DEFAULT_PENETRATION } from './blackjack/rules';
 export { seatStrategy } from './blackjack/seats';
-export { CRAPS_HOUSE_EDGE_VERSION, crapsHouseEdge, standardCraps, type CrapsHouseEdge, type CrapsLineWager } from './craps';
+export {
+  CRAPS_EDGE_WAGERS,
+  CRAPS_HOUSE_EDGE_VERSION,
+  crapsEdgeWager,
+  crapsHouseEdge,
+  standardCraps,
+  type CrapsHouseEdge,
+  type CrapsLineWager,
+  type CrapsProposition,
+  type CrapsWager,
+} from './craps';
 export {
   DOUBLE_ZERO_ROULETTE,
   ROULETTE_HOUSE_EDGE_VERSION,
@@ -37,3 +47,5 @@ export {
   SINGLE_ZERO_ROULETTE,
   type RouletteHouseEdge,
 } from './roulette';
+
+export { FIXED_TWO_DOZENS, FLAT_EVEN_MONEY, ROULETTE_STRATEGIES, strategyDefaults } from './roulette-strategies';

@@ -1,10 +1,9 @@
 // Craps session setup (design frame S1-02 "Craps", free play only): standard
-// craps with a choice of maximum odds, the launch line limits and a fresh
-// buy-in. The field option, editable limits and guided practice arrive with
-// #71, #72 and #76.
+// craps with a choice of maximum odds and field payout, the launch limits and
+// a fresh buy-in. Editable limits and guided practice arrive with #72 and #76.
 
-import { crapsHouseEdge, standardCraps } from '@tableside/definitions';
-import { ODDS_CAPS, type OddsCap } from '@tableside/engine';
+import { crapsHouseEdge, standardCraps, type CrapsWager } from '@tableside/definitions';
+import { FIELD_PAYOUTS, ODDS_CAPS, STANDARD_CRAPS, type FieldPayout, type OddsCap } from '@tableside/engine';
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
@@ -27,6 +26,7 @@ const PROBLEMS: Record<StartProblem, string> = {
   'save-failed': "The session couldn't be saved, so it hasn't started. Try again.",
   'access-denied': "This session can't start right now.",
   'access-uncertain': `${RECONNECT_TO_VERIFY}. Nothing has started and nothing was used.`,
+  'strategy-incompatible': "This strategy doesn't fit your table.",
 };
 
 export function CrapsSetup({ problem, problemReason = null, busy }: { problem: StartProblem | null; problemReason?: string | null; busy: boolean }) {
@@ -34,16 +34,18 @@ export function CrapsSetup({ problem, problemReason = null, busy }: { problem: S
   const feedback = useFeedback();
   const [draft, setDraft] = useState(formatUnits(DEFAULT_BUY_IN));
   const [odds, setOdds] = useState<OddsCap>('3-4-5x');
+  const [field, setField] = useState<FieldPayout>(STANDARD_CRAPS.defaults.field);
   const [notWhole, setNotWhole] = useState(false);
-  const rules = standardCraps(odds);
-  const { line } = rules.limits;
-  const edge = (wager: 'pass' | 'dont-pass') => crapsHouseEdge(wager, rules);
+  const rules = standardCraps(odds, field);
+  const { flat, props } = rules.limits;
+  const edge = (wager: CrapsWager) => crapsHouseEdge(wager, rules);
+  const pct = (wager: CrapsWager) => `${edge(wager).percent}%`;
 
   const start = () => {
     const digits = draft.replace(/[,\s]/g, '');
     const whole = /^\d+$/.test(digits) && digits.length <= MAX_BUY_IN_DIGITS;
     setNotWhole(!whole);
-    if (whole) void controller.start({ game: 'craps', odds, buyIn: BigInt(digits).toString() });
+    if (whole) void controller.start({ game: 'craps', odds, field, buyIn: BigInt(digits).toString() });
     else feedback.cue('input-rejected');
   };
   const error = notWhole ? PROBLEMS['invalid-buy-in'] : problem && (problem === 'access-denied' && problemReason ? problemReason : PROBLEMS[problem]);
@@ -62,11 +64,20 @@ export function CrapsSetup({ problem, problemReason = null, busy }: { problem: S
         <Text nativeID="odds-label" maxFontSizeMultiplier={textScale.body} style={styles.value}>Maximum odds</Text>
         <View accessibilityRole="radiogroup" accessibilityLabel="Maximum odds" style={styles.options}>
           {ODDS_CAPS.map((cap) => (
-            <OddsOption key={cap} cap={cap} selected={cap === odds} onPress={() => setOdds(cap)} />
+            <Option key={cap} label={`${cap} odds`} text={cap} selected={cap === odds} onPress={() => setOdds(cap)} />
           ))}
         </View>
         <Text maxFontSizeMultiplier={textScale.body} style={styles.help}>
           Odds behind a line bet pay true odds with no commission. Laid odds are capped by the amount they win.
+        </Text>
+        <Text maxFontSizeMultiplier={textScale.body} style={styles.value}>Field payout</Text>
+        <View accessibilityRole="radiogroup" accessibilityLabel="Field payout" style={styles.options}>
+          {FIELD_PAYOUTS.map((option) => (
+            <Option key={option} label={FIELD_LABELS[option]} selected={option === field} onPress={() => setField(option)} />
+          ))}
+        </View>
+        <Text maxFontSizeMultiplier={textScale.body} style={styles.help}>
+          The field is one roll: 3, 4, 9, 10 and 11 pay even money and 5, 6, 7 and 8 lose.
         </Text>
       </View>
 
@@ -79,14 +90,37 @@ export function CrapsSetup({ problem, problemReason = null, busy }: { problem: S
           With full {odds} odds: pass {edge('pass').withFullOdds}%, don&apos;t pass {edge('dont-pass').withFullOdds}% of all money bet. A property of
           these rules, not of how you play.
         </Text>
+        <Text maxFontSizeMultiplier={textScale.body} style={styles.value}>
+          Place 6 and 8 {pct('place-6')} · 5 and 9 {pct('place-5')} · 4 and 10 {pct('place-4')}
+        </Text>
+        <Text maxFontSizeMultiplier={textScale.body} style={styles.value}>
+          Buy and lay 6 and 8 {pct('buy-6')} · 5 and 9 {pct('buy-5')} · 4 and 10 {pct('buy-4')}
+        </Text>
+        <Text maxFontSizeMultiplier={textScale.body} style={styles.value}>
+          Field {pct('field')} · Hard 6 and 8 {pct('hard-6')} · Hard 4 and 10 {pct('hard-4')}
+        </Text>
+        <Text maxFontSizeMultiplier={textScale.body} style={styles.value}>
+          Two and twelve {pct('prop-2')} · Three and eleven {pct('prop-3')} · Any craps {pct('any-craps')} · Any seven {pct('any-seven')} · Horn {pct('horn')}
+        </Text>
+        <Text maxFontSizeMultiplier={textScale.body} style={styles.help}>
+          Per bet decided, with commission at exactly 5%. Rounding it up to a whole unit costs more on small stakes: a buy at the{' '}
+          {formatUnits(flat.min)}-unit minimum is 6 and 8 {crapsHouseEdge('buy-6', rules, flat.min).percent}% · 5 and 9{' '}
+          {crapsHouseEdge('buy-5', rules, flat.min).percent}% · 4 and 10 {crapsHouseEdge('buy-4', rules, flat.min).percent}%.
+        </Text>
       </View>
 
       <View style={styles.section}>
         <Text maxFontSizeMultiplier={textScale.body} style={styles.label}>TABLE LIMITS</Text>
         <Text maxFontSizeMultiplier={textScale.body} style={styles.value}>
-          Pass, don&apos;t pass, come and don&apos;t come {formatUnits(line.min)}–{formatUnits(line.max)} units
+          Pass, come, place, buy, lay and field {formatUnits(flat.min)}–{formatUnits(flat.max)} units
         </Text>
-        <Text maxFontSizeMultiplier={textScale.body} style={styles.help}>Per wager. Odds follow the maximum odds instead.</Text>
+        <Text maxFontSizeMultiplier={textScale.body} style={styles.help}>
+          Per wager or number. Place 6 and 8 go in multiples of 6, other place numbers in multiples of 5. Odds follow the maximum odds instead.
+        </Text>
+        <Text maxFontSizeMultiplier={textScale.body} style={styles.value}>
+          Hardways and propositions {formatUnits(props.min)}–{formatUnits(props.max)} units
+        </Text>
+        <Text maxFontSizeMultiplier={textScale.body} style={styles.help}>Per component. The horn is split equally across 2, 3, 11 and 12.</Text>
       </View>
 
       <View style={styles.section}>
@@ -117,19 +151,21 @@ export function CrapsSetup({ problem, problemReason = null, busy }: { problem: S
   );
 }
 
-function OddsOption({ cap, selected, onPress }: { cap: OddsCap; selected: boolean; onPress: () => void }) {
+const FIELD_LABELS: Record<FieldPayout, string> = { 'triple-12': '2 double, 12 triple', 'double-12': '2 and 12 double' };
+
+function Option({ label, text = label, selected, onPress }: { label: string; text?: string; selected: boolean; onPress: () => void }) {
   const { focused, focusProps } = useKeyboardFocus();
   return (
     <Pressable
       accessibilityRole="radio"
-      accessibilityLabel={`${cap} odds`}
+      accessibilityLabel={label}
       accessibilityState={{ checked: selected }}
       onPress={onPress}
       {...focusProps}
       style={[styles.option, selected && styles.optionSelected, focused && styles.optionFocused]}
     >
       <Text maxFontSizeMultiplier={textScale.body} style={[styles.optionText, selected && styles.optionTextSelected]}>
-        {selected ? `✓ ${cap}` : cap}
+        {selected ? `✓ ${text}` : text}
       </Text>
     </Pressable>
   );

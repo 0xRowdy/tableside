@@ -1,8 +1,11 @@
-// The standard craps table, line game (design frames "06 Craps — Roll result",
-// S1-04 "Craps come-out" and "Craps, table + bet list"). It renders only the
-// engine's permitted view and forwards taps to the practice controller; it
-// never advances the game or decides what is legal. Every wager states its
-// working status in text, and committed contracts explain why they stay.
+// The standard craps table (design frames "06 Craps — Roll result", S1-04
+// "Craps come-out", "Craps, table + bet list", "Horn settled as four parts"
+// and "Buy/lay commission on win only"). It renders only the engine's
+// permitted view and forwards taps to the practice controller; it never
+// advances the game or decides what is legal. Every wager states its working
+// status in text, the stake editor gives working instructions, and committed
+// contracts explain why they stay. The felt carries the line bets and the
+// field; place, buy, lay, hardways and propositions are in the bet list.
 
 import { crapsHouseEdge } from '@tableside/definitions';
 import { CRAPS_POINTS, type CrapsPermittedView as PermittedView } from '@tableside/engine';
@@ -19,7 +22,7 @@ import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/th
 import { BetSelector } from './bet-selector/BetSelector';
 import { draftAmountText, EMPTY_DRAFT, findChoice, isDraftPending, type BetDraft } from './bet-selector/catalog';
 import { DraftBar, PresentationSwitch, type Presentation } from './bet-selector/Presentation';
-import { crapsCatalog, crapsPlacedWagers } from './craps-catalog';
+import { crapsCatalog, crapsPlacedWagers, placedToggle } from './craps-catalog';
 import { EndSessionDialog } from './EndSessionDialog';
 import { RebuySheet } from './RebuySheet';
 import { commitmentText, crapsStatus, crapsTargetName, describeCrapsFacts, puckText, workingText } from './craps-text';
@@ -36,7 +39,7 @@ const SIDE_BY_SIDE_MAX_FONT_SCALE = 1.35;
 const SAVE_FAILED_ANNOUNCEMENT = "Couldn't save. Play is paused and will retry automatically.";
 
 function phaseSteps(view: PermittedView): PhaseStep[] {
-  const reached = { 'open-decision': 0, 'revealing-outcome': 1, 'settled-outcome': 2, 'final-settlement': 2, completed: 3 }[view.phase];
+  const reached = { 'open-decision': 0, correction: 0, 'revealing-outcome': 1, 'settled-outcome': 2, 'cycle-completion': 2, 'final-settlement': 2, completed: 3 }[view.phase];
   return [view.table.point === null ? 'Come-out' : 'Betting', 'Roll', 'Settle'].map((label, index) => ({
     label,
     state: index < reached ? 'done' : index === reached ? 'current' : 'upcoming',
@@ -73,7 +76,7 @@ export function CrapsTable({ snapshot }: { snapshot: ActiveSnapshot }) {
   const ready = !busy && save === 'saved';
   const legal = (kind: PermittedView['legalCommands'][number]) => ready && view.legalCommands.includes(kind);
   const message = useMemo(() => describeCrapsFacts(facts, view), [facts, view]);
-  const edge = (wager: 'pass' | 'dont-pass') => crapsHouseEdge(wager, { ...table.variant, odds: table.odds }).percent;
+  const edge = (wager: 'pass' | 'dont-pass') => crapsHouseEdge(wager, { ...table.variant, odds: table.odds, field: table.field }).percent;
 
   // Announce every committed transition as it is published, including ones
   // that pass before the next render, and a save failure that pauses play.
@@ -102,18 +105,30 @@ export function CrapsTable({ snapshot }: { snapshot: ActiveSnapshot }) {
     void controller.placeWager(target, total.toString());
   };
   const canPlace = legal('place-wager');
+  // The stake editor sets the stake, then the working option (design frame
+  // "Craps stake editor"); the option is given only once the stake is on the table.
+  const setWager = async (target: string, amount: string, toggled: boolean | undefined) => {
+    if (stakeOn(target) !== amount) {
+      await controller.placeWager(target, amount);
+      const placedNow = controller.snapshot();
+      if (placedNow.status !== 'active' || !placedNow.facts.some((fact) => fact.kind === 'wager-changed' && fact.target === target)) return;
+    }
+    const latest = controller.snapshot();
+    if (toggled === undefined || latest.status !== 'active' || latest.view.game !== 'craps') return;
+    if (placedToggle(latest.view, target) !== toggled) await controller.setWorking(target, toggled);
+  };
 
   return (
     <View style={styles.screen}>
       <ScrollView testID="table-scroll" contentContainerStyle={{ paddingTop: insets.top, paddingBottom: space[6] }}>
         <TableTopBar
           title="Craps"
-          subtitle={`${table.odds} odds · line ${formatUnits(table.limits.line.min)}–${formatUnits(table.limits.line.max)}`}
+          subtitle={`${table.odds} odds · field 12 pays ${table.field === 'triple-12' ? '3:1' : '2:1'} · ${formatUnits(table.limits.flat.min)}–${formatUnits(table.limits.flat.max)} · props ${formatUnits(table.limits.props.min)}–${formatUnits(table.limits.props.max)}`}
           canEnd={legal('request-stop')}
           onEnd={() => setConfirming(true)}
         />
         <Text maxFontSizeMultiplier={textScale.body} style={styles.edge}>
-          House edge: pass and come {edge('pass')}% · don&apos;t pass and don&apos;t come {edge('dont-pass')}% · odds 0%
+          House edge: pass and come {edge('pass')}% · don&apos;t pass and don&apos;t come {edge('dont-pass')}% · odds 0% · every other wager shows its edge where you choose it
         </Text>
         <PhaseStepper steps={phaseSteps(view)} />
         <SessionStrip
@@ -169,6 +184,12 @@ export function CrapsTable({ snapshot }: { snapshot: ActiveSnapshot }) {
                     />
                   )}
                   <Felt view={view} canPlace={canPlace} chip={chip} placeable={placeable} stakeOn={stakeOn} onSpot={addChip} />
+                  <Button
+                    label="Numbers and center bets"
+                    variant="secondary"
+                    hint="Opens the bet selector for place, buy, lay, hardways and propositions."
+                    onPress={() => setPresentation('selector')}
+                  />
                 </View>
               ) : (
                 <BetSelector
@@ -181,7 +202,7 @@ export function CrapsTable({ snapshot }: { snapshot: ActiveSnapshot }) {
                   canPlace={canPlace}
                   draft={draft}
                   onDraftChange={setDraft}
-                  onSet={(target, amount) => void controller.placeWager(target, amount)}
+                  onSet={(target, amount, toggled) => void setWager(target, amount, toggled)}
                   onRemove={(target) => void controller.placeWager(target, '0')}
                 />
               )}
@@ -192,7 +213,14 @@ export function CrapsTable({ snapshot }: { snapshot: ActiveSnapshot }) {
                   {message}
                 </Text>
               )}
-              <WagerList view={view} canPlace={canPlace} chip={chip} placeable={placeable} onAddOdds={addChip} onRemove={(target) => void controller.placeWager(target, '0')} />
+              <WagerList
+                view={view}
+                canPlace={canPlace}
+                chip={chip}
+                placeable={placeable}
+                onAddOdds={addChip}
+                onRemove={(target) => void controller.placeWager(target, '0')}
+              />
               <Button label="Roll" stretch disabled={!legal('begin-turn')} onPress={() => void controller.beginTurn()} />
               {view.legalCommands.includes('rebuy') && (
                 <Button
@@ -242,7 +270,18 @@ const LINE_SPOTS: readonly { target: string; label: string; closed: string }[] =
   { target: 'pass-odds', label: 'PASS ODDS', closed: 'Odds go behind the pass line once a point is set.' },
   { target: 'dont-pass', label: "DON'T PASS BAR 12", closed: "Don't pass bets are made before a come-out roll." },
   { target: 'dont-pass-odds', label: "DON'T PASS ODDS", closed: "Odds go behind don't pass once a point is set." },
+  { target: 'field', label: 'FIELD · 2 3 4 9 10 11 12', closed: 'The field opens between rolls.' },
 ];
+
+/** Every wager acting on box number n: come and don't come bets with their odds, place, buy and lay. */
+const onNumber = (target: string, n: number) => new RegExp(`^((dont-)?come-${n}(-odds)?|(place|buy|lay)-${n})$`).test(target);
+
+/** The short felt label of a wager in a number box: "come", "odds", "don't", "place". */
+function boxLabel(target: string): string {
+  if (target.endsWith('-odds')) return 'odds';
+  if (target.startsWith('dont')) return "don't";
+  return target.split('-')[0] as string;
+}
 
 function Felt({
   view,
@@ -281,7 +320,7 @@ function Felt({
 
       <View style={styles.boxes}>
         {CRAPS_POINTS.map((n) => {
-          const bets = view.wagers.filter((wager) => wager.target.startsWith(`come-${n}`) || wager.target.startsWith(`dont-come-${n}`));
+          const bets = view.wagers.filter((wager) => onNumber(wager.target, n));
           const spoken = bets.map((wager) => `${crapsTargetName(wager.target)} ${formatUnits(wager.amount)} ${workingText(view, wager.target)}`);
           return (
             <View
@@ -294,7 +333,7 @@ function Felt({
               {point === n && <Text maxFontSizeMultiplier={textScale.body} style={styles.boxPuck}>ON</Text>}
               {bets.map((wager) => (
                 <Text key={wager.target} maxFontSizeMultiplier={textScale.body} style={styles.boxBet}>
-                  {wager.target.endsWith('-odds') ? 'odds' : wager.target.startsWith('dont') ? "don't" : 'come'} {formatUnits(wager.amount)} · {workingText(view, wager.target)}
+                  {boxLabel(wager.target)} {formatUnits(wager.amount)} · {workingText(view, wager.target)}
                 </Text>
               ))}
             </View>
@@ -307,7 +346,7 @@ function Felt({
         const stake = stakeOn(spot.target);
         // An odds spot shows only once it can be used or holds a wager.
         if (spot.target.endsWith('-odds') && !open && stake === undefined) return null;
-        const pays = payout(spot.target) ?? '1 to 1';
+        const pays = spot.target === 'field' ? `1 to 1, 2 pays double, 12 pays ${view.table.field === 'triple-12' ? 'triple' : 'double'}` : (payout(spot.target) ?? '1 to 1');
         return (
           <Spot
             key={spot.target}
