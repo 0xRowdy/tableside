@@ -113,7 +113,7 @@ export type CrapsDomainFact =
   | { readonly kind: 'wager-moved'; readonly turn: number; readonly from: string; readonly to: string; readonly amount: string }
   /** A don't bet's bar-12 standoff: no money moves and the wager stays on the table. */
   | { readonly kind: 'wager-pushed'; readonly turn: number; readonly target: string; readonly stake: string }
-  /** A working instruction was given or cleared: the wager's status on a come-out roll from now on. */
+  /** A working instruction was given or cleared: the wager works, or is off, from now on (a cleared one: its usual status). */
   | { readonly kind: 'working-changed'; readonly target: string; readonly working: boolean };
 
 export interface CrapsWagerStatus {
@@ -461,9 +461,10 @@ function roll(state: State): Step<State> {
 /**
  * A legal per-bet working instruction. Each switchable wager has one usual
  * come-out status: place, buy and come odds are off, lays, hardways and don't
- * come odds work. The instruction is the other one ("working on the come-out",
- * or "off"), and holds until it changes or the wager leaves the table; giving
- * the usual status clears it.
+ * come odds work. An instruction makes the wager work, or be off, on every roll
+ * ("working on the come-out", or "off", including a place bet turned off while
+ * the point is on), and holds until it changes or the wager leaves the table.
+ * Giving the status the wager has anyway, now and on the come-out, clears it.
  */
 function setWorking(state: State, target: string, working: boolean): Step<State> {
   const placed = targetInfo(target);
@@ -471,7 +472,8 @@ function setWorking(state: State, target: string, working: boolean): Step<State>
   if (!isSwitchable(placed)) return { illegal: 'working-fixed' };
   if (!stakeOf(state.wagers, target)) return { illegal: 'not-available-now' };
   const others = state.instructions.filter((item) => item.target !== target);
-  const instructions = working === worksByDefault(placed, null) ? others : sorted([...others, { target, working }]);
+  const usual = working === worksByDefault(placed, null) && working === worksByDefault(placed, state.point);
+  const instructions = usual ? others : sorted([...others, { target, working }]);
   return { change: { phase: 'open-decision', instructions }, facts: [{ kind: 'working-changed', target, working }] };
 }
 

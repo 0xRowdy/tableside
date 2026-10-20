@@ -344,6 +344,20 @@ export const crapsMenuCases: TestCase[] = [
     },
   },
   {
+    name: 'craps menu: a place bet told "off" while the point is on is off: it takes no action until told otherwise',
+    run: (t) => {
+      // k = 93 rolls 6 (3,3): with a pass line it sets the point at 6; the next rolls are a point roll.
+      const pointOn = run(craps(93), [place('pass', '10'), ...roll(), place('place-8', '12')]).state;
+      t.equal(view(pointOn).table.wagers.find((w) => w.target === 'place-8')?.working, true);
+      const off = run(pointOn, [working('place-8', false)]);
+      t.equal(off.facts, [{ kind: 'working-changed', target: 'place-8', working: false }]);
+      t.equal(view(off.state).table.wagers.find((w) => w.target === 'place-8'), { target: 'place-8', working: false, instruction: false, switchable: true, removable: true });
+      // Off holds on the come-out too, until the player says otherwise; "on" then clears nothing it shouldn't.
+      const on = run(off.state, [working('place-8', true)]);
+      t.equal([on.facts, view(on.state).table.wagers.find((w) => w.target === 'place-8')?.working], [[{ kind: 'working-changed', target: 'place-8', working: true }], true]);
+    },
+  },
+  {
     name: 'craps menu: come odds told to work on the come-out win with their base instead of coming back',
     run: (t) => {
       // Pi digits stream: 8 (point), 11, 6 (come to 6), 4, 12, 8 (point made), then 6 on the come-out.
