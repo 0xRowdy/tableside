@@ -22,10 +22,8 @@ import {
   createActivity,
   quarantineStatus,
   summarizeResults,
-  type ActivityState,
   type Command,
   type CompletedPracticeSessionRecord,
-  type DomainFact,
   type QuarantineList,
   type RecordContext,
   type WagerOutcome,
@@ -46,16 +44,11 @@ const OVERRIDE: Command = { kind: 'override-correction' };
 
 const CONTEXT: RecordContext = { startedAt: 1000, endedAt: 2000, meteringBasis: 'free-play', allowancePolicyVersion: null };
 
-/** Runs a session from creation, keeping every committed fact in order, as the store holds them. */
-function session(initial: ActivityState, commands: Command[]): { state: ActivityState; facts: readonly DomainFact[] } {
-  return run(initial, commands);
-}
-
 const outcome = (result: WagerOutcome['result'], net: string, target = 't'): WagerOutcome => ({ turn: 1, target, stake: '10', result, net, returned: '0' });
 
 /** A record with only the fields the summary functions read changed. */
 function record(fields: Partial<CompletedPracticeSessionRecord>): CompletedPracticeSessionRecord {
-  const { state, facts } = session(createActivity(SPEC, STREAM), [STOP, FINAL]);
+  const { state, facts } = run(createActivity(SPEC, STREAM), [STOP, FINAL]);
   return { ...completedPracticeRecord(state, facts, CONTEXT), ...fields };
 }
 
@@ -66,7 +59,7 @@ export const recordCases: TestCase[] = [
     name: 'record: a free-play roulette session carries identities, times, rules and limits, funding, turns, ending reason and per-wager outcomes with their turn',
     run: (t) => {
       // Spin 1 is 27 (red): red 10 wins 10, black 10 loses. Spin 2 is 0: red 10 loses.
-      const { state, facts } = session(createActivity(SPEC, STREAM), [
+      const { state, facts } = run(createActivity(SPEC, STREAM), [
         place('red', '10'), place('black', '10'), BEGIN, SETTLE,
         place('red', '10'), BEGIN, SETTLE,
         { kind: 'request-stop', cause: 'switch' }, FINAL,
@@ -118,9 +111,9 @@ export const recordCases: TestCase[] = [
   {
     name: 'record: the ending reason defaults to stop; an access-ended stop is recorded as such',
     run: (t) => {
-      const plain = session(createActivity(SPEC, STREAM), [STOP, FINAL]);
+      const plain = run(createActivity(SPEC, STREAM), [STOP, FINAL]);
       t.equal(completedPracticeRecord(plain.state, plain.facts, CONTEXT).endingReason, 'stop');
-      const ended = session(createActivity(SPEC, STREAM), [{ kind: 'request-stop', cause: 'access-ended' }, FINAL]);
+      const ended = run(createActivity(SPEC, STREAM), [{ kind: 'request-stop', cause: 'access-ended' }, FINAL]);
       t.equal(completedPracticeRecord(ended.state, ended.facts, CONTEXT).endingReason, 'access-ended');
     },
   },
@@ -135,7 +128,7 @@ export const recordCases: TestCase[] = [
   {
     name: 'record: a session with no bet is flagged no-bet, with zero turns, zero resolved wagers and an unchanged result',
     run: (t) => {
-      const { state, facts } = session(createActivity(SPEC, STREAM), [place('red', '10'), STOP, FINAL]);
+      const { state, facts } = run(createActivity(SPEC, STREAM), [place('red', '10'), STOP, FINAL]);
       const result = completedPracticeRecord(state, facts, CONTEXT);
       t.equal([result.noBet, result.turnsPlayed, result.wagers, result.netResult, classifySession(result)], [true, 0, counts(0, 0, 0), '0', 'unchanged']);
       // The wager taken back by the stop path is a return, outside W/L/P.
@@ -145,7 +138,7 @@ export const recordCases: TestCase[] = [
   {
     name: 'record: craps keeps the chosen odds cap and counts come odds that were off as returned, outside W/L/P',
     run: (t) => {
-      const { state, facts } = session(createActivity({ ...CRAPS_SPEC, rules: { ...CRAPS_SPEC.rules, odds: '5x' } }, PI), [
+      const { state, facts } = run(createActivity({ ...CRAPS_SPEC, rules: { ...CRAPS_SPEC.rules, odds: '5x' } }, PI), [
         place('pass', '10'), BEGIN, SETTLE, // 8: point
         place('pass-odds', '50'), place('come', '10'), BEGIN, SETTLE, // 11: come wins
         place('come', '10'), BEGIN, SETTLE, // 6: come travels
@@ -172,7 +165,7 @@ export const recordCases: TestCase[] = [
     name: 'record: guided practice keeps the strategy revision and choices, betting adherence apart from money, the override flag and the departure log in order with stable ids',
     run: (t) => {
       const initial = createActivity({ ...SPEC, strategy: { definition: FLAT_EVEN_MONEY, parameters: { target: 'red' } } }, STREAM);
-      const { state, facts } = session(initial, [
+      const { state, facts } = run(initial, [
         place('red', '50'), BEGIN, RETRY, BEGIN, SETTLE, // retried; spin 27 red: red 10 wins 10
         place('black', '10'), BEGIN, OVERRIDE, SETTLE, // overridden; spin 0: black 10 loses
         STOP, FINAL,

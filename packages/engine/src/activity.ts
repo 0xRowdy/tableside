@@ -46,7 +46,6 @@ import {
 } from './funding';
 import { add, compare, decodeMoney, encodeMoney, type Money } from './money';
 import { RANDOM_PROTOCOL_VERSION, RandomStream, type RandomStreamIdentity, type RandomStreamState } from './random';
-import { STOP_CAUSES, type StopCause } from './record';
 import { ROULETTE, type RouletteActivityState, type RouletteRuleSet, type RouletteTable } from './roulette';
 import { sha256Hex } from './sha256';
 import { hasExactKeys, isCount, isIdentity, isRecord, isText, parseMoney, type VersionedIdentity } from './shape';
@@ -227,6 +226,11 @@ export type ActivityState = RouletteActivityState | CrapsActivityState | Blackja
 
 /** The state of one game's activity. */
 export type StateOf<G extends GameId> = Extract<ActivityState, { readonly identities: { readonly game: G } }>;
+
+/** Why the stop path ran: the player's stop, reset or switch, or an access-ended stop (which includes a content-removal stop). */
+export type StopCause = 'stop' | 'reset' | 'switch' | 'access-ended';
+
+export const STOP_CAUSES: readonly StopCause[] = ['stop', 'reset', 'switch', 'access-ended'];
 
 export type Command =
   /** Sets the stake on a target; amount "0" takes the wager down. */
@@ -830,6 +834,15 @@ const overrideEndsCycle = (definition: StrategyDefinition) => definition.counter
 /** Funds off the table plus outstanding stakes at their original value. */
 const sessionValue = (state: Pick<ActivityState, 'balance' | 'wagers'>): Money =>
   state.wagers.reduce((sum, wager) => add(sum, decodeMoney(wager.amount)), decodeMoney(state.balance));
+
+/** The cause the latest request-stop carried, read from its receipt; the player's stop when it named none. */
+export function stopCause(state: ActivityState): StopCause {
+  for (const receipt of [...state.receipts].reverse()) {
+    const command = JSON.parse(receipt.command) as Command;
+    if (command.kind === 'request-stop') return command.cause ?? 'stop';
+  }
+  return 'stop';
+}
 
 // ---- read permitted view ------------------------------------------------
 

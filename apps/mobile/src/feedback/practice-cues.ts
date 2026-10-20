@@ -16,7 +16,7 @@ import type { FeedbackService } from './service';
  * that ends a turn settling nothing (a craps roll that only sets the point)
  * gives the "no change" cue, so every turn has exactly one.
  */
-export function cuesForFacts(facts: readonly DomainFact[], endsTurn = false): CueName[] {
+export function cuesForFacts(facts: readonly DomainFact[], turnEnded = false): CueName[] {
   const cues: CueName[] = [];
   let net: Money | null = null;
   let returned = false;
@@ -54,7 +54,7 @@ export function cuesForFacts(facts: readonly DomainFact[], endsTurn = false): Cu
     }
   }
   if (returned) cues.push('wager-removed');
-  if (!net && endsTurn) net = money(0n);
+  if (!net && turnEnded) net = money(0n);
   if (net) cues.push(({ 1: 'net-win', [-1]: 'net-loss', 0: 'net-even' } as const)[compare(net, money(0n))]);
   return cues;
 }

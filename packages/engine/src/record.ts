@@ -9,7 +9,7 @@
 // the record's pinned identities with a shipped quarantine list, so an
 // accepted, immutable record can become quarantined later.
 
-import { readPermittedView, type ActivityState, type GameId, type StrategyDeparture, type VersionedIdentity } from './activity';
+import { readPermittedView, stopCause, type ActivityState, type GameId, type StopCause, type StrategyDeparture, type VersionedIdentity } from './activity';
 import { summarizeFunding, type FundingSource } from './funding';
 import { add, compare, decodeMoney, div, encodeMoney, money, type Money } from './money';
 import type { DomainFact } from './activity';
@@ -20,13 +20,8 @@ export const RECORD_VERSION = 1 as const;
 /** How spec 5 meters an activity, as its admission said (Amendment 4 A3). */
 export type MeteringBasis = 'free-play' | 'premium' | 'time' | 'turns' | 'training-bankroll' | 'challenge-attempt';
 
-/** Why the stop path ran. The player's stop, reset or switch, or an access-ended stop (which includes a content-removal stop). */
-export type StopCause = 'stop' | 'reset' | 'switch' | 'access-ended';
-
-export const STOP_CAUSES: readonly StopCause[] = ['stop', 'reset', 'switch', 'access-ended'];
-
 /**
- * How the session ended (Amendment 2 §B). "quarantined" is for an activity
+ * How the practice session ended (Amendment 2 §B). "quarantined" is for an activity
  * that a proven defect made unusable, ended by #80's path, not the stop path.
  */
 export type EndingReason = StopCause | 'quarantined';
@@ -117,7 +112,7 @@ export interface CompletedPracticeSessionRecord {
   readonly overrideAffected: boolean;
   /** This session's W/L/P and resolved-wager counts. */
   readonly wagers: WagerCounts;
-  /** No turn was played: nothing was ever at risk. Such sessions stay in session denominators. */
+  /** No turn was played: nothing was ever at risk. Such practice sessions stay in session denominators. */
   readonly noBet: boolean;
   /** Detail: every wager outcome and return, in order. */
   readonly outcomes: readonly WagerOutcome[];
@@ -134,15 +129,6 @@ export interface RecordContext {
   readonly endedAt: number;
   readonly meteringBasis: MeteringBasis;
   readonly allowancePolicyVersion: string | null;
-}
-
-/** The stop cause a request-stop command carried, read from its receipt. */
-function stopCause(state: ActivityState): StopCause {
-  for (const receipt of [...state.receipts].reverse()) {
-    const command = JSON.parse(receipt.command) as { kind: string; cause?: StopCause };
-    if (command.kind === 'request-stop') return command.cause ?? 'stop';
-  }
-  return 'stop';
 }
 
 /** Every wager outcome and return in the facts, each with its turn. */

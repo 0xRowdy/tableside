@@ -25,14 +25,14 @@ beforeEach(() => {
 
 const FLAT = { id: 'flat-even-money', revision: 1, name: 'Flat even-money', parameters: { target: 'red' } };
 
-function departure(turn: number, resolution: StrategyDeparture['resolution'], actual: string): StrategyDeparture {
+function departure(turn: number, resolution: StrategyDeparture['resolution'], actual: string, subjects: Record<string, string> = {}): StrategyDeparture {
   return {
     id: `activity-1/departure/${turn * 3}`,
     turn,
     resolution,
     actual: [{ target: 'red', amount: actual }],
     explanation: {
-      situation: { available: '1000', subjects: {} },
+      situation: { available: '1000', subjects },
       instructions: [{ id: 'flat', label: '1 unit on the target, every spin' }],
       prescription: { status: 'prescribed', bets: [{ target: 'red', amount: '10' }], held: [] },
       fallback: null,
@@ -88,14 +88,14 @@ describe('the S1-10 session result', () => {
   });
 
   it('in guided practice shows adherence apart from the money, and each departure with what the strategy prescribed, what you did and how it resolved, in words', async () => {
-    await show(guided([departure(1, 'retried', '50'), departure(3, 'overridden', '25')]));
+    await show(guided([departure(1, 'retried', '50', { 'last-pocket-color': 'none' }), departure(3, 'overridden', '25', { 'last-pocket-color': 'black' })]));
     expect(screen.getByText('Roulette · guided · Flat even-money · single zero')).toBeOnTheScreen();
     expect(screen.getByRole('header', { name: 'How closely you followed the strategy' })).toBeOnTheScreen();
     expect(screen.getByText('Scored apart from money, so a lucky session can\'t hide a missed play.')).toBeOnTheScreen();
     expect(screen.getByLabelText('Betting decisions: 1 of 2 followed, 50%')).toBeOnTheScreen();
     expect(screen.getByRole('header', { name: 'Departures, 2' })).toBeOnTheScreen();
     expect(screen.getByLabelText('Spin 1. Strategy: 10 on Red. You: 50 on Red. Retried.')).toBeOnTheScreen();
-    expect(screen.getByLabelText('Spin 3. Strategy: 10 on Red. You: 25 on Red. Overridden.')).toBeOnTheScreen();
+    expect(screen.getByLabelText('Spin 3 · after black. Strategy: 10 on Red. You: 25 on Red. Overridden.')).toBeOnTheScreen();
     // Resolution is a word, not only a colour.
     expect(screen.getByText('Retried')).toBeOnTheScreen();
     expect(screen.getByText('Overridden')).toBeOnTheScreen();
@@ -106,7 +106,7 @@ describe('the S1-10 session result', () => {
     const log = [1, 2, 3, 4, 5, 6].map((turn) => departure(turn, 'retried', String(20 + turn)));
     await show(guided(log, 6, 0));
     expect(screen.getAllByLabelText(/^Spin \d+\./).map((node) => node.props.accessibilityLabel.split('.')[0])).toEqual(['Spin 1', 'Spin 2', 'Spin 3', 'Spin 4']);
-    const showAll = screen.getByRole('button', { name: 'Show all 6 Departures' });
+    const showAll = screen.getByRole('button', { name: 'Show all 6 entries' });
     expect(showAll).toHaveStyle({ minHeight: 48 });
     await fireEvent.press(showAll);
     expect(screen.getAllByLabelText(/^Spin \d+\./)).toHaveLength(6);
@@ -123,7 +123,7 @@ describe('the S1-10 session result', () => {
     const record = completedRecord('activity-1');
     const list: QuarantineList = { version: 2, entries: [{ id: 'q-1', match: { engine: '0.0.0' }, explanation: 'Engine 0.0.0 settled some splits wrongly.' }] };
     await show(record, { quarantine: list });
-    expect(screen.getByLabelText('Quarantined. Engine 0.0.0 settled some splits wrongly. This session is left out of your totals and adherence.')).toBeOnTheScreen();
+    expect(screen.getByLabelText('Quarantined. Engine 0.0.0 settled some splits wrongly. This practice session is left out of your totals and adherence.')).toBeOnTheScreen();
     expect(record).toEqual(completedRecord('activity-1'));
   });
 

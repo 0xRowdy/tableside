@@ -46,9 +46,12 @@ function betsText(game: CompletedPracticeSession['game'], bets: readonly { reado
 
 /** One departure's lines: what the strategy prescribed and what the player did. */
 function departureLines(game: CompletedPracticeSession['game'], departure: StrategyDeparture) {
-  const { prescription } = departure.explanation;
+  const { prescription, situation } = departure.explanation;
+  // The situation the strategy read, where the game names one (roulette: the last pocket's colour).
+  const color = situation.subjects['last-pocket-color'];
+  const after = color !== undefined && color !== 'none' ? ` · after ${color}` : '';
   return {
-    title: `${TURN_NOUN[game]} ${departure.turn}`,
+    title: `${TURN_NOUN[game]} ${departure.turn}${after}`,
     strategy: `Strategy: ${betsText(game, prescription.status === 'prescribed' ? prescription.bets : [])}`,
     you: `You: ${betsText(game, departure.actual)}`,
     resolution: departure.resolution === 'retried' ? 'Retried' : 'Overridden',
@@ -100,12 +103,12 @@ export function SessionResult({
         <View
           style={styles.banner}
           accessible
-          accessibilityLabel={`Quarantined. ${status.explanation} This session is left out of your totals and adherence.`}
+          accessibilityLabel={`Quarantined. ${status.explanation} This practice session is left out of your totals and adherence.`}
         >
           <TriangleAlert color={palette.destructive} size={20} />
           <View style={styles.bannerText}>
             <Text maxFontSizeMultiplier={textScale.body} style={styles.bannerTitle}>Quarantined</Text>
-            <Text maxFontSizeMultiplier={textScale.body} style={styles.muted}>{status.explanation} This session is left out of your totals and adherence.</Text>
+            <Text maxFontSizeMultiplier={textScale.body} style={styles.muted}>{status.explanation} This practice session is left out of your totals and adherence.</Text>
           </View>
         </View>
       ) : (
@@ -229,7 +232,7 @@ function Guidance({ record, guidance }: { record: CompletedPracticeSession; guid
         </View>
       )}
       {!showAll && departures.length > FIRST_DEPARTURES && (
-        <Button label={`Show all ${departures.length} Departures`} variant="secondary" stretch onPress={() => setShowAll(true)} />
+        <Button label={`Show all ${departures.length} entries`} variant="secondary" stretch onPress={() => setShowAll(true)} />
       )}
     </>
   );
