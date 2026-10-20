@@ -84,6 +84,8 @@ export const essentialPairs: readonly {
   { use: 'sheet focus ring', kind: 'graphic', foreground: 'ring', background: 'popover' },
   { use: 'saved banner icon', kind: 'graphic', foreground: 'correct', background: 'card' },
   { use: 'quarantined banner icon', kind: 'graphic', foreground: 'destructive', background: 'card' },
+  { use: 'incomplete session banner border and icon', kind: 'graphic', foreground: 'primary', background: 'card' },
+  { use: 'incomplete session "What happened?" link', kind: 'text', foreground: 'primary', background: 'card' },
   { use: 'departure resolution tag', kind: 'text', foreground: 'foreground', background: 'secondary' },
   { use: 'red pocket number', kind: 'text', foreground: 'onImage', background: 'pocketRed' },
   { use: 'black pocket number', kind: 'text', foreground: 'onImage', background: 'pocketBlack' },

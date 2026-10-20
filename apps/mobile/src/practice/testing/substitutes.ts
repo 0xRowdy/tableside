@@ -2,11 +2,13 @@
 // deterministic entropy and sequential ids, over the in-memory store and the
 // always-allowed access supervisor.
 
+import { QUARANTINE_LIST } from '@tableside/definitions';
 import type { EntropySource } from '@tableside/engine';
 
 import { alwaysAllowed, type Clock, type PracticeAdapters } from '../adapters';
 import { SAVE_RETRY_MS } from '../controller';
-import { MemoryActivityStore } from '../memory-store';
+import { MemoryActivityStore, MemoryDisk } from '../memory-store';
+import type { StoredActivity } from '../store';
 
 /**
  * A clock that only moves when told. With `auto`, every sleep shorter than
@@ -83,5 +85,15 @@ export function substituteAdapters(options: { clock?: FakeClock; words?: readonl
     newId: () => `activity-${++next}`,
     device: 'test-device',
     owner: 'local',
+    quarantine: QUARANTINE_LIST,
   };
+}
+
+/** A store holding activities exactly as an earlier build left them in durable storage (#80). */
+export function storeHolding(...activities: StoredActivity[]): MemoryActivityStore {
+  const disk = new MemoryDisk();
+  for (const activity of activities) {
+    disk.rows.set(activity.activityId, { activity: JSON.stringify(activity), transitions: new Map(), effects: new Map() });
+  }
+  return new MemoryActivityStore(disk);
 }

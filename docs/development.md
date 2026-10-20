@@ -66,6 +66,12 @@ The engine has no package dependencies, and its TypeScript config includes only 
 
 `packages/definitions/reference/blackjack` holds the certified research files byte for byte (research/blackjack-coaching-validation@ae3776d) and their `reference-manifest.json`. The app can't read files, so `src/blackjack/reference-files.generated.ts` embeds the same bytes. The package's `build` script (also the first step of its `typecheck`) fails if the manifest, any file's SHA-256, or the embedded copy differs. Never edit the files; after a new certified freeze, copy it in and run `pnpm --filter @tableside/definitions reference:write`. No research script or calculator code is copied: `test/reference-integrity.test.ts` checks for them.
 
+## Releases: recorded checkpoints and the quarantine list
+
+Each release must keep resuming every unfinished practice session an earlier release can leave (spec 1, *Durability › Updates*). When you cut a release, run `pnpm --filter @tableside/engine record-checkpoints`: it writes `packages/engine/test/recorded/engine-<version>-schema-<schema>.ts` with that build's checkpoints in each game and unfinished phase, and the outcomes it reached from them. Add the module to `test/recorded/index.ts` and its SHA-256 to `tests/recorded-checkpoints.test.ts`. Recordings are never regenerated, edited or removed, so an unfinished session is never aged out: the engine suite decodes every recording directly with the current build (skipped versions included) and checks the recorded outcomes. A change that breaks one needs a migration in `decodeCheckpoint`, or the old behaviour kept for that pinned engine identity. A checkpoint the build can't run (a rollback) is `unsupported`: the controller leaves it untouched and asks for the update.
+
+A proven engine defect goes in `packages/definitions/src/quarantine.ts`: add an entry naming the affected identities and bump the list's version; never edit or remove an entry. Completed records are judged against it on every read (never stored), and an unfinished session it names is marked incomplete and explained instead of resuming.
+
 ## Accessibility notes for the shell
 
 - The tab bar (`src/navigation/TabBar.tsx`) is a `tablist` of six `tab`s, each at least 48 pt. Labels don't scale with system text, so the bar stays one row.

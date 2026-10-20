@@ -24,6 +24,7 @@ import {
   decodeCheckpoint,
   encodeCheckpoint,
   INSURANCE_TARGET,
+  quarantineStatus,
   readPermittedView,
   StrategySpecificationError,
   streamIdentityFromEntropy,
@@ -37,6 +38,7 @@ import {
   type DomainFact,
   type FieldPayout,
   type FundingSource,
+  type GameId,
   type OddsCap,
   type PermittedView,
   type Phase,
@@ -47,7 +49,7 @@ import {
 import { ROULETTE_PRESETS, standardCraps } from '@tableside/definitions';
 
 import type { AccessDecision, AccessDenial, LifecycleEvent, PhaseReport, PracticeAdapters } from './adapters';
-import type { AllowanceEffect, CommitOutcome, CommittedTransition, CompletedPracticeSession, NewActivity, StoredActivity } from './store';
+import type { AllowanceEffect, CommitOutcome, CommittedTransition, CompletedPracticeSession, IncompleteReason, NewActivity, StoredActivity } from './store';
 
 /** How long the landed ball or the dice stay on screen before the automatic settle step. */
 export const REVEAL_MS = 1500;
@@ -88,6 +90,17 @@ export interface Suspension {
 
 export type ActivePracticeSnapshot = Extract<PracticeSnapshot, { status: 'active' }>;
 
+/** An unfinished session found unusable and marked incomplete (#80), as its explanation shows it. */
+export interface IncompleteSession {
+  readonly game: GameId;
+  readonly buyIn: string;
+  /** Turns committed before it became unusable; null when the checkpoint can't be read. */
+  readonly turnsRecorded: number | null;
+  /** The pinned engine identity; null when the checkpoint can't be read. */
+  readonly engine: string | null;
+  readonly reason: IncompleteReason;
+}
+
 export type PracticeSnapshot =
   | { readonly status: 'loading' }
   | {
@@ -112,7 +125,14 @@ export type PracticeSnapshot =
       readonly ending: 'access-ended' | null;
     }
   /** The result just produced and durably saved in this process. */
-  | { readonly status: 'completed'; readonly result: CompletedPracticeSession };
+  | { readonly status: 'completed'; readonly result: CompletedPracticeSession }
+  /** The unfinished session is unusable (quarantined or damaged): marked incomplete, never given a result. */
+  | { readonly status: 'incomplete'; readonly session: IncompleteSession }
+  /**
+   * The unfinished session was saved by a later build this one can't run (a
+   * rollback): it is never reopened and waits, untouched, for the app to be updated.
+   */
+  | { readonly status: 'needs-update'; readonly game: GameId };
 
 export type ActiveSnapshot<V extends PermittedView = PermittedView> = Extract<PracticeSnapshot, { status: 'active' }> & { readonly view: V };
 
@@ -227,8 +247,7 @@ export class PracticeController {
     await this.exclusive(async () => {
       const stored = await this.adapters.store.findUnfinished();
       if (!stored) return this.showNone(null);
-      this.adopt(stored, []);
-      this.suspendNow('interrupted', null);
+      if (await this.openUnfinished(stored)) this.suspendNow('interrupted', null);
     });
   }
 
@@ -245,7 +264,7 @@ export class PracticeController {
       }
       if (unfinished) {
         this.unacknowledgedStart = null;
-        this.adopt(unfinished, []);
+        if (!(await this.openUnfinished(unfinished))) return;
         this.suspendNow('interrupted', null);
         return this.resumeSuspended();
       }
@@ -525,6 +544,11 @@ export class PracticeController {
       if (pending.kind === 'completion') return this.complete();
       if (settled(await this.retryTransition(pending))) await this.drive();
     });
+  }
+
+  /** Leaves an incomplete session's explanation; Play then offers setup. */
+  dismissIncomplete(): void {
+    if (this.current.status === 'incomplete') this.showNone(null);
   }
 
   /** Leaves a completed session's result; Play then offers setup. */
@@ -835,6 +859,49 @@ export class PracticeController {
     this.report({ activityId: result.activityId, phase: 'completed', suspended: false, timed: false });
     this.notify();
     return true;
+  }
+
+  /**
+   * Takes up the unfinished activity found in the store, unless it is unusable
+   * (#80). One a later build saved is left untouched; one whose checkpoint is
+   * damaged, or whose pinned identities the shipped quarantine list names, is
+   * marked incomplete and explained, never resumed or given a result.
+   * True when it was taken up.
+   */
+  private async openUnfinished(stored: StoredActivity): Promise<boolean> {
+    const decoded = decodeCheckpoint(stored.checkpoint);
+    const game = stored.specification.game;
+    this.activity = null;
+    this.state = null;
+    if (!decoded.ok && decoded.error.kind === 'unsupported') {
+      this.current = { status: 'needs-update', game };
+      this.notify();
+      return false;
+    }
+    const quarantine = decoded.ok ? quarantineStatus(decoded.state, this.adapters.quarantine) : null;
+    const reason: IncompleteReason | null = !decoded.ok
+      ? { kind: 'damaged', detail: decoded.error.message }
+      : quarantine?.quarantined
+        ? { kind: 'quarantined', entry: quarantine.entry, explanation: quarantine.explanation, listVersion: this.adapters.quarantine.version }
+        : null;
+    if (!reason) {
+      this.adopt(stored, []);
+      return true;
+    }
+    // Unsaved, the mark is made again the next time the activity is found; either way nothing is resumed.
+    const marked = await this.adapters.store.markIncomplete(stored.activityId, reason).catch(() => null);
+    this.current = {
+      status: 'incomplete',
+      session: {
+        game,
+        buyIn: stored.specification.funding,
+        turnsRecorded: decoded.ok ? decoded.state.turn : null,
+        engine: decoded.ok ? decoded.state.identities.engine : null,
+        reason: marked?.incomplete ?? reason,
+      },
+    };
+    this.notify();
+    return false;
   }
 
   private adopt(stored: StoredActivity, facts: readonly DomainFact[]): void {

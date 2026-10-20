@@ -178,6 +178,7 @@ export {
   type MeteringBasis,
   type QuarantineEntry,
   type QuarantineList,
+  type QuarantinableIdentities,
   type QuarantineStatus,
   type RecordContext,
   type ResultsSummary,

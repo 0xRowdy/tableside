@@ -11,13 +11,14 @@ import type {
   CommitOutcome,
   CommittedTransition,
   CompletedPracticeSession,
+  IncompleteReason,
   NewActivity,
   OutgoingSyncRecord,
   StoredActivity,
   TransitionCommit,
 } from './store';
 
-type Operation = 'createActivity' | 'commitTransition' | 'recordEffects' | 'complete' | 'readReceipt' | 'readTransitions';
+type Operation = 'createActivity' | 'commitTransition' | 'recordEffects' | 'complete' | 'markIncomplete' | 'readReceipt' | 'readTransitions';
 
 export class StoreWriteError extends Error {
   constructor(message: string) {
@@ -76,7 +77,7 @@ export class MemoryActivityStore implements ActivityStore {
     return this.injectable('createActivity', () => {
       const existing = this.rows.get(activity.activityId);
       if (existing) return parse<StoredActivity>(existing.activity);
-      const stored: StoredActivity = { ...activity, sequence: 0, completion: null };
+      const stored: StoredActivity = { ...activity, sequence: 0, completion: null, incomplete: null };
       this.rows.set(activity.activityId, { activity: JSON.stringify(stored), transitions: new Map(), effects: new Map() });
       return clone(stored);
     });
@@ -93,7 +94,7 @@ export class MemoryActivityStore implements ActivityStore {
     return this.read(() => {
       for (const row of this.rows.values()) {
         const activity = parse<StoredActivity>(row.activity);
-        if (activity.completion === null) return activity;
+        if (activity.completion === null && activity.incomplete === null) return activity;
       }
       return null;
     });
@@ -143,6 +144,17 @@ export class MemoryActivityStore implements ActivityStore {
       const sync: OutgoingSyncRecord = { id: `completed/${record.activityId}`, kind: 'completed-practice-session', record };
       this.outgoing.push(JSON.stringify(sync));
       return clone(record);
+    });
+  }
+
+  markIncomplete(activityId: string, reason: IncompleteReason): Promise<StoredActivity> {
+    return this.injectable('markIncomplete', () => {
+      const row = this.require(activityId);
+      const activity = parse<StoredActivity>(row.activity);
+      if (activity.completion || activity.incomplete) return activity;
+      const marked: StoredActivity = { ...activity, incomplete: reason };
+      row.activity = JSON.stringify(marked);
+      return clone(marked);
     });
   }
 
