@@ -30,7 +30,7 @@ export function SessionResult({
   }, [result]);
 
   // A training-bankroll session has its allocation instead of a buy-in, and never any rebuys.
-  const rows =
+  const funding =
     result.fundingSource === 'training-bankroll'
       ? [{ label: 'From training bankroll', value: formatUnits(result.buyIn) }]
       : [
@@ -40,10 +40,7 @@ export function SessionResult({
             : { label: `Rebuys (${result.rebuys.length})`, value: result.rebuys.map(formatUnits).join(' + ') },
           { label: 'Total funding', value: formatUnits(result.cumulativeFunding) },
         ];
-  rows.push(
-
-    { label: 'Final cash-out', value: formatUnits(result.finalCashOut) },
-  );
+  const rows = [...funding, { label: 'Final cash-out', value: formatUnits(result.finalCashOut) }];
 
   return (
     <Screen>

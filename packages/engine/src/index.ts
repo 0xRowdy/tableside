@@ -32,7 +32,6 @@ export {
 export {
   cumulativeFunding,
   FUNDING_CEILING,
-  FUNDING_SOURCES,
   fundingHeadroom,
   summarizeFunding,
   type Funding,

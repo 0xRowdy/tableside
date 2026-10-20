@@ -103,7 +103,8 @@ export class PracticeController {
   }
 
   /** Durability step 1: creates the activity and its random identity, then shows the table. */
-  async start(request: StartRequest): Promise<void> {
+  async start(requested: StartRequest): Promise<void> {
+    const request = { ...requested, fundingSource: requested.fundingSource ?? 'practice-funding' };
     await this.exclusive(async () => {
       // One unfinished practice session at a time: resume it rather than start another.
       let unfinished: StoredActivity | null;
@@ -135,7 +136,7 @@ export class PracticeController {
           rules: SINGLE_ZERO_ROULETTE,
           strategy: null,
           reference: null,
-          fundingSource: request.fundingSource ?? 'practice-funding',
+          fundingSource: request.fundingSource,
           funding: request.buyIn,
         };
         let initial: ActivityState;
@@ -431,5 +432,4 @@ export class PracticeController {
   }
 }
 
-const sameRequest = (a: StartRequest, b: StartRequest) =>
-  a.game === b.game && a.buyIn === b.buyIn && (a.fundingSource ?? 'practice-funding') === (b.fundingSource ?? 'practice-funding');
+const sameRequest = (a: StartRequest, b: StartRequest) => a.game === b.game && a.buyIn === b.buyIn && a.fundingSource === b.fundingSource;

@@ -70,7 +70,7 @@ function illegalMessage(reason: IllegalActionReason, target: string | null, view
     case 'no-wager':
       return 'Place a wager before you spin.';
     case 'not-whole-units':
-      return 'Stakes are whole units. Nothing was placed.';
+      return target ? 'Stakes are whole units. Nothing was placed.' : 'Rebuys are whole units. Nothing was added.';
     case 'no-wager-to-remove':
     case 'unknown-target':
       return `${name} can't be changed. Nothing was placed.`;

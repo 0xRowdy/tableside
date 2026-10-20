@@ -26,7 +26,7 @@ import { sha256Hex } from './sha256';
 import { ENGINE_VERSION } from './version';
 
 /** The state-schema version, kept apart from engine, rule and protocol identities. */
-export const STATE_SCHEMA_VERSION = 1 as const;
+export const STATE_SCHEMA_VERSION = 2 as const;
 
 /** Ceiling for configurable base-wager limits, in units. */
 const BASE_WAGER_CEILING = 1_000_000n;
@@ -305,7 +305,7 @@ export function createActivity(spec: ActivitySpecification, random: RandomStream
   if (spec.strategy !== null && !isIdentity(spec.strategy)) fail('strategy must be null or an id and version');
   if (spec.reference !== null && !isIdentity(spec.reference)) fail('reference must be null or an id and version');
   const funding = openFunding(spec.fundingSource, parseMoney(spec.funding));
-  if (!funding) fail(`funding must be practice funding or a training bankroll, in whole units from 1 to ${FUNDING_CEILING}`);
+  if (!funding) return fail(`funding must be practice funding or a training bankroll, in whole units from 1 to ${FUNDING_CEILING}`);
   let stream: RandomStream;
   try {
     stream = RandomStream.create(random);
@@ -335,7 +335,7 @@ export function createActivity(spec: ActivitySpecification, random: RandomStream
     phase: 'open-decision',
     turn: 0,
     balance: spec.funding,
-    funding: funding as Funding,
+    funding,
     wagers: [],
     outcome: null,
     random: position,

@@ -1,4 +1,4 @@
-// The rebuy sheet (design frames S1-08): shared by every game table. Prefilled
+// The rebuy sheet (design frames S1-08), for any game table: it reads only the view's funding lines. Prefilled
 // with the original buy-in and editable; the engine judges the amount, and a
 // refusal keeps the draft and explains the room left instead of resizing it.
 // At large text sizes it fills the screen and scrolls (frame U517q0).
@@ -27,8 +27,8 @@ function parseDraft(draft: string): string | null {
   return amount > 0n ? amount.toString() : null;
 }
 
-/** The latest committed refusal of this exact rebuy amount, if any. */
-function refusalOf(facts: readonly DomainFact[], amount: string | null) {
+/** True when the latest committed transition refused a rebuy of exactly this amount. */
+function wasRefused(facts: readonly DomainFact[], amount: string | null) {
   return facts.some((fact) => fact.kind === 'illegal-action' && fact.command.kind === 'rebuy' && fact.command.amount === amount);
 }
 
@@ -55,7 +55,7 @@ export function RebuySheet({
   const [notWhole, setNotWhole] = useState(false);
   const [openedAt] = useState(sequence);
   const amount = parseDraft(draft);
-  const refused = sequence > openedAt && refusalOf(facts, amount);
+  const refused = sequence > openedAt && wasRefused(facts, amount);
   const rebuysSoFar = funding.rebuys.reduce((sum, rebuy) => sum + BigInt(rebuy), 0n).toString();
   const after = amount === null ? null : (BigInt(funding.cumulative) + BigInt(amount)).toString();
   const label = amount === null ? 'Add to this session' : `Add ${formatUnits(amount)} to this session`;

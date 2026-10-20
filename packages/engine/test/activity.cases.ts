@@ -53,7 +53,7 @@ export const activityCases: TestCase[] = [
         reference: null,
         random: STREAM,
       });
-      t.equal(state.schema, 1);
+      t.equal(state.schema, 2);
       t.equal([state.phase, state.turn, state.balance, state.wagers], ['open-decision', 0, '1000', []]);
       // The state is plain data: it survives a JSON round trip unchanged.
       t.equal(JSON.parse(JSON.stringify(state)), state);
@@ -442,7 +442,7 @@ export const activityCases: TestCase[] = [
         return JSON.stringify(value);
       };
       const unsupported = [
-        edit((v) => ((v as Record<string, unknown>).schema = 2)),
+        edit((v) => ((v as Record<string, unknown>).schema = 1)),
         edit((v) => (v.identities!.engine = '9.9.9')),
         edit((v) => (v.identities!.game = 'blackjack')),
         edit((v) => (v.identities!.rules = { id: 'roulette-double-zero', version: 1 })),
