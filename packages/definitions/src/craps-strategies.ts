@@ -47,9 +47,12 @@ export const PASS_WITH_ODDS: StrategyDefinition = {
   note: 'Pass 10, then 10 odds once a point is set.',
 };
 
+/** Either place bet on the table for a roll keeps them up; a seven-out takes them down (each number's loss is the same seven). */
 const UP: StrategyAdjustment[] = [
-  { id: 'up', on: 'any', wager: 'place-6', counter: 'up', to: lit('1') },
-  { id: 'seven-out', on: 'loss', wager: 'place-6', counter: 'up', to: lit('0') },
+  { id: 'up-6', on: 'any', wager: 'place-6', counter: 'up', to: lit('1') },
+  { id: 'up-8', on: 'any', wager: 'place-8', counter: 'up', to: lit('1') },
+  { id: 'seven-out-6', on: 'loss', wager: 'place-6', counter: 'up', to: lit('0') },
+  { id: 'seven-out-8', on: 'loss', wager: 'place-8', counter: 'up', to: lit('0') },
 ];
 
 export const FLAT_PLACE_6_8: StrategyDefinition = {

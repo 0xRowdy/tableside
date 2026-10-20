@@ -169,6 +169,7 @@ export function CycleResultPanel({
   canEnd,
   onRestart,
   onEnd,
+  onPlayOn,
   words = ROULETTE_WORDS,
 }: {
   strategy: StrategyView;
@@ -180,6 +181,8 @@ export function CycleResultPanel({
   canEnd: boolean;
   onRestart: () => void;
   onEnd: () => void;
+  /** Where committed wagers stay after the cycle (craps), playing on without the strategy lets the dice settle them. */
+  onPlayOn?: () => void;
   words?: CoachWords;
 }) {
   const { cycle } = strategy;
@@ -219,6 +222,7 @@ export function CycleResultPanel({
       })}
       <Button label={`Start another cycle with ${formatUnits(balance)}`} stretch disabled={!canRestart} onPress={onRestart} />
       <Button label="End session" variant="secondary" stretch disabled={!canEnd} onPress={onEnd} />
+      {onPlayOn && <Button label="Keep playing without the strategy" variant="secondary" stretch disabled={!canRestart} onPress={onPlayOn} />}
       <Text maxFontSizeMultiplier={textScale.body} style={styles.note}>
         Starting another cycle uses the balance you have now. It never adds chips, and the session keeps the strategy revision you started with.
       </Text>

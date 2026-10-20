@@ -25,8 +25,8 @@ import {
   type OddsCap,
   FIELD_PAYOUTS,
 } from './craps';
-import { add, compare, decodeMoney, encodeMoney, type Money } from './money';
-import { BASE_WAGER_CEILING, isRecord } from './shape';
+import { add, compare, decodeMoney, encodeMoney } from './money';
+import { BASE_WAGER_CEILING, hasExactKeys, isWholeIn, limitGroupProblems, parseMoney } from './shape';
 import type { StrategyGame, StrategyVocabulary } from './strategy';
 
 type Limits = CrapsRuleSet['limits'];
@@ -67,45 +67,23 @@ const SUBJECTS: Record<string, readonly string[]> = {
   'come-bases': ['0', '1', '2', '3', '4', '5', '6'],
 };
 
-function parse(value: unknown): Money | undefined {
-  if (typeof value !== 'string' || value.length > 64) return undefined;
-  try {
-    return decodeMoney(value);
-  } catch {
-    return undefined;
-  }
-}
+const limitsProblems = (limits: unknown, path: string) => limitGroupProblems(limits, ['flat', 'props'], path);
 
+/** A canonical whole-unit amount within the base-wager ceiling. */
 const whole = (value: unknown) => {
-  const amount = parse(value);
-  return amount !== undefined && amount.d === 1n && amount.n >= 1n && amount.n <= BASE_WAGER_CEILING ? amount : undefined;
+  const amount = parseMoney(value);
+  return isWholeIn(amount, 1n, BASE_WAGER_CEILING) ? amount : undefined;
 };
 
-const keysAre = (value: Record<string, unknown>, keys: string) => Object.keys(value).sort().join() === keys;
-
-function limitsProblems(limits: unknown, path: string): { path: string; message: string }[] {
-  if (!isRecord(limits) || !keysAre(limits, 'flat,props')) return [{ path, message: 'flat and proposition limits are required' }];
-  const problems: { path: string; message: string }[] = [];
-  for (const kind of ['flat', 'props'] as const) {
-    const limit = limits[kind];
-    const min = isRecord(limit) ? whole(limit.min) : undefined;
-    const max = isRecord(limit) ? whole(limit.max) : undefined;
-    if (!isRecord(limit) || !keysAre(limit, 'max,min') || !min || !max || compare(min, max) > 0) {
-      problems.push({ path: `${path}/${kind}`, message: `${kind} limits are whole units from 1 to ${BASE_WAGER_CEILING} with min <= max` });
-    }
-  }
-  return problems;
-}
-
 function situationProblem(situation: unknown): string | undefined {
-  if (!isRecord(situation) || !keysAre(situation, 'balance,bases,game,point,rules')) return 'a craps situation has game, rules, balance, point and bases';
+  if (!hasExactKeys(situation, ['balance', 'bases', 'game', 'point', 'rules'])) return 'a craps situation has game, rules, balance, point and bases';
   if (situation.game !== 'craps') return 'not a craps situation';
   const rules = situation.rules;
-  if (!isRecord(rules) || !keysAre(rules, 'field,limits,odds') || !ODDS_CAPS.includes(rules.odds as OddsCap) || !FIELD_PAYOUTS.includes(rules.field as FieldPayout)) {
+  if (!hasExactKeys(rules, ['field', 'limits', 'odds']) || !ODDS_CAPS.includes(rules.odds as OddsCap) || !FIELD_PAYOUTS.includes(rules.field as FieldPayout)) {
     return 'unknown craps rules';
   }
   if (limitsProblems(rules.limits, '').length > 0) return 'the limits contradict the rules';
-  const balance = parse(situation.balance);
+  const balance = parseMoney(situation.balance);
   if (!balance || balance.n < 0n || encodeMoney(balance) !== situation.balance) return 'the balance must be canonical money, not negative';
   const point = situation.point;
   if (point !== null && !CRAPS_POINTS.includes(point as CrapsPoint)) return `${String(point)} is not a point`;
@@ -114,7 +92,7 @@ function situationProblem(situation: unknown): string | undefined {
   const seen = new Set<string>();
   let staked = decodeMoney('0');
   for (const base of bases as unknown[]) {
-    if (!isRecord(base) || !keysAre(base, 'amount,target') || typeof base.target !== 'string') return 'a base has a target and an amount';
+    if (!hasExactKeys(base, ['amount', 'target']) || typeof base.target !== 'string') return 'a base has a target and an amount';
     if (!isBaseTarget(base.target, point as CrapsPoint | null) || seen.has(base.target)) return `${String(base.target)} can't be an established base here`;
     const amount = whole(base.amount);
     if (!amount || encodeMoney(amount) !== base.amount) return 'a base amount is whole units';
@@ -139,7 +117,7 @@ export const CRAPS_VOCABULARY: StrategyVocabulary<CrapsSituation> = {
   subjects: SUBJECTS,
   overrideEndsCycle: true,
   tableProblems(table) {
-    if (!isRecord(table) || !keysAre(table, 'limits,odds')) return [{ path: '', message: 'declare the odds caps and limits the strategy is written for' }];
+    if (!hasExactKeys(table, ['limits', 'odds'])) return [{ path: '', message: 'declare the odds caps and limits the strategy is written for' }];
     const problems = limitsProblems(table.limits, '/limits');
     const odds = table.odds;
     if (!Array.isArray(odds) || odds.length === 0 || new Set(odds).size !== odds.length || !odds.every((cap) => ODDS_CAPS.includes(cap))) {

@@ -212,7 +212,8 @@ export interface StrategyVocabulary<Situation = unknown> {
   /**
    * True when an override ends every strategy's cycle in this game, not only a
    * progression's: craps wagers persist across rolls, so an override leaves a
-   * table the strategy didn't build.
+   * table the strategy didn't build. The one vocabulary flag that shapes the
+   * session protocol (activity.ts overrideEndsCycle).
    */
   readonly overrideEndsCycle?: boolean;
   /**

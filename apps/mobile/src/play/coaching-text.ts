@@ -4,20 +4,25 @@
 // Nothing here judges or praises, and nothing is added that the facts don't hold.
 // A table passes its own words (wager names, and "spin" or "roll").
 
-import type { BetCorrection, CycleEnd, DomainFact, Explanation, PauseReason, PendingStrategyAction, StrategyView, Wager } from '@tableside/engine';
+import type { BetCorrection, CycleEnd, Explanation, PendingStrategyAction, StrategyView, Wager } from '@tableside/engine';
 
 import { crapsTargetName } from './craps-text';
 import { targetName } from './roulette-text';
+import type { TurnWord } from './strategy-text';
 import { formatUnits } from './units';
 
 /** How a game words its wagers and its turns. */
 export interface CoachWords {
   readonly targetName: (target: string) => string;
-  readonly turn: 'spin' | 'roll';
+  readonly turn: TurnWord;
+  /** The turn as a title: "Spin", "Roll". */
+  readonly Turn: string;
+  /** True where some wagers are contracts that stay until the game settles them (craps line bets). */
+  readonly contracts: boolean;
 }
 
-export const ROULETTE_WORDS: CoachWords = { targetName, turn: 'spin' };
-export const CRAPS_WORDS: CoachWords = { targetName: crapsTargetName, turn: 'roll' };
+export const ROULETTE_WORDS: CoachWords = { targetName, turn: 'spin', Turn: 'Spin', contracts: false };
+export const CRAPS_WORDS: CoachWords = { targetName: crapsTargetName, turn: 'roll', Turn: 'Roll', contracts: true };
 
 /** "a, b and c". */
 const listed = (items: readonly string[]) => (items.length < 2 ? items.join('') : `${items.slice(0, -1).join(', ')} and ${items.at(-1)}`);
@@ -152,13 +157,13 @@ export function pendingBlocked(pending: PendingStrategyAction, available: string
 
 /** For a pending action that follows a settled outcome: that outcome stays as it was paid. */
 export const pendingPaidNote = (pending: PendingStrategyAction, words: CoachWords = ROULETTE_WORDS) =>
-  pending.turn === undefined ? null : `${words.turn === 'roll' ? 'Roll' : 'Spin'} ${pending.turn} is settled and stays paid. Nothing is paid again.`;
+  pending.turn === undefined ? null : `${words.Turn} ${pending.turn} is settled and stays paid. Nothing is paid again.`;
 
 /** What an override from a pending strategy action means, before the player chooses it. */
 export const pendingOverrideNote = (progression: boolean, words: CoachWords = ROULETTE_WORDS) =>
   progression
     ? `An override ends this cycle: your ${words.turn} settles, and you restart the strategy yourself.`
-    : 'An override is recorded once, and the strategy coaches your next spin.';
+    : `An override is recorded once, and the strategy coaches your next ${words.turn}.`;
 
 /** The cycle result's headline. */
 export const CYCLE_HEADLINE: Record<CycleEnd, string> = {
@@ -184,7 +189,7 @@ export function cycleEndText(strategy: Pick<StrategyView, 'name' | 'cycleEnd' | 
       return "The strategy's stop rule applies, so no new bet was placed.";
     case 'override':
       return `You overrode the strategy, so its cycle ended once the ${words.turn} settled.${
-        words.turn === 'roll' ? ' Its removable bets came down; committed line bets stay until the dice settle them.' : ''
+        words.contracts ? ' Its removable bets came down; committed line bets stay until the dice settle them.' : ''
       } Restart it to follow it again, or play on your own.`;
     case 'collected':
       return 'You kept what was paid instead of the strategy\'s next step. That ends the cycle: removable bets came down, committed line bets stay until the dice settle them, and nothing is pending. The strategy waits until you restart it.';
@@ -192,45 +197,5 @@ export function cycleEndText(strategy: Pick<StrategyView, 'name' | 'cycleEnd' | 
       return "The strategy's next stake grew past the largest amount a strategy may compute, so its cycle ended. Restart it to begin again from its first bet.";
     case null:
       return '';
-  }
-}
-
-/** How a cycle-end fact is announced. */
-const CYCLE_END_ANNOUNCEMENT: Record<CycleEnd, (turn: CoachWords['turn']) => string> = {
-  completed: () => 'The strategy cycle is complete.',
-  cap: () => 'The strategy cycle ended at its cap.',
-  stop: () => 'The strategy cycle ended at its stop rule.',
-  override: (turn) => `The strategy cycle ends once this ${turn} settles.`,
-  collected: () => 'You collected instead. The strategy cycle ended.',
-  envelope: () => 'The strategy cycle ended: its next stake is too large to compute.',
-};
-
-/** A pending strategy action, announced when it begins. The pending panel shows the amounts. */
-const PAUSED: Record<PauseReason, string> = {
-  'unfunded-group': "Strategy paused: your balance can't cover its next bets. No new strategy bets.",
-  limit: 'Strategy paused: its next bets are outside the table limits. No new strategy bets.',
-  cap: 'Strategy paused at its cap. No new strategy bets.',
-  stop: 'Strategy paused by its stop rule. No new strategy bets.',
-};
-
-/** A guided-practice fact in one sentence, or null for a fact the table words itself. */
-export function strategyFactSentence(fact: DomainFact, words: CoachWords = ROULETTE_WORDS): string | null {
-  switch (fact.kind) {
-    case 'correction-offered':
-      return `Strategy check before your ${words.turn}. Nothing has been placed yet.`;
-    case 'departure-recorded':
-      return fact.departure.resolution === 'retried' ? 'Departure recorded: you took it back.' : 'Departure recorded: you overrode the strategy.';
-    case 'cycle-ended':
-      return CYCLE_END_ANNOUNCEMENT[fact.reason](words.turn);
-    case 'strategy-resumed':
-      return 'The strategy can place its next bet again.';
-    case 'strategy-paused':
-      return PAUSED[fact.reason];
-    case 'cycle-restarted':
-      return 'Strategy restarted with your current balance.';
-    case 'strategy-stopped':
-      return 'Strategy stopped. You play on your own now.';
-    default:
-      return null;
   }
 }

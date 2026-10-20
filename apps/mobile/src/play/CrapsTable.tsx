@@ -8,7 +8,7 @@
 // field; place, buy, lay, hardways and propositions are in the bet list.
 
 import { crapsHouseEdge } from '@tableside/definitions';
-import { CRAPS_POINTS, isPlayCorrection, type CrapsPermittedView as PermittedView, type CycleTurn, type DomainFact } from '@tableside/engine';
+import { CRAPS_POINTS, isPlayCorrection, type CrapsPermittedView as PermittedView, type CycleTurn } from '@tableside/engine';
 import { useEffect, useMemo, useState } from 'react';
 import { AccessibilityInfo, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -22,7 +22,7 @@ import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/th
 import { BetSelector } from './bet-selector/BetSelector';
 import { draftAmountText, EMPTY_DRAFT, findChoice, isDraftPending, type BetDraft } from './bet-selector/catalog';
 import { DraftBar, PresentationSwitch, type Presentation } from './bet-selector/Presentation';
-import { betCorrectionCopy, betsText, CRAPS_WORDS, strategyFactSentence } from './coaching-text';
+import { betCorrectionCopy, betsText, CRAPS_WORDS } from './coaching-text';
 import { crapsCatalog, crapsPlacedWagers, placedToggle } from './craps-catalog';
 import { EndSessionDialog } from './EndSessionDialog';
 import { CorrectionPanel, CycleResultPanel, GuidedStrip, PendingPanel, StopStrategyDialog, type TurnWords } from './Guidance';
@@ -49,12 +49,6 @@ function phaseSteps(view: PermittedView): PhaseStep[] {
 }
 
 const rollText = (dice: readonly [number, number]) => `${dice[0]} and ${dice[1]}, total ${dice[0] + dice[1]}`;
-
-/** The table's own words for a transition, then guided practice's (corrections, pending actions, cycles). */
-function describe(facts: readonly DomainFact[], view: PermittedView): string | null {
-  const parts = [describeCrapsFacts(facts, view), ...facts.map((fact) => strategyFactSentence(fact, CRAPS_WORDS))].filter((part): part is string => part !== null);
-  return parts.length === 0 ? null : parts.join(' ');
-}
 
 /** A cycle's roll for the cycle result: "Roll 3 · 12 on Place 6 and 12 on Place 8", "Rolled 4 and 2". */
 function describeTurn(turn: CycleTurn, index: number): TurnWords {
@@ -95,12 +89,12 @@ export function CrapsTable({ snapshot }: { snapshot: ActiveSnapshot }) {
 
   const ready = !busy && save === 'saved';
   const legal = (kind: PermittedView['legalCommands'][number]) => ready && view.legalCommands.includes(kind);
-  const message = useMemo(() => describe(facts, view), [facts, view]);
+  const message = useMemo(() => describeCrapsFacts(facts, view), [facts, view]);
   const strategy = view.strategy;
-  const wagersText = view.wagers.length === 0 ? 'nothing' : view.wagers.map((wager) => `${crapsTargetName(wager.target)} ${formatUnits(wager.amount)}`).join(' · ');
+  const listText = (list: typeof view.wagers) => list.map((wager) => `${crapsTargetName(wager.target)} ${formatUnits(wager.amount)}`).join(' · ');
+  const wagersText = view.wagers.length === 0 ? 'nothing' : listText(view.wagers);
   const contracts = view.wagers.filter((wager) => table.wagers.find((status) => status.target === wager.target)?.removable === false);
   const removable = view.wagers.filter((wager) => !contracts.includes(wager));
-  const listText = (list: typeof view.wagers) => list.map((wager) => `${crapsTargetName(wager.target)} ${formatUnits(wager.amount)}`).join(' · ');
   const edge = (wager: 'pass' | 'dont-pass') => crapsHouseEdge(wager, { ...table.variant, odds: table.odds, field: table.field }).percent;
 
   // Announce every committed transition as it is published, including ones
@@ -118,7 +112,7 @@ export function CrapsTable({ snapshot }: { snapshot: ActiveSnapshot }) {
       if (latest.view.sequence === announced) return;
       announced = latest.view.sequence;
       // A state adopted from the store carries no facts of its own: restate where things stand.
-      const text = describe(latest.facts, latest.view) ?? `${crapsStatus(latest.view)}. Balance ${formatUnits(latest.view.balance)}.`;
+      const text = describeCrapsFacts(latest.facts, latest.view) ?? `${crapsStatus(latest.view)}. Balance ${formatUnits(latest.view.balance)}.`;
       AccessibilityInfo.announceForAccessibility(text);
     });
   }, [controller]);
@@ -254,6 +248,7 @@ export function CrapsTable({ snapshot }: { snapshot: ActiveSnapshot }) {
                   canEnd={legal('request-stop')}
                   onRestart={() => void controller.restartCycle()}
                   onEnd={() => setConfirming(true)}
+                  onPlayOn={() => void controller.stopStrategy()}
                   words={CRAPS_WORDS}
                 />
               )}

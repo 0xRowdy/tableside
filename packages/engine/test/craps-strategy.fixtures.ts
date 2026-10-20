@@ -51,8 +51,10 @@ export const PASS_WITH_ODDS: StrategyDefinition = {
 
 /** Place bets stay up through a made point: the "up" counter is 1 from their first roll until a seven-out takes them. */
 const UP: StrategyAdjustment[] = [
-  { id: 'up', on: 'any' as const, wager: 'place-6', counter: 'up', to: lit('1') },
-  { id: 'down', on: 'loss' as const, wager: 'place-6', counter: 'up', to: lit('0') },
+  { id: 'up-6', on: 'any', wager: 'place-6', counter: 'up', to: lit('1') },
+  { id: 'up-8', on: 'any', wager: 'place-8', counter: 'up', to: lit('1') },
+  { id: 'down-6', on: 'loss', wager: 'place-6', counter: 'up', to: lit('0') },
+  { id: 'down-8', on: 'loss', wager: 'place-8', counter: 'up', to: lit('0') },
 ];
 
 const placeBoth = (id: string, label: string, when: StrategyCondition): StrategyInstruction => ({

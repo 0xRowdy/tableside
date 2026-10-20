@@ -172,6 +172,13 @@ describe('guided craps practice', () => {
     expect(cycle.getByLabelText(/^Roll 1 · nothing at stake\. Even · rolled \d and \d, total 8/)).toBeOnTheScreen();
     expect(cycle.getByRole('button', { name: 'Start another cycle with 1,042' })).toBeEnabled();
     expect(screen.getByLabelText('On table 0')).toBeOnTheScreen();
+
+    // In a landscape window the controls sit beside the felt, and the cycle result stays whole.
+    await setWindow(844, 390);
+    expect(StyleSheet.flatten(screen.getByTestId('table-columns').props.style)).toMatchObject({ flexDirection: 'row' });
+    expect(within(screen.getByTestId('cycle-panel')).getByRole('button', { name: 'Keep playing without the strategy' })).toBeEnabled();
+    await fireEvent.press(within(screen.getByTestId('cycle-panel')).getByRole('button', { name: 'Keep playing without the strategy' }));
+    await waitFor(() => expect(screen.getByText('Strategy stopped · playing on your own')).toBeOnTheScreen());
   });
 
   it('Stop strategy says a committed pass line is never refunded', async () => {

@@ -28,13 +28,13 @@ import type { StartProblem } from '@/practice/controller';
 import { usePractice } from '@/practice/PracticeProvider';
 import { space } from '@/theme/tokens';
 
-import { betsText } from './coaching-text';
+import { betsText, ROULETTE_WORDS } from './coaching-text';
 import { formatUnits, targetName } from './roulette-text';
 import { FundingSection, useFunding, type Opening } from './setup/Funding';
 import { GroupFields, LimitsBanner, useLimits } from './setup/Limits';
 import type { LimitGroup } from './setup/limit-drafts';
 import { ChoiceGroup, FieldLabel, Help, Section, SetupHeader } from './setup/SetupParts';
-import { StrategyPicker } from './setup/StrategyPicker';
+import { limitRequirementText, StrategyPicker } from './setup/StrategyPicker';
 
 type Mode = 'free-play' | 'guided';
 type Group = 'inside' | 'outside';
@@ -189,12 +189,9 @@ export function RouletteSetup({
 
 /** The plain-language requirement a table fails. */
 function requirementText(strategy: StrategyDefinition, requirement: TableRequirement): string {
-  const bet = requirement.target && requirement.amount ? betsText([{ target: requirement.target, amount: requirement.amount }]) : '';
+  const limit = limitRequirementText(strategy, requirement, ROULETTE_WORDS);
+  if (limit) return limit;
   switch (requirement.requirement) {
-    case 'below-minimum':
-      return `${strategy.name} bets ${bet}. This table's minimum for that bet is ${formatUnits(requirement.limit ?? '0')}, so a ${formatUnits(requirement.amount ?? '0')} bet isn't allowed.`;
-    case 'above-maximum':
-      return `${strategy.name} bets ${bet}. This table's maximum for that bet is ${formatUnits(requirement.limit ?? '0')}.`;
     case 'not-on-layout':
       return `${strategy.name} bets on ${targetName(requirement.target ?? '')}, which this wheel doesn't have.`;
     case 'wheel':

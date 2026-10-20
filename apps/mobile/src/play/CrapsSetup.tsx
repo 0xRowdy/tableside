@@ -33,7 +33,7 @@ import { FundingSection, useFunding, type Opening } from './setup/Funding';
 import { GroupFields, LimitsBanner, useLimits } from './setup/Limits';
 import type { LimitGroup } from './setup/limit-drafts';
 import { ChoiceGroup, FieldLabel, Help, Section, SetupHeader } from './setup/SetupParts';
-import { StrategyPicker } from './setup/StrategyPicker';
+import { limitRequirementText, StrategyPicker } from './setup/StrategyPicker';
 import { betsText, CRAPS_WORDS } from './coaching-text';
 import { formatUnits } from './units';
 
@@ -57,23 +57,6 @@ function strategyOpening(strategy: StrategyDefinition, rules: CrapsRuleSet): Ope
   return { kind: 'strategy', amount, strategyName: strategy.name, bets: betsText(bets, CRAPS_WORDS) };
 }
 
-/** The plain-language requirement a table fails. */
-function requirementText(strategy: StrategyDefinition, requirement: TableRequirement): string {
-  const bet = requirement.target && requirement.amount ? betsText([{ target: requirement.target, amount: requirement.amount }], CRAPS_WORDS) : '';
-  switch (requirement.requirement) {
-    case 'below-minimum':
-      return `${strategy.name} bets ${bet}. This table's minimum for that bet is ${formatUnits(requirement.limit ?? '0')}, so a ${formatUnits(requirement.amount ?? '0')} bet isn't allowed.`;
-    case 'above-maximum':
-      return `${strategy.name} bets ${bet}. This table's maximum for that bet is ${formatUnits(requirement.limit ?? '0')}.`;
-    case 'stake-increment':
-      return `${strategy.name} bets ${bet}, which isn't a stake this bet takes.`;
-    case 'odds':
-      return `${strategy.name} is written for other maximum odds.`;
-    default:
-      return `${strategy.name} needs ${requirement.requirement}.`;
-  }
-}
-
 type Group = 'flat' | 'props';
 
 const GROUPS: readonly LimitGroup<Group>[] = [
@@ -86,6 +69,20 @@ const GROUPS: readonly LimitGroup<Group>[] = [
 ];
 
 const FIELD_LABELS: Record<FieldPayout, string> = { 'triple-12': '2 double, 12 triple', 'double-12': '2 and 12 double' };
+
+/** The plain-language requirement a table fails. */
+function requirementText(strategy: StrategyDefinition, requirement: TableRequirement): string {
+  const limit = limitRequirementText(strategy, requirement, CRAPS_WORDS);
+  if (limit) return limit;
+  switch (requirement.requirement) {
+    case 'stake-increment':
+      return `${strategy.name} bets ${formatUnits(requirement.amount ?? '0')} on ${CRAPS_WORDS.targetName(requirement.target ?? '')}, which isn't a stake that bet takes.`;
+    case 'odds':
+      return `${strategy.name} is written for other maximum odds.`;
+    default:
+      return `${strategy.name} needs ${requirement.requirement}.`;
+  }
+}
 
 export function CrapsSetup({
   problem,

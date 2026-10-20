@@ -1329,11 +1329,10 @@ function strategyDamage(state: ActivityState, identity: VersionedIdentity | null
   const progress = progressProblem(definition, run.progress);
   if (progress) return progress;
   const deferred = run.deferred;
-  if (deferred !== null) {
-    if (status !== 'active' || !hasExactKeys(deferred, ['turn', 'progress']) || !isCount(deferred.turn) || deferred.turn < 1 || deferred.turn > state.turn) {
-      return 'damaged strategy adjustment';
-    }
-    if (progressProblem(definition, deferred.progress)) return 'damaged strategy adjustment';
+  // A waiting adjustment belongs to an active strategy and to a turn already played.
+  const playedTurn = (turn: unknown) => isCount(turn) && turn >= 1 && turn <= state.turn;
+  if (deferred !== null && (status !== 'active' || !hasExactKeys(deferred, ['turn', 'progress']) || !playedTurn(deferred.turn) || progressProblem(definition, deferred.progress))) {
+    return 'damaged strategy adjustment';
   }
   const cycle = cycleDamage(state, definition, run.cycle);
   if (cycle) return cycle;

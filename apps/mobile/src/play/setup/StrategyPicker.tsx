@@ -11,6 +11,22 @@ import { Button } from '@/components/Button';
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/theme/tokens';
 
+import { betsText, type CoachWords } from '../coaching-text';
+import { formatUnits } from '../units';
+
+/** A table limit the strategy's bet falls outside, in words every game shares; null for any other requirement. */
+export function limitRequirementText(strategy: StrategyDefinition, requirement: TableRequirement, words: CoachWords): string | null {
+  const bet = requirement.target && requirement.amount ? betsText([{ target: requirement.target, amount: requirement.amount }], words) : '';
+  switch (requirement.requirement) {
+    case 'below-minimum':
+      return `${strategy.name} bets ${bet}. This table's minimum for that bet is ${formatUnits(requirement.limit ?? '0')}, so a ${formatUnits(requirement.amount ?? '0')} bet isn't allowed.`;
+    case 'above-maximum':
+      return `${strategy.name} bets ${bet}. This table's maximum for that bet is ${formatUnits(requirement.limit ?? '0')}.`;
+    default:
+      return null;
+  }
+}
+
 export function StrategyPicker({
   builtIns,
   myStrategies,

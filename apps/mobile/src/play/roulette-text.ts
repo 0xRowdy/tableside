@@ -3,10 +3,8 @@
 
 import {
   FUNDING_CEILING,
-  type CycleEnd,
   type DomainFact,
   type IllegalActionReason,
-  type PauseReason,
   type Phase,
   type PlacementKind,
   type RoulettePermittedView as PermittedView,
@@ -14,6 +12,7 @@ import {
   type RouletteWheel,
 } from '@tableside/engine';
 
+import { strategyFactSentence } from './strategy-text';
 import { formatUnits } from './units';
 
 /** Pocket colors on the layout. Presentation only: the engine owns what each placement covers. */
@@ -76,24 +75,6 @@ export function targetName(target: string): string {
 
 /** "35:1" → "35 to 1", as screen readers should say it. */
 export const spokenPayout = (payout: string) => payout.replace(':', ' to ');
-
-/** How a cycle-end fact is announced. */
-const CYCLE_END_ANNOUNCEMENT: Record<CycleEnd, string> = {
-  completed: 'The strategy cycle is complete.',
-  cap: 'The strategy cycle ended at its cap.',
-  stop: 'The strategy cycle ended at its stop rule.',
-  override: 'The strategy cycle ends once this spin settles.',
-  collected: 'You collected instead. The strategy cycle ended.',
-  envelope: 'The strategy cycle ended: its next stake is too large to compute.',
-};
-
-/** A pending strategy action, announced when it begins. The pending panel shows the amounts. */
-const PAUSED: Record<PauseReason, string> = {
-  'unfunded-group': "Strategy paused: your balance can't cover its next bets. No new strategy bets.",
-  limit: 'Strategy paused: its next bets are outside the table limits. No new strategy bets.',
-  cap: 'Strategy paused at its cap. No new strategy bets.',
-  stop: 'Strategy paused by its stop rule. No new strategy bets.',
-};
 
 export const STATUS: Record<Phase, string> = {
   'open-decision': 'Betting',
@@ -167,27 +148,11 @@ export function describeFacts(facts: readonly DomainFact[], view: PermittedView)
         parts.push(`Rebuy ${formatUnits(fact.amount)} added. Total funding ${formatUnits(fact.cumulative)}.`);
         balanceChanged = true;
         break;
-      case 'correction-offered':
-        parts.push('Strategy check before your spin. Nothing has been placed yet.');
+      default: {
+        const sentence = strategyFactSentence(fact, 'spin');
+        if (sentence) parts.push(sentence);
         break;
-      case 'departure-recorded':
-        parts.push(fact.departure.resolution === 'retried' ? 'Departure recorded: you took it back.' : 'Departure recorded: you overrode the strategy.');
-        break;
-      case 'cycle-ended':
-        parts.push(CYCLE_END_ANNOUNCEMENT[fact.reason]);
-        break;
-      case 'strategy-resumed':
-        parts.push('The strategy can place its next bet again.');
-        break;
-      case 'strategy-paused':
-        parts.push(PAUSED[fact.reason]);
-        break;
-      case 'cycle-restarted':
-        parts.push('Strategy restarted with your current balance.');
-        break;
-      case 'strategy-stopped':
-        parts.push('Strategy stopped. You play on your own now.');
-        break;
+      }
       case 'turn-began':
       case 'activity-completed':
         break;
