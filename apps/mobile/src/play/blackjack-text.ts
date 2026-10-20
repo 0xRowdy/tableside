@@ -2,7 +2,18 @@
 // facts and the permitted view, so a face-down card is only ever "face down".
 // Amounts are plain units; formatting never changes a ledger value.
 
-import { FUNDING_CEILING, type BlackjackAction, type BlackjackPermittedView, type Card, type DomainFact, type HandTotal, type IllegalActionReason, type Suit } from '@tableside/engine';
+import {
+  FUNDING_CEILING,
+  INSURANCE_TARGET,
+  type BlackjackAction,
+  type BlackjackHandView,
+  type BlackjackPermittedView,
+  type Card,
+  type DomainFact,
+  type HandTotal,
+  type IllegalActionReason,
+  type Suit,
+} from '@tableside/engine';
 
 import { formatUnits } from './units';
 
@@ -21,7 +32,24 @@ export const totalText = (total: HandTotal) => (total.value > 21 ? `bust ${total
 /** A hand's total, with a natural read as "blackjack" rather than "soft 21". */
 export const handTotalText = (hand: { readonly total: HandTotal; readonly natural: boolean }) => (hand.natural ? 'blackjack' : totalText(hand.total));
 
-const ACTION_WORD: Record<BlackjackAction, string> = { hit: 'hit', stand: 'stand', double: 'double' };
+/** The learner's own actions, as "You …". */
+const ACTION_WORD: Record<BlackjackAction, string> = {
+  hit: 'hit',
+  stand: 'stand',
+  double: 'double',
+  split: 'split',
+  surrender: 'surrender',
+  'decline-insurance': 'decline insurance',
+};
+/** A simulated player's actions, as "Seat 1 …". */
+const ACTION_VERB: Record<BlackjackAction, string> = {
+  hit: 'hits',
+  stand: 'stands',
+  double: 'doubles',
+  split: 'splits',
+  surrender: 'surrenders',
+  'decline-insurance': 'declines insurance',
+};
 
 /** The table's rules line: "6 decks · S17 · LS · 10–1,000". */
 export function rulesText(view: BlackjackPermittedView): string {
@@ -34,11 +62,19 @@ export const presetOf = (view: BlackjackPermittedView) => `${view.table.dealer}_
 
 export const isPlaying = (view: BlackjackPermittedView) => view.playActions.length > 0;
 
+/** "2 other players", "No other players". */
+export const otherPlayersText = (count: number) => (count === 0 ? 'No other players' : `${count} other player${count === 1 ? '' : 's'}`);
+
 /** The status tag: what the table is waiting for. */
 export function statusText(view: BlackjackPermittedView): string {
   switch (view.phase) {
-    case 'open-decision':
-      return isPlaying(view) ? 'Your turn' : view.wagers.length === 0 ? 'Waiting for your bet' : 'Betting';
+    case 'open-decision': {
+      if (view.insuranceOffer) return view.insuranceOffer.evenMoney ? 'Even money offered' : 'Insurance offered';
+      if (!isPlaying(view)) return view.wagers.length === 0 ? 'Waiting for your bet' : 'Betting';
+      const round = view.outcome;
+      const count = round?.hands.length ?? 1;
+      return count > 1 && round?.active != null ? `Your turn · hand ${round.active + 1} of ${count}` : 'Your turn';
+    }
     case 'revealing-outcome':
       return "Dealer's turn";
     case 'settled-outcome':
@@ -63,37 +99,86 @@ export function dealerSummary(view: BlackjackPermittedView): string {
 export const showingLastRound = (view: BlackjackPermittedView) =>
   view.outcome !== null && (view.phase === 'settled-outcome' || (view.phase === 'open-decision' && !isPlaying(view)));
 
-/** The learner's hand: "Your hand: Ace of hearts, 6 of clubs. Soft 17, doubled". */
-export function handSummary(view: BlackjackPermittedView): string {
-  const hand = view.outcome?.hands[0];
-  const owner = showingLastRound(view) ? 'Last hand' : 'Your hand';
-  if (!hand) return 'Your hand: no cards yet';
-  return `${owner}: ${hand.cards.map(cardName).join(', ')}. ${capitalize(handTotalText(hand))}${hand.doubled ? ', doubled' : ''}`;
+/** Where a hand stands, in words: "your turn", "waiting", "stood", "doubled", "surrendered", "bust", "blackjack". */
+export function handState(hand: BlackjackHandView, index: number, view: BlackjackPermittedView): string {
+  if (isPlaying(view) && view.outcome?.active === index) return 'your turn';
+  if (hand.surrendered) return 'surrendered';
+  if (hand.busted) return 'bust';
+  if (hand.natural) return 'blackjack';
+  if (hand.doubled) return 'doubled';
+  if (!hand.done) return 'waiting';
+  return 'stood';
+}
+
+/**
+ * One of the learner's hands: "Your hand: Ace of hearts, 6 of clubs. Soft 17, doubled",
+ * or with split hands "Hand 2 of 3: 8 of hearts. 8, waiting".
+ */
+export function handSummary(view: BlackjackPermittedView, index = 0): string {
+  const round = view.outcome;
+  const hand = round?.hands[index];
+  const last = showingLastRound(view);
+  if (!round || !hand) return 'Your hand: no cards yet';
+  const cards = `${hand.cards.map(cardName).join(', ')}. ${capitalize(handTotalText(hand))}`;
+  if (round.hands.length === 1) return `${last ? 'Last hand' : 'Your hand'}: ${cards}${hand.doubled ? ', doubled' : ''}${hand.surrendered ? ', surrendered' : ''}`;
+  return `${last ? 'Last hand' : 'Hand'} ${index + 1} of ${round.hands.length}: ${cards}, ${handState(hand, index, view)}`;
+}
+
+/** A simulated player's hand: "Seat 1 hand: 10 of spades, 6 of hearts. 16, waiting". */
+export function seatSummary(seat: number, hand: BlackjackHandView, index: number, count: number, view: BlackjackPermittedView): string {
+  const name = count > 1 ? `Seat ${seat}, hand ${index + 1} of ${count}` : `Seat ${seat}`;
+  const state = hand.surrendered ? 'surrendered' : hand.busted ? 'bust' : hand.natural ? 'blackjack' : hand.doubled ? 'doubled' : hand.done || !isPlaying(view) ? 'done' : 'waiting';
+  return `${name}: ${hand.cards.map(cardName).join(', ')}. ${capitalize(handTotalText(hand))}, ${state}`;
 }
 
 const capitalize = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
 
-function illegalMessage(reason: IllegalActionReason, command: DomainFact & { kind: 'illegal-action' }, view: BlackjackPermittedView): string {
+/** "Seat 3" for a simulated player's hand target ("seat-3-hand-1"), or null for one of the learner's. */
+const seatOf = (target: string) => /^seat-(\d+)-/.exec(target)?.[1] ?? null;
+
+/** The learner's hand by its place in play order: "hand 2", or "your hand" when there is only one. */
+function handName(target: string, view: BlackjackPermittedView): string {
+  const hands = view.outcome?.hands ?? [];
+  const index = hands.findIndex((hand) => hand.target === target);
+  return hands.length > 1 && index >= 0 ? `hand ${index + 1}` : 'your hand';
+}
+
+/** Who a card goes to or an action is by: "Dealer", "You", "Hand 2", "Seat 1". */
+function who(target: string, view: BlackjackPermittedView): string {
+  if (target === 'dealer') return 'Dealer';
+  const seat = seatOf(target);
+  if (seat !== null) return `Seat ${seat}`;
+  const name = handName(target, view);
+  return name === 'your hand' ? 'You' : capitalize(name);
+}
+
+function illegalMessage(reason: IllegalActionReason, fact: DomainFact & { kind: 'illegal-action' }, view: BlackjackPermittedView): string {
   const { initial } = view.table;
-  const doubling = command.command.kind === 'play' && command.command.action === 'double';
+  const { command } = fact;
+  const action = command.kind === 'play' ? command.action : null;
+  const insurance = command.kind === 'place-wager' && command.target === INSURANCE_TARGET;
   switch (reason) {
     case 'below-minimum':
       return `The initial wager needs at least ${formatUnits(initial.min)}. Nothing was placed.`;
     case 'above-maximum':
-      return `The initial wager allows at most ${formatUnits(initial.max)}. Nothing was placed.`;
+      return insurance
+        ? `Insurance allows at most ${formatUnits(view.insuranceOffer?.max ?? '0')}, half your bet. Nothing was placed.`
+        : `The initial wager allows at most ${formatUnits(initial.max)}. Nothing was placed.`;
     case 'insufficient-funds': {
       const rebuy = view.legalCommands.includes('rebuy') ? ' You can rebuy to add chips.' : '';
-      return doubling
-        ? `Doubling needs the whole stake again, and your balance is ${formatUnits(view.balance)}. Nothing changed.${rebuy}`
-        : `Your balance can't cover that. Nothing was placed.${rebuy}`;
+      if (action === 'double') return `Doubling needs the whole stake again, and your balance is ${formatUnits(view.balance)}. Nothing changed.${rebuy}`;
+      if (action === 'split') return `Splitting needs the whole stake again, and your balance is ${formatUnits(view.balance)}. Nothing changed.${rebuy}`;
+      return `Your balance can't cover that. Nothing was placed.${rebuy}`;
     }
     case 'over-funding-ceiling':
       return `That rebuy would take total funding past the ${formatUnits(FUNDING_CEILING.toString())} limit. You can add up to ${formatUnits(view.funding.headroom)}. Nothing was added.`;
     case 'no-wager':
       return 'Place your initial wager before the deal.';
     case 'not-whole-units':
-      return 'Stakes are whole units. Nothing was placed.';
+      return insurance ? 'Insurance is whole units, or exactly half your bet. Nothing was placed.' : 'Stakes are whole units. Nothing was placed.';
     case 'action-not-available':
+      if (action === 'split') return 'You can split only two cards of the same value, up to four hands. Nothing changed.';
+      if (action === 'surrender') return 'Late surrender is only on your first two cards, after the dealer checks for blackjack. Nothing changed.';
       return 'You can double only on your first two cards. Nothing changed.';
     // no-wager-to-remove, unknown-target, and reasons only other games produce.
     default:
@@ -101,9 +186,26 @@ function illegalMessage(reason: IllegalActionReason, command: DomainFact & { kin
   }
 }
 
+function settledMessage(fact: DomainFact & { kind: 'wager-settled' }, view: BlackjackPermittedView): string {
+  if (fact.target === INSURANCE_TARGET) {
+    return fact.result === 'win' ? `Insurance wins ${formatUnits(fact.net)}.` : `Insurance loses ${formatUnits(fact.stake)}.`;
+  }
+  const hand = view.outcome?.hands.find((h) => h.target === fact.target);
+  const name = handName(fact.target, view);
+  if (hand?.surrendered) return `Surrendered: ${formatUnits(fact.returned)} of your ${formatUnits(fact.stake)} comes back.`;
+  if (name !== 'your hand') {
+    const subject = capitalize(name);
+    if (fact.result === 'win') return `${subject} wins ${formatUnits(fact.net)}.`;
+    return fact.result === 'push' ? `${subject} pushes: ${formatUnits(fact.stake)} comes back.` : `${subject} loses ${formatUnits(fact.stake)}.`;
+  }
+  if (fact.result === 'win') return `${hand?.natural ? 'Blackjack! ' : ''}You win ${formatUnits(fact.net)}.`;
+  return fact.result === 'push' ? `Push: your ${formatUnits(fact.stake)} comes back.` : `You lose ${formatUnits(fact.stake)}.`;
+}
+
 /**
  * What the latest committed transition changed, in one message for the screen
- * and for screen readers: every new wager, card, result and balance.
+ * and for screen readers: every new wager, card (other players' included),
+ * result and balance.
  */
 export function describeFacts(facts: readonly DomainFact[], view: BlackjackPermittedView): string | null {
   const parts: string[] = [];
@@ -112,7 +214,12 @@ export function describeFacts(facts: readonly DomainFact[], view: BlackjackPermi
   for (const fact of facts) {
     switch (fact.kind) {
       case 'wager-changed':
-        parts.push(fact.amount === '0' ? 'Initial wager taken down.' : `Wager ${formatUnits(fact.amount)} on the table.`);
+        if (fact.target === INSURANCE_TARGET) parts.push(`Insurance ${formatUnits(fact.amount)} on the table.`);
+        else if (fact.amount === '0') parts.push('Initial wager taken down.');
+        else {
+          const name = handName(fact.target, view);
+          parts.push(name === 'your hand' ? `Wager ${formatUnits(fact.amount)} on the table.` : `Wager ${formatUnits(fact.amount)} on ${name}.`);
+        }
         balanceChanged = true;
         break;
       case 'shoe-shuffled':
@@ -120,7 +227,14 @@ export function describeFacts(facts: readonly DomainFact[], view: BlackjackPermi
         break;
       case 'card-dealt':
         dealt = true;
-        parts.push(fact.card === null ? 'Dealer: a face-down card.' : `${fact.to === 'dealer' ? 'Dealer' : 'You'}: ${cardName(fact.card)}.`);
+        parts.push(fact.card === null ? 'Dealer: a face-down card.' : `${who(fact.to, view)}: ${cardName(fact.card)}.`);
+        break;
+      case 'insurance-offered':
+        parts.push(
+          fact.evenMoney
+            ? `You have blackjack and the dealer shows an ace: even money is offered before the dealer checks.`
+            : `The dealer shows an ace: insurance up to ${formatUnits(fact.max)} is offered before the dealer checks.`,
+        );
         break;
       case 'peeked':
         parts.push(fact.result === 'blackjack' ? 'The dealer checked and has blackjack.' : 'The dealer checked for blackjack: none.');
@@ -128,22 +242,23 @@ export function describeFacts(facts: readonly DomainFact[], view: BlackjackPermi
       case 'hole-card-revealed':
         parts.push(`The dealer turns over the ${cardName(fact.card)}.`);
         break;
-      case 'played':
-        parts.push(`You ${ACTION_WORD[fact.action]}.`);
+      case 'played': {
+        const seat = seatOf(fact.target);
+        if (seat !== null) parts.push(`Seat ${seat} ${ACTION_VERB[fact.action]}.`);
+        else parts.push(`You ${ACTION_WORD[fact.action]}.`);
         break;
+      }
       case 'illegal-action':
         parts.push(illegalMessage(fact.reason, fact, view));
         break;
-      case 'wager-settled': {
-        const natural = view.outcome?.hands.find((hand) => hand.target === fact.target)?.natural && fact.result === 'win';
-        parts.push(
-          fact.result === 'win'
-            ? `${natural ? 'Blackjack! ' : ''}You win ${formatUnits(fact.net)}.`
-            : fact.result === 'push'
-              ? `Push: your ${formatUnits(fact.stake)} comes back.`
-              : `You lose ${formatUnits(fact.stake)}.`,
-        );
+      case 'wager-settled':
+        parts.push(settledMessage(fact, view));
         balanceChanged = true;
+        break;
+      case 'seat-settled': {
+        const seat = seatOf(fact.target);
+        const net = fact.net.replace(/^-/, '');
+        parts.push(fact.result === 'win' ? `Seat ${seat} wins ${formatUnits(net)}.` : fact.result === 'push' ? `Seat ${seat} pushes.` : `Seat ${seat} loses ${formatUnits(net)}.`);
         break;
       }
       case 'stop-requested':
@@ -161,6 +276,7 @@ export function describeFacts(facts: readonly DomainFact[], view: BlackjackPermi
         // Working status: the stake is committed to the round and can't be taken down.
         for (const wager of fact.wagers) parts.push(`Wager ${formatUnits(wager.amount)} in play.`);
         break;
+      case 'hand-split':
       case 'outcome-generated':
       case 'activity-completed':
         break;
@@ -168,10 +284,14 @@ export function describeFacts(facts: readonly DomainFact[], view: BlackjackPermi
   }
   if (parts.length === 0) return null;
   const round = view.outcome;
-  if (dealt && round) {
-    const hand = round.hands[0];
-    if (hand) parts.push(`You have ${handTotalText(hand)}; the dealer ${round.dealer.cards.includes(null) ? 'shows' : 'has'} ${totalText(round.dealer.total)}.`);
-    if (isPlaying(view)) parts.push('Your turn.');
+  if (dealt && round && round.hands.length > 0) {
+    const totals = round.hands.map(handTotalText);
+    const yours = totals.length > 1 ? `Your hands have ${totals.slice(0, -1).join(', ')} and ${totals.at(-1)}` : `You have ${totals[0]}`;
+    parts.push(`${yours}; the dealer ${round.dealer.cards.includes(null) ? 'shows' : 'has'} ${totalText(round.dealer.total)}.`);
+  }
+  if (isPlaying(view)) {
+    if (view.insuranceOffer) parts.push(view.insuranceOffer.evenMoney ? 'Even money?' : 'Insurance?');
+    else if (dealt || facts.some((fact) => fact.kind === 'played' || fact.kind === 'peeked')) parts.push(`${statusText(view)}.`);
   }
   if (balanceChanged) parts.push(`Balance ${formatUnits(view.balance)}.`);
   return parts.join(' ');

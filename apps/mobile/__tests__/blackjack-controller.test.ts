@@ -9,8 +9,11 @@ import type { BlackjackPermittedView } from '@tableside/engine';
 import { PracticeController, REVEAL_MS, type PracticeSnapshot } from '@/practice/controller';
 import { FakeClock, substituteAdapters } from '@/practice/testing/substitutes';
 
-function setup() {
-  const adapters = substituteAdapters({ clock: new FakeClock(undefined, false) });
+/** A stream whose first round deals 2♥ J♦ against an A♥ up with a 2♠ in the hole, then 5♥ (found through the engine). */
+const ACE_UP = [3, 0x5441424c, 0x45534944, 0x45] as const;
+
+function setup(words?: readonly [number, number, number, number]) {
+  const adapters = substituteAdapters({ clock: new FakeClock(undefined, false), ...(words && { words }) });
   const controller = new PracticeController(adapters);
   return { adapters, store: adapters.store, clock: adapters.clock, controller };
 }
@@ -32,7 +35,7 @@ describe('blackjack through the practice controller', () => {
     await controller.start({ game: 'blackjack', buyIn: '1000', rules: blackjackRules('H17_noLS', 60) });
 
     const table = view(controller.snapshot()).table;
-    expect(table).toEqual({ decks: 6, dealer: 'H17', lateSurrender: false, penetration: 60, initial: { min: '10', max: '1000' }, blackjackPays: '3:2' });
+    expect(table).toEqual({ decks: 6, dealer: 'H17', lateSurrender: false, penetration: 60, initial: { min: '10', max: '1000' }, blackjackPays: '3:2', players: { learnerSeat: 0, others: [] } });
     const stored = await store.findUnfinished();
     expect(stored?.specification).toMatchObject({ game: 'blackjack', rules: { id: 'blackjack-six-deck', dealer: 'H17', penetration: 60 } });
   });
@@ -46,7 +49,7 @@ describe('blackjack through the practice controller', () => {
 
     // A decision: the controller waits; nothing settles while time passes.
     let current = view(controller.snapshot());
-    expect([current.phase, current.playActions, current.outcome?.dealer.cards[1]]).toEqual(['open-decision', ['hit', 'stand', 'double'], null]);
+    expect([current.phase, current.playActions, current.outcome?.dealer.cards[1]]).toEqual(['open-decision', ['hit', 'stand', 'double', 'split', 'surrender'], null]);
     clock.advance(10_000);
     expect(view(controller.snapshot()).sequence).toBe(current.sequence);
 
@@ -83,7 +86,7 @@ describe('blackjack through the practice controller', () => {
     await controller.resume();
     const resumed = controller.snapshot();
     expect(resumed.status === 'active' && resumed.suspension).toBeNull();
-    expect(view(resumed).playActions).toEqual(['hit', 'stand', 'double']);
+    expect(view(resumed).playActions).toEqual(['hit', 'stand', 'double', 'split', 'surrender']);
   });
 
   it('ending mid-hand lets the hand finish, then settles it and completes once', async () => {
@@ -95,7 +98,7 @@ describe('blackjack through the practice controller', () => {
 
     await controller.endSession();
     // The engine never stops a hand mid-decision: the player still plays it.
-    expect(view(controller.snapshot()).playActions).toEqual(['hit', 'stand', 'double']);
+    expect(view(controller.snapshot()).playActions).toEqual(['hit', 'stand', 'double', 'split', 'surrender']);
 
     const standing = controller.play('stand');
     for (let i = 0; i < 4; i++) {
@@ -121,5 +124,40 @@ describe('blackjack through the practice controller', () => {
       { kind: 'illegal-action', command: { kind: 'play', action: 'double' }, reason: 'insufficient-funds' },
     ]);
     expect([view(snapshot).balance, view(snapshot).wagers, view(snapshot).phase]).toEqual(['5', [{ target: 'hand-1', amount: '10' }], 'open-decision']);
+  });
+
+  it('insurance is part of the hand: still taken after ending is asked for, and the hand then finishes and settles once', async () => {
+    const { controller, clock } = setup(ACE_UP);
+    await controller.load();
+    await controller.start({ game: 'blackjack', buyIn: '1000', rules: blackjackRules() });
+    await controller.placeWager('hand-1', '10');
+    await controller.beginTurn();
+    expect(view(controller.snapshot()).insuranceOffer).toEqual({ max: '5', evenMoney: false });
+
+    await controller.endSession();
+    await controller.insure('5');
+    const insured = controller.snapshot();
+    expect(insured.status === 'active' && insured.facts.find((fact) => fact.kind === 'wager-settled')).toMatchObject({ target: 'insurance', result: 'loss', net: '-5' });
+    expect(view(insured).playActions).toEqual(['hit', 'stand', 'double', 'surrender']);
+
+    const standing = controller.play('stand');
+    for (let i = 0; i < 4; i++) {
+      await waitFor(() => clock.pending === 1 || controller.snapshot().status === 'completed');
+      if (controller.snapshot().status === 'completed') break;
+      clock.advance(REVEAL_MS);
+    }
+    await standing;
+    const done = controller.snapshot();
+    // 12 stands; the dealer's A,2 draws the 5♥ to 18. Insurance 5 and the hand's 10 are lost, once each.
+    expect(done.status === 'completed' && [done.result.finalCashOut, done.result.netResult]).toEqual(['985', '-15']);
+  });
+
+  it('pins other players with the rules: their fixed wagers and seats, and the learner after them', async () => {
+    const { controller, store } = setup();
+    await controller.load();
+    await controller.start({ game: 'blackjack', buyIn: '1000', rules: blackjackRules('S17_LS', 75, 2) });
+    expect(view(controller.snapshot()).table.players).toEqual({ learnerSeat: 2, others: ['10', '10'] });
+    const stored = await store.findUnfinished();
+    expect(stored?.specification).toMatchObject({ rules: { players: { learnerSeat: 2, others: ['10', '10'] } } });
   });
 });

@@ -1,12 +1,14 @@
 // The blackjack table (design frames "04a-04d Blackjack" and S1-04 "Table
-// chrome — Blackjack"): dealer area, shoe, the learner's hand and bet spot, and
-// the actions row, with the bet selector over the same session (S1-03). It
+// chrome — Blackjack", incl. insurance, even money, four split hands and late
+// surrender): dealer area, shoe, other players' hands, the learner's hands and
+// bet spot, and the actions or insurance decision, with the bet selector over
+// the same session (S1-03). It
 // renders only the engine's permitted view and forwards taps to the practice
 // controller; it never advances the game or decides what is legal. A face-down
 // card is drawn as a card back and read as "Face-down card".
 
 import { blackjackHouseEdge } from '@tableside/definitions';
-import type { BlackjackAction, BlackjackPermittedView, Card } from '@tableside/engine';
+import { decodeMoney, encodeMoney, INSURANCE_TARGET, money, mul, type BlackjackAction, type BlackjackHandView, type BlackjackPermittedView, type Card } from '@tableside/engine';
 import { useEffect, useMemo, useState } from 'react';
 import { AccessibilityInfo, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -26,11 +28,13 @@ import {
   cardRank,
   dealerSummary,
   describeFacts,
+  handState,
   handSummary,
   handTotalText,
   isPlaying,
   presetOf,
   rulesText,
+  seatSummary,
   showingLastRound,
   statusText,
   SUIT_GLYPH,
@@ -59,7 +63,13 @@ const CHIPS: readonly { value: string; label: string; color: ColorToken; ink: Co
 
 const SUIT_TOKEN = { spades: 'suitSpade', hearts: 'suitHeart', diamonds: 'suitDiamond', clubs: 'suitClub' } as const;
 
-const ACTION_LABEL: Record<BlackjackAction, string> = { hit: 'Hit', stand: 'Stand', double: 'Double' };
+const ACTION_LABEL: Record<Exclude<BlackjackAction, 'decline-insurance'>, string> = {
+  hit: 'Hit',
+  stand: 'Stand',
+  double: 'Double',
+  split: 'Split',
+  surrender: 'Surrender',
+};
 
 function phaseSteps(view: BlackjackPermittedView): PhaseStep[] {
   const reached = view.phase === 'open-decision' ? (isPlaying(view) ? 2 : 0) : view.phase === 'completed' ? 4 : 3;
@@ -91,6 +101,8 @@ export function BlackjackTable({ snapshot }: { snapshot: ActiveSnapshot }) {
   const message = useMemo(() => describeFacts(facts, view), [facts, view]);
   const wager = view.wagers.find((w) => w.target === HAND)?.amount;
   const playing = isPlaying(view);
+  // The insurance decision takes a wager, so the bet list stays open for a lower amount.
+  const offer = view.insuranceOffer;
   // The sheet shows only while a rebuy is offered (the table waits for input).
   const rebuyOpen = rebuying && view.legalCommands.includes('rebuy');
   const addRebuy = async (amount: string) => {
@@ -125,7 +137,9 @@ export function BlackjackTable({ snapshot }: { snapshot: ActiveSnapshot }) {
     if (wager) setLastBet(wager);
     void controller.beginTurn();
   };
-  const selector = presentation === 'selector' && !playing && view.phase !== 'final-settlement';
+  const betting = (!playing || offer !== null) && view.phase !== 'final-settlement';
+  const selector = presentation === 'selector' && betting;
+  const setWager = (target: string, amount: string) => void (target === INSURANCE_TARGET ? controller.insure(amount) : controller.placeWager(target, amount));
 
   return (
     <View style={styles.screen}>
@@ -140,7 +154,7 @@ export function BlackjackTable({ snapshot }: { snapshot: ActiveSnapshot }) {
           onTable={formatUnits(totalOnTable(view))}
           status={save === 'failed' ? 'Paused · not saved' : statusText(view)}
         />
-        {!playing && view.phase !== 'final-settlement' && <PresentationSwitch value={presentation} onChange={setPresentation} />}
+        {betting && <PresentationSwitch value={presentation} onChange={setPresentation} />}
 
         {save === 'failed' && (
           <View style={styles.banner}>
@@ -183,7 +197,7 @@ export function BlackjackTable({ snapshot }: { snapshot: ActiveSnapshot }) {
                 canPlace={legal('place-wager')}
                 draft={draft}
                 onDraftChange={setDraft}
-                onSet={(target, amount) => void controller.placeWager(target, amount)}
+                onSet={setWager}
                 onRemove={(target) => void controller.placeWager(target, '0')}
               />
             ) : (
@@ -208,7 +222,14 @@ export function BlackjackTable({ snapshot }: { snapshot: ActiveSnapshot }) {
                 {message}
               </Text>
             )}
-            {playing ? (
+            {offer ? (
+              <InsurancePanel
+                view={view}
+                enabled={legal('play')}
+                onInsure={() => void controller.insure(offer.max)}
+                onDecline={() => void controller.play('decline-insurance')}
+              />
+            ) : playing ? (
               <PlayActions view={view} enabled={legal('play')} onPlay={(action) => void controller.play(action)} />
             ) : (
               <BettingActions
@@ -282,7 +303,7 @@ function Felt({
   onSpot: () => void;
 }) {
   const round = view.outcome;
-  const hand = round?.hands[0];
+  const hands = round?.hands ?? [];
   const last = showingLastRound(view);
   return (
     <View style={styles.felt} testID="felt">
@@ -311,14 +332,42 @@ function Felt({
         </Text>
       </View>
 
-      <View accessible accessibilityLabel={handSummary(view)} style={[styles.handRow, last && styles.lastRound]}>
-        {hand ? hand.cards.map((card, index) => <PlayingCard key={index} card={card} />) : <EmptyCards />}
-        {hand && (
-          <TotalBadge
-            text={`${capitalize(handTotalText(hand))}${hand.doubled ? ' · doubled' : ''}`}
-          />
-        )}
-      </View>
+      {round && round.others.length > 0 && (
+        <View style={styles.others} testID="other-players">
+          <Text maxFontSizeMultiplier={textScale.body} style={styles.feltLabel}>OTHER PLAYERS</Text>
+          {round.others.map((seat) =>
+            seat.hands.map((hand, index) => (
+              <View
+                key={hand.target}
+                accessible
+                accessibilityLabel={seatSummary(seat.seat, hand, index, seat.hands.length, view)}
+                style={[styles.handRow, last && styles.lastRound]}
+              >
+                <Text maxFontSizeMultiplier={textScale.body} style={styles.seatLabel}>
+                  {seat.hands.length > 1 ? `Seat ${seat.seat} · ${index + 1}` : `Seat ${seat.seat}`}
+                </Text>
+                {hand.cards.map((card, i) => (
+                  <PlayingCard key={i} card={card} small />
+                ))}
+                <TotalBadge text={capitalize(handTotalText(hand))} />
+              </View>
+            )),
+          )}
+        </View>
+      )}
+
+      {hands.length > 1 ? (
+        <View style={styles.splitHands} testID="split-hands">
+          {hands.map((hand, index) => (
+            <SplitHand key={hand.target} view={view} hand={hand} index={index} last={last} />
+          ))}
+        </View>
+      ) : (
+        <View accessible accessibilityLabel={handSummary(view)} style={[styles.handRow, last && styles.lastRound]}>
+          {hands[0] ? hands[0].cards.map((card, index) => <PlayingCard key={index} card={card} />) : <EmptyCards />}
+          {hands[0] && <TotalBadge text={`${capitalize(handTotalText(hands[0]))}${handNote(hands[0])}`} />}
+        </View>
+      )}
       {settledNet && (
         <Text maxFontSizeMultiplier={textScale.body} style={styles.result}>
           {settledNet}
@@ -330,18 +379,50 @@ function Felt({
   );
 }
 
-/** "Win +25", "Push 0", "Loss −25": the latest settled result, in words as well as colour. */
+/**
+ * "Win +25", "Push 0", "Loss −25", or per hand after a split ("Hand 1 win +20 ·
+ * Hand 2 loss −10"): the latest settled result, in words as well as colour.
+ */
 function lastResult(view: BlackjackPermittedView, facts: ActiveSnapshot['facts']): string | null {
   if (view.phase !== 'settled-outcome') return null;
-  const fact = facts.find((f) => f.kind === 'wager-settled');
-  if (!fact || fact.kind !== 'wager-settled') return null;
-  const word = fact.result === 'win' ? 'Win' : fact.result === 'push' ? 'Push' : 'Loss';
-  return `${word} ${formatSigned(fact.net)}`;
+  const results = facts.flatMap((fact) => (fact.kind === 'wager-settled' && fact.target !== INSURANCE_TARGET ? [fact] : []));
+  const word = (result: string) => (result === 'win' ? 'Win' : result === 'push' ? 'Push' : 'Loss');
+  const [only] = results;
+  if (results.length === 1 && only) return `${word(only.result)} ${formatSigned(only.net)}`;
+  return results.length === 0 ? null : results.map((fact, i) => `Hand ${i + 1} ${word(fact.result).toLowerCase()} ${formatSigned(fact.net)}`).join(' · ');
+}
+
+/** " · doubled", " · surrendered": a hand's state beyond its total. */
+const handNote = (hand: BlackjackHandView) => (hand.surrendered ? ' · surrendered' : hand.doubled ? ' · doubled' : '');
+
+/** One of up to four split hands: its cards, "2 · soft 19 · 10" and its state in words. */
+function SplitHand({ view, hand, index, last }: { view: BlackjackPermittedView; hand: BlackjackHandView; index: number; last: boolean }) {
+  const active = isPlaying(view) && view.outcome?.active === index;
+  const stake = view.wagers.find((wager) => wager.target === hand.target)?.amount;
+  return (
+    <View
+      accessible
+      accessibilityLabel={handSummary(view, index)}
+      style={[styles.splitHand, active && styles.splitHandActive, last && styles.lastRound]}
+    >
+      <View style={styles.handRow}>
+        {hand.cards.map((card, i) => (
+          <PlayingCard key={i} card={card} small />
+        ))}
+      </View>
+      <Text maxFontSizeMultiplier={textScale.body} style={styles.splitLabel}>
+        {`${index + 1} · ${handTotalText(hand)}${stake ? ` · ${formatUnits(stake)}` : ''}`}
+      </Text>
+      <Text maxFontSizeMultiplier={textScale.body} style={[styles.splitState, active && styles.splitStateActive]}>
+        {capitalize(handState(hand, index, view))}
+      </Text>
+    </View>
+  );
 }
 
 const capitalize = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
 
-function PlayingCard({ card }: { card: Card | null }) {
+function PlayingCard({ card, small = false }: { card: Card | null; small?: boolean }) {
   if (card === null) {
     return (
       <View accessible accessibilityLabel="Face-down card" style={[styles.card, styles.cardBack]}>
@@ -351,9 +432,9 @@ function PlayingCard({ card }: { card: Card | null }) {
   }
   const color = palette[SUIT_TOKEN[card.suit]];
   return (
-    <View accessible accessibilityLabel={cardName(card)} style={styles.card}>
-      <Text maxFontSizeMultiplier={textScale.body} style={[styles.cardRank, { color }]}>{cardRank(card)}</Text>
-      <Text maxFontSizeMultiplier={textScale.body} style={[styles.cardPip, { color }]}>{SUIT_GLYPH[card.suit]}</Text>
+    <View accessible accessibilityLabel={cardName(card)} style={[styles.card, small && styles.cardSmall]}>
+      <Text maxFontSizeMultiplier={textScale.body} style={[styles.cardRank, small && styles.cardRankSmall, { color }]}>{cardRank(card)}</Text>
+      <Text maxFontSizeMultiplier={textScale.body} style={[styles.cardPip, small && styles.cardPipSmall, { color }]}>{SUIT_GLYPH[card.suit]}</Text>
     </View>
   );
 }
@@ -390,22 +471,106 @@ function BetSpot({ wager, chip, disabled, onPress, committed }: { wager: string 
   );
 }
 
+type TableAction = keyof typeof ACTION_LABEL;
+
+/** Why a playing action the table shows is unavailable, in words; null when it is offered. */
+function unavailable(action: TableAction, view: BlackjackPermittedView): string | null {
+  if (view.playActions.includes(action)) return null;
+  const round = view.outcome;
+  const hand = round?.active != null ? round.hands[round.active] : undefined;
+  const [a, b] = hand?.cards ?? [];
+  switch (action) {
+    case 'double':
+      return 'Double isn’t available: you can double only on your first two cards.';
+    case 'split':
+      return hand?.cards.length === 2 && a && b && Math.min(a.rank, 10) === Math.min(b.rank, 10)
+        ? 'Split is off: four hands is the maximum.'
+        : 'Split isn’t available: your cards aren’t a pair.';
+    case 'surrender':
+      return 'Surrender is only on your first two cards.';
+    default:
+      return null;
+  }
+}
+
+/** Half of a canonical amount, exactly. */
+const half = (amount: string) => encodeMoney(mul(decodeMoney(amount), money(1n, 2n)));
+
 function PlayActions({ view, enabled, onPlay }: { view: BlackjackPermittedView; enabled: boolean; onPlay: (action: BlackjackAction) => void }) {
   const offered = (action: BlackjackAction) => view.playActions.includes(action);
+  // Surrender shows only at tables that offer it.
+  const rows: TableAction[][] = [['hit', 'stand', 'double'], view.table.lateSurrender ? ['split', 'surrender'] : ['split']];
+  const reasons = rows.flat().flatMap((action) => unavailable(action, view) ?? []);
+  const round = view.outcome;
+  const active = round?.active != null ? round.hands[round.active] : undefined;
+  const stake = view.wagers.find((wager) => wager.target === active?.target)?.amount;
   return (
     <View style={styles.actions}>
-      <View style={styles.actionRow}>
-        {(['hit', 'stand', 'double'] as const).map((action) => (
-          <View key={action} style={styles.action}>
-            <Button label={ACTION_LABEL[action]} variant="secondary" stretch disabled={!enabled || !offered(action)} onPress={() => onPlay(action)} />
-          </View>
-        ))}
-      </View>
-      {!offered('double') && (
+      {rows.map((row, i) => (
+        <View key={i} style={styles.actionRow}>
+          {row.map((action) => (
+            <View key={action} style={styles.action}>
+              <Button label={ACTION_LABEL[action]} variant="secondary" stretch disabled={!enabled || !offered(action)} onPress={() => onPlay(action)} />
+            </View>
+          ))}
+        </View>
+      ))}
+      {reasons.length > 0 && (
         <Text maxFontSizeMultiplier={textScale.body} style={styles.hint}>
-          Double isn&apos;t available: you can double only on your first two cards.
+          {reasons.join(' ')}
+          {(round?.hands.length ?? 1) > 1 ? ' Hands play left to right; split aces get one card each and can’t be resplit.' : ''}
         </Text>
       )}
+      {offered('surrender') && stake && (
+        <Text maxFontSizeMultiplier={textScale.body} style={styles.hint}>
+          {round?.dealer.peek === 'no-blackjack' ? 'The dealer checked for blackjack and has none. ' : ''}
+          Late surrender is only on your first two cards. Surrendering returns half your bet ({formatUnits(half(stake))}) and ends the hand.
+        </Text>
+      )}
+    </View>
+  );
+}
+
+/** Insurance or even money, before the peek (design frames "insurance offered" and "even money offered"). */
+function InsurancePanel({
+  view,
+  enabled,
+  onInsure,
+  onDecline,
+}: {
+  view: BlackjackPermittedView;
+  enabled: boolean;
+  onInsure: () => void;
+  onDecline: () => void;
+}) {
+  const offer = view.insuranceOffer;
+  const bet = view.wagers[0]?.amount;
+  if (!offer || !bet) return null;
+  const max = formatUnits(offer.max);
+  const natural = formatUnits(encodeMoney(mul(decodeMoney(bet), money(3n, 2n))));
+  return (
+    <View style={styles.decision} testID="insurance-decision">
+      <Text accessibilityRole="header" maxFontSizeMultiplier={textScale.display} style={styles.decisionTitle}>
+        {offer.evenMoney ? 'Even money?' : 'Insurance?'}
+      </Text>
+      <Text maxFontSizeMultiplier={textScale.body} style={styles.decisionText}>
+        {offer.evenMoney
+          ? `You have blackjack and the dealer shows an ace. Even money pays ${formatUnits(bet)} now (1:1), whatever the dealer has. It’s the same as insuring your blackjack for ${max}.`
+          : `The dealer shows an ace. Before checking for blackjack, you can insure up to half your bet, so up to ${max}. Insurance pays 2:1 and settles separately from your hand.`}
+      </Text>
+      <View style={styles.actionRow}>
+        <View style={styles.action}>
+          <Button label={offer.evenMoney ? `Take even money (${formatUnits(bet)})` : `Insure ${max}`} stretch disabled={!enabled} onPress={onInsure} />
+        </View>
+        <View style={styles.action}>
+          <Button label={offer.evenMoney ? 'No, play it out' : 'No insurance'} variant="secondary" stretch disabled={!enabled} onPress={onDecline} />
+        </View>
+      </View>
+      <Text maxFontSizeMultiplier={textScale.body} style={styles.hint}>
+        {offer.evenMoney
+          ? `If you decline and the dealer also has blackjack, your hand pushes. Otherwise it pays 3:2 (${natural}).`
+          : `${view.table.lateSurrender ? 'Late surrender is still available after the peek. ' : ''}The amount can be lower: choose it in the bet list.`}
+      </Text>
     </View>
   );
 }
@@ -521,6 +686,20 @@ const styles = StyleSheet.create({
   cardEmpty: { backgroundColor: palette.transparent, borderWidth: 1, borderColor: palette.feltText, borderStyle: 'dashed' },
   cardRank: { fontFamily: fonts.uiBold, fontSize: 20 },
   cardPip: { fontSize: 26, alignSelf: 'flex-end' },
+  cardSmall: { width: 40, minHeight: 58 },
+  cardRankSmall: { fontSize: 15 },
+  cardPipSmall: { fontSize: 18 },
+  others: { alignSelf: 'stretch', gap: space[2], alignItems: 'center' },
+  seatLabel: { fontFamily: fonts.uiBold, fontSize: 12, color: palette.feltText },
+  splitHands: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: space[2] },
+  splitHand: { alignItems: 'center', gap: space[1], padding: space[1], borderRadius: radius.md, borderWidth: 2, borderColor: palette.transparent },
+  splitHandActive: { borderColor: palette.primary },
+  splitLabel: { fontFamily: fonts.uiBold, fontSize: 12, color: palette.feltText },
+  splitState: { fontFamily: fonts.uiMedium, fontSize: 11, color: palette.feltText },
+  splitStateActive: { fontFamily: fonts.uiBold, textDecorationLine: 'underline' },
+  decision: { gap: space[2], padding: space[4], borderRadius: radius.lg, backgroundColor: palette.card, borderWidth: 1, borderColor: palette.primary },
+  decisionTitle: { fontFamily: fonts.display, fontSize: 22, color: palette.foreground },
+  decisionText: { fontFamily: fonts.ui, fontSize: 15, lineHeight: 21, color: palette.foreground },
   totalBadge: { paddingHorizontal: space[2], paddingVertical: 3, borderRadius: radius.pill, backgroundColor: palette.feltDeep },
   totalText: { fontFamily: fonts.uiBold, fontSize: 13, color: palette.feltText },
   result: { fontFamily: fonts.uiBold, fontSize: 16, color: palette.feltText },

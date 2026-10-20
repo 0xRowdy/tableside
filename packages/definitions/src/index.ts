@@ -26,7 +26,8 @@ export {
   type PlayAction,
 } from './blackjack/reference';
 
-export { blackjackRules, DEFAULT_BLACKJACK_PRESET, DEFAULT_PENETRATION } from './blackjack/rules';
+export { blackjackRules, DEFAULT_BLACKJACK_PRESET, DEFAULT_PENETRATION, MAX_OTHER_PLAYERS } from './blackjack/rules';
+export { seatStrategy } from './blackjack/seats';
 export { CRAPS_HOUSE_EDGE_VERSION, crapsHouseEdge, standardCraps, type CrapsHouseEdge, type CrapsLineWager } from './craps';
 export {
   DOUBLE_ZERO_ROULETTE,

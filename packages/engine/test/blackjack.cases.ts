@@ -12,9 +12,7 @@ import {
   createActivity,
   decodeCheckpoint,
   encodeCheckpoint,
-  RandomStream,
   readPermittedView,
-  uniformInt,
   type BlackjackActivitySpecification,
   type BlackjackActivityState,
   type Command,
@@ -22,7 +20,7 @@ import {
 } from '../src';
 
 import { run, status, step } from './activity.fixtures';
-import { BJ_SPEC, BJ_STREAM, bet, CUT, DEAL, DOUBLE, FINAL, HIT, S17_LS, SETTLE, STAND, stacked, STOP } from './blackjack.fixtures';
+import { BJ_SPEC, BJ_STREAM, bet, CUT, DEAL, DOUBLE, FINAL, HIT, NO_INSURANCE, S17_LS, SETTLE, STAND, stacked, STOP } from './blackjack.fixtures';
 import { throws, ZERO } from './fixtures';
 
 const RANKS = ['A', '2', '3', '4', '5', '6', '7', '8', '9', 'T', 'J', 'Q', 'K'];
@@ -83,7 +81,8 @@ export const blackjackCases: TestCase[] = [
       );
       // A ten up is peeked; the hole 6 is no blackjack, and the peek reveals no rank.
       t.equal(view(state).outcome?.dealer.peek, 'no-blackjack');
-      t.equal([state.phase, view(state).playActions], ['open-decision', ['hit', 'stand', 'double']]);
+      // T,J is a pair of tens: split is offered, and late surrender after the peek.
+      t.equal([state.phase, view(state).playActions], ['open-decision', ['hit', 'stand', 'double', 'split', 'surrender']]);
       t.equal(view(state).shoe.remaining, 308);
     },
   },
@@ -134,8 +133,9 @@ export const blackjackCases: TestCase[] = [
   {
     name: 'blackjack: a dealer blackjack found by the peek ends the round before any decision (ace up and ten up)',
     run: (t) => {
-      for (const shoe of ['9 A 8 K', '9 K 8 A']) {
-        const { state, facts } = run(stacked(shoe), [bet('10'), DEAL]);
+      // An ace up first offers insurance (blackjack-table cases); declined here.
+      for (const [shoe, commands] of [['9 A 8 K', [bet('10'), DEAL, NO_INSURANCE]], ['9 K 8 A', [bet('10'), DEAL]]] as const) {
+        const { state, facts } = run(stacked(shoe), [...commands]);
         t.equal(
           facts.filter((fact) => fact.kind === 'peeked').map((fact) => fact.kind === 'peeked' && fact.result),
           ['blackjack'],
@@ -148,7 +148,7 @@ export const blackjackCases: TestCase[] = [
   {
     name: 'blackjack: a natural against a dealer blackjack pushes',
     run: (t) => {
-      const result = playOut('A A K Q', '10', []);
+      const result = playOut('A A K Q', '10', [NO_INSURANCE]);
       t.equal(result.cards, { dealer: 'A Q', hand: 'A K' });
       t.equal(result.settled, [['hand-1', 'push', '0', '10']]);
       t.equal(result.balance, '1000');
@@ -163,9 +163,9 @@ export const blackjackCases: TestCase[] = [
       t.equal(view(a).outcome?.dealer.cards[1], null);
       t.equal([view(a).outcome?.dealer.total, view(a).outcome?.dealer.peek], [{ value: 10, soft: false }, 'no-blackjack']);
       t.equal(view(a), view(b));
-      // An ace up is peeked the same way.
-      const c = run(stacked('T A 6 6'), [bet('10'), DEAL]).state;
-      const d = run(stacked('T A 6 9'), [bet('10'), DEAL]).state;
+      // An ace up is peeked the same way once insurance is declined.
+      const c = run(stacked('T A 6 6'), [bet('10'), DEAL, NO_INSURANCE]).state;
+      const d = run(stacked('T A 6 9'), [bet('10'), DEAL, NO_INSURANCE]).state;
       t.equal([view(c), view(c).outcome?.dealer.peek], [view(d), 'no-blackjack']);
     },
   },
@@ -222,7 +222,7 @@ export const blackjackCases: TestCase[] = [
     name: 'blackjack: double is offered on any first two cards (soft 17 here), never after a hit',
     run: (t) => {
       const soft = run(stacked('A 5 6 4 3 T'), [bet('10'), DEAL]).state;
-      t.equal([view(soft).outcome?.hands[0]?.total, view(soft).playActions], [{ value: 17, soft: true }, ['hit', 'stand', 'double']]);
+      t.equal([view(soft).outcome?.hands[0]?.total, view(soft).playActions], [{ value: 17, soft: true }, ['hit', 'stand', 'double', 'surrender']]);
       const hit = step(run(stacked('2 5 3 4 3 T'), [bet('10'), DEAL]).state, HIT).state;
       t.equal(view(hit).playActions, ['hit', 'stand']);
       const attempt = assessed(hit, DOUBLE);
@@ -253,7 +253,7 @@ export const blackjackCases: TestCase[] = [
       // The rebuy adds funds and changes nothing else: still the same hand, awaiting the same decision.
       const funded = step(short, { kind: 'rebuy', amount: '100' });
       t.equal(funded.facts, [{ kind: 'funding-added', amount: '100', cumulative: '115', balance: '105' }]);
-      t.equal([funded.state.outcome, view(funded.state).playActions], [short.outcome, ['hit', 'stand', 'double']]);
+      t.equal([funded.state.outcome, view(funded.state).playActions], [short.outcome, ['hit', 'stand', 'double', 'surrender']]);
       const doubled = step(funded.state, DOUBLE).state;
       t.equal([doubled.balance, doubled.wagers], ['95', [{ target: 'hand-1', amount: '20' }]]);
       const bankroll = run(stacked('6 6 5 T T 9', { ...BJ_SPEC, fundingSource: 'training-bankroll', funding: '15' }), [bet('10'), DEAL]).state;
@@ -333,6 +333,7 @@ export const blackjackCases: TestCase[] = [
         let roundStart = 0;
         let shuffles = 0;
         while (shuffles < 2) {
+          if (view(state).insuranceOffer) state = step(state, NO_INSURANCE).state;
           state = run(state, state.phase === 'open-decision' ? [STAND, SETTLE] : [SETTLE]).state;
           const dealt = 312 - view(state).shoe.remaining;
           const next = run(state, [bet('10'), DEAL]);
@@ -372,7 +373,7 @@ export const blackjackCases: TestCase[] = [
         t.equal(status(advanceActivity(playing, envelope(playing, command))), 'rejected:not-legal-in-phase');
       }
       t.equal([view(betting).wagersCommitted, view(playing).wagersCommitted], [false, true]);
-      t.equal(status(advanceActivity(playing, envelope(playing, { kind: 'play', action: 'split' } as never))), 'rejected:malformed');
+      t.equal(status(advanceActivity(playing, envelope(playing, { kind: 'play', action: 'insure' } as never))), 'rejected:malformed');
     },
   },
   {
@@ -419,63 +420,20 @@ export const blackjackCases: TestCase[] = [
       t.equal([state.phase, state.balance], ['completed', '1010']);
     },
   },
-  {
-    name: 'blackjack: money is conserved over random play, and every settlement follows from the final cards (property)',
-    run: (t) => {
-      const driver = RandomStream.create({ ...ZERO, key: [0x626c6163, 0x6b6a6163] });
-      let state = createActivity({ ...BJ_SPEC, funding: '20000' }, BJ_STREAM);
-      // In half units, so 3:2 stays exact.
-      let halves = 40000n;
-      let rounds = 0;
-      const total = (cs: readonly { rank: number }[]) => {
-        const hard = cs.reduce((sum, card) => sum + Math.min(card.rank, 10), 0);
-        return cs.some((card) => card.rank === 1) && hard <= 11 ? hard + 10 : hard;
-      };
-      const inHalves = (amount: string) => (amount.endsWith('/2') ? BigInt(amount.slice(0, -2)) : BigInt(amount) * 2n);
-      while (rounds < 300) {
-        const actions = view(state).playActions;
-        const command: Command =
-          state.phase === 'revealing-outcome'
-            ? SETTLE
-            : actions.length > 0
-              ? { kind: 'play', action: actions[uniformInt(driver, actions.length)]! }
-              : state.wagers.length === 0
-                ? bet(String(10 + uniformInt(driver, 41)))
-                : DEAL;
-        const before = view(state).outcome;
-        const next = step(state, command);
-        state = next.state;
-        for (const fact of next.facts) {
-          if (fact.kind !== 'wager-settled') continue;
-          rounds++;
-          const player = total(before!.hands[0]!.cards);
-          const dealerCards = before!.dealer.cards.filter((card) => card !== null);
-          const dealer = total(dealerCards);
-          const playerNatural = before!.hands[0]!.cards.length === 2 && player === 21;
-          const dealerNatural = total(dealerCards.slice(0, 2)) === 21;
-          const stake = inHalves(fact.stake);
-          const expected = playerNatural
-            ? dealerNatural ? 0n : (stake * 3n) / 2n
-            : dealerNatural || player > 21 ? -stake
-              : dealer > 21 || player > dealer ? stake
-                : player === dealer ? 0n : -stake;
-          t.equal(inHalves(fact.net), expected);
-          halves += expected;
-        }
-        const staked = state.wagers.reduce((sum, wager) => sum + inHalves(wager.amount), 0n);
-        t.equal(inHalves(state.balance) + staked, halves);
-      }
-      t.record('final', { balance: state.balance, hash: checkpointHash(state) });
-    },
-  },
-
   // ---- checkpoints and specification ----------------------------------------
   {
     name: 'blackjack: create pins the rule set and refuses unsupported rules',
     run: (t) => {
       const state = fresh();
       t.equal([state.identities.game, state.identities.rules], ['blackjack', { id: 'blackjack-six-deck', version: 1 }]);
-      t.equal(state.rules, { decks: 6, dealer: 'S17', lateSurrender: true, penetration: 75, limits: { initial: { min: '10', max: '1000' } } });
+      t.equal(state.rules, {
+        decks: 6,
+        dealer: 'S17',
+        lateSurrender: true,
+        penetration: 75,
+        limits: { initial: { min: '10', max: '1000' } },
+        players: { learnerSeat: 0, others: [], strategy: null },
+      });
       t.equal([state.shoe, state.outcome, state.random.block], [null, null, [0, 0]]);
       const bad: Partial<BlackjackActivitySpecification['rules']>[] = [
         { decks: 8 as never },

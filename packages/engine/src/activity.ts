@@ -16,6 +16,7 @@ import {
   type BlackjackActivityState,
   type BlackjackDomainFact,
   type BlackjackIllegalActionReason,
+  type BlackjackInsuranceOffer,
   type BlackjackRoundView,
   type BlackjackRuleSet,
   type BlackjackShoeView,
@@ -246,6 +247,8 @@ export interface BlackjackPermittedView extends PermittedViewBase {
   readonly table: BlackjackTableView;
   /** Actions the rules offer the hand awaiting a decision; funding is judged when one is submitted. */
   readonly playActions: readonly BlackjackAction[];
+  /** The open insurance or even-money offer, before the peek; null otherwise. */
+  readonly insuranceOffer: BlackjackInsuranceOffer | null;
   readonly shoe: BlackjackShoeView;
 }
 

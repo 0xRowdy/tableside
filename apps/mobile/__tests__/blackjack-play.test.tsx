@@ -30,6 +30,18 @@ jest.mock('@/practice/app-adapters', () => {
  */
 const NATURAL = [40, 0x5441424c, 0x45534944, 0x45] as const;
 const ELEVEN = [47, 0x5441424c, 0x45534944, 0x45] as const;
+/**
+ * Streams found by dealing their first round through the engine (the cards are
+ * named here, not computed by the test): INSURANCE — you 2♥ J♦ against an
+ * A♥ up, 2♠ face down, then 5♥; EVEN_MONEY — you K♣ A♣ against an A♥ up, 9♣
+ * face down; NINES — you 9♣ 9♠ against a 2♠ up, 5♠ face down, then Q♠, Q♥,
+ * 6♥, J♣; PLAYERS — with two other players ahead: seat 1 6♦ Q♦, seat 2 A♦ 6♥,
+ * you 5♦ 5♦ against a 5♠ up, 3♣ face down, then 6♦ and J♣.
+ */
+const INSURANCE = [3, 0x5441424c, 0x45534944, 0x45] as const;
+const EVEN_MONEY = [245, 0x5441424c, 0x45534944, 0x45] as const;
+const NINES = [29, 0x5441424c, 0x45534944, 0x45] as const;
+const PLAYERS = [63, 0x5441424c, 0x45534944, 0x45] as const;
 
 let announcements: string[] = [];
 
@@ -49,19 +61,20 @@ async function openSetup() {
   await screen.findByRole('header', { name: 'Blackjack' });
 }
 
-async function startSession() {
+async function startSession(otherPlayers?: string) {
   await openSetup();
+  if (otherPlayers) await fireEvent.press(screen.getByRole('radio', { name: otherPlayers }));
   await fireEvent.press(screen.getByRole('button', { name: 'Start free play' }));
   await screen.findByLabelText('Session balance 1,000');
 }
 
 const betSpot = () => screen.getByRole('button', { name: /^Initial wager/ });
 
-async function betAndDeal(chip = '25') {
+async function betAndDeal(chip = '25', status = 'Your turn') {
   await fireEvent.press(screen.getByRole('radio', { name: `${chip} chip` }));
   await fireEvent.press(betSpot());
   await fireEvent.press(screen.getByRole('button', { name: 'Deal' }));
-  await screen.findByLabelText('Status Your turn');
+  await screen.findByLabelText(`Status ${status}`);
 }
 
 /** Every label, hint, value and text in the rendered tree, plus every announcement. */
@@ -94,6 +107,14 @@ describe('blackjack free play', () => {
     expect(screen.getByText('Initial wager 10–1,000 units')).toBeOnTheScreen();
     expect(screen.getByText('Edge with basic strategy: 0.33% (this preset)')).toBeOnTheScreen();
     expect(screen.getByLabelText('Starting chips for this session, in units')).toHaveProp('value', '1,000');
+    expect(screen.getByRole('radio', { name: 'No other players' })).toBeChecked();
+    expect(screen.getAllByRole('radio', { name: /other player/ }).map((radio) => radio.props.accessibilityLabel)).toEqual([
+      'No other players',
+      '1 other player',
+      '2 other players',
+      '3 other players',
+      '4 other players',
+    ]);
   });
 
   it('changes the preset and penetration, and the table pins them', async () => {
@@ -286,6 +307,123 @@ describe('blackjack free play', () => {
       const style = StyleSheet.flatten(control.props.style);
       expect(style.minHeight).toBeGreaterThanOrEqual(48);
       expect(style.minWidth ?? 48).toBeGreaterThanOrEqual(48);
+    }
+  });
+
+  it('offers insurance against an ace before the peek; it settles on its own and surrender is still offered after it', async () => {
+    mockAdapters.words = INSURANCE;
+    await startSession();
+    await betAndDeal('25', 'Insurance offered');
+
+    expect(screen.getByRole('header', { name: 'Insurance?' })).toBeOnTheScreen();
+    expect(announcements.some((text) => text.includes('The dealer shows an ace: insurance up to 12.5 is offered before the dealer checks.'))).toBe(true);
+    expect(screen.getByRole('button', { name: 'No insurance' })).toBeEnabled();
+    // No playing action before the insurance decision, and nothing names the hole card or the next card.
+    expect(screen.queryByRole('button', { name: 'Hit' })).toBeNull();
+    expect(everythingSpoken()).not.toMatch(/2 of spades|5 of hearts/);
+
+    await fireEvent.press(screen.getByRole('button', { name: 'Insure 12.5' }));
+
+    await screen.findByLabelText('Status Your turn');
+    expect(announcements).toContain('Insurance 12.5 on the table. The dealer checked for blackjack: none. Insurance loses 12.5. Your turn. Balance 962.5.');
+    expect(screen.getByText(/Surrendering returns half your bet \(12\.5\)/)).toBeOnTheScreen();
+
+    await fireEvent.press(screen.getByRole('button', { name: 'Surrender' }));
+
+    await screen.findByLabelText('Status Settled automatically');
+    expect(announcements).toContain('You surrender. The dealer turns over the 2 of spades.');
+    expect(announcements).toContain('Surrendered: 12.5 of your 25 comes back. Balance 975.');
+    expect(screen.getByLabelText('Last hand: 2 of hearts, Jack of diamonds. 12, surrendered')).toBeOnTheScreen();
+    expect(screen.getByText('Loss −12.5')).toBeOnTheScreen();
+  });
+
+  it('takes a lower insurance amount from the bet list', async () => {
+    mockAdapters.words = INSURANCE;
+    await startSession();
+    await betAndDeal('25', 'Insurance offered');
+    await fireEvent.press(screen.getByRole('tab', { name: 'Bet list' }));
+    expect(screen.getByRole('header', { name: 'Insurance · up to 12.5' })).toBeOnTheScreen();
+
+    await fireEvent.press(screen.getByRole('button', { name: /^Insurance\b/ }));
+    await fireEvent.press(screen.getByRole('radio', { name: 'Insurance' }));
+    await fireEvent.changeText(screen.getByLabelText(/^Total stake for /), '5');
+    await fireEvent.press(screen.getByRole('button', { name: /^Set / }));
+
+    await screen.findByLabelText('Status Your turn');
+    expect(announcements).toContain('Insurance 5 on the table. The dealer checked for blackjack: none. Insurance loses 5. Your turn. Balance 970.');
+  });
+
+  it('offers even money on a natural against an ace: the same as insuring it for half', async () => {
+    mockAdapters.words = EVEN_MONEY;
+    await startSession();
+    await betAndDeal('25', 'Even money offered');
+    expect(screen.getByRole('header', { name: 'Even money?' })).toBeOnTheScreen();
+    expect(screen.getByRole('button', { name: 'No, play it out' })).toBeEnabled();
+
+    await fireEvent.press(screen.getByRole('button', { name: 'Take even money (25)' }));
+
+    await screen.findByLabelText('Status Settled automatically');
+    // 12.5 insurance loses; the natural pays 37.5: +25 whatever the dealer had.
+    expect(announcements).toContain('Blackjack! You win 37.5. Balance 1,025.');
+    expect(screen.getByLabelText('Session balance 1,025')).toBeOnTheScreen();
+  });
+
+  it('splits a pair into two hands played left to right, the second taking its card when its turn comes', async () => {
+    mockAdapters.words = NINES;
+    await startSession();
+    await betAndDeal();
+
+    await fireEvent.press(screen.getByRole('button', { name: 'Split' }));
+
+    await screen.findByLabelText('Status Your turn · hand 1 of 2');
+    expect(announcements).toContain('You split. Wager 25 on hand 2. Hand 1: Queen of spades. Your hands have 19 and 9; the dealer shows 2. Your turn · hand 1 of 2. Balance 950.');
+    expect(screen.getByLabelText('Hand 1 of 2: 9 of clubs, Queen of spades. 19, your turn')).toBeOnTheScreen();
+    expect(screen.getByLabelText('Hand 2 of 2: 9 of spades. 9, waiting')).toBeOnTheScreen();
+    expect(screen.getByLabelText('On table 50')).toBeOnTheScreen();
+    // The hand's state is in words as well as the highlight.
+    expect(within(screen.getByTestId('split-hands')).getByText('Your turn')).toBeOnTheScreen();
+    expect(screen.getByRole('button', { name: 'Surrender' })).toBeDisabled();
+    expect(everythingSpoken()).not.toMatch(/Queen of hearts|5 of spades/);
+
+    await fireEvent.press(screen.getByRole('button', { name: 'Stand' }));
+    await screen.findByLabelText('Status Your turn · hand 2 of 2');
+    expect(announcements).toContain('You stand. Hand 2: Queen of hearts. Your hands have 19 and 19; the dealer shows 2. Your turn · hand 2 of 2.');
+
+    await fireEvent.press(screen.getByRole('button', { name: 'Stand' }));
+    await screen.findByLabelText('Status Settled automatically');
+    expect(announcements).toContain('Hand 1 wins 25. Hand 2 wins 25. Balance 1,050.');
+    expect(screen.getByText('Hand 1 win +25 · Hand 2 win +25')).toBeOnTheScreen();
+  });
+
+  it('seats other players ahead of you whose cards and plays are shown and announced; only your result moves your balance', async () => {
+    mockAdapters.words = PLAYERS;
+    await startSession('2 other players');
+    await betAndDeal();
+
+    expect(
+      announcements.some((text) =>
+        text.includes(
+          'Seat 1: 6 of diamonds. Seat 2: Ace of diamonds. You: 5 of diamonds. Dealer: 5 of spades. Seat 1: Queen of diamonds. Seat 2: 6 of hearts. ' +
+            'You: 5 of diamonds. Dealer: a face-down card. Seat 1 stands. Seat 2 doubles. Seat 2: 6 of diamonds. You have 10; the dealer shows 5. Your turn.',
+        ),
+      ),
+    ).toBe(true);
+    const others = within(screen.getByTestId('other-players'));
+    expect(others.getByLabelText('Seat 1: 6 of diamonds, Queen of diamonds. 16, done')).toBeOnTheScreen();
+    expect(others.getByLabelText('Seat 2: Ace of diamonds, 6 of hearts, 6 of diamonds. 13, doubled')).toBeOnTheScreen();
+    expect(everythingSpoken()).not.toMatch(/3 of clubs/);
+
+    await fireEvent.press(screen.getByRole('button', { name: 'Stand' }));
+    await screen.findByLabelText('Status Settled automatically');
+    expect(announcements).toContain('You lose 25. Seat 1 loses 10. Seat 2 loses 20. Balance 975.');
+  });
+
+  it('gives the insurance decision and split hands touch targets of at least 48 points', async () => {
+    mockAdapters.words = INSURANCE;
+    await startSession();
+    await betAndDeal('25', 'Insurance offered');
+    for (const control of within(screen.getByTestId('insurance-decision')).getAllByRole('button')) {
+      expect(StyleSheet.flatten(control.props.style).minHeight).toBeGreaterThanOrEqual(48);
     }
   });
 

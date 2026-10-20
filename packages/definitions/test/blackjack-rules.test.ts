@@ -16,6 +16,7 @@ describe('blackjack rule presets', () => {
       lateSurrender: true,
       penetration: 75,
       limits: { initial: { min: '10', max: '1000' } },
+      players: { learnerSeat: 0, others: [], strategy: null },
     });
   });
 
@@ -32,7 +33,7 @@ describe('blackjack rule presets', () => {
     const random = { protocol: RANDOM_PROTOCOL_VERSION, key: [1, 2], session: [3, 4] } as const;
     for (const preset of BLACKJACK_PRESETS) {
       for (const penetration of [50, 55, 60, 65, 70, 75, 80]) {
-        const rules = blackjackRules(preset, penetration);
+        const rules = blackjackRules(preset, penetration, penetration % 4);
         const state = createActivity({ activityId: 'a', owner: 'o', device: 'd', game: 'blackjack', rules, strategy: null, reference: null, fundingSource: 'practice-funding', funding: '1000' }, random);
         expect(state.rules.penetration).toBe(penetration);
       }
