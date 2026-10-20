@@ -1,8 +1,8 @@
 // Building blocks of the More and Settings screens (design frames "More",
-// "Settings" and S1-12): the screen header with Back, list rows, the Sound
-// effects slider and the Haptics switch row.
+// "Settings" and S1-12): the screen header with Back, list rows and the Sound
+// effects slider. The Haptics switch row is the shared SwitchRow component.
 
-import { Check, ChevronLeft, ChevronRight, Volume1, Volume2, type LucideIcon } from 'lucide-react-native';
+import { ChevronLeft, ChevronRight, Volume1, Volume2, type LucideIcon } from 'lucide-react-native';
 import { useState, type ReactNode } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View, type GestureResponderEvent } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -156,30 +156,6 @@ function StepButton({ icon: Icon, label, disabled, onPress }: { icon: LucideIcon
   );
 }
 
-/** A labelled on/off switch filling its row. On and off differ by knob position and a check mark, not only color. */
-export function SwitchRow({ title, detail, value, onChange }: { title: string; detail: string; value: boolean; onChange: (value: boolean) => void }) {
-  const { focused, focusProps } = useKeyboardFocus();
-  return (
-    <Pressable
-      accessibilityRole="switch"
-      accessibilityLabel={title}
-      accessibilityHint={detail}
-      accessibilityState={{ checked: value }}
-      onPress={() => onChange(!value)}
-      {...focusProps}
-      style={[styles.switchRow, focused && styles.focused]}
-    >
-      <View style={styles.rowText}>
-        <Text maxFontSizeMultiplier={textScale.body} style={styles.rowTitle}>{title}</Text>
-        <Text maxFontSizeMultiplier={textScale.body} style={styles.rowDetail}>{detail}</Text>
-      </View>
-      <View style={[styles.switch, value ? styles.switchOn : styles.switchOff]}>
-        <View style={[styles.knob, value ? styles.knobOn : styles.knobOff]}>{value && <Check color={palette.primary} size={14} />}</View>
-      </View>
-    </Pressable>
-  );
-}
-
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: palette.background },
   header: { flexDirection: 'row', alignItems: 'center', gap: space[1], minHeight: 56, paddingLeft: space[1], paddingRight: space[2] },
@@ -218,12 +194,5 @@ const styles = StyleSheet.create({
   rail: { height: 6, borderRadius: 3, backgroundColor: palette.controlBorder, overflow: 'hidden' },
   filled: { height: 6, backgroundColor: palette.primary },
   thumb: { position: 'absolute', width: 28, height: 28, marginLeft: -14, borderRadius: 14, backgroundColor: palette.foreground },
-  switchRow: { flexDirection: 'row', alignItems: 'center', gap: space[4], minHeight: MIN_TOUCH_TARGET + 16, paddingVertical: space[3], paddingHorizontal: space[4], borderWidth: 2, borderColor: palette.transparent },
-  switch: { width: 52, height: 32, borderRadius: 16, padding: 3, justifyContent: 'center' },
-  switchOn: { backgroundColor: palette.primary, alignItems: 'flex-end' },
-  switchOff: { backgroundColor: palette.muted, borderWidth: 1.5, borderColor: palette.controlBorder, alignItems: 'flex-start' },
-  knob: { width: 26, height: 26, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
-  knobOn: { backgroundColor: palette.primaryForeground },
-  knobOff: { width: 23, height: 23, backgroundColor: palette.mutedForeground },
   focused: { borderColor: palette.ring },
 });

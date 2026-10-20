@@ -230,6 +230,12 @@ export type StateOf<G extends GameId> = Extract<ActivityState, { readonly identi
 export type Command =
   /** Sets the stake on a target; amount "0" takes the wager down. */
   | { readonly kind: 'place-wager'; readonly target: string; readonly amount: string }
+  /**
+   * A per-bet working instruction (craps), as the wager's status on a come-out
+   * roll: place, buy and come odds can be told to work on the come-out (true),
+   * lays, hardways and don't come odds to be off (false). The usual value clears it.
+   */
+  | { readonly kind: 'set-working'; readonly target: string; readonly working: boolean }
   | { readonly kind: 'begin-turn' }
   /** A blackjack playing action for the hand awaiting a decision. */
   | { readonly kind: 'play'; readonly action: BlackjackAction }
@@ -251,8 +257,11 @@ export type Command =
 /** Commands the protocol handles itself for guided practice. */
 export type StrategyCommandKind = 'retry-correction' | 'override-correction' | 'restart-cycle' | 'stop-strategy';
 
-/** The commands a game module applies; the protocol itself handles funding and guided practice. Only blackjack takes playing actions. */
-export type GameCommand = Exclude<Command, { readonly kind: 'rebuy' | 'play' | StrategyCommandKind }>;
+/**
+ * The commands a game module applies; the protocol itself handles funding and
+ * guided practice. Only blackjack takes playing actions and only craps working instructions.
+ */
+export type GameCommand = Exclude<Command, { readonly kind: 'rebuy' | 'play' | 'set-working' | StrategyCommandKind }>;
 
 export type CommandKind = Command['kind'];
 
@@ -290,8 +299,12 @@ export type DomainFact =
       readonly result: 'win' | 'loss' | 'push';
       /** Net result: payout on a win, minus the stake on a loss, 0 on a push. */
       readonly net: string;
-      /** Paid back to the balance: stake plus payout, the stake on a push, or 0. */
+      /** Paid back to the balance: stake plus payout, the stake on a push, or 0. A craps place, buy, lay or hardway win stays up, so only its net comes back. */
       readonly returned: string;
+      /** A craps horn part (2, 3, 11 or 12): each part of one wager settles as its own bet. */
+      readonly component?: number;
+      /** Commission withheld from a winning craps buy or lay; already taken out of net. */
+      readonly commission?: string;
     }
   | { readonly kind: 'stop-requested'; readonly phase: Phase }
   | { readonly kind: 'wager-returned'; readonly target: string; readonly amount: string }
@@ -415,7 +428,7 @@ export interface GameModule<S extends ActivityState, V extends PermittedView, C 
    * The commands the state allows, when the game refines the phase table (a
    * blackjack hand awaiting a decision takes only playing actions).
    */
-  legal?(state: S): readonly CommandKind[];
+  legal?(state: S, common: readonly CommandKind[]): readonly CommandKind[];
   /** Applies a command already known to be well formed and legal in the phase. */
   apply(state: S, command: C): Step<S>;
   /** The game's part of the permitted view; it may refine when wagers count as committed. */
@@ -443,7 +456,7 @@ const moduleOf = (state: ActivityState) => GAMES[state.identities.game];
  * practice funding; Stop strategy only while a strategy still runs.
  */
 function legalCommands(state: ActivityState): readonly CommandKind[] {
-  const legal = GUIDED_PHASES.has(state.phase) ? LEGAL[state.phase] : (moduleOf(state).legal?.(state) ?? LEGAL[state.phase]);
+  const legal = GUIDED_PHASES.has(state.phase) ? LEGAL[state.phase] : (moduleOf(state).legal?.(state, LEGAL[state.phase]) ?? LEGAL[state.phase]);
   const running = state.strategy !== null && state.strategy.status !== 'stopped';
   return legal.filter((kind) => (kind !== 'rebuy' || rebuysOffered(state.funding)) && (kind !== 'stop-strategy' || running));
 }
@@ -469,6 +482,8 @@ function isCommand(value: unknown): value is Command {
       const amount = parseMoney(value.amount);
       return hasExactKeys(value, ['kind', 'target', 'amount']) && isText(value.target) && amount !== undefined && amount.n >= 0n;
     }
+    case 'set-working':
+      return hasExactKeys(value, ['kind', 'target', 'working']) && isText(value.target) && typeof value.working === 'boolean';
     case 'rebuy': {
       const amount = parseMoney(value.amount);
       return hasExactKeys(value, ['kind', 'amount']) && amount !== undefined && amount.n > 0n;
