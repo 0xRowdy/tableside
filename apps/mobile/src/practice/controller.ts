@@ -40,13 +40,15 @@ import {
   type OddsCap,
   type PermittedView,
   type Phase,
+  type CrapsRuleSet,
+  type RouletteRuleSet,
   type RouletteWheel,
   type StopCause,
   type StrategySelection,
 } from '@tableside/engine';
-import { ROULETTE_PRESETS, standardCraps } from '@tableside/definitions';
+import { rouletteRules, standardCraps } from '@tableside/definitions';
 
-import type { AccessDecision, AccessDenial, LifecycleEvent, PhaseReport, PracticeAdapters } from './adapters';
+import { PRACTICE_FUNDING_TERMS, type AccessDecision, type AccessDenial, type LifecycleEvent, type PhaseReport, type PracticeAdapters, type SetupTerms } from './adapters';
 import type { AllowanceEffect, CommitOutcome, CommittedTransition, CompletedPracticeSession, NewActivity, StoredActivity } from './store';
 
 /** How long the landed ball or the dice stay on screen before the automatic settle step. */
@@ -130,12 +132,16 @@ export type StartRequest =
       readonly game: 'roulette';
       /** The wheel's rule preset; single zero when omitted. */
       readonly wheel?: RouletteWheel;
+      /** The limits chosen at setup; the launch limits when omitted. */
+      readonly limits?: RouletteRuleSet['limits'];
     })
   | (StartRequestBase & {
       readonly game: 'craps';
       readonly odds: OddsCap;
       /** What a field 12 pays; triple when omitted. */
       readonly field?: FieldPayout;
+      /** The limits chosen at setup; the launch limits when omitted. */
+      readonly limits?: CrapsRuleSet['limits'];
     })
   | (StartRequestBase & { readonly game: 'blackjack'; /** The chosen preset and penetration. */ readonly rules: BlackjackRuleSet });
 
@@ -232,6 +238,13 @@ export class PracticeController {
     });
   }
 
+  /** What setup shows for a game: its funding source and allowance line. Asking never charges or starts anything. */
+  async setupTerms(game: string): Promise<SetupTerms> {
+    const { access } = this.adapters;
+    if (!access.setupTerms) return PRACTICE_FUNDING_TERMS;
+    return access.setupTerms({ game }).catch(() => PRACTICE_FUNDING_TERMS);
+  }
+
   /** Durability step 1: creates the activity and its random identity, then shows the table. */
   async start(requested: StartRequest): Promise<void> {
     const request = { ...requested, fundingSource: requested.fundingSource ?? 'practice-funding' };
@@ -279,10 +292,10 @@ export class PracticeController {
         };
         const specification: ActivitySpecification =
           request.game === 'craps'
-            ? { ...base, game: 'craps', rules: standardCraps(request.odds, request.field) }
+            ? { ...base, game: 'craps', rules: standardCraps(request.odds, request.field, request.limits) }
             : request.game === 'blackjack'
               ? { ...base, game: 'blackjack', rules: request.rules }
-              : { ...base, game: 'roulette', rules: ROULETTE_PRESETS[wheelOf(request)] };
+              : { ...base, game: 'roulette', rules: rouletteRules(wheelOf(request), request.limits) };
         let initial: ActivityState;
         try {
           initial = createActivity(specification, random);
@@ -912,7 +925,7 @@ const wheelOf = (request: Extract<StartRequest, { game: 'roulette' }>): Roulette
 function sameRequest(a: StartRequest, b: StartRequest): boolean {
   if (a.buyIn !== b.buyIn || a.fundingSource !== b.fundingSource) return false;
   if (canonicalJson(a.strategy ?? null) !== canonicalJson(b.strategy ?? null)) return false;
-  if (a.game === 'craps') return b.game === 'craps' && a.odds === b.odds && standardCraps(a.odds, a.field).field === standardCraps(b.odds, b.field).field;
+  if (a.game === 'craps') return b.game === 'craps' && canonicalJson(standardCraps(a.odds, a.field, a.limits)) === canonicalJson(standardCraps(b.odds, b.field, b.limits));
   if (a.game === 'blackjack') return b.game === 'blackjack' && canonicalJson(a.rules) === canonicalJson(b.rules);
-  return b.game === 'roulette' && wheelOf(a) === wheelOf(b);
+  return b.game === 'roulette' && canonicalJson(rouletteRules(wheelOf(a), a.limits)) === canonicalJson(rouletteRules(wheelOf(b), b.limits));
 }

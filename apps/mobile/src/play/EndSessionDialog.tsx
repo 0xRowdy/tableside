@@ -1,7 +1,9 @@
 // The End session confirmation (design frame S1-09 "End session — confirm"):
-// the three ending steps, shown before anything is returned or settled.
+// the three ending steps, shown before anything is returned or settled. Its
+// switch variant (S1-09 egZUB) asks before another game's setup opens: the
+// current session ends first, its result is saved, then that setup opens.
 
-import type { PermittedView, Wager } from '@tableside/engine';
+import type { GameId, PermittedView, Wager } from '@tableside/engine';
 import { Modal, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { Button } from '@/components/Button';
@@ -9,6 +11,8 @@ import { fonts, palette, radius, space, textScale } from '@/theme/tokens';
 
 import { crapsTargetName } from './craps-text';
 import { formatUnits, targetName } from './roulette-text';
+
+const GAME_NAMES: Record<GameId, string> = { blackjack: 'blackjack', craps: 'craps', roulette: 'roulette' };
 
 /**
  * What ending would do with each wager. Roulette: every wager comes back
@@ -31,13 +35,18 @@ export function EndSessionDialog({
   onCancel,
   onConfirm,
   cancelLabel = 'Keep playing',
+  switchTo,
 }: {
   visible: boolean;
   view: PermittedView;
   onCancel: () => void;
   onConfirm: () => void;
   cancelLabel?: string;
+  /** The game whose setup opens once this session has ended. */
+  switchTo?: GameId;
 }) {
+  const from = GAME_NAMES[view.game];
+  const to = switchTo && GAME_NAMES[switchTo];
   const { removable, committed, name } = endingWagers(view);
   const list = (wagers: readonly Wager[], none: string) =>
     wagers.length === 0 ? none : wagers.map((w) => `${name(w.target)} ${formatUnits(w.amount)}`).join(' · ');
@@ -47,10 +56,12 @@ export function EndSessionDialog({
         <ScrollView contentContainerStyle={styles.dialogScroll}>
           <View accessibilityViewIsModal style={styles.dialog}>
             <Text accessibilityRole="header" maxFontSizeMultiplier={textScale.display} style={styles.dialogTitle}>
-              End this session?
+              {to ? `Switch to ${to}?` : 'End this session?'}
             </Text>
             <Text maxFontSizeMultiplier={textScale.body} style={styles.dialogText}>
-              Ending works in three steps, and it can&apos;t be undone once settlement starts.
+              {to
+                ? `Starting ${to} ends this ${from} session first. Resetting the table does the same.`
+                : "Ending works in three steps, and it can't be undone once settlement starts."}
             </Text>
             {[
               {
@@ -66,14 +77,16 @@ export function EndSessionDialog({
                       ? list(committed, 'None between rounds')
                       : 'None between spins',
               },
-              { title: 'You see the session result', detail: 'Buy-in, rebuys, final cash-out, net result and maximum drawdown' },
+              to
+                ? { title: `Your ${from} result is saved, then ${to} setup opens`, detail: 'Results and departures in Saved › Practice' }
+                : { title: 'You see the session result', detail: 'Buy-in, rebuys, final cash-out, net result and maximum drawdown' },
             ].map((step, index) => (
               <View key={step.title} accessible accessibilityLabel={`${index + 1}. ${step.title}. ${step.detail}`} style={styles.dialogStep}>
                 <Text maxFontSizeMultiplier={textScale.body} style={styles.dialogStepTitle}>{index + 1}  {step.title}</Text>
                 <Text maxFontSizeMultiplier={textScale.body} style={styles.dialogText}>{step.detail}</Text>
               </View>
             ))}
-            <Button label="End session" stretch onPress={onConfirm} />
+            <Button label={to ? `End ${from} session and switch` : 'End session'} stretch onPress={onConfirm} />
             <Button label={cancelLabel} variant="secondary" stretch onPress={onCancel} />
           </View>
         </ScrollView>

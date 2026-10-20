@@ -1,22 +1,28 @@
 // Roulette rule presets and house-edge facts. Limits are the launch defaults
 // (#3): inside 1-100, outside 10-1,000 units per placement, with no aggregate
-// table cap. Editable limits arrive with #72.
+// table cap; setup may edit them before a session.
 
 import { ROULETTE_RULE_SETS, type PlacementKind, type RouletteRuleSet, type RouletteWheel, type VersionedIdentity } from '@tableside/engine';
 
-const LAUNCH_LIMITS: RouletteRuleSet['limits'] = {
+export const ROULETTE_LIMITS: RouletteRuleSet['limits'] = {
   inside: { min: '1', max: '100' },
   outside: { min: '10', max: '1000' },
 };
 
-export const SINGLE_ZERO_ROULETTE: RouletteRuleSet = { ...ROULETTE_RULE_SETS['single-zero'], limits: LAUNCH_LIMITS };
+export const SINGLE_ZERO_ROULETTE: RouletteRuleSet = { ...ROULETTE_RULE_SETS['single-zero'], limits: ROULETTE_LIMITS };
 
-export const DOUBLE_ZERO_ROULETTE: RouletteRuleSet = { ...ROULETTE_RULE_SETS['double-zero'], limits: LAUNCH_LIMITS };
+export const DOUBLE_ZERO_ROULETTE: RouletteRuleSet = { ...ROULETTE_RULE_SETS['double-zero'], limits: ROULETTE_LIMITS };
 
 export const ROULETTE_PRESETS: Readonly<Record<RouletteWheel, RouletteRuleSet>> = {
   'single-zero': SINGLE_ZERO_ROULETTE,
   'double-zero': DOUBLE_ZERO_ROULETTE,
 };
+
+/** The rule set a roulette activity pins for a wheel, at the launch limits or edited ones. */
+export const rouletteRules = (wheel: RouletteWheel, limits: RouletteRuleSet['limits'] = ROULETTE_LIMITS): RouletteRuleSet => ({
+  ...ROULETTE_RULE_SETS[wheel],
+  limits: { inside: { ...limits.inside }, outside: { ...limits.outside } },
+});
 
 /** The version of the roulette house-edge values; bump it when any value changes. */
 export const ROULETTE_HOUSE_EDGE_VERSION = 1;

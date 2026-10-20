@@ -26,10 +26,11 @@ export {
   type PlayAction,
 } from './blackjack/reference';
 
-export { blackjackRules, DEFAULT_BLACKJACK_PRESET, DEFAULT_PENETRATION } from './blackjack/rules';
+export { BLACKJACK_LIMITS, blackjackRules, DEFAULT_BLACKJACK_PRESET, DEFAULT_PENETRATION } from './blackjack/rules';
 export { seatStrategy } from './blackjack/seats';
 export {
   CRAPS_EDGE_WAGERS,
+  CRAPS_LIMITS,
   CRAPS_HOUSE_EDGE_VERSION,
   crapsEdgeWager,
   crapsHouseEdge,
@@ -42,7 +43,9 @@ export {
 export {
   DOUBLE_ZERO_ROULETTE,
   ROULETTE_HOUSE_EDGE_VERSION,
+  ROULETTE_LIMITS,
   ROULETTE_PRESETS,
+  rouletteRules,
   rouletteHouseEdge,
   SINGLE_ZERO_ROULETTE,
   type RouletteHouseEdge,
@@ -51,3 +54,5 @@ export {
 export { FIXED_TWO_DOZENS, FLAT_EVEN_MONEY, ROULETTE_STRATEGIES, strategyDefaults } from './roulette-strategies';
 
 export { QUARANTINE_LIST } from './quarantine';
+
+export { DEFAULT_LIMITS } from './limits';

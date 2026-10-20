@@ -73,8 +73,10 @@ describe('roulette free play', () => {
     await screen.findByRole('header', { name: 'Roulette' });
 
     expect(screen.getByLabelText('Starting chips for this session, in units')).toHaveProp('value', '1,000');
-    expect(screen.getByText('Inside bets 1–100 units')).toBeOnTheScreen();
-    expect(screen.getByText('Outside bets 10–1,000 units')).toBeOnTheScreen();
+    expect(screen.getByLabelText('Inside bets minimum, in units')).toHaveProp('value', '1');
+    expect(screen.getByLabelText('Inside bets maximum, in units')).toHaveProp('value', '100');
+    expect(screen.getByLabelText('Outside bets minimum, in units')).toHaveProp('value', '10');
+    expect(screen.getByLabelText('Outside bets maximum, in units')).toHaveProp('value', '1,000');
     expect(screen.getByRole('tab', { name: 'Play', selected: true })).toBeOnTheScreen();
   });
 

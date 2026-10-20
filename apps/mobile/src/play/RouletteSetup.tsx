@@ -1,118 +1,156 @@
-// Roulette session setup (design frame S1-02): free play or guided practice,
-// either wheel at the launch limits, and a fresh buy-in. Guided practice picks
-// a built-in strategy (or, from spec 4, one of My strategies) and fixes its
-// targets before the start. The engine judges whether the strategy fits the
-// table; an incompatible pairing is refused naming the requirement, never
-// adjusted. Editable limits and the house-edge line arrive with #72.
+// Roulette session setup (design frame S1-02 XQukd): free play or guided
+// practice, either wheel, editable inside and outside limits, the house edge
+// of the wheel's rules and a fresh buy-in. Guided practice picks a built-in
+// strategy (or, from spec 4, one of My strategies) and fixes its targets
+// before the start. The engine judges whether the strategy fits the table as
+// edited; an incompatible pairing is refused naming the requirement, never
+// adjusted (S4-13), and opening bets the funds can't cover are explained (tUFpp).
 
-import { strategyTableCompatibility, type RouletteActivitySpecification, type RouletteWheel, type StrategyDefinition, type TableRequirement } from '@tableside/engine';
-import { ROULETTE_PRESETS, ROULETTE_STRATEGIES, strategyDefaults } from '@tableside/definitions';
+import {
+  explainPrescription,
+  FUNDING_CEILING,
+  initialProgress,
+  rouletteLayout,
+  strategyTableCompatibility,
+  type RouletteSituation,
+  type RouletteWheel,
+  type StrategyDefinition,
+  type TableRequirement,
+} from '@tableside/engine';
+import { ROULETTE_LIMITS, ROULETTE_STRATEGIES, rouletteHouseEdge, rouletteRules, strategyDefaults } from '@tableside/definitions';
+import { router } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Button } from '@/components/Button';
 import { Screen } from '@/components/Screen';
-import { useFeedback } from '@/feedback/FeedbackProvider';
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
-import { RECONNECT_TO_VERIFY, type StartProblem } from '@/practice/controller';
+import type { StartProblem } from '@/practice/controller';
 import { usePractice } from '@/practice/PracticeProvider';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/theme/tokens';
 
 import { betsText } from './coaching-text';
 import { formatUnits, targetName } from './roulette-text';
-
-const DEFAULT_BUY_IN = '1000';
-/** Longest buy-in text accepted before the engine judges the amount (the ceiling has 10 digits). */
-const MAX_BUY_IN_DIGITS = 13;
-
-const PROBLEMS: Record<StartProblem, string> = {
-  'invalid-buy-in': 'Enter whole units from 1 to 1,000,000,000.',
-  'strategy-incompatible': "This strategy doesn't fit your table.",
-  'save-failed': "The session couldn't be saved, so it hasn't started. Try again.",
-  'access-denied': "This session can't start right now.",
-  'access-uncertain': `${RECONNECT_TO_VERIFY}. Nothing has started and nothing was used.`,
-};
+import { FundingSection, useFunding, type Opening } from './setup/Funding';
+import { GroupFields, LimitsBanner, useLimits } from './setup/Limits';
+import type { LimitGroup } from './setup/limit-drafts';
+import { ChoiceGroup, FieldLabel, Help, Section, SetupHeader } from './setup/SetupParts';
 
 type Mode = 'free-play' | 'guided';
+type Group = 'inside' | 'outside';
+
+const GROUPS: readonly LimitGroup<Group>[] = [
+  { key: 'inside', label: 'Inside bets', help: 'Per placement.' },
+  { key: 'outside', label: 'Outside bets', help: 'Per placement.' },
+];
+
+const WHEELS: readonly { wheel: RouletteWheel; label: string }[] = [
+  { wheel: 'single-zero', label: 'Single zero (0)' },
+  { wheel: 'double-zero', label: 'Double zero (0, 00)' },
+];
+
+/**
+ * What the strategy's first spin bets at this table, with funds to spare so
+ * the whole opening shows, from the engine's Explain prescription. Null when
+ * it opens with no bet.
+ */
+function strategyOpening(strategy: StrategyDefinition, parameters: Record<string, string>, rules: RouletteSituation['rules']): Opening | null {
+  const situation: RouletteSituation = { game: 'roulette', rules, balance: FUNDING_CEILING.toString(), lastPocket: null };
+  const explained = explainPrescription(strategy, parameters, situation, initialProgress(strategy));
+  if (!explained.ok || explained.explanation.prescription.status !== 'prescribed') return null;
+  const { bets } = explained.explanation.prescription;
+  const amount = bets.reduce((sum, bet) => sum + BigInt(bet.amount), 0n).toString();
+  return { kind: 'strategy', amount, strategyName: strategy.name, bets: betsText(bets) };
+}
+
+const smaller = (a: string, b: string) => (BigInt(a) < BigInt(b) ? a : b);
 
 export function RouletteSetup({
   problem,
   problemReason = null,
   busy,
-  presets = ROULETTE_PRESETS,
   myStrategies = [],
 }: {
   problem: StartProblem | null;
   problemReason?: string | null;
   busy: boolean;
-  /** The table each wheel offers (editable limits arrive with #72). */
-  presets?: Readonly<Record<RouletteWheel, RouletteActivitySpecification['rules']>>;
   /** The latest saved revision of each runnable private roulette strategy (spec 4). */
   myStrategies?: readonly StrategyDefinition[];
 }) {
   const { controller } = usePractice();
-  const feedback = useFeedback();
-  const [draft, setDraft] = useState(formatUnits(DEFAULT_BUY_IN));
-  const [notWhole, setNotWhole] = useState(false);
   const [wheel, setWheel] = useState<RouletteWheel>('single-zero');
   const [mode, setMode] = useState<Mode>('free-play');
   const [strategy, setStrategy] = useState<StrategyDefinition>(ROULETTE_STRATEGIES[0] as StrategyDefinition);
   const [choices, setChoices] = useState<Record<string, string>>(strategyDefaults(strategy));
   const [customizeNote, setCustomizeNote] = useState(false);
-  const rules = presets[wheel];
-  const { limits } = rules;
+  const limits = useLimits(GROUPS, ROULETTE_LIMITS);
+  const accepted = limits.accepted;
+  const rules = accepted ? rouletteRules(wheel, accepted) : null;
   const guided = mode === 'guided';
-  const fit = guided ? strategyTableCompatibility(strategy, choices, rules) : null;
+  // Compatibility is judged at the table as edited, once its limits are good.
+  const fit = guided && rules ? strategyTableCompatibility(strategy, choices, rules) : null;
+  let opening: Opening | null = null;
+  if (rules && !guided) opening = { kind: 'table', amount: smaller(rules.limits.inside.min, rules.limits.outside.min) };
+  if (rules && fit?.compatible) opening = strategyOpening(strategy, choices, { wheel, limits: rules.limits });
+  const funding = useFunding('roulette', opening);
   const chooseStrategy = (next: StrategyDefinition) => {
     setStrategy(next);
     setChoices(strategyDefaults(next));
     setCustomizeNote(false);
   };
 
+  // Under a limit the strategy's bets fall outside (S4-13 YwrCf).
+  const limitNote = (group: Group): string | null => {
+    const layout = rouletteLayout(wheel);
+    const failed = fit?.requirements.find(
+      (r) => (r.requirement === 'below-minimum' || r.requirement === 'above-maximum') && layout.find((p) => p.target === r.target)?.limitClass === group,
+    );
+    if (!failed?.amount) return null;
+    return `${failed.requirement === 'below-minimum' ? 'Above' : 'Below'} the strategy's ${formatUnits(failed.amount)} bets.`;
+  };
+
   const start = () => {
-    const digits = draft.replace(/[,\s]/g, '');
-    const whole = /^\d+$/.test(digits) && digits.length <= MAX_BUY_IN_DIGITS;
-    setNotWhole(!whole);
-    if (!whole) return feedback.cue('input-rejected');
+    if (!accepted) return;
+    const funds = funding.prepare();
+    if (!funds) return;
     void controller.start({
       game: 'roulette',
-      buyIn: BigInt(digits).toString(),
+      ...funds,
       wheel,
+      limits: accepted,
       ...(guided ? { strategy: { definition: strategy, parameters: choices } } : {}),
     });
   };
-  const error = notWhole ? PROBLEMS['invalid-buy-in'] : problem && (problem === 'access-denied' && problemReason ? problemReason : PROBLEMS[problem]);
 
   return (
     <Screen>
-      <View style={styles.titles}>
-        <Text accessibilityRole="header" maxFontSizeMultiplier={textScale.display} style={styles.title}>
-          Roulette
-        </Text>
-        <Text maxFontSizeMultiplier={textScale.body} style={styles.subtitle}>New session · {guided ? 'guided practice' : 'free play'}</Text>
-      </View>
+      <SetupHeader title="Roulette" subtitle={`New session · ${guided ? 'guided practice' : 'free play'}`} onBack={() => router.navigate('/')} />
 
-      <View style={styles.section}>
-        <Text maxFontSizeMultiplier={textScale.body} style={styles.label}>HOW DO YOU WANT TO PLAY?</Text>
-        <View accessibilityRole="radiogroup" accessibilityLabel="How do you want to play?" style={styles.choices}>
-          <Choice label="Free play" selected={!guided} onPress={() => setMode('free-play')} />
-          <Choice label="Guided practice" selected={guided} onPress={() => setMode('guided')} />
-        </View>
-      </View>
+      <Section label="HOW DO YOU WANT TO PLAY?">
+        <ChoiceGroup
+          label="How do you want to play?"
+          options={[
+            { label: 'Free play', selected: !guided, onPress: () => setMode('free-play') },
+            { label: 'Guided practice', selected: guided, onPress: () => setMode('guided') },
+          ]}
+        />
+        {guided && <Help>Guided practice pauses before a move that departs from your strategy, so you can retry or override it.</Help>}
+      </Section>
 
-      <View style={styles.section}>
-        <Text maxFontSizeMultiplier={textScale.body} style={styles.label}>WHEEL</Text>
-        <View accessibilityRole="radiogroup" accessibilityLabel="Wheel" style={styles.choices}>
-          {WHEELS.map((option) => (
-            <Choice key={option.wheel} label={option.label} selected={wheel === option.wheel} onPress={() => setWheel(option.wheel)} />
-          ))}
-        </View>
-        <Text maxFontSizeMultiplier={textScale.body} style={styles.help}>
+      <Section label="WHEEL">
+        <ChoiceGroup label="Wheel" options={WHEELS.map((option) => ({ label: option.label, selected: wheel === option.wheel, onPress: () => setWheel(option.wheel) }))} />
+        <Help>
           {wheel === 'single-zero'
             ? 'Even-money bets lose in full when the ball lands on zero.'
             : 'Even-money bets lose in full on 0 or 00. Adds the five-number basket.'}
-        </Text>
-      </View>
+        </Help>
+        <FieldLabel>
+          {wheel === 'single-zero'
+            ? `House edge on every bet: ${rouletteHouseEdge('single-zero', 'straight')?.percent}%.`
+            : `House edge on every bet: ${rouletteHouseEdge('double-zero', 'straight')?.percent}%, except the five-number basket: ${rouletteHouseEdge('double-zero', 'basket')?.percent}%.`}
+        </FieldLabel>
+        <Help>A property of this wheel&apos;s rules, not a prediction of your results.</Help>
+      </Section>
 
       {guided && (
         <View style={styles.section}>
@@ -134,53 +172,30 @@ export function RouletteSetup({
             </View>
           )}
           {fit && !fit.compatible && (
-            <Incompatible
-              strategy={strategy}
-              requirements={fit.requirements}
-              customizeNote={customizeNote}
-              onCustomize={() => setCustomizeNote(true)}
-            />
+            <Incompatible strategy={strategy} requirements={fit.requirements} customizeNote={customizeNote} onCustomize={() => setCustomizeNote(true)} />
           )}
         </View>
       )}
 
-      <View style={styles.section}>
-        <Text maxFontSizeMultiplier={textScale.body} style={styles.label}>TABLE LIMITS</Text>
-        <Text maxFontSizeMultiplier={textScale.body} style={styles.value}>
-          Inside bets {formatUnits(limits.inside.min)}–{formatUnits(limits.inside.max)} units
-        </Text>
-        <Text maxFontSizeMultiplier={textScale.body} style={styles.value}>
-          Outside bets {formatUnits(limits.outside.min)}–{formatUnits(limits.outside.max)} units
-        </Text>
-        <Text maxFontSizeMultiplier={textScale.body} style={styles.help}>Per placement.</Text>
-      </View>
+      <Section label="TABLE LIMITS">
+        {GROUPS.map((group) => (
+          <View key={group.key} style={styles.section}>
+            <FieldLabel>{group.label}</FieldLabel>
+            <GroupFields limits={limits} group={group} showHelp={false} />
+            <Help>{limitNote(group.key) ?? group.help}</Help>
+          </View>
+        ))}
+      </Section>
 
-      <View style={styles.section}>
-        <Text maxFontSizeMultiplier={textScale.body} style={styles.label}>BUY-IN</Text>
-        <Text nativeID="buy-in-label" maxFontSizeMultiplier={textScale.body} style={styles.fieldLabel}>
-          Starting chips for this session
-        </Text>
-        <View style={[styles.field, error && styles.fieldError]}>
-          <TextInput
-            accessibilityLabel="Starting chips for this session, in units"
-            value={draft}
-            onChangeText={setDraft}
-            keyboardType="number-pad"
-            maxFontSizeMultiplier={textScale.body}
-            style={styles.input}
-          />
-          <Text maxFontSizeMultiplier={textScale.body} style={styles.unit}>units</Text>
-        </View>
-        {error ? (
-          <Text accessibilityRole="alert" maxFontSizeMultiplier={textScale.body} style={styles.error}>
-            {error}
-          </Text>
-        ) : (
-          <Text maxFontSizeMultiplier={textScale.body} style={styles.help}>Each session starts fresh.</Text>
-        )}
-      </View>
+      <FundingSection funding={funding} opening={opening} problem={problem} problemReason={problemReason} />
+      <LimitsBanner limits={limits} />
 
-      <Button label={guided ? 'Start guided practice' : 'Start free play'} stretch disabled={busy || (fit !== null && !fit.compatible)} onPress={start} />
+      <Button
+        label={guided ? 'Start guided practice' : 'Start free play'}
+        stretch
+        disabled={busy || !accepted || (fit !== null && !fit.compatible) || funding.short}
+        onPress={start}
+      />
     </Screen>
   );
 }
@@ -226,7 +241,7 @@ function Incompatible({
         </Text>
       ))}
       <Text maxFontSizeMultiplier={textScale.body} style={styles.help}>Tableside won&apos;t change a strategy&apos;s amounts for you.</Text>
-      <Text maxFontSizeMultiplier={textScale.body} style={styles.help}>Choose a compatible table or another strategy above, or:</Text>
+      <Text maxFontSizeMultiplier={textScale.body} style={styles.help}>Choose a compatible table (the wheel or limits) or another strategy, or:</Text>
       <Button label="Customize a copy for this table" variant="secondary" stretch onPress={onCustomize} />
       {customizeNote && (
         <Text accessibilityRole="alert" maxFontSizeMultiplier={textScale.body} style={styles.help}>
@@ -277,18 +292,17 @@ function StrategyParameters({
         const taken = definition.parameters.filter((other) => other.distinctFrom === param.id || param.distinctFrom === other.id).map((other) => choices[other.id]);
         return (
           <View key={param.id} style={styles.section}>
-            <Text maxFontSizeMultiplier={textScale.body} style={styles.fieldLabel}>{param.label}</Text>
-            <View accessibilityRole="radiogroup" accessibilityLabel={param.label} style={styles.choices}>
-              {param.choices.map((choice) => (
-                <Choice
-                  key={choice}
-                  label={targetName(choice)}
-                  selected={choices[param.id] === choice}
-                  disabled={taken.includes(choice)}
-                  onPress={() => onChange({ ...choices, [param.id]: choice })}
-                />
-              ))}
-            </View>
+            <FieldLabel>{param.label}</FieldLabel>
+            <ChoiceGroup
+              label={param.label}
+              options={param.choices.map((choice) => ({
+                label: targetName(choice),
+                selected: choices[param.id] === choice,
+                disabled: taken.includes(choice),
+                disabledHint: 'Already chosen for the other target',
+                onPress: () => onChange({ ...choices, [param.id]: choice }),
+              }))}
+            />
           </View>
         );
       })}
@@ -296,35 +310,12 @@ function StrategyParameters({
   );
 }
 
-const WHEELS: readonly { wheel: RouletteWheel; label: string }[] = [
-  { wheel: 'single-zero', label: 'Single zero (0)' },
-  { wheel: 'double-zero', label: 'Double zero (0, 00)' },
-];
-
-function Choice({ label, selected, onPress, disabled = false }: { label: string; selected: boolean; onPress: () => void; disabled?: boolean }) {
-  const { focused, focusProps } = useKeyboardFocus();
-  return (
-    <Pressable
-      accessibilityRole="radio"
-      accessibilityLabel={label}
-      accessibilityHint={disabled ? 'Already chosen for the other target' : undefined}
-      accessibilityState={{ checked: selected, disabled }}
-      disabled={disabled}
-      onPress={onPress}
-      {...focusProps}
-      style={[styles.choice, selected && styles.choiceSelected, focused && styles.choiceFocused, disabled && styles.choiceDisabled]}
-    >
-      {/* Selection is marked by the check as well as the outline. */}
-      <Text maxFontSizeMultiplier={textScale.body} style={styles.value}>
-        {selected ? '✓ ' : ''}
-        {label}
-      </Text>
-    </Pressable>
-  );
-}
-
 const styles = StyleSheet.create({
-  choices: { flexDirection: 'row', flexWrap: 'wrap', gap: space[2] },
+  section: { gap: space[2] },
+  label: { fontFamily: fonts.uiBold, fontSize: 12, letterSpacing: 0.5, color: palette.mutedForeground },
+  value: { fontFamily: fonts.uiMedium, fontSize: 15, color: palette.foreground },
+  help: { fontFamily: fonts.ui, fontSize: 13, color: palette.mutedForeground },
+  strategies: { gap: space[2] },
   choice: {
     flexGrow: 1,
     minHeight: MIN_TOUCH_TARGET,
@@ -336,32 +327,8 @@ const styles = StyleSheet.create({
     borderColor: palette.controlBorder,
     backgroundColor: palette.card,
   },
-  choiceSelected: { borderColor: palette.primary, borderWidth: 2 },
-  choiceDisabled: { opacity: 0.5 },
-  strategies: { gap: space[2] },
   strategy: { paddingVertical: space[2], gap: 2, justifyContent: 'flex-start' },
-  incompatible: { gap: space[2], padding: space[4], borderRadius: radius.lg, borderWidth: 2, borderColor: palette.destructive, backgroundColor: palette.card },
+  choiceSelected: { borderColor: palette.primary, borderWidth: 2 },
   choiceFocused: { borderColor: palette.ring, borderWidth: 2 },
-  titles: { gap: 2 },
-  title: { fontFamily: fonts.display, fontSize: 30, color: palette.foreground },
-  subtitle: { fontFamily: fonts.ui, fontSize: 14, color: palette.mutedForeground },
-  section: { gap: space[1] },
-  label: { fontFamily: fonts.uiBold, fontSize: 12, letterSpacing: 0.5, color: palette.mutedForeground },
-  value: { fontFamily: fonts.uiMedium, fontSize: 15, color: palette.foreground },
-  help: { fontFamily: fonts.ui, fontSize: 13, color: palette.mutedForeground },
-  fieldLabel: { fontFamily: fonts.uiMedium, fontSize: 13, color: palette.foreground },
-  field: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    minHeight: MIN_TOUCH_TARGET,
-    paddingHorizontal: space[3],
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: palette.controlBorder,
-    backgroundColor: palette.card,
-  },
-  fieldError: { borderColor: palette.destructive, borderWidth: 2 },
-  input: { flex: 1, minHeight: MIN_TOUCH_TARGET, fontFamily: fonts.uiMedium, fontSize: 17, color: palette.foreground },
-  unit: { fontFamily: fonts.ui, fontSize: 14, color: palette.mutedForeground },
-  error: { fontFamily: fonts.uiMedium, fontSize: 13, color: palette.destructive },
+  incompatible: { gap: space[2], padding: space[4], borderRadius: radius.lg, borderWidth: 2, borderColor: palette.destructive, backgroundColor: palette.card },
 });
