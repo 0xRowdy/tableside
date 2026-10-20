@@ -259,18 +259,19 @@ describe('craps free play', () => {
 
   it('gives every table control a touch target of at least 48 points', async () => {
     await pointOfEight();
-    // A place bet brings its working toggle; the field spot and the way to numbers and center bets are always there.
+    // The stake editor's working switch; the field spot and the way to numbers and center bets are always there.
     await fireEvent.press(screen.getByRole('tab', { name: 'Bet list' }));
     await fireEvent.press(screen.getByRole('button', { name: /^Place,/ }));
     await fireEvent.press(screen.getByRole('radio', { name: 'Place 8' }));
     await fireEvent.changeText(screen.getByLabelText(/^Total stake for /), '12');
     await fireEvent.press(screen.getByRole('button', { name: /^Set / }));
+    expect(screen.getByRole('switch', { name: 'Working on the come-out' })).toBeOnTheScreen();
     await fireEvent.press(screen.getByRole('tab', { name: 'Table' }));
-    expect(screen.getByRole('button', { name: 'Turn Place 8 OFF' })).toBeOnTheScreen();
     expect(screen.getByRole('button', { name: 'Numbers and center bets' })).toBeOnTheScreen();
+    await fireEvent.press(screen.getByRole('tab', { name: 'Bet list' }));
 
     const table = within(screen.getByTestId('table-scroll'));
-    const controls = [...table.getAllByRole('button'), ...table.getAllByRole('radio')];
+    const controls = [...table.getAllByRole('button'), ...table.getAllByRole('radio'), ...table.getAllByRole('switch')];
     expect(controls.length).toBeGreaterThan(10);
     for (const control of controls) {
       const style = StyleSheet.flatten(typeof control.props.style === 'function' ? control.props.style({ pressed: false }) : control.props.style);
@@ -314,28 +315,49 @@ describe('craps free play', () => {
     expect(screen.getAllByRole('radio').map((radio) => radio.props.accessibilityLabel)).toEqual(expect.arrayContaining(['Hard 4', 'Hard 6', 'Hard 8', 'Hard 10']));
   });
 
-  it('places a place bet that is off on the come-out, and turns it on with a working instruction', async () => {
+  it('sets a place bet off on the come-out, and turns it on from the stake editor', async () => {
     await startSession();
     await fireEvent.press(screen.getByRole('tab', { name: 'Bet list' }));
     await fireEvent.press(screen.getByRole('button', { name: /^Place,/ }));
     await fireEvent.press(screen.getByRole('radio', { name: 'Place 6' }));
+    const working = screen.getByRole('switch', { name: 'Working on the come-out' });
+    expect(working).not.toBeChecked();
+    expect(working).toHaveProp('accessibilityHint', 'Off by default. Place bets act only while a point is on.');
     await fireEvent.changeText(screen.getByLabelText(/^Total stake for /), '25');
     await fireEvent.press(screen.getByRole('button', { name: /^Set / }));
     expect(announcements).toContain('Place 6 goes in multiples of 6. Nothing was placed.');
 
     await fireEvent.changeText(screen.getByLabelText(/^Total stake for /), '24');
-    await fireEvent.press(screen.getByRole('button', { name: /^Set / }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Set Place 6 to 24' }));
 
     expect(announcements).toContain('Place 6 24 on the table, OFF. Balance 976.');
     expect(screen.getByLabelText('Place 6 24, OFF, removable')).toBeOnTheScreen();
-    const row = within(screen.getByTestId('wager-place-6'));
-    expect(row.getByRole('button', { name: 'Turn Place 6 ON' })).toHaveProp('accessibilityHint', expect.stringMatching(/^Place 6 doesn't act on the next roll, a come-out roll\. Following the usual rule\./));
+    // The working option is part of the draft: nothing changes until it is set.
+    await fireEvent.press(screen.getByRole('switch', { name: 'Working on the come-out' }));
+    expect(screen.getByRole('switch', { name: 'Working on the come-out' })).toBeChecked();
+    expect(screen.getByLabelText('Place 6 24, OFF, removable')).toBeOnTheScreen();
+    await fireEvent.press(screen.getByRole('button', { name: 'Set Place 6 to 24' }));
 
-    await fireEvent.press(row.getByRole('button', { name: 'Turn Place 6 ON' }));
-
-    expect(announcements).toContain('Place 6 is now ON until you turn it off, whatever the puck does.');
+    await waitFor(() => expect(announcements).toContain('Place 6 now works on the come-out roll too.'));
     expect(screen.getByLabelText('Place 6 24, ON, removable')).toBeOnTheScreen();
-    expect(within(screen.getByTestId('wager-place-6')).getByRole('button', { name: 'Turn Place 6 OFF' })).toBeEnabled();
+    expect(screen.getByRole('switch', { name: 'Working on the come-out' })).toBeChecked();
+    // The bet list rows show working status but offer no switch of their own.
+    expect(within(screen.getByTestId('wager-place-6')).queryByRole('button', { name: /^Turn / })).toBeNull();
+  });
+
+  it('places a new lay already told to be off, in one Set', async () => {
+    await startSession();
+    await fireEvent.press(screen.getByRole('tab', { name: 'Bet list' }));
+    await fireEvent.press(screen.getByRole('button', { name: /^Lay,/ }));
+    await fireEvent.press(screen.getByRole('radio', { name: 'Lay 4' }));
+    expect(screen.getByRole('switch', { name: 'Working' })).toBeChecked();
+    await fireEvent.changeText(screen.getByLabelText(/^Total stake for /), '20');
+    await fireEvent.press(screen.getByRole('switch', { name: 'Working' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Set Lay 4 to 20' }));
+
+    await waitFor(() => expect(announcements).toContain('Lay 4 is now OFF until you turn it on.'));
+    expect(announcements).toContain('Lay 4 20 on the table, ON. Balance 980.');
+    expect(screen.getByLabelText('Lay 4 20, OFF, removable')).toBeOnTheScreen();
   });
 
   it('announces place bets going off for the come-out roll when the point is made', async () => {

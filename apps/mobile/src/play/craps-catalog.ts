@@ -8,7 +8,7 @@ import { crapsHouseEdge, type CrapsWager } from '@tableside/definitions';
 import type { CrapsPermittedView as PermittedView } from '@tableside/engine';
 
 import type { PlacedWager, WagerCatalog, WagerChoice, WagerKind } from './bet-selector/catalog';
-import { commitmentText, crapsTargetName, workingText } from './craps-text';
+import { commitmentText, crapsTargetName, workingText, workingToggle } from './craps-text';
 import { formatUnits } from './units';
 
 type Placement = PermittedView['table']['placements'][number];
@@ -23,15 +23,26 @@ function payoutText(placement: Placement): string {
   return placement.payout;
 }
 
-const choice = (placement: Placement): WagerChoice => ({
-  target: placement.target,
-  label: shortLabel(placement.target),
-  name: crapsTargetName(placement.target),
-  min: placement.min,
-  max: placement.max,
-  step: placement.increment,
-  payout: payoutText(placement),
-});
+function choice(placement: Placement): WagerChoice {
+  const toggle = workingToggle(placement.target);
+  return {
+    target: placement.target,
+    label: shortLabel(placement.target),
+    name: crapsTargetName(placement.target),
+    min: placement.min,
+    max: placement.max,
+    step: placement.increment,
+    payout: payoutText(placement),
+    ...(toggle ? { toggle } : {}),
+  };
+}
+
+/** The value of a placed wager's working toggle: its instruction, else the usual come-out status. */
+export function placedToggle(view: PermittedView, target: string): boolean | undefined {
+  const toggle = workingToggle(target);
+  const status = view.table.wagers.find((item) => item.target === target);
+  return toggle && status ? (status.instruction ?? toggle.usual) : undefined;
+}
 
 /** "6·8 1.52% · 5·9 4.00% · 4·10 6.67%": the edge of a box family, number pairs sharing one value. */
 function boxEdges(family: 'place' | 'buy' | 'lay', edge: (wager: CrapsWager) => string): string {
@@ -135,7 +146,8 @@ export function crapsPlacedWagers(view: PermittedView): PlacedWager[] {
   return view.wagers.map((wager) => {
     const status = view.table.wagers.find((item) => item.target === wager.target);
     const working = `${workingText(view, wager.target)}.`;
-    const placed = { target: wager.target, amount: wager.amount, name: crapsTargetName(wager.target) };
+    const toggled = placedToggle(view, wager.target);
+    const placed = { target: wager.target, amount: wager.amount, name: crapsTargetName(wager.target), ...(toggled === undefined ? {} : { toggled }) };
     if (view.wagersCommitted) return { ...placed, committed: true, committedReason: `${ROLLING} ${working}` };
     if (status?.removable === false) return { ...placed, committed: true, committedReason: `${working} ${commitmentText(wager.target, view.table.point)}` };
     return { ...placed, committed: false };

@@ -49,6 +49,30 @@ export const hardwayWords = (n: number) => `${NUMBER_WORDS[n] ?? n} the hard way
 /** Wagers whose working status follows the puck unless the player gives an instruction. */
 const followsPuck = (target: string) => /^(place|buy)-\d+$/.test(target);
 
+/** How each switchable family's option reads: what works on the come-out, or what an off wager does. */
+const TOGGLE_DETAIL: Record<string, string> = {
+  place: 'Off by default. Place bets act only while a point is on.',
+  buy: 'Off by default. Buy bets act only while a point is on.',
+  come: 'Off by default. Come odds act only while a point is on.',
+  lay: 'On by default, on every roll. A lay that is off stays on the table and takes no action.',
+  hard: 'On by default, on every roll. A hardway that is off stays on the table and takes no action.',
+  dont: "On by default, on every roll. Don't come odds that are off stay on the table and take no action.",
+};
+
+/**
+ * The working option a wager's stake editor offers (design frame "Craps stake
+ * editor"): place, buy and come odds can be told to work on the come-out;
+ * lays, hardways and don't come odds can be told to be off. Other wagers
+ * always work and offer none.
+ */
+export function workingToggle(target: string): { title: string; detail: string; usual: boolean } | undefined {
+  const family = /^(place|buy|lay|hard)-\d+$/.exec(target)?.[1] ?? /^(dont|come)-(?:come-)?\d+-odds$/.exec(target)?.[1];
+  if (!family) return undefined;
+  const detail = TOGGLE_DETAIL[family] as string;
+  const comeOutOff = family === 'place' || family === 'buy' || family === 'come';
+  return comeOutOff ? { title: 'Working on the come-out', detail, usual: false } : { title: 'Working', detail, usual: true };
+}
+
 /** The puck, in words: never color alone. */
 export const puckText = (point: number | null) => (point === null ? 'Puck OFF · no point yet' : `Puck ON · point ${point}`);
 
@@ -120,6 +144,15 @@ function illegalMessage(reason: IllegalActionReason, target: string | null, view
   }
 }
 
+/** A working instruction, in words: what changed against the wager's usual come-out status. */
+function workingSentence(target: string, working: boolean): string {
+  const name = crapsTargetName(target);
+  if (workingToggle(target)?.usual === false) {
+    return working ? `${name} now works on the come-out roll too.` : `${name} is off on the come-out roll again, as usual.`;
+  }
+  return working ? `${name} is working again.` : `${name} is now OFF until you turn it on.`;
+}
+
 /** One settled wager: its result, any commission, a horn part, and whether a winning standing bet stays up. */
 function settledSentence(fact: Extract<DomainFact, { kind: 'wager-settled' }>): string {
   const name = fact.component === undefined ? crapsTargetName(fact.target) : `Horn ${fact.component} part`;
@@ -157,7 +190,7 @@ export function describeCrapsFacts(facts: readonly DomainFact[], view: CrapsPerm
         parts.push(rollSentence(fact.dice));
         break;
       case 'working-changed':
-        parts.push(`${crapsTargetName(fact.target)} is now ${fact.working ? 'ON' : 'OFF'} until you turn it ${fact.working ? 'off' : 'on'}, whatever the puck does.`);
+        parts.push(workingSentence(fact.target, fact.working));
         break;
       case 'point-changed':
         parts.push(fact.point === null ? 'Puck OFF. The next roll is a come-out roll.' : `The point is ${fact.point}. Puck ON.`);

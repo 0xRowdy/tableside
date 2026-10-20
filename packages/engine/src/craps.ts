@@ -433,14 +433,20 @@ function roll(state: State): Step<State> {
   };
 }
 
-/** A legal per-bet working instruction. It holds, whatever the puck does, until it changes or the wager leaves the table. */
+/**
+ * A legal per-bet working instruction. Each switchable wager has one usual
+ * come-out status: place, buy and come odds are off, lays, hardways and don't
+ * come odds work. The instruction is the other one ("working on the come-out",
+ * or "off"), and holds until it changes or the wager leaves the table; giving
+ * the usual status clears it.
+ */
 function setWorking(state: State, target: string, working: boolean): Step<State> {
   const placed = targetInfo(target);
   if (!placed) return { illegal: 'unknown-target' };
   if (!isSwitchable(placed)) return { illegal: 'working-fixed' };
   if (!stakeOf(state.wagers, target)) return { illegal: 'not-available-now' };
   const others = state.instructions.filter((item) => item.target !== target);
-  const instructions = sorted([...others, { target, working }]);
+  const instructions = working === worksByDefault(placed, null) ? others : sorted([...others, { target, working }]);
   return { change: { phase: 'open-decision', instructions }, facts: [{ kind: 'working-changed', target, working }] };
 }
 

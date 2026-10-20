@@ -10,10 +10,12 @@ import { AccessibilityInfo, Pressable, StyleSheet, Text, TextInput, View, type H
 
 import { Button } from '@/components/Button';
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
+import { SwitchRow } from '@/settings/SettingsParts';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/theme/tokens';
 
 import { formatUnits } from '../units';
 import {
+  draftToggle,
   findChoice,
   findKind,
   isDraftPending,
@@ -41,8 +43,8 @@ export interface BetSelectorProps {
   readonly canPlace: boolean;
   readonly draft: BetDraft;
   readonly onDraftChange: (draft: BetDraft) => void;
-  /** Sets the total stake on a target. */
-  readonly onSet: (target: string, amount: string) => void;
+  /** Sets the total stake on a target, with the choice's toggle value when it has one. */
+  readonly onSet: (target: string, amount: string, toggled?: boolean) => void;
   readonly onRemove: (target: string) => void;
 }
 
@@ -263,11 +265,12 @@ function StakeEditor(props: BetSelectorProps & { choice: WagerChoice }) {
   const problem = submissionProblem(props);
   const amount = parseStake(draft.text);
   const edit = (text: string) => onDraftChange({ ...draft, text, submittedAt: null });
+  const toggled = draftToggle(draft, choice, wagers);
   const submit = () => {
     // The Return key reaches here too, so it waits for the table like the Set button does.
     if (!canPlace) return;
     onDraftChange({ ...draft, submittedAt: sequence });
-    if (amount !== null && amount !== '0') onSet(choice.target, amount);
+    if (amount !== null && amount !== '0') onSet(choice.target, amount, toggled);
   };
   const step = formatUnits(choice.step);
   const setLabel = amount !== null && decodeMoney(amount).d === 1n ? `Set ${choice.name} to ${formatUnits(amount)}` : `Set ${choice.name}`;
@@ -303,6 +306,16 @@ function StakeEditor(props: BetSelectorProps & { choice: WagerChoice }) {
         <SmallButton label={`− ${step}`} spoken={`Decrease by ${step}`} onPress={() => edit(stepStake(draft.text, choice.step, -1))} />
         <SmallButton label={`+ ${step}`} spoken={`Increase by ${step}`} onPress={() => edit(stepStake(draft.text, choice.step, 1))} />
       </View>
+      {choice.toggle && toggled !== undefined && (
+        <View style={styles.toggle}>
+          <SwitchRow
+            title={choice.toggle.title}
+            detail={choice.toggle.detail}
+            value={toggled}
+            onChange={(value) => onDraftChange({ ...draft, toggled: value, submittedAt: null })}
+          />
+        </View>
+      )}
       <Button label={setLabel} onPress={submit} disabled={!canPlace} stretch />
       {isDraftPending(draft, wagers) && (
         <Text maxFontSizeMultiplier={textScale.body} style={styles.rowDetail}>{DRAFT_NOTE}</Text>
@@ -522,6 +535,7 @@ const styles = StyleSheet.create({
   selector: { gap: space[4], paddingHorizontal: space[4] },
   section: { gap: space[3] },
   group: { gap: space[2] },
+  toggle: { borderRadius: radius.lg, borderWidth: 1, borderColor: palette.border, backgroundColor: palette.card, overflow: 'hidden' },
   sectionLabel: { fontFamily: fonts.uiBold, fontSize: 12, letterSpacing: 0.5, textTransform: 'uppercase', color: palette.mutedForeground },
   row: {
     minHeight: MIN_TOUCH_TARGET + 8,

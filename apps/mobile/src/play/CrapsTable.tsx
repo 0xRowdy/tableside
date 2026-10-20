@@ -3,7 +3,7 @@
 // and "Buy/lay commission on win only"). It renders only the engine's
 // permitted view and forwards taps to the practice controller; it never
 // advances the game or decides what is legal. Every wager states its working
-// status in text, switchable wagers take a working instruction, and committed
+// status in text, the stake editor gives working instructions, and committed
 // contracts explain why they stay. The felt carries the line bets and the
 // field; place, buy, lay, hardways and propositions are in the bet list.
 
@@ -22,7 +22,7 @@ import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/th
 import { BetSelector } from './bet-selector/BetSelector';
 import { draftAmountText, EMPTY_DRAFT, findChoice, isDraftPending, type BetDraft } from './bet-selector/catalog';
 import { DraftBar, PresentationSwitch, type Presentation } from './bet-selector/Presentation';
-import { crapsCatalog, crapsPlacedWagers } from './craps-catalog';
+import { crapsCatalog, crapsPlacedWagers, placedToggle } from './craps-catalog';
 import { EndSessionDialog } from './EndSessionDialog';
 import { RebuySheet } from './RebuySheet';
 import { commitmentText, crapsStatus, crapsTargetName, describeCrapsFacts, puckText, workingText } from './craps-text';
@@ -105,6 +105,18 @@ export function CrapsTable({ snapshot }: { snapshot: ActiveSnapshot }) {
     void controller.placeWager(target, total.toString());
   };
   const canPlace = legal('place-wager');
+  // The stake editor sets the stake, then the working option (design frame
+  // "Craps stake editor"); the option is given only once the stake is on the table.
+  const setWager = async (target: string, amount: string, toggled: boolean | undefined) => {
+    if (stakeOn(target) !== amount) {
+      await controller.placeWager(target, amount);
+      const placedNow = controller.snapshot();
+      if (placedNow.status !== 'active' || !placedNow.facts.some((fact) => fact.kind === 'wager-changed' && fact.target === target)) return;
+    }
+    const latest = controller.snapshot();
+    if (toggled === undefined || latest.status !== 'active' || latest.view.game !== 'craps') return;
+    if (placedToggle(latest.view, target) !== toggled) await controller.setWorking(target, toggled);
+  };
 
   return (
     <View style={styles.screen}>
@@ -190,7 +202,7 @@ export function CrapsTable({ snapshot }: { snapshot: ActiveSnapshot }) {
                   canPlace={canPlace}
                   draft={draft}
                   onDraftChange={setDraft}
-                  onSet={(target, amount) => void controller.placeWager(target, amount)}
+                  onSet={(target, amount, toggled) => void setWager(target, amount, toggled)}
                   onRemove={(target) => void controller.placeWager(target, '0')}
                 />
               )}
@@ -208,7 +220,6 @@ export function CrapsTable({ snapshot }: { snapshot: ActiveSnapshot }) {
                 placeable={placeable}
                 onAddOdds={addChip}
                 onRemove={(target) => void controller.placeWager(target, '0')}
-                onWorking={(target, working) => void controller.setWorking(target, working)}
               />
               <Button label="Roll" stretch disabled={!legal('begin-turn')} onPress={() => void controller.beginTurn()} />
               {view.legalCommands.includes('rebuy') && (
@@ -405,7 +416,6 @@ function WagerList({
   placeable,
   onAddOdds,
   onRemove,
-  onWorking,
 }: {
   view: PermittedView;
   canPlace: boolean;
@@ -413,7 +423,6 @@ function WagerList({
   placeable: (target: string) => boolean;
   onAddOdds: (target: string) => void;
   onRemove: (target: string) => void;
-  onWorking: (target: string, working: boolean) => void;
 }) {
   return (
     <View style={styles.list}>
@@ -447,15 +456,6 @@ function WagerList({
             {placeable(odds) && (
               <Button label={`Add ${formatUnits(chip)} odds behind ${name}`} variant="secondary" disabled={!canPlace} onPress={() => onAddOdds(odds)} />
             )}
-            {status?.switchable && (
-              <Button
-                label={`Turn ${name} ${status.working ? 'OFF' : 'ON'}`}
-                variant="secondary"
-                disabled={!canPlace}
-                hint={workingHint(view, wager.target, status)}
-                onPress={() => onWorking(wager.target, !status.working)}
-              />
-            )}
             <Button
               label={`Remove ${name}`}
               variant="secondary"
@@ -471,15 +471,6 @@ function WagerList({
       })}
     </View>
   );
-}
-
-/** What a working instruction does, and what the default is. */
-function workingHint(view: PermittedView, target: string, status: PermittedView['table']['wagers'][number]): string {
-  const name = crapsTargetName(target);
-  const comeOutOff = /^(place|buy)-\d+$/.test(target) || /^come-\d+-odds$/.test(target);
-  const usual = comeOutOff ? 'Usually off on the come-out roll and on while a point is set.' : 'Usually works on every roll.';
-  const now = status.instruction === null ? 'Following the usual rule.' : `You turned it ${status.instruction ? 'on' : 'off'}; that holds until you change it.`;
-  return `${name} ${status.working ? 'acts' : "doesn't act"} on the next roll${view.table.point === null ? ', a come-out roll' : ''}. ${now} ${usual}`;
 }
 
 function EndingSteps({ snapshot }: { snapshot: ActiveSnapshot }) {
