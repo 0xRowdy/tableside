@@ -231,8 +231,8 @@ const isAccessStop = (cause: StopCause | null): cause is AccessStop => cause !==
 /** A supervisor question that failed to answer counts as uncertain access. */
 const UNANSWERED: AccessDenial = { status: 'uncertain', provenance: 'unanswered', disposition: 'suspend-at-turn-boundary' };
 
-const CANT_RESUME = "This session can't resume right now.";
-const CHECK_FAILED = "Couldn't check whether this session can end. Try again.";
+const CANT_RESUME = "This practice session can't resume right now.";
+const CHECK_FAILED = "Couldn't check whether this practice session can end. Try again.";
 
 export class PracticeController {
   private current: PracticeSnapshot = { status: 'loading' };
@@ -334,12 +334,7 @@ export class PracticeController {
           fundingSource: request.fundingSource,
           funding: request.buyIn,
         };
-        const specification: ActivitySpecification =
-          request.game === 'craps'
-            ? { ...base, game: 'craps', rules: standardCraps(request.odds, request.field, request.limits) }
-            : request.game === 'blackjack'
-              ? { ...base, game: 'blackjack', rules: request.rules }
-              : { ...base, game: 'roulette', rules: rouletteRules(wheelOf(request), request.limits) };
+        const specification = { ...base, ...rulesOf(request) } as ActivitySpecification;
         let initial: ActivityState;
         try {
           initial = createActivity(specification, random);
@@ -702,6 +697,9 @@ export class PracticeController {
     if (!suspension || !this.state) return;
     const betweenTurns = !turnInProgress(this.state);
     const reached = suspension.kind === 'immediate' || betweenTurns;
+    // Amendment 5 §3 allows End session after a turn-boundary suspend, never mid-round. An immediate
+    // suspend that lands between turns is read as one at a turn boundary (owner ruling on review
+    // finding S16): no turn is under way, so ending there runs the same stop path from the boundary.
     const canEnd = reached && betweenTurns;
     const waitsForPlayer = reached && (!resumesOnReturn(suspension) || suspension.resumeBlocked !== null);
     if (reached !== suspension.reached || canEnd !== suspension.canEnd || waitsForPlayer !== suspension.waitsForPlayer) {
@@ -1156,13 +1154,21 @@ const sameAdmission = (a: NewActivity['admission'], b: NewActivity['admission'])
 /** The stop path's first command; the player's plain stop carries no cause. */
 const stopCommand = (cause: StopCause): Command => (cause === 'stop' ? { kind: 'request-stop' } : { kind: 'request-stop', cause });
 
-const wheelOf = (request: Extract<StartRequest, { game: 'roulette' }>): RouletteWheel => request.wheel ?? 'single-zero';
+/** The game and the rule set a start request pins: its preset with the choices made at setup. */
+function rulesOf(request: StartRequest): Pick<ActivitySpecification, 'game' | 'rules'> {
+  switch (request.game) {
+    case 'craps':
+      return { game: 'craps', rules: standardCraps(request.odds, request.field, request.limits) };
+    case 'blackjack':
+      return { game: 'blackjack', rules: request.rules };
+    case 'roulette':
+      return { game: 'roulette', rules: rouletteRules(request.wheel ?? 'single-zero', request.limits) };
+  }
+}
 
 /** Whether a retried start asks for the same table, so it may recover the unacknowledged activity. */
 function sameRequest(a: StartRequest, b: StartRequest): boolean {
   if (a.buyIn !== b.buyIn || a.fundingSource !== b.fundingSource) return false;
   if (canonicalJson(a.strategy ?? null) !== canonicalJson(b.strategy ?? null)) return false;
-  if (a.game === 'craps') return b.game === 'craps' && canonicalJson(standardCraps(a.odds, a.field, a.limits)) === canonicalJson(standardCraps(b.odds, b.field, b.limits));
-  if (a.game === 'blackjack') return b.game === 'blackjack' && canonicalJson(a.rules) === canonicalJson(b.rules);
-  return b.game === 'roulette' && canonicalJson(rouletteRules(wheelOf(a), a.limits)) === canonicalJson(rouletteRules(wheelOf(b), b.limits));
+  return canonicalJson(rulesOf(a)) === canonicalJson(rulesOf(b));
 }

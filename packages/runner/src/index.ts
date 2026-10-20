@@ -69,7 +69,7 @@ export interface RunRequest {
 /**
  * Runs the sessions and returns their records in index order. Throws before
  * running anything when the profile's exposure bound fails validation, and
- * when any record passes it (an integrity error, never a result).
+ * when any record exceeds it (an integrity error, never a result).
  */
 export function runStandardized(request: RunRequest): StandardizedSessionRecord[] {
   const { profile, definition, key } = request;
