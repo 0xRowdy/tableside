@@ -6,7 +6,7 @@ How the engineering skills should consume this repo's domain documentation when 
 
 ## Before exploring, read these
 
-- **`CONTEXT.md`** at the repo root: the glossary of True Count's domain language (table conditions, rule presets, strategies, counting systems, training allowances, and so on).
+- **`CONTEXT.md`** at the repo root: the glossary of Tableside's domain language (table conditions, rule presets, strategies, counting systems, training allowances, and so on). The product was planned as "True Count", which is still the repository's name.
 - **`docs/adr/`**: read ADRs that touch the area you're about to work in.
 
 If any of these files don't exist, **proceed silently**. Don't flag their absence; don't suggest creating them upfront. The `/domain-modeling` skill (reached via `/grill-with-docs` and `/improve-codebase-architecture`) creates them lazily when terms or decisions actually get resolved. `docs/adr/` does not exist yet, and that's fine.

@@ -140,6 +140,8 @@ Retain the seven accepted profiles, 100,000 completed independent sessions per c
 
 Run identity pins the complete profile, revision, engine/rules/references, random allocation, analysis implementation and configuration. Author submissions cannot select seeds or request favorable rerolls. [Community simulation capacity and operating budget](https://github.com/0xRowdy/true-count/issues/19) owns benchmark measurements, admission/workload, cost ceiling, queue targets, cancellation/supersession and operational scheduling. Its investigation must test representative complex strategies and settlement tails using this runtime; changing the evidence contract requires explicit agreement.
 
+The later accepted [Evaluation identity and safe result reuse](https://github.com/0xRowdy/true-count/issues/32) clarifies this manifest into revision/profile request provenance, a shared execution run, and versioned analysis. Identical normalized instructions and full evaluation conditions share the original authoritative run/allocation across revisions or authors. Analysis-only corrections retain the execution sample through explicit predecessor provenance. That contract owns equality, shared cancellation, corrected-version eligibility and retention; it preserves this architecture's unique run-key allocation and deterministic recovery.
+
 ## Implementation acceptance
 
 These are required checks for implementation, not tests claimed to have run during planning.
