@@ -3,6 +3,7 @@
 // straight-up and red/black placements; the full layouts arrive with #62.
 
 import type { RoulettePocket } from './draws';
+import { money, mul, neg, type Money } from './money';
 
 /** The rule ids this engine can run. Rules are pinned by id and version. */
 export const ROULETTE_RULES = { id: 'roulette-single-zero', version: 1, wheel: 'single-zero' } as const;
@@ -35,6 +36,10 @@ export const placementFor = (target: string): RoulettePlacement | undefined => B
 
 /** Canonical layout order, for keeping wagers sorted. */
 export const placementOrder = (target: string): number => BY_TARGET.get(target)?.index ?? -1;
+
+/** A placement's net result for one pocket: stake × payout when it covers the pocket, else minus the stake. */
+export const netResult = (placement: RoulettePlacement, stake: Money, pocket: RoulettePocket): Money =>
+  placement.covers.includes(pocket) ? mul(stake, money(placement.payout)) : neg(stake);
 
 export const isPocket = (value: unknown): value is RoulettePocket =>
   typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= 36;

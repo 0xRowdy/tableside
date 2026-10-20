@@ -6,16 +6,16 @@
 
 import { canonicalJson } from './canonical';
 import { spinRoulette, type RoulettePocket } from './draws';
-import { add, compare, decodeMoney, encodeMoney, money, mul, neg, sub, type Money } from './money';
+import { add, compare, decodeMoney, encodeMoney, money, sub, type Money } from './money';
 import { RANDOM_PROTOCOL_VERSION, RandomStream, type RandomStreamIdentity, type RandomStreamState } from './random';
-import { isPocket, PLACEMENTS, placementFor, placementOrder, ROULETTE_RULES, type LimitClass } from './roulette';
+import { isPocket, netResult, PLACEMENTS, placementFor, placementOrder, ROULETTE_RULES, type LimitClass, type RoulettePlacement } from './roulette';
 import { sha256Hex } from './sha256';
 import { ENGINE_VERSION } from './version';
 
 /** The state-schema version, kept apart from engine, rule and protocol identities. */
 export const STATE_SCHEMA_VERSION = 1 as const;
 
-/** Cumulative session funding ceiling, in units. */
+/** Cumulative practice-session funding ceiling, in units. */
 export const FUNDING_CEILING = 1_000_000_000n;
 /** Ceiling for configurable base-wager limits, in units. */
 const BASE_WAGER_CEILING = 1_000_000n;
@@ -118,7 +118,7 @@ export interface CommandEnvelope {
 }
 
 /** Why a meaningful action failed legality. The attempt is still recorded. */
-export type RefusalReason =
+export type IllegalActionReason =
   | 'unknown-target'
   | 'not-whole-units'
   | 'below-minimum'
@@ -129,7 +129,7 @@ export type RefusalReason =
 
 export type DomainFact =
   | { readonly kind: 'wager-changed'; readonly target: string; readonly amount: string; readonly previous: string }
-  | { readonly kind: 'action-refused'; readonly command: Command; readonly reason: RefusalReason }
+  | { readonly kind: 'illegal-action'; readonly command: Command; readonly reason: IllegalActionReason }
   | { readonly kind: 'turn-began'; readonly turn: number; readonly wagers: readonly Wager[] }
   | { readonly kind: 'outcome-generated'; readonly turn: number; readonly pocket: RoulettePocket }
   | {
@@ -265,10 +265,10 @@ export function createActivity(spec: ActivitySpecification, random: RandomStream
   if (!isRecord(rules) || rules.id !== ROULETTE_RULES.id || rules.version !== ROULETTE_RULES.version || rules.wheel !== ROULETTE_RULES.wheel) {
     fail('unsupported roulette rules');
   }
-  if (!isLimits(rules.limits)) fail('limits must be whole units from 1 to 1,000,000 with min <= max');
+  if (!isLimits(rules.limits)) fail(`limits must be whole units from 1 to ${BASE_WAGER_CEILING} with min <= max`);
   if (spec.strategy !== null && !isIdentity(spec.strategy)) fail('strategy must be null or an id and version');
   if (spec.reference !== null && !isIdentity(spec.reference)) fail('reference must be null or an id and version');
-  if (!isWholeIn(parseMoney(spec.funding), 1n, FUNDING_CEILING)) fail('funding must be whole units from 1 to 1,000,000,000');
+  if (!isWholeIn(parseMoney(spec.funding), 1n, FUNDING_CEILING)) fail(`funding must be whole units from 1 to ${FUNDING_CEILING}`);
   let stream: RandomStream;
   try {
     stream = RandomStream.create(random);
@@ -308,7 +308,7 @@ export function createActivity(spec: ActivitySpecification, random: RandomStream
 // ---- advance ------------------------------------------------------------
 
 type Change = Partial<Pick<ActivityState, 'phase' | 'turn' | 'balance' | 'wagers' | 'outcome' | 'random'>>;
-type Step = { change: Change; facts: DomainFact[] } | { refused: RefusalReason };
+type Step = { change: Change; facts: DomainFact[] } | { illegal: IllegalActionReason };
 
 const reject = (reason: RejectionReason, message: string): AdvanceResult => ({ status: 'rejected', reason, message });
 
@@ -341,10 +341,10 @@ export function advanceActivity(state: ActivityState, envelope: CommandEnvelope)
     commandId: envelope.commandId,
     sequence: state.sequence,
     command: commandText,
-    disposition: 'refused' in step ? 'assessed' : 'applied',
+    disposition: 'illegal' in step ? 'assessed' : 'applied',
   };
-  const change = 'refused' in step ? {} : step.change;
-  const facts: DomainFact[] = 'refused' in step ? [{ kind: 'action-refused', command, reason: step.refused }] : step.facts;
+  const change = 'illegal' in step ? {} : step.change;
+  const facts: DomainFact[] = 'illegal' in step ? [{ kind: 'illegal-action', command, reason: step.illegal }] : step.facts;
   return {
     status: 'committed',
     state: { ...state, ...change, sequence: state.sequence + 1, receipts: [...state.receipts, receipt] },
@@ -358,7 +358,7 @@ function apply(state: ActivityState, command: Command): Step {
     case 'place-wager':
       return placeWager(state, command.target, decodeMoney(command.amount));
     case 'begin-turn': {
-      if (state.wagers.length === 0) return { refused: 'no-wager' };
+      if (state.wagers.length === 0) return { illegal: 'no-wager' };
       const stream = RandomStream.restore(state.random);
       const pocket = spinRoulette(stream, state.rules.wheel);
       const turn = state.turn + 1;
@@ -396,18 +396,18 @@ function apply(state: ActivityState, command: Command): Step {
 
 function placeWager(state: ActivityState, target: string, amount: Money): Step {
   const placement = placementFor(target);
-  if (!placement) return { refused: 'unknown-target' };
+  if (!placement) return { illegal: 'unknown-target' };
   const existing = state.wagers.find((wager) => wager.target === target);
   const previous = existing ? decodeMoney(existing.amount) : money(0n);
-  if (amount.n === 0n && !existing) return { refused: 'no-wager-to-remove' };
+  if (amount.n === 0n && !existing) return { illegal: 'no-wager-to-remove' };
   if (amount.n !== 0n) {
     const limit = state.rules.limits[placement.limitClass];
-    if (amount.d !== 1n) return { refused: 'not-whole-units' };
-    if (compare(amount, decodeMoney(limit.min)) < 0) return { refused: 'below-minimum' };
-    if (compare(amount, decodeMoney(limit.max)) > 0) return { refused: 'above-maximum' };
+    if (amount.d !== 1n) return { illegal: 'not-whole-units' };
+    if (compare(amount, decodeMoney(limit.min)) < 0) return { illegal: 'below-minimum' };
+    if (compare(amount, decodeMoney(limit.max)) > 0) return { illegal: 'above-maximum' };
   }
   const balance = sub(decodeMoney(state.balance), sub(amount, previous));
-  if (balance.n < 0n) return { refused: 'insufficient-funds' };
+  if (balance.n < 0n) return { illegal: 'insufficient-funds' };
   const others = state.wagers.filter((wager) => wager.target !== target);
   const wagers = amount.n === 0n ? others : [...others, { target, amount: encodeMoney(amount) }];
   wagers.sort((a, b) => placementOrder(a.target) - placementOrder(b.target));
@@ -422,12 +422,14 @@ function settle(state: ActivityState): { balance: string; facts: DomainFact[] } 
   let balance = decodeMoney(state.balance);
   const facts: DomainFact[] = [];
   if (state.wagers.length === 0) return { balance: state.balance, facts };
+  // Wagers exist outside a decision only once a turn has generated its outcome.
   const outcome = state.outcome as NonNullable<ActivityState['outcome']>;
   for (const wager of state.wagers) {
-    const placement = placementFor(wager.target);
+    // Every stored target is a layout placement (placeWager and decode both check).
+    const placement = placementFor(wager.target) as RoulettePlacement;
     const stake = decodeMoney(wager.amount);
-    const won = placement !== undefined && placement.covers.includes(outcome.pocket);
-    const net = won ? mul(stake, money((placement as { payout: bigint }).payout)) : neg(stake);
+    const net = netResult(placement, stake, outcome.pocket);
+    const won = net.n > 0n;
     const returned = won ? add(stake, net) : money(0n);
     balance = add(balance, returned);
     facts.push({
@@ -520,6 +522,17 @@ function unsupportedVersion(value: unknown): string | undefined {
 
 const STATE_KEYS = ['schema', 'activity', 'identities', 'rules', 'sequence', 'phase', 'turn', 'balance', 'wagers', 'outcome', 'random', 'receipts'];
 
+/** True for the canonical JSON of a valid command, as receipts store it. */
+function isCanonicalCommand(text: unknown): boolean {
+  if (typeof text !== 'string') return false;
+  try {
+    const command: unknown = JSON.parse(text);
+    return isCommand(command) && canonicalJson(command) === text;
+  } catch {
+    return false;
+  }
+}
+
 /** A description of the first structural or invariant problem, if any. */
 function stateDamage(value: unknown): string | undefined {
   if (!hasExactKeys(value, STATE_KEYS)) return 'the checkpoint does not have the state fields';
@@ -574,7 +587,7 @@ function stateDamage(value: unknown): string | undefined {
       !hasExactKeys(receipt, ['commandId', 'sequence', 'command', 'disposition']) ||
       !isText(receipt.commandId) ||
       receipt.sequence !== index ||
-      typeof receipt.command !== 'string' ||
+      !isCanonicalCommand(receipt.command) ||
       (receipt.disposition !== 'applied' && receipt.disposition !== 'assessed') ||
       ids.has(receipt.commandId)
     ) {

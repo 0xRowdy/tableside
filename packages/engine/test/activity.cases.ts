@@ -1,6 +1,6 @@
 // The engine interface (seam 1) through the single-zero roulette tracer:
 // create, advance, read permitted view, encode/decode checkpoint. Payouts and
-// colours come from the launch rules (#3) and the published single-zero
+// colors come from the launch rules (#3) and the published single-zero
 // layout (red: 1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36);
 // spins come from the protocol's reference vectors (draws.cases).
 import type { TestCase } from '@tableside/harness';
@@ -140,14 +140,19 @@ export const activityCases: TestCase[] = [
       let netTotal = 0n;
       let committed = new Map<string, string>();
       let turns = 0;
-      for (let i = 0; i < 1500 && state.phase !== 'completed'; i++) {
+      // Random play, then a stop (in whichever phase play reached) and final settlement.
+      for (let i = 0; state.phase !== 'completed'; i++) {
         const roll = uniformInt(driver, 10);
         const command: Command =
-          state.phase === 'revealing-outcome'
-            ? SETTLE
-            : roll < 7
-              ? place(targets[uniformInt(driver, targets.length)] as string, String(uniformInt(driver, 120)))
-              : BEGIN;
+          state.phase === 'final-settlement'
+            ? FINAL
+            : i >= 1500 && roll === 0
+              ? STOP
+              : state.phase === 'revealing-outcome'
+                ? SETTLE
+                : roll < 7
+                  ? place(targets[uniformInt(driver, targets.length)] as string, String(uniformInt(driver, 120)))
+                  : BEGIN;
         const { state: next, facts } = step(state, command);
         for (const fact of facts) {
           if (fact.kind === 'turn-began') committed = new Map(fact.wagers.map((wager) => [wager.target, wager.amount]));
@@ -169,6 +174,7 @@ export const activityCases: TestCase[] = [
         t.equal(BigInt(state.balance) + staked, 5000n + netTotal);
       }
       t.equal(turns > 100, true);
+      t.equal(state.wagers, []);
       t.record('final', { balance: state.balance, turns, hash: checkpointHash(state) });
     },
   },
@@ -191,7 +197,7 @@ export const activityCases: TestCase[] = [
       for (const [command, reason] of attempts) {
         const result = advanceActivity(base, envelope(base, command));
         if (result.status !== 'committed') throw new Error(`expected an assessment for ${reason}`);
-        t.equal(result.facts, [{ kind: 'action-refused', command, reason }]);
+        t.equal(result.facts, [{ kind: 'illegal-action', command, reason }]);
         t.equal(result.receipt, { commandId: 'c1', sequence: 1, command: JSON.stringify(command, Object.keys(command).sort()), disposition: 'assessed' });
         t.equal([result.state.sequence, result.state.balance, result.state.wagers, result.state.phase], [2, '10', [{ target: 'red', amount: '990' }], 'open-decision']);
       }
@@ -204,7 +210,7 @@ export const activityCases: TestCase[] = [
     run: (t) => {
       const base = fresh();
       const { state, facts } = step(base, BEGIN);
-      t.equal(facts, [{ kind: 'action-refused', command: BEGIN, reason: 'no-wager' }]);
+      t.equal(facts, [{ kind: 'illegal-action', command: BEGIN, reason: 'no-wager' }]);
       t.equal([state.phase, state.turn, state.random], ['open-decision', 0, base.random]);
     },
   },
@@ -407,6 +413,8 @@ export const activityCases: TestCase[] = [
         edit((v) => (v.wagers = [])),
         edit((v) => (v.wagers = [{ target: 'red', amount: '10' }, { target: 'red', amount: '10' }])),
         edit((v) => (v.receipts = [])),
+        edit((v) => ((v.receipts as Record<string, unknown>[])[0]!.command = '{"kind":"shuffle"}')),
+        edit((v) => ((v.receipts as Record<string, unknown>[])[0]!.command = '{ "kind": "begin-turn" }')),
         edit((v) => (v.outcome = { turn: 1, pocket: 37 })),
         edit((v) => ((v.random as Record<string, unknown>).lane = 4)),
         edit((v) => ((v.random as Record<string, unknown>).key = [1, 2])),

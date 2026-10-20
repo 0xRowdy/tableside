@@ -25,7 +25,7 @@ export {
   type Phase,
   type PermittedView,
   type Receipt,
-  type RefusalReason,
+  type IllegalActionReason,
   type RejectionReason,
   type VersionedIdentity,
   type Wager,
