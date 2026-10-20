@@ -13,6 +13,7 @@ import { readPermittedView, stopCause, type ActivityState, type GameId, type Sto
 import { summarizeFunding, type FundingSource } from './funding';
 import { add, compare, decodeMoney, div, encodeMoney, money, type Money } from './money';
 import type { DomainFact } from './activity';
+import { policyOf } from './blackjack-strategy';
 import type { StrategyDefinition } from './strategy';
 
 /** The record format's version; a field change bumps it. */
@@ -162,10 +163,9 @@ function wagerOutcomes(facts: readonly DomainFact[]): WagerOutcome[] {
 
 /** A guided blackjack strategy's mode, read from its playing policy; null for other games. */
 function blackjackMode(definition: StrategyDefinition): string | null {
-  const play = definition.play as { countShown?: unknown; deviations?: readonly unknown[] } | undefined;
+  const play = policyOf(definition);
   if (definition.game !== 'blackjack' || !play) return null;
-  if (!play.deviations || play.deviations.length === 0) return 'basic';
-  return play.countShown === true ? 'basic-with-deviations' : 'counting-with-deviations';
+  return play.deviations.length === 0 ? 'basic' : 'basic-with-deviations';
 }
 
 /**

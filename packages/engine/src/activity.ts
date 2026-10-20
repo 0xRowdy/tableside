@@ -748,7 +748,7 @@ function guidedStep(state: ActivityState, command: Exclude<Command, { readonly k
   switch (command.kind) {
     case 'begin-turn': {
       // Without betting instructions the player chooses the wagers; only the play is assessed.
-      if (run.status !== 'active' || state.wagers.length === 0 || run.definition.instructions.length === 0) return undefined;
+      if (run.status !== 'active' || state.wagers.length === 0 || leavesBetting(run.definition)) return undefined;
       const explanation = explain(state, run);
       if (follows(explanation, state.wagers)) {
         return { step: withStrategy(apply(state, command), { ...run, coachedTurn: true, decisions: run.decisions + 1 }), assessed: false };
@@ -885,6 +885,9 @@ function guidedStep(state: ActivityState, command: Exclude<Command, { readonly k
   }
 }
 
+/** A strategy without betting instructions leaves the wagers to the player (blackjack's playing policies): betting isn't assessed. */
+const leavesBetting = (definition: StrategyDefinition) => definition.instructions.length === 0;
+
 /**
  * A held playing move resolved: the departure is recorded once and the
  * decision is made now, with the prescribed play (retry) or the player's own
@@ -937,7 +940,7 @@ function cycleEndAfter(state: ActivityState, definition: StrategyDefinition, pro
 /** The strategy's pending action while it waits on a betting decision, if it holds one. */
 function pendingAction(state: ActivityState): PendingStrategyAction | null {
   const run = state.strategy;
-  if (!run || run.status !== 'active' || run.definition.instructions.length === 0 || !WAITING.has(state.phase)) return null;
+  if (!run || run.status !== 'active' || leavesBetting(run.definition) || !WAITING.has(state.phase)) return null;
   return heldAction(state, run);
 }
 

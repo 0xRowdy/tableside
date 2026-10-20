@@ -477,7 +477,6 @@ export function validateWith(vocabulary: StrategyVocabulary, definition: unknown
     else if (tableOk) for (const problem of vocabulary.playProblems(def.play, def.table)) flag(problem.category ?? 'incomplete', problem.path, problem.message);
   }
 
-  // Instructions. A strategy with a playing policy may leave the betting to the player.
   // Lists.
   const lists = def.lists === undefined ? [] : Array.isArray(def.lists) ? def.lists : (flag('incomplete', '/lists', 'lists are a list'), []);
   for (const [index, list] of lists.entries()) {
@@ -492,7 +491,7 @@ export function validateWith(vocabulary: StrategyVocabulary, definition: unknown
     else for (const [item, value] of list.initial.entries()) literal(checker, value, `${path}/initial/${item}`);
   }
 
-  // Instructions.
+  // Instructions. A strategy with a playing policy may leave the betting to the player.
   const instructions = Array.isArray(def.instructions) ? def.instructions : [];
   if (!Array.isArray(def.instructions) || (instructions.length === 0 && !hasPlay)) flag('incomplete', '/instructions', 'a strategy needs at least one instruction');
   if (instructions.length > STRATEGY_ENVELOPE.instructions) {

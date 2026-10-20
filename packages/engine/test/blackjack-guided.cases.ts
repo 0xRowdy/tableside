@@ -204,6 +204,12 @@ export const blackjackGuidedCases: TestCase[] = [
       // A split hand can't surrender: a short split 8,8 there hits.
       const split = explained(TEST_BASIC, situation('8 8', 'T', { hands: 2, balance: '5' }));
       t.equal([split.unavailable.map((u) => u.play), prescribed(split)], [['split', 'surrender'], 'hit']);
+      // On a split hand "if you can't split" never names surrender, which isn't offered there.
+      t.equal(explained(TEST_BASIC, situation('8 8', 'T', { hands: 2 })).ifUnaffordable, { play: 'split', fallback: 'hit' });
+      t.equal(explained(TEST_BASIC, situation('8 8', 'T')).ifUnaffordable, { play: 'split', fallback: 'surrender' });
+      // With deviations, a pair that can't split plays its hard total's index: 8,8 at four hands is 16 against a 10, standing at +1.
+      const fourHands = explained(TEST_DEVIATING, situation('8 8', 'T', { hands: 4, shoe: { running: 5, remaining: 260 } }));
+      t.equal([fourHands.preferred, fourHands.unavailable, fourHands.deviation?.id, prescribed(fourHands)], ['split', [{ play: 'split', reason: 'rule' }], '16v10', 'stand']);
       // 16 against a 10 surrenders on the original hand; after a hit it can't, so it hits.
       t.equal([prescribed(explained(TEST_BASIC, situation('T 6', 'T'))), prescribed(explained(TEST_BASIC, situation('5 6 5', 'T')))], ['surrender', 'hit']);
     },

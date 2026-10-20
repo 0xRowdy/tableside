@@ -110,10 +110,14 @@ export interface BlackjackPlayPolicy {
   readonly deviations: readonly BlackjackDeviation[];
 }
 
-/** A blackjack strategy's declared table conditions. */
-export interface BlackjackStrategyTable {
+/** The two rule choices a blackjack playing policy depends on. */
+export interface BlackjackPlayRules {
   readonly dealer: 'S17' | 'H17';
   readonly lateSurrender: boolean;
+}
+
+/** A blackjack strategy's declared table conditions. */
+export interface BlackjackStrategyTable extends BlackjackPlayRules {
   readonly limits: { readonly initial: { readonly min: string; readonly max: string } };
 }
 
@@ -135,13 +139,11 @@ export interface PlayMove {
   readonly amount: string | null;
 }
 
-/** The count at a decision: exposed cards only, physical shoe to the nearest half deck. */
-export type DecisionCount = BlackjackCount;
 
 /** One playing decision, as Explain play takes it. */
 export interface BlackjackPlaySituation {
   readonly game: 'blackjack';
-  readonly rules: { readonly dealer: 'S17' | 'H17'; readonly lateSurrender: boolean };
+  readonly rules: BlackjackPlayRules;
   /** The insurance (or even-money) offer, or the hand's own play. */
   readonly decision: 'insurance' | 'hand';
   /** The hand deciding (the first hand for insurance). */
@@ -178,7 +180,7 @@ export interface PlayExplanation {
     readonly available: string;
     readonly stake: string;
     /** Null when the policy has no deviations (the count doesn't matter). */
-    readonly count: DecisionCount | null;
+    readonly count: BlackjackCount | null;
   };
   /** The table cell that applies; null for insurance. */
   readonly cell: { readonly table: 'first' | 'later'; readonly kind: 'hard' | 'soft' | 'pair'; readonly hand: number; readonly up: number; readonly play: PlayChoice } | null;
@@ -292,27 +294,27 @@ function playProblems(play: unknown, table: unknown): Problem[] {
   if (!hasExactKeys(play, ['countShown', 'first', 'fallbacks', 'later', 'laterWithoutDouble', 'deviations'])) {
     return [{ path: '/play', message: 'a playing policy has countShown, first, fallbacks, later, laterWithoutDouble and deviations' }];
   }
-  const ls = isRecord(table) && table.lateSurrender === true;
-  const r = ls ? 'R' : '';
+  const lateSurrender = isRecord(table) && table.lateSurrender === true;
+  const surrenderLetter = lateSurrender ? 'R' : '';
   const problems: Problem[] = [];
   if (typeof play.countShown !== 'boolean') problems.push({ path: '/play/countShown', message: 'countShown is true or false' });
-  problems.push(...firstProblems(play.first, `HSD${r}`, `HSDP${r}`, '/play/first'));
+  problems.push(...firstProblems(play.first, `HSD${surrenderLetter}`, `HSDP${surrenderLetter}`, '/play/first'));
   const fallbacks = play.fallbacks;
   if (!hasExactKeys(fallbacks, ['double', 'doubleOnOriginalLateSurrender', 'splitByRule', 'splitByBalance', 'surrender'])) {
     problems.push({ path: '/play/fallbacks', message: 'fallbacks for double, double on the original late-surrender hand, split by rule and by balance, and surrender are required' });
   } else {
     problems.push(
       ...firstProblems(fallbacks.double, 'HS', 'HS', '/play/fallbacks/double'),
-      ...firstProblems(fallbacks.doubleOnOriginalLateSurrender, `HS${r}`, `HS${r}`, '/play/fallbacks/doubleOnOriginalLateSurrender'),
+      ...firstProblems(fallbacks.doubleOnOriginalLateSurrender, `HS${surrenderLetter}`, `HS${surrenderLetter}`, '/play/fallbacks/doubleOnOriginalLateSurrender'),
       ...rowsProblems(fallbacks.splitByRule, ROWS.pairs, 'HSD', '/play/fallbacks/splitByRule'),
-      ...rowsProblems(fallbacks.splitByBalance, ROWS.pairs, `HS${r}`, '/play/fallbacks/splitByBalance'),
+      ...rowsProblems(fallbacks.splitByBalance, ROWS.pairs, `HS${surrenderLetter}`, '/play/fallbacks/splitByBalance'),
       ...firstProblems(fallbacks.surrender, 'HSDP', 'HSDP', '/play/fallbacks/surrender'),
     );
   }
   problems.push(...laterProblems(play.later, 'HSD', '/play/later'), ...laterProblems(play.laterWithoutDouble, 'HS', '/play/laterWithoutDouble'));
-  problems.push(...deviationProblems(play.deviations, ls));
+  problems.push(...deviationProblems(play.deviations, lateSurrender));
   // A surrender letter at a table without late surrender is caught by the letter sets; name it as incompatible too.
-  if (!ls && isRecord(table)) {
+  if (!lateSurrender && isRecord(table)) {
     const text = JSON.stringify([play.first, isRecord(fallbacks) ? fallbacks.doubleOnOriginalLateSurrender : null, isRecord(fallbacks) ? fallbacks.splitByBalance : null]);
     if (text.includes('R')) problems.push({ path: '/play', message: 'the policy surrenders, but the declared table has no late surrender', category: 'incompatible' });
   }
@@ -360,11 +362,11 @@ export const BLACKJACK_VOCABULARY: StrategyVocabulary<BlackjackSituation> = {
     return undefined;
   },
   tableMismatch(declared, actual) {
-    const d = declared as BlackjackStrategyTable;
-    const a = actual as BlackjackStrategyTable;
+    const declaredTable = declared as BlackjackStrategyTable;
+    const actualTable = actual as BlackjackStrategyTable;
     return [
-      ...(d.dealer === a.dealer ? [] : [{ path: '/table/dealer', requirement: 'dealer' }]),
-      ...(d.lateSurrender === a.lateSurrender ? [] : [{ path: '/table/lateSurrender', requirement: 'late-surrender' }]),
+      ...(declaredTable.dealer === actualTable.dealer ? [] : [{ path: '/table/dealer', requirement: 'dealer' }]),
+      ...(declaredTable.lateSurrender === actualTable.lateSurrender ? [] : [{ path: '/table/lateSurrender', requirement: 'late-surrender' }]),
     ];
   },
   situationProblem,
@@ -449,44 +451,14 @@ export function prescribePlay(policy: BlackjackPlayPolicy, situation: BlackjackP
   const offered = rulesOffer(cards, hands, rules.lateSurrender);
   const surrenderFallback = () => (fromFirst ? firstCell(policy.fallbacks.surrender, kind, cellHand, up) : 'hit');
 
-  let preferred = cellPlay;
-  let deviation: PlayExplanation['deviation'] = null;
-  const decide = (row: BlackjackDeviation | undefined): DeviationPlay | null => {
-    if (!row || !count) return null;
-    const decided = atCount(row, count.trueCount);
-    deviation = { ...row, ...decided };
-    return decided.play;
-  };
-  if (count) {
-    if (pair && (cellPlay === 'split' || cellHand === 10)) {
-      // The pair decision takes precedence; T,T has its own index, applied at each (re)split decision.
-      const play = decide(policy.deviations.find((d) => d.hand.kind === 'pair' && d.hand.value === cellHand && d.up === up));
-      if (play) preferred = play as PlayChoice;
-    } else if (!total.soft) {
-      // A hard total, or a pair the table plays as one (5,5; 7,7 against a ten). Fab 4 first, where surrender is offered.
-      const hard = (set: BlackjackDeviation['set']) => policy.deviations.find((d) => d.set === set && d.hand.kind === 'hard' && d.hand.total === total.value && d.up === up);
-      if (offered.includes('surrender')) {
-        const play = decide(hard('fab4'));
-        if (play === 'surrender') preferred = 'surrender';
-        else if (play === 'basic' && preferred === 'surrender') preferred = surrenderFallback();
-      }
-      if (preferred !== 'surrender' || !offered.includes('surrender')) {
-        const row = hard('illustrious18');
-        // Doubling indices apply only where a double is possible: two cards.
-        const play = row && (two || (row.atOrAbove !== 'double' && row.below !== 'double')) ? decide(row) : null;
-        if (play) preferred = play as PlayChoice;
-      }
-    }
-  }
-
-  // Replace an unavailable play by the cell's fallback for that cause, until one is available.
-  const unavailable: { play: PlayChoice; reason: UnavailableReason }[] = [];
-  const why = (play: PlayChoice): UnavailableReason | null => {
+  // Why a play can't be made here; `short` judges it as if the balance couldn't fund another stake.
+  const why = (play: PlayChoice, short = false): UnavailableReason | null => {
+    const unfunded = short || compare(balance, stake) < 0;
     switch (play) {
       case 'double':
-        return !two ? 'rule' : compare(balance, stake) < 0 ? 'balance' : null;
+        return !two ? 'rule' : unfunded ? 'balance' : null;
       case 'split':
-        return !pair || hands >= MAX_SPLIT_HANDS ? 'rule' : compare(balance, stake) < 0 ? 'balance' : null;
+        return !pair || hands >= MAX_SPLIT_HANDS ? 'rule' : unfunded ? 'balance' : null;
       case 'surrender':
         return offered.includes('surrender') ? null : 'rule';
       default:
@@ -504,16 +476,67 @@ export function prescribePlay(policy: BlackjackPlayPolicy, situation: BlackjackP
         return surrenderFallback();
     }
   };
-  let play = preferred;
-  for (let reason = why(play); reason !== null; reason = why(play)) {
-    unavailable.push({ play, reason });
-    let next = fallback(play, reason);
-    // A fallback that leads back to a play already ruled out (a split hand's surrender fallback is split): split by rule, else hit.
-    if (unavailable.some((u) => u.play === next)) next = pair && !unavailable.some((u) => u.play === 'split' && u.reason === 'rule') ? letterAt(policy.fallbacks.splitByRule, cellHand - 1, up) : 'hit';
-    if (unavailable.some((u) => u.play === next)) next = 'hit';
-    play = next;
+  /** The first available play from `start`, replacing each unavailable one by the cell's fallback for that cause (recorded in `ruledOut`). */
+  const resolve = (start: PlayChoice, ruledOut: { play: PlayChoice; reason: UnavailableReason }[], short = false): PlayChoice => {
+    let play = start;
+    for (let reason = why(play, short); reason !== null; reason = why(play, short)) {
+      ruledOut.push({ play, reason });
+      let next = fallback(play, reason);
+      // A fallback that leads back to a play already ruled out (a split hand's surrender fallback is split): split by rule, else hit.
+      if (ruledOut.some((u) => u.play === next)) next = pair && !ruledOut.some((u) => u.play === 'split' && u.reason === 'rule') ? letterAt(policy.fallbacks.splitByRule, cellHand - 1, up) : 'hit';
+      if (ruledOut.some((u) => u.play === next)) next = 'hit';
+      play = next;
+    }
+    return play;
+  };
+
+  let preferred = cellPlay;
+  let deviation: PlayExplanation['deviation'] = null;
+  const decide = (row: BlackjackDeviation | undefined): DeviationPlay | null => {
+    if (!row || !count) return null;
+    const decided = atCount(row, count.trueCount);
+    deviation = { ...row, ...decided };
+    return decided.play;
+  };
+  /** A hard total's indices from a starting play: Fab 4 first, where surrender is offered, then the Illustrious 18. */
+  const hardIndex = (from: PlayChoice): PlayChoice => {
+    let play = from;
+    const hard = (set: BlackjackDeviation['set']) => policy.deviations.find((d) => d.set === set && d.hand.kind === 'hard' && d.hand.total === total.value && d.up === up);
+    if (offered.includes('surrender')) {
+      const decided = decide(hard('fab4'));
+      if (decided === 'surrender') play = 'surrender';
+      else if (decided === 'basic' && play === 'surrender') play = surrenderFallback();
+    }
+    if (play !== 'surrender' || !offered.includes('surrender')) {
+      const row = hard('illustrious18');
+      // Doubling indices apply only where a double is possible: two cards.
+      const decided = row && (two || (row.atOrAbove !== 'double' && row.below !== 'double')) ? decide(row) : null;
+      if (decided) play = decided as PlayChoice;
+    }
+    return play;
+  };
+
+  const unavailable: { play: PlayChoice; reason: UnavailableReason }[] = [];
+  let start: PlayChoice = preferred;
+  if (count) {
+    if (pair && (cellPlay === 'split' || cellHand === 10)) {
+      // The pair decision takes precedence; T,T has its own index, applied at each (re)split decision.
+      const decided = decide(policy.deviations.find((d) => d.hand.kind === 'pair' && d.hand.value === cellHand && d.up === up));
+      if (decided) preferred = start = decided as PlayChoice;
+      // A pair that can't split here (four hands, or no funds) plays its split fallback as a hard total, with that total's index.
+      const reason = preferred === 'split' && cellHand !== 1 ? why('split') : null;
+      if (reason) {
+        unavailable.push({ play: 'split', reason });
+        start = hardIndex(fallback('split', reason));
+      }
+    } else if (!total.soft) {
+      // A hard total, or a pair the table plays as one (5,5; 7,7 against a ten).
+      preferred = start = hardIndex(preferred);
+    }
   }
-  const unaffordable = play === 'double' || play === 'split' ? fallback(play, 'balance') : null;
+  const play = resolve(start, unavailable);
+  // What replaces a prescribed double or split if it couldn't be funded: the same fallbacks, judged short.
+  const unaffordable = play === 'double' || play === 'split' ? resolve(fallback(play, 'balance'), [{ play, reason: 'balance' }], true) : null;
   return {
     kind: 'play',
     situation: facts,
@@ -601,7 +624,7 @@ export const BLACKJACK_STRATEGY: StrategyGame<BlackjackActivityState> = {
     rules: { dealer: state.rules.dealer, lateSurrender: state.rules.lateSurrender, limits: { initial: { ...state.rules.limits.initial } } },
     balance: encodeMoney(state.wagers.reduce((sum: Money, wager) => add(sum, decodeMoney(wager.amount)), decodeMoney(state.balance))),
   }),
-  assessPlay: (state, definition, command) => assessPlay(state, definition, command),
+  assessPlay,
   // "19 v 20": the learner's hand totals against the dealer's.
   outcome: (state) => {
     const round = state.outcome;

@@ -47,12 +47,12 @@ export function GuidedStrip({
   strategy: StrategyView;
   canStop: boolean;
   onStop: () => void;
-  /** What the strategy is set to: its chosen targets, or a blackjack table's rules. */
-  detail?: string;
+  /** What the strategy is set to (its chosen targets); null where it has no choices (blackjack). */
+  detail?: string | null;
   unit?: DecisionUnit;
 }) {
   const cycle = strategy.overrideEndsCycle ? ` · cycle ${strategy.cycle.number}` : '';
-  const status = strategy.status === 'stopped' ? 'Strategy stopped · playing on your own' : `Guided · ${strategy.name}${detail ? ` · ${detail}` : ''}${cycle}`;
+  const status = strategy.status === 'stopped' ? 'Strategy stopped · playing on your own' : `Guided · ${strategy.name}${detail === null ? '' : ` · ${detail}`}${cycle}`;
   return (
     <View style={styles.strip} testID="guided-strip">
       <Text maxFontSizeMultiplier={textScale.body} style={styles.stripTitle}>{status}</Text>

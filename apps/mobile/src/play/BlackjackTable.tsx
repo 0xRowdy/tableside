@@ -39,7 +39,7 @@ import { BetSelector } from './bet-selector/BetSelector';
 import { draftAmountText, EMPTY_DRAFT, findChoice, isDraftPending, type BetDraft } from './bet-selector/catalog';
 import { DraftBar, PresentationSwitch, type Presentation } from './bet-selector/Presentation';
 import { blackjackCatalog, blackjackPlacedWagers } from './blackjack-catalog';
-import { cardShort, countWorking, deviationRule, deviationsAtCount, playCorrectionCopy, signed } from './blackjack-coaching';
+import { cardShort, countWorking, deviationRule, deviationsAtCount, playCorrectionCopy } from './blackjack-coaching';
 import {
   cardName,
   cardRank,
@@ -54,6 +54,7 @@ import {
   rulesText,
   seatSummary,
   showingLastRound,
+  signed,
   statusText,
   SUIT_GLYPH,
   totalText,
@@ -183,7 +184,7 @@ export function BlackjackTable({ snapshot }: { snapshot: ActiveSnapshot }) {
           onTable={formatUnits(totalOnTable(view))}
           status={save === 'failed' ? 'Paused · not saved' : statusText(view)}
         />
-        {strategy && <GuidedStrip strategy={strategy} detail="" unit="decision" canStop={legal('stop-strategy')} onStop={() => setStoppingStrategy(true)} />}
+        {strategy && <GuidedStrip strategy={strategy} detail={null} unit="decision" canStop={legal('stop-strategy')} onStop={() => setStoppingStrategy(true)} />}
         {view.count && <CountPanel view={view} count={view.count} betweenRounds={!inHand(view) && view.phase !== 'revealing-outcome'} />}
         {betting && <PresentationSwitch value={presentation} onChange={setPresentation} />}
 

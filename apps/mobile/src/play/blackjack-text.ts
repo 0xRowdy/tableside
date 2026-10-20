@@ -12,10 +12,30 @@ import {
   type DomainFact,
   type HandTotal,
   type IllegalActionReason,
+  type PlayChoice,
+  type PlayMove,
   type Suit,
 } from '@tableside/engine';
 
 import { formatUnits } from './units';
+
+/** "+2", "0", "−1": a count as a signed whole number. */
+export const signed = (value: number) => (value > 0 ? `+${value}` : value < 0 ? `−${-value}` : '0');
+
+/** The noun for each playing move: "Before your stand", "Keep my stand". */
+export const PLAY_NOUN: Record<PlayChoice, string> = {
+  hit: 'hit',
+  stand: 'stand',
+  double: 'double',
+  split: 'split',
+  surrender: 'surrender',
+  insure: 'insurance',
+  'decline-insurance': 'no-insurance',
+};
+
+/** A playing move as an instruction: "stand", "insure 5", "decline insurance". */
+export const moveText = (move: PlayMove) =>
+  move.action === 'insure' && move.amount ? `insure ${formatUnits(move.amount)}` : move.action === 'decline-insurance' ? 'decline insurance' : move.action;
 
 const RANK_NAMES = ['Ace', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'Jack', 'Queen', 'King'];
 const RANK_SHORT = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
@@ -288,13 +308,13 @@ export function describeFacts(facts: readonly DomainFact[], view: BlackjackPermi
         for (const wager of fact.wagers) parts.push(`Wager ${formatUnits(wager.amount)} in play.`);
         break;
       case 'correction-offered':
-        if ('decision' in fact) parts.push(`Paused before your ${fact.actual.action === 'decline-insurance' ? 'no-insurance' : fact.actual.action === 'insure' ? 'insurance' : fact.actual.action}: nothing has been played yet.`);
+        if ('decision' in fact) parts.push(`Paused before your ${PLAY_NOUN[fact.actual.action]}: nothing has been played yet.`);
         break;
       case 'departure-recorded':
         parts.push(`Recorded once in Departures as ${fact.departure.resolution === 'retried' ? 'taken back' : 'an override'}.`);
         break;
       case 'strategy-stopped':
-        parts.push('Strategy stopped. You play on your own; the session stays open.');
+        parts.push('Strategy stopped. You play on your own; the practice session stays open.');
         break;
       case 'hand-split':
       case 'outcome-generated':
@@ -309,7 +329,10 @@ export function describeFacts(facts: readonly DomainFact[], view: BlackjackPermi
     const yours = totals.length > 1 ? `Your hands have ${totals.slice(0, -1).join(', ')} and ${totals.at(-1)}` : `You have ${totals[0]}`;
     parts.push(`${yours}; the dealer ${round.dealer.cards.includes(null) ? 'shows' : 'has'} ${totalText(round.dealer.total)}.`);
   }
-  if (view.count && (dealt || facts.some((fact) => fact.kind === 'played'))) parts.push(`True count ${view.count.trueCount > 0 ? '+' : ''}${view.count.trueCount}.`);
+  // The supplied count, recomputed before every decision and, once a round settles, for the next deal.
+  if (view.count && (dealt || facts.some((fact) => fact.kind === 'played' || fact.kind === 'wager-settled'))) {
+    parts.push(`${isPlaying(view) ? 'True count' : 'True count for the next deal'} ${signed(view.count.trueCount)}.`);
+  }
   if (isPlaying(view)) {
     if (view.insuranceOffer) parts.push(view.insuranceOffer.evenMoney ? 'Even money?' : 'Insurance?');
     else if (dealt || facts.some((fact) => fact.kind === 'played' || fact.kind === 'peeked')) parts.push(`${statusText(view)}.`);

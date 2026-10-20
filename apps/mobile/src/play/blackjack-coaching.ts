@@ -8,31 +8,18 @@
 
 import type { BlackjackCount, BlackjackDeviation, Card, DeviationPlay, PlayChoice, PlayCorrection, PlayExplanation, PublishedIndex } from '@tableside/engine';
 
-import { cardRank, SUIT_GLYPH, totalText } from './blackjack-text';
+import { cardRank, PLAY_NOUN, signed, SUIT_GLYPH, totalText } from './blackjack-text';
 import type { CorrectionCopy } from './coaching-text';
 import { formatUnits } from './units';
 
 /** "A♥": a card as the table shows it. */
 export const cardShort = (card: Card) => `${cardRank(card)}${SUIT_GLYPH[card.suit]}`;
 
-/** "+2", "0", "−1": a count as a signed whole number. */
-export const signed = (value: number) => (value > 0 ? `+${value}` : value < 0 ? `−${-value}` : '0');
 
 /** The up card by value: "a 5", "an ace", "a 10". */
 const upName = (card: Card) => (card.rank === 1 ? 'an ace' : card.rank === 8 ? 'an 8' : `a ${card.rank >= 10 ? 10 : card.rank}`);
 /** An up-card value: "A" or "10". */
 const upValue = (value: number) => (value === 1 ? 'A' : String(value));
-
-/** The noun for each move: "Before your stand", "Keep my stand". */
-const NOUN: Record<PlayChoice, string> = {
-  hit: 'hit',
-  stand: 'stand',
-  double: 'double',
-  split: 'split',
-  surrender: 'surrender',
-  insure: 'insurance',
-  'decline-insurance': 'no-insurance',
-};
 
 /** The imperative for each play: "If you can't double: hit." */
 const IMPERATIVE: Record<PlayChoice, string> = {
@@ -99,8 +86,10 @@ export function indexDifferenceLines(deviation: BlackjackDeviation, rules: { dea
       const perBet = Number(bin.perBet);
       lines.push(
         perBet < 0
-          ? `At a true count of ${signed(bin.trueCount)} the published play gains ${bin.perBet.replace(/^[+-]/, '')} per unit bet, inside the margin Tableside treats as a tie, so it keeps the play that adds no wager.`
-          : `At a true count of ${signed(bin.trueCount)} the published play costs ${bin.perBet.replace(/^[+-]/, '')} per unit bet at this table.`,
+          ? `At a true count of ${signed(bin.trueCount)} the published play gains ${bin.perBet.replace(/^[+-]/, '')} per unit bet, inside the margin Tableside treats as a tie; ties go to the basic play.`
+          : perBet === 0
+            ? `At a true count of ${signed(bin.trueCount)} the published play makes no measurable difference at this table; ties go to the basic play.`
+            : `At a true count of ${signed(bin.trueCount)} the published play costs ${bin.perBet.replace(/^[+-]/, '')} per unit bet at this table.`,
       );
     }
   }
@@ -155,7 +144,7 @@ const halfOf = (stake: string) => (BigInt(stake) % 2n === 0n ? (BigInt(stake) / 
 
 /** The moves as words: "your stand", "your insurance of 5". */
 const moveName = (correction: PlayCorrection) =>
-  correction.actual.action === 'insure' && correction.actual.amount ? `insurance of ${formatUnits(correction.actual.amount)}` : NOUN[correction.actual.action];
+  correction.actual.action === 'insure' && correction.actual.amount ? `insurance of ${formatUnits(correction.actual.amount)}` : PLAY_NOUN[correction.actual.action];
 
 /** The correction pause for one blackjack decision. */
 export function playCorrectionCopy(strategyName: string, correction: PlayCorrection, rules: { dealer: 'S17' | 'H17'; lateSurrender: boolean }): CorrectionCopy {
@@ -187,15 +176,15 @@ export function playCorrectionCopy(strategyName: string, correction: PlayCorrect
     lines.push(`${deviation.situation}: at ${signed(deviation.threshold)} or more, ${deviationPlay(deviation.atOrAbove)}; below ${signed(deviation.threshold)}, ${deviationPlay(deviation.below)}.`);
   }
   for (const missing of explanation.unavailable) lines.push(unavailableLine(missing.play, missing.reason, explanation));
-  if (explanation.unavailable.length > 0) lines.push(`So the strategy's validated fallback is to ${IMPERATIVE[play]}. That isn't your mistake: it's the legal play here.`);
+  if (explanation.unavailable.length > 0) lines.push(`So the strategy's validated fallback is to ${IMPERATIVE[play]}. Following it isn't a departure: it's the legal play here.`);
   lines.push(`Your ${moveName(correction)} hasn't been played yet.`);
 
   const fallback = explanation.ifUnaffordable ? `If you can't ${explanation.ifUnaffordable.play === 'insure' ? 'cover insurance' : IMPERATIVE[explanation.ifUnaffordable.play]}: ${IMPERATIVE[explanation.ifUnaffordable.fallback]}.` : null;
   const retry = play === 'insure' && explanation.prescribed.amount ? `Take it back & insure ${formatUnits(explanation.prescribed.amount)}` : `Take it back & ${IMPERATIVE[play]}`;
-  const override = correction.actual.action === 'decline-insurance' ? 'Keep declining' : `Keep my ${NOUN[correction.actual.action]}`;
+  const override = correction.actual.action === 'decline-insurance' ? 'Keep declining' : `Keep my ${PLAY_NOUN[correction.actual.action]}`;
   return {
     coach: `Marcus · guided practice, ${strategyName.toLowerCase()}`,
-    kicker: correction.actual.action === 'decline-insurance' ? 'Before you decline insurance' : `Before your ${NOUN[correction.actual.action]}`,
+    kicker: correction.actual.action === 'decline-insurance' ? 'Before you decline insurance' : `Before your ${PLAY_NOUN[correction.actual.action]}`,
     headline,
     lines,
     fallback,

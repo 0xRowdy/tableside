@@ -5,7 +5,7 @@
 // situation); the session protocol and these operations reach games only
 // through this registry.
 
-import { BLACKJACK_STRATEGY, playSituationProblem, policyOf, prescribePlay, type PlayExplanation } from './blackjack-strategy';
+import { BLACKJACK_STRATEGY, playSituationProblem, policyOf, prescribePlay, type BlackjackPlayRules, type PlayExplanation } from './blackjack-strategy';
 import { ROULETTE_STRATEGY } from './roulette-strategy';
 import {
   compatibilityWith,
@@ -103,8 +103,8 @@ export function explainPlay(definition: StrategyDefinition, situation: unknown):
   if (!policy) return { ok: false, error: 'the strategy has no playing policy' };
   const problem = playSituationProblem(situation);
   if (problem) return { ok: false, error: problem };
-  const s = situation as Parameters<typeof prescribePlay>[1];
-  const table = definition.table as { dealer: string; lateSurrender: boolean };
-  if (table.dealer !== s.rules.dealer || table.lateSurrender !== s.rules.lateSurrender) return { ok: false, error: "the strategy isn't declared for these rules" };
-  return { ok: true, explanation: prescribePlay(policy, s) };
+  const playing = situation as Parameters<typeof prescribePlay>[1];
+  const table = definition.table as BlackjackPlayRules;
+  if (table.dealer !== playing.rules.dealer || table.lateSurrender !== playing.rules.lateSurrender) return { ok: false, error: "the strategy isn't declared for these rules" };
+  return { ok: true, explanation: prescribePlay(policy, playing) };
 }

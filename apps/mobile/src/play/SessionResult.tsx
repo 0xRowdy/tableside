@@ -6,7 +6,7 @@
 // the shipped list on every render, never read from the record.
 
 import { QUARANTINE_LIST } from '@tableside/definitions';
-import { isPlayCorrection, quarantineStatus, type PlayMove, type QuarantineList, type StrategyDeparture } from '@tableside/engine';
+import { isPlayCorrection, quarantineStatus, type QuarantineList, type StrategyDeparture } from '@tableside/engine';
 import { CircleCheck, Info, TriangleAlert } from 'lucide-react-native';
 import { useEffect, useState, type ReactNode } from 'react';
 import { AccessibilityInfo, StyleSheet, Text, View } from 'react-native';
@@ -17,6 +17,7 @@ import type { CompletedPracticeSession } from '@/practice/store';
 import { fonts, palette, radius, space, textScale } from '@/theme/tokens';
 
 import { cardShort } from './blackjack-coaching';
+import { moveText } from './blackjack-text';
 import { crapsTargetName } from './craps-text';
 import { targetName } from './roulette-text';
 import { formatSigned, formatUnits, speakSigned } from './units';
@@ -51,11 +52,10 @@ function departureLines(game: CompletedPracticeSession['game'], departure: Strat
   if (isPlayCorrection(departure)) {
     // A blackjack playing decision: the hand and up card, the strategy's play and the player's.
     const { situation, prescribed } = departure.explanation;
-    const move = (m: PlayMove) => (m.action === 'insure' && m.amount ? `insure ${formatUnits(m.amount)}` : m.action === 'decline-insurance' ? 'decline insurance' : m.action);
     return {
       title: `${TURN_NOUN[game]} ${departure.turn} · ${situation.cards.map(cardShort).join(' ')} v ${cardShort(situation.up)}`,
-      strategy: `Strategy: ${move(prescribed)}`,
-      you: `You: ${move(departure.actual)}`,
+      strategy: `Strategy: ${moveText(prescribed)}`,
+      you: `You: ${moveText(departure.actual)}`,
       resolution,
     };
   }

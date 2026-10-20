@@ -410,13 +410,15 @@ export function shoeCount(state: Pick<BlackjackActivityState, 'shoe' | 'outcome'
   return { running, remaining: SHOE.length - shoe.next };
 }
 
+/** The divisor in half decks: the cards left to the nearest half deck, ties up, at least one half deck. */
+const halfDecksLeft = (remaining: number) => Math.max(1, Math.floor((remaining + 13) / 26));
+
 /**
  * The integer true count: the running count over the decks remaining to the
  * nearest half deck (ties up, at least half a deck), truncated toward zero.
  */
 export function trueCount(running: number, remaining: number): number {
-  const halfDecks = Math.max(1, Math.floor((remaining + 13) / 26));
-  const quotient = Math.floor(Math.abs(2 * running) / halfDecks);
+  const quotient = Math.floor(Math.abs(2 * running) / halfDecksLeft(remaining));
   return running < 0 && quotient > 0 ? -quotient : quotient;
 }
 
@@ -430,7 +432,7 @@ export interface BlackjackCount {
 
 export const countOf = (shoe: { readonly running: number; readonly remaining: number }): BlackjackCount => ({
   running: shoe.running,
-  decks: String(Math.max(1, Math.floor((shoe.remaining + 13) / 26)) / 2),
+  decks: String(halfDecksLeft(shoe.remaining) / 2),
   trueCount: trueCount(shoe.running, shoe.remaining),
 });
 
