@@ -19,6 +19,8 @@ if (!values.strategy) {
   const profile = values.profile ? benchmarkProfile(values.profile) : undefined;
   if (!definition || !profile || !values.key) throw new Error('a built-in strategy id, a benchmark profile id and a key are required');
   const from = Number(values.from);
-  const indices = Array.from({ length: Number(values.count) }, (_, i) => from + i);
+  const count = Number(values.count);
+  if (!Number.isSafeInteger(from) || from < 0 || !Number.isSafeInteger(count) || count < 1) throw new Error('--from is a whole number from 0 and --count one from 1');
+  const indices = Array.from({ length: count }, (_, i) => from + i);
   for (const record of runStandardized({ profile, definition, key: parseKey(values.key), indices })) console.log(JSON.stringify(record));
 }

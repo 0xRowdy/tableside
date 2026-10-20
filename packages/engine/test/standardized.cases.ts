@@ -18,18 +18,20 @@ import {
   recordExposureProblems,
   runStandardizedSession,
   serverStreamIdentity,
-  sha256Hex,
+  shoeCount,
   STANDARD_CRAPS,
   startStandardizedSession,
   stepStandardizedSession,
   verifySpecification,
   type BenchmarkProfile,
+  type BlackjackActivityState,
   type StandardizedSession,
   type StrategyDefinition,
   type Words2,
 } from '../src';
 
 import { TEST_BASIC, TEST_COUNTING_SCHEDULE } from './blackjack-strategy.fixtures';
+import { CERTIFIED_BLACKJACK } from './certified-blackjack.fixtures';
 import { S17_LS, TEST_STRATEGY } from './blackjack.fixtures';
 import { CRAPS_BUILT_INS, PASS_WITH_ODDS } from './craps-strategy.fixtures';
 import { FLAT_EVEN_MONEY, LABOUCHERE, MARTINGALE, PARLAY, TWO_DOZENS } from './strategy.fixtures';
@@ -78,6 +80,7 @@ export const TRACED: readonly { readonly profile: BenchmarkProfile; readonly def
   ...CRAPS_BUILT_INS.map((definition) => ({ profile: CRAPS, definition })),
   { profile: BLACKJACK_S17_LS, definition: TEST_BASIC },
   { profile: BLACKJACK_S17_LS, definition: TEST_COUNTING_SCHEDULE },
+  ...Object.values(CERTIFIED_BLACKJACK).map(({ profile, strategy }) => ({ profile, definition: strategy })),
 ];
 
 export const TRACED_INDICES = [0, 1];
@@ -114,6 +117,14 @@ const SIMPLE: StrategyDefinition = {
   instructions: [{ id: 'flat', label: 'Red, every spin', when: { always: true }, bets: [{ target: { target: 'red' }, amount: { lit: '10' } }] }],
   adjustments: [],
   stopWhen: null,
+};
+
+/** Black, only after a red pocket: it waits through every other spin. */
+const AFTER_RED: StrategyDefinition = {
+  ...SIMPLE,
+  id: 'after-red',
+  name: 'Black after red',
+  instructions: [{ id: 'after-red', label: 'Black after red', when: { subject: 'last-pocket-color', is: 'red' }, bets: [{ target: { target: 'black' }, amount: { lit: '10' } }] }],
 };
 
 const ANALYSIS = { id: 'standardized-analysis', version: 1 };
@@ -230,6 +241,14 @@ export const standardizedCases: TestCase[] = [
       t.equal(first?.kind === 'card-dealt' ? first.to : null, 'seat-1-hand-1');
       t.equal(record.opportunities, 200);
       t.equal(readPermittedView(session.activity).phase, 'completed');
+      // The count moves only with exposed cards, the seat's included: Hi-Lo over every face-up card since the last shuffle.
+      const hiLo = (rank: number) => (rank >= 2 && rank <= 6 ? 1 : rank >= 7 && rank <= 9 ? 0 : -1);
+      let running = 0;
+      for (const fact of facts) {
+        if (fact.kind === 'shoe-shuffled') running = 0;
+        if ((fact.kind === 'card-dealt' && fact.card !== null) || fact.kind === 'hole-card-revealed') running += hiLo((fact.card as { rank: number }).rank);
+      }
+      t.equal(shoeCount(session.activity as BlackjackActivityState).running, running);
     },
   },
   {
@@ -243,6 +262,38 @@ export const standardizedCases: TestCase[] = [
       while (rest.activity.phase !== 'completed') rest = stepStandardizedSession(rest);
       t.equal(checkpointHash(rest.activity), checkpointHash(whole.session.activity));
       t.equal(stepStandardizedSession(rest), rest);
+    },
+  },
+  {
+    name: 'standardized: waiting counts: a strategy that waits for a pattern spins on with nothing at stake',
+    run: (t) => {
+      const { record, session } = run(SINGLE_ZERO, AFTER_RED, 0);
+      t.equal(record.stopCause, 'horizon');
+      t.equal(record.opportunities, 200);
+      t.equal(session.activity.turn, 200);
+      // It bets only on spins after a red: fewer bets than spins, but some (about half).
+      t.equal(record.resolved > 50 && record.resolved < 150, true);
+      t.equal(record.turnover, String(10 * record.resolved));
+    },
+  },
+  {
+    name: 'guided roulette: while the strategy places nothing yet, the spin is a waiting spin',
+    run: (t) => {
+      let state = startStandardizedSession({ profile: SINGLE_ZERO, strategy: { definition: AFTER_RED, parameters: {} }, key: KEY, index: 0 }).activity;
+      const send = (command: Parameters<typeof advanceActivity>[1]['command']) => {
+        const result = advanceActivity(state, { sequence: state.sequence, commandId: `c${state.sequence}`, command });
+        if (result.status !== 'committed') throw new Error(result.status);
+        state = result.state;
+        return result.facts.map((fact) => fact.kind);
+      };
+      t.equal(send({ kind: 'begin-turn' }), ['turn-began', 'outcome-generated']);
+      t.equal([state.phase, state.turn, state.wagers], ['revealing-outcome', 1, []]);
+      t.equal(send({ kind: 'settle-turn' }), []);
+      t.equal([state.phase, state.balance], ['settled-outcome', '1000']);
+      // Free play still needs a wager to spin.
+      const free = { ...state, strategy: null, identities: { ...state.identities, strategy: null } } as typeof state;
+      const refused = advanceActivity(free, { sequence: free.sequence, commandId: 'free', command: { kind: 'begin-turn' } });
+      t.equal(refused.status === 'committed' ? refused.facts.map((fact) => fact.kind) : refused.status, ['illegal-action']);
     },
   },
   {
@@ -273,7 +324,8 @@ export const standardizedCases: TestCase[] = [
         ),
         true,
       );
-      t.equal(spec.fingerprint, sha256Hex(spec.manifest));
+      // SHA-256 of that manifest, from Node's crypto module.
+      t.equal(spec.fingerprint, '90c5cd08807bfeb03972322faea9c7dbd35f9da905bc88a761a55873a6153cc6');
       const base = fingerprint(SIMPLE);
       const instruction = SIMPLE.instructions[0] as StrategyDefinition['instructions'][number];
       const renamed: StrategyDefinition = { ...SIMPLE, id: 'other', revision: 9, name: 'Renamed', note: 'A note', instructions: [{ ...instruction, id: 'renamed', label: 'Reworded', note: 'Why' }] };
@@ -281,7 +333,7 @@ export const standardizedCases: TestCase[] = [
       // 10 as 5 + 5, and the parameter chosen as its default, execute the same.
       const rewritten: StrategyDefinition = { ...SIMPLE, instructions: [{ ...instruction, bets: [{ target: { target: 'red' }, amount: { add: [{ lit: '5' }, { lit: '5' }] } }] }] };
       t.equal(fingerprint(rewritten), base);
-      const parameterized: StrategyDefinition = { ...SIMPLE, parameters: [{ id: 'colour', label: 'Colour', choices: ['red', 'black'], default: 'red' }], instructions: [{ ...instruction, bets: [{ target: { param: 'colour' }, amount: { lit: '10' } }] }] };
+      const parameterized: StrategyDefinition = { ...SIMPLE, parameters: [{ id: 'color', label: 'Color', choices: ['red', 'black'], default: 'red' }], instructions: [{ ...instruction, bets: [{ target: { param: 'color' }, amount: { lit: '10' } }] }] };
       t.equal(fingerprint(parameterized), base);
       // The engine's hand-written fixtures and their renamed counterparts encode alike.
       t.equal(fingerprint({ ...MARTINGALE, id: 'x', name: 'y', counters: MARTINGALE.counters.map((c) => ({ ...c })) }), fingerprint(MARTINGALE));

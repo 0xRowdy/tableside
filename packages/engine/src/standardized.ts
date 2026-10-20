@@ -242,9 +242,9 @@ function nextMove(session: StandardizedSession): { command: Command; stop?: Stan
     const { prescription } = decision;
     if (prescription.status === 'paused') return stop(STOP_FOR_PAUSE[prescription.reason]);
     if (prescription.status === 'uncovered') {
-      // Nothing to place. Craps rolls on without the player (a waiting roll); elsewhere nothing changes
-      // until a turn is played, so the strategy waits out every remaining opportunity.
-      if (state.identities.game !== 'craps') return stop('horizon', session.horizon);
+      // Nothing to place: a waiting turn (a roll or spin with nothing at stake) still uses an opportunity.
+      // A blackjack round can't yet be dealt with the evaluated player sitting out.
+      if (state.identities.game === 'blackjack') throw new StandardizedRunError('a waiting blackjack round is not supported');
       if (state.wagers.length > 0) throw new StandardizedRunError('an uncovered situation with wagers on the table');
       return { command: { kind: 'begin-turn' } };
     }

@@ -121,7 +121,7 @@ const REQUIRED_REMOVAL: AccessDenial = {
 /**
  * A supervisor that answers `stop` before the next turn of an activity whose
  * pinned strategy revision a required removal covers (Amendment 6 §5): the
- * session takes the stop path at that turn boundary, and nothing more is
+ * practice session takes the stop path at that turn boundary, and nothing more is
  * asked or charged. Everything else goes to the supervisor it wraps.
  */
 export function withRequiredRemovals(access: AccessSupervisor, removals: RequiredRemovals): AccessSupervisor {

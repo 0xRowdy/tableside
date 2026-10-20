@@ -32,15 +32,15 @@ describe('headless runner', () => {
     let replayed = 0;
     for (const traced of tracedSessions()) {
       const definition = builtIns.get(canonicalJson(traced.strategy));
-      // The engine's blackjack fixtures are hand-written test tables, not the certified ones.
+      // The engine's hand-written blackjack test tables aren't shipped; its copies of certified ones are.
       if (!definition) continue;
       const profile = BENCHMARK_PROFILES.find((p) => p.id === traced.profile.id);
       expect(profile).toEqual(traced.profile);
       expect(runStandardized({ profile: profile as BenchmarkProfile, definition, key: traced.key, indices: [traced.index] })).toEqual([traced.record]);
       replayed++;
     }
-    // Every roulette and craps built-in, on each profile it fits, two sessions each.
-    expect(replayed).toBe((5 * 2 + 5) * 2);
+    // Every roulette and craps built-in on each profile it fits, and two certified blackjack ones, two sessions each.
+    expect(replayed).toBe((5 * 2 + 5 + 2) * 2);
   });
 
   it('runs every built-in strategy on every profile it fits, with complete, bounded records', () => {

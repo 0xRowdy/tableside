@@ -101,6 +101,8 @@ function expression(value: StrategyExpression, names: Names): StrategyExpression
       return folded ? { lit: encodeMoney(FOLD[op](folded[0] as Money, folded[1] as Money)) } : ({ [op]: items } as unknown as StrategyExpression);
     }
   }
+  // A validated definition holds no other node; anything else is an integrity error, never encoded as something it isn't.
+  if (!('min' in value) && !('max' in value)) throw new FingerprintIntegrityError('unknown expression node');
   const op = 'min' in value ? 'min' : 'max';
   const items = (value as Record<typeof op, readonly StrategyExpression[]>)[op].map((item) => expression(item, names));
   const folded = literal(items);
@@ -114,6 +116,7 @@ function condition(value: StrategyCondition, names: Names): StrategyCondition {
   if ('all' in value) return { all: value.all.map((item) => condition(item, names)) };
   if ('any' in value) return { any: value.any.map((item) => condition(item, names)) };
   if ('subject' in value) return { subject: value.subject, is: value.is };
+  if (!('compare' in value)) throw new FingerprintIntegrityError('unknown condition node');
   return { compare: expression(value.compare, names), op: value.op, to: expression(value.to, names) };
 }
 
