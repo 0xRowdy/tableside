@@ -214,6 +214,9 @@ const RESUMES_ON_RETURN: ReadonlySet<SuspendCause> = new Set(['navigation', 'app
 /** Whether coming back to the table lifts this suspension by itself (it still asks the supervisor). */
 const resumesOnReturn = (suspension: Pick<Suspension, 'cause'>): boolean => RESUMES_ON_RETURN.has(suspension.cause);
 
+/** Stops the access supervisor imposes, as opposed to the player's own. */
+const ACCESS_STOPS: ReadonlySet<StopCause> = new Set(['access-ended']);
+
 /** A supervisor question that failed to answer counts as uncertain access. */
 const UNANSWERED: AccessDenial = { status: 'uncertain', provenance: 'unanswered', disposition: 'suspend-at-turn-boundary' };
 
@@ -576,8 +579,33 @@ export class PracticeController {
       const pending = this.pending;
       if (!pending) return;
       if (pending.kind === 'completion') return this.complete();
+      if (this.heldBack(pending)) {
+        // Suspended, or a turn that may no longer begin: only learn whether it committed after all.
+        const recovered = await this.recover(pending);
+        if (recovered !== 'not-saved') return this.drive();
+        if (this.pendingIsUnknown) return;
+        // It never committed: drop it. Nothing is revealed, settled or charged; resuming re-derives the step or asks again.
+        this.pending = null;
+        this.publish();
+        return this.drive();
+      }
       if (settled(await this.retryTransition(pending))) await this.drive();
     });
+  }
+
+  /**
+   * Whether a failed save may no longer be committed by a retry: while the
+   * session is suspended nothing is revealed, settled or charged (an automatic
+   * step is re-derived after the resume), and once access stops play or a
+   * suspension applies, a command that begins a turn never begins it. (The
+   * player's own stop keeps the turn they asked for, as when it saved first time.)
+   */
+  private heldBack(pending: Outbound): boolean {
+    if (this.suspension?.kind === 'immediate' || this.suspension?.reached) return true;
+    if (!this.suspension && !(this.stopping && ACCESS_STOPS.has(this.stopping))) return false;
+    const state = this.requireState();
+    const candidate = advanceActivity(state, pending.envelope);
+    return candidate.status === 'committed' && candidate.state.turn !== state.turn;
   }
 
   /** Leaves an incomplete session's explanation; Play then offers setup. */

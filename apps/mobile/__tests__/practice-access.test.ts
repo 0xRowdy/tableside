@@ -6,7 +6,7 @@ import { CAPPED_MARTINGALE, FLAT_EVEN_MONEY } from '@tableside/definitions';
 import type { DomainFact } from '@tableside/engine';
 
 import { alwaysAllowed, withRequiredRemovals, type AccessDecision, type AccessSupervisor, type AdmissionDecision, type PhaseReport, type TurnDecision } from '@/practice/adapters';
-import { PracticeController, REVEAL_MS, type PracticeSnapshot } from '@/practice/controller';
+import { PracticeController, REVEAL_MS, SAVE_RETRY_MS, type PracticeSnapshot } from '@/practice/controller';
 import type { ActivityStore, TransitionCommit } from '@/practice/store';
 import { FakeClock, substituteAdapters } from '@/practice/testing/substitutes';
 
@@ -635,5 +635,44 @@ describe('required content removal (Amendment 6 §5)', () => {
     expect(await access.beforeTurn({ activityId: 'a', turn: 1, strategy: null })).toMatchObject({ status: 'allowed' });
     expect(await access.beforeTurn({ activityId: 'a', turn: 1, strategy: { id: FLAT_EVEN_MONEY.id, version: 1 } })).toMatchObject({ status: 'allowed' });
     expect(await access.beforeTurn({ activityId: 'a', turn: 1, strategy: { id: 'another', version: 1 } })).toMatchObject({ status: 'denied', disposition: 'stop' });
+  });
+});
+
+describe('a failed save that begins a turn', () => {
+  it('is never retried, revealed or charged once the session is suspended with access stopped', async () => {
+    const { controller, store, next, clock, commits } = await started();
+    await controller.placeWager('red', '10');
+    store.failNext('commitTransition', 'before');
+    await controller.spin();
+    expect(active(controller.snapshot())).toMatchObject({ save: 'failed', view: { phase: 'open-decision' } });
+
+    next.lifecycle = { status: 'denied', provenance: 'test', disposition: 'stop' };
+    await controller.lifecycle('backgrounded');
+    clock.advance(SAVE_RETRY_MS);
+    await waitFor(() => active(controller.snapshot()).save === 'saved' && !active(controller.snapshot()).busy);
+
+    expect(kinds(commits)).toEqual(['place-wager']);
+    expect(await store.readEffects('activity-1')).toEqual([]);
+    expect(active(controller.snapshot())).toMatchObject({ save: 'saved', view: { phase: 'open-decision', outcome: null }, suspension: { reached: true } });
+  });
+
+  it('is dropped, not retried, after a direct suspend; resuming asks again before the turn', async () => {
+    const { controller, store, clock, commits, asked } = await started();
+    await controller.placeWager('red', '10');
+    store.failNext('commitTransition', 'before');
+    await controller.spin();
+    controller.suspend('navigation');
+    clock.advance(SAVE_RETRY_MS);
+    await waitFor(() => active(controller.snapshot()).save === 'saved' && !active(controller.snapshot()).busy);
+
+    expect(kinds(commits)).toEqual(['place-wager']);
+    expect(await store.readEffects('activity-1')).toEqual([]);
+
+    await controller.resume();
+    await controller.spin();
+    await waitFor(() => active(controller.snapshot()).view.phase === 'settled-outcome' && !active(controller.snapshot()).busy);
+    expect(kinds(commits)).toEqual(['place-wager', 'begin-turn', 'settle-turn']);
+    expect(asked.filter((question) => question.startsWith('turn'))).toEqual(['turn 1', 'turn 1']);
+    expect(await store.readEffects('activity-1')).toHaveLength(1);
   });
 });
