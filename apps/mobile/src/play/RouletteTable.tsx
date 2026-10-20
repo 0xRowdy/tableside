@@ -9,7 +9,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/Button';
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
-import type { PracticeSnapshot } from '@/practice/controller';
+import { SAVE_RETRY_MS, type PracticeSnapshot } from '@/practice/controller';
 import { usePractice } from '@/practice/PracticeProvider';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale, type ColorToken } from '@/theme/tokens';
 
@@ -94,15 +94,17 @@ export function RouletteTable({ snapshot }: { snapshot: ActiveSnapshot }) {
       <ScrollView testID="table-scroll" contentContainerStyle={{ paddingTop: insets.top, paddingBottom: space[6] }}>
         <TableTopBar title="Roulette" subtitle={limitsText(view)} canEnd={legal('request-stop')} onEnd={() => setConfirming(true)} />
         <PhaseStepper steps={phaseSteps(view)} />
-        <SessionStrip balance={formatUnits(view.balance)} onTable={formatUnits(totalOnTable(view))} status={STATUS[view.phase]} />
+        <SessionStrip balance={formatUnits(view.balance)} onTable={formatUnits(totalOnTable(view))} status={save === 'failed' ? 'Paused · not saved' : STATUS[view.phase]} />
 
         {save === 'failed' && (
           <View style={styles.banner}>
-            <Text accessibilityRole="alert" maxFontSizeMultiplier={textScale.body} style={styles.bannerTitle}>{NOT_SAVED}</Text>
+            <Text accessibilityRole="alert" maxFontSizeMultiplier={textScale.body} style={styles.bannerTitle}>Couldn&apos;t save · play is paused</Text>
             <Text maxFontSizeMultiplier={textScale.body} style={styles.bannerText}>
-              Your last move hasn&apos;t been saved, so nothing has been revealed. Try saving again.
+              {busy
+                ? 'Saving your last move…'
+                : `Your last move hasn't been saved, so nothing has been revealed. Nothing is lost. Retrying automatically in ${SAVE_RETRY_MS / 1000} s.`}
             </Text>
-            <Button label="Try again" variant="secondary" disabled={busy} onPress={() => void controller.retrySave()} />
+            <Button label="Retry now" variant="secondary" disabled={busy} onPress={() => void controller.retrySave()} />
           </View>
         )}
         {snapshot.accessNotAllowed && (
@@ -169,7 +171,7 @@ const POCKET_TOKEN = { red: 'pocketRed', black: 'pocketBlack', green: 'pocketGre
 
 const WHEEL_NAMES: Record<PermittedView['table']['wheel'], string> = { 'single-zero': 'Single zero' };
 
-const NOT_SAVED = 'Not saved yet. Play is paused.';
+const NOT_SAVED = "Couldn't save. Play is paused and will retry automatically.";
 
 const capitalize = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
 

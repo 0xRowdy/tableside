@@ -8,8 +8,9 @@ import { alwaysAllowed, type Clock, type PracticeAdapters } from '../adapters';
 import { MemoryActivityStore } from '../memory-store';
 
 /**
- * A clock that only moves when told. With `auto`, every sleep resolves at once
- * and moves time forward by its length.
+ * A clock that only moves when told. With `auto`, every sleep of at most
+ * `autoLimitMs` (the pacing of automatic steps) resolves at once and moves time
+ * forward by its length; longer waits, such as the save retry, wait for `advance`.
  */
 export class FakeClock implements Clock {
   private time: number;
@@ -18,6 +19,7 @@ export class FakeClock implements Clock {
   constructor(
     start = 1_790_000_000_000,
     private readonly auto = false,
+    private readonly autoLimitMs = 2_000,
   ) {
     this.time = start;
   }
@@ -27,7 +29,7 @@ export class FakeClock implements Clock {
   }
 
   sleep(ms: number): Promise<void> {
-    if (this.auto) {
+    if (this.auto && ms <= this.autoLimitMs) {
       this.time += ms;
       return Promise.resolve();
     }

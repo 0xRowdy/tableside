@@ -144,19 +144,21 @@ describe('roulette free play', () => {
     expect(steps.getByLabelText('Step 3 of 3, Settle, current')).toBeOnTheScreen();
   });
 
-  it('announces a failed save, reveals nothing, and reveals the spin once the retry saves it', async () => {
+  it('announces a failed save, shows play paused and retrying, and reveals the spin once a retry saves it', async () => {
     await startSession();
     await chooseChipAndTap('25', /^Red,/);
     mockAdapters.latest?.store.failNext('commitTransition', 'before');
 
     await fireEvent.press(screen.getByRole('button', { name: 'Spin' }));
 
-    expect(announcements).toContain('Not saved yet. Play is paused.');
-    expect(screen.getByRole('alert')).toHaveTextContent(/Not saved yet/);
+    expect(announcements).toContain("Couldn't save. Play is paused and will retry automatically.");
+    expect(screen.getByRole('alert')).toHaveTextContent("Couldn't save · play is paused");
+    expect(screen.getByText(/Retrying automatically in 5 s\./)).toBeOnTheScreen();
+    expect(screen.getByLabelText(/Status Paused · not saved/)).toBeOnTheScreen();
     expect(screen.queryByLabelText(/^Last spin/)).toBeNull();
     expect(screen.getByRole('button', { name: 'Spin' })).toBeDisabled();
 
-    await fireEvent.press(screen.getByRole('button', { name: 'Try again' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Retry now' }));
 
     expect(await screen.findByLabelText('Last spin: 27 red')).toBeOnTheScreen();
     expect(screen.queryByRole('alert')).toBeNull();

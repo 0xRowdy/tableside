@@ -3,12 +3,16 @@
 // store implements this same interface. Every operation is durable when its
 // promise resolves; a rejected promise is an uncertain acknowledgement (the
 // write may or may not have happened), which the caller resolves by reading.
+// Every implementation must pass the contract suite in testing/store-contract.ts.
 
 import type { ActivitySpecification, DomainFact, RandomStreamIdentity, Receipt, VersionedIdentity } from '@tableside/engine';
 
-/** An allowance effect committed with a transition (spec 5). Spec 1 never produces one. */
+/**
+ * An allowance effect (spec 5): a turn charge committed with the transition that
+ * begins the turn, or a time-usage checkpoint. Spec 1 never produces one.
+ */
 export interface AllowanceEffect {
-  /** Stable identity, so a replayed or recovered transition never applies twice. */
+  /** Stable identity: the store records an effect id once, so a replayed or recovered transition never charges twice. */
   readonly effectId: { readonly grant: string; readonly activity: string; readonly sequence: number };
   /** For example a turn charge or a time-usage checkpoint. */
   readonly kind: string;
@@ -49,6 +53,8 @@ export interface TransitionCommit {
 
 export type CommitOutcome =
   | { readonly status: 'committed' }
+  /** This command (by receipt command id) was committed before: a second delivery; nothing was written. */
+  | { readonly status: 'already-committed'; readonly transition: CommittedTransition }
   /** Another transition already committed at this sequence; nothing was written. */
   | { readonly status: 'sequence-conflict'; readonly sequence: number };
 
@@ -92,8 +98,15 @@ export interface ActivityStore {
   load(activityId: string): Promise<StoredActivity | null>;
   /** The unfinished activity (not yet completed), if any. */
   findUnfinished(): Promise<StoredActivity | null>;
-  /** Durability step 3, conditioned on the prior sequence. */
+  /**
+   * Durability step 3, conditioned on the prior sequence. A commit whose command
+   * id is already committed is a duplicate delivery and returns that transition.
+   */
   commitTransition(commit: TransitionCommit): Promise<CommitOutcome>;
+  /** Time-usage checkpoints between transitions, through the same single writer. Idempotent by effect id. */
+  recordEffects(activityId: string, effects: readonly AllowanceEffect[]): Promise<void>;
+  /** Every allowance effect recorded for the activity, in the order first recorded. */
+  readEffects(activityId: string): Promise<readonly AllowanceEffect[]>;
   /** The committed transition for a command id, for resolving an uncertain acknowledgement. */
   readReceipt(activityId: string, commandId: string): Promise<CommittedTransition | null>;
   /**

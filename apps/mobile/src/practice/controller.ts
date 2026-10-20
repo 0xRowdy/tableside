@@ -31,6 +31,8 @@ import type { CommitOutcome, CommittedTransition, CompletedPracticeSession, NewA
 export const REVEAL_MS = 1500;
 /** The pause between the ending steps, so each is seen and announced. */
 export const ENDING_STEP_MS = 1000;
+/** How long play stays paused after a failed save before it retries by itself. */
+export const SAVE_RETRY_MS = 5000;
 
 export type StartProblem = 'invalid-buy-in' | 'save-failed' | 'access-not-allowed';
 
@@ -79,6 +81,7 @@ export class PracticeController {
   private busy = false;
   private pending: Pending | null = null;
   private accessNotAllowed = false;
+  private retryScheduled = false;
   /** A start whose creation wasn't acknowledged, reused by the retry so it recovers the same activity. */
   private unacknowledgedStart: { request: StartRequest; activity: NewActivity } | null = null;
 
@@ -217,7 +220,19 @@ export class PracticeController {
     } finally {
       this.busy = false;
       this.publish();
+      if (this.pending) this.scheduleRetry();
     }
+  }
+
+  /** While a save is failing, retries it every SAVE_RETRY_MS until it succeeds. */
+  private scheduleRetry(): void {
+    if (this.retryScheduled) return;
+    this.retryScheduled = true;
+    void this.adapters.clock.sleep(SAVE_RETRY_MS).then(() => {
+      this.retryScheduled = false;
+      // If input is in flight instead, it schedules the next retry when it ends.
+      return this.retrySave();
+    });
   }
 
   /** The automatic, no-tap steps: settle a revealed spin, run final settlement, complete. */
@@ -266,6 +281,8 @@ export class PracticeController {
       return this.recover(envelope);
     }
     if (outcome.status === 'sequence-conflict') return this.adoptStored(envelope);
+    // Delivered twice: show the transition the store holds, not the candidate.
+    if (outcome.status === 'already-committed') return this.acceptStored(envelope, outcome.transition);
     this.accept(result.state, result.facts);
     return 'committed';
   }
@@ -287,8 +304,7 @@ export class PracticeController {
    */
   private async recover(envelope: CommandEnvelope): Promise<CommitResult> {
     const { store } = this.adapters;
-    const state = this.requireState();
-    const activityId = state.activity.id;
+    const activityId = this.requireState().activity.id;
     let found: CommittedTransition | null;
     try {
       found = await store.readReceipt(activityId, envelope.commandId);
@@ -302,6 +318,13 @@ export class PracticeController {
       this.publish();
       return 'not-saved';
     }
+    return this.acceptStored(envelope, found);
+  }
+
+  /** Accepts a committed transition read back from the store for this command. */
+  private async acceptStored(envelope: CommandEnvelope, found: CommittedTransition): Promise<CommitResult> {
+    const state = this.requireState();
+    const activityId = state.activity.id;
     const candidate = advanceActivity(state, envelope);
     // The id names "the command at this sequence"; a different command there means the activity moved on.
     if (candidate.status !== 'committed' || found.receipt.command !== candidate.receipt.command) return this.adoptStored(envelope);
