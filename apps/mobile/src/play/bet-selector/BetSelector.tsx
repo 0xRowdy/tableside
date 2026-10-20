@@ -9,11 +9,13 @@ import { useEffect, useRef, useState } from 'react';
 import { AccessibilityInfo, Pressable, StyleSheet, Text, TextInput, View, type HostInstance } from 'react-native';
 
 import { Button } from '@/components/Button';
+import { SwitchRow } from '@/components/SwitchRow';
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/theme/tokens';
 
 import { formatUnits } from '../units';
 import {
+  draftToggle,
   findChoice,
   findKind,
   isDraftPending,
@@ -41,8 +43,8 @@ export interface BetSelectorProps {
   readonly canPlace: boolean;
   readonly draft: BetDraft;
   readonly onDraftChange: (draft: BetDraft) => void;
-  /** Sets the total stake on a target. */
-  readonly onSet: (target: string, amount: string) => void;
+  /** Sets the total stake on a target, with the choice's toggle value when it has one. */
+  readonly onSet: (target: string, amount: string, toggled?: boolean) => void;
   readonly onRemove: (target: string) => void;
 }
 
@@ -263,11 +265,12 @@ function StakeEditor(props: BetSelectorProps & { choice: WagerChoice }) {
   const problem = submissionProblem(props);
   const amount = parseStake(draft.text);
   const edit = (text: string) => onDraftChange({ ...draft, text, submittedAt: null });
+  const toggled = draftToggle(draft, choice, wagers);
   const submit = () => {
     // The Return key reaches here too, so it waits for the table like the Set button does.
     if (!canPlace) return;
     onDraftChange({ ...draft, submittedAt: sequence });
-    if (amount !== null && amount !== '0') onSet(choice.target, amount);
+    if (amount !== null && amount !== '0') onSet(choice.target, amount, toggled);
   };
   const step = formatUnits(choice.step);
   const setLabel = amount !== null && decodeMoney(amount).d === 1n ? `Set ${choice.name} to ${formatUnits(amount)}` : `Set ${choice.name}`;
@@ -303,6 +306,17 @@ function StakeEditor(props: BetSelectorProps & { choice: WagerChoice }) {
         <SmallButton label={`− ${step}`} spoken={`Decrease by ${step}`} onPress={() => edit(stepStake(draft.text, choice.step, -1))} />
         <SmallButton label={`+ ${step}`} spoken={`Increase by ${step}`} onPress={() => edit(stepStake(draft.text, choice.step, 1))} />
       </View>
+      {choice.toggle && toggled !== undefined && (
+        <View style={styles.toggle}>
+          <SwitchRow
+            title={choice.toggle.title}
+            detail={choice.toggle.detail}
+            value={toggled}
+            disabled={!canPlace}
+            onChange={(value) => onDraftChange({ ...draft, toggled: value, submittedAt: null })}
+          />
+        </View>
+      )}
       <Button label={setLabel} onPress={submit} disabled={!canPlace} stretch />
       {isDraftPending(draft, wagers) && (
         <Text maxFontSizeMultiplier={textScale.body} style={styles.rowDetail}>{DRAFT_NOTE}</Text>
@@ -347,10 +361,15 @@ function YourWagers({ catalog, wagers, canPlace, onRemove, openEditor }: BetSele
         const name = found?.choice.name ?? wager.name ?? wager.target;
         return (
           <View key={wager.target} style={styles.wager}>
-            <View accessible accessibilityLabel={`${name}, ${formatUnits(wager.amount)}, ${wager.committed ? 'committed' : 'removable'}`} style={styles.wagerText}>
+            <View
+              accessible
+              accessibilityLabel={[name, formatUnits(wager.amount), wager.committed ? 'committed' : 'removable', wager.status].filter(Boolean).join(', ')}
+              style={styles.wagerText}
+            >
               <Text maxFontSizeMultiplier={textScale.body} style={styles.rowTitle}>{name}</Text>
               <Text maxFontSizeMultiplier={textScale.body} style={styles.rowTitle}>{formatUnits(wager.amount)}</Text>
               <Text maxFontSizeMultiplier={textScale.body} style={styles.tag}>{wager.committed ? 'Committed' : 'Removable'}</Text>
+              {wager.status && <Text maxFontSizeMultiplier={textScale.body} style={styles.tag}>{wager.status}</Text>}
             </View>
             {explaining === wager.target && wager.committed && (
               <Text maxFontSizeMultiplier={textScale.body} style={styles.rowDetail}>{wager.committedReason ?? COMMITTED}</Text>
@@ -414,6 +433,7 @@ function illegalExplanation(reason: IllegalActionReason, choice: WagerChoice, { 
   switch (reason) {
     case 'not-whole-units':
     case 'odds-increment':
+    case 'stake-increment':
       return `Use ${increments(choice)}, from ${min} to ${max}. Your draft is kept and nothing on the table changed.`;
     case 'above-odds-cap':
       return `Over the odds this table allows. ${choice.name} can be at most ${max}. Your draft is kept.`;
@@ -428,6 +448,8 @@ function illegalExplanation(reason: IllegalActionReason, choice: WagerChoice, { 
         ? `More than you have. With a balance of ${formatUnits(balance)} you can set up to ${formatUnits(cap)}${choice.step === '1' ? '' : ` (${increments(choice)})`}${rebuy}. Your draft is kept.`
         : `More than you have. With a balance of ${formatUnits(balance)} you can't cover the minimum of ${min}${rebuy}. Your draft is kept.`;
     }
+    case 'commission-unfunded':
+      return `Your balance after this stake can't cover the commission ${choice.name} charges when it wins. Set a smaller stake. Your draft is kept.`;
     default:
       return `${choice.name} can't be set to that. Your draft is kept.`;
   }
@@ -519,6 +541,7 @@ const styles = StyleSheet.create({
   selector: { gap: space[4], paddingHorizontal: space[4] },
   section: { gap: space[3] },
   group: { gap: space[2] },
+  toggle: { borderRadius: radius.lg, borderWidth: 1, borderColor: palette.border, backgroundColor: palette.card, overflow: 'hidden' },
   sectionLabel: { fontFamily: fonts.uiBold, fontSize: 12, letterSpacing: 0.5, textTransform: 'uppercase', color: palette.mutedForeground },
   row: {
     minHeight: MIN_TOUCH_TARGET + 8,

@@ -74,13 +74,31 @@ describe('craps free play', () => {
     expect(screen.getAllByRole('radio', { name: /odds$/ }).map((radio) => radio.props.accessibilityLabel)).toEqual([
       '1x odds', '2x odds', '3-4-5x odds', '5x odds', '10x odds',
     ]);
-    expect(screen.getByText("Pass, don't pass, come and don't come 10–1,000 units")).toBeOnTheScreen();
+    expect(screen.getByText('Pass, come, place, buy, lay and field 10–1,000 units')).toBeOnTheScreen();
+    expect(screen.getByText('Hardways and propositions 1–100 units')).toBeOnTheScreen();
     expect(screen.getByText(/Pass and come 1\.41% · Don't pass and don't come 1\.36% · Odds 0%/)).toBeOnTheScreen();
     expect(screen.getByText(/With full 3-4-5x odds: pass 0\.37%, don't pass 0\.27%/)).toBeOnTheScreen();
 
     await fireEvent.press(screen.getByRole('radio', { name: '10x odds' }));
     expect(screen.getByRole('radio', { name: '10x odds' })).toBeChecked();
     expect(screen.getByText(/With full 10x odds: pass 0\.18%, don't pass 0\.12%/)).toBeOnTheScreen();
+  });
+
+  it('offers the field payout as a rule, with the house edge of every wager under the selected rules', async () => {
+    await openCrapsSetup();
+
+    expect(screen.getAllByRole('radio', { name: /double/ }).map((radio) => radio.props.accessibilityLabel)).toEqual(['2 double, 12 triple', '2 and 12 double']);
+    expect(screen.getByRole('radio', { name: '2 double, 12 triple' })).toBeChecked();
+    expect(screen.getByText('Place 6 and 8 1.52% · 5 and 9 4.00% · 4 and 10 6.67%')).toBeOnTheScreen();
+    expect(screen.getByText('Buy and lay 6 and 8 2.27% · 5 and 9 2.00% · 4 and 10 1.67%')).toBeOnTheScreen();
+    expect(screen.getByText('Field 2.78% · Hard 6 and 8 9.09% · Hard 4 and 10 11.11%')).toBeOnTheScreen();
+    expect(screen.getByText(/Two and twelve 13\.89% · Three and eleven 11\.11% · Any craps 11\.11% · Any seven 16\.67% · Horn 12\.50%/)).toBeOnTheScreen();
+
+    await fireEvent.press(screen.getByRole('radio', { name: '2 and 12 double' }));
+    expect(screen.getByRole('radio', { name: '2 and 12 double' })).toBeChecked();
+    expect(screen.getByText(/^Field 5\.56%/)).toBeOnTheScreen();
+    await fireEvent.press(screen.getByRole('button', { name: 'Start free play' }));
+    expect(await screen.findByText(/field 12 pays 2:1/)).toBeOnTheScreen();
   });
 
   it('starts on a come-out roll with the puck off, and offers only the pass line bets', async () => {
@@ -157,7 +175,7 @@ describe('craps free play', () => {
     expect(announcements).toContain('Pass line odds 125 on the table, ON. Balance 850.');
     // The contract is committed in the bet list too, by name, and says why.
     const yours = within(screen.getByTestId('your-wagers'));
-    expect(yours.getByLabelText('Pass line, 25, committed')).toBeOnTheScreen();
+    expect(yours.getByLabelText('Pass line, 25, committed, Working')).toBeOnTheScreen();
     await fireEvent.press(yours.getByRole('button', { name: "Why can't I change Pass line?" }));
     expect(yours.getByText(/^ON\. Pass line is a contract now: it stays on the table until it wins on 8 or loses on 7/)).toBeOnTheScreen();
   });
@@ -235,15 +253,25 @@ describe('craps free play', () => {
     // 11, 6, 4 and 12 leave the pass line; 8 pays it.
     announced('Pass line 25 wins 25.');
     expect(announcements).toContain('Session result. Win, net result plus 25. Final cash-out 1,025. Max drawdown 0.');
-    expect(screen.getByText('Craps · free play · standard craps')).toBeOnTheScreen();
+    expect(screen.getByText('Craps · free play · standard craps · 3-4-5x odds')).toBeOnTheScreen();
     expect(screen.getByLabelText('Net result plus 25, Win')).toBeOnTheScreen();
   });
 
   it('gives every table control a touch target of at least 48 points', async () => {
     await pointOfEight();
+    // The stake editor's working switch; the field spot and the way to numbers and center bets are always there.
+    await fireEvent.press(screen.getByRole('tab', { name: 'Bet list' }));
+    await fireEvent.press(screen.getByRole('button', { name: /^Place,/ }));
+    await fireEvent.press(screen.getByRole('radio', { name: 'Place 8' }));
+    await fireEvent.changeText(screen.getByLabelText(/^Total stake for /), '12');
+    await fireEvent.press(screen.getByRole('button', { name: /^Set / }));
+    expect(screen.getByRole('switch', { name: 'Working on the come-out' })).toBeOnTheScreen();
+    await fireEvent.press(screen.getByRole('tab', { name: 'Table' }));
+    expect(screen.getByRole('button', { name: 'Numbers and center bets' })).toBeOnTheScreen();
+    await fireEvent.press(screen.getByRole('tab', { name: 'Bet list' }));
 
     const table = within(screen.getByTestId('table-scroll'));
-    const controls = [...table.getAllByRole('button'), ...table.getAllByRole('radio')];
+    const controls = [...table.getAllByRole('button'), ...table.getAllByRole('radio'), ...table.getAllByRole('switch')];
     expect(controls.length).toBeGreaterThan(10);
     for (const control of controls) {
       const style = StyleSheet.flatten(typeof control.props.style === 'function' ? control.props.style({ pressed: false }) : control.props.style);
@@ -265,5 +293,130 @@ describe('craps free play', () => {
     } finally {
       await setWindow(width, height, fontScale);
     }
+  });
+
+  it('covers every craps wager in the bet list, each with its payout and house edge', async () => {
+    await startSession();
+    await fireEvent.press(screen.getByRole('tab', { name: 'Bet list' }));
+
+    expect(screen.getByRole('header', { name: 'Numbers and field · 10 to 1,000' })).toBeOnTheScreen();
+    expect(screen.getByRole('header', { name: 'Hardways and propositions · 1 to 100 per part' })).toBeOnTheScreen();
+    for (const kind of [/^Pass line and don’t pass,/, /^Place, Pays 9:5, 7:5, 7:6/, /^Buy, True odds · 5% commission of the stake/, /^Lay, Wins on 7/, /^Field, One roll · 2 pays 2:1, 12 pays 3:1/, /^Hardways, Hard 4·10 pays 7:1, 6·8 pays 9:1/, /^Propositions, One roll/]) {
+      expect(screen.getByRole('button', { name: kind })).toBeOnTheScreen();
+    }
+    expect(screen.getByRole('button', { name: /^Place,/ })).toHaveProp('accessibilityLabel', expect.stringMatching(/edge 6·8 1\.52% · 5·9 4\.00% · 4·10 6\.67%$/));
+
+    await fireEvent.press(screen.getByRole('button', { name: /^Propositions,/ }));
+    expect(screen.getAllByRole('radio').map((radio) => radio.props.accessibilityLabel)).toEqual(
+      expect.arrayContaining(['Any seven', 'Any craps', 'Two (aces)', 'Three (ace-deuce)', 'Eleven (yo)', 'Twelve (boxcars)', 'Horn']),
+    );
+    await fireEvent.press(screen.getByRole('button', { name: 'All wagers' }));
+    await fireEvent.press(screen.getByRole('button', { name: /^Hardways,/ }));
+    expect(screen.getAllByRole('radio').map((radio) => radio.props.accessibilityLabel)).toEqual(expect.arrayContaining(['Hard 4', 'Hard 6', 'Hard 8', 'Hard 10']));
+  });
+
+  it('sets a place bet off on the come-out, and turns it on from the stake editor', async () => {
+    await startSession();
+    await fireEvent.press(screen.getByRole('tab', { name: 'Bet list' }));
+    await fireEvent.press(screen.getByRole('button', { name: /^Place,/ }));
+    await fireEvent.press(screen.getByRole('radio', { name: 'Place 6' }));
+    const working = screen.getByRole('switch', { name: 'Working on the come-out' });
+    expect(working).not.toBeChecked();
+    expect(working).toHaveProp('accessibilityHint', 'Off by default. Place bets act only while a point is on.');
+    await fireEvent.changeText(screen.getByLabelText(/^Total stake for /), '25');
+    await fireEvent.press(screen.getByRole('button', { name: /^Set / }));
+    expect(announcements).toContain('Place 6 goes in multiples of 6. Nothing was placed.');
+
+    await fireEvent.changeText(screen.getByLabelText(/^Total stake for /), '24');
+    await fireEvent.press(screen.getByRole('button', { name: 'Set Place 6 to 24' }));
+
+    expect(announcements).toContain('Place 6 24 on the table, OFF. Balance 976.');
+    expect(screen.getByLabelText('Place 6 24, OFF, removable')).toBeOnTheScreen();
+    // The working option is part of the draft: nothing changes until it is set.
+    await fireEvent.press(screen.getByRole('switch', { name: 'Working on the come-out' }));
+    expect(screen.getByRole('switch', { name: 'Working on the come-out' })).toBeChecked();
+    expect(screen.getByLabelText('Place 6 24, OFF, removable')).toBeOnTheScreen();
+    await fireEvent.press(screen.getByRole('button', { name: 'Set Place 6 to 24' }));
+
+    await waitFor(() => expect(announcements).toContain('Place 6 24 now works on the come-out roll too.'));
+    expect(screen.getByLabelText('Place 6 24, ON, removable')).toBeOnTheScreen();
+    expect(screen.getByRole('switch', { name: 'Working on the come-out' })).toBeChecked();
+    // Your wagers show working status but offer no switch of their own.
+    expect(within(screen.getByTestId('wager-place-6')).queryByRole('button', { name: /^Turn / })).toBeNull();
+  });
+
+  it('places a new lay already told to be off, in one Set', async () => {
+    await startSession();
+    await fireEvent.press(screen.getByRole('tab', { name: 'Bet list' }));
+    await fireEvent.press(screen.getByRole('button', { name: /^Lay,/ }));
+    await fireEvent.press(screen.getByRole('radio', { name: 'Lay 4' }));
+    expect(screen.getByRole('switch', { name: 'Working' })).toBeChecked();
+    await fireEvent.changeText(screen.getByLabelText(/^Total stake for /), '20');
+    await fireEvent.press(screen.getByRole('switch', { name: 'Working' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Set Lay 4 to 20' }));
+
+    await waitFor(() => expect(announcements).toContain('Lay 4 20 is now OFF until you turn it on.'));
+    expect(announcements).toContain('Lay 4 20 on the table, ON. Balance 980.');
+    expect(screen.getByLabelText('Lay 4 20, OFF, removable')).toBeOnTheScreen();
+    expect(within(screen.getByTestId('your-wagers')).getByLabelText('Lay 4, 20, removable, Off')).toBeOnTheScreen();
+  });
+
+  it('announces place bets going off for the come-out roll when the point is made', async () => {
+    await pointOfEight();
+    await fireEvent.press(screen.getByRole('tab', { name: 'Bet list' }));
+    await fireEvent.press(screen.getByRole('button', { name: /^Place,/ }));
+    await fireEvent.press(screen.getByRole('radio', { name: 'Place 6' }));
+    await fireEvent.changeText(screen.getByLabelText(/^Total stake for /), '12');
+    await fireEvent.press(screen.getByRole('button', { name: /^Set / }));
+    expect(screen.getByLabelText('Place 6 12, ON, removable')).toBeOnTheScreen();
+
+    await roll(); // 11
+    await roll(); // 6: place 6 wins 14 and stays up
+    announced('Place 6 12 wins 14. It stays up.');
+    await roll(); // 4
+    await roll(); // 12
+    await roll(); // 8: the point is made
+
+    announced('Place and buy bets are OFF for the come-out roll.');
+    expect(screen.getByLabelText('Place 6 12, OFF, removable')).toBeOnTheScreen();
+    await fireEvent.press(screen.getByRole('tab', { name: 'Table' }));
+    expect(screen.getByLabelText(/^Box 6, Place 6 12 OFF$/)).toBeOnTheScreen();
+  });
+
+  it('settles the field from the felt and the horn as four parts, announcing each', async () => {
+    await startSession();
+    await fireEvent.press(spot(/^Pass line,/));
+    await fireEvent.press(spot(/^Field, pays 1 to 1, 2 pays double, 12 pays triple$/));
+    expect(announcements).toContain('Field 25 on the table, ON. Balance 950.');
+    await roll(); // 8: the field loses
+    announced('Field 25 loses.');
+
+    await fireEvent.press(screen.getByRole('tab', { name: 'Bet list' }));
+    await fireEvent.press(screen.getByRole('button', { name: /^Propositions,/ }));
+    await fireEvent.press(screen.getByRole('radio', { name: 'Horn' }));
+    expect(screen.getByText(/^Multiples of 4 · 4 to 400 · pays 30:1 on 2 or 12, 15:1 on 3 or 11, per part\./)).toBeOnTheScreen();
+    await fireEvent.changeText(screen.getByLabelText(/^Total stake for /), '4');
+    await fireEvent.press(screen.getByRole('button', { name: /^Set / }));
+    announcements = [];
+
+    await roll(); // 11: the horn's 11 part pays 15:1, the other parts lose
+
+    announced('Horn 2 part 1 loses. Horn 3 part 1 loses. Horn 11 part 1 wins 15. Horn 12 part 1 loses.');
+  });
+
+  it('announces a winning buy with the commission charged on the win', async () => {
+    await pointOfEight();
+    await fireEvent.press(screen.getByRole('tab', { name: 'Bet list' }));
+    await fireEvent.press(screen.getByRole('button', { name: /^Buy,/ }));
+    await fireEvent.press(screen.getByRole('radio', { name: 'Buy 6' }));
+    await fireEvent.changeText(screen.getByLabelText(/^Total stake for /), '10');
+    await fireEvent.press(screen.getByRole('button', { name: /^Set / }));
+    expect(announcements).toContain('Buy 6 10 on the table, ON. Balance 965.');
+
+    await roll(); // 11
+    await roll(); // 6: 12 at 6:5, less 5% of 10 rounded up to 1
+
+    announced('Buy 6 10 wins 11, after commission 1. It stays up.');
+    expect(screen.getByLabelText('Session balance 976')).toBeOnTheScreen();
   });
 });

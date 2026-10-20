@@ -38,7 +38,7 @@ export const CRAPS_SPEC: CrapsActivitySpecification = {
   owner: 'local',
   device: 'device-1',
   game: 'craps',
-  rules: { id: 'standard-craps', version: 1, odds: '3-4-5x', limits: { line: { min: '10', max: '1000' } } },
+  rules: { id: 'standard-craps', version: 2, odds: '3-4-5x', field: 'triple-12', limits: { flat: { min: '10', max: '1000' }, props: { min: '1', max: '100' } } },
   strategy: null,
   reference: null,
   fundingSource: 'practice-funding',
@@ -79,15 +79,15 @@ export const crapsCases: TestCase[] = [
     name: 'craps: standard craps is its own variant identity, pinned with the activity, with a versioned capability description',
     run: (t) => {
       const state = craps();
-      t.equal([state.identities.game, state.identities.rules], ['craps', { id: 'standard-craps', version: 1 }]);
-      t.equal(state.rules, { odds: '3-4-5x', limits: { line: { min: '10', max: '1000' } } });
-      t.equal([STANDARD_CRAPS.id, STANDARD_CRAPS.version, STANDARD_CRAPS.oddsCaps], ['standard-craps', 1, ['1x', '2x', '3-4-5x', '5x', '10x']]);
-      t.equal(view(state).table.variant, { id: 'standard-craps', version: 1 });
+      t.equal([state.identities.game, state.identities.rules], ['craps', { id: 'standard-craps', version: 2 }]);
+      t.equal(state.rules, { odds: '3-4-5x', field: 'triple-12', limits: { flat: { min: '10', max: '1000' }, props: { min: '1', max: '100' } } });
+      t.equal([STANDARD_CRAPS.id, STANDARD_CRAPS.version, STANDARD_CRAPS.oddsCaps, STANDARD_CRAPS.fieldPayouts], ['standard-craps', 2, ['1x', '2x', '3-4-5x', '5x', '10x'], ['triple-12', 'double-12']]);
+      t.equal(view(state).table.variant, { id: 'standard-craps', version: 2 });
       t.equal([state.phase, state.balance, state.wagers, view(state).table.point], ['open-decision', '1000', [], null]);
       t.equal(throws(() => createActivity({ ...CRAPS_SPEC, rules: { ...CRAPS_SPEC.rules, id: 'crapless-craps' } }, PI)), 'ActivitySpecificationError');
       t.equal(throws(() => createActivity({ ...CRAPS_SPEC, rules: { ...CRAPS_SPEC.rules, odds: '4x' as OddsCap } }, PI)), 'ActivitySpecificationError');
       t.equal(
-        throws(() => createActivity({ ...CRAPS_SPEC, rules: { ...CRAPS_SPEC.rules, limits: { line: { min: '20', max: '10' } } } }, PI)),
+        throws(() => createActivity({ ...CRAPS_SPEC, rules: { ...CRAPS_SPEC.rules, limits: { ...CRAPS_SPEC.rules.limits, flat: { min: '20', max: '10' } } } }, PI)),
         'ActivitySpecificationError',
       );
     },
@@ -95,7 +95,7 @@ export const crapsCases: TestCase[] = [
   {
     name: 'craps: on the come-out the table offers pass and don\'t pass at the line limits, paying 1:1',
     run: (t) => {
-      t.equal(view(craps()).table.placements, [
+      t.equal(view(craps()).table.placements.filter((p) => p.kind === 'line'), [
         { target: 'pass', kind: 'line', min: '10', max: '1000', increment: '1', payout: '1:1' },
         { target: 'dont-pass', kind: 'line', min: '10', max: '1000', increment: '1', payout: '1:1' },
       ]);
@@ -178,10 +178,10 @@ export const crapsCases: TestCase[] = [
       t.equal(
         view(state).table.wagers,
         [
-          { target: 'come-4', working: true, removable: false },
-          { target: 'come-4-odds', working: false, removable: true },
-          { target: 'come-6', working: true, removable: false },
-          { target: 'come-6-odds', working: false, removable: true },
+          { target: 'come-4', working: true, instruction: null, switchable: false, removable: false },
+          { target: 'come-4-odds', working: false, instruction: null, switchable: true, removable: true },
+          { target: 'come-6', working: true, instruction: null, switchable: false, removable: false },
+          { target: 'come-6-odds', working: false, instruction: null, switchable: true, removable: true },
         ],
       );
       go([ROLL, SETTLE]); // 6 on the come-out: come 6 wins, its odds are off and come back
@@ -193,7 +193,7 @@ export const crapsCases: TestCase[] = [
         [],
         [],
         [['pass', 'win', '10', '20'], ['pass-odds', 'win', '60', '110']],
-        [['come-6', 'win', '10', '20'], ['come-6-odds', 'push', '0', '50']],
+        [['come-6', 'win', '10', '20'], ['come-6-odds', 'returned', '0', '50']],
         [['come-4', 'loss', '-10', '0'], ['come-4-odds', 'loss', '-30', '0']],
       ]);
       t.equal([state.balance, state.wagers, point(state)], ['1050', [], null]);
@@ -303,7 +303,7 @@ export const crapsCases: TestCase[] = [
     run: (t) => {
       const comeOut = craps(FIRST[6]);
       t.equal(
-        [place('come', '10'), place('dont-come', '10'), place('pass-odds', '10'), place('come-6', '10'), place('field', '10'), place('pass', '5'), place('pass', '1001')].map((command) => illegal(comeOut, command)),
+        [place('come', '10'), place('dont-come', '10'), place('pass-odds', '10'), place('come-6', '10'), place('big-6', '10'), place('pass', '5'), place('pass', '1001')].map((command) => illegal(comeOut, command)),
         ['not-available-now', 'not-available-now', 'not-available-now', 'not-available-now', 'unknown-target', 'below-minimum', 'above-maximum'],
       );
       const pointOn = run(comeOut, [place('dont-pass', '10'), ROLL, SETTLE]).state;
@@ -327,10 +327,10 @@ export const crapsCases: TestCase[] = [
         ['committed-wager', 'committed-wager', 'committed-wager', 'committed-wager', 'committed-wager'],
       );
       t.equal(view(state).table.wagers, [
-        { target: 'pass', working: true, removable: false },
-        { target: 'dont-pass', working: true, removable: true },
-        { target: 'dont-pass-odds', working: true, removable: true },
-        { target: 'come-6', working: true, removable: false },
+        { target: 'pass', working: true, instruction: null, switchable: false, removable: false },
+        { target: 'dont-pass', working: true, instruction: null, switchable: false, removable: true },
+        { target: 'dont-pass-odds', working: true, instruction: null, switchable: false, removable: true },
+        { target: 'come-6', working: true, instruction: null, switchable: false, removable: false },
       ]);
       const { state: down, facts } = step(state, place('dont-pass', '0'));
       t.equal(facts, [
@@ -391,7 +391,7 @@ export const crapsCases: TestCase[] = [
     name: 'craps: money is conserved, every settlement has a committed wager and each turn is one roll (property)',
     run: (t) => {
       const driver = RandomStream.create({ ...ZERO, key: [0x63726170, 0x73000000] });
-      const targets = ['pass', 'dont-pass', 'come', 'dont-come', 'pass-odds', 'dont-pass-odds', ...[4, 5, 6, 8, 9, 10].flatMap((n) => [`come-${n}`, `come-${n}-odds`, `dont-come-${n}-odds`]), 'field'];
+      const targets = ['pass', 'dont-pass', 'come', 'dont-come', 'pass-odds', 'dont-pass-odds', ...[4, 5, 6, 8, 9, 10].flatMap((n) => [`come-${n}`, `come-${n}-odds`, `dont-come-${n}-odds`]), 'field', 'place-6', 'place-4', 'buy-4', 'buy-9', 'lay-10', 'lay-6', 'hard-8', 'hard-4', 'any-seven', 'any-craps', 'prop-12', 'horn'];
       let state = createActivity({ ...CRAPS_SPEC, funding: '20000' }, PI);
       let net = 0n;
       let rolls = 0;
@@ -406,15 +406,19 @@ export const crapsCases: TestCase[] = [
               : state.phase === 'revealing-outcome'
                 ? SETTLE
                 : roll < 6
-                  ? place(targets[uniformInt(driver, targets.length)] as string, String(uniformInt(driver, 13) * 6))
-                  : ROLL;
+                  ? place(targets[uniformInt(driver, targets.length)] as string, String(uniformInt(driver, 13) * 12))
+                  : roll === 6
+                    ? { kind: 'set-working', target: targets[uniformInt(driver, targets.length)] as string, working: uniformInt(driver, 2) === 0 }
+                    : ROLL;
         const next = step(state, command);
         for (const fact of next.facts) {
           if (fact.kind === 'turn-began') committed = new Map(fact.wagers.map((wager) => [wager.target, wager.amount]));
           if (fact.kind === 'dice-rolled') rolls++;
-          if (fact.kind === 'wager-moved') committed.set(fact.to, fact.amount);
+          // A come bet that travels this roll can't also settle on it (its number was just rolled),
+          // so only the wagers committed when the turn began can settle.
           if (fact.kind === 'wager-settled') {
-            t.equal(committed.get(fact.target), fact.stake);
+            // A horn part settles a quarter of the committed horn.
+            t.equal(committed.get(fact.target), fact.component === undefined ? fact.stake : String(BigInt(fact.stake) * 4n));
             net += BigInt(fact.net);
           }
         }
@@ -463,7 +467,7 @@ export const crapsCases: TestCase[] = [
         edit((v) => (v.outcome = { turn: 1, dice: [7, 1] })),
         edit((v) => ((v.rules as Record<string, unknown>).odds = '4x')),
         edit((v) => (v.wagers = [{ target: 'pass-odds', amount: '50' }])),
-        edit((v) => (v.wagers = [{ target: 'field', amount: '10' }])),
+        edit((v) => (v.wagers = [{ target: 'big-6', amount: '10' }])),
         edit((v) => ((v.wagers as unknown[]).reverse())),
         edit((v) => ((v.point = null), (v.wagers = [{ target: 'come', amount: '10' }]))),
       ];
@@ -474,7 +478,7 @@ export const crapsCases: TestCase[] = [
         }),
         damaged.map(() => 'damaged'),
       );
-      t.equal(decodeCheckpoint(edit((v) => (((v.identities as Record<string, unknown>).rules = { id: 'standard-craps', version: 2 })))).ok, false);
+      t.equal(decodeCheckpoint(edit((v) => (((v.identities as Record<string, unknown>).rules = { id: 'standard-craps', version: 3 })))).ok, false);
     },
   },
   {

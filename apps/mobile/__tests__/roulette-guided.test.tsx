@@ -182,7 +182,9 @@ describe('guided roulette practice', () => {
     await fireEvent.press(screen.getByRole('button', { name: 'End session' }));
     await fireEvent.press(screen.getAllByRole('button', { name: 'End session' }).at(-1) as never);
     expect(await screen.findByRole('header', { name: 'Session result' })).toBeOnTheScreen();
-    expect(screen.getByLabelText('Strategy adherence: Followed 0 of 1 spin. Departures 1: 1 retried, 0 overridden.')).toBeOnTheScreen();
+    expect(screen.getByLabelText('Betting decisions: 0 of 1 followed, 0%')).toBeOnTheScreen();
+    expect(screen.getByRole('header', { name: 'Departures, 1' })).toBeOnTheScreen();
+    expect(screen.getByLabelText('Spin 1. Strategy: 10 on Red. You: 25 on Red. Retried.')).toBeOnTheScreen();
     expect(screen.getByLabelText('Net result plus 10, Win')).toBeOnTheScreen();
   });
 });

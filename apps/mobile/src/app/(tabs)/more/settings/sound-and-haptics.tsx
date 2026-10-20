@@ -1,7 +1,8 @@
 import { router } from 'expo-router';
 
 import { useFeedbackSettings } from '@/feedback/FeedbackProvider';
-import { Group, Note, SettingsScreen, SwitchRow, VolumeSlider } from '@/settings/SettingsParts';
+import { SwitchRow } from '@/components/SwitchRow';
+import { Group, Note, SettingsScreen, VolumeSlider } from '@/settings/SettingsParts';
 
 /** S1-12: one Sound effects slider (0 is off) and one Haptics switch, stored on this device only. */
 export default function SoundAndHaptics() {

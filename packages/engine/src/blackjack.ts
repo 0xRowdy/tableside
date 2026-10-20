@@ -1,26 +1,73 @@
 // The blackjack game module: six decks, 3:2 naturals, U.S. hole card with
-// peek, S17 or H17 dealer, double on any first two cards (no double-for-less),
-// cut card after floor(312 x penetration) cards with the round that reaches it
-// finished and no burn card. One learner hand per round; splits, insurance,
-// surrender and extra players arrive with #70.
+// peek, S17 or H17 dealer, double on any first two cards including after a
+// split (no double-for-less), splits of equal values (mixed tens included) up
+// to four hands with non-aces resplit and split aces taking one card each,
+// insurance before the peek, late surrender in LS presets, and zero to four
+// simulated players. Cut card after floor(312 x penetration) cards with the
+// round that reaches it finished and no burn card.
+//
+// Dealing order. Initial cards go round the seats from first base (the seat
+// that acts first), then the dealer's up card, a second round, then the hole
+// card face down. A split hand takes its second card only when its play
+// begins: the hand being split takes it at once, and each hand split off waits
+// until play reaches it. Hands play in seat order and, within a seat, left to
+// right (a hand split off sits just right of the hand it came from).
+//
+// Simulated players play the pinned rule-specific basic strategy with a fixed
+// initial wager and unlimited funds. They never insure. Their results are
+// facts of their own, outside the learner's balance and every metric.
 //
 // The state keeps the whole shoe order and the hole card. The permitted view
 // shows only exposed cards: the hole card is face down until the round ends,
 // and a negative peek reveals no rank.
 
-import type { ActivityStateBase, BlackjackPermittedView, Command, CommandKind, DomainFact, GameModule, PermittedViewBase, Step, StrategyCommandKind, Wager } from './activity';
+import type { ActivityStateBase, BlackjackPermittedView, Command, CommandKind, DomainFact, GameCommand, GameModule, PermittedViewBase, Step, Wager } from './activity';
 import { canonicalShoe, shuffle, type Card, type Rank, type Suit } from './draws';
 import { add, compare, decodeMoney, encodeMoney, money, mul, neg, sub, type Money } from './money';
 import { RandomStream } from './random';
-import { BASE_WAGER_CEILING, hasExactKeys, isCount, isLimit, isWagerList, type Limit, type VersionedIdentity } from './shape';
+import { BASE_WAGER_CEILING, hasExactKeys, isCount, isLimit, isWagerList, parseMoney, type Limit, type VersionedIdentity } from './shape';
 
-/** The rule identity this engine can run. Dealer rule, surrender, penetration and limits are pinned table content. */
+/** The rule identity this engine can run. Dealer rule, surrender, penetration, players and limits are pinned table content. */
 export const BLACKJACK_RULES = { id: 'blackjack-six-deck', version: 1, decks: 6 } as const;
 
 /** Penetration choices, in percent of the shoe dealt before the cut card. */
 export const PENETRATIONS: readonly number[] = [50, 55, 60, 65, 70, 75, 80];
 
+/** Simulated players a table may seat besides the learner. */
+export const MAX_OTHER_PLAYERS = 4;
+
+/** Most hands one player may hold after splitting. */
+export const MAX_SPLIT_HANDS = 4;
+
 const SHOE: readonly Card[] = canonicalShoe(BLACKJACK_RULES.decks);
+
+/**
+ * A simulated player's rule-specific basic strategy, pinned as data. Each row
+ * holds ten letters, one per dealer up card in the order A, 2, 3, ..., 9, 10:
+ * H hit, S stand, D double, P split, R surrender.
+ */
+export interface SeatStrategy {
+  /** The first decision on an unsplit two-card hand: hard 4-20, soft 12-20, pairs by card value A (1) to 10. */
+  readonly first: { readonly hard: readonly string[]; readonly soft: readonly string[]; readonly pair: readonly string[] };
+  /** A pair on a split hand, where surrender is not available. */
+  readonly pairWithoutSurrender: readonly string[];
+  /** A pair once four hands are reached (split unavailable by rule). */
+  readonly pairAtCap: readonly string[];
+  /** Later decisions (three or more cards, and split hands): hard 4-21, soft 12-21. */
+  readonly later: { readonly hard: readonly string[]; readonly soft: readonly string[] };
+  /** The later play when a prescribed double is unavailable (three or more cards). */
+  readonly laterWithoutDouble: { readonly hard: readonly string[]; readonly soft: readonly string[] };
+}
+
+/** Who sits at the table. */
+export interface BlackjackPlayers {
+  /** The learner's seat counted from first base, from 0: 0 acts first, `otherWagers.length` acts last. */
+  readonly learnerSeat: number;
+  /** Each simulated player's fixed initial wager, in seat order without the learner. */
+  readonly otherWagers: readonly string[];
+  /** The basic strategy the simulated players use; null when there are none. */
+  readonly strategy: SeatStrategy | null;
+}
 
 export interface BlackjackTable {
   readonly decks: typeof BLACKJACK_RULES.decks;
@@ -29,16 +76,17 @@ export interface BlackjackTable {
   readonly lateSurrender: boolean;
   readonly penetration: number;
   readonly limits: { readonly initial: Limit };
+  readonly players: BlackjackPlayers;
 }
 
 export interface BlackjackRuleSet extends VersionedIdentity, BlackjackTable {}
 
-/** The player's playing actions in this module. Split, surrender and insurance arrive with #70. */
-export type BlackjackAction = 'hit' | 'stand' | 'double';
-const ACTIONS: readonly BlackjackAction[] = ['hit', 'stand', 'double'];
+/** Playing actions: the learner's, and the simulated players' (who never take decline-insurance). */
+export type BlackjackAction = 'hit' | 'stand' | 'double' | 'split' | 'surrender' | 'decline-insurance';
+const ACTIONS: readonly BlackjackAction[] = ['hit', 'stand', 'double', 'split', 'surrender', 'decline-insurance'];
 
 /** The commands the blackjack module applies: every game command plus the playing action. */
-export type BlackjackCommand = Exclude<Command, { readonly kind: 'rebuy' | StrategyCommandKind }>;
+export type BlackjackCommand = GameCommand | Extract<Command, { readonly kind: 'play' }>;
 
 /** Why a blackjack action fails legality beyond the common reasons. */
 export type BlackjackIllegalActionReason =
@@ -48,10 +96,23 @@ export type BlackjackIllegalActionReason =
 /** Blackjack's own facts. A face-down card is dealt as null: facts never carry a concealed card. */
 export type BlackjackDomainFact =
   | { readonly kind: 'shoe-shuffled'; readonly cards: number; readonly cut: number }
+  /** `to` is "dealer", a learner hand ("hand-2") or a simulated player's hand ("seat-1-hand-1"). */
   | { readonly kind: 'card-dealt'; readonly turn: number; readonly to: string; readonly card: Card | null }
+  | { readonly kind: 'insurance-offered'; readonly turn: number; readonly max: string; readonly evenMoney: boolean }
   | { readonly kind: 'peeked'; readonly turn: number; readonly result: 'no-blackjack' | 'blackjack' }
   | { readonly kind: 'hole-card-revealed'; readonly turn: number; readonly card: Card }
-  | { readonly kind: 'played'; readonly turn: number; readonly target: string; readonly action: BlackjackAction };
+  | { readonly kind: 'played'; readonly turn: number; readonly target: string; readonly action: BlackjackAction }
+  /** A split: `into` is the new hand, just right of `target`. */
+  | { readonly kind: 'hand-split'; readonly turn: number; readonly target: string; readonly into: string }
+  /** A simulated player's hand settled: outside the learner's balance and every metric. */
+  | {
+      readonly kind: 'seat-settled';
+      readonly turn: number;
+      readonly target: string;
+      readonly stake: string;
+      readonly result: 'win' | 'loss' | 'push';
+      readonly net: string;
+    };
 
 export interface Shoe {
   /** Canonical-shoe indices in dealing order. */
@@ -63,24 +124,40 @@ export interface Shoe {
 }
 
 export interface BlackjackHand {
-  /** The wager target this hand is played for: "hand-1". */
+  /** "hand-1" for the learner's box (later learner hands number in split order); "seat-2-hand-1" for a simulated player. */
   readonly target: string;
+  /** A hand split off holds one card until its play begins. */
   readonly cards: readonly Card[];
   readonly doubled: boolean;
-  /** No more actions: stood, doubled, busted, a natural or 21. */
+  readonly surrendered: boolean;
+  /** No more actions: stood, doubled, surrendered, busted, a natural, 21 or a split ace. */
   readonly done: boolean;
 }
 
-export type Peek = 'not-needed' | 'no-blackjack' | 'blackjack';
+/** Peek "pending": an ace is up and the insurance decision comes first. */
+export type Peek = 'not-needed' | 'pending' | 'no-blackjack' | 'blackjack';
+
+/** Insurance is offered only against an ace up, before the peek. */
+export type Insurance = 'not-offered' | 'offered' | 'declined' | 'insured';
+
+export interface BlackjackSeat {
+  /** Table position from first base, from 1. */
+  readonly seat: number;
+  readonly hands: readonly BlackjackHand[];
+}
 
 export interface BlackjackRound {
   /** Up card, hole card, then the dealer's draws. */
   readonly dealer: readonly Card[];
   readonly holeRevealed: boolean;
   readonly peek: Peek;
+  readonly insurance: Insurance;
+  /** The learner's hands in play order. */
   readonly hands: readonly BlackjackHand[];
-  /** The hand awaiting a decision, or null once the player is done. */
+  /** The learner hand awaiting a decision (the first hand while insurance is offered), or null once the learner is done. */
   readonly active: number | null;
+  /** The simulated players, in seat order. */
+  readonly others: readonly BlackjackSeat[];
 }
 
 export interface BlackjackActivityState extends ActivityStateBase<'blackjack'> {
@@ -98,6 +175,18 @@ export interface HandTotal {
   readonly soft: boolean;
 }
 
+export interface BlackjackHandView {
+  readonly target: string;
+  readonly cards: readonly Card[];
+  readonly total: HandTotal;
+  readonly doubled: boolean;
+  readonly surrendered: boolean;
+  /** A two-card 21 on an unsplit hand; a split 21 is not blackjack. */
+  readonly natural: boolean;
+  readonly busted: boolean;
+  readonly done: boolean;
+}
+
 /** The round as the view shows it: exposed cards only. */
 export interface BlackjackRoundView {
   readonly turn: number;
@@ -108,15 +197,11 @@ export interface BlackjackRoundView {
     readonly total: HandTotal;
     readonly peek: Peek;
   };
-  readonly hands: readonly {
-    readonly target: string;
-    readonly cards: readonly Card[];
-    readonly total: HandTotal;
-    readonly doubled: boolean;
-    readonly natural: boolean;
-    readonly busted: boolean;
-  }[];
+  readonly insurance: Insurance;
+  readonly hands: readonly BlackjackHandView[];
   readonly active: number | null;
+  /** Simulated players' exposed cards, in seat order. */
+  readonly others: readonly { readonly seat: number; readonly wager: string; readonly hands: readonly BlackjackHandView[] }[];
 }
 
 export interface BlackjackShoeView {
@@ -134,11 +219,64 @@ export interface BlackjackTableView {
   readonly penetration: number;
   readonly initial: Limit;
   readonly blackjackPays: '3:2';
+  readonly players: { readonly learnerSeat: number; readonly otherWagers: readonly string[] };
+}
+
+/** The open insurance (or even-money) offer: insure up to `max`, whole units or exactly half the initial wager. */
+export interface BlackjackInsuranceOffer {
+  readonly max: string;
+  /** The learner holds a natural: insuring exactly half is even money. */
+  readonly evenMoney: boolean;
 }
 
 // ---- rules ----------------------------------------------------------------
 
-const TABLE_KEYS = ['decks', 'dealer', 'lateSurrender', 'penetration', 'limits'];
+const TABLE_KEYS = ['decks', 'dealer', 'lateSurrender', 'penetration', 'limits', 'players'];
+const STRATEGY_ROWS = {
+  firstHard: 17, // 4-20
+  firstSoft: 9, // 12-20
+  pairs: 10, // A-10
+  laterHard: 18, // 4-21
+  laterSoft: 10, // 12-21
+} as const;
+
+const isRows = (value: unknown, count: number, letters: string): value is string[] =>
+  Array.isArray(value) && value.length === count && value.every((row) => typeof row === 'string' && row.length === 10 && [...row].every((c) => letters.includes(c)));
+
+/** A well-formed seat strategy. Without late surrender it never prescribes surrender. */
+function isSeatStrategy(value: unknown, lateSurrender: boolean): value is SeatStrategy {
+  const surrender = lateSurrender ? 'R' : '';
+  if (!hasExactKeys(value, ['first', 'pairWithoutSurrender', 'pairAtCap', 'later', 'laterWithoutDouble'])) return false;
+  const { first, later, laterWithoutDouble } = value;
+  return (
+    hasExactKeys(first, ['hard', 'soft', 'pair']) &&
+    isRows(first.hard, STRATEGY_ROWS.firstHard, `HSD${surrender}`) &&
+    isRows(first.soft, STRATEGY_ROWS.firstSoft, `HSD${surrender}`) &&
+    isRows(first.pair, STRATEGY_ROWS.pairs, `HSDP${surrender}`) &&
+    isRows(value.pairWithoutSurrender, STRATEGY_ROWS.pairs, 'HSDP') &&
+    isRows(value.pairAtCap, STRATEGY_ROWS.pairs, 'HSD') &&
+    hasExactKeys(later, ['hard', 'soft']) &&
+    isRows(later.hard, STRATEGY_ROWS.laterHard, 'HSD') &&
+    isRows(later.soft, STRATEGY_ROWS.laterSoft, 'HSD') &&
+    hasExactKeys(laterWithoutDouble, ['hard', 'soft']) &&
+    isRows(laterWithoutDouble.hard, STRATEGY_ROWS.laterHard, 'HS') &&
+    isRows(laterWithoutDouble.soft, STRATEGY_ROWS.laterSoft, 'HS')
+  );
+}
+
+/** Whole units within the initial-wager limit. */
+function withinInitial(text: unknown, limit: Limit): boolean {
+  const amount = parseMoney(text);
+  return amount !== undefined && amount.d === 1n && compare(amount, decodeMoney(limit.min)) >= 0 && compare(amount, decodeMoney(limit.max)) <= 0;
+}
+
+function isPlayers(value: unknown, limit: Limit, lateSurrender: boolean): value is BlackjackPlayers {
+  if (!hasExactKeys(value, ['learnerSeat', 'otherWagers', 'strategy']) || !Array.isArray(value.otherWagers)) return false;
+  const others = value.otherWagers as unknown[];
+  if (others.length > MAX_OTHER_PLAYERS || !others.every((wager) => withinInitial(wager, limit))) return false;
+  if (!isCount(value.learnerSeat) || value.learnerSeat > others.length) return false;
+  return others.length === 0 ? value.strategy === null : isSeatStrategy(value.strategy, lateSurrender);
+}
 
 /** Valid table fields; `extra` names the other keys the value may carry. */
 const isTable = (value: unknown, extra: readonly string[]): value is BlackjackTable =>
@@ -148,7 +286,8 @@ const isTable = (value: unknown, extra: readonly string[]): value is BlackjackTa
   typeof value.lateSurrender === 'boolean' &&
   PENETRATIONS.includes(value.penetration as number) &&
   hasExactKeys(value.limits, ['initial']) &&
-  isLimit(value.limits.initial);
+  isLimit(value.limits.initial) &&
+  isPlayers(value.players, value.limits.initial, value.lateSurrender);
 
 /** Pinned table content, exactly: no missing, malformed or extra fields. */
 export const isBlackjackTable = (value: unknown): value is BlackjackTable => isTable(value, []);
@@ -159,6 +298,14 @@ export const isBlackjackRuleSet = (value: unknown): value is BlackjackRuleSet =>
   (value as BlackjackRuleSet).id === BLACKJACK_RULES.id &&
   (value as BlackjackRuleSet).version === BLACKJACK_RULES.version;
 
+const copyStrategy = (s: SeatStrategy): SeatStrategy => ({
+  first: { hard: [...s.first.hard], soft: [...s.first.soft], pair: [...s.first.pair] },
+  pairWithoutSurrender: [...s.pairWithoutSurrender],
+  pairAtCap: [...s.pairAtCap],
+  later: { hard: [...s.later.hard], soft: [...s.later.soft] },
+  laterWithoutDouble: { hard: [...s.laterWithoutDouble.hard], soft: [...s.laterWithoutDouble.soft] },
+});
+
 /** The pinned table content of a rule set. */
 export const blackjackTable = (rules: BlackjackRuleSet): BlackjackTable => ({
   decks: rules.decks,
@@ -166,10 +313,19 @@ export const blackjackTable = (rules: BlackjackRuleSet): BlackjackTable => ({
   lateSurrender: rules.lateSurrender,
   penetration: rules.penetration,
   limits: { initial: { min: rules.limits.initial.min, max: rules.limits.initial.max } },
+  players: {
+    learnerSeat: rules.players.learnerSeat,
+    otherWagers: [...rules.players.otherWagers],
+    strategy: rules.players.strategy && copyStrategy(rules.players.strategy),
+  },
 });
 
 /** Cards dealt before the cut card: floor(312 x penetration). */
 const cutIndex = (table: BlackjackTable) => Math.floor((SHOE.length * table.penetration) / 100);
+
+/** Table positions from first base: the learner's, and each simulated player's in seat order. */
+const learnerPosition = (rules: BlackjackTable) => rules.players.learnerSeat + 1;
+const otherPositions = (rules: BlackjackTable) => rules.players.otherWagers.map((_, k) => (k < rules.players.learnerSeat ? k + 1 : k + 2));
 
 // ---- totals ---------------------------------------------------------------
 
@@ -183,17 +339,24 @@ export function handTotal(cards: readonly Card[]): HandTotal {
 
 const isNatural = (cards: readonly Card[]) => cards.length === 2 && handTotal(cards).value === 21;
 const busted = (cards: readonly Card[]) => handTotal(cards).value > 21;
+/** Two cards of equal value: any two ten-valued cards are a pair. */
+const isPair = (cards: readonly Card[]) => cards.length === 2 && cardValue(cards[0] as Card) === cardValue(cards[1] as Card);
+/** A natural counts only on a player's one unsplit hand. */
+const naturalIn = (hand: { readonly cards: readonly Card[] }, hands: readonly unknown[]) => hands.length === 1 && isNatural(hand.cards);
+/** A split ace takes one card and no further action. */
+const splitAce = (hand: { readonly cards: readonly Card[] }, hands: readonly unknown[]) => hands.length > 1 && hand.cards[0]?.rank === 1;
 
 // ---- phases ---------------------------------------------------------------
 
 const playing = (state: BlackjackActivityState) => state.phase === 'open-decision' && state.outcome?.active != null;
 
-/** A hand in play takes only playing actions (and rebuys, while the table waits for input). */
+/** A hand in play takes only playing actions (and rebuys, while the table waits for input); the insurance offer also takes the insurance wager. */
 function legal(state: BlackjackActivityState): CommandKind[] {
   switch (state.phase) {
     case 'open-decision':
-      // Rebuys while waiting for input, including before an unaffordable double.
-      return playing(state) ? ['play', 'rebuy'] : ['place-wager', 'begin-turn', 'request-stop', 'rebuy'];
+      // Rebuys while waiting for input, including before an unaffordable insurance, split or double.
+      if (!playing(state)) return ['place-wager', 'begin-turn', 'request-stop', 'rebuy'];
+      return state.outcome?.insurance === 'offered' ? ['play', 'place-wager', 'rebuy'] : ['play', 'rebuy'];
     case 'revealing-outcome':
       return ['settle-turn', 'request-stop'];
     case 'settled-outcome':
@@ -210,12 +373,28 @@ function legal(state: BlackjackActivityState): CommandKind[] {
 
 export const isBlackjackAction = (value: unknown): value is BlackjackAction => ACTIONS.includes(value as BlackjackAction);
 
+/** What the rules offer the learner's hand awaiting a decision; funding is judged when an action is submitted. */
+function offeredActions(round: BlackjackRound, rules: BlackjackTable): BlackjackAction[] {
+  if (round.active === null) return [];
+  if (round.insurance === 'offered') return ['decline-insurance'];
+  const hand = round.hands[round.active] as BlackjackHand;
+  const two = hand.cards.length === 2;
+  const actions: BlackjackAction[] = ['hit', 'stand'];
+  if (two) actions.push('double');
+  if (isPair(hand.cards) && round.hands.length < MAX_SPLIT_HANDS) actions.push('split');
+  // Late surrender: the original unsplit two cards, after the peek.
+  if (rules.lateSurrender && two && round.hands.length === 1) actions.push('surrender');
+  return actions;
+}
+
 // ---- advance --------------------------------------------------------------
 
 type BlackjackStep = Step<BlackjackActivityState>;
 
-/** The one wager target in this module: the learner's box. */
+/** The learner's box: the one target for an initial wager. */
 export const HAND_TARGET = 'hand-1';
+/** The insurance wager's target, placed only while insurance is offered. */
+export const INSURANCE_TARGET = 'insurance';
 
 /** Deals from the shoe in order. */
 class Dealer {
@@ -225,7 +404,7 @@ class Dealer {
   }
   card(): Card {
     const index = this.shoe.order[this.next];
-    // A one-hand round needs far fewer than the cards behind an 80% cut.
+    // Five seats with splits need far fewer cards than the 63 behind an 80% cut.
     if (index === undefined) throw new RangeError('the shoe ran out mid-round');
     this.next++;
     return SHOE[index] as Card;
@@ -235,10 +414,192 @@ class Dealer {
   }
 }
 
+interface WorkHand {
+  target: string;
+  cards: Card[];
+  doubled: boolean;
+  surrendered: boolean;
+  done: boolean;
+}
+
+interface WorkRound {
+  dealer: Card[];
+  holeRevealed: boolean;
+  peek: Peek;
+  insurance: Insurance;
+  hands: WorkHand[];
+  active: number | null;
+  others: { seat: number; hands: WorkHand[] }[];
+}
+
+const thawHand = (hand: BlackjackHand): WorkHand => ({ ...hand, cards: [...hand.cards] });
+const thaw = (round: BlackjackRound): WorkRound => ({
+  ...round,
+  dealer: [...round.dealer],
+  hands: round.hands.map(thawHand),
+  others: round.others.map((seat) => ({ seat: seat.seat, hands: seat.hands.map(thawHand) })),
+});
+
+/** One transition's working round: the dealer, the facts and the money it moves. */
+class Table {
+  readonly facts: DomainFact[] = [];
+  constructor(
+    readonly round: WorkRound,
+    readonly dealer: Dealer,
+    readonly turn: number,
+    readonly rules: BlackjackTable,
+  ) {}
+
+  deal(hand: WorkHand): Card {
+    const card = this.dealer.card();
+    hand.cards.push(card);
+    this.facts.push({ kind: 'card-dealt', turn: this.turn, to: hand.target, card });
+    return card;
+  }
+
+  played(target: string, action: BlackjackAction) {
+    this.facts.push({ kind: 'played', turn: this.turn, target, action });
+  }
+
+  /** Looks for a dealer blackjack under an ace or ten up. */
+  peek() {
+    const up = this.round.dealer[0] as Card;
+    if (up.rank !== 1 && up.rank < 10) {
+      this.round.peek = 'not-needed';
+      return;
+    }
+    const result = isNatural(this.round.dealer.slice(0, 2)) ? 'blackjack' : 'no-blackjack';
+    this.round.peek = result;
+    this.facts.push({ kind: 'peeked', turn: this.turn, result });
+  }
+
+  /**
+   * Readies the next hand of `hands` for a decision: a hand split off takes its
+   * second card now; a split ace or a 21 is done. Returns its index, or null
+   * when every hand is done.
+   */
+  nextHand(hands: WorkHand[]): number | null {
+    for (const [index, hand] of hands.entries()) {
+      if (hand.done) continue;
+      if (hand.cards.length === 1) {
+        this.deal(hand);
+        if (splitAce(hand, hands) || handTotal(hand.cards).value >= 21) hand.done = true;
+        if (hand.done) continue;
+      }
+      return index;
+    }
+    return null;
+  }
+
+  /** Splits hands[index]: the new hand takes the second card and sits right of it; the split hand takes its next card now. */
+  split(hands: WorkHand[], index: number, into: string) {
+    const hand = hands[index] as WorkHand;
+    const second = hand.cards.pop() as Card;
+    hands.splice(index + 1, 0, { target: into, cards: [second], doubled: false, surrendered: false, done: false });
+    this.facts.push({ kind: 'hand-split', turn: this.turn, target: hand.target, into });
+  }
+
+  /** Carries the round on until the learner must decide or every hand is done. */
+  proceed() {
+    const round = this.round;
+    if (round.insurance === 'offered') {
+      round.active = 0;
+      return;
+    }
+    if (round.peek === 'blackjack') return this.finish();
+    const me = learnerPosition(this.rules);
+    for (const seat of round.others) if (seat.seat < me) this.playSeat(seat);
+    const next = this.nextHand(round.hands);
+    if (next !== null) {
+      // A split hand that became 21 or a split ace is done; play moves on.
+      round.active = next;
+      return;
+    }
+    for (const seat of round.others) if (seat.seat > me) this.playSeat(seat);
+    this.finish();
+  }
+
+  /** A simulated player plays every hand by the pinned basic strategy, with unlimited funds. */
+  playSeat(seat: { seat: number; hands: WorkHand[] }) {
+    const strategy = this.rules.players.strategy as SeatStrategy;
+    const up = cardValue(this.round.dealer[0] as Card);
+    for (let index = this.nextHand(seat.hands); index !== null; index = this.nextHand(seat.hands)) {
+      const hand = seat.hands[index] as WorkHand;
+      const action = seatAction(strategy, hand.cards, seat.hands.length, up);
+      this.played(hand.target, action);
+      switch (action) {
+        case 'stand':
+          hand.done = true;
+          break;
+        case 'hit':
+          this.deal(hand);
+          hand.done = handTotal(hand.cards).value >= 21;
+          break;
+        case 'double':
+          hand.doubled = true;
+          this.deal(hand);
+          hand.done = true;
+          break;
+        case 'surrender':
+          hand.surrendered = true;
+          hand.done = true;
+          break;
+        case 'split':
+          this.split(seat.hands, index, `seat-${seat.seat}-hand-${seat.hands.length + 1}`);
+          this.deal(hand);
+          if (splitAce(hand, seat.hands) || handTotal(hand.cards).value >= 21) hand.done = true;
+          break;
+        case 'decline-insurance':
+          break;
+      }
+    }
+  }
+
+  /** Every player is done: reveal the hole card, then the dealer draws while any hand at the table is live. */
+  finish() {
+    const round = this.round;
+    round.active = null;
+    round.holeRevealed = true;
+    this.facts.push({ kind: 'hole-card-revealed', turn: this.turn, card: round.dealer[1] as Card });
+    const players = [round.hands, ...round.others.map((seat) => seat.hands)];
+    const live =
+      round.peek !== 'blackjack' &&
+      players.some((hands) => hands.some((hand) => !busted(hand.cards) && !hand.surrendered && !naturalIn(hand, hands)));
+    if (!live) return;
+    for (;;) {
+      const total = handTotal(round.dealer);
+      if (total.value > 17 || (total.value === 17 && !(total.soft && this.rules.dealer === 'H17'))) break;
+      const card = this.dealer.card();
+      round.dealer.push(card);
+      this.facts.push({ kind: 'card-dealt', turn: this.turn, to: 'dealer', card });
+    }
+  }
+}
+
+const LETTER_ACTIONS: Readonly<Record<string, BlackjackAction>> = { H: 'hit', S: 'stand', D: 'double', P: 'split', R: 'surrender' };
+const letterAt = (rows: readonly string[], row: number, up: number) => LETTER_ACTIONS[(rows[row] as string)[up - 1] as string] as BlackjackAction;
+
+/** The basic-strategy play for a simulated player's hand (`count` is how many hands the player holds). */
+function seatAction(strategy: SeatStrategy, cards: readonly Card[], count: number, up: number): BlackjackAction {
+  const two = cards.length === 2;
+  const total = handTotal(cards);
+  if (isPair(cards)) {
+    const value = cardValue(cards[0] as Card) - 1;
+    let action = letterAt(strategy.first.pair, value, up);
+    if (action === 'surrender' && count > 1) action = letterAt(strategy.pairWithoutSurrender, value, up);
+    if (action === 'split' && count >= MAX_SPLIT_HANDS) action = letterAt(strategy.pairAtCap, value, up);
+    return action;
+  }
+  if (two && count === 1) return total.soft ? letterAt(strategy.first.soft, total.value - 12, up) : letterAt(strategy.first.hard, total.value - 4, up);
+  const later = total.soft ? letterAt(strategy.later.soft, total.value - 12, up) : letterAt(strategy.later.hard, total.value - 4, up);
+  if (later !== 'double' || two) return later;
+  return total.soft ? letterAt(strategy.laterWithoutDouble.soft, total.value - 12, up) : letterAt(strategy.laterWithoutDouble.hard, total.value - 4, up);
+}
+
 function apply(state: BlackjackActivityState, command: BlackjackCommand): BlackjackStep {
   switch (command.kind) {
     case 'place-wager':
-      return placeWager(state, command.target, decodeMoney(command.amount));
+      return playing(state) ? insure(state, command.target, decodeMoney(command.amount)) : placeWager(state, command.target, decodeMoney(command.amount));
     case 'begin-turn':
       return beginRound(state);
     case 'play':
@@ -249,7 +610,7 @@ function apply(state: BlackjackActivityState, command: BlackjackCommand): Blackj
     }
     case 'request-stop': {
       const facts: DomainFact[] = [{ kind: 'stop-requested', phase: state.phase }];
-      // A finished round keeps its committed wager for final settlement.
+      // A finished round keeps its committed wagers for final settlement.
       if (state.phase === 'revealing-outcome') return { change: { phase: 'final-settlement' }, facts };
       let balance = decodeMoney(state.balance);
       for (const wager of state.wagers) {
@@ -285,6 +646,12 @@ function placeWager(state: BlackjackActivityState, target: string, amount: Money
   };
 }
 
+const HALF = money(1n, 2n);
+const TWO = money(2n);
+
+/** Insurance is up to half the initial wager (the learner's box carries the round's first wager). */
+const insuranceMax = (wagers: readonly Wager[]) => mul(decodeMoney((wagers[0] as Wager).amount), HALF);
+
 function beginRound(state: BlackjackActivityState): BlackjackStep {
   if (state.wagers.length === 0) return { illegal: 'no-wager' };
   const facts: DomainFact[] = [];
@@ -300,151 +667,235 @@ function beginRound(state: BlackjackActivityState): BlackjackStep {
   }
   const turn = state.turn + 1;
   facts.push({ kind: 'turn-began', turn, wagers: state.wagers });
-  const dealer = new Dealer(shoe);
-  // U.S. order: player, dealer up, player, dealer hole (face down).
-  const first = dealer.card();
-  const up = dealer.card();
-  const second = dealer.card();
-  const hole = dealer.card();
-  facts.push(
-    { kind: 'card-dealt', turn, to: HAND_TARGET, card: first },
-    { kind: 'card-dealt', turn, to: 'dealer', card: up },
-    { kind: 'card-dealt', turn, to: HAND_TARGET, card: second },
-    { kind: 'card-dealt', turn, to: 'dealer', card: null },
+  const rules = state.rules;
+  const empty = (target: string): WorkHand => ({ target, cards: [], doubled: false, surrendered: false, done: false });
+  const round: WorkRound = {
+    dealer: [],
+    holeRevealed: false,
+    peek: 'not-needed',
+    insurance: 'not-offered',
+    hands: [empty(HAND_TARGET)],
+    active: null,
+    others: otherPositions(rules).map((seat) => ({ seat, hands: [empty(`seat-${seat}-hand-1`)] })),
+  };
+  const table = new Table(round, new Dealer(shoe), turn, rules);
+  const me = learnerPosition(rules);
+  // Seats from first base; each seat's one hand.
+  const seated = [...round.others.map((seat) => ({ position: seat.seat, hand: seat.hands[0] as WorkHand })), { position: me, hand: round.hands[0] as WorkHand }].sort(
+    (a, b) => a.position - b.position,
   );
-  const dealerCards = [up, hole];
-  let peek: Peek = 'not-needed';
-  if (up.rank === 1 || up.rank >= 10) {
-    peek = isNatural(dealerCards) ? 'blackjack' : 'no-blackjack';
-    facts.push({ kind: 'peeked', turn, result: peek });
+  // U.S. order: a card to every seat, the dealer's up card, a second round, then the hole card face down.
+  for (const { hand } of seated) table.deal(hand);
+  round.dealer.push(table.dealer.card());
+  facts.push(...table.facts.splice(0), { kind: 'card-dealt', turn, to: 'dealer', card: round.dealer[0] as Card });
+  for (const { hand } of seated) table.deal(hand);
+  round.dealer.push(table.dealer.card());
+  facts.push(...table.facts.splice(0), { kind: 'card-dealt', turn, to: 'dealer', card: null });
+  for (const { hand } of seated) hand.done = isNatural(hand.cards);
+
+  if ((round.dealer[0] as Card).rank === 1) {
+    // Insurance (even money on a natural) comes before the peek.
+    round.insurance = 'offered';
+    round.peek = 'pending';
+    facts.push({ kind: 'insurance-offered', turn, max: encodeMoney(insuranceMax(state.wagers)), evenMoney: (round.hands[0] as WorkHand).done });
+  } else {
+    table.peek();
   }
-  const hand: BlackjackHand = { target: HAND_TARGET, cards: [first, second], doubled: false, done: isNatural([first, second]) };
-  let round: BlackjackRound = { dealer: dealerCards, holeRevealed: false, peek, hands: [hand], active: 0 };
-  // A dealer natural ends the round at the peek; a player natural needs no decision.
-  if (peek === 'blackjack' || hand.done) round = finishRound(round, dealer, turn, facts, state.rules);
+  table.proceed();
+  facts.push(...table.facts);
   return {
-    change: { phase: round.active === null ? 'revealing-outcome' : 'open-decision', turn, shoe: dealer.done(), outcome: round, random },
+    change: { phase: round.active === null ? 'revealing-outcome' : 'open-decision', turn, shoe: table.dealer.done(), outcome: round, random },
     facts,
+  };
+}
+
+/** An insurance wager while it is offered: up to half the initial wager, in whole units or exactly half. It settles at the peek. */
+function insure(state: BlackjackActivityState, target: string, amount: Money): BlackjackStep {
+  if (target !== INSURANCE_TARGET) return { illegal: 'unknown-target' };
+  if (amount.n === 0n) return { illegal: 'no-wager-to-remove' };
+  const max = insuranceMax(state.wagers);
+  if (compare(amount, max) > 0) return { illegal: 'above-maximum' };
+  if (amount.d !== 1n && compare(amount, max) !== 0) return { illegal: 'not-whole-units' };
+  let balance = sub(decodeMoney(state.balance), amount);
+  if (balance.n < 0n) return { illegal: 'insufficient-funds' };
+  const table = new Table(thaw(state.outcome as BlackjackRound), new Dealer(state.shoe as Shoe), state.turn, state.rules);
+  const stake = encodeMoney(amount);
+  table.facts.push({ kind: 'wager-changed', target, amount: stake, previous: '0' });
+  table.round.insurance = 'insured';
+  table.peek();
+  // Insurance pays 2:1 on a dealer blackjack and settles on its own, before play goes on.
+  const won = table.round.peek === 'blackjack';
+  const net = won ? mul(amount, TWO) : neg(amount);
+  const returned = won ? add(amount, net) : money(0n);
+  balance = add(balance, returned);
+  table.facts.push({
+    kind: 'wager-settled',
+    turn: state.turn,
+    target,
+    stake,
+    result: won ? 'win' : 'loss',
+    net: encodeMoney(net),
+    returned: encodeMoney(returned),
+  });
+  return carryOn(state, table, encodeMoney(balance), state.wagers);
+}
+
+/** Ends a learner transition: the round carries on, then the phase follows from whether the learner must decide again. */
+function carryOn(state: BlackjackActivityState, table: Table, balance: string, wagers: readonly Wager[]): BlackjackStep {
+  table.proceed();
+  const round = table.round;
+  // Wagers follow the learner's hands in play order.
+  const ordered = round.hands.map((hand) => wagers.find((w) => w.target === hand.target) as Wager);
+  return {
+    change: {
+      phase: round.active === null ? 'revealing-outcome' : 'open-decision',
+      outcome: round,
+      shoe: table.dealer.done(),
+      balance,
+      wagers: ordered,
+    },
+    facts: table.facts,
   };
 }
 
 function play(state: BlackjackActivityState, action: BlackjackAction): BlackjackStep {
   const round = state.outcome as BlackjackRound;
-  const index = round.active as number;
-  const hand = round.hands[index] as BlackjackHand;
-  const turn = state.turn;
-  const facts: DomainFact[] = [];
-  const dealer = new Dealer(state.shoe as Shoe);
-  let wagers = state.wagers;
-  let balance = state.balance;
-  let next: BlackjackHand;
+  if (!offeredActions(round, state.rules).includes(action)) return { illegal: 'action-not-available' };
+  const table = new Table(thaw(round), new Dealer(state.shoe as Shoe), state.turn, state.rules);
+  const work = table.round;
+  if (action === 'decline-insurance') {
+    table.played(HAND_TARGET, action);
+    work.insurance = 'declined';
+    work.active = null;
+    table.peek();
+    return carryOn(state, table, state.balance, state.wagers);
+  }
+  const index = work.active as number;
+  const hand = work.hands[index] as WorkHand;
+  const wager = state.wagers.find((w) => w.target === hand.target) as Wager;
+  const stake = decodeMoney(wager.amount);
+  let balance = decodeMoney(state.balance);
+  let wagers: Wager[] = [...state.wagers];
+  // Doubles and splits need the whole stake again (no double-for-less), judged in play order.
+  if (action === 'double' || action === 'split') {
+    balance = sub(balance, stake);
+    if (balance.n < 0n) return { illegal: 'insufficient-funds' };
+  }
+  table.played(hand.target, action);
+  work.active = null;
   switch (action) {
     case 'stand':
-      facts.push({ kind: 'played', turn, target: hand.target, action });
-      next = { ...hand, done: true };
+      hand.done = true;
       break;
-    case 'hit': {
-      facts.push({ kind: 'played', turn, target: hand.target, action });
-      const card = dealer.card();
-      facts.push({ kind: 'card-dealt', turn, to: hand.target, card });
-      const cards = [...hand.cards, card];
-      next = { ...hand, cards, done: handTotal(cards).value >= 21 };
+    case 'hit':
+      table.deal(hand);
+      hand.done = handTotal(hand.cards).value >= 21;
       break;
-    }
     case 'double': {
-      if (hand.cards.length !== 2) return { illegal: 'action-not-available' };
-      const wager = state.wagers.find((w) => w.target === hand.target) as Wager;
-      const stake = decodeMoney(wager.amount);
-      const remaining = sub(decodeMoney(state.balance), stake);
-      // No double-for-less: the whole stake again, or nothing.
-      if (remaining.n < 0n) return { illegal: 'insufficient-funds' };
       const doubled = encodeMoney(add(stake, stake));
-      facts.push(
-        { kind: 'played', turn, target: hand.target, action },
-        { kind: 'wager-changed', target: hand.target, amount: doubled, previous: wager.amount },
-      );
-      balance = encodeMoney(remaining);
-      wagers = state.wagers.map((w) => (w.target === hand.target ? { target: w.target, amount: doubled } : w));
-      const card = dealer.card();
-      facts.push({ kind: 'card-dealt', turn, to: hand.target, card });
-      next = { ...hand, cards: [...hand.cards, card], doubled: true, done: true };
+      table.facts.push({ kind: 'wager-changed', target: hand.target, amount: doubled, previous: wager.amount });
+      wagers = wagers.map((w) => (w.target === hand.target ? { target: w.target, amount: doubled } : w));
+      hand.doubled = true;
+      table.deal(hand);
+      hand.done = true;
+      break;
+    }
+    case 'surrender':
+      hand.surrendered = true;
+      hand.done = true;
+      break;
+    case 'split': {
+      const into = `hand-${work.hands.length + 1}`;
+      table.split(work.hands, index, into);
+      table.facts.push({ kind: 'wager-changed', target: into, amount: wager.amount, previous: '0' });
+      wagers.push({ target: into, amount: wager.amount });
+      // The split hand takes its second card now; a hand split off waits for its turn.
+      table.deal(hand);
+      if (splitAce(hand, work.hands) || handTotal(hand.cards).value >= 21) hand.done = true;
       break;
     }
   }
-  const hands = round.hands.map((h, i) => (i === index ? next : h));
-  let after: BlackjackRound = { ...round, hands };
-  if (next.done) after = finishRound(after, dealer, turn, facts, state.rules);
-  return {
-    change: { phase: after.active === null ? 'revealing-outcome' : 'open-decision', outcome: after, shoe: dealer.done(), balance, wagers },
-    facts,
-  };
-}
-
-/** The player is done: reveal the hole card, then the dealer draws while any hand is live. */
-function finishRound(round: BlackjackRound, dealer: Dealer, turn: number, facts: DomainFact[], rules: BlackjackTable): BlackjackRound {
-  const hole = round.dealer[1] as Card;
-  facts.push({ kind: 'hole-card-revealed', turn, card: hole });
-  const cards = [...round.dealer];
-  const live = round.peek !== 'blackjack' && round.hands.some((hand) => !busted(hand.cards) && !isNatural(hand.cards));
-  if (live) {
-    for (;;) {
-      const total = handTotal(cards);
-      if (total.value > 17 || (total.value === 17 && !(total.soft && rules.dealer === 'H17'))) break;
-      const card = dealer.card();
-      cards.push(card);
-      facts.push({ kind: 'card-dealt', turn, to: 'dealer', card });
-    }
-  }
-  return { ...round, dealer: cards, holeRevealed: true, active: null };
+  return carryOn(state, table, encodeMoney(balance), wagers);
 }
 
 const THREE_TO_TWO = money(3n, 2n);
 
-/** Settles every committed hand against the finished dealer hand. With no wagers, nothing is settled. */
+/** A hand's net against the finished dealer hand. */
+function handNet(hand: BlackjackHand, hands: readonly BlackjackHand[], round: BlackjackRound, stake: Money): Money {
+  const dealerTotal = handTotal(round.dealer).value;
+  const dealerNatural = isNatural(round.dealer.slice(0, 2));
+  const total = handTotal(hand.cards).value;
+  if (hand.surrendered) return neg(mul(stake, HALF));
+  if (naturalIn(hand, hands)) return dealerNatural ? money(0n) : mul(stake, THREE_TO_TWO);
+  if (dealerNatural || total > 21) return neg(stake);
+  if (dealerTotal > 21 || total > dealerTotal) return stake;
+  return total === dealerTotal ? money(0n) : neg(stake);
+}
+
+const resultOf = (net: Money) => (net.n > 0n ? 'win' : net.n < 0n ? 'loss' : 'push');
+
+/** Settles every committed hand against the finished dealer hand, then the simulated players'. With no wagers, nothing is settled. */
 function settle(state: BlackjackActivityState): { balance: string; facts: DomainFact[] } {
   const facts: DomainFact[] = [];
   if (state.wagers.length === 0) return { balance: state.balance, facts };
   // Wagers exist outside a decision only once a round has finished dealing.
   const round = state.outcome as BlackjackRound;
   let balance = decodeMoney(state.balance);
-  const dealerTotal = handTotal(round.dealer).value;
-  const dealerNatural = isNatural(round.dealer.slice(0, 2));
   for (const wager of state.wagers) {
     const hand = round.hands.find((h) => h.target === wager.target) as BlackjackHand;
     const stake = decodeMoney(wager.amount);
-    const total = handTotal(hand.cards).value;
-    const natural = isNatural(hand.cards) && round.hands.length === 1;
-    let net: Money;
-    if (natural) net = dealerNatural ? money(0n) : mul(stake, THREE_TO_TWO);
-    else if (dealerNatural || total > 21) net = neg(stake);
-    else if (dealerTotal > 21 || total > dealerTotal) net = stake;
-    else net = total === dealerTotal ? money(0n) : neg(stake);
-    const returned = net.n < 0n ? money(0n) : add(stake, net);
+    const net = handNet(hand, round.hands, round, stake);
+    // A surrender returns half the stake.
+    const returned = hand.surrendered ? add(stake, net) : net.n < 0n ? money(0n) : add(stake, net);
     balance = add(balance, returned);
     facts.push({
       kind: 'wager-settled',
       turn: state.turn,
       target: wager.target,
       stake: wager.amount,
-      result: net.n > 0n ? 'win' : net.n < 0n ? 'loss' : 'push',
+      result: resultOf(net),
       net: encodeMoney(net),
       returned: encodeMoney(returned),
     });
   }
+  round.others.forEach((seat, k) => {
+    const initial = decodeMoney(state.rules.players.otherWagers[k] as string);
+    for (const hand of seat.hands) {
+      const stake = hand.doubled ? add(initial, initial) : initial;
+      const net = handNet(hand, seat.hands, round, stake);
+      facts.push({ kind: 'seat-settled', turn: state.turn, target: hand.target, stake: encodeMoney(stake), result: resultOf(net), net: encodeMoney(net) });
+    }
+  });
   return { balance: encodeMoney(balance), facts };
 }
 
 // ---- permitted view ---------------------------------------------------------
 
-function view(state: BlackjackActivityState): Omit<BlackjackPermittedView, keyof PermittedViewBase> & Pick<BlackjackPermittedView, 'wagersCommitted'> {
+const handView = (hand: BlackjackHand, hands: readonly BlackjackHand[]): BlackjackHandView => ({
+  target: hand.target,
+  cards: hand.cards.map((card) => ({ ...card })),
+  total: handTotal(hand.cards),
+  doubled: hand.doubled,
+  surrendered: hand.surrendered,
+  natural: naturalIn(hand, hands),
+  busted: busted(hand.cards),
+  done: hand.done,
+});
+
+function view(
+  state: BlackjackActivityState,
+): Omit<BlackjackPermittedView, keyof PermittedViewBase> & Pick<BlackjackPermittedView, 'wagersCommitted'> {
   const { outcome: round, shoe, rules } = state;
-  const active = round?.active ?? null;
-  const activeHand = active === null ? undefined : round?.hands[active];
+  const deciding = round !== null && state.phase === 'open-decision';
+  const offer = deciding && round.insurance === 'offered' && round.active !== null;
   return {
     game: 'blackjack',
     // A dealt hand awaiting a decision is committed too, not only a revealed round.
     wagersCommitted: state.wagers.length > 0 && (playing(state) || state.phase === 'revealing-outcome' || state.phase === 'final-settlement'),
-    playActions: activeHand && state.phase === 'open-decision' ? ACTIONS.filter((action) => action !== 'double' || activeHand.cards.length === 2) : [],
+    playActions: deciding ? offeredActions(round, rules) : [],
+    insuranceOffer: offer
+      ? { max: encodeMoney(insuranceMax(state.wagers)), evenMoney: naturalIn(round.hands[0] as BlackjackHand, round.hands) }
+      : null,
     outcome: round && {
       turn: state.turn,
       dealer: {
@@ -452,15 +903,14 @@ function view(state: BlackjackActivityState): Omit<BlackjackPermittedView, keyof
         total: handTotal(round.holeRevealed ? round.dealer : round.dealer.slice(0, 1)),
         peek: round.peek,
       },
-      hands: round.hands.map((hand) => ({
-        target: hand.target,
-        cards: hand.cards.map((card) => ({ ...card })),
-        total: handTotal(hand.cards),
-        doubled: hand.doubled,
-        natural: isNatural(hand.cards) && round.hands.length === 1,
-        busted: busted(hand.cards),
+      insurance: round.insurance,
+      hands: round.hands.map((hand) => handView(hand, round.hands)),
+      active: round.active,
+      others: round.others.map((seat, k) => ({
+        seat: seat.seat,
+        wager: rules.players.otherWagers[k] as string,
+        hands: seat.hands.map((hand) => handView(hand, seat.hands)),
       })),
-      active,
     },
     shoe: {
       cards: SHOE.length,
@@ -474,6 +924,7 @@ function view(state: BlackjackActivityState): Omit<BlackjackPermittedView, keyof
       penetration: rules.penetration,
       initial: { min: rules.limits.initial.min, max: rules.limits.initial.max },
       blackjackPays: '3:2',
+      players: { learnerSeat: rules.players.learnerSeat, otherWagers: [...rules.players.otherWagers] },
     },
   };
 }
@@ -503,17 +954,41 @@ function shoeDamage(value: unknown, rules: BlackjackTable): string | undefined {
   return undefined;
 }
 
-function roundDamage(value: unknown): string | undefined {
-  if (value === null) return undefined;
-  if (!hasExactKeys(value, ['dealer', 'holeRevealed', 'peek', 'hands', 'active'])) return 'damaged round';
-  if (!isCards(value.dealer, 2) || typeof value.holeRevealed !== 'boolean') return 'damaged dealer hand';
-  if (!(['not-needed', 'no-blackjack', 'blackjack'] as unknown[]).includes(value.peek)) return 'damaged peek';
-  if (!Array.isArray(value.hands) || value.hands.length !== 1) return 'damaged hands';
-  for (const hand of value.hands as unknown[]) {
-    if (!hasExactKeys(hand, ['target', 'cards', 'doubled', 'done']) || hand.target !== HAND_TARGET || !isCards(hand.cards, 2)) return 'damaged hand';
-    if (typeof hand.doubled !== 'boolean' || typeof hand.done !== 'boolean') return 'damaged hand';
+/** One player's hands: 1-4 hands with distinct targets of the player's form; only a split hand awaiting its turn holds one card. */
+function handsDamage(value: unknown, target: (n: number) => string): boolean {
+  if (!Array.isArray(value) || value.length < 1 || value.length > MAX_SPLIT_HANDS) return true;
+  const allowed = new Set(Array.from({ length: value.length }, (_, n) => target(n + 1)));
+  const seen = new Set<unknown>();
+  for (const hand of value as unknown[]) {
+    if (!hasExactKeys(hand, ['target', 'cards', 'doubled', 'surrendered', 'done']) || !allowed.has(hand.target as string) || seen.has(hand.target)) return true;
+    seen.add(hand.target);
+    if (!isCards(hand.cards, value.length > 1 && hand.done === false ? 1 : 2)) return true;
+    if (typeof hand.doubled !== 'boolean' || typeof hand.surrendered !== 'boolean' || typeof hand.done !== 'boolean') return true;
   }
-  if (value.active !== null && !(isCount(value.active) && value.active < value.hands.length)) return 'damaged active hand';
+  return false;
+}
+
+function roundDamage(value: unknown, rules: BlackjackTable): string | undefined {
+  if (value === null) return undefined;
+  if (!hasExactKeys(value, ['dealer', 'holeRevealed', 'peek', 'insurance', 'hands', 'active', 'others'])) return 'damaged round';
+  if (!isCards(value.dealer, 2) || typeof value.holeRevealed !== 'boolean') return 'damaged dealer hand';
+  if (!(['not-needed', 'pending', 'no-blackjack', 'blackjack'] as unknown[]).includes(value.peek)) return 'damaged peek';
+  if (!(['not-offered', 'offered', 'declined', 'insured'] as unknown[]).includes(value.insurance)) return 'damaged insurance';
+  if ((value.insurance === 'offered') !== (value.peek === 'pending')) return 'the peek does not match the insurance offer';
+  if ((value.insurance !== 'not-offered') !== ((value.dealer[0] as Card).rank === 1)) return 'insurance does not match the up card';
+  if (handsDamage(value.hands, (n) => `hand-${n}`)) return 'damaged hands';
+  const positions = otherPositions(rules);
+  const others = value.others;
+  if (!Array.isArray(others) || others.length !== positions.length) return 'damaged seats';
+  for (const [k, seat] of (others as unknown[]).entries()) {
+    if (!hasExactKeys(seat, ['seat', 'hands']) || seat.seat !== positions[k]) return 'damaged seats';
+    if (handsDamage(seat.hands, (n) => `seat-${positions[k]}-hand-${n}`)) return 'damaged seat hands';
+  }
+  const hands = value.hands as BlackjackHand[];
+  // While insurance is offered the first hand waits for that decision, even a natural (even money).
+  if (value.insurance === 'offered' ? value.active !== 0 : value.active !== null && !(isCount(value.active) && value.active < hands.length && !hands[value.active]?.done)) {
+    return 'damaged active hand';
+  }
   if ((value.active === null) !== value.holeRevealed) return 'the hole card does not match the round';
   return undefined;
 }
@@ -526,14 +1001,18 @@ function damage(value: Record<string, unknown>): string | undefined {
   if (!isBlackjackTable(value.rules)) return 'damaged rules';
   const shoe = shoeDamage(value.shoe, value.rules);
   if (shoe) return shoe;
-  const round = roundDamage(value.outcome);
+  const round = roundDamage(value.outcome, value.rules);
   if (round) return round;
   const { phase, wagers, turn } = value;
-  if (!isWagerList(wagers, (target) => (target === HAND_TARGET ? 0 : -1))) return 'damaged wagers';
-  if ((value.outcome === null) !== (turn === 0) || (value.outcome !== null && value.shoe === null)) return 'the round does not match the turn count';
   const r = value.outcome as BlackjackRound | null;
+  const targets = r === null ? [HAND_TARGET] : r.hands.map((hand) => hand.target);
+  if (!isWagerList(wagers, (target) => targets.indexOf(target))) return 'damaged wagers';
+  if ((value.outcome === null) !== (turn === 0) || (value.outcome !== null && value.shoe === null)) return 'the round does not match the turn count';
   const inPlay = phase === 'open-decision' && r !== null && r.active !== null;
-  if (inPlay && wagers.length === 0) return 'a hand in play has no wager';
+  const unsettled = inPlay || phase === 'revealing-outcome' || (phase === 'final-settlement' && wagers.length > 0);
+  // A dealt round stakes every learner hand; between rounds only the initial wager sits on the box.
+  if (unsettled && r !== null && wagers.length !== r.hands.length) return 'a hand in play has no wager';
+  if (!unsettled && wagers.some((wager) => wager.target !== HAND_TARGET)) return 'a split wager outside its round';
   if (phase === 'revealing-outcome' && (r === null || r.active !== null || wagers.length === 0)) return 'damaged revealing round';
   if (phase === 'final-settlement' && wagers.length > 0 && (r === null || r.active !== null)) return 'damaged final settlement';
   if ((phase === 'settled-outcome' || phase === 'completed') && wagers.length > 0) return 'wagers remain after settlement';
@@ -547,7 +1026,7 @@ export const BLACKJACK: GameModule<BlackjackActivityState, BlackjackPermittedVie
   pinRules: (rules) =>
     isBlackjackRuleSet(rules)
       ? blackjackTable(rules)
-      : `blackjack rules need six decks, S17 or H17, a penetration of 50-80% in 5% steps and whole-unit limits from 1 to ${BASE_WAGER_CEILING}`,
+      : `blackjack rules need six decks, S17 or H17, a penetration of 50-80% in 5% steps, whole-unit limits from 1 to ${BASE_WAGER_CEILING} and up to ${MAX_OTHER_PLAYERS} other players with fixed wagers and a basic strategy`,
   legal,
   apply,
   view,
