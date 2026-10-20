@@ -7,6 +7,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { FeedbackProvider } from '@/feedback/FeedbackProvider';
 import { PracticeProvider } from '@/practice/PracticeProvider';
 import { palette } from '@/theme/tokens';
 
@@ -39,7 +40,9 @@ export default function RootLayout() {
       <ThemeProvider value={theme}>
         <StatusBar style="light" />
         <PracticeProvider>
-          <Slot />
+          <FeedbackProvider>
+            <Slot />
+          </FeedbackProvider>
         </PracticeProvider>
       </ThemeProvider>
     </SafeAreaProvider>

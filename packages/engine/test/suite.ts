@@ -10,9 +10,20 @@ import { fundingCases } from './funding.cases';
 import { hashCases } from './hash.cases';
 import { moneyCases } from './money.cases';
 import { randomCases } from './random.cases';
+import { rouletteCases } from './roulette.cases';
 import { runtimeCases } from './runtime.cases';
 
 export const engineSuite: Suite = {
   name: 'engine',
-  cases: [...runtimeCases, ...engineCases, ...randomCases, ...drawCases, ...moneyCases, ...hashCases, ...activityCases, ...fundingCases],
+  cases: [
+    ...runtimeCases,
+    ...engineCases,
+    ...randomCases,
+    ...drawCases,
+    ...moneyCases,
+    ...hashCases,
+    ...activityCases,
+    ...fundingCases,
+    ...rouletteCases,
+  ],
 };

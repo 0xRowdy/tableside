@@ -5,7 +5,7 @@
 // prescription arrive with the strategy interpreter (#74).
 
 import { canonicalJson } from './canonical';
-import { spinRoulette, type RoulettePocket } from './draws';
+import { spinRoulette, type RoulettePocket, type RouletteWheel } from './draws';
 import {
   addRebuy,
   cumulativeFunding,
@@ -21,7 +21,17 @@ import {
 } from './funding';
 import { add, compare, decodeMoney, encodeMoney, money, sub, type Money } from './money';
 import { RANDOM_PROTOCOL_VERSION, RandomStream, type RandomStreamIdentity, type RandomStreamState } from './random';
-import { isPocket, netResult, PLACEMENTS, placementFor, placementOrder, ROULETTE_RULES, type LimitClass, type RoulettePlacement } from './roulette';
+import {
+  isPocket,
+  netResult,
+  placementFor,
+  placementOrder,
+  ROULETTE_RULE_SETS,
+  rouletteLayout,
+  type LimitClass,
+  type PlacementKind,
+  type RoulettePlacement,
+} from './roulette';
 import { sha256Hex } from './sha256';
 import { ENGINE_VERSION } from './version';
 
@@ -45,7 +55,7 @@ export interface Limit {
 }
 
 export interface RouletteRuleSet extends VersionedIdentity {
-  readonly wheel: 'single-zero';
+  readonly wheel: RouletteWheel;
   readonly limits: { readonly inside: Limit; readonly outside: Limit };
 }
 
@@ -196,8 +206,17 @@ export interface PermittedView {
     readonly headroom: string;
   };
   readonly table: {
-    readonly wheel: 'single-zero';
-    readonly placements: readonly { target: string; limitClass: LimitClass; min: string; max: string; payout: string }[];
+    readonly wheel: RouletteWheel;
+    /** Every legal placement on the layout, in canonical order. */
+    readonly placements: readonly {
+      target: string;
+      kind: PlacementKind;
+      covers: readonly RoulettePocket[];
+      limitClass: LimitClass;
+      min: string;
+      max: string;
+      payout: string;
+    }[];
   };
 }
 
@@ -259,6 +278,12 @@ function isLimit(value: unknown): value is Limit {
   return isWholeIn(min, 1n, BASE_WAGER_CEILING) && isWholeIn(max, 1n, BASE_WAGER_CEILING) && compare(min, max) <= 0;
 }
 
+const isWheel = (value: unknown): value is RouletteWheel => value === 'single-zero' || value === 'double-zero';
+
+/** True when the id, version and wheel name one of the rule sets this engine runs. */
+const isRuleSet = (value: Record<string, unknown>): boolean =>
+  isWheel(value.wheel) && value.id === ROULETTE_RULE_SETS[value.wheel].id && value.version === ROULETTE_RULE_SETS[value.wheel].version;
+
 const isLimits = (value: unknown): value is RouletteRuleSet['limits'] =>
   hasExactKeys(value, ['inside', 'outside']) && isLimit(value.inside) && isLimit(value.outside);
 
@@ -298,9 +323,7 @@ export function createActivity(spec: ActivitySpecification, random: RandomStream
   if (!isText(spec.activityId) || !isText(spec.owner) || !isText(spec.device)) fail('activity id, owner and device are required');
   if (spec.game !== 'roulette') fail(`unsupported game ${String(spec.game)}`);
   const rules = spec.rules;
-  if (!isRecord(rules) || rules.id !== ROULETTE_RULES.id || rules.version !== ROULETTE_RULES.version || rules.wheel !== ROULETTE_RULES.wheel) {
-    fail('unsupported roulette rules');
-  }
+  if (!isRecord(rules) || !isRuleSet(rules)) fail('unsupported roulette rules');
   if (!isLimits(rules.limits)) fail(`limits must be whole units from 1 to ${BASE_WAGER_CEILING} with min <= max`);
   if (spec.strategy !== null && !isIdentity(spec.strategy)) fail('strategy must be null or an id and version');
   if (spec.reference !== null && !isIdentity(spec.reference)) fail('reference must be null or an id and version');
@@ -455,7 +478,8 @@ const sessionValue = (state: Pick<ActivityState, 'balance' | 'wagers'>): Money =
   state.wagers.reduce((sum, wager) => add(sum, decodeMoney(wager.amount)), decodeMoney(state.balance));
 
 function placeWager(state: ActivityState, target: string, amount: Money): Step {
-  const placement = placementFor(target);
+  const wheel = state.rules.wheel;
+  const placement = placementFor(wheel, target);
   if (!placement) return { illegal: 'unknown-target' };
   const existing = state.wagers.find((wager) => wager.target === target);
   const previous = existing ? decodeMoney(existing.amount) : money(0n);
@@ -470,7 +494,7 @@ function placeWager(state: ActivityState, target: string, amount: Money): Step {
   if (balance.n < 0n) return { illegal: 'insufficient-funds' };
   const others = state.wagers.filter((wager) => wager.target !== target);
   const wagers = amount.n === 0n ? others : [...others, { target, amount: encodeMoney(amount) }];
-  wagers.sort((a, b) => placementOrder(a.target) - placementOrder(b.target));
+  wagers.sort((a, b) => placementOrder(wheel, a.target) - placementOrder(wheel, b.target));
   return {
     change: { phase: 'open-decision', balance: encodeMoney(balance), wagers },
     facts: [{ kind: 'wager-changed', target, amount: encodeMoney(amount), previous: encodeMoney(previous) }],
@@ -486,7 +510,7 @@ function settle(state: ActivityState): { balance: string; facts: DomainFact[] } 
   const outcome = state.outcome as NonNullable<ActivityState['outcome']>;
   for (const wager of state.wagers) {
     // Every stored target is a layout placement (placeWager and decode both check).
-    const placement = placementFor(wager.target) as RoulettePlacement;
+    const placement = placementFor(state.rules.wheel, wager.target) as RoulettePlacement;
     const stake = decodeMoney(wager.amount);
     const net = netResult(placement, stake, outcome.pocket);
     const won = net.n > 0n;
@@ -533,8 +557,10 @@ export function readPermittedView(state: ActivityState): PermittedView {
     },
     table: {
       wheel: state.rules.wheel,
-      placements: PLACEMENTS.map((placement) => ({
+      placements: rouletteLayout(state.rules.wheel).map((placement) => ({
         target: placement.target,
+        kind: placement.kind,
+        covers: [...placement.covers],
         limitClass: placement.limitClass,
         min: state.rules.limits[placement.limitClass].min,
         max: state.rules.limits[placement.limitClass].max,
@@ -577,7 +603,7 @@ function unsupportedVersion(value: unknown): string | undefined {
   if (typeof identities.engine === 'string' && identities.engine !== ENGINE_VERSION) return `unsupported engine ${identities.engine}`;
   if (typeof identities.game === 'string' && identities.game !== 'roulette') return `unsupported game ${identities.game}`;
   const rules = identities.rules;
-  if (isIdentity(rules) && (rules.id !== ROULETTE_RULES.id || rules.version !== ROULETTE_RULES.version)) {
+  if (isIdentity(rules) && !Object.values(ROULETTE_RULE_SETS).some((set) => set.id === rules.id && set.version === rules.version)) {
     return `unsupported rules ${rules.id} v${rules.version}`;
   }
   const random = identities.random;
@@ -613,7 +639,9 @@ function stateDamage(value: unknown): string | undefined {
   if (identities.strategy !== null && !isIdentity(identities.strategy)) return 'damaged strategy identity';
   if (identities.reference !== null && !isIdentity(identities.reference)) return 'damaged reference identity';
   if (!hasExactKeys(identities.random, ['protocol', 'key', 'session'])) return 'damaged random identity';
-  if (!hasExactKeys(rules, ['wheel', 'limits']) || rules.wheel !== ROULETTE_RULES.wheel || !isLimits(rules.limits)) return 'damaged rules';
+  if (!hasExactKeys(rules, ['wheel', 'limits']) || !isWheel(rules.wheel) || !isLimits(rules.limits)) return 'damaged rules';
+  if (!isRuleSet({ ...identities.rules, wheel: rules.wheel })) return 'the rules do not match their recorded identity';
+  const wheel = rules.wheel;
 
   let random: RandomStreamState;
   try {
@@ -638,10 +666,10 @@ function stateDamage(value: unknown): string | undefined {
   for (const wager of wagers as unknown[]) {
     if (!hasExactKeys(wager, ['target', 'amount']) || typeof wager.target !== 'string') return 'damaged wager';
     const amount = parseMoney(wager.amount);
-    if (amount === undefined || amount.n <= 0n || placementOrder(wager.target) <= order) return 'damaged wager';
-    order = placementOrder(wager.target);
+    if (amount === undefined || amount.n <= 0n || placementOrder(wheel, wager.target) <= order) return 'damaged wager';
+    order = placementOrder(wheel, wager.target);
   }
-  if (outcome !== null && !(hasExactKeys(outcome, ['turn', 'pocket']) && isCount(outcome.turn) && outcome.turn >= 1 && outcome.turn === turn && isPocket(outcome.pocket))) {
+  if (outcome !== null && !(hasExactKeys(outcome, ['turn', 'pocket']) && isCount(outcome.turn) && outcome.turn >= 1 && outcome.turn === turn && isPocket(wheel, outcome.pocket))) {
     return 'damaged outcome';
   }
   if ((outcome === null) !== (turn === 0)) return 'the outcome does not match the turn count';

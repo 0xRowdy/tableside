@@ -17,6 +17,7 @@ export const palette = {
   scrim: '#000000B3',
   transparent: '#00000000',
   popover: '#1B2420',
+  muted: '#1E2723',
   correct: '#3FA877',
   destructive: '#E07A5F',
   felt: '#1B5A43',
@@ -82,6 +83,9 @@ export const essentialPairs: readonly {
   { use: 'wagered spot outline on a black pocket', kind: 'graphic', foreground: 'foreground', background: 'pocketBlack' },
   { use: 'wagered spot outline on the zero pocket', kind: 'graphic', foreground: 'foreground', background: 'pocketGreen' },
   { use: 'focused spot or chip ring on the felt', kind: 'graphic', foreground: 'ring', background: 'feltDeep' },
+  { use: 'outside spot label and payout on the felt', kind: 'text', foreground: 'onImage', background: 'felt' },
+  { use: 'wagered outside spot outline on the felt', kind: 'graphic', foreground: 'foreground', background: 'felt' },
+  { use: 'selected wheel choice outline', kind: 'graphic', foreground: 'primary', background: 'card' },
   { use: 'focused chip ring on the rail', kind: 'graphic', foreground: 'ring', background: 'rail' },
   { use: 'chip rack caption', kind: 'text', foreground: 'foreground', background: 'rail' },
   { use: 'buy-in field boundary', kind: 'graphic', foreground: 'controlBorder', background: 'card' },
@@ -94,6 +98,12 @@ export const essentialPairs: readonly {
   { use: '500 chip value', kind: 'text', foreground: 'onImage', background: 'chip500' },
   { use: '1K chip value', kind: 'text', foreground: 'ink', background: 'chip1k' },
   { use: 'selected chip ring on the rail', kind: 'graphic', foreground: 'primary', background: 'rail' },
+  { use: 'volume fill and switch on', kind: 'graphic', foreground: 'primary', background: 'card' },
+  { use: 'volume thumb', kind: 'graphic', foreground: 'foreground', background: 'card' },
+  { use: 'switch knob when off', kind: 'graphic', foreground: 'mutedForeground', background: 'muted' },
+  { use: 'switch knob when on', kind: 'graphic', foreground: 'primaryForeground', background: 'primary' },
+  { use: 'check mark on the switch knob', kind: 'graphic', foreground: 'primary', background: 'primaryForeground' },
+  { use: 'volume button icon', kind: 'graphic', foreground: 'foreground', background: 'secondary' },
 ];
 
 export const space = { 1: 4, 2: 8, 3: 12, 4: 16, 6: 24, 8: 32, 12: 48, 16: 64 } as const;
