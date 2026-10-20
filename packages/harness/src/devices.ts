@@ -2,6 +2,7 @@
 // The app is built in Release, so the suite runs on the same bundled Hermes
 // bytecode a store build ships, and posts its report back over HTTP.
 import { spawn, execFileSync } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 import { mkdirSync, openSync, rmSync } from 'node:fs';
 import { createServer } from 'node:http';
 import path from 'node:path';
@@ -13,11 +14,16 @@ const PORT = 8099;
 const BUILD_TIMEOUT_MS = 45 * 60_000;
 const REPORT_TIMEOUT_AFTER_LAUNCH_MS = 3 * 60_000;
 
+// Each run bundles its own report path, so a harness app left running from an
+// earlier run can't deliver a report for this one.
+const RUN_ID = randomUUID();
+const REPORT_PATH = `/report/${RUN_ID}`;
+
 const harnessEnv = {
   ...process.env,
   // Bundle the harness entry instead of the app (inlined at bundle time).
   EXPO_PUBLIC_ENGINE_HARNESS: '1',
-  EXPO_PUBLIC_ENGINE_HARNESS_URL: `http://127.0.0.1:${PORT}/report`,
+  EXPO_PUBLIC_ENGINE_HARNESS_URL: `http://127.0.0.1:${PORT}${REPORT_PATH}`,
   // Prebuild applies the harness-only config plugin.
   ENGINE_HARNESS: '1',
   // Non-interactive Expo CLI.
@@ -63,7 +69,7 @@ function receiveReports() {
   let deliver: (report: Report) => void = () => {};
   const next = new Promise<Report>((resolve) => (deliver = resolve));
   const server = createServer((request, response) => {
-    if (request.method !== 'POST' || request.url !== '/report') {
+    if (request.method !== 'POST' || request.url !== REPORT_PATH) {
       response.writeHead(404).end();
       return;
     }

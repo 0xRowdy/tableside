@@ -24,11 +24,16 @@ export default function Home() {
         {!sideBySide && <Text maxFontSizeMultiplier={textScale.body} style={styles.subtitle}>Pick a table to practice.</Text>}
       </View>
       <View style={[styles.cards, sideBySide && styles.cardsSideBySide]}>
-        {LAUNCH_GAMES.map((game) => (
+        {LAUNCH_GAMES.map((game, i) => (
           <GameCard
             key={game.id}
             game={game}
             style={styles.card}
+            // Side by side, only the outer cards meet the screen edges.
+            contentInset={{
+              left: !sideBySide || i === 0 ? insets.left : 0,
+              right: !sideBySide || i === LAUNCH_GAMES.length - 1 ? insets.right : 0,
+            }}
             onPress={() => router.navigate({ pathname: '/play', params: { game: game.id } })}
           />
         ))}

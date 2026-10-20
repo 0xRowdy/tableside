@@ -7,7 +7,18 @@ import type { LaunchGame } from '@/games';
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
 import { fonts, palette, space, textScale } from '@/theme/tokens';
 
-export function GameCard({ game, onPress, style }: { game: LaunchGame; onPress: () => void; style?: StyleProp<ViewStyle> }) {
+/** `contentInset` keeps the text clear of notches and rounded corners while the photo runs edge to edge. */
+export function GameCard({
+  game,
+  onPress,
+  style,
+  contentInset = { left: 0, right: 0 },
+}: {
+  game: LaunchGame;
+  onPress: () => void;
+  style?: StyleProp<ViewStyle>;
+  contentInset?: { left: number; right: number };
+}) {
   const { focused, focusProps } = useKeyboardFocus();
   return (
     <Pressable
@@ -20,7 +31,7 @@ export function GameCard({ game, onPress, style }: { game: LaunchGame; onPress: 
     >
       <Image source={game.image} contentFit="cover" accessible={false} style={StyleSheet.absoluteFill} />
       {/* Text sits on a solid scrim band, so it meets text contrast over any photo at any text size. */}
-      <View style={styles.content}>
+      <View style={[styles.content, { paddingLeft: CONTENT_PADDING + contentInset.left, paddingRight: CONTENT_PADDING + contentInset.right }]}>
         <LinearGradient colors={[palette.transparent, palette.scrim]} style={styles.fade} />
         <Text maxFontSizeMultiplier={textScale.body} style={styles.summary}>{game.summary}</Text>
         <View style={styles.titleRow}>
@@ -35,10 +46,12 @@ export function GameCard({ game, onPress, style }: { game: LaunchGame; onPress: 
   );
 }
 
+const CONTENT_PADDING = space[6] - 4;
+
 const styles = StyleSheet.create({
   card: { overflow: 'hidden', justifyContent: 'flex-end', backgroundColor: palette.card },
   pressed: { opacity: 0.85 },
-  content: { padding: space[6] - 4, gap: space[1], backgroundColor: palette.scrim },
+  content: { padding: CONTENT_PADDING, gap: space[1], backgroundColor: palette.scrim },
   fade: { position: 'absolute', left: 0, right: 0, bottom: '100%', height: space[16] },
   summary: {
     fontFamily: fonts.uiBold,

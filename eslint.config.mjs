@@ -1,7 +1,34 @@
 // Lint for the shared packages and tooling. The app has its own config
 // (apps/mobile/eslint.config.js, from eslint-config-expo).
+import path from 'node:path';
+
 import { defineConfig } from 'eslint/config';
 import tseslint from 'typescript-eslint';
+
+// no-restricted-imports only sees the specifier, so it can't tell `../src/x`
+// (same package) from `../../harness/src/x` (another package's internals).
+const portability = {
+  rules: {
+    'no-relative-outside-package': {
+      meta: { type: 'problem', schema: [] },
+      create(context) {
+        const parts = context.filename.split(path.sep);
+        const at = parts.lastIndexOf('packages');
+        if (at < 0) return {};
+        const packageRoot = parts.slice(0, at + 2).join(path.sep);
+        const check = (node) => {
+          const specifier = node.source?.value;
+          if (typeof specifier !== 'string' || !specifier.startsWith('.')) return;
+          const target = path.relative(packageRoot, path.resolve(path.dirname(context.filename), specifier));
+          if (target.startsWith('..') || path.isAbsolute(target)) {
+            context.report({ node: node.source, message: 'Relative imports stay inside this package; import other packages by name.' });
+          }
+        };
+        return { ImportDeclaration: check, ExportNamedDeclaration: check, ExportAllDeclaration: check };
+      },
+    },
+  },
+};
 
 const relativeOnly = (allowed = []) => ({
   patterns: [
@@ -15,6 +42,7 @@ const relativeOnly = (allowed = []) => ({
 
 const portabilityRules = (allowedImports) => ({
   'no-restricted-imports': ['error', relativeOnly(allowedImports)],
+  'portability/no-relative-outside-package': 'error',
   'no-restricted-globals': [
     'error',
     ...['Date', 'performance'].map((name) => ({ name, message: 'Clocks come from an adapter; game time never enters the engine.' })),
@@ -44,6 +72,7 @@ const portabilityRules = (allowedImports) => ({
 export default defineConfig(
   { ignores: ['**/node_modules/**', 'apps/mobile/**', 'harness-reports/**'] },
   ...tseslint.configs.recommended,
+  { files: ['packages/engine/**/*.ts', 'packages/definitions/**/*.ts'], plugins: { portability } },
   {
     files: ['packages/engine/**/*.ts'],
     rules: portabilityRules([]),

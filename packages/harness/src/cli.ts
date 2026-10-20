@@ -85,7 +85,7 @@ async function main(): Promise<boolean> {
       return judge([await nodeLeg()]);
     case 'ios':
     case 'android':
-      return judge([await nodeLeg(), await deviceLeg(command)]);
+      return judge([await nodeLeg(), await deviceLeg(command)], LAUNCH_LEGS.filter((leg) => leg.platform === 'node' || leg.platform === command));
     case 'compare': {
       const reports = await Promise.all(rest.map(async (file) => JSON.parse(await readFile(fromInvocation(file), 'utf8')) as Report));
       return judge(reports);

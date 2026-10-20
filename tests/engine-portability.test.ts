@@ -1,11 +1,12 @@
 import { readFile } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
 
 import { ESLint } from 'eslint';
 import { describe, expect, it } from 'vitest';
 
 // The engine and definitions packages run unchanged on Hermes and Node, so the
 // lint config forbids anything that ties them to a platform or the outside world.
-const eslint = new ESLint({ cwd: new URL('..', import.meta.url).pathname });
+const eslint = new ESLint({ cwd: fileURLToPath(new URL('..', import.meta.url)) });
 
 async function problems(code: string, file = 'packages/engine/src/example.ts'): Promise<string[]> {
   const [result] = await eslint.lintText(code, { filePath: file });
@@ -49,6 +50,18 @@ describe('engine portability rule', () => {
   it('allows relative imports and standard language features', async () => {
     const code = "import { ENGINE_VERSION } from './index';\nexport const v = `${ENGINE_VERSION}:${(2n ** 64n).toString()}`;\n";
     expect(await problems(code)).toEqual([]);
+  });
+
+  it.each([
+    ["import { runDeviceLeg } from '../../harness/src/devices';", 'packages/engine/src/example.ts', 'a sibling package'],
+    ["export * from '../../../apps/mobile/src/games';", 'packages/engine/test/example.ts', 'the app'],
+    ["import { ENGINE_VERSION } from '../../engine/src/index';", 'packages/definitions/src/x.ts', 'the engine, bypassing its entry'],
+  ])('rejects %s from %s (relative import into %s)', async (code, file) => {
+    expect(await problems(code, file)).toContain('portability/no-relative-outside-package');
+  });
+
+  it('allows relative imports between folders of the same package', async () => {
+    expect(await problems("import { ENGINE_VERSION } from '../src/index';\nexport const v = ENGINE_VERSION;\n", 'packages/engine/test/x.ts')).toEqual([]);
   });
 
   it('applies to the definitions package, which may import the engine', async () => {

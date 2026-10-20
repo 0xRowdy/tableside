@@ -55,7 +55,7 @@ npx expo install <package>   # add dependencies at SDK-compatible versions
 
 The engine and definitions packages must run unchanged on Hermes and Node, so `eslint.config.mjs` restricts them to:
 
-- relative imports only (definitions may also import the engine), so no React, Expo, Node, network, account, advertising or subscription packages;
+- relative imports only, and only within the package (definitions may also import the engine by name), so no React, Expo, Node, network, account, advertising or subscription packages;
 - no clocks (`Date`, `performance`), timers, network, storage, platform globals, `Math.random`, `Intl` or `console`.
 
 The engine has no package dependencies, and its TypeScript config includes only the standard ES library. `tests/engine-portability.test.ts` checks that the rule rejects each category.
