@@ -9,22 +9,19 @@ import { Modal, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Button } from '@/components/Button';
 import { fonts, palette, radius, space, textScale } from '@/theme/tokens';
 
-import { crapsTargetName } from './craps-text';
-import { formatUnits, targetName } from './roulette-text';
+import { GAME_WORDS } from './game-words';
+import { formatUnits } from './units';
 
 /**
  * What ending would do with each wager. Roulette: every wager comes back
  * between spins. Craps: contracts on their number stay and roll on to settle.
  * Blackjack: the initial wager comes back between rounds; a dealt round settles.
  */
-function endingWagers(view: PermittedView): { removable: readonly Wager[]; committed: readonly Wager[]; name: (target: string) => string } {
-  if (view.wagersCommitted) {
-    return { removable: [], committed: view.wagers, name: view.game === 'craps' ? crapsTargetName : view.game === 'blackjack' ? () => 'Initial wager' : targetName };
-  }
-  if (view.game === 'blackjack') return { removable: view.wagers, committed: [], name: () => 'Initial wager' };
-  if (view.game !== 'craps') return { removable: view.wagers, committed: [], name: targetName };
+function endingWagers(view: PermittedView): { removable: readonly Wager[]; committed: readonly Wager[] } {
+  if (view.wagersCommitted) return { removable: [], committed: view.wagers };
+  if (view.game !== 'craps') return { removable: view.wagers, committed: [] };
   const contract = (wager: Wager) => view.table.wagers.find((item) => item.target === wager.target)?.removable === false;
-  return { removable: view.wagers.filter((w) => !contract(w)), committed: view.wagers.filter(contract), name: crapsTargetName };
+  return { removable: view.wagers.filter((w) => !contract(w)), committed: view.wagers.filter(contract) };
 }
 
 export function EndSessionDialog({
@@ -46,9 +43,10 @@ export function EndSessionDialog({
   // Game ids are the lower-case game names used in sentences.
   const from = view.game;
   const to = switchTo;
-  const { removable, committed, name } = endingWagers(view);
+  const words = GAME_WORDS[view.game];
+  const { removable, committed } = endingWagers(view);
   const list = (wagers: readonly Wager[], none: string) =>
-    wagers.length === 0 ? none : wagers.map((w) => `${name(w.target)} ${formatUnits(w.amount)}`).join(' · ');
+    wagers.length === 0 ? none : wagers.map((w) => `${words.wagerName(w.target)} ${formatUnits(w.amount)}`).join(' · ');
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel} supportedOrientations={['portrait', 'landscape']}>
       <View style={styles.scrim}>
@@ -69,12 +67,7 @@ export function EndSessionDialog({
               },
               {
                 title: 'Committed wagers settle automatically',
-                detail:
-                  view.game === 'craps'
-                    ? list(committed, 'No contracts on the table')
-                    : view.game === 'blackjack'
-                      ? list(committed, 'None between rounds')
-                      : 'None between spins',
+                detail: list(committed, words.noneCommitted),
               },
               to
                 ? { title: `Your ${from} result is saved, then ${to} setup opens`, detail: 'Results and departures in Saved › Practice' }

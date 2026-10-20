@@ -6,7 +6,8 @@ import { Button } from '@/components/Button';
 import { GameCard } from '@/components/GameCard';
 import { Notice, NoticeText } from '@/components/Notice';
 import { LAUNCH_GAMES } from '@/games';
-import { STATUS } from '@/play/roulette-text';
+import { GAME_WORDS, modeText } from '@/play/game-words';
+import { capitalize } from '@/play/units';
 import { usePractice } from '@/practice/PracticeProvider';
 import { fonts, palette, space, textScale } from '@/theme/tokens';
 
@@ -20,6 +21,7 @@ export default function Home() {
   const sideBySide = width > height && fontScale <= SIDE_BY_SIDE_MAX_FONT_SCALE;
   const { snapshot } = usePractice();
   const suspended = snapshot.status === 'active' && snapshot.suspension?.reached ? snapshot : null;
+  const words = suspended ? GAME_WORDS[suspended.view.game] : null;
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
@@ -29,11 +31,13 @@ export default function Home() {
         </Text>
         {!sideBySide && <Text maxFontSizeMultiplier={textScale.body} style={styles.subtitle}>Pick a table to practice.</Text>}
       </View>
-      {suspended && (
+      {suspended && words && (
         // Design frame S1-01 "Home — session paused" (a suspension, in the glossary). Balances stay in the session (Amendment 1 A6).
         <View style={[styles.suspended, { marginLeft: insets.left + space[4], marginRight: insets.right + space[4] }]}>
-          <Notice title="Roulette session suspended" testID="session-suspended">
-            <NoticeText>Free play · {STATUS[suspended.view.phase].toLowerCase()}. Nothing has been spun or settled since you left.</NoticeText>
+          <Notice title={`${words.title} session suspended`} testID="session-suspended">
+            <NoticeText>
+              {capitalize(modeText(suspended.view.strategy))} · {words.status(suspended.view).toLowerCase()}. Nothing has been {words.drawn} or settled since you left.
+            </NoticeText>
             <Button label="Resume session" onPress={() => router.navigate('/play')} />
           </Notice>
         </View>

@@ -97,6 +97,23 @@ describe('suspension', () => {
     expect(await screen.findByLabelText('Session balance 975')).toBeOnTheScreen();
   });
 
+  it('names the suspended session’s own game, mode and status on Home and on the resume screen', async () => {
+    await renderRouter('./src/app', { initialUrl: '/play?game=craps' });
+    await fireEvent.press(await screen.findByRole('radio', { name: 'Guided practice' }));
+    await fireEvent.press(screen.getByRole('radio', { name: 'Pass with odds' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Start guided practice' }));
+    await screen.findByLabelText('Session balance 1,000');
+
+    await fireEvent.press(screen.getByRole('tab', { name: 'Home' }));
+    expect(await screen.findByRole('header', { name: 'Craps session suspended' })).toBeOnTheScreen();
+    expect(screen.getByText('Guided · Pass with odds · come-out roll. Nothing has been rolled or settled since you left.')).toBeOnTheScreen();
+
+    await relaunch();
+    await fireEvent.press(screen.getByRole('button', { name: 'Resume session' }));
+    expect(await screen.findByText('Craps · guided · Pass with odds')).toBeOnTheScreen();
+    expect(screen.getByLabelText('Where you were: Come-out roll')).toBeOnTheScreen();
+  });
+
   it('after a relaunch, offers to pick up the session where it was, and resumes the same table', async () => {
     await startSession();
     await betRed25();

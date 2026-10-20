@@ -6,25 +6,16 @@
 
 import type { AdherenceMeasure, BetCorrection, CycleEnd, Explanation, PendingStrategyAction, StrategyView, Wager } from '@tableside/engine';
 
-import { crapsTargetName } from './craps-text';
-import { targetName } from './roulette-text';
-import type { TurnWord } from './strategy-text';
+import { GAME_WORDS, type GameWords } from './game-words';
 import { capitalize, formatUnits, totalStake } from './units';
 
-/** How a game words its wagers and its turns. */
-export interface CoachWords {
-  readonly targetName: (target: string) => string;
-  readonly turn: TurnWord;
-  /** The turn as a title: "Spin", "Roll". */
-  readonly Turn: string;
-  /** True where some wagers are contracts that stay until the game settles them (craps line bets). */
-  readonly contracts: boolean;
-}
+/** How a game words its wagers and its turns (game-words.ts). */
+export type CoachWords = Pick<GameWords, 'targetName' | 'turn' | 'Turn' | 'contracts'>;
 
-export const ROULETTE_WORDS: CoachWords = { targetName, turn: 'spin', Turn: 'Spin', contracts: false };
-export const CRAPS_WORDS: CoachWords = { targetName: crapsTargetName, turn: 'roll', Turn: 'Roll', contracts: true };
+export const ROULETTE_WORDS: CoachWords = GAME_WORDS.roulette;
+export const CRAPS_WORDS: CoachWords = GAME_WORDS.craps;
 /** Blackjack's betting decision is the initial wager before a round. */
-export const BLACKJACK_WORDS: CoachWords = { targetName: () => 'your hand', turn: 'round', Turn: 'Round', contracts: false };
+export const BLACKJACK_WORDS: CoachWords = GAME_WORDS.blackjack;
 
 /** "a, b and c". */
 const listed = (items: readonly string[]) => (items.length < 2 ? items.join('') : `${items.slice(0, -1).join(', ')} and ${items.at(-1)}`);
