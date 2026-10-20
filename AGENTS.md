@@ -1,5 +1,7 @@
 # Tableside
 
+pnpm workspace: install with `pnpm install`, run tools with `pnpm exec`, one-off packages with `pnpm dlx`.
+
 ## Agent skills
 
 ### Issue tracker

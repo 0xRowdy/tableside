@@ -1,0 +1,13 @@
+{
+  "name": "@tableside/harness",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/portable.ts",
+    "./compare": "./src/compare.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p .",
+    "harness": "tsx src/cli.ts"
+  }
+}
