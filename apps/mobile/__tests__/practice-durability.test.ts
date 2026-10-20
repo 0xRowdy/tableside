@@ -342,7 +342,7 @@ describe('snapshots', () => {
     // A session saved under rules whose outside minimum was 50, unlike today's 10.
     const rules = { ...SINGLE_ZERO_ROULETTE, limits: { ...SINGLE_ZERO_ROULETTE.limits, outside: { min: '50', max: '1000' } } };
     const random = { protocol: 1, key: [PI_WORDS[0], PI_WORDS[1]], session: [PI_WORDS[2], PI_WORDS[3]] } as const;
-    const specification = { activityId: 'old', owner: 'local', device: 'test-device', game: 'roulette', rules, strategy: null, reference: null, funding: '1000' } as const;
+    const specification = { activityId: 'old', owner: 'local', device: 'test-device', game: 'roulette', rules, strategy: null, reference: null, fundingSource: 'practice-funding', funding: '1000' } as const;
     const initial = createActivity(specification, random);
     await adapters.store.createActivity({ activityId: 'old', specification, random, checkpoint: encodeCheckpoint(initial), createdAt: 0 });
     expect(JSON.parse(encodeCheckpoint(initial)).rules.limits.outside).toEqual({ min: '50', max: '1000' });
