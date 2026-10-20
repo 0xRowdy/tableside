@@ -15,7 +15,8 @@ const project = (platform) => {
 };
 
 module.exports = {
-  // The first render transforms the whole route tree, which is slow on a cold cache (as in CI).
+  // Above Jest's 5 s default for RNTL's async renders; the app shell test warms up
+  // the route tree in beforeAll, which has its own longer timeout.
   testTimeout: 30_000,
   projects: [project('ios'), project('android')],
 };

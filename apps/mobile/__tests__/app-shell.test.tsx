@@ -1,4 +1,4 @@
-import { act, fireEvent, screen, within } from '@testing-library/react-native';
+import { act, cleanup, fireEvent, screen, within } from '@testing-library/react-native';
 import { renderRouter } from 'expo-router/testing-library';
 
 const TAB_LABELS = ['Home', 'Play', 'Counting', 'Community', 'Saved', 'More'];
@@ -16,6 +16,13 @@ function tabBar() {
 }
 
 describe('app shell', () => {
+  // The first render transforms the whole route tree, which takes most of a
+  // minute on a cold cache (as in CI). Pay that once here, not inside a test.
+  beforeAll(async () => {
+    await renderApp();
+    await cleanup();
+  }, 180_000);
+
   it('opens on Home with the six labelled tabs and Home selected', async () => {
     await renderApp();
 
