@@ -13,6 +13,10 @@ import type { PracticeSnapshot } from '@/practice/controller';
 import { usePractice } from '@/practice/PracticeProvider';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale, type ColorToken } from '@/theme/tokens';
 
+import { BetSelector } from './bet-selector/BetSelector';
+import { EMPTY_DRAFT, findChoice, isDraftPending, type BetDraft } from './bet-selector/catalog';
+import { DraftBar, PresentationSwitch, type Presentation } from './bet-selector/Presentation';
+import { rouletteCatalog, roulettePlacedWagers } from './roulette-catalog';
 import { describeFacts, describePocket, formatUnits, pocketColor, STATUS, targetName, totalOnTable } from './roulette-text';
 import { PhaseStepper, SessionStrip, TableTopBar, type PhaseStep } from './TableChrome';
 
@@ -55,7 +59,13 @@ export function RouletteTable({ snapshot }: { snapshot: ActiveSnapshot }) {
   const sideBySide = width > height && fontScale <= SIDE_BY_SIDE_MAX_FONT_SCALE;
   const [chip, setChip] = useState('5');
   const [confirming, setConfirming] = useState(false);
+  // Held here, above both presentations, so rotation, resizing and switching keep the draft.
+  const [presentation, setPresentation] = useState<Presentation>('table');
+  const [draft, setDraft] = useState<BetDraft>(EMPTY_DRAFT);
   const { view, facts, busy, save } = snapshot;
+  const catalog = useMemo(() => rouletteCatalog(view), [view]);
+  const placed = useMemo(() => roulettePlacedWagers(view), [view]);
+  const drafted = isDraftPending(draft, placed) ? findChoice(catalog, draft.target) : undefined;
 
   const ready = !busy && save === 'saved';
   const legal = (kind: PermittedView['legalCommands'][number]) => ready && view.legalCommands.includes(kind);
@@ -95,6 +105,7 @@ export function RouletteTable({ snapshot }: { snapshot: ActiveSnapshot }) {
         <TableTopBar title="Roulette" subtitle={limitsText(view)} canEnd={legal('request-stop')} onEnd={() => setConfirming(true)} />
         <PhaseStepper steps={phaseSteps(view)} />
         <SessionStrip balance={formatUnits(view.balance)} onTable={formatUnits(totalOnTable(view))} status={STATUS[view.phase]} />
+        {view.phase !== 'final-settlement' && <PresentationSwitch value={presentation} onChange={setPresentation} />}
 
         {save === 'failed' && (
           <View style={styles.banner}>
@@ -116,7 +127,34 @@ export function RouletteTable({ snapshot }: { snapshot: ActiveSnapshot }) {
         ) : (
           <View testID="table-columns" style={[styles.columns, sideBySide && styles.columnsSideBySide]}>
             <View style={styles.column}>
-              <Felt view={view} canPlace={canPlace} chip={chip} wagerOn={wagerOn} onSpot={addChip} />
+              {presentation === 'table' ? (
+                <View style={styles.tableView}>
+                  {drafted && (
+                    <DraftBar
+                      name={drafted.choice.name}
+                      amount={draft.text}
+                      onEdit={() => {
+                        setDraft({ ...draft, kind: drafted.kind.id });
+                        setPresentation('list');
+                      }}
+                    />
+                  )}
+                  <Felt view={view} canPlace={canPlace} chip={chip} wagerOn={wagerOn} onSpot={addChip} />
+                </View>
+              ) : (
+                <BetSelector
+                  catalog={catalog}
+                  wagers={placed}
+                  balance={view.balance}
+                  facts={facts}
+                  sequence={view.sequence}
+                  canPlace={canPlace}
+                  draft={draft}
+                  onDraftChange={setDraft}
+                  onSet={(target, amount) => void controller.placeWager(target, amount)}
+                  onRemove={(target) => void controller.placeWager(target, '0')}
+                />
+              )}
             </View>
             <View style={[styles.column, styles.controls]}>
               {message && (
@@ -146,7 +184,7 @@ export function RouletteTable({ snapshot }: { snapshot: ActiveSnapshot }) {
                 </Text>
               </View>
               <Button label="Spin" stretch disabled={!legal('begin-turn')} onPress={() => void controller.spin()} />
-              <ChipRack chip={chip} onChoose={setChip} />
+              {presentation === 'table' && <ChipRack chip={chip} onChoose={setChip} />}
             </View>
           </View>
         )}
@@ -377,6 +415,7 @@ const styles = StyleSheet.create({
   columns: { gap: space[3], paddingTop: space[2] },
   columnsSideBySide: { flexDirection: 'row', alignItems: 'flex-start' },
   column: { flex: 1 },
+  tableView: { gap: space[3] },
   controls: { gap: space[3], paddingHorizontal: space[4] },
   message: { fontFamily: fonts.uiMedium, fontSize: 15, lineHeight: 21, color: palette.foreground },
   sectionLabel: { fontFamily: fonts.uiBold, fontSize: 10, letterSpacing: 0.5, color: palette.mutedForeground },
