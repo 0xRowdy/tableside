@@ -313,6 +313,30 @@ function oddsCap(cap: OddsCap, dont: boolean, n: CrapsPoint, base: Money): Money
   return dont ? mul(take, TRUE_ODDS[n]) : take;
 }
 
+/**
+ * An upper bound on one roll under these rules: every flat target (line
+ * bases, traveled come and don't come bases, place, buy, lay, field) at the
+ * flat maximum, the largest odds every base allows, and every hardway,
+ * proposition and horn part at the component maximum; and the largest profit
+ * any of them pays per unit (a 2 or 12 proposition at 30:1).
+ */
+export function crapsTurnExposure(rules: Pick<CrapsRuleSet, 'odds' | 'limits'>): { readonly stake: Money; readonly payout: Money } {
+  const flat = decodeMoney(rules.limits.flat.max);
+  const props = decodeMoney(rules.limits.props.max);
+  const points = CRAPS_POINTS.length;
+  // pass, don't pass, come, don't come; a traveled come and don't come base and a place, buy and lay bet per number; the field.
+  const flatTargets = 4 + points * 5 + 1;
+  const bases = 2 + points * 2;
+  const odds = CRAPS_POINTS.reduce((most, n) => {
+    const largest = [false, true].map((dont) => oddsCap(rules.odds, dont, n, flat)).reduce((a, b) => (compare(a, b) >= 0 ? a : b));
+    return compare(largest, most) > 0 ? largest : most;
+  }, money(0n));
+  const components = HARDWAYS.length + PROPOSITIONS.length + HORN_PARTS.length;
+  const stake = add(add(mul(flat, money(BigInt(flatTargets))), mul(odds, money(BigInt(bases)))), mul(props, money(BigInt(components))));
+  const payouts = [...PROPOSITIONS.map((target) => PROPOSITION_TERMS[target].pays), ...Object.values(HARD_PAYS), ...Object.values(PLACE_PAYS), ...Object.values(TRUE_ODDS), money(3n)];
+  return { stake, payout: payouts.reduce((a, b) => (compare(a, b) >= 0 ? a : b)) };
+}
+
 const ratioText = (ratio: Money) => `${ratio.n.toString()}:${ratio.d.toString()}`;
 
 /** Profit per unit staked on a place, buy, lay or hardway bet. */

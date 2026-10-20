@@ -2,10 +2,10 @@
 // suspend dispositions and the stop path, with substitute adapters.
 // Spin outcomes come from the Random123 "pi digits" stream: 27, 0, 25, 31, 9.
 
-import { CAPPED_MARTINGALE } from '@tableside/definitions';
+import { CAPPED_MARTINGALE, FLAT_EVEN_MONEY } from '@tableside/definitions';
 import type { DomainFact } from '@tableside/engine';
 
-import { alwaysAllowed, type AccessDecision, type AccessSupervisor, type AdmissionDecision, type PhaseReport, type TurnDecision } from '@/practice/adapters';
+import { alwaysAllowed, withRequiredRemovals, type AccessDecision, type AccessSupervisor, type AdmissionDecision, type PhaseReport, type TurnDecision } from '@/practice/adapters';
 import { PracticeController, REVEAL_MS, type PracticeSnapshot } from '@/practice/controller';
 import type { ActivityStore, TransitionCommit } from '@/practice/store';
 import { FakeClock, substituteAdapters } from '@/practice/testing/substitutes';
@@ -585,5 +585,55 @@ describe('the timed-metering hook', () => {
       await controller.spin();
     }
     expect(reports.at(-1)).toMatchObject({ phase: 'cycle-completion', timed: false });
+  });
+});
+
+describe('cycle restarts in practice (Amendment 6 §2)', () => {
+  it('a completed cycle waits for the player: practice never restarts it automatically', async () => {
+    // Capped Martingale on black from 1,000: 27 loses 10, 0 loses 20, 25 loses 40, 31 wins 80 and completes the cycle.
+    const { controller, commits } = setup();
+    await controller.load();
+    await controller.start({ game: 'roulette', buyIn: '1000', strategy: { definition: CAPPED_MARTINGALE, parameters: { target: 'black' } } });
+    for (const stake of ['10', '20', '40', '80']) {
+      await controller.placeWager('black', stake);
+      await controller.spin();
+    }
+    for (let i = 0; i < 20; i++) await new Promise((resolve) => setImmediate(resolve));
+    const { view } = active(controller.snapshot());
+    expect(view.phase).toBe('cycle-completion');
+    expect(view.legalCommands).toContain('restart-cycle');
+    expect(kinds(commits)).not.toContain('restart-cycle');
+  });
+});
+
+describe('required content removal (Amendment 6 §5)', () => {
+  it('stops a session running a removed strategy revision at the next turn boundary', async () => {
+    const removed = new Set<string>();
+    const script = scriptedAccess();
+    const access = withRequiredRemovals(script.access, { removed: (strategy) => removed.has(`${strategy.id}@${strategy.version}`) });
+    const adapters = { ...substituteAdapters({ clock: new FakeClock(undefined, true) }), access };
+    const commits = recordCommits(adapters.store);
+    const controller = new PracticeController(adapters);
+    await controller.load();
+    await controller.start({ game: 'roulette', buyIn: '1000', strategy: { definition: FLAT_EVEN_MONEY, parameters: { target: 'red' } } });
+
+    await controller.placeWager('red', '10');
+    await controller.spin();
+    // The removal arrives (spec 6 syncs it) between turns: the next turn never begins.
+    removed.add(`${FLAT_EVEN_MONEY.id}@${FLAT_EVEN_MONEY.revision}`);
+    await controller.placeWager('red', '10');
+    await controller.spin();
+
+    expect(kinds(commits)).toEqual(['place-wager', 'begin-turn', 'settle-turn', 'place-wager', 'request-stop', 'advance-final-settlement']);
+    expect(controller.snapshot()).toMatchObject({ status: 'completed', result: { endingReason: 'access-ended' } });
+    // The supervisor behind it is never asked about the turn the removal stopped.
+    expect(script.asked.filter((q) => q.startsWith('turn'))).toEqual(['turn 1']);
+  });
+
+  it('leaves free play and other strategies alone', async () => {
+    const access = withRequiredRemovals(alwaysAllowed, { removed: (strategy) => strategy.id === 'another' });
+    expect(await access.beforeTurn({ activityId: 'a', turn: 1, strategy: null })).toMatchObject({ status: 'allowed' });
+    expect(await access.beforeTurn({ activityId: 'a', turn: 1, strategy: { id: FLAT_EVEN_MONEY.id, version: 1 } })).toMatchObject({ status: 'allowed' });
+    expect(await access.beforeTurn({ activityId: 'a', turn: 1, strategy: { id: 'another', version: 1 } })).toMatchObject({ status: 'denied', disposition: 'stop' });
   });
 });

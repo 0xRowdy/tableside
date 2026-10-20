@@ -1073,6 +1073,18 @@ function pendingAction(state: ActivityState): PendingStrategyAction | null {
   return held && run.deferred ? { ...held, turn: run.deferred.turn } : held;
 }
 
+/**
+ * What following the pinned strategy means for the betting decision the
+ * activity waits on: its prescription and what it can't place now (even where
+ * the view hides a pending action from a counting player). For a player that
+ * follows the strategy exactly, such as the standardized runner; never shown.
+ */
+export function strategyDecision(state: ActivityState): { readonly prescription: Explanation['prescription']; readonly held: PendingStrategyAction | null } | null {
+  const run = state.strategy;
+  if (!run) return null;
+  return { prescription: explain(state, run).prescription, held: heldAction(state, run) };
+}
+
 /** What the strategy can't place now, and why, if anything. */
 function heldAction(state: ActivityState, run: StrategyRun): PendingStrategyAction | null {
   const prescription = explain(state, run).prescription;

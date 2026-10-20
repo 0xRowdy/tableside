@@ -137,12 +137,13 @@ export {
   type RouletteRuleSet,
   type RouletteTable,
 } from './roulette';
-export { philox4x32 } from './philox';
+export { philox4x32, type Words2 } from './philox';
 export {
   RANDOM_PROTOCOL_VERSION,
   RandomStream,
   RandomStreamExhaustedError,
   RandomStreamStateError,
+  serverStreamIdentity,
   streamIdentityFromEntropy,
   uniformInt,
   type EntropySource,
@@ -271,3 +272,27 @@ export {
   type PublishedIndex,
   type UnavailableReason,
 } from './blackjack-strategy';
+export {
+  canonicalSpecification,
+  canonicalStrategy,
+  CANONICAL_ENCODING,
+  FingerprintIntegrityError,
+  verifySpecification,
+  type CanonicalSpecification,
+} from './fingerprint';
+export {
+  BENCHMARK_PROTOCOL,
+  deriveExposureBound,
+  exposureBoundProblems,
+  recordExposureProblems,
+  runStandardizedSession,
+  StandardizedRunError,
+  standardizedRecord,
+  startStandardizedSession,
+  stepStandardizedSession,
+  STANDARDIZED_STOP_CAUSES,
+  type BenchmarkProfile,
+  type StandardizedSession,
+  type StandardizedSessionRecord,
+  type StandardizedStopCause,
+} from './standardized';

@@ -147,6 +147,17 @@ export function uniformInt(stream: RandomStream, n: number): number {
 }
 
 /**
+ * A server run's stream identity (spec 6, Amendment 6 §4): the coordinator
+ * supplies the 64-bit key as [keyLow32, keyHigh32], and the session words are
+ * the session index, [indexLow32, indexHigh32]. Device entropy plays no part.
+ */
+export function serverStreamIdentity(key: Words2, sessionIndex: number): RandomStreamIdentity {
+  if (!isWords2(key)) throw new RandomStreamStateError('the coordinator key must be two unsigned 32-bit words');
+  if (!Number.isSafeInteger(sessionIndex) || sessionIndex < 0) throw new RangeError(`a session index is a whole number from 0, got ${sessionIndex}`);
+  return { protocol: RANDOM_PROTOCOL_VERSION, key: [key[0], key[1]], session: [sessionIndex % TWO_32, Math.floor(sessionIndex / TWO_32)] };
+}
+
+/**
  * The secure native entropy adapter. The app supplies it; the engine never
  * seeds from clocks or other predictable state.
  */

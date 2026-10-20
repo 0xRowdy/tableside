@@ -22,6 +22,7 @@ import { randomCases } from './random.cases';
 import { recordCases } from './record.cases';
 import { rouletteCases } from './roulette.cases';
 import { runtimeCases } from './runtime.cases';
+import { standardizedCases } from './standardized.cases';
 import { strategyCases } from './strategy.cases';
 import { guidedCases } from './guided.cases';
 import { progressionCases } from './progression.cases';
@@ -51,5 +52,6 @@ export const engineSuite: Suite = {
     ...crapsStrategyCases,
     ...recordCases,
     ...compatibilityCases,
+    ...standardizedCases,
   ],
 };
