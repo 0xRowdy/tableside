@@ -77,7 +77,6 @@ export function targetName(target: string): string {
 /** "35:1" → "35 to 1", as screen readers should say it. */
 export const spokenPayout = (payout: string) => payout.replace(':', ' to ');
 
-/** A pending strategy action, announced when it begins. The strip shows the amounts. */
 /** How a cycle-end fact is announced. */
 const CYCLE_END_ANNOUNCEMENT: Record<CycleEnd, string> = {
   completed: 'The strategy cycle is complete.',
@@ -87,6 +86,7 @@ const CYCLE_END_ANNOUNCEMENT: Record<CycleEnd, string> = {
   envelope: 'The strategy cycle ended: its next stake is too large to compute.',
 };
 
+/** A pending strategy action, announced when it begins. The pending panel shows the amounts. */
 const PAUSED: Record<PauseReason, string> = {
   'unfunded-group': "Strategy paused: your balance can't cover its next bets. No new strategy bets.",
   limit: 'Strategy paused: its next bets are outside the table limits. No new strategy bets.',

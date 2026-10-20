@@ -8,7 +8,7 @@
 
 import { canonicalJson } from './canonical';
 import { add, compare, decodeMoney, encodeMoney, money, mul, sub, MoneyFormatError, type Money } from './money';
-import { hasExactKeys as hasKeys, isRecord } from './shape';
+import { hasExactKeys, isRecord } from './shape';
 import { decodeStrategyLiteral, StrategyEnvelopeError, withinStrategyBits } from './strategy-envelope';
 
 /** The strategy envelope (spec #51, Exact money and limits). */
@@ -772,7 +772,7 @@ const sameIds = (record: Record<string, unknown>, ids: readonly string[]) => Obj
 
 /** A stored progress's problem against the definition, if any. */
 export function progressProblem(definition: StrategyDefinition, progress: unknown): string | undefined {
-  if (!hasKeys(progress, ['counters', 'lists', 'lastResult', 'cycleTurn'])) return 'damaged strategy progress';
+  if (!hasExactKeys(progress, ['counters', 'lists', 'lastResult', 'cycleTurn'])) return 'damaged strategy progress';
   if (!RESULTS.includes(progress.lastResult as TurnResult) || !isCount(progress.cycleTurn)) return 'damaged strategy progress';
   const { counters, lists } = progress;
   if (!isRecord(counters) || !sameIds(counters, definition.counters.map((c) => c.id))) return 'damaged strategy counters';

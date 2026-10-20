@@ -87,7 +87,7 @@ export const progressionCases: TestCase[] = [
     },
   },
   {
-    name: 'progression: Labouchere bets first plus last, or the sole number, and pauses at its 32-unit cap',
+    name: 'progression: Labouchere bets first plus last, or the sole number, and stops at its 32-unit cap',
     run: (t) => {
       t.equal(prescribed(LABOUCHERE, lineAt(['10', '20', '30'])), { status: 'prescribed', bets: [{ target: 'red', amount: '40' }], held: [] });
       t.equal(prescribed(LABOUCHERE, lineAt(['20'])), { status: 'prescribed', bets: [{ target: 'red', amount: '20' }], held: [] });
@@ -195,7 +195,7 @@ export const progressionCases: TestCase[] = [
       state = settled.state;
       t.equal(settled.facts.at(-1), { kind: 'strategy-paused', reason: 'unfunded-group', unavailable: [{ target: 'black', amount: '80' }] });
       t.equal([state.phase, strategyOf(state)?.status, readPermittedView(state).legalCommands.includes('rebuy')], ['settled-outcome', 'active', true]);
-      // A rebuy that still falls short changes nothing; one that covers the stake lifts the pause, placing nothing.
+      // A rebuy that still falls short changes nothing; one that covers the stake clears the pending action, placing nothing.
       t.equal(kinds(step(state, { kind: 'rebuy', amount: '20' }).facts), ['funding-added']);
       const covered = step(state, { kind: 'rebuy', amount: '50' });
       t.equal(kinds(covered.facts), ['funding-added', 'strategy-resumed']);

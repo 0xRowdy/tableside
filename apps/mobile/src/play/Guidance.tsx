@@ -221,17 +221,23 @@ export function PendingPanel({
   pending,
   available,
   canRebuy,
+  canOverride,
   canStop,
   onRebuy,
+  onOverride,
   onStop,
 }: {
   strategy: StrategyView;
   pending: PendingStrategyAction;
   /** Funds available for the strategy's bets. */
   available: string;
+  /** Null when no rebuy is offered (a training bankroll); otherwise whether one can be made now. */
   canRebuy: boolean | null;
+  canOverride: boolean;
   canStop: boolean;
   onRebuy: () => void;
+  /** Opens the bets, so the player can place their own instead (an override, judged when they spin). */
+  onOverride: () => void;
   onStop: () => void;
 }) {
   return (
@@ -243,6 +249,7 @@ export function PendingPanel({
         No new strategy bets until this is resolved. Tableside never makes a stake smaller or places part of a bet.
       </Text>
       {canRebuy !== null && <Button label="Resolve: rebuy" stretch disabled={!canRebuy} onPress={onRebuy} />}
+      <Button label="Place my own bets (override)" variant="secondary" stretch disabled={!canOverride} onPress={onOverride} />
       <Text maxFontSizeMultiplier={textScale.body} style={styles.note}>{pendingOverrideNote(strategy.overrideEndsCycle)}</Text>
       <Button label="Stop strategy" variant="secondary" stretch disabled={!canStop} onPress={onStop} />
     </View>

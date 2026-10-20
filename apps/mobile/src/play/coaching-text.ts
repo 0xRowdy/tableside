@@ -102,8 +102,8 @@ export function pendingBlocked(pending: PendingStrategyAction, available: string
 /** What an override from a pending strategy action means, before the player chooses it. */
 export const pendingOverrideNote = (progression: boolean) =>
   progression
-    ? 'To override, place your own bets and spin. An override ends this cycle: the spin settles, and you restart the strategy yourself.'
-    : 'To override, place your own bets and spin. The override is recorded once, and the strategy coaches your next spin.';
+    ? 'An override ends this cycle: your spin settles, and you restart the strategy yourself.'
+    : 'An override is recorded once, and the strategy coaches your next spin.';
 
 /** The cycle result's headline. */
 export const CYCLE_HEADLINE: Record<CycleEnd, string> = {

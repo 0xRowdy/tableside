@@ -219,8 +219,10 @@ export function RouletteTable({ snapshot }: { snapshot: ActiveSnapshot }) {
                   pending={strategy.pending}
                   available={encodeMoney(add(decodeMoney(view.balance), decodeMoney(totalOnTable(view))))}
                   canRebuy={view.legalCommands.includes('rebuy') ? legal('rebuy') : null}
+                  canOverride={legal('place-wager')}
                   canStop={legal('stop-strategy')}
                   onRebuy={() => setRebuying(true)}
+                  onOverride={() => setPresentation('selector')}
                   onStop={() => setStoppingStrategy(true)}
                 />
               )}

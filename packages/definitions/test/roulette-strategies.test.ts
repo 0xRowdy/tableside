@@ -111,7 +111,7 @@ describe('roulette built-in progressions', () => {
       state = result.state;
     };
     for (let i = 0; i < spins && state.phase !== 'cycle-completion'; i++) {
-      const stake = (state.strategy?.progress && amountFor(definition, target, state)) as string;
+      const stake = amountFor(definition, target, state);
       send({ kind: 'place-wager', target, amount: stake });
       send({ kind: 'begin-turn' });
       send({ kind: 'settle-turn' });

@@ -131,6 +131,7 @@ describe('roulette progressions', () => {
     expect(panel.getByText('Blocked: not enough chips (20 of 40)')).toBeOnTheScreen();
     expect(panel.getByText(/Tableside never makes a stake smaller/)).toBeOnTheScreen();
     expect(panel.getByText(/An override ends this cycle/)).toBeOnTheScreen();
+    expect(panel.getByRole('button', { name: 'Place my own bets (override)' })).toBeEnabled();
     expect(panel.getByRole('button', { name: 'Stop strategy' })).toBeOnTheScreen();
 
     await fireEvent.press(panel.getByRole('button', { name: 'Resolve: rebuy' }));

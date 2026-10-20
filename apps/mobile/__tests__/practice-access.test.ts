@@ -576,7 +576,7 @@ describe('the timed-metering hook', () => {
     }
     expect(active(controller.snapshot()).view.strategy?.pending?.reason).toBe('unfunded-group');
     expect(reports.at(-1)).toMatchObject({ phase: 'settled-outcome', timed: false });
-    // A rebuy covers the stake: the pause lifts and time counts again.
+    // A rebuy covers the stake: the pending action clears and time counts again.
     await controller.rebuy('100');
     expect(timedNow()).toBe(true);
     // 25 loses the 40; 31 wins the 80, completing the cycle: its result isn't timed.
