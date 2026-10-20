@@ -51,12 +51,14 @@ import { sha256Hex } from './sha256';
 import { hasExactKeys, isCount, isIdentity, isRecord, isText, parseMoney, type VersionedIdentity } from './shape';
 import { strategyGame, strategyTableCompatibility, validateStrategy } from './strategies';
 import {
+  cycleComplete,
   initialProgress,
   parameterProblem,
   prescribe,
   progressAfter,
   progressProblem,
   type Explanation,
+  type HeldGroup,
   type PauseReason,
   type PrescribedBet,
   type StrategyDefinition,
@@ -69,7 +71,7 @@ import { ENGINE_VERSION } from './version';
 export type { Limit, VersionedIdentity } from './shape';
 
 /** The state-schema version, kept apart from engine, rule and protocol identities. */
-export const STATE_SCHEMA_VERSION = 3 as const;
+export const STATE_SCHEMA_VERSION = 4 as const;
 
 /** Fields every activity specification has, whatever the game. */
 interface SpecificationBase {
@@ -149,16 +151,35 @@ export interface StrategyDeparture extends PendingCorrection {
   readonly resolution: 'retried' | 'overridden';
 }
 
+/**
+ * Why a strategy cycle ended: its completion rule matched; its next stake is
+ * past a declared cap, or its stop rule matched (it is exhausted); a
+ * progression was overridden; or an adjustment left the strategy envelope.
+ */
+export type CycleEnd = 'completed' | 'cap' | 'stop' | 'override' | 'envelope';
+
+/** One turn of a strategy cycle, for the cycle result. */
+export interface CycleTurn {
+  readonly turn: number;
+  /** The stakes the turn began with. */
+  readonly wagers: readonly Wager[];
+  /** The game's outcome, in its own words (a roulette pocket). */
+  readonly outcome: string;
+  /** Net result of the turn's wagers. */
+  readonly net: string;
+  /** False for the overridden turn that ended the cycle. */
+  readonly followed: boolean;
+}
+
 /** A guided activity's strategy: the pinned revision and where its cycle stands. */
 export interface StrategyRun extends StrategySelection {
   /** "stopped": Stop strategy ended its bets; the practice session goes on uncoached. */
   readonly status: 'active' | 'cycle-ended' | 'stopped';
-  /**
-   * Why the cycle ended, while it is ended: an override of a progression, or
-   * an adjustment past what the strategy envelope can hold.
-   */
-  readonly cycleEnd: 'override' | 'envelope' | null;
+  /** Why the cycle ended, while it is ended. */
+  readonly cycleEnd: CycleEnd | null;
   readonly progress: StrategyProgress;
+  /** The current cycle: its number in the session (from 1) and its turns so far (for a strategy with cycles). */
+  readonly cycle: { readonly number: number; readonly turns: readonly CycleTurn[] };
   /** True while the current turn began as the strategy prescribed, so its result adjusts the progress. */
   readonly coachedTurn: boolean;
   readonly correction: PendingCorrection | null;
@@ -172,6 +193,8 @@ export interface StrategyRun extends StrategySelection {
 export interface PendingStrategyAction {
   readonly reason: PauseReason;
   readonly unavailable: readonly PrescribedBet[];
+  /** For a bet past its declared cap: that cap. */
+  readonly cap?: string;
 }
 
 export interface StrategyView {
@@ -182,7 +205,11 @@ export interface StrategyView {
   readonly parameters: readonly { readonly id: string; readonly label: string; readonly value: string }[];
   readonly status: StrategyRun['status'];
   readonly cycleEnd: StrategyRun['cycleEnd'];
+  /** The current cycle and its result so far (the sum of its turns' net results). */
+  readonly cycle: { readonly number: number; readonly net: string; readonly turns: readonly CycleTurn[] };
   readonly pending: PendingStrategyAction | null;
+  /** While a cycle ended at its cap or stop rule: what the strategy could not place, which ended it. */
+  readonly exhaustion: PendingStrategyAction | null;
   readonly correction: PendingCorrection | null;
   readonly departures: readonly StrategyDeparture[];
   /** Strategy adherence, kept apart from winnings. */
@@ -309,7 +336,9 @@ export type DomainFact =
   | { readonly kind: 'departure-recorded'; readonly departure: StrategyDeparture }
   /** The strategy now holds a pending action (or a different one) and places no new bets for it. */
   | ({ readonly kind: 'strategy-paused' } & PendingStrategyAction)
-  | { readonly kind: 'cycle-ended'; readonly reason: 'override' | 'envelope' }
+  | { readonly kind: 'cycle-ended'; readonly reason: CycleEnd }
+  /** A pending strategy action no longer holds (a rebuy covered it): the strategy prescribes again. */
+  | { readonly kind: 'strategy-resumed' }
   | { readonly kind: 'cycle-restarted' }
   | { readonly kind: 'strategy-stopped' }
   | CrapsDomainFact
@@ -569,6 +598,7 @@ function strategyRun(game: GameId, value: unknown, rules: unknown): StrategyRun 
     status: 'active',
     cycleEnd: null,
     progress: initialProgress(definition),
+    cycle: { number: 1, turns: [] },
     coachedTurn: false,
     correction: null,
     departures: [],
@@ -617,8 +647,11 @@ export function advanceActivity<S extends ActivityState>(state: S, envelope: Com
   const facts: DomainFact[] = 'illegal' in step ? [{ kind: 'illegal-action', command, reason: step.illegal }] : step.facts;
   const next = { ...state, ...change } as S;
   // A pending strategy action is explicit: it is announced when it begins or changes.
+  // After any input (a rebuy, say) the pending action is checked again against current funds.
   const pending = pendingAction(next);
-  if (pending && canonicalJson(pending) !== canonicalJson(pendingAction(state))) facts.push({ kind: 'strategy-paused', ...pending });
+  const before = pendingAction(state);
+  if (pending && canonicalJson(pending) !== canonicalJson(before)) facts.push({ kind: 'strategy-paused', ...pending });
+  if (!pending && before && next.strategy?.status === 'active' && WAITING.has(next.phase)) facts.push({ kind: 'strategy-resumed' });
   return {
     status: 'committed',
     state: {
@@ -721,7 +754,10 @@ function guidedStep(state: ActivityState, command: Exclude<Command, { readonly k
     case 'restart-cycle':
       return {
         step: {
-          change: { phase: 'open-decision', strategy: { ...run, status: 'active', cycleEnd: null, progress: initialProgress(run.definition) } },
+          change: {
+            phase: 'open-decision',
+            strategy: { ...run, status: 'active', cycleEnd: null, progress: initialProgress(run.definition), cycle: { number: run.cycle.number + 1, turns: [] } },
+          },
           facts: [{ kind: 'cycle-restarted' }],
         },
         assessed: false,
@@ -744,12 +780,21 @@ function guidedStep(state: ActivityState, command: Exclude<Command, { readonly k
       const settled = apply(state, command);
       if ('illegal' in settled) return { step: settled, assessed: false };
       let strategy: StrategyRun = { ...run, coachedTurn: false };
+      const net = settled.facts.reduce((sum, fact) => (fact.kind === 'wager-settled' ? add(sum, decodeMoney(fact.net)) : sum), decodeMoney('0'));
+      const after = { ...state, ...settled.change } as ActivityState;
+      // The turn joins the cycle's record: a coached turn, or the overridden one that ends the cycle.
+      const overridden = run.status === 'cycle-ended' && run.cycleEnd === 'override';
+      if (hasCycles(run.definition) && ((run.coachedTurn && run.status === 'active') || overridden)) {
+        const turn: CycleTurn = { turn: state.turn, wagers: state.wagers, outcome: gameStrategy(state).outcome(after), net: encodeMoney(net), followed: !overridden };
+        strategy = { ...strategy, cycle: { ...run.cycle, turns: [...run.cycle.turns, turn] } };
+      }
       if (run.coachedTurn && run.status === 'active') {
         // The strategy's adjustment is its own step after settlement: settlement is already final.
-        const net = settled.facts.reduce((sum, fact) => (fact.kind === 'wager-settled' ? add(sum, decodeMoney(fact.net)) : sum), decodeMoney('0'));
-        const progress = progressAfter(run.definition, run.progress, net.n > 0n ? 'win' : net.n < 0n ? 'loss' : 'push');
-        strategy = progress ? { ...strategy, progress } : { ...strategy, status: 'cycle-ended', cycleEnd: 'envelope' };
-        if (!progress) settled.facts.push({ kind: 'cycle-ended', reason: 'envelope' });
+        const staked = state.wagers.reduce((sum, wager) => add(sum, decodeMoney(wager.amount)), decodeMoney('0'));
+        const progress = progressAfter(run.definition, run.progress, net.n > 0n ? 'win' : net.n < 0n ? 'loss' : 'push', staked);
+        const end = progress ? cycleEndAfter({ ...after, strategy: { ...strategy, progress } } as ActivityState, run.definition, progress) : 'envelope';
+        strategy = { ...strategy, ...(progress ? { progress } : {}), ...(end ? { status: 'cycle-ended' as const, cycleEnd: end } : {}) };
+        if (end) settled.facts.push({ kind: 'cycle-ended', reason: end });
       }
       const change = strategy.status === 'cycle-ended' ? { ...settled.change, phase: 'cycle-completion' as const } : settled.change;
       return { step: { change: { ...change, strategy }, facts: settled.facts }, assessed: false };
@@ -781,15 +826,38 @@ function follows(explanation: Explanation, wagers: readonly Wager[]): boolean {
   );
 }
 
+/** Phases that wait on a betting decision. */
+const WAITING: ReadonlySet<Phase> = new Set(['open-decision', 'settled-outcome']);
+
+/**
+ * Whether a coached turn's settlement ends the cycle, and why: its completion
+ * rule matches, or (for a progression) its next stake is past a declared cap
+ * or its stop rule matches, so the cycle is exhausted. A shortfall or a table
+ * limit is not an end: it is a pending strategy action.
+ */
+function cycleEndAfter(state: ActivityState, definition: StrategyDefinition, progress: StrategyProgress): CycleEnd | null {
+  const game = gameStrategy(state);
+  if (cycleComplete(game.vocabulary, definition, game.situation(state), progress)) return 'completed';
+  if (!overrideEndsCycle(definition)) return null;
+  const prescription = explain(state, state.strategy as StrategyRun).prescription;
+  return prescription.status === 'paused' && (prescription.reason === 'cap' || prescription.reason === 'stop') ? prescription.reason : null;
+}
+
 /** The strategy's pending action while it waits on a betting decision, if it holds one. */
 function pendingAction(state: ActivityState): PendingStrategyAction | null {
   const run = state.strategy;
-  if (!run || run.status !== 'active' || (state.phase !== 'open-decision' && state.phase !== 'settled-outcome')) return null;
+  if (!run || run.status !== 'active' || !WAITING.has(state.phase)) return null;
+  return heldAction(state, run);
+}
+
+/** What the strategy can't place now, and why, if anything. */
+function heldAction(state: ActivityState, run: StrategyRun): PendingStrategyAction | null {
   const prescription = explain(state, run).prescription;
-  if (prescription.status === 'paused') return { reason: prescription.reason, unavailable: prescription.unavailable };
+  const capOf = (cap: string | undefined) => (cap === undefined ? {} : { cap });
+  if (prescription.status === 'paused') return { reason: prescription.reason, unavailable: prescription.unavailable, ...capOf(prescription.cap) };
   if (prescription.status === 'prescribed' && prescription.held.length > 0) {
-    const held = prescription.held;
-    return { reason: (held[0] as (typeof held)[number]).reason, unavailable: held.flatMap((group) => group.unavailable) };
+    const [first] = prescription.held as [HeldGroup];
+    return { reason: first.reason, unavailable: prescription.held.flatMap((group) => group.unavailable), ...capOf(first.cap) };
   }
   return null;
 }
@@ -805,7 +873,13 @@ function strategyView(state: ActivityState, run: StrategyRun): StrategyView {
     parameters: definition.parameters.map((param) => ({ id: param.id, label: param.label, value: run.parameters[param.id] as string })),
     status: run.status,
     cycleEnd: run.cycleEnd,
+    cycle: {
+      number: run.cycle.number,
+      net: encodeMoney(run.cycle.turns.reduce((sum, turn) => add(sum, decodeMoney(turn.net)), decodeMoney('0'))),
+      turns: run.cycle.turns,
+    },
     pending: pendingAction(state),
+    exhaustion: run.status === 'cycle-ended' && (run.cycleEnd === 'cap' || run.cycleEnd === 'stop') ? heldAction(state, run) : null,
     correction: run.correction,
     departures: run.departures,
     adherence: { decisions: run.decisions, followed: run.decisions - departedTurns.length, departures: run.departures.length },
@@ -814,8 +888,11 @@ function strategyView(state: ActivityState, run: StrategyRun): StrategyView {
   };
 }
 
-/** A strategy with progression state (counters) is a betting progression: an override ends its cycle. */
-const overrideEndsCycle = (definition: StrategyDefinition) => definition.counters.length > 0;
+/** A strategy with progression state (counters or lists) is a betting progression: an override ends its cycle. */
+const overrideEndsCycle = (definition: StrategyDefinition) => definition.counters.length > 0 || (definition.lists ?? []).length > 0;
+
+/** A strategy whose cycles can end (a progression, or one with a completion rule) keeps a record of each cycle's turns. */
+const hasCycles = (definition: StrategyDefinition) => overrideEndsCycle(definition) || definition.completeWhen != null;
 
 /** Funds off the table plus outstanding stakes at their original value. */
 const sessionValue = (state: Pick<ActivityState, 'balance' | 'wagers'>): Money =>
@@ -967,7 +1044,31 @@ function stateDamage(value: unknown): string | undefined {
   return undefined;
 }
 
-const RUN_KEYS = ['definition', 'parameters', 'status', 'cycleEnd', 'progress', 'coachedTurn', 'correction', 'departures', 'decisions'];
+const RUN_KEYS = ['definition', 'parameters', 'status', 'cycleEnd', 'progress', 'cycle', 'coachedTurn', 'correction', 'departures', 'decisions'];
+
+const CYCLE_ENDS: readonly unknown[] = ['completed', 'cap', 'stop', 'override', 'envelope'];
+
+const isCanonicalMoney = (value: unknown) => {
+  const amount = parseMoney(value);
+  return amount !== undefined && encodeMoney(amount) === value;
+};
+
+/** The problem with a stored cycle record, if any: turns already played, in order, with canonical amounts. */
+function cycleDamage(state: ActivityState, definition: StrategyDefinition, cycle: unknown): string | undefined {
+  if (!hasExactKeys(cycle, ['number', 'turns']) || !isCount(cycle.number) || cycle.number < 1 || !Array.isArray(cycle.turns)) return 'damaged strategy cycle';
+  if (cycle.turns.length > 0 && !hasCycles(definition)) return 'damaged strategy cycle';
+  let previous = 0;
+  for (const turn of cycle.turns as unknown[]) {
+    if (!hasExactKeys(turn, ['turn', 'wagers', 'outcome', 'net', 'followed']) || !isCount(turn.turn) || turn.turn <= previous || turn.turn > state.turn) return 'damaged strategy cycle';
+    if (!isText(turn.outcome) || typeof turn.followed !== 'boolean' || !isCanonicalMoney(turn.net)) return 'damaged strategy cycle';
+    const wagers = turn.wagers;
+    if (!Array.isArray(wagers) || !wagers.every((wager) => hasExactKeys(wager, ['target', 'amount']) && isText(wager.target) && isCanonicalMoney(wager.amount))) {
+      return 'damaged strategy cycle';
+    }
+    previous = turn.turn;
+  }
+  return undefined;
+}
 
 const isPlain = (value: unknown) => {
   try {
@@ -990,11 +1091,13 @@ function strategyDamage(state: ActivityState, identity: VersionedIdentity | null
   if (!strategyTableCompatibility(definition, run.parameters, state.rules).compatible) return 'the strategy does not fit the pinned rules';
   const { status, cycleEnd } = run;
   if (status !== 'active' && status !== 'cycle-ended' && status !== 'stopped') return 'damaged strategy status';
-  const ended = cycleEnd === 'override' || cycleEnd === 'envelope';
+  const ended = CYCLE_ENDS.includes(cycleEnd);
   if ((status === 'cycle-ended') !== ended || (!ended && cycleEnd !== null)) return 'damaged strategy cycle';
   if (state.phase === 'cycle-completion' && status !== 'cycle-ended') return 'damaged strategy cycle';
   const progress = progressProblem(definition, run.progress);
   if (progress) return progress;
+  const cycle = cycleDamage(state, definition, run.cycle);
+  if (cycle) return cycle;
   if (typeof run.coachedTurn !== 'boolean' || (run.coachedTurn && !(status === 'active' && (state.phase === 'revealing-outcome' || state.phase === 'final-settlement')))) {
     return 'damaged strategy turn';
   }

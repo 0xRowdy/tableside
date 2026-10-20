@@ -836,9 +836,10 @@ export class PracticeController {
       if (this.current.status === 'none') this.showNone(this.current.problem, this.current.problemReason);
       return;
     }
+    const view = readPermittedView(this.state);
     this.current = {
       status: 'active',
-      view: readPermittedView(this.state),
+      view,
       facts: this.facts,
       busy: this.busy,
       save: this.pending ? 'failed' : 'saved',
@@ -850,8 +851,9 @@ export class PracticeController {
       activityId: this.state.activity.id,
       phase: this.state.phase,
       suspended,
-      // A failed save pauses training, and the stop path is never metered.
-      timed: TIMED_PHASES.has(this.state.phase) && !suspended && !this.pending && this.stopping === null,
+      // A failed save pauses training, and the stop path is never metered. Nor is a
+      // pending strategy action: the table waits on the player in an open decision.
+      timed: TIMED_PHASES.has(this.state.phase) && !view.strategy?.pending && !suspended && !this.pending && this.stopping === null,
     });
     this.notify();
   }

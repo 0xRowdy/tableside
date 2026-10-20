@@ -8,7 +8,7 @@
 
 import { canonicalJson } from './canonical';
 import { add, compare, decodeMoney, encodeMoney, money, mul, sub, MoneyFormatError, type Money } from './money';
-import { isRecord } from './shape';
+import { hasExactKeys as hasKeys, isRecord } from './shape';
 import { decodeStrategyLiteral, StrategyEnvelopeError, withinStrategyBits } from './strategy-envelope';
 
 /** The strategy envelope (spec #51, Exact money and limits). */
@@ -20,6 +20,8 @@ export const STRATEGY_ENVELOPE = {
   expressionNodes: 4096,
   /** UTF-8 bytes of the canonical definition. */
   bytes: 1_048_576,
+  /** Items a list may hold, declared or grown by adjustments. */
+  listItems: 256,
 } as const;
 
 export const STRATEGY_FORMAT = 1 as const;
@@ -28,6 +30,13 @@ export const STRATEGY_FORMAT = 1 as const;
 export type StrategyExpression =
   | { readonly lit: string }
   | { readonly counter: string }
+  /** A list's first or last item; neither exists for an empty list. */
+  | { readonly first: string }
+  | { readonly last: string }
+  /** How many items a list holds. */
+  | { readonly length: string }
+  /** What the settled turn staked in all: only an adjustment may read it. */
+  | { readonly staked: true }
   | { readonly add: readonly [StrategyExpression, StrategyExpression] }
   | { readonly sub: readonly [StrategyExpression, StrategyExpression] }
   | { readonly mul: readonly [StrategyExpression, StrategyExpression] }
@@ -51,6 +60,8 @@ export type StrategyTarget = { readonly target: string } | { readonly param: str
 export interface StrategyBet {
   readonly target: StrategyTarget;
   readonly amount: StrategyExpression;
+  /** The largest amount the bet may require; past it the strategy stops at its cap, never resized. */
+  readonly cap?: string;
 }
 
 export interface StrategyInstruction {
@@ -84,13 +95,24 @@ export interface StrategyCounter {
   readonly cap?: string;
 }
 
-export interface StrategyAdjustment {
+/** A list counter (a Labouchere line): items of canonical money. */
+export interface StrategyList {
+  readonly id: string;
+  readonly initial: readonly string[];
+}
+
+interface AdjustmentBase {
   readonly id: string;
   /** Applied after a coached turn settles with this result. */
   readonly on: 'win' | 'loss' | 'push' | 'any';
-  readonly counter: string;
-  readonly to: StrategyExpression;
 }
+
+export type StrategyAdjustment =
+  | (AdjustmentBase & { readonly counter: string; readonly to: StrategyExpression })
+  /** Adds an item at the end of a list. */
+  | (AdjustmentBase & { readonly list: string; readonly append: StrategyExpression })
+  /** Removes a list's first and last items (its only item, when it has one). */
+  | (AdjustmentBase & { readonly list: string; readonly drop: 'ends' });
 
 export interface StrategyDefinition {
   readonly format: typeof STRATEGY_FORMAT;
@@ -102,10 +124,17 @@ export interface StrategyDefinition {
   readonly table: unknown;
   readonly parameters: readonly StrategyParameter[];
   readonly counters: readonly StrategyCounter[];
+  /** List counters; none when omitted. */
+  readonly lists?: readonly StrategyList[];
   readonly instructions: readonly StrategyInstruction[];
   readonly adjustments: readonly StrategyAdjustment[];
   /** When it matches, the strategy places no new bets (a declared stop). */
   readonly stopWhen: StrategyCondition | null;
+  /**
+   * Checked after each coached turn's adjustment: when it matches, the cycle
+   * is complete, and another starts only explicitly. Never, when omitted.
+   */
+  readonly completeWhen?: StrategyCondition | null;
   readonly note?: string;
 }
 
@@ -163,12 +192,16 @@ export interface StrategyGame<State = never> {
   tableForRules(rules: unknown): unknown;
   /** The betting situation the strategy sees in an activity state waiting for a decision. */
   situation(state: State): unknown;
+  /** The outcome of the turn a state has just settled, in the game's own words (a roulette pocket), for the cycle record. */
+  outcome(state: State): string;
 }
 
 /** Where a strategy cycle stands. */
 export interface StrategyProgress {
   /** Counter values, canonical money, keyed by counter id. */
   readonly counters: Readonly<Record<string, string>>;
+  /** List items, canonical money, keyed by list id. */
+  readonly lists: Readonly<Record<string, readonly string[]>>;
   readonly lastResult: TurnResult;
   /** Coached turns settled in this cycle. */
   readonly cycleTurn: number;
@@ -187,13 +220,15 @@ export interface HeldGroup {
   readonly instruction: string;
   readonly reason: PauseReason;
   readonly unavailable: readonly PrescribedBet[];
+  /** For a bet past its declared cap: that cap. */
+  readonly cap?: string;
 }
 
 export type Prescription =
   /** The groups that execute; each other matching group is held whole (an atomic group never executes in part). */
   | { readonly status: 'prescribed'; readonly bets: readonly PrescribedBet[]; readonly held: readonly HeldGroup[] }
   /** A pending strategy action: the group can't execute, so no new bets until it can. */
-  | { readonly status: 'paused'; readonly reason: PauseReason; readonly unavailable: readonly PrescribedBet[] }
+  | { readonly status: 'paused'; readonly reason: PauseReason; readonly unavailable: readonly PrescribedBet[]; readonly cap?: string }
   /** No instruction covers the situation: no new bets. */
   | { readonly status: 'uncovered' };
 
@@ -235,7 +270,11 @@ interface Checker {
   readonly diagnostics: StrategyDiagnostic[];
   nodes: number;
   readonly counters: ReadonlySet<string>;
+  readonly lists: ReadonlySet<string>;
 }
+
+/** What an expression reads: counters by id, lists as "list:<id>". */
+const listRead = (id: string) => `list:${id}`;
 
 const report = (checker: Checker, category: DiagnosticCategory, path: string, message: string) => {
   checker.diagnostics.push({ category, path, message });
@@ -253,8 +292,11 @@ function literal(checker: Checker, text: unknown, path: string): Money | undefin
   }
 }
 
-/** Checks an expression; returns false when it is malformed (already reported). Records counters it reads. */
-function checkExpression(checker: Checker, value: unknown, path: string, depth: number, reads: Set<string>): boolean {
+/**
+ * Checks an expression; returns false when it is malformed (already reported).
+ * Records the counters and lists it reads. Only an adjustment may read the staked amount.
+ */
+function checkExpression(checker: Checker, value: unknown, path: string, depth: number, reads: Set<string>, staked = false): boolean {
   checker.nodes++;
   if (depth > MAX_WALK_DEPTH) return report(checker, 'envelope', path, 'expressions are nested too deeply'), false;
   if (!isRecord(value) || Object.keys(value).length !== 1) return report(checker, 'incomplete', path, 'an expression is required'), false;
@@ -266,6 +308,15 @@ function checkExpression(checker: Checker, value: unknown, path: string, depth: 
       if (!checker.counters.has(operand as string)) return report(checker, 'incomplete', path, `no counter ${String(operand)}`), false;
       reads.add(operand as string);
       return true;
+    case 'first':
+    case 'last':
+    case 'length':
+      if (!checker.lists.has(operand as string)) return report(checker, 'incomplete', path, `no list ${String(operand)}`), false;
+      reads.add(listRead(operand as string));
+      return true;
+    case 'staked':
+      if (operand !== true || !staked) return report(checker, 'incomplete', path, 'only an adjustment can read what the turn staked'), false;
+      return true;
     case 'add':
     case 'sub':
     case 'mul':
@@ -276,7 +327,7 @@ function checkExpression(checker: Checker, value: unknown, path: string, depth: 
         return report(checker, 'incomplete', path, `${key} needs ${pair ? 'two operands' : 'operands'}`), false;
       }
       let ok = true;
-      for (const [index, item] of operand.entries()) ok = checkExpression(checker, item, `${path}/${key}/${index}`, depth + 1, reads) && ok;
+      for (const [index, item] of operand.entries()) ok = checkExpression(checker, item, `${path}/${key}/${index}`, depth + 1, reads, staked) && ok;
       return ok;
     }
     default:
@@ -339,7 +390,8 @@ export function validateWith(vocabulary: StrategyVocabulary, definition: unknown
   }
   const def = definition;
   const counterIds = new Set<string>();
-  const checker: Checker = { diagnostics, nodes: 0, counters: counterIds };
+  const listIds = new Set<string>();
+  const checker: Checker = { diagnostics, nodes: 0, counters: counterIds, lists: listIds };
   const flag = (category: DiagnosticCategory, path: string, message: string) => report(checker, category, path, message);
 
   if (def.format !== STRATEGY_FORMAT) flag('incomplete', '/format', `unsupported strategy format ${String(def.format)}`);
@@ -396,6 +448,20 @@ export function validateWith(vocabulary: StrategyVocabulary, definition: unknown
     if (counter.cap !== undefined && literal(checker, counter.cap, `${path}/cap`)) capped.add(counter.id);
   }
 
+  // Lists.
+  const lists = def.lists === undefined ? [] : Array.isArray(def.lists) ? def.lists : (flag('incomplete', '/lists', 'lists are a list'), []);
+  for (const [index, list] of lists.entries()) {
+    const path = `/lists/${index}`;
+    if (!isRecord(list) || !isText(list.id) || !Array.isArray(list.initial)) {
+      flag('incomplete', path, 'a list needs an id and its initial items');
+      continue;
+    }
+    if (listIds.has(list.id)) flag('incomplete', `${path}/id`, `list ${list.id} is declared twice`);
+    listIds.add(list.id);
+    if (list.initial.length > STRATEGY_ENVELOPE.listItems) flag('envelope', `${path}/initial`, `a list holds at most ${STRATEGY_ENVELOPE.listItems} items`);
+    else for (const [item, value] of list.initial.entries()) literal(checker, value, `${path}/initial/${item}`);
+  }
+
   // Instructions.
   const instructions = Array.isArray(def.instructions) ? def.instructions : [];
   if (!Array.isArray(def.instructions) || instructions.length === 0) flag('incomplete', '/instructions', 'a strategy needs at least one instruction');
@@ -404,7 +470,9 @@ export function validateWith(vocabulary: StrategyVocabulary, definition: unknown
     return done();
   }
   const instructionIds = new Set<string>();
-  const usable: { index: number; id: string; priority: number | null; overrides: string[]; when: StrategyCondition; targets: Set<string>[] }[] = [];
+  /** What each bet's amount reads, and whether the bet declares a cap. */
+  const betReads: { reads: ReadonlySet<string>; capped: boolean }[] = [];
+  const usable:{ index: number; id: string; priority: number | null; overrides: string[]; when: StrategyCondition; targets: Set<string>[] }[] = [];
   for (const [index, item] of instructions.entries()) {
     const path = `/instructions/${index}`;
     if (!isRecord(item) || !isText(item.id) || typeof item.label !== 'string') {
@@ -428,6 +496,8 @@ export function validateWith(vocabulary: StrategyVocabulary, definition: unknown
       }
       const reads = new Set<string>();
       const amountOk = checkExpression(checker, bet.amount, `${betPath}/amount`, 0, reads);
+      const capOk = bet.cap !== undefined && literal(checker, bet.cap, `${betPath}/cap`) !== undefined;
+      betReads.push({ reads, capped: capOk });
       let possible: Set<string> | null = null;
       const target = bet.target;
       if (isRecord(target) && 'target' in target && isText(target.target)) {
@@ -446,7 +516,7 @@ export function validateWith(vocabulary: StrategyVocabulary, definition: unknown
       if (possible) targets.push(possible);
       // A fixed amount must fit the declared table for every target the bet may take.
       if (amountOk && possible && tableOk && reads.size === 0) {
-        const amount = evaluate(bet.amount as StrategyExpression, {});
+        const amount = evaluate(bet.amount as StrategyExpression, NO_VALUES);
         for (const choice of possible) {
           const failed = amount && vocabulary.betRequirement(def.table, choice, amount);
           if (failed && failed.requirement !== 'not-on-layout') {
@@ -502,25 +572,49 @@ export function validateWith(vocabulary: StrategyVocabulary, definition: unknown
   for (const [index, item] of adjustments.entries()) {
     const path = `/adjustments/${index}`;
     if (!isRecord(item) || !isText(item.id) || !['win', 'loss', 'push', 'any'].includes(item.on as string)) {
-      flag('incomplete', path, 'an adjustment needs an id, a result and a counter');
+      flag('incomplete', path, 'an adjustment needs an id, a result and a counter or list');
+      continue;
+    }
+    const reads = new Set<string>();
+    if ('list' in item) {
+      const keys = Object.keys(item).sort().join();
+      if (!listIds.has(item.list as string)) {
+        flag('incomplete', `${path}/list`, `no list ${String(item.list)}`);
+      } else if (keys === 'drop,id,list,on') {
+        if (item.drop !== 'ends') flag('incomplete', `${path}/drop`, 'a list drops its ends');
+      } else if (keys === 'append,id,list,on') {
+        // Appending grows the list, whatever it appends.
+        if (checkExpression(checker, item.append, `${path}/append`, 0, reads, true)) grows.add(listRead(item.list as string));
+      } else {
+        flag('incomplete', path, 'a list adjustment appends an amount or drops the ends');
+      }
       continue;
     }
     if (!counterIds.has(item.counter as string)) {
       flag('incomplete', `${path}/counter`, `no counter ${String(item.counter)}`);
       continue;
     }
-    const reads = new Set<string>();
-    if (checkExpression(checker, item.to, `${path}/to`, 0, reads) && reads.has(item.counter as string)) grows.add(item.counter as string);
+    if (checkExpression(checker, item.to, `${path}/to`, 0, reads, true) && reads.has(item.counter as string)) grows.add(item.counter as string);
   }
 
-  // Stop rule.
+  // Stop and completion rules.
   const stopOk = def.stopWhen === null || checkCondition(checker, vocabulary, def.stopWhen, '/stopWhen', 0);
   if (!stopOk && def.stopWhen === undefined) flag('incomplete', '/stopWhen', 'stopWhen is a condition or null');
+  if (def.completeWhen !== undefined && def.completeWhen !== null) checkCondition(checker, vocabulary, def.completeWhen, '/completeWhen', 0);
 
-  // A counter that grows from itself needs a declared cap or a stop rule.
+  // A counter or list that grows needs a declared cap or a stop rule: its own cap, or a cap on every bet it sizes.
+  const bounded = (read: string) => {
+    const sized = betReads.filter((bet) => bet.reads.has(read));
+    return def.stopWhen !== null || (sized.length > 0 && sized.every((bet) => bet.capped));
+  };
   for (const [index, counter] of counters.entries()) {
-    if (isRecord(counter) && grows.has(counter.id as string) && !capped.has(counter.id as string) && def.stopWhen === null) {
+    if (isRecord(counter) && grows.has(counter.id as string) && !capped.has(counter.id as string) && !bounded(counter.id as string)) {
       flag('unbounded', `/counters/${index}`, `counter ${String(counter.id)} can grow without a declared cap or stop`);
+    }
+  }
+  for (const [index, list] of lists.entries()) {
+    if (isRecord(list) && grows.has(listRead(list.id as string)) && !bounded(listRead(list.id as string))) {
+      flag('unbounded', `/lists/${index}`, `list ${String(list.id)} can grow without a declared cap or stop`);
     }
   }
 
@@ -572,24 +666,43 @@ function disjoint(a: StrategyCondition, b: StrategyCondition): boolean {
 
 // ---- evaluate -------------------------------------------------------------
 
-/** Evaluates an expression; undefined when an intermediate leaves the 256-bit envelope. */
-function evaluate(expression: StrategyExpression, counters: Readonly<Record<string, string>>): Money | undefined {
+/** What an expression can read: counters, lists and, in an adjustment, what the settled turn staked. */
+interface Values {
+  readonly counters: Readonly<Record<string, string>>;
+  readonly lists: Readonly<Record<string, readonly string[]>>;
+  readonly staked?: Money;
+}
+
+const NO_VALUES: Values = { counters: {}, lists: {} };
+
+/**
+ * Evaluates an expression; undefined when an intermediate leaves the 256-bit
+ * envelope, or when it reads the first or last item of an empty list.
+ */
+function evaluate(expression: StrategyExpression, values: Values): Money | undefined {
   const value = ((): Money | undefined => {
     if ('lit' in expression) return decodeStrategyLiteral(expression.lit);
-    if ('counter' in expression) return decodeMoney(counters[expression.counter] as string);
-    const operands = 'add' in expression ? expression.add : 'sub' in expression ? expression.sub : 'mul' in expression ? expression.mul : 'min' in expression ? expression.min : expression.max;
-    const values: Money[] = [];
-    for (const operand of operands) {
-      const v = evaluate(operand, counters);
-      if (!v) return undefined;
-      values.push(v);
+    if ('counter' in expression) return decodeMoney(values.counters[expression.counter] as string);
+    if ('first' in expression || 'last' in expression) {
+      const items = values.lists['first' in expression ? expression.first : expression.last] as readonly string[];
+      const item = 'first' in expression ? items[0] : items.at(-1);
+      return item === undefined ? undefined : decodeMoney(item);
     }
-    const [first, second] = values as [Money, Money];
+    if ('length' in expression) return money(BigInt((values.lists[expression.length] as readonly string[]).length));
+    if ('staked' in expression) return values.staked ?? ZERO;
+    const operands = 'add' in expression ? expression.add : 'sub' in expression ? expression.sub : 'mul' in expression ? expression.mul : 'min' in expression ? expression.min : expression.max;
+    const results: Money[] = [];
+    for (const operand of operands) {
+      const v = evaluate(operand, values);
+      if (!v) return undefined;
+      results.push(v);
+    }
+    const [first, second] = results as [Money, Money];
     if ('add' in expression) return add(first, second);
     if ('sub' in expression) return sub(first, second);
     if ('mul' in expression) return mul(first, second);
     const pick = 'min' in expression ? -1 : 1;
-    return values.reduce((best, v) => (compare(v, best) === pick ? v : best));
+    return results.reduce((best, v) => (compare(v, best) === pick ? v : best));
   })();
   return value && withinStrategyBits(value) ? value : undefined;
 }
@@ -618,8 +731,8 @@ function holds<S>(vocabulary: StrategyVocabulary<S>, condition: StrategyConditio
     const actual = condition.subject === 'last-result' ? progress.lastResult : vocabulary.subject(situation, condition.subject);
     return actual === condition.is;
   }
-  const left = evaluate(condition.compare, progress.counters);
-  const right = evaluate(condition.to, progress.counters);
+  const left = evaluate(condition.compare, progress);
+  const right = evaluate(condition.to, progress);
   if (!left || !right) return undefined;
   const order = compare(left, right);
   return { lt: order < 0, le: order <= 0, eq: order === 0, ge: order >= 0, gt: order > 0 }[condition.op];
@@ -641,22 +754,32 @@ export function parameterProblem(definition: StrategyDefinition, parameters: unk
 /** The progress a fresh cycle starts from. */
 export const initialProgress = (definition: StrategyDefinition): StrategyProgress => ({
   counters: Object.fromEntries(definition.counters.map((counter) => [counter.id, encodeMoney(decodeStrategyLiteral(counter.initial))])),
+  lists: Object.fromEntries((definition.lists ?? []).map((list) => [list.id, list.initial.map((item) => encodeMoney(decodeStrategyLiteral(item)))])),
   lastResult: 'none',
   cycleTurn: 0,
 });
 
+/** True for canonical money within the strategy's 256-bit envelope. */
+function isStrategyValue(value: unknown): boolean {
+  try {
+    return typeof value === 'string' && value.length <= 200 && encodeMoney(decodeMoney(value)) === value && withinStrategyBits(decodeMoney(value));
+  } catch {
+    return false;
+  }
+}
+
+const sameIds = (record: Record<string, unknown>, ids: readonly string[]) => Object.keys(record).sort().join() === [...ids].sort().join();
+
 /** A stored progress's problem against the definition, if any. */
 export function progressProblem(definition: StrategyDefinition, progress: unknown): string | undefined {
-  if (!isRecord(progress) || Object.keys(progress).sort().join() !== 'counters,cycleTurn,lastResult') return 'damaged strategy progress';
+  if (!hasKeys(progress, ['counters', 'lists', 'lastResult', 'cycleTurn'])) return 'damaged strategy progress';
   if (!RESULTS.includes(progress.lastResult as TurnResult) || !isCount(progress.cycleTurn)) return 'damaged strategy progress';
-  const counters = progress.counters;
-  if (!isRecord(counters) || Object.keys(counters).sort().join() !== definition.counters.map((c) => c.id).sort().join()) return 'damaged strategy counters';
-  for (const value of Object.values(counters)) {
-    try {
-      if (typeof value !== 'string' || value.length > 200 || encodeMoney(decodeMoney(value)) !== value || !withinStrategyBits(decodeMoney(value))) return 'damaged strategy counters';
-    } catch {
-      return 'damaged strategy counters';
-    }
+  const { counters, lists } = progress;
+  if (!isRecord(counters) || !sameIds(counters, definition.counters.map((c) => c.id))) return 'damaged strategy counters';
+  if (!Object.values(counters).every(isStrategyValue)) return 'damaged strategy counters';
+  if (!isRecord(lists) || !sameIds(lists, (definition.lists ?? []).map((l) => l.id))) return 'damaged strategy lists';
+  for (const items of Object.values(lists)) {
+    if (!Array.isArray(items) || items.length > STRATEGY_ENVELOPE.listItems || !items.every(isStrategyValue)) return 'damaged strategy lists';
   }
   return undefined;
 }
@@ -708,9 +831,15 @@ export function prescribe<S>(
   for (const instruction of winners) {
     const group: PrescribedBet[] = [];
     let overCap = false;
+    let cap: string | undefined;
     for (const bet of instruction.bets) {
-      const amount = evaluate(bet.amount, progress.counters);
+      const amount = evaluate(bet.amount, progress);
       if (!amount) overCap = true;
+      // A bet past its declared cap is never resized to it: the strategy stops at its cap.
+      else if (bet.cap !== undefined && compare(amount, decodeStrategyLiteral(bet.cap)) > 0) {
+        overCap = true;
+        cap ??= encodeMoney(decodeStrategyLiteral(bet.cap));
+      }
       group.push({ target: resolveTarget(bet.target, parameters), amount: amount ? encodeMoney(amount) : '0' });
     }
     group.sort((a, b) => byText(a.target, b.target));
@@ -723,7 +852,7 @@ export function prescribe<S>(
           ? 'unfunded-group'
           : null;
     if (reason) {
-      held.push({ instruction: instruction.id, reason, unavailable: group });
+      held.push({ instruction: instruction.id, reason, unavailable: group, ...(cap === undefined ? {} : { cap }) });
     } else {
       bets.push(...group);
       remaining = sub(remaining, total);
@@ -733,22 +862,49 @@ export function prescribe<S>(
   if (bets.length === 0) {
     const first = held[0] as HeldGroup;
     const unavailable = held.flatMap((group) => group.unavailable).sort((a, b) => byText(a.target, b.target));
-    return { ...base, instructions: named, prescription: { status: 'paused', reason: first.reason, unavailable }, fallback: 'no-new-bets' };
+    const prescription: Prescription = { status: 'paused', reason: first.reason, unavailable, ...(first.cap === undefined ? {} : { cap: first.cap }) };
+    return { ...base, instructions: named, prescription, fallback: 'no-new-bets' };
   }
   return { ...base, instructions: named, prescription: { status: 'prescribed', bets, held }, fallback: held.length > 0 ? 'no-new-bets' : null };
 }
 
-/** The progress after a coached turn settles with a result; undefined when an adjustment leaves the envelope. */
-export function progressAfter(definition: StrategyDefinition, progress: StrategyProgress, result: Exclude<TurnResult, 'none'>): StrategyProgress | undefined {
+/**
+ * The progress after a coached turn settles with a result, given what the
+ * turn staked; undefined when an adjustment leaves the envelope (a value past
+ * 256 bits, a list past its item limit, or the end of an empty list).
+ */
+export function progressAfter(
+  definition: StrategyDefinition,
+  progress: StrategyProgress,
+  result: Exclude<TurnResult, 'none'>,
+  staked: Money,
+): StrategyProgress | undefined {
   const counters: Record<string, string> = { ...progress.counters };
+  const lists: Record<string, readonly string[]> = { ...progress.lists };
+  // Every adjustment reads the counters and lists as they were before the turn settled; list changes apply in order.
+  const before: Values = { ...progress, staked };
   for (const adjustment of definition.adjustments) {
     if (adjustment.on !== 'any' && adjustment.on !== result) continue;
-    // Every adjustment reads the counters as they were before the turn settled.
-    const value = evaluate(adjustment.to, progress.counters);
+    if ('drop' in adjustment) {
+      lists[adjustment.list] = (lists[adjustment.list] as readonly string[]).slice(1, -1);
+      continue;
+    }
+    const value = evaluate('append' in adjustment ? adjustment.append : adjustment.to, before);
     if (!value) return undefined;
-    counters[adjustment.counter] = encodeMoney(value);
+    if ('append' in adjustment) {
+      const items = [...(lists[adjustment.list] as readonly string[]), encodeMoney(value)];
+      if (items.length > STRATEGY_ENVELOPE.listItems) return undefined;
+      lists[adjustment.list] = items;
+    } else {
+      counters[adjustment.counter] = encodeMoney(value);
+    }
   }
-  return { counters, lastResult: result, cycleTurn: progress.cycleTurn + 1 };
+  return { counters, lists, lastResult: result, cycleTurn: progress.cycleTurn + 1 };
+}
+
+/** Whether a cycle is complete after its latest adjustment, by its declared completion rule. */
+export function cycleComplete<S>(vocabulary: StrategyVocabulary<S>, definition: StrategyDefinition, situation: S, progress: StrategyProgress): boolean {
+  return definition.completeWhen != null && holds(vocabulary, definition.completeWhen, situation, progress) === true;
 }
 
 /** One requirement an actual table fails for a strategy and its chosen parameters. */
@@ -772,11 +928,11 @@ export function compatibilityWith(vocabulary: StrategyVocabulary, definition: St
   const chosen = parameters as Readonly<Record<string, string>>;
   const requirements: TableRequirement[] = [...vocabulary.tableMismatch(definition.table, table)];
   if (requirements.length > 0) return requirements;
-  const { counters } = initialProgress(definition);
+  const start = initialProgress(definition);
   for (const [index, instruction] of definition.instructions.entries()) {
     for (const [betIndex, bet] of instruction.bets.entries()) {
       const target = resolveTarget(bet.target, chosen);
-      const amount = evaluate(bet.amount, counters);
+      const amount = evaluate(bet.amount, start);
       if (!amount) continue;
       const failed = vocabulary.betRequirement(table, target, amount);
       if (!failed) continue;

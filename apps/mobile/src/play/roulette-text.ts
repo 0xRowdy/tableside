@@ -3,6 +3,7 @@
 
 import {
   FUNDING_CEILING,
+  type CycleEnd,
   type DomainFact,
   type IllegalActionReason,
   type PauseReason,
@@ -77,6 +78,15 @@ export function targetName(target: string): string {
 export const spokenPayout = (payout: string) => payout.replace(':', ' to ');
 
 /** A pending strategy action, announced when it begins. The strip shows the amounts. */
+/** How a cycle-end fact is announced. */
+const CYCLE_END_ANNOUNCEMENT: Record<CycleEnd, string> = {
+  completed: 'The strategy cycle is complete.',
+  cap: 'The strategy cycle ended at its cap.',
+  stop: 'The strategy cycle ended at its stop rule.',
+  override: 'The strategy cycle ends once this spin settles.',
+  envelope: 'The strategy cycle ended: its next stake is too large to compute.',
+};
+
 const PAUSED: Record<PauseReason, string> = {
   'unfunded-group': "Strategy paused: your balance can't cover its next bets. No new strategy bets.",
   limit: 'Strategy paused: its next bets are outside the table limits. No new strategy bets.',
@@ -163,7 +173,10 @@ export function describeFacts(facts: readonly DomainFact[], view: PermittedView)
         parts.push(fact.departure.resolution === 'retried' ? 'Departure recorded: you took it back.' : 'Departure recorded: you overrode the strategy.');
         break;
       case 'cycle-ended':
-        parts.push(fact.reason === 'override' ? 'The strategy cycle ends once this spin settles.' : 'The strategy cycle ended: its next stake is too large to compute.');
+        parts.push(CYCLE_END_ANNOUNCEMENT[fact.reason]);
+        break;
+      case 'strategy-resumed':
+        parts.push('The strategy can place its next bet again.');
         break;
       case 'strategy-paused':
         parts.push(PAUSED[fact.reason]);

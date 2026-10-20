@@ -74,3 +74,85 @@ export const DOUBLING: StrategyDefinition = {
   ],
   stopWhen: null,
 };
+
+// The three roulette progressions, from spec #51's built-in strategy table, in
+// units of 10 on the default 10-minimum table.
+
+const EVEN_MONEY = { id: 'target', label: 'Target', choices: ['red', 'black', 'odd', 'even', 'low', 'high'], default: 'red' };
+
+/** "Capped Martingale: 1/2/4/8/16/32 after successive losses; a win completes and resets; a loss at 32 terminates at cap." */
+export const MARTINGALE: StrategyDefinition = {
+  format: 1,
+  id: 'test-martingale',
+  revision: 1,
+  name: 'Capped Martingale',
+  game: 'roulette',
+  table: LAUNCH_TABLE,
+  parameters: [EVEN_MONEY],
+  counters: [{ id: 'stake', initial: '10' }],
+  instructions: [
+    { id: 'bet', label: 'The stake on your target', when: { always: true }, bets: [{ target: { param: 'target' }, amount: { counter: 'stake' }, cap: '320' }] },
+  ],
+  adjustments: [{ id: 'double', on: 'loss', counter: 'stake', to: { mul: [{ counter: 'stake' }, { lit: '2' }] } }],
+  stopWhen: null,
+  completeWhen: { subject: 'last-result', is: 'win' },
+};
+
+/** "Three-win parlay: 1/2/4 after consecutive wins; a loss or third win completes and resets." */
+export const PARLAY: StrategyDefinition = {
+  format: 1,
+  id: 'test-parlay',
+  revision: 1,
+  name: 'Three-win parlay',
+  game: 'roulette',
+  table: LAUNCH_TABLE,
+  parameters: [EVEN_MONEY],
+  counters: [
+    { id: 'stake', initial: '10', cap: '40' },
+    { id: 'wins', initial: '0', cap: '3' },
+  ],
+  instructions: [{ id: 'bet', label: 'The stake on your target', when: { always: true }, bets: [{ target: { param: 'target' }, amount: { counter: 'stake' } }] }],
+  adjustments: [
+    { id: 'let-it-ride', on: 'win', counter: 'stake', to: { mul: [{ counter: 'stake' }, { lit: '2' }] } },
+    { id: 'count', on: 'win', counter: 'wins', to: { add: [{ counter: 'wins' }, { lit: '1' }] } },
+  ],
+  stopWhen: null,
+  completeWhen: { any: [{ subject: 'last-result', is: 'loss' }, { compare: { counter: 'wins' }, op: 'ge', to: { lit: '3' } }] },
+};
+
+/**
+ * "Bounded Labouchere: start [1,2,3]; bet first+last (or sole); win removes
+ * endpoints; loss appends stake; empty completes; max required stake 32 units."
+ */
+export const LABOUCHERE: StrategyDefinition = {
+  format: 1,
+  id: 'test-labouchere',
+  revision: 1,
+  name: 'Bounded Labouchere',
+  game: 'roulette',
+  table: LAUNCH_TABLE,
+  parameters: [EVEN_MONEY],
+  counters: [],
+  lists: [{ id: 'line', initial: ['10', '20', '30'] }],
+  instructions: [
+    {
+      id: 'ends',
+      label: 'First plus last on your target',
+      when: { compare: { length: 'line' }, op: 'ge', to: { lit: '2' } },
+      bets: [{ target: { param: 'target' }, amount: { add: [{ first: 'line' }, { last: 'line' }] }, cap: '320' }],
+    },
+    {
+      id: 'sole',
+      label: 'The one number left on your target',
+      priority: 1,
+      when: { compare: { length: 'line' }, op: 'eq', to: { lit: '1' } },
+      bets: [{ target: { param: 'target' }, amount: { first: 'line' }, cap: '320' }],
+    },
+  ],
+  adjustments: [
+    { id: 'cross-off', on: 'win', list: 'line', drop: 'ends' },
+    { id: 'add-loss', on: 'loss', list: 'line', append: { staked: true } },
+  ],
+  stopWhen: null,
+  completeWhen: { compare: { length: 'line' }, op: 'eq', to: { lit: '0' } },
+};

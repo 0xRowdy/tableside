@@ -37,4 +37,12 @@ export {
   type RouletteHouseEdge,
 } from './roulette';
 
-export { FIXED_TWO_DOZENS, FLAT_EVEN_MONEY, ROULETTE_STRATEGIES, strategyDefaults } from './roulette-strategies';
+export {
+  BOUNDED_LABOUCHERE,
+  CAPPED_MARTINGALE,
+  FIXED_TWO_DOZENS,
+  FLAT_EVEN_MONEY,
+  ROULETTE_STRATEGIES,
+  strategyDefaults,
+  THREE_WIN_PARLAY,
+} from './roulette-strategies';

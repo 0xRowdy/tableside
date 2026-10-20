@@ -2,6 +2,7 @@
 // suspend dispositions and the stop path, with substitute adapters.
 // Spin outcomes come from the Random123 "pi digits" stream: 27, 0, 25, 31, 9.
 
+import { CAPPED_MARTINGALE } from '@tableside/definitions';
 import type { DomainFact } from '@tableside/engine';
 
 import { alwaysAllowed, type AccessDecision, type AccessSupervisor, type AdmissionDecision, type PhaseReport, type TurnDecision } from '@/practice/adapters';
@@ -561,5 +562,28 @@ describe('the timed-metering hook', () => {
       { phase: 'final-settlement', suspended: false, timed: false },
       { phase: 'completed', suspended: false, timed: false },
     ]);
+  });
+
+  it('excludes a pending strategy action and a cycle result, even in an open decision', async () => {
+    // Capped Martingale on black, from 50: 27 and 0 lose 10 and 20, leaving 20 against a stake of 40.
+    const { controller, reports } = setup();
+    await controller.load();
+    await controller.start({ game: 'roulette', buyIn: '50', strategy: { definition: CAPPED_MARTINGALE, parameters: { target: 'black' } } });
+    const timedNow = () => reports.at(-1)?.timed;
+    for (const stake of ['10', '20']) {
+      await controller.placeWager('black', stake);
+      await controller.spin();
+    }
+    expect(active(controller.snapshot()).view.strategy?.pending?.reason).toBe('unfunded-group');
+    expect(reports.at(-1)).toMatchObject({ phase: 'settled-outcome', timed: false });
+    // A rebuy covers the stake: the pause lifts and time counts again.
+    await controller.rebuy('100');
+    expect(timedNow()).toBe(true);
+    // 25 loses the 40; 31 wins the 80, completing the cycle: its result isn't timed.
+    for (const stake of ['40', '80']) {
+      await controller.placeWager('black', stake);
+      await controller.spin();
+    }
+    expect(reports.at(-1)).toMatchObject({ phase: 'cycle-completion', timed: false });
   });
 });
