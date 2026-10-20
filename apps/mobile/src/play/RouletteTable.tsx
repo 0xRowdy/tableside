@@ -14,7 +14,7 @@ import { usePractice } from '@/practice/PracticeProvider';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale, type ColorToken } from '@/theme/tokens';
 
 import { describeFacts, describePocket, formatUnits, pocketColor, STATUS, targetName, totalOnTable } from './roulette-text';
-import { RouletteFelt } from './RouletteFelt';
+import { POCKET_TOKEN, RouletteFelt } from './RouletteFelt';
 import { PhaseStepper, SessionStrip, TableTopBar, type PhaseStep } from './TableChrome';
 
 type ActiveSnapshot = Extract<PracticeSnapshot, { status: 'active' }>;
@@ -165,8 +165,6 @@ export function RouletteTable({ snapshot }: { snapshot: ActiveSnapshot }) {
   );
 }
 
-const POCKET_TOKEN = { red: 'pocketRed', black: 'pocketBlack', green: 'pocketGreen' } as const;
-
 const WHEEL_NAMES: Record<PermittedView['table']['wheel'], string> = { 'single-zero': 'Single zero', 'double-zero': 'Double zero' };
 
 const NOT_SAVED = 'Not saved yet. Play is paused.';
@@ -197,7 +195,7 @@ function Chip({ option, selected, onPress }: { option: (typeof CHIPS)[number]; s
       accessibilityState={{ checked: selected }}
       onPress={onPress}
       {...focusProps}
-      style={[styles.chipSlot, selected && styles.chipSelected, focused && styles.spotFocused]}
+      style={[styles.chipSlot, selected && styles.chipSelected, focused && styles.chipFocused]}
     >
       <View style={[styles.chip, { backgroundColor: palette[option.color] }]}>
         <Text maxFontSizeMultiplier={textScale.display} style={[styles.chipText, { color: palette[option.ink] }]}>{option.label}</Text>
@@ -299,7 +297,7 @@ const styles = StyleSheet.create({
   summary: { gap: 2 },
   summaryTitle: { fontFamily: fonts.uiBold, fontSize: 15, color: palette.foreground },
   summaryText: { fontFamily: fonts.ui, fontSize: 12, color: palette.mutedForeground },
-  spotFocused: { borderColor: palette.ring },
+  chipFocused: { borderColor: palette.ring },
   rack: { gap: space[2], padding: space[3], borderRadius: radius.lg, backgroundColor: palette.rail },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: space[1] },
   chipSlot: {

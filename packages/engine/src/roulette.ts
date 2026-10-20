@@ -110,7 +110,7 @@ const isInside = (kind: PlacementKind) => KIND_ORDER.indexOf(kind) < KIND_ORDER.
 
 function buildLayout(wheel: RouletteWheel): RoulettePlacement[] {
   const zeros = roulettePockets(wheel).filter((pocket) => pocket === 0 || pocket === '00');
-  const sets: [PlacementKind, readonly RoulettePocket[], string?][] = [];
+  const sets: (readonly [kind: PlacementKind, covers: readonly RoulettePocket[], target?: string])[] = [];
   for (const pocket of [...zeros, ...NUMBERS]) sets.push(['straight', [pocket]]);
   for (const n of NUMBERS) {
     if (columnOf(n) < 3) sets.push(['split', [n, n + 1]]);
@@ -119,7 +119,7 @@ function buildLayout(wheel: RouletteWheel): RoulettePlacement[] {
     if (columnOf(n) < 3 && n <= 32) sets.push(['corner', [n, n + 1, n + 3, n + 4]]);
     if (columnOf(n) === 1 && n <= 31) sets.push(['six-line', [n, n + 1, n + 2, n + 3, n + 4, n + 5]]);
   }
-  sets.push(...ZERO_PLACEMENTS[wheel].map(([kind, covers]): [PlacementKind, readonly RoulettePocket[]] => [kind, covers]));
+  sets.push(...ZERO_PLACEMENTS[wheel]);
   const outside: [PlacementKind, (n: number) => boolean, string?][] = [
     ['red', (n) => RED.has(n)],
     ['black', (n) => !RED.has(n)],

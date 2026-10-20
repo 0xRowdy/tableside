@@ -134,7 +134,7 @@ export class PracticeController {
           owner: this.adapters.owner,
           device: this.adapters.device,
           game: request.game,
-          rules: ROULETTE_PRESETS[request.wheel ?? 'single-zero'],
+          rules: ROULETTE_PRESETS[wheelOf(request)],
           strategy: null,
           reference: null,
           funding: request.buyIn,
@@ -420,4 +420,6 @@ export class PracticeController {
   }
 }
 
-const sameRequest = (a: StartRequest, b: StartRequest) => a.game === b.game && a.buyIn === b.buyIn && (a.wheel ?? 'single-zero') === (b.wheel ?? 'single-zero');
+const wheelOf = (request: StartRequest): RouletteWheel => request.wheel ?? 'single-zero';
+
+const sameRequest = (a: StartRequest, b: StartRequest) => a.game === b.game && a.buyIn === b.buyIn && wheelOf(a) === wheelOf(b);

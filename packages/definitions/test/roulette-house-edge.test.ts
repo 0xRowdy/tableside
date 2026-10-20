@@ -63,7 +63,12 @@ describe('roulette house edge', () => {
     it.each(WHEELS[wheel].kinds)(`${wheel} %s matches the exact computation`, (kind) => {
       const edge = rouletteHouseEdge(wheel, kind);
       const exact = exactEdge(wheel, kind);
-      expect(edge).toEqual({ exact: `${exact[0]}/${exact[1]}`, percent: percent(exact), version: ROULETTE_HOUSE_EDGE_VERSION });
+      expect(edge).toEqual({
+        exact: `${exact[0]}/${exact[1]}`,
+        percent: percent(exact),
+        version: ROULETTE_HOUSE_EDGE_VERSION,
+        rules: { id: `roulette-${wheel}`, version: 1 },
+      });
       expect(tableEdge(wheel, kind)).toBe(edge?.exact);
     });
   }

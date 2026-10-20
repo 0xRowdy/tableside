@@ -9,7 +9,7 @@
 
 import type { PermittedView, RoulettePocket } from '@tableside/engine';
 import { useState } from 'react';
-import { AccessibilityInfo, Pressable, StyleSheet, Text, View } from 'react-native';
+import { AccessibilityInfo, Pressable, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native';
 
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale, type ColorToken } from '@/theme/tokens';
@@ -18,7 +18,8 @@ import { formatUnits, kindName, pocketColor, spokenPayout, targetName } from './
 
 type Placement = PermittedView['table']['placements'][number];
 
-const POCKET_TOKEN = { red: 'pocketRed', black: 'pocketBlack', green: 'pocketGreen' } as const;
+export const POCKET_TOKEN = { red: 'pocketRed', black: 'pocketBlack', green: 'pocketGreen' } as const;
+const ROW_GAP = 2;
 const ROWS = Array.from({ length: 12 }, (_, row) => [row * 3 + 1, row * 3 + 2, row * 3 + 3]);
 const EVEN_MONEY = [
   { target: 'low', label: '1–18' },
@@ -44,6 +45,14 @@ export function RouletteFelt({
   onSpot: (target: string) => void;
 }) {
   const [open, setOpen] = useState<RoulettePocket | null>(null);
+  // The side columns line up with the twelve number rows, between the zero row
+  // and the column row, whatever height larger text gives those rows.
+  const [edges, setEdges] = useState({ top: MIN_TOUCH_TARGET, bottom: MIN_TOUCH_TARGET });
+  const measure = (edge: 'top' | 'bottom') => (event: LayoutChangeEvent) => {
+    const height = event.nativeEvent.layout.height;
+    setEdges((current) => (current[edge] === height ? current : { ...current, [edge]: height }));
+  };
+  const side = { paddingTop: edges.top + ROW_GAP, paddingBottom: edges.bottom + ROW_GAP };
   const placement = (target: string) => view.table.placements.find((p) => p.target === target);
   const zeros: RoulettePocket[] = view.table.wheel === 'double-zero' ? [0, '00'] : [0];
   const hint = `Adds ${formatUnits(chip)}.`;
@@ -99,24 +108,24 @@ export function RouletteFelt({
   return (
     <View style={styles.wrap}>
       <View style={styles.felt} testID="felt">
-        <View style={[styles.side, styles.evenMoney]}>
+        <View style={[styles.side, side, styles.evenMoney]}>
           {EVEN_MONEY.map(({ target, label }) => outside(target, label, styles.sideSpot, COLOR_SPOTS[target]))}
         </View>
-        <View style={[styles.side, styles.dozens]}>
+        <View style={[styles.side, side, styles.dozens]}>
           {[1, 2, 3].map((d) => outside(`dozen-${d}`, `${['1st', '2nd', '3rd'][d - 1]} 12`, styles.sideSpot))}
         </View>
         <View style={styles.numbers}>
-          <View style={styles.row}>{zeros.map((pocket) => pocketSpot(pocket, styles.number))}</View>
+          <View style={styles.row} onLayout={measure('top')}>{zeros.map((pocket) => pocketSpot(pocket, styles.number))}</View>
           {ROWS.map((row) => (
             <View key={row[0]} style={styles.row}>
               {row.map((n) => pocketSpot(n, styles.number))}
             </View>
           ))}
-          <View style={styles.row}>{[1, 2, 3].map((c) => outside(`column-${c}`, null, styles.number))}</View>
+          <View style={styles.row} onLayout={measure('bottom')}>{[1, 2, 3].map((c) => outside(`column-${c}`, null, styles.number))}</View>
         </View>
       </View>
       <Text maxFontSizeMultiplier={textScale.body} style={styles.caption}>
-        Tap a number for its straight-up, split, street, corner and line bets.
+        Numbers pay 35:1 straight up. Tap a number for its split, street, corner and line bets.
       </Text>
       {open !== null && (
         <Loupe
@@ -275,13 +284,12 @@ function Spot({
 const styles = StyleSheet.create({
   wrap: { gap: space[2] },
   felt: { flexDirection: 'row', gap: 2, padding: space[3], marginHorizontal: space[2], borderRadius: radius.lg, backgroundColor: palette.feltDeep },
-  // The side columns line up with the twelve number rows, between the zero and column rows.
-  side: { gap: 2, paddingVertical: MIN_TOUCH_TARGET + 2 },
+  side: { gap: ROW_GAP },
   evenMoney: { width: 56 },
   dozens: { width: MIN_TOUCH_TARGET },
   sideSpot: { flex: 1 },
-  numbers: { flex: 1, gap: 2 },
-  row: { flexDirection: 'row', gap: 2 },
+  numbers: { flex: 1, gap: ROW_GAP },
+  row: { flexDirection: 'row', gap: ROW_GAP },
   number: { flex: 1 },
   spot: {
     minHeight: MIN_TOUCH_TARGET,

@@ -2,26 +2,16 @@
 // (#3): inside 1-100, outside 10-1,000 units per placement, with no aggregate
 // table cap. Editable limits arrive with #72.
 
-import type { ActivitySpecification, PlacementKind, RouletteWheel } from '@tableside/engine';
+import { ROULETTE_RULE_SETS, type ActivitySpecification, type PlacementKind, type RouletteWheel, type VersionedIdentity } from '@tableside/engine';
 
 const LAUNCH_LIMITS: ActivitySpecification['rules']['limits'] = {
   inside: { min: '1', max: '100' },
   outside: { min: '10', max: '1000' },
 };
 
-export const SINGLE_ZERO_ROULETTE: ActivitySpecification['rules'] = {
-  id: 'roulette-single-zero',
-  version: 1,
-  wheel: 'single-zero',
-  limits: LAUNCH_LIMITS,
-};
+export const SINGLE_ZERO_ROULETTE: ActivitySpecification['rules'] = { ...ROULETTE_RULE_SETS['single-zero'], limits: LAUNCH_LIMITS };
 
-export const DOUBLE_ZERO_ROULETTE: ActivitySpecification['rules'] = {
-  id: 'roulette-double-zero',
-  version: 1,
-  wheel: 'double-zero',
-  limits: LAUNCH_LIMITS,
-};
+export const DOUBLE_ZERO_ROULETTE: ActivitySpecification['rules'] = { ...ROULETTE_RULE_SETS['double-zero'], limits: LAUNCH_LIMITS };
 
 export const ROULETTE_PRESETS: Readonly<Record<RouletteWheel, ActivitySpecification['rules']>> = {
   'single-zero': SINGLE_ZERO_ROULETTE,
@@ -36,7 +26,10 @@ export interface RouletteHouseEdge {
   readonly exact: string;
   /** Percent of the stake, two decimals, as displayed ("2.70"). */
   readonly percent: string;
+  /** The version of these values. */
   readonly version: number;
+  /** The rule set the value is a property of. */
+  readonly rules: VersionedIdentity;
 }
 
 const SINGLE_ZERO = { exact: '1/37', percent: '2.70' } as const;
@@ -62,5 +55,6 @@ const HOUSE_EDGES: Readonly<Record<RouletteWheel, Partial<Record<PlacementKind, 
 /** The house edge of a wager under a wheel's rules, or undefined when that layout doesn't offer it. */
 export function rouletteHouseEdge(wheel: RouletteWheel, kind: PlacementKind): RouletteHouseEdge | undefined {
   const edge = HOUSE_EDGES[wheel][kind];
-  return edge && { exact: edge.exact, percent: edge.percent, version: ROULETTE_HOUSE_EDGE_VERSION };
+  const { id, version } = ROULETTE_PRESETS[wheel];
+  return edge && { exact: edge.exact, percent: edge.percent, version: ROULETTE_HOUSE_EDGE_VERSION, rules: { id, version } };
 }

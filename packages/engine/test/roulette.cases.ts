@@ -51,29 +51,40 @@ const inside = (kind: string, covers: readonly Pocket[], payout: string): Expect
 });
 const outside = (target: string, covers: readonly number[], payout: string): Expected => ({ target, covers, payout, limitClass: 'outside' });
 
-/** Each layout's legal placements, built from the published layout geometry and zero rules above. */
+// The 36-number grid's placements, written out from the standard layout
+// (three columns, 1-2-3 in the first row, 34-35-36 in the last).
+const literal = (text: string) => text.split(' ').map((set) => set.split(/[-,]/).map(Number));
+const NUMBER_SPLITS = literal(
+  '1-2 1-4 2-3 2-5 3-6 4-5 4-7 5-6 5-8 6-9 7-8 7-10 8-9 8-11 9-12 10-11 10-13 11-12 11-14 12-15 13-14 13-16 14-15 ' +
+    '14-17 15-18 16-17 16-19 17-18 17-20 18-21 19-20 19-22 20-21 20-23 21-24 22-23 22-25 23-24 23-26 24-27 25-26 25-28 ' +
+    '26-27 26-29 27-30 28-29 28-31 29-30 29-32 30-33 31-32 31-34 32-33 32-35 33-36 34-35 35-36',
+);
+const STREETS = literal('1-2-3 4-5-6 7-8-9 10-11-12 13-14-15 16-17-18 19-20-21 22-23-24 25-26-27 28-29-30 31-32-33 34-35-36');
+const CORNERS = literal(
+  '1-2-4-5 2-3-5-6 4-5-7-8 5-6-8-9 7-8-10-11 8-9-11-12 10-11-13-14 11-12-14-15 13-14-16-17 14-15-17-18 16-17-19-20 ' +
+    '17-18-20-21 19-20-22-23 20-21-23-24 22-23-25-26 23-24-26-27 25-26-28-29 26-27-29-30 28-29-31-32 29-30-32-33 ' +
+    '31-32-34-35 32-33-35-36',
+);
+const SIX_LINES = literal(
+  '1-2-3-4-5-6 4-5-6-7-8-9 7-8-9-10-11-12 10-11-12-13-14-15 13-14-15-16-17-18 16-17-18-19-20-21 19-20-21-22-23-24 ' +
+    '22-23-24-25-26-27 25-26-27-28-29-30 28-29-30-31-32-33 31-32-33-34-35-36',
+);
+const DOZENS = literal('1,2,3,4,5,6,7,8,9,10,11,12 13,14,15,16,17,18,19,20,21,22,23,24 25,26,27,28,29,30,31,32,33,34,35,36');
+const COLUMNS = literal('1,4,7,10,13,16,19,22,25,28,31,34 2,5,8,11,14,17,20,23,26,29,32,35 3,6,9,12,15,18,21,24,27,30,33,36');
+
+/** Each layout's legal placements, from the literal grid above and the zero rules in the header. */
 function expectedLayout(wheel: RouletteWheel): Expected[] {
-  const column = (n: number) => ((n - 1) % 3) + 1;
   const zeros: Pocket[] = wheel === 'single-zero' ? [0] : [0, '00'];
   const zeroSplits: Pocket[][] = wheel === 'single-zero' ? [[0, 1], [0, 2], [0, 3]] : [[0, '00'], [0, 1], [0, 2], ['00', 2], ['00', 3]];
   const trios: Pocket[][] = wheel === 'single-zero' ? [[0, 1, 2], [0, 2, 3]] : [[0, '00', 2], [0, 1, 2], ['00', 2, 3]];
-  const numberSplits: number[][] = [];
-  for (const n of NUMBERS) {
-    if (column(n) < 3) numberSplits.push([n, n + 1]);
-    if (n <= 33) numberSplits.push([n, n + 3]);
-  }
-  numberSplits.sort((a, b) => (a[0] as number) - (b[0] as number) || (a[1] as number) - (b[1] as number));
-  const rows = Array.from({ length: 12 }, (_, r) => [r * 3 + 1, r * 3 + 2, r * 3 + 3]);
-  const corners = NUMBERS.filter((n) => column(n) < 3 && n <= 32).map((n) => [n, n + 1, n + 3, n + 4]);
-  const sixLines = rows.slice(0, 11).map((row, r) => [...row, ...(rows[r + 1] as number[])]);
   return [
     ...[...zeros, ...NUMBERS].map((pocket) => inside('straight', [pocket], '35:1')),
-    ...[...zeroSplits, ...numberSplits].map((covers) => inside('split', covers, '17:1')),
-    ...rows.map((covers) => inside('street', covers, '11:1')),
+    ...[...zeroSplits, ...NUMBER_SPLITS].map((covers) => inside('split', covers, '17:1')),
+    ...STREETS.map((covers) => inside('street', covers, '11:1')),
     ...trios.map((covers) => inside('trio', covers, '11:1')),
-    ...corners.map((covers) => inside('corner', covers, '8:1')),
+    ...CORNERS.map((covers) => inside('corner', covers, '8:1')),
     ...(wheel === 'single-zero' ? [inside('first-four', [0, 1, 2, 3], '8:1')] : []),
-    ...sixLines.map((covers) => inside('six-line', covers, '5:1')),
+    ...SIX_LINES.map((covers) => inside('six-line', covers, '5:1')),
     ...(wheel === 'double-zero' ? [inside('basket', [0, '00', 1, 2, 3], '6:1')] : []),
     outside('red', RED, '1:1'),
     outside('black', NUMBERS.filter((n) => !RED.includes(n)), '1:1'),
@@ -81,8 +92,8 @@ function expectedLayout(wheel: RouletteWheel): Expected[] {
     outside('even', NUMBERS.filter((n) => n % 2 === 0), '1:1'),
     outside('low', NUMBERS.filter((n) => n <= 18), '1:1'),
     outside('high', NUMBERS.filter((n) => n >= 19), '1:1'),
-    ...[1, 2, 3].map((d) => outside(`dozen-${d}`, NUMBERS.filter((n) => Math.ceil(n / 12) === d), '2:1')),
-    ...[1, 2, 3].map((c) => outside(`column-${c}`, NUMBERS.filter((n) => column(n) === c), '2:1')),
+    ...DOZENS.map((covers, d) => outside(`dozen-${d + 1}`, covers, '2:1')),
+    ...COLUMNS.map((covers, c) => outside(`column-${c + 1}`, covers, '2:1')),
   ];
 }
 
