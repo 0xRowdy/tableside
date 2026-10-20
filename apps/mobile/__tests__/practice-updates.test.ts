@@ -82,6 +82,7 @@ describe('the quarantine list', () => {
       session: {
         game: 'craps',
         buyIn: '1000',
+        fundingSource: 'practice-funding',
         turnsRecorded: 1,
         engine: identities.engine,
         reason: { kind: 'quarantined', entry: 'q-craps-1', listVersion: 2 },
