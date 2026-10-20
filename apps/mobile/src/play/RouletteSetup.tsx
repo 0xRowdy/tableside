@@ -1,13 +1,15 @@
-// Minimal roulette session setup (design frame S1-02, free play only): the
-// single-zero wheel at the launch limits and a fresh buy-in. Guided practice,
-// the double-zero wheel and editable limits arrive with #62, #72 and #74.
+// Minimal roulette session setup (design frame S1-02, free play only): either
+// wheel at the launch limits and a fresh buy-in. Guided practice, editable
+// limits and the house-edge line arrive with #72 and #74.
 
-import { SINGLE_ZERO_ROULETTE } from '@tableside/definitions';
+import type { RouletteWheel } from '@tableside/engine';
+import { ROULETTE_PRESETS } from '@tableside/definitions';
 import { useState } from 'react';
-import { StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { Button } from '@/components/Button';
 import { Screen } from '@/components/Screen';
+import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
 import type { StartProblem } from '@/practice/controller';
 import { usePractice } from '@/practice/PracticeProvider';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/theme/tokens';
@@ -28,13 +30,14 @@ export function RouletteSetup({ problem, busy }: { problem: StartProblem | null;
   const { controller } = usePractice();
   const [draft, setDraft] = useState(formatUnits(DEFAULT_BUY_IN));
   const [notWhole, setNotWhole] = useState(false);
-  const { limits } = SINGLE_ZERO_ROULETTE;
+  const [wheel, setWheel] = useState<RouletteWheel>('single-zero');
+  const { limits } = ROULETTE_PRESETS[wheel];
 
   const start = () => {
     const digits = draft.replace(/[,\s]/g, '');
     const whole = /^\d+$/.test(digits) && digits.length <= MAX_BUY_IN_DIGITS;
     setNotWhole(!whole);
-    if (whole) void controller.start({ game: 'roulette', buyIn: BigInt(digits).toString() });
+    if (whole) void controller.start({ game: 'roulette', buyIn: BigInt(digits).toString(), wheel });
   };
   const error = notWhole ? PROBLEMS['invalid-buy-in'] : problem && PROBLEMS[problem];
 
@@ -49,8 +52,16 @@ export function RouletteSetup({ problem, busy }: { problem: StartProblem | null;
 
       <View style={styles.section}>
         <Text maxFontSizeMultiplier={textScale.body} style={styles.label}>WHEEL</Text>
-        <Text maxFontSizeMultiplier={textScale.body} style={styles.value}>Single zero (0)</Text>
-        <Text maxFontSizeMultiplier={textScale.body} style={styles.help}>Even-money bets lose in full when the ball lands on zero.</Text>
+        <View accessibilityRole="radiogroup" accessibilityLabel="Wheel" style={styles.choices}>
+          {WHEELS.map((option) => (
+            <Choice key={option.wheel} label={option.label} selected={wheel === option.wheel} onPress={() => setWheel(option.wheel)} />
+          ))}
+        </View>
+        <Text maxFontSizeMultiplier={textScale.body} style={styles.help}>
+          {wheel === 'single-zero'
+            ? 'Even-money bets lose in full when the ball lands on zero.'
+            : 'Even-money bets lose in full on 0 or 00. Adds the five-number basket.'}
+        </Text>
       </View>
 
       <View style={styles.section}>
@@ -94,7 +105,46 @@ export function RouletteSetup({ problem, busy }: { problem: StartProblem | null;
   );
 }
 
+const WHEELS: readonly { wheel: RouletteWheel; label: string }[] = [
+  { wheel: 'single-zero', label: 'Single zero (0)' },
+  { wheel: 'double-zero', label: 'Double zero (0, 00)' },
+];
+
+function Choice({ label, selected, onPress }: { label: string; selected: boolean; onPress: () => void }) {
+  const { focused, focusProps } = useKeyboardFocus();
+  return (
+    <Pressable
+      accessibilityRole="radio"
+      accessibilityLabel={label}
+      accessibilityState={{ checked: selected }}
+      onPress={onPress}
+      {...focusProps}
+      style={[styles.choice, selected && styles.choiceSelected, focused && styles.choiceFocused]}
+    >
+      {/* Selection is marked by the check as well as the outline. */}
+      <Text maxFontSizeMultiplier={textScale.body} style={styles.value}>
+        {selected ? '✓ ' : ''}
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
 const styles = StyleSheet.create({
+  choices: { flexDirection: 'row', flexWrap: 'wrap', gap: space[2] },
+  choice: {
+    flexGrow: 1,
+    minHeight: MIN_TOUCH_TARGET,
+    minWidth: MIN_TOUCH_TARGET,
+    justifyContent: 'center',
+    paddingHorizontal: space[3],
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: palette.controlBorder,
+    backgroundColor: palette.card,
+  },
+  choiceSelected: { borderColor: palette.primary, borderWidth: 2 },
+  choiceFocused: { borderColor: palette.ring, borderWidth: 2 },
   titles: { gap: 2 },
   title: { fontFamily: fonts.display, fontSize: 30, color: palette.foreground },
   subtitle: { fontFamily: fonts.ui, fontSize: 14, color: palette.mutedForeground },

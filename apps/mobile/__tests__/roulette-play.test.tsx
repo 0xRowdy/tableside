@@ -1,6 +1,7 @@
 // Seam 3: the roulette free-play screens, rendered through the real routes on
 // the in-memory adapters and driven only through the accessibility tree.
-// Spins come from the Random123 "pi digits" stream: 27 (red), then 0, 25.
+// Spins come from the Random123 "pi digits" stream: 27 (red), then 0, 25 on the
+// single-zero wheel; 3, then 29, 0 on the double-zero wheel.
 
 import { act, cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react-native';
 import { renderRouter } from 'expo-router/testing-library';
@@ -32,8 +33,9 @@ async function openRouletteSetup() {
   await screen.findByRole('header', { name: 'Roulette' });
 }
 
-async function startSession() {
+async function startSession(wheel: 'Single zero (0)' | 'Double zero (0, 00)' = 'Single zero (0)') {
   await openRouletteSetup();
+  await fireEvent.press(screen.getByRole('radio', { name: wheel }));
   await fireEvent.press(screen.getByRole('button', { name: 'Start free play' }));
   await screen.findByLabelText('Session balance 1,000');
 }
@@ -101,7 +103,9 @@ describe('roulette free play', () => {
 
     await chooseChipAndTap('25', /^Red, pays 1 to 1$/);
     expect(announcements).toContain('Red 25 on the table. Balance 975.');
-    await chooseChipAndTap('5', /^Straight 17, black, pays 35 to 1$/);
+    await fireEvent.press(spot(/^17, black$/));
+    expect(screen.getByLabelText('Session balance 975')).toBeOnTheScreen();
+    await chooseChipAndTap('5', /^Straight 17, pays 35 to 1$/);
     expect(announcements).toContain('Straight 17 5 on the table. Balance 970.');
 
     expect(spot(/^Red,/)).toHaveAccessibilityValue({ text: '25 on it' });
@@ -125,6 +129,7 @@ describe('roulette free play', () => {
   it('spins, then reveals and settles the committed outcome with no further tap', async () => {
     await startSession();
     await chooseChipAndTap('25', /^Red,/);
+    await fireEvent.press(spot(/^17, black$/));
     await chooseChipAndTap('5', /^Straight 17,/);
     // Nothing about the coming spin is exposed before it is committed.
     expect(screen.queryByLabelText(/^Last spin/)).toBeNull();
@@ -176,6 +181,7 @@ describe('roulette free play', () => {
     await chooseChipAndTap('25', /^Red,/);
     await fireEvent.press(screen.getByRole('button', { name: 'Spin' }));
     await screen.findByLabelText('Session balance 1,025');
+    await fireEvent.press(spot(/^17, black$/));
     await chooseChipAndTap('5', /^Straight 17,/);
 
     await fireEvent.press(screen.getByRole('button', { name: 'End session' }));
@@ -216,12 +222,117 @@ describe('roulette free play', () => {
     expect(await screen.findByRole('button', { name: 'Start free play' })).toBeOnTheScreen();
   });
 
+  it('opens the bets on a number without placing anything, each with its payout, and closes them', async () => {
+    await startSession();
+
+    await fireEvent.press(spot(/^17, black$/));
+
+    const loupe = within(screen.getByTestId('bet-loupe'));
+    expect(loupe.getByRole('header', { name: 'Bets on 17' })).toBeOnTheScreen();
+    expect(announcements).toContain('Bets on 17 are listed below the table.');
+    // Every inside bet covering 17, per the standard layout: 1 straight, 4 splits, 1 street, 4 corners, 2 six lines.
+    expect(loupe.getAllByRole('button', { name: /pays/ }).map((row) => row.props.accessibilityLabel)).toEqual([
+      'Straight 17, pays 35 to 1',
+      'Split 14 and 17, pays 17 to 1',
+      'Split 16 and 17, pays 17 to 1',
+      'Split 17 and 18, pays 17 to 1',
+      'Split 17 and 20, pays 17 to 1',
+      'Street 16, 17 and 18, pays 11 to 1',
+      'Corner 13, 14, 16 and 17, pays 8 to 1',
+      'Corner 14, 15, 17 and 18, pays 8 to 1',
+      'Corner 16, 17, 19 and 20, pays 8 to 1',
+      'Corner 17, 18, 20 and 21, pays 8 to 1',
+      'Six line 13 to 18, pays 5 to 1',
+      'Six line 16 to 21, pays 5 to 1',
+    ]);
+    // Payouts are labelled on screen too, not only for screen readers.
+    expect(loupe.getAllByText(/^Split 17:1$/)).toHaveLength(4);
+    expect(loupe.getAllByText(/^Corner 8:1$/)).toHaveLength(4);
+    expect(spot(/^17, black$/)).toHaveProp('accessibilityState', { disabled: false, expanded: true });
+    expect(screen.getByLabelText('On table 0')).toBeOnTheScreen();
+    expect(announcements.join(' ')).not.toMatch(/on the table/);
+
+    await fireEvent.press(loupe.getByRole('button', { name: 'Close bets on 17' }));
+    expect(screen.queryByTestId('bet-loupe')).toBeNull();
+  });
+
+  it('places a split from the bets on a number, marking the covered numbers by more than color', async () => {
+    await startSession();
+    await fireEvent.press(spot(/^17, black$/));
+
+    await chooseChipAndTap('5', /^Split 16 and 17,/);
+
+    expect(announcements).toContain('Split 16 and 17 5 on the table. Balance 995.');
+    expect(spot(/^Split 16 and 17,/)).toHaveAccessibilityValue({ text: '5 on it' });
+    expect(spot(/^16, red$/)).toHaveAccessibilityValue({ text: 'no straight-up wager, 1 other bet covers it' });
+    expect(within(spot(/^16, red$/)).getByText('•')).toBeOnTheScreen();
+  });
+
+  it('labels the outside bets with their payouts on the felt', async () => {
+    await startSession();
+    const felt = within(screen.getByTestId('felt'));
+
+    for (const [name, payout] of [
+      ['Red', '1 to 1'], ['Black', '1 to 1'], ['Odd', '1 to 1'], ['Even', '1 to 1'], ['1 to 18', '1 to 1'], ['19 to 36', '1 to 1'],
+      ['1st dozen', '2 to 1'], ['2nd dozen', '2 to 1'], ['3rd dozen', '2 to 1'],
+      ['1st column', '2 to 1'], ['2nd column', '2 to 1'], ['3rd column', '2 to 1'],
+    ]) {
+      expect(felt.getByRole('button', { name: `${name}, pays ${payout}` })).toBeOnTheScreen();
+    }
+    expect(within(spot(/^Red,/)).getByText('1:1')).toBeOnTheScreen();
+    expect(within(spot(/^2nd dozen,/)).getByText('2:1')).toBeOnTheScreen();
+    expect(within(spot(/^3rd column,/)).getByText('2 to 1')).toBeOnTheScreen();
+  });
+
+  it.each([
+    ['Single zero (0)', 157, ['0'], 'First four 0, 1, 2 and 3, pays 8 to 1'],
+    ['Double zero (0, 00)', 161, ['0', '00'], 'Five-number basket 0, 00, 1, 2 and 3, pays 6 to 1'],
+  ] as const)('reaches every placement of the %s layout from the felt', async (wheel, count, zeros, zeroBet) => {
+    await startSession(wheel);
+    const names = new Set(
+      within(screen.getByTestId('felt'))
+        .getAllByRole('button', { name: /pays/ })
+        .map((control) => control.props.accessibilityLabel as string),
+    );
+    const pockets = [...zeros, ...Array.from({ length: 36 }, (_, i) => String(i + 1))];
+    for (const pocket of pockets) {
+      await fireEvent.press(spot(new RegExp(`^${pocket}, (red|black|green)$`)));
+      for (const row of within(screen.getByTestId('bet-loupe')).getAllByRole('button', { name: /pays/ })) names.add(row.props.accessibilityLabel);
+    }
+    // 12 outside placements plus every inside placement, each reached once by name.
+    expect(names.size).toBe(count);
+    expect(names).toContain(zeroBet);
+    expect(names).toContain('Trio 0, 1 and 2, pays 11 to 1');
+  }, 60_000);
+
+  it('plays the double-zero wheel: 00 on the layout and a five-number basket that pays 6 to 1', async () => {
+    await startSession('Double zero (0, 00)');
+    expect(screen.getByText('Double zero · inside 1–100 · outside 10–1,000')).toBeOnTheScreen();
+    expect(spot(/^00, green$/)).toBeOnTheScreen();
+
+    await fireEvent.press(spot(/^00, green$/));
+    const loupe = within(screen.getByTestId('bet-loupe'));
+    expect(loupe.getByRole('button', { name: 'Split 0 and 00, pays 17 to 1' })).toBeOnTheScreen();
+    expect(loupe.getByRole('button', { name: 'Trio 0, 00 and 2, pays 11 to 1' })).toBeOnTheScreen();
+    expect(loupe.getByText('Five-number basket 6:1')).toBeOnTheScreen();
+    await chooseChipAndTap('5', /^Five-number basket/);
+    expect(announcements).toContain('Five-number basket 0, 00, 1, 2 and 3 5 on the table. Balance 995.');
+
+    await fireEvent.press(screen.getByRole('button', { name: 'Spin' }));
+
+    expect(await screen.findByLabelText('Last spin: 3 red')).toBeOnTheScreen();
+    await waitFor(() => expect(announcements).toContain('Five-number basket 0, 00, 1, 2 and 3 5 wins 30. Balance 1,030.'));
+  });
+
   it('gives every table control a touch target of at least 48 points', async () => {
     await startSession();
 
     const table = within(screen.getByTestId('table-scroll'));
     const controls = [...table.getAllByRole('button'), ...table.getAllByRole('radio')];
     expect(controls.length).toBeGreaterThan(40);
+    // The bets on a number are table controls too.
+    await fireEvent.press(spot(/^17, black$/));
+    controls.push(...within(screen.getByTestId('bet-loupe')).getAllByRole('button'));
     for (const control of controls) {
       const style = StyleSheet.flatten(control.props.style);
       expect(style.minHeight).toBeGreaterThanOrEqual(48);

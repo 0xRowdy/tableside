@@ -1,7 +1,7 @@
 // How roulette sessions read on screen and aloud. Amounts are plain units (no
 // currency symbol); formatting never changes a ledger value.
 
-import type { DomainFact, IllegalActionReason, PermittedView, Phase, RoulettePocket } from '@tableside/engine';
+import type { DomainFact, IllegalActionReason, PermittedView, Phase, PlacementKind, RoulettePocket } from '@tableside/engine';
 
 /** Pocket colors on the layout. Presentation only: the engine owns what each placement covers. */
 const RED_POCKETS: ReadonlySet<number> = new Set([1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36]);
@@ -34,12 +34,52 @@ export function speakSigned(amount: string): string {
   return amount === '0' ? '0' : `plus ${formatUnits(amount)}`;
 }
 
-/** "Red", "Straight 17". */
+const ORDINAL = ['1st', '2nd', '3rd'];
+
+/** "a, b and c". */
+const listed = (items: readonly string[]) => (items.length < 2 ? items.join('') : `${items.slice(0, -1).join(', ')} and ${items.at(-1)}`);
+
+const OUTSIDE_NAMES: Readonly<Record<string, string>> = { red: 'Red', black: 'Black', odd: 'Odd', even: 'Even', low: '1 to 18', high: '19 to 36' };
+
+/**
+ * A placement's name for the screen and for screen readers: "Red", "Straight 17",
+ * "Split 16 and 17", "Corner 13, 14, 16 and 17", "Six line 1 to 6", "2nd dozen".
+ * Built from the target id alone; the engine owns what each placement covers.
+ */
 export function targetName(target: string): string {
-  const straight = /^straight-(\d+)$/.exec(target);
-  if (straight) return `Straight ${straight[1]}`;
-  return target.charAt(0).toUpperCase() + target.slice(1);
+  const outside = OUTSIDE_NAMES[target];
+  if (outside) return outside;
+  const group = /^(dozen|column)-([123])$/.exec(target);
+  if (group) return `${ORDINAL[Number(group[2]) - 1]} ${group[1]}`;
+  const inside = /^(straight|split|street|trio|corner|first-four|six-line|basket)-(.+)$/.exec(target);
+  if (!inside) return target;
+  const [, kind = '', rest = ''] = inside;
+  const pockets = rest.split('-');
+  switch (kind) {
+    case 'first-four':
+      return `First four ${listed(pockets)}`;
+    case 'basket':
+      return `Five-number basket ${listed(pockets)}`;
+    case 'six-line':
+      return `Six line ${pockets[0]} to ${pockets.at(-1)}`;
+    default:
+      return `${kind.charAt(0).toUpperCase()}${kind.slice(1)} ${listed(pockets)}`;
+  }
 }
+
+const KIND_NAMES: Partial<Record<PlacementKind, string>> = {
+  'first-four': 'First four',
+  'six-line': 'Six line',
+  basket: 'Five-number basket',
+  low: '1 to 18',
+  high: '19 to 36',
+};
+
+/** A kind's name alone: "Split", "Six line", "Five-number basket". */
+export const kindName = (kind: PlacementKind): string => KIND_NAMES[kind] ?? `${kind.charAt(0).toUpperCase()}${kind.slice(1)}`;
+
+/** "35:1" → "35 to 1", as screen readers should say it. */
+export const spokenPayout = (payout: string) => payout.replace(':', ' to ');
 
 export const totalOnTable = (view: PermittedView): string =>
   // Roulette stakes are whole units, so a plain integer sum is exact.
