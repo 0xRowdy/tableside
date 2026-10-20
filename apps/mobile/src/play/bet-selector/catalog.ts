@@ -3,7 +3,9 @@
 // keeps. Each game builds its catalog from the engine's permitted view; the
 // selector itself knows nothing about roulette, craps or blackjack.
 
-import { encodeMoney, money } from '@tableside/engine';
+import { decodeMoney, encodeMoney, money } from '@tableside/engine';
+
+import { formatUnits } from '../units';
 
 /** One placeable wager: a target with its terms, as the permitted view gives them. */
 export interface WagerChoice {
@@ -99,6 +101,12 @@ export function parseStake(text: string): string | null {
   return encodeMoney(money(BigInt(whole + fraction), 10n ** BigInt(fraction.length)));
 }
 
+/** The typed stake for display: grouped when it is whole units, as typed otherwise. */
+export function draftAmountText(text: string): string {
+  const amount = parseStake(text);
+  return amount !== null && decodeMoney(amount).d === 1n ? formatUnits(amount) : text;
+}
+
 /** True when the draft holds a stake that differs from what is on its target. */
 export function isDraftPending(draft: BetDraft, wagers: readonly PlacedWager[]): boolean {
   if (draft.target === null || draft.text === '') return false;
@@ -109,7 +117,7 @@ export function isDraftPending(draft: BetDraft, wagers: readonly PlacedWager[]):
 /** Steps the typed stake by one increment, never below zero; a stake that isn't a number starts from zero. */
 export function stepStake(text: string, step: string, direction: 1 | -1): string {
   const current = parseStake(text);
-  const whole = current !== null && !current.includes('/') ? BigInt(current) : 0n;
+  const whole = current !== null && decodeMoney(current).d === 1n ? BigInt(current) : 0n;
   const next = whole + BigInt(step) * BigInt(direction);
   return (next < 0n ? 0n : next).toString();
 }

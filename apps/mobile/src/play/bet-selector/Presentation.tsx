@@ -8,11 +8,12 @@ import { Button } from '@/components/Button';
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/theme/tokens';
 
-export type Presentation = 'table' | 'list';
+export type Presentation = 'table' | 'selector';
 
 const OPTIONS: readonly { value: Presentation; label: string }[] = [
   { value: 'table', label: 'Table' },
-  { value: 'list', label: 'Bet list' },
+  // "Bet list" is the design's tab copy for the bet selector.
+  { value: 'selector', label: 'Bet list' },
 ];
 
 export function PresentationSwitch({ value, onChange }: { value: Presentation; onChange: (value: Presentation) => void }) {

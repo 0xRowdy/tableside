@@ -14,7 +14,7 @@ import { usePractice } from '@/practice/PracticeProvider';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale, type ColorToken } from '@/theme/tokens';
 
 import { BetSelector } from './bet-selector/BetSelector';
-import { EMPTY_DRAFT, findChoice, isDraftPending, type BetDraft } from './bet-selector/catalog';
+import { draftAmountText, EMPTY_DRAFT, findChoice, isDraftPending, type BetDraft } from './bet-selector/catalog';
 import { DraftBar, PresentationSwitch, type Presentation } from './bet-selector/Presentation';
 import { rouletteCatalog, roulettePlacedWagers } from './roulette-catalog';
 import { describeFacts, describePocket, formatUnits, pocketColor, STATUS, targetName, totalOnTable } from './roulette-text';
@@ -132,10 +132,10 @@ export function RouletteTable({ snapshot }: { snapshot: ActiveSnapshot }) {
                   {drafted && (
                     <DraftBar
                       name={drafted.choice.name}
-                      amount={draft.text}
+                      amount={draftAmountText(draft.text)}
                       onEdit={() => {
                         setDraft({ ...draft, kind: drafted.kind.id });
-                        setPresentation('list');
+                        setPresentation('selector');
                       }}
                     />
                   )}

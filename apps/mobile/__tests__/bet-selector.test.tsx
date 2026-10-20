@@ -212,6 +212,34 @@ describe('bet selector', () => {
     expect(screen.getByRole('tab', { name: 'Bet list', selected: true })).toBeOnTheScreen();
   });
 
+  it('keeps the draft while another kind of wager is only browsed', async () => {
+    await startSession();
+    await openBetList();
+    await draftWager(/^Straight up\b/, 'Straight 17', '1000');
+
+    await fireEvent.press(screen.getByRole('button', { name: 'All wagers' }));
+    await fireEvent.press(kind(/^Red or black\b/));
+    expect(choice('Red')).not.toBeChecked();
+    await openTable();
+
+    expect(screen.getByLabelText('Draft, Straight 17, 1,000, not placed')).toBeOnTheScreen();
+  });
+
+  it('leaves focus alone when the editor comes back after a presentation switch', async () => {
+    const focusEvents = jest.spyOn(AccessibilityInfo, 'sendAccessibilityEvent');
+    await startSession();
+    await openBetList();
+    await draftWager(/^Straight up\b/, 'Straight 17', '24');
+    expect(focusEvents).toHaveBeenCalledWith(expect.anything(), 'focus');
+    focusEvents.mockClear();
+
+    await openTable();
+    await openBetList();
+
+    expect(stakeField()).toHaveProp('value', '24');
+    expect(focusEvents).not.toHaveBeenCalled();
+  });
+
   it('keeps the unsubmitted draft through rotation, window resizing and the largest text', async () => {
     await startSession();
     await openBetList();

@@ -4,10 +4,11 @@
 // from the permitted view and the wagers on the table, and it sends the same
 // place-wager commands as the graphical table. The engine judges legality.
 
-import { compare, decodeMoney, type DomainFact, type IllegalActionReason } from '@tableside/engine';
+import { add, compare, decodeMoney, encodeMoney, money, mul, type DomainFact, type IllegalActionReason } from '@tableside/engine';
 import { useEffect, useRef, useState } from 'react';
 import { AccessibilityInfo, Pressable, StyleSheet, Text, TextInput, View, type HostInstance } from 'react-native';
 
+import { Button } from '@/components/Button';
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/theme/tokens';
 
@@ -42,35 +43,50 @@ export interface BetSelectorProps {
   readonly onRemove: (target: string) => void;
 }
 
-export const DRAFT_NOTE = 'Draft · not placed yet. It stays if you rotate, resize or switch to the table.';
+const DRAFT_NOTE = 'Draft · not placed yet. It stays if you rotate, resize or switch to the table.';
 
 /** Moves screen-reader focus to a control, for focus that must land somewhere meaningful. */
 const moveFocus = (ref: React.RefObject<HostInstance | null>) => {
   if (ref.current) AccessibilityInfo.sendAccessibilityEvent(ref.current, 'focus');
 };
 
+/** Shown for a committed wager whose game gave no reason of its own. */
+const COMMITTED = 'Committed until it settles.';
+
+/** Opens an editor on the player's request, so focus moves to its heading. */
+type OpenEditor = (draft: BetDraft) => void;
+
 export function BetSelector(props: BetSelectorProps) {
   const { catalog, draft } = props;
   const kind = findKind(catalog, draft.kind);
+  // Focus moves to an editor's heading only when the player opens it, not when
+  // the editor reappears after a presentation switch.
+  const focusRequested = useRef(false);
+  const openEditor: OpenEditor = (next) => {
+    focusRequested.current = true;
+    props.onDraftChange(next);
+  };
+  const takeFocusRequest = () => {
+    const requested = focusRequested.current;
+    focusRequested.current = false;
+    return requested;
+  };
   return (
     <View testID="bet-selector" style={styles.selector}>
-      {kind ? <WagerEditor {...props} kind={kind} /> : <WagerList {...props} />}
-      <YourWagers {...props} />
+      {kind ? <WagerEditor {...props} kind={kind} takeFocusRequest={takeFocusRequest} /> : <WagerList {...props} openEditor={openEditor} />}
+      <YourWagers {...props} openEditor={openEditor} />
     </View>
   );
 }
 
-function WagerList({ catalog, wagers, draft, onDraftChange }: BetSelectorProps) {
+function WagerList({ catalog, wagers, draft, openEditor }: BetSelectorProps & { openEditor: OpenEditor }) {
   const staked = (kind: WagerKind) => {
     let total = 0n;
     for (const wager of wagers) if (kind.choices.some((c) => c.target === wager.target)) total += BigInt(wager.amount);
     return total;
   };
-  const open = (kind: WagerKind) => {
-    // A draft on one of this kind's choices stays; otherwise the kind opens with nothing chosen.
-    const keep = kind.choices.some((c) => c.target === draft.target);
-    onDraftChange(keep ? { ...draft, kind: kind.id } : { kind: kind.id, target: null, text: '', submittedAt: null });
-  };
+  // The draft stays whatever kind is opened; it is replaced only when another wager is chosen.
+  const open = (kind: WagerKind) => openEditor({ ...draft, kind: kind.id });
   return (
     <View style={styles.section}>
       {catalog.sections.map((section) => (
@@ -104,10 +120,12 @@ function WagerList({ catalog, wagers, draft, onDraftChange }: BetSelectorProps) 
   );
 }
 
-function WagerEditor(props: BetSelectorProps & { kind: WagerKind }) {
-  const { kind, draft, wagers, canPlace, onDraftChange, onSet } = props;
+function WagerEditor(props: BetSelectorProps & { kind: WagerKind; takeFocusRequest: () => boolean }) {
+  const { kind, draft, wagers, onDraftChange, takeFocusRequest } = props;
   const heading = useRef<HostInstance>(null);
-  useEffect(() => moveFocus(heading), [kind.id]);
+  useEffect(() => {
+    if (takeFocusRequest()) moveFocus(heading);
+  }, [kind.id, takeFocusRequest]);
 
   const choice = kind.choices.find((c) => c.target === draft.target);
   const placed = choice && wagers.find((w) => w.target === choice.target);
@@ -135,7 +153,7 @@ function WagerEditor(props: BetSelectorProps & { kind: WagerKind }) {
         ))}
       </View>
 
-      {choice && (placed?.committed ? <CommittedStake wager={placed} choice={choice} /> : <StakeEditor {...props} choice={choice} canPlace={canPlace} onSet={onSet} />)}
+      {choice && (placed?.committed ? <CommittedStake wager={placed} choice={choice} /> : <StakeEditor {...props} choice={choice} />)}
     </View>
   );
 }
@@ -146,11 +164,13 @@ function StakeEditor({ choice, draft, wagers, balance, facts, sequence, canPlace
   const amount = parseStake(draft.text);
   const edit = (text: string) => onDraftChange({ ...draft, text, submittedAt: null });
   const submit = () => {
+    // The Return key reaches here too, so it waits for the table like the Set button does.
+    if (!canPlace) return;
     onDraftChange({ ...draft, submittedAt: sequence });
     if (amount !== null && amount !== '0') onSet(choice.target, amount);
   };
   const step = formatUnits(choice.step);
-  const setLabel = amount !== null && !amount.includes('/') ? `Set ${choice.name} to ${formatUnits(amount)}` : `Set ${choice.name}`;
+  const setLabel = amount !== null && decodeMoney(amount).d === 1n ? `Set ${choice.name} to ${formatUnits(amount)}` : `Set ${choice.name}`;
 
   return (
     <View style={styles.group}>
@@ -172,7 +192,7 @@ function StakeEditor({ choice, draft, wagers, balance, facts, sequence, canPlace
         <Text maxFontSizeMultiplier={textScale.body} style={styles.rowDetail}>units</Text>
       </View>
       <Text maxFontSizeMultiplier={textScale.body} style={styles.rowDetail}>
-        {choice.step === '1' ? 'Whole units' : `Multiples of ${step}`} · {formatUnits(choice.min)} to {formatUnits(choice.max)} · pays {choice.payout}. Enter the total, not an amount to add.
+        {capitalize(increments(choice))} · {formatUnits(choice.min)} to {formatUnits(choice.max)} · pays {choice.payout}. Enter the total, not an amount to add.
       </Text>
       {problem !== null && (
         <Text accessibilityRole="alert" maxFontSizeMultiplier={textScale.body} style={styles.problem}>
@@ -183,9 +203,7 @@ function StakeEditor({ choice, draft, wagers, balance, facts, sequence, canPlace
         <SmallButton label={`− ${step}`} spoken={`Decrease by ${step}`} onPress={() => edit(stepStake(draft.text, choice.step, -1))} />
         <SmallButton label={`+ ${step}`} spoken={`Increase by ${step}`} onPress={() => edit(stepStake(draft.text, choice.step, 1))} />
       </View>
-      <Row label={setLabel} onPress={submit} disabled={!canPlace} primary compact>
-        <Text maxFontSizeMultiplier={textScale.body} style={styles.primaryLabel}>{setLabel}</Text>
-      </Row>
+      <Button label={setLabel} onPress={submit} disabled={!canPlace} stretch />
       {isDraftPending(draft, wagers) && (
         <Text maxFontSizeMultiplier={textScale.body} style={styles.rowDetail}>{DRAFT_NOTE}</Text>
       )}
@@ -198,12 +216,12 @@ function CommittedStake({ wager, choice }: { wager: PlacedWager; choice: WagerCh
     <View style={styles.group}>
       <Text maxFontSizeMultiplier={textScale.body} style={styles.sectionLabel}>Total stake on {choice.name}</Text>
       <Text maxFontSizeMultiplier={textScale.body} style={styles.rowTitle}>{formatUnits(wager.amount)} · committed</Text>
-      <Text maxFontSizeMultiplier={textScale.body} style={styles.rowDetail}>{wager.committedReason ?? 'Committed until it settles.'}</Text>
+      <Text maxFontSizeMultiplier={textScale.body} style={styles.rowDetail}>{wager.committedReason ?? COMMITTED}</Text>
     </View>
   );
 }
 
-function YourWagers({ catalog, wagers, canPlace, onDraftChange, onRemove }: BetSelectorProps) {
+function YourWagers({ catalog, wagers, canPlace, onRemove, openEditor }: BetSelectorProps & { openEditor: OpenEditor }) {
   const heading = useRef<HostInstance>(null);
   const removing = useRef<string | null>(null);
   const [explaining, setExplaining] = useState<string | null>(null);
@@ -216,7 +234,6 @@ function YourWagers({ catalog, wagers, canPlace, onDraftChange, onRemove }: BetS
     }
   }, [wagers]);
 
-  const nameOf = (target: string) => findChoice(catalog, target)?.choice.name ?? target;
   return (
     <View testID="your-wagers" style={styles.group}>
       <Text ref={heading} testID="your-wagers-heading" accessibilityRole="header" maxFontSizeMultiplier={textScale.body} style={styles.sectionLabel}>
@@ -226,8 +243,8 @@ function YourWagers({ catalog, wagers, canPlace, onDraftChange, onRemove }: BetS
         <Text maxFontSizeMultiplier={textScale.body} style={styles.rowDetail}>No wagers yet. Choose one above, set its stake, then spin.</Text>
       )}
       {wagers.map((wager) => {
-        const name = nameOf(wager.target);
         const found = findChoice(catalog, wager.target);
+        const name = found?.choice.name ?? wager.target;
         return (
           <View key={wager.target} style={styles.wager}>
             <View accessible accessibilityLabel={`${name}, ${formatUnits(wager.amount)}, ${wager.committed ? 'committed' : 'removable'}`} style={styles.wagerText}>
@@ -236,14 +253,14 @@ function YourWagers({ catalog, wagers, canPlace, onDraftChange, onRemove }: BetS
               <Text maxFontSizeMultiplier={textScale.body} style={styles.tag}>{wager.committed ? 'Committed' : 'Removable'}</Text>
             </View>
             {explaining === wager.target && wager.committed && (
-              <Text maxFontSizeMultiplier={textScale.body} style={styles.rowDetail}>{wager.committedReason ?? 'Committed until it settles.'}</Text>
+              <Text maxFontSizeMultiplier={textScale.body} style={styles.rowDetail}>{wager.committedReason ?? COMMITTED}</Text>
             )}
             <View style={styles.steppers}>
               {found && (
                 <SmallButton
                   label={wager.committed ? 'Inspect' : 'Edit'}
                   spoken={`${wager.committed ? 'Inspect' : 'Edit'} ${name}`}
-                  onPress={() => onDraftChange({ kind: found.kind.id, target: wager.target, text: wager.amount, submittedAt: null })}
+                  onPress={() => openEditor({ kind: found.kind.id, target: wager.target, text: wager.amount, submittedAt: null })}
                 />
               )}
               {wager.committed ? (
@@ -291,12 +308,17 @@ function submissionProblem(
   return illegal ? illegalExplanation(illegal.reason, choice, balance, wagers) : null;
 }
 
+/** "whole units", "multiples of 6". */
+const increments = (choice: WagerChoice) => (choice.step === '1' ? 'whole units' : `multiples of ${formatUnits(choice.step)}`);
+
+const capitalize = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
+
 function illegalExplanation(reason: IllegalActionReason, choice: WagerChoice, balance: string, wagers: readonly PlacedWager[]): string {
   const min = formatUnits(choice.min);
   const max = formatUnits(choice.max);
   switch (reason) {
     case 'not-whole-units':
-      return `Use ${choice.step === '1' ? 'whole units' : `multiples of ${formatUnits(choice.step)}`}, from ${min} to ${max}. Your draft is kept and nothing on the table changed.`;
+      return `Use ${increments(choice)}, from ${min} to ${max}. Your draft is kept and nothing on the table changed.`;
     case 'below-minimum':
       return `${choice.name} needs at least ${min}. Your draft is kept.`;
     case 'above-maximum':
@@ -304,7 +326,7 @@ function illegalExplanation(reason: IllegalActionReason, choice: WagerChoice, ba
     case 'insufficient-funds': {
       const cap = affordableCap(choice, balance, wagers);
       return compare(decodeMoney(cap), decodeMoney(choice.min)) >= 0
-        ? `More than you have. With a balance of ${formatUnits(balance)} you can set up to ${formatUnits(cap)}. Your draft is kept.`
+        ? `More than you have. With a balance of ${formatUnits(balance)} you can set up to ${formatUnits(cap)}${choice.step === '1' ? '' : ` (${increments(choice)})`}. Your draft is kept.`
         : `More than you have. With a balance of ${formatUnits(balance)} you can't cover the minimum of ${min}. Your draft is kept.`;
     }
     default:
@@ -314,13 +336,14 @@ function illegalExplanation(reason: IllegalActionReason, choice: WagerChoice, ba
 
 /** The largest legal total for this target the balance covers: its own stake back plus the balance, capped and rounded down to the step. */
 function affordableCap(choice: WagerChoice, balance: string, wagers: readonly PlacedWager[]): string {
-  const available = decodeMoney(balance);
-  const own = BigInt(wagers.find((w) => w.target === choice.target)?.amount ?? '0');
-  const step = BigInt(choice.step);
-  let units = available.n / available.d + own;
-  const max = BigInt(choice.max);
-  if (units > max) units = max;
-  return (units - (units % step)).toString();
+  const own = decodeMoney(wagers.find((w) => w.target === choice.target)?.amount ?? '0');
+  const covered = add(decodeMoney(balance), own);
+  const max = decodeMoney(choice.max);
+  const limit = compare(covered, max) > 0 ? max : covered;
+  // Whole steps only, rounded down: floor(limit / step) x step.
+  const step = decodeMoney(choice.step);
+  const steps = (limit.n * step.d) / (limit.d * step.n);
+  return encodeMoney(mul(money(steps), step));
 }
 
 // ---- controls -------------------------------------------------------------
@@ -330,8 +353,6 @@ function Row({
   value,
   hint,
   onPress,
-  disabled = false,
-  primary = false,
   compact = false,
   children,
 }: {
@@ -339,8 +360,6 @@ function Row({
   value?: string;
   hint?: string;
   onPress: () => void;
-  disabled?: boolean;
-  primary?: boolean;
   compact?: boolean;
   children: React.ReactNode;
 }) {
@@ -351,18 +370,9 @@ function Row({
       accessibilityLabel={label}
       accessibilityHint={hint}
       accessibilityValue={value === undefined ? undefined : { text: value }}
-      accessibilityState={{ disabled }}
-      disabled={disabled}
       onPress={onPress}
       {...focusProps}
-      style={({ pressed }) => [
-        styles.row,
-        compact && styles.rowCompact,
-        primary && styles.primary,
-        pressed && styles.pressed,
-        disabled && styles.disabled,
-        focused && styles.focused,
-      ]}
+      style={({ pressed }) => [styles.row, compact && styles.rowCompact, pressed && styles.pressed, focused && styles.focused]}
     >
       {children}
     </Pressable>
@@ -420,7 +430,7 @@ const styles = StyleSheet.create({
     paddingVertical: space[3],
     borderRadius: radius.md,
     borderWidth: 2,
-    borderColor: palette.transparent,
+    borderColor: palette.controlBorder,
     backgroundColor: palette.card,
   },
   rowCompact: { minHeight: MIN_TOUCH_TARGET, alignSelf: 'flex-start' },
@@ -429,8 +439,6 @@ const styles = StyleSheet.create({
   rowDetail: { fontFamily: fonts.ui, fontSize: 13, lineHeight: 18, color: palette.mutedForeground },
   rowValue: { fontFamily: fonts.uiBold, fontSize: 15, color: palette.foreground },
   editorTitle: { fontFamily: fonts.display, fontSize: 24, color: palette.foreground },
-  primary: { backgroundColor: palette.primary, borderColor: palette.primary, alignSelf: 'stretch', justifyContent: 'center' },
-  primaryLabel: { fontFamily: fonts.uiBold, fontSize: 16, color: palette.primaryForeground, textAlign: 'center', flexShrink: 1 },
   pressed: { opacity: 0.8 },
   disabled: { opacity: 0.4 },
   focused: { borderColor: palette.ring },
@@ -476,7 +484,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: space[4],
     borderRadius: radius.pill,
     borderWidth: 2,
-    borderColor: palette.secondary,
+    borderColor: palette.controlBorder,
     backgroundColor: palette.secondary,
   },
   smallText: { fontFamily: fonts.uiBold, fontSize: 14, color: palette.foreground },

@@ -6,7 +6,8 @@
 import type { PermittedView } from '@tableside/engine';
 
 import type { PlacedWager, WagerCatalog, WagerChoice, WagerKind } from './bet-selector/catalog';
-import { formatUnits, targetName } from './roulette-text';
+import { targetName } from './roulette-text';
+import { formatUnits } from './units';
 
 type Placement = PermittedView['table']['placements'][number];
 
