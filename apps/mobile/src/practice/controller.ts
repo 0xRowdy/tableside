@@ -23,6 +23,7 @@ import {
   decodeCheckpoint,
   decodeMoney,
   encodeCheckpoint,
+  INSURANCE_TARGET,
   readPermittedView,
   StrategySpecificationError,
   streamIdentityFromEntropy,
@@ -411,10 +412,23 @@ export class PracticeController {
    * Once the hand is done the round settles automatically after the reveal.
    */
   async play(action: BlackjackAction): Promise<void> {
+    await this.handAction({ kind: 'play', action });
+  }
+
+  /**
+   * Insures the blackjack hand in play while insurance (or even money) is
+   * offered, before the peek. Part of the hand, so it stays open on the stop
+   * path just like a playing action.
+   */
+  async insure(amount: string): Promise<void> {
+    await this.handAction({ kind: 'place-wager', target: INSURANCE_TARGET, amount });
+  }
+
+  private async handAction(command: Command): Promise<void> {
     await this.exclusive(async () => {
       if (this.suspension?.reached ?? false) return;
       if (this.suspension?.kind === 'immediate') return;
-      if (settled(await this.send({ kind: 'play', action }))) await this.drive();
+      if (settled(await this.send(command))) await this.drive();
     });
   }
 

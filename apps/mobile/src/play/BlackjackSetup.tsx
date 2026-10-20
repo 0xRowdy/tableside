@@ -1,9 +1,9 @@
 // Minimal blackjack session setup (design frame S1-02, free play only): the
-// four rule presets, penetration and a fresh buy-in. Guided modes, editable
-// limits and extra players arrive with #70, #72, #77 and #78.
+// four rule presets, penetration, other players at the table and a fresh
+// buy-in. Guided modes and editable limits arrive with #72, #77 and #78.
 
 import { blackjackHouseEdge, blackjackRules, DEFAULT_PENETRATION, type BlackjackPreset } from '@tableside/definitions';
-import { PENETRATIONS } from '@tableside/engine';
+import { MAX_OTHER_PLAYERS, PENETRATIONS } from '@tableside/engine';
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
@@ -15,6 +15,7 @@ import { RECONNECT_TO_VERIFY, type StartProblem } from '@/practice/controller';
 import { usePractice } from '@/practice/PracticeProvider';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/theme/tokens';
 
+import { otherPlayersText } from './blackjack-text';
 import { formatUnits } from './units';
 
 const DEFAULT_BUY_IN = '1000';
@@ -35,10 +36,11 @@ export function BlackjackSetup({ problem, problemReason = null, busy }: { proble
   const [dealer, setDealer] = useState<'S17' | 'H17'>('S17');
   const [surrender, setSurrender] = useState(true);
   const [penetration, setPenetration] = useState(DEFAULT_PENETRATION);
+  const [others, setOthers] = useState(0);
   const [draft, setDraft] = useState(formatUnits(DEFAULT_BUY_IN));
   const [notWhole, setNotWhole] = useState(false);
   const preset: BlackjackPreset = `${dealer}_${surrender ? 'LS' : 'noLS'}`;
-  const rules = blackjackRules(preset, penetration);
+  const rules = blackjackRules(preset, penetration, others);
 
   const start = () => {
     const digits = draft.replace(/[,\s]/g, '');
@@ -67,7 +69,7 @@ export function BlackjackSetup({ problem, problemReason = null, busy }: { proble
       />
       <Choices
         label="LATE SURRENDER"
-        help="Surrender plays arrive in a later update; the preset still sets the rules."
+        help="After the peek, on your first two cards only."
         options={[
           { label: 'Late surrender on', short: 'On', selected: surrender, onPress: () => setSurrender(true) },
           { label: 'Late surrender off', short: 'Off', selected: !surrender, onPress: () => setSurrender(false) },
@@ -83,6 +85,16 @@ export function BlackjackSetup({ problem, problemReason = null, busy }: { proble
           onPress: () => setPenetration(value),
         }))}
       />
+      <Choices
+        label="OTHER PLAYERS AT THE TABLE"
+        help="0–4 · they play basic strategy at the table minimum, before you, and their cards count toward the shoe."
+        options={Array.from({ length: MAX_OTHER_PLAYERS + 1 }, (_, count) => ({
+          label: otherPlayersText(count),
+          short: String(count),
+          selected: count === others,
+          onPress: () => setOthers(count),
+        }))}
+      />
 
       <View style={styles.section}>
         <Text maxFontSizeMultiplier={textScale.body} style={styles.label}>TABLE</Text>
@@ -91,6 +103,9 @@ export function BlackjackSetup({ problem, problemReason = null, busy }: { proble
         </Text>
         <Text maxFontSizeMultiplier={textScale.body} style={styles.help}>
           Edge with basic strategy: {blackjackHouseEdge(preset).percent}% (this preset)
+        </Text>
+        <Text maxFontSizeMultiplier={textScale.body} style={styles.help}>
+          Fixed for every preset: 6 decks · blackjack pays 3:2 · dealer peeks · double any two cards, including after splits · split to 4 hands.
         </Text>
       </View>
 

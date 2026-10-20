@@ -60,12 +60,20 @@ export {
 } from './funding';
 export {
   BLACKJACK_RULES,
+  HAND_TARGET,
+  INSURANCE_TARGET,
+  MAX_OTHER_PLAYERS,
+  MAX_SPLIT_HANDS,
   PENETRATIONS,
   type BlackjackAction,
   type BlackjackActivityState,
   type BlackjackDomainFact,
   type BlackjackHand,
+  type BlackjackHandView,
   type BlackjackIllegalActionReason,
+  type BlackjackInsuranceOffer,
+  type BlackjackPlayers,
+  type BlackjackSeat,
   type BlackjackRound,
   type BlackjackRoundView,
   type BlackjackRuleSet,
@@ -73,7 +81,9 @@ export {
   type BlackjackTable,
   type BlackjackTableView,
   type HandTotal,
+  type Insurance,
   type Peek,
+  type SeatStrategy,
 } from './blackjack';
 export {
   CRAPS_POINTS,

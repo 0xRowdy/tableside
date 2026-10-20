@@ -27,6 +27,7 @@ export {
 } from './blackjack/reference';
 
 export { blackjackRules, DEFAULT_BLACKJACK_PRESET, DEFAULT_PENETRATION } from './blackjack/rules';
+export { seatStrategy } from './blackjack/seats';
 export {
   CRAPS_EDGE_WAGERS,
   CRAPS_HOUSE_EDGE_VERSION,
