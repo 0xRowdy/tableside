@@ -3,8 +3,33 @@
 // storage, clock, account, advertising or subscription dependency; the app and
 // the runner supply adapters. The portability rule is enforced by lint.
 
-/** The engine build's version. Activities will pin it alongside rule and strategy identities. */
-export const ENGINE_VERSION = '0.0.0';
+export { ENGINE_VERSION } from './version';
+export {
+  advanceActivity,
+  checkpointHash,
+  createActivity,
+  decodeCheckpoint,
+  encodeCheckpoint,
+  readPermittedView,
+  ActivitySpecificationError,
+  FUNDING_CEILING,
+  STATE_SCHEMA_VERSION,
+  type ActivitySpecification,
+  type ActivityState,
+  type AdvanceResult,
+  type CheckpointResult,
+  type Command,
+  type CommandEnvelope,
+  type CommandKind,
+  type DomainFact,
+  type Phase,
+  type PermittedView,
+  type Receipt,
+  type RefusalReason,
+  type RejectionReason,
+  type VersionedIdentity,
+  type Wager,
+} from './activity';
 
 export { philox4x32 } from './philox';
 export {
@@ -44,6 +69,7 @@ export {
   sub,
   type Money,
 } from './money';
+export { sha256Hex } from './sha256';
 export {
   decodeStrategyLiteral,
   STRATEGY_LITERAL_DIGITS,
