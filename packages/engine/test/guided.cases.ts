@@ -69,7 +69,7 @@ export const guidedCases: TestCase[] = [
         exhaustion: null,
         correction: null,
         departures: [],
-        adherence: { decisions: 0, followed: 0, departures: 0 },
+        adherence: { betting: { decisions: 0, followed: 0 }, playing: null, departures: 0 },
         overrideAffected: false,
         overrideEndsCycle: false,
       });
@@ -94,7 +94,7 @@ export const guidedCases: TestCase[] = [
       const { state, facts } = run(flat(), [place('red', '10'), BEGIN, SETTLE]);
       t.equal(kinds(facts), ['wager-changed', 'turn-began', 'outcome-generated', 'wager-settled']);
       t.equal([state.phase, state.balance], ['settled-outcome', '1010']);
-      t.equal(strategyOf(state)?.adherence, { decisions: 1, followed: 1, departures: 0 });
+      t.equal(strategyOf(state)?.adherence, { betting: { decisions: 1, followed: 1 }, playing: null, departures: 0 });
     },
   },
   {
@@ -144,7 +144,7 @@ export const guidedCases: TestCase[] = [
       ]);
       // Then the spin follows the strategy; the decision counts once and is not "followed".
       const spun = run(state, [BEGIN, SETTLE]).state;
-      t.equal(strategyOf(spun)?.adherence, { decisions: 1, followed: 0, departures: 1 });
+      t.equal(strategyOf(spun)?.adherence, { betting: { decisions: 1, followed: 0 }, playing: null, departures: 1 });
       t.equal(strategyOf(spun)?.overrideAffected, false);
     },
   },
@@ -157,7 +157,7 @@ export const guidedCases: TestCase[] = [
       t.equal(overridden.state.wagers, [{ target: 'red', amount: '50' }]);
       const settled = step(overridden.state, SETTLE).state;
       t.equal([settled.phase, settled.balance, strategyOf(settled)?.status, strategyOf(settled)?.overrideAffected], ['settled-outcome', '1050', 'active', true]);
-      t.equal(strategyOf(settled)?.adherence, { decisions: 1, followed: 0, departures: 1 });
+      t.equal(strategyOf(settled)?.adherence, { betting: { decisions: 1, followed: 0 }, playing: null, departures: 1 });
       // The next spin is coached again.
       t.equal(step(run(settled, [place('red', '20')]).state, BEGIN).state.phase, 'correction');
     },
@@ -235,7 +235,7 @@ export const guidedCases: TestCase[] = [
       t.equal(wrong.state.phase, 'correction');
       state = run(state, [place('red', '20'), BEGIN, SETTLE]).state;
       t.equal([state.balance, state.strategy?.progress.counters], ['1020', { stake: '10' }]);
-      t.equal(strategyOf(state)?.adherence, { decisions: 3, followed: 3, departures: 0 });
+      t.equal(strategyOf(state)?.adherence, { betting: { decisions: 3, followed: 3 }, playing: null, departures: 0 });
     },
   },
   {

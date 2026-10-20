@@ -216,7 +216,7 @@ export const strategyCases: TestCase[] = [
     name: 'explain: flat even-money prescribes 10 on the chosen target, with structured explanation facts',
     run: (t) => {
       t.equal(explained(FLAT_EVEN_MONEY, { target: 'black' }, situation('1000'), START), {
-        situation: { available: '1000', subjects: { 'last-result': 'none', 'last-pocket-color': 'none' } },
+        situation: { available: '1000', subjects: { 'last-result': 'none', 'last-pocket-color': 'none' }, values: {} },
         instructions: [{ id: 'flat', label: '1 unit on the target, every spin' }],
         prescription: { status: 'prescribed', bets: [{ target: 'black', amount: '10' }] , held: []},
         fallback: null,

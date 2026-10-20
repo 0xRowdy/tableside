@@ -31,6 +31,7 @@ import { BJ_SPEC, BJ_STREAM } from '../test/blackjack.fixtures';
 import { CRAPS_SPEC } from '../test/craps.cases';
 import { PI, ZERO } from '../test/fixtures';
 import type { RecordedBuild, RecordedCheckpoint } from '../test/recorded';
+import { TEST_COUNTING_SCHEDULE } from '../test/blackjack-strategy.fixtures';
 import { DOUBLING, FLAT_EVEN_MONEY } from '../test/strategy.fixtures';
 
 const place = (target: string, amount: string): Command => ({ kind: 'place-wager', target, amount });
@@ -65,6 +66,12 @@ const SCENARIOS: Scenario[] = [
   // Key [1, 0] rolls a six first: the point is on, the pass line is committed.
   { name: 'craps, a point established', specification: CRAPS_SPEC, random: { ...ZERO, key: [1, 0] }, commands: [place('pass', '10'), place('field', '5'), BEGIN, SETTLE] },
   { name: 'blackjack, dealt and waiting for the decision', specification: BJ_SPEC, random: BJ_STREAM, commands: [place('hand-1', '10'), BEGIN] },
+  {
+    name: 'blackjack guided, counting with the bet schedule, a betting correction waiting',
+    specification: { ...BJ_SPEC, strategy: { definition: TEST_COUNTING_SCHEDULE, parameters: {} } },
+    random: BJ_STREAM,
+    commands: [place('hand-1', '50'), BEGIN],
+  },
 ];
 
 /** The next command toward completion: settle what is revealed, resolve guidance, then stop and settle finally. */

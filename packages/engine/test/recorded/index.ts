@@ -7,7 +7,7 @@
 // --replace while it changes; no build has been released yet. The values are
 // plain JSON, typed loosely on purpose: they are what an older build wrote, not
 // what this build's types say.
-import { RECORDED_ENGINE_0_0_0_SCHEMA_4 } from './engine-0.0.0-schema-4';
+import { RECORDED_ENGINE_0_0_0_SCHEMA_5 } from './engine-0.0.0-schema-5';
 
 export interface RecordedCheckpoint {
   readonly name: string;
@@ -33,4 +33,4 @@ export interface RecordedBuild {
 }
 
 /** Every build's recorded checkpoints, oldest first. A release appends its own. */
-export const RECORDED_BUILDS: readonly RecordedBuild[] = [RECORDED_ENGINE_0_0_0_SCHEMA_4];
+export const RECORDED_BUILDS: readonly RecordedBuild[] = [RECORDED_ENGINE_0_0_0_SCHEMA_5];

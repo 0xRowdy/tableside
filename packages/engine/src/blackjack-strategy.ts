@@ -23,6 +23,7 @@ import {
   MAX_SPLIT_HANDS,
   rulesOffer,
   countOf,
+  decisionShoe,
   shoeCount,
   type BlackjackAction,
   type BlackjackCount,
@@ -83,10 +84,23 @@ export interface BlackjackDeviation {
   readonly published: { readonly schlesinger: PublishedIndex; readonly bja: PublishedIndex };
 }
 
+/**
+ * Who keeps the Hi-Lo count: nobody ("none", basic strategy), Tableside, which
+ * shows it ("supplied", basic with deviations), or the player, from whom it
+ * is hidden while play is assessed against the actual count ("player", the
+ * counting modes).
+ */
+export type CountResponsibility = 'none' | 'supplied' | 'player';
+
+export const COUNT_RESPONSIBILITIES: readonly CountResponsibility[] = ['none', 'supplied', 'player'];
+
+/** The four guided blackjack modes (spec #51, Counting). */
+export type BlackjackMode = 'basic' | 'basic-with-deviations' | 'counting-with-basic' | 'counting-with-deviations';
+
 /** A blackjack strategy's playing policy. */
 export interface BlackjackPlayPolicy {
-  /** True when Tableside shows the count ("basic with deviations"); otherwise it isn't shown. */
-  readonly countShown: boolean;
+  /** Who keeps the count. Deviations need someone to; Tableside supplies it only for deviations. */
+  readonly count: CountResponsibility;
   /** The preferred first play on the original two cards, and on any pair: H S D P R. */
   readonly first: FirstRows;
   /** Each first-decision cell's validated fallbacks. */
@@ -127,6 +141,8 @@ export interface BlackjackSituation {
   readonly rules: BlackjackStrategyTable;
   /** Funds the player can commit: the balance plus the removable initial wager. Canonical money. */
   readonly balance: string;
+  /** The exposed-card running count and the cards physically left in the shoe, as the next deal sees them. */
+  readonly shoe: { readonly running: number; readonly remaining: number };
 }
 
 /** A playing choice: an action, insuring (with its amount) or declining insurance. */
@@ -291,13 +307,16 @@ function deviationProblems(value: unknown, lateSurrender: boolean): Problem[] {
 
 /** Problems with a playing policy under its declared table; incompatible where it needs late surrender the table doesn't declare. */
 function playProblems(play: unknown, table: unknown): Problem[] {
-  if (!hasExactKeys(play, ['countShown', 'first', 'fallbacks', 'later', 'laterWithoutDouble', 'deviations'])) {
-    return [{ path: '/play', message: 'a playing policy has countShown, first, fallbacks, later, laterWithoutDouble and deviations' }];
+  if (!hasExactKeys(play, ['count', 'first', 'fallbacks', 'later', 'laterWithoutDouble', 'deviations'])) {
+    return [{ path: '/play', message: 'a playing policy has count, first, fallbacks, later, laterWithoutDouble and deviations' }];
   }
   const lateSurrender = isRecord(table) && table.lateSurrender === true;
   const surrenderLetter = lateSurrender ? 'R' : '';
   const problems: Problem[] = [];
-  if (typeof play.countShown !== 'boolean') problems.push({ path: '/play/countShown', message: 'countShown is true or false' });
+  const deviating = Array.isArray(play.deviations) && play.deviations.length > 0;
+  if (!COUNT_RESPONSIBILITIES.includes(play.count as CountResponsibility)) problems.push({ path: '/play/count', message: 'the count is kept by none, supplied by Tableside, or kept by the player' });
+  else if (play.count === 'none' && deviating) problems.push({ path: '/play/count', message: 'deviations need the count: Tableside supplies it, or the player keeps it' });
+  else if (play.count === 'supplied' && !deviating) problems.push({ path: '/play/count', message: 'Tableside supplies the count only for deviations' });
   problems.push(...firstProblems(play.first, `HSD${surrenderLetter}`, `HSDP${surrenderLetter}`, '/play/first'));
   const fallbacks = play.fallbacks;
   if (!hasExactKeys(fallbacks, ['double', 'doubleOnOriginalLateSurrender', 'splitByRule', 'splitByBalance', 'surrender'])) {
@@ -340,18 +359,31 @@ function tableProblems(table: unknown): { path: string; message: string }[] {
   return problems;
 }
 
+/** True for a shoe's exposed running count and its 0 to 312 cards left. */
+const isShoe = (shoe: unknown) =>
+  hasExactKeys(shoe, ['running', 'remaining']) &&
+  Number.isSafeInteger(shoe.running) &&
+  Number.isSafeInteger(shoe.remaining) &&
+  (shoe.remaining as number) >= 0 &&
+  (shoe.remaining as number) <= 312 &&
+  Math.abs(shoe.running as number) <= 312;
+
 function situationProblem(situation: unknown): string | undefined {
-  if (!hasExactKeys(situation, ['game', 'rules', 'balance'])) return 'a blackjack situation has game, rules and balance';
+  if (!hasExactKeys(situation, ['game', 'rules', 'balance', 'shoe'])) return 'a blackjack situation has game, rules, balance and shoe';
   if (situation.game !== 'blackjack') return 'not a blackjack situation';
   if (tableProblems(situation.rules).length > 0) return 'the rules contradict the table';
   const balance = parseMoney(situation.balance);
   if (!balance || balance.n < 0n) return 'the balance must be canonical money, not negative';
+  if (!isShoe(situation.shoe)) return 'the shoe has a whole running count and 0 to 312 cards left';
   return undefined;
 }
 
 export const BLACKJACK_VOCABULARY: StrategyVocabulary<BlackjackSituation> = {
   game: 'blackjack',
   subjects: {},
+  // The integer Hi-Lo true count the next deal sees: what a bet schedule reads.
+  values: ['true-count'],
+  value: (situation) => money(BigInt(countOf(situation.shoe).trueCount)),
   tableProblems,
   betRequirement(table, target, amount) {
     const { min, max } = (table as BlackjackStrategyTable).limits.initial;
@@ -601,6 +633,13 @@ const sameMove = (a: PlayMove, b: PlayMove) =>
 /** The playing policy a valid blackjack definition pins. */
 export const policyOf = (definition: StrategyDefinition) => definition.play as BlackjackPlayPolicy | undefined;
 
+/** The mode a playing policy plays: who keeps the count, and whether it deviates. */
+export function blackjackModeOf(policy: BlackjackPlayPolicy): BlackjackMode {
+  const deviating = policy.deviations.length > 0;
+  if (policy.count === 'player') return deviating ? 'counting-with-deviations' : 'counting-with-basic';
+  return deviating ? 'basic-with-deviations' : 'basic';
+}
+
 /** A playing move assessed against the pinned policy: the explanation, whether it follows, and the prescribed command. */
 export function assessPlay(state: BlackjackActivityState, definition: StrategyDefinition, command: unknown): PlayAssessment<PlayExplanation, PlayMove, Command> | undefined {
   const policy = policyOf(definition);
@@ -623,7 +662,13 @@ export const BLACKJACK_STRATEGY: StrategyGame<BlackjackActivityState> = {
     game: 'blackjack',
     rules: { dealer: state.rules.dealer, lateSurrender: state.rules.lateSurrender, limits: { initial: { ...state.rules.limits.initial } } },
     balance: encodeMoney(state.wagers.reduce((sum: Money, wager) => add(sum, decodeMoney(wager.amount)), decodeMoney(state.balance))),
+    shoe: decisionShoe(state),
   }),
+  // A schedule's next bet would tell the player the count it reads, so it stays hidden unless Tableside shows the count.
+  hidesPending: (state) => {
+    const definition = state.strategy?.definition;
+    return definition !== undefined && policyOf(definition)?.count !== 'supplied' && JSON.stringify(definition.instructions).includes('"value":"true-count"');
+  },
   assessPlay,
   // "19 v 20": the learner's hand totals against the dealer's.
   outcome: (state) => {
@@ -657,9 +702,6 @@ export function playSituationProblem(situation: unknown): string | undefined {
   const balance = parseMoney(situation.balance);
   const stake = parseMoney(situation.stake);
   if (!balance || balance.n < 0n || !stake || stake.n <= 0n) return 'the balance and stake must be canonical money';
-  const shoe = situation.shoe;
-  if (!hasExactKeys(shoe, ['running', 'remaining']) || !Number.isSafeInteger(shoe.running) || !Number.isSafeInteger(shoe.remaining) || (shoe.remaining as number) < 0 || (shoe.remaining as number) > 312 || Math.abs(shoe.running as number) > 312) {
-    return 'the shoe has a whole running count and 0 to 312 cards left';
-  }
+  if (!isShoe(situation.shoe)) return 'the shoe has a whole running count and 0 to 312 cards left';
   return undefined;
 }

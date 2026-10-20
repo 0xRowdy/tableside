@@ -92,6 +92,20 @@ export function stacked(ranks: string, spec: BlackjackActivitySpecification = BJ
 }
 
 /**
+ * A guided activity whose shoe deals `seen` first (cards already exposed in
+ * earlier rounds) and then `round`; the rest in canonical order.
+ */
+export function counted(seen: string, round: string, spec: BlackjackActivitySpecification): BlackjackActivityState {
+  const base = stacked(`${seen} ${round}`, spec);
+  const next = seen.split(' ').filter(Boolean).length;
+  const decoded = decodeCheckpoint(encodeCheckpoint({ ...base, shoe: { ...(base.shoe as NonNullable<BlackjackActivityState['shoe']>), next } }));
+  if (!decoded.ok) throw new Error(decoded.error.message);
+  return decoded.state as BlackjackActivityState;
+}
+
+/** Eight low cards seen: running count +8. */
+export const PLUS_EIGHT = '2 3 4 5 6 2 3 4';
+/**
  * A small hand-written chart for the simulated players in engine cases (the
  * certified tables are checked against the engine in the definitions
  * package). Up cards A, 2..9, 10. Hard: hit to 9; double 10 against 2-9 and 11
