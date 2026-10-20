@@ -71,7 +71,10 @@ export function SuspendedSession({ snapshot, suspension }: { snapshot: ActivePra
         </Text>
       )}
       <Text maxFontSizeMultiplier={textScale.body} style={styles.caption}>
-        Resuming isn&apos;t a new buy-in. Ending returns removable wagers and settles the rest.
+        {view.funding.source === 'training-bankroll'
+          ? "Resuming doesn't allocate your training bankroll again."
+          : "Resuming isn't a new buy-in."}{' '}
+        Ending returns removable wagers and settles the rest.
       </Text>
 
       <EndSessionDialog

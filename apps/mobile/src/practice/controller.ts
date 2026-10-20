@@ -100,7 +100,9 @@ export type ActivePracticeSnapshot = Extract<PracticeSnapshot, { status: 'active
 /** An unfinished session found unusable and marked incomplete (#80), as its explanation shows it. */
 export interface IncompleteSessionSummary {
   readonly game: GameId;
+  /** The buy-in, or the training-bankroll allocation (see fundingSource). */
   readonly buyIn: string;
+  readonly fundingSource: FundingSource;
   /** Turns committed before it became unusable; null when the checkpoint can't be read. */
   readonly turnsRecorded: number | null;
   /** The pinned engine identity; null when the checkpoint can't be read. */
@@ -984,6 +986,7 @@ export class PracticeController {
       session: {
         game,
         buyIn: stored.specification.funding,
+        fundingSource: stored.specification.fundingSource,
         turnsRecorded: decoded.ok ? decoded.state.turn : null,
         engine: decoded.ok ? decoded.state.identities.engine : null,
         reason: marked,

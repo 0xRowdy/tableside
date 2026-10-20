@@ -6,7 +6,7 @@ import { act, cleanup, fireEvent, screen, waitFor } from '@testing-library/react
 import { renderRouter } from 'expo-router/testing-library';
 import { AccessibilityInfo } from 'react-native';
 
-import type { AccessDecision, AccessSupervisor, AdmissionDecision, TurnDecision } from '@/practice/adapters';
+import type { AccessDecision, AccessSupervisor, AdmissionDecision, SetupTerms, TurnDecision } from '@/practice/adapters';
 import { ENDING_STEP_MS } from '@/practice/controller';
 import type { FakeClock, substituteAdapters } from '@/practice/testing/substitutes';
 
@@ -22,7 +22,8 @@ const mockApp: {
   disk: unknown;
   manualClock: boolean;
   next: { admission?: AdmissionDecision; turn?: TurnDecision; resume?: AccessDecision };
-} = { latest: null, disk: null, manualClock: false, next: {} };
+  terms: SetupTerms | null;
+} = { latest: null, disk: null, manualClock: false, next: {}, terms: null };
 
 jest.mock('@/practice/app-adapters', () => {
   const { FakeClock: Clock, substituteAdapters: create } = jest.requireActual('@/practice/testing/substitutes');
@@ -36,6 +37,7 @@ jest.mock('@/practice/app-adapters', () => {
         beforeActivity: async (context) => mockApp.next.admission ?? alwaysAllowed.beforeActivity(context),
         beforeTurn: async (context) => mockApp.next.turn ?? alwaysAllowed.beforeTurn(context),
         beforeResume: async (context) => mockApp.next.resume ?? alwaysAllowed.beforeResume(context),
+        ...(mockApp.terms ? { setupTerms: async () => mockApp.terms } : {}),
       };
       const adapters = { ...create({ clock: new Clock(undefined, !mockApp.manualClock) }), access, store: new MemoryActivityStore(mockApp.disk) };
       mockApp.latest = adapters;
@@ -52,6 +54,7 @@ beforeEach(() => {
   mockApp.disk = null;
   mockApp.manualClock = false;
   mockApp.next = {};
+  mockApp.terms = null;
 });
 
 async function startSession() {
@@ -112,6 +115,18 @@ describe('suspension', () => {
     await fireEvent.press(screen.getByRole('button', { name: 'Resume session' }));
     expect(await screen.findByText('Craps · guided · Pass with odds')).toBeOnTheScreen();
     expect(screen.getByLabelText('Where you were: Come-out roll')).toBeOnTheScreen();
+  });
+
+  it('resuming a training-bankroll session says the bankroll isn’t allocated again, never a buy-in (Amendment 4 B)', async () => {
+    mockApp.terms = { funding: { source: 'training-bankroll', available: '500' }, allowance: null, seePremium: false };
+    await renderRouter('./src/app', { initialUrl: '/play?game=roulette' });
+    await fireEvent.press(await screen.findByRole('button', { name: 'Start free play' }));
+    await screen.findByLabelText('Session balance 500');
+
+    await relaunch();
+    await fireEvent.press(screen.getByRole('button', { name: 'Resume session' }));
+    expect(await screen.findByText(/Resuming doesn't allocate your training bankroll again\./)).toBeOnTheScreen();
+    expect(screen.queryByText(/buy-in/)).toBeNull();
   });
 
   it('after a relaunch, offers to pick up the session where it was, and resumes the same table', async () => {
