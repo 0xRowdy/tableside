@@ -34,6 +34,7 @@ describe('bundled cue sounds', () => {
     for (const cue of CUES) {
       const seconds = durationOf(readFileSync(join(SOUNDS, `${String(cue.number).padStart(2, '0')}-${cue.name}.wav`)));
       expect(seconds).toBeLessThan(cue.name === 'ball-landed' ? 2 : 1);
+      expect(seconds * 1000).toBeLessThanOrEqual(cue.maxMs);
     }
   });
 

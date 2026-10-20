@@ -5,7 +5,7 @@
 import { createAudioPlayer, setAudioModeAsync, type AudioPlayer } from 'expo-audio';
 import { File, Paths } from 'expo-file-system';
 import * as Haptics from 'expo-haptics';
-import { AppState } from 'react-native';
+import { AppState, Platform } from 'react-native';
 
 import type { CueName, HapticPattern } from './catalog';
 import type { FeedbackPorts } from './service';
@@ -24,7 +24,8 @@ export const AUDIO_MODE = {
   allowsRecording: false,
 } as const;
 
-const HAPTICS: Record<HapticPattern, () => Promise<void>> = {
+/** iOS: the standard feedback generators, which follow the system haptics setting. */
+const IOS_HAPTICS: Record<HapticPattern, () => Promise<void>> = {
   selection: () => Haptics.selectionAsync(),
   'impact-light': () => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light),
   'impact-medium': () => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium),
@@ -34,22 +35,32 @@ const HAPTICS: Record<HapticPattern, () => Promise<void>> = {
   error: () => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error),
 };
 
+/**
+ * Android: the system haptic feedback constants (View.performHapticFeedback),
+ * which follow the system touch-feedback setting, unlike the vibrator that
+ * impactAsync and notificationAsync use there. The nearest constant stands in
+ * for each pattern; how each feels is measured on devices (gate 8).
+ */
+const ANDROID_HAPTICS: Record<HapticPattern, Haptics.AndroidHaptics> = {
+  selection: Haptics.AndroidHaptics.Segment_Tick,
+  'impact-light': Haptics.AndroidHaptics.Clock_Tick,
+  'impact-medium': Haptics.AndroidHaptics.Context_Click,
+  'impact-heavy': Haptics.AndroidHaptics.Long_Press,
+  success: Haptics.AndroidHaptics.Confirm,
+  warning: Haptics.AndroidHaptics.Gesture_End,
+  error: Haptics.AndroidHaptics.Reject,
+};
+
+const fireHaptic = (pattern: HapticPattern) =>
+  Platform.OS === 'android' ? Haptics.performAndroidHapticsAsync(ANDROID_HAPTICS[pattern]) : IOS_HAPTICS[pattern]();
+
 export const SETTINGS_FILE = 'sound-and-haptics.json';
 
 export function createDevicePorts(): FeedbackPorts {
   void setAudioModeAsync(AUDIO_MODE).catch(() => undefined);
 
   // One player per cue, loaded up front so a cue starts without load time.
-  const players = new Map<CueName, AudioPlayer>();
-  const player = (cue: CueName) => {
-    let found = players.get(cue);
-    if (!found) {
-      found = createAudioPlayer(CUE_SOUNDS[cue]);
-      players.set(cue, found);
-    }
-    return found;
-  };
-  for (const cue of Object.keys(CUE_SOUNDS) as CueName[]) player(cue);
+  const players = new Map((Object.keys(CUE_SOUNDS) as CueName[]).map((cue) => [cue, createAudioPlayer(CUE_SOUNDS[cue])]));
 
   let playing: AudioPlayer | null = null;
   let foreground = AppState.currentState === 'active';
@@ -65,7 +76,7 @@ export function createDevicePorts(): FeedbackPorts {
       play(cue, volume) {
         // A new cue cuts off one still playing.
         playing?.pause();
-        const next = player(cue);
+        const next = players.get(cue) as AudioPlayer;
         next.volume = volume;
         void next.seekTo(0).catch(() => undefined);
         next.play();
@@ -74,7 +85,7 @@ export function createDevicePorts(): FeedbackPorts {
     },
     haptics: {
       fire(pattern) {
-        void HAPTICS[pattern]().catch(() => undefined);
+        void fireHaptic(pattern).catch(() => undefined);
       },
     },
     storage: {

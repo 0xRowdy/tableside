@@ -8,6 +8,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View, type GestureResponderEve
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
+import { volumeText } from '@/settings/summary';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/theme/tokens';
 
 /** A settings screen: header, then content that reflows and scrolls at any text size. */
@@ -93,10 +94,11 @@ const STEP = 10;
 export function VolumeSlider({ label, value, onChange, help }: { label: string; value: number; onChange: (value: number) => void; help: string }) {
   const [trackWidth, setTrackWidth] = useState(0);
   const { focused, focusProps } = useKeyboardFocus();
-  const valueText = value === 0 ? 'Off' : `${value}%`;
-  const step = (direction: 1 | -1) => onChange(Math.min(100, Math.max(0, value + direction * STEP)));
+  const valueText = volumeText(value);
+  // The settings store keeps the volume within 0–100.
+  const step = (direction: 1 | -1) => onChange(value + direction * STEP);
   const fromTouch = (event: GestureResponderEvent) => {
-    if (trackWidth > 0) onChange(Math.round((Math.min(trackWidth, Math.max(0, event.nativeEvent.locationX)) / trackWidth) * 100));
+    if (trackWidth > 0) onChange((event.nativeEvent.locationX / trackWidth) * 100);
   };
   return (
     <View style={styles.sliderBlock}>

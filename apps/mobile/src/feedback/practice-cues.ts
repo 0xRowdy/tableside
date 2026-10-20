@@ -27,7 +27,8 @@ export function cuesForFacts(facts: readonly DomainFact[]): CueName[] {
         returned = true;
         break;
       case 'outcome-generated':
-        cues.push('ball-landed');
+        // A roulette outcome is a pocket; other games' outcomes get their own cues (dice thrown, card dealt).
+        if ('pocket' in fact) cues.push('ball-landed');
         break;
       case 'wager-settled':
         net = add(net ?? money(0n), decodeMoney(fact.net));
@@ -53,8 +54,8 @@ export function followPractice(controller: PracticeController, feedback: Feedbac
     last = next;
     if (next.status === 'active') {
       // The controller republishes the same transition as input opens and closes; cue it once.
-      const fresh = previous.status !== 'active' || previous.view.sequence !== next.view.sequence || previous.view.activityId !== next.view.activityId;
-      if (fresh) for (const cue of cuesForFacts(next.facts)) feedback.cue(cue);
+      const newTransition = previous.status !== 'active' || previous.view.sequence !== next.view.sequence || previous.view.activityId !== next.view.activityId;
+      if (newTransition) for (const cue of cuesForFacts(next.facts)) feedback.cue(cue);
     } else if (next.status === 'completed' && previous.status === 'active') {
       // Results ready, on arrival from the session itself (never when reviewing history).
       feedback.cue('attempt-ended');

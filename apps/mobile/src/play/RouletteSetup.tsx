@@ -36,8 +36,8 @@ export function RouletteSetup({ problem, busy }: { problem: StartProblem | null;
     const digits = draft.replace(/[,\s]/g, '');
     const whole = /^\d+$/.test(digits) && digits.length <= MAX_BUY_IN_DIGITS;
     setNotWhole(!whole);
-    if (!whole) feedback.cue('input-rejected');
     if (whole) void controller.start({ game: 'roulette', buyIn: BigInt(digits).toString() });
+    else feedback.cue('input-rejected');
   };
   const error = notWhole ? PROBLEMS['invalid-buy-in'] : problem && PROBLEMS[problem];
 

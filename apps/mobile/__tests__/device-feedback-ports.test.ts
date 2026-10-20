@@ -2,7 +2,7 @@
 // file modules replaced by recorders. What the platforms then do (the silent
 // switch, mixing, system haptics) is checked on physical devices (gate 8).
 
-import { AppState, type AppStateStatus } from 'react-native';
+import { AppState, Platform, type AppStateStatus } from 'react-native';
 
 jest.unmock('@/feedback/device-ports');
 
@@ -43,6 +43,16 @@ jest.mock('expo-haptics', () => ({
   selectionAsync: async () => void mockHaptics.push('selection'),
   impactAsync: async (style: string) => void mockHaptics.push(`impact ${style}`),
   notificationAsync: async (type: string) => void mockHaptics.push(`notification ${type}`),
+  AndroidHaptics: {
+    Segment_Tick: 'segment-tick',
+    Clock_Tick: 'clock-tick',
+    Context_Click: 'context-click',
+    Long_Press: 'long-press',
+    Confirm: 'confirm',
+    Gesture_End: 'gesture-end',
+    Reject: 'reject',
+  },
+  performAndroidHapticsAsync: async (type: string) => void mockHaptics.push(`android ${type}`),
 }));
 
 const mockFiles = new Map<string, string>();
@@ -122,13 +132,25 @@ describe('device feedback ports', () => {
     expect(ports.isForeground()).toBe(true);
   });
 
-  it('fires the standard platform pattern for each haptic', () => {
+  it('fires the standard platform pattern for each haptic, through the system feedback that follows the haptics setting', () => {
     const ports = createDevicePorts();
 
     for (const pattern of ['selection', 'impact-light', 'impact-medium', 'impact-heavy', 'success', 'warning', 'error'] as const) {
       ports.haptics.fire(pattern);
     }
 
+    if (Platform.OS === 'android') {
+      expect(mockHaptics).toEqual([
+        'android segment-tick',
+        'android clock-tick',
+        'android context-click',
+        'android long-press',
+        'android confirm',
+        'android gesture-end',
+        'android reject',
+      ]);
+      return;
+    }
     expect(mockHaptics).toEqual([
       'selection',
       'impact light',
