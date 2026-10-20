@@ -1,7 +1,7 @@
 // Blackjack rule presets (#3): six decks, S17 or H17 x late surrender on or
 // off (default S17 + LS), penetration 50-80% in 5% steps (default 75%),
-// initial-wager limits 10/1,000 units and 0-4 other players (default none).
-// Editable limits arrive with #72.
+// initial-wager limits 10/1,000 units (editable at setup) and 0-4 other
+// players (default none).
 
 import { BLACKJACK_RULES, type BlackjackRuleSet } from '@tableside/engine';
 
@@ -18,7 +18,8 @@ const PRESETS: Readonly<Record<BlackjackPreset, Pick<BlackjackRuleSet, 'dealer' 
   H17_noLS: { dealer: 'H17', lateSurrender: false },
 };
 
-const LIMITS = { min: '10', max: '1000' } as const;
+/** The launch initial-wager limits. */
+export const BLACKJACK_LIMITS: BlackjackRuleSet['limits'] = { initial: { min: '10', max: '1000' } };
 
 /**
  * The rule set a blackjack activity pins for a preset, penetration and number
@@ -26,17 +27,22 @@ const LIMITS = { min: '10', max: '1000' } as const;
  * basic strategy; the learner sits after them, so their cards are out before
  * each of the learner's decisions.
  */
-export function blackjackRules(preset: BlackjackPreset = DEFAULT_BLACKJACK_PRESET, penetration = DEFAULT_PENETRATION, otherPlayers = 0): BlackjackRuleSet {
+export function blackjackRules(
+  preset: BlackjackPreset = DEFAULT_BLACKJACK_PRESET,
+  penetration = DEFAULT_PENETRATION,
+  otherPlayers = 0,
+  limits: BlackjackRuleSet['limits'] = BLACKJACK_LIMITS,
+): BlackjackRuleSet {
   return {
     id: BLACKJACK_RULES.id,
     version: BLACKJACK_RULES.version,
     decks: BLACKJACK_RULES.decks,
     ...PRESETS[preset],
     penetration,
-    limits: { initial: { ...LIMITS } },
+    limits: { initial: { ...limits.initial } },
     players: {
       learnerSeat: otherPlayers,
-      otherWagers: Array.from({ length: otherPlayers }, () => LIMITS.min),
+      otherWagers: Array.from({ length: otherPlayers }, () => limits.initial.min),
       strategy: otherPlayers > 0 ? seatStrategy(preset) : null,
     },
   };

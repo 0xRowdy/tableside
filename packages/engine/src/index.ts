@@ -4,6 +4,8 @@
 // the runner supply adapters. The portability rule is enforced by lint.
 
 export { ENGINE_VERSION } from './version';
+export { checkLimitInput, type LimitAmountProblem, type LimitInputCheck } from './limits';
+export { BASE_WAGER_CEILING } from './shape';
 export {
   advanceActivity,
   checkpointHash,

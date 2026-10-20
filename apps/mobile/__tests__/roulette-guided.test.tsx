@@ -2,15 +2,9 @@
 // in-memory adapters and driven only through the accessibility tree. Spins
 // come from the Random123 "pi digits" stream: 27 (red), then 0, 25 (red).
 
-import { ROULETTE_PRESETS } from '@tableside/definitions';
-import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react-native';
+import { act, cleanup, fireEvent, screen, within } from '@testing-library/react-native';
 import { renderRouter } from 'expo-router/testing-library';
 import { AccessibilityInfo, Dimensions } from 'react-native';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
-
-import { FeedbackProvider } from '@/feedback/FeedbackProvider';
-import { RouletteSetup } from '@/play/RouletteSetup';
-import { PracticeProvider } from '@/practice/PracticeProvider';
 
 jest.mock('@/practice/app-adapters', () => {
   const { FakeClock, substituteAdapters: create } = jest.requireActual('@/practice/testing/substitutes');
@@ -189,27 +183,4 @@ describe('guided roulette practice', () => {
   });
 });
 
-describe('an incompatible strategy and table', () => {
-  it('is refused naming the requirement, with "Customize a copy for this table" as a third choice', async () => {
-    const strict = { ...ROULETTE_PRESETS, 'single-zero': { ...ROULETTE_PRESETS['single-zero'], limits: { inside: { min: '1', max: '100' }, outside: { min: '25', max: '1000' } } } };
-    await render(
-      <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 0, left: 0, right: 0, bottom: 0 } }}>
-        <PracticeProvider>
-          <FeedbackProvider>
-            <RouletteSetup problem={null} busy={false} presets={strict} />
-          </FeedbackProvider>
-        </PracticeProvider>
-      </SafeAreaProvider>,
-    );
-    await fireEvent.press(screen.getByRole('radio', { name: 'Guided practice' }));
-    expect(screen.getByRole('alert')).toHaveTextContent("This strategy doesn't fit your table");
-    expect(screen.getByText("Flat even-money bets 10 on Red. This table's minimum for that bet is 25, so a 10 bet isn't allowed.")).toBeOnTheScreen();
-    expect(screen.getByRole('button', { name: 'Start guided practice' })).toBeDisabled();
-    await fireEvent.press(screen.getByRole('button', { name: 'Customize a copy for this table' }));
-    expect(screen.getByText(/The strategy builder arrives in a later update/)).toBeOnTheScreen();
-    // Choosing the compatible wheel clears it.
-    await fireEvent.press(screen.getByRole('radio', { name: 'Double zero (0, 00)' }));
-    expect(screen.queryByTestId('strategy-incompatible')).toBeNull();
-    expect(screen.getByRole('button', { name: 'Start guided practice' })).toBeEnabled();
-  });
-});
+// The incompatible strategy and table case lives with session setup (session-setup.test.tsx), at edited limits.

@@ -8,6 +8,7 @@ import { useEffect } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { FeedbackProvider } from '@/feedback/FeedbackProvider';
+import { SetupPreferencesProvider } from '@/play/setup/SetupPreferencesProvider';
 import { PracticeProvider } from '@/practice/PracticeProvider';
 import { palette } from '@/theme/tokens';
 
@@ -41,7 +42,9 @@ export default function RootLayout() {
         <StatusBar style="light" />
         <PracticeProvider>
           <FeedbackProvider>
-            <Slot />
+            <SetupPreferencesProvider>
+              <Slot />
+            </SetupPreferencesProvider>
           </FeedbackProvider>
         </PracticeProvider>
       </ThemeProvider>

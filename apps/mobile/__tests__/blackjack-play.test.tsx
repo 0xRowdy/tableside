@@ -61,9 +61,9 @@ async function openSetup() {
   await screen.findByRole('header', { name: 'Blackjack' });
 }
 
-async function startSession(otherPlayers?: string) {
+async function startSession(otherPlayers = 0) {
   await openSetup();
-  if (otherPlayers) await fireEvent.press(screen.getByRole('radio', { name: otherPlayers }));
+  for (let i = 0; i < otherPlayers; i++) await fireEvent.press(screen.getByRole('button', { name: 'More other players' }));
   await fireEvent.press(screen.getByRole('button', { name: 'Start free play' }));
   await screen.findByLabelText('Session balance 1,000');
 }
@@ -98,31 +98,21 @@ describe('blackjack free play', () => {
     await fireEvent.press(await screen.findByRole('button', { name: /^Blackjack\b/ }));
     await screen.findByRole('header', { name: 'Blackjack' });
 
-    expect(screen.getByRole('radio', { name: 'Stands on all 17s (S17)' })).toBeChecked();
-    expect(screen.getByRole('radio', { name: 'Late surrender on' })).toBeChecked();
-    expect(screen.getByRole('radio', { name: 'Penetration 75%' })).toBeChecked();
-    expect(screen.getAllByRole('radio', { name: /^Penetration/ }).map((radio) => radio.props.accessibilityLabel)).toEqual(
-      [50, 55, 60, 65, 70, 75, 80].map((p) => `Penetration ${p}%`),
-    );
-    expect(screen.getByText('Initial wager 10–1,000 units')).toBeOnTheScreen();
-    expect(screen.getByText('Edge with basic strategy: 0.33% (this preset)')).toBeOnTheScreen();
+    expect(screen.getByRole('radio', { name: 'S17 · surrender', checked: true })).toBeOnTheScreen();
+    expect(screen.getByRole('switch', { name: 'Late surrender' })).toBeChecked();
+    expect(screen.getByRole('adjustable', { name: 'Shoe penetration' })).toHaveAccessibilityValue({ text: '75%' });
+    expect(screen.getByLabelText('Initial wager minimum, in units')).toHaveProp('value', '10');
+    expect(screen.getByLabelText('Initial wager maximum, in units')).toHaveProp('value', '1,000');
+    expect(screen.getByText('House edge with basic strategy: 0.33%')).toBeOnTheScreen();
     expect(screen.getByLabelText('Starting chips for this session, in units')).toHaveProp('value', '1,000');
-    expect(screen.getByRole('radio', { name: 'No other players' })).toBeChecked();
-    expect(screen.getAllByRole('radio', { name: /other player/ }).map((radio) => radio.props.accessibilityLabel)).toEqual([
-      'No other players',
-      '1 other player',
-      '2 other players',
-      '3 other players',
-      '4 other players',
-    ]);
+    expect(screen.getByRole('adjustable', { name: 'Other players at the table' })).toHaveAccessibilityValue({ text: 'No other players' });
   });
 
   it('changes the preset and penetration, and the table pins them', async () => {
     await openSetup();
-    await fireEvent.press(screen.getByRole('radio', { name: 'Hits soft 17 (H17)' }));
-    await fireEvent.press(screen.getByRole('radio', { name: 'Late surrender off' }));
-    await fireEvent.press(screen.getByRole('radio', { name: 'Penetration 60%' }));
-    expect(screen.getByText('Edge with basic strategy: 0.62% (this preset)')).toBeOnTheScreen();
+    await fireEvent.press(screen.getByRole('radio', { name: 'H17' }));
+    for (let i = 0; i < 3; i++) await fireEvent.press(screen.getByRole('button', { name: 'Less shoe penetration' }));
+    expect(screen.getByText('House edge with basic strategy: 0.62%')).toBeOnTheScreen();
 
     await fireEvent.press(screen.getByRole('button', { name: 'Start free play' }));
 
@@ -397,7 +387,7 @@ describe('blackjack free play', () => {
 
   it('seats other players ahead of you whose cards and plays are shown and announced; only your result moves your balance', async () => {
     mockAdapters.words = PLAYERS;
-    await startSession('2 other players');
+    await startSession(2);
     await betAndDeal();
 
     expect(
