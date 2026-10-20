@@ -323,9 +323,11 @@ export const crapsMenuCases: TestCase[] = [
         [working('pass', false), working('field', false), working('place-8', true), working('big-8', true)].map((c) => illegal(run(table, [place('pass', '10'), place('field', '10')]).state, c)),
         ['working-fixed', 'working-fixed', 'not-available-now', 'unknown-target'],
       );
-      // Giving the default status clears the instruction; taking the wager down drops it.
+      // An instruction holds through the puck moving, even when it matches the usual status; taking the wager down drops it.
+      const held = run(told.state, [place('pass', '10'), ...roll()]).state; // 6 sets the point: place 6 is on either way
+      t.equal(view(held).table.wagers.find((w) => w.target === 'place-6'), { target: 'place-6', working: true, instruction: true, switchable: true, removable: true });
       const cleared = run(told.state, [working('place-6', false), place('hard-6', '0')]).state;
-      t.equal([(cleared as CrapsActivityState).instructions, targets(cleared)], [[], ['place-6 12', 'lay-4 20']]);
+      t.equal([(cleared as CrapsActivityState).instructions, targets(cleared)], [[{ target: 'place-6', working: false }], ['place-6 12', 'lay-4 20']]);
     },
   },
   {

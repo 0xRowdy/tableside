@@ -248,7 +248,7 @@ export class PracticeController {
         };
         const specification: ActivitySpecification =
           request.game === 'craps'
-            ? { ...base, game: 'craps', rules: standardCraps(request.odds, request.field ?? 'triple-12') }
+            ? { ...base, game: 'craps', rules: standardCraps(request.odds, request.field) }
             : { ...base, game: 'roulette', rules: ROULETTE_PRESETS[wheelOf(request)] };
         let initial: ActivityState;
         try {
@@ -798,6 +798,6 @@ const wheelOf = (request: Extract<StartRequest, { game: 'roulette' }>): Roulette
 /** Whether a retried start asks for the same table, so it may recover the unacknowledged activity. */
 function sameRequest(a: StartRequest, b: StartRequest): boolean {
   if (a.buyIn !== b.buyIn || a.fundingSource !== b.fundingSource) return false;
-  if (a.game === 'craps') return b.game === 'craps' && a.odds === b.odds && (a.field ?? 'triple-12') === (b.field ?? 'triple-12');
+  if (a.game === 'craps') return b.game === 'craps' && a.odds === b.odds && standardCraps(a.odds, a.field).field === standardCraps(b.odds, b.field).field;
   return b.game === 'roulette' && wheelOf(a) === wheelOf(b);
 }

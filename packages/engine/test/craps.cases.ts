@@ -414,6 +414,8 @@ export const crapsCases: TestCase[] = [
         for (const fact of next.facts) {
           if (fact.kind === 'turn-began') committed = new Map(fact.wagers.map((wager) => [wager.target, wager.amount]));
           if (fact.kind === 'dice-rolled') rolls++;
+          // A come bet that travels this roll can't also settle on it (its number was just rolled),
+          // so only the wagers committed when the turn began can settle.
           if (fact.kind === 'wager-settled') {
             // A horn part settles a quarter of the committed horn.
             t.equal(committed.get(fact.target), fact.component === undefined ? fact.stake : String(BigInt(fact.stake) * 4n));

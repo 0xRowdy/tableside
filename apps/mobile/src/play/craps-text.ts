@@ -157,7 +157,7 @@ export function describeCrapsFacts(facts: readonly DomainFact[], view: CrapsPerm
         parts.push(rollSentence(fact.dice));
         break;
       case 'working-changed':
-        parts.push(`${crapsTargetName(fact.target)} is now ${fact.working ? 'ON' : 'OFF'}${fact.working ? ', working on every roll' : ' until you turn it on'}.`);
+        parts.push(`${crapsTargetName(fact.target)} is now ${fact.working ? 'ON' : 'OFF'} until you turn it ${fact.working ? 'off' : 'on'}, whatever the puck does.`);
         break;
       case 'point-changed':
         parts.push(fact.point === null ? 'Puck OFF. The next roll is a come-out roll.' : `The point is ${fact.point}. Puck ON.`);

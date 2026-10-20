@@ -27,7 +27,7 @@ import {
 } from '@tableside/engine';
 
 /** A standard craps table with the launch limits, the chosen odds cap (default 3-4-5x) and field payout (default 12 pays triple). */
-export const standardCraps = (odds: OddsCap = '3-4-5x', field: FieldPayout = 'triple-12'): CrapsRuleSet => ({
+export const standardCraps = (odds: OddsCap = STANDARD_CRAPS.defaults.odds, field: FieldPayout = STANDARD_CRAPS.defaults.field): CrapsRuleSet => ({
   id: STANDARD_CRAPS.id,
   version: STANDARD_CRAPS.version,
   odds,
@@ -178,7 +178,7 @@ export function crapsHouseEdge(
     wager,
     odds: rules.odds,
     field: rules.field,
-    stake: rounded && stake !== undefined ? stake : null,
+    stake: rounded ? rounded.n.toString() : null,
     version: CRAPS_HOUSE_EDGE_VERSION,
     rules: { id: rules.id, version: rules.version },
   };

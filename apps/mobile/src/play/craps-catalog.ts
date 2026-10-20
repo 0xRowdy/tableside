@@ -38,10 +38,20 @@ function boxEdges(family: 'place' | 'buy' | 'lay', edge: (wager: CrapsWager) => 
   return ([[6, 8], [5, 9], [4, 10]] as const).map(([a, b]) => `${a}·${b} ${edge(`${family}-${a}`)}%`).join(' · ');
 }
 
+/** Buy and lay edges at each number's minimum stake, where rounding the commission up costs the most. */
+function minimumEdges(family: 'buy' | 'lay', placements: readonly Placement[], edge: (wager: CrapsWager, stake?: string) => string): string {
+  return ([6, 5, 4] as const)
+    .map((n) => {
+      const min = placements.find((p) => p.target === `${family}-${n}`)?.min;
+      return `${n === 6 ? '6·8' : n === 5 ? '5·9' : '4·10'} ${edge(`${family}-${n}`, min)}%`;
+    })
+    .join(' · ');
+}
+
 export function crapsCatalog(view: PermittedView): WagerCatalog {
   const { placements, limits, point, variant, odds, field } = view.table;
   const rules = { ...variant, odds, field };
-  const edge = (wager: CrapsWager) => crapsHouseEdge(wager, rules).percent;
+  const edge = (wager: CrapsWager, stake?: string) => crapsHouseEdge(wager, rules, stake).percent;
   const of = (kind: Placement['kind']) => placements.filter((p) => p.kind === kind).map(choice);
   const kinds: WagerKind[] = [];
   const line = of('line');
@@ -75,14 +85,14 @@ export function crapsCatalog(view: PermittedView): WagerCatalog {
           {
             id: 'buy',
             name: 'Buy',
-            detail: `True odds · 5% commission of the stake on wins, rounded up · off on the come-out unless you turn it on · edge ${boxEdges('buy', edge)}`,
+            detail: `True odds · 5% commission of the stake on wins, rounded up · off on the come-out unless you turn it on · edge ${boxEdges('buy', edge)}, at the minimum stake ${minimumEdges('buy', placements, edge)}`,
             choiceLabel: 'Number',
             choices: of('buy'),
           },
           {
             id: 'lay',
             name: 'Lay',
-            detail: `Wins on 7 at true odds · 5% commission of the win, rounded up · works on the come-out · edge ${boxEdges('lay', edge)}`,
+            detail: `Wins on 7 at true odds · 5% commission of the win, rounded up · works on the come-out · edge ${boxEdges('lay', edge)}, at the minimum stake ${minimumEdges('lay', placements, edge)}`,
             choiceLabel: 'Against',
             choices: of('lay'),
           },

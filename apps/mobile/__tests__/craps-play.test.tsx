@@ -259,6 +259,15 @@ describe('craps free play', () => {
 
   it('gives every table control a touch target of at least 48 points', async () => {
     await pointOfEight();
+    // A place bet brings its working toggle; the field spot and the way to numbers and center bets are always there.
+    await fireEvent.press(screen.getByRole('tab', { name: 'Bet list' }));
+    await fireEvent.press(screen.getByRole('button', { name: /^Place,/ }));
+    await fireEvent.press(screen.getByRole('radio', { name: 'Place 8' }));
+    await fireEvent.changeText(screen.getByLabelText(/^Total stake for /), '12');
+    await fireEvent.press(screen.getByRole('button', { name: /^Set / }));
+    await fireEvent.press(screen.getByRole('tab', { name: 'Table' }));
+    expect(screen.getByRole('button', { name: 'Turn Place 8 OFF' })).toBeOnTheScreen();
+    expect(screen.getByRole('button', { name: 'Numbers and center bets' })).toBeOnTheScreen();
 
     const table = within(screen.getByTestId('table-scroll'));
     const controls = [...table.getAllByRole('button'), ...table.getAllByRole('radio')];
@@ -324,7 +333,7 @@ describe('craps free play', () => {
 
     await fireEvent.press(row.getByRole('button', { name: 'Turn Place 6 ON' }));
 
-    expect(announcements).toContain('Place 6 is now ON, working on every roll.');
+    expect(announcements).toContain('Place 6 is now ON until you turn it off, whatever the puck does.');
     expect(screen.getByLabelText('Place 6 24, ON, removable')).toBeOnTheScreen();
     expect(within(screen.getByTestId('wager-place-6')).getByRole('button', { name: 'Turn Place 6 OFF' })).toBeEnabled();
   });

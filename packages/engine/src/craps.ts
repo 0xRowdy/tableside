@@ -204,13 +204,16 @@ const info = (target: string, line: Line, dont: boolean, number: CrapsPoint | nu
   number,
 });
 
-const PROPOSITION_TOTALS: Record<(typeof PROPOSITIONS)[number], readonly number[]> = {
-  'any-seven': [7],
-  'any-craps': [2, 3, 12],
-  'prop-2': [2],
-  'prop-3': [3],
-  'prop-11': [11],
-  'prop-12': [12],
+type Proposition = (typeof PROPOSITIONS)[number];
+
+/** Each one-roll proposition: the totals it wins on and what it pays per unit. */
+const PROPOSITION_TERMS: Record<Proposition, { readonly totals: readonly number[]; readonly pays: Money }> = {
+  'any-seven': { totals: [7], pays: money(4n) },
+  'any-craps': { totals: [2, 3, 12], pays: money(7n) },
+  'prop-2': { totals: [2], pays: money(30n) },
+  'prop-3': { totals: [3], pays: money(15n) },
+  'prop-11': { totals: [11], pays: money(15n) },
+  'prop-12': { totals: [12], pays: money(30n) },
 };
 
 /** Every target in table order. */
@@ -230,7 +233,7 @@ const TARGETS: readonly TargetInfo[] = [
   ...(['place', 'buy', 'lay'] as const).flatMap((family) => CRAPS_POINTS.map((number): BoxTarget => ({ family, target: `${family}-${number}`, number }))),
   { family: 'field', target: 'field', totals: [2, 3, 4, 9, 10, 11, 12] },
   ...HARDWAYS.map((number): HardTarget => ({ family: 'hardway', target: `hard-${number}`, number })),
-  ...PROPOSITIONS.map((target): OneRollTarget => ({ family: 'proposition', target, totals: PROPOSITION_TOTALS[target] })),
+  ...PROPOSITIONS.map((target): OneRollTarget => ({ family: 'proposition', target, totals: PROPOSITION_TERMS[target].totals })),
   { family: 'horn', target: 'horn', totals: HORN_PARTS },
 ];
 
@@ -276,19 +279,11 @@ const isWorking = (state: Pick<State, 'instructions' | 'point'>, target: TargetI
 const TRUE_ODDS: Record<CrapsPoint, Money> = { 4: money(2n), 10: money(2n), 5: money(3n, 2n), 9: money(3n, 2n), 6: money(6n, 5n), 8: money(6n, 5n) };
 const PLACE_PAYS: Record<CrapsPoint, Money> = { 4: money(9n, 5n), 10: money(9n, 5n), 5: money(7n, 5n), 9: money(7n, 5n), 6: money(7n, 6n), 8: money(7n, 6n) };
 const HARD_PAYS: Record<Hardway, Money> = { 4: money(7n), 10: money(7n), 6: money(9n), 8: money(9n) };
-const PROPOSITION_PAYS: Record<(typeof PROPOSITIONS)[number], Money> = {
-  'any-seven': money(4n),
-  'any-craps': money(7n),
-  'prop-2': money(30n),
-  'prop-3': money(15n),
-  'prop-11': money(15n),
-  'prop-12': money(30n),
-};
 /** Each horn part pays as the individual proposition on its total. */
-const hornPartPays = (total: number) => (total === 2 || total === 12 ? money(30n) : money(15n));
+const hornPartPays = (total: (typeof HORN_PARTS)[number]) => PROPOSITION_TERMS[`prop-${total}`].pays;
 const fieldPays = (total: number, field: FieldPayout) => (total === 2 ? money(2n) : total === 12 ? money(field === 'triple-12' ? 3n : 2n) : money(1n));
 
-const COMMISSION_RATE = money(1n, 20n);
+const COMMISSION_RATE = decodeMoney(STANDARD_CRAPS.commission.rate);
 
 /** Taking-odds multiple of the base. Under 3-4-5x it depends on the number. */
 function oddsMultiple(cap: OddsCap, n: CrapsPoint): bigint {
@@ -314,8 +309,8 @@ function oddsCap(cap: OddsCap, dont: boolean, n: CrapsPoint, base: Money): Money
 
 const ratioText = (ratio: Money) => `${ratio.n.toString()}:${ratio.d.toString()}`;
 
-/** Profit per unit staked on a non-line wager (the horn's parts aside). */
-function payoutOf(target: Exclude<TargetInfo, LineTarget>, field: FieldPayout): Money {
+/** Profit per unit staked on a place, buy, lay or hardway bet. */
+function standingPayout(target: BoxTarget | HardTarget): Money {
   switch (target.family) {
     case 'place':
       return PLACE_PAYS[target.number];
@@ -325,13 +320,15 @@ function payoutOf(target: Exclude<TargetInfo, LineTarget>, field: FieldPayout): 
       return trueOddsPayout(true, target.number);
     case 'hardway':
       return HARD_PAYS[target.number];
-    case 'proposition':
-      return PROPOSITION_PAYS[target.target as (typeof PROPOSITIONS)[number]];
-    case 'field':
-      return fieldPays(3, field);
-    case 'horn':
-      return money(15n);
   }
+}
+
+/** The payout a placement states: a standing bet's ratio, a proposition's, or the field's even money (2 and 12 pay more). */
+function statedPayout(target: Exclude<TargetInfo, LineTarget>): string {
+  if (!('totals' in target)) return ratioText(standingPayout(target));
+  if (target.family === 'horn') return '30:1/15:1';
+  if (target.family === 'field') return '1:1';
+  return ratioText(PROPOSITION_TERMS[target.target as Proposition].pays);
 }
 
 /** Stakes on a non-line wager go in multiples of this. */
@@ -341,7 +338,7 @@ function stakeIncrement(target: Exclude<TargetInfo, LineTarget>): bigint {
       return target.number === 6 || target.number === 8 ? 6n : 5n;
     case 'buy':
     case 'lay':
-      return wholeIncrement(payoutOf(target, 'triple-12'));
+      return wholeIncrement(standingPayout(target));
     case 'horn':
       return BigInt(HORN_PARTS.length);
     default:
@@ -352,7 +349,7 @@ function stakeIncrement(target: Exclude<TargetInfo, LineTarget>): bigint {
 /** The commission a winning buy or lay with this stake would charge; zero for every other wager. */
 function commissionFor(target: TargetInfo, stake: Money): Money {
   if (target.family === 'buy') return commission(stake, COMMISSION_RATE);
-  if (target.family === 'lay') return commission(mul(stake, payoutOf(target, 'triple-12')), COMMISSION_RATE);
+  if (target.family === 'lay') return commission(mul(stake, standingPayout(target)), COMMISSION_RATE);
   return money(0n);
 }
 
@@ -361,11 +358,11 @@ function stakeLimits(target: Exclude<TargetInfo, LineTarget>, rules: State['rule
   const props = target.family === 'hardway' || target.family === 'proposition' || target.family === 'horn';
   const limit = props ? rules.limits.props : rules.limits.flat;
   const increment = stakeIncrement(target);
-  const parts = target.family === 'horn' ? increment : 1n;
+  // The horn's limit is per part, so its stake limits are the part limits times its four parts.
+  const parts = target.family === 'horn' ? BigInt(HORN_PARTS.length) : 1n;
   const low = BigInt(limit.min) * parts;
   const high = BigInt(limit.max) * parts;
-  const step = target.family === 'horn' ? parts : increment;
-  return { min: ((low + step - 1n) / step) * step, max: (high / step) * step, increment: step };
+  return { min: ((low + increment - 1n) / increment) * increment, max: (high / increment) * increment, increment };
 }
 
 // ---- module -----------------------------------------------------------
@@ -424,14 +421,14 @@ function roll(state: State): Step<State> {
   };
 }
 
-/** A legal per-bet working instruction. Giving the default status clears the instruction. */
+/** A legal per-bet working instruction. It holds, whatever the puck does, until it changes or the wager leaves the table. */
 function setWorking(state: State, target: string, working: boolean): Step<State> {
   const placed = targetInfo(target);
   if (!placed) return { illegal: 'unknown-target' };
   if (!isSwitchable(placed)) return { illegal: 'working-fixed' };
   if (!stakeOf(state.wagers, target)) return { illegal: 'not-available-now' };
   const others = state.instructions.filter((item) => item.target !== target);
-  const instructions = working === worksByDefault(placed, state.point) ? others : sorted([...others, { target, working }]);
+  const instructions = sorted([...others, { target, working }]);
   return { change: { phase: 'open-decision', instructions }, facts: [{ kind: 'working-changed', target, working }] };
 }
 
@@ -605,7 +602,7 @@ function settle(state: State): Settled {
         const resolution = isWorking(state, target) ? resolveStanding(target, dice) : 'stay';
         if (resolution === 'loss') pay(wager.target, stake, 'loss', money(0n));
         else wagers.push(wager);
-        if (resolution === 'win') pay(wager.target, stake, 'win', mul(stake, payoutOf(target, state.rules.field)), { fee: commissionFor(target, stake), staysUp: true });
+        if (resolution === 'win') pay(wager.target, stake, 'win', mul(stake, standingPayout(target)), { fee: commissionFor(target, stake), staysUp: true });
         break;
       }
       case 'field':
@@ -613,7 +610,7 @@ function settle(state: State): Settled {
         else pay(wager.target, stake, 'loss', money(0n));
         break;
       case 'proposition':
-        if (target.totals.includes(total)) pay(wager.target, stake, 'win', mul(stake, payoutOf(target, state.rules.field)));
+        if (target.totals.includes(total)) pay(wager.target, stake, 'win', mul(stake, PROPOSITION_TERMS[target.target as Proposition].pays));
         else pay(wager.target, stake, 'loss', money(0n));
         break;
       case 'horn': {
@@ -691,7 +688,7 @@ function placements(state: State): CrapsPlacement[] {
       min: limits.min.toString(),
       max: limits.max.toString(),
       increment: limits.increment.toString(),
-      payout: target.family === 'horn' ? '30:1/15:1' : ratioText(payoutOf(target, rules.field)),
+      payout: statedPayout(target),
       ...(target.family === 'buy' ? { commission: 'stake' as const } : target.family === 'lay' ? { commission: 'win' as const } : {}),
     });
   }

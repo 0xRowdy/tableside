@@ -3,7 +3,7 @@
 // a fresh buy-in. Editable limits and guided practice arrive with #72 and #76.
 
 import { crapsHouseEdge, standardCraps, type CrapsWager } from '@tableside/definitions';
-import { FIELD_PAYOUTS, ODDS_CAPS, type FieldPayout, type OddsCap } from '@tableside/engine';
+import { FIELD_PAYOUTS, ODDS_CAPS, STANDARD_CRAPS, type FieldPayout, type OddsCap } from '@tableside/engine';
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
@@ -33,7 +33,7 @@ export function CrapsSetup({ problem, problemReason = null, busy }: { problem: S
   const feedback = useFeedback();
   const [draft, setDraft] = useState(formatUnits(DEFAULT_BUY_IN));
   const [odds, setOdds] = useState<OddsCap>('3-4-5x');
-  const [field, setField] = useState<FieldPayout>('triple-12');
+  const [field, setField] = useState<FieldPayout>(STANDARD_CRAPS.defaults.field);
   const [notWhole, setNotWhole] = useState(false);
   const rules = standardCraps(odds, field);
   const { flat, props } = rules.limits;
@@ -102,7 +102,9 @@ export function CrapsSetup({ problem, problemReason = null, busy }: { problem: S
           Two and twelve {pct('prop-2')} · Three and eleven {pct('prop-3')} · Any craps {pct('any-craps')} · Any seven {pct('any-seven')} · Horn {pct('horn')}
         </Text>
         <Text maxFontSizeMultiplier={textScale.body} style={styles.help}>
-          Per bet decided. Buy and lay commission is 5% rounded up to a whole unit, so small stakes pay a little more.
+          Per bet decided, with commission at exactly 5%. Rounding it up to a whole unit costs more on small stakes: a buy at the{' '}
+          {formatUnits(flat.min)}-unit minimum is 6 and 8 {crapsHouseEdge('buy-6', rules, flat.min).percent}% · 5 and 9{' '}
+          {crapsHouseEdge('buy-5', rules, flat.min).percent}% · 4 and 10 {crapsHouseEdge('buy-4', rules, flat.min).percent}%.
         </Text>
       </View>
 

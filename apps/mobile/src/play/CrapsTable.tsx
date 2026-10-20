@@ -116,7 +116,7 @@ export function CrapsTable({ snapshot }: { snapshot: ActiveSnapshot }) {
           onEnd={() => setConfirming(true)}
         />
         <Text maxFontSizeMultiplier={textScale.body} style={styles.edge}>
-          House edge: pass and come {edge('pass')}% · don&apos;t pass and don&apos;t come {edge('dont-pass')}% · odds 0% · other bets in the Bet list
+          House edge: pass and come {edge('pass')}% · don&apos;t pass and don&apos;t come {edge('dont-pass')}% · odds 0% · every other wager shows its edge where you choose it
         </Text>
         <PhaseStepper steps={phaseSteps(view)} />
         <SessionStrip
@@ -175,7 +175,7 @@ export function CrapsTable({ snapshot }: { snapshot: ActiveSnapshot }) {
                   <Button
                     label="Numbers and center bets"
                     variant="secondary"
-                    hint="Opens the bet list for place, buy, lay, hardways and propositions."
+                    hint="Opens the bet selector for place, buy, lay, hardways and propositions."
                     onPress={() => setPresentation('selector')}
                   />
                 </View>
@@ -477,8 +477,8 @@ function WagerList({
 function workingHint(view: PermittedView, target: string, status: PermittedView['table']['wagers'][number]): string {
   const name = crapsTargetName(target);
   const comeOutOff = /^(place|buy)-\d+$/.test(target) || /^come-\d+-odds$/.test(target);
-  const usual = comeOutOff ? 'Off on the come-out roll and on while a point is set, unless you say otherwise.' : 'Works on every roll unless you turn it off.';
-  const now = status.instruction === null ? 'Following the usual rule.' : `You turned it ${status.instruction ? 'on' : 'off'}.`;
+  const usual = comeOutOff ? 'Usually off on the come-out roll and on while a point is set.' : 'Usually works on every roll.';
+  const now = status.instruction === null ? 'Following the usual rule.' : `You turned it ${status.instruction ? 'on' : 'off'}; that holds until you change it.`;
   return `${name} ${status.working ? 'acts' : "doesn't act"} on the next roll${view.table.point === null ? ', a come-out roll' : ''}. ${now} ${usual}`;
 }
 
