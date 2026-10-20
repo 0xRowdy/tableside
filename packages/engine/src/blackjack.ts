@@ -330,7 +330,8 @@ const otherPositions = (rules: BlackjackTable) => rules.players.otherWagers.map(
 
 // ---- totals ---------------------------------------------------------------
 
-const cardValue = (card: Card) => (card.rank >= 10 ? 10 : card.rank);
+/** A card's blackjack value: the ace is 1 and every ten-valued card is 10. */
+export const cardValue = (card: Card): number => (card.rank >= 10 ? 10 : card.rank);
 
 export function handTotal(cards: readonly Card[]): HandTotal {
   const hard = cards.reduce((sum, card) => sum + cardValue(card), 0);
@@ -1080,11 +1081,11 @@ function damage(value: Record<string, unknown>): string | undefined {
   if (shoe) return shoe;
   const round = roundDamage(value.outcome, value.rules);
   if (round) return round;
-  const { phase, wagers, turn } = value;
+  const { phase, wagers } = value;
   const r = value.outcome as BlackjackRound | null;
   const targets = r === null ? [HAND_TARGET] : r.hands.map((hand) => hand.target);
   if (!isWagerList(wagers, (target) => targets.indexOf(target))) return 'damaged wagers';
-  if ((value.outcome === null) !== (turn === 0) || (value.outcome !== null && value.shoe === null)) return 'the round does not match the turn count';
+  if (value.outcome !== null && value.shoe === null) return 'a round dealt from no shoe';
   const inPlay = phase === 'open-decision' && r !== null && r.active !== null;
   const unsettled = inPlay || phase === 'revealing-outcome' || (phase === 'final-settlement' && wagers.length > 0);
   // A dealt round stakes every learner hand; between rounds only the initial wager sits on the box.
@@ -1096,7 +1097,6 @@ function damage(value: Record<string, unknown>): string | undefined {
   return undefined;
 }
 
-/** Six-deck blackjack behind the session protocol. */
 /**
  * In the counting modes the player keeps the count, so no view field may carry
  * it (spec Counting): each held or recorded move keeps its explanation, minus
@@ -1112,6 +1112,7 @@ function strategyView(state: BlackjackActivityState, view: StrategyView): Strate
   return { ...view, correction: view.correction && hidden(view.correction), departures: view.departures.map(hidden) };
 }
 
+/** Six-deck blackjack behind the session protocol. */
 export const BLACKJACK: GameModule<BlackjackActivityState, BlackjackPermittedView, BlackjackCommand> = {
   ruleSets: [{ id: BLACKJACK_RULES.id, version: BLACKJACK_RULES.version }],
   extra: { shoe: null },

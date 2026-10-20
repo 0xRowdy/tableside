@@ -6,7 +6,7 @@
 // the published index comparison. Nothing is judged and nothing added that the
 // facts don't hold.
 
-import type { BlackjackCount, BlackjackDeviation, Card, DeviationPlay, PlayChoice, PlayCorrection, PlayExplanation, PublishedIndex } from '@tableside/engine';
+import { cardValue, type BlackjackCount, type BlackjackDeviation, type Card, type DeviationPlay, type PlayChoice, type PlayCorrection, type PlayExplanation, type PublishedIndex } from '@tableside/engine';
 
 import { cardRank, PLAY_NOUN, signed, SUIT_GLYPH, totalText } from './blackjack-text';
 import type { CorrectionCopy } from './coaching-text';
@@ -17,7 +17,7 @@ export const cardShort = (card: Card) => `${cardRank(card)}${SUIT_GLYPH[card.sui
 
 
 /** The up card by value: "a 5", "an ace", "a 10". */
-const upName = (card: Card) => (card.rank === 1 ? 'an ace' : card.rank === 8 ? 'an 8' : `a ${card.rank >= 10 ? 10 : card.rank}`);
+const upName = (card: Card) => (card.rank === 1 ? 'an ace' : card.rank === 8 ? 'an 8' : `a ${cardValue(card)}`);
 /** An up-card value: "A" or "10". */
 const upValue = (value: number) => (value === 1 ? 'A' : String(value));
 

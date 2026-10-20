@@ -1310,6 +1310,8 @@ function stateDamage(value: unknown): string | undefined {
   // A game judges its own part as of the decision a guided phase waits on.
   const gameDamage = game.damage(GUIDED_PHASES.has(phase as Phase) ? { ...value, phase: 'open-decision' } : value);
   if (gameDamage) return gameDamage;
+  // Every game: an outcome from the first turn on, and never before.
+  if ((value.outcome === null) !== (turn === 0)) return 'the outcome does not match the turn count';
   const strategy = strategyDamage(value as unknown as ActivityState, identities.strategy as VersionedIdentity | null);
   if (strategy) return strategy;
   // A cycle's outstanding wagers resolved when it ended: only contracts can still be on the table.

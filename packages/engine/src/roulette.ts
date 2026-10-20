@@ -372,7 +372,6 @@ function damage(value: Record<string, unknown>): string | undefined {
   if (outcome !== null && !(hasExactKeys(outcome, ['turn', 'pocket']) && isCount(outcome.turn) && outcome.turn >= 1 && outcome.turn === turn && isPocket(wheel, outcome.pocket))) {
     return 'damaged outcome';
   }
-  if ((outcome === null) !== (turn === 0)) return 'the outcome does not match the turn count';
   const committed = phase === 'revealing-outcome' || (phase === 'final-settlement' && wagers.length > 0 && outcome !== null);
   // Only guided practice takes a waiting spin, with nothing at stake.
   if (phase === 'revealing-outcome' && wagers.length === 0 && strategy === null) return 'a revealing turn has no committed wagers';

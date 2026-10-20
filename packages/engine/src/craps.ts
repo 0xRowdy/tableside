@@ -789,7 +789,6 @@ function damage(value: Record<string, unknown>): string | undefined {
   if (outcome !== null && !(hasExactKeys(outcome, ['turn', 'dice']) && isCount(outcome.turn) && outcome.turn >= 1 && outcome.turn === turn && isDice(outcome.dice))) {
     return 'damaged outcome';
   }
-  if ((outcome === null) !== (turn === 0)) return 'the outcome does not match the turn count';
   if (outcome === null && puck !== null) return 'the point is set before any roll';
   if (!isWagerList(wagers, targetOrder)) return 'damaged wager';
   for (const wager of wagers) {
