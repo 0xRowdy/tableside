@@ -19,6 +19,7 @@ import { rouletteCases } from './roulette.cases';
 import { runtimeCases } from './runtime.cases';
 import { strategyCases } from './strategy.cases';
 import { guidedCases } from './guided.cases';
+import { progressionCases } from './progression.cases';
 
 export const engineSuite: Suite = {
   name: 'engine',
@@ -38,6 +39,7 @@ export const engineSuite: Suite = {
     ...blackjackTableCases,
     ...strategyCases,
     ...guidedCases,
+    ...progressionCases,
     ...recordCases,
   ],
 };
