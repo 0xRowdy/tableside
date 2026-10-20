@@ -2,9 +2,9 @@
 // currency symbol). Everything here is built from committed facts and the
 // engine's permitted view: the next roll is never known until it is committed.
 
-import type { CrapsPermittedView, DomainFact, IllegalActionReason, Phase } from '@tableside/engine';
+import { FUNDING_CEILING, type CrapsPermittedView, type DomainFact, type IllegalActionReason, type Phase } from '@tableside/engine';
 
-import { formatUnits } from './roulette-text';
+import { formatUnits } from './units';
 
 const BASE_NAMES: Record<string, string> = { pass: 'Pass line', 'dont-pass': "Don't pass", come: 'Come', 'dont-come': "Don't come" };
 
@@ -67,11 +67,15 @@ function illegalMessage(reason: IllegalActionReason, target: string | null, view
       if (target === 'come' || target === 'dont-come') return `${name} bets open once a point is set. Nothing was placed.`;
       return `${name} can't be placed directly. Nothing was placed.`;
     case 'insufficient-funds':
-      return `Your balance can't cover that. Nothing was placed.`;
+      return view.legalCommands.includes('rebuy')
+        ? `Your balance can't cover that. Nothing was placed. You can rebuy to add chips.`
+        : `Your balance can't cover that. Nothing was placed.`;
+    case 'over-funding-ceiling':
+      return `That rebuy would take total funding past the ${formatUnits(FUNDING_CEILING.toString())} limit. You can add up to ${formatUnits(view.funding.headroom)}. Nothing was added.`;
     case 'no-wager':
       return 'Place a wager before you roll.';
     case 'not-whole-units':
-      return 'Stakes are whole units. Nothing was placed.';
+      return target ? 'Stakes are whole units. Nothing was placed.' : 'Rebuys are whole units. Nothing was added.';
     case 'no-wager-to-remove':
     case 'unknown-target':
       return `${name} can't be changed. Nothing was placed.`;
@@ -126,6 +130,10 @@ export function describeCrapsFacts(facts: readonly DomainFact[], view: CrapsPerm
         break;
       case 'wager-returned':
         parts.push(`${crapsTargetName(fact.target)} ${formatUnits(fact.amount)} returned to your balance.`);
+        balanceChanged = true;
+        break;
+      case 'funding-added':
+        parts.push(`Rebuy ${formatUnits(fact.amount)} added. Total funding ${formatUnits(fact.cumulative)}.`);
         balanceChanged = true;
         break;
       case 'turn-began':

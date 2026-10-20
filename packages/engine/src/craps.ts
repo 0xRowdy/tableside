@@ -7,7 +7,7 @@
 // own module; a strategy compatible with this one is not automatically
 // compatible with it. Rules: #3 (Launch game rules) and spec #51.
 
-import type { ActivityStateBase, Command, CrapsPermittedView, DomainFact, GameModule, Step, Wager } from './activity';
+import type { ActivityStateBase, CrapsPermittedView, DomainFact, GameCommand, GameModule, Step, Wager } from './activity';
 import { rollDice } from './draws';
 import { add, compare, decodeMoney, encodeMoney, money, mul, neg, sub, type Money } from './money';
 import { RandomStream } from './random';
@@ -202,7 +202,7 @@ const stakeOf = (wagers: readonly Wager[], target: string) => {
 
 const sorted = <T extends { target: string }>(items: T[]) => items.sort((a, b) => targetOrder(a.target) - targetOrder(b.target));
 
-function apply(state: State, command: Command): Step<State> {
+function apply(state: State, command: GameCommand): Step<State> {
   switch (command.kind) {
     case 'place-wager':
       return placeWager(state, command.target, decodeMoney(command.amount));

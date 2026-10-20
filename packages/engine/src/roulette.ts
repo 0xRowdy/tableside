@@ -3,7 +3,7 @@
 // the single-zero wheel's straight-up and red/black placements; the full
 // layouts arrive with #62.
 
-import type { ActivityStateBase, Command, DomainFact, GameModule, RoulettePermittedView, Step } from './activity';
+import type { ActivityStateBase, DomainFact, GameCommand, GameModule, RoulettePermittedView, Step } from './activity';
 import { spinRoulette, type RoulettePocket } from './draws';
 import { add, compare, decodeMoney, encodeMoney, money, mul, neg, sub, type Money } from './money';
 import { RandomStream } from './random';
@@ -70,7 +70,7 @@ const isLimits = (value: unknown): value is RouletteRuleSet['limits'] =>
 
 type State = RouletteActivityState;
 
-function apply(state: State, command: Command): Step<State> {
+function apply(state: State, command: GameCommand): Step<State> {
   switch (command.kind) {
     case 'place-wager':
       return placeWager(state, command.target, decodeMoney(command.amount));

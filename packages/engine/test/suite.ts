@@ -7,6 +7,7 @@ import { activityCases } from './activity.cases';
 import { crapsCases } from './craps.cases';
 import { drawCases } from './draws.cases';
 import { engineCases } from './engine.cases';
+import { fundingCases } from './funding.cases';
 import { hashCases } from './hash.cases';
 import { moneyCases } from './money.cases';
 import { randomCases } from './random.cases';
@@ -14,5 +15,5 @@ import { runtimeCases } from './runtime.cases';
 
 export const engineSuite: Suite = {
   name: 'engine',
-  cases: [...runtimeCases, ...engineCases, ...randomCases, ...drawCases, ...moneyCases, ...hashCases, ...activityCases, ...crapsCases],
+  cases: [...runtimeCases, ...engineCases, ...randomCases, ...drawCases, ...moneyCases, ...hashCases, ...activityCases, ...fundingCases, ...crapsCases],
 };

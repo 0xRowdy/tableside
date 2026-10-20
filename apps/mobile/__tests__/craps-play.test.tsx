@@ -139,6 +139,29 @@ describe('craps free play', () => {
     expect(odds.getByRole('button', { name: 'Remove Pass line odds' })).toBeEnabled();
   });
 
+  it('offers the same wagers in the bet list, with odds in increments that pay whole units', async () => {
+    await pointOfEight();
+    await fireEvent.press(screen.getByRole('tab', { name: 'Bet list' }));
+
+    expect(screen.getByRole('header', { name: 'Line bets · 10 to 1,000 · odds 3-4-5x' })).toBeOnTheScreen();
+    await fireEvent.press(screen.getByRole('button', { name: /^Odds\b/ }));
+    await fireEvent.press(screen.getByRole('radio', { name: 'Pass line odds' }));
+    await fireEvent.changeText(screen.getByLabelText(/^Total stake for /), '52');
+    await fireEvent.press(screen.getByRole('button', { name: /^Set / }));
+    expect(announcements).toContain('Pass line odds goes in multiples of 5, so it pays whole units. Nothing was placed.');
+    expect(screen.getByLabelText('On table 25')).toBeOnTheScreen();
+
+    await fireEvent.changeText(screen.getByLabelText(/^Total stake for /), '125');
+    await fireEvent.press(screen.getByRole('button', { name: /^Set / }));
+
+    expect(announcements).toContain('Pass line odds 125 on the table, ON. Balance 850.');
+    // The contract is committed in the bet list too, by name, and says why.
+    const yours = within(screen.getByTestId('your-wagers'));
+    expect(yours.getByLabelText('Pass line, 25, committed')).toBeOnTheScreen();
+    await fireEvent.press(yours.getByRole('button', { name: "Why can't I change Pass line?" }));
+    expect(yours.getByText(/^ON\. Pass line is a contract now: it stays on the table until it wins on 8 or loses on 7/)).toBeOnTheScreen();
+  });
+
   it('explains odds that would not pay whole units and leaves the table unchanged', async () => {
     await pointOfEight();
     await fireEvent.press(screen.getByRole('radio', { name: '1 chip' }));
@@ -211,7 +234,7 @@ describe('craps free play', () => {
     announced('Pass line odds 25 returned to your balance.');
     // 11, 6, 4 and 12 leave the pass line; 8 pays it.
     announced('Pass line 25 wins 25.');
-    expect(announcements).toContain('Session result. Win, net result plus 25. Final cash-out 1,025.');
+    expect(announcements).toContain('Session result. Win, net result plus 25. Final cash-out 1,025. Max drawdown 0.');
     expect(screen.getByText('Craps · free play · standard craps')).toBeOnTheScreen();
     expect(screen.getByLabelText('Net result plus 25, Win')).toBeOnTheScreen();
   });

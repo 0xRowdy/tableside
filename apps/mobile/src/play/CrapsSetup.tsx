@@ -15,7 +15,7 @@ import type { StartProblem } from '@/practice/controller';
 import { usePractice } from '@/practice/PracticeProvider';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/theme/tokens';
 
-import { formatUnits } from './roulette-text';
+import { formatUnits } from './units';
 
 const DEFAULT_BUY_IN = '1000';
 /** Longest buy-in text accepted before the engine judges the amount (the ceiling has 10 digits). */

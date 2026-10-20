@@ -24,6 +24,7 @@ export const SPEC: RouletteActivitySpecification = {
   },
   strategy: null,
   reference: null,
+  fundingSource: 'practice-funding',
   funding: '1000',
 };
 

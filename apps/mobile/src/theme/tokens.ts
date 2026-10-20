@@ -17,6 +17,7 @@ export const palette = {
   scrim: '#000000B3',
   transparent: '#00000000',
   popover: '#1B2420',
+  muted: '#1E2723',
   correct: '#3FA877',
   destructive: '#E07A5F',
   felt: '#1B5A43',
@@ -69,6 +70,11 @@ export const essentialPairs: readonly {
   { use: 'dialog text', kind: 'text', foreground: 'foreground', background: 'popover' },
   { use: 'dialog secondary text', kind: 'text', foreground: 'mutedForeground', background: 'popover' },
   { use: 'error text', kind: 'text', foreground: 'destructive', background: 'background' },
+  { use: 'error text in a sheet', kind: 'text', foreground: 'destructive', background: 'popover' },
+  { use: 'sheet field boundary', kind: 'graphic', foreground: 'controlBorder', background: 'popover' },
+  { use: 'sheet error field boundary', kind: 'graphic', foreground: 'destructive', background: 'popover' },
+  { use: 'sheet icon', kind: 'graphic', foreground: 'foreground', background: 'popover' },
+  { use: 'sheet focus ring', kind: 'graphic', foreground: 'ring', background: 'popover' },
   { use: 'saved banner icon', kind: 'graphic', foreground: 'correct', background: 'card' },
   { use: 'red pocket number', kind: 'text', foreground: 'onImage', background: 'pocketRed' },
   { use: 'black pocket number', kind: 'text', foreground: 'onImage', background: 'pocketBlack' },
@@ -92,6 +98,12 @@ export const essentialPairs: readonly {
   { use: '500 chip value', kind: 'text', foreground: 'onImage', background: 'chip500' },
   { use: '1K chip value', kind: 'text', foreground: 'ink', background: 'chip1k' },
   { use: 'selected chip ring on the rail', kind: 'graphic', foreground: 'primary', background: 'rail' },
+  { use: 'volume fill and switch on', kind: 'graphic', foreground: 'primary', background: 'card' },
+  { use: 'volume thumb', kind: 'graphic', foreground: 'foreground', background: 'card' },
+  { use: 'switch knob when off', kind: 'graphic', foreground: 'mutedForeground', background: 'muted' },
+  { use: 'switch knob when on', kind: 'graphic', foreground: 'primaryForeground', background: 'primary' },
+  { use: 'check mark on the switch knob', kind: 'graphic', foreground: 'primary', background: 'primaryForeground' },
+  { use: 'volume button icon', kind: 'graphic', foreground: 'foreground', background: 'secondary' },
 ];
 
 export const space = { 1: 4, 2: 8, 3: 12, 4: 16, 6: 24, 8: 32, 12: 48, 16: 64 } as const;

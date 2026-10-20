@@ -41,6 +41,7 @@ export const CRAPS_SPEC: CrapsActivitySpecification = {
   rules: { id: 'standard-craps', version: 1, odds: '3-4-5x', limits: { line: { min: '10', max: '1000' } } },
   strategy: null,
   reference: null,
+  fundingSource: 'practice-funding',
   funding: '1000',
 };
 

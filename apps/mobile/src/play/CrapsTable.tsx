@@ -12,13 +12,19 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/Button';
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
-import type { PracticeSnapshot } from '@/practice/controller';
+import { SAVE_RETRY_MS, type PracticeSnapshot } from '@/practice/controller';
 import { usePractice } from '@/practice/PracticeProvider';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/theme/tokens';
 
+import { BetSelector } from './bet-selector/BetSelector';
+import { draftAmountText, EMPTY_DRAFT, findChoice, isDraftPending, type BetDraft } from './bet-selector/catalog';
+import { DraftBar, PresentationSwitch, type Presentation } from './bet-selector/Presentation';
+import { crapsCatalog, crapsPlacedWagers } from './craps-catalog';
+import { RebuySheet } from './RebuySheet';
 import { commitmentText, crapsStatus, crapsTargetName, describeCrapsFacts, puckText, workingText } from './craps-text';
 import { ChipRack } from './RouletteTable';
-import { formatUnits, totalOnTable } from './roulette-text';
+import { totalOnTable } from './roulette-text';
+import { formatUnits } from './units';
 import { PhaseStepper, SessionStrip, TableTopBar, type PhaseStep } from './TableChrome';
 
 type ActiveSnapshot = Extract<PracticeSnapshot, { status: 'active' }> & { readonly view: PermittedView };
@@ -26,7 +32,7 @@ type ActiveSnapshot = Extract<PracticeSnapshot, { status: 'active' }> & { readon
 /** Above this text scale, a wide window stacks the felt and the controls so text has room. */
 const SIDE_BY_SIDE_MAX_FONT_SCALE = 1.35;
 
-const NOT_SAVED = 'Not saved yet. Play is paused.';
+const SAVE_FAILED_ANNOUNCEMENT = "Couldn't save. Play is paused and will retry automatically.";
 
 function phaseSteps(view: PermittedView): PhaseStep[] {
   const reached = { 'open-decision': 0, 'revealing-outcome': 1, 'settled-outcome': 2, 'final-settlement': 2, completed: 3 }[view.phase];
@@ -45,8 +51,23 @@ export function CrapsTable({ snapshot }: { snapshot: ActiveSnapshot }) {
   const sideBySide = width > height && fontScale <= SIDE_BY_SIDE_MAX_FONT_SCALE;
   const [chip, setChip] = useState('25');
   const [confirming, setConfirming] = useState(false);
+  const [rebuying, setRebuying] = useState(false);
+  // Held here, above both presentations, so rotation, resizing and switching keep the draft.
+  const [presentation, setPresentation] = useState<Presentation>('table');
+  const [draft, setDraft] = useState<BetDraft>(EMPTY_DRAFT);
   const { view, facts, busy, save } = snapshot;
   const { table } = view;
+  const catalog = useMemo(() => crapsCatalog(view), [view]);
+  const placed = useMemo(() => crapsPlacedWagers(view), [view]);
+  const drafted = isDraftPending(draft, placed) ? findChoice(catalog, draft.target) : undefined;
+  // The sheet shows only while a rebuy is offered (the table waits for input).
+  const rebuyOpen = rebuying && view.legalCommands.includes('rebuy');
+  const addRebuy = async (amount: string) => {
+    await controller.rebuy(amount);
+    const latest = controller.snapshot();
+    // Committed: close. Refused or not saved: keep the sheet and the draft.
+    if (latest.status !== 'active' || latest.facts.some((fact) => fact.kind === 'funding-added')) setRebuying(false);
+  };
 
   const ready = !busy && save === 'saved';
   const legal = (kind: PermittedView['legalCommands'][number]) => ready && view.legalCommands.includes(kind);
@@ -63,7 +84,7 @@ export function CrapsTable({ snapshot }: { snapshot: ActiveSnapshot }) {
       const latest = controller.snapshot();
       if (latest.status !== 'active' || latest.view.game !== 'craps') return;
       const nowFailed = latest.save === 'failed';
-      if (nowFailed && !failed) AccessibilityInfo.announceForAccessibility(NOT_SAVED);
+      if (nowFailed && !failed) AccessibilityInfo.announceForAccessibility(SAVE_FAILED_ANNOUNCEMENT);
       failed = nowFailed;
       if (latest.view.sequence === announced) return;
       announced = latest.view.sequence;
@@ -94,15 +115,22 @@ export function CrapsTable({ snapshot }: { snapshot: ActiveSnapshot }) {
           House edge: pass and come {edge('pass')}% · don&apos;t pass and don&apos;t come {edge('dont-pass')}% · odds 0%
         </Text>
         <PhaseStepper steps={phaseSteps(view)} />
-        <SessionStrip balance={formatUnits(view.balance)} onTable={formatUnits(totalOnTable(view))} status={crapsStatus(view)} />
+        <SessionStrip
+          balance={formatUnits(view.balance)}
+          onTable={formatUnits(totalOnTable(view))}
+          status={save === 'failed' ? 'Paused · not saved' : crapsStatus(view)}
+        />
+        {view.phase !== 'final-settlement' && <PresentationSwitch value={presentation} onChange={setPresentation} />}
 
         {save === 'failed' && (
           <View style={styles.banner}>
-            <Text accessibilityRole="alert" maxFontSizeMultiplier={textScale.body} style={styles.bannerTitle}>{NOT_SAVED}</Text>
+            <Text accessibilityRole="alert" maxFontSizeMultiplier={textScale.body} style={styles.bannerTitle}>Couldn&apos;t save · play is paused</Text>
             <Text maxFontSizeMultiplier={textScale.body} style={styles.bannerText}>
-              Your last move hasn&apos;t been saved, so nothing has been revealed. Try saving again.
+              {busy
+                ? 'Saving your last move…'
+                : `Your last move hasn't been saved, so nothing has been revealed. Nothing is lost. Retrying automatically every ${SAVE_RETRY_MS / 1000} s.`}
             </Text>
-            <Button label="Try again" variant="secondary" disabled={busy} onPress={() => void controller.retrySave()} />
+            <Button label="Retry now" variant="secondary" disabled={busy} onPress={() => void controller.retrySave()} />
           </View>
         )}
         {snapshot.accessNotAllowed && (
@@ -116,7 +144,35 @@ export function CrapsTable({ snapshot }: { snapshot: ActiveSnapshot }) {
         ) : (
           <View testID="table-columns" style={[styles.columns, sideBySide && styles.columnsSideBySide]}>
             <View style={styles.column}>
-              <Felt view={view} canPlace={canPlace} chip={chip} placeable={placeable} stakeOn={stakeOn} onSpot={addChip} />
+              {presentation === 'table' ? (
+                <View style={styles.tableView}>
+                  {drafted && (
+                    <DraftBar
+                      name={drafted.choice.name}
+                      amount={draftAmountText(draft.text)}
+                      onEdit={() => {
+                        setDraft({ ...draft, kind: drafted.kind.id });
+                        setPresentation('selector');
+                      }}
+                    />
+                  )}
+                  <Felt view={view} canPlace={canPlace} chip={chip} placeable={placeable} stakeOn={stakeOn} onSpot={addChip} />
+                </View>
+              ) : (
+                <BetSelector
+                  catalog={catalog}
+                  wagers={placed}
+                  balance={view.balance}
+                  canRebuy={view.legalCommands.includes('rebuy')}
+                  facts={facts}
+                  sequence={view.sequence}
+                  canPlace={canPlace}
+                  draft={draft}
+                  onDraftChange={setDraft}
+                  onSet={(target, amount) => void controller.placeWager(target, amount)}
+                  onRemove={(target) => void controller.placeWager(target, '0')}
+                />
+              )}
             </View>
             <View style={[styles.column, styles.controls]}>
               {message && (
@@ -126,11 +182,32 @@ export function CrapsTable({ snapshot }: { snapshot: ActiveSnapshot }) {
               )}
               <WagerList view={view} canPlace={canPlace} chip={chip} placeable={placeable} onAddOdds={addChip} onRemove={(target) => void controller.placeWager(target, '0')} />
               <Button label="Roll" stretch disabled={!legal('begin-turn')} onPress={() => void controller.beginTurn()} />
-              <ChipRack chip={chip} onChoose={setChip} />
+              {view.legalCommands.includes('rebuy') && (
+                <Button
+                  label="Rebuy"
+                  variant="secondary"
+                  stretch
+                  hint="Adds chips to this session. It counts as funding, not as a win."
+                  disabled={!legal('rebuy')}
+                  onPress={() => setRebuying(true)}
+                />
+              )}
+              {presentation === 'table' && <ChipRack chip={chip} onChoose={setChip} />}
             </View>
           </View>
         )}
       </ScrollView>
+
+      {rebuyOpen && (
+        <RebuySheet
+          funding={view.funding}
+          sequence={view.sequence}
+          facts={facts}
+          busy={!ready}
+          onAdd={(amount) => void addRebuy(amount)}
+          onClose={() => setRebuying(false)}
+        />
+      )}
 
       <EndSessionDialog
         visible={confirming}
@@ -428,6 +505,7 @@ const styles = StyleSheet.create({
   columns: { gap: space[3], paddingTop: space[2] },
   columnsSideBySide: { flexDirection: 'row', alignItems: 'flex-start' },
   column: { flex: 1 },
+  tableView: { gap: space[3] },
   controls: { gap: space[3], paddingHorizontal: space[4] },
   message: { fontFamily: fonts.uiMedium, fontSize: 15, lineHeight: 21, color: palette.foreground },
   sectionLabel: { fontFamily: fonts.uiBold, fontSize: 10, letterSpacing: 0.5, color: palette.mutedForeground },

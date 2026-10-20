@@ -44,6 +44,8 @@ const config: ExpoConfig = {
         android: { minSdkVersion: 29 },
       },
     ],
+    // Cues only: nothing plays in the background and nothing records.
+    ['expo-audio', { microphonePermission: false, recordAudioAndroid: false, enableBackgroundPlayback: false, enableBackgroundRecording: false }],
     './plugins/with-engine-harness',
   ],
   experiments: {

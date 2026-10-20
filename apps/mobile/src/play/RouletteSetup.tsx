@@ -8,6 +8,7 @@ import { StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { Button } from '@/components/Button';
 import { Screen } from '@/components/Screen';
+import { useFeedback } from '@/feedback/FeedbackProvider';
 import type { StartProblem } from '@/practice/controller';
 import { usePractice } from '@/practice/PracticeProvider';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/theme/tokens';
@@ -26,6 +27,7 @@ const PROBLEMS: Record<StartProblem, string> = {
 
 export function RouletteSetup({ problem, busy }: { problem: StartProblem | null; busy: boolean }) {
   const { controller } = usePractice();
+  const feedback = useFeedback();
   const [draft, setDraft] = useState(formatUnits(DEFAULT_BUY_IN));
   const [notWhole, setNotWhole] = useState(false);
   const { limits } = SINGLE_ZERO_ROULETTE;
@@ -35,6 +37,7 @@ export function RouletteSetup({ problem, busy }: { problem: StartProblem | null;
     const whole = /^\d+$/.test(digits) && digits.length <= MAX_BUY_IN_DIGITS;
     setNotWhole(!whole);
     if (whole) void controller.start({ game: 'roulette', buyIn: BigInt(digits).toString() });
+    else feedback.cue('input-rejected');
   };
   const error = notWhole ? PROBLEMS['invalid-buy-in'] : problem && PROBLEMS[problem];
 
