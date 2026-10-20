@@ -85,4 +85,15 @@ export default defineConfig(
     files: ['packages/definitions/**/*.ts'],
     rules: portabilityRules(['@tableside/engine']),
   },
+  {
+    // Build-time checks and tests of the definitions package run on Node and
+    // never ship; only src/ must stay portable.
+    files: ['packages/definitions/scripts/**/*.ts', 'packages/definitions/test/**/*.ts'],
+    rules: {
+      'no-restricted-imports': 'off',
+      'portability/no-relative-outside-package': 'error',
+      'no-restricted-globals': 'off',
+      'no-console': 'off',
+    },
+  },
 );
