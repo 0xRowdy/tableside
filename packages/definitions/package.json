@@ -6,7 +6,9 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "typecheck": "tsc -p ."
+    "build": "tsx scripts/blackjack-reference.ts check",
+    "reference:write": "tsx scripts/blackjack-reference.ts write",
+    "typecheck": "pnpm run build && tsc -p . && tsc -p tsconfig.node.json"
   },
   "dependencies": {
     "@tableside/engine": "workspace:*"

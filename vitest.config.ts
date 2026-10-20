@@ -4,6 +4,6 @@ import { defineConfig } from 'vitest/config';
 // and the app through jest-expo; neither is collected here.
 export default defineConfig({
   test: {
-    include: ['tests/**/*.test.ts', 'packages/*/src/**/*.test.ts'],
+    include: ['tests/**/*.test.ts', 'packages/*/src/**/*.test.ts', 'packages/definitions/test/**/*.test.ts'],
   },
 });

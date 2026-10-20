@@ -4,3 +4,23 @@
 
 /** The definitions release. Activities will pin the identities of the content they use. */
 export const DEFINITIONS_VERSION = '0.0.0';
+
+export {
+  basicStrategy,
+  BLACKJACK_REFERENCE,
+  blackjackHouseEdge,
+  type BlackjackHouseEdge,
+  continuation,
+  deviationAction,
+  playingDeviations,
+  type BasicStrategyCell,
+  type ContinuationCell,
+  type DeviationAction,
+  type PlayingDeviation,
+  type PublishedCost,
+  type BlackjackPreset,
+  type CardValue,
+  type DealerRule,
+  type HandKind,
+  type PlayAction,
+} from './blackjack/reference';

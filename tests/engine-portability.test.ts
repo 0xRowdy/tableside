@@ -69,6 +69,16 @@ describe('engine portability rule', () => {
     expect(await problems('export const now = Date.now();', 'packages/definitions/src/x.ts')).not.toEqual([]);
   });
 
+  it('lets the definitions build checks and tests use Node, but not across packages', async () => {
+    const node = "import { readFileSync } from 'node:fs';\nexport const f = readFileSync(process.argv[1] ?? '');\n";
+    expect(await problems(node, 'packages/definitions/scripts/x.ts')).toEqual([]);
+    expect(await problems(node, 'packages/definitions/test/x.ts')).toEqual([]);
+    expect(await problems(node, 'packages/definitions/src/x.ts')).not.toEqual([]);
+    expect(await problems("export * from '../../engine/src/index';", 'packages/definitions/test/x.ts')).toContain(
+      'portability/no-relative-outside-package',
+    );
+  });
+
   it('does not restrict the app or the Node runner', async () => {
     expect(await problems("import { readFile } from 'node:fs';\nexport { readFile };\n", 'packages/runner/src/x.ts')).toEqual([]);
   });
