@@ -193,7 +193,9 @@ export const progressionCases: TestCase[] = [
       let state = guided(MARTINGALE, 'black', { funding: '100' });
       const settled = run(state, [...spin('black', '10'), ...spin('black', '20'), ...spin('black', '40')]);
       state = settled.state;
-      t.equal(settled.facts.at(-1), { kind: 'strategy-paused', reason: 'unfunded-group', unavailable: [{ target: 'black', amount: '80' }] });
+      t.equal(settled.facts.at(-1), { kind: 'strategy-paused', reason: 'unfunded-group', unavailable: [{ target: 'black', amount: '80' }], turn: 3 });
+      // Settlement and the adjustment are separate: the doubling waits, so the counter keeps its pre-adjustment 40.
+      t.equal([state.strategy?.progress.counters, state.strategy?.deferred?.progress.counters], [{ stake: '40' }, { stake: '80' }]);
       t.equal([state.phase, strategyOf(state)?.status, readPermittedView(state).legalCommands.includes('rebuy')], ['settled-outcome', 'active', true]);
       // A rebuy that still falls short changes nothing; one that covers the stake clears the pending action, placing nothing.
       t.equal(kinds(step(state, { kind: 'rebuy', amount: '20' }).facts), ['funding-added']);
@@ -208,7 +210,7 @@ export const progressionCases: TestCase[] = [
     run: (t) => {
       let state = guided(MARTINGALE, 'black', { funding: '100', fundingSource: 'training-bankroll' });
       state = run(state, [...spin('black', '10'), ...spin('black', '20'), ...spin('black', '40')]).state;
-      t.equal([strategyOf(state)?.pending?.reason, readPermittedView(state).legalCommands], ['unfunded-group', ['place-wager', 'begin-turn', 'stop-strategy', 'request-stop']]);
+      t.equal([strategyOf(state)?.pending?.reason, readPermittedView(state).legalCommands], ['unfunded-group', ['place-wager', 'begin-turn', 'collect-instead', 'stop-strategy', 'request-stop']]);
       // A legal override: the player bets what they can; it waits in a correction, then ends the cycle.
       state = run(state, [place('black', '30'), BEGIN]).state;
       t.equal([state.phase, state.strategy?.correction?.explanation.prescription.status], ['correction', 'paused']);
@@ -226,7 +228,7 @@ export const progressionCases: TestCase[] = [
       const small = { ...SPEC.rules, limits: { inside: { min: '1', max: '100' }, outside: { min: '10', max: '50' } } };
       let state = guided(MARTINGALE, 'black', { rules: small });
       state = run(state, [...spin('black', '10'), ...spin('black', '20'), ...spin('black', '40')]).state;
-      t.equal(strategyOf(state)?.pending, { reason: 'limit', unavailable: [{ target: 'black', amount: '80' }] });
+      t.equal(strategyOf(state)?.pending, { reason: 'limit', unavailable: [{ target: 'black', amount: '80' }], turn: 3 });
     },
   },
   {

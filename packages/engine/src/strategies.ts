@@ -5,6 +5,7 @@
 // situation); the session protocol and these operations reach games only
 // through this registry.
 
+import { CRAPS_STRATEGY } from './craps-strategy';
 import { ROULETTE_STRATEGY } from './roulette-strategy';
 import {
   compatibilityWith,
@@ -22,6 +23,7 @@ import {
 
 const GAMES: Readonly<Record<string, StrategyGame<never>>> = {
   roulette: ROULETTE_STRATEGY as StrategyGame<never>,
+  craps: CRAPS_STRATEGY as StrategyGame<never>,
 };
 
 /** The strategy game for a game id, when that game supports guided practice. */

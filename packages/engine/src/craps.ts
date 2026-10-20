@@ -14,6 +14,7 @@ import { rollDice } from './draws';
 import { add, commission, compare, decodeMoney, encodeMoney, money, mul, neg, sub, type Money } from './money';
 import { RandomStream } from './random';
 import { BASE_WAGER_CEILING, hasExactKeys, isCount, isLimit, isWagerList, type Limit, type VersionedIdentity } from './shape';
+import type { BetRequirement } from './strategy';
 
 export type OddsCap = '1x' | '2x' | '3-4-5x' | '5x' | '10x';
 export type CrapsPoint = 4 | 5 | 6 | 8 | 9 | 10;
@@ -772,8 +773,75 @@ function damage(value: Record<string, unknown>): string | undefined {
   }
   const instructionProblem = instructionDamage(instructions, wagers);
   if (instructionProblem) return instructionProblem;
-  if (phase === 'revealing-outcome' && wagers.length === 0) return 'a revealing roll has no committed wagers';
+  // Only guided practice rolls with nothing at stake (the strategy waits for a point).
+  if (phase === 'revealing-outcome' && wagers.length === 0 && value.strategy === null) return 'a revealing roll has no committed wagers';
   if (phase === 'completed' && wagers.length > 0) return 'wagers remain after settlement';
+  return undefined;
+}
+
+// ---- strategy support ---------------------------------------------------
+
+/** A line base established on the table: what a craps strategy situation states of the table. */
+export interface CrapsBase {
+  readonly target: string;
+  readonly amount: string;
+}
+
+/** Pass and don't pass once a point is on, and every come and don't come bet that has traveled, in table order. */
+export function establishedBases(state: Pick<State, 'wagers' | 'point'>): CrapsBase[] {
+  return state.wagers
+    .filter((wager) => {
+      const target = known(wager.target);
+      return target.family === 'line' && established(target, state.point);
+    })
+    .map((wager) => ({ target: wager.target, amount: wager.amount }));
+}
+
+/** True for a target that is an established base when its number is set: pass, don't pass, or a traveled come or don't come bet. */
+export const isBaseTarget = (target: string, point: CrapsPoint | null): boolean => {
+  const placed = targetInfo(target);
+  return placed?.family === 'line' && !placed.odds && (placed.line === 'pass' ? point !== null : placed.number !== null);
+};
+
+/**
+ * Why a strategy's bet of this amount can't be made under these rules, if it
+ * can't. With the table's state (the puck and the established bases), it is
+ * judged as a bet for the next roll: contracts and established bases stay as
+ * they are, line bets follow the puck, and odds need their base and fit its cap.
+ * Without it (a strategy's declared table), only what holds on every roll is judged.
+ */
+export function crapsBetProblem(
+  rules: Pick<CrapsRuleSet, 'odds' | 'limits'>,
+  target: string,
+  amount: Money,
+  now?: { readonly point: CrapsPoint | null; readonly bases: readonly CrapsBase[] },
+): BetRequirement | undefined {
+  const placed = targetInfo(target);
+  if (!placed) return 'not-on-layout';
+  if (amount.d !== 1n) return 'not-whole-units';
+  if (placed.family !== 'line') {
+    const limits = stakeLimits(placed, rules as State['rules']);
+    if (amount.n % limits.increment !== 0n) return 'stake-increment';
+    if (amount.n < limits.min) return 'below-minimum';
+    if (amount.n > limits.max) return 'above-maximum';
+    return undefined;
+  }
+  if (!placed.odds) {
+    if (compare(amount, decodeMoney(rules.limits.flat.min)) < 0) return 'below-minimum';
+    if (compare(amount, decodeMoney(rules.limits.flat.max)) > 0) return 'above-maximum';
+  }
+  if (!now) return undefined;
+  const base = now.bases.find((item) => item.target === placed.base);
+  if (!placed.odds) {
+    // An established base stays exactly as it is; anything else is a new line bet the puck must allow.
+    if (base) return compare(amount, decodeMoney(base.amount)) === 0 ? undefined : 'committed-wager';
+    if (placed.number !== null) return 'not-available-now';
+    return (placed.line === 'pass') === (now.point === null) ? undefined : 'not-available-now';
+  }
+  const n = base ? numberOf(lineInfo(placed.base), now.point) : null;
+  if (!base || n === null) return 'not-available-now';
+  if (amount.n % wholeIncrement(trueOddsPayout(placed.dont, n)) !== 0n) return 'odds-increment';
+  if (compare(amount, oddsCap(rules.odds, placed.dont, n, decodeMoney(base.amount))) > 0) return 'above-odds-cap';
   return undefined;
 }
 
@@ -797,6 +865,7 @@ export const CRAPS: GameModule<CrapsActivityState, CrapsPermittedView, CrapsComm
   },
   legal,
   apply,
+  idleTurn: roll,
   view: (state) => ({
     game: 'craps',
     outcome: state.outcome && { turn: state.outcome.turn, dice: [state.outcome.dice[0], state.outcome.dice[1]] },

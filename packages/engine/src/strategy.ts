@@ -103,8 +103,14 @@ export interface StrategyList {
 
 interface AdjustmentBase {
   readonly id: string;
-  /** Applied after a coached turn settles with this result. */
+  /**
+   * Applied after a coached turn settles with this result: the turn's net
+   * result, or, with `wager`, that one wager's ("any" then means the wager was
+   * on the table for the turn, settled or not).
+   */
   readonly on: 'win' | 'loss' | 'push' | 'any';
+  /** A target whose own outcome triggers the adjustment (a craps place 6 that wins), instead of the turn's. */
+  readonly wager?: string;
 }
 
 export type StrategyAdjustment =
@@ -162,8 +168,22 @@ export interface StrategyValidation {
   readonly runnable: boolean;
 }
 
-/** Why a bet can't be made under some table conditions. */
-export type BetRequirement = 'not-on-layout' | 'not-whole-units' | 'below-minimum' | 'above-maximum';
+/**
+ * Why a bet can't be made under some table conditions. Beyond the table's
+ * limits, a game may judge a bet against the state of the table in a
+ * situation (craps: a contract that can't change, a wager the puck doesn't
+ * allow now, stake increments and odds caps).
+ */
+export type BetRequirement =
+  | 'not-on-layout'
+  | 'not-whole-units'
+  | 'below-minimum'
+  | 'above-maximum'
+  | 'stake-increment'
+  | 'not-available-now'
+  | 'committed-wager'
+  | 'odds-increment'
+  | 'above-odds-cap';
 
 /** What a game module tells the interpreter. Tables are the vocabulary's own shape (declared or actual). */
 export interface StrategyVocabulary<Situation = unknown> {
@@ -183,6 +203,12 @@ export interface StrategyVocabulary<Situation = unknown> {
   /** Funds the player can commit to this decision. */
   available(situation: Situation): Money;
   subject(situation: Situation, name: string): string;
+  /**
+   * True when an override ends every strategy's cycle in this game, not only a
+   * progression's: craps wagers persist across rolls, so an override leaves a
+   * table the strategy didn't build.
+   */
+  readonly overrideEndsCycle?: boolean;
 }
 
 /** A game's part of guided practice, registered in strategies.ts. */
@@ -576,8 +602,14 @@ export function validateWith(vocabulary: StrategyVocabulary, definition: unknown
       continue;
     }
     const reads = new Set<string>();
+    if ('wager' in item) {
+      if (!isText(item.wager)) flag('incomplete', `${path}/wager`, 'a wager names a target');
+      else if (tableOk && vocabulary.betRequirement(def.table, item.wager, money(1n))?.requirement === 'not-on-layout') {
+        flag('incompatible', `${path}/wager`, `${item.wager} isn't a bet under the declared table conditions`);
+      }
+    }
     if ('list' in item) {
-      const keys = Object.keys(item).sort().join();
+      const keys = Object.keys(item).filter((key) => key !== 'wager').sort().join();
       if (!listIds.has(item.list as string)) {
         flag('incomplete', `${path}/list`, `no list ${String(item.list)}`);
       } else if (keys === 'drop,id,list,on') {
@@ -878,13 +910,16 @@ export function progressAfter(
   progress: StrategyProgress,
   result: Exclude<TurnResult, 'none'>,
   staked: Money,
+  /** Each wager on the table for the turn, by target: its own result, or "none" while it stays unresolved. */
+  wagers: Readonly<Record<string, TurnResult>> = {},
 ): StrategyProgress | undefined {
   const counters: Record<string, string> = { ...progress.counters };
   const lists: Record<string, readonly string[]> = { ...progress.lists };
   // Every adjustment reads the counters and lists as they were before the turn settled; list changes apply in order.
   const before: Values = { ...progress, staked };
   for (const adjustment of definition.adjustments) {
-    if (adjustment.on !== 'any' && adjustment.on !== result) continue;
+    const own = adjustment.wager === undefined ? result : Object.hasOwn(wagers, adjustment.wager) ? wagers[adjustment.wager] : undefined;
+    if (own === undefined || (adjustment.on !== 'any' && adjustment.on !== own)) continue;
     if ('drop' in adjustment) {
       lists[adjustment.list] = (lists[adjustment.list] as readonly string[]).slice(1, -1);
       continue;

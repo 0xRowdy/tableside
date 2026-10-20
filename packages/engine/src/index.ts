@@ -99,6 +99,7 @@ export {
   PROPOSITIONS,
   STANDARD_CRAPS,
   type CrapsActivityState,
+  type CrapsBase,
   type CrapsDomainFact,
   type CrapsIllegalActionReason,
   type CrapsOutcome,
@@ -231,3 +232,4 @@ export {
   type TurnResult,
 } from './strategy';
 export { ROULETTE_VOCABULARY, type RouletteLimits, type RouletteSituation, type RouletteStrategyTable } from './roulette-strategy';
+export { CRAPS_VOCABULARY, type CrapsSituation, type CrapsStrategyTable } from './craps-strategy';
