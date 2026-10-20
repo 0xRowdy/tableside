@@ -6,7 +6,7 @@
 // the shipped list on every render, never read from the record.
 
 import { QUARANTINE_LIST } from '@tableside/definitions';
-import { quarantineStatus, type QuarantineList, type StrategyDeparture } from '@tableside/engine';
+import { isPlayCorrection, quarantineStatus, type QuarantineList, type StrategyDeparture } from '@tableside/engine';
 import { CircleCheck, Info, TriangleAlert } from 'lucide-react-native';
 import { useEffect, useState, type ReactNode } from 'react';
 import { AccessibilityInfo, StyleSheet, Text, View } from 'react-native';
@@ -16,6 +16,8 @@ import { Screen } from '@/components/Screen';
 import type { CompletedPracticeSession } from '@/practice/store';
 import { fonts, palette, radius, space, textScale } from '@/theme/tokens';
 
+import { cardShort } from './blackjack-coaching';
+import { moveText } from './blackjack-text';
 import { crapsTargetName } from './craps-text';
 import { targetName } from './roulette-text';
 import { formatSigned, formatUnits, speakSigned } from './units';
@@ -46,6 +48,17 @@ function betsText(game: CompletedPracticeSession['game'], bets: readonly { reado
 
 /** One departure's lines: what the strategy prescribed and what the player did. */
 function departureLines(game: CompletedPracticeSession['game'], departure: StrategyDeparture) {
+  const resolution = departure.resolution === 'retried' ? 'Retried' : 'Overridden';
+  if (isPlayCorrection(departure)) {
+    // A blackjack playing decision: the hand and up card, the strategy's play and the player's.
+    const { situation, prescribed } = departure.explanation;
+    return {
+      title: `${TURN_NOUN[game]} ${departure.turn} · ${situation.cards.map(cardShort).join(' ')} v ${cardShort(situation.up)}`,
+      strategy: `Strategy: ${moveText(prescribed)}`,
+      you: `You: ${moveText(departure.actual)}`,
+      resolution,
+    };
+  }
   const { prescription, situation } = departure.explanation;
   // The situation the strategy read, where the game names one (roulette: the last pocket's colour).
   const color = situation.subjects['last-pocket-color'];
@@ -54,7 +67,7 @@ function departureLines(game: CompletedPracticeSession['game'], departure: Strat
     title: `${TURN_NOUN[game]} ${departure.turn}${after}`,
     strategy: `Strategy: ${betsText(game, prescription.status === 'prescribed' ? prescription.bets : [])}`,
     you: `You: ${betsText(game, departure.actual)}`,
-    resolution: departure.resolution === 'retried' ? 'Retried' : 'Overridden',
+    resolution,
   };
 }
 

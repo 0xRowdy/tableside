@@ -4,7 +4,7 @@
 // Nothing here judges or praises, and nothing is added that the facts don't hold.
 // A table passes its own words (wager names, and "spin" or "roll").
 
-import type { CycleEnd, DomainFact, Explanation, PauseReason, PendingCorrection, PendingStrategyAction, StrategyView, Wager } from '@tableside/engine';
+import type { BetCorrection, CycleEnd, DomainFact, Explanation, PauseReason, PendingStrategyAction, StrategyView, Wager } from '@tableside/engine';
 
 import { crapsTargetName } from './craps-text';
 import { targetName } from './roulette-text';
@@ -54,7 +54,7 @@ export function prescriptionLine(strategyName: string, explanation: Explanation,
 const RESULT_WORDS = { win: 'won', loss: 'lost', push: 'broke even' } as const;
 
 /** The situation, the matching instruction and what the player submitted, as the correction's body. */
-export function correctionLines(correction: PendingCorrection, words: CoachWords = ROULETTE_WORDS): string[] {
+export function correctionLines(correction: BetCorrection, words: CoachWords = ROULETTE_WORDS): string[] {
   const { explanation, actual } = correction;
   const lines: string[] = [];
   const { available, subjects } = explanation.situation;
@@ -72,7 +72,7 @@ export function correctionLines(correction: PendingCorrection, words: CoachWords
 }
 
 /** The retry button: what taking the move back does. */
-export function retryLabel(correction: PendingCorrection, words: CoachWords = ROULETTE_WORDS): string {
+export function retryLabel(correction: BetCorrection, words: CoachWords = ROULETTE_WORDS): string {
   const prescription = correction.explanation.prescription;
   return prescription.status === 'prescribed' ? `Take it back & bet ${betsText(prescription.bets, words)}` : 'Take my bets back';
 }
@@ -84,10 +84,45 @@ export function overrideNote(progression: boolean, words: CoachWords = ROULETTE_
     : `"Keep my bets" is an override, recorded once. The ${words.turn} goes ahead, and the strategy coaches your next ${words.turn}.`;
 }
 
+/** What a strategy decision is in each game: a spin, or a blackjack playing decision. */
+export type DecisionUnit = 'spin' | 'roll' | 'decision';
+
 /** Adherence in words, kept apart from winnings. */
-export function adherenceText(adherence: StrategyView['adherence'], words: CoachWords = ROULETTE_WORDS): string {
-  if (adherence.decisions === 0) return `No strategy ${words.turn}s yet`;
-  return `Followed ${adherence.followed} of ${adherence.decisions} ${adherence.decisions === 1 ? words.turn : `${words.turn}s`}`;
+export function adherenceText(adherence: StrategyView['adherence'], unit: DecisionUnit = 'spin'): string {
+  if (adherence.decisions === 0) return `No strategy ${unit}s yet`;
+  return `Followed ${adherence.followed} of ${adherence.decisions} ${adherence.decisions === 1 ? unit : `${unit}s`}`;
+}
+
+/** The words a correction pause shows, whatever the game. */
+export interface CorrectionCopy {
+  /** "Marcus · guided practice, basic strategy". */
+  readonly coach: string;
+  /** "Before your spin", "Before your stand". */
+  readonly kicker: string;
+  readonly headline: string;
+  readonly lines: readonly string[];
+  /** A short fallback line set apart: "If you can't double: hit." */
+  readonly fallback: string | null;
+  readonly retry: string;
+  readonly override: string;
+  readonly note: string;
+  /** Why the taught index differs from published charts, when it does. */
+  readonly why: readonly string[];
+}
+
+/** A betting correction's copy (roulette, craps). */
+export function betCorrectionCopy(strategyName: string, correction: BetCorrection, overrideEndsCycle: boolean, words: CoachWords = ROULETTE_WORDS): CorrectionCopy {
+  return {
+    coach: `Marcus · guided practice, ${strategyName}`,
+    kicker: `Before your ${words.turn}`,
+    headline: prescriptionLine(strategyName, correction.explanation, words),
+    lines: correctionLines(correction, words),
+    fallback: null,
+    retry: retryLabel(correction, words),
+    override: 'Keep my bets',
+    note: overrideNote(overrideEndsCycle, words),
+    why: [],
+  };
 }
 
 /** The strategy's choices: "Black", "1st dozen and 2nd dozen". */

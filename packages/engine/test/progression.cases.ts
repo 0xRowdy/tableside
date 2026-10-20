@@ -25,6 +25,7 @@ import {
   type RouletteSituation,
   type StrategyDefinition,
   type StrategyProgress,
+  type Explanation,
 } from '../src';
 
 import { run, SPEC, status, step } from './activity.fixtures';
@@ -213,7 +214,7 @@ export const progressionCases: TestCase[] = [
       t.equal([strategyOf(state)?.pending?.reason, readPermittedView(state).legalCommands], ['unfunded-group', ['place-wager', 'begin-turn', 'collect-instead', 'stop-strategy', 'request-stop']]);
       // A legal override: the player bets what they can; it waits in a correction, then ends the cycle.
       state = run(state, [place('black', '30'), BEGIN]).state;
-      t.equal([state.phase, state.strategy?.correction?.explanation.prescription.status], ['correction', 'paused']);
+      t.equal([state.phase, (state.strategy?.correction?.explanation as Explanation | undefined)?.prescription.status], ['correction', 'paused']);
       const overridden = run(state, [{ kind: 'override-correction' }, SETTLE]);
       t.equal(kinds(overridden.facts), ['departure-recorded', 'cycle-ended', 'turn-began', 'outcome-generated', 'wager-settled']);
       state = overridden.state;

@@ -323,7 +323,8 @@ export const crapsStrategyCases: TestCase[] = [
       // Point 8; the player sets 30 odds instead of 10.
       let state = follow(guidedCraps(PASS_WITH_ODDS, PI), 1).state;
       state = send(send(state, place('pass-odds', '30')).state, ROLL).state;
-      t.equal([state.phase, state.strategy?.correction?.explanation.prescription], ['correction', { status: 'prescribed', bets: bets(['pass', '10'], ['pass-odds', '10']), held: [] }]);
+      const held = state.strategy?.correction?.explanation;
+      t.equal([state.phase, held && 'prescription' in held ? held.prescription : null], ['correction', { status: 'prescribed', bets: bets(['pass', '10'], ['pass-odds', '10']), held: [] }]);
       state = send(state, { kind: 'override-correction' }).state;
       // 11: nothing resolves; the cycle ends and the 30 odds come back.
       const settled = send(state, SETTLE);

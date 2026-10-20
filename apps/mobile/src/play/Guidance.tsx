@@ -6,7 +6,7 @@
 // passes what it shows of itself ("the table right now"), including cards for
 // blackjack, so the full-screen correction can restate it.
 
-import type { CycleTurn, PendingCorrection, PendingStrategyAction, StrategyView } from '@tableside/engine';
+import type { CycleTurn, PendingStrategyAction, StrategyView } from '@tableside/engine';
 import { Modal, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { Button } from '@/components/Button';
@@ -14,20 +14,18 @@ import { fonts, palette, radius, space, textScale } from '@/theme/tokens';
 
 import {
   adherenceText,
-  correctionLines,
   CYCLE_HEADLINE,
   cycleBadge,
   cycleEndText,
-  overrideNote,
   parametersText,
   pendingBlocked,
   pendingOverrideNote,
   pendingPaidNote,
   pendingWaiting,
-  prescriptionLine,
-  retryLabel,
   ROULETTE_WORDS,
   type CoachWords,
+  type CorrectionCopy,
+  type DecisionUnit,
 } from './coaching-text';
 import { formatSigned, formatUnits, speakSigned } from './units';
 
@@ -46,27 +44,29 @@ export function GuidedStrip({
   strategy,
   canStop,
   onStop,
-  words = ROULETTE_WORDS,
+  detail = parametersText(strategy),
+  unit = 'spin',
 }: {
   strategy: StrategyView;
   canStop: boolean;
   onStop: () => void;
-  words?: CoachWords;
+  /** What the strategy is set to (its chosen targets); null where it has no choices (blackjack). */
+  detail?: string | null;
+  unit?: DecisionUnit;
 }) {
   const cycle = strategy.overrideEndsCycle ? ` · cycle ${strategy.cycle.number}` : '';
-  const parameters = parametersText(strategy, words);
-  const status = strategy.status === 'stopped' ? 'Strategy stopped · playing on your own' : `Guided · ${strategy.name}${parameters ? ` · ${parameters}` : ''}${cycle}`;
+  const status = strategy.status === 'stopped' ? 'Strategy stopped · playing on your own' : `Guided · ${strategy.name}${detail === null ? '' : ` · ${detail}`}${cycle}`;
   return (
     <View style={styles.strip} testID="guided-strip">
       <Text maxFontSizeMultiplier={textScale.body} style={styles.stripTitle}>{status}</Text>
       <View
         accessible
-        accessibilityLabel={`Strategy adherence: ${adherenceText(strategy.adherence, words)}. Departures ${strategy.adherence.departures}.`}
+        accessibilityLabel={`Strategy adherence: ${adherenceText(strategy.adherence, unit)}. Departures ${strategy.adherence.departures}.`}
         style={styles.adherence}
       >
         <Text maxFontSizeMultiplier={textScale.body} style={styles.stripLabel}>ADHERENCE</Text>
         <Text maxFontSizeMultiplier={textScale.body} style={styles.stripText}>
-          {adherenceText(strategy.adherence, words)} · Departures {strategy.adherence.departures}
+          {adherenceText(strategy.adherence, unit)} · Departures {strategy.adherence.departures}
         </Text>
       </View>
       {strategy.status !== 'stopped' && (
@@ -76,36 +76,35 @@ export function GuidedStrip({
   );
 }
 
-function CorrectionBody({
-  strategyName,
-  correction,
-  overrideEndsCycle,
-  busy,
-  onRetry,
-  onOverride,
-  words = ROULETTE_WORDS,
-}: {
-  strategyName: string;
-  correction: PendingCorrection;
-  overrideEndsCycle: boolean;
-  busy: boolean;
-  onRetry: () => void;
-  onOverride: () => void;
-  words?: CoachWords;
-}) {
+function CorrectionBody({ copy, busy, onRetry, onOverride }: { copy: CorrectionCopy; busy: boolean; onRetry: () => void; onOverride: () => void }) {
   return (
     <>
-      <Text maxFontSizeMultiplier={textScale.body} style={styles.coach}>Marcus · guided practice, {strategyName}</Text>
+      <Text maxFontSizeMultiplier={textScale.body} style={styles.coach}>{copy.coach}</Text>
       <Text accessibilityRole="header" maxFontSizeMultiplier={textScale.display} style={styles.kicker}>
-        Before your {words.turn}
+        {copy.kicker}
       </Text>
-      <Text maxFontSizeMultiplier={textScale.display} style={styles.headline}>{prescriptionLine(strategyName, correction.explanation, words)}</Text>
-      {correctionLines(correction, words).map((line) => (
+      <Text maxFontSizeMultiplier={textScale.display} style={styles.headline}>{copy.headline}</Text>
+      {copy.lines.map((line) => (
         <Text key={line} maxFontSizeMultiplier={textScale.body} style={styles.body}>{line}</Text>
       ))}
-      <Button label={retryLabel(correction, words)} stretch disabled={busy} onPress={onRetry} />
-      <Button label="Keep my bets" variant="secondary" stretch disabled={busy} onPress={onOverride} />
-      <Text maxFontSizeMultiplier={textScale.body} style={styles.note}>{overrideNote(overrideEndsCycle, words)}</Text>
+      {copy.fallback && (
+        <View style={styles.fallback}>
+          <Text maxFontSizeMultiplier={textScale.body} style={styles.body}>{copy.fallback}</Text>
+        </View>
+      )}
+      <Button label={copy.retry} stretch disabled={busy} onPress={onRetry} />
+      <Button label={copy.override} variant="secondary" stretch disabled={busy} onPress={onOverride} />
+      <Text maxFontSizeMultiplier={textScale.body} style={styles.note}>{copy.note}</Text>
+      {copy.why.length > 0 && (
+        <View style={styles.why} testID="index-difference">
+          <Text accessibilityRole="header" maxFontSizeMultiplier={textScale.body} style={styles.whyTitle}>
+            Why Tableside&apos;s index can differ from published charts
+          </Text>
+          {copy.why.map((line) => (
+            <Text key={line} maxFontSizeMultiplier={textScale.body} style={styles.note}>{line}</Text>
+          ))}
+        </View>
+      )}
     </>
   );
 }
@@ -115,15 +114,12 @@ function CorrectionBody({
  * opens as a full-screen panel that restates the table as text first.
  */
 export function CorrectionPanel(props: {
-  strategyName: string;
-  correction: PendingCorrection;
-  overrideEndsCycle: boolean;
+  copy: CorrectionCopy;
   table: TableNow;
   fullScreen: boolean;
   busy: boolean;
   onRetry: () => void;
   onOverride: () => void;
-  words?: CoachWords;
 }) {
   const { table, fullScreen } = props;
   if (!fullScreen) {
@@ -352,6 +348,9 @@ const styles = StyleSheet.create({
   headline: { fontFamily: fonts.display, fontSize: 22, color: palette.foreground },
   body: { fontFamily: fonts.ui, fontSize: 14, lineHeight: 20, color: palette.foreground },
   note: { fontFamily: fonts.ui, fontSize: 13, color: palette.mutedForeground },
+  fallback: { padding: space[3], borderRadius: radius.md, borderWidth: 1, borderColor: palette.border, backgroundColor: palette.card },
+  why: { gap: space[1], paddingTop: space[2], borderTopWidth: 1, borderTopColor: palette.border },
+  whyTitle: { fontFamily: fonts.uiBold, fontSize: 13, color: palette.foreground },
   fullScreen: { flex: 1, backgroundColor: palette.background },
   fullScreenContent: { flexGrow: 1, padding: space[4] },
   fullScreenInner: { gap: space[3] },

@@ -8,7 +8,7 @@
 // field; place, buy, lay, hardways and propositions are in the bet list.
 
 import { crapsHouseEdge } from '@tableside/definitions';
-import { CRAPS_POINTS, type CrapsPermittedView as PermittedView, type CycleTurn, type DomainFact } from '@tableside/engine';
+import { CRAPS_POINTS, isPlayCorrection, type CrapsPermittedView as PermittedView, type CycleTurn, type DomainFact } from '@tableside/engine';
 import { useEffect, useMemo, useState } from 'react';
 import { AccessibilityInfo, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -22,7 +22,7 @@ import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/th
 import { BetSelector } from './bet-selector/BetSelector';
 import { draftAmountText, EMPTY_DRAFT, findChoice, isDraftPending, type BetDraft } from './bet-selector/catalog';
 import { DraftBar, PresentationSwitch, type Presentation } from './bet-selector/Presentation';
-import { betsText, CRAPS_WORDS, strategyFactSentence } from './coaching-text';
+import { betCorrectionCopy, betsText, CRAPS_WORDS, strategyFactSentence } from './coaching-text';
 import { crapsCatalog, crapsPlacedWagers, placedToggle } from './craps-catalog';
 import { EndSessionDialog } from './EndSessionDialog';
 import { CorrectionPanel, CycleResultPanel, GuidedStrip, PendingPanel, StopStrategyDialog, type TurnWords } from './Guidance';
@@ -161,7 +161,7 @@ export function CrapsTable({ snapshot }: { snapshot: ActiveSnapshot }) {
           onTable={formatUnits(totalOnTable(view))}
           status={save === 'failed' ? 'Paused · not saved' : crapsStatus(view)}
         />
-        {strategy && <GuidedStrip strategy={strategy} canStop={legal('stop-strategy')} onStop={() => setStoppingStrategy(true)} words={CRAPS_WORDS} />}
+        {strategy && <GuidedStrip strategy={strategy} canStop={legal('stop-strategy')} onStop={() => setStoppingStrategy(true)} detail={null} unit="roll" />}
         {view.phase !== 'final-settlement' && <PresentationSwitch value={presentation} onChange={setPresentation} />}
 
         {save === 'failed' && (
@@ -234,17 +234,14 @@ export function CrapsTable({ snapshot }: { snapshot: ActiveSnapshot }) {
               )}
             </View>
             <View style={[styles.column, styles.controls]}>
-              {strategy?.correction && view.phase === 'correction' && (
+              {strategy?.correction && !isPlayCorrection(strategy.correction) && view.phase === 'correction' && (
                 <CorrectionPanel
-                  strategyName={strategy.name}
-                  correction={strategy.correction}
-                  overrideEndsCycle={strategy.overrideEndsCycle}
+                  copy={betCorrectionCopy(strategy.name, strategy.correction, strategy.overrideEndsCycle, CRAPS_WORDS)}
                   table={{ phase: `Strategy check before your roll · ${puckText(table.point)}`, balance: formatUnits(view.balance), wagers: wagersText }}
                   fullScreen={fontScale > SIDE_BY_SIDE_MAX_FONT_SCALE}
                   busy={!ready}
                   onRetry={() => void controller.retryCorrection()}
                   onOverride={() => void controller.overrideCorrection()}
-                  words={CRAPS_WORDS}
                 />
               )}
               {strategy && view.phase === 'cycle-completion' && (

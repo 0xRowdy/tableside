@@ -5,6 +5,7 @@ import type { Suite } from '@tableside/harness';
 
 import { activityCases } from './activity.cases';
 import { blackjackCases } from './blackjack.cases';
+import { blackjackGuidedCases } from './blackjack-guided.cases';
 import { blackjackTableCases } from './blackjack-table.cases';
 import { compatibilityCases } from './compatibility.cases';
 import { crapsCases } from './craps.cases';
@@ -43,6 +44,7 @@ export const engineSuite: Suite = {
     ...blackjackTableCases,
     ...strategyCases,
     ...guidedCases,
+    ...blackjackGuidedCases,
     ...progressionCases,
     ...crapsStrategyCases,
     ...recordCases,

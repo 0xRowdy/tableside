@@ -2,7 +2,7 @@
 // the engine's permitted view and forwards taps to the practice controller;
 // it never advances the game or decides what is legal.
 
-import { add, decodeMoney, encodeMoney, type CycleTurn, type RoulettePermittedView as PermittedView, type RoulettePocket } from '@tableside/engine';
+import { add, decodeMoney, encodeMoney, isPlayCorrection, type CycleTurn, type RoulettePermittedView as PermittedView, type RoulettePocket } from '@tableside/engine';
 import { useEffect, useMemo, useState } from 'react';
 import { AccessibilityInfo, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -14,7 +14,7 @@ import { usePractice } from '@/practice/PracticeProvider';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale, type ColorToken } from '@/theme/tokens';
 
 import { BetSelector } from './bet-selector/BetSelector';
-import { betsText } from './coaching-text';
+import { betCorrectionCopy, betsText } from './coaching-text';
 import { CorrectionPanel, CycleResultPanel, GuidedStrip, PendingPanel, StopStrategyDialog, type TurnWords } from './Guidance';
 import { draftAmountText, EMPTY_DRAFT, findChoice, isDraftPending, type BetDraft } from './bet-selector/catalog';
 import { DraftBar, PresentationSwitch, type Presentation } from './bet-selector/Presentation';
@@ -189,11 +189,9 @@ export function RouletteTable({ snapshot }: { snapshot: ActiveSnapshot }) {
               )}
             </View>
             <View style={[styles.column, styles.controls]}>
-              {strategy?.correction && view.phase === 'correction' && (
+              {strategy?.correction && !isPlayCorrection(strategy.correction) && view.phase === 'correction' && (
                 <CorrectionPanel
-                  strategyName={strategy.name}
-                  correction={strategy.correction}
-                  overrideEndsCycle={strategy.overrideEndsCycle}
+                  copy={betCorrectionCopy(strategy.name, strategy.correction, strategy.overrideEndsCycle)}
                   table={{ phase: 'Strategy check before your spin', balance: formatUnits(view.balance), wagers: wagersText }}
                   fullScreen={fontScale > SIDE_BY_SIDE_MAX_FONT_SCALE}
                   busy={!ready}

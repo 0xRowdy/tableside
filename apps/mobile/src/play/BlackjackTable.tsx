@@ -2,13 +2,29 @@
 // chrome — Blackjack", incl. insurance, even money, four split hands and late
 // surrender): dealer area, shoe, other players' hands, the learner's hands and
 // bet spot, and the actions or insurance decision, with the bet selector over
-// the same session (S1-03). It
+// the same session (S1-03). In guided practice (S1-04 "basic with deviations,
+// count supplied", S1-05 "BJ guided, before move") it adds the strategy strip,
+// the supplied count and the correction pause before a departing play. It
 // renders only the engine's permitted view and forwards taps to the practice
 // controller; it never advances the game or decides what is legal. A face-down
 // card is drawn as a card back and read as "Face-down card".
 
-import { blackjackHouseEdge } from '@tableside/definitions';
-import { decodeMoney, encodeMoney, INSURANCE_TARGET, MAX_SPLIT_HANDS, money, mul, type BlackjackAction, type BlackjackHandView, type BlackjackPermittedView, type Card } from '@tableside/engine';
+import { blackjackHouseEdge, blackjackStrategy } from '@tableside/definitions';
+import {
+  decodeMoney,
+  encodeMoney,
+  INSURANCE_TARGET,
+  isPlayCorrection,
+  MAX_SPLIT_HANDS,
+  money,
+  mul,
+  type BlackjackAction,
+  type BlackjackCount,
+  type BlackjackHandView,
+  type BlackjackPermittedView,
+  type BlackjackPlayPolicy,
+  type Card,
+} from '@tableside/engine';
 import { useEffect, useMemo, useState } from 'react';
 import { AccessibilityInfo, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -23,6 +39,7 @@ import { BetSelector } from './bet-selector/BetSelector';
 import { draftAmountText, EMPTY_DRAFT, findChoice, isDraftPending, type BetDraft } from './bet-selector/catalog';
 import { DraftBar, PresentationSwitch, type Presentation } from './bet-selector/Presentation';
 import { blackjackCatalog, blackjackPlacedWagers } from './blackjack-catalog';
+import { cardShort, countWorking, deviationRule, deviationsAtCount, playCorrectionCopy } from './blackjack-coaching';
 import {
   cardName,
   cardRank,
@@ -31,16 +48,19 @@ import {
   handState,
   handSummary,
   handTotalText,
+  inHand,
   isPlaying,
   presetOf,
   rulesText,
   seatSummary,
   showingLastRound,
+  signed,
   statusText,
   SUIT_GLYPH,
   totalText,
 } from './blackjack-text';
 import { EndSessionDialog } from './EndSessionDialog';
+import { CorrectionPanel, GuidedStrip, StopStrategyDialog, type TableNow } from './Guidance';
 import { RebuySheet } from './RebuySheet';
 import { ACCESS_ENDED } from './RouletteTable';
 import { PhaseStepper, SessionStrip, TableTopBar, type PhaseStep } from './TableChrome';
@@ -72,7 +92,7 @@ const ACTION_LABEL: Record<Exclude<BlackjackAction, 'decline-insurance'>, string
 };
 
 function phaseSteps(view: BlackjackPermittedView): PhaseStep[] {
-  const reached = view.phase === 'open-decision' ? (isPlaying(view) ? 2 : 0) : view.phase === 'completed' ? 4 : 3;
+  const reached = view.phase === 'open-decision' || view.phase === 'correction' ? (inHand(view) ? 2 : 0) : view.phase === 'completed' ? 4 : 3;
   return ['Bet', 'Deal', 'Play', 'Settle'].map((label, index) => ({
     label,
     state: index < reached ? 'done' : index === reached ? 'current' : 'upcoming',
@@ -88,6 +108,7 @@ export function BlackjackTable({ snapshot }: { snapshot: ActiveSnapshot }) {
   const [lastBet, setLastBet] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [rebuying, setRebuying] = useState(false);
+  const [stoppingStrategy, setStoppingStrategy] = useState(false);
   // Held here, above both presentations, so rotation, resizing and switching keep the draft.
   const [presentation, setPresentation] = useState<Presentation>('table');
   const [draft, setDraft] = useState<BetDraft>(EMPTY_DRAFT);
@@ -137,14 +158,23 @@ export function BlackjackTable({ snapshot }: { snapshot: ActiveSnapshot }) {
     if (wager) setLastBet(wager);
     void controller.beginTurn();
   };
-  const betting = (!playing || offer !== null) && view.phase !== 'final-settlement';
+  const strategy = view.strategy;
+  const held = view.phase === 'correction' && strategy?.correction && isPlayCorrection(strategy.correction) ? strategy.correction : null;
+  const betting = !held && (!playing || offer !== null) && view.phase !== 'final-settlement';
+  const rules = { dealer: view.table.dealer, lateSurrender: view.table.lateSurrender };
+  const handsText = view.wagers.length === 0 ? 'nothing' : `${formatUnits(totalOnTable(view))} (${view.wagers.length === 1 ? 'one hand' : `${view.wagers.length} hands`})`;
   const selector = presentation === 'selector' && betting;
   const setWager = (target: string, amount: string) => void (target === INSURANCE_TARGET ? controller.insure(amount) : controller.placeWager(target, amount));
 
   return (
     <View style={styles.screen}>
       <ScrollView testID="table-scroll" contentContainerStyle={{ paddingTop: insets.top, paddingBottom: space[6] }}>
-        <TableTopBar title="Blackjack" subtitle={rulesText(view)} canEnd={legal('request-stop')} onEnd={() => setConfirming(true)} />
+        <TableTopBar
+          title="Blackjack"
+          subtitle={strategy ? `Guided · ${strategy.name.toLowerCase()} · ${rulesText(view)}` : rulesText(view)}
+          canEnd={legal('request-stop')}
+          onEnd={() => setConfirming(true)}
+        />
         <Text maxFontSizeMultiplier={textScale.body} style={styles.edge}>
           Edge with basic strategy: {blackjackHouseEdge(presetOf(view)).percent}% (this preset) · Penetration {view.table.penetration}%
         </Text>
@@ -154,6 +184,8 @@ export function BlackjackTable({ snapshot }: { snapshot: ActiveSnapshot }) {
           onTable={formatUnits(totalOnTable(view))}
           status={save === 'failed' ? 'Paused · not saved' : statusText(view)}
         />
+        {strategy && <GuidedStrip strategy={strategy} detail={null} unit="decision" canStop={legal('stop-strategy')} onStop={() => setStoppingStrategy(true)} />}
+        {view.count && <CountPanel view={view} count={view.count} betweenRounds={!inHand(view) && view.phase !== 'revealing-outcome'} />}
         {betting && <PresentationSwitch value={presentation} onChange={setPresentation} />}
 
         {save === 'failed' && (
@@ -222,7 +254,16 @@ export function BlackjackTable({ snapshot }: { snapshot: ActiveSnapshot }) {
                 {message}
               </Text>
             )}
-            {offer ? (
+            {held && strategy ? (
+              <CorrectionPanel
+                copy={playCorrectionCopy(strategy.name, held, rules)}
+                table={tableNow(view, handsText)}
+                fullScreen={fontScale > SIDE_BY_SIDE_MAX_FONT_SCALE}
+                busy={!ready}
+                onRetry={() => void controller.retryCorrection()}
+                onOverride={() => void controller.overrideCorrection()}
+              />
+            ) : offer ? (
               <InsurancePanel
                 view={view}
                 enabled={legal('play')}
@@ -253,8 +294,8 @@ export function BlackjackTable({ snapshot }: { snapshot: ActiveSnapshot }) {
                 onPress={() => setRebuying(true)}
               />
             )}
-            {!playing && !selector && view.phase !== 'final-settlement' && <ChipRack chip={chip} onChoose={setChip} />}
-            {playing && (
+            {betting && !playing && !selector && <ChipRack chip={chip} onChoose={setChip} />}
+            {inHand(view) && (
               <Text maxFontSizeMultiplier={textScale.body} style={styles.hint}>
                 Finish this hand before ending the session.
               </Text>
@@ -274,6 +315,17 @@ export function BlackjackTable({ snapshot }: { snapshot: ActiveSnapshot }) {
         />
       )}
 
+      <StopStrategyDialog
+        visible={stoppingStrategy}
+        removable={view.wagersCommitted || view.wagers.length === 0 ? 'Nothing removable on the table' : `Your ${handsText} wager comes back`}
+        committed={view.wagersCommitted ? `Your ${handsText} in play settles with this round.` : 'None between rounds.'}
+        onCancel={() => setStoppingStrategy(false)}
+        onConfirm={() => {
+          setStoppingStrategy(false);
+          void controller.stopStrategy();
+        }}
+      />
+
       <EndSessionDialog
         visible={confirming}
         view={view}
@@ -283,6 +335,55 @@ export function BlackjackTable({ snapshot }: { snapshot: ActiveSnapshot }) {
           void controller.endSession();
         }}
       />
+    </View>
+  );
+}
+
+/** The table restated as text for the full-screen correction: phase, cards, balance and outstanding wagers. */
+function tableNow(view: BlackjackPermittedView, handsText: string): TableNow {
+  const round = view.outcome;
+  const hands = round?.hands ?? [];
+  const handLine = (hand: BlackjackHandView, index: number) =>
+    `${hands.length > 1 ? `Hand ${index + 1} of ${hands.length}` : 'Your hand'}: ${hand.cards.map(cardShort).join(' ')}, ${handTotalText(hand)}${round?.active === index ? ' (deciding)' : ''}`;
+  const dealer = round?.dealer.cards ?? [];
+  const up = dealer[0];
+  const others = (round?.others ?? []).flatMap((seat) => seat.hands.map((hand) => `Seat ${seat.seat}: ${hand.cards.map(cardShort).join(' ')}, ${handTotalText(hand)}`));
+  return {
+    phase: '3 Play · your decision',
+    cards: [...hands.map(handLine), `Dealer: ${up ? cardShort(up) : 'no card'} showing${dealer.includes(null) ? ', one card face down' : ''}`, ...others],
+    balance: formatUnits(view.balance),
+    wagers: handsText,
+  };
+}
+
+/**
+ * The count Tableside supplies in "basic with deviations", recomputed before
+ * every deal and decision. Between rounds it also names the deviation at this
+ * count and the next index up; never during a decision, where that would be the answer.
+ */
+function CountPanel({ view, count, betweenRounds }: { view: BlackjackPermittedView; count: BlackjackCount; betweenRounds: boolean }) {
+  const preset = presetOf(view);
+  const builtIn = blackjackStrategy(preset, 'basic-with-deviations');
+  const deviations = view.strategy?.id === builtIn.id ? (builtIn.play as BlackjackPlayPolicy).deviations : [];
+  const { at, next } = deviationsAtCount(deviations, count.trueCount);
+  return (
+    <View
+      style={styles.countPanel}
+      testID="count-panel"
+      accessible
+      accessibilityLabel={`Count supplied in this mode: true count ${signed(count.trueCount)}. Running count ${signed(count.running)}, ${count.decks} decks left.${betweenRounds && at ? ` Deviation at this count: ${deviationRule(at)}.` : ''}${betweenRounds && next ? ` Next index: ${next.situation} at ${signed(next.threshold)}.` : ''}`}
+    >
+      <Text maxFontSizeMultiplier={textScale.body} style={styles.countLabel}>COUNT SUPPLIED IN THIS MODE</Text>
+      <Text maxFontSizeMultiplier={textScale.display} style={styles.countValue}>True count {signed(count.trueCount)}</Text>
+      <Text maxFontSizeMultiplier={textScale.body} style={styles.hint}>{countWorking(count)}</Text>
+      {betweenRounds && at && (
+        <Text maxFontSizeMultiplier={textScale.body} style={styles.countHint}>Deviation at this count: {deviationRule(at)}</Text>
+      )}
+      {betweenRounds && next && (
+        <Text maxFontSizeMultiplier={textScale.body} style={styles.hint}>
+          Next: {next.situation} at {signed(next.threshold)}
+        </Text>
+      )}
     </View>
   );
 }
@@ -397,7 +498,7 @@ const handNote = (hand: BlackjackHandView) => (hand.surrendered ? ' · surrender
 
 /** One of up to four split hands: its cards, "2 · soft 19 · 10" and its state in words. */
 function SplitHand({ view, hand, index, last }: { view: BlackjackPermittedView; hand: BlackjackHandView; index: number; last: boolean }) {
-  const active = isPlaying(view) && view.outcome?.active === index;
+  const active = inHand(view) && view.outcome?.active === index;
   const stake = view.wagers.find((wager) => wager.target === hand.target)?.amount;
   return (
     <View
@@ -589,7 +690,7 @@ function BettingActions({
   onRebet: (amount: string) => void;
   onDeal: () => void;
 }) {
-  if (view.phase === 'final-settlement' || view.phase === 'revealing-outcome') return null;
+  if (view.phase === 'final-settlement' || view.phase === 'revealing-outcome' || view.phase === 'correction') return null;
   return (
     <View style={styles.actions}>
       <View style={styles.actionRow}>
@@ -657,6 +758,10 @@ const styles = StyleSheet.create({
   controls: { gap: space[3], paddingHorizontal: space[4] },
   message: { fontFamily: fonts.uiMedium, fontSize: 15, lineHeight: 21, color: palette.foreground },
   hint: { fontFamily: fonts.ui, fontSize: 13, color: palette.mutedForeground },
+  countPanel: { gap: 2, marginHorizontal: space[4], marginTop: space[2], padding: space[3], borderRadius: radius.lg, backgroundColor: palette.card, borderWidth: 1, borderColor: palette.border },
+  countLabel: { fontFamily: fonts.uiBold, fontSize: 10, letterSpacing: 0.5, color: palette.mutedForeground },
+  countValue: { fontFamily: fonts.display, fontSize: 20, color: palette.foreground },
+  countHint: { fontFamily: fonts.uiMedium, fontSize: 13, color: palette.foreground },
   felt: { gap: space[3], padding: space[4], marginHorizontal: space[2], borderRadius: radius.lg, backgroundColor: palette.felt, alignItems: 'center' },
   feltTop: { flexDirection: 'row', alignSelf: 'stretch' },
   shoe: { minWidth: 52, paddingVertical: space[1], paddingHorizontal: space[2], borderRadius: radius.sm, backgroundColor: palette.feltDeep, alignItems: 'center' },

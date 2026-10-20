@@ -24,6 +24,7 @@ import {
   decodeCheckpoint,
   encodeCheckpoint,
   INSURANCE_TARGET,
+  isPlayCorrection,
   quarantineStatus,
   readPermittedView,
   StrategySpecificationError,
@@ -48,7 +49,7 @@ import {
   type StopCause,
   type StrategySelection,
 } from '@tableside/engine';
-import { rouletteRules, standardCraps } from '@tableside/definitions';
+import { BLACKJACK_REFERENCE_IDENTITY, rouletteRules, standardCraps } from '@tableside/definitions';
 
 import { PRACTICE_FUNDING_TERMS, type AccessDecision, type AccessDenial, type LifecycleEvent, type PhaseReport, type PracticeAdapters, type SetupTerms } from './adapters';
 import type { AllowanceEffect, CommitOutcome, CommittedTransition, CompletedPracticeSession, IncompleteReason, NewActivity, StoredActivity } from './store';
@@ -202,7 +203,7 @@ const TURN_PHASES: ReadonlySet<Phase> = new Set(['revealing-outcome']);
  */
 const turnInProgress = (state: ActivityState): boolean =>
   TURN_PHASES.has(state.phase) ||
-  (state.identities.game === 'blackjack' && state.phase === 'open-decision' && (state as BlackjackActivityState).outcome?.active != null);
+  (state.identities.game === 'blackjack' && (state.phase === 'open-decision' || state.phase === 'correction') && (state as BlackjackActivityState).outcome?.active != null);
 
 /** Phases whose time counts as active training (Amendment 4 A4); every other phase is excluded. */
 const TIMED_PHASES: ReadonlySet<Phase> = new Set(['open-decision', 'revealing-outcome', 'settled-outcome']);
@@ -307,7 +308,8 @@ export class PracticeController {
           owner: this.adapters.owner,
           device: this.adapters.device,
           strategy: request.strategy ? { definition: request.strategy.definition, parameters: { ...request.strategy.parameters } } : null,
-          reference: null,
+          // Guided blackjack pins the certified reference its built-in strategies are packed from.
+          reference: request.game === 'blackjack' && request.strategy ? { ...BLACKJACK_REFERENCE_IDENTITY } : null,
           fundingSource: request.fundingSource,
           funding: request.buyIn,
         };
@@ -370,8 +372,10 @@ export class PracticeController {
     await this.exclusive(() => this.turnCommand({ kind: 'begin-turn' }));
   }
 
-  /** From a correction: takes the move back and sets the strategy's bets. */
+  /** From a correction: takes the move back and sets the strategy's bets, or plays the strategy's play in a blackjack hand. */
   async retryCorrection(): Promise<void> {
+    // A held playing move is part of the hand in play, which always finishes.
+    if (this.heldPlay()) return this.handAction({ kind: 'retry-correction' });
     await this.exclusive(async () => {
       if (!this.playOpen()) return;
       if (settled(await this.send({ kind: 'retry-correction' }))) await this.drive();
@@ -380,7 +384,14 @@ export class PracticeController {
 
   /** From a correction: keeps the move (a strategy override), which begins the turn at once. */
   async overrideCorrection(): Promise<void> {
+    if (this.heldPlay()) return this.handAction({ kind: 'override-correction' });
     await this.exclusive(() => this.turnCommand({ kind: 'override-correction' }));
+  }
+
+  /** True while a blackjack playing move waits in a correction. */
+  private heldPlay(): boolean {
+    const correction = this.state?.strategy?.correction;
+    return this.state?.phase === 'correction' && correction != null && isPlayCorrection(correction);
   }
 
   /** Starts another strategy cycle with the remaining balance. */
