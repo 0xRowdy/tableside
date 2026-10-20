@@ -45,7 +45,21 @@ export interface StoredActivity extends NewActivity {
   /** The sequence the next command must carry. */
   readonly sequence: number;
   readonly completion: CompletedPracticeSession | null;
+  /** Set when the activity was found unusable and marked incomplete (#80): it never gets a result. */
+  readonly incomplete: IncompleteReason | null;
 }
+
+/**
+ * Why an unfinished activity is unusable (#80). "quarantined": its pinned
+ * identities fall under the shipped quarantine list (a proven engine defect);
+ * the mark keeps which entry and list version did it, and the explanation is
+ * always read from the shipped list, never stored. "damaged": its checkpoint
+ * can't be read; the checkpoint is kept, so a later build could still recover it.
+ * Either way it is marked incomplete instead of being given an invented outcome.
+ */
+export type IncompleteReason =
+  | { readonly kind: 'quarantined'; readonly entry: string; readonly listVersion: number }
+  | { readonly kind: 'damaged'; readonly detail: string };
 
 /** One committed transition: everything step 3 of the durability protocol writes atomically. */
 export interface TransitionCommit {
@@ -91,7 +105,7 @@ export interface ActivityStore {
   /** Durability step 1. Idempotent by activity id: a retry returns the activity already stored, unchanged. */
   createActivity(activity: NewActivity): Promise<StoredActivity>;
   load(activityId: string): Promise<StoredActivity | null>;
-  /** The unfinished activity (not yet completed), if any. */
+  /** The unfinished activity (neither completed nor marked incomplete), if any. */
   findUnfinished(): Promise<StoredActivity | null>;
   /**
    * Durability step 3, conditioned on the prior sequence. A commit whose command
@@ -112,4 +126,11 @@ export interface ActivityStore {
    */
   complete(record: CompletedPracticeSession): Promise<CompletedPracticeSession>;
   readOutgoing(): Promise<readonly OutgoingSyncRecord[]>;
+  /**
+   * Marks an unusable unfinished activity incomplete, keeping its checkpoint and
+   * transitions as they are; it is no longer unfinished and is never completed.
+   * Idempotent: a repeat keeps the first reason. A completed activity is
+   * returned unchanged. The controller writes nothing more to an incomplete activity.
+   */
+  markIncomplete(activityId: string, reason: IncompleteReason): Promise<StoredActivity>;
 }

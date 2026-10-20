@@ -8,7 +8,7 @@
 
 import type { DomainFact, Receipt } from '@tableside/engine';
 
-import type { ActivityStore, AllowanceEffect, CompletedPracticeSession, NewActivity, TransitionCommit } from '../store';
+import type { ActivityStore, AllowanceEffect, CompletedPracticeSession, IncompleteReason, NewActivity, TransitionCommit } from '../store';
 
 export interface StoreUnderTest {
   /** A store over fresh, empty durable storage. */
@@ -46,6 +46,8 @@ export function newActivity(activityId: string, overrides: Partial<NewActivity> 
     ...overrides,
   };
 }
+
+const QUARANTINED: IncompleteReason = { kind: 'quarantined', entry: 'q-1', listVersion: 2 };
 
 function receipt(sequence: number, command: string): Receipt {
   return { commandId: `cmd-${sequence}`, sequence, command, disposition: 'applied' };
@@ -114,7 +116,7 @@ export function describeActivityStoreContract(name: string, open: () => Promise<
 
         const stored = await store.createActivity(activity);
 
-        expect(stored).toEqual({ ...activity, sequence: 0, completion: null });
+        expect(stored).toEqual({ ...activity, sequence: 0, completion: null, incomplete: null });
         expect(await store.load('a1')).toEqual(stored);
         expect((await store.load('a1'))?.checkpoint).toBe(activity.checkpoint);
       });
@@ -305,6 +307,59 @@ export function describeActivityStoreContract(name: string, open: () => Promise<
       });
     });
 
+    describe('marking an unusable activity incomplete (#80)', () => {
+      it('records why, keeps the checkpoint, and the activity is no longer unfinished; no result or sync record is invented', async () => {
+        const { store } = await open();
+        await store.createActivity(newActivity('a1'));
+        await store.commitTransition(transition('a1', 0));
+
+        const marked = await store.markIncomplete('a1', QUARANTINED);
+
+        expect(marked).toMatchObject({ activityId: 'a1', sequence: 1, completion: null, incomplete: QUARANTINED });
+        expect((await store.load('a1'))?.incomplete).toEqual(QUARANTINED);
+        expect((await store.load('a1'))?.checkpoint).toBe(transition('a1', 0).checkpoint);
+        expect(await store.findUnfinished()).toBeNull();
+        expect(await store.readOutgoing()).toEqual([]);
+      });
+
+      it('marks once: a repeat keeps the first reason', async () => {
+        const { store } = await open();
+        await store.createActivity(newActivity('a1'));
+        await store.markIncomplete('a1', QUARANTINED);
+
+        const repeat = await store.markIncomplete('a1', { kind: 'damaged', detail: 'later' });
+
+        expect(repeat.incomplete).toEqual(QUARANTINED);
+      });
+
+      it('never marks a completed activity: its result stands', async () => {
+        const { store } = await open();
+        await store.createActivity(newActivity('a1'));
+        await store.complete(completedRecord('a1'));
+
+        const marked = await store.markIncomplete('a1', QUARANTINED);
+
+        expect([marked.completion, marked.incomplete]).toEqual([completedRecord('a1'), null]);
+      });
+
+      it('keeps the mark across a restart and finds the next unfinished activity past it', async () => {
+        const subject = await open();
+        await subject.store.createActivity(newActivity('a1'));
+        await subject.store.markIncomplete('a1', QUARANTINED);
+        await subject.store.createActivity(newActivity('a2'));
+
+        const reopened = await subject.reopen();
+
+        expect((await reopened.load('a1'))?.incomplete).toEqual(QUARANTINED);
+        expect((await reopened.findUnfinished())?.activityId).toBe('a2');
+      });
+
+      it('rejects a mark for an activity it does not hold', async () => {
+        const { store } = await open();
+        await expect(store.markIncomplete('missing', QUARANTINED)).rejects.toThrow();
+      });
+    });
+
     describe('durability', () => {
       it('keeps everything it acknowledged across a restart', async () => {
         const subject = await open();
@@ -317,7 +372,7 @@ export function describeActivityStoreContract(name: string, open: () => Promise<
 
         const reopened = await subject.reopen();
 
-        expect(await reopened.findUnfinished()).toEqual({ ...newActivity('a1'), checkpoint: commit.checkpoint, sequence: 1, completion: null });
+        expect(await reopened.findUnfinished()).toEqual({ ...newActivity('a1'), checkpoint: commit.checkpoint, sequence: 1, completion: null, incomplete: null });
         expect(await reopened.readReceipt('a1', 'cmd-0')).toEqual({ receipt: commit.receipt, checkpoint: commit.checkpoint, facts: commit.facts });
         expect(await reopened.readEffects('a1')).toEqual([turnCharge('a1', 0)]);
         expect((await reopened.load('a2'))?.completion).toEqual(completedRecord('a2'));

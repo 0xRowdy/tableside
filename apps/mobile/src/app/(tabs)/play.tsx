@@ -9,6 +9,7 @@ import { BlackjackSetup } from '@/play/BlackjackSetup';
 import { BlackjackTable } from '@/play/BlackjackTable';
 import { CrapsSetup } from '@/play/CrapsSetup';
 import { CrapsTable } from '@/play/CrapsTable';
+import { IncompleteSession } from '@/play/IncompleteSession';
 import { RouletteSetup } from '@/play/RouletteSetup';
 import { RouletteTable } from '@/play/RouletteTable';
 import { SessionResult } from '@/play/SessionResult';
@@ -76,6 +77,17 @@ export default function Play() {
             </>
           }
         />
+      );
+    case 'incomplete':
+      return <IncompleteSession session={snapshot.session} />;
+    case 'needs-update':
+      return (
+        <Placeholder
+          title="Update to resume"
+          message={`Your ${findGame(snapshot.game)?.title.toLowerCase() ?? 'practice'} session was saved by a newer version of Tableside. Update the app to pick it up exactly where you left off. Nothing has changed.`}
+        >
+          <Button label="Back to Home" onPress={() => router.navigate('/')} />
+        </Placeholder>
       );
     case 'none':
       break;

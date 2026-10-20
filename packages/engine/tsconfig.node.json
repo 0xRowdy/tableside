@@ -1,0 +1,6 @@
+{
+  "extends": "../../tsconfig.base.json",
+  // The recording script runs on Node. The shipped src and the portable suite stay portable (tsconfig.json).
+  "compilerOptions": { "types": ["node"] },
+  "include": ["scripts"]
+}
