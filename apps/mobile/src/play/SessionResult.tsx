@@ -11,7 +11,7 @@ import { Screen } from '@/components/Screen';
 import type { CompletedPracticeSession } from '@/practice/store';
 import { fonts, palette, radius, space, textScale } from '@/theme/tokens';
 
-import { adherenceText } from './coaching-text';
+import { adherenceText, type DecisionUnit } from './coaching-text';
 import { formatSigned, formatUnits, speakSigned } from './roulette-text';
 
 const SUBTITLES: Record<CompletedPracticeSession['game'], string> = {
@@ -107,7 +107,7 @@ export function SessionResult({
       </View>
 
       {result.guidance ? (
-        <Guidance guidance={result.guidance} />
+        <Guidance guidance={result.guidance} unit={result.game === 'blackjack' ? 'decision' : 'spin'} />
       ) : (
         <View style={styles.note}>
           <Info color={palette.mutedForeground} size={18} />
@@ -124,14 +124,14 @@ export function SessionResult({
 }
 
 /** Adherence and the departure log, shown apart from the money. */
-function Guidance({ guidance }: { guidance: NonNullable<CompletedPracticeSession['guidance']> }) {
+function Guidance({ guidance, unit }: { guidance: NonNullable<CompletedPracticeSession['guidance']>; unit: DecisionUnit }) {
   const retried = guidance.departures.filter((departure) => departure.resolution === 'retried').length;
   const overridden = guidance.departures.length - retried;
   return (
     <>
       <Text maxFontSizeMultiplier={textScale.body} style={styles.label}>STRATEGY ADHERENCE</Text>
-      <View style={styles.ledger} accessible accessibilityLabel={`Strategy adherence: ${adherenceText(guidance.adherence)}. Departures ${guidance.departures.length}: ${retried} retried, ${overridden} overridden.`}>
-        <Text maxFontSizeMultiplier={textScale.body} style={styles.kvValue}>{adherenceText(guidance.adherence)}</Text>
+      <View style={styles.ledger} accessible accessibilityLabel={`Strategy adherence: ${adherenceText(guidance.adherence, unit)}. Departures ${guidance.departures.length}: ${retried} retried, ${overridden} overridden.`}>
+        <Text maxFontSizeMultiplier={textScale.body} style={styles.kvValue}>{adherenceText(guidance.adherence, unit)}</Text>
         <Text maxFontSizeMultiplier={textScale.body} style={styles.muted}>
           Departures {guidance.departures.length} · {retried} retried · {overridden} overridden
         </Text>

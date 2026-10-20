@@ -1,8 +1,10 @@
-// Minimal blackjack session setup (design frame S1-02, free play only): the
-// four rule presets, penetration, other players at the table and a fresh
-// buy-in. Guided modes and editable limits arrive with #72, #77 and #78.
+// Blackjack session setup (design frame S1-02): free play or guided practice
+// in basic strategy or basic with deviations (the counting modes arrive with
+// #78), the four rule presets, penetration, other players at the table and a
+// fresh buy-in. Guided practice pins the preset's built-in strategy. Editable
+// limits arrive with #72.
 
-import { blackjackHouseEdge, blackjackRules, DEFAULT_PENETRATION, type BlackjackPreset } from '@tableside/definitions';
+import { blackjackHouseEdge, blackjackRules, blackjackStrategy, DEFAULT_PENETRATION, type BlackjackMode, type BlackjackPreset } from '@tableside/definitions';
 import { MAX_OTHER_PLAYERS, PENETRATIONS } from '@tableside/engine';
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
@@ -33,6 +35,8 @@ const PROBLEMS: Record<StartProblem, string> = {
 export function BlackjackSetup({ problem, problemReason = null, busy }: { problem: StartProblem | null; problemReason?: string | null; busy: boolean }) {
   const { controller } = usePractice();
   const feedback = useFeedback();
+  const [guided, setGuided] = useState(false);
+  const [mode, setMode] = useState<BlackjackMode>('basic');
   const [dealer, setDealer] = useState<'S17' | 'H17'>('S17');
   const [surrender, setSurrender] = useState(true);
   const [penetration, setPenetration] = useState(DEFAULT_PENETRATION);
@@ -46,7 +50,10 @@ export function BlackjackSetup({ problem, problemReason = null, busy }: { proble
     const digits = draft.replace(/[,\s]/g, '');
     const whole = /^\d+$/.test(digits) && digits.length <= MAX_BUY_IN_DIGITS;
     setNotWhole(!whole);
-    if (whole) void controller.start({ game: 'blackjack', buyIn: BigInt(digits).toString(), rules });
+    if (whole) {
+      const strategy = guided ? { strategy: { definition: blackjackStrategy(preset, mode), parameters: {} } } : {};
+      void controller.start({ game: 'blackjack', buyIn: BigInt(digits).toString(), rules, ...strategy });
+    }
     else feedback.cue('input-rejected');
   };
   const error = notWhole ? PROBLEMS['invalid-buy-in'] : problem && (problem === 'access-denied' && problemReason ? problemReason : PROBLEMS[problem]);
@@ -57,8 +64,30 @@ export function BlackjackSetup({ problem, problemReason = null, busy }: { proble
         <Text accessibilityRole="header" maxFontSizeMultiplier={textScale.display} style={styles.title}>
           Blackjack
         </Text>
-        <Text maxFontSizeMultiplier={textScale.body} style={styles.subtitle}>New session · free play · 6 decks · 3:2</Text>
+        <Text maxFontSizeMultiplier={textScale.body} style={styles.subtitle}>New session · {guided ? 'guided practice' : 'free play'} · 6 decks · 3:2</Text>
       </View>
+
+      <Choices
+        label="HOW DO YOU WANT TO PLAY?"
+        options={[
+          { label: 'Free play', selected: !guided, onPress: () => setGuided(false) },
+          { label: 'Guided practice', selected: guided, onPress: () => setGuided(true) },
+        ]}
+      />
+      {guided && (
+        <Choices
+          label="STRATEGY"
+          help={
+            mode === 'basic'
+              ? 'Rule-specific basic strategy for the preset below. Tableside pauses before a play that departs from it. Your bets are your own.'
+              : `Basic strategy plus the certified ${dealer} deviations${surrender ? ' and the Fab 4 surrenders' : ''}. Tableside supplies the true count before every deal and decision.`
+          }
+          options={[
+            { label: 'Basic strategy', selected: mode === 'basic', onPress: () => setMode('basic') },
+            { label: 'Basic with deviations', selected: mode === 'basic-with-deviations', onPress: () => setMode('basic-with-deviations') },
+          ]}
+        />
+      )}
 
       <Choices
         label="DEALER"
@@ -131,7 +160,7 @@ export function BlackjackSetup({ problem, problemReason = null, busy }: { proble
         )}
       </View>
 
-      <Button label="Start free play" stretch disabled={busy} onPress={start} />
+      <Button label={guided ? 'Start guided practice' : 'Start free play'} stretch disabled={busy} onPress={start} />
     </Screen>
   );
 }
