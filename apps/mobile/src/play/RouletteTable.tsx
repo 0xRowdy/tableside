@@ -2,7 +2,7 @@
 // the engine's permitted view and forwards taps to the practice controller;
 // it never advances the game or decides what is legal.
 
-import type { PermittedView } from '@tableside/engine';
+import type { RoulettePermittedView as PermittedView } from '@tableside/engine';
 import { useEffect, useMemo, useState } from 'react';
 import { AccessibilityInfo, Modal, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -16,7 +16,7 @@ import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale, type ColorT
 import { describeFacts, describePocket, formatUnits, pocketColor, STATUS, targetName, totalOnTable } from './roulette-text';
 import { PhaseStepper, SessionStrip, TableTopBar, type PhaseStep } from './TableChrome';
 
-type ActiveSnapshot = Extract<PracticeSnapshot, { status: 'active' }>;
+type ActiveSnapshot = Extract<PracticeSnapshot, { status: 'active' }> & { readonly view: PermittedView };
 
 /** Above this text scale, a wide window stacks the felt and the controls so text has room. */
 const SIDE_BY_SIDE_MAX_FONT_SCALE = 1.35;
@@ -70,7 +70,7 @@ export function RouletteTable({ snapshot }: { snapshot: ActiveSnapshot }) {
     let failed = initial.status === 'active' && initial.save === 'failed';
     return controller.subscribe(() => {
       const latest = controller.snapshot();
-      if (latest.status !== 'active') return;
+      if (latest.status !== 'active' || latest.view.game !== 'roulette') return;
       const nowFailed = latest.save === 'failed';
       if (nowFailed && !failed) AccessibilityInfo.announceForAccessibility(NOT_SAVED);
       failed = nowFailed;
@@ -262,7 +262,7 @@ function Spot({
   );
 }
 
-function ChipRack({ chip, onChoose }: { chip: string; onChoose: (value: string) => void }) {
+export function ChipRack({ chip, onChoose }: { chip: string; onChoose: (value: string) => void }) {
   return (
     <View style={styles.rack}>
       <View accessibilityRole="radiogroup" accessibilityLabel="Chip value" style={styles.chips}>

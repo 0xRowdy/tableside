@@ -1,7 +1,7 @@
 // How roulette sessions read on screen and aloud. Amounts are plain units (no
 // currency symbol); formatting never changes a ledger value.
 
-import type { DomainFact, IllegalActionReason, PermittedView, Phase, RoulettePocket } from '@tableside/engine';
+import type { DomainFact, IllegalActionReason, Phase, RoulettePermittedView as PermittedView, RoulettePocket } from '@tableside/engine';
 
 /** Pocket colors on the layout. Presentation only: the engine owns what each placement covers. */
 const RED_POCKETS: ReadonlySet<number> = new Set([1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36]);
@@ -41,8 +41,8 @@ export function targetName(target: string): string {
   return target.charAt(0).toUpperCase() + target.slice(1);
 }
 
-export const totalOnTable = (view: PermittedView): string =>
-  // Roulette stakes are whole units, so a plain integer sum is exact.
+export const totalOnTable = (view: { readonly wagers: readonly { readonly amount: string }[] }): string =>
+  // Table stakes are whole units, so a plain integer sum is exact.
   view.wagers.reduce((sum, wager) => sum + BigInt(wager.amount), 0n).toString();
 
 export const STATUS: Record<Phase, string> = {
@@ -69,6 +69,11 @@ function illegalMessage(reason: IllegalActionReason, target: string | null, view
       return 'Stakes are whole units. Nothing was placed.';
     case 'no-wager-to-remove':
     case 'unknown-target':
+    // Craps-only reasons; a roulette table never produces them.
+    case 'committed-wager':
+    case 'not-available-now':
+    case 'above-odds-cap':
+    case 'odds-increment':
       return `${name} can't be changed. Nothing was placed.`;
   }
 }

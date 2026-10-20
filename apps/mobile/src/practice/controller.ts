@@ -16,18 +16,20 @@ import {
   readPermittedView,
   streamIdentityFromEntropy,
   sub,
+  type ActivitySpecification,
   type ActivityState,
   type Command,
   type CommandEnvelope,
   type DomainFact,
+  type OddsCap,
   type PermittedView,
 } from '@tableside/engine';
-import { SINGLE_ZERO_ROULETTE } from '@tableside/definitions';
+import { SINGLE_ZERO_ROULETTE, standardCraps } from '@tableside/definitions';
 
 import type { PracticeAdapters } from './adapters';
 import type { CommitOutcome, CommittedTransition, CompletedPracticeSession, NewActivity, StoredActivity } from './store';
 
-/** How long the landed ball stays on screen before the automatic settle step. */
+/** How long the landed ball or the dice stay on screen before the automatic settle step. */
 export const REVEAL_MS = 1500;
 /** The pause between the ending steps, so each is seen and announced. */
 export const ENDING_STEP_MS = 1000;
@@ -51,11 +53,13 @@ export type PracticeSnapshot =
     }
   | { readonly status: 'completed'; readonly result: CompletedPracticeSession };
 
-export interface StartRequest {
-  readonly game: 'roulette';
-  /** Whole units, as canonical decimal text. */
-  readonly buyIn: string;
-}
+export type StartRequest =
+  | {
+      readonly game: 'roulette';
+      /** Whole units, as canonical decimal text. */
+      readonly buyIn: string;
+    }
+  | { readonly game: 'craps'; readonly buyIn: string; readonly odds: OddsCap };
 
 type Pending = { readonly kind: 'transition'; readonly envelope: CommandEnvelope } | { readonly kind: 'completion' };
 
@@ -126,16 +130,11 @@ export class PracticeController {
       } else {
         const activityId = this.adapters.newId();
         const random = streamIdentityFromEntropy(this.adapters.entropy);
-        const specification = {
-          activityId,
-          owner: this.adapters.owner,
-          device: this.adapters.device,
-          game: request.game,
-          rules: SINGLE_ZERO_ROULETTE,
-          strategy: null,
-          reference: null,
-          funding: request.buyIn,
-        };
+        const base = { activityId, owner: this.adapters.owner, device: this.adapters.device, strategy: null, reference: null, funding: request.buyIn };
+        const specification: ActivitySpecification =
+          request.game === 'craps'
+            ? { ...base, game: 'craps', rules: standardCraps(request.odds) }
+            : { ...base, game: 'roulette', rules: SINGLE_ZERO_ROULETTE };
         let initial: ActivityState;
         try {
           initial = createActivity(specification, random);
@@ -169,8 +168,8 @@ export class PracticeController {
     });
   }
 
-  /** Begins a turn (the spin), then settles it automatically after the reveal. */
-  async spin(): Promise<void> {
+  /** Begins a turn (a spin or a roll), then settles it automatically after the reveal. */
+  async beginTurn(): Promise<void> {
     await this.exclusive(async () => {
       const state = this.requireState();
       const access = await this.adapters.access.beforeTurn({ activityId: state.activity.id, turn: state.turn + 1 });
@@ -179,6 +178,9 @@ export class PracticeController {
       if (settled(await this.send({ kind: 'begin-turn' }))) await this.drive();
     });
   }
+
+  /** Spins the wheel: a roulette turn. */
+  spin = (): Promise<void> => this.beginTurn();
 
   /** Ends the session: removable wagers come back, committed ones settle automatically, then one final result. */
   async endSession(): Promise<void> {
@@ -220,7 +222,7 @@ export class PracticeController {
     }
   }
 
-  /** The automatic, no-tap steps: settle a revealed spin, run final settlement, complete. */
+  /** The automatic, no-tap steps: settle a revealed turn, run final settlement (one step or roll at a time), complete. */
   private async drive(): Promise<void> {
     for (;;) {
       if (this.pending) return;
@@ -417,4 +419,5 @@ export class PracticeController {
   }
 }
 
-const sameRequest = (a: StartRequest, b: StartRequest) => a.game === b.game && a.buyIn === b.buyIn;
+const sameRequest = (a: StartRequest, b: StartRequest) =>
+  a.game === b.game && a.buyIn === b.buyIn && (a.game !== 'craps' || (b.game === 'craps' && a.odds === b.odds));
