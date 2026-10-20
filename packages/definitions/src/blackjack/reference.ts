@@ -9,16 +9,23 @@ import { REFERENCE_FILES } from './reference-files.generated';
 /** Identity of this reference; activities pin it alongside rule and strategy identities. */
 export const BLACKJACK_REFERENCE = {
   version: '1.0.0',
-  frozen: '2026-09-14',
   source: 'research/blackjack-coaching-validation@ae3776d151f5ebf35432abb4ce7ae1b0bd9b69c3',
   files: Object.fromEntries(Object.entries(REFERENCE_FILES).map(([file, { sha256 }]) => [file, sha256])) as Readonly<
     Record<keyof typeof REFERENCE_FILES, string>
   >,
 } as const;
 
-/** Dealer rule × late surrender. Default S17_LS. */
-export type BlackjackPreset = 'S17_LS' | 'S17_noLS' | 'H17_LS' | 'H17_noLS';
+/** The blackjack rule presets: dealer rule × late surrender. Default S17_LS. */
+export const BLACKJACK_PRESETS = ['S17_LS', 'S17_noLS', 'H17_LS', 'H17_noLS'] as const;
+export type BlackjackPreset = (typeof BLACKJACK_PRESETS)[number];
 export type DealerRule = 'S17' | 'H17';
+
+const PRESET_RULES: Readonly<Record<BlackjackPreset, { readonly dealerRule: DealerRule; readonly lateSurrender: boolean }>> = {
+  S17_LS: { dealerRule: 'S17', lateSurrender: true },
+  S17_noLS: { dealerRule: 'S17', lateSurrender: false },
+  H17_LS: { dealerRule: 'H17', lateSurrender: true },
+  H17_noLS: { dealerRule: 'H17', lateSurrender: false },
+};
 
 /** A card's blackjack value: the ace is 1 and every ten-valued card is 10. */
 export type CardValue = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
@@ -55,13 +62,14 @@ export interface BasicStrategyCell {
 
 const LETTERS: Readonly<Record<string, PlayAction>> = { H: 'hit', S: 'stand', D: 'double', P: 'split', R: 'surrender' };
 
-function letter(value: string | undefined): PlayAction {
-  const action = value === undefined ? undefined : LETTERS[value];
-  if (action === undefined) throw new Error(`unknown reference action ${JSON.stringify(value)}`);
+/** The research's single-letter action, which must be one of `allowed`. */
+function letter<A extends PlayAction>(value: string, allowed: readonly A[]): A {
+  const action = allowed.find((candidate) => candidate === LETTERS[value]);
+  if (action === undefined) throw new Error(`reference action ${JSON.stringify(value)} is not one of ${allowed.join('/')}`);
   return action;
 }
 
-const optionalLetter = (value: string | undefined) => (value ? letter(value) : null);
+const optionalLetter = <A extends PlayAction>(value: string, allowed: readonly A[]) => (value === '' ? null : letter(value, allowed));
 const field = (row: CsvRow, name: string): string => row[name] ?? '';
 const optionalNumber = (value: string) => (value === '' ? null : Number(value));
 
@@ -74,18 +82,18 @@ const cellKey = (kind: string, hand: number | string, up: number | string) => `$
 
 const basicTables = lazy(() => {
   const tables = new Map<BlackjackPreset, Map<string, BasicStrategyCell>>();
-  for (const preset of ['S17_LS', 'S17_noLS', 'H17_LS', 'H17_noLS'] as const) {
+  for (const preset of BLACKJACK_PRESETS) {
     const cells = new Map<string, BasicStrategyCell>();
     for (const row of parseCsv(REFERENCE_FILES[`basic_${preset}.csv`].text)) {
       cells.set(cellKey(field(row, 'kind'), field(row, 'hand'), field(row, 'up')), {
-        action: letter(row['action']),
+        action: letter(field(row, 'action'), ['hit', 'stand', 'double', 'split', 'surrender']),
         margin: Number(row['margin']),
         fallbacks: {
-          double: letter(row['fallback_double']) as 'hit' | 'stand',
-          doubleOnOriginalLateSurrenderHand: letter(row['fallback_double_ls_original']) as 'hit' | 'stand' | 'surrender',
-          splitByRule: optionalLetter(row['fallback_split_rule']) as 'hit' | 'stand' | 'double' | null,
-          splitByBalance: optionalLetter(row['fallback_split_balance']) as 'hit' | 'stand' | 'surrender' | null,
-          surrender: letter(row['fallback_surrender']) as 'hit' | 'stand' | 'double' | 'split',
+          double: letter(field(row, 'fallback_double'), ['hit', 'stand']),
+          doubleOnOriginalLateSurrenderHand: letter(field(row, 'fallback_double_ls_original'), ['hit', 'stand', 'surrender']),
+          splitByRule: optionalLetter(field(row, 'fallback_split_rule'), ['hit', 'stand', 'double']),
+          splitByBalance: optionalLetter(field(row, 'fallback_split_balance'), ['hit', 'stand', 'surrender']),
+          surrender: letter(field(row, 'fallback_surrender'), ['hit', 'stand', 'double', 'split']),
         },
         values: {
           stand: Number(row['ev_stand']),
@@ -127,7 +135,7 @@ export interface PublishedCost {
 
 /** One certified Hi-Lo index play (Illustrious 18, Fab 4 surrender, or insurance). */
 export interface PlayingDeviation {
-  readonly rule: DealerRule;
+  readonly dealerRule: DealerRule;
   readonly set: 'illustrious18' | 'fab4' | 'insurance';
   /** The research's name for the situation, e.g. "16 vs 10" or "T,T vs 6". */
   readonly situation: string;
@@ -205,7 +213,7 @@ const deviationTables = lazy(() => {
       rows.map((row): PlayingDeviation => {
         const hand = field(row, 'hand');
         return {
-          rule,
+          dealerRule: rule,
           set: known(SETS, field(row, 'set')),
           situation: field(row, 'situation'),
           handKind: known({ hard: 'hard', pair: 'pair', insurance: 'insurance' } as const, field(row, 'hand_kind')),
@@ -244,9 +252,9 @@ const deviationTables = lazy(() => {
  * late-surrender presets.
  */
 export function playingDeviations(preset: BlackjackPreset): readonly PlayingDeviation[] {
-  const rule: DealerRule = preset.startsWith('S17') ? 'S17' : 'H17';
-  const all = deviationTables().get(rule) ?? [];
-  return preset.endsWith('_LS') ? all : all.filter((deviation) => deviation.set !== 'fab4');
+  const { dealerRule, lateSurrender } = PRESET_RULES[preset];
+  const all = deviationTables().get(dealerRule) ?? [];
+  return lateSurrender ? all : all.filter((deviation) => deviation.set !== 'fab4');
 }
 
 /** The play a deviation prescribes at an integer true count. */
@@ -261,9 +269,10 @@ export interface BlackjackHouseEdge {
   readonly reference: string;
 }
 
-// The preset's basic strategy off the top of a fresh six-deck shoe, derived
-// from the certified basic tables' values (see test/house-edge.test.ts). A
-// property of the rules, never a prediction of a session's results.
+// The edge of each preset's rules off the top of a fresh six-deck shoe, computed
+// under the certified basic-strategy play from the certified basic tables'
+// values (see test/house-edge.test.ts). A property of the rules, never a
+// prediction of a session's results.
 const HOUSE_EDGE_PERCENT: Readonly<Record<BlackjackPreset, string>> = {
   S17_LS: '0.33',
   S17_noLS: '0.40',
@@ -287,8 +296,8 @@ const continuationTables = lazy(() => {
     const cells = new Map<string, ContinuationCell>();
     for (const row of parseCsv(REFERENCE_FILES[`continuation_${rule}.csv`].text)) {
       cells.set(cellKey(field(row, 'kind'), field(row, 'total'), field(row, 'up')), {
-        action: letter(row['action']) as ContinuationCell['action'],
-        fallback: letter(row['fallback']) as ContinuationCell['fallback'],
+        action: letter(field(row, 'action'), ['hit', 'stand', 'double']),
+        fallback: letter(field(row, 'fallback'), ['hit', 'stand']),
       });
     }
     tables.set(rule, cells);

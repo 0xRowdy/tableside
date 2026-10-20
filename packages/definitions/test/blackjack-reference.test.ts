@@ -33,7 +33,7 @@ describe('Hi-Lo playing deviations', () => {
       rows.forEach((row, i) => {
         const deviation = deviations[i];
         expect(deviation, row['situation']).toEqual({
-          rule,
+          dealerRule: rule,
           set: { I18: 'illustrious18', F4: 'fab4', insurance: 'insurance' }[row['set'] ?? ''],
           situation: row['situation'],
           handKind: row['hand_kind'],

@@ -3,8 +3,8 @@ import { describe, expect, it } from 'vitest';
 import { BLACKJACK_REFERENCE, blackjackHouseEdge, type BlackjackPreset } from '../src/index';
 import { frozenRows, LETTER, PRESETS } from './frozen-files';
 
-// The house edge of the preset's basic strategy off the top of a fresh six-deck
-// shoe, derived here from the certified basic_<preset>.csv values and exact
+// The house edge of each preset's rules off the top of a fresh six-deck shoe,
+// under basic-strategy play, derived here from the certified basic_<preset>.csv values and exact
 // card-removal probabilities. Each row's values are expectations per original
 // bet given no dealer blackjack, averaged over the row's two-card compositions
 // weighted by P(composition | up card, no dealer blackjack), so weighting every

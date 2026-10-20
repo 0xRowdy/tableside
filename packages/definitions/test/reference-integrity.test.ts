@@ -80,8 +80,12 @@ describe('certified blackjack reference integrity (launch gate 2)', () => {
     // listed in its manifest; none may appear anywhere in the product tree.
     const manifest = JSON.parse(readFileSync(join(REFERENCE_DIR, 'reference-manifest.json'), 'utf8')) as {
       scripts: Record<string, string>;
+      calculator: { files_used: string[] };
     };
-    const researchScripts = new Set(Object.keys(manifest.scripts));
+    // Plus the GPL calculator's own sources (src/blackjack.cpp, src/blackjack.h), never vendored.
+    const calculatorFiles = manifest.calculator.files_used.map((path) => path.split('/').pop() ?? path);
+    expect(calculatorFiles).toEqual(['blackjack.cpp', 'blackjack.h']);
+    const researchScripts = new Set([...Object.keys(manifest.scripts), ...calculatorFiles]);
     const researchHashes = new Set(Object.values(manifest.scripts));
     expect(researchScripts).toContain('farmer_driver.cpp');
 

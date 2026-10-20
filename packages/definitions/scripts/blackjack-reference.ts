@@ -32,7 +32,7 @@ export const SHIPPED_FILES = {
 
 const sha256 = (bytes: Buffer | string) => createHash('sha256').update(bytes).digest('hex');
 
-/** Every way the reference on disk departs from the frozen manifest; empty when intact. */
+/** Every way the reference on disk differs from the frozen manifest; empty when intact. */
 export function referenceProblems(dir = REFERENCE_DIR): string[] {
   const manifestBytes = readFileSync(`${dir}/reference-manifest.json`);
   if (sha256(manifestBytes) !== MANIFEST_SHA256) {
