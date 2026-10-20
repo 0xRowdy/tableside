@@ -1,0 +1,43 @@
+{
+  "register": "Tableside provenance register (content rights, spec 7): launch sound and haptic cues",
+  "policy": "docs/decisions/built-in-reference-content-rights.md, Minimal provenance record",
+  "records": [
+    {
+      "item": "Launch sound cues 1–16 (#49 catalog), revision 1",
+      "files": [
+        { "path": "apps/mobile/assets/sounds/01-card-dealt.wav", "sha256": "1b563e6f6f1abfd1313ab375710642a68c187af673b83bcb91fb53d8a814205e" },
+        { "path": "apps/mobile/assets/sounds/02-stake-set.wav", "sha256": "aadb3de76069a4ec6fce74487732e2a86893b5b8690da59f5c816d6fd0232c57" },
+        { "path": "apps/mobile/assets/sounds/03-wager-removed.wav", "sha256": "6de1bd8dc83774c932ef8cd8bd3f45e4822b92255013e075e03a814c2066c402" },
+        { "path": "apps/mobile/assets/sounds/04-dice-thrown.wav", "sha256": "2c6db21677dd02842fba0222e9ddfc9767300fa7a142f72dfadeee970c5e2e46" },
+        { "path": "apps/mobile/assets/sounds/05-ball-landed.wav", "sha256": "a3df9c5d4eb69fa0f92238ff9b29867641cfc84df30bb41bad4d3de2657c0acc" },
+        { "path": "apps/mobile/assets/sounds/06-net-win.wav", "sha256": "670f51bf4dbdc8e6ce59d0cd2baec6753bb8eca98123fab5d65a34cdee12a9c1" },
+        { "path": "apps/mobile/assets/sounds/07-net-loss.wav", "sha256": "17e4d2af02ee702ae849921cbebbd9d015c9c872c47832faffcaa3acd767bb1c" },
+        { "path": "apps/mobile/assets/sounds/08-net-even.wav", "sha256": "bbea8d8e4cde1a61182c77fdb4f51ee85d32e583aed246baec4f39c4f0130663" },
+        { "path": "apps/mobile/assets/sounds/09-input-rejected.wav", "sha256": "6f74aa06a44bba6e9974bd14ad1ffed034ed12f70b7573332602fe6197d84c7c" },
+        { "path": "apps/mobile/assets/sounds/10-answer-accepted.wav", "sha256": "b690425c68eaf9332f1476241d010c1bd3c18b3cee7ad15246a720f1fcd07ed7" },
+        { "path": "apps/mobile/assets/sounds/11-checkpoint-due.wav", "sha256": "a837391a2064691420b129579c91c189265fb526745138e414a926bf4b12ecb7" },
+        { "path": "apps/mobile/assets/sounds/12-attempt-ended.wav", "sha256": "ed0210bf46bdab72e5341a450af121765e92bedc4afea9dea2fc02ddcfb6aaa5" },
+        { "path": "apps/mobile/assets/sounds/13-correct.wav", "sha256": "cfc9a576f605030b12718129540758b083ebff03980694da0b25112d14e3307f" },
+        { "path": "apps/mobile/assets/sounds/14-incorrect.wav", "sha256": "454e963b0840effd178ef9046fb4ee322fab2f40a53ceae98581a4702c46722f" },
+        { "path": "apps/mobile/assets/sounds/15-correction-offered.wav", "sha256": "885d842c02dc1526529d83de0074d5b9c102657b1afbceb459029c7a76ba2079" },
+        { "path": "apps/mobile/assets/sounds/16-milestone.wav", "sha256": "03b111de6a323d5cc50e82381c7b16e75957093a48a1acfbc32069ddd5202231" }
+      ],
+      "usedIn": "Bundled in the app install and played by the audio/haptics service (apps/mobile/src/feedback) during practice play and, from spec 3, challenges. Not used in store materials.",
+      "origin": "Original work. Synthesized from sine tones and seeded noise by apps/mobile/scripts/generate-cue-sounds.mjs in this repository, written by the implementing developer on 2026-10-20. No samples, recordings, sound libraries or AI generators were used; re-running the script reproduces every file byte for byte.",
+      "rightsBasis": "Original work created for Tableside. No third-party material, license or paid asset.",
+      "usageLimits": "None beyond the project's own: commercial app distribution, offline bundling and modification are permitted; no attribution is required.",
+      "changesAndValidation": "File hashes, durations and catalog coverage are checked by apps/mobile/__tests__/cue-assets.test.ts. Rights approval is not a correctness result.",
+      "releaseReview": { "owner": null, "date": null, "decision": "Pending owner review before external distribution." }
+    },
+    {
+      "item": "Paired haptics for cues 2, 4, 5, 6, 7, 9, 10, 12, 14, 15 and 16",
+      "files": [],
+      "usedIn": "Fired by the audio/haptics service through expo-haptics (apps/mobile/src/feedback/device-ports.ts).",
+      "origin": "Standard platform patterns (selection; light, medium and heavy impact; success, warning and error notification) supplied by iOS and Android through expo-haptics. No haptic asset or custom pattern ships with the app.",
+      "rightsBasis": "System-provided resources used through the platform APIs; the expo-haptics library is a software dependency under its own license, outside this content register.",
+      "usageLimits": "As the platform APIs allow.",
+      "changesAndValidation": "The pairing is checked by apps/mobile/__tests__/feedback-service.test.ts and device-feedback-ports.test.ts. Android system-haptic behavior is measured on devices (spec 1 gate 8).",
+      "releaseReview": { "owner": null, "date": null, "decision": "Pending owner review before external distribution." }
+    }
+  ]
+}
