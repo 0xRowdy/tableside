@@ -6,6 +6,7 @@
 // strategy vocabulary (its situation subjects, targets and table conditions),
 // so the same interpreter serves every game. Every function is pure.
 
+import type { Command } from './activity';
 import { canonicalJson } from './canonical';
 import { add, compare, decodeMoney, encodeMoney, money, mul, sub, MoneyFormatError, type Money } from './money';
 import { hasExactKeys, isRecord } from './shape';
@@ -253,6 +254,10 @@ export interface StrategyGame<State = never> {
   situation(state: State): unknown;
   /** The command's playing decision assessed against the definition's policy; undefined when the command makes none. */
   assessPlay?(state: State, definition: StrategyDefinition, command: unknown): PlayAssessment | undefined;
+  /** A playing move (one an assessment explains) as the game's command. */
+  playCommand?(move: unknown): Command;
+  /** The policy's play for the decision the state awaits, after its legal and funding fallbacks; undefined when none awaits. */
+  followPlay?(state: State, definition: StrategyDefinition): Command | undefined;
   /** The outcome of the turn a state has just settled, in the game's own words (a roulette pocket), for the cycle record. */
   outcome(state: State): string;
   /**

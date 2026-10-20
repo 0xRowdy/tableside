@@ -30,7 +30,7 @@ import {
   type BlackjackShoeView,
   type BlackjackTableView,
 } from './blackjack';
-import { moveCommand, type BlackjackDeviation, type PlayExplanation, type PlayMove } from './blackjack-strategy';
+import type { BlackjackDeviation, PlayExplanation, PlayMove } from './blackjack-strategy';
 import { canonicalJson } from './canonical';
 import { CRAPS, type CrapsActivityState, type CrapsDomainFact, type CrapsIllegalActionReason, type CrapsRuleSet, type CrapsTable, type CrapsOutcome } from './craps';
 import type { RoulettePocket } from './draws';
@@ -538,6 +538,14 @@ export interface GameModule<S extends ActivityState, V extends PermittedView, C 
   strategyView?(state: S, view: StrategyView): StrategyView;
   /** The first problem with the game's part of a checkpoint (rules, wagers, outcome, table state), if any. */
   damage(value: Record<string, unknown>): string | undefined;
+  /** The most a player can stake on one turn under these rules, and the largest profit per unit staked (spec 6 exposure bound). */
+  turnExposure(rules: S['rules']): { readonly stake: Money; readonly payout: Money };
+  /**
+   * Where a standardized runner bets the profile's base when the strategy
+   * leaves the bets to the player (a blackjack playing policy without a bet
+   * schedule); undefined where every strategy places its own bets.
+   */
+  readonly ownBetTarget?: string;
 }
 
 // The registry casts each module to the union: a module only ever receives states of its own game.
@@ -553,6 +561,15 @@ const gameFor = (game: unknown): AnyModule | undefined =>
   typeof game === 'string' && Object.hasOwn(GAMES, game) ? GAMES[game as GameId] : undefined;
 
 const moduleOf = (state: ActivityState) => GAMES[state.identities.game];
+
+/** A game's module, for the standardized runner: its turn exposure and where it bets for the player. */
+export const gameModule = (game: GameId): AnyModule => GAMES[game];
+
+/** The pinned strategy's play for the decision the state awaits (a blackjack hand), after its fallbacks; undefined when none awaits. */
+export function strategyPlay(state: ActivityState): Command | undefined {
+  const run = state.strategy;
+  return run ? gameStrategy(state).followPlay?.(state, run.definition) : undefined;
+}
 
 /**
  * Rebuys are offered only while the activity waits for input, and only with
@@ -1036,7 +1053,7 @@ const leavesBetting = (definition: StrategyDefinition) => definition.instruction
 function resolvePlay(state: ActivityState, run: StrategyRun, correction: PlayCorrection, resolution: StrategyDeparture['resolution']): AnyStep {
   const departure: StrategyDeparture = { ...correction, resolution };
   const move = resolution === 'retried' ? correction.explanation.prescribed : correction.actual;
-  const applied = moduleOf(state).apply({ ...state, phase: 'open-decision' } as ActivityState, moveCommand(move) as GameCommand);
+  const applied = moduleOf(state).apply({ ...state, phase: 'open-decision' } as ActivityState, gameStrategy(state).playCommand?.(move) as GameCommand);
   const strategy: StrategyRun = { ...run, correction: null, departures: [...run.departures, departure], decisions: counted(run, 'playing') };
   return withStrategy(applied, strategy, [{ kind: 'departure-recorded', departure }]);
 }
@@ -1399,7 +1416,7 @@ function strategyDamage(state: ActivityState, identity: VersionedIdentity | null
     // A held playing move is exactly what the pinned policy says about this decision.
     const actual = run.correction.actual;
     if (status !== 'active' || !isMove(actual)) return 'damaged correction';
-    const assessment = gameStrategy(state).assessPlay?.(state, definition, moveCommand(actual)) as PlayAssessment<PlayExplanation, PlayMove, Command> | undefined;
+    const assessment = gameStrategy(state).assessPlay?.(state, definition, gameStrategy(state).playCommand?.(actual)) as PlayAssessment<PlayExplanation, PlayMove, Command> | undefined;
     if (!assessment || assessment.follows) return 'damaged correction';
     const held: PlayCorrection = { id: `${state.activity.id}/departure/${state.sequence - 1}`, turn: state.turn, decision: (run.decisions as StrategyRun['decisions']).playing, explanation: assessment.explanation, actual: assessment.actual };
     return canonicalJson(run.correction) !== canonicalJson(held) || ids.has(held.id) ? 'damaged correction' : undefined;

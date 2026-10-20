@@ -670,6 +670,12 @@ export const BLACKJACK_STRATEGY: StrategyGame<BlackjackActivityState> = {
     return definition !== undefined && policyOf(definition)?.count !== 'supplied' && instructionsRead(definition, 'true-count');
   },
   assessPlay,
+  playCommand: (move) => moveCommand(move as PlayMove),
+  followPlay: (state, definition) => {
+    const policy = policyOf(definition);
+    const decision = policy && playSituation(state);
+    return decision ? moveCommand(prescribePlay(policy, decision.situation, decision.target, decision.hand).prescribed) : undefined;
+  },
   // "19 v 20": the learner's hand totals against the dealer's.
   outcome: (state) => {
     const round = state.outcome;

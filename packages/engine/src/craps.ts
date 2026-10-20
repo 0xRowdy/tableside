@@ -881,6 +881,7 @@ export function crapsBetProblem(
 /** Standard craps behind the session protocol. */
 export const CRAPS: GameModule<CrapsActivityState, CrapsPermittedView, CrapsCommand> = {
   ruleSets: [{ id: STANDARD_CRAPS.id, version: STANDARD_CRAPS.version }],
+  turnExposure: crapsTurnExposure,
   extra: { point: null, instructions: [] },
   pinRules: (rules) => {
     if (rules.id !== STANDARD_CRAPS.id || rules.version !== STANDARD_CRAPS.version) return 'unsupported craps rules';

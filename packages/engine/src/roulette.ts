@@ -408,6 +408,13 @@ export const ROULETTE: GameModule<RouletteActivityState, RoulettePermittedView> 
   apply,
   // A waiting spin: guided practice spins on while the strategy places nothing yet (it waits for a pattern).
   idleTurn: spin,
+  // Every placement at its own maximum: chips on one target never pass its limit, and there is no aggregate cap.
+  turnExposure: (rules) => {
+    const placements = rouletteLayout(rules.wheel);
+    const stake = placements.reduce((sum, placement) => add(sum, decodeMoney(rules.limits[placement.limitClass].max)), money(0n));
+    const payout = placements.reduce((most, placement) => (placement.payout > most ? placement.payout : most), 0n);
+    return { stake, payout: money(payout) };
+  },
   view: (state) => ({
     game: 'roulette',
     outcome: state.outcome && { turn: state.outcome.turn, pocket: state.outcome.pocket },

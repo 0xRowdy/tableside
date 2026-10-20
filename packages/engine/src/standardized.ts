@@ -16,18 +16,19 @@
 import {
   advanceActivity,
   createActivity,
+  gameModule,
   strategyDecision,
+  strategyPlay,
   type ActivityState,
   type Command,
   type DomainFact,
   type PendingStrategyAction,
 } from './activity';
-import { HAND_TARGET, MAX_SPLIT_HANDS, type BlackjackActivityState, type BlackjackRuleSet } from './blackjack';
-import { playSituation, policyOf, prescribePlay, moveCommand } from './blackjack-strategy';
-import { crapsTurnExposure, type CrapsRuleSet } from './craps';
+import type { BlackjackRuleSet } from './blackjack';
+import type { CrapsRuleSet } from './craps';
 import { add, compare, decodeMoney, encodeMoney, money, mul, sub, type Money } from './money';
 import { serverStreamIdentity } from './random';
-import { rouletteLayout, type RouletteRuleSet } from './roulette';
+import type { RouletteRuleSet } from './roulette';
 import type { VersionedIdentity } from './shape';
 import type { StrategySelection } from './strategy';
 import type { Words2 } from './philox';
@@ -60,27 +61,10 @@ interface ProfileBase {
 export type BenchmarkProfile = ProfileBase &
   ({ readonly game: 'roulette'; readonly rules: RouletteRuleSet } | { readonly game: 'craps'; readonly rules: CrapsRuleSet } | { readonly game: 'blackjack'; readonly rules: BlackjackRuleSet });
 
-const largest = (values: readonly Money[]) => values.reduce((a, b) => (compare(a, b) >= 0 ? a : b));
 const units = (n: number | bigint) => money(BigInt(n));
 
-/** The most a player can stake on one turn under the rules, and the largest profit per unit staked. */
-function turnExposure(profile: BenchmarkProfile): { stake: Money; payout: Money } {
-  switch (profile.game) {
-    case 'roulette': {
-      // Every placement at its own maximum: chips on one target never pass its limit, and there is no aggregate cap.
-      const placements = rouletteLayout(profile.rules.wheel);
-      const stake = placements.reduce((sum, placement) => add(sum, decodeMoney(profile.rules.limits[placement.limitClass].max)), units(0));
-      return { stake, payout: largest(placements.map((placement) => units(placement.payout))) };
-    }
-    case 'craps':
-      return crapsTurnExposure(profile.rules);
-    case 'blackjack': {
-      // Every hand split to the cap and doubled, plus full insurance; a doubled win or insurance pays at most 2 per unit.
-      const initial = decodeMoney(profile.rules.limits.initial.max);
-      return { stake: add(mul(initial, units(MAX_SPLIT_HANDS * 2)), mul(initial, money(1n, 2n))), payout: units(2) };
-    }
-  }
-}
+/** The most a player can stake on one turn under the rules, and the largest profit per unit staked: the game module's to say. */
+const turnExposure = (profile: BenchmarkProfile): { stake: Money; payout: Money } => gameModule(profile.game).turnExposure(profile.rules as never);
 
 /**
  * The monetary-exposure bound the profile's rules imply: the funding plus, for
@@ -209,12 +193,10 @@ function nextMove(session: StandardizedSession): { command: Command; stop?: Stan
     default:
       break;
   }
-  // A blackjack hand awaiting a decision: the strategy's play, after its legal and funding fallbacks.
-  if (state.identities.game === 'blackjack') {
-    const decision = playSituation(state as BlackjackActivityState);
-    const policy = policyOf(run.definition);
-    if (decision && policy) return { command: moveCommand(prescribePlay(policy, decision.situation, decision.target, decision.hand).prescribed) };
-  }
+  // A decision the player makes mid-turn (a blackjack hand): the strategy's play, after its legal and funding fallbacks.
+  const play = strategyPlay(state);
+  if (play) return { command: play };
+  const game = gameModule(state.identities.game);
   const stop = (cause: StandardizedStopCause, opportunities = state.turn) => ({ command: { kind: 'request-stop' } as Command, stop: cause, opportunities });
   if (state.turn >= session.horizon) return stop('horizon');
   if (state.phase === 'cycle-completion') {
@@ -233,18 +215,19 @@ function nextMove(session: StandardizedSession): { command: Command; stop?: Stan
   if (run.status !== 'active') throw new StandardizedRunError(`the strategy is ${run.status}`);
   let wanted: readonly { readonly target: string; readonly amount: string }[];
   if (run.definition.instructions.length === 0) {
-    // A blackjack strategy that leaves the bets to the player: the profile's base every round.
+    // A strategy that leaves the bets to the player: the profile's base every turn, where the game says.
+    if (!game.ownBetTarget) throw new StandardizedRunError('the strategy places no bets');
     if (compare(available(state), decodeMoney(session.base)) < 0) return stop('unaffordable');
-    wanted = [{ target: HAND_TARGET, amount: session.base }];
+    wanted = [{ target: game.ownBetTarget, amount: session.base }];
   } else {
     const decision = strategyDecision(state) as NonNullable<ReturnType<typeof strategyDecision>>;
     if (decision.held) return stop(STOP_FOR_PAUSE[decision.held.reason]);
     const { prescription } = decision;
     if (prescription.status === 'paused') return stop(STOP_FOR_PAUSE[prescription.reason]);
     if (prescription.status === 'uncovered') {
-      // Nothing to place: a waiting turn (a roll or spin with nothing at stake) still uses an opportunity.
-      // A blackjack round can't yet be dealt with the evaluated player sitting out.
-      if (state.identities.game === 'blackjack') throw new StandardizedRunError('a waiting blackjack round is not supported');
+      // Nothing to place: a waiting turn (a roll or spin with nothing at stake) still uses an opportunity,
+      // in a game that has one (a blackjack round can't yet be dealt with the evaluated player sitting out).
+      if (!game.idleTurn) throw new StandardizedRunError(`a waiting ${state.identities.game} turn is not supported`);
       if (state.wagers.length > 0) throw new StandardizedRunError('an uncovered situation with wagers on the table');
       return { command: { kind: 'begin-turn' } };
     }

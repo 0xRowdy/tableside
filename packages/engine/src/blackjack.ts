@@ -1124,4 +1124,11 @@ export const BLACKJACK: GameModule<BlackjackActivityState, BlackjackPermittedVie
   view,
   strategyView,
   damage,
+  // Every hand split to the cap and doubled, plus full insurance; a doubled win or insurance pays at most 2 per unit.
+  turnExposure: (rules) => {
+    const initial = decodeMoney(rules.limits.initial.max);
+    return { stake: add(mul(initial, money(BigInt(MAX_SPLIT_HANDS * 2))), mul(initial, money(1n, 2n))), payout: money(2n) };
+  },
+  // A playing policy without a bet schedule leaves the initial wager to the player.
+  ownBetTarget: HAND_TARGET,
 };
