@@ -86,7 +86,7 @@ export function explainPrescription(definition: StrategyDefinition, parameters: 
   if (mismatch.length > 0) return { ok: false, error: `the strategy isn't declared for this table (${mismatch.map((m) => m.requirement).join(', ')})` };
   const progressError = progressProblem(definition, progress);
   if (progressError) return { ok: false, error: progressError };
-  return { ok: true, explanation: prescribe(vocabulary, definition, parameters as Record<string, string>, situation, progress) };
+  return { ok: true, explanation: prescribe(vocabulary, { definition, parameters: parameters as Record<string, string> }, situation, progress) };
 }
 
 export type ExplainPlayResult = { readonly ok: true; readonly explanation: PlayExplanation } | { readonly ok: false; readonly error: string };

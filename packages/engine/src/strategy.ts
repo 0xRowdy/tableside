@@ -158,6 +158,12 @@ export interface StrategySelection {
   readonly parameters: Readonly<Record<string, string>>;
 }
 
+/** A strategy with every parameter at its declared default. */
+export const defaultSelection = (definition: StrategyDefinition): StrategySelection => ({
+  definition,
+  parameters: Object.fromEntries(definition.parameters.map((param) => [param.id, param.default])),
+});
+
 export type DiagnosticCategory = 'incomplete' | 'conflict' | 'incompatible' | 'envelope' | 'unbounded';
 
 export interface StrategyDiagnostic {
@@ -943,13 +949,7 @@ export function progressProblem(definition: StrategyDefinition, progress: unknow
  * definition, parameters, situation and progress must already be valid. Pure;
  * draws nothing.
  */
-export function prescribe<S>(
-  vocabulary: StrategyVocabulary<S>,
-  definition: StrategyDefinition,
-  parameters: Readonly<Record<string, string>>,
-  situation: S,
-  progress: StrategyProgress,
-): Explanation {
+export function prescribe<S>(vocabulary: StrategyVocabulary<S>, { definition, parameters }: StrategySelection, situation: S, progress: StrategyProgress): Explanation {
   const available = vocabulary.available(situation);
   const subjects: Record<string, string> = { 'last-result': progress.lastResult };
   for (const name of Object.keys(vocabulary.subjects).sort()) subjects[name] = vocabulary.subject(situation, name);

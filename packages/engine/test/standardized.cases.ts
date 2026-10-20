@@ -10,6 +10,7 @@ import {
   advanceActivity,
   canonicalSpecification,
   canonicalStrategy,
+  defaultSelection,
   checkpointHash,
   deriveExposureBound,
   exposureBoundProblems,
@@ -129,7 +130,7 @@ const AFTER_RED: StrategyDefinition = {
 };
 
 const ANALYSIS = { id: 'standardized-analysis', version: 1 };
-const fingerprint = (definition: StrategyDefinition, profile: BenchmarkProfile = SINGLE_ZERO) => canonicalSpecification({ definition, profile, analysis: ANALYSIS }).fingerprint;
+const fingerprint = (definition: StrategyDefinition, profile: BenchmarkProfile = SINGLE_ZERO) => canonicalSpecification({ strategy: defaultSelection(definition), profile, analysis: ANALYSIS }).fingerprint;
 
 export const standardizedCases: TestCase[] = [
   {
@@ -303,7 +304,7 @@ export const standardizedCases: TestCase[] = [
       for (const { profile, definition } of TRACED) {
         for (const index of TRACED_INDICES) {
           const { record, session } = run(profile, definition, index);
-          t.record(`${profile.id} ${definition.id} ${index}`, { profile, strategy: canonicalStrategy(definition), key: KEY, index, record, checkpoint: checkpointHash(session.activity) });
+          t.record(`${profile.id} ${definition.id} ${index}`, { profile, strategy: canonicalStrategy(defaultSelection(definition)), key: KEY, index, record, checkpoint: checkpointHash(session.activity) });
         }
       }
     },
@@ -312,7 +313,7 @@ export const standardizedCases: TestCase[] = [
     name: 'canonical encoding: names, prose, ids and equal numbers leave the fingerprint unchanged',
     run: (t) => {
       // Worked by hand: the strategy's canonical form, the profile verbatim and the identities, as canonical JSON.
-      const spec = canonicalSpecification({ definition: SIMPLE, profile: SINGLE_ZERO, analysis: ANALYSIS });
+      const spec = canonicalSpecification({ strategy: defaultSelection(SIMPLE), profile: SINGLE_ZERO, analysis: ANALYSIS });
       t.equal(
         spec.manifest.startsWith(
           '{"encoding":{"instructionSchema":1,"normalization":1,"version":1},"identities":{"analysis":{"id":"standardized-analysis","version":1},"engine":"0.0.0","randomProtocol":1,"reference":null,"rules":{"id":"roulette-single-zero","version":1}},"profile":{',
@@ -362,18 +363,18 @@ export const standardizedCases: TestCase[] = [
       t.equal(fingerprint(SIMPLE, { ...SINGLE_ZERO, opportunities: 199 }) === base, false);
       t.equal(fingerprint(SIMPLE, { ...SINGLE_ZERO, version: 2 }) === base, false);
       t.equal(fingerprint(SIMPLE, { ...SINGLE_ZERO, reference: { id: 'r', version: 1 } }) === base, false);
-      t.equal(canonicalSpecification({ definition: SIMPLE, profile: SINGLE_ZERO, analysis: { ...ANALYSIS, version: 2 } }).fingerprint === base, false);
+      t.equal(canonicalSpecification({ strategy: defaultSelection(SIMPLE), profile: SINGLE_ZERO, analysis: { ...ANALYSIS, version: 2 } }).fingerprint === base, false);
     },
   },
   {
     name: 'canonical encoding: a fingerprint that does not match its manifest is an integrity error',
     run: (t) => {
-      const spec = canonicalSpecification({ definition: SIMPLE, profile: SINGLE_ZERO, analysis: ANALYSIS });
+      const spec = canonicalSpecification({ strategy: defaultSelection(SIMPLE), profile: SINGLE_ZERO, analysis: ANALYSIS });
       t.equal(throws(() => verifySpecification(spec)), 'no error');
       t.equal(throws(() => verifySpecification({ ...spec, manifest: spec.manifest.replace('"10"', '"20"') })), 'FingerprintIntegrityError');
       // Only a runnable strategy with valid choices has an encoding.
-      t.equal(throws(() => canonicalStrategy({ ...SIMPLE, instructions: [] })), 'FingerprintIntegrityError');
-      t.equal(throws(() => canonicalStrategy(FLAT_EVEN_MONEY, { target: 'green' })), 'FingerprintIntegrityError');
+      t.equal(throws(() => canonicalStrategy(defaultSelection({ ...SIMPLE, instructions: [] }))), 'FingerprintIntegrityError');
+      t.equal(throws(() => canonicalStrategy({ definition: FLAT_EVEN_MONEY, parameters: { target: 'green' } })), 'FingerprintIntegrityError');
     },
   },
 ];

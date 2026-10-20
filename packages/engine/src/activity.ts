@@ -1046,7 +1046,7 @@ const gameStrategy = (state: ActivityState) => strategyGame(state.identities.gam
 /** What the strategy prescribes for the decision the activity waits on (the same function Explain prescription runs). */
 function explain(state: ActivityState, run: StrategyRun): Explanation {
   const game = gameStrategy(state);
-  return prescribe(game.vocabulary, run.definition, run.parameters, game.situation(state), run.deferred?.progress ?? run.progress);
+  return prescribe(game.vocabulary, run, game.situation(state), run.deferred?.progress ?? run.progress);
 }
 
 /** True when the wagers are exactly the prescribed groups. A paused or uncovered prescription places no new bets. */

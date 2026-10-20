@@ -220,6 +220,7 @@ export {
   type TableCompatibility,
 } from './strategies';
 export {
+  defaultSelection,
   initialProgress,
   STRATEGY_ENVELOPE,
   STRATEGY_FORMAT,

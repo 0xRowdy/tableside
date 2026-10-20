@@ -12,7 +12,6 @@ import {
   CRAPS_STRATEGIES,
   DEFINITIONS_VERSION,
   ROULETTE_STRATEGIES,
-  strategyDefaults,
 } from '@tableside/definitions';
 import {
   ENGINE_VERSION,
@@ -23,6 +22,7 @@ import {
   type BenchmarkProfile,
   type StandardizedSessionRecord,
   type StrategyDefinition,
+  type StrategySelection,
   type Words2,
 } from '@tableside/engine';
 
@@ -45,7 +45,7 @@ export function builtInStrategies(): StrategyDefinition[] {
 }
 
 /** The profiles a strategy is evaluated under: every profile of its game it fits, without adjustment. */
-export function compatibleProfiles(definition: StrategyDefinition, parameters: Readonly<Record<string, string>> = strategyDefaults(definition)): BenchmarkProfile[] {
+export function compatibleProfiles({ definition, parameters }: StrategySelection): BenchmarkProfile[] {
   return BENCHMARK_PROFILES.filter((profile) => profile.game === definition.game && strategyTableCompatibility(definition, parameters, profile.rules).compatible);
 }
 
@@ -58,9 +58,8 @@ export function parseKey(hex: string): Words2 {
 
 export interface RunRequest {
   readonly profile: BenchmarkProfile;
-  readonly definition: StrategyDefinition;
-  /** The strategy's choices; its defaults when omitted. */
-  readonly parameters?: Readonly<Record<string, string>>;
+  /** The strategy with its choices (defaultSelection for its defaults). */
+  readonly strategy: StrategySelection;
   readonly key: Words2;
   /** The session indices to run, in order. */
   readonly indices: readonly number[];
@@ -72,12 +71,11 @@ export interface RunRequest {
  * when any record exceeds it (an integrity error, never a result).
  */
 export function runStandardized(request: RunRequest): StandardizedSessionRecord[] {
-  const { profile, definition, key } = request;
+  const { profile, strategy, key } = request;
   const problems = exposureBoundProblems(profile);
   if (problems.length > 0) throw new Error(problems.join('; '));
-  const parameters = request.parameters ?? strategyDefaults(definition);
   return request.indices.map((index) => {
-    const { record } = runStandardizedSession({ profile, strategy: { definition, parameters }, key, index });
+    const { record } = runStandardizedSession({ profile, strategy, key, index });
     const past = recordExposureProblems(record, profile);
     if (past.length > 0) throw new Error(past.join('; '));
     return record;

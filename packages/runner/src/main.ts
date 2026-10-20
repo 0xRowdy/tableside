@@ -4,6 +4,7 @@
 import { parseArgs } from 'node:util';
 
 import { benchmarkProfile } from '@tableside/definitions';
+import { defaultSelection } from '@tableside/engine';
 
 import { builtInStrategies, parseKey, runnerInfo, runStandardized } from './index';
 
@@ -22,5 +23,5 @@ if (!values.strategy) {
   const count = Number(values.count);
   if (!Number.isSafeInteger(from) || from < 0 || !Number.isSafeInteger(count) || count < 1) throw new Error('--from is a whole number from 0 and --count one from 1');
   const indices = Array.from({ length: count }, (_, i) => from + i);
-  for (const record of runStandardized({ profile, definition, key: parseKey(values.key), indices })) console.log(JSON.stringify(record));
+  for (const record of runStandardized({ profile, strategy: defaultSelection(definition), key: parseKey(values.key), indices })) console.log(JSON.stringify(record));
 }
