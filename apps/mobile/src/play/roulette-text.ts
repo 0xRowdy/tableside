@@ -1,7 +1,17 @@
 // How roulette sessions read on screen and aloud. Amounts are plain units (no
 // currency symbol); formatting never changes a ledger value.
 
-import { FUNDING_CEILING, type DomainFact, type IllegalActionReason, type PermittedView, type Phase, type PlacementKind, type RoulettePocket, type RouletteWheel } from '@tableside/engine';
+import {
+  FUNDING_CEILING,
+  type DomainFact,
+  type IllegalActionReason,
+  type PauseReason,
+  type Phase,
+  type PlacementKind,
+  type RoulettePermittedView as PermittedView,
+  type RoulettePocket,
+  type RouletteWheel,
+} from '@tableside/engine';
 
 import { formatUnits } from './units';
 
@@ -22,19 +32,8 @@ export const wheelZeros = (wheel: RouletteWheel): RoulettePocket[] => (wheel ===
 /** "27 red", "0 green". */
 export const describePocket = (pocket: RoulettePocket) => `${pocket} ${pocketColor(pocket)}`;
 
-export { formatUnits };
-
-/** "+120", "−85" (minus sign), "0". */
-export function formatSigned(amount: string): string {
-  if (amount.startsWith('-')) return `−${formatUnits(amount.slice(1))}`;
-  return amount === '0' ? '0' : `+${formatUnits(amount)}`;
-}
-
-/** "plus 120", "minus 85", "0": for screen readers, which may skip a sign. */
-export function speakSigned(amount: string): string {
-  if (amount.startsWith('-')) return `minus ${formatUnits(amount.slice(1))}`;
-  return amount === '0' ? '0' : `plus ${formatUnits(amount)}`;
-}
+// Shared by every table; re-exported for the roulette screens' existing imports.
+export { formatSigned, formatUnits, speakSigned, totalOnTable } from './units';
 
 /** "1st", "2nd", "3rd": the dozens and columns. */
 export const ORDINAL = ['1st', '2nd', '3rd'] as const;
@@ -77,9 +76,13 @@ export function targetName(target: string): string {
 /** "35:1" → "35 to 1", as screen readers should say it. */
 export const spokenPayout = (payout: string) => payout.replace(':', ' to ');
 
-export const totalOnTable = (view: PermittedView): string =>
-  // Roulette stakes are whole units, so a plain integer sum is exact.
-  view.wagers.reduce((sum, wager) => sum + BigInt(wager.amount), 0n).toString();
+/** A pending strategy action, announced when it begins. The strip shows the amounts. */
+const PAUSED: Record<PauseReason, string> = {
+  'unfunded-group': "Strategy paused: your balance can't cover its next bets. No new strategy bets.",
+  limit: 'Strategy paused: its next bets are outside the table limits. No new strategy bets.',
+  cap: 'Strategy paused at its cap. No new strategy bets.',
+  stop: 'Strategy paused by its stop rule. No new strategy bets.',
+};
 
 export const STATUS: Record<Phase, string> = {
   'open-decision': 'Betting',
@@ -109,8 +112,8 @@ function illegalMessage(reason: IllegalActionReason, target: string | null, view
       return 'Place a wager before you spin.';
     case 'not-whole-units':
       return target ? 'Stakes are whole units. Nothing was placed.' : 'Rebuys are whole units. Nothing was added.';
-    case 'no-wager-to-remove':
-    case 'unknown-target':
+    // no-wager-to-remove, unknown-target, and reasons only other games produce.
+    default:
       return `${name} can't be changed. Nothing was placed.`;
   }
 }
@@ -160,7 +163,10 @@ export function describeFacts(facts: readonly DomainFact[], view: PermittedView)
         parts.push(fact.departure.resolution === 'retried' ? 'Departure recorded: you took it back.' : 'Departure recorded: you overrode the strategy.');
         break;
       case 'cycle-ended':
-        parts.push(fact.reason === 'override' ? 'The strategy cycle ends once this spin settles.' : 'The strategy cycle ended at its cap.');
+        parts.push(fact.reason === 'override' ? 'The strategy cycle ends once this spin settles.' : 'The strategy cycle ended: its next stake is too large to compute.');
+        break;
+      case 'strategy-paused':
+        parts.push(PAUSED[fact.reason]);
         break;
       case 'cycle-restarted':
         parts.push('Strategy restarted with your current balance.');

@@ -2,8 +2,12 @@ import { router } from 'expo-router';
 import { ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { Button } from '@/components/Button';
 import { GameCard } from '@/components/GameCard';
+import { Notice, NoticeText } from '@/components/Notice';
 import { LAUNCH_GAMES } from '@/games';
+import { STATUS } from '@/play/roulette-text';
+import { usePractice } from '@/practice/PracticeProvider';
 import { fonts, palette, space, textScale } from '@/theme/tokens';
 
 /** Above this text scale, landscape also stacks the cards so their text has room. */
@@ -14,6 +18,8 @@ export default function Home() {
   const insets = useSafeAreaInsets();
   const { width, height, fontScale } = useWindowDimensions();
   const sideBySide = width > height && fontScale <= SIDE_BY_SIDE_MAX_FONT_SCALE;
+  const { snapshot } = usePractice();
+  const suspended = snapshot.status === 'active' && snapshot.suspension?.reached ? snapshot : null;
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
@@ -23,6 +29,15 @@ export default function Home() {
         </Text>
         {!sideBySide && <Text maxFontSizeMultiplier={textScale.body} style={styles.subtitle}>Pick a table to practice.</Text>}
       </View>
+      {suspended && (
+        // Design frame S1-01 "Home — session paused" (a suspension, in the glossary). Balances stay in the session (Amendment 1 A6).
+        <View style={[styles.suspended, { marginLeft: insets.left + space[4], marginRight: insets.right + space[4] }]}>
+          <Notice title="Roulette session suspended" testID="session-suspended">
+            <NoticeText>Free play · {STATUS[suspended.view.phase].toLowerCase()}. Nothing has been spun or settled since you left.</NoticeText>
+            <Button label="Resume session" onPress={() => router.navigate('/play')} />
+          </Notice>
+        </View>
+      )}
       <View style={[styles.cards, sideBySide && styles.cardsSideBySide]}>
         {LAUNCH_GAMES.map((game, i) => (
           <GameCard
@@ -51,4 +66,5 @@ const styles = StyleSheet.create({
   cards: { flex: 1, gap: 2 },
   cardsSideBySide: { flexDirection: 'row' },
   card: { flex: 1, minHeight: MIN_CARD_HEIGHT },
+  suspended: { marginBottom: space[3] },
 });

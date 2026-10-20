@@ -17,7 +17,9 @@ import {
   uniformInt,
   type ActivityState,
   type Command,
+  type RouletteActivityState,
   type DomainFact,
+  type RoulettePermittedView,
 } from '../src';
 
 import { DOUBLE_ZERO, run, SPEC, status, step, STREAM } from './activity.fixtures';
@@ -339,7 +341,7 @@ export const activityCases: TestCase[] = [
       collect(readPermittedView(step(a, BEGIN).state));
       t.equal(keys.filter((key) => ['random', 'key', 'session', 'block', 'lane', 'identities', 'receipts'].includes(key)), []);
       t.equal(Object.keys(readPermittedView(a)).sort(), [
-        'activityId', 'balance', 'funding', 'legalCommands', 'outcome', 'phase', 'sequence', 'strategy', 'table', 'turn', 'wagers', 'wagersCommitted',
+        'activityId', 'balance', 'funding', 'game', 'legalCommands', 'outcome', 'phase', 'sequence', 'strategy', 'table', 'turn', 'wagers', 'wagersCommitted',
       ]);
       // readPermittedView takes the state alone: no caller flag can widen it.
       t.equal(readPermittedView.length, 1);
@@ -352,7 +354,7 @@ export const activityCases: TestCase[] = [
       t.equal(placements.length, 157);
       t.equal(placements[0], { target: 'straight-0', kind: 'straight', covers: [0], limitClass: 'inside', min: '1', max: '100', payout: '35:1' });
       t.equal(placements.at(-1), { target: 'column-3', kind: 'column', covers: [3, 6, 9, 12, 15, 18, 21, 24, 27, 30, 33, 36], limitClass: 'outside', min: '10', max: '1000', payout: '2:1' });
-      const doubleZero = readPermittedView(createActivity({ ...SPEC, rules: DOUBLE_ZERO }, STREAM)).table;
+      const doubleZero = (readPermittedView(createActivity({ ...SPEC, rules: DOUBLE_ZERO }, STREAM)) as RoulettePermittedView).table;
       t.equal([doubleZero.wheel, doubleZero.placements.length], ['double-zero', 161]);
       t.equal(doubleZero.placements.find((p) => p.kind === 'basket'), {
         target: 'basket-0-00-1-2-3', kind: 'basket', covers: [0, '00', 1, 2, 3], limitClass: 'inside', min: '1', max: '100', payout: '6:1',
@@ -385,7 +387,7 @@ export const activityCases: TestCase[] = [
     run: (t) => {
       const states = [fresh()];
       for (const command of [place('red', '10'), BEGIN, SETTLE, place('straight-0', '1'), BEGIN, STOP, FINAL]) {
-        states.push(step(states.at(-1) as ActivityState, command).state);
+        states.push(step(states.at(-1) as RouletteActivityState, command).state);
       }
       for (const state of states) {
         const text = encodeCheckpoint(state);
@@ -459,7 +461,8 @@ export const activityCases: TestCase[] = [
       const unsupported = [
         edit((v) => ((v as Record<string, unknown>).schema = 1)),
         edit((v) => (v.identities!.engine = '9.9.9')),
-        edit((v) => (v.identities!.game = 'blackjack')),
+        edit((v) => (v.identities!.game = 'baccarat')),
+        edit((v) => (v.identities!.game = 'toString')),
         edit((v) => (v.identities!.rules = { id: 'roulette-triple-zero', version: 1 })),
         edit((v) => (v.identities!.rules = { id: 'roulette-double-zero', version: 2 })),
         edit((v) => (v.identities!.rules = { id: 'roulette-single-zero', version: 2 })),

@@ -44,8 +44,12 @@ const RESULT_WORDS = { win: 'won', loss: 'lost', push: 'broke even' } as const;
 export function correctionLines(correction: PendingCorrection): string[] {
   const { explanation, actual } = correction;
   const lines: string[] = [];
+  const { available, subjects } = explanation.situation;
+  const color = subjects['last-pocket-color'];
+  if (color !== undefined && color !== 'none') lines.push(`The last spin landed on ${color}.`);
   const last = explanation.state.lastResult;
   if (last !== 'none') lines.push(`The strategy's last spin ${RESULT_WORDS[last]}.`);
+  lines.push(`Available for this spin: ${formatUnits(available)}.`);
   for (const instruction of explanation.instructions) lines.push(`Matching instruction: "${instruction.label}".`);
   if (explanation.fallback === 'no-new-bets') lines.push('Fallback: no new bets.');
   lines.push(`You've set ${betsText(actual)}. Nothing has been placed yet.`);
@@ -59,8 +63,11 @@ export function retryLabel(correction: PendingCorrection): string {
 }
 
 /** What an override means, before the player chooses it. */
-export const OVERRIDE_NOTE =
-  '"Keep my bets" is an override, recorded once. The spin goes ahead, the strategy cycle ends, and you restart the strategy yourself.';
+export function overrideNote(progression: boolean): string {
+  return progression
+    ? '"Keep my bets" is an override, recorded once. The spin goes ahead, the strategy cycle ends, and you restart the strategy yourself.'
+    : '"Keep my bets" is an override, recorded once. The spin goes ahead, and the strategy coaches your next spin.';
+}
 
 /** Adherence in words, kept apart from winnings. */
 export function adherenceText(adherence: StrategyView['adherence']): string {
@@ -90,5 +97,5 @@ export function pendingLine(strategy: StrategyView): string | null {
 /** Why a cycle ended. */
 export const CYCLE_END_TEXT: Record<NonNullable<StrategyView['cycleEnd']>, string> = {
   override: 'You overrode the strategy, so its cycle ended once the spin settled. Restart it to follow it again, or play on your own.',
-  cap: "The strategy's next stake went past its limits, so its cycle ended. Restart it to begin again from its first bet.",
+  envelope: "The strategy's next stake grew past the largest amount a strategy may compute, so its cycle ended. Restart it to begin again from its first bet.",
 };

@@ -5,7 +5,7 @@
 // table; an incompatible pairing is refused naming the requirement, never
 // adjusted. Editable limits and the house-edge line arrive with #72.
 
-import { strategyTableCompatibility, type ActivitySpecification, type RouletteWheel, type StrategyDefinition, type TableRequirement } from '@tableside/engine';
+import { strategyTableCompatibility, type RouletteActivitySpecification, type RouletteWheel, type StrategyDefinition, type TableRequirement } from '@tableside/engine';
 import { ROULETTE_PRESETS, ROULETTE_STRATEGIES, strategyDefaults } from '@tableside/definitions';
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
@@ -14,7 +14,7 @@ import { Button } from '@/components/Button';
 import { Screen } from '@/components/Screen';
 import { useFeedback } from '@/feedback/FeedbackProvider';
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
-import type { StartProblem } from '@/practice/controller';
+import { RECONNECT_TO_VERIFY, type StartProblem } from '@/practice/controller';
 import { usePractice } from '@/practice/PracticeProvider';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/theme/tokens';
 
@@ -29,21 +29,24 @@ const PROBLEMS: Record<StartProblem, string> = {
   'invalid-buy-in': 'Enter whole units from 1 to 1,000,000,000.',
   'strategy-incompatible': "This strategy doesn't fit your table.",
   'save-failed': "The session couldn't be saved, so it hasn't started. Try again.",
-  'access-not-allowed': "This session can't start right now.",
+  'access-denied': "This session can't start right now.",
+  'access-uncertain': `${RECONNECT_TO_VERIFY}. Nothing has started and nothing was used.`,
 };
 
 type Mode = 'free-play' | 'guided';
 
 export function RouletteSetup({
   problem,
+  problemReason = null,
   busy,
   presets = ROULETTE_PRESETS,
   myStrategies = [],
 }: {
   problem: StartProblem | null;
+  problemReason?: string | null;
   busy: boolean;
   /** The table each wheel offers (editable limits arrive with #72). */
-  presets?: Readonly<Record<RouletteWheel, ActivitySpecification['rules']>>;
+  presets?: Readonly<Record<RouletteWheel, RouletteActivitySpecification['rules']>>;
   /** The latest saved revision of each runnable private roulette strategy (spec 4). */
   myStrategies?: readonly StrategyDefinition[];
 }) {
@@ -78,7 +81,7 @@ export function RouletteSetup({
       ...(guided ? { strategy: { definition: strategy, parameters: choices } } : {}),
     });
   };
-  const error = notWhole ? PROBLEMS['invalid-buy-in'] : problem && PROBLEMS[problem];
+  const error = notWhole ? PROBLEMS['invalid-buy-in'] : problem && (problem === 'access-denied' && problemReason ? problemReason : PROBLEMS[problem]);
 
   return (
     <Screen>

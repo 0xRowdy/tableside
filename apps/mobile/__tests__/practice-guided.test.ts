@@ -6,7 +6,7 @@
 import { FIXED_TWO_DOZENS, FLAT_EVEN_MONEY } from '@tableside/definitions';
 import type { DomainFact } from '@tableside/engine';
 
-import type { AccessSupervisor } from '@/practice/adapters';
+import { alwaysAllowed, type AccessSupervisor } from '@/practice/adapters';
 import { PracticeController, type PracticeSnapshot } from '@/practice/controller';
 import type { ActivityStore } from '@/practice/store';
 import { FakeClock, substituteAdapters } from '@/practice/testing/substitutes';
@@ -14,7 +14,7 @@ import { FakeClock, substituteAdapters } from '@/practice/testing/substitutes';
 const turnsAsked: number[] = [];
 /** Charges one turn of allowance per turn, as spec 5's turn metering will, and notes each ask. */
 const chargingAccess: AccessSupervisor = {
-  beforeActivity: async () => ({ status: 'allowed', provenance: 'test' }),
+  ...alwaysAllowed,
   beforeTurn: async ({ turn }) => {
     turnsAsked.push(turn);
     return { status: 'allowed', provenance: 'test', turnCharge: { grant: 'grant-1', amount: '1' } };
@@ -45,6 +45,8 @@ async function restart(adapters: ReturnType<typeof setup>['adapters']) {
   const store = adapters.store.reopen();
   const controller = new PracticeController({ ...adapters, store, clock: new FakeClock(undefined, true) });
   await controller.load();
+  // An interrupted session resumes in its committed phase.
+  await controller.resume();
   return { controller, store };
 }
 
@@ -111,18 +113,20 @@ describe('guided practice', () => {
     expect(snapshot.view.strategy?.departures.map((d) => [d.id, d.resolution])).toEqual([['activity-1/departure/1', 'retried']]);
   });
 
-  it('overrides into the player\'s spin, charging that turn once, then waits for an explicit cycle restart', async () => {
+  it('overrides into the player\'s spin, asking for and charging that turn once, and coaching goes on', async () => {
     const { controller, store } = await guided();
     await controller.placeWager('red', '50');
     await controller.spin();
     await controller.overrideCorrection();
-    let snapshot = active(controller.snapshot());
-    expect([snapshot.view.phase, snapshot.view.balance, snapshot.view.strategy?.cycleEnd]).toEqual(['cycle-completion', '1050', 'override']);
+    const snapshot = active(controller.snapshot());
+    expect([snapshot.view.phase, snapshot.view.balance, snapshot.view.strategy?.status, snapshot.view.strategy?.overrideAffected]).toEqual([
+      'settled-outcome',
+      '1050',
+      'active',
+      true,
+    ]);
     expect(turnsAsked).toEqual([1]);
     expect(await store.readEffects('activity-1')).toEqual([{ effectId: { grant: 'grant-1', activity: 'activity-1', sequence: 2 }, kind: 'turn-charge', amount: '1' }]);
-    await controller.restartCycle();
-    snapshot = active(controller.snapshot());
-    expect([snapshot.view.phase, snapshot.view.strategy?.status, snapshot.view.balance]).toEqual(['open-decision', 'active', '1050']);
   });
 
   it('stops the strategy without ending the session: removable wagers come back and play goes on uncoached', async () => {

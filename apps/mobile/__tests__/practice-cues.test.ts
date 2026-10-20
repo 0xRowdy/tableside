@@ -3,7 +3,7 @@
 // play is identical with sound and haptics off.
 // Spins come from the Random123 "pi digits" stream: 27 (red), 0, 25 (red).
 
-import { FLAT_EVEN_MONEY } from '@tableside/definitions';
+import { blackjackRules, FLAT_EVEN_MONEY } from '@tableside/definitions';
 
 import { followPractice } from '@/feedback/practice-cues';
 import { FeedbackService } from '@/feedback/service';
@@ -103,7 +103,9 @@ describe('cues during roulette play', () => {
     const ports = substituteFeedbackPorts();
     followPractice(resumed, new FeedbackService(ports, new DeviceSettings(ports.storage)));
 
+    // The launch finds it suspended; the player resumes it.
     await resumed.load();
+    await resumed.resume();
     expect(resumed.snapshot().status).toBe('active');
     expect(ports.sound.played).toEqual([]);
 
@@ -118,6 +120,55 @@ describe('cues during roulette play', () => {
     await controller.placeWager('red', '10');
 
     expect(ports.sound.played).toEqual([]);
+  });
+});
+
+describe('cues during blackjack play', () => {
+  // The "pi digits" shoe: you 10 and Jack against a dealer 10 up and 6 down; standing, the dealer draws an Ace to 17.
+  it('fires one card cue per dealing transition, no haptic for cards, and one net-result cue per round', async () => {
+    const adapters = substituteAdapters({ clock: new FakeClock(undefined, true) });
+    const controller = new PracticeController(adapters);
+    const ports = substituteFeedbackPorts(null);
+    const settings = new DeviceSettings(ports.storage);
+    await settings.load();
+    followPractice(controller, new FeedbackService(ports, settings));
+    await controller.load();
+    await controller.start({ game: 'blackjack', buyIn: '1000', rules: blackjackRules() });
+
+    await controller.placeWager('hand-1', '10');
+    await controller.beginTurn();
+    await controller.play('stand');
+
+    expect(ports.sound.played.map((play) => play.cue)).toEqual(['stake-set', 'card-dealt', 'card-dealt', 'net-win']);
+    expect(ports.haptics.fired).toEqual(['selection', 'success']);
+  });
+});
+
+describe('cues during craps play', () => {
+  it('throws the dice on every roll and gives one net-result cue for a roll that settles several wagers', async () => {
+    const { controller, ports } = await setup();
+    await controller.endSession();
+    controller.dismissResult();
+    ports.sound.played.length = 0;
+    ports.haptics.fired.length = 0;
+    await controller.start({ game: 'craps', odds: '3-4-5x', buyIn: '1000' });
+
+    // Pi stream rolls: 8 sets the point; 11 wins the come bet; then the 6 sends a come bet to 6.
+    await controller.placeWager('pass', '10');
+    await controller.beginTurn();
+    await controller.placeWager('pass-odds', '10');
+    await controller.placeWager('come', '10');
+    await controller.beginTurn();
+
+    expect(ports.sound.played.map((play) => play.cue)).toEqual([
+      'stake-set',
+      'dice-thrown',
+      'stake-set',
+      'stake-set',
+      'dice-thrown',
+      'net-win',
+    ]);
+    expect(ports.haptics.fired).toEqual(['selection', 'impact-medium', 'selection', 'selection', 'impact-medium', 'success']);
   });
 });
 

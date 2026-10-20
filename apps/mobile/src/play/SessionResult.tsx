@@ -14,14 +14,23 @@ import { fonts, palette, radius, space, textScale } from '@/theme/tokens';
 import { adherenceText } from './coaching-text';
 import { formatSigned, formatUnits, speakSigned } from './roulette-text';
 
+const SUBTITLES: Record<CompletedPracticeSession['game'], string> = {
+  craps: 'Craps · free play · standard craps',
+  roulette: 'Roulette · free play · single zero',
+  blackjack: 'Blackjack · free play',
+};
+
 const outcomeWord = (net: string) => (net.startsWith('-') ? 'Loss' : net === '0' ? 'Even' : 'Win');
 
 export function SessionResult({
   result,
+  subtitle,
   onNewSession,
   onHome,
 }: {
   result: CompletedPracticeSession;
+  /** The rules line, when the screen knows more than the game ("Blackjack · free play · S17 · LS"). */
+  subtitle?: string | undefined;
   onNewSession: () => void;
   onHome: () => void;
 }) {
@@ -50,7 +59,7 @@ export function SessionResult({
         <Text accessibilityRole="header" maxFontSizeMultiplier={textScale.display} style={styles.title}>
           Session result
         </Text>
-        <Text maxFontSizeMultiplier={textScale.body} style={styles.subtitle}>Roulette · {result.guidance ? 'guided practice' : 'free play'}</Text>
+        <Text maxFontSizeMultiplier={textScale.body} style={styles.subtitle}>{subtitle ?? SUBTITLES[result.game]}</Text>
       </View>
 
       <View style={styles.banner} accessible accessibilityLabel="Saved. This session is in Saved, Practice.">

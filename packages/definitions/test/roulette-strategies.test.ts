@@ -29,7 +29,7 @@ describe('roulette built-in strategies', () => {
   it('flat even-money bets 10 on red by default, and on any of the six even-money targets', () => {
     expect(strategyDefaults(FLAT_EVEN_MONEY)).toEqual({ target: 'red' });
     const explained = explainPrescription(FLAT_EVEN_MONEY, { target: 'red' }, situation('single-zero'), START);
-    expect(explained.ok && explained.explanation.prescription).toEqual({ status: 'prescribed', bets: [{ target: 'red', amount: '10' }] });
+    expect(explained.ok && explained.explanation.prescription).toEqual({ status: 'prescribed', bets: [{ target: 'red', amount: '10' }] , held: []});
     expect(FLAT_EVEN_MONEY.parameters[0]?.choices).toEqual(['red', 'black', 'odd', 'even', 'low', 'high']);
   });
 
@@ -42,6 +42,7 @@ describe('roulette built-in strategies', () => {
         { target: 'dozen-1', amount: '10' },
         { target: 'dozen-2', amount: '10' },
       ],
+      held: [],
     });
     expect(explainPrescription(FIXED_TWO_DOZENS, { first: 'dozen-2', second: 'dozen-2' }, situation('double-zero'), START).ok).toBe(false);
   });

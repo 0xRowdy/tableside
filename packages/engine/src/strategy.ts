@@ -8,6 +8,7 @@
 
 import { canonicalJson } from './canonical';
 import { add, compare, decodeMoney, encodeMoney, money, mul, sub, MoneyFormatError, type Money } from './money';
+import { isRecord } from './shape';
 import { decodeStrategyLiteral, StrategyEnvelopeError, withinStrategyBits } from './strategy-envelope';
 
 /** The strategy envelope (spec #51, Exact money and limits). */
@@ -108,6 +109,12 @@ export interface StrategyDefinition {
   readonly note?: string;
 }
 
+/** A strategy revision with the choices made for one session: what a guided activity pins. */
+export interface StrategySelection {
+  readonly definition: StrategyDefinition;
+  readonly parameters: Readonly<Record<string, string>>;
+}
+
 export type DiagnosticCategory = 'incomplete' | 'conflict' | 'incompatible' | 'envelope' | 'unbounded';
 
 export interface StrategyDiagnostic {
@@ -149,6 +156,15 @@ export interface StrategyVocabulary<Situation = unknown> {
   subject(situation: Situation, name: string): string;
 }
 
+/** A game's part of guided practice, registered in strategies.ts. */
+export interface StrategyGame<State = never> {
+  readonly vocabulary: StrategyVocabulary;
+  /** The game's pinned rule content, in the vocabulary's table shape. */
+  tableForRules(rules: unknown): unknown;
+  /** The betting situation the strategy sees in an activity state waiting for a decision. */
+  situation(state: State): unknown;
+}
+
 /** Where a strategy cycle stands. */
 export interface StrategyProgress {
   /** Counter values, canonical money, keyed by counter id. */
@@ -166,8 +182,16 @@ export interface PrescribedBet {
   readonly amount: string;
 }
 
+/** An instruction's atomic group that can't execute now, and why. */
+export interface HeldGroup {
+  readonly instruction: string;
+  readonly reason: PauseReason;
+  readonly unavailable: readonly PrescribedBet[];
+}
+
 export type Prescription =
-  | { readonly status: 'prescribed'; readonly bets: readonly PrescribedBet[] }
+  /** The groups that execute; each other matching group is held whole (an atomic group never executes in part). */
+  | { readonly status: 'prescribed'; readonly bets: readonly PrescribedBet[]; readonly held: readonly HeldGroup[] }
   /** A pending strategy action: the group can't execute, so no new bets until it can. */
   | { readonly status: 'paused'; readonly reason: PauseReason; readonly unavailable: readonly PrescribedBet[] }
   /** No instruction covers the situation: no new bets. */
@@ -179,15 +203,14 @@ export interface Explanation {
   /** The matching instructions that prescribed, in priority order. */
   readonly instructions: readonly { readonly id: string; readonly label: string }[];
   readonly prescription: Prescription;
-  /** What happens instead when the prescription can't be followed. */
+  /** What happens instead when the prescription (or part of it) can't be followed: no new bets for what is held. */
   readonly fallback: 'no-new-bets' | null;
+  /** The strategy state the prescription follows from; the outcome's adjustment comes after settlement, as its own step. */
   readonly state: StrategyProgress;
 }
 
 // ---- shape helpers --------------------------------------------------------
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
 const isText = (value: unknown): value is string => typeof value === 'string' && value.length > 0 && value.length <= 128;
 const isCount = (value: unknown): value is number => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
 
@@ -278,7 +301,9 @@ function checkCondition(checker: Checker, vocabulary: StrategyVocabulary, value:
   }
   if ('always' in value) return value.always === true && Object.keys(value).length === 1 ? true : (report(checker, 'incomplete', path, 'always must be true'), false);
   if ('subject' in value) {
-    const values = value.subject === 'last-result' ? RESULTS : vocabulary.subjects[value.subject as string];
+    const subject = value.subject as string;
+    // Only the vocabulary's own subjects: never an inherited property of the map.
+    const values = subject === 'last-result' ? RESULTS : Object.hasOwn(vocabulary.subjects, subject) ? vocabulary.subjects[subject] : undefined;
     if (Object.keys(value).length !== 2 || !values) return report(checker, 'incomplete', path, `unknown subject ${String(value.subject)}`), false;
     if (!values.includes(value.is as string)) return report(checker, 'incomplete', `${path}/is`, `${String(value.subject)} is never ${String(value.is)}`), false;
     return true;
@@ -299,7 +324,7 @@ const RESULTS: readonly TurnResult[] = ['win', 'loss', 'push', 'none'];
  * own declared table conditions, conflicts and bounds. Diagnostics come in
  * category order of discovery, each with its path.
  */
-export function validateWith(vocabulary: StrategyVocabulary, definition: unknown): StrategyValidation {
+export function validateWith(vocabulary: StrategyVocabulary, definition: unknown, configuration?: unknown): StrategyValidation {
   const diagnostics: StrategyDiagnostic[] = [];
   const done = () => ({ diagnostics, runnable: diagnostics.length === 0 });
   if (!isRecord(definition)) return diagnostics.push({ category: 'incomplete', path: '', message: 'a strategy definition is an object' }), done();
@@ -313,7 +338,9 @@ export function validateWith(vocabulary: StrategyVocabulary, definition: unknown
     return diagnostics.push({ category: 'envelope', path: '/', message: `a definition is at most ${STRATEGY_ENVELOPE.bytes} bytes of UTF-8` }), done();
   }
   const def = definition;
-  const flag = (category: DiagnosticCategory, path: string, message: string) => diagnostics.push({ category, path, message });
+  const counterIds = new Set<string>();
+  const checker: Checker = { diagnostics, nodes: 0, counters: counterIds };
+  const flag = (category: DiagnosticCategory, path: string, message: string) => report(checker, category, path, message);
 
   if (def.format !== STRATEGY_FORMAT) flag('incomplete', '/format', `unsupported strategy format ${String(def.format)}`);
   if (!isText(def.id)) flag('incomplete', '/id', 'an id is required');
@@ -321,8 +348,9 @@ export function validateWith(vocabulary: StrategyVocabulary, definition: unknown
   if (!isText(def.name)) flag('incomplete', '/name', 'a name is required');
   if (def.game !== vocabulary.game) flag('incomplete', '/game', `this vocabulary is for ${vocabulary.game}`);
   if ('note' in def && typeof def.note !== 'string') flag('incomplete', '/note', 'a note is text');
-  for (const problem of vocabulary.tableProblems(def.table)) flag('incomplete', `/table${problem.path}`, problem.message);
-  const tableOk = vocabulary.tableProblems(def.table).length === 0;
+  const tableProblems = vocabulary.tableProblems(def.table);
+  for (const problem of tableProblems) flag('incomplete', `/table${problem.path}`, problem.message);
+  const tableOk = tableProblems.length === 0;
 
   // Parameters.
   const parameters = Array.isArray(def.parameters) ? def.parameters : (flag('incomplete', '/parameters', 'parameters are a list'), []);
@@ -355,13 +383,11 @@ export function validateWith(vocabulary: StrategyVocabulary, definition: unknown
 
   // Counters.
   const counters = Array.isArray(def.counters) ? def.counters : (flag('incomplete', '/counters', 'counters are a list'), []);
-  const counterIds = new Set<string>();
   const capped = new Set<string>();
-  const checker: Checker = { diagnostics, nodes: 0, counters: counterIds };
   for (const [index, counter] of counters.entries()) {
     const path = `/counters/${index}`;
     if (!isRecord(counter) || !isText(counter.id)) {
-      flag('incomplete', path, 'a counter needs an id and an initial value');
+      flag('incomplete', path, 'a counter needs an id');
       continue;
     }
     if (counterIds.has(counter.id)) flag('incomplete', `${path}/id`, `counter ${counter.id} is declared twice`);
@@ -501,10 +527,22 @@ export function validateWith(vocabulary: StrategyVocabulary, definition: unknown
   if (checker.nodes > STRATEGY_ENVELOPE.expressionNodes) {
     flag('envelope', '/', `a strategy has at most ${STRATEGY_ENVELOPE.expressionNodes} expression and condition nodes`);
   }
+  // Configuration: the choices made for a session, when given.
+  if (configuration !== undefined && diagnostics.length === 0) {
+    const problem = parameterProblem(def as unknown as StrategyDefinition, configuration);
+    if (problem) flag('incomplete', '/parameters', problem);
+  }
   return done();
 }
 
 const overlaps = (a: ReadonlySet<string>, b: ReadonlySet<string>) => [...a].some((item) => b.has(item));
+
+/** Plain string order, for deterministic output whatever the input order. */
+const byText = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
+
+/** A bet's target with the session's choices filled in. */
+const resolveTarget = (target: StrategyTarget, parameters: Readonly<Record<string, string>>): string =>
+  'target' in target ? target.target : (parameters[target.param] as string);
 
 /** >0 when x wins over y, <0 when y wins over x, 0 when neither is ranked over the other (never by position). */
 function ranked(x: { id: string; priority: number | null; overrides: readonly string[] }, y: { id: string; priority: number | null; overrides: readonly string[] }): number {
@@ -652,36 +690,52 @@ export function prescribe<S>(
   }
 
   const matching = definition.instructions.filter((instruction) => holds(vocabulary, instruction.when, situation, progress) === true);
-  const targetsOf = (instruction: StrategyInstruction) =>
-    new Set(instruction.bets.map((bet) => ('target' in bet.target ? bet.target.target : (parameters[bet.target.param] as string))));
+  const targetsOf = (instruction: StrategyInstruction) => new Set(instruction.bets.map((bet) => resolveTarget(bet.target, parameters)));
   const meta = (i: StrategyInstruction) => ({ id: i.id, priority: i.priority ?? null, overrides: i.overrides ?? [] });
   // Where two matching instructions touch one bet, only the ranked-higher one prescribes (Validate rules out unranked overlaps).
   const winners = matching.filter((instruction) =>
     !matching.some((other) => other !== instruction && overlaps(targetsOf(instruction), targetsOf(other)) && ranked(meta(other), meta(instruction)) > 0),
   );
   if (winners.length === 0) return { ...base, instructions: [], prescription: { status: 'uncovered' }, fallback: 'no-new-bets' };
-  winners.sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  winners.sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0) || byText(a.id, b.id));
   const named = winners.map((instruction) => ({ id: instruction.id, label: instruction.label }));
 
+  // Each instruction's bets are one atomic group: placed whole or held whole. Funds go to groups in priority order.
+  const table = vocabulary.tableOf(situation);
   const bets: PrescribedBet[] = [];
-  let overCap = false;
+  const held: HeldGroup[] = [];
+  let remaining = available;
   for (const instruction of winners) {
+    const group: PrescribedBet[] = [];
+    let overCap = false;
     for (const bet of instruction.bets) {
-      const target = 'target' in bet.target ? bet.target.target : (parameters[bet.target.param] as string);
       const amount = evaluate(bet.amount, progress.counters);
       if (!amount) overCap = true;
-      bets.push({ target, amount: amount ? encodeMoney(amount) : '0' });
+      group.push({ target: resolveTarget(bet.target, parameters), amount: amount ? encodeMoney(amount) : '0' });
+    }
+    group.sort((a, b) => byText(a.target, b.target));
+    const total = group.reduce((sum, bet) => add(sum, decodeMoney(bet.amount)), ZERO);
+    const reason: PauseReason | null = overCap
+      ? 'cap'
+      : group.some((bet) => compare(decodeMoney(bet.amount), ZERO) <= 0 || vocabulary.betRequirement(table, bet.target, decodeMoney(bet.amount)))
+        ? 'limit'
+        : compare(total, remaining) > 0
+          ? 'unfunded-group'
+          : null;
+    if (reason) {
+      held.push({ instruction: instruction.id, reason, unavailable: group });
+    } else {
+      bets.push(...group);
+      remaining = sub(remaining, total);
     }
   }
-  bets.sort((a, b) => (a.target < b.target ? -1 : a.target > b.target ? 1 : 0));
-  if (overCap) return pause('cap', bets, named);
-  const table = vocabulary.tableOf(situation);
-  if (bets.some((bet) => compare(decodeMoney(bet.amount), ZERO) <= 0 || vocabulary.betRequirement(table, bet.target, decodeMoney(bet.amount)))) {
-    return pause('limit', bets, named);
+  bets.sort((a, b) => byText(a.target, b.target));
+  if (bets.length === 0) {
+    const first = held[0] as HeldGroup;
+    const unavailable = held.flatMap((group) => group.unavailable).sort((a, b) => byText(a.target, b.target));
+    return { ...base, instructions: named, prescription: { status: 'paused', reason: first.reason, unavailable }, fallback: 'no-new-bets' };
   }
-  const total = bets.reduce((sum, bet) => add(sum, decodeMoney(bet.amount)), ZERO);
-  if (compare(total, available) > 0) return pause('unfunded-group', bets, named);
-  return { ...base, instructions: named, prescription: { status: 'prescribed', bets }, fallback: null };
+  return { ...base, instructions: named, prescription: { status: 'prescribed', bets, held }, fallback: held.length > 0 ? 'no-new-bets' : null };
 }
 
 /** The progress after a coached turn settles with a result; undefined when an adjustment leaves the envelope. */
@@ -721,7 +775,7 @@ export function compatibilityWith(vocabulary: StrategyVocabulary, definition: St
   const { counters } = initialProgress(definition);
   for (const [index, instruction] of definition.instructions.entries()) {
     for (const [betIndex, bet] of instruction.bets.entries()) {
-      const target = 'target' in bet.target ? bet.target.target : (chosen[bet.target.param] as string);
+      const target = resolveTarget(bet.target, chosen);
       const amount = evaluate(bet.amount, counters);
       if (!amount) continue;
       const failed = vocabulary.betRequirement(table, target, amount);

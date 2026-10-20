@@ -15,6 +15,14 @@ export {
   STATE_SCHEMA_VERSION,
   type ActivitySpecification,
   type ActivityState,
+  type BlackjackActivitySpecification,
+  type BlackjackPermittedView,
+  type CrapsActivitySpecification,
+  type CrapsPermittedView,
+  type GameId,
+  type Limit,
+  type RouletteActivitySpecification,
+  type RoulettePermittedView,
   type AdvanceResult,
   type CheckpointResult,
   type Command,
@@ -22,12 +30,18 @@ export {
   type CommandKind,
   type DomainFact,
   type PendingCorrection,
+  type PendingStrategyAction,
+  StrategySpecificationError,
+  type StrategyCommandKind,
+  type GameCommand,
   type Phase,
   type PermittedView,
+  type PermittedViewBase,
+  type StateOf,
+  type ViewOf,
   type Receipt,
   type IllegalActionReason,
   type RejectionReason,
-  type RouletteRuleSet,
   type StrategyDeparture,
   type StrategyRun,
   type StrategyView,
@@ -44,7 +58,38 @@ export {
   type FundingSource,
   type RebuyRefusal,
 } from './funding';
-
+export {
+  BLACKJACK_RULES,
+  PENETRATIONS,
+  type BlackjackAction,
+  type BlackjackActivityState,
+  type BlackjackDomainFact,
+  type BlackjackHand,
+  type BlackjackIllegalActionReason,
+  type BlackjackRound,
+  type BlackjackRoundView,
+  type BlackjackRuleSet,
+  type BlackjackShoeView,
+  type BlackjackTable,
+  type BlackjackTableView,
+  type HandTotal,
+  type Peek,
+} from './blackjack';
+export {
+  CRAPS_POINTS,
+  ODDS_CAPS,
+  STANDARD_CRAPS,
+  type CrapsActivityState,
+  type CrapsDomainFact,
+  type CrapsIllegalActionReason,
+  type CrapsOutcome,
+  type CrapsPlacement,
+  type CrapsPoint,
+  type CrapsRuleSet,
+  type CrapsTable,
+  type CrapsWagerStatus,
+  type OddsCap,
+} from './craps';
 export {
   oneSpinOutcomeTable,
   ROULETTE_RULE_SETS,
@@ -52,7 +97,10 @@ export {
   type LimitClass,
   type OneSpinOutcome,
   type PlacementKind,
+  type RouletteActivityState,
   type RoulettePlacement,
+  type RouletteRuleSet,
+  type RouletteTable,
 } from './roulette';
 export { philox4x32 } from './philox';
 export {
@@ -92,6 +140,7 @@ export {
   sub,
   type Money,
 } from './money';
+export { canonicalJson } from './canonical';
 export { sha256Hex } from './sha256';
 export {
   decodeStrategyLiteral,
@@ -126,6 +175,7 @@ export {
   type StrategyInstruction,
   type StrategyParameter,
   type StrategyProgress,
+  type StrategySelection,
   type StrategyTarget,
   type StrategyValidation,
   type StrategyVocabulary,

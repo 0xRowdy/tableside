@@ -8,15 +8,19 @@ import type { TestCase } from '@tableside/harness';
 
 import {
   advanceActivity,
+  canonicalJson,
   checkpointHash,
   createActivity,
   decodeCheckpoint,
   encodeCheckpoint,
   explainPrescription,
+  ActivitySpecificationError,
+  StrategySpecificationError,
   RandomStream,
   readPermittedView,
   uniformInt,
-  type ActivitySpecification,
+  type RouletteActivitySpecification,
+  type RoulettePermittedView,
   type ActivityState,
   type Command,
   type DomainFact,
@@ -35,7 +39,7 @@ const OVERRIDE: Command = { kind: 'override-correction' };
 const RESTART: Command = { kind: 'restart-cycle' };
 const STOP_STRATEGY: Command = { kind: 'stop-strategy' };
 
-const guided = (definition: StrategyDefinition, parameters: Record<string, string>, extra: Partial<ActivitySpecification> = {}): ActivitySpecification => ({
+const guided = (definition: StrategyDefinition, parameters: Record<string, string>, extra: Partial<RouletteActivitySpecification> = {}): RouletteActivitySpecification => ({
   ...SPEC,
   strategy: { definition, parameters },
   ...extra,
@@ -64,6 +68,7 @@ export const guidedCases: TestCase[] = [
         departures: [],
         adherence: { decisions: 0, followed: 0, departures: 0 },
         overrideAffected: false,
+        overrideEndsCycle: false,
       });
       t.equal(readPermittedView(createActivity(SPEC, STREAM)).strategy, null);
     },
@@ -71,11 +76,13 @@ export const guidedCases: TestCase[] = [
   {
     name: 'guided: create refuses a strategy that is not runnable, has invalid choices or does not fit the table',
     run: (t) => {
-      t.equal(throws(() => createActivity(guided({ ...FLAT_EVEN_MONEY, instructions: [] }, { target: 'red' }), STREAM)), 'ActivitySpecificationError');
-      t.equal(throws(() => createActivity(guided(FLAT_EVEN_MONEY, { target: 'dozen-1' }), STREAM)), 'ActivitySpecificationError');
-      t.equal(throws(() => createActivity(guided(TWO_DOZENS, { first: 'dozen-1', second: 'dozen-1' }), STREAM)), 'ActivitySpecificationError');
+      t.equal(throws(() => createActivity(guided({ ...FLAT_EVEN_MONEY, instructions: [] }, { target: 'red' }), STREAM)), 'StrategySpecificationError');
+      t.equal(throws(() => createActivity(guided(FLAT_EVEN_MONEY, { target: 'dozen-1' }), STREAM)), 'StrategySpecificationError');
+      t.equal(throws(() => createActivity(guided(TWO_DOZENS, { first: 'dozen-1', second: 'dozen-1' }), STREAM)), 'StrategySpecificationError');
       const strict = { ...SPEC.rules, limits: { inside: { min: '1', max: '100' }, outside: { min: '25', max: '1000' } } };
-      t.equal(throws(() => createActivity(guided(FLAT_EVEN_MONEY, { target: 'red' }, { rules: strict }), STREAM)), 'ActivitySpecificationError');
+      t.equal(throws(() => createActivity(guided(FLAT_EVEN_MONEY, { target: 'red' }, { rules: strict }), STREAM)), 'StrategySpecificationError');
+      // A StrategySpecificationError is still an ActivitySpecificationError.
+      t.equal(new StrategySpecificationError('x') instanceof ActivitySpecificationError, true);
     },
   },
   {
@@ -108,7 +115,7 @@ export const guidedCases: TestCase[] = [
           actual: [{ target: 'red', amount: '50' }],
         },
       ]);
-      t.equal(readPermittedView(after).legalCommands, ['retry-correction', 'override-correction']);
+      t.equal(readPermittedView(after).legalCommands, ['retry-correction', 'override-correction', 'request-stop']);
       t.equal(strategyOf(after)?.correction?.id, 'activity-1/departure/1');
       // Resending the tap is the same command: no second attempt, no second departure.
       t.equal(status(advanceActivity(after, { sequence: before.sequence, commandId: 'spin', command: BEGIN })), 'duplicate');
@@ -139,23 +146,56 @@ export const guidedCases: TestCase[] = [
     },
   },
   {
-    name: 'guided: override records the departure, spins the player\'s bets, and pauses the cycle until an explicit restart',
+    name: 'guided: overriding a flat strategy records the departure, spins the player\'s bets, and coaching goes on',
     run: (t) => {
       const corrected = run(flat(), [place('red', '50'), BEGIN]).state;
       const overridden = step(corrected, OVERRIDE);
-      t.equal(kinds(overridden.facts), ['departure-recorded', 'cycle-ended', 'turn-began', 'outcome-generated']);
+      t.equal(kinds(overridden.facts), ['departure-recorded', 'turn-began', 'outcome-generated']);
       t.equal(overridden.state.wagers, [{ target: 'red', amount: '50' }]);
+      const settled = step(overridden.state, SETTLE).state;
+      t.equal([settled.phase, settled.balance, strategyOf(settled)?.status, strategyOf(settled)?.overrideAffected], ['settled-outcome', '1050', 'active', true]);
+      t.equal(strategyOf(settled)?.adherence, { decisions: 1, followed: 0, departures: 1 });
+      // The next spin is coached again.
+      t.equal(step(run(settled, [place('red', '20')]).state, BEGIN).state.phase, 'correction');
+    },
+  },
+  {
+    name: 'guided: overriding a progression ends its cycle until an explicit restart, which never refills the balance',
+    run: (t) => {
+      const corrected = run(createActivity(guided(DOUBLING, {}), STREAM), [place('red', '50'), BEGIN]).state;
+      const overridden = step(corrected, OVERRIDE);
+      t.equal(kinds(overridden.facts), ['departure-recorded', 'cycle-ended', 'turn-began', 'outcome-generated']);
       const settled = step(overridden.state, SETTLE).state;
       t.equal([settled.phase, settled.balance], ['cycle-completion', '1050']);
       t.equal(readPermittedView(settled).legalCommands, ['restart-cycle', 'stop-strategy', 'request-stop', 'rebuy']);
-      t.equal(strategyOf(settled)?.status, 'cycle-ended');
-      t.equal(strategyOf(settled)?.cycleEnd, 'override');
-      t.equal(strategyOf(settled)?.overrideAffected, true);
+      t.equal([strategyOf(settled)?.status, strategyOf(settled)?.cycleEnd, strategyOf(settled)?.overrideAffected], ['cycle-ended', 'override', true]);
+      // The overridden spin adjusts nothing.
+      t.equal(settled.strategy?.progress, { counters: { stake: '10' }, lastResult: 'none', cycleTurn: 0 });
       const restarted = step(settled, RESTART);
       t.equal(kinds(restarted.facts), ['cycle-restarted']);
-      t.equal([restarted.state.phase, strategyOf(restarted.state)?.status, restarted.state.strategy?.definition.revision], ['open-decision', 'active', 1]);
-      // A restart never refills the balance and keeps the override marking.
+      t.equal([restarted.state.phase, strategyOf(restarted.state)?.status, restarted.state.strategy?.definition.revision], ['open-decision', 'active', 3]);
       t.equal([restarted.state.balance, strategyOf(restarted.state)?.overrideAffected], ['1050', true]);
+    },
+  },
+  {
+    name: 'guided: the stop path can end a session holding a correction; the held move never executes and is not a departure',
+    run: (t) => {
+      const corrected = run(flat(), [place('red', '50'), BEGIN]).state;
+      const { state, facts } = run(corrected, [{ kind: 'request-stop' }, { kind: 'advance-final-settlement' }]);
+      t.equal(kinds(facts), ['stop-requested', 'wager-returned', 'activity-completed']);
+      t.equal([state.phase, state.balance, state.strategy?.correction, state.strategy?.departures], ['completed', '1000', null, []]);
+    },
+  },
+  {
+    name: 'guided: a pending strategy action is announced when it begins, and not again while it holds',
+    run: (t) => {
+      // 25 covers two dozens once: after a losing spin (27 is in the 3rd dozen) only 5 is left.
+      const poor = createActivity(guided(TWO_DOZENS, { first: 'dozen-1', second: 'dozen-2' }, { funding: '25' }), STREAM);
+      const spun = run(poor, [place('dozen-1', '10'), place('dozen-2', '10'), BEGIN]).state;
+      const settled = step(spun, SETTLE);
+      t.equal(settled.facts.at(-1), { kind: 'strategy-paused', reason: 'unfunded-group', unavailable: [{ target: 'dozen-1', amount: '10' }, { target: 'dozen-2', amount: '10' }] });
+      t.equal(kinds(step(settled.state, { kind: 'rebuy', amount: '5' }).facts), ['funding-added']);
+      t.equal(strategyOf(step(settled.state, { kind: 'rebuy', amount: '15' }).state)?.pending, null);
     },
   },
   {
@@ -273,13 +313,16 @@ export const guidedCases: TestCase[] = [
               game: 'roulette' as const,
               rules: { wheel: 'single-zero' as const, limits: SPEC.rules.limits },
               balance: readPermittedView(state).balance,
-              lastPocket: view.outcome?.pocket ?? null,
+              lastPocket: (view as RoulettePermittedView).outcome?.pocket ?? null,
             };
             const explained = explainPrescription(definition, parameters, situation, (state.strategy as NonNullable<ActivityState['strategy']>).progress);
             if (!explained.ok) throw new Error(explained.error);
             const prescription = explained.explanation.prescription;
             const follow = prescription.status === 'prescribed' && pick(3) > 0;
-            const bets = follow ? prescription.bets : [{ target: others[pick(others.length)] as string, amount: String(10 + 10 * pick(3)) }];
+            // A departing bet is on a target the prescription doesn't name, so it can't follow it by chance.
+            const named = prescription.status === 'prescribed' ? prescription.bets.map((b) => b.target) : [];
+            const elsewhere = others.filter((target) => !named.includes(target));
+            const bets = follow ? prescription.bets : [{ target: elsewhere[pick(elsewhere.length)] as string, amount: String(10 + 10 * pick(3)) }];
             let placed = true;
             for (const bet of bets) {
               const result = advanceActivity(state, { sequence: state.sequence, commandId: `p${state.sequence}`, command: place(bet.target, bet.amount) });
@@ -290,13 +333,11 @@ export const guidedCases: TestCase[] = [
             if (!placed || state.wagers.length === 0) break;
             const begun = step(state, BEGIN);
             const offered = begun.facts.find((fact) => fact.kind === 'correction-offered');
-            const followedExactly =
-              prescription.status === 'prescribed' && state.wagers.length === prescription.bets.length && prescription.bets.every((bet) => state.wagers.some((w) => w.target === bet.target && w.amount === bet.amount));
             checked++;
             if (offered) {
               corrections++;
-              if (followedExactly || JSON.stringify(offered.explanation) !== JSON.stringify(explained.explanation)) mismatches++;
-            } else if (!followedExactly) {
+              if (follow || canonicalJson(offered.explanation) !== canonicalJson(explained.explanation)) mismatches++;
+            } else if (!follow) {
               mismatches++;
             }
             state = begun.state;

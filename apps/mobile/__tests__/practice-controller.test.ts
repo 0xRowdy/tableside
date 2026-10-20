@@ -232,6 +232,7 @@ describe('spinning', () => {
     const { controller, adapters } = await started();
     const other = new PracticeController(adapters);
     await other.load();
+    await other.resume();
     await controller.placeWager('red', '10');
 
     await other.placeWager('black', '20');
@@ -245,6 +246,7 @@ describe('spinning', () => {
     const { controller, adapters } = await started({ autoClock: false });
     const other = new PracticeController({ ...adapters, clock: new FakeClock(undefined, true) });
     await other.load();
+    await other.resume();
     await controller.placeWager('red', '10');
     void controller.spin();
     await waitFor(() => adapters.clock.pending === 1);
@@ -266,6 +268,7 @@ describe('spinning', () => {
     // The app restarts: a new controller over the same durable store.
     const restarted = new PracticeController({ ...adapters, clock: new FakeClock(undefined, true) });
     await restarted.load();
+    await restarted.resume();
 
     const { view } = active(restarted.snapshot());
     expect(view.phase).toBe('settled-outcome');
@@ -354,6 +357,53 @@ describe('ending', () => {
     controller.dismissResult();
 
     expect(controller.snapshot()).toMatchObject({ status: 'none', problem: null });
+  });
+});
+
+describe('craps', () => {
+  // Pi stream rolls: 8 (point), 11, 6, 4, 12, 8 (point made).
+  async function crapsStarted() {
+    const context = setup();
+    await context.controller.load();
+    await context.controller.start({ game: 'craps', odds: '5x', buyIn: '1000' });
+    return context;
+  }
+
+  it('starts a standard craps session pinned to the chosen odds cap', async () => {
+    const { controller, store } = await crapsStarted();
+
+    const session = active(controller.snapshot());
+    expect(session.view).toMatchObject({ game: 'craps', phase: 'open-decision', balance: '1000', table: { odds: '5x', point: null } });
+    const stored = await store.load(session.view.activityId);
+    expect(stored?.specification).toMatchObject({ game: 'craps', rules: { id: 'standard-craps', version: 1, odds: '5x' } });
+  });
+
+  it('rolls one turn and settles it automatically, leaving the contract on the table', async () => {
+    const { controller } = await crapsStarted();
+    await controller.placeWager('pass', '10');
+
+    await controller.beginTurn();
+
+    const session = active(controller.snapshot());
+    expect(session.view).toMatchObject({ phase: 'settled-outcome', turn: 1, outcome: { turn: 1, dice: [5, 3] }, table: { point: 8 } });
+    expect(session.view.wagers).toEqual([{ target: 'pass', amount: '10' }]);
+  });
+
+  it('ends by returning removable wagers, rolling on one committed step at a time for the contracts, and recording one result', async () => {
+    const { controller, store } = await crapsStarted();
+    await controller.placeWager('pass', '10');
+    await controller.beginTurn();
+    await controller.placeWager('pass-odds', '50');
+
+    await controller.endSession();
+
+    expect(controller.snapshot()).toMatchObject({
+      status: 'completed',
+      result: { game: 'craps', buyIn: '1000', finalCashOut: '1010', netResult: '10', identities: { rules: { id: 'standard-craps', version: 1 } } },
+    });
+    // Pass, roll, settle, odds, stop, then one final-settlement roll each for 11, 6, 4, 12 and 8.
+    expect((await store.load('activity-1'))?.sequence).toBe(10);
+    expect(await store.readOutgoing()).toHaveLength(1);
   });
 });
 

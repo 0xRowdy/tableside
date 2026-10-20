@@ -112,6 +112,7 @@ describe('guided roulette practice', () => {
     expect(panel.getByText('Flat even-money bets 10 on Black.')).toBeOnTheScreen();
     expect(panel.getByText('Matching instruction: "1 unit on your even-money target, every spin".')).toBeOnTheScreen();
     expect(panel.getByText("You've set 25 on Red. Nothing has been placed yet.")).toBeOnTheScreen();
+    expect(panel.getByText('Available for this spin: 1,000.')).toBeOnTheScreen();
     expect(announcements).toContain('Strategy check before your spin. Nothing has been placed yet.');
     // Nothing spun: no outcome was announced, and the stake is still the player's.
     expect(announcements.join(' ')).not.toMatch(/ball landed/);
@@ -132,20 +133,17 @@ describe('guided roulette practice', () => {
     expect(announcements).toContain('The ball landed on 27 red.');
   });
 
-  it('an override spins the player\'s bet, then the cycle waits for an explicit restart', async () => {
+  it('an override spins the player\'s bet, is recorded once, and coaching goes on', async () => {
     await startGuided();
     await bet('25', /^Red, pays 1 to 1$/);
     await fireEvent.press(screen.getByRole('button', { name: 'Spin' }));
     await fireEvent.press(within(await screen.findByTestId('correction-panel')).getByRole('button', { name: 'Keep my bets' }));
 
-    const cycle = within(await screen.findByTestId('cycle-panel'));
-    expect(cycle.getByRole('header', { name: 'Strategy cycle ended' })).toBeOnTheScreen();
-    expect(screen.getByLabelText('Session balance 1,025')).toBeOnTheScreen();
-    expect(screen.getByRole('button', { name: 'Spin' })).toBeDisabled();
-    await fireEvent.press(cycle.getByRole('button', { name: 'Restart the strategy' }));
+    expect(await screen.findByLabelText('Session balance 1,025')).toBeOnTheScreen();
+    expect(announcements).toContain('Departure recorded: you overrode the strategy. The ball landed on 27 red.');
+    expect(screen.getByLabelText('Strategy adherence: Followed 0 of 1 spin. Departures 1.')).toBeOnTheScreen();
     expect(screen.queryByTestId('cycle-panel')).toBeNull();
-    expect(announcements).toContain('Strategy restarted with your current balance.');
-    expect(screen.getByLabelText('Session balance 1,025')).toBeOnTheScreen();
+    expect(screen.getByRole('button', { name: 'Spin' })).toBeOnTheScreen();
   });
 
   it('Stop strategy asks first, returns removable wagers and keeps the session open', async () => {

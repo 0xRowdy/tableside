@@ -18,6 +18,7 @@ import { DOUBLING, FLAT_EVEN_MONEY, TWO_DOZENS } from './strategy.fixtures';
 
 /** "category path" for each diagnostic, in order. */
 const found = (definition: unknown) => validateStrategy(definition).diagnostics.map((d) => `${d.category} ${d.path}`);
+const found2 = (definition: unknown, parameters: unknown) => validateStrategy(definition, parameters).diagnostics.map((d) => `${d.category} ${d.path}`);
 
 const instruction = (id: string, extra: Record<string, unknown> = {}) => ({
   id,
@@ -88,6 +89,8 @@ export const strategyCases: TestCase[] = [
       t.equal(found(withInstructions([instruction('a', { priority: 2 }), instruction('b', { priority: 1 })])), []);
       t.equal(found(withInstructions([instruction('a'), instruction('b', { overrides: ['a'] })])), []);
       // An explicit priority ranks over an instruction with none.
+      // A subject the vocabulary doesn't declare is incomplete, inherited object properties included.
+      t.equal(found(withInstructions([instruction('a', { when: { subject: 'constructor', is: 'x' } })])), ['incomplete /instructions/0/when']);
       t.equal(found(withInstructions([instruction('a'), instruction('b', { priority: 0 })])), []);
       t.equal(found(withInstructions([instruction('a'), instruction('b', { overrides: ['missing'] })])), [
         'incomplete /instructions/1/overrides/0',
@@ -215,7 +218,7 @@ export const strategyCases: TestCase[] = [
       t.equal(explained(FLAT_EVEN_MONEY, { target: 'black' }, situation('1000'), START), {
         situation: { available: '1000', subjects: { 'last-result': 'none', 'last-pocket-color': 'none' } },
         instructions: [{ id: 'flat', label: '1 unit on the target, every spin' }],
-        prescription: { status: 'prescribed', bets: [{ target: 'black', amount: '10' }] },
+        prescription: { status: 'prescribed', bets: [{ target: 'black', amount: '10' }] , held: []},
         fallback: null,
         state: START,
       });
@@ -226,7 +229,7 @@ export const strategyCases: TestCase[] = [
     name: 'explain: two dozens is one atomic group, placed completely or paused entirely',
     run: (t) => {
       const both = [{ target: 'dozen-1', amount: '10' }, { target: 'dozen-3', amount: '10' }];
-      t.equal(explained(TWO_DOZENS, { first: 'dozen-3', second: 'dozen-1' }, situation('20'), START).prescription, { status: 'prescribed', bets: both });
+      t.equal(explained(TWO_DOZENS, { first: 'dozen-3', second: 'dozen-1' }, situation('20'), START).prescription, { status: 'prescribed', bets: both , held: []});
       // 15 covers one dozen but not both: neither is placed, and nothing is resized.
       const short = explained(TWO_DOZENS, { first: 'dozen-3', second: 'dozen-1' }, situation('15'), START);
       t.equal([short.prescription, short.fallback], [{ status: 'paused', reason: 'unfunded-group', unavailable: both }, 'no-new-bets']);
@@ -236,7 +239,7 @@ export const strategyCases: TestCase[] = [
     name: 'explain: counters drive amounts; a stake past its cap or past the table maximum pauses',
     run: (t) => {
       const at = (stake: string) => ({ counters: { stake }, lastResult: 'loss' as const, cycleTurn: 3 });
-      t.equal(explained(DOUBLING, {}, situation('1000'), at('80')).prescription, { status: 'prescribed', bets: [{ target: 'red', amount: '80' }] });
+      t.equal(explained(DOUBLING, {}, situation('1000'), at('80')).prescription, { status: 'prescribed', bets: [{ target: 'red', amount: '80' }] , held: []});
       t.equal(explained(DOUBLING, {}, situation('1000'), at('640')).prescription, { status: 'paused', reason: 'cap', unavailable: [] });
       const roomy = { ...DOUBLING, counters: [{ id: 'stake', initial: '10', cap: '5000' }] };
       t.equal(explained(roomy, {}, situation('9000'), at('2560')).prescription, { status: 'paused', reason: 'limit', unavailable: [{ target: 'red', amount: '2560' }] });
@@ -270,9 +273,9 @@ export const strategyCases: TestCase[] = [
         ],
       });
       const green = situation('100', { lastPocket: 0 });
-      t.equal(explained(pair({ priority: 1 }), {}, green, START).prescription, { status: 'prescribed', bets: [{ target: 'red', amount: '20' }] });
+      t.equal(explained(pair({ priority: 1 }), {}, green, START).prescription, { status: 'prescribed', bets: [{ target: 'red', amount: '20' }] , held: []});
       t.equal(explained(pair({ overrides: ['low'] }), {}, green, START).instructions, [{ id: 'high', label: 'Twenty after a green' }]);
-      t.equal(explained(pair({ overrides: ['low'] }), {}, situation('100', { lastPocket: 1 }), START).prescription, { status: 'prescribed', bets: [{ target: 'red', amount: '10' }] });
+      t.equal(explained(pair({ overrides: ['low'] }), {}, situation('100', { lastPocket: 1 }), START).prescription, { status: 'prescribed', bets: [{ target: 'red', amount: '10' }] , held: []});
     },
   },
   {
@@ -301,6 +304,48 @@ export const strategyCases: TestCase[] = [
       const first = explainPrescription(...inputs);
       t.equal(explainPrescription(...inputs), first);
       t.equal(JSON.stringify(inputs), before);
+    },
+  },
+  {
+    name: 'strategy: Validate checks a configuration (the chosen targets) when given one',
+    run: (t) => {
+      t.equal(validateStrategy(FLAT_EVEN_MONEY, { target: 'black' }), { diagnostics: [], runnable: true });
+      t.equal(found2(FLAT_EVEN_MONEY, { target: 'dozen-1' }), ['incomplete /parameters']);
+      t.equal(found2(TWO_DOZENS, { first: 'dozen-2', second: 'dozen-2' }), ['incomplete /parameters']);
+    },
+  },
+  {
+    name: 'explain: each instruction is its own atomic group; one that can\'t be funded is held whole while another executes',
+    run: (t) => {
+      const two: StrategyDefinition = {
+        ...FLAT_EVEN_MONEY,
+        parameters: [],
+        instructions: [
+          { id: 'red', label: 'Red', priority: 2, when: { always: true }, bets: [{ target: { target: 'red' }, amount: { lit: '10' } }] },
+          {
+            id: 'dozens',
+            label: 'Two dozens',
+            priority: 1,
+            when: { always: true },
+            bets: [
+              { target: { target: 'dozen-1' }, amount: { lit: '10' } },
+              { target: { target: 'dozen-2' }, amount: { lit: '10' } },
+            ],
+          },
+        ],
+      };
+      const explanation = explained(two, {}, situation('25'), START);
+      t.equal(explanation.prescription, {
+        status: 'prescribed',
+        bets: [{ target: 'red', amount: '10' }],
+        held: [{ instruction: 'dozens', reason: 'unfunded-group', unavailable: [{ target: 'dozen-1', amount: '10' }, { target: 'dozen-2', amount: '10' }] }],
+      });
+      t.equal(explanation.fallback, 'no-new-bets');
+      t.equal(explained(two, {}, situation('30'), START).prescription, {
+        status: 'prescribed',
+        bets: [{ target: 'dozen-1', amount: '10' }, { target: 'dozen-2', amount: '10' }, { target: 'red', amount: '10' }],
+        held: [],
+      });
     },
   },
 ];

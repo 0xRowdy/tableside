@@ -48,12 +48,13 @@ describe('app shell', () => {
     expect(screen.queryByText(/balance|wallet|chips|\$/i)).toBeNull();
   });
 
-  it('opens Play on the setup placeholder for the chosen game', async () => {
+  it('opens Play on the setup for the chosen game', async () => {
     await renderApp();
 
     await fireEvent.press(screen.getByRole('button', { name: /^Craps\b/ }));
 
-    expect(await screen.findByRole('header', { name: 'Craps setup' })).toBeOnTheScreen();
+    expect(await screen.findByRole('header', { name: 'Craps' })).toBeOnTheScreen();
+    expect(screen.getByRole('button', { name: 'Start free play' })).toBeOnTheScreen();
     expect(tabBar().getByRole('tab', { name: 'Play', selected: true })).toBeOnTheScreen();
   });
 

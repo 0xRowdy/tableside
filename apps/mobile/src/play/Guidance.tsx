@@ -16,7 +16,7 @@ import {
   adherenceText,
   correctionLines,
   CYCLE_END_TEXT,
-  OVERRIDE_NOTE,
+  overrideNote,
   parametersText,
   pendingLine,
   prescriptionLine,
@@ -65,12 +65,14 @@ export function GuidedStrip({ strategy, canStop, onStop }: { strategy: StrategyV
 function CorrectionBody({
   strategyName,
   correction,
+  overrideEndsCycle,
   busy,
   onRetry,
   onOverride,
 }: {
   strategyName: string;
   correction: PendingCorrection;
+  overrideEndsCycle: boolean;
   busy: boolean;
   onRetry: () => void;
   onOverride: () => void;
@@ -87,7 +89,7 @@ function CorrectionBody({
       ))}
       <Button label={retryLabel(correction)} stretch disabled={busy} onPress={onRetry} />
       <Button label="Keep my bets" variant="secondary" stretch disabled={busy} onPress={onOverride} />
-      <Text maxFontSizeMultiplier={textScale.body} style={styles.note}>{OVERRIDE_NOTE}</Text>
+      <Text maxFontSizeMultiplier={textScale.body} style={styles.note}>{overrideNote(overrideEndsCycle)}</Text>
     </>
   );
 }
@@ -99,6 +101,7 @@ function CorrectionBody({
 export function CorrectionPanel(props: {
   strategyName: string;
   correction: PendingCorrection;
+  overrideEndsCycle: boolean;
   table: TableNow;
   fullScreen: boolean;
   busy: boolean;
