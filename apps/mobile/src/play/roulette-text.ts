@@ -85,6 +85,8 @@ export const STATUS: Record<Phase, string> = {
   'open-decision': 'Betting',
   'revealing-outcome': 'Spinning',
   'settled-outcome': 'Settled',
+  correction: 'Strategy check',
+  'cycle-completion': 'Cycle ended',
   'final-settlement': 'Final settlement',
   completed: 'Ended',
 };
@@ -150,6 +152,21 @@ export function describeFacts(facts: readonly DomainFact[], view: PermittedView)
       case 'funding-added':
         parts.push(`Rebuy ${formatUnits(fact.amount)} added. Total funding ${formatUnits(fact.cumulative)}.`);
         balanceChanged = true;
+        break;
+      case 'correction-offered':
+        parts.push('Strategy check before your spin. Nothing has been placed yet.');
+        break;
+      case 'departure-recorded':
+        parts.push(fact.departure.resolution === 'retried' ? 'Departure recorded: you took it back.' : 'Departure recorded: you overrode the strategy.');
+        break;
+      case 'cycle-ended':
+        parts.push(fact.reason === 'override' ? 'The strategy cycle ends once this spin settles.' : 'The strategy cycle ended at its cap.');
+        break;
+      case 'cycle-restarted':
+        parts.push('Strategy restarted with your current balance.');
+        break;
+      case 'strategy-stopped':
+        parts.push('Strategy stopped. You play on your own now.');
         break;
       case 'turn-began':
       case 'activity-completed':

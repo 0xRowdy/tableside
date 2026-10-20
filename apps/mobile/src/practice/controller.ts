@@ -3,7 +3,9 @@
 // and publishes the engine's permitted view only after the commit. It never
 // decides legality, payouts or settlement; the engine does. Automatic steps
 // (settling a revealed spin, final settlement, completion) are driven here,
-// never by a tap or an animation callback.
+// never by a tap or an animation callback. In guided practice the engine
+// assesses each spin against the pinned strategy; a correction, a pending
+// strategy action and a cycle completion all wait for the player's input.
 
 import {
   advanceActivity,
@@ -13,8 +15,10 @@ import {
   decodeMoney,
   encodeCheckpoint,
   readPermittedView,
+  strategyTableCompatibility,
   streamIdentityFromEntropy,
   summarizeFunding,
+  validateStrategy,
   type ActivityState,
   type Command,
   type CommandEnvelope,
@@ -22,6 +26,7 @@ import {
   type FundingSource,
   type PermittedView,
   type RouletteWheel,
+  type StrategyDefinition,
 } from '@tableside/engine';
 import { ROULETTE_PRESETS } from '@tableside/definitions';
 
@@ -35,7 +40,7 @@ export const ENDING_STEP_MS = 1000;
 /** How long play stays paused after a failed save before it retries by itself. */
 export const SAVE_RETRY_MS = 5000;
 
-export type StartProblem = 'invalid-buy-in' | 'save-failed' | 'access-not-allowed';
+export type StartProblem = 'invalid-buy-in' | 'strategy-incompatible' | 'save-failed' | 'access-not-allowed';
 
 export type PracticeSnapshot =
   | { readonly status: 'loading' }
@@ -61,6 +66,8 @@ export interface StartRequest {
   readonly wheel?: RouletteWheel;
   /** Practice funding unless spec 5 starts the session from the training bankroll. */
   readonly fundingSource?: FundingSource;
+  /** Guided practice: the strategy revision to pin, with the choices made at setup. Free play when omitted. */
+  readonly strategy?: { readonly definition: StrategyDefinition; readonly parameters: Readonly<Record<string, string>> };
 }
 
 /** A command as sent to the store, with the allowance effects that commit with it. */
@@ -132,6 +139,8 @@ export class PracticeController {
         return this.drive();
       }
 
+      // The engine judges whether the strategy runs at this table; setup shows why when it doesn't.
+      if (request.strategy && !strategyFits(request.strategy, ROULETTE_PRESETS[wheelOf(request)])) return this.showNone('strategy-incompatible');
       const access = await this.adapters.access.beforeActivity({ game: request.game });
       if (access.status !== 'allowed') return this.showNone('access-not-allowed');
 
@@ -147,7 +156,7 @@ export class PracticeController {
           device: this.adapters.device,
           game: request.game,
           rules: ROULETTE_PRESETS[wheelOf(request)],
-          strategy: null,
+          strategy: request.strategy ? { definition: request.strategy.definition, parameters: { ...request.strategy.parameters } } : null,
           reference: null,
           fundingSource: request.fundingSource,
           funding: request.buyIn,
@@ -185,19 +194,37 @@ export class PracticeController {
     });
   }
 
-  /** Begins a turn (the spin), then settles it automatically after the reveal. */
+  /**
+   * Begins a turn (the spin), then settles it automatically after the reveal.
+   * In guided practice a departing spin stops at a correction instead.
+   */
   async spin(): Promise<void> {
+    await this.exclusive(() => this.beginTurn({ kind: 'begin-turn' }));
+  }
+
+  /** From a correction: takes the move back and sets the strategy's bets. */
+  async retryCorrection(): Promise<void> {
     await this.exclusive(async () => {
-      const state = this.requireState();
-      const access = await this.adapters.access.beforeTurn({ activityId: state.activity.id, turn: state.turn + 1 });
-      this.accessNotAllowed = access.status !== 'allowed';
-      if (access.status !== 'allowed') return this.publish();
-      // A turn charge (spec 5) commits atomically with the transition that begins the turn.
-      const charge = access.turnCharge;
-      const effects: AllowanceEffect[] = charge
-        ? [{ effectId: { grant: charge.grant, activity: state.activity.id, sequence: state.sequence }, kind: 'turn-charge', amount: charge.amount }]
-        : [];
-      if (settled(await this.send({ kind: 'begin-turn' }, effects))) await this.drive();
+      if (settled(await this.send({ kind: 'retry-correction' }))) await this.drive();
+    });
+  }
+
+  /** From a correction: keeps the move (a strategy override), which spins at once and ends the cycle. */
+  async overrideCorrection(): Promise<void> {
+    await this.exclusive(() => this.beginTurn({ kind: 'override-correction' }));
+  }
+
+  /** Starts another strategy cycle with the remaining balance. */
+  async restartCycle(): Promise<void> {
+    await this.exclusive(async () => {
+      if (settled(await this.send({ kind: 'restart-cycle' }))) await this.drive();
+    });
+  }
+
+  /** Stops the strategy's bets; the practice session stays open. */
+  async stopStrategy(): Promise<void> {
+    await this.exclusive(async () => {
+      if (settled(await this.send({ kind: 'stop-strategy' }))) await this.drive();
     });
   }
 
@@ -237,6 +264,29 @@ export class PracticeController {
   }
 
   // ---- internals ----------------------------------------------------------
+
+  /**
+   * Sends a command that may begin a turn. Access is asked, and a turn charge
+   * committed with it, only when the engine's transition really begins one
+   * (a correction begins nothing).
+   */
+  private async beginTurn(command: Command): Promise<void> {
+    if (this.pending) return;
+    const state = this.requireState();
+    const candidate = advanceActivity(state, { sequence: state.sequence, commandId: `${state.activity.id}/${state.sequence}`, command });
+    let effects: AllowanceEffect[] = [];
+    if (candidate.status === 'committed' && candidate.state.turn > state.turn) {
+      const access = await this.adapters.access.beforeTurn({ activityId: state.activity.id, turn: state.turn + 1 });
+      this.accessNotAllowed = access.status !== 'allowed';
+      if (access.status !== 'allowed') return this.publish();
+      // A turn charge (spec 5) commits atomically with the transition that begins the turn.
+      const charge = access.turnCharge;
+      effects = charge
+        ? [{ effectId: { grant: charge.grant, activity: state.activity.id, sequence: state.sequence }, kind: 'turn-charge', amount: charge.amount }]
+        : [];
+    }
+    if (settled(await this.send(command, effects))) await this.drive();
+  }
 
   /** Runs one operation at a time; input that arrives meanwhile is ignored, never queued. */
   private async exclusive(run: () => Promise<unknown>): Promise<void> {
@@ -399,10 +449,11 @@ export class PracticeController {
     if (!activity) throw new Error('no practice session is active');
     // Completed: nothing is left on the table, so the balance is the final cash-out.
     const funding = summarizeFunding(state.funding, decodeMoney(state.balance));
+    const strategy = readPermittedView(state).strategy;
     const record: CompletedPracticeSession = {
       activityId: state.activity.id,
       game: state.identities.game,
-      mode: 'free-play',
+      mode: strategy ? 'guided' : 'free-play',
       identities: {
         engine: state.identities.engine,
         rules: state.identities.rules,
@@ -416,6 +467,7 @@ export class PracticeController {
       finalCashOut: funding.finalCashOut,
       netResult: funding.netResult,
       maxDrawdown: funding.maxDrawdown,
+      guidance: strategy && { adherence: strategy.adherence, departures: strategy.departures, overrideAffected: strategy.overrideAffected },
       completedAt: this.adapters.clock.now(),
     };
     let result: CompletedPracticeSession | null;
@@ -479,7 +531,14 @@ export class PracticeController {
   }
 }
 
+const strategyFits = (strategy: NonNullable<StartRequest['strategy']>, rules: unknown) =>
+  validateStrategy(strategy.definition).runnable && strategyTableCompatibility(strategy.definition, strategy.parameters, rules).compatible;
+
 const wheelOf = (request: StartRequest): RouletteWheel => request.wheel ?? 'single-zero';
 
 const sameRequest = (a: StartRequest, b: StartRequest) =>
-  a.game === b.game && a.buyIn === b.buyIn && a.fundingSource === b.fundingSource && wheelOf(a) === wheelOf(b);
+  a.game === b.game &&
+  a.buyIn === b.buyIn &&
+  a.fundingSource === b.fundingSource &&
+  wheelOf(a) === wheelOf(b) &&
+  JSON.stringify(a.strategy ?? null) === JSON.stringify(b.strategy ?? null);

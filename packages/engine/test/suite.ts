@@ -12,6 +12,8 @@ import { moneyCases } from './money.cases';
 import { randomCases } from './random.cases';
 import { rouletteCases } from './roulette.cases';
 import { runtimeCases } from './runtime.cases';
+import { strategyCases } from './strategy.cases';
+import { guidedCases } from './guided.cases';
 
 export const engineSuite: Suite = {
   name: 'engine',
@@ -25,5 +27,7 @@ export const engineSuite: Suite = {
     ...activityCases,
     ...fundingCases,
     ...rouletteCases,
+    ...strategyCases,
+    ...guidedCases,
   ],
 };

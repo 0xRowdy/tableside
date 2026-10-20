@@ -53,7 +53,7 @@ export const activityCases: TestCase[] = [
         reference: null,
         random: STREAM,
       });
-      t.equal(state.schema, 2);
+      t.equal(state.schema, 3);
       t.equal([state.phase, state.turn, state.balance, state.wagers], ['open-decision', 0, '1000', []]);
       // The state is plain data: it survives a JSON round trip unchanged.
       t.equal(JSON.parse(JSON.stringify(state)), state);
@@ -65,7 +65,7 @@ export const activityCases: TestCase[] = [
       const state = createActivity(SPEC, STREAM);
       t.equal(
         Object.keys(state).sort(),
-        ['activity', 'balance', 'funding', 'identities', 'outcome', 'phase', 'random', 'receipts', 'rules', 'schema', 'sequence', 'turn', 'wagers'],
+        ['activity', 'balance', 'funding', 'identities', 'outcome', 'phase', 'random', 'receipts', 'rules', 'schema', 'sequence', 'strategy', 'turn', 'wagers'],
       );
       t.equal(state.receipts, []);
     },
@@ -339,7 +339,7 @@ export const activityCases: TestCase[] = [
       collect(readPermittedView(step(a, BEGIN).state));
       t.equal(keys.filter((key) => ['random', 'key', 'session', 'block', 'lane', 'identities', 'receipts'].includes(key)), []);
       t.equal(Object.keys(readPermittedView(a)).sort(), [
-        'activityId', 'balance', 'funding', 'legalCommands', 'outcome', 'phase', 'sequence', 'table', 'turn', 'wagers', 'wagersCommitted',
+        'activityId', 'balance', 'funding', 'legalCommands', 'outcome', 'phase', 'sequence', 'strategy', 'table', 'turn', 'wagers', 'wagersCommitted',
       ]);
       // readPermittedView takes the state alone: no caller flag can widen it.
       t.equal(readPermittedView.length, 1);
