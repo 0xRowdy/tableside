@@ -1,6 +1,6 @@
 # Tableside
 
-Tableside is a table-game practice and performance-tracking app for recreational players first and beginners second. Its launch games are blackjack, standard craps, and roulette. ("True Count" remains the repository's name and the blackjack term **True count** below.)
+Tableside is a table-game practice and performance-tracking app for recreational players first and beginners second. Its launch games are blackjack, standard craps, and roulette. (It was planned under the working name "True Count"; **True count** below remains the blackjack term.)
 
 ## Language
 

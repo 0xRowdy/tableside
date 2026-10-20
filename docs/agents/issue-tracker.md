@@ -4,7 +4,7 @@ Issues and specs for this repo live as GitHub issues. Use the `gh` CLI for all o
 
 ## Repo status
 
-The tracker is **`0xRowdy/true-count`** (public, issues enabled). `gh` infers it from the
+The tracker is **`0xRowdy/tableside`** (renamed from `true-count` on 2026-10-19; old URLs redirect) (public, issues enabled). `gh` infers it from the
 `origin` remote, so the commands below work from anywhere in the working tree.
 
 The MVP planning effort lives here as issue **#1** (`wayfinder:map`) with 14 sub-issues. It was

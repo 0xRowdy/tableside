@@ -1,6 +1,6 @@
 # Tableside — confirmed planning inputs
 
-_Planned under the working name "True Count" (still the repository's name). These are the original planning inputs; the MVP specs #51–#57 and their amendments supersede them where they differ._
+_Planned under the working name "True Count" (the repository was renamed `tableside` on 2026-10-19). These are the original planning inputs; the MVP specs #51–#57 and their amendments supersede them where they differ._
 
 These requirements were agreed during the initial planning conversation. Unsettled details belong in the decision tickets; this is not the finished MVP spec.
 

@@ -1,4 +1,4 @@
-# Tableside (repo: true-count)
+# Tableside
 
 ## Agent skills
 
