@@ -10,6 +10,7 @@ import { blackjackTableCases } from './blackjack-table.cases';
 import { compatibilityCases } from './compatibility.cases';
 import { crapsCases } from './craps.cases';
 import { crapsMenuCases } from './craps-menu.cases';
+import { crapsStrategyCases } from './craps-strategy.cases';
 import { drawCases } from './draws.cases';
 import { engineCases } from './engine.cases';
 import { fundingCases } from './funding.cases';
@@ -45,6 +46,7 @@ export const engineSuite: Suite = {
     ...guidedCases,
     ...blackjackGuidedCases,
     ...progressionCases,
+    ...crapsStrategyCases,
     ...recordCases,
     ...compatibilityCases,
   ],

@@ -402,6 +402,14 @@ export class PracticeController {
     });
   }
 
+  /** At a pending strategy action: keeps what was paid and ends the cycle instead; another starts only explicitly. */
+  async collectInstead(): Promise<void> {
+    await this.exclusive(async () => {
+      if (!this.playOpen()) return;
+      if (settled(await this.send({ kind: 'collect-instead' }))) await this.drive();
+    });
+  }
+
   /** Stops the strategy's bets; the practice session stays open. */
   async stopStrategy(): Promise<void> {
     await this.exclusive(async () => {

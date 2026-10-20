@@ -4,6 +4,7 @@
 
 import { FUNDING_CEILING, type CrapsPermittedView, type DomainFact, type IllegalActionReason, type Phase } from '@tableside/engine';
 
+import { strategyFactSentence } from './strategy-text';
 import { formatUnits } from './units';
 
 const BASE_NAMES: Record<string, string> = { pass: 'Pass line', 'dont-pass': "Don't pass", come: 'Come', 'dont-come': "Don't come" };
@@ -225,6 +226,12 @@ export function describeCrapsFacts(facts: readonly DomainFact[], view: CrapsPerm
       case 'activity-completed':
       case 'outcome-generated':
         break;
+      default: {
+        // Guided practice: corrections, departures, pending actions, cycles.
+        const sentence = strategyFactSentence(fact, 'roll');
+        if (sentence) parts.push(sentence);
+        break;
+      }
     }
   }
   // Come odds, place and buy bets go off for a come-out roll and back on with the next point: say so when the puck moves.

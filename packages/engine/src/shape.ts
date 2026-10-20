@@ -53,6 +53,18 @@ export function isLimit(value: unknown): value is Limit {
   return isWholeIn(min, 1n, BASE_WAGER_CEILING) && isWholeIn(max, 1n, BASE_WAGER_CEILING) && compare(min, max) <= 0;
 }
 
+/**
+ * Problems with a strategy's declared limits: one limit per group (roulette's
+ * inside and outside, craps' flat and props), each whole units within the
+ * base-wager ceiling with min <= max. Paths are relative to `path`.
+ */
+export function limitGroupProblems(limits: unknown, groups: readonly string[], path: string): { path: string; message: string }[] {
+  if (!hasExactKeys(limits, groups)) return [{ path, message: `${groups.join(' and ')} limits are required` }];
+  return groups
+    .filter((group) => !isLimit(limits[group]))
+    .map((group) => ({ path: `${path}/${group}`, message: `${group} limits are whole units from 1 to ${BASE_WAGER_CEILING} with min <= max` }));
+}
+
 /** Wagers as a checkpoint stores them: known targets in strictly ascending layout order, positive amounts. */
 export function isWagerList(value: unknown, order: (target: string) => number): value is { target: string; amount: string }[] {
   if (!Array.isArray(value)) return false;
