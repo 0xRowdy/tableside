@@ -4,12 +4,27 @@
 // checkpoint is just its canonical JSON. Validate definitions and Explain
 // prescription arrive with the strategy interpreter (#74).
 
+import {
+  applyBlackjack,
+  BLACKJACK_RULES,
+  blackjackDamage,
+  blackjackLegal,
+  blackjackTable,
+  blackjackView,
+  isBlackjackAction,
+  isBlackjackTable,
+  type BlackjackAction,
+  type BlackjackActivityState,
+  type BlackjackPermittedView,
+  type BlackjackRuleSet,
+} from './blackjack';
 import { canonicalJson } from './canonical';
-import { spinRoulette, type RoulettePocket } from './draws';
+import { spinRoulette, type Card, type RoulettePocket } from './draws';
 import { add, compare, decodeMoney, encodeMoney, money, sub, type Money } from './money';
 import { RANDOM_PROTOCOL_VERSION, RandomStream, type RandomStreamIdentity, type RandomStreamState } from './random';
 import { isPocket, netResult, PLACEMENTS, placementFor, placementOrder, ROULETTE_RULES, type LimitClass, type RoulettePlacement } from './roulette';
 import { sha256Hex } from './sha256';
+import { BASE_WAGER_CEILING, hasExactKeys, isCount, isLimit, isRecord, isText, isWholeIn, parseMoney, type Limit } from './shape';
 import { ENGINE_VERSION } from './version';
 
 /** The state-schema version, kept apart from engine, rule and protocol identities. */
@@ -17,21 +32,15 @@ export const STATE_SCHEMA_VERSION = 1 as const;
 
 /** Cumulative practice-session funding ceiling, in units. */
 export const FUNDING_CEILING = 1_000_000_000n;
-/** Ceiling for configurable base-wager limits, in units. */
-const BASE_WAGER_CEILING = 1_000_000n;
-/** Longest accepted id or amount text; anything longer is malformed. */
-const MAX_TEXT = 128;
-
 export interface VersionedIdentity {
   readonly id: string;
   readonly version: number;
 }
 
-export interface Limit {
-  /** Canonical whole-unit amounts. */
-  readonly min: string;
-  readonly max: string;
-}
+export type { Limit };
+
+/** The games this engine runs. */
+export type GameId = 'roulette' | 'blackjack';
 
 export interface RouletteRuleSet extends VersionedIdentity {
   readonly wheel: 'single-zero';
@@ -39,14 +48,24 @@ export interface RouletteRuleSet extends VersionedIdentity {
 }
 
 /** Everything an activity pins at creation. */
-export interface ActivitySpecification {
+export type ActivitySpecification = RouletteActivitySpecification | BlackjackActivitySpecification;
+
+export interface RouletteActivitySpecification extends SpecificationCommon {
+  readonly game: 'roulette';
+  readonly rules: RouletteRuleSet;
+}
+
+export interface BlackjackActivitySpecification extends SpecificationCommon {
+  readonly game: 'blackjack';
+  readonly rules: BlackjackRuleSet;
+}
+
+interface SpecificationCommon {
   readonly activityId: string;
   /** Account owner; a local placeholder until accounts exist. */
   readonly owner: string;
   /** Originating device. */
   readonly device: string;
-  readonly game: 'roulette';
-  readonly rules: RouletteRuleSet;
   /** Null in free play. */
   readonly strategy: VersionedIdentity | null;
   /** Null for games without a coaching reference. */
@@ -71,19 +90,18 @@ export interface Receipt {
   readonly disposition: 'applied' | 'assessed';
 }
 
-export interface ActivityState {
+/** The fields every game's activity state shares. */
+export interface ActivityCommon<G extends GameId> {
   readonly schema: typeof STATE_SCHEMA_VERSION;
   readonly activity: { readonly id: string; readonly owner: string; readonly device: string };
   readonly identities: {
     readonly engine: string;
-    readonly game: 'roulette';
+    readonly game: G;
     readonly rules: VersionedIdentity;
     readonly strategy: VersionedIdentity | null;
     readonly reference: VersionedIdentity | null;
     readonly random: RandomStreamIdentity;
   };
-  /** The pinned rule content, not a pointer to current definitions. */
-  readonly rules: Pick<RouletteRuleSet, 'wheel' | 'limits'>;
   /** The sequence the next command must carry. */
   readonly sequence: number;
   readonly phase: Phase;
@@ -93,16 +111,27 @@ export interface ActivityState {
   readonly balance: string;
   /** Stakes on the table in layout order: removable in a decision, committed once a turn begins. */
   readonly wagers: readonly Wager[];
-  /** The latest turn's generated outcome. */
-  readonly outcome: { readonly turn: number; readonly pocket: RoulettePocket } | null;
   readonly random: RandomStreamState;
   readonly receipts: readonly Receipt[];
 }
+
+export interface RouletteActivityState extends ActivityCommon<'roulette'> {
+  /** The pinned rule content, not a pointer to current definitions. */
+  readonly rules: Pick<RouletteRuleSet, 'wheel' | 'limits'>;
+  /** The latest turn's generated outcome. */
+  readonly outcome: { readonly turn: number; readonly pocket: RoulettePocket } | null;
+}
+
+export type ActivityState = RouletteActivityState | BlackjackActivityState;
+
+const isBlackjack = (state: ActivityState): state is BlackjackActivityState => state.identities.game === 'blackjack';
 
 export type Command =
   /** Sets the stake on a target; amount "0" takes the wager down. */
   | { readonly kind: 'place-wager'; readonly target: string; readonly amount: string }
   | { readonly kind: 'begin-turn' }
+  /** A blackjack playing action for the hand awaiting a decision. */
+  | { readonly kind: 'play'; readonly action: BlackjackAction }
   /** The automatic settle step after the reveal; the controller issues it, never a tap. */
   | { readonly kind: 'settle-turn' }
   | { readonly kind: 'request-stop' }
@@ -125,7 +154,9 @@ export type IllegalActionReason =
   | 'above-maximum'
   | 'insufficient-funds'
   | 'no-wager-to-remove'
-  | 'no-wager';
+  | 'no-wager'
+  /** The rules don't offer that action here (e.g. a double after the first two cards). */
+  | 'action-not-available';
 
 export type DomainFact =
   | { readonly kind: 'wager-changed'; readonly target: string; readonly amount: string; readonly previous: string }
@@ -137,26 +168,35 @@ export type DomainFact =
       readonly turn: number;
       readonly target: string;
       readonly stake: string;
-      readonly result: 'win' | 'loss';
-      /** Net result: payout on a win, minus the stake on a loss. */
+      readonly result: 'win' | 'loss' | 'push';
+      /** Net result: payout on a win, minus the stake on a loss, 0 on a push. */
       readonly net: string;
       /** Paid back to the balance: stake plus payout, or 0. */
       readonly returned: string;
     }
   | { readonly kind: 'stop-requested'; readonly phase: Phase }
+  // Blackjack. A face-down card is dealt as null: facts never carry a concealed card.
+  | { readonly kind: 'shoe-shuffled'; readonly cards: number; readonly cut: number }
+  | { readonly kind: 'card-dealt'; readonly turn: number; readonly to: string; readonly card: Card | null }
+  | { readonly kind: 'peeked'; readonly turn: number; readonly result: 'no-blackjack' | 'blackjack' }
+  | { readonly kind: 'hole-card-revealed'; readonly turn: number; readonly card: Card }
+  | { readonly kind: 'played'; readonly turn: number; readonly target: string; readonly action: BlackjackAction }
   | { readonly kind: 'wager-returned'; readonly target: string; readonly amount: string }
   | { readonly kind: 'activity-completed'; readonly balance: string };
 
 export type RejectionReason = 'malformed' | 'stale' | 'not-legal-in-phase' | 'conflicting-command-id';
 
-export type AdvanceResult =
-  | { readonly status: 'committed'; readonly state: ActivityState; readonly facts: readonly DomainFact[]; readonly receipt: Receipt }
+export type AdvanceResult<S extends ActivityState = ActivityState> =
+  | { readonly status: 'committed'; readonly state: S; readonly facts: readonly DomainFact[]; readonly receipt: Receipt }
   /** The command id was already committed; nothing changes and nothing is drawn. */
   | { readonly status: 'duplicate'; readonly receipt: Receipt }
   /** An invalid envelope: no transition, no receipt. */
   | { readonly status: 'rejected'; readonly reason: RejectionReason; readonly message: string };
 
-export interface PermittedView {
+export type PermittedView = RoulettePermittedView | BlackjackPermittedView;
+
+export interface RoulettePermittedView {
+  readonly game: 'roulette';
   readonly activityId: string;
   readonly phase: Phase;
   readonly sequence: number;
@@ -184,6 +224,9 @@ export class ActivitySpecificationError extends Error {
   }
 }
 
+/** A game module's candidate change for one legal command, or why the action fails legality. */
+export type Step<S> = { change: Partial<S>; facts: DomainFact[] } | { illegal: IllegalActionReason };
+
 const LEGAL: Record<Phase, readonly CommandKind[]> = {
   'open-decision': ['place-wager', 'begin-turn', 'request-stop'],
   'revealing-outcome': ['settle-turn', 'request-stop'],
@@ -194,38 +237,8 @@ const LEGAL: Record<Phase, readonly CommandKind[]> = {
 
 // ---- shape checks -------------------------------------------------------
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
-
-const hasExactKeys = (value: unknown, keys: readonly string[]): value is Record<string, unknown> =>
-  isRecord(value) && Object.keys(value).sort().join() === [...keys].sort().join();
-
-const isText = (value: unknown): value is string => typeof value === 'string' && value.length > 0 && value.length <= MAX_TEXT;
-
-const isCount = (value: unknown): value is number => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
-
 const isIdentity = (value: unknown): value is VersionedIdentity =>
   hasExactKeys(value, ['id', 'version']) && isText(value.id) && isCount(value.version);
-
-/** A canonical money value, or undefined. */
-function parseMoney(value: unknown): Money | undefined {
-  if (typeof value !== 'string' || value.length > MAX_TEXT) return undefined;
-  try {
-    return decodeMoney(value);
-  } catch {
-    return undefined;
-  }
-}
-
-const isWholeIn = (amount: Money | undefined, low: bigint, high: bigint): amount is Money =>
-  amount !== undefined && amount.d === 1n && amount.n >= low && amount.n <= high;
-
-function isLimit(value: unknown): value is Limit {
-  if (!hasExactKeys(value, ['min', 'max'])) return false;
-  const min = parseMoney(value.min);
-  const max = parseMoney(value.max);
-  return isWholeIn(min, 1n, BASE_WAGER_CEILING) && isWholeIn(max, 1n, BASE_WAGER_CEILING) && compare(min, max) <= 0;
-}
 
 const isLimits = (value: unknown): value is RouletteRuleSet['limits'] =>
   hasExactKeys(value, ['inside', 'outside']) && isLimit(value.inside) && isLimit(value.outside);
@@ -237,6 +250,8 @@ function isCommand(value: unknown): value is Command {
       const amount = parseMoney(value.amount);
       return hasExactKeys(value, ['kind', 'target', 'amount']) && isText(value.target) && amount !== undefined && amount.n >= 0n;
     }
+    case 'play':
+      return hasExactKeys(value, ['kind', 'action']) && isBlackjackAction(value.action);
     case 'begin-turn':
     case 'settle-turn':
     case 'request-stop':
@@ -254,18 +269,29 @@ function isCommand(value: unknown): value is Command {
  * random stream identity. Grants no access and consumes no allowance.
  * Throws ActivitySpecificationError for an incomplete or unsupported specification.
  */
+export function createActivity(spec: RouletteActivitySpecification, random: RandomStreamIdentity): RouletteActivityState;
+export function createActivity(spec: BlackjackActivitySpecification, random: RandomStreamIdentity): BlackjackActivityState;
+export function createActivity(spec: ActivitySpecification, random: RandomStreamIdentity): ActivityState;
 export function createActivity(spec: ActivitySpecification, random: RandomStreamIdentity): ActivityState {
   const fail = (message: string): never => {
     throw new ActivitySpecificationError(message);
   };
   if (!isRecord(spec)) fail('the specification must be an object');
   if (!isText(spec.activityId) || !isText(spec.owner) || !isText(spec.device)) fail('activity id, owner and device are required');
-  if (spec.game !== 'roulette') fail(`unsupported game ${String(spec.game)}`);
-  const rules = spec.rules;
-  if (!isRecord(rules) || rules.id !== ROULETTE_RULES.id || rules.version !== ROULETTE_RULES.version || rules.wheel !== ROULETTE_RULES.wheel) {
-    fail('unsupported roulette rules');
+  const game: unknown = spec.game;
+  if (game !== 'roulette' && game !== 'blackjack') fail(`unsupported game ${String(game)}`);
+  const rules: Record<string, unknown> | undefined = isRecord(spec.rules) ? spec.rules : undefined;
+  if (spec.game === 'roulette') {
+    if (!rules || rules.id !== ROULETTE_RULES.id || rules.version !== ROULETTE_RULES.version || rules.wheel !== ROULETTE_RULES.wheel) {
+      fail('unsupported roulette rules');
+    }
+    if (!isLimits(spec.rules.limits)) fail(`limits must be whole units from 1 to ${BASE_WAGER_CEILING} with min <= max`);
+  } else {
+    if (!rules || rules.id !== BLACKJACK_RULES.id || rules.version !== BLACKJACK_RULES.version) fail('unsupported blackjack rules');
+    if (!isBlackjackTable(blackjackTable(spec.rules))) {
+      fail(`blackjack rules need six decks, S17 or H17, a penetration of 50-80% in 5% steps and whole-unit limits from 1 to ${BASE_WAGER_CEILING}`);
+    }
   }
-  if (!isLimits(rules.limits)) fail(`limits must be whole units from 1 to ${BASE_WAGER_CEILING} with min <= max`);
   if (spec.strategy !== null && !isIdentity(spec.strategy)) fail('strategy must be null or an id and version');
   if (spec.reference !== null && !isIdentity(spec.reference)) fail('reference must be null or an id and version');
   if (!isWholeIn(parseMoney(spec.funding), 1n, FUNDING_CEILING)) fail(`funding must be whole units from 1 to ${FUNDING_CEILING}`);
@@ -276,47 +302,54 @@ export function createActivity(spec: ActivitySpecification, random: RandomStream
     return fail(`invalid random stream identity: ${error instanceof Error ? error.message : String(error)}`);
   }
   const position = stream.state();
-  return {
+  const common = {
     schema: STATE_SCHEMA_VERSION,
     activity: { id: spec.activityId, owner: spec.owner, device: spec.device },
-    identities: {
-      engine: ENGINE_VERSION,
-      game: 'roulette',
-      rules: { id: rules.id, version: rules.version },
-      strategy: spec.strategy && { id: spec.strategy.id, version: spec.strategy.version },
-      reference: spec.reference && { id: spec.reference.id, version: spec.reference.version },
-      random: { protocol: position.protocol, key: position.key, session: position.session },
-    },
-    rules: {
-      wheel: rules.wheel,
-      limits: {
-        inside: { min: rules.limits.inside.min, max: rules.limits.inside.max },
-        outside: { min: rules.limits.outside.min, max: rules.limits.outside.max },
-      },
-    },
     sequence: 0,
     phase: 'open-decision',
     turn: 0,
     balance: spec.funding,
     wagers: [],
-    outcome: null,
     random: position,
     receipts: [],
+  } as const;
+  const identities = {
+    engine: ENGINE_VERSION,
+    rules: { id: spec.rules.id, version: spec.rules.version },
+    strategy: spec.strategy && { id: spec.strategy.id, version: spec.strategy.version },
+    reference: spec.reference && { id: spec.reference.id, version: spec.reference.version },
+    random: { protocol: position.protocol, key: position.key, session: position.session },
+  };
+  if (spec.game === 'blackjack') {
+    return { ...common, identities: { ...identities, game: 'blackjack' }, rules: blackjackTable(spec.rules), shoe: null, round: null };
+  }
+  const { limits } = spec.rules;
+  return {
+    ...common,
+    identities: { ...identities, game: 'roulette' },
+    rules: {
+      wheel: spec.rules.wheel,
+      limits: {
+        inside: { min: limits.inside.min, max: limits.inside.max },
+        outside: { min: limits.outside.min, max: limits.outside.max },
+      },
+    },
+    outcome: null,
   };
 }
 
 // ---- advance ------------------------------------------------------------
 
-type Change = Partial<Pick<ActivityState, 'phase' | 'turn' | 'balance' | 'wagers' | 'outcome' | 'random'>>;
-type Step = { change: Change; facts: DomainFact[] } | { illegal: IllegalActionReason };
+/** The commands the state's phase (and game substate) allows. */
+const legalCommands = (state: ActivityState): readonly CommandKind[] => (isBlackjack(state) ? blackjackLegal(state) : LEGAL[state.phase]);
 
-const reject = (reason: RejectionReason, message: string): AdvanceResult => ({ status: 'rejected', reason, message });
+const reject = (reason: RejectionReason, message: string) => ({ status: 'rejected', reason, message }) as const;
 
 /**
  * Applies one command envelope. Pure: the same state and envelope always give
  * the same result, and nothing outside the returned state changes.
  */
-export function advanceActivity(state: ActivityState, envelope: CommandEnvelope): AdvanceResult {
+export function advanceActivity<S extends ActivityState>(state: S, envelope: CommandEnvelope): AdvanceResult<S> {
   if (!hasExactKeys(envelope, ['sequence', 'commandId', 'command']) || !isCount(envelope.sequence) || !isText(envelope.commandId)) {
     return reject('malformed', 'an envelope needs a sequence, a command id and a command');
   }
@@ -332,11 +365,11 @@ export function advanceActivity(state: ActivityState, envelope: CommandEnvelope)
     return reject('stale', `expected sequence ${state.sequence}, got ${envelope.sequence}`);
   }
   const command = envelope.command;
-  if (!LEGAL[state.phase].includes(command.kind)) {
+  if (!legalCommands(state).includes(command.kind)) {
     return reject('not-legal-in-phase', `${command.kind} is not legal in ${state.phase}`);
   }
 
-  const step = apply(state, command);
+  const step: Step<ActivityState> = isBlackjack(state) ? applyBlackjack(state, command) : apply(state, command);
   const receipt: Receipt = {
     commandId: envelope.commandId,
     sequence: state.sequence,
@@ -347,13 +380,13 @@ export function advanceActivity(state: ActivityState, envelope: CommandEnvelope)
   const facts: DomainFact[] = 'illegal' in step ? [{ kind: 'illegal-action', command, reason: step.illegal }] : step.facts;
   return {
     status: 'committed',
-    state: { ...state, ...change, sequence: state.sequence + 1, receipts: [...state.receipts, receipt] },
+    state: { ...state, ...change, sequence: state.sequence + 1, receipts: [...state.receipts, receipt] } as S,
     facts,
     receipt,
   };
 }
 
-function apply(state: ActivityState, command: Command): Step {
+function apply(state: RouletteActivityState, command: Command): Step<RouletteActivityState> {
   switch (command.kind) {
     case 'place-wager':
       return placeWager(state, command.target, decodeMoney(command.amount));
@@ -391,10 +424,13 @@ function apply(state: ActivityState, command: Command): Step {
       facts.push({ kind: 'activity-completed', balance });
       return { change: { phase: 'completed', balance, wagers: [] }, facts };
     }
+    case 'play':
+      // Never reached: no roulette phase allows a playing action.
+      return { illegal: 'action-not-available' };
   }
 }
 
-function placeWager(state: ActivityState, target: string, amount: Money): Step {
+function placeWager(state: RouletteActivityState, target: string, amount: Money): Step<RouletteActivityState> {
   const placement = placementFor(target);
   if (!placement) return { illegal: 'unknown-target' };
   const existing = state.wagers.find((wager) => wager.target === target);
@@ -418,12 +454,12 @@ function placeWager(state: ActivityState, target: string, amount: Money): Step {
 }
 
 /** Settles every committed wager against the latest outcome. With no wagers, nothing is settled. */
-function settle(state: ActivityState): { balance: string; facts: DomainFact[] } {
+function settle(state: RouletteActivityState): { balance: string; facts: DomainFact[] } {
   let balance = decodeMoney(state.balance);
   const facts: DomainFact[] = [];
   if (state.wagers.length === 0) return { balance: state.balance, facts };
   // Wagers exist outside a decision only once a turn has generated its outcome.
-  const outcome = state.outcome as NonNullable<ActivityState['outcome']>;
+  const outcome = state.outcome as NonNullable<RouletteActivityState['outcome']>;
   for (const wager of state.wagers) {
     // Every stored target is a layout placement (placeWager and decode both check).
     const placement = placementFor(wager.target) as RoulettePlacement;
@@ -453,8 +489,13 @@ const payoutText = (payout: bigint) => `${payout.toString()}:1`;
  * What the stored phase permits the player to see. It never contains random
  * state or an outcome that hasn't been generated; there is no override flag.
  */
+export function readPermittedView(state: RouletteActivityState): RoulettePermittedView;
+export function readPermittedView(state: BlackjackActivityState): BlackjackPermittedView;
+export function readPermittedView(state: ActivityState): PermittedView;
 export function readPermittedView(state: ActivityState): PermittedView {
+  if (isBlackjack(state)) return blackjackView(state, blackjackLegal(state));
   return {
+    game: 'roulette',
     activityId: state.activity.id,
     phase: state.phase,
     sequence: state.sequence,
@@ -508,9 +549,11 @@ function unsupportedVersion(value: unknown): string | undefined {
   const { identities } = value;
   if (typeof value.schema === 'number' && value.schema !== STATE_SCHEMA_VERSION) return `unsupported state schema ${value.schema}`;
   if (typeof identities.engine === 'string' && identities.engine !== ENGINE_VERSION) return `unsupported engine ${identities.engine}`;
-  if (typeof identities.game === 'string' && identities.game !== 'roulette') return `unsupported game ${identities.game}`;
+  const game = identities.game;
+  if (typeof game === 'string' && !(game in RULES)) return `unsupported game ${game}`;
   const rules = identities.rules;
-  if (isIdentity(rules) && (rules.id !== ROULETTE_RULES.id || rules.version !== ROULETTE_RULES.version)) {
+  const supported = RULES[game as GameId] ?? ROULETTE_RULES;
+  if (isIdentity(rules) && (rules.id !== supported.id || rules.version !== supported.version)) {
     return `unsupported rules ${rules.id} v${rules.version}`;
   }
   const random = identities.random;
@@ -520,7 +563,11 @@ function unsupportedVersion(value: unknown): string | undefined {
   return undefined;
 }
 
-const STATE_KEYS = ['schema', 'activity', 'identities', 'rules', 'sequence', 'phase', 'turn', 'balance', 'wagers', 'outcome', 'random', 'receipts'];
+/** The rule identity each game runs. */
+const RULES: Record<GameId, VersionedIdentity> = { roulette: ROULETTE_RULES, blackjack: BLACKJACK_RULES };
+
+const COMMON_KEYS = ['schema', 'activity', 'identities', 'rules', 'sequence', 'phase', 'turn', 'balance', 'wagers', 'random', 'receipts'];
+const GAME_KEYS: Record<GameId, readonly string[]> = { roulette: ['outcome'], blackjack: ['shoe', 'round'] };
 
 /** True for the canonical JSON of a valid command, as receipts store it. */
 function isCanonicalCommand(text: unknown): boolean {
@@ -535,18 +582,18 @@ function isCanonicalCommand(text: unknown): boolean {
 
 /** A description of the first structural or invariant problem, if any. */
 function stateDamage(value: unknown): string | undefined {
-  if (!hasExactKeys(value, STATE_KEYS)) return 'the checkpoint does not have the state fields';
+  const game = isRecord(value) && isRecord(value.identities) ? (value.identities.game as GameId) : 'roulette';
+  if (!hasExactKeys(value, [...COMMON_KEYS, ...(GAME_KEYS[game] ?? [])])) return 'the checkpoint does not have the state fields';
   if (value.schema !== STATE_SCHEMA_VERSION) return 'missing state schema';
-  const { activity, identities, rules } = value;
+  const { activity, identities } = value;
   if (!hasExactKeys(activity, ['id', 'owner', 'device']) || !isText(activity.id) || !isText(activity.owner) || !isText(activity.device)) {
     return 'damaged activity identity';
   }
   if (!hasExactKeys(identities, ['engine', 'game', 'rules', 'strategy', 'reference', 'random'])) return 'damaged identities';
-  if (identities.engine !== ENGINE_VERSION || identities.game !== 'roulette' || !isIdentity(identities.rules)) return 'damaged identities';
+  if (identities.engine !== ENGINE_VERSION || !(identities.game as string in RULES) || !isIdentity(identities.rules)) return 'damaged identities';
   if (identities.strategy !== null && !isIdentity(identities.strategy)) return 'damaged strategy identity';
   if (identities.reference !== null && !isIdentity(identities.reference)) return 'damaged reference identity';
   if (!hasExactKeys(identities.random, ['protocol', 'key', 'session'])) return 'damaged random identity';
-  if (!hasExactKeys(rules, ['wheel', 'limits']) || rules.wheel !== ROULETTE_RULES.wheel || !isLimits(rules.limits)) return 'damaged rules';
 
   let random: RandomStreamState;
   try {
@@ -559,27 +606,19 @@ function stateDamage(value: unknown): string | undefined {
     return 'the random stream does not match its recorded identity';
   }
 
-  const { sequence, phase, turn, wagers, outcome, receipts } = value;
+  const { sequence, phase, turn, wagers, receipts } = value;
   if (!isCount(sequence) || !isCount(turn)) return 'damaged sequence or turn';
   if (typeof phase !== 'string' || !Object.keys(LEGAL).includes(phase)) return 'unknown phase';
   const balance = parseMoney(value.balance);
   if (balance === undefined || balance.n < 0n) return 'damaged balance';
   if (!Array.isArray(wagers)) return 'damaged wagers';
-  let order = -1;
   for (const wager of wagers as unknown[]) {
     if (!hasExactKeys(wager, ['target', 'amount']) || typeof wager.target !== 'string') return 'damaged wager';
     const amount = parseMoney(wager.amount);
-    if (amount === undefined || amount.n <= 0n || placementOrder(wager.target) <= order) return 'damaged wager';
-    order = placementOrder(wager.target);
+    if (amount === undefined || amount.n <= 0n) return 'damaged wager';
   }
-  if (outcome !== null && !(hasExactKeys(outcome, ['turn', 'pocket']) && isCount(outcome.turn) && outcome.turn >= 1 && outcome.turn === turn && isPocket(outcome.pocket))) {
-    return 'damaged outcome';
-  }
-  if ((outcome === null) !== (turn === 0)) return 'the outcome does not match the turn count';
-  const committed = phase === 'revealing-outcome' || (phase === 'final-settlement' && wagers.length > 0 && outcome !== null);
-  if (phase === 'revealing-outcome' && wagers.length === 0) return 'a revealing turn has no committed wagers';
-  if ((phase === 'settled-outcome' || phase === 'completed') && wagers.length > 0) return 'wagers remain after settlement';
-  if (phase === 'final-settlement' && wagers.length > 0 && !committed) return 'damaged final settlement';
+  const gameDamage = game === 'blackjack' ? blackjackDamage(value) : rouletteDamage(value);
+  if (gameDamage) return gameDamage;
   if (!Array.isArray(receipts) || receipts.length !== sequence) return 'receipts do not match the sequence';
   const ids = new Set<string>();
   for (const [index, receipt] of (receipts as unknown[]).entries()) {
@@ -595,5 +634,26 @@ function stateDamage(value: unknown): string | undefined {
     }
     ids.add(receipt.commandId);
   }
+  return undefined;
+}
+
+/** The first roulette-specific problem in a checkpoint whose common fields are sound. */
+function rouletteDamage(value: Record<string, unknown>): string | undefined {
+  const { rules, phase, turn, outcome } = value;
+  const wagers = value.wagers as Wager[];
+  if (!hasExactKeys(rules, ['wheel', 'limits']) || rules.wheel !== ROULETTE_RULES.wheel || !isLimits(rules.limits)) return 'damaged rules';
+  let order = -1;
+  for (const wager of wagers) {
+    if (placementOrder(wager.target) <= order) return 'damaged wager';
+    order = placementOrder(wager.target);
+  }
+  if (outcome !== null && !(hasExactKeys(outcome, ['turn', 'pocket']) && isCount(outcome.turn) && outcome.turn >= 1 && outcome.turn === turn && isPocket(outcome.pocket))) {
+    return 'damaged outcome';
+  }
+  if ((outcome === null) !== (turn === 0)) return 'the outcome does not match the turn count';
+  const committed = phase === 'revealing-outcome' || (phase === 'final-settlement' && wagers.length > 0 && outcome !== null);
+  if (phase === 'revealing-outcome' && wagers.length === 0) return 'a revealing turn has no committed wagers';
+  if ((phase === 'settled-outcome' || phase === 'completed') && wagers.length > 0) return 'wagers remain after settlement';
+  if (phase === 'final-settlement' && wagers.length > 0 && !committed) return 'damaged final settlement';
   return undefined;
 }

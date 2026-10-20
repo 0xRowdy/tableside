@@ -2,9 +2,9 @@
 // outside 10-1,000 units per placement. The double-zero preset and editable
 // limits arrive with #62 and #72.
 
-import type { ActivitySpecification } from '@tableside/engine';
+import type { RouletteRuleSet } from '@tableside/engine';
 
-export const SINGLE_ZERO_ROULETTE: ActivitySpecification['rules'] = {
+export const SINGLE_ZERO_ROULETTE: RouletteRuleSet = {
   id: 'roulette-single-zero',
   version: 1,
   wheel: 'single-zero',

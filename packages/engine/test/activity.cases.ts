@@ -17,6 +17,7 @@ import {
   uniformInt,
   type ActivityState,
   type Command,
+  type RouletteActivityState,
   type DomainFact,
 } from '../src';
 
@@ -335,7 +336,7 @@ export const activityCases: TestCase[] = [
       collect(readPermittedView(step(a, BEGIN).state));
       t.equal(keys.filter((key) => ['random', 'key', 'session', 'block', 'lane', 'identities', 'receipts'].includes(key)), []);
       t.equal(Object.keys(readPermittedView(a)).sort(), [
-        'activityId', 'balance', 'legalCommands', 'outcome', 'phase', 'sequence', 'table', 'turn', 'wagers', 'wagersCommitted',
+        'activityId', 'balance', 'game', 'legalCommands', 'outcome', 'phase', 'sequence', 'table', 'turn', 'wagers', 'wagersCommitted',
       ]);
       // readPermittedView takes the state alone: no caller flag can widen it.
       t.equal(readPermittedView.length, 1);
@@ -376,7 +377,7 @@ export const activityCases: TestCase[] = [
     run: (t) => {
       const states = [fresh()];
       for (const command of [place('red', '10'), BEGIN, SETTLE, place('straight-0', '1'), BEGIN, STOP, FINAL]) {
-        states.push(step(states.at(-1) as ActivityState, command).state);
+        states.push(step(states.at(-1) as RouletteActivityState, command).state);
       }
       for (const state of states) {
         const text = encodeCheckpoint(state);
@@ -444,7 +445,7 @@ export const activityCases: TestCase[] = [
       const unsupported = [
         edit((v) => ((v as Record<string, unknown>).schema = 2)),
         edit((v) => (v.identities!.engine = '9.9.9')),
-        edit((v) => (v.identities!.game = 'blackjack')),
+        edit((v) => (v.identities!.game = 'baccarat')),
         edit((v) => (v.identities!.rules = { id: 'roulette-double-zero', version: 1 })),
         edit((v) => (v.identities!.rules = { id: 'roulette-single-zero', version: 2 })),
         edit((v) => ((v.identities!.random as Record<string, unknown>).protocol = 2)),

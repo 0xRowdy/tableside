@@ -26,4 +26,5 @@ export {
   type PlayAction,
 } from './blackjack/reference';
 
+export { blackjackRules, DEFAULT_BLACKJACK_PRESET, DEFAULT_PENETRATION } from './blackjack/rules';
 export { SINGLE_ZERO_ROULETTE } from './roulette';

@@ -16,6 +16,13 @@ export {
   STATE_SCHEMA_VERSION,
   type ActivitySpecification,
   type ActivityState,
+  type BlackjackActivitySpecification,
+  type GameId,
+  type Limit,
+  type RouletteActivitySpecification,
+  type RouletteActivityState,
+  type RouletteRuleSet,
+  type RoulettePermittedView,
   type AdvanceResult,
   type CheckpointResult,
   type Command,
@@ -30,6 +37,19 @@ export {
   type VersionedIdentity,
   type Wager,
 } from './activity';
+export {
+  BLACKJACK_RULES,
+  PENETRATIONS,
+  type BlackjackAction,
+  type BlackjackActivityState,
+  type BlackjackHand,
+  type BlackjackPermittedView,
+  type BlackjackRound,
+  type BlackjackRuleSet,
+  type BlackjackTable,
+  type HandTotal,
+  type Peek,
+} from './blackjack';
 
 export { philox4x32 } from './philox';
 export {
