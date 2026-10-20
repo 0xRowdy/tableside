@@ -80,6 +80,7 @@ export function completedRecord(activityId: string, overrides: Partial<Completed
     finalCashOut: '1010',
     netResult: '10',
     maxDrawdown: '0',
+    guidance: null,
     completedAt: 1_790_000_100_000,
     ...overrides,
   };

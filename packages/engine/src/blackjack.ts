@@ -201,6 +201,9 @@ function legal(state: BlackjackActivityState): CommandKind[] {
     case 'final-settlement':
       return ['advance-final-settlement'];
     case 'completed':
+    // Guided phases are the protocol's to decide.
+    case 'correction':
+    case 'cycle-completion':
       return [];
   }
 }

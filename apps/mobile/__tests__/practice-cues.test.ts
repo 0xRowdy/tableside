@@ -3,7 +3,7 @@
 // play is identical with sound and haptics off.
 // Spins come from the Random123 "pi digits" stream: 27 (red), 0, 25 (red).
 
-import { blackjackRules } from '@tableside/definitions';
+import { blackjackRules, FLAT_EVEN_MONEY } from '@tableside/definitions';
 
 import { followPractice } from '@/feedback/practice-cues';
 import { FeedbackService } from '@/feedback/service';
@@ -188,5 +188,22 @@ describe('sound and haptics off', () => {
     expect(bothOff.ports.sound.played).toEqual([]);
     expect(bothOff.ports.haptics.fired).toEqual([]);
     for (const run of [soundOff, hapticsOff, bothOff]) expect(run.timeline).toEqual(on.timeline);
+  });
+});
+
+describe('cues during guided practice', () => {
+  it('a correction fires the correction-offered cue with its warning haptic, and nothing for the spin it held', async () => {
+    const adapters = substituteAdapters({ clock: new FakeClock(undefined, true) });
+    const controller = new PracticeController(adapters);
+    const ports = substituteFeedbackPorts(null);
+    const settings = new DeviceSettings(ports.storage);
+    await settings.load();
+    followPractice(controller, new FeedbackService(ports, settings));
+    await controller.load();
+    await controller.start({ game: 'roulette', buyIn: '1000', strategy: { definition: FLAT_EVEN_MONEY, parameters: { target: 'red' } } });
+    await controller.placeWager('red', '50');
+    await controller.spin();
+    expect(ports.sound.played.map((play) => play.cue)).toEqual(['stake-set', 'correction-offered']);
+    expect(ports.haptics.fired).toEqual(['selection', 'warning']);
   });
 });

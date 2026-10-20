@@ -47,6 +47,10 @@ export function statusText(view: BlackjackPermittedView): string {
       return 'Final settlement';
     case 'completed':
       return 'Ended';
+    case 'correction':
+      return 'Strategy check';
+    case 'cycle-completion':
+      return 'Cycle ended';
   }
 }
 

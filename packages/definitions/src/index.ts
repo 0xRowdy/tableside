@@ -46,3 +46,5 @@ export {
   SINGLE_ZERO_ROULETTE,
   type RouletteHouseEdge,
 } from './roulette';
+
+export { FIXED_TWO_DOZENS, FLAT_EVEN_MONEY, ROULETTE_STRATEGIES, strategyDefaults } from './roulette-strategies';

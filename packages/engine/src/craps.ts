@@ -9,7 +9,7 @@
 // own module; a strategy compatible with this one is not automatically
 // compatible with it. Rules: #3 (Launch game rules) and spec #51.
 
-import type { ActivityStateBase, Command, CommandKind, CrapsPermittedView, DomainFact, GameCommand, GameModule, Phase, Step, Wager } from './activity';
+import type { ActivityStateBase, Command, CommandKind, CrapsPermittedView, DomainFact, GameCommand, GameModule, Step, Wager } from './activity';
 import { rollDice } from './draws';
 import { add, commission, compare, decodeMoney, encodeMoney, money, mul, neg, sub, type Money } from './money';
 import { RandomStream } from './random';
@@ -388,14 +388,9 @@ const keptInstructions = (instructions: readonly WorkingInstruction[], wagers: r
 /** Craps adds per-bet working instructions to the common commands. */
 type CrapsCommand = GameCommand | Extract<Command, { readonly kind: 'set-working' }>;
 
-/** The common phase table, plus working instructions whenever bets are open. */
-const LEGAL: Record<Phase, readonly CommandKind[]> = {
-  'open-decision': ['place-wager', 'set-working', 'begin-turn', 'request-stop', 'rebuy'],
-  'revealing-outcome': ['settle-turn', 'request-stop'],
-  'settled-outcome': ['place-wager', 'set-working', 'begin-turn', 'request-stop', 'rebuy'],
-  'final-settlement': ['advance-final-settlement'],
-  completed: [],
-};
+/** The common commands, plus working instructions whenever bets are open. */
+const legal = (_state: State, common: readonly CommandKind[]): readonly CommandKind[] =>
+  common.flatMap((kind): CommandKind[] => (kind === 'place-wager' ? ['place-wager', 'set-working'] : [kind]));
 
 function apply(state: State, command: CrapsCommand): Step<State> {
   switch (command.kind) {
@@ -800,7 +795,7 @@ export const CRAPS: GameModule<CrapsActivityState, CrapsPermittedView, CrapsComm
       limits: { flat: { min: limits.flat.min, max: limits.flat.max }, props: { min: limits.props.min, max: limits.props.max } },
     };
   },
-  legal: (state) => LEGAL[state.phase],
+  legal,
   apply,
   view: (state) => ({
     game: 'craps',

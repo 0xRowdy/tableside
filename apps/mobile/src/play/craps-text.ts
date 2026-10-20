@@ -82,6 +82,8 @@ export function crapsStatus(view: CrapsPermittedView): string {
     'open-decision': view.table.point === null ? 'Come-out roll' : `Point ${view.table.point} · betting`,
     'revealing-outcome': 'Rolling',
     'settled-outcome': 'Settled',
+    correction: 'Strategy check',
+    'cycle-completion': 'Cycle ended',
     'final-settlement': 'Final settlement',
     completed: 'Ended',
   };

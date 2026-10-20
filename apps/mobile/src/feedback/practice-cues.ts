@@ -44,6 +44,9 @@ export function cuesForFacts(facts: readonly DomainFact[]): CueName[] {
       case 'illegal-action':
         cues.push('input-rejected');
         break;
+      case 'correction-offered':
+        cues.push('correction-offered');
+        break;
       default:
         break;
     }

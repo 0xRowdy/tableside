@@ -1,5 +1,6 @@
-// The session result (design frame S1-10, free play): net result, maximum
-// drawdown and the funding lines. The full record arrives with #79.
+// The session result (design frame S1-10): net result, maximum drawdown and
+// the funding lines, with guided practice's adherence and Departures kept
+// apart from the money. The full record arrives with #79.
 
 import { CircleCheck, Info } from 'lucide-react-native';
 import { useEffect } from 'react';
@@ -10,6 +11,7 @@ import { Screen } from '@/components/Screen';
 import type { CompletedPracticeSession } from '@/practice/store';
 import { fonts, palette, radius, space, textScale } from '@/theme/tokens';
 
+import { adherenceText } from './coaching-text';
 import { formatSigned, formatUnits, speakSigned } from './roulette-text';
 
 const SUBTITLES: Record<CompletedPracticeSession['game'], string> = {
@@ -104,16 +106,38 @@ export function SessionResult({
         </View>
       </View>
 
-      <View style={styles.note}>
-        <Info color={palette.mutedForeground} size={18} />
-        <Text maxFontSizeMultiplier={textScale.body} style={[styles.muted, styles.noteText]}>
-          Free play has no strategy, so there&apos;s no adherence score and no Departures.
-        </Text>
-      </View>
+      {result.guidance ? (
+        <Guidance guidance={result.guidance} />
+      ) : (
+        <View style={styles.note}>
+          <Info color={palette.mutedForeground} size={18} />
+          <Text maxFontSizeMultiplier={textScale.body} style={[styles.muted, styles.noteText]}>
+            Free play has no strategy, so there&apos;s no adherence score and no Departures.
+          </Text>
+        </View>
+      )}
 
       <Button label="New session" stretch onPress={onNewSession} />
       <Button label="Back to Home" variant="secondary" stretch onPress={onHome} />
     </Screen>
+  );
+}
+
+/** Adherence and the departure log, shown apart from the money. */
+function Guidance({ guidance }: { guidance: NonNullable<CompletedPracticeSession['guidance']> }) {
+  const retried = guidance.departures.filter((departure) => departure.resolution === 'retried').length;
+  const overridden = guidance.departures.length - retried;
+  return (
+    <>
+      <Text maxFontSizeMultiplier={textScale.body} style={styles.label}>STRATEGY ADHERENCE</Text>
+      <View style={styles.ledger} accessible accessibilityLabel={`Strategy adherence: ${adherenceText(guidance.adherence)}. Departures ${guidance.departures.length}: ${retried} retried, ${overridden} overridden.`}>
+        <Text maxFontSizeMultiplier={textScale.body} style={styles.kvValue}>{adherenceText(guidance.adherence)}</Text>
+        <Text maxFontSizeMultiplier={textScale.body} style={styles.muted}>
+          Departures {guidance.departures.length} · {retried} retried · {overridden} overridden
+        </Text>
+        {guidance.overrideAffected && <Text maxFontSizeMultiplier={textScale.body} style={styles.muted}>This session includes an override.</Text>}
+      </View>
+    </>
   );
 }
 
