@@ -2,7 +2,9 @@
 // prefills the next setup's field; it is never a balance or a wallet (#20).
 // Kept in a file on this device.
 
-import type { GameId } from '@/games';
+import { FUNDING_CEILING } from '@tableside/engine';
+
+import { LAUNCH_GAMES, type GameId } from '@/games';
 
 /** Where the preferences live on this device. */
 export interface SetupPreferencesStorage {
@@ -13,7 +15,8 @@ export interface SetupPreferencesStorage {
 /** Each game's last buy-in, canonical whole units. */
 export type RememberedBuyIns = Readonly<Partial<Record<GameId, string>>>;
 
-const GAMES: readonly GameId[] = ['blackjack', 'craps', 'roulette'];
+/** A buy-in worth keeping: canonical whole units from 1 to the funding ceiling. */
+const keepable = (amount: unknown): amount is string => typeof amount === 'string' && /^[1-9]\d*$/.test(amount) && amount.length <= 13 && BigInt(amount) <= FUNDING_CEILING;
 
 function parse(text: string | null): RememberedBuyIns {
   if (text === null) return {};
@@ -22,9 +25,9 @@ function parse(text: string | null): RememberedBuyIns {
     const buyIns = typeof value === 'object' && value !== null ? (value as { buyIns?: unknown }).buyIns : undefined;
     if (typeof buyIns !== 'object' || buyIns === null) return {};
     const kept: Partial<Record<GameId, string>> = {};
-    for (const game of GAMES) {
+    for (const { id: game } of LAUNCH_GAMES) {
       const amount = (buyIns as Record<string, unknown>)[game];
-      if (typeof amount === 'string' && /^[1-9]\d{0,9}$/.test(amount)) kept[game] = amount;
+      if (keepable(amount)) kept[game] = amount;
     }
     return kept;
   } catch {

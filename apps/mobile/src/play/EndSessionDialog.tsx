@@ -12,8 +12,6 @@ import { fonts, palette, radius, space, textScale } from '@/theme/tokens';
 import { crapsTargetName } from './craps-text';
 import { formatUnits, targetName } from './roulette-text';
 
-const GAME_NAMES: Record<GameId, string> = { blackjack: 'blackjack', craps: 'craps', roulette: 'roulette' };
-
 /**
  * What ending would do with each wager. Roulette: every wager comes back
  * between spins. Craps: contracts on their number stay and roll on to settle.
@@ -45,8 +43,9 @@ export function EndSessionDialog({
   /** The game whose setup opens once this session has ended. */
   switchTo?: GameId;
 }) {
-  const from = GAME_NAMES[view.game];
-  const to = switchTo && GAME_NAMES[switchTo];
+  // Game ids are the lower-case game names used in sentences.
+  const from = view.game;
+  const to = switchTo;
   const { removable, committed, name } = endingWagers(view);
   const list = (wagers: readonly Wager[], none: string) =>
     wagers.length === 0 ? none : wagers.map((w) => `${name(w.target)} ${formatUnits(w.amount)}`).join(' · ');

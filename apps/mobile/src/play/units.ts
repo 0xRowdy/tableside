@@ -30,6 +30,17 @@ export function formatUnits(amount: string): string {
   return `${negative ? '-' : ''}${grouped}${fraction ? `.${fraction}` : ''}`;
 }
 
+/**
+ * Typed amount text without its thousands separators ("1,000" → "1000"). Only
+ * separators in their proper places are dropped: anything else ("1,0,0",
+ * "1 000") comes back as typed, so it is explained rather than read as a
+ * different amount.
+ */
+export function withoutGrouping(text: string): string {
+  const trimmed = text.trim();
+  return /^[+-]?\d{1,3}(,\d{3})+(\.\d+)?$/.test(trimmed) ? trimmed.replace(/,/g, '') : trimmed;
+}
+
 /** "+120", "−85" (minus sign), "0". */
 export function formatSigned(amount: string): string {
   if (amount.startsWith('-')) return `−${formatUnits(amount.slice(1))}`;

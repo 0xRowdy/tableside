@@ -48,8 +48,7 @@ export function CrapsSetup({ problem, problemReason = null, busy }: { problem: S
 
   const start = () => {
     if (!accepted) return;
-    const funds = funding.prepare();
-    if (funds) void controller.start({ game: 'craps', ...funds, odds, field, limits: accepted });
+    void funding.start((funds) => controller.start({ game: 'craps', ...funds, odds, field, limits: accepted }));
   };
 
   return (

@@ -15,7 +15,7 @@ import { RECONNECT_TO_VERIFY, type StartProblem } from '@/practice/controller';
 import { usePractice } from '@/practice/PracticeProvider';
 import { space } from '@/theme/tokens';
 
-import { formatUnits } from '../units';
+import { formatUnits, withoutGrouping } from '../units';
 
 import { AllowanceCard, AmountField, InlineProblem, ProblemBanner, Section, type AmountInput } from './SetupParts';
 import { useSetupPreferences } from './SetupPreferencesProvider';
@@ -39,9 +39,6 @@ export type Opening =
   /** Free play: the table's smallest bet. */
   | { readonly kind: 'table'; readonly amount: string };
 
-const GAME_NAMES: Record<GameId, string> = { blackjack: 'blackjack', craps: 'craps', roulette: 'roulette' };
-
-const digitsOf = (text: string) => text.replace(/[,\s]/g, '');
 const wholeDigits = (digits: string) => /^\d+$/.test(digits) && digits.length <= MAX_BUY_IN_DIGITS;
 
 export function useFunding(game: GameId, opening: Opening | null) {
@@ -65,7 +62,7 @@ export function useFunding(game: GameId, opening: Opening | null) {
   // Until the player types, the field shows the remembered buy-in (which may load after the first render).
   const text = draft ?? formatUnits(remembered ?? DEFAULT_BUY_IN);
   const training = terms.funding.source === 'training-bankroll' ? terms.funding : null;
-  const digits = digitsOf(text);
+  const digits = withoutGrouping(text);
   // A buy-in that isn't positive whole units is explained at Start, not as a shortfall.
   const funds = training ? training.available : wholeDigits(digits) && BigInt(digits) > 0n ? BigInt(digits).toString() : null;
   const short = opening !== null && funds !== null && BigInt(funds) < BigInt(opening.amount);
@@ -75,21 +72,21 @@ export function useFunding(game: GameId, opening: Opening | null) {
     setNotWhole(false);
   };
 
-  /** The funding to start with, or null (with the problem shown) when the buy-in isn't whole units. */
-  const prepare = (): { buyIn: string; fundingSource: FundingSource } | null => {
-    if (training) return { buyIn: training.available, fundingSource: 'training-bankroll' };
+  /**
+   * Starts with this funding (the problem shown instead when the buy-in isn't
+   * whole units). The buy-in is remembered only once a session has started.
+   */
+  const start = async (begin: (funds: { buyIn: string; fundingSource: FundingSource }) => Promise<void>): Promise<void> => {
+    if (training) return begin({ buyIn: training.available, fundingSource: 'training-bankroll' });
     const ok = wholeDigits(digits);
     setNotWhole(!ok);
-    if (!ok) {
-      feedback.cue('input-rejected');
-      return null;
-    }
+    if (!ok) return feedback.cue('input-rejected');
     const buyIn = BigInt(digits).toString();
-    if (BigInt(buyIn) >= 1n && BigInt(buyIn) <= FUNDING_CEILING) void preferences.rememberBuyIn(game, buyIn);
-    return { buyIn, fundingSource: 'practice-funding' };
+    await begin({ buyIn, fundingSource: 'practice-funding' });
+    if (controller.snapshot().status === 'active') await preferences.rememberBuyIn(game, buyIn);
   };
 
-  return { terms, training, text, change, notWhole, short, prepare, input, remembered: remembered !== undefined && draft === null, game };
+  return { terms, training, text, change, notWhole, short, start, input, remembered: remembered !== undefined && draft === null, game };
 }
 
 export type FundingState = ReturnType<typeof useFunding>;
@@ -109,7 +106,6 @@ export function FundingSection({
   problemReason: string | null;
 }) {
   const { terms, training, text, change, notWhole, short, input } = funding;
-  const name = GAME_NAMES[funding.game];
   // A refused buy-in is explained at its field; any other refusal stands on its own.
   const error = notWhole || problem === 'invalid-buy-in' ? PROBLEMS['invalid-buy-in'] : null;
   const refused = problem && problem !== 'invalid-buy-in' ? (problem === 'access-denied' && problemReason ? problemReason : PROBLEMS[problem]) : null;
@@ -122,7 +118,7 @@ export function FundingSection({
           <AllowanceCard
             title={terms.allowance?.title ?? 'TRAINING BANKROLL'}
             text={terms.allowance?.text ?? `${formatUnits(training.available)} training units available.`}
-            detail="Your whole training bankroll funds this session, so there's no buy-in and no rebuys. What's left when the session ends goes back to today's bankroll."
+            detail="Your whole training bankroll funds this session, so there's no buy-in and no rebuys. What's left when the session ends goes back to today's training bankroll."
             seePremium={terms.seePremium}
           />
           {/* No field to sit under: the shortfall line stands alone. */}
@@ -137,7 +133,7 @@ export function FundingSection({
             value={text}
             onChange={change}
             problem={error ?? inline}
-            help={funding.remembered ? `Your last ${name} buy-in. Each session starts fresh.` : 'Each session starts fresh.'}
+            help={funding.remembered ? `Your last ${funding.game} buy-in. Each session starts fresh.` : 'Each session starts fresh.'}
           />
         </Section>
       )}

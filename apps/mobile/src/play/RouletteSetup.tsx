@@ -111,15 +111,15 @@ export function RouletteSetup({
 
   const start = () => {
     if (!accepted) return;
-    const funds = funding.prepare();
-    if (!funds) return;
-    void controller.start({
-      game: 'roulette',
-      ...funds,
-      wheel,
-      limits: accepted,
-      ...(guided ? { strategy: { definition: strategy, parameters: choices } } : {}),
-    });
+    void funding.start((funds) =>
+      controller.start({
+        game: 'roulette',
+        ...funds,
+        wheel,
+        limits: accepted,
+        ...(guided ? { strategy: { definition: strategy, parameters: choices } } : {}),
+      }),
+    );
   };
 
   return (

@@ -1,7 +1,7 @@
 import { createActivity, RANDOM_PROTOCOL_VERSION, type ActivitySpecification } from '@tableside/engine';
 import { describe, expect, it } from 'vitest';
 
-import { blackjackRules, DEFAULT_LIMITS, rouletteRules, standardCraps } from '../src/index';
+import { BLACKJACK_LIMITS, blackjackRules, CRAPS_LIMITS, ROULETTE_LIMITS, rouletteRules, standardCraps } from '../src/index';
 
 // Default limits (#3 / spec #51 "Default table limits"): blackjack initial wager
 // 10/1,000; craps line/come, place/buy/lay and field 10/1,000, hardways and
@@ -12,14 +12,12 @@ const base = { activityId: 'a', owner: 'o', device: 'd', strategy: null, referen
 
 describe('table limits', () => {
   it('defaults to the launch limits for every game', () => {
-    expect(DEFAULT_LIMITS).toEqual({
-      blackjack: { initial: { min: '10', max: '1000' } },
-      craps: { flat: { min: '10', max: '1000' }, props: { min: '1', max: '100' } },
-      roulette: { inside: { min: '1', max: '100' }, outside: { min: '10', max: '1000' } },
-    });
-    expect(blackjackRules().limits).toEqual(DEFAULT_LIMITS.blackjack);
-    expect(standardCraps().limits).toEqual(DEFAULT_LIMITS.craps);
-    expect(rouletteRules('double-zero').limits).toEqual(DEFAULT_LIMITS.roulette);
+    expect(BLACKJACK_LIMITS).toEqual({ initial: { min: '10', max: '1000' } });
+    expect(CRAPS_LIMITS).toEqual({ flat: { min: '10', max: '1000' }, props: { min: '1', max: '100' } });
+    expect(ROULETTE_LIMITS).toEqual({ inside: { min: '1', max: '100' }, outside: { min: '10', max: '1000' } });
+    expect(blackjackRules().limits).toEqual(BLACKJACK_LIMITS);
+    expect(standardCraps().limits).toEqual(CRAPS_LIMITS);
+    expect(rouletteRules('double-zero').limits).toEqual(ROULETTE_LIMITS);
   });
 
   it('pins edited limits, and other blackjack players bet the edited minimum', () => {

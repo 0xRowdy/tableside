@@ -52,8 +52,7 @@ export function BlackjackSetup({ problem, problemReason = null, busy }: { proble
 
   const start = () => {
     if (!accepted) return;
-    const funds = funding.prepare();
-    if (funds) void controller.start({ game: 'blackjack', ...funds, rules: blackjackRules(preset, penetration, others, accepted) });
+    void funding.start((funds) => controller.start({ game: 'blackjack', ...funds, rules: blackjackRules(preset, penetration, others, accepted) }));
   };
 
   return (

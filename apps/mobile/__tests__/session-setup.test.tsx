@@ -12,6 +12,7 @@ import { AccessibilityInfo, Dimensions, StyleSheet } from 'react-native';
 import type { SetupTerms } from '@/practice/adapters';
 
 let mockTerms: SetupTerms | null = null;
+let mockDenyStart = false;
 
 jest.mock('@/practice/app-adapters', () => {
   const { FakeClock, substituteAdapters } = jest.requireActual('@/practice/testing/substitutes');
@@ -19,7 +20,11 @@ jest.mock('@/practice/app-adapters', () => {
   return {
     createAppAdapters: () => ({
       ...substituteAdapters({ clock: new FakeClock(undefined, true) }),
-      access: { ...alwaysAllowed, ...(mockTerms ? { setupTerms: async () => mockTerms } : {}) },
+      access: {
+        ...alwaysAllowed,
+        ...(mockTerms ? { setupTerms: async () => mockTerms } : {}),
+        ...(mockDenyStart ? { beforeActivity: async () => ({ status: 'denied', provenance: 'test', disposition: 'stop', reason: 'Not today.' }) } : {}),
+      },
     }),
   };
 });
@@ -37,6 +42,7 @@ beforeAll(() => {
 beforeEach(() => {
   announcements = [];
   mockTerms = null;
+  mockDenyStart = false;
   storage().stored = null;
 });
 
@@ -154,6 +160,14 @@ describe('session setup', () => {
       expect(start()).toBeDisabled();
     });
 
+    it('reads only properly placed thousands separators; anything else is explained, not reinterpreted', async () => {
+      await open('blackjack', 'Blackjack');
+      await fireEvent.changeText(field('Initial wager maximum, in units'), '1,0,0');
+      expect(screen.getByText('Digits only, in whole units.')).toBeOnTheScreen();
+      await fireEvent.changeText(field('Initial wager maximum, in units'), '2,000');
+      expect(screen.queryByTestId('setup-problems')).toBeNull();
+    });
+
     it('starts craps and roulette at edited limits', async () => {
       await open('craps', 'Craps');
       await fireEvent.changeText(field('Pass, come, place, buy, lay, field minimum, in units'), '25');
@@ -211,6 +225,15 @@ describe('session setup', () => {
       await cleanup();
       await open('craps', 'Craps');
       expect(buyIn()).toHaveProp('value', '1,000');
+    });
+
+    it('remembers a buy-in only once its session has started', async () => {
+      mockDenyStart = true;
+      await open('craps', 'Craps');
+      await fireEvent.changeText(buyIn(), '300');
+      await fireEvent.press(start());
+      expect(await screen.findByText('Not today.')).toBeOnTheScreen();
+      expect(storage().latest?.text ?? null).toBeNull();
     });
 
     it("explains when the buy-in can't cover the strategy's opening bets, and offers to raise it", async () => {

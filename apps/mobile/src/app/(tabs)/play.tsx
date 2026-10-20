@@ -68,7 +68,7 @@ export default function Play() {
           {table}
           {switchTo && (
             <EndSessionDialog
-              visible={switchingFrom !== snapshot.view.activityId && snapshot.view.legalCommands.includes('request-stop')}
+              visible={switchingFrom !== snapshot.view.activityId}
               view={snapshot.view}
               switchTo={switchTo}
               cancelLabel={`Stay at ${snapshot.view.game}`}

@@ -2,9 +2,9 @@
 // judgement of each, and the words that explain a problem. A draft is never
 // corrected; only a limit the engine accepts reaches the rules.
 
-import { checkLimitInput, type Limit, type LimitAmountProblem, type LimitInputCheck } from '@tableside/engine';
+import { BASE_WAGER_CEILING, checkLimitInput, type Limit, type LimitAmountProblem, type LimitInputCheck } from '@tableside/engine';
 
-import { formatUnits } from '../units';
+import { formatUnits, withoutGrouping } from '../units';
 
 /** One limit group's draft, as typed (thousands separators allowed). */
 export interface LimitDraft {
@@ -31,28 +31,20 @@ export interface LimitProblem<K extends string> {
   readonly summary: string;
 }
 
-/** Grouping separators are presentation; the engine judges the plain decimal text. */
-const plain = (text: string) => text.replace(/[,\s]/g, '');
-
 export const draftOf = (limit: Limit): LimitDraft => ({ min: formatUnits(limit.min), max: formatUnits(limit.max) });
 
-export const checkDraft = (draft: LimitDraft): LimitInputCheck => checkLimitInput(plain(draft.min), plain(draft.max));
+export const checkDraft = (draft: LimitDraft): LimitInputCheck => checkLimitInput(withoutGrouping(draft.min), withoutGrouping(draft.max));
 
-const INLINE: Record<LimitAmountProblem, string> = {
-  missing: 'Enter an amount.',
-  'not-a-number': 'Digits only, in whole units.',
-  'not-positive': 'Use 1 or more.',
-  'not-whole': 'Whole units only.',
-  'over-ceiling': 'At most 1,000,000 units.',
-};
-
-const SUMMARY: Record<LimitAmountProblem, string> = {
+/** Each problem as a phrase: a sentence under the field, a clause in the banner. */
+const PHRASE: Record<LimitAmountProblem, string> = {
   missing: 'enter an amount',
   'not-a-number': 'digits only, in whole units',
   'not-positive': 'use 1 or more',
   'not-whole': 'whole units only',
-  'over-ceiling': 'at most 1,000,000 units',
+  'over-ceiling': `at most ${formatUnits(BASE_WAGER_CEILING.toString())} units`,
 };
+
+const sentence = (phrase: string) => `${phrase.charAt(0).toUpperCase()}${phrase.slice(1)}.`;
 
 const WONT_CHANGE = "We won't change it for you.";
 
@@ -82,8 +74,8 @@ export function limitProblems<K extends string>(groups: readonly LimitGroup<K>[]
       problems.push({
         group: group.key,
         end,
-        inline: INLINE[problem],
-        summary: `${name}: ${SUMMARY[problem]}${typed ? ` (you entered ${typed})` : ''}. ${WONT_CHANGE}`,
+        inline: sentence(PHRASE[problem]),
+        summary: `${name}: ${PHRASE[problem]}${typed ? ` (you entered ${typed})` : ''}. ${WONT_CHANGE}`,
       });
     }
   }
