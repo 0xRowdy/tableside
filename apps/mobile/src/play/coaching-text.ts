@@ -3,7 +3,7 @@
 // situation, the matching instruction, the prescription and the fallback.
 // Nothing here judges or praises, and nothing is added that the facts don't hold.
 
-import type { BetCorrection, Explanation, StrategyView, Wager } from '@tableside/engine';
+import type { BetCorrection, CycleEnd, Explanation, PendingStrategyAction, StrategyView, Wager } from '@tableside/engine';
 
 import { targetName } from './roulette-text';
 import { formatUnits } from './units';
@@ -113,24 +113,59 @@ export function betCorrectionCopy(strategyName: string, correction: BetCorrectio
 /** The strategy's choices: "Black", "1st dozen and 2nd dozen". */
 export const parametersText = (strategy: Pick<StrategyView, 'parameters'>) => listed(strategy.parameters.map((param) => targetName(param.value)));
 
-/** A pending strategy action, in words, or null. */
-export function pendingLine(strategy: StrategyView): string | null {
-  const pending = strategy.pending;
-  if (!pending) return null;
+/** "Capped Martingale · cycle 2": a strategy with cycles names the one under way. */
+export const cycleBadge = (strategy: Pick<StrategyView, 'name' | 'cycle'>) => `${strategy.name} · cycle ${strategy.cycle.number}`;
+
+/** A pending strategy action: what the strategy waits to place. */
+export const pendingWaiting = (pending: PendingStrategyAction) =>
+  pending.unavailable.length > 0 ? `Waiting: ${betsText(pending.unavailable)}` : 'Waiting: no strategy bet can be placed';
+
+/** Why a pending strategy action can't execute, against the funds available for it. */
+export function pendingBlocked(pending: PendingStrategyAction, available: string): string {
   switch (pending.reason) {
     case 'unfunded-group':
-      return `Strategy paused: ${betsText(pending.unavailable)} needs ${formatUnits(total(pending.unavailable))}, more than your balance. No new strategy bets until it's covered.`;
+      return `Blocked: not enough chips (${formatUnits(available)} of ${formatUnits(total(pending.unavailable))})`;
     case 'limit':
-      return `Strategy paused: ${betsText(pending.unavailable)} is outside the table limits. No new strategy bets.`;
+      return 'Blocked: outside the table limits';
     case 'cap':
-      return "Strategy paused at its cap. No new strategy bets.";
+      return pending.cap === undefined ? "Blocked: past the strategy's cap" : `Blocked: past the strategy's cap of ${formatUnits(pending.cap)}`;
     case 'stop':
-      return 'Strategy paused by its stop rule. No new strategy bets.';
+      return "Blocked: the strategy's stop rule applies";
   }
 }
 
-/** Why a cycle ended. */
-export const CYCLE_END_TEXT: Record<NonNullable<StrategyView['cycleEnd']>, string> = {
-  override: 'You overrode the strategy, so its cycle ended once the spin settled. Restart it to follow it again, or play on your own.',
-  envelope: "The strategy's next stake grew past the largest amount a strategy may compute, so its cycle ended. Restart it to begin again from its first bet.",
+/** What an override from a pending strategy action means, before the player chooses it. */
+export const pendingOverrideNote = (progression: boolean) =>
+  progression
+    ? 'An override ends this cycle: your spin settles, and you restart the strategy yourself.'
+    : 'An override is recorded once, and the strategy coaches your next spin.';
+
+/** The cycle result's headline. */
+export const CYCLE_HEADLINE: Record<CycleEnd, string> = {
+  completed: 'Cycle complete',
+  cap: "This cycle ended at the strategy's cap",
+  stop: "This cycle ended at the strategy's stop rule",
+  override: 'This cycle ended with your override',
+  envelope: 'This cycle ended: its next stake is too large to compute',
 };
+
+/** Why a cycle ended, in one or two sentences from the engine's facts. */
+export function cycleEndText(strategy: Pick<StrategyView, 'name' | 'cycleEnd' | 'exhaustion'>): string {
+  const exhaustion = strategy.exhaustion;
+  switch (strategy.cycleEnd) {
+    case 'completed':
+      return `${strategy.name} completed its cycle. Another cycle starts again from its first bet.`;
+    case 'cap':
+      return exhaustion && exhaustion.unavailable.length > 0 && exhaustion.cap !== undefined
+        ? `The next stake would be ${betsText(exhaustion.unavailable)}, past the strategy's cap of ${formatUnits(exhaustion.cap)}, so no new bet was placed.`
+        : "The strategy's next stake is past its cap, so no new bet was placed.";
+    case 'stop':
+      return "The strategy's stop rule applies, so no new bet was placed.";
+    case 'override':
+      return 'You overrode the strategy, so its cycle ended once the spin settled. Restart it to follow it again, or play on your own.';
+    case 'envelope':
+      return "The strategy's next stake grew past the largest amount a strategy may compute, so its cycle ended. Restart it to begin again from its first bet.";
+    case null:
+      return '';
+  }
+}

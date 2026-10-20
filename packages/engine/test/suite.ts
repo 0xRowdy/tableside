@@ -7,6 +7,7 @@ import { activityCases } from './activity.cases';
 import { blackjackCases } from './blackjack.cases';
 import { blackjackGuidedCases } from './blackjack-guided.cases';
 import { blackjackTableCases } from './blackjack-table.cases';
+import { compatibilityCases } from './compatibility.cases';
 import { crapsCases } from './craps.cases';
 import { crapsMenuCases } from './craps-menu.cases';
 import { drawCases } from './draws.cases';
@@ -15,10 +16,12 @@ import { fundingCases } from './funding.cases';
 import { hashCases } from './hash.cases';
 import { moneyCases } from './money.cases';
 import { randomCases } from './random.cases';
+import { recordCases } from './record.cases';
 import { rouletteCases } from './roulette.cases';
 import { runtimeCases } from './runtime.cases';
 import { strategyCases } from './strategy.cases';
 import { guidedCases } from './guided.cases';
+import { progressionCases } from './progression.cases';
 
 export const engineSuite: Suite = {
   name: 'engine',
@@ -39,5 +42,8 @@ export const engineSuite: Suite = {
     ...strategyCases,
     ...guidedCases,
     ...blackjackGuidedCases,
+    ...progressionCases,
+    ...recordCases,
+    ...compatibilityCases,
   ],
 };

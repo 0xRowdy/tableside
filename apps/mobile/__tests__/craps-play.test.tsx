@@ -253,7 +253,7 @@ describe('craps free play', () => {
     // 11, 6, 4 and 12 leave the pass line; 8 pays it.
     announced('Pass line 25 wins 25.');
     expect(announcements).toContain('Session result. Win, net result plus 25. Final cash-out 1,025. Max drawdown 0.');
-    expect(screen.getByText('Craps · free play · standard craps')).toBeOnTheScreen();
+    expect(screen.getByText('Craps · free play · standard craps · 3-4-5x odds')).toBeOnTheScreen();
     expect(screen.getByLabelText('Net result plus 25, Win')).toBeOnTheScreen();
   });
 

@@ -38,7 +38,7 @@ const situation = (balance: string, extra: Partial<RouletteSituation> = {}): Rou
   lastPocket: null,
   ...extra,
 });
-const START: StrategyProgress = { counters: {}, lastResult: 'none', cycleTurn: 0 };
+const START: StrategyProgress = { counters: {}, lists: {}, lastResult: 'none', cycleTurn: 0 };
 const explained = (...args: Parameters<typeof explainPrescription>) => {
   const result = explainPrescription(...args);
   if (!result.ok) throw new Error(result.error);
@@ -238,7 +238,7 @@ export const strategyCases: TestCase[] = [
   {
     name: 'explain: counters drive amounts; a stake past its cap or past the table maximum pauses',
     run: (t) => {
-      const at = (stake: string) => ({ counters: { stake }, lastResult: 'loss' as const, cycleTurn: 3 });
+      const at = (stake: string) => ({ counters: { stake }, lists: {}, lastResult: 'loss' as const, cycleTurn: 3 });
       t.equal(explained(DOUBLING, {}, situation('1000'), at('80')).prescription, { status: 'prescribed', bets: [{ target: 'red', amount: '80' }] , held: []});
       t.equal(explained(DOUBLING, {}, situation('1000'), at('640')).prescription, { status: 'paused', reason: 'cap', unavailable: [] });
       const roomy = { ...DOUBLING, counters: [{ id: 'stake', initial: '10', cap: '5000' }] };
@@ -299,7 +299,7 @@ export const strategyCases: TestCase[] = [
   {
     name: 'explain: is pure and read-only (inputs unchanged, same answer every time)',
     run: (t) => {
-      const inputs = [DOUBLING, {}, situation('1000'), { counters: { stake: '40' }, lastResult: 'loss', cycleTurn: 2 }] as const;
+      const inputs = [DOUBLING, {}, situation('1000'), { counters: { stake: '40' }, lists: {}, lastResult: 'loss', cycleTurn: 2 }] as const;
       const before = JSON.stringify(inputs);
       const first = explainPrescription(...inputs);
       t.equal(explainPrescription(...inputs), first);

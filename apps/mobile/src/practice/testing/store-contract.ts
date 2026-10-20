@@ -8,7 +8,7 @@
 
 import type { DomainFact, Receipt } from '@tableside/engine';
 
-import type { ActivityStore, AllowanceEffect, CompletedPracticeSession, NewActivity, TransitionCommit } from '../store';
+import type { ActivityStore, AllowanceEffect, CompletedPracticeSession, IncompleteReason, NewActivity, TransitionCommit } from '../store';
 
 export interface StoreUnderTest {
   /** A store over fresh, empty durable storage. */
@@ -47,6 +47,8 @@ export function newActivity(activityId: string, overrides: Partial<NewActivity> 
   };
 }
 
+const QUARANTINED: IncompleteReason = { kind: 'quarantined', entry: 'q-1', listVersion: 2 };
+
 function receipt(sequence: number, command: string): Receipt {
   return { commandId: `cmd-${sequence}`, sequence, command, disposition: 'applied' };
 }
@@ -68,20 +70,39 @@ export function turnCharge(activityId: string, sequence: number): AllowanceEffec
 
 export function completedRecord(activityId: string, overrides: Partial<CompletedPracticeSession> = {}): CompletedPracticeSession {
   return {
+    recordVersion: 1,
     activityId,
+    owner: 'local',
+    device: 'test-device',
     game: 'roulette',
+    identities: { engine: '0.0.0', rules: { id: 'roulette/single-zero', version: 1 }, strategy: null, reference: null, randomProtocol: 1 },
+    startedAt: 1_790_000_000_000,
+    endedAt: 1_790_000_100_000,
     mode: 'free-play',
-    identities: { engine: '0.0.0', rules: { id: 'roulette/single-zero', version: 1 }, strategy: null, reference: null },
+    blackjackMode: null,
+    betSchedule: null,
+    strategy: null,
+    rules: {
+      id: 'roulette/single-zero',
+      version: 1,
+      content: { wheel: 'single-zero', limits: { inside: { min: '1', max: '100' }, outside: { min: '10', max: '1000' } } },
+    },
     fundingSource: 'practice-funding',
     meteringBasis: 'free-play',
+    allowancePolicyVersion: null,
     buyIn: '1000',
     rebuys: [],
     cumulativeFunding: '1000',
     finalCashOut: '1010',
     netResult: '10',
     maxDrawdown: '0',
+    turnsPlayed: 1,
+    endingReason: 'stop',
+    overrideAffected: false,
+    wagers: { wins: 1, losses: 0, pushes: 0, resolved: 1 },
+    noBet: false,
+    outcomes: [{ turn: 1, target: 'red', stake: '10', result: 'win', net: '10', returned: '20' }],
     guidance: null,
-    completedAt: 1_790_000_100_000,
     ...overrides,
   };
 }
@@ -95,7 +116,7 @@ export function describeActivityStoreContract(name: string, open: () => Promise<
 
         const stored = await store.createActivity(activity);
 
-        expect(stored).toEqual({ ...activity, sequence: 0, completion: null });
+        expect(stored).toEqual({ ...activity, sequence: 0, completion: null, incomplete: null });
         expect(await store.load('a1')).toEqual(stored);
         expect((await store.load('a1'))?.checkpoint).toBe(activity.checkpoint);
       });
@@ -137,6 +158,24 @@ export function describeActivityStoreContract(name: string, open: () => Promise<
         expect(stored?.sequence).toBe(1);
         expect(stored?.checkpoint).toBe(commit.checkpoint);
         expect(await store.readReceipt('a1', 'cmd-0')).toEqual({ receipt: commit.receipt, checkpoint: commit.checkpoint, facts: commit.facts });
+      });
+
+      it('reads back every committed transition in commit order, once each, across a restart', async () => {
+        const { store, reopen } = await open();
+        await store.createActivity(newActivity('a1'));
+        expect(await store.readTransitions('a1')).toEqual([]);
+        const first = transition('a1', 0, { facts: [{ kind: 'turn-began', turn: 1, wagers: [] }] });
+        const second = transition('a1', 1, { facts: [{ kind: 'outcome-generated', turn: 1, pocket: 0 }] });
+        await store.commitTransition(first);
+        // A second delivery and a stale commit add nothing.
+        await store.commitTransition(first);
+        const stale = transition('a1', 0);
+        await store.commitTransition({ ...stale, receipt: { ...stale.receipt, commandId: 'stale' } });
+        await store.commitTransition(second);
+        const expected = [first, second].map((commit) => ({ receipt: commit.receipt, checkpoint: commit.checkpoint, facts: commit.facts }));
+        expect(await store.readTransitions('a1')).toEqual(expected);
+        expect(await (await reopen()).readTransitions('a1')).toEqual(expected);
+        expect(await store.readTransitions('missing')).toEqual([]);
       });
 
       it('applies a commit only at its prior sequence; a stale one writes nothing and reports the stored sequence', async () => {
@@ -252,7 +291,7 @@ export function describeActivityStoreContract(name: string, open: () => Promise<
         await store.createActivity(newActivity('a1'));
         await store.complete(completedRecord('a1'));
 
-        const repeat = await store.complete(completedRecord('a1', { finalCashOut: '0', netResult: '-1000', completedAt: 9 }));
+        const repeat = await store.complete(completedRecord('a1', { finalCashOut: '0', netResult: '-1000', endedAt: 9 }));
 
         expect(repeat).toEqual(completedRecord('a1'));
         expect(await store.readOutgoing()).toHaveLength(1);
@@ -268,6 +307,59 @@ export function describeActivityStoreContract(name: string, open: () => Promise<
       });
     });
 
+    describe('marking an unusable activity incomplete (#80)', () => {
+      it('records why, keeps the checkpoint, and the activity is no longer unfinished; no result or sync record is invented', async () => {
+        const { store } = await open();
+        await store.createActivity(newActivity('a1'));
+        await store.commitTransition(transition('a1', 0));
+
+        const marked = await store.markIncomplete('a1', QUARANTINED);
+
+        expect(marked).toMatchObject({ activityId: 'a1', sequence: 1, completion: null, incomplete: QUARANTINED });
+        expect((await store.load('a1'))?.incomplete).toEqual(QUARANTINED);
+        expect((await store.load('a1'))?.checkpoint).toBe(transition('a1', 0).checkpoint);
+        expect(await store.findUnfinished()).toBeNull();
+        expect(await store.readOutgoing()).toEqual([]);
+      });
+
+      it('marks once: a repeat keeps the first reason', async () => {
+        const { store } = await open();
+        await store.createActivity(newActivity('a1'));
+        await store.markIncomplete('a1', QUARANTINED);
+
+        const repeat = await store.markIncomplete('a1', { kind: 'damaged', detail: 'later' });
+
+        expect(repeat.incomplete).toEqual(QUARANTINED);
+      });
+
+      it('never marks a completed activity: its result stands', async () => {
+        const { store } = await open();
+        await store.createActivity(newActivity('a1'));
+        await store.complete(completedRecord('a1'));
+
+        const marked = await store.markIncomplete('a1', QUARANTINED);
+
+        expect([marked.completion, marked.incomplete]).toEqual([completedRecord('a1'), null]);
+      });
+
+      it('keeps the mark across a restart and finds the next unfinished activity past it', async () => {
+        const subject = await open();
+        await subject.store.createActivity(newActivity('a1'));
+        await subject.store.markIncomplete('a1', QUARANTINED);
+        await subject.store.createActivity(newActivity('a2'));
+
+        const reopened = await subject.reopen();
+
+        expect((await reopened.load('a1'))?.incomplete).toEqual(QUARANTINED);
+        expect((await reopened.findUnfinished())?.activityId).toBe('a2');
+      });
+
+      it('rejects a mark for an activity it does not hold', async () => {
+        const { store } = await open();
+        await expect(store.markIncomplete('missing', QUARANTINED)).rejects.toThrow();
+      });
+    });
+
     describe('durability', () => {
       it('keeps everything it acknowledged across a restart', async () => {
         const subject = await open();
@@ -280,7 +372,7 @@ export function describeActivityStoreContract(name: string, open: () => Promise<
 
         const reopened = await subject.reopen();
 
-        expect(await reopened.findUnfinished()).toEqual({ ...newActivity('a1'), checkpoint: commit.checkpoint, sequence: 1, completion: null });
+        expect(await reopened.findUnfinished()).toEqual({ ...newActivity('a1'), checkpoint: commit.checkpoint, sequence: 1, completion: null, incomplete: null });
         expect(await reopened.readReceipt('a1', 'cmd-0')).toEqual({ receipt: commit.receipt, checkpoint: commit.checkpoint, facts: commit.facts });
         expect(await reopened.readEffects('a1')).toEqual([turnCharge('a1', 0)]);
         expect((await reopened.load('a2'))?.completion).toEqual(completedRecord('a2'));

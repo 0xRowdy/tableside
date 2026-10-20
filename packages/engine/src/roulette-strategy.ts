@@ -123,4 +123,5 @@ export const ROULETTE_STRATEGY: StrategyGame<RouletteActivityState> = {
     balance: encodeMoney(state.wagers.reduce((sum, wager) => add(sum, decodeMoney(wager.amount)), decodeMoney(state.balance))),
     lastPocket: state.outcome?.pocket ?? null,
   }),
+  outcome: (state) => String(state.outcome?.pocket),
 };

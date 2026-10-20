@@ -2,6 +2,7 @@
 // is in memory and there are no accounts; until spec 5 every activity and turn
 // is allowed.
 
+import { QUARANTINE_LIST } from '@tableside/definitions';
 import * as Crypto from 'expo-crypto';
 
 import { alwaysAllowed, type PracticeAdapters } from './adapters';
@@ -20,5 +21,6 @@ export function createAppAdapters(): PracticeAdapters {
     // Placeholders until accounts and device registration exist (spec 2).
     device: 'this-device',
     owner: 'local',
+    quarantine: QUARANTINE_LIST,
   };
 }

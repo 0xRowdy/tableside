@@ -11,13 +11,14 @@ import type {
   CommitOutcome,
   CommittedTransition,
   CompletedPracticeSession,
+  IncompleteReason,
   NewActivity,
   OutgoingSyncRecord,
   StoredActivity,
   TransitionCommit,
 } from './store';
 
-type Operation = 'createActivity' | 'commitTransition' | 'recordEffects' | 'complete' | 'readReceipt';
+type Operation = 'createActivity' | 'commitTransition' | 'recordEffects' | 'complete' | 'markIncomplete' | 'readReceipt' | 'readTransitions';
 
 export class StoreWriteError extends Error {
   constructor(message: string) {
@@ -76,7 +77,7 @@ export class MemoryActivityStore implements ActivityStore {
     return this.injectable('createActivity', () => {
       const existing = this.rows.get(activity.activityId);
       if (existing) return parse<StoredActivity>(existing.activity);
-      const stored: StoredActivity = { ...activity, sequence: 0, completion: null };
+      const stored: StoredActivity = { ...activity, sequence: 0, completion: null, incomplete: null };
       this.rows.set(activity.activityId, { activity: JSON.stringify(stored), transitions: new Map(), effects: new Map() });
       return clone(stored);
     });
@@ -93,7 +94,8 @@ export class MemoryActivityStore implements ActivityStore {
     return this.read(() => {
       for (const row of this.rows.values()) {
         const activity = parse<StoredActivity>(row.activity);
-        if (activity.completion === null) return activity;
+        // A row written before the incomplete mark existed has no such field.
+        if (!activity.completion && !activity.incomplete) return activity;
       }
       return null;
     });
@@ -122,6 +124,11 @@ export class MemoryActivityStore implements ActivityStore {
     return this.read(() => [...(this.rows.get(activityId)?.effects.values() ?? [])].map((text) => parse<AllowanceEffect>(text)));
   }
 
+  readTransitions(activityId: string): Promise<readonly CommittedTransition[]> {
+    // Transitions are kept in commit order (a Map keeps insertion order).
+    return this.injectable('readTransitions', () => [...(this.rows.get(activityId)?.transitions.values() ?? [])].map((text) => parse<CommittedTransition>(text)));
+  }
+
   readReceipt(activityId: string, commandId: string): Promise<CommittedTransition | null> {
     return this.injectable('readReceipt', () => {
       const text = this.rows.get(activityId)?.transitions.get(commandId);
@@ -138,6 +145,17 @@ export class MemoryActivityStore implements ActivityStore {
       const sync: OutgoingSyncRecord = { id: `completed/${record.activityId}`, kind: 'completed-practice-session', record };
       this.outgoing.push(JSON.stringify(sync));
       return clone(record);
+    });
+  }
+
+  markIncomplete(activityId: string, reason: IncompleteReason): Promise<StoredActivity> {
+    return this.injectable('markIncomplete', () => {
+      const row = this.require(activityId);
+      const activity = parse<StoredActivity>(row.activity);
+      if (activity.completion || activity.incomplete) return activity;
+      const marked: StoredActivity = { ...activity, incomplete: reason };
+      row.activity = JSON.stringify(marked);
+      return clone(marked);
     });
   }
 
@@ -158,7 +176,7 @@ export class MemoryActivityStore implements ActivityStore {
   /** Runs an operation that failure injection can target. */
   private injectable<T>(operation: Operation, run: () => T): Promise<T> {
     return this.enqueue(() => {
-      if (this.full && operation !== 'readReceipt') throw new StoreWriteError(`${operation} failed: the disk is full`);
+      if (this.full && operation !== 'readReceipt' && operation !== 'readTransitions') throw new StoreWriteError(`${operation} failed: the disk is full`);
       const index = this.failures.findIndex((failure) => failure.operation === operation);
       const failure = index >= 0 ? this.failures.splice(index, 1)[0] : undefined;
       if (failure?.when === 'before') throw new StoreWriteError(`${operation} failed before writing`);

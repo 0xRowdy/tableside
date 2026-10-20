@@ -19,16 +19,16 @@ import {
   advanceActivity,
   canonicalJson,
   ActivitySpecificationError,
+  completedPracticeRecord,
   createActivity,
   decodeCheckpoint,
-  decodeMoney,
   encodeCheckpoint,
   INSURANCE_TARGET,
   isPlayCorrection,
+  quarantineStatus,
   readPermittedView,
   StrategySpecificationError,
   streamIdentityFromEntropy,
-  summarizeFunding,
   type ActivitySpecification,
   type ActivityState,
   type BlackjackAction,
@@ -39,16 +39,18 @@ import {
   type DomainFact,
   type FieldPayout,
   type FundingSource,
+  type GameId,
   type OddsCap,
   type PermittedView,
   type Phase,
   type RouletteWheel,
+  type StopCause,
   type StrategySelection,
 } from '@tableside/engine';
 import { BLACKJACK_REFERENCE_IDENTITY, ROULETTE_PRESETS, standardCraps } from '@tableside/definitions';
 
 import type { AccessDecision, AccessDenial, LifecycleEvent, PhaseReport, PracticeAdapters } from './adapters';
-import type { AllowanceEffect, CommitOutcome, CommittedTransition, CompletedPracticeSession, NewActivity, StoredActivity } from './store';
+import type { AllowanceEffect, CommitOutcome, CommittedTransition, CompletedPracticeSession, IncompleteReason, NewActivity, StoredActivity } from './store';
 
 /** How long the landed ball or the dice stay on screen before the automatic settle step. */
 export const REVEAL_MS = 1500;
@@ -89,6 +91,19 @@ export interface Suspension {
 
 export type ActivePracticeSnapshot = Extract<PracticeSnapshot, { status: 'active' }>;
 
+/** An unfinished session found unusable and marked incomplete (#80), as its explanation shows it. */
+export interface IncompleteSessionSummary {
+  readonly game: GameId;
+  readonly buyIn: string;
+  /** Turns committed before it became unusable; null when the checkpoint can't be read. */
+  readonly turnsRecorded: number | null;
+  /** The pinned engine identity; null when the checkpoint can't be read. */
+  readonly engine: string | null;
+  readonly reason: IncompleteReason;
+  /** A quarantine entry's explanation, from the shipped list; null for a damaged checkpoint. */
+  readonly explanation: string | null;
+}
+
 export type PracticeSnapshot =
   | { readonly status: 'loading' }
   | {
@@ -112,7 +127,15 @@ export type PracticeSnapshot =
       /** "access-ended": the stop path runs because access or allowance ended. */
       readonly ending: 'access-ended' | null;
     }
-  | { readonly status: 'completed'; readonly result: CompletedPracticeSession; readonly specification: ActivitySpecification };
+  /** The result just produced and durably saved in this process. */
+  | { readonly status: 'completed'; readonly result: CompletedPracticeSession }
+  /** The unfinished session is unusable (quarantined or damaged): marked incomplete, never given a result. */
+  | { readonly status: 'incomplete'; readonly session: IncompleteSessionSummary }
+  /**
+   * The unfinished session was saved by a later build this one can't run (a
+   * rollback): it is never reopened and waits, untouched, for the app to be updated.
+   */
+  | { readonly status: 'needs-update'; readonly game: GameId };
 
 export type ActiveSnapshot<V extends PermittedView = PermittedView> = Extract<PracticeSnapshot, { status: 'active' }> & { readonly view: V };
 
@@ -200,8 +223,8 @@ export class PracticeController {
   private busy = false;
   private pending: Pending | null = null;
   private suspension: Suspension | null = null;
-  /** Set once the stop path must run: by the player, or because access ended. */
-  private stopping: 'player' | 'access-ended' | null = null;
+  /** Set once the stop path must run, with its cause: the player's stop, reset or switch, or access ending. */
+  private stopping: StopCause | null = null;
   /** A resume asked for while other work was in flight; it runs when that work ends. */
   private resumeQueued = false;
   /** Counts direct suspends, so a resume still being asked notices the player left again. */
@@ -227,8 +250,7 @@ export class PracticeController {
     await this.exclusive(async () => {
       const stored = await this.adapters.store.findUnfinished();
       if (!stored) return this.showNone(null);
-      this.adopt(stored, []);
-      this.suspendNow('interrupted', null);
+      if (await this.openUnfinished(stored)) this.suspendNow('interrupted', null);
     });
   }
 
@@ -245,7 +267,7 @@ export class PracticeController {
       }
       if (unfinished) {
         this.unacknowledgedStart = null;
-        this.adopt(unfinished, []);
+        if (!(await this.openUnfinished(unfinished))) return;
         this.suspendNow('interrupted', null);
         return this.resumeSuspended();
       }
@@ -255,7 +277,11 @@ export class PracticeController {
       if (access.status !== 'allowed') {
         return access.status === 'uncertain' ? this.showNone('access-uncertain') : this.showNone('access-denied', access.reason ?? null);
       }
-      const admission = { provenance: access.provenance, meteringBasis: access.meteringBasis };
+      const admission = {
+        provenance: access.provenance,
+        meteringBasis: access.meteringBasis,
+        ...(access.allowancePolicyVersion === undefined ? {} : { allowancePolicyVersion: access.allowancePolicyVersion }),
+      };
 
       let activity: NewActivity;
       const retry = this.unacknowledgedStart;
@@ -450,7 +476,7 @@ export class PracticeController {
    * offline and never asks for access. A session suspended mid-round must resume
    * to finish the round first.
    */
-  async endSession(): Promise<void> {
+  async endSession(cause: Exclude<StopCause, 'access-ended'> = 'stop'): Promise<void> {
     await this.exclusive(async () => {
       if (!this.state || this.current.status !== 'active') return;
       const suspension = this.suspension;
@@ -471,9 +497,9 @@ export class PracticeController {
       // Mid-reveal, the engine keeps the committed wagers for final settlement. Anywhere
       // else the stop path runs between turns, after a blackjack hand in play finishes.
       if (this.state.phase === 'revealing-outcome') {
-        if (!settled(await this.send({ kind: 'request-stop' }))) return;
+        if (!settled(await this.send(stopCommand(cause)))) return;
       } else {
-        this.stopping ??= 'player';
+        this.stopping ??= cause;
       }
       await this.drive();
     });
@@ -533,13 +559,21 @@ export class PracticeController {
     });
   }
 
+  /** Leaves an incomplete session's explanation; Play then offers setup. */
+  dismissIncomplete(): void {
+    if (this.current.status === 'incomplete') this.showNone(null);
+  }
+
   /** Leaves a completed session's result; Play then offers setup. */
   dismissResult(): void {
     if (this.current.status !== 'completed' || this.busy) return;
+    const { result } = this.current;
     this.activity = null;
     this.state = null;
     this.lastReport = null;
     this.showNone(null);
+    // Only a result produced (and durably saved) in this process reaches here.
+    this.adapters.leftFreshResult?.(result);
   }
 
   // ---- internals ----------------------------------------------------------
@@ -684,7 +718,7 @@ export class PracticeController {
       } else if (this.stopping && !turnInProgress(this.requireState())) {
         // The stop path, between turns: removable wagers come back, then final settlement.
         // A blackjack hand still in play finishes first; the player's actions stay open.
-        if (!settled(await this.send({ kind: 'request-stop' }))) return;
+        if (!settled(await this.send(stopCommand(this.stopping)))) return;
       } else {
         return;
       }
@@ -801,30 +835,25 @@ export class PracticeController {
     const state = this.requireState();
     const activity = this.activity;
     if (!activity) throw new Error('no practice session is active');
-    // Completed: nothing is left on the table, so the balance is the final cash-out.
-    const funding = summarizeFunding(state.funding, decodeMoney(state.balance));
-    const guided = readPermittedView(state).strategy;
-    const record: CompletedPracticeSession = {
-      activityId: state.activity.id,
-      game: state.identities.game,
-      mode: guided ? 'guided' : 'free-play',
-      identities: {
-        engine: state.identities.engine,
-        rules: state.identities.rules,
-        strategy: state.identities.strategy,
-        reference: state.identities.reference,
-      },
-      fundingSource: funding.source,
-      meteringBasis: activity.admission.meteringBasis,
-      buyIn: funding.buyIn,
-      rebuys: funding.rebuys,
-      cumulativeFunding: funding.cumulativeFunding,
-      finalCashOut: funding.finalCashOut,
-      netResult: funding.netResult,
-      maxDrawdown: funding.maxDrawdown,
-      guidance: guided && { adherence: guided.adherence, departures: guided.departures, overrideAffected: guided.overrideAffected },
-      completedAt: this.adapters.clock.now(),
-    };
+    let record: CompletedPracticeSession;
+    try {
+      // The record is built from every durably committed fact, so a recovered completion builds the same one.
+      const transitions = await this.adapters.store.readTransitions(activity.activityId);
+      record = completedPracticeRecord(
+        state,
+        transitions.flatMap((transition) => transition.facts),
+        {
+          startedAt: activity.createdAt,
+          endedAt: this.adapters.clock.now(),
+          meteringBasis: activity.admission.meteringBasis,
+          allowancePolicyVersion: activity.admission.allowancePolicyVersion ?? null,
+        },
+      );
+    } catch {
+      this.pending = { kind: 'completion' };
+      this.publish();
+      return false;
+    }
     let result: CompletedPracticeSession | null;
     try {
       result = await this.adapters.store.complete(record);
@@ -839,10 +868,60 @@ export class PracticeController {
     this.pending = null;
     this.suspension = null;
     this.stopping = null;
-    this.current = { status: 'completed', result, specification: activity.specification };
+    this.current = { status: 'completed', result };
     this.report({ activityId: result.activityId, phase: 'completed', suspended: false, timed: false });
     this.notify();
     return true;
+  }
+
+  /**
+   * Takes up the unfinished activity found in the store, unless it is unusable
+   * (#80). One a later build saved is left untouched; one whose checkpoint is
+   * damaged, or whose pinned identities the shipped quarantine list names, is
+   * marked incomplete and explained, never resumed or given a result.
+   * True when it was taken up.
+   */
+  private async openUnfinished(stored: StoredActivity): Promise<boolean> {
+    const decoded = decodeCheckpoint(stored.checkpoint);
+    const game = stored.specification.game;
+    this.activity = null;
+    this.state = null;
+    if (!decoded.ok && decoded.error.kind === 'unsupported') {
+      this.current = { status: 'needs-update', game };
+      this.notify();
+      return false;
+    }
+    const quarantine = decoded.ok ? quarantineStatus(decoded.state, this.adapters.quarantine) : null;
+    const reason: IncompleteReason | null = !decoded.ok
+      ? { kind: 'damaged', detail: decoded.error.message }
+      : quarantine?.quarantined
+        ? { kind: 'quarantined', entry: quarantine.entry, listVersion: this.adapters.quarantine.version }
+        : null;
+    if (!reason) {
+      this.adopt(stored, []);
+      return true;
+    }
+    // Unsaved, the mark is made again the next time the activity is found; either way nothing is resumed.
+    const marked = (await this.adapters.store.markIncomplete(stored.activityId, reason).catch(() => null))?.incomplete ?? reason;
+    this.current = {
+      status: 'incomplete',
+      session: {
+        game,
+        buyIn: stored.specification.funding,
+        turnsRecorded: decoded.ok ? decoded.state.turn : null,
+        engine: decoded.ok ? decoded.state.identities.engine : null,
+        reason: marked,
+        explanation: this.explanationOf(marked),
+      },
+    };
+    this.notify();
+    return false;
+  }
+
+  /** The shipped list's explanation for a quarantine mark (entries are never removed, so it is always there). */
+  private explanationOf(reason: IncompleteReason): string | null {
+    if (reason.kind !== 'quarantined') return null;
+    return this.adapters.quarantine.entries.find((entry) => entry.id === reason.entry)?.explanation ?? null;
   }
 
   private adopt(stored: StoredActivity, facts: readonly DomainFact[]): void {
@@ -854,7 +933,7 @@ export class PracticeController {
     this.pending = null;
     this.suspension = null;
     // Final settlement already started: the stop path is under way and play never reopens.
-    this.stopping = decoded.state.phase === 'final-settlement' ? (this.stopping ?? 'player') : null;
+    this.stopping = decoded.state.phase === 'final-settlement' ? (this.stopping ?? 'stop') : null;
     this.publish();
   }
 
@@ -875,9 +954,10 @@ export class PracticeController {
       if (this.current.status === 'none') this.showNone(this.current.problem, this.current.problemReason);
       return;
     }
+    const view = readPermittedView(this.state);
     this.current = {
       status: 'active',
-      view: readPermittedView(this.state),
+      view,
       facts: this.facts,
       busy: this.busy,
       save: this.pending ? 'failed' : 'saved',
@@ -889,8 +969,9 @@ export class PracticeController {
       activityId: this.state.activity.id,
       phase: this.state.phase,
       suspended,
-      // A failed save pauses training, and the stop path is never metered.
-      timed: TIMED_PHASES.has(this.state.phase) && !suspended && !this.pending && this.stopping === null,
+      // A failed save pauses training, and the stop path is never metered. Nor is a
+      // pending strategy action: the table waits on the player in an open decision.
+      timed: TIMED_PHASES.has(this.state.phase) && !view.strategy?.pending && !suspended && !this.pending && this.stopping === null,
     });
     this.notify();
   }
@@ -909,7 +990,10 @@ export class PracticeController {
 }
 
 const sameAdmission = (a: NewActivity['admission'], b: NewActivity['admission']) =>
-  a.provenance === b.provenance && a.meteringBasis === b.meteringBasis;
+  a.provenance === b.provenance && a.meteringBasis === b.meteringBasis && a.allowancePolicyVersion === b.allowancePolicyVersion;
+
+/** The stop path's first command; the player's plain stop carries no cause. */
+const stopCommand = (cause: StopCause): Command => (cause === 'stop' ? { kind: 'request-stop' } : { kind: 'request-stop', cause });
 
 const wheelOf = (request: Extract<StartRequest, { game: 'roulette' }>): RouletteWheel => request.wheel ?? 'single-zero';
 

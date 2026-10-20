@@ -602,6 +602,12 @@ export const BLACKJACK_STRATEGY: StrategyGame<BlackjackActivityState> = {
     balance: encodeMoney(state.wagers.reduce((sum: Money, wager) => add(sum, decodeMoney(wager.amount)), decodeMoney(state.balance))),
   }),
   assessPlay: (state, definition, command) => assessPlay(state, definition, command),
+  // "19 v 20": the learner's hand totals against the dealer's.
+  outcome: (state) => {
+    const round = state.outcome;
+    if (!round) return 'none';
+    return `${round.hands.map((hand) => handTotal(hand.cards).value).join(', ')} v ${handTotal(round.dealer).value}`;
+  },
 };
 
 // ---- Explain play -----------------------------------------------------------

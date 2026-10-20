@@ -2,7 +2,7 @@
 // the engine's permitted view and forwards taps to the practice controller;
 // it never advances the game or decides what is legal.
 
-import { isPlayCorrection, type RoulettePermittedView as PermittedView } from '@tableside/engine';
+import { add, decodeMoney, encodeMoney, isPlayCorrection, type CycleTurn, type RoulettePermittedView as PermittedView, type RoulettePocket } from '@tableside/engine';
 import { useEffect, useMemo, useState } from 'react';
 import { AccessibilityInfo, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -14,8 +14,8 @@ import { usePractice } from '@/practice/PracticeProvider';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale, type ColorToken } from '@/theme/tokens';
 
 import { BetSelector } from './bet-selector/BetSelector';
-import { betCorrectionCopy } from './coaching-text';
-import { CorrectionPanel, CycleEndPanel, GuidedStrip, StopStrategyDialog } from './Guidance';
+import { betCorrectionCopy, betsText } from './coaching-text';
+import { CorrectionPanel, CycleResultPanel, GuidedStrip, PendingPanel, StopStrategyDialog, type TurnWords } from './Guidance';
 import { draftAmountText, EMPTY_DRAFT, findChoice, isDraftPending, type BetDraft } from './bet-selector/catalog';
 import { DraftBar, PresentationSwitch, type Presentation } from './bet-selector/Presentation';
 import { EndSessionDialog } from './EndSessionDialog';
@@ -200,11 +200,28 @@ export function RouletteTable({ snapshot }: { snapshot: ActiveSnapshot }) {
                 />
               )}
               {strategy && view.phase === 'cycle-completion' && (
-                <CycleEndPanel
+                <CycleResultPanel
                   strategy={strategy}
-                  busy={!ready}
+                  balance={view.balance}
+                  rebought={view.funding.rebuys.length > 0}
+                  describeTurn={describeTurn}
+                  canRestart={legal('restart-cycle')}
+                  canEnd={legal('request-stop')}
                   onRestart={() => void controller.restartCycle()}
-                  onStopStrategy={() => setStoppingStrategy(true)}
+                  onEnd={() => setConfirming(true)}
+                />
+              )}
+              {strategy?.pending && (
+                <PendingPanel
+                  strategy={strategy}
+                  pending={strategy.pending}
+                  available={encodeMoney(add(decodeMoney(view.balance), decodeMoney(totalOnTable(view))))}
+                  canRebuy={view.legalCommands.includes('rebuy') ? legal('rebuy') : null}
+                  canOverride={legal('place-wager')}
+                  canStop={legal('stop-strategy')}
+                  onRebuy={() => setRebuying(true)}
+                  onOverride={() => setPresentation('selector')}
+                  onStop={() => setStoppingStrategy(true)}
                 />
               )}
               {message && (
@@ -281,6 +298,16 @@ export function RouletteTable({ snapshot }: { snapshot: ActiveSnapshot }) {
       />
     </View>
   );
+}
+
+/** A cycle's spin for the cycle result: "Spin 1 · 10 on Black", "Lost · 0 green". */
+function describeTurn(turn: CycleTurn, index: number): TurnWords {
+  const pocket: RoulettePocket = turn.outcome === '00' ? '00' : Number(turn.outcome);
+  const result = turn.net.startsWith('-') ? 'Lost' : turn.net === '0' ? 'Even' : 'Won';
+  return {
+    title: `Spin ${index + 1} · ${betsText(turn.wagers)}${turn.followed ? '' : ' (override)'}`,
+    detail: `${result} · ${describePocket(pocket)}`,
+  };
 }
 
 const WHEEL_NAMES: Record<PermittedView['table']['wheel'], string> = { 'single-zero': 'Single zero', 'double-zero': 'Double zero' };
