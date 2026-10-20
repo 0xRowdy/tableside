@@ -1,8 +1,10 @@
-// Checkpoints recorded by earlier builds (#80, launch gate 3). Each module is
-// written once by scripts/record-checkpoints.ts when a build is released and is
-// never edited or removed afterwards (tests/recorded-checkpoints.test.ts holds
-// their hashes): an unfinished activity is never aged out to drop compatibility
-// code, so every later build must keep resuming all of them. The values are
+// Checkpoints recorded by builds (#80, launch gate 3), one module per build,
+// written by scripts/record-checkpoints.ts. A released build's recording is
+// never edited or removed afterwards (its hash is in released.json, checked by
+// tests/recorded-checkpoints.test.ts): an unfinished activity is never aged out
+// to drop compatibility code, so every later build must keep resuming all of
+// them. The build under development keeps its own recording, re-recorded with
+// --replace while it changes; no build has been released yet. The values are
 // plain JSON, typed loosely on purpose: they are what an older build wrote, not
 // what this build's types say.
 import { RECORDED_ENGINE_0_0_0_SCHEMA_3 } from './engine-0.0.0-schema-3';

@@ -3,28 +3,12 @@
 // checkpoints come from the engine's recordings of earlier builds; a "later
 // build" checkpoint is a recorded one with a newer schema, as a rollback finds it.
 
-import { canonicalJson, type QuarantineList } from '@tableside/engine';
-import { RECORDED_BUILDS, type RecordedCheckpoint } from '@tableside/engine/recorded-checkpoints';
+import type { QuarantineList } from '@tableside/engine';
+import { RECORDED_BUILDS } from '@tableside/engine/recorded-checkpoints';
 
 import { PracticeController, type PracticeSnapshot } from '@/practice/controller';
 import type { StoredActivity } from '@/practice/store';
-import { FakeClock, storeHolding, substituteAdapters } from '@/practice/testing/substitutes';
-
-/** The store row an earlier build left for a recorded checkpoint. */
-function leftBy(recorded: RecordedCheckpoint, checkpoint = recorded.checkpoint): StoredActivity {
-  const specification = recorded.specification as StoredActivity['specification'];
-  return {
-    activityId: specification.activityId,
-    admission: { provenance: 'earlier-build', meteringBasis: 'free-play' },
-    specification,
-    random: recorded.random as StoredActivity['random'],
-    checkpoint,
-    sequence: (JSON.parse(checkpoint) as { sequence: number }).sequence,
-    createdAt: 1_790_000_000_000,
-    completion: null,
-    incomplete: null,
-  };
-}
+import { FakeClock, fromLaterBuild, leftBy, storeHolding, substituteAdapters } from '@/practice/testing/substitutes';
 
 function setup(stored: StoredActivity, quarantine?: QuarantineList) {
   const store = storeHolding(stored);
@@ -40,12 +24,6 @@ async function waitFor(condition: () => boolean): Promise<void> {
 const status = (snapshot: PracticeSnapshot) => snapshot.status;
 
 const recordedCheckpoints = RECORDED_BUILDS.flatMap((build) => build.checkpoints.map((recorded) => [`${build.engine}: ${recorded.name}`, recorded] as const));
-
-/** A recorded checkpoint as a later build would write it: a newer state schema. */
-function fromLaterBuild(recorded: RecordedCheckpoint): string {
-  const value = JSON.parse(recorded.checkpoint) as { schema: number };
-  return canonicalJson({ ...value, schema: value.schema + 1 });
-}
 
 const CRAPS = RECORDED_BUILDS[0]!.checkpoints.find((recorded) => recorded.game === 'craps')!;
 
@@ -106,7 +84,8 @@ describe('the quarantine list', () => {
         buyIn: '1000',
         turnsRecorded: 1,
         engine: identities.engine,
-        reason: { kind: 'quarantined', entry: 'q-craps-1', explanation: 'A craps settlement defect in this engine.', listVersion: 2 },
+        reason: { kind: 'quarantined', entry: 'q-craps-1', listVersion: 2 },
+        explanation: 'A craps settlement defect in this engine.',
       },
     });
     const marked = await store.load(stored.activityId);
@@ -150,7 +129,7 @@ describe('a damaged checkpoint', () => {
 
     expect(controller.snapshot()).toMatchObject({
       status: 'incomplete',
-      session: { game: 'craps', buyIn: '1000', turnsRecorded: null, engine: null, reason: { kind: 'damaged' } },
+      session: { game: 'craps', buyIn: '1000', turnsRecorded: null, engine: null, reason: { kind: 'damaged' }, explanation: null },
     });
     expect((await store.load(stored.activityId))?.incomplete).toMatchObject({ kind: 'damaged' });
     expect(await store.readOutgoing()).toEqual([]);

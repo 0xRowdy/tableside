@@ -3,7 +3,8 @@
 // always-allowed access supervisor.
 
 import { QUARANTINE_LIST } from '@tableside/definitions';
-import type { EntropySource } from '@tableside/engine';
+import { canonicalJson, type EntropySource } from '@tableside/engine';
+import type { RecordedCheckpoint } from '@tableside/engine/recorded-checkpoints';
 
 import { alwaysAllowed, type Clock, type PracticeAdapters } from '../adapters';
 import { SAVE_RETRY_MS } from '../controller';
@@ -96,4 +97,26 @@ export function storeHolding(...activities: StoredActivity[]): MemoryActivitySto
     disk.rows.set(activity.activityId, { activity: JSON.stringify(activity), transitions: new Map(), effects: new Map() });
   }
   return new MemoryActivityStore(disk);
+}
+
+/** The store row an earlier build left beside one of its recorded checkpoints (or another checkpoint text). */
+export function leftBy(recorded: RecordedCheckpoint, checkpoint = recorded.checkpoint): StoredActivity {
+  const specification = recorded.specification as StoredActivity['specification'];
+  return {
+    activityId: specification.activityId,
+    admission: { provenance: 'earlier-build', meteringBasis: 'free-play' },
+    specification,
+    random: recorded.random as StoredActivity['random'],
+    checkpoint,
+    sequence: (JSON.parse(checkpoint) as { sequence: number }).sequence,
+    createdAt: 1_790_000_000_000,
+    completion: null,
+    incomplete: null,
+  };
+}
+
+/** A recorded checkpoint as a later build would write it, with a newer state schema: what a rollback finds. */
+export function fromLaterBuild(recorded: RecordedCheckpoint): string {
+  const value = JSON.parse(recorded.checkpoint) as { schema: number };
+  return canonicalJson({ ...value, schema: value.schema + 1 });
 }

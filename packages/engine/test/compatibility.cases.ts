@@ -74,14 +74,17 @@ export const compatibilityCases: TestCase[] = [
   {
     name: 'compatibility: an unfinished activity is judged against the quarantine list by the same pinned identities as a completed record',
     run: (t) => {
-      const recorded = RECORDED_BUILDS[0]?.checkpoints.find((checkpoint) => checkpoint.game === 'craps');
-      if (!recorded) throw new Error('no recorded craps checkpoint');
+      const build = RECORDED_BUILDS[0];
+      const recorded = build?.checkpoints.find((checkpoint) => checkpoint.game === 'craps');
+      if (!build || !recorded) throw new Error('no recorded craps checkpoint');
       const decoded = decodeCheckpoint(recorded.checkpoint);
       if (!decoded.ok) throw new Error(decoded.error.message);
-      const { rules } = decoded.state.identities;
+      // The combination as a defect report would name it: the recording build and the rule preset it was given.
+      const preset = (recorded.specification as { rules: { id: string; version: number } }).rules;
+      const rules = { id: preset.id, version: preset.version };
       const list: QuarantineList = {
         version: 2,
-        entries: [{ id: 'q-craps', match: { engine: decoded.state.identities.engine, rules }, explanation: 'A craps settlement defect.' }],
+        entries: [{ id: 'q-craps', match: { engine: build.engine, rules }, explanation: 'A craps settlement defect.' }],
       };
       t.equal(quarantineStatus(decoded.state, list), { quarantined: true, entry: 'q-craps', explanation: 'A craps settlement defect.' });
       t.equal(quarantineStatus(decoded.state, { version: 2, entries: [{ ...list.entries[0]!, match: { rules: { ...rules, version: rules.version + 1 } } }] }), { quarantined: false });

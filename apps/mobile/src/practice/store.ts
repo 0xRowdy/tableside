@@ -51,12 +51,14 @@ export interface StoredActivity extends NewActivity {
 
 /**
  * Why an unfinished activity is unusable (#80). "quarantined": its pinned
- * identities fall under the shipped quarantine list (a proven engine defect).
- * "damaged": its checkpoint can't be read. Either way it is marked incomplete
- * instead of being given an invented outcome.
+ * identities fall under the shipped quarantine list (a proven engine defect);
+ * the mark keeps which entry and list version did it, and the explanation is
+ * always read from the shipped list, never stored. "damaged": its checkpoint
+ * can't be read; the checkpoint is kept, so a later build could still recover it.
+ * Either way it is marked incomplete instead of being given an invented outcome.
  */
 export type IncompleteReason =
-  | { readonly kind: 'quarantined'; readonly entry: string; readonly explanation: string; readonly listVersion: number }
+  | { readonly kind: 'quarantined'; readonly entry: string; readonly listVersion: number }
   | { readonly kind: 'damaged'; readonly detail: string };
 
 /** One committed transition: everything step 3 of the durability protocol writes atomically. */

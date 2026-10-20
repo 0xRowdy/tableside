@@ -84,7 +84,7 @@ export default function Play() {
       return (
         <Placeholder
           title="Update to resume"
-          message={`Your ${findGame(snapshot.game)?.title.toLowerCase() ?? ''} session was saved by a newer version of Tableside. Update the app to pick it up exactly where you left off. Nothing has changed.`}
+          message={`Your ${findGame(snapshot.game)?.title.toLowerCase() ?? 'practice'} session was saved by a newer version of Tableside. Update the app to pick it up exactly where you left off. Nothing has changed.`}
         >
           <Button label="Back to Home" onPress={() => router.navigate('/')} />
         </Placeholder>

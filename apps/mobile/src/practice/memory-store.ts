@@ -94,7 +94,8 @@ export class MemoryActivityStore implements ActivityStore {
     return this.read(() => {
       for (const row of this.rows.values()) {
         const activity = parse<StoredActivity>(row.activity);
-        if (activity.completion === null && activity.incomplete === null) return activity;
+        // A row written before the incomplete mark existed has no such field.
+        if (!activity.completion && !activity.incomplete) return activity;
       }
       return null;
     });

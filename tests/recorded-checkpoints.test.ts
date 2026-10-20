@@ -3,30 +3,38 @@ import { readdir, readFile } from 'node:fs/promises';
 
 import { describe, expect, it } from 'vitest';
 
-// Unfinished activities are never aged out (#80): each build's recorded
-// checkpoints stay exactly as that build wrote them, and the engine suite keeps
-// resuming every one. A release adds its recording and its hash here; nothing
-// is ever edited or removed, so dropping compatibility code fails this test or
-// the engine suite.
+import { ENGINE_VERSION, STATE_SCHEMA_VERSION } from '../packages/engine/src';
+
+// Unfinished activities are never aged out (#80). Every released build's
+// recorded checkpoints stay exactly as that build wrote them (their SHA-256 is
+// in released.json, added when the build ships), and the engine suite keeps
+// resuming every one. The build under development keeps its own recording,
+// re-recorded while its behaviour still changes.
 const RECORDED = new URL('../packages/engine/test/recorded/', import.meta.url);
+const CURRENT = `engine-${ENGINE_VERSION}-schema-${STATE_SCHEMA_VERSION}.ts`;
 
-/** SHA-256 of every recording, as written when its build was released. */
-const FROZEN: Record<string, string> = {
-  'engine-0.0.0-schema-3.ts': '4fe6a6cf899a285c26523a61331856ac68adfa11e3c47fb0e27f8e9b72e25368',
-};
+const released = async () => JSON.parse(await readFile(new URL('released.json', RECORDED), 'utf8')) as Record<string, string>;
+const recordings = async () => (await readdir(RECORDED)).filter((file) => file.endsWith('.ts') && file !== 'index.ts').sort();
 
-describe('recorded checkpoints from earlier builds', () => {
-  it('are kept byte for byte: none edited or removed', async () => {
-    for (const [file, hash] of Object.entries(FROZEN)) {
+describe('recorded checkpoints', () => {
+  it('of released builds are kept byte for byte: none edited or removed', async () => {
+    for (const [file, hash] of Object.entries(await released())) {
       const text = await readFile(new URL(file, RECORDED));
       expect([file, createHash('sha256').update(text).digest('hex')]).toEqual([file, hash]);
     }
   });
 
-  it('are all frozen here and all run by the engine suite', async () => {
-    const recordings = (await readdir(RECORDED)).filter((file) => file !== 'index.ts').sort();
-    expect(recordings).toEqual(Object.keys(FROZEN).sort());
+  it('include this build, so a schema or engine change needs a recording (pnpm --filter @tableside/engine record-checkpoints)', async () => {
+    expect(await recordings()).toContain(CURRENT);
+  });
+
+  it("are a released build's or this build's: an unreleased build's recording is replaced, not kept", async () => {
+    const frozen = await released();
+    expect((await recordings()).filter((file) => file !== CURRENT && !(file in frozen))).toEqual([]);
+  });
+
+  it('are all run by the engine suite', async () => {
     const index = await readFile(new URL('index.ts', RECORDED), 'utf8');
-    for (const file of recordings) expect(index).toContain(`from './${file.replace(/\.ts$/, '')}'`);
+    for (const file of await recordings()) expect(index).toContain(`from './${file.replace(/\.ts$/, '')}'`);
   });
 });

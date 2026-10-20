@@ -47,7 +47,7 @@ export function newActivity(activityId: string, overrides: Partial<NewActivity> 
   };
 }
 
-const QUARANTINED: IncompleteReason = { kind: 'quarantined', entry: 'q-1', explanation: 'A settlement defect.', listVersion: 2 };
+const QUARANTINED: IncompleteReason = { kind: 'quarantined', entry: 'q-1', listVersion: 2 };
 
 function receipt(sequence: number, command: string): Receipt {
   return { commandId: `cmd-${sequence}`, sequence, command, disposition: 'applied' };

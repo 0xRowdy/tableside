@@ -1,13 +1,15 @@
 // Records this build's unfinished-activity checkpoints for update-compatibility
-// testing (#80). Run it once when a build is released:
+// testing (#80):
 //
-//   pnpm --filter @tableside/engine record-checkpoints
+//   pnpm --filter @tableside/engine record-checkpoints [--replace]
 //
-// It writes test/recorded/engine-<ENGINE_VERSION>-schema-<STATE_SCHEMA_VERSION>.ts
-// and refuses to overwrite an existing recording: a recording is what that
-// build wrote, so it is never regenerated, edited or removed. Add the new module
-// to test/recorded/index.ts and its hash to tests/recorded-checkpoints.test.ts.
-import { existsSync, writeFileSync } from 'node:fs';
+// It writes test/recorded/engine-<ENGINE_VERSION>-schema-<STATE_SCHEMA_VERSION>.ts.
+// While that build is unreleased, --replace re-records it (its behaviour may
+// still change). When the build is released, its recording's SHA-256 goes in
+// test/recorded/released.json; from then on it is never regenerated, edited or
+// removed. A new recording must be added to test/recorded/index.ts.
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import {
@@ -116,7 +118,9 @@ function record(scenario: Scenario): RecordedCheckpoint {
 
 const exportName = `RECORDED_ENGINE_${ENGINE_VERSION.replaceAll('.', '_')}_SCHEMA_${STATE_SCHEMA_VERSION}`;
 const target = fileURLToPath(new URL(`../test/recorded/engine-${ENGINE_VERSION}-schema-${STATE_SCHEMA_VERSION}.ts`, import.meta.url));
-if (existsSync(target)) throw new Error(`${target} exists: a recording is never rewritten`);
+const released = JSON.parse(readFileSync(new URL('../test/recorded/released.json', import.meta.url), 'utf8')) as Record<string, string>;
+if (basename(target) in released) throw new Error(`${target} is a released build's recording: it is never rewritten`);
+if (existsSync(target) && !process.argv.includes('--replace')) throw new Error(`${target} exists: pass --replace to re-record this unreleased build`);
 
 const build: RecordedBuild = { engine: ENGINE_VERSION, schema: STATE_SCHEMA_VERSION, checkpoints: SCENARIOS.map(record) };
 writeFileSync(

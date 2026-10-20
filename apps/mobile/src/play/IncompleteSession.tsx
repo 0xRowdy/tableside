@@ -12,7 +12,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Button } from '@/components/Button';
 import { Screen } from '@/components/Screen';
 import { findGame } from '@/games';
-import type { IncompleteSession as Session } from '@/practice/controller';
+import type { IncompleteSessionSummary } from '@/practice/controller';
 import { usePractice } from '@/practice/PracticeProvider';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/theme/tokens';
 
@@ -22,40 +22,41 @@ const TURNS = { roulette: 'Spins', craps: 'Rolls', blackjack: 'Rounds' } as cons
 
 const SET_ASIDE = "We won't invent a result, so it's set aside and doesn't count toward your totals or adherence.";
 
-export function IncompleteSession({ session }: { session: Session }) {
+/** What each reason says: the banner, and how the engine identity reads. */
+const COPY = {
+  quarantined: { title: 'This session is quarantined', text: `We found a defect in the game engine that affected this session. ${SET_ASIDE}`, engine: (engine: string) => `${engine} (affected)` },
+  damaged: { title: "This session can't be recovered", text: `Its saved state is damaged. ${SET_ASIDE}`, engine: (engine: string) => engine },
+} as const;
+
+export function IncompleteSession({ session }: { session: IncompleteSessionSummary }) {
   const { controller } = usePractice();
   const [explained, setExplained] = useState(false);
-  const title = `${findGame(session.game)?.title ?? session.game} session`;
-  const { reason } = session;
-  const banner =
-    reason.kind === 'quarantined'
-      ? { title: 'This session is quarantined', text: `We found a defect in the game engine that affected this session. ${SET_ASIDE}` }
-      : { title: "This session can't be recovered", text: `Its saved state is damaged. ${SET_ASIDE}` };
+  const gameTitle = findGame(session.game)?.title ?? session.game;
+  const copy = COPY[session.reason.kind];
   const rows = [
+    { label: 'Game', value: gameTitle },
     { label: 'Buy-in', value: formatUnits(session.buyIn) },
-    ...(session.turnsRecorded === null
-      ? []
-      : [{ label: `${TURNS[session.game]} recorded`, value: reason.kind === 'quarantined' ? `${session.turnsRecorded} before the defect` : `${session.turnsRecorded}` }]),
+    ...(session.turnsRecorded === null ? [] : [{ label: `${TURNS[session.game]} recorded`, value: `${session.turnsRecorded}` }]),
     { label: 'Result', value: 'Not available' },
-    ...(session.engine === null ? [] : [{ label: 'Engine', value: reason.kind === 'quarantined' ? `${session.engine} (affected)` : session.engine }]),
+    ...(session.engine === null ? [] : [{ label: 'Engine', value: copy.engine(session.engine) }]),
   ];
 
   return (
     <Screen>
       <Text accessibilityRole="header" maxFontSizeMultiplier={textScale.display} style={styles.title}>
-        {title}
+        {gameTitle} session
       </Text>
 
       <View style={styles.banner} testID="incomplete-session">
         <TriangleAlert color={palette.primary} size={20} />
         <View style={styles.bannerText}>
           <Text accessibilityRole="header" maxFontSizeMultiplier={textScale.body} style={styles.bannerTitle}>
-            {banner.title}
+            {copy.title}
           </Text>
-          <Text maxFontSizeMultiplier={textScale.body} style={styles.muted}>{banner.text}</Text>
-          {reason.kind === 'quarantined' &&
+          <Text maxFontSizeMultiplier={textScale.body} style={styles.muted}>{copy.text}</Text>
+          {session.explanation !== null &&
             (explained ? (
-              <Text maxFontSizeMultiplier={textScale.body} style={styles.explanation}>{reason.explanation}</Text>
+              <Text maxFontSizeMultiplier={textScale.body} style={styles.explanation}>{session.explanation}</Text>
             ) : (
               <Pressable
                 accessibilityRole="button"

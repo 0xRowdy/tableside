@@ -91,7 +91,7 @@ export interface Suspension {
 export type ActivePracticeSnapshot = Extract<PracticeSnapshot, { status: 'active' }>;
 
 /** An unfinished session found unusable and marked incomplete (#80), as its explanation shows it. */
-export interface IncompleteSession {
+export interface IncompleteSessionSummary {
   readonly game: GameId;
   readonly buyIn: string;
   /** Turns committed before it became unusable; null when the checkpoint can't be read. */
@@ -99,6 +99,8 @@ export interface IncompleteSession {
   /** The pinned engine identity; null when the checkpoint can't be read. */
   readonly engine: string | null;
   readonly reason: IncompleteReason;
+  /** A quarantine entry's explanation, from the shipped list; null for a damaged checkpoint. */
+  readonly explanation: string | null;
 }
 
 export type PracticeSnapshot =
@@ -127,7 +129,7 @@ export type PracticeSnapshot =
   /** The result just produced and durably saved in this process. */
   | { readonly status: 'completed'; readonly result: CompletedPracticeSession }
   /** The unfinished session is unusable (quarantined or damaged): marked incomplete, never given a result. */
-  | { readonly status: 'incomplete'; readonly session: IncompleteSession }
+  | { readonly status: 'incomplete'; readonly session: IncompleteSessionSummary }
   /**
    * The unfinished session was saved by a later build this one can't run (a
    * rollback): it is never reopened and waits, untouched, for the app to be updated.
@@ -882,14 +884,14 @@ export class PracticeController {
     const reason: IncompleteReason | null = !decoded.ok
       ? { kind: 'damaged', detail: decoded.error.message }
       : quarantine?.quarantined
-        ? { kind: 'quarantined', entry: quarantine.entry, explanation: quarantine.explanation, listVersion: this.adapters.quarantine.version }
+        ? { kind: 'quarantined', entry: quarantine.entry, listVersion: this.adapters.quarantine.version }
         : null;
     if (!reason) {
       this.adopt(stored, []);
       return true;
     }
     // Unsaved, the mark is made again the next time the activity is found; either way nothing is resumed.
-    const marked = await this.adapters.store.markIncomplete(stored.activityId, reason).catch(() => null);
+    const marked = (await this.adapters.store.markIncomplete(stored.activityId, reason).catch(() => null))?.incomplete ?? reason;
     this.current = {
       status: 'incomplete',
       session: {
@@ -897,11 +899,18 @@ export class PracticeController {
         buyIn: stored.specification.funding,
         turnsRecorded: decoded.ok ? decoded.state.turn : null,
         engine: decoded.ok ? decoded.state.identities.engine : null,
-        reason: marked?.incomplete ?? reason,
+        reason: marked,
+        explanation: this.explanationOf(marked),
       },
     };
     this.notify();
     return false;
+  }
+
+  /** The shipped list's explanation for a quarantine mark (entries are never removed, so it is always there). */
+  private explanationOf(reason: IncompleteReason): string | null {
+    if (reason.kind !== 'quarantined') return null;
+    return this.adapters.quarantine.entries.find((entry) => entry.id === reason.entry)?.explanation ?? null;
   }
 
   private adopt(stored: StoredActivity, facts: readonly DomainFact[]): void {

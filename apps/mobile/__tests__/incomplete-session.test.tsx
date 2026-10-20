@@ -3,13 +3,16 @@
 // routes and the accessibility tree. The app launches over a durable store that
 // already holds a craps session an earlier build left, recorded by that build.
 
-import { canonicalJson, type QuarantineList } from '@tableside/engine';
+import type { QuarantineList } from '@tableside/engine';
 import { RECORDED_BUILDS } from '@tableside/engine/recorded-checkpoints';
 import { cleanup, fireEvent, screen } from '@testing-library/react-native';
 import { renderRouter } from 'expo-router/testing-library';
 import { AccessibilityInfo } from 'react-native';
 
 import type { StoredActivity } from '@/practice/store';
+import { fromLaterBuild, leftBy as leftByBuild } from '@/practice/testing/substitutes';
+
+const leftBy = (checkpoint: string) => leftByBuild(CRAPS, checkpoint);
 
 const CRAPS = RECORDED_BUILDS[0]!.checkpoints.find((recorded) => recorded.game === 'craps')!;
 const IDENTITIES = JSON.parse(CRAPS.checkpoint).identities;
@@ -17,21 +20,6 @@ const LIST: QuarantineList = {
   version: 2,
   entries: [{ id: 'q-craps-1', match: { engine: IDENTITIES.engine, rules: IDENTITIES.rules }, explanation: 'Field bets on 12 were paid double instead of triple.' }],
 };
-
-function leftBy(checkpoint: string): StoredActivity {
-  const specification = CRAPS.specification as StoredActivity['specification'];
-  return {
-    activityId: specification.activityId,
-    admission: { provenance: 'earlier-build', meteringBasis: 'free-play' },
-    specification,
-    random: CRAPS.random as StoredActivity['random'],
-    checkpoint,
-    sequence: (JSON.parse(checkpoint) as { sequence: number }).sequence,
-    createdAt: 1_790_000_000_000,
-    completion: null,
-    incomplete: null,
-  };
-}
 
 const mockApp: { stored: StoredActivity | null; quarantine: QuarantineList | null } = { stored: null, quarantine: null };
 
@@ -67,7 +55,8 @@ describe('a quarantined unfinished session', () => {
     expect(screen.getByRole('header', { name: 'This session is quarantined' })).toBeOnTheScreen();
     expect(screen.getByText(/We won't invent a result, so it's set aside and doesn't count toward your totals or adherence\./)).toBeOnTheScreen();
     expect(screen.getByLabelText('Buy-in: 1,000')).toBeOnTheScreen();
-    expect(screen.getByLabelText('Rolls recorded: 1 before the defect')).toBeOnTheScreen();
+    expect(screen.getByLabelText('Game: Craps')).toBeOnTheScreen();
+    expect(screen.getByLabelText('Rolls recorded: 1')).toBeOnTheScreen();
     expect(screen.getByLabelText('Result: Not available')).toBeOnTheScreen();
     expect(screen.getByLabelText(`Engine: ${IDENTITIES.engine} (affected)`)).toBeOnTheScreen();
     expect(screen.queryByRole('button', { name: 'Resume session' })).toBeNull();
@@ -95,8 +84,7 @@ describe('a quarantined unfinished session', () => {
 
 describe('a session a later build saved', () => {
   it('is never reopened after a rollback: Play asks for the update', async () => {
-    const value = JSON.parse(CRAPS.checkpoint) as { schema: number };
-    mockApp.stored = leftBy(canonicalJson({ ...value, schema: value.schema + 1 }));
+    mockApp.stored = leftBy(fromLaterBuild(CRAPS));
     await renderRouter('./src/app', { initialUrl: '/play?game=roulette' });
 
     expect(await screen.findByRole('header', { name: 'Update to resume' })).toBeOnTheScreen();
