@@ -293,10 +293,14 @@ export type ActivityState = RouletteActivityState | CrapsActivityState | Blackja
 /** The state of one game's activity. */
 export type StateOf<G extends GameId> = Extract<ActivityState, { readonly identities: { readonly game: G } }>;
 
-/** Why the stop path ran: the player's stop, reset or switch, or an access-ended stop (which includes a content-removal stop). */
-export type StopCause = 'stop' | 'reset' | 'switch' | 'access-ended';
+/**
+ * Why the stop path ran: the player's stop, reset or switch; an access-ended
+ * stop; or a content-removal stop, when a required removal covers the pinned
+ * strategy revision (Amendment 6 §5). Records keep the two apart (§2).
+ */
+export type StopCause = 'stop' | 'reset' | 'switch' | 'access-ended' | 'content-removed';
 
-export const STOP_CAUSES: readonly StopCause[] = ['stop', 'reset', 'switch', 'access-ended'];
+export const STOP_CAUSES: readonly StopCause[] = ['stop', 'reset', 'switch', 'access-ended', 'content-removed'];
 
 export type Command =
   /** Sets the stake on a target; amount "0" takes the wager down. */

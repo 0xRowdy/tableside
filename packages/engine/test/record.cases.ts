@@ -118,7 +118,14 @@ export const recordCases: TestCase[] = [
     },
   },
   {
-    name: 'record: a stop cause outside stop, reset, switch and access-ended is a malformed command',
+    name: 'record: a content-removal stop is recorded apart from an access-ended stop (Amendment 6 §2, §5)',
+    run: (t) => {
+      const removed = run(createActivity(SPEC, STREAM), [{ kind: 'request-stop', cause: 'content-removed' }, FINAL]);
+      t.equal(completedPracticeRecord(removed.state, removed.facts, CONTEXT).endingReason, 'content-removed');
+    },
+  },
+  {
+    name: 'record: a stop cause outside stop, reset, switch, access-ended and content-removed is a malformed command',
     run: (t) => {
       const state = createActivity(SPEC, STREAM);
       const result = advanceActivity(state, { sequence: 0, commandId: 'c0', command: { kind: 'request-stop', cause: 'bored' } as unknown as Command });

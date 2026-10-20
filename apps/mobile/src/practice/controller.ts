@@ -126,8 +126,11 @@ export type PracticeSnapshot =
       readonly save: 'saved' | 'failed';
       /** Null while play is open. */
       readonly suspension: Suspension | null;
-      /** "access-ended": the stop path runs because access or allowance ended. */
-      readonly ending: 'access-ended' | null;
+      /**
+       * "access-ended": the stop path runs because access or allowance ended.
+       * "content-removed": it runs because a required removal covers the strategy.
+       */
+      readonly ending: AccessStop | null;
     }
   /** The result just produced and durably saved in this process. */
   | { readonly status: 'completed'; readonly result: CompletedPracticeSession }
@@ -215,7 +218,9 @@ const RESUMES_ON_RETURN: ReadonlySet<SuspendCause> = new Set(['navigation', 'app
 const resumesOnReturn = (suspension: Pick<Suspension, 'cause'>): boolean => RESUMES_ON_RETURN.has(suspension.cause);
 
 /** Stops the access supervisor imposes, as opposed to the player's own. */
-const ACCESS_STOPS: ReadonlySet<StopCause> = new Set(['access-ended']);
+export type AccessStop = Extract<StopCause, 'access-ended' | 'content-removed'>;
+const ACCESS_STOPS: ReadonlySet<StopCause> = new Set<AccessStop>(['access-ended', 'content-removed']);
+const isAccessStop = (cause: StopCause | null): cause is AccessStop => cause !== null && ACCESS_STOPS.has(cause);
 
 /** A supervisor question that failed to answer counts as uncertain access. */
 const UNANSWERED: AccessDenial = { status: 'uncertain', provenance: 'unanswered', disposition: 'suspend-at-turn-boundary' };
@@ -500,7 +505,7 @@ export class PracticeController {
    * offline and never asks for access. A session suspended mid-round must resume
    * to finish the round first.
    */
-  async endSession(cause: Exclude<StopCause, 'access-ended'> = 'stop'): Promise<void> {
+  async endSession(cause: Exclude<StopCause, AccessStop> = 'stop'): Promise<void> {
     await this.exclusive(async () => {
       if (!this.state || this.current.status !== 'active') return;
       const suspension = this.suspension;
@@ -602,7 +607,7 @@ export class PracticeController {
    */
   private heldBack(pending: Outbound): boolean {
     if (this.suspension?.kind === 'immediate' || this.suspension?.reached) return true;
-    if (!this.suspension && !(this.stopping && ACCESS_STOPS.has(this.stopping))) return false;
+    if (!this.suspension && !isAccessStop(this.stopping)) return false;
     const state = this.requireState();
     const candidate = advanceActivity(state, pending.envelope);
     return candidate.status === 'committed' && candidate.state.turn !== state.turn;
@@ -687,7 +692,7 @@ export class PracticeController {
   private applyDenial(denial: AccessDenial): void {
     switch (denial.disposition) {
       case 'stop':
-        this.stopping = 'access-ended';
+        this.stopping = denial.stopCause ?? 'access-ended';
         return this.publish();
       case 'suspend':
         return this.suspendNow('access', denial.reason ?? null);
@@ -711,7 +716,7 @@ export class PracticeController {
       const resumeBlocked = decision.status === 'uncertain' ? RECONNECT_TO_VERIFY : (decision.reason ?? CANT_RESUME);
       this.suspension = { ...suspension, resumeBlocked };
       // Access ended: play never reopens, so ending runs (and says it runs) the access-ended stop path.
-      if (decision.disposition === 'stop') this.stopping = 'access-ended';
+      if (decision.disposition === 'stop') this.stopping = decision.stopCause ?? 'access-ended';
       return this.refreshSuspension();
     }
     this.suspension = null;
@@ -1011,7 +1016,7 @@ export class PracticeController {
       busy: this.busy,
       save: this.pending ? 'failed' : 'saved',
       suspension: this.suspension,
-      ending: this.stopping === 'access-ended' ? 'access-ended' : null,
+      ending: isAccessStop(this.stopping) ? this.stopping : null,
     };
     const suspended = this.suspension?.reached ?? false;
     this.report({

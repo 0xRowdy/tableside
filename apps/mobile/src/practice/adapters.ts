@@ -25,6 +25,11 @@ export interface AccessDenial {
   readonly disposition: Disposition;
   /** Player-facing reason, if the policy has one. */
   readonly reason?: string;
+  /**
+   * For a "stop": why play ends, as the record keeps it. Access or allowance
+   * ending when omitted; "content-removed" for a required removal (Amendment 6 §5).
+   */
+  readonly stopCause?: 'access-ended' | 'content-removed';
 }
 
 /** Allowed (with any extra the question carries), denied or uncertain, always with provenance. */
@@ -115,6 +120,7 @@ const REQUIRED_REMOVAL: AccessDenial = {
   status: 'denied',
   provenance: 'required-removal',
   disposition: 'stop',
+  stopCause: 'content-removed',
   reason: 'Removed after a validated legal or privacy request',
 };
 

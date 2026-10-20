@@ -28,10 +28,10 @@ import { EndSessionDialog } from './EndSessionDialog';
 import { CorrectionPanel, CycleResultPanel, GuidedStrip, PendingPanel, StopStrategyDialog, type TurnWords } from './Guidance';
 import { RebuySheet } from './RebuySheet';
 import { commitmentText, crapsStatus, crapsTargetName, describeCrapsFacts, puckText, workingText } from './craps-text';
-import { ACCESS_ENDED, ChipRack } from './RouletteTable';
+import { ChipRack } from './RouletteTable';
 import { totalOnTable } from './roulette-text';
 import { formatUnits } from './units';
-import { PhaseStepper, SessionStrip, TableTopBar, type PhaseStep } from './TableChrome';
+import { AccessStopBanner, PhaseStepper, SessionStrip, TableTopBar, type PhaseStep } from './TableChrome';
 
 type ActiveSnapshot = ActivePracticeSnapshot & { readonly view: PermittedView };
 
@@ -169,14 +169,7 @@ export function CrapsTable({ snapshot }: { snapshot: ActiveSnapshot }) {
             <Button label="Retry now" variant="secondary" disabled={busy} onPress={() => void controller.retrySave()} />
           </View>
         )}
-        {snapshot.ending === 'access-ended' && (
-          <View style={styles.banner} testID="access-ended">
-            <Text accessibilityRole="alert" maxFontSizeMultiplier={textScale.body} style={styles.bannerTitle}>{ACCESS_ENDED}</Text>
-            <Text maxFontSizeMultiplier={textScale.body} style={styles.bannerText}>
-              The dice roll on to settle only the bets already working. No new bets, odds or rolls of your own.
-            </Text>
-          </View>
-        )}
+        <AccessStopBanner ending={snapshot.ending} detail="The dice roll on to settle only the bets already working. No new bets, odds or rolls of your own." />
         {snapshot.suspension?.kind === 'turn-boundary' && !snapshot.suspension.reached && (
           <View style={styles.banner}>
             <Text accessibilityRole="alert" maxFontSizeMultiplier={textScale.body} style={styles.bannerTitle}>Suspending after this roll</Text>

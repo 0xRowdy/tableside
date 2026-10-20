@@ -614,6 +614,11 @@ describe('required content removal (Amendment 6 §5)', () => {
     const adapters = { ...substituteAdapters({ clock: new FakeClock(undefined, true) }), access };
     const commits = recordCommits(adapters.store);
     const controller = new PracticeController(adapters);
+    const shown: (string | null)[] = [];
+    controller.subscribe(() => {
+      const snapshot = controller.snapshot();
+      if (snapshot.status === 'active') shown.push(snapshot.ending);
+    });
     await controller.load();
     await controller.start({ game: 'roulette', buyIn: '1000', strategy: { definition: FLAT_EVEN_MONEY, parameters: { target: 'red' } } });
 
@@ -625,7 +630,10 @@ describe('required content removal (Amendment 6 §5)', () => {
     await controller.spin();
 
     expect(kinds(commits)).toEqual(['place-wager', 'begin-turn', 'settle-turn', 'place-wager', 'request-stop', 'advance-final-settlement']);
-    expect(controller.snapshot()).toMatchObject({ status: 'completed', result: { endingReason: 'access-ended' } });
+    // Recorded and announced as a content removal, never as access or allowance ending.
+    expect(shown).toContain('content-removed');
+    expect(shown).not.toContain('access-ended');
+    expect(controller.snapshot()).toMatchObject({ status: 'completed', result: { endingReason: 'content-removed' } });
     // The supervisor behind it is never asked about the turn the removal stopped.
     expect(script.asked.filter((q) => q.startsWith('turn'))).toEqual(['turn 1']);
   });

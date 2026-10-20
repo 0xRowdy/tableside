@@ -23,7 +23,7 @@ import { RebuySheet } from './RebuySheet';
 import { rouletteCatalog, roulettePlacedWagers } from './roulette-catalog';
 import { describeFacts, describePocket, formatUnits, POCKET_TOKEN, pocketColor, STATUS, targetName, totalOnTable } from './roulette-text';
 import { RouletteFelt } from './RouletteFelt';
-import { PhaseStepper, SessionStrip, TableTopBar, type PhaseStep } from './TableChrome';
+import { AccessStopBanner, PhaseStepper, SessionStrip, TableTopBar, type PhaseStep } from './TableChrome';
 
 type ActiveSnapshot = ActivePracticeSnapshot & { readonly view: PermittedView };
 
@@ -136,14 +136,7 @@ export function RouletteTable({ snapshot }: { snapshot: ActiveSnapshot }) {
             <Button label="Retry now" variant="secondary" disabled={busy} onPress={() => void controller.retrySave()} />
           </View>
         )}
-        {snapshot.ending === 'access-ended' && (
-          <View style={styles.banner} testID="access-ended">
-            <Text accessibilityRole="alert" maxFontSizeMultiplier={textScale.body} style={styles.bannerTitle}>{ACCESS_ENDED}</Text>
-            <Text maxFontSizeMultiplier={textScale.body} style={styles.bannerText}>
-              Your bets settle automatically, then you&apos;ll see the session result.
-            </Text>
-          </View>
-        )}
+        <AccessStopBanner ending={snapshot.ending} detail="Your bets settle automatically, then you'll see the session result." />
         {snapshot.suspension?.kind === 'turn-boundary' && !snapshot.suspension.reached && (
           <View style={styles.banner}>
             <Text accessibilityRole="alert" maxFontSizeMultiplier={textScale.body} style={styles.bannerTitle}>Suspending after this spin</Text>
@@ -311,9 +304,6 @@ function describeTurn(turn: CycleTurn, index: number): TurnWords {
 }
 
 const WHEEL_NAMES: Record<PermittedView['table']['wheel'], string> = { 'single-zero': 'Single zero', 'double-zero': 'Double zero' };
-
-/** The access-ended stop (spec 5, Amendment 4 D). */
-export const ACCESS_ENDED = 'Training ended — settling existing bets; no further allowance used';
 
 const SAVE_FAILED_ANNOUNCEMENT = "Couldn't save. Play is paused and will retry automatically.";
 

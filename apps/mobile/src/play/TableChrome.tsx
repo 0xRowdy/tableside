@@ -1,10 +1,13 @@
-// Table chrome shared by every game table: the top bar, the Phase Stepper and
-// the session strip (balance, outstanding wagers and status, always visible).
+// Table chrome shared by every game table: the top bar, the Phase Stepper,
+// the session strip (balance, outstanding wagers and status, always visible)
+// and the banners every table shows above play.
 
 import { CircleStop } from 'lucide-react-native';
+import type { ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
+import type { AccessStop } from '@/practice/controller';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/theme/tokens';
 
 export function TableTopBar({
@@ -92,7 +95,40 @@ export function SessionStrip({ balance, onTable, status }: { balance: string; on
   );
 }
 
+/** The access-ended stop (spec 5, Amendment 4 D). */
+export const ACCESS_ENDED = 'Training ended — settling existing bets; no further allowance used';
+/** The content-removal stop (Amendment 6 §5): the pinned strategy revision was removed. */
+export const CONTENT_REMOVED = 'Strategy removed — settling existing bets';
+const CONTENT_REMOVED_REASON = 'Removed after a validated legal or privacy request.';
+
+/** A notice above play: its title is announced as an alert. */
+export function TableBanner({ title, text, testID, children }: { title: string; text: string; testID?: string; children?: ReactNode }) {
+  return (
+    <View style={styles.banner} testID={testID}>
+      <Text accessibilityRole="alert" maxFontSizeMultiplier={textScale.body} style={styles.bannerTitle}>{title}</Text>
+      <Text maxFontSizeMultiplier={textScale.body} style={styles.bannerText}>{text}</Text>
+      {children}
+    </View>
+  );
+}
+
+/**
+ * The stop path the supervisor imposed, and why: access or allowance ended, or a
+ * required removal covers the strategy. `detail` says how this table settles.
+ */
+export function AccessStopBanner({ ending, detail }: { ending: AccessStop | null; detail: string }) {
+  if (ending === null) return null;
+  return ending === 'content-removed' ? (
+    <TableBanner title={CONTENT_REMOVED} text={`${CONTENT_REMOVED_REASON} ${detail}`} testID="content-removed" />
+  ) : (
+    <TableBanner title={ACCESS_ENDED} text={detail} testID="access-ended" />
+  );
+}
+
 const styles = StyleSheet.create({
+  banner: { margin: space[4], padding: space[4], gap: space[2], borderRadius: radius.lg, backgroundColor: palette.card, borderWidth: 1, borderColor: palette.destructive },
+  bannerTitle: { fontFamily: fonts.uiBold, fontSize: 14, color: palette.foreground },
+  bannerText: { fontFamily: fonts.ui, fontSize: 13, color: palette.mutedForeground },
   topBar: { flexDirection: 'row', alignItems: 'center', gap: space[1], paddingLeft: space[4], paddingRight: space[2] },
   titles: { flex: 1, gap: 1, paddingVertical: space[1] },
   title: { fontFamily: fonts.uiBold, fontSize: 16, color: palette.foreground },

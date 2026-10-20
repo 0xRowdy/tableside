@@ -160,4 +160,17 @@ describe('suspension', () => {
     expect(await screen.findByRole('header', { name: 'Session result' })).toBeOnTheScreen();
     expect(screen.getByLabelText('Final cash-out 1,000')).toBeOnTheScreen();
   });
+
+  it('a content-removal stop says the strategy was removed, never that training or allowance ended', async () => {
+    mockApp.manualClock = true;
+    await startSession();
+    await betRed25();
+    mockApp.next.turn = { status: 'denied', provenance: 'required-removal', disposition: 'stop', stopCause: 'content-removed', reason: 'Removed after a validated legal or privacy request' };
+
+    await fireEvent.press(screen.getByRole('button', { name: 'Spin' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Strategy removed — settling existing bets');
+    expect(screen.getByText(/Removed after a validated legal or privacy request/)).toBeOnTheScreen();
+    expect(screen.queryByText(/Training ended/)).toBeNull();
+  });
 });

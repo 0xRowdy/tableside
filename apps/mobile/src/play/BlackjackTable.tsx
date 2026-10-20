@@ -63,8 +63,7 @@ import { EndSessionDialog } from './EndSessionDialog';
 import { betCorrectionCopy, BLACKJACK_WORDS } from './coaching-text';
 import { CorrectionPanel, GuidedStrip, StopStrategyDialog, type TableNow } from './Guidance';
 import { RebuySheet } from './RebuySheet';
-import { ACCESS_ENDED } from './RouletteTable';
-import { PhaseStepper, SessionStrip, TableTopBar, type PhaseStep } from './TableChrome';
+import { AccessStopBanner, PhaseStepper, SessionStrip, TableTopBar, type PhaseStep } from './TableChrome';
 import { formatSigned, formatUnits, totalOnTable } from './units';
 
 type ActiveSnapshot = Active<BlackjackPermittedView>;
@@ -203,14 +202,10 @@ export function BlackjackTable({ snapshot }: { snapshot: ActiveSnapshot }) {
             <Button label="Retry now" variant="secondary" disabled={busy} onPress={() => void controller.retrySave()} />
           </View>
         )}
-        {snapshot.ending === 'access-ended' && (
-          <View style={styles.banner} testID="access-ended">
-            <Text accessibilityRole="alert" maxFontSizeMultiplier={textScale.body} style={styles.bannerTitle}>{ACCESS_ENDED}</Text>
-            <Text maxFontSizeMultiplier={textScale.body} style={styles.bannerText}>
-              {playing ? 'Finish this hand; then it settles automatically' : 'Your bets settle automatically'}, then you&apos;ll see the session result.
-            </Text>
-          </View>
-        )}
+        <AccessStopBanner
+          ending={snapshot.ending}
+          detail={`${playing ? 'Finish this hand; then it settles automatically' : 'Your bets settle automatically'}, then you'll see the session result.`}
+        />
         {snapshot.suspension?.kind === 'turn-boundary' && !snapshot.suspension.reached && (
           <View style={styles.banner}>
             <Text accessibilityRole="alert" maxFontSizeMultiplier={textScale.body} style={styles.bannerTitle}>Suspending after this round</Text>
