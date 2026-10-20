@@ -224,7 +224,7 @@ function Felt({
             key={spot.target}
             label={spot.label}
             spoken={`${crapsTargetName(spot.target)}, pays ${pays}`}
-            hint={open ? `Adds ${formatUnits(chip)}.` : stake !== undefined ? commitmentText(spot.target, point) : spot.closed}
+            hint={open ? `Adds ${formatUnits(chip)}.` : stake !== undefined ? heldHint(view, spot.target) : spot.closed}
             wager={stake === undefined ? undefined : `${formatUnits(stake)} · ${workingText(view, spot.target)}`}
             disabled={!canPlace || !open}
             onPress={() => onSpot(spot.target)}
@@ -233,6 +233,13 @@ function Felt({
       })}
     </View>
   );
+}
+
+/** Why a spot holding a wager takes no more: a contract can't change; anything else can still come down. */
+function heldHint(view: PermittedView, target: string): string {
+  const removable = view.table.wagers.find((wager) => wager.target === target)?.removable !== false;
+  if (!removable) return commitmentText(target, view.table.point);
+  return `${crapsTargetName(target)} can't be raised now. You can remove it from your wagers.`;
 }
 
 function Spot({

@@ -134,9 +134,10 @@ export function describeCrapsFacts(facts: readonly DomainFact[], view: CrapsPerm
         break;
     }
   }
-  // Come odds go off for a come-out roll: say so when the puck turns off with odds on the table.
-  if (facts.some((fact) => fact.kind === 'point-changed' && fact.point === null) && view.table.wagers.some((wager) => !wager.working)) {
-    parts.push('Come odds are OFF for the come-out roll.');
+  // Come odds go off for a come-out roll and back on with the next point: say so when the puck moves.
+  const puck = facts.find((fact) => fact.kind === 'point-changed');
+  if (puck && view.table.wagers.some((wager) => /^come-\d+-odds$/.test(wager.target))) {
+    parts.push(puck.point === null ? 'Come odds are OFF for the come-out roll.' : 'Come odds are ON again.');
   }
   if (parts.length === 0) return null;
   if (balanceChanged) parts.push(`Balance ${formatUnits(view.balance)}.`);

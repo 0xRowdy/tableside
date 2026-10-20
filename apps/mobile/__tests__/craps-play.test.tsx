@@ -168,6 +168,36 @@ describe('craps free play', () => {
     expect(screen.getByLabelText(/^Box 6, Come 6 25 ON, Come 6 odds 25 OFF$/)).toBeOnTheScreen();
   });
 
+  it('announces come odds working again once the next point is set', async () => {
+    await pointOfEight();
+    await roll(); // 11
+    await fireEvent.press(spot(/^Come,/));
+    await roll(); // 6: to come 6
+    await fireEvent.press(spot(/^Come,/));
+    await roll(); // 4: to come 4
+    await fireEvent.press(within(screen.getByTestId('wager-come-4')).getByRole('button', { name: 'Add 25 odds behind Come 4' }));
+    await roll(); // 12
+    await roll(); // 8: the point is made and come odds go off
+    expect(screen.getByLabelText('Come 4 odds 25, OFF, removable')).toBeOnTheScreen();
+    announcements = [];
+
+    await roll(); // 6 on the come-out: come 6 wins and the puck goes on at 6
+
+    announced('The point is 6. Puck ON. Come odds are ON again.');
+    expect(screen.getByLabelText('Come 4 odds 25, ON, removable')).toBeOnTheScreen();
+  });
+
+  it("explains that an established don't pass can come down but can't change, without calling it a contract", async () => {
+    await startSession();
+    await fireEvent.press(spot(/^Don't pass,/));
+    await roll(); // 8: the point
+
+    expect(spot(/^Don't pass,/)).toBeDisabled();
+    expect(spot(/^Don't pass,/)).toHaveProp('accessibilityHint', "Don't pass can't be raised now. You can remove it from your wagers.");
+    expect(screen.getByLabelText("Don't pass 25, ON, removable")).toBeOnTheScreen();
+    expect(within(screen.getByTestId('wager-dont-pass')).getByRole('button', { name: "Remove Don't pass" })).toBeEnabled();
+  });
+
   it('ends the session by returning removable wagers and rolling on for the contracts with no tap', async () => {
     await pointOfEight();
     await fireEvent.press(within(screen.getByTestId('wager-pass')).getByRole('button', { name: 'Add 25 odds behind Pass line' }));

@@ -67,13 +67,8 @@ function illegalMessage(reason: IllegalActionReason, target: string | null, view
       return 'Place a wager before you spin.';
     case 'not-whole-units':
       return 'Stakes are whole units. Nothing was placed.';
-    case 'no-wager-to-remove':
-    case 'unknown-target':
-    // Craps-only reasons; a roulette table never produces them.
-    case 'committed-wager':
-    case 'not-available-now':
-    case 'above-odds-cap':
-    case 'odds-increment':
+    // no-wager-to-remove, unknown-target, and reasons only other games produce.
+    default:
       return `${name} can't be changed. Nothing was placed.`;
   }
 }
