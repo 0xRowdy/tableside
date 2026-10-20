@@ -30,7 +30,7 @@ import { RebuySheet } from './RebuySheet';
 import { commitmentText, crapsStatus, crapsTargetName, describeCrapsFacts, puckText, workingText } from './craps-text';
 import { ChipRack } from './RouletteTable';
 import { formatUnits, sumUnits, totalOnTable } from './units';
-import { AccessStopBanner, PhaseStepper, SessionStrip, TableTopBar, type PhaseStep } from './TableChrome';
+import { AccessStopBanner, AllowanceLine, PhaseStepper, SessionStrip, TableTopBar, type PhaseStep } from './TableChrome';
 
 type ActiveSnapshot = ActivePracticeSnapshot & { readonly view: PermittedView };
 
@@ -153,6 +153,7 @@ export function CrapsTable({ snapshot }: { snapshot: ActiveSnapshot }) {
           onTable={formatUnits(totalOnTable(view))}
           status={save === 'failed' ? 'Paused · not saved' : crapsStatus(view)}
         />
+        <AllowanceLine game="craps" />
         {strategy && <GuidedStrip strategy={strategy} canStop={legal('stop-strategy')} onStop={() => setStoppingStrategy(true)} detail={null} unit="roll" />}
         {view.phase !== 'final-settlement' && <PresentationSwitch value={presentation} onChange={setPresentation} />}
 

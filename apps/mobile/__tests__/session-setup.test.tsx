@@ -301,6 +301,16 @@ describe('session setup', () => {
       expect(await screen.findByLabelText('Session balance 500')).toBeOnTheScreen();
     });
 
+    it('the table chrome keeps the allowance line in play, and shows none when the policy has none (Amendment 4 D)', async () => {
+      mockTerms = { funding: { source: 'practice-funding' }, allowance: { title: 'TIME', text: '12 min of guided practice left today' }, seePremium: true };
+      await open('roulette', 'Roulette');
+      await fireEvent.press(start());
+      await screen.findByLabelText('Session balance 1,000');
+      expect(await screen.findByLabelText('TIME: 12 min of guided practice left today')).toBeOnTheScreen();
+      // Nothing promotes premium during play.
+      expect(screen.queryByRole('button', { name: 'See premium' })).toBeNull();
+    });
+
     it('a short training bankroll is explained with no offer to raise it', async () => {
       mockTerms = { funding: { source: 'training-bankroll', available: '5' }, allowance: { title: 'TRAINING BANKROLL', text: '5 training units available.' }, seePremium: false };
       await open('blackjack', 'Blackjack');

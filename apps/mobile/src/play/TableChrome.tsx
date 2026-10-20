@@ -3,11 +3,13 @@
 // and the banners every table shows above play.
 
 import { CircleStop } from 'lucide-react-native';
-import type { ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
+import type { SetupTerms } from '@/practice/adapters';
 import type { AccessStop } from '@/practice/controller';
+import { usePractice } from '@/practice/PracticeProvider';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/theme/tokens';
 
 export function TableTopBar({
@@ -95,6 +97,30 @@ export function SessionStrip({ balance, onTable, status }: { balance: string; on
   );
 }
 
+/**
+ * The allowance line for the active metering method (Amendment 4 D), as the
+ * supervisor words it for this game; nothing when the policy has none (the
+ * spec 1 stub). Asking never charges, and nothing here promotes premium.
+ */
+export function AllowanceLine({ game }: { game: string }) {
+  const { controller } = usePractice();
+  const [allowance, setAllowance] = useState<SetupTerms['allowance']>(null);
+  useEffect(() => {
+    let current = true;
+    void controller.setupTerms(game).then((terms) => current && setAllowance(terms.allowance));
+    return () => {
+      current = false;
+    };
+  }, [controller, game]);
+  if (!allowance) return null;
+  return (
+    <View accessible accessibilityLabel={`${allowance.title}: ${allowance.text}`} style={styles.allowance} testID="allowance-line">
+      <Text maxFontSizeMultiplier={textScale.body} style={styles.statLabel}>{allowance.title}</Text>
+      <Text maxFontSizeMultiplier={textScale.body} style={styles.allowanceText}>{allowance.text}</Text>
+    </View>
+  );
+}
+
 /** The access-ended stop (spec 5, Amendment 4 D). */
 export const ACCESS_ENDED = 'Training ended — settling existing bets; no further allowance used';
 /** The content-removal stop (Amendment 6 §5): the pinned strategy revision was removed. */
@@ -170,4 +196,6 @@ const styles = StyleSheet.create({
     backgroundColor: palette.secondary,
   },
   statusText: { fontFamily: fonts.uiBold, fontSize: 12, color: palette.foreground },
+  allowance: { gap: 1, paddingHorizontal: space[4], paddingVertical: space[1], backgroundColor: palette.card },
+  allowanceText: { fontFamily: fonts.uiMedium, fontSize: 13, color: palette.foreground },
 });

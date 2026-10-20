@@ -62,7 +62,7 @@ import { EndSessionDialog } from './EndSessionDialog';
 import { betCorrectionCopy, BLACKJACK_WORDS } from './coaching-text';
 import { CorrectionPanel, GuidedStrip, StopStrategyDialog, type TableNow } from './Guidance';
 import { RebuySheet } from './RebuySheet';
-import { AccessStopBanner, PhaseStepper, SessionStrip, TableTopBar, type PhaseStep } from './TableChrome';
+import { AccessStopBanner, AllowanceLine, PhaseStepper, SessionStrip, TableTopBar, type PhaseStep } from './TableChrome';
 import { capitalize, formatSigned, formatUnits, halfUnits, sumUnits, totalOnTable } from './units';
 
 type ActiveSnapshot = Active<BlackjackPermittedView>;
@@ -186,6 +186,7 @@ export function BlackjackTable({ snapshot }: { snapshot: ActiveSnapshot }) {
           onTable={formatUnits(totalOnTable(view))}
           status={save === 'failed' ? 'Paused · not saved' : statusText(view)}
         />
+        <AllowanceLine game="blackjack" />
         {strategy && <GuidedStrip strategy={strategy} detail={null} unit="decision" canStop={legal('stop-strategy')} onStop={() => setStoppingStrategy(true)} />}
         {view.count && <CountPanel view={view} count={view.count} betweenRounds={!inHand(view) && view.phase !== 'revealing-outcome'} />}
         {betting && <PresentationSwitch value={presentation} onChange={setPresentation} />}

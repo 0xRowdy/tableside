@@ -24,7 +24,7 @@ import { rouletteCatalog, roulettePlacedWagers } from './roulette-catalog';
 import { describeFacts, describePocket, POCKET_TOKEN, pocketColor, STATUS, targetName } from './roulette-text';
 import { capitalize, formatUnits, sumUnits, totalOnTable } from './units';
 import { RouletteFelt } from './RouletteFelt';
-import { AccessStopBanner, PhaseStepper, SessionStrip, TableTopBar, type PhaseStep } from './TableChrome';
+import { AccessStopBanner, AllowanceLine, PhaseStepper, SessionStrip, TableTopBar, type PhaseStep } from './TableChrome';
 
 type ActiveSnapshot = ActivePracticeSnapshot & { readonly view: PermittedView };
 
@@ -122,6 +122,7 @@ export function RouletteTable({ snapshot }: { snapshot: ActiveSnapshot }) {
         <TableTopBar title="Roulette" subtitle={limitsText(view)} canEnd={legal('request-stop')} onEnd={() => setConfirming(true)} />
         <PhaseStepper steps={phaseSteps(view)} />
         <SessionStrip balance={formatUnits(view.balance)} onTable={formatUnits(totalOnTable(view))} status={save === 'failed' ? 'Paused · not saved' : STATUS[view.phase]} />
+        <AllowanceLine game="roulette" />
         {strategy && <GuidedStrip strategy={strategy} canStop={legal('stop-strategy')} onStop={() => setStoppingStrategy(true)} />}
         {view.phase !== 'final-settlement' && <PresentationSwitch value={presentation} onChange={setPresentation} />}
 
