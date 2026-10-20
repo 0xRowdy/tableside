@@ -486,6 +486,47 @@ describe('dispositions', () => {
     expect((await store.readEffects('activity-1')).map((effect) => effect.effectId.sequence)).toEqual([1]);
   });
 
+  it('"stop" in craps returns removable wagers, then further rolls resolve only the contracts, never asking or charging', async () => {
+    // Pi stream rolls: 8 (point), then 11, 6, 4, 12 leave the pass line and 8 pays it.
+    const { controller, next, commits, store, asked } = setup();
+    await controller.load();
+    await controller.start({ game: 'craps', odds: '3-4-5x', buyIn: '1000' });
+    await controller.placeWager('pass', '10');
+    await controller.beginTurn();
+    await controller.placeWager('pass-odds', '50');
+    next.turn = { status: 'denied', provenance: 'test', disposition: 'stop' };
+
+    await controller.beginTurn();
+
+    expect(kinds(commits)).toEqual([
+      'place-wager', 'begin-turn', 'settle-turn', 'place-wager', 'request-stop',
+      'advance-final-settlement', 'advance-final-settlement', 'advance-final-settlement', 'advance-final-settlement', 'advance-final-settlement',
+    ]);
+    const facts = commits.flatMap((commit) => commit.facts);
+    expect(facts.filter((fact) => fact.kind === 'wager-returned')).toEqual([{ kind: 'wager-returned', target: 'pass-odds', amount: '50' }]);
+    // No new bets, odds or presses once the stop path starts: only the pass line settles.
+    expect(facts.filter((fact) => fact.kind === 'wager-settled').map((fact) => [fact.target, fact.result])).toEqual([['pass', 'win']]);
+    expect(controller.snapshot()).toMatchObject({ status: 'completed', result: { game: 'craps', finalCashOut: '1010' } });
+    // Only the roll begun before the stop was asked about and charged; the settling rolls never are.
+    expect(asked.filter((q) => q.startsWith('turn'))).toEqual(['turn 1', 'turn 2']);
+    expect((await store.readEffects('activity-1')).map((effect) => effect.effectId.sequence)).toEqual([1]);
+  });
+
+  it('a craps session suspended mid-roll must resume to finish the roll before it can end', async () => {
+    const { controller, clock } = setup({ autoClock: false });
+    await controller.load();
+    await controller.start({ game: 'craps', odds: '3-4-5x', buyIn: '1000' });
+    await controller.placeWager('pass', '10');
+    const rolling = controller.beginTurn();
+    await waitFor(() => clock.pending === 1);
+    controller.suspend('sign-out');
+
+    expect(active(controller.snapshot())).toMatchObject({ view: { phase: 'revealing-outcome' }, suspension: { canEnd: false } });
+    clock.advance(REVEAL_MS);
+    await rolling;
+    expect(active(controller.snapshot()).view.phase).toBe('revealing-outcome');
+  });
+
   it('after a restart in the stop path, resumes settlement but never reopens play', async () => {
     const { controller, next, clock, adapters } = await started({ autoClock: false });
     await controller.placeWager('red', '10');

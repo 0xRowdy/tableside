@@ -4,7 +4,6 @@
 // a blocked resume changes nothing and End session stays available.
 // Copy says "suspended", not "paused": a pause is the player's own (CONTEXT.md).
 
-import type { PermittedView } from '@tableside/engine';
 import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
@@ -15,42 +14,34 @@ import type { ActivePracticeSnapshot, Suspension } from '@/practice/controller';
 import { usePractice } from '@/practice/PracticeProvider';
 import { fonts, palette, radius, space, textScale } from '@/theme/tokens';
 
-import { EndSessionDialog } from './EndSessionDialog';
 import { statusText } from './blackjack-text';
+import { crapsStatus } from './craps-text';
+import { EndSessionDialog } from './EndSessionDialog';
 import { formatUnits, STATUS, totalOnTable } from './roulette-text';
 
-/** Each game's words for a suspended session. */
-const WORDS: Record<PermittedView['game'], { game: string; title: string; turn: string; happened: string; same: string }> = {
-  roulette: { game: 'roulette', title: 'Roulette', turn: 'spin', happened: 'spun', same: 'Same rules, wheel and spins as before.' },
-  blackjack: { game: 'blackjack', title: 'Blackjack', turn: 'round', happened: 'dealt', same: 'Same rules, shoe and cards as before.' },
-};
+/** How each game's session and turn read in this screen's copy. */
+const WORDS = {
+  roulette: { game: 'roulette', title: 'Roulette', turn: 'spin', drawn: 'spun', same: 'Same rules, wheel and spins as before.' },
+  craps: { game: 'craps', title: 'Craps', turn: 'roll', drawn: 'rolled', same: 'Same rules, point and dice as before.' },
+  blackjack: { game: 'blackjack', title: 'Blackjack', turn: 'round', drawn: 'dealt', same: 'Same rules, shoe and cards as before.' },
+} as const;
 
-const why = (cause: Suspension['cause'], { game, happened }: (typeof WORDS)[keyof typeof WORDS]): string => {
-  switch (cause) {
-    case 'interrupted':
-      return `Tableside closed during your ${game} session. It's saved exactly as it was. Nothing was ${happened} or settled while you were away.`;
-    case 'navigation':
-      return `Your ${game} session is suspended. It's saved exactly as it was.`;
-    case 'app-lifecycle':
-      return `Your ${game} session was suspended when Tableside went to the background. It's saved exactly as it was.`;
-    case 'sign-out':
-      return `Your ${game} session was suspended when you signed out. It's saved exactly as it was.`;
-    case 'access':
-      return `Your ${game} session is suspended. It's saved exactly as it was, and nothing was ${happened} or settled since.`;
-  }
-};
+type Words = (typeof WORDS)[keyof typeof WORDS];
 
-/** Where the session stopped: "Settled, spin 3", "Your turn, round 2". */
-const whereText = (view: PermittedView): string => {
-  const status = view.game === 'blackjack' ? statusText(view) : STATUS[view.phase];
-  return `${status}${view.turn > 0 && view.phase !== 'final-settlement' ? `, ${WORDS[view.game].turn} ${view.turn}` : ''}`;
-};
+const why = (words: Words): Record<Suspension['cause'], string> => ({
+  interrupted: `Tableside closed during your ${words.game} session. It's saved exactly as it was. Nothing was ${words.drawn} or settled while you were away.`,
+  navigation: `Your ${words.game} session is suspended. It's saved exactly as it was.`,
+  'app-lifecycle': `Your ${words.game} session was suspended when Tableside went to the background. It's saved exactly as it was.`,
+  'sign-out': `Your ${words.game} session was suspended when you signed out. It's saved exactly as it was.`,
+  access: `Your ${words.game} session is suspended. It's saved exactly as it was, and nothing was ${words.drawn} or settled since.`,
+});
 
 export function SuspendedSession({ snapshot, suspension }: { snapshot: ActivePracticeSnapshot; suspension: Suspension }) {
   const { controller } = usePractice();
   const [confirming, setConfirming] = useState(false);
   const { view, busy } = snapshot;
   const words = WORDS[view.game];
+  const status = view.game === 'craps' ? crapsStatus(view) : view.game === 'blackjack' ? statusText(view) : STATUS[view.phase];
 
   return (
     <Screen>
@@ -58,7 +49,7 @@ export function SuspendedSession({ snapshot, suspension }: { snapshot: ActivePra
         Pick up where you left off
       </Text>
       <Text maxFontSizeMultiplier={textScale.body} style={styles.body}>
-        {suspension.reason ?? why(suspension.cause, words)}
+        {suspension.reason ?? why(words)[suspension.cause]}
       </Text>
 
       {suspension.resumeBlocked && (
@@ -75,7 +66,7 @@ export function SuspendedSession({ snapshot, suspension }: { snapshot: ActivePra
             <Text maxFontSizeMultiplier={textScale.body} style={styles.tagText}>Suspended</Text>
           </View>
         </View>
-        <Row label="Where you were" value={whereText(view)} />
+        <Row label="Where you were" value={`${status}${view.turn > 0 && view.phase !== 'final-settlement' ? `, ${words.turn} ${view.turn}` : ''}`} />
         <Row label="Session balance" value={formatUnits(view.balance)} />
         <Row label="On table" value={formatUnits(totalOnTable(view))} />
         <Text maxFontSizeMultiplier={textScale.body} style={styles.caption}>{words.same}</Text>

@@ -52,7 +52,7 @@ export function statusText(view: BlackjackPermittedView): string {
 
 /** The dealer's cards for screen readers: "Dealer: 5 of spades and a face-down card, showing 5". */
 export function dealerSummary(view: BlackjackPermittedView): string {
-  const dealer = view.round?.dealer;
+  const dealer = view.outcome?.dealer;
   if (!dealer) return 'Dealer: no cards yet';
   const names = dealer.cards.map((card) => (card ? cardName(card) : 'a face-down card'));
   const faceDown = dealer.cards.includes(null);
@@ -61,11 +61,11 @@ export function dealerSummary(view: BlackjackPermittedView): string {
 
 /** True while the table shows the previous round's cards: between rounds, before the next deal. */
 export const showingLastRound = (view: BlackjackPermittedView) =>
-  view.round !== null && (view.phase === 'settled-outcome' || (view.phase === 'open-decision' && !isPlaying(view)));
+  view.outcome !== null && (view.phase === 'settled-outcome' || (view.phase === 'open-decision' && !isPlaying(view)));
 
 /** The learner's hand: "Your hand: Ace of hearts, 6 of clubs. Soft 17, doubled". */
 export function handSummary(view: BlackjackPermittedView): string {
-  const hand = view.round?.hands[0];
+  const hand = view.outcome?.hands[0];
   const owner = showingLastRound(view) ? 'Last hand' : 'Your hand';
   if (!hand) return 'Your hand: no cards yet';
   return `${owner}: ${hand.cards.map(cardName).join(', ')}. ${capitalize(handTotalText(hand))}${hand.doubled ? ', doubled' : ''}`;
@@ -95,8 +95,8 @@ function illegalMessage(reason: IllegalActionReason, command: DomainFact & { kin
       return 'Stakes are whole units. Nothing was placed.';
     case 'action-not-available':
       return 'You can double only on your first two cards. Nothing changed.';
-    case 'no-wager-to-remove':
-    case 'unknown-target':
+    // no-wager-to-remove, unknown-target, and reasons only other games produce.
+    default:
       return "That wager can't be changed. Nothing was placed.";
   }
 }
@@ -135,7 +135,7 @@ export function describeFacts(facts: readonly DomainFact[], view: BlackjackPermi
         parts.push(illegalMessage(fact.reason, fact, view));
         break;
       case 'wager-settled': {
-        const natural = view.round?.hands.find((hand) => hand.target === fact.target)?.natural && fact.result === 'win';
+        const natural = view.outcome?.hands.find((hand) => hand.target === fact.target)?.natural && fact.result === 'win';
         parts.push(
           fact.result === 'win'
             ? `${natural ? 'Blackjack! ' : ''}You win ${formatUnits(fact.net)}.`
@@ -167,7 +167,7 @@ export function describeFacts(facts: readonly DomainFact[], view: BlackjackPermi
     }
   }
   if (parts.length === 0) return null;
-  const round = view.round;
+  const round = view.outcome;
   if (dealt && round) {
     const hand = round.hands[0];
     if (hand) parts.push(`You have ${handTotalText(hand)}; the dealer ${round.dealer.cards.includes(null) ? 'shows' : 'has'} ${totalText(round.dealer.total)}.`);

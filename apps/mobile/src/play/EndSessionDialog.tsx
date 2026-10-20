@@ -1,16 +1,29 @@
 // The End session confirmation (design frame S1-09 "End session — confirm"):
 // the three ending steps, shown before anything is returned or settled.
 
-import type { PermittedView } from '@tableside/engine';
+import type { PermittedView, Wager } from '@tableside/engine';
 import { Modal, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { Button } from '@/components/Button';
 import { fonts, palette, radius, space, textScale } from '@/theme/tokens';
 
+import { crapsTargetName } from './craps-text';
 import { formatUnits, targetName } from './roulette-text';
 
-/** A wager's name in the game's own words. */
-const wagerName = (view: PermittedView, target: string) => (view.game === 'blackjack' ? 'Initial wager' : targetName(target));
+/**
+ * What ending would do with each wager. Roulette: every wager comes back
+ * between spins. Craps: contracts on their number stay and roll on to settle.
+ * Blackjack: the initial wager comes back between rounds; a dealt round settles.
+ */
+function endingWagers(view: PermittedView): { removable: readonly Wager[]; committed: readonly Wager[]; name: (target: string) => string } {
+  if (view.wagersCommitted) {
+    return { removable: [], committed: view.wagers, name: view.game === 'craps' ? crapsTargetName : view.game === 'blackjack' ? () => 'Initial wager' : targetName };
+  }
+  if (view.game === 'blackjack') return { removable: view.wagers, committed: [], name: () => 'Initial wager' };
+  if (view.game !== 'craps') return { removable: view.wagers, committed: [], name: targetName };
+  const contract = (wager: Wager) => view.table.wagers.find((item) => item.target === wager.target)?.removable === false;
+  return { removable: view.wagers.filter((w) => !contract(w)), committed: view.wagers.filter(contract), name: crapsTargetName };
+}
 
 export function EndSessionDialog({
   visible,
@@ -25,7 +38,9 @@ export function EndSessionDialog({
   onConfirm: () => void;
   cancelLabel?: string;
 }) {
-  const removable = view.wagersCommitted ? [] : view.wagers;
+  const { removable, committed, name } = endingWagers(view);
+  const list = (wagers: readonly Wager[], none: string) =>
+    wagers.length === 0 ? none : wagers.map((w) => `${name(w.target)} ${formatUnits(w.amount)}`).join(' · ');
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel} supportedOrientations={['portrait', 'landscape']}>
       <View style={styles.scrim}>
@@ -40,11 +55,16 @@ export function EndSessionDialog({
             {[
               {
                 title: 'Removable wagers come back',
-                detail: removable.length === 0 ? 'Nothing on the table' : removable.map((w) => `${wagerName(view, w.target)} ${formatUnits(w.amount)}`).join(' · '),
+                detail: list(removable, 'Nothing on the table'),
               },
               {
                 title: 'Committed wagers settle automatically',
-                detail: view.wagersCommitted ? 'They settle on their own' : `None between ${view.game === 'blackjack' ? 'rounds' : 'spins'}`,
+                detail:
+                  view.game === 'craps'
+                    ? list(committed, 'No contracts on the table')
+                    : view.game === 'blackjack'
+                      ? list(committed, 'None between rounds')
+                      : 'None between spins',
               },
               { title: 'You see the session result', detail: 'Buy-in, rebuys, final cash-out, net result and maximum drawdown' },
             ].map((step, index) => (

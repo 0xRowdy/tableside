@@ -35,6 +35,9 @@ export function cuesForFacts(facts: readonly DomainFact[]): CueName[] {
         // One cue per transition, however many cards it deals or turns.
         if (!cues.includes('card-dealt')) cues.push('card-dealt');
         break;
+      case 'dice-rolled':
+        cues.push('dice-thrown');
+        break;
       case 'wager-settled':
         net = add(net ?? money(0n), decodeMoney(fact.net));
         break;

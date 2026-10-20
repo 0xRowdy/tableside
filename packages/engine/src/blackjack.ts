@@ -8,11 +8,11 @@
 // shows only exposed cards: the hole card is face down until the round ends,
 // and a negative peek reveals no rank.
 
-import type { ActivityCommon, CommandKind, DomainFact, FundingView, GameCommand, Step, VersionedIdentity, Wager } from './activity';
+import type { ActivityStateBase, BlackjackPermittedView, Command, CommandKind, DomainFact, GameModule, PermittedViewBase, Step, Wager } from './activity';
 import { canonicalShoe, shuffle, type Card, type Rank, type Suit } from './draws';
 import { add, compare, decodeMoney, encodeMoney, money, mul, neg, sub, type Money } from './money';
 import { RandomStream } from './random';
-import { hasExactKeys, isCount, isLimit, type Limit } from './shape';
+import { BASE_WAGER_CEILING, hasExactKeys, isCount, isLimit, isWagerList, type Limit, type VersionedIdentity } from './shape';
 
 /** The rule identity this engine can run. Dealer rule, surrender, penetration and limits are pinned table content. */
 export const BLACKJACK_RULES = { id: 'blackjack-six-deck', version: 1, decks: 6 } as const;
@@ -36,6 +36,22 @@ export interface BlackjackRuleSet extends VersionedIdentity, BlackjackTable {}
 /** The player's playing actions in this module. Split, surrender and insurance arrive with #70. */
 export type BlackjackAction = 'hit' | 'stand' | 'double';
 const ACTIONS: readonly BlackjackAction[] = ['hit', 'stand', 'double'];
+
+/** The commands the blackjack module applies: every game command plus the playing action. */
+export type BlackjackCommand = Exclude<Command, { readonly kind: 'rebuy' }>;
+
+/** Why a blackjack action fails legality beyond the common reasons. */
+export type BlackjackIllegalActionReason =
+  /** The rules don't offer that action here (e.g. a double after the first two cards). */
+  'action-not-available';
+
+/** Blackjack's own facts. A face-down card is dealt as null: facts never carry a concealed card. */
+export type BlackjackDomainFact =
+  | { readonly kind: 'shoe-shuffled'; readonly cards: number; readonly cut: number }
+  | { readonly kind: 'card-dealt'; readonly turn: number; readonly to: string; readonly card: Card | null }
+  | { readonly kind: 'peeked'; readonly turn: number; readonly result: 'no-blackjack' | 'blackjack' }
+  | { readonly kind: 'hole-card-revealed'; readonly turn: number; readonly card: Card }
+  | { readonly kind: 'played'; readonly turn: number; readonly target: string; readonly action: BlackjackAction };
 
 export interface Shoe {
   /** Canonical-shoe indices in dealing order. */
@@ -67,13 +83,13 @@ export interface BlackjackRound {
   readonly active: number | null;
 }
 
-export interface BlackjackActivityState extends ActivityCommon<'blackjack'> {
+export interface BlackjackActivityState extends ActivityStateBase<'blackjack'> {
   /** The pinned table rules, not a pointer to current definitions. */
   readonly rules: BlackjackTable;
+  /** The current or latest round: the turn's dealt outcome. */
+  readonly outcome: BlackjackRound | null;
   /** Null until the first round shuffles. */
   readonly shoe: Shoe | null;
-  /** The current or latest round. */
-  readonly round: BlackjackRound | null;
 }
 
 export interface HandTotal {
@@ -82,53 +98,42 @@ export interface HandTotal {
   readonly soft: boolean;
 }
 
-export interface BlackjackPermittedView {
-  readonly game: 'blackjack';
-  readonly activityId: string;
-  readonly phase: BlackjackActivityState['phase'];
-  readonly sequence: number;
+/** The round as the view shows it: exposed cards only. */
+export interface BlackjackRoundView {
   readonly turn: number;
-  readonly balance: string;
-  readonly wagers: readonly Wager[];
-  readonly wagersCommitted: boolean;
-  readonly legalCommands: readonly CommandKind[];
-  readonly funding: FundingView;
-  /** Actions the rules offer the active hand; funding is judged when one is submitted. */
-  readonly playActions: readonly BlackjackAction[];
-  readonly round: {
-    readonly turn: number;
-    readonly dealer: {
-      /** Null is the face-down hole card. */
-      readonly cards: readonly (Card | null)[];
-      /** Total of the exposed cards. */
-      readonly total: HandTotal;
-      readonly peek: Peek;
-    };
-    readonly hands: readonly {
-      readonly target: string;
-      readonly cards: readonly Card[];
-      readonly total: HandTotal;
-      readonly doubled: boolean;
-      readonly natural: boolean;
-      readonly busted: boolean;
-    }[];
-    readonly active: number | null;
-  } | null;
-  readonly shoe: {
-    readonly cards: number;
-    /** Cards physically left in the shoe. */
-    readonly remaining: number;
-    /** The cut card has come out (or no shoe is shuffled yet): a fresh shoe starts the next round. */
-    readonly shuffleBeforeNextRound: boolean;
+  readonly dealer: {
+    /** Null is the face-down hole card. */
+    readonly cards: readonly (Card | null)[];
+    /** Total of the exposed cards. */
+    readonly total: HandTotal;
+    readonly peek: Peek;
   };
-  readonly table: {
-    readonly decks: number;
-    readonly dealer: 'S17' | 'H17';
-    readonly lateSurrender: boolean;
-    readonly penetration: number;
-    readonly initial: Limit;
-    readonly blackjackPays: '3:2';
-  };
+  readonly hands: readonly {
+    readonly target: string;
+    readonly cards: readonly Card[];
+    readonly total: HandTotal;
+    readonly doubled: boolean;
+    readonly natural: boolean;
+    readonly busted: boolean;
+  }[];
+  readonly active: number | null;
+}
+
+export interface BlackjackShoeView {
+  readonly cards: number;
+  /** Cards physically left in the shoe. */
+  readonly remaining: number;
+  /** The cut card has come out (or no shoe is shuffled yet): a fresh shoe starts the next round. */
+  readonly shuffleBeforeNextRound: boolean;
+}
+
+export interface BlackjackTableView {
+  readonly decks: number;
+  readonly dealer: 'S17' | 'H17';
+  readonly lateSurrender: boolean;
+  readonly penetration: number;
+  readonly initial: Limit;
+  readonly blackjackPays: '3:2';
 }
 
 // ---- rules ----------------------------------------------------------------
@@ -181,9 +186,10 @@ const busted = (cards: readonly Card[]) => handTotal(cards).value > 21;
 
 // ---- phases ---------------------------------------------------------------
 
-const playing = (state: BlackjackActivityState) => state.phase === 'open-decision' && state.round?.active != null;
+const playing = (state: BlackjackActivityState) => state.phase === 'open-decision' && state.outcome?.active != null;
 
-export function blackjackLegal(state: BlackjackActivityState): CommandKind[] {
+/** A hand in play takes only playing actions (and rebuys, while the table waits for input). */
+function legal(state: BlackjackActivityState): CommandKind[] {
   switch (state.phase) {
     case 'open-decision':
       // Rebuys while waiting for input, including before an unaffordable double.
@@ -226,7 +232,7 @@ class Dealer {
   }
 }
 
-export function applyBlackjack(state: BlackjackActivityState, command: GameCommand): BlackjackStep {
+function apply(state: BlackjackActivityState, command: BlackjackCommand): BlackjackStep {
   switch (command.kind) {
     case 'place-wager':
       return placeWager(state, command.target, decodeMoney(command.amount));
@@ -314,13 +320,13 @@ function beginRound(state: BlackjackActivityState): BlackjackStep {
   // A dealer natural ends the round at the peek; a player natural needs no decision.
   if (peek === 'blackjack' || hand.done) round = finishRound(round, dealer, turn, facts, state.rules);
   return {
-    change: { phase: round.active === null ? 'revealing-outcome' : 'open-decision', turn, shoe: dealer.done(), round, random },
+    change: { phase: round.active === null ? 'revealing-outcome' : 'open-decision', turn, shoe: dealer.done(), outcome: round, random },
     facts,
   };
 }
 
 function play(state: BlackjackActivityState, action: BlackjackAction): BlackjackStep {
-  const round = state.round as BlackjackRound;
+  const round = state.outcome as BlackjackRound;
   const index = round.active as number;
   const hand = round.hands[index] as BlackjackHand;
   const turn = state.turn;
@@ -366,7 +372,7 @@ function play(state: BlackjackActivityState, action: BlackjackAction): Blackjack
   let after: BlackjackRound = { ...round, hands };
   if (next.done) after = finishRound(after, dealer, turn, facts, state.rules);
   return {
-    change: { phase: after.active === null ? 'revealing-outcome' : 'open-decision', round: after, shoe: dealer.done(), balance, wagers },
+    change: { phase: after.active === null ? 'revealing-outcome' : 'open-decision', outcome: after, shoe: dealer.done(), balance, wagers },
     facts,
   };
 }
@@ -396,7 +402,7 @@ function settle(state: BlackjackActivityState): { balance: string; facts: Domain
   const facts: DomainFact[] = [];
   if (state.wagers.length === 0) return { balance: state.balance, facts };
   // Wagers exist outside a decision only once a round has finished dealing.
-  const round = state.round as BlackjackRound;
+  const round = state.outcome as BlackjackRound;
   let balance = decodeMoney(state.balance);
   const dealerTotal = handTotal(round.dealer).value;
   const dealerNatural = isNatural(round.dealer.slice(0, 2));
@@ -427,23 +433,16 @@ function settle(state: BlackjackActivityState): { balance: string; facts: Domain
 
 // ---- permitted view ---------------------------------------------------------
 
-export function blackjackView(state: BlackjackActivityState, legalCommands: readonly CommandKind[], funding: FundingView): BlackjackPermittedView {
-  const { round, shoe, rules } = state;
+function view(state: BlackjackActivityState): Omit<BlackjackPermittedView, keyof PermittedViewBase> & Pick<BlackjackPermittedView, 'wagersCommitted'> {
+  const { outcome: round, shoe, rules } = state;
   const active = round?.active ?? null;
   const activeHand = active === null ? undefined : round?.hands[active];
   return {
     game: 'blackjack',
-    activityId: state.activity.id,
-    phase: state.phase,
-    sequence: state.sequence,
-    turn: state.turn,
-    balance: state.balance,
-    wagers: state.wagers.map((wager) => ({ target: wager.target, amount: wager.amount })),
+    // A dealt hand awaiting a decision is committed too, not only a revealed round.
     wagersCommitted: state.wagers.length > 0 && (playing(state) || state.phase === 'revealing-outcome' || state.phase === 'final-settlement'),
-    legalCommands: [...legalCommands],
-    funding,
     playActions: activeHand && state.phase === 'open-decision' ? ACTIONS.filter((action) => action !== 'double' || activeHand.cards.length === 2) : [],
-    round: round && {
+    outcome: round && {
       turn: state.turn,
       dealer: {
         cards: round.dealer.map((card, index) => (index === 1 && !round.holeRevealed ? null : { ...card })),
@@ -517,19 +516,19 @@ function roundDamage(value: unknown): string | undefined {
 }
 
 /** The first blackjack-specific structural or invariant problem in a checkpoint, if any. */
-export function blackjackDamage(value: Record<string, unknown>): string | undefined {
+function damage(value: Record<string, unknown>): string | undefined {
+  const identities = value.identities as Record<string, unknown>;
+  const identity = identities.rules as VersionedIdentity;
+  if (identity.id !== BLACKJACK_RULES.id || identity.version !== BLACKJACK_RULES.version) return 'the rules do not match their recorded identity';
   if (!isBlackjackTable(value.rules)) return 'damaged rules';
   const shoe = shoeDamage(value.shoe, value.rules);
   if (shoe) return shoe;
-  const round = roundDamage(value.round);
+  const round = roundDamage(value.outcome);
   if (round) return round;
   const { phase, wagers, turn } = value;
-  if (!Array.isArray(wagers) || wagers.length > 1) return 'damaged wagers';
-  for (const wager of wagers as unknown[]) {
-    if (!hasExactKeys(wager, ['target', 'amount']) || wager.target !== HAND_TARGET) return 'damaged wager';
-  }
-  if ((value.round === null) !== (turn === 0) || (value.round !== null && value.shoe === null)) return 'the round does not match the turn count';
-  const r = value.round as BlackjackRound | null;
+  if (!isWagerList(wagers, (target) => (target === HAND_TARGET ? 0 : -1))) return 'damaged wagers';
+  if ((value.outcome === null) !== (turn === 0) || (value.outcome !== null && value.shoe === null)) return 'the round does not match the turn count';
+  const r = value.outcome as BlackjackRound | null;
   const inPlay = phase === 'open-decision' && r !== null && r.active !== null;
   if (inPlay && wagers.length === 0) return 'a hand in play has no wager';
   if (phase === 'revealing-outcome' && (r === null || r.active !== null || wagers.length === 0)) return 'damaged revealing round';
@@ -537,3 +536,17 @@ export function blackjackDamage(value: Record<string, unknown>): string | undefi
   if ((phase === 'settled-outcome' || phase === 'completed') && wagers.length > 0) return 'wagers remain after settlement';
   return undefined;
 }
+
+/** Six-deck blackjack behind the session protocol. */
+export const BLACKJACK: GameModule<BlackjackActivityState, BlackjackPermittedView, BlackjackCommand> = {
+  ruleSets: [{ id: BLACKJACK_RULES.id, version: BLACKJACK_RULES.version }],
+  extra: { shoe: null },
+  pinRules: (rules) =>
+    isBlackjackRuleSet(rules)
+      ? blackjackTable(rules)
+      : `blackjack rules need six decks, S17 or H17, a penetration of 50-80% in 5% steps and whole-unit limits from 1 to ${BASE_WAGER_CEILING}`,
+  legal,
+  apply,
+  view,
+  damage,
+};

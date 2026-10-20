@@ -2,7 +2,7 @@
 // (#3): inside 1-100, outside 10-1,000 units per placement, with no aggregate
 // table cap. Editable limits arrive with #72.
 
-import { ROULETTE_RULE_SETS, type RouletteRuleSet, type PlacementKind, type RouletteWheel, type VersionedIdentity } from '@tableside/engine';
+import { ROULETTE_RULE_SETS, type PlacementKind, type RouletteRuleSet, type RouletteWheel, type VersionedIdentity } from '@tableside/engine';
 
 const LAUNCH_LIMITS: RouletteRuleSet['limits'] = {
   inside: { min: '1', max: '100' },

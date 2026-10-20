@@ -46,7 +46,7 @@ describe('blackjack through the practice controller', () => {
 
     // A decision: the controller waits; nothing settles while time passes.
     let current = view(controller.snapshot());
-    expect([current.phase, current.playActions, current.round?.dealer.cards[1]]).toEqual(['open-decision', ['hit', 'stand', 'double'], null]);
+    expect([current.phase, current.playActions, current.outcome?.dealer.cards[1]]).toEqual(['open-decision', ['hit', 'stand', 'double'], null]);
     clock.advance(10_000);
     expect(view(controller.snapshot()).sequence).toBe(current.sequence);
 
@@ -55,7 +55,7 @@ describe('blackjack through the practice controller', () => {
     // The reveal is published (and durable) before the automatic settle.
     current = view(controller.snapshot());
     expect(current.phase).toBe('revealing-outcome');
-    expect(current.round?.dealer.cards.map((card) => card?.rank)).toEqual([10, 6, 1]);
+    expect(current.outcome?.dealer.cards.map((card) => card?.rank)).toEqual([10, 6, 1]);
     expect((await store.load(current.activityId))?.sequence).toBe(current.sequence);
 
     clock.advance(REVEAL_MS);

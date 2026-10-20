@@ -281,7 +281,7 @@ function Felt({
   wager: string | undefined;
   onSpot: () => void;
 }) {
-  const round = view.round;
+  const round = view.outcome;
   const hand = round?.hands[0];
   const last = showingLastRound(view);
   return (

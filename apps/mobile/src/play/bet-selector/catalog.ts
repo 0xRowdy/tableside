@@ -68,6 +68,8 @@ export interface WagerCatalog {
 export interface PlacedWager {
   readonly target: string;
   readonly amount: string;
+  /** Its name when the catalog no longer offers it (a craps contract on its number). */
+  readonly name?: string;
   /** Committed wagers can't be changed or taken down until they settle. */
   readonly committed: boolean;
   /** Why it is committed, in the game's own words. */

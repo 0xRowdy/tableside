@@ -2,9 +2,7 @@
 // fake clock, deterministic entropy, always-allowed access supervisor).
 // Spin outcomes come from the Random123 "pi digits" stream: 27, 0, 25, 31, 9.
 
-import type { RoulettePermittedView } from '@tableside/engine';
-
-import { ENDING_STEP_MS, PracticeController, REVEAL_MS, type ActiveSnapshot, type PracticeSnapshot } from '@/practice/controller';
+import { ENDING_STEP_MS, PracticeController, REVEAL_MS, type PracticeSnapshot } from '@/practice/controller';
 import { FakeClock, PI_WORDS, substituteAdapters } from '@/practice/testing/substitutes';
 
 function setup(options: { autoClock?: boolean } = {}) {
@@ -22,10 +20,9 @@ async function started(options: { autoClock?: boolean } = {}) {
   return context;
 }
 
-function active(snapshot: PracticeSnapshot): ActiveSnapshot<RoulettePermittedView> {
+function active(snapshot: PracticeSnapshot) {
   if (snapshot.status !== 'active') throw new Error(`expected an active session, got ${snapshot.status}`);
-  if (snapshot.view.game !== 'roulette') throw new Error('expected a roulette session');
-  return { ...snapshot, view: snapshot.view };
+  return snapshot;
 }
 
 async function waitFor(condition: () => boolean): Promise<void> {
@@ -164,7 +161,7 @@ describe('spinning', () => {
     const paused = active(controller.snapshot());
     expect(paused.save).toBe('failed');
     expect(paused.view.phase).toBe('open-decision');
-    expect(published.some((snapshot) => snapshot.status === 'active' && snapshot.view.game === 'roulette' && snapshot.view.outcome !== null)).toBe(false);
+    expect(published.some((snapshot) => snapshot.status === 'active' && snapshot.view.outcome !== null)).toBe(false);
     expect((await store.load(paused.view.activityId))?.sequence).toBe(1);
 
     await controller.retrySave();
@@ -360,6 +357,53 @@ describe('ending', () => {
     controller.dismissResult();
 
     expect(controller.snapshot()).toMatchObject({ status: 'none', problem: null });
+  });
+});
+
+describe('craps', () => {
+  // Pi stream rolls: 8 (point), 11, 6, 4, 12, 8 (point made).
+  async function crapsStarted() {
+    const context = setup();
+    await context.controller.load();
+    await context.controller.start({ game: 'craps', odds: '5x', buyIn: '1000' });
+    return context;
+  }
+
+  it('starts a standard craps session pinned to the chosen odds cap', async () => {
+    const { controller, store } = await crapsStarted();
+
+    const session = active(controller.snapshot());
+    expect(session.view).toMatchObject({ game: 'craps', phase: 'open-decision', balance: '1000', table: { odds: '5x', point: null } });
+    const stored = await store.load(session.view.activityId);
+    expect(stored?.specification).toMatchObject({ game: 'craps', rules: { id: 'standard-craps', version: 1, odds: '5x' } });
+  });
+
+  it('rolls one turn and settles it automatically, leaving the contract on the table', async () => {
+    const { controller } = await crapsStarted();
+    await controller.placeWager('pass', '10');
+
+    await controller.beginTurn();
+
+    const session = active(controller.snapshot());
+    expect(session.view).toMatchObject({ phase: 'settled-outcome', turn: 1, outcome: { turn: 1, dice: [5, 3] }, table: { point: 8 } });
+    expect(session.view.wagers).toEqual([{ target: 'pass', amount: '10' }]);
+  });
+
+  it('ends by returning removable wagers, rolling on one committed step at a time for the contracts, and recording one result', async () => {
+    const { controller, store } = await crapsStarted();
+    await controller.placeWager('pass', '10');
+    await controller.beginTurn();
+    await controller.placeWager('pass-odds', '50');
+
+    await controller.endSession();
+
+    expect(controller.snapshot()).toMatchObject({
+      status: 'completed',
+      result: { game: 'craps', buyIn: '1000', finalCashOut: '1010', netResult: '10', identities: { rules: { id: 'standard-craps', version: 1 } } },
+    });
+    // Pass, roll, settle, odds, stop, then one final-settlement roll each for 11, 6, 4, 12 and 8.
+    expect((await store.load('activity-1'))?.sequence).toBe(10);
+    expect(await store.readOutgoing()).toHaveLength(1);
   });
 });
 

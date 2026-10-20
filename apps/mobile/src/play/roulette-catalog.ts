@@ -4,14 +4,14 @@
 // choose a wager"), plus "Find by number", which lists every inside bet
 // covering a number (the design's bet loupe, "Wagers on 17").
 
-import type { RoulettePermittedView, PlacementKind, RoulettePocket } from '@tableside/engine';
+import type { PlacementKind, RoulettePermittedView as PermittedView, RoulettePocket } from '@tableside/engine';
 
 import type { PlacedWager, WagerCatalog, WagerChoice, WagerKind } from './bet-selector/catalog';
 import { ORDINAL, targetName, wheelZeros } from './roulette-text';
 import { formatUnits } from './units';
 
-type Placement = RoulettePermittedView['table']['placements'][number];
-type Wheel = RoulettePermittedView['table']['wheel'];
+type Placement = PermittedView['table']['placements'][number];
+type Wheel = PermittedView['table']['wheel'];
 
 interface KindDescriptor {
   readonly name: string;
@@ -82,7 +82,7 @@ function choiceLabel(placement: Placement): string {
 
 const SECTION_TITLES = { inside: 'Inside bets', outside: 'Outside bets' } as const;
 
-export function rouletteCatalog(view: RoulettePermittedView): WagerCatalog {
+export function rouletteCatalog(view: PermittedView): WagerCatalog {
   const { wheel } = view.table;
   const sections = (['inside', 'outside'] as const).map((limitClass) => {
     const placements = view.table.placements.filter((p) => p.limitClass === limitClass);
@@ -147,7 +147,7 @@ function choiceFor(placement: Placement): WagerChoice {
 const COMMITTED_REASON = 'Committed to this spin until it settles. It can’t be changed or taken down.';
 
 /** The wagers on the table, for the selector: all removable between spins, all committed during one. */
-export function roulettePlacedWagers(view: RoulettePermittedView): PlacedWager[] {
+export function roulettePlacedWagers(view: PermittedView): PlacedWager[] {
   return view.wagers.map((wager) =>
     view.wagersCommitted
       ? { target: wager.target, amount: wager.amount, committed: true, committedReason: COMMITTED_REASON }

@@ -29,12 +29,12 @@ const RANKS = ['A', '2', '3', '4', '5', '6', '7', '8', '9', 'T', 'J', 'Q', 'K'];
 const view = (state: BlackjackActivityState) => readPermittedView(state);
 const label = (card: { rank: number; suit: string } | null) => (card === null ? 'down' : `${RANKS[card.rank - 1]}${card.suit[0]!.toUpperCase()}`);
 const cards = (state: BlackjackActivityState) => {
-  const round = view(state).round;
+  const round = view(state).outcome;
   return round && { dealer: round.dealer.cards.map(label), hand: round.hands.map((hand) => hand.cards.map(label)) };
 };
 /** Ranks only: "dealer: T 6 A, hand: T 6 9". */
 const ranks = (state: BlackjackActivityState) => {
-  const round = view(state).round;
+  const round = view(state).outcome;
   return (
     round && {
       dealer: round.dealer.cards.map((card) => (card ? RANKS[card.rank - 1] : 'down')).join(' '),
@@ -82,7 +82,7 @@ export const blackjackCases: TestCase[] = [
         ],
       );
       // A ten up is peeked; the hole 6 is no blackjack, and the peek reveals no rank.
-      t.equal(view(state).round?.dealer.peek, 'no-blackjack');
+      t.equal(view(state).outcome?.dealer.peek, 'no-blackjack');
       t.equal([state.phase, view(state).playActions], ['open-decision', ['hit', 'stand', 'double']]);
       t.equal(view(state).shoe.remaining, 308);
     },
@@ -112,9 +112,9 @@ export const blackjackCases: TestCase[] = [
       // A,K against a 9 up: no peek, no decision, and the hole card is turned at once.
       const { state, facts } = run(stacked('A 9 K 7'), [bet('15'), DEAL]);
       t.equal(facts.some((fact) => fact.kind === 'peeked'), false);
-      t.equal([state.phase, view(state).round?.dealer.peek, view(state).playActions], ['revealing-outcome', 'not-needed', []]);
+      t.equal([state.phase, view(state).outcome?.dealer.peek, view(state).playActions], ['revealing-outcome', 'not-needed', []]);
       t.equal(ranks(state), { dealer: '9 7', hand: 'A K' });
-      t.equal(view(state).round?.hands[0]?.natural, true);
+      t.equal(view(state).outcome?.hands[0]?.natural, true);
       const end = step(state, SETTLE);
       // 15 x 3/2 = 22.5 net; 37.5 returned; 1,000 - 15 + 37.5 = 1,022.5.
       t.equal(settled(end.facts), [['hand-1', 'win', '45/2', '75/2']]);
@@ -126,7 +126,7 @@ export const blackjackCases: TestCase[] = [
     run: (t) => {
       const result = playOut('A T K 6', '10', []);
       t.equal(result.cards, { dealer: 'T 6', hand: 'A K' });
-      t.equal(view(result.revealing).round?.dealer.peek, 'no-blackjack');
+      t.equal(view(result.revealing).outcome?.dealer.peek, 'no-blackjack');
       t.equal(result.settled, [['hand-1', 'win', '15', '25']]);
       t.equal(result.balance, '1015');
     },
@@ -160,13 +160,13 @@ export const blackjackCases: TestCase[] = [
       // Ten up, 16 in hand; hole 6 or 7 (both no blackjack), different cards behind.
       const a = run(stacked('T T 6 6 2 3'), [bet('10'), DEAL]).state;
       const b = run(stacked('T T 6 7 9 K'), [bet('10'), DEAL]).state;
-      t.equal(view(a).round?.dealer.cards[1], null);
-      t.equal([view(a).round?.dealer.total, view(a).round?.dealer.peek], [{ value: 10, soft: false }, 'no-blackjack']);
+      t.equal(view(a).outcome?.dealer.cards[1], null);
+      t.equal([view(a).outcome?.dealer.total, view(a).outcome?.dealer.peek], [{ value: 10, soft: false }, 'no-blackjack']);
       t.equal(view(a), view(b));
       // An ace up is peeked the same way.
       const c = run(stacked('T A 6 6'), [bet('10'), DEAL]).state;
       const d = run(stacked('T A 6 9'), [bet('10'), DEAL]).state;
-      t.equal([view(c), view(c).round?.dealer.peek], [view(d), 'no-blackjack']);
+      t.equal([view(c), view(c).outcome?.dealer.peek], [view(d), 'no-blackjack']);
     },
   },
   {
@@ -195,7 +195,7 @@ export const blackjackCases: TestCase[] = [
       // Revealed at the round's end, as a fact and in the view.
       const done = step(state, STAND);
       t.equal(done.facts.find((fact) => fact.kind === 'hole-card-revealed'), { kind: 'hole-card-revealed', turn: 1, card: hole });
-      t.equal(view(done.state).round?.dealer.cards[1], hole);
+      t.equal(view(done.state).outcome?.dealer.cards[1], hole);
     },
   },
 
@@ -212,7 +212,7 @@ export const blackjackCases: TestCase[] = [
       ]);
       t.equal([doubled.state.balance, doubled.state.wagers, doubled.state.phase], ['980', [{ target: 'hand-1', amount: '20' }], 'revealing-outcome']);
       t.equal(ranks(doubled.state), { dealer: '6 T 9', hand: '6 5 T' });
-      t.equal(view(doubled.state).round?.hands[0]?.doubled, true);
+      t.equal(view(doubled.state).outcome?.hands[0]?.doubled, true);
       const end = step(doubled.state, SETTLE);
       t.equal(settled(end.facts), [['hand-1', 'win', '20', '40']]);
       t.equal(end.state.balance, '1020');
@@ -222,14 +222,14 @@ export const blackjackCases: TestCase[] = [
     name: 'blackjack: double is offered on any first two cards (soft 17 here), never after a hit',
     run: (t) => {
       const soft = run(stacked('A 5 6 4 3 T'), [bet('10'), DEAL]).state;
-      t.equal([view(soft).round?.hands[0]?.total, view(soft).playActions], [{ value: 17, soft: true }, ['hit', 'stand', 'double']]);
+      t.equal([view(soft).outcome?.hands[0]?.total, view(soft).playActions], [{ value: 17, soft: true }, ['hit', 'stand', 'double']]);
       const hit = step(run(stacked('2 5 3 4 3 T'), [bet('10'), DEAL]).state, HIT).state;
       t.equal(view(hit).playActions, ['hit', 'stand']);
       const attempt = assessed(hit, DOUBLE);
       t.equal(attempt.facts, [{ kind: 'illegal-action', command: DOUBLE, reason: 'action-not-available' }]);
       t.equal(
-        [attempt.receipt.disposition, attempt.state.wagers, attempt.state.balance, attempt.state.round],
-        ['assessed', hit.wagers, hit.balance, hit.round],
+        [attempt.receipt.disposition, attempt.state.wagers, attempt.state.balance, attempt.state.outcome],
+        ['assessed', hit.wagers, hit.balance, hit.outcome],
       );
     },
   },
@@ -239,7 +239,7 @@ export const blackjackCases: TestCase[] = [
       const short = run(stacked('6 6 5 T T 9', { ...BJ_SPEC, funding: '19' }), [bet('10'), DEAL]).state;
       const attempt = assessed(short, DOUBLE);
       t.equal(attempt.facts, [{ kind: 'illegal-action', command: DOUBLE, reason: 'insufficient-funds' }]);
-      t.equal([attempt.state.balance, attempt.state.wagers, attempt.state.round, attempt.state.shoe], ['9', short.wagers, short.round, short.shoe]);
+      t.equal([attempt.state.balance, attempt.state.wagers, attempt.state.outcome, attempt.state.shoe], ['9', short.wagers, short.outcome, short.shoe]);
       // Exactly the stake left: the double goes ahead and the balance reaches 0.
       const exact = run(stacked('6 6 5 T T 9', { ...BJ_SPEC, funding: '20' }), [bet('10'), DEAL, DOUBLE]).state;
       t.equal([exact.balance, exact.wagers], ['0', [{ target: 'hand-1', amount: '20' }]]);
@@ -253,7 +253,7 @@ export const blackjackCases: TestCase[] = [
       // The rebuy adds funds and changes nothing else: still the same hand, awaiting the same decision.
       const funded = step(short, { kind: 'rebuy', amount: '100' });
       t.equal(funded.facts, [{ kind: 'funding-added', amount: '100', cumulative: '115', balance: '105' }]);
-      t.equal([funded.state.round, view(funded.state).playActions], [short.round, ['hit', 'stand', 'double']]);
+      t.equal([funded.state.outcome, view(funded.state).playActions], [short.outcome, ['hit', 'stand', 'double']]);
       const doubled = step(funded.state, DOUBLE).state;
       t.equal([doubled.balance, doubled.wagers], ['95', [{ target: 'hand-1', amount: '20' }]]);
       const bankroll = run(stacked('6 6 5 T T 9', { ...BJ_SPEC, fundingSource: 'training-bankroll', funding: '15' }), [bet('10'), DEAL]).state;
@@ -266,7 +266,7 @@ export const blackjackCases: TestCase[] = [
     run: (t) => {
       const result = playOut('T 6 6 T T 5', '10', [HIT]);
       t.equal(result.cards, { dealer: '6 T', hand: 'T 6 T' });
-      t.equal(view(result.revealing).round?.hands[0]?.busted, true);
+      t.equal(view(result.revealing).outcome?.hands[0]?.busted, true);
       t.equal(result.settled, [['hand-1', 'loss', '-10', '0']]);
     },
   },
@@ -442,7 +442,7 @@ export const blackjackCases: TestCase[] = [
               : state.wagers.length === 0
                 ? bet(String(10 + uniformInt(driver, 41)))
                 : DEAL;
-        const before = view(state).round;
+        const before = view(state).outcome;
         const next = step(state, command);
         state = next.state;
         for (const fact of next.facts) {
@@ -476,7 +476,7 @@ export const blackjackCases: TestCase[] = [
       const state = fresh();
       t.equal([state.identities.game, state.identities.rules], ['blackjack', { id: 'blackjack-six-deck', version: 1 }]);
       t.equal(state.rules, { decks: 6, dealer: 'S17', lateSurrender: true, penetration: 75, limits: { initial: { min: '10', max: '1000' } } });
-      t.equal([state.shoe, state.round, state.random.block], [null, null, [0, 0]]);
+      t.equal([state.shoe, state.outcome, state.random.block], [null, null, [0, 0]]);
       const bad: Partial<BlackjackActivitySpecification['rules']>[] = [
         { decks: 8 as never },
         { dealer: 'H18' as never },
@@ -536,15 +536,15 @@ export const blackjackCases: TestCase[] = [
         edit((v) => (v.shoe!.order = order(v).slice(1))),
         edit((v) => (v.shoe!.cut = 200)),
         edit((v) => (v.shoe!.next = 313)),
-        edit((v) => (v.round!.holeRevealed = true)),
-        edit((v) => (v.round!.active = 1)),
-        edit((v) => (v.round!.peek = 'peeked')),
-        edit((v) => ((v.round!.dealer as Record<string, unknown>[])[0]!.rank = 14)),
+        edit((v) => (v.outcome!.holeRevealed = true)),
+        edit((v) => (v.outcome!.active = 1)),
+        edit((v) => (v.outcome!.peek = 'peeked')),
+        edit((v) => ((v.outcome!.dealer as Record<string, unknown>[])[0]!.rank = 14)),
         edit((v) => (v.wagers = [] as never)),
         edit((v) => (v.rules!.penetration = 77)),
-        edit((v) => (v.round = null as never)),
+        edit((v) => (v.outcome = null as never)),
         edit((v) => delete v.shoe),
-        edit((v) => ((v as Record<string, unknown>).outcome = null)),
+        edit((v) => ((v as Record<string, unknown>).pocket = 27)),
       ];
       t.equal(damaged.map(kind), damaged.map(() => 'damaged'));
       const unsupported = [

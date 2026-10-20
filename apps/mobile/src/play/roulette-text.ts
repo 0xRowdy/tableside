@@ -1,7 +1,16 @@
 // How roulette sessions read on screen and aloud. Amounts are plain units (no
 // currency symbol); formatting never changes a ledger value.
 
-import { FUNDING_CEILING, type DomainFact, type IllegalActionReason, type RoulettePermittedView, type Phase, type PlacementKind, type RoulettePocket, type RouletteWheel } from '@tableside/engine';
+import {
+  FUNDING_CEILING,
+  type DomainFact,
+  type IllegalActionReason,
+  type Phase,
+  type PlacementKind,
+  type RoulettePermittedView as PermittedView,
+  type RoulettePocket,
+  type RouletteWheel,
+} from '@tableside/engine';
 
 import { formatUnits } from './units';
 
@@ -22,6 +31,7 @@ export const wheelZeros = (wheel: RouletteWheel): RoulettePocket[] => (wheel ===
 /** "27 red", "0 green". */
 export const describePocket = (pocket: RoulettePocket) => `${pocket} ${pocketColor(pocket)}`;
 
+// Shared by every table; re-exported for the roulette screens' existing imports.
 export { formatSigned, formatUnits, speakSigned, totalOnTable } from './units';
 
 /** "1st", "2nd", "3rd": the dozens and columns. */
@@ -73,7 +83,7 @@ export const STATUS: Record<Phase, string> = {
   completed: 'Ended',
 };
 
-function illegalMessage(reason: IllegalActionReason, target: string | null, view: RoulettePermittedView): string {
+function illegalMessage(reason: IllegalActionReason, target: string | null, view: PermittedView): string {
   const placement = target ? view.table.placements.find((p) => p.target === target) : undefined;
   const name = target ? targetName(target) : 'That wager';
   switch (reason) {
@@ -91,9 +101,8 @@ function illegalMessage(reason: IllegalActionReason, target: string | null, view
       return 'Place a wager before you spin.';
     case 'not-whole-units':
       return target ? 'Stakes are whole units. Nothing was placed.' : 'Rebuys are whole units. Nothing was added.';
-    case 'no-wager-to-remove':
-    case 'unknown-target':
-    case 'action-not-available':
+    // no-wager-to-remove, unknown-target, and reasons only other games produce.
+    default:
       return `${name} can't be changed. Nothing was placed.`;
   }
 }
@@ -102,7 +111,7 @@ function illegalMessage(reason: IllegalActionReason, target: string | null, view
  * What the latest committed transition changed, in one message for the screen
  * and for screen readers. Built only from committed facts and the permitted view.
  */
-export function describeFacts(facts: readonly DomainFact[], view: RoulettePermittedView): string | null {
+export function describeFacts(facts: readonly DomainFact[], view: PermittedView): string | null {
   const parts: string[] = [];
   let balanceChanged = false;
   for (const fact of facts) {

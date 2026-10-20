@@ -19,7 +19,7 @@ import {
   createActivity,
   oneSpinOutcomeTable,
   rouletteLayout,
-  type RouletteRuleSet,
+  type RouletteActivitySpecification,
   checkpointHash,
   decodeCheckpoint,
   encodeCheckpoint,
@@ -104,7 +104,7 @@ const shape = (placement: RoulettePlacement): Expected => ({
   limitClass: placement.limitClass,
 });
 
-const RULES: Record<RouletteWheel, RouletteRuleSet> = { 'single-zero': SPEC.rules, 'double-zero': DOUBLE_ZERO };
+const RULES: Record<RouletteWheel, RouletteActivitySpecification['rules']> = { 'single-zero': SPEC.rules, 'double-zero': DOUBLE_ZERO };
 const place = (target: string, amount: string): Command => ({ kind: 'place-wager', target, amount });
 const BEGIN: Command = { kind: 'begin-turn' };
 const SETTLE: Command = { kind: 'settle-turn' };

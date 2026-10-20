@@ -2,14 +2,14 @@
 // the engine's permitted view and forwards taps to the practice controller;
 // it never advances the game or decides what is legal.
 
-import type { RoulettePermittedView } from '@tableside/engine';
+import type { RoulettePermittedView as PermittedView } from '@tableside/engine';
 import { useEffect, useMemo, useState } from 'react';
 import { AccessibilityInfo, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/Button';
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
-import { SAVE_RETRY_MS, type ActiveSnapshot } from '@/practice/controller';
+import { SAVE_RETRY_MS, type ActivePracticeSnapshot } from '@/practice/controller';
 import { usePractice } from '@/practice/PracticeProvider';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale, type ColorToken } from '@/theme/tokens';
 
@@ -23,6 +23,7 @@ import { describeFacts, describePocket, formatUnits, POCKET_TOKEN, pocketColor, 
 import { RouletteFelt } from './RouletteFelt';
 import { PhaseStepper, SessionStrip, TableTopBar, type PhaseStep } from './TableChrome';
 
+type ActiveSnapshot = ActivePracticeSnapshot & { readonly view: PermittedView };
 
 /** Above this text scale, a wide window stacks the felt and the controls so text has room. */
 const SIDE_BY_SIDE_MAX_FONT_SCALE = 1.35;
@@ -37,7 +38,7 @@ const CHIPS: readonly { value: string; label: string; color: ColorToken; ink: Co
 ];
 
 
-function phaseSteps(view: RoulettePermittedView): PhaseStep[] {
+function phaseSteps(view: PermittedView): PhaseStep[] {
   const reached = { 'open-decision': 0, 'revealing-outcome': 1, 'settled-outcome': 2, 'final-settlement': 2, completed: 3 }[view.phase];
   return ['Betting', 'Spin', 'Settle'].map((label, index) => ({
     label,
@@ -45,7 +46,7 @@ function phaseSteps(view: RoulettePermittedView): PhaseStep[] {
   }));
 }
 
-function limitsText(view: RoulettePermittedView): string {
+function limitsText(view: PermittedView): string {
   const limit = (limitClass: 'inside' | 'outside') => {
     const placement = view.table.placements.find((p) => p.limitClass === limitClass);
     return placement ? `${formatUnits(placement.min)}–${formatUnits(placement.max)}` : '';
@@ -53,7 +54,7 @@ function limitsText(view: RoulettePermittedView): string {
   return `${WHEEL_NAMES[view.table.wheel]} · inside ${limit('inside')} · outside ${limit('outside')}`;
 }
 
-export function RouletteTable({ snapshot }: { snapshot: ActiveSnapshot<RoulettePermittedView> }) {
+export function RouletteTable({ snapshot }: { snapshot: ActiveSnapshot }) {
   const { controller } = usePractice();
   const insets = useSafeAreaInsets();
   const { width, height, fontScale } = useWindowDimensions();
@@ -78,7 +79,7 @@ export function RouletteTable({ snapshot }: { snapshot: ActiveSnapshot<RouletteP
   };
 
   const ready = !busy && save === 'saved';
-  const legal = (kind: RoulettePermittedView['legalCommands'][number]) => ready && view.legalCommands.includes(kind);
+  const legal = (kind: PermittedView['legalCommands'][number]) => ready && view.legalCommands.includes(kind);
   const message = useMemo(() => describeFacts(facts, view), [facts, view]);
 
   // Announce every committed transition as it is published, including ones
@@ -248,7 +249,7 @@ export function RouletteTable({ snapshot }: { snapshot: ActiveSnapshot<RouletteP
   );
 }
 
-const WHEEL_NAMES: Record<RoulettePermittedView['table']['wheel'], string> = { 'single-zero': 'Single zero', 'double-zero': 'Double zero' };
+const WHEEL_NAMES: Record<PermittedView['table']['wheel'], string> = { 'single-zero': 'Single zero', 'double-zero': 'Double zero' };
 
 /** The access-ended stop (spec 5, Amendment 4 D). */
 export const ACCESS_ENDED = 'Training ended — settling existing bets; no further allowance used';
@@ -257,7 +258,7 @@ const SAVE_FAILED_ANNOUNCEMENT = "Couldn't save. Play is paused and will retry a
 
 const capitalize = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
 
-function ChipRack({ chip, onChoose }: { chip: string; onChoose: (value: string) => void }) {
+export function ChipRack({ chip, onChoose }: { chip: string; onChoose: (value: string) => void }) {
   return (
     <View style={styles.rack}>
       <View accessibilityRole="radiogroup" accessibilityLabel="Chip value" style={styles.chips}>
@@ -291,7 +292,7 @@ function Chip({ option, selected, onPress }: { option: (typeof CHIPS)[number]; s
   );
 }
 
-function EndingSteps({ snapshot }: { snapshot: ActiveSnapshot<RoulettePermittedView> }) {
+function EndingSteps({ snapshot }: { snapshot: ActivePracticeSnapshot }) {
   let returned = 0n;
   for (const fact of snapshot.facts) if (fact.kind === 'wager-returned') returned += BigInt(fact.amount);
   const steps = [
