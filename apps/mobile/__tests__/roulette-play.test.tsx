@@ -153,7 +153,7 @@ describe('roulette free play', () => {
 
     expect(announcements).toContain("Couldn't save. Play is paused and will retry automatically.");
     expect(screen.getByRole('alert')).toHaveTextContent("Couldn't save · play is paused");
-    expect(screen.getByText(/Retrying automatically in 5 s\./)).toBeOnTheScreen();
+    expect(screen.getByText(/Retrying automatically every 5 s\./)).toBeOnTheScreen();
     expect(screen.getByLabelText(/Status Paused · not saved/)).toBeOnTheScreen();
     expect(screen.queryByLabelText(/^Last spin/)).toBeNull();
     expect(screen.getByRole('button', { name: 'Spin' })).toBeDisabled();

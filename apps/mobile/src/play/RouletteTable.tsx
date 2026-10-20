@@ -72,7 +72,7 @@ export function RouletteTable({ snapshot }: { snapshot: ActiveSnapshot }) {
       const latest = controller.snapshot();
       if (latest.status !== 'active') return;
       const nowFailed = latest.save === 'failed';
-      if (nowFailed && !failed) AccessibilityInfo.announceForAccessibility(NOT_SAVED);
+      if (nowFailed && !failed) AccessibilityInfo.announceForAccessibility(SAVE_FAILED_ANNOUNCEMENT);
       failed = nowFailed;
       if (latest.view.sequence === announced) return;
       announced = latest.view.sequence;
@@ -102,7 +102,7 @@ export function RouletteTable({ snapshot }: { snapshot: ActiveSnapshot }) {
             <Text maxFontSizeMultiplier={textScale.body} style={styles.bannerText}>
               {busy
                 ? 'Saving your last move…'
-                : `Your last move hasn't been saved, so nothing has been revealed. Nothing is lost. Retrying automatically in ${SAVE_RETRY_MS / 1000} s.`}
+                : `Your last move hasn't been saved, so nothing has been revealed. Nothing is lost. Retrying automatically every ${SAVE_RETRY_MS / 1000} s.`}
             </Text>
             <Button label="Retry now" variant="secondary" disabled={busy} onPress={() => void controller.retrySave()} />
           </View>
@@ -171,7 +171,7 @@ const POCKET_TOKEN = { red: 'pocketRed', black: 'pocketBlack', green: 'pocketGre
 
 const WHEEL_NAMES: Record<PermittedView['table']['wheel'], string> = { 'single-zero': 'Single zero' };
 
-const NOT_SAVED = "Couldn't save. Play is paused and will retry automatically.";
+const SAVE_FAILED_ANNOUNCEMENT = "Couldn't save. Play is paused and will retry automatically.";
 
 const capitalize = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
 

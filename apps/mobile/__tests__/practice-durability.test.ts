@@ -6,25 +6,36 @@
 import { createActivity, encodeCheckpoint, readPermittedView, decodeCheckpoint, type DomainFact } from '@tableside/engine';
 import { SINGLE_ZERO_ROULETTE } from '@tableside/definitions';
 
-import { PracticeController, SAVE_RETRY_MS, type PracticeSnapshot } from '@/practice/controller';
-import type { MemoryActivityStore } from '@/practice/memory-store';
+import { PracticeController, REVEAL_MS, SAVE_RETRY_MS, type PracticeSnapshot } from '@/practice/controller';
 import type { ActivityStore } from '@/practice/store';
+import type { AccessSupervisor } from '@/practice/adapters';
 import { FakeClock, PI_WORDS, substituteAdapters } from '@/practice/testing/substitutes';
 
-type Adapters = ReturnType<typeof substituteAdapters>;
+type Adapters = ReturnType<typeof setup>['adapters'];
+
+/** A supervisor that charges one turn of allowance for every turn, as spec 5's turn metering will. */
+const chargingAccess: AccessSupervisor = {
+  beforeActivity: async () => ({ status: 'allowed', provenance: 'test' }),
+  beforeTurn: async () => ({ status: 'allowed', provenance: 'test', turnCharge: { grant: 'grant-1', amount: '1' } }),
+};
 
 function setup(clock = new FakeClock(undefined, true)) {
-  const adapters = substituteAdapters({ clock });
+  const adapters = { ...substituteAdapters({ clock }), access: chargingAccess };
   const controller = new PracticeController(adapters);
   return { adapters, store: adapters.store, clock, controller };
 }
 
 /** The app restarts: a new controller over the same durable data. */
-async function restart(adapters: Adapters, store: MemoryActivityStore = adapters.store) {
-  const reopened = store.reopen();
-  const controller = new PracticeController({ ...adapters, store: reopened, clock: new FakeClock(undefined, true) });
-  await controller.load();
-  return { controller, store: reopened };
+function restarted(adapters: Adapters, clock = new FakeClock(undefined, true)) {
+  const store = adapters.store.reopen();
+  return { controller: new PracticeController({ ...adapters, store, clock }), store };
+}
+
+/** Restarts and waits for the launch to finish resuming. */
+async function restart(adapters: Adapters) {
+  const next = restarted(adapters);
+  await next.controller.load();
+  return next;
 }
 
 function active(snapshot: PracticeSnapshot) {
@@ -52,10 +63,11 @@ async function committedFacts(store: ActivityStore, activityId: string): Promise
 const settlements = (facts: DomainFact[]) => facts.filter((fact) => fact.kind === 'wager-settled');
 
 // Red 10 on 27 (red) wins 10.
+const TURN_1_CHARGE = { effectId: { grant: 'grant-1', activity: 'activity-1', sequence: 1 }, kind: 'turn-charge', amount: '1' };
 const RED_WINS = { kind: 'wager-settled', turn: 1, target: 'red', stake: '10', result: 'win', net: '10', returned: '20' };
 
 describe('a command delivered twice', () => {
-  it('takes effect once and the controller shows the committed result', async () => {
+  it('takes effect once, charges once, and the controller shows the committed result', async () => {
     const { adapters, store } = setup();
     // A store link that delivers every commit twice, answering with the second delivery.
     const twice: ActivityStore = new Proxy(store, {
@@ -82,6 +94,7 @@ describe('a command delivered twice', () => {
     expect(view).toMatchObject({ phase: 'settled-outcome', sequence: 3, balance: '1010', outcome: { turn: 1, pocket: 27 } });
     expect(facts).toEqual([RED_WINS]);
     expect(settlements(await committedFacts(store, 'activity-1'))).toEqual([RED_WINS]);
+    expect(await store.readEffects('activity-1')).toEqual([TURN_1_CHARGE]);
   });
 });
 
@@ -111,13 +124,19 @@ describe('a save failure', () => {
     await controller.load();
     await controller.start({ game: 'roulette', buyIn: '1000' });
     await controller.placeWager('red', '10');
+    let attempts = 0;
+    const commit = store.commitTransition.bind(store);
+    store.commitTransition = (transition) => (attempts++, commit(transition));
     store.setFull(true);
 
     await controller.spin();
-    for (let attempt = 0; attempt < 3; attempt++) {
+    expect(attempts).toBe(1);
+    for (let retry = 1; retry <= 3; retry++) {
       await waitFor(() => clock.pending === 1);
-      clock.advance(SAVE_RETRY_MS);
-      await waitFor(() => clock.pending === 1);
+      clock.advance(SAVE_RETRY_MS - 1);
+      expect(attempts).toBe(retry);
+      clock.advance(1);
+      await waitFor(() => attempts === retry + 1 && clock.pending === 1);
       expect(active(controller.snapshot())).toMatchObject({ save: 'failed', view: { phase: 'open-decision', outcome: null } });
     }
     // Input waits too: nothing is accepted while the last move isn't saved.
@@ -154,7 +173,7 @@ describe('failure injection before and after each commit and acknowledgement', (
   // still open. Each case must show one settlement effect for the spin if it
   // happened, and one final result.
   const cases = [1, 2, 3, 4, 5].flatMap((commit) =>
-    (['before', 'after'] as const).flatMap((when) => (['retry', 'restart'] as const).map((recovery) => ({ commit, when, recovery }))),
+    (['before', 'after', 'after-unread'] as const).flatMap((when) => (['retry', 'restart'] as const).map((recovery) => ({ commit, when, recovery }))),
   );
 
   it.each(cases)('commit $commit fails $when writing, recovered by $recovery', async ({ commit, when, recovery }) => {
@@ -164,7 +183,11 @@ describe('failure injection before and after each commit and acknowledgement', (
     let commits = 0;
     const original = store.commitTransition.bind(store);
     store.commitTransition = (transition) => {
-      if (++commits === commit) store.failNext('commitTransition', when);
+      if (++commits === commit) {
+        store.failNext('commitTransition', when === 'before' ? 'before' : 'after');
+        // The acknowledgement is lost and so is the receipt read: whether it committed is unknown.
+        if (when === 'after-unread') store.failNext('readReceipt', 'before');
+      }
       return original(transition);
     };
 
@@ -181,13 +204,14 @@ describe('failure injection before and after each commit and acknowledgement', (
     }
     if (recovered.snapshot().status === 'active') await recovered.endSession();
 
-    // The spin happened unless a failure before writing paused play before it
-    // (place-wager), or before it committed and the app restarted.
-    const spun = when === 'after' || commit > 2 || (commit === 2 && recovery === 'retry');
+    // The spin happened unless play paused before it (at place-wager), or its
+    // commit never reached the store and the app restarted.
+    const spun = when === 'after' || commit > 2 || (commit === 2 && (when === 'after-unread' || recovery === 'retry'));
     const outgoing = await durable.readOutgoing();
     expect(outgoing).toHaveLength(1);
     expect(outgoing[0]?.record).toMatchObject({ netResult: spun ? '10' : '0', finalCashOut: spun ? '1010' : '1000' });
     expect(settlements(await committedFacts(durable, 'activity-1'))).toEqual(spun ? [RED_WINS] : []);
+    expect(await durable.readEffects('activity-1')).toEqual(spun ? [TURN_1_CHARGE] : []);
     expect(await durable.findUnfinished()).toBeNull();
   });
 
@@ -223,7 +247,7 @@ describe('failure injection before and after each commit and acknowledgement', (
 });
 
 describe('restarts', () => {
-  it('resumes a spin whose acknowledgement was lost in its committed reveal, and settles it once', async () => {
+  it('resumes a spin whose acknowledgement was lost in its committed reveal, and settles and charges it once', async () => {
     const { controller, adapters } = setup(new FakeClock(undefined, false));
     await controller.load();
     await controller.start({ game: 'roulette', buyIn: '1000' });
@@ -234,11 +258,17 @@ describe('restarts', () => {
     expect(active(controller.snapshot()).view.outcome).toBeNull();
 
     // The reveal animation never ran; the committed reveal is what resumes.
-    const reopened = adapters.store.reopen();
-    const restarted = new PracticeController({ ...adapters, store: reopened, clock: new FakeClock(undefined, false) });
-    void restarted.load();
-    await waitFor(() => restarted.snapshot().status === 'active');
-    expect(active(restarted.snapshot()).view).toMatchObject({ phase: 'revealing-outcome', outcome: { turn: 1, pocket: 27 }, balance: '990' });
+    const clock = new FakeClock(undefined, false);
+    const { controller: relaunched, store } = restarted(adapters, clock);
+    const launching = relaunched.load();
+    await waitFor(() => relaunched.snapshot().status === 'active' && clock.pending === 1);
+    expect(active(relaunched.snapshot()).view).toMatchObject({ phase: 'revealing-outcome', outcome: { turn: 1, pocket: 27 }, balance: '990' });
+
+    clock.advance(REVEAL_MS);
+    await launching;
+    expect(active(relaunched.snapshot()).view).toMatchObject({ phase: 'settled-outcome', balance: '1010' });
+    expect(settlements(await committedFacts(store, 'activity-1'))).toEqual([RED_WINS]);
+    expect(await store.readEffects('activity-1')).toEqual([TURN_1_CHARGE]);
   });
 
   it('resumes during final settlement and finishes with one final result', async () => {
@@ -248,7 +278,7 @@ describe('restarts', () => {
     await controller.placeWager('red', '10');
     const spinning = controller.spin();
     await waitFor(() => clock.pending === 1);
-    clock.advance(1500);
+    clock.advance(REVEAL_MS);
     await spinning;
     void controller.endSession();
     await waitFor(() => clock.pending === 1 && active(controller.snapshot()).view.phase === 'final-settlement');

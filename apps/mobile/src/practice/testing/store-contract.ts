@@ -160,6 +160,18 @@ export function describeActivityStoreContract(name: string, open: () => Promise<
         expect(await store.readEffects('a1')).toEqual([turnCharge('a1', 0)]);
       });
 
+      it('never overwrites a committed transition with another that reuses its command id', async () => {
+        const { store } = await open();
+        await store.createActivity(newActivity('a1'));
+        const commit = transition('a1', 0);
+        await store.commitTransition(commit);
+        const reused = { ...transition('a1', 1, { command: '{"kind":"settle-turn"}', effects: [turnCharge('a1', 1)] }), receipt: commit.receipt };
+
+        expect(await store.commitTransition(reused)).toEqual({ status: 'already-committed', transition: { receipt: commit.receipt, checkpoint: commit.checkpoint, facts: commit.facts } });
+        expect((await store.load('a1'))?.sequence).toBe(1);
+        expect(await store.readEffects('a1')).toEqual([]);
+      });
+
       it('lets exactly one of two concurrent commits at the same sequence through (single writer)', async () => {
         const { store } = await open();
         await store.createActivity(newActivity('a1'));

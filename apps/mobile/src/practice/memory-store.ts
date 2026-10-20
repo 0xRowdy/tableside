@@ -158,9 +158,9 @@ export class MemoryActivityStore implements ActivityStore {
   /** Runs an operation that failure injection can target. */
   private injectable<T>(operation: Operation, run: () => T): Promise<T> {
     return this.enqueue(() => {
+      if (this.full && operation !== 'readReceipt') throw new StoreWriteError(`${operation} failed: the disk is full`);
       const index = this.failures.findIndex((failure) => failure.operation === operation);
       const failure = index >= 0 ? this.failures.splice(index, 1)[0] : undefined;
-      if (this.full && operation !== 'readReceipt') throw new StoreWriteError(`${operation} failed: the disk is full`);
       if (failure?.when === 'before') throw new StoreWriteError(`${operation} failed before writing`);
       const result = run();
       if (failure?.when === 'after') throw new StoreWriteError(`${operation} wrote but its acknowledgement was lost`);
