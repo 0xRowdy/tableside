@@ -1,6 +1,7 @@
 // Seam 3: the roulette free-play screens, rendered through the real routes on
 // the in-memory adapters and driven only through the accessibility tree.
-// Spins come from the Random123 "pi digits" stream: 27 (red), then 0, 25.
+// Spins come from the Random123 "pi digits" stream: 27 (red), then 0, 25 on the
+// single-zero wheel; 3, then 29, 0 on the double-zero wheel.
 
 import { act, cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react-native';
 import { renderRouter } from 'expo-router/testing-library';
@@ -32,14 +33,22 @@ async function openRouletteSetup() {
   await screen.findByRole('header', { name: 'Roulette' });
 }
 
-async function startSession() {
+async function startSession(wheel: 'Single zero (0)' | 'Double zero (0, 00)' = 'Single zero (0)') {
   await openRouletteSetup();
+  await fireEvent.press(screen.getByRole('radio', { name: wheel }));
   await fireEvent.press(screen.getByRole('button', { name: 'Start free play' }));
   await screen.findByLabelText('Session balance 1,000');
 }
 
 const spot = (name: RegExp) => screen.getByRole('button', { name });
 const chip = (value: string) => screen.getByRole('radio', { name: `${value} chip` });
+
+/** Opens the bet selector's Find by number and picks a number. */
+async function openFinder(pocket: string) {
+  await fireEvent.press(screen.getByRole('tab', { name: 'Bet list' }));
+  await fireEvent.press(screen.getByRole('button', { name: /^Find by number,/ }));
+  await fireEvent.press(screen.getByRole('radio', { name: pocket }));
+}
 
 async function chooseChipAndTap(value: string, target: RegExp) {
   await fireEvent.press(chip(value));
@@ -216,6 +225,123 @@ describe('roulette free play', () => {
     await fireEvent.press((await screen.findAllByRole('button', { name: 'End session' })).at(-1)!);
     await fireEvent.press(await screen.findByRole('button', { name: 'New session' }));
     expect(await screen.findByRole('button', { name: 'Start free play' })).toBeOnTheScreen();
+  });
+
+  it('finds every bet covering a number from the bet selector, each with its payout, without placing anything', async () => {
+    await startSession();
+    await openFinder('17');
+
+    const results = within(screen.getByTestId('finder-results'));
+    expect(results.getByRole('header', { name: 'Wagers on 17' })).toBeOnTheScreen();
+    // Every inside bet covering 17, per the standard layout: 1 straight, 4 splits, 1 street, 4 corners, 2 six lines.
+    expect(results.getAllByRole('button').map((row) => row.props.accessibilityLabel)).toEqual([
+      'Straight 17, pays 35 to 1',
+      'Split 14 and 17, pays 17 to 1',
+      'Split 16 and 17, pays 17 to 1',
+      'Split 17 and 18, pays 17 to 1',
+      'Split 17 and 20, pays 17 to 1',
+      'Street 16, 17 and 18, pays 11 to 1',
+      'Corner 13, 14, 16 and 17, pays 8 to 1',
+      'Corner 14, 15, 17 and 18, pays 8 to 1',
+      'Corner 16, 17, 19 and 20, pays 8 to 1',
+      'Corner 17, 18, 20 and 21, pays 8 to 1',
+      'Six line 13 to 18, pays 5 to 1',
+      'Six line 16 to 21, pays 5 to 1',
+    ]);
+    // Payouts are labelled on screen too, not only for screen readers.
+    expect(results.getAllByText(/^Split 17:1$/)).toHaveLength(4);
+    expect(results.getByText('16 | 17')).toBeOnTheScreen();
+    expect(screen.getByLabelText('On table 0')).toBeOnTheScreen();
+    expect(announcements.join(' ')).not.toMatch(/on the table/);
+  });
+
+  it('places a split found by number, and the felt marks the numbers it covers by more than color', async () => {
+    await startSession();
+    await openFinder('17');
+
+    await fireEvent.press(screen.getByRole('button', { name: 'Split 16 and 17, pays 17 to 1' }));
+    expect(screen.getByRole('header', { name: 'Split' })).toBeOnTheScreen();
+    expect(screen.getByRole('radio', { name: 'Split 16 and 17' })).toBeChecked();
+    expect(announcements).toContain('Selected Split 16 and 17. Nothing placed.');
+    await fireEvent.changeText(screen.getByLabelText('Total stake for Split 16 and 17, in units'), '5');
+    await fireEvent.press(screen.getByRole('button', { name: 'Set Split 16 and 17 to 5' }));
+
+    expect(announcements).toContain('Split 16 and 17 5 on the table. Balance 995.');
+    await fireEvent.press(screen.getByRole('tab', { name: 'Table' }));
+    expect(spot(/^Straight 16,/)).toHaveAccessibilityValue({ text: 'no wager, 1 other bet covers it' });
+    expect(within(spot(/^Straight 16,/)).getByText('•')).toBeOnTheScreen();
+  });
+
+  it('labels every bet on the felt with its payout', async () => {
+    await startSession();
+    const felt = within(screen.getByTestId('felt'));
+
+    for (const [name, payout] of [
+      ['Red', '1 to 1'], ['Black', '1 to 1'], ['Odd', '1 to 1'], ['Even', '1 to 1'], ['1 to 18', '1 to 1'], ['19 to 36', '1 to 1'],
+      ['1st dozen', '2 to 1'], ['2nd dozen', '2 to 1'], ['3rd dozen', '2 to 1'],
+      ['1st column', '2 to 1'], ['2nd column', '2 to 1'], ['3rd column', '2 to 1'],
+      ['Straight 0, green', '35 to 1'], ['Straight 36, red', '35 to 1'],
+    ]) {
+      expect(felt.getByRole('button', { name: `${name}, pays ${payout}` })).toBeOnTheScreen();
+    }
+    expect(within(spot(/^Red,/)).getByText('1:1')).toBeOnTheScreen();
+    expect(within(spot(/^2nd dozen,/)).getByText('2:1')).toBeOnTheScreen();
+    expect(within(spot(/^3rd column,/)).getByText('2 to 1')).toBeOnTheScreen();
+    expect(screen.getByText(/^Numbers pay 35:1 straight up\./)).toBeOnTheScreen();
+  });
+
+  it.each([
+    ['Single zero (0)', 157, ['0'], 'First four 0, 1, 2 and 3, pays 8 to 1'],
+    ['Double zero (0, 00)', 161, ['0', '00'], 'Five-number basket 0, 00, 1, 2 and 3, pays 6 to 1'],
+  ] as const)('reaches every placement of the %s layout from the table and the bet selector', async (wheel, count, zeros, zeroBet) => {
+    await startSession(wheel);
+    // One tap on the felt: the numbers straight up and every outside bet.
+    const names = new Set(
+      within(screen.getByTestId('felt'))
+        .getAllByRole('button')
+        .map((control) => (control.props.accessibilityLabel as string).replace(/, (red|black|green)(?=, pays)/, '')),
+    );
+    // Find by number: every inside bet covering each pocket.
+    await openFinder(zeros[0]);
+    for (const pocket of [...zeros, ...Array.from({ length: 36 }, (_, i) => String(i + 1))]) {
+      await fireEvent.press(screen.getByRole('radio', { name: pocket }));
+      for (const row of within(screen.getByTestId('finder-results')).getAllByRole('button')) names.add(row.props.accessibilityLabel);
+    }
+    // 12 outside placements plus every inside placement, each reached once by name.
+    expect(names.size).toBe(count);
+    expect(names).toContain(zeroBet);
+    expect(names).toContain('Trio 0, 1 and 2, pays 11 to 1');
+  }, 60_000);
+
+  it('plays the double-zero wheel: 00 on the layout and a five-number basket that pays 6 to 1', async () => {
+    await startSession('Double zero (0, 00)');
+    expect(screen.getByText('Double zero · inside 1–100 · outside 10–1,000')).toBeOnTheScreen();
+    expect(spot(/^Straight 00, green, pays 35 to 1$/)).toBeOnTheScreen();
+
+    await openFinder('00');
+    const results = within(screen.getByTestId('finder-results'));
+    expect(results.getByRole('button', { name: 'Split 0 and 00, pays 17 to 1' })).toBeOnTheScreen();
+    expect(results.getByRole('button', { name: 'Trio 0, 00 and 2, pays 11 to 1' })).toBeOnTheScreen();
+    expect(results.getByText('Five-number basket 6:1')).toBeOnTheScreen();
+    await fireEvent.press(results.getByRole('button', { name: /^Five-number basket/ }));
+    await fireEvent.changeText(screen.getByLabelText('Total stake for Five-number basket 0, 00, 1, 2 and 3, in units'), '5');
+    await fireEvent.press(screen.getByRole('button', { name: /^Set Five-number basket .* to 5$/ }));
+    expect(announcements).toContain('Five-number basket 0, 00, 1, 2 and 3 5 on the table. Balance 995.');
+
+    await fireEvent.press(screen.getByRole('button', { name: 'Spin' }));
+
+    expect(await screen.findByLabelText('Last spin: 3 red')).toBeOnTheScreen();
+    await waitFor(() => expect(announcements).toContain('Five-number basket 0, 00, 1, 2 and 3 5 wins 30. Balance 1,030.'));
+  });
+
+  it('gives every Find by number control a touch target of at least 48 points', async () => {
+    await startSession();
+    await openFinder('17');
+
+    const finder = within(screen.getByTestId('bet-selector'));
+    const controls = [...finder.getAllByRole('button'), ...finder.getAllByRole('radio')];
+    expect(controls.length).toBeGreaterThan(37 + 12);
+    for (const control of controls) expect(StyleSheet.flatten(control.props.style).minHeight).toBeGreaterThanOrEqual(48);
   });
 
   it('gives every table control a touch target of at least 48 points', async () => {

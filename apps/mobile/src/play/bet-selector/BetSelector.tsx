@@ -23,6 +23,7 @@ import {
   type PlacedWager,
   type WagerCatalog,
   type WagerChoice,
+  type WagerFinder,
   type WagerKind,
 } from './catalog';
 
@@ -73,15 +74,34 @@ export function BetSelector(props: BetSelectorProps) {
     focusRequested.current = false;
     return requested;
   };
+  // The finder is open (with a key chosen, or not yet) or closed.
+  const [finding, setFinding] = useState<{ key: string | null } | null>(null);
+  const finder = catalog.finder;
   return (
     <View testID="bet-selector" style={styles.selector}>
-      {kind ? <WagerEditor {...props} kind={kind} takeFocusRequest={takeFocusRequest} /> : <WagerList {...props} openEditor={openEditor} />}
+      {kind ? (
+        <WagerEditor {...props} kind={kind} takeFocusRequest={takeFocusRequest} />
+      ) : finder && finding ? (
+        <Finder
+          {...props}
+          finder={finder}
+          selected={finding.key}
+          onKey={(key) => setFinding({ key })}
+          onBack={() => setFinding(null)}
+          openEditor={(next) => {
+            setFinding(null);
+            openEditor(next);
+          }}
+        />
+      ) : (
+        <WagerList {...props} openEditor={openEditor} onFind={() => setFinding({ key: null })} />
+      )}
       <YourWagers {...props} openEditor={openEditor} />
     </View>
   );
 }
 
-function WagerList({ catalog, wagers, draft, openEditor }: BetSelectorProps & { openEditor: OpenEditor }) {
+function WagerList({ catalog, wagers, draft, openEditor, onFind }: BetSelectorProps & { openEditor: OpenEditor; onFind: () => void }) {
   const staked = (kind: WagerKind) => {
     let total = 0n;
     for (const wager of wagers) if (kind.choices.some((c) => c.target === wager.target)) total += BigInt(wager.amount);
@@ -91,6 +111,14 @@ function WagerList({ catalog, wagers, draft, openEditor }: BetSelectorProps & { 
   const open = (kind: WagerKind) => openEditor({ ...draft, kind: kind.id });
   return (
     <View style={styles.section}>
+      {catalog.finder && (
+        <Row label={`${catalog.finder.name}, ${catalog.finder.detail}`} hint="Lists the wagers that cover what you pick. Nothing is placed." onPress={onFind}>
+          <View style={styles.rowText}>
+            <Text maxFontSizeMultiplier={textScale.body} style={styles.rowTitle}>{catalog.finder.name}</Text>
+            <Text maxFontSizeMultiplier={textScale.body} style={styles.rowDetail}>{catalog.finder.detail}</Text>
+          </View>
+        </Row>
+      )}
       {catalog.sections.map((section) => (
         <View key={section.title} style={styles.group}>
           <Text accessibilityRole="header" maxFontSizeMultiplier={textScale.body} style={styles.sectionLabel}>
@@ -151,11 +179,80 @@ function WagerEditor(props: BetSelectorProps & { kind: WagerKind; takeFocusReque
       <Text maxFontSizeMultiplier={textScale.body} style={styles.sectionLabel}>{kind.choiceLabel}</Text>
       <View accessibilityRole="radiogroup" accessibilityLabel={`${kind.name}: ${kind.choiceLabel}`} style={styles.choices}>
         {kind.choices.map((option) => (
-          <ChoiceButton key={option.target} choice={option} checked={option.target === draft.target} onPress={() => choose(option)} />
+          <ChoiceButton key={option.target} name={option.name} label={option.label} checked={option.target === draft.target} onPress={() => choose(option)} />
         ))}
       </View>
 
       {choice && (placed?.committed ? <CommittedStake wager={placed} choice={choice} /> : <StakeEditor {...props} choice={choice} />)}
+    </View>
+  );
+}
+
+/** Finds wagers by a key (the design's bet loupe, "Wagers on 17"); choosing one opens its editor, placing nothing. */
+function Finder({
+  catalog,
+  wagers,
+  finder,
+  selected,
+  onKey,
+  onBack,
+  openEditor,
+}: BetSelectorProps & { finder: WagerFinder; selected: string | null; onKey: (key: string) => void; onBack: () => void; openEditor: OpenEditor }) {
+  const heading = useRef<HostInstance>(null);
+  const results = useRef<HostInstance>(null);
+  const entry = finder.keys.find((k) => k.id === selected);
+  useEffect(() => moveFocus(heading), []);
+  useEffect(() => {
+    if (selected !== null) moveFocus(results);
+  }, [selected]);
+  return (
+    <View style={styles.section}>
+      <Row label="All wagers" hint="Back to the list of wagers. Your draft is kept." onPress={onBack} compact>
+        <Text maxFontSizeMultiplier={textScale.body} style={styles.rowTitle}>‹ All wagers</Text>
+      </Row>
+      <Text ref={heading} accessibilityRole="header" maxFontSizeMultiplier={textScale.display} style={styles.editorTitle}>
+        {finder.name}
+      </Text>
+      <Text maxFontSizeMultiplier={textScale.body} style={styles.rowDetail}>{finder.detail}</Text>
+      <Text maxFontSizeMultiplier={textScale.body} style={styles.sectionLabel}>{finder.keyLabel}</Text>
+      <View accessibilityRole="radiogroup" accessibilityLabel={`${finder.name}: ${finder.keyLabel}`} style={styles.choices}>
+        {finder.keys.map((option) => (
+          <ChoiceButton key={option.id} name={option.label} label={option.label} checked={option.id === selected} onPress={() => onKey(option.id)} />
+        ))}
+      </View>
+      {entry && (
+        <View testID="finder-results" style={styles.group}>
+          <Text ref={results} accessibilityRole="header" maxFontSizeMultiplier={textScale.body} style={styles.rowTitle}>
+            {entry.title}
+          </Text>
+          <Text maxFontSizeMultiplier={textScale.body} style={styles.rowDetail}>Select one to set its stake. Selecting places nothing.</Text>
+          {entry.targets.map((target) => {
+            const found = findChoice(catalog, target);
+            if (!found) return null;
+            const { kind, choice } = found;
+            const placed = wagers.find((w) => w.target === target);
+            return (
+              <Row
+                key={target}
+                // Spoken "17 to 1": a screen reader may read "17:1" as a time.
+                label={`${choice.name}, pays ${choice.payout.replace(':', ' to ')}`}
+                value={placed ? `${formatUnits(placed.amount)} on the table` : 'no wager'}
+                hint="Opens its editor. Nothing is placed until you set a stake."
+                onPress={() => {
+                  openEditor({ kind: kind.id, target, text: placed?.amount ?? choice.min, submittedAt: null });
+                  AccessibilityInfo.announceForAccessibility(`Selected ${choice.name}. Nothing placed.`);
+                }}
+              >
+                <View style={styles.rowText}>
+                  <Text maxFontSizeMultiplier={textScale.body} style={styles.rowTitle}>{choice.label}</Text>
+                  <Text maxFontSizeMultiplier={textScale.body} style={styles.rowDetail}>{kind.name} {choice.payout}</Text>
+                </View>
+                <Text maxFontSizeMultiplier={textScale.body} style={styles.rowValue}>{placed ? formatUnits(placed.amount) : '—'}</Text>
+              </Row>
+            );
+          })}
+        </View>
+      )}
     </View>
   );
 }
@@ -378,19 +475,20 @@ function Row({
   );
 }
 
-function ChoiceButton({ choice, checked, onPress }: { choice: WagerChoice; checked: boolean; onPress: () => void }) {
+/** A radio in a chooser: the short label shown, the full name spoken. */
+function ChoiceButton({ name, label, checked, onPress }: { name: string; label: string; checked: boolean; onPress: () => void }) {
   const { focused, focusProps } = useKeyboardFocus();
   return (
     <Pressable
       accessibilityRole="radio"
-      accessibilityLabel={choice.name}
+      accessibilityLabel={name}
       accessibilityState={{ checked }}
       onPress={onPress}
       {...focusProps}
       style={[styles.choice, checked && styles.choiceChecked, focused && styles.focused]}
     >
       <Text maxFontSizeMultiplier={textScale.body} style={[styles.choiceText, checked && styles.choiceTextChecked]}>
-        {choice.label}
+        {label}
       </Text>
       {checked && <Text maxFontSizeMultiplier={textScale.body} style={styles.choiceCheck}>✓</Text>}
     </Pressable>

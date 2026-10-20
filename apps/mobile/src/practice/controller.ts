@@ -21,8 +21,9 @@ import {
   type DomainFact,
   type FundingSource,
   type PermittedView,
+  type RouletteWheel,
 } from '@tableside/engine';
-import { SINGLE_ZERO_ROULETTE } from '@tableside/definitions';
+import { ROULETTE_PRESETS } from '@tableside/definitions';
 
 import type { PracticeAdapters } from './adapters';
 import type { AllowanceEffect, CommitOutcome, CommittedTransition, CompletedPracticeSession, NewActivity, StoredActivity } from './store';
@@ -56,6 +57,8 @@ export interface StartRequest {
   readonly game: 'roulette';
   /** Whole units, as canonical decimal text: the buy-in, or the whole training bankroll allocated to the session. */
   readonly buyIn: string;
+  /** The wheel's rule preset; single zero when omitted. */
+  readonly wheel?: RouletteWheel;
   /** Practice funding unless spec 5 starts the session from the training bankroll. */
   readonly fundingSource?: FundingSource;
 }
@@ -143,7 +146,7 @@ export class PracticeController {
           owner: this.adapters.owner,
           device: this.adapters.device,
           game: request.game,
-          rules: SINGLE_ZERO_ROULETTE,
+          rules: ROULETTE_PRESETS[wheelOf(request)],
           strategy: null,
           reference: null,
           fundingSource: request.fundingSource,
@@ -476,4 +479,7 @@ export class PracticeController {
   }
 }
 
-const sameRequest = (a: StartRequest, b: StartRequest) => a.game === b.game && a.buyIn === b.buyIn && a.fundingSource === b.fundingSource;
+const wheelOf = (request: StartRequest): RouletteWheel => request.wheel ?? 'single-zero';
+
+const sameRequest = (a: StartRequest, b: StartRequest) =>
+  a.game === b.game && a.buyIn === b.buyIn && a.fundingSource === b.fundingSource && wheelOf(a) === wheelOf(b);

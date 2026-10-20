@@ -26,6 +26,7 @@ export {
   type Receipt,
   type IllegalActionReason,
   type RejectionReason,
+  type RouletteRuleSet,
   type VersionedIdentity,
   type Wager,
 } from './activity';
@@ -40,6 +41,15 @@ export {
   type RebuyRefusal,
 } from './funding';
 
+export {
+  oneSpinOutcomeTable,
+  ROULETTE_RULE_SETS,
+  rouletteLayout,
+  type LimitClass,
+  type OneSpinOutcome,
+  type PlacementKind,
+  type RoulettePlacement,
+} from './roulette';
 export { philox4x32 } from './philox';
 export {
   RANDOM_PROTOCOL_VERSION,

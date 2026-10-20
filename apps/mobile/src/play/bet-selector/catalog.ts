@@ -41,8 +41,27 @@ export interface WagerSection {
   readonly kinds: readonly WagerKind[];
 }
 
+/** One key of a finder ("17") and the targets it finds, in catalog order. */
+export interface FinderKey {
+  readonly id: string;
+  readonly label: string;
+  /** Heading of its results: "Wagers on 17". */
+  readonly title: string;
+  readonly targets: readonly string[];
+}
+
+/** Another way into the catalog: pick a key, see every wager it covers ("Find by number"). */
+export interface WagerFinder {
+  readonly name: string;
+  readonly detail: string;
+  /** What choosing a key means: "Number". */
+  readonly keyLabel: string;
+  readonly keys: readonly FinderKey[];
+}
+
 export interface WagerCatalog {
   readonly sections: readonly WagerSection[];
+  readonly finder?: WagerFinder;
 }
 
 /** A wager on the table as the selector shows it. */

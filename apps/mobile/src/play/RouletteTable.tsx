@@ -18,7 +18,8 @@ import { draftAmountText, EMPTY_DRAFT, findChoice, isDraftPending, type BetDraft
 import { DraftBar, PresentationSwitch, type Presentation } from './bet-selector/Presentation';
 import { RebuySheet } from './RebuySheet';
 import { rouletteCatalog, roulettePlacedWagers } from './roulette-catalog';
-import { describeFacts, describePocket, formatUnits, pocketColor, STATUS, targetName, totalOnTable } from './roulette-text';
+import { describeFacts, describePocket, formatUnits, POCKET_TOKEN, pocketColor, STATUS, targetName, totalOnTable } from './roulette-text';
+import { RouletteFelt } from './RouletteFelt';
 import { PhaseStepper, SessionStrip, TableTopBar, type PhaseStep } from './TableChrome';
 
 type ActiveSnapshot = Extract<PracticeSnapshot, { status: 'active' }>;
@@ -35,7 +36,6 @@ const CHIPS: readonly { value: string; label: string; color: ColorToken; ink: Co
   { value: '1000', label: '1K', color: 'chip1k', ink: 'ink' },
 ];
 
-const ROWS = Array.from({ length: 12 }, (_, row) => [row * 3 + 1, row * 3 + 2, row * 3 + 3]);
 
 function phaseSteps(view: PermittedView): PhaseStep[] {
   const reached = { 'open-decision': 0, 'revealing-outcome': 1, 'settled-outcome': 2, 'final-settlement': 2, completed: 3 }[view.phase];
@@ -151,7 +151,7 @@ export function RouletteTable({ snapshot }: { snapshot: ActiveSnapshot }) {
                       }}
                     />
                   )}
-                  <Felt view={view} canPlace={canPlace} chip={chip} wagerOn={wagerOn} onSpot={addChip} />
+                  <RouletteFelt view={view} canPlace={canPlace} chip={chip} wagerOn={wagerOn} onSpot={addChip} />
                 </View>
               ) : (
                 <BetSelector
@@ -237,102 +237,11 @@ export function RouletteTable({ snapshot }: { snapshot: ActiveSnapshot }) {
   );
 }
 
-const POCKET_TOKEN = { red: 'pocketRed', black: 'pocketBlack', green: 'pocketGreen' } as const;
-
-const WHEEL_NAMES: Record<PermittedView['table']['wheel'], string> = { 'single-zero': 'Single zero' };
+const WHEEL_NAMES: Record<PermittedView['table']['wheel'], string> = { 'single-zero': 'Single zero', 'double-zero': 'Double zero' };
 
 const SAVE_FAILED_ANNOUNCEMENT = "Couldn't save. Play is paused and will retry automatically.";
 
 const capitalize = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
-
-function Felt({
-  view,
-  canPlace,
-  chip,
-  wagerOn,
-  onSpot,
-}: {
-  view: PermittedView;
-  canPlace: boolean;
-  chip: string;
-  wagerOn: (target: string) => string | undefined;
-  onSpot: (target: string) => void;
-}) {
-  const payout = (target: string) => view.table.placements.find((p) => p.target === target)?.payout.replace(':', ' to ') ?? '';
-  const spot = (target: string, label: string, spoken: string, color: ColorToken | null, style?: object) => (
-    <Spot
-      key={target}
-      label={label}
-      spoken={`${spoken}, pays ${payout(target)}`}
-      hint={`Adds ${formatUnits(chip)}.`}
-      wager={wagerOn(target)}
-      color={color}
-      disabled={!canPlace}
-      onPress={() => onSpot(target)}
-      style={style}
-    />
-  );
-  return (
-    <View style={styles.felt} testID="felt">
-      <View style={styles.outside}>
-        {spot('red', 'RED', 'Red', 'pocketRed', styles.outsideSpot)}
-        {spot('black', 'BLACK', 'Black', 'pocketBlack', styles.outsideSpot)}
-      </View>
-      <View style={styles.numbers}>
-        {spot('straight-0', '0', 'Straight 0, green', 'pocketGreen')}
-        {ROWS.map((row) => (
-          <View key={row[0]} style={styles.row}>
-            {row.map((n) =>
-              spot(`straight-${n}`, String(n), `Straight ${n}, ${pocketColor(n)}`, POCKET_TOKEN[pocketColor(n)], styles.number),
-            )}
-          </View>
-        ))}
-      </View>
-    </View>
-  );
-}
-
-function Spot({
-  label,
-  spoken,
-  hint,
-  wager,
-  color,
-  disabled,
-  onPress,
-  style,
-}: {
-  label: string;
-  spoken: string;
-  hint: string;
-  wager: string | undefined;
-  color: ColorToken | null;
-  disabled: boolean;
-  onPress: () => void;
-  style?: object | undefined;
-}) {
-  const { focused, focusProps } = useKeyboardFocus();
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={spoken}
-      accessibilityHint={hint}
-      accessibilityValue={{ text: wager ? `${formatUnits(wager)} on it` : 'no wager' }}
-      accessibilityState={{ disabled }}
-      disabled={disabled}
-      onPress={onPress}
-      {...focusProps}
-      style={[styles.spot, color && { backgroundColor: palette[color] }, wager !== undefined && styles.spotWagered, focused && styles.spotFocused, style]}
-    >
-      <Text maxFontSizeMultiplier={textScale.body} style={styles.spotText}>{label}</Text>
-      {wager !== undefined && (
-        <View style={styles.marker}>
-          <Text maxFontSizeMultiplier={textScale.body} style={styles.markerText}>{formatUnits(wager)}</Text>
-        </View>
-      )}
-    </Pressable>
-  );
-}
 
 function ChipRack({ chip, onChoose }: { chip: string; onChoose: (value: string) => void }) {
   return (
@@ -358,7 +267,7 @@ function Chip({ option, selected, onPress }: { option: (typeof CHIPS)[number]; s
       accessibilityState={{ checked: selected }}
       onPress={onPress}
       {...focusProps}
-      style={[styles.chipSlot, selected && styles.chipSelected, focused && styles.spotFocused]}
+      style={[styles.chipSlot, selected && styles.chipSelected, focused && styles.chipFocused]}
     >
       <View style={[styles.chip, { backgroundColor: palette[option.color] }]}>
         <Text maxFontSizeMultiplier={textScale.display} style={[styles.chipText, { color: palette[option.ink] }]}>{option.label}</Text>
@@ -461,28 +370,7 @@ const styles = StyleSheet.create({
   summary: { gap: 2 },
   summaryTitle: { fontFamily: fonts.uiBold, fontSize: 15, color: palette.foreground },
   summaryText: { fontFamily: fonts.ui, fontSize: 12, color: palette.mutedForeground },
-  felt: { flexDirection: 'row', gap: space[1], padding: space[3], marginHorizontal: space[2], borderRadius: radius.lg, backgroundColor: palette.feltDeep },
-  outside: { width: 76, gap: 2, paddingTop: MIN_TOUCH_TARGET + 2 },
-  outsideSpot: { flex: 1, minHeight: 96 },
-  numbers: { flex: 1, gap: 2 },
-  row: { flexDirection: 'row', gap: 2 },
-  number: { flex: 1 },
-  spot: {
-    minHeight: MIN_TOUCH_TARGET,
-    minWidth: MIN_TOUCH_TARGET,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: space[1],
-    borderRadius: radius.sm,
-    borderWidth: 2,
-    borderColor: palette.transparent,
-    backgroundColor: palette.felt,
-  },
-  spotWagered: { borderColor: palette.foreground },
-  spotFocused: { borderColor: palette.ring },
-  spotText: { fontFamily: fonts.uiBold, fontSize: 15, color: palette.onImage },
-  marker: { marginTop: 2, minWidth: 26, paddingHorizontal: 4, borderRadius: radius.pill, backgroundColor: palette.chip1, alignItems: 'center' },
-  markerText: { fontFamily: fonts.uiBold, fontSize: 11, color: palette.ink },
+  chipFocused: { borderColor: palette.ring },
   rack: { gap: space[2], padding: space[3], borderRadius: radius.lg, backgroundColor: palette.rail },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: space[1] },
   chipSlot: {

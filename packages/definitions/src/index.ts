@@ -26,4 +26,11 @@ export {
   type PlayAction,
 } from './blackjack/reference';
 
-export { SINGLE_ZERO_ROULETTE } from './roulette';
+export {
+  DOUBLE_ZERO_ROULETTE,
+  ROULETTE_HOUSE_EDGE_VERSION,
+  ROULETTE_PRESETS,
+  rouletteHouseEdge,
+  SINGLE_ZERO_ROULETTE,
+  type RouletteHouseEdge,
+} from './roulette';
