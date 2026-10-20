@@ -4,7 +4,7 @@
 // the engine's Explain play (the same answer a guided activity assesses) every
 // reachable first decision, legal and funding fallback, later decision and
 // certified index plays as the files say.
-import { explainPlay, validateStrategy, type BlackjackPlayPolicy, type BlackjackPlaySituation, type Card, type PlayExplanation } from '@tableside/engine';
+import { blackjackModeOf, explainPlay, explainPrescription, initialProgress, validateStrategy, type BlackjackPlayPolicy, type BlackjackPlaySituation, type Card, type PlayExplanation } from '@tableside/engine';
 import { describe, expect, it } from 'vitest';
 
 import { BLACKJACK_MODES, blackjackStrategy } from '../src/index';
@@ -42,14 +42,38 @@ function play(preset: (typeof PRESETS)[number], mode: (typeof BLACKJACK_MODES)[n
 const prescribed = (explanation: PlayExplanation) => explanation.prescribed.action;
 
 describe('blackjack built-in strategies', () => {
-  it('every preset has basic and basic-with-deviations, runnable, with the bets left to the player', () => {
+  it('every preset has the four modes, runnable, with the bets left to the player; who keeps the count follows the mode table', () => {
+    // Spec #51 mode table: basic (no count), basic with deviations (Tableside supplies it), the counting modes (the player keeps it).
+    const expected = { basic: ['none', false], 'basic-with-deviations': ['supplied', true], 'counting-with-basic': ['player', false], 'counting-with-deviations': ['player', true] };
+    expect(BLACKJACK_MODES).toEqual(Object.keys(expected));
     for (const preset of PRESETS) {
       for (const mode of BLACKJACK_MODES) {
         const definition = blackjackStrategy(preset, mode);
+        const policy = definition.play as BlackjackPlayPolicy;
         expect(validateStrategy(definition), `${preset} ${mode}`).toEqual({ diagnostics: [], runnable: true });
-        expect([definition.instructions, (definition.play as BlackjackPlayPolicy).countShown]).toEqual([[], mode === 'basic-with-deviations']);
+        expect([definition.instructions, policy.count, policy.deviations.length > 0]).toEqual([[], ...expected[mode]]);
+        expect(blackjackModeOf(policy)).toBe(mode);
       }
     }
+  });
+
+  it('a counting mode may add the Hi-Lo bet schedule: 1 unit below +1, 2 at +1, 4 at +2, 6 at +3, 8 at +4 or more (10-unit base)', () => {
+    // Spec #51, Counting (Hi-Lo): the schedule by integer true count; a base unit of 10.
+    const expected: [number, string][] = [[-3, '10'], [0, '10'], [1, '20'], [2, '40'], [3, '60'], [4, '80'], [9, '80']];
+    for (const preset of PRESETS) {
+      for (const mode of ['counting-with-basic', 'counting-with-deviations'] as const) {
+        const definition = blackjackStrategy(preset, mode, true);
+        expect(validateStrategy(definition)).toEqual({ diagnostics: [], runnable: true });
+        expect(blackjackStrategy(preset, mode, true).id).not.toBe(blackjackStrategy(preset, mode).id);
+        // 260 cards is 5 decks: a running count of 5 x the true count gives that true count.
+        const rules = { dealer: preset.startsWith('H17') ? 'H17' : 'S17', lateSurrender: preset.endsWith('_LS'), limits: { initial: { min: '10', max: '1000' } } };
+        for (const [trueCount, amount] of expected) {
+          const result = explainPrescription(definition, {}, { game: 'blackjack', rules, balance: '1000', shoe: { running: 5 * trueCount, remaining: 260 } }, initialProgress(definition));
+          expect(result.ok && result.explanation.prescription, `${preset} ${mode} ${trueCount}`).toEqual({ status: 'prescribed', bets: [{ target: 'hand-1', amount }], held: [] });
+        }
+      }
+    }
+    expect(() => blackjackStrategy('S17_LS', 'basic-with-deviations', true)).toThrow('counting mode');
   });
 
   for (const preset of PRESETS) {

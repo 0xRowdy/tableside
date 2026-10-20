@@ -4,12 +4,12 @@
 // Nothing here judges or praises, and nothing is added that the facts don't hold.
 // A table passes its own words (wager names, and "spin" or "roll").
 
-import type { BetCorrection, CycleEnd, Explanation, PendingStrategyAction, StrategyView, Wager } from '@tableside/engine';
+import type { AdherenceMeasure, BetCorrection, CycleEnd, Explanation, PendingStrategyAction, StrategyView, Wager } from '@tableside/engine';
 
 import { crapsTargetName } from './craps-text';
 import { targetName } from './roulette-text';
 import type { TurnWord } from './strategy-text';
-import { formatUnits } from './units';
+import { formatSigned, formatUnits } from './units';
 
 /** How a game words its wagers and its turns. */
 export interface CoachWords {
@@ -23,6 +23,8 @@ export interface CoachWords {
 
 export const ROULETTE_WORDS: CoachWords = { targetName, turn: 'spin', Turn: 'Spin', contracts: false };
 export const CRAPS_WORDS: CoachWords = { targetName: crapsTargetName, turn: 'roll', Turn: 'Roll', contracts: true };
+/** Blackjack's betting decision is the initial wager before a round. */
+export const BLACKJACK_WORDS: CoachWords = { targetName: () => 'your hand', turn: 'round', Turn: 'Round', contracts: false };
 
 /** "a, b and c". */
 const listed = (items: readonly string[]) => (items.length < 2 ? items.join('') : `${items.slice(0, -1).join(', ')} and ${items.at(-1)}`);
@@ -67,8 +69,11 @@ export function correctionLines(correction: BetCorrection, words: CoachWords = R
   if (color !== undefined && color !== 'none') lines.push(`The last spin landed on ${color}.`);
   const point = subjects.point;
   if (point !== undefined) lines.push(point === 'none' ? 'The puck is off: the next roll is a come-out roll.' : `The point is ${point}.`);
+  // A bet schedule reads the true count; it is stated only here, after the player has bet.
+  const trueCount = explanation.situation.values['true-count'];
+  if (trueCount !== undefined) lines.push(`The true count for this deal is ${formatSigned(trueCount)}.`);
   const last = explanation.state.lastResult;
-  if (last !== 'none') lines.push(`The strategy's last ${words.turn} ${RESULT_WORDS[last]}.`);
+  if (last !== 'none' && trueCount === undefined) lines.push(`The strategy's last ${words.turn} ${RESULT_WORDS[last]}.`);
   lines.push(`Available for this ${words.turn}: ${formatUnits(available)}.`);
   for (const instruction of explanation.instructions) lines.push(`Matching instruction: "${instruction.label}".`);
   if (explanation.fallback === 'no-new-bets') lines.push('Fallback: no new bets.');
@@ -89,13 +94,22 @@ export function overrideNote(progression: boolean, words: CoachWords = ROULETTE_
     : `"Keep my bets" is an override, recorded once. The ${words.turn} goes ahead, and the strategy coaches your next ${words.turn}.`;
 }
 
-/** What a strategy decision is in each game: a spin, or a blackjack playing decision. */
-export type DecisionUnit = 'spin' | 'roll' | 'decision';
+/** What a strategy decision is in each game: a spin, a roll, a blackjack playing decision, or a blackjack round's bet. */
+export type DecisionUnit = 'spin' | 'roll' | 'decision' | 'round';
 
-/** Adherence in words, kept apart from winnings. */
+const measureText = (measure: AdherenceMeasure, unit: DecisionUnit) =>
+  measure.decisions === 0 ? `no strategy ${unit}s yet` : `followed ${measure.followed} of ${measure.decisions} ${measure.decisions === 1 ? unit : `${unit}s`}`;
+const capitalized = (text: string) => `${text.charAt(0).toUpperCase()}${text.slice(1)}`;
+
+/**
+ * Adherence in words, kept apart from winnings. A strategy that assesses both
+ * the play and the bets (blackjack with the bet schedule) keeps each apart.
+ */
 export function adherenceText(adherence: StrategyView['adherence'], unit: DecisionUnit = 'spin'): string {
-  if (adherence.decisions === 0) return `No strategy ${unit}s yet`;
-  return `Followed ${adherence.followed} of ${adherence.decisions} ${adherence.decisions === 1 ? unit : `${unit}s`}`;
+  const { betting, playing } = adherence;
+  if (betting && playing) return `Playing: ${measureText(playing, 'decision')} · Betting: ${measureText(betting, 'round')}`;
+  const only = playing ?? betting;
+  return only ? capitalized(measureText(only, unit)) : 'Nothing assessed yet';
 }
 
 /** The words a correction pause shows, whatever the game. */

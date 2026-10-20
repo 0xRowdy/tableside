@@ -51,7 +51,7 @@ describe('guided blackjack through the practice controller', () => {
     const stored = await store.findUnfinished();
     expect(stored?.specification).toMatchObject({ reference: BLACKJACK_REFERENCE_IDENTITY, strategy: { definition: { id: 'blackjack-basic-S17_LS' } } });
     const current = view(controller.snapshot());
-    expect([current.phase, current.strategy?.adherence, current.count]).toEqual(['open-decision', { decisions: 0, followed: 0, departures: 0 }, null]);
+    expect([current.phase, current.strategy?.adherence, current.count]).toEqual(['open-decision', { playing: { decisions: 0, followed: 0 }, betting: null, departures: 0 }, null]);
   });
 
   it('holds a departing play before it executes, asks no access question for it, and retry plays the strategy and settles automatically', async () => {
@@ -72,7 +72,7 @@ describe('guided blackjack through the practice controller', () => {
     await retried;
     current = view(controller.snapshot());
     // Stood on 20: the dealer's 16 draws the ace for 17. 20 wins 10.
-    expect([current.phase, current.balance, current.strategy?.adherence]).toEqual(['settled-outcome', '1010', { decisions: 1, followed: 0, departures: 1 }]);
+    expect([current.phase, current.balance, current.strategy?.adherence]).toEqual(['settled-outcome', '1010', { playing: { decisions: 1, followed: 0 }, betting: null, departures: 1 }]);
     expect(current.strategy?.departures.map((d) => d.resolution)).toEqual(['retried']);
     expect(beforeTurn).toHaveBeenCalledTimes(1);
   });

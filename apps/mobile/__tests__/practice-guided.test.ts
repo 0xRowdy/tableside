@@ -86,7 +86,7 @@ describe('guided practice', () => {
     await controller.spin();
     const snapshot = active(controller.snapshot());
     expect([snapshot.view.phase, snapshot.view.balance]).toEqual(['settled-outcome', '1010']);
-    expect(snapshot.view.strategy?.adherence).toEqual({ decisions: 1, followed: 1, departures: 0 });
+    expect(snapshot.view.strategy?.adherence).toEqual({ betting: { decisions: 1, followed: 1 }, playing: null, departures: 0 });
   });
 
   it('pauses a departing spin before it executes, without asking for or charging a turn', async () => {
