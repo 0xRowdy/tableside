@@ -25,3 +25,5 @@ export {
   type HandKind,
   type PlayAction,
 } from './blackjack/reference';
+
+export { SINGLE_ZERO_ROULETTE } from './roulette';
