@@ -13,6 +13,7 @@ import { SAVE_RETRY_MS, type PracticeSnapshot } from '@/practice/controller';
 import { usePractice } from '@/practice/PracticeProvider';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale, type ColorToken } from '@/theme/tokens';
 
+import { RebuySheet } from './RebuySheet';
 import { describeFacts, describePocket, formatUnits, pocketColor, STATUS, targetName, totalOnTable } from './roulette-text';
 import { PhaseStepper, SessionStrip, TableTopBar, type PhaseStep } from './TableChrome';
 
@@ -55,7 +56,16 @@ export function RouletteTable({ snapshot }: { snapshot: ActiveSnapshot }) {
   const sideBySide = width > height && fontScale <= SIDE_BY_SIDE_MAX_FONT_SCALE;
   const [chip, setChip] = useState('5');
   const [confirming, setConfirming] = useState(false);
+  const [rebuying, setRebuying] = useState(false);
   const { view, facts, busy, save } = snapshot;
+  // The sheet shows only while a rebuy is offered (the table waits for input).
+  const rebuyOpen = rebuying && view.legalCommands.includes('rebuy');
+  const addRebuy = async (amount: string) => {
+    await controller.rebuy(amount);
+    const latest = controller.snapshot();
+    // Committed: close. Refused or not saved: keep the sheet and the draft.
+    if (latest.status !== 'active' || latest.facts.some((fact) => fact.kind === 'funding-added')) setRebuying(false);
+  };
 
   const ready = !busy && save === 'saved';
   const legal = (kind: PermittedView['legalCommands'][number]) => ready && view.legalCommands.includes(kind);
@@ -148,11 +158,32 @@ export function RouletteTable({ snapshot }: { snapshot: ActiveSnapshot }) {
                 </Text>
               </View>
               <Button label="Spin" stretch disabled={!legal('begin-turn')} onPress={() => void controller.spin()} />
+              {view.legalCommands.includes('rebuy') && (
+                <Button
+                  label="Rebuy"
+                  variant="secondary"
+                  stretch
+                  hint="Adds chips to this session. It counts as funding, not as a win."
+                  disabled={!legal('rebuy')}
+                  onPress={() => setRebuying(true)}
+                />
+              )}
               <ChipRack chip={chip} onChoose={setChip} />
             </View>
           </View>
         )}
       </ScrollView>
+
+      {rebuyOpen && (
+        <RebuySheet
+          funding={view.funding}
+          sequence={view.sequence}
+          facts={facts}
+          busy={!ready}
+          onAdd={(amount) => void addRebuy(amount)}
+          onClose={() => setRebuying(false)}
+        />
+      )}
 
       <EndSessionDialog
         visible={confirming}
@@ -355,7 +386,7 @@ function EndSessionDialog({
                 detail: removable.length === 0 ? 'Nothing on the table' : removable.map((w) => `${targetName(w.target)} ${formatUnits(w.amount)}`).join(' · '),
               },
               { title: 'Committed wagers settle automatically', detail: 'None between spins' },
-              { title: 'You see the session result', detail: 'Buy-in, final cash-out and net result' },
+              { title: 'You see the session result', detail: 'Buy-in, rebuys, final cash-out, net result and maximum drawdown' },
             ].map((step, index) => (
               <View key={step.title} accessible accessibilityLabel={`${index + 1}. ${step.title}. ${step.detail}`} style={styles.dialogStep}>
                 <Text maxFontSizeMultiplier={textScale.body} style={styles.dialogStepTitle}>{index + 1}  {step.title}</Text>

@@ -12,14 +12,14 @@ import {
   decodeCheckpoint,
   decodeMoney,
   encodeCheckpoint,
-  encodeMoney,
   readPermittedView,
   streamIdentityFromEntropy,
-  sub,
+  summarizeFunding,
   type ActivityState,
   type Command,
   type CommandEnvelope,
   type DomainFact,
+  type FundingSource,
   type PermittedView,
 } from '@tableside/engine';
 import { SINGLE_ZERO_ROULETTE } from '@tableside/definitions';
@@ -44,7 +44,6 @@ export type PracticeSnapshot =
       readonly view: PermittedView;
       /** Facts of the latest committed transition, for announcements. */
       readonly facts: readonly DomainFact[];
-      readonly buyIn: string;
       /** True while a command or an automatic step is in flight; input waits. */
       readonly busy: boolean;
       /** "failed": the last transition isn't saved and play is paused until a retry succeeds. */
@@ -55,8 +54,10 @@ export type PracticeSnapshot =
 
 export interface StartRequest {
   readonly game: 'roulette';
-  /** Whole units, as canonical decimal text. */
+  /** Whole units, as canonical decimal text: the buy-in, or the whole training bankroll allocated to the session. */
   readonly buyIn: string;
+  /** Practice funding unless spec 5 starts the session from the training bankroll. */
+  readonly fundingSource?: FundingSource;
 }
 
 /** A command as sent to the store, with the allowance effects that commit with it. */
@@ -112,7 +113,8 @@ export class PracticeController {
   }
 
   /** Durability step 1: creates the activity and its random identity, then shows the table. */
-  async start(request: StartRequest): Promise<void> {
+  async start(requested: StartRequest): Promise<void> {
+    const request = { ...requested, fundingSource: requested.fundingSource ?? 'practice-funding' };
     await this.exclusive(async () => {
       // One unfinished practice session at a time: resume it rather than start another.
       let unfinished: StoredActivity | null;
@@ -144,6 +146,7 @@ export class PracticeController {
           rules: SINGLE_ZERO_ROULETTE,
           strategy: null,
           reference: null,
+          fundingSource: request.fundingSource,
           funding: request.buyIn,
         };
         let initial: ActivityState;
@@ -192,6 +195,16 @@ export class PracticeController {
         ? [{ effectId: { grant: charge.grant, activity: state.activity.id, sequence: state.sequence }, kind: 'turn-charge', amount: charge.amount }]
         : [];
       if (settled(await this.send({ kind: 'begin-turn' }, effects))) await this.drive();
+    });
+  }
+
+  /**
+   * Adds funds while the table waits for input. The engine refuses it beyond the
+   * funding headroom or under a training bankroll; it never places a wager itself.
+   */
+  async rebuy(amount: string): Promise<void> {
+    await this.exclusive(async () => {
+      if (settled(await this.send({ kind: 'rebuy', amount }))) await this.drive();
     });
   }
 
@@ -381,7 +394,8 @@ export class PracticeController {
     const state = this.requireState();
     const activity = this.activity;
     if (!activity) throw new Error('no practice session is active');
-    const buyIn = activity.specification.funding;
+    // Completed: nothing is left on the table, so the balance is the final cash-out.
+    const funding = summarizeFunding(state.funding, decodeMoney(state.balance));
     const record: CompletedPracticeSession = {
       activityId: state.activity.id,
       game: state.identities.game,
@@ -392,11 +406,13 @@ export class PracticeController {
         strategy: state.identities.strategy,
         reference: state.identities.reference,
       },
-      buyIn,
-      rebuys: [],
-      cumulativeFunding: buyIn,
-      finalCashOut: state.balance,
-      netResult: encodeMoney(sub(decodeMoney(state.balance), decodeMoney(buyIn))),
+      fundingSource: funding.source,
+      buyIn: funding.buyIn,
+      rebuys: funding.rebuys,
+      cumulativeFunding: funding.cumulativeFunding,
+      finalCashOut: funding.finalCashOut,
+      netResult: funding.netResult,
+      maxDrawdown: funding.maxDrawdown,
       completedAt: this.adapters.clock.now(),
     };
     let result: CompletedPracticeSession | null;
@@ -448,7 +464,6 @@ export class PracticeController {
       status: 'active',
       view: readPermittedView(this.state),
       facts: this.facts,
-      buyIn: this.activity.specification.funding,
       busy: this.busy,
       save: this.pending ? 'failed' : 'saved',
       accessNotAllowed: this.accessNotAllowed,
@@ -461,4 +476,4 @@ export class PracticeController {
   }
 }
 
-const sameRequest = (a: StartRequest, b: StartRequest) => a.game === b.game && a.buyIn === b.buyIn;
+const sameRequest = (a: StartRequest, b: StartRequest) => a.game === b.game && a.buyIn === b.buyIn && a.fundingSource === b.fundingSource;
