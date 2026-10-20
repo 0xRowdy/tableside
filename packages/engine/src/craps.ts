@@ -376,6 +376,13 @@ function stakeIncrement(target: Exclude<TargetInfo, LineTarget>): bigint {
   }
 }
 
+/** The commissions every buy and lay on the table would charge on a win, together. */
+const commissionsDue = (wagers: readonly Wager[]): Money =>
+  wagers.reduce((sum, wager) => {
+    const target = targetInfo(wager.target);
+    return target ? add(sum, commissionFor(target, decodeMoney(wager.amount))) : sum;
+  }, money(0n));
+
 /** The commission a winning buy or lay with this stake would charge; zero for every other wager. */
 function commissionFor(target: TargetInfo, stake: Money): Money {
   if (target.family === 'buy') return commission(stake, COMMISSION_RATE);
@@ -531,8 +538,8 @@ function placeWager(state: State, target: string, amount: Money): Step<State> {
     facts.push({ kind: 'wager-changed', target: change.target, amount: encodeMoney(change.amount), previous: encodeMoney(previous) });
   }
   if (balance.n < 0n) return { illegal: 'insufficient-funds' };
-  // A buy or lay must be able to pay its commission on top of the stake.
-  if (amount.n !== 0n && compare(balance, commissionFor(placed, amount)) < 0) return { illegal: 'commission-unfunded' };
+  // Every buy and lay on the table must be able to pay its commission on top of the stakes.
+  if (amount.n !== 0n && compare(balance, commissionsDue(wagers)) < 0) return { illegal: 'commission-unfunded' };
   return {
     change: { phase: 'open-decision', balance: encodeMoney(balance), wagers: sorted(wagers), instructions: keptInstructions(state.instructions, wagers) },
     facts,

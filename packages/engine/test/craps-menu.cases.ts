@@ -219,6 +219,13 @@ export const crapsMenuCases: TestCase[] = [
         [place('buy-6', '30'), place('buy-6', '25'), place('lay-4', '30'), place('lay-4', '28'), place('place-6', '30')].map((c) => illegal(poor, c)),
         ['commission-unfunded', 'legal', 'commission-unfunded', 'legal', 'legal'],
       );
+      // Commissions are funded across every buy and lay on the table: with 41, buy 4 of 20 leaves 21; buy 10 of 20
+      // would leave 1 for two commissions of 1 each, while 19 leaves 2.
+      const buy4 = step(craps(4, 'triple-12', '41'), place('buy-4', '20')).state;
+      t.equal([illegal(buy4, place('buy-10', '20')), illegal(buy4, place('buy-10', '19'))], ['commission-unfunded', 'legal']);
+      // With 44, buy 4 of 20 leaves 24: a place 6 of 24 would leave nothing for its commission; 18 leaves 6.
+      const buy4of44 = step(craps(4, 'triple-12', '44'), place('buy-4', '20')).state;
+      t.equal([illegal(buy4of44, place('place-6', '24')), illegal(buy4of44, place('place-6', '18'))], ['commission-unfunded', 'legal']);
       // Nothing changes on a refusal.
       const refused = step(poor, place('buy-6', '30'));
       t.equal([refused.state.balance, refused.state.wagers], ['30', []]);
