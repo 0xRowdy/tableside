@@ -30,7 +30,7 @@ import {
   type BlackjackShoeView,
   type BlackjackTableView,
 } from './blackjack';
-import { moveCommand, type PlayExplanation, type PlayMove } from './blackjack-strategy';
+import { moveCommand, type BlackjackDeviation, type PlayExplanation, type PlayMove } from './blackjack-strategy';
 import { canonicalJson } from './canonical';
 import { CRAPS, type CrapsActivityState, type CrapsDomainFact, type CrapsIllegalActionReason, type CrapsRuleSet, type CrapsTable, type CrapsOutcome } from './craps';
 import type { RoulettePocket } from './draws';
@@ -471,6 +471,8 @@ export interface BlackjackPermittedView extends PermittedViewBase {
   readonly shoe: BlackjackShoeView;
   /** The count, only where the pinned strategy has Tableside supply it (basic with deviations); null otherwise. */
   readonly count: BlackjackCount | null;
+  /** The pinned strategy revision's deviation indices, beside the count it supplies; empty wherever `count` is null. */
+  readonly deviations: readonly BlackjackDeviation[];
 }
 
 export type PermittedView = RoulettePermittedView | CrapsPermittedView | BlackjackPermittedView;

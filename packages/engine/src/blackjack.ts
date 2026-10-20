@@ -25,6 +25,7 @@ import type { ActivityStateBase, BlackjackPermittedView, Command, CommandKind, D
 import { canonicalShoe, shuffle, type Card, type Rank, type Suit } from './draws';
 import { add, compare, decodeMoney, encodeMoney, money, mul, neg, sub, type Money } from './money';
 import { RandomStream } from './random';
+import type { BlackjackPlayPolicy } from './blackjack-strategy';
 import { BASE_WAGER_CEILING, hasExactKeys, isCount, isLimit, isWagerList, parseMoney, type Limit, type VersionedIdentity } from './shape';
 
 /** The rule identity this engine can run. Dealer rule, surrender, penetration, players and limits are pinned table content. */
@@ -986,6 +987,8 @@ function view(
     },
     // Supplied only in "basic with deviations"; the counting modes hide it (the player keeps it).
     count: countSupplied(state) ? referenceCount(state) : null,
+    // The revision this practice session pinned, never the one the app ships now.
+    deviations: countSupplied(state) ? [...((state.strategy?.definition.play as BlackjackPlayPolicy | undefined)?.deviations ?? [])] : [],
     shoe: {
       cards: SHOE.length,
       remaining: shoe === null ? SHOE.length : SHOE.length - shoe.next,

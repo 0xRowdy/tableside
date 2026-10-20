@@ -9,7 +9,7 @@
 // controller; it never advances the game or decides what is legal. A face-down
 // card is drawn as a card back and read as "Face-down card".
 
-import { blackjackHouseEdge, blackjackStrategy } from '@tableside/definitions';
+import { blackjackHouseEdge } from '@tableside/definitions';
 import {
   decodeMoney,
   encodeMoney,
@@ -22,7 +22,6 @@ import {
   type BlackjackCount,
   type BlackjackHandView,
   type BlackjackPermittedView,
-  type BlackjackPlayPolicy,
   type Card,
 } from '@tableside/engine';
 import { useEffect, useMemo, useState } from 'react';
@@ -370,10 +369,8 @@ function tableNow(view: BlackjackPermittedView, handsText: string): TableNow {
  * count and the next index up; never during a decision, where that would be the answer.
  */
 function CountPanel({ view, count, betweenRounds }: { view: BlackjackPermittedView; count: BlackjackCount; betweenRounds: boolean }) {
-  const preset = presetOf(view);
-  const builtIn = blackjackStrategy(preset, 'basic-with-deviations');
-  const deviations = view.strategy?.id === builtIn.id ? (builtIn.play as BlackjackPlayPolicy).deviations : [];
-  const { at, next } = deviationsAtCount(deviations, count.trueCount);
+  // The pinned revision's indices, as the engine shows them beside the count.
+  const { at, next } = deviationsAtCount(view.deviations, count.trueCount);
   return (
     <View
       style={styles.countPanel}
