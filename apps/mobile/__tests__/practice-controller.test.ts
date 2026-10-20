@@ -375,7 +375,7 @@ describe('craps', () => {
     const session = active(controller.snapshot());
     expect(session.view).toMatchObject({ game: 'craps', phase: 'open-decision', balance: '1000', table: { odds: '5x', point: null } });
     const stored = await store.load(session.view.activityId);
-    expect(stored?.specification).toMatchObject({ game: 'craps', rules: { id: 'standard-craps', version: 1, odds: '5x' } });
+    expect(stored?.specification).toMatchObject({ game: 'craps', rules: { id: 'standard-craps', version: 2, odds: '5x', field: 'triple-12' } });
   });
 
   it('rolls one turn and settles it automatically, leaving the contract on the table', async () => {
@@ -399,7 +399,7 @@ describe('craps', () => {
 
     expect(controller.snapshot()).toMatchObject({
       status: 'completed',
-      result: { game: 'craps', buyIn: '1000', finalCashOut: '1010', netResult: '10', identities: { rules: { id: 'standard-craps', version: 1 } } },
+      result: { game: 'craps', buyIn: '1000', finalCashOut: '1010', netResult: '10', identities: { rules: { id: 'standard-craps', version: 2 } } },
     });
     // Pass, roll, settle, odds, stop, then one final-settlement roll each for 11, 6, 4, 12 and 8.
     expect((await store.load('activity-1'))?.sequence).toBe(10);

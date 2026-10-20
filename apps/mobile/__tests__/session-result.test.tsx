@@ -78,7 +78,7 @@ describe('the S1-10 session result', () => {
       completedRecord('activity-1', {
         game: 'craps',
         fundingSource: 'training-bankroll',
-        rules: { id: 'standard-craps', version: 1, content: { odds: '5x', limits: { line: { min: '10', max: '1000' } } } },
+        rules: { id: 'standard-craps', version: 2, content: { odds: '5x', field: 'triple-12', limits: { flat: { min: '10', max: '1000' }, props: { min: '1', max: '100' } } } },
       }),
     );
     expect(screen.getByText('Craps · free play · standard craps · 5x odds')).toBeOnTheScreen();

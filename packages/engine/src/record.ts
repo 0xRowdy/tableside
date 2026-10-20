@@ -38,6 +38,10 @@ export interface WagerOutcome {
   readonly net: string;
   /** Paid back to the balance. */
   readonly returned: string;
+  /** A craps horn part (2, 3, 11 or 12): each part counts as its own wager. */
+  readonly component?: number;
+  /** Commission withheld from a winning craps buy or lay, already taken out of net. */
+  readonly commission?: string;
 }
 
 /** Win, loss and push counts; resolved is their sum (returns are outside it). */
@@ -138,7 +142,16 @@ function wagerOutcomes(facts: readonly DomainFact[]): WagerOutcome[] {
   for (const fact of facts) {
     if (fact.kind === 'turn-began') turn = fact.turn;
     else if (fact.kind === 'wager-settled') {
-      outcomes.push({ turn: fact.turn, target: fact.target, stake: fact.stake, result: fact.result, net: fact.net, returned: fact.returned });
+      outcomes.push({
+        turn: fact.turn,
+        target: fact.target,
+        stake: fact.stake,
+        result: fact.result,
+        net: fact.net,
+        returned: fact.returned,
+        ...(fact.component === undefined ? {} : { component: fact.component }),
+        ...(fact.commission === undefined ? {} : { commission: fact.commission }),
+      });
     } else if (fact.kind === 'wager-returned') {
       outcomes.push({ turn, target: fact.target, stake: fact.amount, result: 'returned', net: '0', returned: fact.amount });
     }

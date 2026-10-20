@@ -23,6 +23,7 @@ import {
   createActivity,
   decodeCheckpoint,
   encodeCheckpoint,
+  INSURANCE_TARGET,
   readPermittedView,
   StrategySpecificationError,
   streamIdentityFromEntropy,
@@ -34,6 +35,7 @@ import {
   type Command,
   type CommandEnvelope,
   type DomainFact,
+  type FieldPayout,
   type FundingSource,
   type OddsCap,
   type PermittedView,
@@ -129,7 +131,12 @@ export type StartRequest =
       /** The wheel's rule preset; single zero when omitted. */
       readonly wheel?: RouletteWheel;
     })
-  | (StartRequestBase & { readonly game: 'craps'; readonly odds: OddsCap })
+  | (StartRequestBase & {
+      readonly game: 'craps';
+      readonly odds: OddsCap;
+      /** What a field 12 pays; triple when omitted. */
+      readonly field?: FieldPayout;
+    })
   | (StartRequestBase & { readonly game: 'blackjack'; /** The chosen preset and penetration. */ readonly rules: BlackjackRuleSet });
 
 /** A command as sent to the store, with the allowance effects that commit with it. */
@@ -272,7 +279,7 @@ export class PracticeController {
         };
         const specification: ActivitySpecification =
           request.game === 'craps'
-            ? { ...base, game: 'craps', rules: standardCraps(request.odds) }
+            ? { ...base, game: 'craps', rules: standardCraps(request.odds, request.field) }
             : request.game === 'blackjack'
               ? { ...base, game: 'blackjack', rules: request.rules }
               : { ...base, game: 'roulette', rules: ROULETTE_PRESETS[wheelOf(request)] };
@@ -309,6 +316,14 @@ export class PracticeController {
       if (!this.playOpen()) return;
       // A wager never starts an automatic step itself, but an adopted later state may.
       if (settled(await this.send({ kind: 'place-wager', target, amount }))) await this.drive();
+    });
+  }
+
+  /** A per-bet working instruction (craps): the wager works, or is off, until told otherwise. */
+  async setWorking(target: string, working: boolean): Promise<void> {
+    await this.exclusive(async () => {
+      if (!this.playOpen()) return;
+      if (settled(await this.send({ kind: 'set-working', target, working }))) await this.drive();
     });
   }
 
@@ -402,10 +417,23 @@ export class PracticeController {
    * Once the hand is done the round settles automatically after the reveal.
    */
   async play(action: BlackjackAction): Promise<void> {
+    await this.handAction({ kind: 'play', action });
+  }
+
+  /**
+   * Insures the blackjack hand in play while insurance (or even money) is
+   * offered, before the peek. Part of the hand, so it stays open on the stop
+   * path just like a playing action.
+   */
+  async insure(amount: string): Promise<void> {
+    await this.handAction({ kind: 'place-wager', target: INSURANCE_TARGET, amount });
+  }
+
+  private async handAction(command: Command): Promise<void> {
     await this.exclusive(async () => {
       if (this.suspension?.reached ?? false) return;
       if (this.suspension?.kind === 'immediate') return;
-      if (settled(await this.send({ kind: 'play', action }))) await this.drive();
+      if (settled(await this.send(command))) await this.drive();
     });
   }
 
@@ -884,7 +912,7 @@ const wheelOf = (request: Extract<StartRequest, { game: 'roulette' }>): Roulette
 function sameRequest(a: StartRequest, b: StartRequest): boolean {
   if (a.buyIn !== b.buyIn || a.fundingSource !== b.fundingSource) return false;
   if (canonicalJson(a.strategy ?? null) !== canonicalJson(b.strategy ?? null)) return false;
-  if (a.game === 'craps') return b.game === 'craps' && a.odds === b.odds;
+  if (a.game === 'craps') return b.game === 'craps' && a.odds === b.odds && standardCraps(a.odds, a.field).field === standardCraps(b.odds, b.field).field;
   if (a.game === 'blackjack') return b.game === 'blackjack' && canonicalJson(a.rules) === canonicalJson(b.rules);
   return b.game === 'roulette' && wheelOf(a) === wheelOf(b);
 }

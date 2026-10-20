@@ -22,6 +22,15 @@ export interface WagerChoice {
   readonly step: string;
   /** "35:1". */
   readonly payout: string;
+  /** An on/off option set with the stake, in the game's words. */
+  readonly toggle?: WagerToggle;
+}
+
+export interface WagerToggle {
+  readonly title: string;
+  readonly detail: string;
+  /** Its value when the player hasn't changed it. */
+  readonly usual: boolean;
 }
 
 /** A kind of wager (straight up, place bet), with the choices it covers. */
@@ -74,6 +83,10 @@ export interface PlacedWager {
   readonly committed: boolean;
   /** Why it is committed, in the game's own words. */
   readonly committedReason?: string;
+  /** The current value of its choice's toggle, when it has one. */
+  readonly toggled?: boolean;
+  /** A short state shown and spoken with it, in the game's words ("Working"). */
+  readonly status?: string;
 }
 
 /**
@@ -86,6 +99,8 @@ export interface BetDraft {
   readonly target: string | null;
   readonly text: string;
   readonly submittedAt: number | null;
+  /** The toggle as the player set it in this draft; absent while untouched. */
+  readonly toggled?: boolean;
 }
 
 export const EMPTY_DRAFT: BetDraft = { kind: null, target: null, text: '', submittedAt: null };
@@ -128,12 +143,17 @@ export function draftAmountText(text: string): string {
   return amount !== null && decodeMoney(amount).d === 1n ? formatUnits(amount) : text;
 }
 
-/** True when the draft holds a stake that differs from what is on its target. */
+/** True when the draft holds a stake, or a toggle setting, that differs from what is on its target. */
 export function isDraftPending(draft: BetDraft, wagers: readonly PlacedWager[]): boolean {
   if (draft.target === null || draft.text === '') return false;
-  const onTarget = wagers.find((w) => w.target === draft.target)?.amount ?? null;
-  return parseStake(draft.text) !== onTarget;
+  const placed = wagers.find((w) => w.target === draft.target);
+  if (parseStake(draft.text) !== (placed?.amount ?? null)) return true;
+  return draft.toggled !== undefined && placed?.toggled !== undefined && draft.toggled !== placed.toggled;
 }
+
+/** The toggle value a draft would set: as the player set it, else what the placed wager has, else the usual value. */
+export const draftToggle = (draft: BetDraft, choice: WagerChoice, wagers: readonly PlacedWager[]): boolean | undefined =>
+  choice.toggle && (draft.toggled ?? wagers.find((w) => w.target === choice.target)?.toggled ?? choice.toggle.usual);
 
 /** Steps the typed stake by one increment, never below zero; a stake that isn't a number starts from zero. */
 export function stepStake(text: string, step: string, direction: 1 | -1): string {

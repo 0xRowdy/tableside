@@ -150,7 +150,7 @@ export const recordCases: TestCase[] = [
         STOP, FINAL,
       ]);
       const result = completedPracticeRecord(state, facts, CONTEXT);
-      t.equal(result.rules, { id: 'standard-craps', version: 1, content: { odds: '5x', limits: { line: { min: '10', max: '1000' } } } });
+      t.equal(result.rules, { id: 'standard-craps', version: 2, content: { odds: '5x', field: 'triple-12', limits: { flat: { min: '10', max: '1000' }, props: { min: '1', max: '100' } } } });
       t.equal([result.turnsPlayed, result.netResult, result.wagers], [8, '50', counts(4, 2, 0)]);
       t.equal(
         result.outcomes.filter((o) => o.turn === 7),
