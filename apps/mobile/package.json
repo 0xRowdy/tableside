@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "main": "index.ts",
+  "engines": {
+    "npm": "use pnpm, not npm"
+  },
   "scripts": {
     "start": "expo start",
     "ios": "expo run:ios",

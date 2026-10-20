@@ -1,5 +1,10 @@
 node_modules/
 .pnpm-store/
+# Lockfiles from other package managers (this repo uses pnpm)
+package-lock.json
+yarn.lock
+bun.lock
+bun.lockb
 dist/
 coverage/
 *.tsbuildinfo

@@ -36,18 +36,18 @@ export async function runDeviceLeg(platform: 'ios' | 'android'): Promise<Report>
     if (platform === 'ios') {
       const udid = bootedIosSimulator();
       log(`iOS: building Release harness for simulator ${udid}`);
-      await run('npx', ['expo', 'run:ios', '--configuration', 'Release', '--no-bundler', '--device', udid]);
+      await run('pnpm', ['exec', 'expo', 'run:ios', '--configuration', 'Release', '--no-bundler', '--device', udid]);
     } else {
       await ensureAndroidDevice();
       execFileSync('adb', ['reverse', `tcp:${PORT}`, `tcp:${PORT}`]);
       log('Android: generating native project with the harness plugin');
-      await run('npx', ['expo', 'prebuild', '--platform', 'android', '--no-install']);
+      await run('pnpm', ['exec', 'expo', 'prebuild', '--platform', 'android', '--no-install']);
       log('Android: building Release harness');
       // Gradle's bundle task ignores environment variables, so it would reuse an
       // app bundle here, and later reuse this harness bundle in an app build.
       discardAndroidJsBundle();
       try {
-        await run('npx', ['expo', 'run:android', '--variant', 'release', '--no-bundler']);
+        await run('pnpm', ['exec', 'expo', 'run:android', '--variant', 'release', '--no-bundler']);
       } finally {
         discardAndroidJsBundle();
       }

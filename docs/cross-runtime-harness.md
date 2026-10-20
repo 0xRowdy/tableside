@@ -28,7 +28,7 @@ The first device run builds the native app (several minutes). Later runs reuse t
 3. **Device legs:** the harness builds the app in **Release** with `EXPO_PUBLIC_ENGINE_HARNESS=1`, so it runs on the same bundled Hermes bytecode as a store build. That variable makes `apps/mobile/index.ts` boot `src/harness/HarnessApp.tsx` instead of the app. The harness app checks it is running on Hermes, runs the same suite, and POSTs the report to `http://127.0.0.1:8099/report/<run id>`, where the harness listens. Each run bundles a fresh id, so a harness app left over from an earlier run can't answer for this one. On Android, `adb reverse` forwards the port. The harness-only config plugin (`plugins/with-engine-harness.js`, applied when `ENGINE_HARNESS=1` at prebuild) allows that cleartext request to localhost.
 4. `compareReports` checks the reports: every launch leg the command ran is present, every report comes from a launch runtime (so device reports ran on Hermes), every case passed everywhere, and every output matches the Node leg.
 
-After an Android harness run, the generated `android/` project still carries the harness plugin's cleartext setting. Run `npx expo prebuild --clean --platform android` before making a local release build. EAS builds always prebuild from scratch.
+After an Android harness run, the generated `android/` project still carries the harness plugin's cleartext setting. Run `pnpm exec expo prebuild --clean --platform android` before making a local release build. EAS builds always prebuild from scratch.
 
 ## Adding cases
 
