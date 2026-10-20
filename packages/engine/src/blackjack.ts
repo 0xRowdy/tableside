@@ -355,12 +355,12 @@ function legal(state: BlackjackActivityState): CommandKind[] {
   switch (state.phase) {
     case 'open-decision':
       // Rebuys while waiting for input, including before an unaffordable insurance, split or double.
-      if (!playing(state)) return ['place-wager', 'begin-turn', 'request-stop', 'rebuy'];
+      if (!playing(state)) return ['place-wager', 'begin-turn', 'stop-strategy', 'request-stop', 'rebuy'];
       return state.outcome?.insurance === 'offered' ? ['play', 'place-wager', 'rebuy'] : ['play', 'rebuy'];
     case 'revealing-outcome':
-      return ['settle-turn', 'request-stop'];
+      return ['settle-turn', 'stop-strategy', 'request-stop'];
     case 'settled-outcome':
-      return ['place-wager', 'begin-turn', 'request-stop', 'rebuy'];
+      return ['place-wager', 'begin-turn', 'stop-strategy', 'request-stop', 'rebuy'];
     case 'final-settlement':
       return ['advance-final-settlement'];
     case 'completed':
@@ -373,19 +373,70 @@ function legal(state: BlackjackActivityState): CommandKind[] {
 
 export const isBlackjackAction = (value: unknown): value is BlackjackAction => ACTIONS.includes(value as BlackjackAction);
 
+/** The actions the rules offer a hand once insurance is settled (`hands` is how many the learner holds); funding is judged when one is submitted. */
+export function rulesOffer(cards: readonly Card[], hands: number, lateSurrender: boolean): BlackjackAction[] {
+  const two = cards.length === 2;
+  const actions: BlackjackAction[] = ['hit', 'stand'];
+  if (two) actions.push('double');
+  if (isPair(cards) && hands < MAX_SPLIT_HANDS) actions.push('split');
+  // Late surrender: the original unsplit two cards, after the peek.
+  if (lateSurrender && two && hands === 1) actions.push('surrender');
+  return actions;
+}
+
 /** What the rules offer the learner's hand awaiting a decision; funding is judged when an action is submitted. */
 function offeredActions(round: BlackjackRound, rules: BlackjackTable): BlackjackAction[] {
   if (round.active === null) return [];
   if (round.insurance === 'offered') return ['decline-insurance'];
-  const hand = round.hands[round.active] as BlackjackHand;
-  const two = hand.cards.length === 2;
-  const actions: BlackjackAction[] = ['hit', 'stand'];
-  if (two) actions.push('double');
-  if (isPair(hand.cards) && round.hands.length < MAX_SPLIT_HANDS) actions.push('split');
-  // Late surrender: the original unsplit two cards, after the peek.
-  if (rules.lateSurrender && two && round.hands.length === 1) actions.push('surrender');
-  return actions;
+  return rulesOffer((round.hands[round.active] as BlackjackHand).cards, round.hands.length, rules.lateSurrender);
 }
+
+// ---- the count ------------------------------------------------------------
+
+/** The Hi-Lo tag: 2-6 count +1, 7-9 count 0, tens and aces count -1. */
+export const hiLoTag = (card: Card) => (card.rank >= 2 && card.rank <= 6 ? 1 : card.rank >= 7 && card.rank <= 9 ? 0 : -1);
+
+/**
+ * The running count of every card exposed since the shuffle and the cards
+ * physically left in the shoe. A face-down hole card has left the shoe but
+ * never counts until it is turned over.
+ */
+export function shoeCount(state: Pick<BlackjackActivityState, 'shoe' | 'outcome'>): { running: number; remaining: number } {
+  const { shoe, outcome } = state;
+  if (shoe === null) return { running: 0, remaining: SHOE.length };
+  let running = 0;
+  for (let i = 0; i < shoe.next; i++) running += hiLoTag(SHOE[shoe.order[i] as number] as Card);
+  if (outcome !== null && !outcome.holeRevealed) running -= hiLoTag(outcome.dealer[1] as Card);
+  return { running, remaining: SHOE.length - shoe.next };
+}
+
+/**
+ * The integer true count: the running count over the decks remaining to the
+ * nearest half deck (ties up, at least half a deck), truncated toward zero.
+ */
+export function trueCount(running: number, remaining: number): number {
+  const halfDecks = Math.max(1, Math.floor((remaining + 13) / 26));
+  const quotient = Math.floor(Math.abs(2 * running) / halfDecks);
+  return running < 0 && quotient > 0 ? -quotient : quotient;
+}
+
+/** The count at a decision, as the player may be shown it. */
+export interface BlackjackCount {
+  readonly running: number;
+  /** The divisor: decks remaining to the nearest half deck, e.g. "4.5". */
+  readonly decks: string;
+  readonly trueCount: number;
+}
+
+export const countOf = (shoe: { readonly running: number; readonly remaining: number }): BlackjackCount => ({
+  running: shoe.running,
+  decks: String(Math.max(1, Math.floor((shoe.remaining + 13) / 26)) / 2),
+  trueCount: trueCount(shoe.running, shoe.remaining),
+});
+
+/** True when the pinned strategy is still running and its policy has Tableside show the count. */
+const countSupplied = (state: BlackjackActivityState) =>
+  state.strategy !== null && state.strategy.status !== 'stopped' && (state.strategy.definition.play as { countShown?: unknown } | undefined)?.countShown === true;
 
 // ---- advance --------------------------------------------------------------
 
@@ -891,7 +942,8 @@ function view(
   return {
     game: 'blackjack',
     // A dealt hand awaiting a decision is committed too, not only a revealed round.
-    wagersCommitted: state.wagers.length > 0 && (playing(state) || state.phase === 'revealing-outcome' || state.phase === 'final-settlement'),
+    wagersCommitted:
+      state.wagers.length > 0 && (playing(state) || (state.phase === 'correction' && round?.active != null) || state.phase === 'revealing-outcome' || state.phase === 'final-settlement'),
     playActions: deciding ? offeredActions(round, rules) : [],
     insuranceOffer: offer
       ? { max: encodeMoney(insuranceMax(state.wagers)), evenMoney: naturalIn(round.hands[0] as BlackjackHand, round.hands) }
@@ -912,6 +964,10 @@ function view(
         hands: seat.hands.map((hand) => handView(hand, seat.hands)),
       })),
     },
+    // Supplied in "basic with deviations": the count the next decision or deal sees; a fresh shoe once the cut card is out between rounds.
+    count: countSupplied(state)
+      ? countOf(round?.active == null && (shoe === null || shoe.next >= shoe.cut) ? { running: 0, remaining: SHOE.length } : shoeCount(state))
+      : null,
     shoe: {
       cards: SHOE.length,
       remaining: shoe === null ? SHOE.length : SHOE.length - shoe.next,

@@ -14,6 +14,7 @@ import {
   decodeCheckpoint,
   encodeCheckpoint,
   explainPrescription,
+  isPlayCorrection,
   ActivitySpecificationError,
   StrategySpecificationError,
   RandomStream,
@@ -243,7 +244,8 @@ export const guidedCases: TestCase[] = [
         instructions: [{ ...(FLAT_EVEN_MONEY.instructions[0] as StrategyDefinition['instructions'][number]), when: { subject: 'last-result', is: 'loss' } }],
       };
       const corrected = run(createActivity(guided(afterLoss, { target: 'red' }), STREAM), [place('red', '10'), BEGIN]).state;
-      t.equal(corrected.strategy?.correction?.explanation.prescription, { status: 'uncovered' });
+      const held = corrected.strategy?.correction;
+      t.equal(held && !isPlayCorrection(held) ? held.explanation.prescription : null, { status: 'uncovered' });
       const { state, facts } = step(corrected, RETRY);
       t.equal([state.phase, state.wagers, state.balance], ['open-decision', [], '1000']);
       t.equal(kinds(facts), ['departure-recorded', 'wager-changed']);

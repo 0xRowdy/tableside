@@ -106,6 +106,12 @@ export interface StrategyDefinition {
   readonly adjustments: readonly StrategyAdjustment[];
   /** When it matches, the strategy places no new bets (a declared stop). */
   readonly stopWhen: StrategyCondition | null;
+  /**
+   * A playing policy in the game vocabulary's terms, for games with playing
+   * decisions (blackjack). With one, the betting instructions may be empty:
+   * the player then chooses the wagers and only the play is assessed.
+   */
+  readonly play?: unknown;
   readonly note?: string;
 }
 
@@ -154,6 +160,20 @@ export interface StrategyVocabulary<Situation = unknown> {
   /** Funds the player can commit to this decision. */
   available(situation: Situation): Money;
   subject(situation: Situation, name: string): string;
+  /**
+   * Problems with a definition's playing policy under its declared table, as
+   * paths from the definition root; absent for games without playing decisions.
+   */
+  playProblems?(play: unknown, table: unknown): readonly { readonly path: string; readonly message: string; readonly category?: DiagnosticCategory }[];
+}
+
+/** A playing move assessed against a pinned policy before it executes. */
+export interface PlayAssessment<Explanation = unknown, Move = unknown, Command = unknown> {
+  readonly explanation: Explanation;
+  readonly actual: Move;
+  readonly follows: boolean;
+  /** The command that plays the prescription. */
+  readonly prescribed: Command;
 }
 
 /** A game's part of guided practice, registered in strategies.ts. */
@@ -163,6 +183,8 @@ export interface StrategyGame<State = never> {
   tableForRules(rules: unknown): unknown;
   /** The betting situation the strategy sees in an activity state waiting for a decision. */
   situation(state: State): unknown;
+  /** The command's playing decision assessed against the definition's policy; undefined when the command makes none. */
+  assessPlay?(state: State, definition: StrategyDefinition, command: unknown): PlayAssessment | undefined;
 }
 
 /** Where a strategy cycle stands. */
@@ -396,9 +418,16 @@ export function validateWith(vocabulary: StrategyVocabulary, definition: unknown
     if (counter.cap !== undefined && literal(checker, counter.cap, `${path}/cap`)) capped.add(counter.id);
   }
 
-  // Instructions.
+  // A playing policy, where the game has playing decisions.
+  const hasPlay = 'play' in def;
+  if (hasPlay) {
+    if (!vocabulary.playProblems) flag('incomplete', '/play', `${vocabulary.game} strategies have no playing policy`);
+    else if (tableOk) for (const problem of vocabulary.playProblems(def.play, def.table)) flag(problem.category ?? 'incomplete', problem.path, problem.message);
+  }
+
+  // Instructions. A strategy with a playing policy may leave the betting to the player.
   const instructions = Array.isArray(def.instructions) ? def.instructions : [];
-  if (!Array.isArray(def.instructions) || instructions.length === 0) flag('incomplete', '/instructions', 'a strategy needs at least one instruction');
+  if (!Array.isArray(def.instructions) || (instructions.length === 0 && !hasPlay)) flag('incomplete', '/instructions', 'a strategy needs at least one instruction');
   if (instructions.length > STRATEGY_ENVELOPE.instructions) {
     flag('envelope', '/instructions', `a strategy has at most ${STRATEGY_ENVELOPE.instructions} instructions`);
     return done();
