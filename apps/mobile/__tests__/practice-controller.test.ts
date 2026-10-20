@@ -232,6 +232,7 @@ describe('spinning', () => {
     const { controller, adapters } = await started();
     const other = new PracticeController(adapters);
     await other.load();
+    await other.resume();
     await controller.placeWager('red', '10');
 
     await other.placeWager('black', '20');
@@ -245,6 +246,7 @@ describe('spinning', () => {
     const { controller, adapters } = await started({ autoClock: false });
     const other = new PracticeController({ ...adapters, clock: new FakeClock(undefined, true) });
     await other.load();
+    await other.resume();
     await controller.placeWager('red', '10');
     void controller.spin();
     await waitFor(() => adapters.clock.pending === 1);
@@ -266,6 +268,7 @@ describe('spinning', () => {
     // The app restarts: a new controller over the same durable store.
     const restarted = new PracticeController({ ...adapters, clock: new FakeClock(undefined, true) });
     await restarted.load();
+    await restarted.resume();
 
     const { view } = active(restarted.snapshot());
     expect(view.phase).toBe('settled-outcome');

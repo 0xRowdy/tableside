@@ -227,7 +227,7 @@ describe('craps free play', () => {
 
     await fireEvent.press(screen.getByRole('button', { name: 'End session' }));
     expect(await screen.findByLabelText('1. Removable wagers come back. Pass line odds 25')).toBeOnTheScreen();
-    expect(screen.getByLabelText('2. Contracts settle automatically. Pass line 25')).toBeOnTheScreen();
+    expect(screen.getByLabelText('2. Committed wagers settle automatically. Pass line 25')).toBeOnTheScreen();
     await fireEvent.press(screen.getAllByRole('button', { name: 'End session' }).at(-1)!);
 
     expect(await screen.findByRole('header', { name: 'Session result' })).toBeOnTheScreen();

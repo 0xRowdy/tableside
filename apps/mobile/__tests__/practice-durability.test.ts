@@ -8,14 +8,15 @@ import { SINGLE_ZERO_ROULETTE } from '@tableside/definitions';
 
 import { PracticeController, REVEAL_MS, SAVE_RETRY_MS, type PracticeSnapshot } from '@/practice/controller';
 import type { ActivityStore } from '@/practice/store';
-import type { AccessSupervisor } from '@/practice/adapters';
+import { alwaysAllowed, type AccessSupervisor } from '@/practice/adapters';
 import { FakeClock, PI_WORDS, substituteAdapters } from '@/practice/testing/substitutes';
 
 type Adapters = ReturnType<typeof setup>['adapters'];
 
 /** A supervisor that charges one turn of allowance for every turn, as spec 5's turn metering will. */
 const chargingAccess: AccessSupervisor = {
-  beforeActivity: async () => ({ status: 'allowed', provenance: 'test' }),
+  ...alwaysAllowed,
+  beforeActivity: async () => ({ status: 'allowed', provenance: 'test', meteringBasis: 'turns' }),
   beforeTurn: async () => ({ status: 'allowed', provenance: 'test', turnCharge: { grant: 'grant-1', amount: '1' } }),
 };
 
@@ -31,10 +32,11 @@ function restarted(adapters: Adapters, clock = new FakeClock(undefined, true)) {
   return { controller: new PracticeController({ ...adapters, store, clock }), store };
 }
 
-/** Restarts and waits for the launch to finish resuming. */
+/** Restarts, then resumes the session the launch found suspended, and waits for it to settle down. */
 async function restart(adapters: Adapters) {
   const next = restarted(adapters);
   await next.controller.load();
+  await next.controller.resume();
   return next;
 }
 
@@ -260,7 +262,8 @@ describe('restarts', () => {
     // The reveal animation never ran; the committed reveal is what resumes.
     const clock = new FakeClock(undefined, false);
     const { controller: relaunched, store } = restarted(adapters, clock);
-    const launching = relaunched.load();
+    await relaunched.load();
+    const launching = relaunched.resume();
     await waitFor(() => relaunched.snapshot().status === 'active' && clock.pending === 1);
     expect(active(relaunched.snapshot()).view).toMatchObject({ phase: 'revealing-outcome', outcome: { turn: 1, pocket: 27 }, balance: '990' });
 
@@ -344,7 +347,7 @@ describe('snapshots', () => {
     const random = { protocol: 1, key: [PI_WORDS[0], PI_WORDS[1]], session: [PI_WORDS[2], PI_WORDS[3]] } as const;
     const specification = { activityId: 'old', owner: 'local', device: 'test-device', game: 'roulette', rules, strategy: null, reference: null, fundingSource: 'practice-funding', funding: '1000' } as const;
     const initial = createActivity(specification, random);
-    await adapters.store.createActivity({ activityId: 'old', specification, random, checkpoint: encodeCheckpoint(initial), createdAt: 0 });
+    await adapters.store.createActivity({ activityId: 'old', admission: { provenance: 'test', meteringBasis: 'free-play' }, specification, random, checkpoint: encodeCheckpoint(initial), createdAt: 0 });
     expect(JSON.parse(encodeCheckpoint(initial)).rules.limits.outside).toEqual({ min: '50', max: '1000' });
 
     const { controller } = await restart(adapters);

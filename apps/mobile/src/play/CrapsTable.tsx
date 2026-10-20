@@ -7,12 +7,12 @@
 import { crapsHouseEdge } from '@tableside/definitions';
 import { CRAPS_POINTS, type CrapsPermittedView as PermittedView } from '@tableside/engine';
 import { useEffect, useMemo, useState } from 'react';
-import { AccessibilityInfo, Modal, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { AccessibilityInfo, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/Button';
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
-import { SAVE_RETRY_MS, type PracticeSnapshot } from '@/practice/controller';
+import { SAVE_RETRY_MS, type ActivePracticeSnapshot } from '@/practice/controller';
 import { usePractice } from '@/practice/PracticeProvider';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/theme/tokens';
 
@@ -20,14 +20,15 @@ import { BetSelector } from './bet-selector/BetSelector';
 import { draftAmountText, EMPTY_DRAFT, findChoice, isDraftPending, type BetDraft } from './bet-selector/catalog';
 import { DraftBar, PresentationSwitch, type Presentation } from './bet-selector/Presentation';
 import { crapsCatalog, crapsPlacedWagers } from './craps-catalog';
+import { EndSessionDialog } from './EndSessionDialog';
 import { RebuySheet } from './RebuySheet';
 import { commitmentText, crapsStatus, crapsTargetName, describeCrapsFacts, puckText, workingText } from './craps-text';
-import { ChipRack } from './RouletteTable';
+import { ACCESS_ENDED, ChipRack } from './RouletteTable';
 import { totalOnTable } from './roulette-text';
 import { formatUnits } from './units';
 import { PhaseStepper, SessionStrip, TableTopBar, type PhaseStep } from './TableChrome';
 
-type ActiveSnapshot = Extract<PracticeSnapshot, { status: 'active' }> & { readonly view: PermittedView };
+type ActiveSnapshot = ActivePracticeSnapshot & { readonly view: PermittedView };
 
 /** Above this text scale, a wide window stacks the felt and the controls so text has room. */
 const SIDE_BY_SIDE_MAX_FONT_SCALE = 1.35;
@@ -133,9 +134,20 @@ export function CrapsTable({ snapshot }: { snapshot: ActiveSnapshot }) {
             <Button label="Retry now" variant="secondary" disabled={busy} onPress={() => void controller.retrySave()} />
           </View>
         )}
-        {snapshot.accessNotAllowed && (
+        {snapshot.ending === 'access-ended' && (
+          <View style={styles.banner} testID="access-ended">
+            <Text accessibilityRole="alert" maxFontSizeMultiplier={textScale.body} style={styles.bannerTitle}>{ACCESS_ENDED}</Text>
+            <Text maxFontSizeMultiplier={textScale.body} style={styles.bannerText}>
+              The dice roll on to settle only the bets already working. No new bets, odds or rolls of your own.
+            </Text>
+          </View>
+        )}
+        {snapshot.suspension?.kind === 'turn-boundary' && !snapshot.suspension.reached && (
           <View style={styles.banner}>
-            <Text accessibilityRole="alert" maxFontSizeMultiplier={textScale.body} style={styles.bannerTitle}>This roll can&apos;t start right now.</Text>
+            <Text accessibilityRole="alert" maxFontSizeMultiplier={textScale.body} style={styles.bannerTitle}>Suspending after this roll</Text>
+            <Text maxFontSizeMultiplier={textScale.body} style={styles.bannerText}>
+              {snapshot.suspension.reason ?? 'This roll finishes normally. No new roll starts until the session resumes.'}
+            </Text>
           </View>
         )}
 
@@ -461,41 +473,6 @@ function EndingSteps({ snapshot }: { snapshot: ActiveSnapshot }) {
   );
 }
 
-function EndSessionDialog({ visible, view, onCancel, onConfirm }: { visible: boolean; view: PermittedView; onCancel: () => void; onConfirm: () => void }) {
-  const removable = view.wagers.filter((wager) => view.table.wagers.find((item) => item.target === wager.target)?.removable !== false);
-  const contracts = view.wagers.filter((wager) => !removable.includes(wager));
-  const list = (wagers: typeof view.wagers, none: string) =>
-    wagers.length === 0 ? none : wagers.map((w) => `${crapsTargetName(w.target)} ${formatUnits(w.amount)}`).join(' · ');
-  return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel} supportedOrientations={['portrait', 'landscape']}>
-      <View style={styles.scrim}>
-        <ScrollView contentContainerStyle={styles.dialogScroll}>
-          <View accessibilityViewIsModal style={styles.dialog}>
-            <Text accessibilityRole="header" maxFontSizeMultiplier={textScale.display} style={styles.dialogTitle}>
-              End this session?
-            </Text>
-            <Text maxFontSizeMultiplier={textScale.body} style={styles.dialogText}>
-              Ending works in three steps, and it can&apos;t be undone once settlement starts.
-            </Text>
-            {[
-              { title: 'Removable wagers come back', detail: list(removable, 'Nothing removable on the table') },
-              { title: 'Contracts settle automatically', detail: list(contracts, 'No contracts on the table') },
-              { title: 'You see the session result', detail: 'Buy-in, final cash-out and net result' },
-            ].map((step, index) => (
-              <View key={step.title} accessible accessibilityLabel={`${index + 1}. ${step.title}. ${step.detail}`} style={styles.dialogStep}>
-                <Text maxFontSizeMultiplier={textScale.body} style={styles.dialogStepTitle}>{index + 1}  {step.title}</Text>
-                <Text maxFontSizeMultiplier={textScale.body} style={styles.dialogText}>{step.detail}</Text>
-              </View>
-            ))}
-            <Button label="End session" stretch onPress={onConfirm} />
-            <Button label="Keep playing" variant="secondary" stretch onPress={onCancel} />
-          </View>
-        </ScrollView>
-      </View>
-    </Modal>
-  );
-}
-
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: palette.background },
   edge: { fontFamily: fonts.ui, fontSize: 12, color: palette.mutedForeground, paddingHorizontal: space[4] },
@@ -553,11 +530,4 @@ const styles = StyleSheet.create({
   endingStep: { gap: 2 },
   endingStepTitle: { fontFamily: fonts.uiMedium, fontSize: 15, color: palette.foreground },
   endingStepDetail: { fontFamily: fonts.ui, fontSize: 13, color: palette.mutedForeground },
-  scrim: { flex: 1, backgroundColor: palette.scrim },
-  dialogScroll: { flexGrow: 1, justifyContent: 'center', padding: space[4] },
-  dialog: { gap: space[3], padding: space[6], borderRadius: radius.lg, backgroundColor: palette.popover },
-  dialogTitle: { fontFamily: fonts.display, fontSize: 24, color: palette.foreground },
-  dialogText: { fontFamily: fonts.ui, fontSize: 14, color: palette.mutedForeground },
-  dialogStep: { gap: 2 },
-  dialogStepTitle: { fontFamily: fonts.uiMedium, fontSize: 15, color: palette.foreground },
 });
