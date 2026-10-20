@@ -26,5 +26,12 @@ export {
   type PlayAction,
 } from './blackjack/reference';
 
-export { crapsHouseEdge, standardCraps, type CrapsHouseEdge, type CrapsLineWager } from './craps';
-export { SINGLE_ZERO_ROULETTE } from './roulette';
+export { CRAPS_HOUSE_EDGE_VERSION, crapsHouseEdge, standardCraps, type CrapsHouseEdge, type CrapsLineWager } from './craps';
+export {
+  DOUBLE_ZERO_ROULETTE,
+  ROULETTE_HOUSE_EDGE_VERSION,
+  ROULETTE_PRESETS,
+  rouletteHouseEdge,
+  SINGLE_ZERO_ROULETTE,
+  type RouletteHouseEdge,
+} from './roulette';

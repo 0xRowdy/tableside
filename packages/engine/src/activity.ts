@@ -238,8 +238,8 @@ export type Step<S extends ActivityState> = { change: Change<S>; facts: DomainFa
 
 /** Everything the protocol needs from one game. */
 export interface GameModule<S extends ActivityState, V extends PermittedView> {
-  /** The rule set this build runs: pinned by id and version. */
-  readonly rules: VersionedIdentity;
+  /** The rule sets this build runs, each pinned by id and version. */
+  readonly ruleSets: readonly VersionedIdentity[];
   /** Game state fields beyond the common ones (and their initial values). */
   readonly extra: Omit<S, keyof ActivityStateBase<GameId> | 'rules' | 'outcome'>;
   /** The rule content to pin from a specification's rules, or why they can't run. */
@@ -330,7 +330,8 @@ export function createActivity(spec: ActivitySpecification, random: RandomStream
     identities: {
       engine: ENGINE_VERSION,
       game: spec.game,
-      rules: { id: game.rules.id, version: game.rules.version },
+      // pinRules accepted these, so they name one of the game's rule sets.
+      rules: { id: spec.rules.id, version: spec.rules.version },
       strategy: spec.strategy && { id: spec.strategy.id, version: spec.strategy.version },
       reference: spec.reference && { id: spec.reference.id, version: spec.reference.version },
       random: { protocol: position.protocol, key: position.key, session: position.session },
@@ -479,7 +480,7 @@ function unsupportedVersion(value: unknown): string | undefined {
   const game = gameFor(identities.game);
   if (typeof identities.game === 'string' && !game) return `unsupported game ${identities.game}`;
   const rules = identities.rules;
-  if (game && isIdentity(rules) && (rules.id !== game.rules.id || rules.version !== game.rules.version)) {
+  if (game && isIdentity(rules) && !game.ruleSets.some((set) => set.id === rules.id && set.version === rules.version)) {
     return `unsupported rules ${rules.id} v${rules.version}`;
   }
   const random = identities.random;

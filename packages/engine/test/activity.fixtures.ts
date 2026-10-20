@@ -1,5 +1,5 @@
 // Shared inputs for the engine-interface cases: a single-zero roulette free-play
-// activity with the launch default limits (#3: inside 1-100, outside 10-1,000).
+// activity (and its double-zero twin) with the launch default limits (#3: inside 1-100, outside 10-1,000).
 import {
   advanceActivity,
   type RouletteActivitySpecification,
@@ -27,6 +27,9 @@ export const SPEC: RouletteActivitySpecification = {
   fundingSource: 'practice-funding',
   funding: '1000',
 };
+
+/** The double-zero rule set at the same launch default limits. */
+export const DOUBLE_ZERO: RouletteActivitySpecification['rules'] = { ...SPEC.rules, id: 'roulette-double-zero', wheel: 'double-zero' };
 
 /** The Random123 "pi digits" stream: its first single-zero spins are 27, 0, 25, 31, 9 (draws.cases). */
 export const STREAM = PI;

@@ -60,8 +60,18 @@ export {
   type CrapsWagerStatus,
   type OddsCap,
 } from './craps';
-export { ROULETTE_RULES, type RouletteActivityState, type RouletteRuleSet, type RouletteTable } from './roulette';
-
+export {
+  oneSpinOutcomeTable,
+  ROULETTE_RULE_SETS,
+  rouletteLayout,
+  type LimitClass,
+  type OneSpinOutcome,
+  type PlacementKind,
+  type RouletteActivityState,
+  type RoulettePlacement,
+  type RouletteRuleSet,
+  type RouletteTable,
+} from './roulette';
 export { philox4x32 } from './philox';
 export {
   RANDOM_PROTOCOL_VERSION,

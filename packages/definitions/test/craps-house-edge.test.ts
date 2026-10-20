@@ -1,7 +1,7 @@
 import { ODDS_CAPS, STANDARD_CRAPS, type OddsCap } from '@tableside/engine';
 import { describe, expect, it } from 'vitest';
 
-import { crapsHouseEdge, standardCraps } from '../src/index';
+import { CRAPS_HOUSE_EDGE_VERSION, crapsHouseEdge, standardCraps } from '../src/index';
 
 // Published figures (Wizard of Odds, "Craps — house edge" and "Odds in craps"
 // tables; Shackleford): pass/come 1.414%, don't pass/don't come 1.364% per bet
@@ -40,6 +40,7 @@ describe('standard craps house edge', () => {
   it('is a property of the pinned rules, versioned with them', () => {
     const edge = crapsHouseEdge('pass', standardCraps('3-4-5x'));
     expect(edge.rules).toEqual({ id: STANDARD_CRAPS.id, version: STANDARD_CRAPS.version });
+    expect(edge.version).toBe(CRAPS_HOUSE_EDGE_VERSION);
     expect(edge.odds).toBe('3-4-5x');
   });
 });

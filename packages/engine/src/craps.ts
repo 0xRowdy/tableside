@@ -446,7 +446,7 @@ function damage(value: Record<string, unknown>): string | undefined {
 
 /** Standard craps behind the session protocol. */
 export const CRAPS: GameModule<CrapsActivityState, CrapsPermittedView> = {
-  rules: { id: STANDARD_CRAPS.id, version: STANDARD_CRAPS.version },
+  ruleSets: [{ id: STANDARD_CRAPS.id, version: STANDARD_CRAPS.version }],
   extra: { point: null },
   pinRules: (rules) => {
     if (rules.id !== STANDARD_CRAPS.id || rules.version !== STANDARD_CRAPS.version) return 'unsupported craps rules';

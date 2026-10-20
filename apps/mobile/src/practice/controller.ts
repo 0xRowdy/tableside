@@ -23,8 +23,9 @@ import {
   type FundingSource,
   type OddsCap,
   type PermittedView,
+  type RouletteWheel,
 } from '@tableside/engine';
-import { SINGLE_ZERO_ROULETTE, standardCraps } from '@tableside/definitions';
+import { ROULETTE_PRESETS, standardCraps } from '@tableside/definitions';
 
 import type { PracticeAdapters } from './adapters';
 import type { AllowanceEffect, CommitOutcome, CommittedTransition, CompletedPracticeSession, NewActivity, StoredActivity } from './store';
@@ -62,7 +63,11 @@ interface StartRequestBase {
 }
 
 export type StartRequest =
-  | (StartRequestBase & { readonly game: 'roulette' })
+  | (StartRequestBase & {
+      readonly game: 'roulette';
+      /** The wheel's rule preset; single zero when omitted. */
+      readonly wheel?: RouletteWheel;
+    })
   | (StartRequestBase & { readonly game: 'craps'; readonly odds: OddsCap });
 
 /** A command as sent to the store, with the allowance effects that commit with it. */
@@ -155,7 +160,7 @@ export class PracticeController {
         const specification: ActivitySpecification =
           request.game === 'craps'
             ? { ...base, game: 'craps', rules: standardCraps(request.odds) }
-            : { ...base, game: 'roulette', rules: SINGLE_ZERO_ROULETTE };
+            : { ...base, game: 'roulette', rules: ROULETTE_PRESETS[wheelOf(request)] };
         let initial: ActivityState;
         try {
           initial = createActivity(specification, random);
@@ -486,8 +491,11 @@ export class PracticeController {
   }
 }
 
-const sameRequest = (a: StartRequest, b: StartRequest) =>
-  a.game === b.game &&
-  a.buyIn === b.buyIn &&
-  a.fundingSource === b.fundingSource &&
-  (a.game !== 'craps' || (b.game === 'craps' && a.odds === b.odds));
+const wheelOf = (request: Extract<StartRequest, { game: 'roulette' }>): RouletteWheel => request.wheel ?? 'single-zero';
+
+/** Whether a retried start asks for the same table, so it may recover the unacknowledged activity. */
+function sameRequest(a: StartRequest, b: StartRequest): boolean {
+  if (a.buyIn !== b.buyIn || a.fundingSource !== b.fundingSource) return false;
+  if (a.game === 'craps') return b.game === 'craps' && a.odds === b.odds;
+  return b.game === 'roulette' && wheelOf(a) === wheelOf(b);
+}

@@ -29,6 +29,9 @@ export const standardCraps = (odds: OddsCap = '3-4-5x'): CrapsRuleSet => ({
 
 export type CrapsLineWager = 'pass' | 'dont-pass' | 'come' | 'dont-come' | 'odds';
 
+/** The version of the craps house-edge values; bump it when any value or its derivation changes. */
+export const CRAPS_HOUSE_EDGE_VERSION = 1;
+
 export interface CrapsHouseEdge {
   readonly wager: CrapsLineWager;
   /** Per bet made, as a percentage with two decimals ("1.41"). */
@@ -36,6 +39,8 @@ export interface CrapsHouseEdge {
   /** The line bet with full odds behind it, per total amount bet; null for odds alone. */
   readonly withFullOdds: string | null;
   readonly odds: OddsCap;
+  /** The version of these values. */
+  readonly version: number;
   /** The rule identity these facts belong to. */
   readonly rules: VersionedIdentity;
 }
@@ -79,10 +84,10 @@ function percent(value: Money): string {
 
 /** The house edge of a line-game wager under the given standard craps rules. */
 export function crapsHouseEdge(wager: CrapsLineWager, rules: Pick<CrapsRuleSet, 'id' | 'version' | 'odds'>): CrapsHouseEdge {
-  const identity = { id: rules.id, version: rules.version };
-  if (wager === 'odds') return { wager, percent: percent(money(0n)), withFullOdds: null, odds: rules.odds, rules: identity };
+  const facts = { wager, odds: rules.odds, version: CRAPS_HOUSE_EDGE_VERSION, rules: { id: rules.id, version: rules.version } };
+  if (wager === 'odds') return { ...facts, percent: percent(money(0n)), withFullOdds: null };
   const dont = wager === 'dont-pass' || wager === 'dont-come';
   const edge = lineEdge(dont);
   const combined = div(edge, add(money(1n), fullOdds(rules.odds, dont)));
-  return { wager, percent: percent(edge), withFullOdds: percent(combined), odds: rules.odds, rules: identity };
+  return { ...facts, percent: percent(edge), withFullOdds: percent(combined) };
 }
