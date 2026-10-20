@@ -79,16 +79,20 @@ async function deviceLeg(platform: 'ios' | 'android'): Promise<Report> {
   return report;
 }
 
+/** The Node leg plus the Hermes leg for each device platform, so a device report from another engine fails. */
+const legsFor = (platforms: readonly string[]): Leg[] =>
+  LAUNCH_LEGS.filter((leg) => leg.platform === 'node' || platforms.includes(leg.platform));
+
 async function main(): Promise<boolean> {
   switch (command) {
     case 'node':
       return judge([await nodeLeg()]);
     case 'ios':
     case 'android':
-      return judge([await nodeLeg(), await deviceLeg(command)], LAUNCH_LEGS.filter((leg) => leg.platform === 'node' || leg.platform === command));
+      return judge([await nodeLeg(), await deviceLeg(command)], legsFor([command]));
     case 'compare': {
       const reports = await Promise.all(rest.map(async (file) => JSON.parse(await readFile(fromInvocation(file), 'utf8')) as Report));
-      return judge(reports);
+      return judge(reports, legsFor(reports.map((r) => r.runtime.platform)));
     }
     case 'all':
       return judge([await nodeLeg(), await deviceLeg('ios'), await deviceLeg('android')], LAUNCH_LEGS);
