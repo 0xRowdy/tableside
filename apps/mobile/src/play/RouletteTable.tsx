@@ -4,20 +4,20 @@
 
 import type { PermittedView } from '@tableside/engine';
 import { useEffect, useMemo, useState } from 'react';
-import { AccessibilityInfo, Modal, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { AccessibilityInfo, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/Button';
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
-import { SAVE_RETRY_MS, type PracticeSnapshot } from '@/practice/controller';
+import { SAVE_RETRY_MS, type ActivePracticeSnapshot } from '@/practice/controller';
 import { usePractice } from '@/practice/PracticeProvider';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale, type ColorToken } from '@/theme/tokens';
 
+import { EndSessionDialog } from './EndSessionDialog';
 import { RebuySheet } from './RebuySheet';
 import { describeFacts, describePocket, formatUnits, pocketColor, STATUS, targetName, totalOnTable } from './roulette-text';
 import { PhaseStepper, SessionStrip, TableTopBar, type PhaseStep } from './TableChrome';
 
-type ActiveSnapshot = Extract<PracticeSnapshot, { status: 'active' }>;
 
 /** Above this text scale, a wide window stacks the felt and the controls so text has room. */
 const SIDE_BY_SIDE_MAX_FONT_SCALE = 1.35;
@@ -49,7 +49,7 @@ function limitsText(view: PermittedView): string {
   return `${WHEEL_NAMES[view.table.wheel]} · inside ${limit('inside')} · outside ${limit('outside')}`;
 }
 
-export function RouletteTable({ snapshot }: { snapshot: ActiveSnapshot }) {
+export function RouletteTable({ snapshot }: { snapshot: ActivePracticeSnapshot }) {
   const { controller } = usePractice();
   const insets = useSafeAreaInsets();
   const { width, height, fontScale } = useWindowDimensions();
@@ -127,7 +127,7 @@ export function RouletteTable({ snapshot }: { snapshot: ActiveSnapshot }) {
         )}
         {snapshot.suspension?.kind === 'turn-boundary' && !snapshot.suspension.reached && (
           <View style={styles.banner}>
-            <Text accessibilityRole="alert" maxFontSizeMultiplier={textScale.body} style={styles.bannerTitle}>Pausing after this spin</Text>
+            <Text accessibilityRole="alert" maxFontSizeMultiplier={textScale.body} style={styles.bannerTitle}>Suspending after this spin</Text>
             <Text maxFontSizeMultiplier={textScale.body} style={styles.bannerText}>
               {snapshot.suspension.reason ?? 'This spin finishes normally. No new spin starts until the session resumes.'}
             </Text>
@@ -343,7 +343,7 @@ function Chip({ option, selected, onPress }: { option: (typeof CHIPS)[number]; s
   );
 }
 
-function EndingSteps({ snapshot }: { snapshot: ActiveSnapshot }) {
+function EndingSteps({ snapshot }: { snapshot: ActivePracticeSnapshot }) {
   let returned = 0n;
   for (const fact of snapshot.facts) if (fact.kind === 'wager-returned') returned += BigInt(fact.amount);
   const steps = [
@@ -368,53 +368,6 @@ function EndingSteps({ snapshot }: { snapshot: ActiveSnapshot }) {
         Final settlement starts on its own. There&apos;s nothing to tap.
       </Text>
     </View>
-  );
-}
-
-export function EndSessionDialog({
-  visible,
-  view,
-  onCancel,
-  onConfirm,
-  cancelLabel = 'Keep playing',
-}: {
-  visible: boolean;
-  view: PermittedView;
-  onCancel: () => void;
-  onConfirm: () => void;
-  cancelLabel?: string;
-}) {
-  const removable = view.wagersCommitted ? [] : view.wagers;
-  return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel} supportedOrientations={['portrait', 'landscape']}>
-      <View style={styles.scrim}>
-        <ScrollView contentContainerStyle={styles.dialogScroll}>
-          <View accessibilityViewIsModal style={styles.dialog}>
-            <Text accessibilityRole="header" maxFontSizeMultiplier={textScale.display} style={styles.dialogTitle}>
-              End this session?
-            </Text>
-            <Text maxFontSizeMultiplier={textScale.body} style={styles.dialogText}>
-              Ending works in three steps, and it can&apos;t be undone once settlement starts.
-            </Text>
-            {[
-              {
-                title: 'Removable wagers come back',
-                detail: removable.length === 0 ? 'Nothing on the table' : removable.map((w) => `${targetName(w.target)} ${formatUnits(w.amount)}`).join(' · '),
-              },
-              { title: 'Committed wagers settle automatically', detail: 'None between spins' },
-              { title: 'You see the session result', detail: 'Buy-in, rebuys, final cash-out, net result and maximum drawdown' },
-            ].map((step, index) => (
-              <View key={step.title} accessible accessibilityLabel={`${index + 1}. ${step.title}. ${step.detail}`} style={styles.dialogStep}>
-                <Text maxFontSizeMultiplier={textScale.body} style={styles.dialogStepTitle}>{index + 1}  {step.title}</Text>
-                <Text maxFontSizeMultiplier={textScale.body} style={styles.dialogText}>{step.detail}</Text>
-              </View>
-            ))}
-            <Button label="End session" stretch onPress={onConfirm} />
-            <Button label={cancelLabel} variant="secondary" stretch onPress={onCancel} />
-          </View>
-        </ScrollView>
-      </View>
-    </Modal>
   );
 }
 
@@ -481,11 +434,4 @@ const styles = StyleSheet.create({
   endingStepTitle: { fontFamily: fonts.uiMedium, fontSize: 15, color: palette.foreground },
   endingStepDetail: { fontFamily: fonts.ui, fontSize: 13, color: palette.mutedForeground },
   muted: { color: palette.mutedForeground },
-  scrim: { flex: 1, backgroundColor: palette.scrim },
-  dialogScroll: { flexGrow: 1, justifyContent: 'center', padding: space[4] },
-  dialog: { gap: space[3], padding: space[6], borderRadius: radius.lg, backgroundColor: palette.popover },
-  dialogTitle: { fontFamily: fonts.display, fontSize: 24, color: palette.foreground },
-  dialogText: { fontFamily: fonts.ui, fontSize: 14, color: palette.mutedForeground },
-  dialogStep: { gap: 2 },
-  dialogStepTitle: { fontFamily: fonts.uiMedium, fontSize: 15, color: palette.foreground },
 });

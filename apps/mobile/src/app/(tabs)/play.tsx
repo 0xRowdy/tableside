@@ -9,7 +9,6 @@ import { RouletteSetup } from '@/play/RouletteSetup';
 import { RouletteTable } from '@/play/RouletteTable';
 import { SessionResult } from '@/play/SessionResult';
 import { SuspendedSession } from '@/play/SuspendedSession';
-import { resumesOnReturn } from '@/practice/controller';
 import { usePractice } from '@/practice/PracticeProvider';
 
 /** Play shows the active practice session's table (or its result), or setup when there is none. */
@@ -37,7 +36,7 @@ export default function Play() {
     case 'active': {
       const { suspension } = snapshot;
       // A suspension that coming back lifts shows the table while it resumes; any other waits for the player.
-      if (suspension?.reached && (!resumesOnReturn(suspension) || suspension.resumeBlocked)) {
+      if (suspension?.waitsForPlayer) {
         return <SuspendedSession snapshot={snapshot} suspension={suspension} />;
       }
       return <RouletteTable snapshot={snapshot} />;

@@ -79,12 +79,12 @@ describe('suspension', () => {
     await cleanup();
   }, 180_000);
 
-  it('suspends when the tab bar leaves the table, shows it paused on Home, and resumes on return without restarting', async () => {
+  it('suspends when the tab bar leaves the table, shows it suspended on Home, and resumes on return without restarting', async () => {
     await startSession();
     await betRed25();
 
     await fireEvent.press(screen.getByRole('tab', { name: 'Home' }));
-    expect(await screen.findByRole('header', { name: 'Roulette session paused' })).toBeOnTheScreen();
+    expect(await screen.findByRole('header', { name: 'Roulette session suspended' })).toBeOnTheScreen();
     expect(mockApp.latest && (await mockApp.latest.store.findUnfinished())?.sequence).toBe(1);
 
     await fireEvent.press(screen.getByRole('tab', { name: 'Play' }));

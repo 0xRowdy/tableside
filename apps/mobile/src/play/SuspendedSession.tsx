@@ -2,34 +2,33 @@
 // "Resume an interrupted session"): where it stopped, Resume session, and End
 // session when the session is between turns. Nothing here advances the game;
 // a blocked resume changes nothing and End session stays available.
+// Copy says "suspended", not "paused": a pause is the player's own (CONTEXT.md).
 
 import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { Button } from '@/components/Button';
+import { Notice, NoticeText } from '@/components/Notice';
 import { Screen } from '@/components/Screen';
-import type { PracticeSnapshot, Suspension } from '@/practice/controller';
+import type { ActivePracticeSnapshot, Suspension } from '@/practice/controller';
 import { usePractice } from '@/practice/PracticeProvider';
 import { fonts, palette, radius, space, textScale } from '@/theme/tokens';
 
-import { EndSessionDialog } from './RouletteTable';
+import { EndSessionDialog } from './EndSessionDialog';
 import { formatUnits, STATUS, totalOnTable } from './roulette-text';
-
-type ActiveSnapshot = Extract<PracticeSnapshot, { status: 'active' }>;
 
 const WHY: Record<Suspension['cause'], string> = {
   interrupted: "Tableside closed during your roulette session. It's saved exactly as it was. Nothing was spun or settled while you were away.",
-  navigation: "Your roulette session is paused. It's saved exactly as it was.",
-  'app-lifecycle': "Your roulette session paused when Tableside went to the background. It's saved exactly as it was.",
-  'sign-out': "Your roulette session paused when you signed out. It's saved exactly as it was.",
-  access: "Your roulette session is paused. It's saved exactly as it was, and nothing was spun or settled since.",
+  navigation: "Your roulette session is suspended. It's saved exactly as it was.",
+  'app-lifecycle': "Your roulette session was suspended when Tableside went to the background. It's saved exactly as it was.",
+  'sign-out': "Your roulette session was suspended when you signed out. It's saved exactly as it was.",
+  access: "Your roulette session is suspended. It's saved exactly as it was, and nothing was spun or settled since.",
 };
 
-export function SuspendedSession({ snapshot, suspension }: { snapshot: ActiveSnapshot; suspension: Suspension }) {
+export function SuspendedSession({ snapshot, suspension }: { snapshot: ActivePracticeSnapshot; suspension: Suspension }) {
   const { controller } = usePractice();
   const [confirming, setConfirming] = useState(false);
   const { view, busy } = snapshot;
-  const ending = view.phase === 'final-settlement';
 
   return (
     <Screen>
@@ -41,31 +40,20 @@ export function SuspendedSession({ snapshot, suspension }: { snapshot: ActiveSna
       </Text>
 
       {suspension.resumeBlocked && (
-        <View style={styles.notice}>
-          <Text accessibilityRole="alert" maxFontSizeMultiplier={textScale.body} style={styles.noticeTitle}>
-            Can&apos;t resume · {suspension.resumeBlocked}
-          </Text>
-          <Text maxFontSizeMultiplier={textScale.body} style={styles.noticeText}>
-            Nothing has changed. {suspension.canEnd ? 'You can still end the session.' : 'Try again once access is confirmed.'}
-          </Text>
-        </View>
+        <Notice role="alert" title={`Can't resume · ${suspension.resumeBlocked}`}>
+          <NoticeText>Nothing has changed. {suspension.canEnd ? 'You can still end the session.' : 'Try again once access is confirmed.'}</NoticeText>
+        </Notice>
       )}
-      {suspension.endBlocked && (
-        <View style={styles.notice}>
-          <Text accessibilityRole="alert" maxFontSizeMultiplier={textScale.body} style={styles.noticeTitle}>
-            Can&apos;t end yet · {suspension.endBlocked}
-          </Text>
-        </View>
-      )}
+      {suspension.endBlocked && <Notice role="alert" title={`Can't end yet · ${suspension.endBlocked}`} />}
 
       <View style={styles.card} testID="suspended-session">
         <View style={styles.cardHead}>
           <Text maxFontSizeMultiplier={textScale.body} style={styles.cardTitle}>Roulette · free play</Text>
           <View style={styles.tag}>
-            <Text maxFontSizeMultiplier={textScale.body} style={styles.tagText}>Paused</Text>
+            <Text maxFontSizeMultiplier={textScale.body} style={styles.tagText}>Suspended</Text>
           </View>
         </View>
-        <Row label="Where you were" value={ending ? 'Final settlement' : `${STATUS[view.phase]}${view.turn > 0 ? `, spin ${view.turn}` : ''}`} />
+        <Row label="Where you were" value={`${STATUS[view.phase]}${view.turn > 0 && view.phase !== 'final-settlement' ? `, spin ${view.turn}` : ''}`} />
         <Row label="Session balance" value={formatUnits(view.balance)} />
         <Row label="On table" value={formatUnits(totalOnTable(view))} />
         <Text maxFontSizeMultiplier={textScale.body} style={styles.caption}>Same rules, wheel and spins as before.</Text>
@@ -91,7 +79,7 @@ export function SuspendedSession({ snapshot, suspension }: { snapshot: ActiveSna
           setConfirming(false);
           void controller.endSession();
         }}
-        cancelLabel="Keep it paused"
+        cancelLabel="Not now"
       />
     </Screen>
   );
@@ -109,9 +97,6 @@ function Row({ label, value }: { label: string; value: string }) {
 const styles = StyleSheet.create({
   title: { fontFamily: fonts.display, fontSize: 26, color: palette.foreground },
   body: { fontFamily: fonts.ui, fontSize: 14, lineHeight: 20, color: palette.mutedForeground },
-  notice: { gap: space[1], padding: space[4], borderRadius: radius.lg, backgroundColor: palette.card, borderWidth: 1, borderColor: palette.primary },
-  noticeTitle: { fontFamily: fonts.uiBold, fontSize: 14, color: palette.foreground },
-  noticeText: { fontFamily: fonts.ui, fontSize: 13, color: palette.mutedForeground },
   card: { gap: space[3], padding: space[4], borderRadius: radius.lg, backgroundColor: palette.card, borderWidth: 1, borderColor: palette.border },
   cardHead: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: space[2] },
   cardTitle: { fontFamily: fonts.uiBold, fontSize: 16, color: palette.foreground },

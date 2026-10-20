@@ -281,6 +281,86 @@ describe('resuming', () => {
   });
 });
 
+describe('races with the supervisor', () => {
+  it('stays suspended when the player leaves again while a resume is still being asked', async () => {
+    const { controller, next, commits, clock } = await started({ autoClock: false });
+    await controller.placeWager('red', '10');
+    const spinning = controller.spin();
+    await waitFor(() => clock.pending === 1);
+    controller.suspend('navigation');
+    clock.advance(REVEAL_MS);
+    await spinning;
+    let answer = (_: AccessDecision) => undefined as void;
+    next.resume = new Promise<AccessDecision>((resolve) => (answer = resolve));
+
+    const resuming = controller.resumeOnReturn();
+    controller.suspend('navigation');
+    answer({ status: 'allowed', provenance: 'test' });
+    await resuming;
+
+    expect(active(controller.snapshot()).suspension).toMatchObject({ reached: true });
+    expect(clock.pending).toBe(0);
+    expect(kinds(commits)).toEqual(['place-wager', 'begin-turn']);
+  });
+
+  it('keeps an access suspension waiting for its turn boundary when the player leaves, and never lifts it on return', async () => {
+    const { controller, next, clock } = await started({ autoClock: false });
+    await controller.placeWager('red', '10');
+    const spinning = controller.spin();
+    await waitFor(() => clock.pending === 1);
+    next.lifecycle = { status: 'uncertain', provenance: 'test', disposition: 'suspend-at-turn-boundary', reason: 'Checking your access.' };
+    await controller.lifecycle('access-changed');
+
+    controller.suspend('navigation');
+    clock.advance(REVEAL_MS);
+    await spinning;
+
+    expect(active(controller.snapshot()).suspension).toMatchObject({ cause: 'access', reason: 'Checking your access.', kind: 'immediate' });
+    await controller.resumeOnReturn();
+    expect(active(controller.snapshot()).suspension).toMatchObject({ cause: 'access' });
+  });
+
+  it('treats a supervisor that fails before a turn as uncertain: no turn starts and the session suspends', async () => {
+    const { controller, adapters, commits } = await started();
+    await controller.placeWager('red', '10');
+    adapters.access.beforeTurn = async () => {
+      throw new Error('unreachable');
+    };
+
+    await controller.spin();
+
+    expect(kinds(commits)).toEqual(['place-wager']);
+    expect(active(controller.snapshot()).suspension).toMatchObject({ cause: 'access', reached: true, canEnd: true });
+  });
+
+  it('keeps End session available when the gate check fails, explaining it can be tried again', async () => {
+    const { controller, adapters, commits } = await started();
+    controller.suspend('navigation');
+    adapters.access.beforeEndWhileSuspended = async () => {
+      throw new Error('unreachable');
+    };
+
+    await controller.endSession();
+
+    expect(commits).toHaveLength(0);
+    expect(active(controller.snapshot()).suspension).toMatchObject({ canEnd: true, endBlocked: expect.any(String) });
+  });
+
+  it('a resume refused because access ended changes nothing, and ending then shows the access-ended stop', async () => {
+    const { controller, next, commits } = await started();
+    await controller.placeWager('red', '10');
+    controller.suspend('navigation');
+    next.resume = { status: 'denied', provenance: 'test', disposition: 'stop', reason: 'Training ended for today.' };
+
+    await controller.resume();
+    expect(commits).toHaveLength(1);
+    expect(active(controller.snapshot())).toMatchObject({ suspension: { resumeBlocked: 'Training ended for today.' }, ending: 'access-ended' });
+
+    await controller.endSession();
+    expect(controller.snapshot()).toMatchObject({ status: 'completed', result: { finalCashOut: '1000' } });
+  });
+});
+
 describe('ending while suspended', () => {
   it('after a turn-boundary suspend, returns removable wagers and settles, offline and without asking for access', async () => {
     const { controller, next, asked, store } = await started();

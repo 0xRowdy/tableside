@@ -64,9 +64,13 @@ export interface Suspension {
   readonly resumeBlocked: string | null;
   /** End session works from here: suspended between turns, never mid-round (Amendment 5 A3). */
   readonly canEnd: boolean;
+  /** The session waits for the player: coming back to the table won't lift this by itself, or a resume was refused. */
+  readonly waitsForPlayer: boolean;
   /** Why the last End session was refused (spec 2's gate states). */
   readonly endBlocked: string | null;
 }
+
+export type ActivePracticeSnapshot = Extract<PracticeSnapshot, { status: 'active' }>;
 
 export type PracticeSnapshot =
   | { readonly status: 'loading' }
@@ -120,7 +124,12 @@ type CommitResult = 'committed' | 'adopted' | 'not-saved' | 'rejected';
 /** Whether automatic steps may carry on after a command. */
 const settled = (result: CommitResult) => result === 'committed' || result === 'adopted';
 
-/** Phases in which a turn is under way: it finishes before a turn boundary is reached. */
+/**
+ * Phases in which a turn is under way: it finishes before a turn boundary is
+ * reached, and a session suspended in one can't end until it resumes. Roulette's
+ * turn is the spin; each game that adds phases (a blackjack round, a craps roll)
+ * must list its mid-turn ones here.
+ */
 const TURN_PHASES: ReadonlySet<Phase> = new Set(['revealing-outcome']);
 
 /** Phases whose time counts as active training (Amendment 4 A4); every other phase is excluded. */
@@ -130,7 +139,13 @@ const TIMED_PHASES: ReadonlySet<Phase> = new Set(['open-decision', 'revealing-ou
 const RESUMES_ON_RETURN: ReadonlySet<SuspendCause> = new Set(['navigation', 'app-lifecycle']);
 
 /** Whether coming back to the table lifts this suspension by itself (it still asks the supervisor). */
-export const resumesOnReturn = (suspension: Suspension): boolean => RESUMES_ON_RETURN.has(suspension.cause);
+const resumesOnReturn = (suspension: Pick<Suspension, 'cause'>): boolean => RESUMES_ON_RETURN.has(suspension.cause);
+
+/** A supervisor question that failed to answer counts as uncertain access. */
+const UNANSWERED: AccessDenial = { status: 'uncertain', provenance: 'unanswered', disposition: 'suspend-at-turn-boundary' };
+
+const CANT_RESUME = "This session can't resume right now.";
+const CHECK_FAILED = "Couldn't check whether this session can end. Try again.";
 
 export class PracticeController {
   private current: PracticeSnapshot = { status: 'loading' };
@@ -145,6 +160,8 @@ export class PracticeController {
   private stopping: 'player' | 'access-ended' | null = null;
   /** A resume asked for while other work was in flight; it runs when that work ends. */
   private resumeQueued = false;
+  /** Counts direct suspends, so a resume still being asked notices the player left again. */
+  private suspends = 0;
   /** The last report given to the timed-metering hook, so only changes are reported. */
   private lastReport: string | null = null;
   /** The failed save the pending automatic retry is for, if one is waiting. */
@@ -190,7 +207,7 @@ export class PracticeController {
       }
 
       // Uncertain or denied: nothing is created, drawn or charged.
-      const access = await this.adapters.access.beforeActivity({ game: request.game });
+      const access = await this.adapters.access.beforeActivity({ game: request.game }).catch((): AccessDenial => UNANSWERED);
       if (access.status !== 'allowed') {
         return access.status === 'uncertain' ? this.showNone('access-uncertain') : this.showNone('access-denied', access.reason ?? null);
       }
@@ -253,7 +270,8 @@ export class PracticeController {
     await this.exclusive(async () => {
       if (!this.playOpen()) return;
       const state = this.requireState();
-      const access = await this.adapters.access.beforeTurn({ activityId: state.activity.id, turn: state.turn + 1 });
+      // Unanswered mid-activity: uncertain, so no new turn (Amendment 5 A1).
+      const access = await this.adapters.access.beforeTurn({ activityId: state.activity.id, turn: state.turn + 1 }).catch((): AccessDenial => UNANSWERED);
       if (access.status !== 'allowed') {
         // No turn starts: the stop path runs, or the session suspends here, at the boundary.
         this.applyDenial(access);
@@ -294,10 +312,14 @@ export class PracticeController {
       const suspension = this.suspension;
       if (suspension) {
         if (!suspension.canEnd) return;
-        const gate = await this.adapters.access.beforeEndWhileSuspended({ activityId: this.state.activity.id });
-        if (this.suspension !== suspension) return;
+        const gate = await this.adapters.access
+          .beforeEndWhileSuspended({ activityId: this.state.activity.id })
+          .catch(() => ({ status: 'blocked', reason: CHECK_FAILED }) as const);
+        // Changed while asking (another suspension): judge ending against the one now in place.
+        const now = this.suspension;
+        if (!now?.canEnd) return this.publish();
         if (gate.status === 'blocked') {
-          this.suspension = { ...suspension, endBlocked: gate.reason };
+          this.suspension = { ...now, endBlocked: gate.reason };
           return this.publish();
         }
         this.suspension = null;
@@ -320,6 +342,7 @@ export class PracticeController {
   suspend(cause: 'navigation' | 'app-lifecycle' | 'sign-out' = 'navigation'): void {
     if (!this.state || this.current.status !== 'active') return;
     this.resumeQueued = false;
+    this.suspends++;
     this.suspendNow(cause, null);
   }
 
@@ -347,7 +370,8 @@ export class PracticeController {
     if (event === 'backgrounded') this.suspend('app-lifecycle');
     if (event === 'signed-out') this.suspend('sign-out');
     const activityId = this.state.activity.id;
-    const decision = await this.adapters.access.onLifecycle({ activityId, event });
+    // An event the supervisor couldn't answer tells it nothing new; the next turn or resume asks again.
+    const decision = await this.adapters.access.onLifecycle({ activityId, event }).catch((): AccessDecision => ({ status: 'allowed', provenance: 'unanswered' }));
     if (decision.status === 'allowed' || this.state?.activity.id !== activityId || this.current.status !== 'active') return;
     this.applyDenial(decision);
     // Work in flight picks the disposition up at its next step; otherwise apply it now.
@@ -403,21 +427,31 @@ export class PracticeController {
     if (previous) {
       // A turn-boundary suspend never loosens one already in place.
       if (kind === 'turn-boundary') return;
-      // Leaving the table never replaces a suspension that coming back can't lift.
-      if (previous.kind === 'immediate' && RESUMES_ON_RETURN.has(cause)) return;
+      if (resumesOnReturn({ cause })) {
+        if (previous.kind === 'immediate') return;
+        // Leaving the table makes a waiting access suspension immediate but keeps its cause, so return can't lift it.
+        cause = previous.cause;
+        reason = previous.reason;
+      }
     }
-    this.suspension = { cause, kind, reached: false, reason, resumeBlocked: null, canEnd: false, endBlocked: null };
-    this.markBoundary();
+    this.suspension = { cause, kind, reached: false, reason, resumeBlocked: null, canEnd: false, endBlocked: null, waitsForPlayer: false };
+    this.refreshSuspension();
   }
 
-  /** Marks the suspension reached once it applies: at once, or when no turn is under way. */
-  private markBoundary(): void {
+  /**
+   * Recomputes what the suspension allows in the committed phase (reached at
+   * once, or when no turn is under way; whether it can end; whether it waits for
+   * the player), then publishes.
+   */
+  private refreshSuspension(): void {
     const suspension = this.suspension;
     if (!suspension || !this.state) return;
     const betweenTurns = !TURN_PHASES.has(this.state.phase);
     const reached = suspension.kind === 'immediate' || betweenTurns;
-    if (reached !== suspension.reached || (reached && betweenTurns) !== suspension.canEnd) {
-      this.suspension = { ...suspension, reached, canEnd: reached && betweenTurns };
+    const canEnd = reached && betweenTurns;
+    const waitsForPlayer = reached && (!resumesOnReturn(suspension) || suspension.resumeBlocked !== null);
+    if (reached !== suspension.reached || canEnd !== suspension.canEnd || waitsForPlayer !== suspension.waitsForPlayer) {
+      this.suspension = { ...suspension, reached, canEnd, waitsForPlayer };
     }
     this.publish();
   }
@@ -439,18 +473,18 @@ export class PracticeController {
     const suspension = this.suspension;
     const state = this.state;
     if (!suspension || !state) return;
-    let decision: AccessDecision;
-    try {
-      decision = await this.adapters.access.beforeResume({ activityId: state.activity.id, phase: state.phase });
-    } catch {
-      decision = { status: 'uncertain', provenance: 'unanswered', disposition: 'suspend' };
-    }
-    // Suspended again while asking: stay suspended.
-    if (this.suspension !== suspension) return;
+    const suspends = this.suspends;
+    const decision = await this.adapters.access
+      .beforeResume({ activityId: state.activity.id, phase: state.phase })
+      .catch((): AccessDecision => UNANSWERED);
+    // Suspended again while asking (the player left again, or a disposition arrived): stay suspended.
+    if (this.suspension !== suspension || this.suspends !== suspends) return;
     if (decision.status !== 'allowed') {
-      const resumeBlocked = decision.status === 'uncertain' ? RECONNECT_TO_VERIFY : (decision.reason ?? "This session can't resume right now.");
+      const resumeBlocked = decision.status === 'uncertain' ? RECONNECT_TO_VERIFY : (decision.reason ?? CANT_RESUME);
       this.suspension = { ...suspension, resumeBlocked };
-      return this.publish();
+      // Access ended: play never reopens, so ending runs (and says it runs) the access-ended stop path.
+      if (decision.disposition === 'stop') this.stopping = 'access-ended';
+      return this.refreshSuspension();
     }
     this.suspension = null;
     this.publish();
@@ -486,7 +520,7 @@ export class PracticeController {
       if (this.pending) return;
       const phase = this.requireState().phase;
       if (this.suspension) {
-        this.markBoundary();
+        this.refreshSuspension();
         if (this.suspension.reached) return;
       }
       if (phase === 'revealing-outcome') {
@@ -603,7 +637,7 @@ export class PracticeController {
     // Another writer moved the activity on; this session's suspension and stop still hold.
     this.suspension = suspension;
     this.stopping ??= stopping;
-    this.markBoundary();
+    this.refreshSuspension();
     return 'adopted';
   }
 
