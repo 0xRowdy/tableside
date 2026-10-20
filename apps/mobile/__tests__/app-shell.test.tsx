@@ -1,5 +1,6 @@
 import { act, cleanup, fireEvent, screen, within } from '@testing-library/react-native';
 import { renderRouter } from 'expo-router/testing-library';
+import { Platform } from 'react-native';
 
 const TAB_LABELS = ['Home', 'Play', 'Counting', 'Community', 'Saved', 'More'];
 
@@ -84,9 +85,25 @@ describe('app shell', () => {
     }
   });
 
-  it('lets a long press preview the tab label at accessibility text sizes and selects it on release', async () => {
-    const { Platform } = require('react-native') as typeof import('react-native');
-    if (Platform.OS !== 'android') return; // iOS uses the native Large Content Viewer.
+  // Each platform's large-content path runs in its own Jest project; the other is skipped.
+  const onIos = Platform.OS === 'ios' ? it : it.skip;
+  const onAndroid = Platform.OS === 'android' ? it : it.skip;
+
+  onIos('gives the Large Content Viewer each tab label and symbol, and selects the tab the finger lifts on', async () => {
+    await renderApp();
+
+    // The native interaction itself is checked by hand (docs/development.md); this covers what the tab bar hands it.
+    const items = screen.getAllByTestId('large-content-item');
+    expect(items.map((item) => item.props.title)).toEqual(TAB_LABELS);
+    expect(items.every((item) => typeof item.props.systemImage === 'string')).toBe(true);
+
+    const saved = items[TAB_LABELS.indexOf('Saved')]!;
+    await act(() => saved.props.onSelect());
+    expect(await screen.findByRole('header', { name: 'Saved' })).toBeOnTheScreen();
+    expect(tabBar().getByRole('tab', { name: 'Saved', selected: true })).toBeOnTheScreen();
+  });
+
+  onAndroid('lets a long press preview the tab label at accessibility text sizes and selects it on release', async () => {
     await renderApp();
     const { Dimensions } = require('react-native') as typeof import('react-native');
     const window = Dimensions.get('window');
