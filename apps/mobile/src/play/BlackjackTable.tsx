@@ -8,7 +8,7 @@
 // card is drawn as a card back and read as "Face-down card".
 
 import { blackjackHouseEdge } from '@tableside/definitions';
-import { decodeMoney, encodeMoney, INSURANCE_TARGET, money, mul, type BlackjackAction, type BlackjackHandView, type BlackjackPermittedView, type Card } from '@tableside/engine';
+import { decodeMoney, encodeMoney, INSURANCE_TARGET, MAX_SPLIT_HANDS, money, mul, type BlackjackAction, type BlackjackHandView, type BlackjackPermittedView, type Card } from '@tableside/engine';
 import { useEffect, useMemo, useState } from 'react';
 import { AccessibilityInfo, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -476,16 +476,11 @@ type TableAction = keyof typeof ACTION_LABEL;
 /** Why a playing action the table shows is unavailable, in words; null when it is offered. */
 function unavailable(action: TableAction, view: BlackjackPermittedView): string | null {
   if (view.playActions.includes(action)) return null;
-  const round = view.outcome;
-  const hand = round?.active != null ? round.hands[round.active] : undefined;
-  const [a, b] = hand?.cards ?? [];
   switch (action) {
     case 'double':
       return 'Double isn’t available: you can double only on your first two cards.';
     case 'split':
-      return hand?.cards.length === 2 && a && b && Math.min(a.rank, 10) === Math.min(b.rank, 10)
-        ? 'Split is off: four hands is the maximum.'
-        : 'Split isn’t available: your cards aren’t a pair.';
+      return (view.outcome?.hands.length ?? 1) >= MAX_SPLIT_HANDS ? 'Split is off: four hands is the maximum.' : 'Split isn’t available: your cards aren’t a pair.';
     case 'surrender':
       return 'Surrender is only on your first two cards.';
     default:

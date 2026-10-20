@@ -35,7 +35,7 @@ describe('blackjack through the practice controller', () => {
     await controller.start({ game: 'blackjack', buyIn: '1000', rules: blackjackRules('H17_noLS', 60) });
 
     const table = view(controller.snapshot()).table;
-    expect(table).toEqual({ decks: 6, dealer: 'H17', lateSurrender: false, penetration: 60, initial: { min: '10', max: '1000' }, blackjackPays: '3:2', players: { learnerSeat: 0, others: [] } });
+    expect(table).toEqual({ decks: 6, dealer: 'H17', lateSurrender: false, penetration: 60, initial: { min: '10', max: '1000' }, blackjackPays: '3:2', players: { learnerSeat: 0, otherWagers: [] } });
     const stored = await store.findUnfinished();
     expect(stored?.specification).toMatchObject({ game: 'blackjack', rules: { id: 'blackjack-six-deck', dealer: 'H17', penetration: 60 } });
   });
@@ -156,8 +156,8 @@ describe('blackjack through the practice controller', () => {
     const { controller, store } = setup();
     await controller.load();
     await controller.start({ game: 'blackjack', buyIn: '1000', rules: blackjackRules('S17_LS', 75, 2) });
-    expect(view(controller.snapshot()).table.players).toEqual({ learnerSeat: 2, others: ['10', '10'] });
+    expect(view(controller.snapshot()).table.players).toEqual({ learnerSeat: 2, otherWagers: ['10', '10'] });
     const stored = await store.findUnfinished();
-    expect(stored?.specification).toMatchObject({ rules: { players: { learnerSeat: 2, others: ['10', '10'] } } });
+    expect(stored?.specification).toMatchObject({ rules: { players: { learnerSeat: 2, otherWagers: ['10', '10'] } } });
   });
 });

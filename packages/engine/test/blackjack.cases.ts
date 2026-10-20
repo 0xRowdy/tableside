@@ -432,7 +432,7 @@ export const blackjackCases: TestCase[] = [
         lateSurrender: true,
         penetration: 75,
         limits: { initial: { min: '10', max: '1000' } },
-        players: { learnerSeat: 0, others: [], strategy: null },
+        players: { learnerSeat: 0, otherWagers: [], strategy: null },
       });
       t.equal([state.shoe, state.outcome, state.random.block], [null, null, [0, 0]]);
       const bad: Partial<BlackjackActivitySpecification['rules']>[] = [

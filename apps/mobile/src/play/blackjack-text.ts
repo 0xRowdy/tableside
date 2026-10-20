@@ -99,15 +99,18 @@ export function dealerSummary(view: BlackjackPermittedView): string {
 export const showingLastRound = (view: BlackjackPermittedView) =>
   view.outcome !== null && (view.phase === 'settled-outcome' || (view.phase === 'open-decision' && !isPlaying(view)));
 
-/** Where a hand stands, in words: "your turn", "waiting", "stood", "doubled", "surrendered", "bust", "blackjack". */
-export function handState(hand: BlackjackHandView, index: number, view: BlackjackPermittedView): string {
-  if (isPlaying(view) && view.outcome?.active === index) return 'your turn';
+/** A finished or waiting hand in words: "surrendered", "bust", "blackjack", "doubled", "waiting" or `done`. */
+function settledState(hand: BlackjackHandView, done: string): string {
   if (hand.surrendered) return 'surrendered';
   if (hand.busted) return 'bust';
   if (hand.natural) return 'blackjack';
   if (hand.doubled) return 'doubled';
-  if (!hand.done) return 'waiting';
-  return 'stood';
+  return hand.done ? done : 'waiting';
+}
+
+/** Where one of the learner's hands stands, in words: "your turn", "waiting", "stood", "doubled", "surrendered", "bust", "blackjack". */
+export function handState(hand: BlackjackHandView, index: number, view: BlackjackPermittedView): string {
+  return isPlaying(view) && view.outcome?.active === index ? 'your turn' : settledState(hand, 'stood');
 }
 
 /**
@@ -127,7 +130,8 @@ export function handSummary(view: BlackjackPermittedView, index = 0): string {
 /** A simulated player's hand: "Seat 1 hand: 10 of spades, 6 of hearts. 16, waiting". */
 export function seatSummary(seat: number, hand: BlackjackHandView, index: number, count: number, view: BlackjackPermittedView): string {
   const name = count > 1 ? `Seat ${seat}, hand ${index + 1} of ${count}` : `Seat ${seat}`;
-  const state = hand.surrendered ? 'surrendered' : hand.busted ? 'bust' : hand.natural ? 'blackjack' : hand.doubled ? 'doubled' : hand.done || !isPlaying(view) ? 'done' : 'waiting';
+  // Between rounds every hand is done.
+  const state = settledState(isPlaying(view) ? hand : { ...hand, done: true }, 'done');
   return `${name}: ${hand.cards.map(cardName).join(', ')}. ${capitalize(handTotalText(hand))}, ${state}`;
 }
 

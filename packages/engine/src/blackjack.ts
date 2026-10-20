@@ -61,10 +61,10 @@ export interface SeatStrategy {
 
 /** Who sits at the table. */
 export interface BlackjackPlayers {
-  /** The learner's seat counted from first base, from 0: 0 acts first, `others.length` acts last. */
+  /** The learner's seat counted from first base, from 0: 0 acts first, `otherWagers.length` acts last. */
   readonly learnerSeat: number;
   /** Each simulated player's fixed initial wager, in seat order without the learner. */
-  readonly others: readonly string[];
+  readonly otherWagers: readonly string[];
   /** The basic strategy the simulated players use; null when there are none. */
   readonly strategy: SeatStrategy | null;
 }
@@ -219,7 +219,7 @@ export interface BlackjackTableView {
   readonly penetration: number;
   readonly initial: Limit;
   readonly blackjackPays: '3:2';
-  readonly players: { readonly learnerSeat: number; readonly others: readonly string[] };
+  readonly players: { readonly learnerSeat: number; readonly otherWagers: readonly string[] };
 }
 
 /** The open insurance (or even-money) offer: insure up to `max`, whole units or exactly half the initial wager. */
@@ -271,8 +271,8 @@ function withinInitial(text: unknown, limit: Limit): boolean {
 }
 
 function isPlayers(value: unknown, limit: Limit, lateSurrender: boolean): value is BlackjackPlayers {
-  if (!hasExactKeys(value, ['learnerSeat', 'others', 'strategy']) || !Array.isArray(value.others)) return false;
-  const others = value.others as unknown[];
+  if (!hasExactKeys(value, ['learnerSeat', 'otherWagers', 'strategy']) || !Array.isArray(value.otherWagers)) return false;
+  const others = value.otherWagers as unknown[];
   if (others.length > MAX_OTHER_PLAYERS || !others.every((wager) => withinInitial(wager, limit))) return false;
   if (!isCount(value.learnerSeat) || value.learnerSeat > others.length) return false;
   return others.length === 0 ? value.strategy === null : isSeatStrategy(value.strategy, lateSurrender);
@@ -315,7 +315,7 @@ export const blackjackTable = (rules: BlackjackRuleSet): BlackjackTable => ({
   limits: { initial: { min: rules.limits.initial.min, max: rules.limits.initial.max } },
   players: {
     learnerSeat: rules.players.learnerSeat,
-    others: [...rules.players.others],
+    otherWagers: [...rules.players.otherWagers],
     strategy: rules.players.strategy && copyStrategy(rules.players.strategy),
   },
 });
@@ -325,7 +325,7 @@ const cutIndex = (table: BlackjackTable) => Math.floor((SHOE.length * table.pene
 
 /** Table positions from first base: the learner's, and each simulated player's in seat order. */
 const learnerPosition = (rules: BlackjackTable) => rules.players.learnerSeat + 1;
-const otherPositions = (rules: BlackjackTable) => rules.players.others.map((_, k) => (k < rules.players.learnerSeat ? k + 1 : k + 2));
+const otherPositions = (rules: BlackjackTable) => rules.players.otherWagers.map((_, k) => (k < rules.players.learnerSeat ? k + 1 : k + 2));
 
 // ---- totals ---------------------------------------------------------------
 
@@ -646,6 +646,9 @@ function placeWager(state: BlackjackActivityState, target: string, amount: Money
 const HALF = money(1n, 2n);
 const TWO = money(2n);
 
+/** Insurance is up to half the initial wager (the learner's box carries the round's first wager). */
+const insuranceMax = (wagers: readonly Wager[]) => mul(decodeMoney((wagers[0] as Wager).amount), HALF);
+
 function beginRound(state: BlackjackActivityState): BlackjackStep {
   if (state.wagers.length === 0) return { illegal: 'no-wager' };
   const facts: DomainFact[] = [];
@@ -691,8 +694,7 @@ function beginRound(state: BlackjackActivityState): BlackjackStep {
     // Insurance (even money on a natural) comes before the peek.
     round.insurance = 'offered';
     round.peek = 'pending';
-    const initial = decodeMoney((state.wagers[0] as Wager).amount);
-    facts.push({ kind: 'insurance-offered', turn, max: encodeMoney(mul(initial, HALF)), evenMoney: (round.hands[0] as WorkHand).done });
+    facts.push({ kind: 'insurance-offered', turn, max: encodeMoney(insuranceMax(state.wagers)), evenMoney: (round.hands[0] as WorkHand).done });
   } else {
     table.peek();
   }
@@ -708,7 +710,7 @@ function beginRound(state: BlackjackActivityState): BlackjackStep {
 function insure(state: BlackjackActivityState, target: string, amount: Money): BlackjackStep {
   if (target !== INSURANCE_TARGET) return { illegal: 'unknown-target' };
   if (amount.n === 0n) return { illegal: 'no-wager-to-remove' };
-  const max = mul(decodeMoney((state.wagers[0] as Wager).amount), HALF);
+  const max = insuranceMax(state.wagers);
   if (compare(amount, max) > 0) return { illegal: 'above-maximum' };
   if (amount.d !== 1n && compare(amount, max) !== 0) return { illegal: 'not-whole-units' };
   let balance = sub(decodeMoney(state.balance), amount);
@@ -854,7 +856,7 @@ function settle(state: BlackjackActivityState): { balance: string; facts: Domain
     });
   }
   round.others.forEach((seat, k) => {
-    const initial = decodeMoney(state.rules.players.others[k] as string);
+    const initial = decodeMoney(state.rules.players.otherWagers[k] as string);
     for (const hand of seat.hands) {
       const stake = hand.doubled ? add(initial, initial) : initial;
       const net = handNet(hand, seat.hands, round, stake);
@@ -889,7 +891,7 @@ function view(
     wagersCommitted: state.wagers.length > 0 && (playing(state) || state.phase === 'revealing-outcome' || state.phase === 'final-settlement'),
     playActions: deciding ? offeredActions(round, rules) : [],
     insuranceOffer: offer
-      ? { max: encodeMoney(mul(decodeMoney((state.wagers[0] as Wager).amount), HALF)), evenMoney: naturalIn(round.hands[0] as BlackjackHand, round.hands) }
+      ? { max: encodeMoney(insuranceMax(state.wagers)), evenMoney: naturalIn(round.hands[0] as BlackjackHand, round.hands) }
       : null,
     outcome: round && {
       turn: state.turn,
@@ -903,7 +905,7 @@ function view(
       active: round.active,
       others: round.others.map((seat, k) => ({
         seat: seat.seat,
-        wager: rules.players.others[k] as string,
+        wager: rules.players.otherWagers[k] as string,
         hands: seat.hands.map((hand) => handView(hand, seat.hands)),
       })),
     },
@@ -919,7 +921,7 @@ function view(
       penetration: rules.penetration,
       initial: { min: rules.limits.initial.min, max: rules.limits.initial.max },
       blackjackPays: '3:2',
-      players: { learnerSeat: rules.players.learnerSeat, others: [...rules.players.others] },
+      players: { learnerSeat: rules.players.learnerSeat, otherWagers: [...rules.players.otherWagers] },
     },
   };
 }
@@ -980,8 +982,10 @@ function roundDamage(value: unknown, rules: BlackjackTable): string | undefined 
     if (handsDamage(seat.hands, (n) => `seat-${positions[k]}-hand-${n}`)) return 'damaged seat hands';
   }
   const hands = value.hands as BlackjackHand[];
-  if (value.active !== null && !(isCount(value.active) && value.active < hands.length && !hands[value.active]?.done)) return 'damaged active hand';
-  if (value.insurance === 'offered' && value.active !== 0) return 'damaged active hand';
+  // While insurance is offered the first hand waits for that decision, even a natural (even money).
+  if (value.insurance === 'offered' ? value.active !== 0 : value.active !== null && !(isCount(value.active) && value.active < hands.length && !hands[value.active]?.done)) {
+    return 'damaged active hand';
+  }
   if ((value.active === null) !== value.holeRevealed) return 'the hole card does not match the round';
   return undefined;
 }

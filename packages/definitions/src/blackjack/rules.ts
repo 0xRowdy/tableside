@@ -3,14 +3,13 @@
 // initial-wager limits 10/1,000 units and 0-4 other players (default none).
 // Editable limits arrive with #72.
 
-import { BLACKJACK_RULES, MAX_OTHER_PLAYERS, type BlackjackRuleSet } from '@tableside/engine';
+import { BLACKJACK_RULES, type BlackjackRuleSet } from '@tableside/engine';
 
 import type { BlackjackPreset } from './reference';
 import { seatStrategy } from './seats';
 
 export const DEFAULT_BLACKJACK_PRESET: BlackjackPreset = 'S17_LS';
 export const DEFAULT_PENETRATION = 75;
-export { MAX_OTHER_PLAYERS };
 
 const PRESETS: Readonly<Record<BlackjackPreset, Pick<BlackjackRuleSet, 'dealer' | 'lateSurrender'>>> = {
   S17_LS: { dealer: 'S17', lateSurrender: true },
@@ -37,7 +36,7 @@ export function blackjackRules(preset: BlackjackPreset = DEFAULT_BLACKJACK_PRESE
     limits: { initial: { ...LIMITS } },
     players: {
       learnerSeat: otherPlayers,
-      others: Array.from({ length: otherPlayers }, () => LIMITS.min),
+      otherWagers: Array.from({ length: otherPlayers }, () => LIMITS.min),
       strategy: otherPlayers > 0 ? seatStrategy(preset) : null,
     },
   };

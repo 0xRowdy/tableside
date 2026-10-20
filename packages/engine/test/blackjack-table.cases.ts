@@ -360,7 +360,7 @@ export const blackjackTableCases: TestCase[] = [
         [1, '10', ['T 6 T']],
         [3, '25', ['5 6']],
       ]);
-      t.equal([view(state).outcome?.active, view(state).table.players], [0, { learnerSeat: 1, others: ['10', '25'] }]);
+      t.equal([view(state).outcome?.active, view(state).table.players], [0, { learnerSeat: 1, otherWagers: ['10', '25'] }]);
       ({ state, facts } = step(state, STAND));
       // Seat 3 doubles 11 against the 9 for one card: 20. Dealer 17 stands.
       t.equal(played(facts), [
@@ -441,7 +441,7 @@ export const blackjackTableCases: TestCase[] = [
     name: 'blackjack players: zero to four players with fixed whole-unit wagers within the table limits and a basic strategy',
     run: (t) => {
       const ok = createActivity(withPlayers(4, ['10', '10', '1000', '25']), BJ_STREAM);
-      t.equal(view(ok).table.players, { learnerSeat: 4, others: ['10', '10', '1000', '25'] });
+      t.equal(view(ok).table.players, { learnerSeat: 4, otherWagers: ['10', '10', '1000', '25'] });
       // The view never carries the strategy table.
       t.equal(JSON.stringify(view(ok)).includes('HSSSSSHHHH'), false);
       const players = withPlayers(1, ['10']).rules.players;
@@ -452,7 +452,7 @@ export const blackjackTableCases: TestCase[] = [
         withPlayers(0, ['21/2']),
         withPlayers(2, ['10']),
         withRules({ players: { ...players, strategy: null } }),
-        withRules({ players: { learnerSeat: 0, others: [], strategy: TEST_STRATEGY } }),
+        withRules({ players: { learnerSeat: 0, otherWagers: [], strategy: TEST_STRATEGY } }),
         withRules({ players: { ...players, strategy: { ...TEST_STRATEGY, pairAtCap: TEST_STRATEGY.pairAtCap.slice(1) } } }),
         withRules({ players: { ...players, strategy: { ...TEST_STRATEGY, later: { ...TEST_STRATEGY.later, hard: TEST_STRATEGY.later.hard.map(() => 'HHHHHHHHHX') } } } }),
         // A surrender play is malformed where the rules have no late surrender.
@@ -484,6 +484,8 @@ export const blackjackTableCases: TestCase[] = [
       const spec = withPlayers(1, ['10', '25']);
       const states: BlackjackActivityState[] = [stacked('9 8 9 A 9 8 9 6 3 T 9', spec)];
       for (const command of [bet('10'), DEAL, NO_INSURANCE, SPLIT, DOUBLE, STAND, SETTLE]) states.push(step(states.at(-1)!, command).state);
+      // An even-money offer: the natural needs no playing decision but waits for the insurance one.
+      states.push(run(stacked('A A K 9'), [bet('10'), DEAL]).state);
       for (const state of states) {
         const decoded = decodeCheckpoint(encodeCheckpoint(state));
         if (!decoded.ok) throw new Error(decoded.error.message);
@@ -507,7 +509,7 @@ export const blackjackTableCases: TestCase[] = [
         edit((v) => (outcome(v).others![0]!.seat = 2)),
         edit((v) => ((outcome(v) as Record<string, unknown>).insurance = 'offered')),
         edit((v) => (v.wagers = (v.wagers as unknown as unknown[]).slice(0, 1) as never)),
-        edit((v) => ((v.rules!.players as Record<string, unknown>).others = ['10'])),
+        edit((v) => ((v.rules!.players as Record<string, unknown>).otherWagers = ['10'])),
       ];
       t.equal(damaged, damaged.map(() => 'damaged'));
     },

@@ -418,6 +418,34 @@ describe('blackjack free play', () => {
     expect(announcements).toContain('You lose 25. Seat 1 loses 10. Seat 2 loses 20. Balance 975.');
   });
 
+  it('reflows split hands and the insurance decision in a wide window and at the largest text size', async () => {
+    const { width, height, fontScale } = Dimensions.get('window');
+    try {
+      mockAdapters.words = NINES;
+      await startSession();
+      await betAndDeal();
+      await fireEvent.press(screen.getByRole('button', { name: 'Split' }));
+      await screen.findByLabelText('Status Your turn · hand 1 of 2');
+      for (const [w, h, scale] of [[844, 390, 1], [844, 390, 3.1], [320, 568, 3.1]] as const) {
+        await setWindow(w, h, scale);
+        // The hands wrap onto more rows instead of overflowing, inside the scrolling table.
+        expect(StyleSheet.flatten(screen.getByTestId('split-hands').props.style).flexWrap).toBe('wrap');
+        expect(within(screen.getByTestId('table-scroll')).getByLabelText('Hand 2 of 2: 9 of spades. 9, waiting')).toBeOnTheScreen();
+      }
+      expect(StyleSheet.flatten(screen.getByTestId('table-columns').props.style).flexDirection).toBeUndefined();
+      await cleanup();
+
+      mockAdapters.words = INSURANCE;
+      await setWindow(320, 568, 3.1);
+      await startSession();
+      await betAndDeal('25', 'Insurance offered');
+      expect(within(screen.getByTestId('table-scroll')).getByTestId('insurance-decision')).toBeOnTheScreen();
+      expect(within(screen.getByTestId('insurance-decision')).getByRole('header', { name: 'Insurance?' })).toBeOnTheScreen();
+    } finally {
+      await setWindow(width, height, fontScale);
+    }
+  });
+
   it('gives the insurance decision and split hands touch targets of at least 48 points', async () => {
     mockAdapters.words = INSURANCE;
     await startSession();

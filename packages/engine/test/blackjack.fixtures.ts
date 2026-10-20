@@ -25,7 +25,7 @@ export const S17_LS: BlackjackRuleSet = {
   lateSurrender: true,
   penetration: 75,
   limits: { initial: { min: '10', max: '1000' } },
-  players: { learnerSeat: 0, others: [], strategy: null },
+  players: { learnerSeat: 0, otherWagers: [], strategy: null },
 };
 
 export const BJ_SPEC: BlackjackActivitySpecification = {
@@ -127,7 +127,7 @@ export const TEST_STRATEGY: SeatStrategy = {
 };
 
 /** The launch table with simulated players: their fixed wagers in seat order, and the learner's seat from first base (from 0). */
-export const withPlayers = (learnerSeat: number, others: string[], spec: BlackjackActivitySpecification = BJ_SPEC): BlackjackActivitySpecification => ({
+export const withPlayers = (learnerSeat: number, otherWagers: string[], spec: BlackjackActivitySpecification = BJ_SPEC): BlackjackActivitySpecification => ({
   ...spec,
-  rules: { ...spec.rules, players: { learnerSeat, others, strategy: others.length > 0 ? TEST_STRATEGY : null } },
+  rules: { ...spec.rules, players: { learnerSeat, otherWagers, strategy: otherWagers.length > 0 ? TEST_STRATEGY : null } },
 });

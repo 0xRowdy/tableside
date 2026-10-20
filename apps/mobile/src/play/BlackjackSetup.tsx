@@ -2,8 +2,8 @@
 // four rule presets, penetration, other players at the table and a fresh
 // buy-in. Guided modes and editable limits arrive with #72, #77 and #78.
 
-import { blackjackHouseEdge, blackjackRules, DEFAULT_PENETRATION, MAX_OTHER_PLAYERS, type BlackjackPreset } from '@tableside/definitions';
-import { PENETRATIONS } from '@tableside/engine';
+import { blackjackHouseEdge, blackjackRules, DEFAULT_PENETRATION, type BlackjackPreset } from '@tableside/definitions';
+import { MAX_OTHER_PLAYERS, PENETRATIONS } from '@tableside/engine';
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 

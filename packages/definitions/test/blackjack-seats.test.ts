@@ -137,8 +137,8 @@ describe('simulated players: through the engine', () => {
 
   it('players bet the table minimum, sit ahead of the learner and carry the preset strategy', () => {
     const rules = blackjackRules('H17_noLS', 75, 3);
-    expect([rules.players.learnerSeat, rules.players.others]).toEqual([3, ['10', '10', '10']]);
+    expect([rules.players.learnerSeat, rules.players.otherWagers]).toEqual([3, ['10', '10', '10']]);
     expect(rules.players.strategy).toEqual(seatStrategy('H17_noLS'));
-    expect(blackjackRules().players).toEqual({ learnerSeat: 0, others: [], strategy: null });
+    expect(blackjackRules().players).toEqual({ learnerSeat: 0, otherWagers: [], strategy: null });
   });
 });

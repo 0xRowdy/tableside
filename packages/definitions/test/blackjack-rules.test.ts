@@ -16,7 +16,7 @@ describe('blackjack rule presets', () => {
       lateSurrender: true,
       penetration: 75,
       limits: { initial: { min: '10', max: '1000' } },
-      players: { learnerSeat: 0, others: [], strategy: null },
+      players: { learnerSeat: 0, otherWagers: [], strategy: null },
     });
   });
 
