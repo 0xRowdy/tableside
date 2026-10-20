@@ -1,9 +1,13 @@
 // The in-memory activity store: the store port's substitute until spec 2's
 // SQLite store. Values are kept as JSON text so callers never share objects
-// with it, and one queue serializes every operation (the single writer).
+// with it, and one queue serializes every operation (the single writer). The
+// stored rows live in a MemoryDisk, so `reopen()` can simulate an app restart:
+// a new store instance, with no queued work or injected failures, over the
+// same durable data.
 
 import type {
   ActivityStore,
+  AllowanceEffect,
   CommitOutcome,
   CommittedTransition,
   CompletedPracticeSession,
@@ -13,7 +17,7 @@ import type {
   TransitionCommit,
 } from './store';
 
-type Operation = 'createActivity' | 'commitTransition' | 'complete' | 'readReceipt';
+type Operation = 'createActivity' | 'commitTransition' | 'recordEffects' | 'complete' | 'readReceipt';
 
 export class StoreWriteError extends Error {
   constructor(message: string) {
@@ -25,14 +29,35 @@ export class StoreWriteError extends Error {
 interface Row {
   activity: string;
   transitions: Map<string, string>;
-  effects: Set<string>;
+  /** Effect text keyed by its effect id, in the order first recorded. */
+  effects: Map<string, string>;
+}
+
+/** The durable part of the in-memory store. */
+export class MemoryDisk {
+  readonly rows = new Map<string, Row>();
+  readonly outgoing: string[] = [];
 }
 
 export class MemoryActivityStore implements ActivityStore {
-  private readonly rows = new Map<string, Row>();
-  private readonly outgoing: string[] = [];
   private queue: Promise<unknown> = Promise.resolve();
   private readonly failures: { operation: Operation; when: 'before' | 'after' }[] = [];
+  private full = false;
+
+  constructor(private readonly disk = new MemoryDisk()) {}
+
+  private get rows() {
+    return this.disk.rows;
+  }
+
+  private get outgoing() {
+    return this.disk.outgoing;
+  }
+
+  /** A new store over the same durable data, as after an app restart. */
+  reopen(): MemoryActivityStore {
+    return new MemoryActivityStore(this.disk);
+  }
 
   /**
    * Failure injection: the next call of `operation` fails. "before" writes
@@ -42,12 +67,17 @@ export class MemoryActivityStore implements ActivityStore {
     this.failures.push({ operation, when });
   }
 
+  /** Failure injection: while full, every write fails before writing (a full disk). */
+  setFull(full: boolean): void {
+    this.full = full;
+  }
+
   createActivity(activity: NewActivity): Promise<StoredActivity> {
     return this.injectable('createActivity', () => {
       const existing = this.rows.get(activity.activityId);
       if (existing) return parse<StoredActivity>(existing.activity);
       const stored: StoredActivity = { ...activity, sequence: 0, completion: null };
-      this.rows.set(activity.activityId, { activity: JSON.stringify(stored), transitions: new Map(), effects: new Set() });
+      this.rows.set(activity.activityId, { activity: JSON.stringify(stored), transitions: new Map(), effects: new Map() });
       return clone(stored);
     });
   }
@@ -73,16 +103,23 @@ export class MemoryActivityStore implements ActivityStore {
     return this.injectable('commitTransition', (): CommitOutcome => {
       const row = this.require(commit.activityId);
       const activity = parse<StoredActivity>(row.activity);
+      const earlier = row.transitions.get(commit.receipt.commandId);
+      if (earlier !== undefined) return { status: 'already-committed', transition: parse<CommittedTransition>(earlier) };
       if (activity.sequence !== commit.priorSequence) return { status: 'sequence-conflict', sequence: activity.sequence };
-      for (const effect of commit.effects) {
-        const { grant, activity: owner, sequence } = effect.effectId;
-        row.effects.add(JSON.stringify([grant, owner, sequence]));
-      }
+      addEffects(row, commit.effects);
       const transition: CommittedTransition = { receipt: commit.receipt, checkpoint: commit.checkpoint, facts: commit.facts };
       row.transitions.set(commit.receipt.commandId, JSON.stringify(transition));
       row.activity = JSON.stringify({ ...activity, checkpoint: commit.checkpoint, sequence: commit.priorSequence + 1 });
       return { status: 'committed' };
     });
+  }
+
+  recordEffects(activityId: string, effects: readonly AllowanceEffect[]): Promise<void> {
+    return this.injectable('recordEffects', () => addEffects(this.require(activityId), effects));
+  }
+
+  readEffects(activityId: string): Promise<readonly AllowanceEffect[]> {
+    return this.read(() => [...(this.rows.get(activityId)?.effects.values() ?? [])].map((text) => parse<AllowanceEffect>(text)));
   }
 
   readReceipt(activityId: string, commandId: string): Promise<CommittedTransition | null> {
@@ -121,6 +158,7 @@ export class MemoryActivityStore implements ActivityStore {
   /** Runs an operation that failure injection can target. */
   private injectable<T>(operation: Operation, run: () => T): Promise<T> {
     return this.enqueue(() => {
+      if (this.full && operation !== 'readReceipt') throw new StoreWriteError(`${operation} failed: the disk is full`);
       const index = this.failures.findIndex((failure) => failure.operation === operation);
       const failure = index >= 0 ? this.failures.splice(index, 1)[0] : undefined;
       if (failure?.when === 'before') throw new StoreWriteError(`${operation} failed before writing`);
@@ -134,6 +172,14 @@ export class MemoryActivityStore implements ActivityStore {
     const next = this.queue.then(run);
     this.queue = next.catch(() => undefined);
     return next;
+  }
+}
+
+function addEffects(row: Row, effects: readonly AllowanceEffect[]): void {
+  for (const effect of effects) {
+    const { grant, activity, sequence } = effect.effectId;
+    const id = JSON.stringify([grant, activity, sequence]);
+    if (!row.effects.has(id)) row.effects.set(id, JSON.stringify(effect));
   }
 }
 
