@@ -356,3 +356,104 @@ describe('ending', () => {
     expect(controller.snapshot()).toMatchObject({ status: 'none', problem: null });
   });
 });
+
+describe('funding', () => {
+  // The worked example of spec #51 (Results): 1,000 → 600 → rebuy 1,000 → win 100.
+  async function workedExample(controller: PracticeController) {
+    await controller.placeWager('black', '400');
+    await controller.spin(); // 27: black loses, balance 600
+    await controller.rebuy('1000');
+    await controller.placeWager('straight-0', '3');
+    await controller.placeWager('straight-1', '5');
+    await controller.spin(); // 0: +105 and −5, balance 1,700
+  }
+
+  it('adds a rebuy while the table waits for input and records buy-in, rebuys, net result and maximum drawdown', async () => {
+    const { controller, store } = await started();
+    await controller.placeWager('black', '400');
+    await controller.spin();
+
+    await controller.rebuy('1000');
+
+    const session = active(controller.snapshot());
+    expect(session.view.balance).toBe('1600');
+    expect(session.view.funding).toMatchObject({ buyIn: '1000', rebuys: ['1000'], cumulative: '2000' });
+    expect(session.facts).toEqual([{ kind: 'funding-added', amount: '1000', cumulative: '2000', balance: '1600' }]);
+
+    await controller.placeWager('straight-0', '3');
+    await controller.placeWager('straight-1', '5');
+    await controller.spin();
+    await controller.endSession();
+
+    const expected = {
+      fundingSource: 'practice-funding',
+      buyIn: '1000',
+      rebuys: ['1000'],
+      cumulativeFunding: '2000',
+      finalCashOut: '1700',
+      netResult: '-300',
+      maxDrawdown: '400',
+    };
+    expect(controller.snapshot()).toMatchObject({ status: 'completed', result: expected });
+    expect((await store.readOutgoing())[0]?.record).toMatchObject(expected);
+  });
+
+  it('refuses a rebuy beyond the funding headroom without adjusting it', async () => {
+    const { controller } = setup();
+    await controller.load();
+    await controller.start({ game: 'roulette', buyIn: '999997000' });
+
+    await controller.rebuy('5000');
+
+    const session = active(controller.snapshot());
+    expect(session.view.balance).toBe('999997000');
+    expect(session.facts).toEqual([{ kind: 'illegal-action', command: { kind: 'rebuy', amount: '5000' }, reason: 'over-funding-ceiling' }]);
+    expect(session.view.funding.headroom).toBe('3000');
+  });
+
+  it('offers no rebuy once final settlement starts', async () => {
+    const { controller, clock, store } = await started({ autoClock: false });
+    await controller.placeWager('red', '10');
+    const ending = controller.endSession();
+    await waitFor(() => clock.pending === 1);
+
+    expect(active(controller.snapshot()).view.legalCommands).not.toContain('rebuy');
+    clock.advance(ENDING_STEP_MS);
+    await ending;
+    expect((await store.readOutgoing())[0]?.record.rebuys).toEqual([]);
+  });
+
+  it('resumes an interrupted session with its funding, not as a fresh buy-in', async () => {
+    const { controller, adapters, store } = await started();
+    await workedExample(controller);
+
+    const resumed = new PracticeController({ ...adapters, newId: () => 'activity-2' });
+    await resumed.load();
+    const session = active(resumed.snapshot());
+    expect(session.view.activityId).toBe('activity-1');
+    expect(session.view.funding).toMatchObject({ buyIn: '1000', rebuys: ['1000'] });
+
+    await resumed.endSession();
+    expect(resumed.snapshot()).toMatchObject({
+      status: 'completed',
+      result: { buyIn: '1000', rebuys: ['1000'], netResult: '-300', maxDrawdown: '400' },
+    });
+    expect(await store.readOutgoing()).toHaveLength(1);
+  });
+
+  it('starts a training-bankroll session with the whole allocation as funding and no rebuys', async () => {
+    const { controller } = setup();
+    await controller.load();
+    await controller.start({ game: 'roulette', buyIn: '750', fundingSource: 'training-bankroll' });
+    expect(active(controller.snapshot()).view.legalCommands).not.toContain('rebuy');
+
+    await controller.rebuy('100');
+    expect(active(controller.snapshot()).view.balance).toBe('750');
+
+    await controller.endSession();
+    expect(controller.snapshot()).toMatchObject({
+      status: 'completed',
+      result: { fundingSource: 'training-bankroll', buyIn: '750', rebuys: [], cumulativeFunding: '750', netResult: '0', maxDrawdown: '0' },
+    });
+  });
+});

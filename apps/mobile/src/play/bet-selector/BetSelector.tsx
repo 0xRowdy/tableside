@@ -31,6 +31,8 @@ export interface BetSelectorProps {
   readonly wagers: readonly PlacedWager[];
   /** The available balance (funds not on the table). */
   readonly balance: string;
+  /** Whether a rebuy is on offer now, so a stake the balance can't cover can point to it. */
+  readonly canRebuy: boolean;
   /** Facts of the latest committed transition and the view sequence after it. */
   readonly facts: readonly DomainFact[];
   readonly sequence: number;
@@ -158,9 +160,10 @@ function WagerEditor(props: BetSelectorProps & { kind: WagerKind; takeFocusReque
   );
 }
 
-function StakeEditor({ choice, draft, wagers, balance, facts, sequence, canPlace, onDraftChange, onSet }: BetSelectorProps & { choice: WagerChoice }) {
+function StakeEditor(props: BetSelectorProps & { choice: WagerChoice }) {
+  const { choice, draft, wagers, sequence, canPlace, onDraftChange, onSet } = props;
   const { focused, focusProps } = useKeyboardFocus();
-  const problem = submissionProblem(draft, choice, facts, sequence, balance, wagers);
+  const problem = submissionProblem(props);
   const amount = parseStake(draft.text);
   const edit = (text: string) => onDraftChange({ ...draft, text, submittedAt: null });
   const submit = () => {
@@ -285,14 +288,7 @@ function YourWagers({ catalog, wagers, canPlace, onRemove, openEditor }: BetSele
 }
 
 /** Why the latest submission of this draft didn't set the wager, or null. */
-function submissionProblem(
-  draft: BetDraft,
-  choice: WagerChoice,
-  facts: readonly DomainFact[],
-  sequence: number,
-  balance: string,
-  wagers: readonly PlacedWager[],
-): string | null {
+function submissionProblem({ draft, choice, facts, sequence, ...funds }: BetSelectorProps & { choice: WagerChoice }): string | null {
   if (draft.submittedAt === null || draft.target !== choice.target) return null;
   const min = formatUnits(choice.min);
   const max = formatUnits(choice.max);
@@ -305,7 +301,7 @@ function submissionProblem(
     (fact): fact is Extract<DomainFact, { kind: 'illegal-action' }> =>
       fact.kind === 'illegal-action' && fact.command.kind === 'place-wager' && fact.command.target === choice.target,
   );
-  return illegal ? illegalExplanation(illegal.reason, choice, balance, wagers) : null;
+  return illegal ? illegalExplanation(illegal.reason, choice, funds) : null;
 }
 
 /** "whole units", "multiples of 6". */
@@ -313,7 +309,9 @@ const increments = (choice: WagerChoice) => (choice.step === '1' ? 'whole units'
 
 const capitalize = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
 
-function illegalExplanation(reason: IllegalActionReason, choice: WagerChoice, balance: string, wagers: readonly PlacedWager[]): string {
+type Funds = Pick<BetSelectorProps, 'balance' | 'wagers' | 'canRebuy'>;
+
+function illegalExplanation(reason: IllegalActionReason, choice: WagerChoice, { balance, wagers, canRebuy }: Funds): string {
   const min = formatUnits(choice.min);
   const max = formatUnits(choice.max);
   switch (reason) {
@@ -325,9 +323,10 @@ function illegalExplanation(reason: IllegalActionReason, choice: WagerChoice, ba
       return `Over this table's maximum. ${choice.name} can be at most ${max}. Your draft is kept.`;
     case 'insufficient-funds': {
       const cap = affordableCap(choice, balance, wagers);
+      const rebuy = canRebuy ? ', or rebuy first' : '';
       return compare(decodeMoney(cap), decodeMoney(choice.min)) >= 0
-        ? `More than you have. With a balance of ${formatUnits(balance)} you can set up to ${formatUnits(cap)}${choice.step === '1' ? '' : ` (${increments(choice)})`}. Your draft is kept.`
-        : `More than you have. With a balance of ${formatUnits(balance)} you can't cover the minimum of ${min}. Your draft is kept.`;
+        ? `More than you have. With a balance of ${formatUnits(balance)} you can set up to ${formatUnits(cap)}${choice.step === '1' ? '' : ` (${increments(choice)})`}${rebuy}. Your draft is kept.`
+        : `More than you have. With a balance of ${formatUnits(balance)} you can't cover the minimum of ${min}${rebuy}. Your draft is kept.`;
     }
     default:
       return `${choice.name} can't be set to that. Your draft is kept.`;

@@ -1,7 +1,7 @@
 // How roulette sessions read on screen and aloud. Amounts are plain units (no
 // currency symbol); formatting never changes a ledger value.
 
-import type { DomainFact, IllegalActionReason, PermittedView, Phase, RoulettePocket } from '@tableside/engine';
+import { FUNDING_CEILING, type DomainFact, type IllegalActionReason, type PermittedView, type Phase, type RoulettePocket } from '@tableside/engine';
 
 import { formatUnits } from './units';
 
@@ -58,11 +58,15 @@ function illegalMessage(reason: IllegalActionReason, target: string | null, view
     case 'above-maximum':
       return `${name} allows at most ${formatUnits(placement?.max ?? '0')}. Nothing was placed.`;
     case 'insufficient-funds':
-      return `Your balance can't cover that. Nothing was placed.`;
+      return view.legalCommands.includes('rebuy')
+        ? `Your balance can't cover that. Nothing was placed. You can rebuy to add chips.`
+        : `Your balance can't cover that. Nothing was placed.`;
+    case 'over-funding-ceiling':
+      return `That rebuy would take total funding past the ${formatUnits(FUNDING_CEILING.toString())} limit. You can add up to ${formatUnits(view.funding.headroom)}. Nothing was added.`;
     case 'no-wager':
       return 'Place a wager before you spin.';
     case 'not-whole-units':
-      return 'Stakes are whole units. Nothing was placed.';
+      return target ? 'Stakes are whole units. Nothing was placed.' : 'Rebuys are whole units. Nothing was added.';
     case 'no-wager-to-remove':
     case 'unknown-target':
       return `${name} can't be changed. Nothing was placed.`;
@@ -101,6 +105,10 @@ export function describeFacts(facts: readonly DomainFact[], view: PermittedView)
         break;
       case 'wager-returned':
         parts.push(`${targetName(fact.target)} ${formatUnits(fact.amount)} returned to your balance.`);
+        balanceChanged = true;
+        break;
+      case 'funding-added':
+        parts.push(`Rebuy ${formatUnits(fact.amount)} added. Total funding ${formatUnits(fact.cumulative)}.`);
         balanceChanged = true;
         break;
       case 'turn-began':

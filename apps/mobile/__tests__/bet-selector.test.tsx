@@ -180,7 +180,7 @@ describe('bet selector', () => {
     await setWager(/^Straight up\b/, 'Straight 17', '45');
 
     expect(screen.getByRole('alert')).toHaveTextContent(
-      'More than you have. With a balance of 40 you can set up to 40. Your draft is kept.',
+      'More than you have. With a balance of 40 you can set up to 40, or rebuy first. Your draft is kept.',
     );
     expect(stakeField()).toHaveProp('value', '45');
     expect(screen.getByLabelText('On table 20')).toBeOnTheScreen();
