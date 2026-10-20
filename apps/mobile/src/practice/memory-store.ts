@@ -17,7 +17,7 @@ import type {
   TransitionCommit,
 } from './store';
 
-type Operation = 'createActivity' | 'commitTransition' | 'recordEffects' | 'complete' | 'readReceipt';
+type Operation = 'createActivity' | 'commitTransition' | 'recordEffects' | 'complete' | 'readReceipt' | 'readTransitions';
 
 export class StoreWriteError extends Error {
   constructor(message: string) {
@@ -122,6 +122,11 @@ export class MemoryActivityStore implements ActivityStore {
     return this.read(() => [...(this.rows.get(activityId)?.effects.values() ?? [])].map((text) => parse<AllowanceEffect>(text)));
   }
 
+  readTransitions(activityId: string): Promise<readonly CommittedTransition[]> {
+    // Transitions are kept in commit order (a Map keeps insertion order).
+    return this.injectable('readTransitions', () => [...(this.rows.get(activityId)?.transitions.values() ?? [])].map((text) => parse<CommittedTransition>(text)));
+  }
+
   readReceipt(activityId: string, commandId: string): Promise<CommittedTransition | null> {
     return this.injectable('readReceipt', () => {
       const text = this.rows.get(activityId)?.transitions.get(commandId);
@@ -158,7 +163,7 @@ export class MemoryActivityStore implements ActivityStore {
   /** Runs an operation that failure injection can target. */
   private injectable<T>(operation: Operation, run: () => T): Promise<T> {
     return this.enqueue(() => {
-      if (this.full && operation !== 'readReceipt') throw new StoreWriteError(`${operation} failed: the disk is full`);
+      if (this.full && operation !== 'readReceipt' && operation !== 'readTransitions') throw new StoreWriteError(`${operation} failed: the disk is full`);
       const index = this.failures.findIndex((failure) => failure.operation === operation);
       const failure = index >= 0 ? this.failures.splice(index, 1)[0] : undefined;
       if (failure?.when === 'before') throw new StoreWriteError(`${operation} failed before writing`);

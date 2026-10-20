@@ -121,7 +121,7 @@ export function describeCrapsFacts(facts: readonly DomainFact[], view: CrapsPerm
         parts.push(
           fact.result === 'win'
             ? `${crapsTargetName(fact.target)} ${formatUnits(fact.stake)} wins ${formatUnits(fact.net)}.`
-            : fact.result === 'push'
+            : fact.result === 'returned'
               ? `${crapsTargetName(fact.target)} ${formatUnits(fact.stake)} was off and comes back.`
               : `${crapsTargetName(fact.target)} ${formatUnits(fact.stake)} loses.`,
         );

@@ -141,6 +141,32 @@ export {
   type Money,
 } from './money';
 export { canonicalJson } from './canonical';
+export {
+  classifySession,
+  classifyWager,
+  completedPracticeRecord,
+  countWagers,
+  EMPTY_QUARANTINE_LIST,
+  quarantineStatus,
+  RECORD_VERSION,
+  STOP_CAUSES,
+  summarizeResults,
+  type Adherence,
+  type AdherenceMeasure,
+  type CompletedPracticeSessionRecord,
+  type EndingReason,
+  type MeteringBasis,
+  type QuarantineEntry,
+  type QuarantineList,
+  type QuarantineStatus,
+  type RecordContext,
+  type ResultsSummary,
+  type SessionClass,
+  type Share,
+  type StopCause,
+  type WagerCounts,
+  type WagerOutcome,
+} from './record';
 export { sha256Hex } from './sha256';
 export {
   decodeStrategyLiteral,

@@ -46,6 +46,7 @@ import {
 } from './funding';
 import { add, compare, decodeMoney, encodeMoney, type Money } from './money';
 import { RANDOM_PROTOCOL_VERSION, RandomStream, type RandomStreamIdentity, type RandomStreamState } from './random';
+import { STOP_CAUSES, type StopCause } from './record';
 import { ROULETTE, type RouletteActivityState, type RouletteRuleSet, type RouletteTable } from './roulette';
 import { sha256Hex } from './sha256';
 import { hasExactKeys, isCount, isIdentity, isRecord, isText, parseMoney, type VersionedIdentity } from './shape';
@@ -235,7 +236,8 @@ export type Command =
   | { readonly kind: 'play'; readonly action: BlackjackAction }
   /** The automatic settle step after the reveal; the controller issues it, never a tap. */
   | { readonly kind: 'settle-turn' }
-  | { readonly kind: 'request-stop' }
+  /** Starts the stop path. The cause (the player's stop when omitted) is kept in the receipt for the completed record. */
+  | { readonly kind: 'request-stop'; readonly cause?: StopCause }
   | { readonly kind: 'advance-final-settlement' }
   /** Adds funds to a practice-funding session while it waits for input. Never places or settles anything. */
   | { readonly kind: 'rebuy'; readonly amount: string }
@@ -286,11 +288,15 @@ export type DomainFact =
       readonly turn: number;
       readonly target: string;
       readonly stake: string;
-      /** A push returns the stake with no win or loss (craps odds that are off). */
-      readonly result: 'win' | 'loss' | 'push';
-      /** Net result: payout on a win, minus the stake on a loss, 0 on a push. */
+      /**
+       * By net result after commission. A push is an outcome that nets 0 (a
+       * blackjack tie); "returned" gives the stake back without an outcome (craps
+       * odds that are off when their base resolves), so it is outside W/L/P.
+       */
+      readonly result: 'win' | 'loss' | 'push' | 'returned';
+      /** Net result: payout on a win, minus the stake on a loss, 0 on a push or a return. */
       readonly net: string;
-      /** Paid back to the balance: stake plus payout, the stake on a push, or 0. */
+      /** Paid back to the balance: stake plus payout, the stake on a push or a return, or 0. */
       readonly returned: string;
     }
   | { readonly kind: 'stop-requested'; readonly phase: Phase }
@@ -475,9 +481,13 @@ function isCommand(value: unknown): value is Command {
     }
     case 'play':
       return hasExactKeys(value, ['kind', 'action']) && isBlackjackAction(value.action);
+    case 'request-stop':
+    {
+      const { cause } = value as Record<string, unknown>;
+      return hasExactKeys(value, cause === undefined ? ['kind'] : ['kind', 'cause']) && (cause === undefined || STOP_CAUSES.includes(cause as StopCause));
+    }
     case 'begin-turn':
     case 'settle-turn':
-    case 'request-stop':
     case 'advance-final-settlement':
     case 'retry-correction':
     case 'override-correction':

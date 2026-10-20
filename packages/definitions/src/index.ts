@@ -38,3 +38,5 @@ export {
 } from './roulette';
 
 export { FIXED_TWO_DOZENS, FLAT_EVEN_MONEY, ROULETTE_STRATEGIES, strategyDefaults } from './roulette-strategies';
+
+export { QUARANTINE_LIST } from './quarantine';

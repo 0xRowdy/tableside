@@ -317,7 +317,7 @@ function settle(state: State): { change: { balance: string; wagers: Wager[]; poi
   let balance = decodeMoney(state.balance);
   const wagers: Wager[] = [];
   const facts: DomainFact[] = [];
-  const pay = (wager: Wager, result: 'win' | 'loss' | 'push', net: Money) => {
+  const pay = (wager: Wager, result: 'win' | 'loss' | 'returned', net: Money) => {
     const stake = decodeMoney(wager.amount);
     const returned = result === 'loss' ? money(0n) : add(stake, net);
     balance = add(balance, returned);
@@ -348,7 +348,8 @@ function settle(state: State): { change: { balance: string; wagers: Wager[]; poi
     const wins = target.dont ? total === 7 : total === n;
     const loses = target.dont ? total === n : total === 7;
     if (!wins && !loses) wagers.push(wager);
-    else if (!isWorking(target, point)) pay(wager, 'push', money(0n));
+    // Odds that are off have no action: they come back without an outcome.
+    else if (!isWorking(target, point)) pay(wager, 'returned', money(0n));
     else if (wins) pay(wager, 'win', mul(stake, oddsPayout(target.dont, n)));
     else pay(wager, 'loss', neg(stake));
   }
