@@ -16,6 +16,12 @@ export {
   STATE_SCHEMA_VERSION,
   type ActivitySpecification,
   type ActivityState,
+  type CrapsActivitySpecification,
+  type CrapsPermittedView,
+  type GameId,
+  type Limit,
+  type RouletteActivitySpecification,
+  type RoulettePermittedView,
   type AdvanceResult,
   type CheckpointResult,
   type Command,
@@ -30,6 +36,22 @@ export {
   type VersionedIdentity,
   type Wager,
 } from './activity';
+export {
+  CRAPS_POINTS,
+  ODDS_CAPS,
+  STANDARD_CRAPS,
+  type CrapsActivityState,
+  type CrapsDomainFact,
+  type CrapsIllegalActionReason,
+  type CrapsOutcome,
+  type CrapsPlacement,
+  type CrapsPoint,
+  type CrapsRuleSet,
+  type CrapsTable,
+  type CrapsWagerStatus,
+  type OddsCap,
+} from './craps';
+export { ROULETTE_RULES, type RouletteActivityState, type RouletteRuleSet, type RouletteTable } from './roulette';
 
 export { philox4x32 } from './philox';
 export {

@@ -2,7 +2,7 @@
 // activity with the launch default limits (#3: inside 1-100, outside 10-1,000).
 import {
   advanceActivity,
-  type ActivitySpecification,
+  type RouletteActivitySpecification,
   type ActivityState,
   type AdvanceResult,
   type Command,
@@ -11,7 +11,7 @@ import {
 
 import { PI } from './fixtures';
 
-export const SPEC: ActivitySpecification = {
+export const SPEC: RouletteActivitySpecification = {
   activityId: 'activity-1',
   owner: 'local',
   device: 'device-1',

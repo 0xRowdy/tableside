@@ -4,6 +4,7 @@
 import type { Suite } from '@tableside/harness';
 
 import { activityCases } from './activity.cases';
+import { crapsCases } from './craps.cases';
 import { drawCases } from './draws.cases';
 import { engineCases } from './engine.cases';
 import { hashCases } from './hash.cases';
@@ -13,5 +14,5 @@ import { runtimeCases } from './runtime.cases';
 
 export const engineSuite: Suite = {
   name: 'engine',
-  cases: [...runtimeCases, ...engineCases, ...randomCases, ...drawCases, ...moneyCases, ...hashCases, ...activityCases],
+  cases: [...runtimeCases, ...engineCases, ...randomCases, ...drawCases, ...moneyCases, ...hashCases, ...activityCases, ...crapsCases],
 };
