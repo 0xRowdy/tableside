@@ -20,8 +20,13 @@ export interface AllowanceEffect {
   readonly amount: string;
 }
 
+/** How spec 5 meters an activity, as its admission said (Amendment 4 A3). */
+export type MeteringBasis = 'free-play' | 'premium' | 'time' | 'turns' | 'training-bankroll' | 'challenge-attempt';
+
 export interface NewActivity {
   readonly activityId: string;
+  /** The access supervisor's admission: who allowed it and how it is metered. */
+  readonly admission: { readonly provenance: string; readonly meteringBasis: MeteringBasis };
   readonly specification: ActivitySpecification;
   /** The random identity, recorded before any content is generated from it. */
   readonly random: RandomStreamIdentity;
@@ -78,6 +83,8 @@ export interface CompletedPracticeSession {
   };
   /** Practice funding, or spec 5's training bankroll (no rebuys; the allocation is the buy-in). */
   readonly fundingSource: FundingSource;
+  /** How the session was metered, from its admission (Amendment 4 C). */
+  readonly meteringBasis: MeteringBasis;
   /** The initial buy-in, or the training-bankroll allocation. */
   readonly buyIn: string;
   /** Each rebuy, in order. */

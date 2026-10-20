@@ -9,8 +9,9 @@ import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { Button } from '@/components/Button';
 import { Screen } from '@/components/Screen';
+import { useFeedback } from '@/feedback/FeedbackProvider';
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
-import type { StartProblem } from '@/practice/controller';
+import { RECONNECT_TO_VERIFY, type StartProblem } from '@/practice/controller';
 import { usePractice } from '@/practice/PracticeProvider';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/theme/tokens';
 
@@ -23,11 +24,13 @@ const MAX_BUY_IN_DIGITS = 13;
 const PROBLEMS: Record<StartProblem, string> = {
   'invalid-buy-in': 'Enter whole units from 1 to 1,000,000,000.',
   'save-failed': "The session couldn't be saved, so it hasn't started. Try again.",
-  'access-not-allowed': "This session can't start right now.",
+  'access-denied': "This session can't start right now.",
+  'access-uncertain': `${RECONNECT_TO_VERIFY}. Nothing has started and nothing was used.`,
 };
 
-export function BlackjackSetup({ problem, busy }: { problem: StartProblem | null; busy: boolean }) {
+export function BlackjackSetup({ problem, problemReason = null, busy }: { problem: StartProblem | null; problemReason?: string | null; busy: boolean }) {
   const { controller } = usePractice();
+  const feedback = useFeedback();
   const [dealer, setDealer] = useState<'S17' | 'H17'>('S17');
   const [surrender, setSurrender] = useState(true);
   const [penetration, setPenetration] = useState(DEFAULT_PENETRATION);
@@ -41,8 +44,9 @@ export function BlackjackSetup({ problem, busy }: { problem: StartProblem | null
     const whole = /^\d+$/.test(digits) && digits.length <= MAX_BUY_IN_DIGITS;
     setNotWhole(!whole);
     if (whole) void controller.start({ game: 'blackjack', buyIn: BigInt(digits).toString(), rules });
+    else feedback.cue('input-rejected');
   };
-  const error = notWhole ? PROBLEMS['invalid-buy-in'] : problem && PROBLEMS[problem];
+  const error = notWhole ? PROBLEMS['invalid-buy-in'] : problem && (problem === 'access-denied' && problemReason ? problemReason : PROBLEMS[problem]);
 
   return (
     <Screen>

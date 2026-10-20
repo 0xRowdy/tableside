@@ -64,6 +64,50 @@ describe('blackjack through the practice controller', () => {
     expect([current.phase, current.balance]).toEqual(['settled-outcome', '1010']);
   });
 
+  it('treats a hand in play as a round under way: suspended there it cannot end, and it resumes to the same decision', async () => {
+    const { controller } = setup();
+    await controller.load();
+    await controller.start({ game: 'blackjack', buyIn: '1000', rules: blackjackRules() });
+    await controller.placeWager('hand-1', '10');
+    await controller.beginTurn();
+    const before = view(controller.snapshot());
+
+    controller.suspend('navigation');
+
+    const suspended = controller.snapshot();
+    expect(suspended.status === 'active' && suspended.suspension).toMatchObject({ reached: true, canEnd: false });
+    // Nothing is played while suspended.
+    await controller.play('stand');
+    expect(view(controller.snapshot()).sequence).toBe(before.sequence);
+
+    await controller.resume();
+    const resumed = controller.snapshot();
+    expect(resumed.status === 'active' && resumed.suspension).toBeNull();
+    expect(view(resumed).playActions).toEqual(['hit', 'stand', 'double']);
+  });
+
+  it('ending mid-hand lets the hand finish, then settles it and completes once', async () => {
+    const { controller, clock } = setup();
+    await controller.load();
+    await controller.start({ game: 'blackjack', buyIn: '1000', rules: blackjackRules() });
+    await controller.placeWager('hand-1', '10');
+    await controller.beginTurn();
+
+    await controller.endSession();
+    // The engine never stops a hand mid-decision: the player still plays it.
+    expect(view(controller.snapshot()).playActions).toEqual(['hit', 'stand', 'double']);
+
+    const standing = controller.play('stand');
+    for (let i = 0; i < 4; i++) {
+      await waitFor(() => clock.pending === 1 || controller.snapshot().status === 'completed');
+      if (controller.snapshot().status === 'completed') break;
+      clock.advance(REVEAL_MS);
+    }
+    await standing;
+    const done = controller.snapshot();
+    expect(done.status === 'completed' && [done.result.finalCashOut, done.result.netResult]).toEqual(['1010', '10']);
+  });
+
   it('a double the balance cannot cover is assessed and changes nothing', async () => {
     const { controller } = setup();
     await controller.load();

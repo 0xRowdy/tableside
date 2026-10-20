@@ -8,7 +8,7 @@
 import { blackjackHouseEdge } from '@tableside/definitions';
 import type { BlackjackAction, BlackjackPermittedView, Card } from '@tableside/engine';
 import { useEffect, useMemo, useState } from 'react';
-import { AccessibilityInfo, Modal, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { AccessibilityInfo, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/Button';
@@ -36,7 +36,9 @@ import {
   SUIT_GLYPH,
   totalText,
 } from './blackjack-text';
+import { EndSessionDialog } from './EndSessionDialog';
 import { RebuySheet } from './RebuySheet';
+import { ACCESS_ENDED } from './RouletteTable';
 import { PhaseStepper, SessionStrip, TableTopBar, type PhaseStep } from './TableChrome';
 import { formatSigned, formatUnits, totalOnTable } from './units';
 
@@ -151,9 +153,20 @@ export function BlackjackTable({ snapshot }: { snapshot: ActiveSnapshot }) {
             <Button label="Retry now" variant="secondary" disabled={busy} onPress={() => void controller.retrySave()} />
           </View>
         )}
-        {snapshot.accessNotAllowed && (
+        {snapshot.ending === 'access-ended' && (
+          <View style={styles.banner} testID="access-ended">
+            <Text accessibilityRole="alert" maxFontSizeMultiplier={textScale.body} style={styles.bannerTitle}>{ACCESS_ENDED}</Text>
+            <Text maxFontSizeMultiplier={textScale.body} style={styles.bannerText}>
+              {playing ? 'Finish this hand; then it settles automatically' : 'Your bets settle automatically'}, then you&apos;ll see the session result.
+            </Text>
+          </View>
+        )}
+        {snapshot.suspension?.kind === 'turn-boundary' && !snapshot.suspension.reached && (
           <View style={styles.banner}>
-            <Text accessibilityRole="alert" maxFontSizeMultiplier={textScale.body} style={styles.bannerTitle}>This round can&apos;t start right now.</Text>
+            <Text accessibilityRole="alert" maxFontSizeMultiplier={textScale.body} style={styles.bannerTitle}>Suspending after this round</Text>
+            <Text maxFontSizeMultiplier={textScale.body} style={styles.bannerText}>
+              {snapshot.suspension.reason ?? 'This round finishes normally. No new round starts until the session resumes.'}
+            </Text>
           </View>
         )}
 
@@ -468,36 +481,6 @@ function Chip({ option, selected, onPress }: { option: (typeof CHIPS)[number]; s
   );
 }
 
-function EndSessionDialog({ visible, view, onCancel, onConfirm }: { visible: boolean; view: BlackjackPermittedView; onCancel: () => void; onConfirm: () => void }) {
-  const removable = view.wagersCommitted ? [] : view.wagers;
-  const steps = [
-    { title: 'Removable wagers come back', detail: removable.length === 0 ? 'Nothing on the table' : removable.map((w) => `Initial wager ${formatUnits(w.amount)}`).join(' · ') },
-    { title: 'Committed wagers settle automatically', detail: view.wagersCommitted ? 'This round settles on its own' : 'None between rounds' },
-    { title: 'You see the session result', detail: 'Buy-in, final cash-out and net result' },
-  ];
-  return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel} supportedOrientations={['portrait', 'landscape']}>
-      <View style={styles.scrim}>
-        <ScrollView contentContainerStyle={styles.dialogScroll}>
-          <View accessibilityViewIsModal style={styles.dialog}>
-            <Text accessibilityRole="header" maxFontSizeMultiplier={textScale.display} style={styles.dialogTitle}>
-              End this session?
-            </Text>
-            {steps.map((step, index) => (
-              <View key={step.title} accessible accessibilityLabel={`${index + 1}. ${step.title}. ${step.detail}`} style={styles.dialogStep}>
-                <Text maxFontSizeMultiplier={textScale.body} style={styles.dialogStepTitle}>{index + 1}  {step.title}</Text>
-                <Text maxFontSizeMultiplier={textScale.body} style={styles.dialogText}>{step.detail}</Text>
-              </View>
-            ))}
-            <Button label="End session" stretch onPress={onConfirm} />
-            <Button label="Keep playing" variant="secondary" stretch onPress={onCancel} />
-          </View>
-        </ScrollView>
-      </View>
-    </Modal>
-  );
-}
-
 const CARD_WIDTH = 56;
 
 const styles = StyleSheet.create({
@@ -574,11 +557,4 @@ const styles = StyleSheet.create({
   chipText: { fontFamily: fonts.uiBold, fontSize: 15 },
   chipCheck: { position: 'absolute', top: -2, right: -2, fontFamily: fonts.uiBold, fontSize: 12, color: palette.primary },
   rackCaption: { fontFamily: fonts.ui, fontSize: 12, color: palette.foreground },
-  scrim: { flex: 1, backgroundColor: palette.scrim },
-  dialogScroll: { flexGrow: 1, justifyContent: 'center', padding: space[4] },
-  dialog: { gap: space[3], padding: space[6], borderRadius: radius.lg, backgroundColor: palette.popover },
-  dialogTitle: { fontFamily: fonts.display, fontSize: 24, color: palette.foreground },
-  dialogText: { fontFamily: fonts.ui, fontSize: 14, color: palette.mutedForeground },
-  dialogStep: { gap: 2 },
-  dialogStepTitle: { fontFamily: fonts.uiMedium, fontSize: 15, color: palette.foreground },
 });
