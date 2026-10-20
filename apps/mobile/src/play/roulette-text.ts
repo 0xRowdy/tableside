@@ -3,6 +3,8 @@
 
 import { FUNDING_CEILING, type DomainFact, type IllegalActionReason, type PermittedView, type Phase, type RoulettePocket } from '@tableside/engine';
 
+import { formatUnits } from './units';
+
 /** Pocket colors on the layout. Presentation only: the engine owns what each placement covers. */
 const RED_POCKETS: ReadonlySet<number> = new Set([1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36]);
 
@@ -14,13 +16,7 @@ export const pocketColor = (pocket: RoulettePocket): PocketColor =>
 /** "27 red", "0 green". */
 export const describePocket = (pocket: RoulettePocket) => `${pocket} ${pocketColor(pocket)}`;
 
-/** Canonical money text with thousands separators: "1000" → "1,000", "-2.5" → "-2.5". */
-export function formatUnits(amount: string): string {
-  const negative = amount.startsWith('-');
-  const [whole = '0', fraction] = (negative ? amount.slice(1) : amount).split('.');
-  const grouped = whole.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-  return `${negative ? '-' : ''}${grouped}${fraction ? `.${fraction}` : ''}`;
-}
+export { formatUnits };
 
 /** "+120", "−85" (minus sign), "0". */
 export function formatSigned(amount: string): string {
