@@ -21,7 +21,7 @@
 // shows only exposed cards: the hole card is face down until the round ends,
 // and a negative peek reveals no rank.
 
-import type { ActivityStateBase, BlackjackPermittedView, Command, CommandKind, DomainFact, GameCommand, GameModule, PermittedViewBase, Step, Wager } from './activity';
+import type { ActivityStateBase, BlackjackPermittedView, Command, CommandKind, DomainFact, GameCommand, GameModule, PendingCorrection, PermittedViewBase, Step, StrategyView, Wager } from './activity';
 import { canonicalShoe, shuffle, type Card, type Rank, type Suit } from './draws';
 import { add, compare, decodeMoney, encodeMoney, money, mul, neg, sub, type Money } from './money';
 import { RandomStream } from './random';
@@ -1094,6 +1094,21 @@ function damage(value: Record<string, unknown>): string | undefined {
 }
 
 /** Six-deck blackjack behind the session protocol. */
+/**
+ * In the counting modes the player keeps the count, so no view field may carry
+ * it (spec Counting): each held or recorded move keeps its explanation, minus
+ * the count it was checked against. The state and the facts keep it for the record.
+ */
+function strategyView(state: BlackjackActivityState, view: StrategyView): StrategyView {
+  if (countSupplied(state)) return view;
+  const hidden = <C extends PendingCorrection>(correction: C): C => {
+    if ('decision' in correction) return { ...correction, explanation: { ...correction.explanation, situation: { ...correction.explanation.situation, count: null } } };
+    const { 'true-count': _count, ...values } = correction.explanation.situation.values;
+    return { ...correction, explanation: { ...correction.explanation, situation: { ...correction.explanation.situation, values } } };
+  };
+  return { ...view, correction: view.correction && hidden(view.correction), departures: view.departures.map(hidden) };
+}
+
 export const BLACKJACK: GameModule<BlackjackActivityState, BlackjackPermittedView, BlackjackCommand> = {
   ruleSets: [{ id: BLACKJACK_RULES.id, version: BLACKJACK_RULES.version }],
   extra: { shoe: null },
@@ -1104,5 +1119,6 @@ export const BLACKJACK: GameModule<BlackjackActivityState, BlackjackPermittedVie
   legal,
   apply,
   view,
+  strategyView,
   damage,
 };

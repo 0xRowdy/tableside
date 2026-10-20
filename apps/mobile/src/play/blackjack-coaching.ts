@@ -175,9 +175,10 @@ export function playCorrectionCopy(strategyName: string, correction: PlayCorrect
     const source = cell.table === 'first' ? `Basic strategy (${rulesName})` : `For later decisions (after a hit or a split), Tableside's table (${rules.dealer})`;
     lines.push(`${source} ${verbPhrase(cell.play, hand)} against ${upValue(cell.up)}.`);
   } else if (!deviation) lines.push('Basic strategy never takes insurance.');
-  if (deviation && count) {
+  if (deviation) {
+    // In the counting modes the engine's view carries no count: the player keeps it.
     lines.push(
-      countSupplied
+      countSupplied && count
         ? `The true count is ${signed(count.trueCount)}, supplied by Tableside in this mode (${countWorking(count)}).`
         : 'You keep the count in this mode; your play was checked against the actual count, which Tableside doesn\'t show.',
     );

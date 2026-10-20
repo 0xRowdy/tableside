@@ -61,7 +61,7 @@ export function prescriptionLine(strategyName: string, explanation: Explanation,
 const RESULT_WORDS = { win: 'won', loss: 'lost', push: 'broke even' } as const;
 
 /** The situation, the matching instruction and what the player submitted, as the correction's body. */
-export function correctionLines(correction: BetCorrection, words: CoachWords = ROULETTE_WORDS): string[] {
+export function correctionLines(correction: BetCorrection, words: CoachWords = ROULETTE_WORDS, countKept = false): string[] {
   const { explanation, actual } = correction;
   const lines: string[] = [];
   const { available, subjects } = explanation.situation;
@@ -69,11 +69,13 @@ export function correctionLines(correction: BetCorrection, words: CoachWords = R
   if (color !== undefined && color !== 'none') lines.push(`The last spin landed on ${color}.`);
   const point = subjects.point;
   if (point !== undefined) lines.push(point === 'none' ? 'The puck is off: the next roll is a come-out roll.' : `The point is ${point}.`);
-  // A bet schedule reads the true count the player keeps: the correction names the band, never the count itself.
+  // A bet schedule reads the true count. Where the player keeps it, the engine's view leaves it out and
+  // the correction names the band, never the count; where Tableside supplies it, the correction states it.
   const trueCount = explanation.situation.values['true-count'];
-  if (trueCount !== undefined) lines.push('Checked against the actual true count, which you keep in this mode.');
+  if (countKept) lines.push('Checked against the actual true count, which you keep in this mode.');
+  else if (trueCount !== undefined) lines.push(`The true count is ${Number(trueCount) > 0 ? '+' : ''}${trueCount}, supplied by Tableside in this mode.`);
   const last = explanation.state.lastResult;
-  if (last !== 'none' && trueCount === undefined) lines.push(`The strategy's last ${words.turn} ${RESULT_WORDS[last]}.`);
+  if (last !== 'none' && trueCount === undefined && !countKept) lines.push(`The strategy's last ${words.turn} ${RESULT_WORDS[last]}.`);
   lines.push(`Available for this ${words.turn}: ${formatUnits(available)}.`);
   for (const instruction of explanation.instructions) lines.push(`Matching instruction: "${instruction.label}".`);
   if (explanation.fallback === 'no-new-bets') lines.push('Fallback: no new bets.');
@@ -130,12 +132,13 @@ export interface CorrectionCopy {
 }
 
 /** A betting correction's copy (roulette, craps). */
-export function betCorrectionCopy(strategyName: string, correction: BetCorrection, overrideEndsCycle: boolean, words: CoachWords = ROULETTE_WORDS): CorrectionCopy {
+/** `countKept`: a blackjack counting mode, where the player keeps the count the bet schedule reads. */
+export function betCorrectionCopy(strategyName: string, correction: BetCorrection, overrideEndsCycle: boolean, words: CoachWords = ROULETTE_WORDS, countKept = false): CorrectionCopy {
   return {
     coach: `Marcus · guided practice, ${strategyName}`,
     kicker: `Before your ${words.turn}`,
     headline: prescriptionLine(strategyName, correction.explanation, words),
-    lines: correctionLines(correction, words),
+    lines: correctionLines(correction, words, countKept),
     fallback: null,
     retry: retryLabel(correction, words),
     override: 'Keep my bets',

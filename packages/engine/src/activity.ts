@@ -528,6 +528,12 @@ export interface GameModule<S extends ActivityState, V extends PermittedView, C 
   idleTurn?(state: S): Step<S>;
   /** The game's part of the permitted view; it may refine when wagers count as committed. */
   view(state: S): Omit<V, keyof PermittedViewBase> & Partial<Pick<PermittedViewBase, 'wagersCommitted'>>;
+  /**
+   * The strategy's part of the view as this game may show it: a game whose
+   * explanations carry information the player keeps hidden (the blackjack count
+   * in the counting modes) takes it out of each correction and departure.
+   */
+  strategyView?(state: S, view: StrategyView): StrategyView;
   /** The first problem with the game's part of a checkpoint (rules, wagers, outcome, table state), if any. */
   damage(value: Record<string, unknown>): string | undefined;
 }
@@ -1101,6 +1107,9 @@ function heldAction(state: ActivityState, run: StrategyRun): PendingStrategyActi
   return null;
 }
 
+/** The strategy view after the game takes out what its player keeps hidden. */
+const shownStrategy = (state: ActivityState, view: StrategyView): StrategyView => moduleOf(state).strategyView?.(state, view) ?? view;
+
 function strategyView(state: ActivityState, run: StrategyRun): StrategyView {
   const { definition } = run;
   // A betting departure at a turn still waiting to begin isn't a decision yet; each playing departure is its own decision.
@@ -1181,7 +1190,7 @@ export function readPermittedView(state: ActivityState): PermittedView {
       cumulative: encodeMoney(cumulativeFunding(state.funding)),
       headroom: encodeMoney(fundingHeadroom(state.funding)),
     },
-    strategy: state.strategy && strategyView(state, state.strategy),
+    strategy: state.strategy && shownStrategy(state, strategyView(state, state.strategy)),
     ...moduleOf(state).view(state),
   } as PermittedView;
 }

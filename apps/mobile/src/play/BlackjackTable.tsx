@@ -264,7 +264,7 @@ export function BlackjackTable({ snapshot }: { snapshot: ActiveSnapshot }) {
               />
             ) : heldBet && strategy ? (
               <CorrectionPanel
-                copy={betCorrectionCopy(strategy.name, heldBet, strategy.overrideEndsCycle, BLACKJACK_WORDS)}
+                copy={betCorrectionCopy(strategy.name, heldBet, strategy.overrideEndsCycle, BLACKJACK_WORDS, view.count === null)}
                 table={tableNow(view, handsText)}
                 fullScreen={fontScale > SIDE_BY_SIDE_MAX_FONT_SCALE}
                 busy={!ready}
