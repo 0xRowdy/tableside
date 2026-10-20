@@ -22,6 +22,7 @@ const RANDOM = { protocol: 1, key: [1, 2], session: [3, 4] } as const;
 export function newActivity(activityId: string, overrides: Partial<NewActivity> = {}): NewActivity {
   return {
     activityId,
+    admission: { provenance: 'contract-suite', meteringBasis: 'free-play' },
     specification: {
       activityId,
       owner: 'local',
@@ -72,6 +73,7 @@ export function completedRecord(activityId: string, overrides: Partial<Completed
     mode: 'free-play',
     identities: { engine: '0.0.0', rules: { id: 'roulette/single-zero', version: 1 }, strategy: null, reference: null },
     fundingSource: 'practice-funding',
+    meteringBasis: 'free-play',
     buyIn: '1000',
     rebuys: [],
     cumulativeFunding: '1000',

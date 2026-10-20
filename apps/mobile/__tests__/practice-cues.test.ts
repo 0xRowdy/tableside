@@ -101,7 +101,9 @@ describe('cues during roulette play', () => {
     const ports = substituteFeedbackPorts();
     followPractice(resumed, new FeedbackService(ports, new DeviceSettings(ports.storage)));
 
+    // The launch finds it suspended; the player resumes it.
     await resumed.load();
+    await resumed.resume();
     expect(resumed.snapshot().status).toBe('active');
     expect(ports.sound.played).toEqual([]);
 
