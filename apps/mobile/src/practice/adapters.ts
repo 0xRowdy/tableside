@@ -3,7 +3,7 @@
 
 import type { EntropySource, Phase } from '@tableside/engine';
 
-import type { ActivityStore, MeteringBasis } from './store';
+import type { ActivityStore, CompletedPracticeSession, MeteringBasis } from './store';
 
 /** Wall-clock time for records, and waits that pace automatic steps. Never a seed. */
 export interface Clock {
@@ -33,7 +33,7 @@ export type AccessDecision<Allowed extends object = object> =
   | AccessDenial;
 
 /** The admission answer carries how the activity is metered (spec 5). */
-export type AdmissionDecision = AccessDecision<{ readonly meteringBasis: MeteringBasis }>;
+export type AdmissionDecision = AccessDecision<{ readonly meteringBasis: MeteringBasis; readonly allowancePolicyVersion?: string }>;
 
 /** Before a turn only: the allowance this turn uses, charged once with the turn's beginning. */
 export type TurnDecision = AccessDecision<{ readonly turnCharge?: { readonly grant: string; readonly amount: string } }>;
@@ -93,4 +93,10 @@ export interface PracticeAdapters {
   /** Originating device and account owner, recorded on each activity. */
   readonly device: string;
   readonly owner: string;
+  /**
+   * The post-result hook (spec 5's ads, Amendment 4 §D): called when the player
+   * leaves a result this process just produced, whose record is durably saved.
+   * Never called for a session reopened from Saved.
+   */
+  readonly leftFreshResult?: (record: CompletedPracticeSession) => void;
 }

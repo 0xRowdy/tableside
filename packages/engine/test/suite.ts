@@ -15,6 +15,7 @@ import { hashCases } from './hash.cases';
 import { limitCases } from './limits.cases';
 import { moneyCases } from './money.cases';
 import { randomCases } from './random.cases';
+import { recordCases } from './record.cases';
 import { rouletteCases } from './roulette.cases';
 import { runtimeCases } from './runtime.cases';
 import { strategyCases } from './strategy.cases';
@@ -39,5 +40,6 @@ export const engineSuite: Suite = {
     ...blackjackTableCases,
     ...strategyCases,
     ...guidedCases,
+    ...recordCases,
   ],
 };

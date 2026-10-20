@@ -34,6 +34,9 @@ export {
   type PendingCorrection,
   type PendingStrategyAction,
   StrategySpecificationError,
+  STOP_CAUSES,
+  stopCause,
+  type StopCause,
   type StrategyCommandKind,
   type GameCommand,
   type Phase,
@@ -161,6 +164,30 @@ export {
   type Money,
 } from './money';
 export { canonicalJson } from './canonical';
+export {
+  classifySession,
+  classifyWager,
+  completedPracticeRecord,
+  countWagers,
+  EMPTY_QUARANTINE_LIST,
+  quarantineStatus,
+  RECORD_VERSION,
+  summarizeResults,
+  type Adherence,
+  type AdherenceMeasure,
+  type CompletedPracticeSessionRecord,
+  type EndingReason,
+  type MeteringBasis,
+  type QuarantineEntry,
+  type QuarantineList,
+  type QuarantineStatus,
+  type RecordContext,
+  type ResultsSummary,
+  type SessionClass,
+  type Share,
+  type WagerCounts,
+  type WagerOutcome,
+} from './record';
 export { sha256Hex } from './sha256';
 export {
   decodeStrategyLiteral,

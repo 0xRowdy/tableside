@@ -152,9 +152,9 @@ describe('guided practice', () => {
     if (snapshot.status !== 'completed') throw new Error(snapshot.status);
     expect(snapshot.result.mode).toBe('guided');
     expect(snapshot.result.netResult).toBe('10');
+    expect(snapshot.result.overrideAffected).toBe(false);
     expect(snapshot.result.guidance).toMatchObject({
-      adherence: { decisions: 1, followed: 0, departures: 1 },
-      overrideAffected: false,
+      adherence: { betting: { decisions: 1, followed: 0 }, playing: null, counting: null },
       departures: [{ id: 'activity-1/departure/1', turn: 1, resolution: 'retried', actual: [{ target: 'red', amount: '50' }] }],
     });
   });

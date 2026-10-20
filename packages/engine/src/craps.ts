@@ -559,7 +559,7 @@ function settle(state: State): Settled {
   const pay = (
     target: string,
     stake: Money,
-    result: 'win' | 'loss' | 'push',
+    result: 'win' | 'loss' | 'returned',
     gross: Money,
     extra: { component?: number; fee?: Money; staysUp?: boolean } = {},
   ) => {
@@ -606,7 +606,7 @@ function settle(state: State): Settled {
         const wins = target.dont ? total === 7 : total === n;
         const loses = target.dont ? total === n : total === 7;
         if (!wins && !loses) wagers.push(wager);
-        else if (!isWorking(state, target)) pay(wager.target, stake, 'push', money(0n));
+        else if (!isWorking(state, target)) pay(wager.target, stake, 'returned', money(0n));
         else if (wins) pay(wager.target, stake, 'win', mul(stake, trueOddsPayout(target.dont, n)));
         else pay(wager.target, stake, 'loss', money(0n));
         break;
