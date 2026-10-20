@@ -60,7 +60,11 @@ The engine and definitions packages must run unchanged on Hermes and Node, so `e
 - relative imports only, and only within the package (definitions may also import the engine by name), so no React, Expo, Node, network, account, advertising or subscription packages;
 - no clocks (`Date`, `performance`), timers, network, storage, platform globals, `Math.random`, `Intl` or `console`.
 
-The engine has no package dependencies, and its TypeScript config includes only the standard ES library. `tests/engine-portability.test.ts` checks that the rule rejects each category.
+The engine has no package dependencies, and its TypeScript config includes only the standard ES library. `tests/engine-portability.test.ts` checks that the rule rejects each category. Only `src/` ships: the definitions package's `scripts/` and `test/` run on Node and may use it.
+
+## Blackjack reference
+
+`packages/definitions/reference/blackjack` holds the certified research files byte for byte (research/blackjack-coaching-validation@ae3776d) and their `reference-manifest.json`. The app can't read files, so `src/blackjack/reference-files.generated.ts` embeds the same bytes. The package's `build` script (also the first step of its `typecheck`) fails if the manifest, any file's SHA-256, or the embedded copy differs. Never edit the files; after a new certified freeze, copy it in and run `pnpm --filter @tableside/definitions reference:write`. No research script or calculator code is copied: `test/reference-integrity.test.ts` checks for them.
 
 ## Accessibility notes for the shell
 

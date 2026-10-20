@@ -1,0 +1,6 @@
+{
+  "extends": "../../tsconfig.base.json",
+  // Build-time scripts and tests run on Node. The shipped src stays portable (tsconfig.json).
+  "compilerOptions": { "types": ["node"] },
+  "include": ["scripts", "test"]
+}
