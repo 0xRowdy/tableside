@@ -1,0 +1,16 @@
+{
+  "name": "@tableside/engine",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./test-suite": "./test/suite.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p .",
+    "test": "tsx ../harness/src/cli.ts node"
+  },
+  "devDependencies": {
+    "@tableside/harness": "workspace:*"
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "name": "@tableside/runner",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p .",
+    "start": "tsx src/main.ts"
+  },
+  "dependencies": {
+    "@tableside/definitions": "workspace:*",
+    "@tableside/engine": "workspace:*"
+  }
+}

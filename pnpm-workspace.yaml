@@ -1,0 +1,10 @@
+packages:
+  - apps/*
+  - packages/*
+
+# Install scripts pnpm may run. Denied packages ship prebuilt binaries as
+# optional dependencies, so their scripts are not needed.
+allowBuilds:
+  esbuild: true
+  '@parcel/watcher': false
+  unrs-resolver: false
