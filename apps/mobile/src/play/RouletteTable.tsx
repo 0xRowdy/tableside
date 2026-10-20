@@ -9,11 +9,17 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/Button';
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
-import type { ActiveSnapshot as Active } from '@/practice/controller';
+import { SAVE_RETRY_MS, type ActiveSnapshot as Active } from '@/practice/controller';
 import { usePractice } from '@/practice/PracticeProvider';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale, type ColorToken } from '@/theme/tokens';
 
-import { describeFacts, describePocket, formatUnits, pocketColor, STATUS, targetName, totalOnTable } from './roulette-text';
+import { BetSelector } from './bet-selector/BetSelector';
+import { draftAmountText, EMPTY_DRAFT, findChoice, isDraftPending, type BetDraft } from './bet-selector/catalog';
+import { DraftBar, PresentationSwitch, type Presentation } from './bet-selector/Presentation';
+import { RebuySheet } from './RebuySheet';
+import { rouletteCatalog, roulettePlacedWagers } from './roulette-catalog';
+import { describeFacts, describePocket, formatUnits, POCKET_TOKEN, pocketColor, STATUS, targetName, totalOnTable } from './roulette-text';
+import { RouletteFelt } from './RouletteFelt';
 import { PhaseStepper, SessionStrip, TableTopBar, type PhaseStep } from './TableChrome';
 
 type ActiveSnapshot = Active<RoulettePermittedView>;
@@ -30,7 +36,6 @@ const CHIPS: readonly { value: string; label: string; color: ColorToken; ink: Co
   { value: '1000', label: '1K', color: 'chip1k', ink: 'ink' },
 ];
 
-const ROWS = Array.from({ length: 12 }, (_, row) => [row * 3 + 1, row * 3 + 2, row * 3 + 3]);
 
 function phaseSteps(view: RoulettePermittedView): PhaseStep[] {
   const reached = { 'open-decision': 0, 'revealing-outcome': 1, 'settled-outcome': 2, 'final-settlement': 2, completed: 3 }[view.phase];
@@ -55,7 +60,22 @@ export function RouletteTable({ snapshot }: { snapshot: ActiveSnapshot }) {
   const sideBySide = width > height && fontScale <= SIDE_BY_SIDE_MAX_FONT_SCALE;
   const [chip, setChip] = useState('5');
   const [confirming, setConfirming] = useState(false);
+  const [rebuying, setRebuying] = useState(false);
+  // Held here, above both presentations, so rotation, resizing and switching keep the draft.
+  const [presentation, setPresentation] = useState<Presentation>('table');
+  const [draft, setDraft] = useState<BetDraft>(EMPTY_DRAFT);
   const { view, facts, busy, save } = snapshot;
+  const catalog = useMemo(() => rouletteCatalog(view), [view]);
+  const placed = useMemo(() => roulettePlacedWagers(view), [view]);
+  const drafted = isDraftPending(draft, placed) ? findChoice(catalog, draft.target) : undefined;
+  // The sheet shows only while a rebuy is offered (the table waits for input).
+  const rebuyOpen = rebuying && view.legalCommands.includes('rebuy');
+  const addRebuy = async (amount: string) => {
+    await controller.rebuy(amount);
+    const latest = controller.snapshot();
+    // Committed: close. Refused or not saved: keep the sheet and the draft.
+    if (latest.status !== 'active' || latest.facts.some((fact) => fact.kind === 'funding-added')) setRebuying(false);
+  };
 
   const ready = !busy && save === 'saved';
   const legal = (kind: RoulettePermittedView['legalCommands'][number]) => ready && view.legalCommands.includes(kind);
@@ -72,7 +92,7 @@ export function RouletteTable({ snapshot }: { snapshot: ActiveSnapshot }) {
       const latest = controller.snapshot();
       if (latest.status !== 'active' || latest.view.game !== 'roulette') return;
       const nowFailed = latest.save === 'failed';
-      if (nowFailed && !failed) AccessibilityInfo.announceForAccessibility(NOT_SAVED);
+      if (nowFailed && !failed) AccessibilityInfo.announceForAccessibility(SAVE_FAILED_ANNOUNCEMENT);
       failed = nowFailed;
       if (latest.view.sequence === announced) return;
       announced = latest.view.sequence;
@@ -94,15 +114,18 @@ export function RouletteTable({ snapshot }: { snapshot: ActiveSnapshot }) {
       <ScrollView testID="table-scroll" contentContainerStyle={{ paddingTop: insets.top, paddingBottom: space[6] }}>
         <TableTopBar title="Roulette" subtitle={limitsText(view)} canEnd={legal('request-stop')} onEnd={() => setConfirming(true)} />
         <PhaseStepper steps={phaseSteps(view)} />
-        <SessionStrip balance={formatUnits(view.balance)} onTable={formatUnits(totalOnTable(view))} status={STATUS[view.phase]} />
+        <SessionStrip balance={formatUnits(view.balance)} onTable={formatUnits(totalOnTable(view))} status={save === 'failed' ? 'Paused · not saved' : STATUS[view.phase]} />
+        {view.phase !== 'final-settlement' && <PresentationSwitch value={presentation} onChange={setPresentation} />}
 
         {save === 'failed' && (
           <View style={styles.banner}>
-            <Text accessibilityRole="alert" maxFontSizeMultiplier={textScale.body} style={styles.bannerTitle}>{NOT_SAVED}</Text>
+            <Text accessibilityRole="alert" maxFontSizeMultiplier={textScale.body} style={styles.bannerTitle}>Couldn&apos;t save · play is paused</Text>
             <Text maxFontSizeMultiplier={textScale.body} style={styles.bannerText}>
-              Your last move hasn&apos;t been saved, so nothing has been revealed. Try saving again.
+              {busy
+                ? 'Saving your last move…'
+                : `Your last move hasn't been saved, so nothing has been revealed. Nothing is lost. Retrying automatically every ${SAVE_RETRY_MS / 1000} s.`}
             </Text>
-            <Button label="Try again" variant="secondary" disabled={busy} onPress={() => void controller.retrySave()} />
+            <Button label="Retry now" variant="secondary" disabled={busy} onPress={() => void controller.retrySave()} />
           </View>
         )}
         {snapshot.accessNotAllowed && (
@@ -116,7 +139,35 @@ export function RouletteTable({ snapshot }: { snapshot: ActiveSnapshot }) {
         ) : (
           <View testID="table-columns" style={[styles.columns, sideBySide && styles.columnsSideBySide]}>
             <View style={styles.column}>
-              <Felt view={view} canPlace={canPlace} chip={chip} wagerOn={wagerOn} onSpot={addChip} />
+              {presentation === 'table' ? (
+                <View style={styles.tableView}>
+                  {drafted && (
+                    <DraftBar
+                      name={drafted.choice.name}
+                      amount={draftAmountText(draft.text)}
+                      onEdit={() => {
+                        setDraft({ ...draft, kind: drafted.kind.id });
+                        setPresentation('selector');
+                      }}
+                    />
+                  )}
+                  <RouletteFelt view={view} canPlace={canPlace} chip={chip} wagerOn={wagerOn} onSpot={addChip} />
+                </View>
+              ) : (
+                <BetSelector
+                  catalog={catalog}
+                  wagers={placed}
+                  balance={view.balance}
+                  canRebuy={view.legalCommands.includes('rebuy')}
+                  facts={facts}
+                  sequence={view.sequence}
+                  canPlace={canPlace}
+                  draft={draft}
+                  onDraftChange={setDraft}
+                  onSet={(target, amount) => void controller.placeWager(target, amount)}
+                  onRemove={(target) => void controller.placeWager(target, '0')}
+                />
+              )}
             </View>
             <View style={[styles.column, styles.controls]}>
               {message && (
@@ -146,11 +197,32 @@ export function RouletteTable({ snapshot }: { snapshot: ActiveSnapshot }) {
                 </Text>
               </View>
               <Button label="Spin" stretch disabled={!legal('begin-turn')} onPress={() => void controller.spin()} />
-              <ChipRack chip={chip} onChoose={setChip} />
+              {view.legalCommands.includes('rebuy') && (
+                <Button
+                  label="Rebuy"
+                  variant="secondary"
+                  stretch
+                  hint="Adds chips to this session. It counts as funding, not as a win."
+                  disabled={!legal('rebuy')}
+                  onPress={() => setRebuying(true)}
+                />
+              )}
+              {presentation === 'table' && <ChipRack chip={chip} onChoose={setChip} />}
             </View>
           </View>
         )}
       </ScrollView>
+
+      {rebuyOpen && (
+        <RebuySheet
+          funding={view.funding}
+          sequence={view.sequence}
+          facts={facts}
+          busy={!ready}
+          onAdd={(amount) => void addRebuy(amount)}
+          onClose={() => setRebuying(false)}
+        />
+      )}
 
       <EndSessionDialog
         visible={confirming}
@@ -165,102 +237,11 @@ export function RouletteTable({ snapshot }: { snapshot: ActiveSnapshot }) {
   );
 }
 
-const POCKET_TOKEN = { red: 'pocketRed', black: 'pocketBlack', green: 'pocketGreen' } as const;
+const WHEEL_NAMES: Record<RoulettePermittedView['table']['wheel'], string> = { 'single-zero': 'Single zero', 'double-zero': 'Double zero' };
 
-const WHEEL_NAMES: Record<RoulettePermittedView['table']['wheel'], string> = { 'single-zero': 'Single zero' };
-
-const NOT_SAVED = 'Not saved yet. Play is paused.';
+const SAVE_FAILED_ANNOUNCEMENT = "Couldn't save. Play is paused and will retry automatically.";
 
 const capitalize = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
-
-function Felt({
-  view,
-  canPlace,
-  chip,
-  wagerOn,
-  onSpot,
-}: {
-  view: RoulettePermittedView;
-  canPlace: boolean;
-  chip: string;
-  wagerOn: (target: string) => string | undefined;
-  onSpot: (target: string) => void;
-}) {
-  const payout = (target: string) => view.table.placements.find((p) => p.target === target)?.payout.replace(':', ' to ') ?? '';
-  const spot = (target: string, label: string, spoken: string, color: ColorToken | null, style?: object) => (
-    <Spot
-      key={target}
-      label={label}
-      spoken={`${spoken}, pays ${payout(target)}`}
-      hint={`Adds ${formatUnits(chip)}.`}
-      wager={wagerOn(target)}
-      color={color}
-      disabled={!canPlace}
-      onPress={() => onSpot(target)}
-      style={style}
-    />
-  );
-  return (
-    <View style={styles.felt} testID="felt">
-      <View style={styles.outside}>
-        {spot('red', 'RED', 'Red', 'pocketRed', styles.outsideSpot)}
-        {spot('black', 'BLACK', 'Black', 'pocketBlack', styles.outsideSpot)}
-      </View>
-      <View style={styles.numbers}>
-        {spot('straight-0', '0', 'Straight 0, green', 'pocketGreen')}
-        {ROWS.map((row) => (
-          <View key={row[0]} style={styles.row}>
-            {row.map((n) =>
-              spot(`straight-${n}`, String(n), `Straight ${n}, ${pocketColor(n)}`, POCKET_TOKEN[pocketColor(n)], styles.number),
-            )}
-          </View>
-        ))}
-      </View>
-    </View>
-  );
-}
-
-function Spot({
-  label,
-  spoken,
-  hint,
-  wager,
-  color,
-  disabled,
-  onPress,
-  style,
-}: {
-  label: string;
-  spoken: string;
-  hint: string;
-  wager: string | undefined;
-  color: ColorToken | null;
-  disabled: boolean;
-  onPress: () => void;
-  style?: object | undefined;
-}) {
-  const { focused, focusProps } = useKeyboardFocus();
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={spoken}
-      accessibilityHint={hint}
-      accessibilityValue={{ text: wager ? `${formatUnits(wager)} on it` : 'no wager' }}
-      accessibilityState={{ disabled }}
-      disabled={disabled}
-      onPress={onPress}
-      {...focusProps}
-      style={[styles.spot, color && { backgroundColor: palette[color] }, wager !== undefined && styles.spotWagered, focused && styles.spotFocused, style]}
-    >
-      <Text maxFontSizeMultiplier={textScale.body} style={styles.spotText}>{label}</Text>
-      {wager !== undefined && (
-        <View style={styles.marker}>
-          <Text maxFontSizeMultiplier={textScale.body} style={styles.markerText}>{formatUnits(wager)}</Text>
-        </View>
-      )}
-    </Pressable>
-  );
-}
 
 function ChipRack({ chip, onChoose }: { chip: string; onChoose: (value: string) => void }) {
   return (
@@ -286,7 +267,7 @@ function Chip({ option, selected, onPress }: { option: (typeof CHIPS)[number]; s
       accessibilityState={{ checked: selected }}
       onPress={onPress}
       {...focusProps}
-      style={[styles.chipSlot, selected && styles.chipSelected, focused && styles.spotFocused]}
+      style={[styles.chipSlot, selected && styles.chipSelected, focused && styles.chipFocused]}
     >
       <View style={[styles.chip, { backgroundColor: palette[option.color] }]}>
         <Text maxFontSizeMultiplier={textScale.display} style={[styles.chipText, { color: palette[option.ink] }]}>{option.label}</Text>
@@ -353,7 +334,7 @@ function EndSessionDialog({
                 detail: removable.length === 0 ? 'Nothing on the table' : removable.map((w) => `${targetName(w.target)} ${formatUnits(w.amount)}`).join(' · '),
               },
               { title: 'Committed wagers settle automatically', detail: 'None between spins' },
-              { title: 'You see the session result', detail: 'Buy-in, final cash-out and net result' },
+              { title: 'You see the session result', detail: 'Buy-in, rebuys, final cash-out, net result and maximum drawdown' },
             ].map((step, index) => (
               <View key={step.title} accessible accessibilityLabel={`${index + 1}. ${step.title}. ${step.detail}`} style={styles.dialogStep}>
                 <Text maxFontSizeMultiplier={textScale.body} style={styles.dialogStepTitle}>{index + 1}  {step.title}</Text>
@@ -377,6 +358,7 @@ const styles = StyleSheet.create({
   columns: { gap: space[3], paddingTop: space[2] },
   columnsSideBySide: { flexDirection: 'row', alignItems: 'flex-start' },
   column: { flex: 1 },
+  tableView: { gap: space[3] },
   controls: { gap: space[3], paddingHorizontal: space[4] },
   message: { fontFamily: fonts.uiMedium, fontSize: 15, lineHeight: 21, color: palette.foreground },
   sectionLabel: { fontFamily: fonts.uiBold, fontSize: 10, letterSpacing: 0.5, color: palette.mutedForeground },
@@ -388,28 +370,7 @@ const styles = StyleSheet.create({
   summary: { gap: 2 },
   summaryTitle: { fontFamily: fonts.uiBold, fontSize: 15, color: palette.foreground },
   summaryText: { fontFamily: fonts.ui, fontSize: 12, color: palette.mutedForeground },
-  felt: { flexDirection: 'row', gap: space[1], padding: space[3], marginHorizontal: space[2], borderRadius: radius.lg, backgroundColor: palette.feltDeep },
-  outside: { width: 76, gap: 2, paddingTop: MIN_TOUCH_TARGET + 2 },
-  outsideSpot: { flex: 1, minHeight: 96 },
-  numbers: { flex: 1, gap: 2 },
-  row: { flexDirection: 'row', gap: 2 },
-  number: { flex: 1 },
-  spot: {
-    minHeight: MIN_TOUCH_TARGET,
-    minWidth: MIN_TOUCH_TARGET,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: space[1],
-    borderRadius: radius.sm,
-    borderWidth: 2,
-    borderColor: palette.transparent,
-    backgroundColor: palette.felt,
-  },
-  spotWagered: { borderColor: palette.foreground },
-  spotFocused: { borderColor: palette.ring },
-  spotText: { fontFamily: fonts.uiBold, fontSize: 15, color: palette.onImage },
-  marker: { marginTop: 2, minWidth: 26, paddingHorizontal: 4, borderRadius: radius.pill, backgroundColor: palette.chip1, alignItems: 'center' },
-  markerText: { fontFamily: fonts.uiBold, fontSize: 11, color: palette.ink },
+  chipFocused: { borderColor: palette.ring },
   rack: { gap: space[2], padding: space[3], borderRadius: radius.lg, backgroundColor: palette.rail },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: space[1] },
   chipSlot: {

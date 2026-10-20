@@ -2,7 +2,7 @@
 // facts and the permitted view, so a face-down card is only ever "face down".
 // Amounts are plain units; formatting never changes a ledger value.
 
-import type { BlackjackAction, BlackjackPermittedView, Card, DomainFact, HandTotal, IllegalActionReason, Suit } from '@tableside/engine';
+import { FUNDING_CEILING, type BlackjackAction, type BlackjackPermittedView, type Card, type DomainFact, type HandTotal, type IllegalActionReason, type Suit } from '@tableside/engine';
 
 import { formatUnits } from './units';
 
@@ -81,10 +81,14 @@ function illegalMessage(reason: IllegalActionReason, command: DomainFact & { kin
       return `The initial wager needs at least ${formatUnits(initial.min)}. Nothing was placed.`;
     case 'above-maximum':
       return `The initial wager allows at most ${formatUnits(initial.max)}. Nothing was placed.`;
-    case 'insufficient-funds':
+    case 'insufficient-funds': {
+      const rebuy = view.legalCommands.includes('rebuy') ? ' You can rebuy to add chips.' : '';
       return doubling
-        ? `Doubling needs the whole stake again, and your balance is ${formatUnits(view.balance)}. Nothing changed.`
-        : `Your balance can't cover that. Nothing was placed.`;
+        ? `Doubling needs the whole stake again, and your balance is ${formatUnits(view.balance)}. Nothing changed.${rebuy}`
+        : `Your balance can't cover that. Nothing was placed.${rebuy}`;
+    }
+    case 'over-funding-ceiling':
+      return `That rebuy would take total funding past the ${formatUnits(FUNDING_CEILING.toString())} limit. You can add up to ${formatUnits(view.funding.headroom)}. Nothing was added.`;
     case 'no-wager':
       return 'Place your initial wager before the deal.';
     case 'not-whole-units':
@@ -147,6 +151,10 @@ export function describeFacts(facts: readonly DomainFact[], view: BlackjackPermi
         break;
       case 'wager-returned':
         parts.push(`Wager ${formatUnits(fact.amount)} returned to your balance.`);
+        balanceChanged = true;
+        break;
+      case 'funding-added':
+        parts.push(`Rebuy ${formatUnits(fact.amount)} added. Total funding ${formatUnits(fact.cumulative)}.`);
         balanceChanged = true;
         break;
       case 'turn-began':

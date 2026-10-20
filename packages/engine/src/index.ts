@@ -12,7 +12,6 @@ export {
   encodeCheckpoint,
   readPermittedView,
   ActivitySpecificationError,
-  FUNDING_CEILING,
   STATE_SCHEMA_VERSION,
   type ActivitySpecification,
   type ActivityState,
@@ -21,7 +20,8 @@ export {
   type Limit,
   type RouletteActivitySpecification,
   type RouletteActivityState,
-  type RouletteRuleSet,
+  type FundingView,
+  type GameCommand,
   type RoulettePermittedView,
   type AdvanceResult,
   type CheckpointResult,
@@ -34,6 +34,7 @@ export {
   type Receipt,
   type IllegalActionReason,
   type RejectionReason,
+  type RouletteRuleSet,
   type VersionedIdentity,
   type Wager,
 } from './activity';
@@ -50,7 +51,26 @@ export {
   type HandTotal,
   type Peek,
 } from './blackjack';
+export {
+  cumulativeFunding,
+  FUNDING_CEILING,
+  fundingHeadroom,
+  summarizeFunding,
+  type Funding,
+  type FundingResult,
+  type FundingSource,
+  type RebuyRefusal,
+} from './funding';
 
+export {
+  oneSpinOutcomeTable,
+  ROULETTE_RULE_SETS,
+  rouletteLayout,
+  type LimitClass,
+  type OneSpinOutcome,
+  type PlacementKind,
+  type RoulettePlacement,
+} from './roulette';
 export { philox4x32 } from './philox';
 export {
   RANDOM_PROTOCOL_VERSION,

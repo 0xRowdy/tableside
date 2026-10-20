@@ -27,4 +27,11 @@ export {
 } from './blackjack/reference';
 
 export { blackjackRules, DEFAULT_BLACKJACK_PRESET, DEFAULT_PENETRATION } from './blackjack/rules';
-export { SINGLE_ZERO_ROULETTE } from './roulette';
+export {
+  DOUBLE_ZERO_ROULETTE,
+  ROULETTE_HOUSE_EDGE_VERSION,
+  ROULETTE_PRESETS,
+  rouletteHouseEdge,
+  SINGLE_ZERO_ROULETTE,
+  type RouletteHouseEdge,
+} from './roulette';

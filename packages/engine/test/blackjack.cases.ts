@@ -246,6 +246,22 @@ export const blackjackCases: TestCase[] = [
     },
   },
   {
+    name: 'blackjack: a rebuy mid-hand funds the double that was unaffordable; a training bankroll offers none',
+    run: (t) => {
+      const short = run(stacked('6 6 5 T T 9', { ...BJ_SPEC, funding: '15' }), [bet('10'), DEAL]).state;
+      t.equal(assessed(short, DOUBLE).facts[0], { kind: 'illegal-action', command: DOUBLE, reason: 'insufficient-funds' });
+      // The rebuy adds funds and changes nothing else: still the same hand, awaiting the same decision.
+      const funded = step(short, { kind: 'rebuy', amount: '100' });
+      t.equal(funded.facts, [{ kind: 'funding-added', amount: '100', cumulative: '115', balance: '105' }]);
+      t.equal([funded.state.round, view(funded.state).playActions], [short.round, ['hit', 'stand', 'double']]);
+      const doubled = step(funded.state, DOUBLE).state;
+      t.equal([doubled.balance, doubled.wagers], ['95', [{ target: 'hand-1', amount: '20' }]]);
+      const bankroll = run(stacked('6 6 5 T T 9', { ...BJ_SPEC, fundingSource: 'training-bankroll', funding: '15' }), [bet('10'), DEAL]).state;
+      t.equal(view(bankroll).legalCommands, ['play']);
+      t.equal(status(advanceActivity(bankroll, envelope(bankroll, { kind: 'rebuy', amount: '100' }))), 'rejected:not-legal-in-phase');
+    },
+  },
+  {
     name: 'blackjack: a bust loses at once; the dealer draws nothing but the hole card is still revealed',
     run: (t) => {
       const result = playOut('T 6 6 T T 5', '10', [HIT]);
@@ -344,11 +360,12 @@ export const blackjackCases: TestCase[] = [
       const revealing = step(playing, STAND).state;
       const settledOutcome = step(revealing, SETTLE).state;
       const legal = (state: BlackjackActivityState) => [state.phase, view(state).legalCommands];
+      // Rebuys are offered whenever the table waits for input, mid-hand included (#64).
       t.equal([betting, playing, revealing, settledOutcome].map(legal), [
-        ['open-decision', ['place-wager', 'begin-turn', 'request-stop']],
-        ['open-decision', ['play']],
+        ['open-decision', ['place-wager', 'begin-turn', 'request-stop', 'rebuy']],
+        ['open-decision', ['play', 'rebuy']],
         ['revealing-outcome', ['settle-turn', 'request-stop']],
-        ['settled-outcome', ['place-wager', 'begin-turn', 'request-stop']],
+        ['settled-outcome', ['place-wager', 'begin-turn', 'request-stop', 'rebuy']],
       ]);
       t.equal(status(advanceActivity(betting, envelope(betting, STAND))), 'rejected:not-legal-in-phase');
       for (const command of [bet('20'), DEAL, STOP, SETTLE]) {

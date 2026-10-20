@@ -19,19 +19,40 @@ import {
   type BlackjackRuleSet,
 } from './blackjack';
 import { canonicalJson } from './canonical';
-import { spinRoulette, type Card, type RoulettePocket } from './draws';
+import { spinRoulette, type Card, type RoulettePocket, type RouletteWheel } from './draws';
+import {
+  addRebuy,
+  cumulativeFunding,
+  FUNDING_CEILING,
+  fundingDamage,
+  fundingHeadroom,
+  observeSessionValue,
+  openFunding,
+  rebuysOffered,
+  rebuyRefusal,
+  type Funding,
+  type FundingSource,
+} from './funding';
 import { add, compare, decodeMoney, encodeMoney, money, sub, type Money } from './money';
 import { RANDOM_PROTOCOL_VERSION, RandomStream, type RandomStreamIdentity, type RandomStreamState } from './random';
-import { isPocket, netResult, PLACEMENTS, placementFor, placementOrder, ROULETTE_RULES, type LimitClass, type RoulettePlacement } from './roulette';
+import {
+  isPocket,
+  netResult,
+  placementFor,
+  placementOrder,
+  ROULETTE_RULE_SETS,
+  rouletteLayout,
+  type LimitClass,
+  type PlacementKind,
+  type RoulettePlacement,
+} from './roulette';
 import { sha256Hex } from './sha256';
-import { BASE_WAGER_CEILING, hasExactKeys, isCount, isLimit, isRecord, isText, isWholeIn, parseMoney, type Limit } from './shape';
+import { BASE_WAGER_CEILING, hasExactKeys, isCount, isLimit, isRecord, isText, parseMoney, type Limit } from './shape';
 import { ENGINE_VERSION } from './version';
 
 /** The state-schema version, kept apart from engine, rule and protocol identities. */
-export const STATE_SCHEMA_VERSION = 1 as const;
+export const STATE_SCHEMA_VERSION = 2 as const;
 
-/** Cumulative practice-session funding ceiling, in units. */
-export const FUNDING_CEILING = 1_000_000_000n;
 export interface VersionedIdentity {
   readonly id: string;
   readonly version: number;
@@ -43,7 +64,7 @@ export type { Limit };
 export type GameId = 'roulette' | 'blackjack';
 
 export interface RouletteRuleSet extends VersionedIdentity {
-  readonly wheel: 'single-zero';
+  readonly wheel: RouletteWheel;
   readonly limits: { readonly inside: Limit; readonly outside: Limit };
 }
 
@@ -70,7 +91,9 @@ interface SpecificationCommon {
   readonly strategy: VersionedIdentity | null;
   /** Null for games without a coaching reference. */
   readonly reference: VersionedIdentity | null;
-  /** Opening balance: canonical positive whole units within the funding ceiling. */
+  /** Practice funding (buy-in and rebuys) or the training bankroll (no rebuys). */
+  readonly fundingSource: FundingSource;
+  /** Opening balance (buy-in or training-bankroll allocation): canonical positive whole units within the funding ceiling. */
   readonly funding: string;
 }
 
@@ -109,6 +132,8 @@ export interface ActivityCommon<G extends GameId> {
   readonly turn: number;
   /** Funds not on the table, canonical money. */
   readonly balance: string;
+  /** Buy-in, rebuys and drawdown tracking (shared with every game). */
+  readonly funding: Funding;
   /** Stakes on the table in layout order: removable in a decision, committed once a turn begins. */
   readonly wagers: readonly Wager[];
   readonly random: RandomStreamState;
@@ -134,7 +159,12 @@ export type Command =
   /** The automatic settle step after the reveal; the controller issues it, never a tap. */
   | { readonly kind: 'settle-turn' }
   | { readonly kind: 'request-stop' }
-  | { readonly kind: 'advance-final-settlement' };
+  | { readonly kind: 'advance-final-settlement' }
+  /** Adds funds to a practice-funding session while it waits for input. Never places or settles anything. */
+  | { readonly kind: 'rebuy'; readonly amount: string };
+
+/** The commands a game module applies; the protocol handles rebuys for every game. */
+export type GameCommand = Exclude<Command, { readonly kind: 'rebuy' }>;
 
 export type CommandKind = Command['kind'];
 
@@ -154,6 +184,7 @@ export type IllegalActionReason =
   | 'insufficient-funds'
   | 'no-wager-to-remove'
   | 'no-wager'
+  | 'over-funding-ceiling'
   /** The rules don't offer that action here (e.g. a double after the first two cards). */
   | 'action-not-available';
 
@@ -181,6 +212,8 @@ export type DomainFact =
   | { readonly kind: 'hole-card-revealed'; readonly turn: number; readonly card: Card }
   | { readonly kind: 'played'; readonly turn: number; readonly target: string; readonly action: BlackjackAction }
   | { readonly kind: 'wager-returned'; readonly target: string; readonly amount: string }
+  /** A rebuy: funds added, not a win. */
+  | { readonly kind: 'funding-added'; readonly amount: string; readonly cumulative: string; readonly balance: string }
   | { readonly kind: 'activity-completed'; readonly balance: string };
 
 export type RejectionReason = 'malformed' | 'stale' | 'not-legal-in-phase' | 'conflicting-command-id';
@@ -194,6 +227,16 @@ export type AdvanceResult<S extends ActivityState = ActivityState> =
 
 export type PermittedView = RoulettePermittedView | BlackjackPermittedView;
 
+/** Every game's funding lines in the view. */
+export interface FundingView {
+  readonly source: FundingSource;
+  readonly buyIn: string;
+  readonly rebuys: readonly string[];
+  readonly cumulative: string;
+  /** How much a rebuy may still add. */
+  readonly headroom: string;
+}
+
 export interface RoulettePermittedView {
   readonly game: 'roulette';
   readonly activityId: string;
@@ -206,9 +249,19 @@ export interface RoulettePermittedView {
   readonly wagersCommitted: boolean;
   readonly outcome: { readonly turn: number; readonly pocket: RoulettePocket } | null;
   readonly legalCommands: readonly CommandKind[];
+  readonly funding: FundingView;
   readonly table: {
-    readonly wheel: 'single-zero';
-    readonly placements: readonly { target: string; limitClass: LimitClass; min: string; max: string; payout: string }[];
+    readonly wheel: RouletteWheel;
+    /** Every legal placement on the layout, in canonical order. */
+    readonly placements: readonly {
+      target: string;
+      kind: PlacementKind;
+      covers: readonly RoulettePocket[];
+      limitClass: LimitClass;
+      min: string;
+      max: string;
+      payout: string;
+    }[];
   };
 }
 
@@ -227,9 +280,9 @@ export class ActivitySpecificationError extends Error {
 export type Step<S> = { change: Partial<S>; facts: DomainFact[] } | { illegal: IllegalActionReason };
 
 const LEGAL: Record<Phase, readonly CommandKind[]> = {
-  'open-decision': ['place-wager', 'begin-turn', 'request-stop'],
+  'open-decision': ['place-wager', 'begin-turn', 'request-stop', 'rebuy'],
   'revealing-outcome': ['settle-turn', 'request-stop'],
-  'settled-outcome': ['place-wager', 'begin-turn', 'request-stop'],
+  'settled-outcome': ['place-wager', 'begin-turn', 'request-stop', 'rebuy'],
   'final-settlement': ['advance-final-settlement'],
   completed: [],
 };
@@ -238,6 +291,12 @@ const LEGAL: Record<Phase, readonly CommandKind[]> = {
 
 const isIdentity = (value: unknown): value is VersionedIdentity =>
   hasExactKeys(value, ['id', 'version']) && isText(value.id) && isCount(value.version);
+
+const isWheel = (value: unknown): value is RouletteWheel => value === 'single-zero' || value === 'double-zero';
+
+/** True when the id, version and wheel name one of the roulette rule sets this engine runs. */
+const isRuleSet = (value: Record<string, unknown>): boolean =>
+  isWheel(value.wheel) && value.id === ROULETTE_RULE_SETS[value.wheel].id && value.version === ROULETTE_RULE_SETS[value.wheel].version;
 
 const isLimits = (value: unknown): value is RouletteRuleSet['limits'] =>
   hasExactKeys(value, ['inside', 'outside']) && isLimit(value.inside) && isLimit(value.outside);
@@ -251,6 +310,10 @@ function isCommand(value: unknown): value is Command {
     }
     case 'play':
       return hasExactKeys(value, ['kind', 'action']) && isBlackjackAction(value.action);
+    case 'rebuy': {
+      const amount = parseMoney(value.amount);
+      return hasExactKeys(value, ['kind', 'amount']) && amount !== undefined && amount.n > 0n;
+    }
     case 'begin-turn':
     case 'settle-turn':
     case 'request-stop':
@@ -281,9 +344,7 @@ export function createActivity(spec: ActivitySpecification, random: RandomStream
   if (game !== 'roulette' && game !== 'blackjack') fail(`unsupported game ${String(game)}`);
   const rules: Record<string, unknown> | undefined = isRecord(spec.rules) ? spec.rules : undefined;
   if (spec.game === 'roulette') {
-    if (!rules || rules.id !== ROULETTE_RULES.id || rules.version !== ROULETTE_RULES.version || rules.wheel !== ROULETTE_RULES.wheel) {
-      fail('unsupported roulette rules');
-    }
+    if (!rules || !isRuleSet(rules)) fail('unsupported roulette rules');
     if (!isLimits(spec.rules.limits)) fail(`limits must be whole units from 1 to ${BASE_WAGER_CEILING} with min <= max`);
   } else {
     if (!rules || rules.id !== BLACKJACK_RULES.id || rules.version !== BLACKJACK_RULES.version) fail('unsupported blackjack rules');
@@ -293,7 +354,8 @@ export function createActivity(spec: ActivitySpecification, random: RandomStream
   }
   if (spec.strategy !== null && !isIdentity(spec.strategy)) fail('strategy must be null or an id and version');
   if (spec.reference !== null && !isIdentity(spec.reference)) fail('reference must be null or an id and version');
-  if (!isWholeIn(parseMoney(spec.funding), 1n, FUNDING_CEILING)) fail(`funding must be whole units from 1 to ${FUNDING_CEILING}`);
+  const funding = openFunding(spec.fundingSource, parseMoney(spec.funding));
+  if (!funding) return fail(`funding must be practice funding or a training bankroll, in whole units from 1 to ${FUNDING_CEILING}`);
   let stream: RandomStream;
   try {
     stream = RandomStream.create(random);
@@ -308,6 +370,7 @@ export function createActivity(spec: ActivitySpecification, random: RandomStream
     phase: 'open-decision',
     turn: 0,
     balance: spec.funding,
+    funding,
     wagers: [],
     random: position,
     receipts: [],
@@ -339,8 +402,11 @@ export function createActivity(spec: ActivitySpecification, random: RandomStream
 
 // ---- advance ------------------------------------------------------------
 
-/** The commands the state's phase (and game substate) allows. */
-const legalCommands = (state: ActivityState): readonly CommandKind[] => moduleOf(state).legal(state);
+/** The commands the state's phase (and game substate) allows. Rebuys only ever come with practice funding. */
+function legalCommands(state: ActivityState): readonly CommandKind[] {
+  const legal = moduleOf(state).legal(state);
+  return rebuysOffered(state.funding) ? legal : legal.filter((kind) => kind !== 'rebuy');
+}
 
 const reject = (reason: RejectionReason, message: string) => ({ status: 'rejected', reason, message }) as const;
 
@@ -368,7 +434,7 @@ export function advanceActivity<S extends ActivityState>(state: S, envelope: Com
     return reject('not-legal-in-phase', `${command.kind} is not legal in ${state.phase}`);
   }
 
-  const step = moduleOf(state).apply(state, command);
+  const step = command.kind === 'rebuy' ? rebuy(state, command.amount) : moduleOf(state).apply(state, command);
   const receipt: Receipt = {
     commandId: envelope.commandId,
     sequence: state.sequence,
@@ -377,15 +443,48 @@ export function advanceActivity<S extends ActivityState>(state: S, envelope: Com
   };
   const change = 'illegal' in step ? {} : step.change;
   const facts: DomainFact[] = 'illegal' in step ? [{ kind: 'illegal-action', command, reason: step.illegal }] : step.facts;
+  const next = { ...state, ...change } as S;
   return {
     status: 'committed',
-    state: { ...state, ...change, sequence: state.sequence + 1, receipts: [...state.receipts, receipt] } as S,
+    state: {
+      ...next,
+      // Drawdown is observed once per transition, so a turn's simultaneous settlements count together.
+      funding: observeSessionValue(next.funding, sessionValue(next)),
+      sequence: state.sequence + 1,
+      receipts: [...state.receipts, receipt],
+    },
     facts,
     receipt,
   };
 }
 
-function apply(state: RouletteActivityState, command: Command): Step<RouletteActivityState> {
+/** A rebuy, for every game: funds added while the activity waits for input; never a win. */
+function rebuy(state: ActivityState, amountText: string): Step<ActivityState> {
+  const amount = decodeMoney(amountText);
+  const refusal = rebuyRefusal(state.funding, amount);
+  if (refusal) return { illegal: refusal };
+  const funding = addRebuy(state.funding, amount);
+  const balance = encodeMoney(add(decodeMoney(state.balance), amount));
+  return {
+    change: { balance, funding },
+    facts: [{ kind: 'funding-added', amount: amountText, cumulative: encodeMoney(cumulativeFunding(funding)), balance }],
+  };
+}
+
+/** Funds off the table plus outstanding stakes at their original value. */
+const sessionValue = (state: Pick<ActivityState, 'balance' | 'wagers'>): Money =>
+  state.wagers.reduce((sum, wager) => add(sum, decodeMoney(wager.amount)), decodeMoney(state.balance));
+
+/** Every game's funding lines in the view. */
+const fundingView = (funding: Funding): FundingView => ({
+  source: funding.source,
+  buyIn: funding.buyIn,
+  rebuys: [...funding.rebuys],
+  cumulative: encodeMoney(cumulativeFunding(funding)),
+  headroom: encodeMoney(fundingHeadroom(funding)),
+});
+
+function apply(state: RouletteActivityState, command: GameCommand): Step<RouletteActivityState> {
   switch (command.kind) {
     case 'place-wager':
       return placeWager(state, command.target, decodeMoney(command.amount));
@@ -430,7 +529,8 @@ function apply(state: RouletteActivityState, command: Command): Step<RouletteAct
 }
 
 function placeWager(state: RouletteActivityState, target: string, amount: Money): Step<RouletteActivityState> {
-  const placement = placementFor(target);
+  const wheel = state.rules.wheel;
+  const placement = placementFor(wheel, target);
   if (!placement) return { illegal: 'unknown-target' };
   const existing = state.wagers.find((wager) => wager.target === target);
   const previous = existing ? decodeMoney(existing.amount) : money(0n);
@@ -445,7 +545,7 @@ function placeWager(state: RouletteActivityState, target: string, amount: Money)
   if (balance.n < 0n) return { illegal: 'insufficient-funds' };
   const others = state.wagers.filter((wager) => wager.target !== target);
   const wagers = amount.n === 0n ? others : [...others, { target, amount: encodeMoney(amount) }];
-  wagers.sort((a, b) => placementOrder(a.target) - placementOrder(b.target));
+  wagers.sort((a, b) => placementOrder(wheel, a.target) - placementOrder(wheel, b.target));
   return {
     change: { phase: 'open-decision', balance: encodeMoney(balance), wagers },
     facts: [{ kind: 'wager-changed', target, amount: encodeMoney(amount), previous: encodeMoney(previous) }],
@@ -461,7 +561,7 @@ function settle(state: RouletteActivityState): { balance: string; facts: DomainF
   const outcome = state.outcome as NonNullable<RouletteActivityState['outcome']>;
   for (const wager of state.wagers) {
     // Every stored target is a layout placement (placeWager and decode both check).
-    const placement = placementFor(wager.target) as RoulettePlacement;
+    const placement = placementFor(state.rules.wheel, wager.target) as RoulettePlacement;
     const stake = decodeMoney(wager.amount);
     const net = netResult(placement, stake, outcome.pocket);
     const won = net.n > 0n;
@@ -506,11 +606,14 @@ function rouletteView(state: RouletteActivityState): RoulettePermittedView {
     wagers: state.wagers.map((wager) => ({ target: wager.target, amount: wager.amount })),
     wagersCommitted: state.wagers.length > 0 && (state.phase === 'revealing-outcome' || state.phase === 'final-settlement'),
     outcome: state.outcome && { turn: state.outcome.turn, pocket: state.outcome.pocket },
-    legalCommands: [...LEGAL[state.phase]],
+    legalCommands: [...legalCommands(state)],
+    funding: fundingView(state.funding),
     table: {
       wheel: state.rules.wheel,
-      placements: PLACEMENTS.map((placement) => ({
+      placements: rouletteLayout(state.rules.wheel).map((placement) => ({
         target: placement.target,
+        kind: placement.kind,
+        covers: [...placement.covers],
         limitClass: placement.limitClass,
         min: state.rules.limits[placement.limitClass].min,
         max: state.rules.limits[placement.limitClass].max,
@@ -554,8 +657,8 @@ function unsupportedVersion(value: unknown): string | undefined {
   const game = identities.game;
   if (typeof game === 'string' && !isGame(game)) return `unsupported game ${game}`;
   const rules = identities.rules;
-  const supported = isGame(game) ? GAMES[game].rules : ROULETTE_RULES;
-  if (isIdentity(rules) && (rules.id !== supported.id || rules.version !== supported.version)) {
+  const supported = GAMES[isGame(game) ? game : 'roulette'].rules;
+  if (isIdentity(rules) && !supported.some((set) => set.id === rules.id && set.version === rules.version)) {
     return `unsupported rules ${rules.id} v${rules.version}`;
   }
   const random = identities.random;
@@ -565,7 +668,7 @@ function unsupportedVersion(value: unknown): string | undefined {
   return undefined;
 }
 
-const COMMON_KEYS = ['schema', 'activity', 'identities', 'rules', 'sequence', 'phase', 'turn', 'balance', 'wagers', 'random', 'receipts'];
+const COMMON_KEYS = ['schema', 'activity', 'identities', 'rules', 'sequence', 'phase', 'turn', 'balance', 'funding', 'wagers', 'random', 'receipts'];
 
 /** True for the canonical JSON of a valid command, as receipts store it. */
 function isCanonicalCommand(text: unknown): boolean {
@@ -610,6 +713,8 @@ function stateDamage(value: unknown): string | undefined {
   if (typeof phase !== 'string' || !Object.keys(LEGAL).includes(phase)) return 'unknown phase';
   const balance = parseMoney(value.balance);
   if (balance === undefined || balance.n < 0n) return 'damaged balance';
+  const funding = fundingDamage(value.funding, parseMoney);
+  if (funding) return funding;
   if (!Array.isArray(wagers)) return 'damaged wagers';
   for (const wager of wagers as unknown[]) {
     if (!hasExactKeys(wager, ['target', 'amount']) || typeof wager.target !== 'string') return 'damaged wager';
@@ -639,14 +744,17 @@ function stateDamage(value: unknown): string | undefined {
 /** The first roulette-specific problem in a checkpoint whose common fields are sound. */
 function rouletteDamage(value: Record<string, unknown>): string | undefined {
   const { rules, phase, turn, outcome } = value;
+  const identities = value.identities as Record<string, unknown>;
   const wagers = value.wagers as Wager[];
-  if (!hasExactKeys(rules, ['wheel', 'limits']) || rules.wheel !== ROULETTE_RULES.wheel || !isLimits(rules.limits)) return 'damaged rules';
+  if (!hasExactKeys(rules, ['wheel', 'limits']) || !isWheel(rules.wheel) || !isLimits(rules.limits)) return 'damaged rules';
+  if (!isRuleSet({ ...(identities.rules as VersionedIdentity), wheel: rules.wheel })) return 'the rules do not match their recorded identity';
+  const wheel = rules.wheel;
   let order = -1;
   for (const wager of wagers) {
-    if (placementOrder(wager.target) <= order) return 'damaged wager';
-    order = placementOrder(wager.target);
+    if (placementOrder(wheel, wager.target) <= order) return 'damaged wager';
+    order = placementOrder(wheel, wager.target);
   }
-  if (outcome !== null && !(hasExactKeys(outcome, ['turn', 'pocket']) && isCount(outcome.turn) && outcome.turn >= 1 && outcome.turn === turn && isPocket(outcome.pocket))) {
+  if (outcome !== null && !(hasExactKeys(outcome, ['turn', 'pocket']) && isCount(outcome.turn) && outcome.turn >= 1 && outcome.turn === turn && isPocket(wheel, outcome.pocket))) {
     return 'damaged outcome';
   }
   if ((outcome === null) !== (turn === 0)) return 'the outcome does not match the turn count';
@@ -661,12 +769,12 @@ function rouletteDamage(value: Record<string, unknown>): string | undefined {
 
 /** What the session protocol needs from a game module. A new game adds one entry to GAMES. */
 interface GameModule<S extends ActivityState> {
-  /** The rule identity the module runs. */
-  readonly rules: VersionedIdentity;
+  /** The rule identities the module runs. */
+  readonly rules: readonly VersionedIdentity[];
   /** State fields beyond the common ones. */
   readonly keys: readonly string[];
   legal(state: S): readonly CommandKind[];
-  apply(state: S, command: Command): Step<S>;
+  apply(state: S, command: GameCommand): Step<S>;
   view(state: S): PermittedView;
   /** The first game-specific problem in a checkpoint whose common fields are sound. */
   damage(value: Record<string, unknown>): string | undefined;
@@ -675,13 +783,20 @@ interface GameModule<S extends ActivityState> {
 type StateOf<G extends GameId> = Extract<ActivityState, { readonly identities: { readonly game: G } }>;
 
 const GAMES: { readonly [G in GameId]: GameModule<StateOf<G>> } = {
-  roulette: { rules: ROULETTE_RULES, keys: ['outcome'], legal: (state) => LEGAL[state.phase], apply, view: rouletteView, damage: rouletteDamage },
+  roulette: {
+    rules: Object.values(ROULETTE_RULE_SETS),
+    keys: ['outcome'],
+    legal: (state) => LEGAL[state.phase],
+    apply,
+    view: rouletteView,
+    damage: rouletteDamage,
+  },
   blackjack: {
-    rules: BLACKJACK_RULES,
+    rules: [BLACKJACK_RULES],
     keys: ['shoe', 'round'],
     legal: blackjackLegal,
     apply: applyBlackjack,
-    view: (state) => blackjackView(state, blackjackLegal(state)),
+    view: (state) => blackjackView(state, legalCommands(state), fundingView(state.funding)),
     damage: blackjackDamage,
   },
 };

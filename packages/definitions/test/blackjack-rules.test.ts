@@ -33,7 +33,7 @@ describe('blackjack rule presets', () => {
     for (const preset of BLACKJACK_PRESETS) {
       for (const penetration of [50, 55, 60, 65, 70, 75, 80]) {
         const rules = blackjackRules(preset, penetration);
-        const state = createActivity({ activityId: 'a', owner: 'o', device: 'd', game: 'blackjack', rules, strategy: null, reference: null, funding: '1000' }, random);
+        const state = createActivity({ activityId: 'a', owner: 'o', device: 'd', game: 'blackjack', rules, strategy: null, reference: null, fundingSource: 'practice-funding', funding: '1000' }, random);
         expect(state.rules.penetration).toBe(penetration);
       }
     }

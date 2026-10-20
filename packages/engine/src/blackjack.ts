@@ -8,7 +8,7 @@
 // shows only exposed cards: the hole card is face down until the round ends,
 // and a negative peek reveals no rank.
 
-import type { ActivityCommon, Command, CommandKind, DomainFact, Step, VersionedIdentity, Wager } from './activity';
+import type { ActivityCommon, CommandKind, DomainFact, FundingView, GameCommand, Step, VersionedIdentity, Wager } from './activity';
 import { canonicalShoe, shuffle, type Card, type Rank, type Suit } from './draws';
 import { add, compare, decodeMoney, encodeMoney, money, mul, neg, sub, type Money } from './money';
 import { RandomStream } from './random';
@@ -92,6 +92,7 @@ export interface BlackjackPermittedView {
   readonly wagers: readonly Wager[];
   readonly wagersCommitted: boolean;
   readonly legalCommands: readonly CommandKind[];
+  readonly funding: FundingView;
   /** Actions the rules offer the active hand; funding is judged when one is submitted. */
   readonly playActions: readonly BlackjackAction[];
   readonly round: {
@@ -185,11 +186,12 @@ const playing = (state: BlackjackActivityState) => state.phase === 'open-decisio
 export function blackjackLegal(state: BlackjackActivityState): CommandKind[] {
   switch (state.phase) {
     case 'open-decision':
-      return playing(state) ? ['play'] : ['place-wager', 'begin-turn', 'request-stop'];
+      // Rebuys while waiting for input, including before an unaffordable double.
+      return playing(state) ? ['play', 'rebuy'] : ['place-wager', 'begin-turn', 'request-stop', 'rebuy'];
     case 'revealing-outcome':
       return ['settle-turn', 'request-stop'];
     case 'settled-outcome':
-      return ['place-wager', 'begin-turn', 'request-stop'];
+      return ['place-wager', 'begin-turn', 'request-stop', 'rebuy'];
     case 'final-settlement':
       return ['advance-final-settlement'];
     case 'completed':
@@ -224,7 +226,7 @@ class Dealer {
   }
 }
 
-export function applyBlackjack(state: BlackjackActivityState, command: Command): BlackjackStep {
+export function applyBlackjack(state: BlackjackActivityState, command: GameCommand): BlackjackStep {
   switch (command.kind) {
     case 'place-wager':
       return placeWager(state, command.target, decodeMoney(command.amount));
@@ -425,7 +427,7 @@ function settle(state: BlackjackActivityState): { balance: string; facts: Domain
 
 // ---- permitted view ---------------------------------------------------------
 
-export function blackjackView(state: BlackjackActivityState, legalCommands: readonly CommandKind[]): BlackjackPermittedView {
+export function blackjackView(state: BlackjackActivityState, legalCommands: readonly CommandKind[], funding: FundingView): BlackjackPermittedView {
   const { round, shoe, rules } = state;
   const active = round?.active ?? null;
   const activeHand = active === null ? undefined : round?.hands[active];
@@ -439,6 +441,7 @@ export function blackjackView(state: BlackjackActivityState, legalCommands: read
     wagers: state.wagers.map((wager) => ({ target: wager.target, amount: wager.amount })),
     wagersCommitted: state.wagers.length > 0 && (playing(state) || state.phase === 'revealing-outcome' || state.phase === 'final-settlement'),
     legalCommands: [...legalCommands],
+    funding,
     playActions: activeHand && state.phase === 'open-decision' ? ACTIONS.filter((action) => action !== 'double' || activeHand.cards.length === 2) : [],
     round: round && {
       turn: state.turn,

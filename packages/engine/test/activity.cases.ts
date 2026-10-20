@@ -21,7 +21,7 @@ import {
   type DomainFact,
 } from '../src';
 
-import { run, SPEC, status, step, STREAM } from './activity.fixtures';
+import { DOUBLE_ZERO, run, SPEC, status, step, STREAM } from './activity.fixtures';
 import { throws, ZERO } from './fixtures';
 
 const RED = [1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36];
@@ -54,7 +54,7 @@ export const activityCases: TestCase[] = [
         reference: null,
         random: STREAM,
       });
-      t.equal(state.schema, 1);
+      t.equal(state.schema, 2);
       t.equal([state.phase, state.turn, state.balance, state.wagers], ['open-decision', 0, '1000', []]);
       // The state is plain data: it survives a JSON round trip unchanged.
       t.equal(JSON.parse(JSON.stringify(state)), state);
@@ -66,7 +66,7 @@ export const activityCases: TestCase[] = [
       const state = createActivity(SPEC, STREAM);
       t.equal(
         Object.keys(state).sort(),
-        ['activity', 'balance', 'identities', 'outcome', 'phase', 'random', 'receipts', 'rules', 'schema', 'sequence', 'turn', 'wagers'],
+        ['activity', 'balance', 'funding', 'identities', 'outcome', 'phase', 'random', 'receipts', 'rules', 'schema', 'sequence', 'turn', 'wagers'],
       );
       t.equal(state.receipts, []);
     },
@@ -136,7 +136,7 @@ export const activityCases: TestCase[] = [
     name: 'activity: money is conserved and payouts match the layout over random play (property)',
     run: (t) => {
       const driver = RandomStream.create({ ...ZERO, key: [0x726f756c, 0x65747465] });
-      const targets = [...Array.from({ length: 37 }, (_, i) => `straight-${i}`), 'red', 'black', 'split-1-2'];
+      const targets = [...Array.from({ length: 37 }, (_, i) => `straight-${i}`), 'red', 'black', 'split-1-3'];
       let state = createActivity({ ...SPEC, funding: '5000' }, STREAM);
       let netTotal = 0n;
       let committed = new Map<string, string>();
@@ -191,7 +191,11 @@ export const activityCases: TestCase[] = [
         [place('red', '1001'), 'above-maximum'],
         [place('straight-7', '5/2'), 'not-whole-units'],
         [place('straight-37', '1'), 'unknown-target'],
-        [place('split-1-2', '1'), 'unknown-target'],
+        // Equal coverage isn't enough: only the layout's placements are bets.
+        [place('split-1-3', '1'), 'unknown-target'],
+        [place('corner-1-2-3-4', '1'), 'unknown-target'],
+        [place('straight-00', '1'), 'unknown-target'],
+        [place('basket-0-00-1-2-3', '1'), 'unknown-target'],
         [place('straight-7', '11'), 'insufficient-funds'],
         [place('black', '0'), 'no-wager-to-remove'],
       ];
@@ -270,14 +274,14 @@ export const activityCases: TestCase[] = [
       t.equal(
         [open, revealing, settledOutcome, final, completed].map((state) => [state.phase, legal(state)]),
         [
-          ['open-decision', ['place-wager', 'begin-turn', 'request-stop']],
+          ['open-decision', ['place-wager', 'begin-turn', 'request-stop', 'rebuy']],
           ['revealing-outcome', ['settle-turn', 'request-stop']],
-          ['settled-outcome', ['place-wager', 'begin-turn', 'request-stop']],
+          ['settled-outcome', ['place-wager', 'begin-turn', 'request-stop', 'rebuy']],
           ['final-settlement', ['advance-final-settlement']],
           ['completed', []],
         ],
       );
-      const all = [place('red', '10'), BEGIN, SETTLE, STOP, FINAL];
+      const all: Command[] = [place('red', '10'), BEGIN, SETTLE, STOP, FINAL, { kind: 'rebuy', amount: '100' }];
       for (const state of [open, revealing, settledOutcome, final, completed]) {
         const accepted = all.filter((command) => advanceActivity(state, envelope(state, command, 'probe')).status === 'committed');
         t.equal(accepted.map((command) => command.kind), legal(state));
@@ -336,7 +340,7 @@ export const activityCases: TestCase[] = [
       collect(readPermittedView(step(a, BEGIN).state));
       t.equal(keys.filter((key) => ['random', 'key', 'session', 'block', 'lane', 'identities', 'receipts'].includes(key)), []);
       t.equal(Object.keys(readPermittedView(a)).sort(), [
-        'activityId', 'balance', 'game', 'legalCommands', 'outcome', 'phase', 'sequence', 'table', 'turn', 'wagers', 'wagersCommitted',
+        'activityId', 'balance', 'funding', 'game', 'legalCommands', 'outcome', 'phase', 'sequence', 'table', 'turn', 'wagers', 'wagersCommitted',
       ]);
       // readPermittedView takes the state alone: no caller flag can widen it.
       t.equal(readPermittedView.length, 1);
@@ -346,9 +350,14 @@ export const activityCases: TestCase[] = [
     name: 'activity: the view lists the table placements with their limits and payouts',
     run: (t) => {
       const placements = readPermittedView(fresh()).table.placements;
-      t.equal(placements.length, 39);
-      t.equal(placements[0], { target: 'straight-0', limitClass: 'inside', min: '1', max: '100', payout: '35:1' });
-      t.equal(placements.at(-1), { target: 'black', limitClass: 'outside', min: '10', max: '1000', payout: '1:1' });
+      t.equal(placements.length, 157);
+      t.equal(placements[0], { target: 'straight-0', kind: 'straight', covers: [0], limitClass: 'inside', min: '1', max: '100', payout: '35:1' });
+      t.equal(placements.at(-1), { target: 'column-3', kind: 'column', covers: [3, 6, 9, 12, 15, 18, 21, 24, 27, 30, 33, 36], limitClass: 'outside', min: '10', max: '1000', payout: '2:1' });
+      const doubleZero = readPermittedView(createActivity({ ...SPEC, rules: DOUBLE_ZERO }, STREAM)).table;
+      t.equal([doubleZero.wheel, doubleZero.placements.length], ['double-zero', 161]);
+      t.equal(doubleZero.placements.find((p) => p.kind === 'basket'), {
+        target: 'basket-0-00-1-2-3', kind: 'basket', covers: [0, '00', 1, 2, 3], limitClass: 'inside', min: '1', max: '100', payout: '6:1',
+      });
     },
   },
 
@@ -417,6 +426,12 @@ export const activityCases: TestCase[] = [
         edit((v) => ((v.receipts as Record<string, unknown>[])[0]!.command = '{"kind":"shuffle"}')),
         edit((v) => ((v.receipts as Record<string, unknown>[])[0]!.command = '{ "kind": "begin-turn" }')),
         edit((v) => (v.outcome = { turn: 1, pocket: 37 })),
+        // 00 is no pocket of the single-zero wheel, nor a target on its layout.
+        edit((v) => (v.outcome = { turn: 1, pocket: '00' })),
+        edit((v) => (v.wagers = [{ target: 'straight-00', amount: '10' }])),
+        // Pinned rule content that disagrees with the recorded rule identity.
+        edit((v) => ((v.rules as Record<string, unknown>).wheel = 'double-zero')),
+        edit((v) => ((v.identities as Record<string, unknown>).rules = { id: 'roulette-double-zero', version: 1 })),
         edit((v) => ((v.random as Record<string, unknown>).lane = 4)),
         edit((v) => ((v.random as Record<string, unknown>).key = [1, 2])),
         edit((v) => delete v.turn),
@@ -443,11 +458,12 @@ export const activityCases: TestCase[] = [
         return JSON.stringify(value);
       };
       const unsupported = [
-        edit((v) => ((v as Record<string, unknown>).schema = 2)),
+        edit((v) => ((v as Record<string, unknown>).schema = 1)),
         edit((v) => (v.identities!.engine = '9.9.9')),
         edit((v) => (v.identities!.game = 'baccarat')),
         edit((v) => (v.identities!.game = 'toString')),
-        edit((v) => (v.identities!.rules = { id: 'roulette-double-zero', version: 1 })),
+        edit((v) => (v.identities!.rules = { id: 'roulette-triple-zero', version: 1 })),
+        edit((v) => (v.identities!.rules = { id: 'roulette-double-zero', version: 2 })),
         edit((v) => (v.identities!.rules = { id: 'roulette-single-zero', version: 2 })),
         edit((v) => ((v.identities!.random as Record<string, unknown>).protocol = 2)),
       ];

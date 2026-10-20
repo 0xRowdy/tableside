@@ -34,6 +34,7 @@ export const BJ_SPEC: BlackjackActivitySpecification = {
   rules: S17_LS,
   strategy: null,
   reference: null,
+  fundingSource: 'practice-funding',
   funding: '1000',
 };
 

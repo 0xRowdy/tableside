@@ -210,6 +210,34 @@ describe('blackjack free play', () => {
     expect(screen.getByLabelText('Last hand: 2 of hearts, 9 of clubs, 8 of hearts. 19, doubled')).toBeOnTheScreen();
   });
 
+  it('sets the initial wager from the bet list as well as the table, the same session either way', async () => {
+    await startSession();
+    await fireEvent.press(screen.getByRole('tab', { name: 'Bet list' }));
+    expect(screen.getByRole('header', { name: 'Initial wager · 10 to 1,000' })).toBeOnTheScreen();
+
+    await fireEvent.press(screen.getByRole('button', { name: /^Initial wager\b/ }));
+    await fireEvent.press(screen.getByRole('radio', { name: 'Initial wager' }));
+    await fireEvent.changeText(screen.getByLabelText(/^Total stake for /), '40');
+    await fireEvent.press(screen.getByRole('button', { name: /^Set / }));
+
+    expect(announcements).toContain('Wager 40 on the table. Balance 960.');
+    await fireEvent.press(screen.getByRole('tab', { name: 'Table' }));
+    expect(betSpot()).toHaveAccessibilityValue({ text: '40 on it' });
+    await fireEvent.press(screen.getByRole('button', { name: 'Deal' }));
+    await screen.findByLabelText('Status Your turn');
+    // Mid-hand the only choices are the hand's own; the bet list returns between rounds.
+    expect(screen.queryByRole('tab', { name: 'Bet list' })).toBeNull();
+  });
+
+  it('offers a rebuy between rounds, counted as funding', async () => {
+    await startSession();
+    await fireEvent.press(screen.getByRole('button', { name: 'Rebuy' }));
+    await fireEvent.press(await screen.findByRole('button', { name: /^Add / }));
+
+    expect(announcements).toContain('Rebuy 1,000 added. Total funding 2,000. Balance 2,000.');
+    expect(screen.getByLabelText('Session balance 2,000')).toBeOnTheScreen();
+  });
+
   it('offers a rebet of the last wager for the next round', async () => {
     await startSession();
     await betAndDeal();
