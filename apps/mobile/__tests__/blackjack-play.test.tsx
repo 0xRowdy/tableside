@@ -10,11 +10,26 @@ import { AccessibilityInfo, Dimensions, StyleSheet } from 'react-native';
 
 import type { substituteAdapters } from '@/practice/testing/substitutes';
 
-const mockAdapters: { latest: ReturnType<typeof substituteAdapters> | null } = { latest: null };
+// The stream each render's app adapters draw from; null is the "pi digits" stream.
+const mockAdapters: { latest: ReturnType<typeof substituteAdapters> | null; words: readonly [number, number, number, number] | null } = {
+  latest: null,
+  words: null,
+};
 jest.mock('@/practice/app-adapters', () => {
   const { FakeClock, substituteAdapters: create } = jest.requireActual('@/practice/testing/substitutes');
-  return { createAppAdapters: () => (mockAdapters.latest = create({ clock: new FakeClock(undefined, true) })) };
+  return {
+    createAppAdapters: () =>
+      (mockAdapters.latest = create({ clock: new FakeClock(undefined, true), ...(mockAdapters.words && { words: mockAdapters.words }) })),
+  };
 });
+
+/**
+ * Streams whose first shuffle (Python reference, test/reference/philox_reference.py)
+ * deals: NATURAL — you Q♥ and A♦ against a 7♣ up, 2♠ face down;
+ * ELEVEN — you 2♥ and 9♣ against a 4♥ up, Q♥ face down, then 8♥ and J♣.
+ */
+const NATURAL = [40, 0x5441424c, 0x45534944, 0x45] as const;
+const ELEVEN = [47, 0x5441424c, 0x45534944, 0x45] as const;
 
 let announcements: string[] = [];
 
@@ -26,6 +41,7 @@ beforeAll(() => {
 
 beforeEach(() => {
   announcements = [];
+  mockAdapters.words = null;
 });
 
 async function openSetup() {
@@ -148,6 +164,50 @@ describe('blackjack free play', () => {
     expect(within(screen.getByTestId('phase-stepper')).getByLabelText('Step 4 of 4, Settle, current')).toBeOnTheScreen();
     // The result is marked in words as well as colour.
     expect(screen.getByText('Win +25')).toBeOnTheScreen();
+  });
+
+  it('pays a natural 3:2 in exact half units with no decision, announcing it', async () => {
+    mockAdapters.words = NATURAL;
+    await startSession();
+    // A lone 5 is under the 10 minimum: refused and explained, nothing placed.
+    await fireEvent.press(screen.getByRole('radio', { name: '5 chip' }));
+    await fireEvent.press(betSpot());
+    expect(announcements).toContain('The initial wager needs at least 10. Nothing was placed.');
+    expect(betSpot()).toHaveAccessibilityValue({ text: 'no wager' });
+    await fireEvent.press(screen.getByRole('radio', { name: '25 chip' }));
+    await fireEvent.press(betSpot());
+
+    await fireEvent.press(screen.getByRole('button', { name: 'Deal' }));
+
+    // A 7 up is not peeked; the hole card is turned at once and the round settles on its own.
+    await screen.findByLabelText('Status Settled automatically');
+    expect(announcements).toContain(
+      'A fresh shoe is shuffled. Wager 25 in play. You: Queen of hearts. Dealer: 7 of clubs. You: Ace of diamonds. Dealer: a face-down card. ' +
+        'The dealer turns over the 2 of spades. You have blackjack; the dealer has 9.',
+    );
+    // 25 x 3/2 = 37.5; 1,000 - 25 + 62.5 = 1,037.5.
+    expect(announcements).toContain('Blackjack! You win 37.5. Balance 1,037.5.');
+    expect(screen.getByLabelText('Session balance 1,037.5')).toBeOnTheScreen();
+    expect(screen.getByText('Win +37.5')).toBeOnTheScreen();
+    expect(screen.getByLabelText('Last hand: Queen of hearts, Ace of diamonds. Blackjack')).toBeOnTheScreen();
+    expect(screen.queryByRole('button', { name: 'Hit' })).toBeNull();
+  });
+
+  it('doubles 11 for one card at the whole stake again, announcing the doubled wager', async () => {
+    mockAdapters.words = ELEVEN;
+    await startSession();
+    await betAndDeal('25');
+    expect(screen.getByLabelText('Your hand: 2 of hearts, 9 of clubs. 11')).toBeOnTheScreen();
+
+    await fireEvent.press(screen.getByRole('button', { name: 'Double' }));
+
+    await screen.findByLabelText('Status Settled automatically');
+    expect(announcements).toContain(
+      'You double. Wager 50 on the table. You: 8 of hearts. The dealer turns over the Queen of hearts. Dealer: Jack of clubs. ' +
+        'You have 19; the dealer has bust 24. Balance 950.',
+    );
+    expect(announcements).toContain('You win 50. Balance 1,050.');
+    expect(screen.getByLabelText('Last hand: 2 of hearts, 9 of clubs, 8 of hearts. 19, doubled')).toBeOnTheScreen();
   });
 
   it('offers a rebet of the last wager for the next round', async () => {

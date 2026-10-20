@@ -89,6 +89,7 @@ export {
   sub,
   type Money,
 } from './money';
+export { canonicalJson } from './canonical';
 export { sha256Hex } from './sha256';
 export {
   decodeStrategyLiteral,

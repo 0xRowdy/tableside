@@ -7,6 +7,7 @@
 
 import {
   advanceActivity,
+  canonicalJson,
   ActivitySpecificationError,
   createActivity,
   decodeCheckpoint,
@@ -426,4 +427,4 @@ export class PracticeController {
   }
 }
 
-const sameRequest = (a: StartRequest, b: StartRequest) => JSON.stringify(a) === JSON.stringify(b);
+const sameRequest = (a: StartRequest, b: StartRequest) => canonicalJson(a) === canonicalJson(b);

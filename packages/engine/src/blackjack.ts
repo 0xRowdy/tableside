@@ -132,14 +132,26 @@ export interface BlackjackPermittedView {
 
 // ---- rules ----------------------------------------------------------------
 
-export const isBlackjackTable = (value: unknown): value is BlackjackTable =>
-  hasExactKeys(value, ['decks', 'dealer', 'lateSurrender', 'penetration', 'limits']) &&
+const TABLE_KEYS = ['decks', 'dealer', 'lateSurrender', 'penetration', 'limits'];
+
+/** Valid table fields; `extra` names the other keys the value may carry. */
+const isTable = (value: unknown, extra: readonly string[]): value is BlackjackTable =>
+  hasExactKeys(value, [...TABLE_KEYS, ...extra]) &&
   value.decks === BLACKJACK_RULES.decks &&
   (value.dealer === 'S17' || value.dealer === 'H17') &&
   typeof value.lateSurrender === 'boolean' &&
   PENETRATIONS.includes(value.penetration as number) &&
   hasExactKeys(value.limits, ['initial']) &&
   isLimit(value.limits.initial);
+
+/** Pinned table content, exactly: no missing, malformed or extra fields. */
+export const isBlackjackTable = (value: unknown): value is BlackjackTable => isTable(value, []);
+
+/** A whole rule set this engine runs: its identity plus valid table fields and nothing else. */
+export const isBlackjackRuleSet = (value: unknown): value is BlackjackRuleSet =>
+  isTable(value, ['id', 'version']) &&
+  (value as BlackjackRuleSet).id === BLACKJACK_RULES.id &&
+  (value as BlackjackRuleSet).version === BLACKJACK_RULES.version;
 
 /** The pinned table content of a rule set. */
 export const blackjackTable = (rules: BlackjackRuleSet): BlackjackTable => ({
@@ -503,7 +515,7 @@ function roundDamage(value: unknown): string | undefined {
 
 /** The first blackjack-specific structural or invariant problem in a checkpoint, if any. */
 export function blackjackDamage(value: Record<string, unknown>): string | undefined {
-  if (!hasExactKeys(value.rules, ['decks', 'dealer', 'lateSurrender', 'penetration', 'limits']) || !isBlackjackTable(value.rules)) return 'damaged rules';
+  if (!isBlackjackTable(value.rules)) return 'damaged rules';
   const shoe = shoeDamage(value.shoe, value.rules);
   if (shoe) return shoe;
   const round = roundDamage(value.round);

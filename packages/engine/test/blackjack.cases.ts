@@ -467,6 +467,10 @@ export const blackjackCases: TestCase[] = [
         { id: 'blackjack-eight-deck' },
         { version: 2 },
         { limits: { initial: { min: '1000', max: '10' } } },
+        // Malformed or unknown fields are refused as a specification error, never a crash.
+        { limits: null as never },
+        { limits: { initial: { min: '10', max: '1000' }, insurance: { min: '1', max: '500' } } as never },
+        { burnCard: true } as never,
       ];
       t.equal(
         bad.map((change) => throws(() => createActivity(withRules(change), BJ_STREAM))),

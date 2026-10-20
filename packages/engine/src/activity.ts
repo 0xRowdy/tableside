@@ -12,7 +12,7 @@ import {
   blackjackTable,
   blackjackView,
   isBlackjackAction,
-  isBlackjackTable,
+  isBlackjackRuleSet,
   type BlackjackAction,
   type BlackjackActivityState,
   type BlackjackPermittedView,
@@ -124,7 +124,6 @@ export interface RouletteActivityState extends ActivityCommon<'roulette'> {
 
 export type ActivityState = RouletteActivityState | BlackjackActivityState;
 
-const isBlackjack = (state: ActivityState): state is BlackjackActivityState => state.identities.game === 'blackjack';
 
 export type Command =
   /** Sets the stake on a target; amount "0" takes the wager down. */
@@ -288,7 +287,7 @@ export function createActivity(spec: ActivitySpecification, random: RandomStream
     if (!isLimits(spec.rules.limits)) fail(`limits must be whole units from 1 to ${BASE_WAGER_CEILING} with min <= max`);
   } else {
     if (!rules || rules.id !== BLACKJACK_RULES.id || rules.version !== BLACKJACK_RULES.version) fail('unsupported blackjack rules');
-    if (!isBlackjackTable(blackjackTable(spec.rules))) {
+    if (!isBlackjackRuleSet(rules)) {
       fail(`blackjack rules need six decks, S17 or H17, a penetration of 50-80% in 5% steps and whole-unit limits from 1 to ${BASE_WAGER_CEILING}`);
     }
   }
@@ -341,7 +340,7 @@ export function createActivity(spec: ActivitySpecification, random: RandomStream
 // ---- advance ------------------------------------------------------------
 
 /** The commands the state's phase (and game substate) allows. */
-const legalCommands = (state: ActivityState): readonly CommandKind[] => (isBlackjack(state) ? blackjackLegal(state) : LEGAL[state.phase]);
+const legalCommands = (state: ActivityState): readonly CommandKind[] => moduleOf(state).legal(state);
 
 const reject = (reason: RejectionReason, message: string) => ({ status: 'rejected', reason, message }) as const;
 
@@ -369,7 +368,7 @@ export function advanceActivity<S extends ActivityState>(state: S, envelope: Com
     return reject('not-legal-in-phase', `${command.kind} is not legal in ${state.phase}`);
   }
 
-  const step: Step<ActivityState> = isBlackjack(state) ? applyBlackjack(state, command) : apply(state, command);
+  const step = moduleOf(state).apply(state, command);
   const receipt: Receipt = {
     commandId: envelope.commandId,
     sequence: state.sequence,
@@ -493,7 +492,10 @@ export function readPermittedView(state: RouletteActivityState): RoulettePermitt
 export function readPermittedView(state: BlackjackActivityState): BlackjackPermittedView;
 export function readPermittedView(state: ActivityState): PermittedView;
 export function readPermittedView(state: ActivityState): PermittedView {
-  if (isBlackjack(state)) return blackjackView(state, blackjackLegal(state));
+  return moduleOf(state).view(state);
+}
+
+function rouletteView(state: RouletteActivityState): RoulettePermittedView {
   return {
     game: 'roulette',
     activityId: state.activity.id,
@@ -550,9 +552,9 @@ function unsupportedVersion(value: unknown): string | undefined {
   if (typeof value.schema === 'number' && value.schema !== STATE_SCHEMA_VERSION) return `unsupported state schema ${value.schema}`;
   if (typeof identities.engine === 'string' && identities.engine !== ENGINE_VERSION) return `unsupported engine ${identities.engine}`;
   const game = identities.game;
-  if (typeof game === 'string' && !(game in RULES)) return `unsupported game ${game}`;
+  if (typeof game === 'string' && !isGame(game)) return `unsupported game ${game}`;
   const rules = identities.rules;
-  const supported = RULES[game as GameId] ?? ROULETTE_RULES;
+  const supported = isGame(game) ? GAMES[game].rules : ROULETTE_RULES;
   if (isIdentity(rules) && (rules.id !== supported.id || rules.version !== supported.version)) {
     return `unsupported rules ${rules.id} v${rules.version}`;
   }
@@ -563,11 +565,7 @@ function unsupportedVersion(value: unknown): string | undefined {
   return undefined;
 }
 
-/** The rule identity each game runs. */
-const RULES: Record<GameId, VersionedIdentity> = { roulette: ROULETTE_RULES, blackjack: BLACKJACK_RULES };
-
 const COMMON_KEYS = ['schema', 'activity', 'identities', 'rules', 'sequence', 'phase', 'turn', 'balance', 'wagers', 'random', 'receipts'];
-const GAME_KEYS: Record<GameId, readonly string[]> = { roulette: ['outcome'], blackjack: ['shoe', 'round'] };
 
 /** True for the canonical JSON of a valid command, as receipts store it. */
 function isCanonicalCommand(text: unknown): boolean {
@@ -582,15 +580,16 @@ function isCanonicalCommand(text: unknown): boolean {
 
 /** A description of the first structural or invariant problem, if any. */
 function stateDamage(value: unknown): string | undefined {
-  const game = isRecord(value) && isRecord(value.identities) ? (value.identities.game as GameId) : 'roulette';
-  if (!hasExactKeys(value, [...COMMON_KEYS, ...(GAME_KEYS[game] ?? [])])) return 'the checkpoint does not have the state fields';
+  const named = isRecord(value) && isRecord(value.identities) ? value.identities.game : undefined;
+  const game: GameId = isGame(named) ? named : 'roulette';
+  if (!hasExactKeys(value, [...COMMON_KEYS, ...GAMES[game].keys])) return 'the checkpoint does not have the state fields';
   if (value.schema !== STATE_SCHEMA_VERSION) return 'missing state schema';
   const { activity, identities } = value;
   if (!hasExactKeys(activity, ['id', 'owner', 'device']) || !isText(activity.id) || !isText(activity.owner) || !isText(activity.device)) {
     return 'damaged activity identity';
   }
   if (!hasExactKeys(identities, ['engine', 'game', 'rules', 'strategy', 'reference', 'random'])) return 'damaged identities';
-  if (identities.engine !== ENGINE_VERSION || !(identities.game as string in RULES) || !isIdentity(identities.rules)) return 'damaged identities';
+  if (identities.engine !== ENGINE_VERSION || identities.game !== game || !isIdentity(identities.rules)) return 'damaged identities';
   if (identities.strategy !== null && !isIdentity(identities.strategy)) return 'damaged strategy identity';
   if (identities.reference !== null && !isIdentity(identities.reference)) return 'damaged reference identity';
   if (!hasExactKeys(identities.random, ['protocol', 'key', 'session'])) return 'damaged random identity';
@@ -617,7 +616,7 @@ function stateDamage(value: unknown): string | undefined {
     const amount = parseMoney(wager.amount);
     if (amount === undefined || amount.n <= 0n) return 'damaged wager';
   }
-  const gameDamage = game === 'blackjack' ? blackjackDamage(value) : rouletteDamage(value);
+  const gameDamage = GAMES[game].damage(value);
   if (gameDamage) return gameDamage;
   if (!Array.isArray(receipts) || receipts.length !== sequence) return 'receipts do not match the sequence';
   const ids = new Set<string>();
@@ -657,3 +656,37 @@ function rouletteDamage(value: Record<string, unknown>): string | undefined {
   if (phase === 'final-settlement' && wagers.length > 0 && !committed) return 'damaged final settlement';
   return undefined;
 }
+
+// ---- game modules -------------------------------------------------------
+
+/** What the session protocol needs from a game module. A new game adds one entry to GAMES. */
+interface GameModule<S extends ActivityState> {
+  /** The rule identity the module runs. */
+  readonly rules: VersionedIdentity;
+  /** State fields beyond the common ones. */
+  readonly keys: readonly string[];
+  legal(state: S): readonly CommandKind[];
+  apply(state: S, command: Command): Step<S>;
+  view(state: S): PermittedView;
+  /** The first game-specific problem in a checkpoint whose common fields are sound. */
+  damage(value: Record<string, unknown>): string | undefined;
+}
+
+type StateOf<G extends GameId> = Extract<ActivityState, { readonly identities: { readonly game: G } }>;
+
+const GAMES: { readonly [G in GameId]: GameModule<StateOf<G>> } = {
+  roulette: { rules: ROULETTE_RULES, keys: ['outcome'], legal: (state) => LEGAL[state.phase], apply, view: rouletteView, damage: rouletteDamage },
+  blackjack: {
+    rules: BLACKJACK_RULES,
+    keys: ['shoe', 'round'],
+    legal: blackjackLegal,
+    apply: applyBlackjack,
+    view: (state) => blackjackView(state, blackjackLegal(state)),
+    damage: blackjackDamage,
+  },
+};
+
+const isGame = (value: unknown): value is GameId => typeof value === 'string' && Object.hasOwn(GAMES, value);
+
+/** The state's game module. Each state's game names its own module, so widening the type is sound. */
+const moduleOf = (state: ActivityState) => GAMES[state.identities.game] as unknown as GameModule<ActivityState>;

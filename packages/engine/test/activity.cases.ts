@@ -446,6 +446,7 @@ export const activityCases: TestCase[] = [
         edit((v) => ((v as Record<string, unknown>).schema = 2)),
         edit((v) => (v.identities!.engine = '9.9.9')),
         edit((v) => (v.identities!.game = 'baccarat')),
+        edit((v) => (v.identities!.game = 'toString')),
         edit((v) => (v.identities!.rules = { id: 'roulette-double-zero', version: 1 })),
         edit((v) => (v.identities!.rules = { id: 'roulette-single-zero', version: 2 })),
         edit((v) => ((v.identities!.random as Record<string, unknown>).protocol = 2)),

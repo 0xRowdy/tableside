@@ -23,15 +23,16 @@ import {
   describeFacts,
   handSummary,
   isPlaying,
-  onTable,
+
   presetOf,
   rulesText,
   showingLastRound,
   statusText,
   SUIT_GLYPH,
   totalText,
+  handTotalText,
 } from './blackjack-text';
-import { formatSigned, formatUnits } from './roulette-text';
+import { formatSigned, formatUnits, totalOnTable } from './units';
 import { PhaseStepper, SessionStrip, TableTopBar, type PhaseStep } from './TableChrome';
 
 type ActiveSnapshot = Active<BlackjackPermittedView>;
@@ -112,7 +113,7 @@ export function BlackjackTable({ snapshot }: { snapshot: ActiveSnapshot }) {
           Edge with basic strategy: {blackjackHouseEdge(presetOf(view)).percent}% (this preset) · Penetration {view.table.penetration}%
         </Text>
         <PhaseStepper steps={phaseSteps(view)} />
-        <SessionStrip balance={formatUnits(view.balance)} onTable={formatUnits(onTable(view))} status={statusText(view)} />
+        <SessionStrip balance={formatUnits(view.balance)} onTable={formatUnits(totalOnTable(view))} status={statusText(view)} />
 
         {save === 'failed' && (
           <View style={styles.banner}>
@@ -225,7 +226,7 @@ function Felt({
         {hand ? hand.cards.map((card, index) => <PlayingCard key={index} card={card} />) : <EmptyCards />}
         {hand && (
           <TotalBadge
-            text={[capitalize(totalText(hand.total)), hand.natural ? 'Blackjack' : null, hand.doubled ? 'doubled' : null].filter(Boolean).join(' · ')}
+            text={`${capitalize(handTotalText(hand))}${hand.doubled ? ' · doubled' : ''}`}
           />
         )}
       </View>

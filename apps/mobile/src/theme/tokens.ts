@@ -104,6 +104,7 @@ export const essentialPairs: readonly {
   { use: 'felt labels', kind: 'text', foreground: 'feltText', background: 'felt' },
   { use: 'shoe count, hand totals and bet spot text', kind: 'text', foreground: 'feltText', background: 'feltDeep' },
   { use: 'bet spot boundary', kind: 'graphic', foreground: 'feltText', background: 'felt' },
+  { use: 'wagered bet spot outline', kind: 'graphic', foreground: 'cardFace', background: 'feltDeep' },
   { use: 'focused control ring on the felt', kind: 'graphic', foreground: 'ring', background: 'felt' },
 ];
 

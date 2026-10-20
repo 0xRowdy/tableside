@@ -4,7 +4,7 @@
 
 import type { BlackjackAction, BlackjackPermittedView, Card, DomainFact, HandTotal, IllegalActionReason, Suit } from '@tableside/engine';
 
-import { formatUnits } from './roulette-text';
+import { formatUnits } from './units';
 
 const RANK_NAMES = ['Ace', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'Jack', 'Queen', 'King'];
 const RANK_SHORT = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
@@ -17,6 +17,9 @@ export const cardRank = (card: Card) => RANK_SHORT[card.rank - 1] as string;
 
 /** "soft 17", "20", "bust 24". */
 export const totalText = (total: HandTotal) => (total.value > 21 ? `bust ${total.value}` : total.soft ? `soft ${total.value}` : String(total.value));
+
+/** A hand's total, with a natural read as "blackjack" rather than "soft 21". */
+export const handTotalText = (hand: { readonly total: HandTotal; readonly natural: boolean }) => (hand.natural ? 'blackjack' : totalText(hand.total));
 
 const ACTION_WORD: Record<BlackjackAction, string> = { hit: 'hit', stand: 'stand', double: 'double' };
 
@@ -47,10 +50,6 @@ export function statusText(view: BlackjackPermittedView): string {
   }
 }
 
-/** Stakes on the table, exactly (halves can't occur in stakes, but sum as money text anyway). */
-export const onTable = (view: BlackjackPermittedView): string =>
-  view.wagers.reduce((sum, wager) => sum + BigInt(wager.amount), 0n).toString();
-
 /** The dealer's cards for screen readers: "Dealer: 5 of spades and a face-down card, showing 5". */
 export function dealerSummary(view: BlackjackPermittedView): string {
   const dealer = view.round?.dealer;
@@ -69,8 +68,7 @@ export function handSummary(view: BlackjackPermittedView): string {
   const hand = view.round?.hands[0];
   const owner = showingLastRound(view) ? 'Last hand' : 'Your hand';
   if (!hand) return 'Your hand: no cards yet';
-  const marks = [hand.natural ? 'blackjack' : null, hand.doubled ? 'doubled' : null].filter(Boolean).join(', ');
-  return `${owner}: ${hand.cards.map(cardName).join(', ')}. ${capitalize(totalText(hand.total))}${marks ? `, ${marks}` : ''}`;
+  return `${owner}: ${hand.cards.map(cardName).join(', ')}. ${capitalize(handTotalText(hand))}${hand.doubled ? ', doubled' : ''}`;
 }
 
 const capitalize = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
@@ -164,7 +162,7 @@ export function describeFacts(facts: readonly DomainFact[], view: BlackjackPermi
   const round = view.round;
   if (dealt && round) {
     const hand = round.hands[0];
-    if (hand) parts.push(`You have ${totalText(hand.total)}; the dealer ${round.dealer.cards.includes(null) ? 'shows' : 'has'} ${totalText(round.dealer.total)}.`);
+    if (hand) parts.push(`You have ${handTotalText(hand)}; the dealer ${round.dealer.cards.includes(null) ? 'shows' : 'has'} ${totalText(round.dealer.total)}.`);
     if (isPlaying(view)) parts.push('Your turn.');
   }
   if (balanceChanged) parts.push(`Balance ${formatUnits(view.balance)}.`);

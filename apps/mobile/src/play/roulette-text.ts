@@ -3,6 +3,10 @@
 
 import type { DomainFact, IllegalActionReason, RoulettePermittedView, Phase, RoulettePocket } from '@tableside/engine';
 
+import { formatUnits } from './units';
+
+export { formatSigned, formatUnits, speakSigned, totalOnTable } from './units';
+
 /** Pocket colors on the layout. Presentation only: the engine owns what each placement covers. */
 const RED_POCKETS: ReadonlySet<number> = new Set([1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36]);
 
@@ -14,55 +18,12 @@ export const pocketColor = (pocket: RoulettePocket): PocketColor =>
 /** "27 red", "0 green". */
 export const describePocket = (pocket: RoulettePocket) => `${pocket} ${pocketColor(pocket)}`;
 
-/**
- * Canonical money text with thousands separators: "1000" → "1,000",
- * "2045/2" → "1,022.5". A fraction shows as its exact decimal; one without a
- * finite decimal (never produced by launch payouts) stays a fraction.
- */
-export function formatUnits(amount: string): string {
-  const negative = amount.startsWith('-');
-  const [numerator = '0', denominator] = (negative ? amount.slice(1) : amount).split('/');
-  let whole = numerator;
-  let fraction = '';
-  if (denominator) {
-    const n = BigInt(numerator);
-    const d = BigInt(denominator);
-    let rest = n % d;
-    whole = (n / d).toString();
-    // An exact decimal needs a denominator of only 2s and 5s; cap the digits to stay finite.
-    for (let digits = 0; rest !== 0n && digits < 12; digits++) {
-      rest *= 10n;
-      fraction += (rest / d).toString();
-      rest %= d;
-    }
-    if (rest !== 0n) return amount;
-  }
-  const grouped = whole.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-  return `${negative ? '-' : ''}${grouped}${fraction ? `.${fraction}` : ''}`;
-}
-
-/** "+120", "−85" (minus sign), "0". */
-export function formatSigned(amount: string): string {
-  if (amount.startsWith('-')) return `−${formatUnits(amount.slice(1))}`;
-  return amount === '0' ? '0' : `+${formatUnits(amount)}`;
-}
-
-/** "plus 120", "minus 85", "0": for screen readers, which may skip a sign. */
-export function speakSigned(amount: string): string {
-  if (amount.startsWith('-')) return `minus ${formatUnits(amount.slice(1))}`;
-  return amount === '0' ? '0' : `plus ${formatUnits(amount)}`;
-}
-
 /** "Red", "Straight 17". */
 export function targetName(target: string): string {
   const straight = /^straight-(\d+)$/.exec(target);
   if (straight) return `Straight ${straight[1]}`;
   return target.charAt(0).toUpperCase() + target.slice(1);
 }
-
-export const totalOnTable = (view: RoulettePermittedView): string =>
-  // Roulette stakes are whole units, so a plain integer sum is exact.
-  view.wagers.reduce((sum, wager) => sum + BigInt(wager.amount), 0n).toString();
 
 export const STATUS: Record<Phase, string> = {
   'open-decision': 'Betting',
