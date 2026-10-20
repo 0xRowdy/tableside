@@ -7,7 +7,7 @@
 import type { PermittedView, PlacementKind, RoulettePocket } from '@tableside/engine';
 
 import type { PlacedWager, WagerCatalog, WagerChoice, WagerKind } from './bet-selector/catalog';
-import { targetName } from './roulette-text';
+import { ORDINAL, targetName, wheelZeros } from './roulette-text';
 import { formatUnits } from './units';
 
 type Placement = PermittedView['table']['placements'][number];
@@ -23,8 +23,11 @@ interface KindDescriptor {
 const capitalize = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
 const losesOnZero = (pays: string, wheel: Wheel) => `${capitalize(pays)} · loses on ${wheel === 'double-zero' ? '0 and 00' : '0'}`;
 
+type Paired = 'red' | 'black' | 'odd' | 'even' | 'low' | 'high';
+type KindId = Exclude<PlacementKind, Paired> | 'red-black' | 'odd-even' | 'low-high';
+
 /** The selector's kinds; paired outside bets share one ("Red or black"). Order follows the design. */
-const KINDS: Readonly<Record<string, KindDescriptor>> = {
+const KINDS: Readonly<Record<KindId, KindDescriptor>> = {
   straight: { name: 'Straight up', choiceLabel: 'Number', detail: (pays) => `1 number · ${pays}` },
   split: { name: 'Split', choiceLabel: 'Two neighbors', detail: (pays) => `2 neighbors · ${pays}` },
   street: { name: 'Street', choiceLabel: 'Row', detail: (pays) => `Row of 3 · ${pays}` },
@@ -44,7 +47,7 @@ const KINDS: Readonly<Record<string, KindDescriptor>> = {
   column: { name: 'Column', choiceLabel: 'Column', detail: capitalize },
 };
 
-const PAIRED: Partial<Record<PlacementKind, string>> = {
+const PAIRED: Readonly<Record<Paired, KindId>> = {
   red: 'red-black',
   black: 'red-black',
   odd: 'odd-even',
@@ -53,9 +56,9 @@ const PAIRED: Partial<Record<PlacementKind, string>> = {
   high: 'low-high',
 };
 
-const kindId = (kind: PlacementKind) => PAIRED[kind] ?? kind;
+const isPaired = (kind: PlacementKind): kind is Paired => kind in PAIRED;
+const kindId = (kind: PlacementKind): KindId => (isPaired(kind) ? PAIRED[kind] : kind);
 
-const ORDINAL = ['1st', '2nd', '3rd'];
 const OUTSIDE_LABELS: Partial<Record<string, string>> = { low: '1–18', high: '19–36' };
 
 /** A choice's short label: "17", "16 | 17", "16 · 17 · 18", "13–18", "1st 12". */
@@ -69,9 +72,9 @@ function choiceLabel(placement: Placement): string {
     case 'six-line':
       return `${covers[0]}–${covers.at(-1)}`;
     case 'dozen':
-      return `${ORDINAL[Number(target.slice(-1)) - 1]} 12`;
+      return `${ORDINAL[Math.ceil((covers[0] as number) / 12) - 1]} 12`;
     case 'column':
-      return `${ORDINAL[Number(target.slice(-1)) - 1]} column`;
+      return `${ORDINAL[(covers[0] as number) - 1]} column`;
     default:
       return placement.limitClass === 'inside' ? covers.join(' · ') : (OUTSIDE_LABELS[target] ?? targetName(target));
   }
@@ -83,7 +86,7 @@ export function rouletteCatalog(view: PermittedView): WagerCatalog {
   const { wheel } = view.table;
   const sections = (['inside', 'outside'] as const).map((limitClass) => {
     const placements = view.table.placements.filter((p) => p.limitClass === limitClass);
-    const kinds = new Map<string, { payouts: Set<string>; choices: WagerChoice[] }>();
+    const kinds = new Map<KindId, { payouts: Set<string>; choices: WagerChoice[] }>();
     for (const placement of placements) {
       const id = kindId(placement.kind);
       const entry = kinds.get(id) ?? { payouts: new Set<string>(), choices: [] };
@@ -92,13 +95,13 @@ export function rouletteCatalog(view: PermittedView): WagerCatalog {
       entry.choices.push(choiceFor(placement));
     }
     const first = placements[0];
-    const order = Object.keys(KINDS);
+    const order = Object.keys(KINDS) as KindId[];
     return {
       title: first ? `${SECTION_TITLES[limitClass]} · ${formatUnits(first.min)} to ${formatUnits(first.max)}` : SECTION_TITLES[limitClass],
       kinds: [...kinds]
         .sort(([a], [b]) => order.indexOf(a) - order.indexOf(b))
         .map(([id, { payouts, choices }]): WagerKind => {
-          const descriptor = KINDS[id] ?? { name: capitalize(id.replace(/-/g, ' ')), choiceLabel: 'Choice', detail: capitalize };
+          const descriptor = KINDS[id];
           return {
             id,
             name: descriptor.name,
@@ -110,7 +113,7 @@ export function rouletteCatalog(view: PermittedView): WagerCatalog {
     };
   });
 
-  const pockets: RoulettePocket[] = [...(wheel === 'double-zero' ? [0, '00' as const] : [0]), ...Array.from({ length: 36 }, (_, i) => i + 1)];
+  const pockets: RoulettePocket[] = [...wheelZeros(wheel), ...Array.from({ length: 36 }, (_, i) => i + 1)];
   const inside = view.table.placements.filter((p) => p.limitClass === 'inside');
   return {
     sections: sections.filter((section) => section.kinds.length > 0),

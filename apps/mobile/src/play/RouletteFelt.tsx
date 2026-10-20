@@ -8,14 +8,13 @@
 
 import type { PermittedView, RoulettePocket } from '@tableside/engine';
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native';
+import { Pressable, StyleSheet, Text, View, type LayoutChangeEvent, type StyleProp, type ViewStyle } from 'react-native';
 
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale, type ColorToken } from '@/theme/tokens';
 
-import { formatUnits, pocketColor, spokenPayout, targetName } from './roulette-text';
+import { formatUnits, ORDINAL, POCKET_TOKEN, pocketColor, spokenPayout, targetName, wheelZeros } from './roulette-text';
 
-export const POCKET_TOKEN = { red: 'pocketRed', black: 'pocketBlack', green: 'pocketGreen' } as const;
 const ROW_GAP = 2;
 const ROWS = Array.from({ length: 12 }, (_, row) => [row * 3 + 1, row * 3 + 2, row * 3 + 3]);
 const EVEN_MONEY = [
@@ -50,11 +49,10 @@ export function RouletteFelt({
   };
   const side = { paddingTop: edges.top + ROW_GAP, paddingBottom: edges.bottom + ROW_GAP };
   const placement = (target: string) => view.table.placements.find((p) => p.target === target);
-  const zeros: RoulettePocket[] = view.table.wheel === 'double-zero' ? [0, '00'] : [0];
   const hint = `Adds ${formatUnits(chip)}.`;
 
   /** An outside area; with no label, its payout is the label (the column spots read "2 to 1"). */
-  const outside = (target: string, label: string | null, style: object, color: ColorToken = 'felt') => {
+  const outside = (target: string, label: string | null, style: StyleProp<ViewStyle>, color: ColorToken = 'felt') => {
     const payout = placement(target)?.payout ?? '';
     const wager = wagerOn(target);
     return (
@@ -75,7 +73,7 @@ export function RouletteFelt({
   };
 
   /** A number or zero, straight up; its value also says when other bets cover it. */
-  const pocketSpot = (pocket: RoulettePocket, style: object) => {
+  const pocketSpot = (pocket: RoulettePocket, style: StyleProp<ViewStyle>) => {
     const target = `straight-${pocket}`;
     const straight = wagerOn(target);
     const others = view.wagers.filter((w) => w.target !== target && placement(w.target)?.covers.includes(pocket)).length;
@@ -106,10 +104,10 @@ export function RouletteFelt({
           {EVEN_MONEY.map(({ target, label }) => outside(target, label, styles.sideSpot, COLOR_SPOTS[target]))}
         </View>
         <View style={[styles.side, side, styles.dozens]}>
-          {[1, 2, 3].map((d) => outside(`dozen-${d}`, `${['1st', '2nd', '3rd'][d - 1]} 12`, styles.sideSpot))}
+          {[1, 2, 3].map((d) => outside(`dozen-${d}`, `${ORDINAL[d - 1]} 12`, styles.sideSpot))}
         </View>
         <View style={styles.numbers}>
-          <View style={styles.row} onLayout={measure('top')}>{zeros.map((pocket) => pocketSpot(pocket, styles.number))}</View>
+          <View style={styles.row} onLayout={measure('top')}>{wheelZeros(view.table.wheel).map((pocket) => pocketSpot(pocket, styles.number))}</View>
           {ROWS.map((row) => (
             <View key={row[0]} style={styles.row}>
               {row.map((n) => pocketSpot(n, styles.number))}
@@ -148,7 +146,7 @@ function Spot({
   color: ColorToken;
   disabled: boolean;
   onPress: () => void;
-  style: object;
+  style: StyleProp<ViewStyle>;
 }) {
   const { focused, focusProps } = useKeyboardFocus();
   return (

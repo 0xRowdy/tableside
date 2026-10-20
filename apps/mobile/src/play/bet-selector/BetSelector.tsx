@@ -85,7 +85,7 @@ export function BetSelector(props: BetSelectorProps) {
         <Finder
           {...props}
           finder={finder}
-          keyId={finding.key}
+          selected={finding.key}
           onKey={(key) => setFinding({ key })}
           onBack={() => setFinding(null)}
           openEditor={(next) => {
@@ -193,18 +193,18 @@ function Finder({
   catalog,
   wagers,
   finder,
-  keyId,
+  selected,
   onKey,
   onBack,
   openEditor,
-}: BetSelectorProps & { finder: WagerFinder; keyId: string | null; onKey: (key: string) => void; onBack: () => void; openEditor: OpenEditor }) {
+}: BetSelectorProps & { finder: WagerFinder; selected: string | null; onKey: (key: string) => void; onBack: () => void; openEditor: OpenEditor }) {
   const heading = useRef<HostInstance>(null);
   const results = useRef<HostInstance>(null);
-  const key = finder.keys.find((k) => k.id === keyId);
+  const entry = finder.keys.find((k) => k.id === selected);
   useEffect(() => moveFocus(heading), []);
   useEffect(() => {
-    if (keyId !== null) moveFocus(results);
-  }, [keyId]);
+    if (selected !== null) moveFocus(results);
+  }, [selected]);
   return (
     <View style={styles.section}>
       <Row label="All wagers" hint="Back to the list of wagers. Your draft is kept." onPress={onBack} compact>
@@ -217,16 +217,16 @@ function Finder({
       <Text maxFontSizeMultiplier={textScale.body} style={styles.sectionLabel}>{finder.keyLabel}</Text>
       <View accessibilityRole="radiogroup" accessibilityLabel={`${finder.name}: ${finder.keyLabel}`} style={styles.choices}>
         {finder.keys.map((option) => (
-          <ChoiceButton key={option.id} name={option.label} label={option.label} checked={option.id === keyId} onPress={() => onKey(option.id)} />
+          <ChoiceButton key={option.id} name={option.label} label={option.label} checked={option.id === selected} onPress={() => onKey(option.id)} />
         ))}
       </View>
-      {key && (
+      {entry && (
         <View testID="finder-results" style={styles.group}>
           <Text ref={results} accessibilityRole="header" maxFontSizeMultiplier={textScale.body} style={styles.rowTitle}>
-            {key.title}
+            {entry.title}
           </Text>
           <Text maxFontSizeMultiplier={textScale.body} style={styles.rowDetail}>Select one to set its stake. Selecting places nothing.</Text>
-          {key.targets.map((target) => {
+          {entry.targets.map((target) => {
             const found = findChoice(catalog, target);
             if (!found) return null;
             const { kind, choice } = found;
@@ -234,7 +234,8 @@ function Finder({
             return (
               <Row
                 key={target}
-                label={`${choice.name}, pays ${choice.payout}`}
+                // Spoken "17 to 1": a screen reader may read "17:1" as a time.
+                label={`${choice.name}, pays ${choice.payout.replace(':', ' to ')}`}
                 value={placed ? `${formatUnits(placed.amount)} on the table` : 'no wager'}
                 hint="Opens its editor. Nothing is placed until you set a stake."
                 onPress={() => {

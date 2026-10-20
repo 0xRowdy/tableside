@@ -1,7 +1,7 @@
 // How roulette sessions read on screen and aloud. Amounts are plain units (no
 // currency symbol); formatting never changes a ledger value.
 
-import { FUNDING_CEILING, type DomainFact, type IllegalActionReason, type PermittedView, type Phase, type PlacementKind, type RoulettePocket } from '@tableside/engine';
+import { FUNDING_CEILING, type DomainFact, type IllegalActionReason, type PermittedView, type Phase, type PlacementKind, type RoulettePocket, type RouletteWheel } from '@tableside/engine';
 
 import { formatUnits } from './units';
 
@@ -12,6 +12,12 @@ export type PocketColor = 'red' | 'black' | 'green';
 
 export const pocketColor = (pocket: RoulettePocket): PocketColor =>
   typeof pocket !== 'number' || pocket === 0 ? 'green' : RED_POCKETS.has(pocket) ? 'red' : 'black';
+
+/** The palette token of each pocket color. */
+export const POCKET_TOKEN = { red: 'pocketRed', black: 'pocketBlack', green: 'pocketGreen' } as const;
+
+/** The zero pockets of a wheel, in wheel order. */
+export const wheelZeros = (wheel: RouletteWheel): RoulettePocket[] => (wheel === 'double-zero' ? [0, '00'] : [0]);
 
 /** "27 red", "0 green". */
 export const describePocket = (pocket: RoulettePocket) => `${pocket} ${pocketColor(pocket)}`;
@@ -30,7 +36,8 @@ export function speakSigned(amount: string): string {
   return amount === '0' ? '0' : `plus ${formatUnits(amount)}`;
 }
 
-const ORDINAL = ['1st', '2nd', '3rd'];
+/** "1st", "2nd", "3rd": the dozens and columns. */
+export const ORDINAL = ['1st', '2nd', '3rd'] as const;
 
 /** "a, b and c". */
 const listed = (items: readonly string[]) => (items.length < 2 ? items.join('') : `${items.slice(0, -1).join(', ')} and ${items.at(-1)}`);

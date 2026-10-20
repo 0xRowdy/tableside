@@ -43,7 +43,7 @@ async function startSession(wheel: 'Single zero (0)' | 'Double zero (0, 00)' = '
 const spot = (name: RegExp) => screen.getByRole('button', { name });
 const chip = (value: string) => screen.getByRole('radio', { name: `${value} chip` });
 
-/** Opens the bet list's Find by number and picks a number. */
+/** Opens the bet selector's Find by number and picks a number. */
 async function openFinder(pocket: string) {
   await fireEvent.press(screen.getByRole('tab', { name: 'Bet list' }));
   await fireEvent.press(screen.getByRole('button', { name: /^Find by number,/ }));
@@ -227,7 +227,7 @@ describe('roulette free play', () => {
     expect(await screen.findByRole('button', { name: 'Start free play' })).toBeOnTheScreen();
   });
 
-  it('finds every bet covering a number from the bet list, each with its payout, without placing anything', async () => {
+  it('finds every bet covering a number from the bet selector, each with its payout, without placing anything', async () => {
     await startSession();
     await openFinder('17');
 
@@ -235,18 +235,18 @@ describe('roulette free play', () => {
     expect(results.getByRole('header', { name: 'Wagers on 17' })).toBeOnTheScreen();
     // Every inside bet covering 17, per the standard layout: 1 straight, 4 splits, 1 street, 4 corners, 2 six lines.
     expect(results.getAllByRole('button').map((row) => row.props.accessibilityLabel)).toEqual([
-      'Straight 17, pays 35:1',
-      'Split 14 and 17, pays 17:1',
-      'Split 16 and 17, pays 17:1',
-      'Split 17 and 18, pays 17:1',
-      'Split 17 and 20, pays 17:1',
-      'Street 16, 17 and 18, pays 11:1',
-      'Corner 13, 14, 16 and 17, pays 8:1',
-      'Corner 14, 15, 17 and 18, pays 8:1',
-      'Corner 16, 17, 19 and 20, pays 8:1',
-      'Corner 17, 18, 20 and 21, pays 8:1',
-      'Six line 13 to 18, pays 5:1',
-      'Six line 16 to 21, pays 5:1',
+      'Straight 17, pays 35 to 1',
+      'Split 14 and 17, pays 17 to 1',
+      'Split 16 and 17, pays 17 to 1',
+      'Split 17 and 18, pays 17 to 1',
+      'Split 17 and 20, pays 17 to 1',
+      'Street 16, 17 and 18, pays 11 to 1',
+      'Corner 13, 14, 16 and 17, pays 8 to 1',
+      'Corner 14, 15, 17 and 18, pays 8 to 1',
+      'Corner 16, 17, 19 and 20, pays 8 to 1',
+      'Corner 17, 18, 20 and 21, pays 8 to 1',
+      'Six line 13 to 18, pays 5 to 1',
+      'Six line 16 to 21, pays 5 to 1',
     ]);
     // Payouts are labelled on screen too, not only for screen readers.
     expect(results.getAllByText(/^Split 17:1$/)).toHaveLength(4);
@@ -259,7 +259,7 @@ describe('roulette free play', () => {
     await startSession();
     await openFinder('17');
 
-    await fireEvent.press(screen.getByRole('button', { name: 'Split 16 and 17, pays 17:1' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Split 16 and 17, pays 17 to 1' }));
     expect(screen.getByRole('header', { name: 'Split' })).toBeOnTheScreen();
     expect(screen.getByRole('radio', { name: 'Split 16 and 17' })).toBeChecked();
     expect(announcements).toContain('Selected Split 16 and 17. Nothing placed.');
@@ -291,15 +291,15 @@ describe('roulette free play', () => {
   });
 
   it.each([
-    ['Single zero (0)', 157, ['0'], 'First four 0, 1, 2 and 3, pays 8:1'],
-    ['Double zero (0, 00)', 161, ['0', '00'], 'Five-number basket 0, 00, 1, 2 and 3, pays 6:1'],
-  ] as const)('reaches every placement of the %s layout from the table and the bet list', async (wheel, count, zeros, zeroBet) => {
+    ['Single zero (0)', 157, ['0'], 'First four 0, 1, 2 and 3, pays 8 to 1'],
+    ['Double zero (0, 00)', 161, ['0', '00'], 'Five-number basket 0, 00, 1, 2 and 3, pays 6 to 1'],
+  ] as const)('reaches every placement of the %s layout from the table and the bet selector', async (wheel, count, zeros, zeroBet) => {
     await startSession(wheel);
     // One tap on the felt: the numbers straight up and every outside bet.
     const names = new Set(
       within(screen.getByTestId('felt'))
         .getAllByRole('button')
-        .map((control) => (control.props.accessibilityLabel as string).replace(/, (red|black|green)(?=, pays)/, '').replace(/ to 1$/, ':1')),
+        .map((control) => (control.props.accessibilityLabel as string).replace(/, (red|black|green)(?=, pays)/, '')),
     );
     // Find by number: every inside bet covering each pocket.
     await openFinder(zeros[0]);
@@ -310,7 +310,7 @@ describe('roulette free play', () => {
     // 12 outside placements plus every inside placement, each reached once by name.
     expect(names.size).toBe(count);
     expect(names).toContain(zeroBet);
-    expect(names).toContain('Trio 0, 1 and 2, pays 11:1');
+    expect(names).toContain('Trio 0, 1 and 2, pays 11 to 1');
   }, 60_000);
 
   it('plays the double-zero wheel: 00 on the layout and a five-number basket that pays 6 to 1', async () => {
@@ -320,8 +320,8 @@ describe('roulette free play', () => {
 
     await openFinder('00');
     const results = within(screen.getByTestId('finder-results'));
-    expect(results.getByRole('button', { name: 'Split 0 and 00, pays 17:1' })).toBeOnTheScreen();
-    expect(results.getByRole('button', { name: 'Trio 0, 00 and 2, pays 11:1' })).toBeOnTheScreen();
+    expect(results.getByRole('button', { name: 'Split 0 and 00, pays 17 to 1' })).toBeOnTheScreen();
+    expect(results.getByRole('button', { name: 'Trio 0, 00 and 2, pays 11 to 1' })).toBeOnTheScreen();
     expect(results.getByText('Five-number basket 6:1')).toBeOnTheScreen();
     await fireEvent.press(results.getByRole('button', { name: /^Five-number basket/ }));
     await fireEvent.changeText(screen.getByLabelText('Total stake for Five-number basket 0, 00, 1, 2 and 3, in units'), '5');
@@ -332,6 +332,16 @@ describe('roulette free play', () => {
 
     expect(await screen.findByLabelText('Last spin: 3 red')).toBeOnTheScreen();
     await waitFor(() => expect(announcements).toContain('Five-number basket 0, 00, 1, 2 and 3 5 wins 30. Balance 1,030.'));
+  });
+
+  it('gives every Find by number control a touch target of at least 48 points', async () => {
+    await startSession();
+    await openFinder('17');
+
+    const finder = within(screen.getByTestId('bet-selector'));
+    const controls = [...finder.getAllByRole('button'), ...finder.getAllByRole('radio')];
+    expect(controls.length).toBeGreaterThan(37 + 12);
+    for (const control of controls) expect(StyleSheet.flatten(control.props.style).minHeight).toBeGreaterThanOrEqual(48);
   });
 
   it('gives every table control a touch target of at least 48 points', async () => {

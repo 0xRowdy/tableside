@@ -18,8 +18,8 @@ import { draftAmountText, EMPTY_DRAFT, findChoice, isDraftPending, type BetDraft
 import { DraftBar, PresentationSwitch, type Presentation } from './bet-selector/Presentation';
 import { RebuySheet } from './RebuySheet';
 import { rouletteCatalog, roulettePlacedWagers } from './roulette-catalog';
-import { describeFacts, describePocket, formatUnits, pocketColor, STATUS, targetName, totalOnTable } from './roulette-text';
-import { POCKET_TOKEN, RouletteFelt } from './RouletteFelt';
+import { describeFacts, describePocket, formatUnits, POCKET_TOKEN, pocketColor, STATUS, targetName, totalOnTable } from './roulette-text';
+import { RouletteFelt } from './RouletteFelt';
 import { PhaseStepper, SessionStrip, TableTopBar, type PhaseStep } from './TableChrome';
 
 type ActiveSnapshot = Extract<PracticeSnapshot, { status: 'active' }>;
