@@ -114,7 +114,7 @@ export interface CompletedPracticeSessionRecord {
   readonly overrideAffected: boolean;
   /** This session's W/L/P and resolved-wager counts. */
   readonly wagers: WagerCounts;
-  /** No turn was played: nothing was ever at risk. Such practice sessions stay in session denominators. */
+  /** No turn began with a stake: nothing was ever at risk. Such practice sessions stay in session denominators. */
   readonly noBet: boolean;
   /** Detail: every wager outcome and return, in order. */
   readonly outcomes: readonly WagerOutcome[];
@@ -157,6 +157,24 @@ function wagerOutcomes(facts: readonly DomainFact[]): WagerOutcome[] {
   return outcomes;
 }
 
+/**
+ * Turns played and whether any staked anything, derived as the standardized
+ * record derives them: a turn that began with nothing at stake (a craps roll
+ * while the strategy waits for a point) is no bet, and the rolls of final
+ * settlement, after the stop was requested, only settle what was already there.
+ */
+function turnsOf(facts: readonly DomainFact[]): { played: number; staked: boolean } {
+  let played = 0;
+  let staked = false;
+  for (const fact of facts) {
+    if (fact.kind === 'stop-requested') break;
+    if (fact.kind !== 'turn-began') continue;
+    played = fact.turn;
+    if (fact.wagers.length > 0) staked = true;
+  }
+  return { played, staked };
+}
+
 /** A guided blackjack strategy's mode, read from its playing policy; null for other games. */
 function blackjackMode(definition: StrategyDefinition): BlackjackMode | null {
   const play = policyOf(definition);
@@ -175,6 +193,7 @@ export function completedPracticeRecord(state: ActivityState, facts: readonly Do
   const strategy = readPermittedView(state).strategy;
   const run = state.strategy;
   const outcomes = wagerOutcomes(facts);
+  const turns = turnsOf(facts);
   return {
     recordVersion: RECORD_VERSION,
     activityId: state.activity.id,
@@ -205,11 +224,11 @@ export function completedPracticeRecord(state: ActivityState, facts: readonly Do
     finalCashOut: funding.finalCashOut,
     netResult: funding.netResult,
     maxDrawdown: funding.maxDrawdown,
-    turnsPlayed: state.turn,
+    turnsPlayed: turns.played,
     endingReason: stopCause(state),
     overrideAffected: strategy?.overrideAffected ?? false,
     wagers: countWagers(outcomes),
-    noBet: state.turn === 0,
+    noBet: !turns.staked,
     outcomes,
     guidance: strategy && {
       // Each kind on its own. Counting adherence needs a learner-entered count, which spec 3's count checkpoints add.
