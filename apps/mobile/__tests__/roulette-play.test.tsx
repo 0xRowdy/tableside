@@ -6,9 +6,13 @@ import { act, cleanup, fireEvent, screen, waitFor, within } from '@testing-libra
 import { renderRouter } from 'expo-router/testing-library';
 import { AccessibilityInfo, Dimensions, StyleSheet } from 'react-native';
 
+import type { substituteAdapters } from '@/practice/testing/substitutes';
+
+// The app runs on the substitute adapters; the latest set is kept for failure injection.
+const mockAdapters: { latest: ReturnType<typeof substituteAdapters> | null } = { latest: null };
 jest.mock('@/practice/app-adapters', () => {
-  const { FakeClock, substituteAdapters } = jest.requireActual('@/practice/testing/substitutes');
-  return { createAppAdapters: () => substituteAdapters({ clock: new FakeClock(undefined, true) }) };
+  const { FakeClock, substituteAdapters: create } = jest.requireActual('@/practice/testing/substitutes');
+  return { createAppAdapters: () => (mockAdapters.latest = create({ clock: new FakeClock(undefined, true) })) };
 });
 
 let announcements: string[] = [];
@@ -104,7 +108,7 @@ describe('roulette free play', () => {
     expect(spot(/^Straight 17,/)).toHaveAccessibilityValue({ text: '5 on it' });
     expect(screen.getByLabelText('Session balance 970')).toBeOnTheScreen();
     expect(screen.getByLabelText('On table 30')).toBeOnTheScreen();
-    // A wagered spot is marked by its stake text, not only by its outline colour.
+    // A wagered spot is marked by its stake text, not only by its outline color.
     expect(within(spot(/^Red,/)).getByText('25')).toBeOnTheScreen();
   });
 
@@ -138,6 +142,24 @@ describe('roulette free play', () => {
     expect(steps.getByLabelText('Step 1 of 3, Betting, done')).toBeOnTheScreen();
     expect(steps.getByLabelText('Step 2 of 3, Spin, done')).toBeOnTheScreen();
     expect(steps.getByLabelText('Step 3 of 3, Settle, current')).toBeOnTheScreen();
+  });
+
+  it('announces a failed save, reveals nothing, and reveals the spin once the retry saves it', async () => {
+    await startSession();
+    await chooseChipAndTap('25', /^Red,/);
+    mockAdapters.latest?.store.failNext('commitTransition', 'before');
+
+    await fireEvent.press(screen.getByRole('button', { name: 'Spin' }));
+
+    expect(announcements).toContain('Not saved yet. Play is paused.');
+    expect(screen.getByRole('alert')).toHaveTextContent(/Not saved yet/);
+    expect(screen.queryByLabelText(/^Last spin/)).toBeNull();
+    expect(screen.getByRole('button', { name: 'Spin' })).toBeDisabled();
+
+    await fireEvent.press(screen.getByRole('button', { name: 'Try again' }));
+
+    expect(await screen.findByLabelText('Last spin: 27 red')).toBeOnTheScreen();
+    expect(screen.queryByRole('alert')).toBeNull();
   });
 
   it('asks the engine before spinning with nothing on the table', async () => {

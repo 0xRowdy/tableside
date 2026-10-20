@@ -45,7 +45,7 @@ function limitsText(view: PermittedView): string {
     const placement = view.table.placements.find((p) => p.limitClass === limitClass);
     return placement ? `${formatUnits(placement.min)}–${formatUnits(placement.max)}` : '';
   };
-  return `Single zero · inside ${limit('inside')} · outside ${limit('outside')}`;
+  return `${WHEEL_NAMES[view.table.wheel]} · inside ${limit('inside')} · outside ${limit('outside')}`;
 }
 
 export function RouletteTable({ snapshot }: { snapshot: ActiveSnapshot }) {
@@ -62,16 +62,23 @@ export function RouletteTable({ snapshot }: { snapshot: ActiveSnapshot }) {
   const message = useMemo(() => describeFacts(facts, view), [facts, view]);
 
   // Announce every committed transition as it is published, including ones
-  // that pass before the next render (an automatic settle right after a reveal).
+  // that pass before the next render (an automatic settle right after a reveal),
+  // and a save failure that pauses play.
   useEffect(() => {
-    const sequenceOf = (s: PracticeSnapshot) => (s.status === 'active' ? s.view.sequence : -1);
-    let announced = sequenceOf(controller.snapshot());
+    const initial = controller.snapshot();
+    let announced = initial.status === 'active' ? initial.view.sequence : -1;
+    let failed = initial.status === 'active' && initial.save === 'failed';
     return controller.subscribe(() => {
       const latest = controller.snapshot();
-      if (latest.status !== 'active' || latest.view.sequence === announced) return;
+      if (latest.status !== 'active') return;
+      const nowFailed = latest.save === 'failed';
+      if (nowFailed && !failed) AccessibilityInfo.announceForAccessibility(NOT_SAVED);
+      failed = nowFailed;
+      if (latest.view.sequence === announced) return;
       announced = latest.view.sequence;
-      const text = describeFacts(latest.facts, latest.view);
-      if (text) AccessibilityInfo.announceForAccessibility(text);
+      // A state adopted from the store carries no facts of its own: restate where things stand.
+      const text = describeFacts(latest.facts, latest.view) ?? `${STATUS[latest.view.phase]}. Balance ${formatUnits(latest.view.balance)}.`;
+      AccessibilityInfo.announceForAccessibility(text);
     });
   }, [controller]);
 
@@ -87,15 +94,20 @@ export function RouletteTable({ snapshot }: { snapshot: ActiveSnapshot }) {
       <ScrollView testID="table-scroll" contentContainerStyle={{ paddingTop: insets.top, paddingBottom: space[6] }}>
         <TableTopBar title="Roulette" subtitle={limitsText(view)} canEnd={legal('request-stop')} onEnd={() => setConfirming(true)} />
         <PhaseStepper steps={phaseSteps(view)} />
-        <SessionStrip balance={formatUnits(view.balance)} onTable={formatUnits(totalOnTable(view))} status={view.phase === 'final-settlement' ? 'Final settlement' : STATUS[view.phase]} />
+        <SessionStrip balance={formatUnits(view.balance)} onTable={formatUnits(totalOnTable(view))} status={STATUS[view.phase]} />
 
         {save === 'failed' && (
-          <View style={styles.banner} accessibilityRole="alert">
-            <Text maxFontSizeMultiplier={textScale.body} style={styles.bannerTitle}>Not saved yet · play is paused</Text>
+          <View style={styles.banner}>
+            <Text accessibilityRole="alert" maxFontSizeMultiplier={textScale.body} style={styles.bannerTitle}>{NOT_SAVED}</Text>
             <Text maxFontSizeMultiplier={textScale.body} style={styles.bannerText}>
               Your last move hasn&apos;t been saved, so nothing has been revealed. Try saving again.
             </Text>
             <Button label="Try again" variant="secondary" disabled={busy} onPress={() => void controller.retrySave()} />
+          </View>
+        )}
+        {snapshot.accessNotAllowed && (
+          <View style={styles.banner}>
+            <Text accessibilityRole="alert" maxFontSizeMultiplier={textScale.body} style={styles.bannerTitle}>This spin can&apos;t start right now.</Text>
           </View>
         )}
 
@@ -153,7 +165,11 @@ export function RouletteTable({ snapshot }: { snapshot: ActiveSnapshot }) {
   );
 }
 
-const POCKET_TOKEN = { red: 'chip5', black: 'chip100', green: 'chip25' } as const;
+const POCKET_TOKEN = { red: 'pocketRed', black: 'pocketBlack', green: 'pocketGreen' } as const;
+
+const WHEEL_NAMES: Record<PermittedView['table']['wheel'], string> = { 'single-zero': 'Single zero' };
+
+const NOT_SAVED = 'Not saved yet. Play is paused.';
 
 const capitalize = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
 
@@ -187,11 +203,11 @@ function Felt({
   return (
     <View style={styles.felt} testID="felt">
       <View style={styles.outside}>
-        {spot('red', 'RED', 'Red', 'chip5', styles.outsideSpot)}
-        {spot('black', 'BLACK', 'Black', 'chip100', styles.outsideSpot)}
+        {spot('red', 'RED', 'Red', 'pocketRed', styles.outsideSpot)}
+        {spot('black', 'BLACK', 'Black', 'pocketBlack', styles.outsideSpot)}
       </View>
       <View style={styles.numbers}>
-        {spot('straight-0', '0', 'Straight 0, green', 'chip25')}
+        {spot('straight-0', '0', 'Straight 0, green', 'pocketGreen')}
         {ROWS.map((row) => (
           <View key={row[0]} style={styles.row}>
             {row.map((n) =>
@@ -273,9 +289,9 @@ function Chip({ option, selected, onPress }: { option: (typeof CHIPS)[number]; s
       style={[styles.chipSlot, selected && styles.chipSelected, focused && styles.spotFocused]}
     >
       <View style={[styles.chip, { backgroundColor: palette[option.color] }]}>
-        <Text maxFontSizeMultiplier={1} style={[styles.chipText, { color: palette[option.ink] }]}>{option.label}</Text>
+        <Text maxFontSizeMultiplier={textScale.display} style={[styles.chipText, { color: palette[option.ink] }]}>{option.label}</Text>
       </View>
-      {selected && <Text maxFontSizeMultiplier={1} style={styles.chipCheck}>{'✓'}</Text>}
+      {selected && <Text maxFontSizeMultiplier={textScale.display} style={styles.chipCheck}>{'✓'}</Text>}
     </Pressable>
   );
 }
@@ -389,7 +405,7 @@ const styles = StyleSheet.create({
     borderColor: palette.transparent,
     backgroundColor: palette.felt,
   },
-  spotWagered: { borderColor: palette.primary },
+  spotWagered: { borderColor: palette.foreground },
   spotFocused: { borderColor: palette.ring },
   spotText: { fontFamily: fonts.uiBold, fontSize: 15, color: palette.onImage },
   marker: { marginTop: 2, minWidth: 26, paddingHorizontal: 4, borderRadius: radius.pill, backgroundColor: palette.chip1, alignItems: 'center' },

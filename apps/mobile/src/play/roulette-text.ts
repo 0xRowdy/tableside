@@ -3,7 +3,7 @@
 
 import type { DomainFact, IllegalActionReason, PermittedView, Phase, RoulettePocket } from '@tableside/engine';
 
-/** Pocket colours on the layout. Presentation only: the engine owns what each placement covers. */
+/** Pocket colors on the layout. Presentation only: the engine owns what each placement covers. */
 const RED_POCKETS: ReadonlySet<number> = new Set([1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36]);
 
 export type PocketColor = 'red' | 'black' | 'green';
@@ -49,7 +49,7 @@ export const STATUS: Record<Phase, string> = {
   'open-decision': 'Betting',
   'revealing-outcome': 'Spinning',
   'settled-outcome': 'Settled',
-  'final-settlement': 'Ending',
+  'final-settlement': 'Final settlement',
   completed: 'Ended',
 };
 

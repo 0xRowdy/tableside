@@ -57,6 +57,20 @@ describe('starting', () => {
     expect(await store.findUnfinished()).toBeNull();
   });
 
+  it('resumes the unfinished session instead of starting a second one', async () => {
+    const { controller, adapters, store } = await started();
+    await controller.placeWager('red', '10');
+    const other = new PracticeController({ ...adapters, newId: () => 'activity-2' });
+
+    await other.start({ game: 'roulette', buyIn: '500' });
+
+    const { view } = active(other.snapshot());
+    expect(view.activityId).toBe('activity-1');
+    expect(view.balance).toBe('990');
+    expect((await store.findUnfinished())?.activityId).toBe('activity-1');
+    expect(await store.load('activity-2')).toBeNull();
+  });
+
   it('recovers the same activity and random identity when creation was not acknowledged', async () => {
     const { store, adapters } = setup();
     let draws = 0;
@@ -171,6 +185,29 @@ describe('spinning', () => {
     expect((await store.load(view.activityId))?.sequence).toBe(view.sequence);
   });
 
+  it('stays paused while it is unknown whether a spin committed, then recovers the committed spin on retry', async () => {
+    const { controller, store } = await started();
+    await controller.placeWager('red', '10');
+    store.failNext('commitTransition', 'after');
+    store.failNext('readReceipt', 'before');
+
+    await controller.spin();
+
+    const paused = active(controller.snapshot());
+    expect(paused.save).toBe('failed');
+    expect(paused.view.outcome).toBeNull();
+
+    await controller.retrySave();
+
+    const { view } = active(controller.snapshot());
+    expect(view.outcome).toEqual({ turn: 1, pocket: 27 });
+    expect(view.phase).toBe('settled-outcome');
+    expect(view.balance).toBe('1010');
+    // The spin committed once; the retry recovered it rather than drawing again.
+    expect((await store.readReceipt(view.activityId, `${view.activityId}/1`))?.facts).toContainEqual({ kind: 'outcome-generated', turn: 1, pocket: 27 });
+    expect((await store.load(view.activityId))?.sequence).toBe(3);
+  });
+
   it('commits each transition with its command identity, facts and checkpoint before publishing it', async () => {
     const { controller, store, published } = await started();
     await controller.placeWager('red', '10');
@@ -202,6 +239,22 @@ describe('spinning', () => {
     const { view } = active(other.snapshot());
     expect(view.wagers).toEqual([{ target: 'red', amount: '10' }]);
     expect(view.sequence).toBe(1);
+  });
+
+  it('carries on the automatic steps of a state adopted from another writer', async () => {
+    const { controller, adapters } = await started({ autoClock: false });
+    const other = new PracticeController({ ...adapters, clock: new FakeClock(undefined, true) });
+    await other.load();
+    await controller.placeWager('red', '10');
+    void controller.spin();
+    await waitFor(() => adapters.clock.pending === 1);
+
+    await other.placeWager('black', '20');
+
+    const { view } = active(other.snapshot());
+    expect(view.phase).toBe('settled-outcome');
+    expect(view.outcome).toEqual({ turn: 1, pocket: 27 });
+    expect(view.balance).toBe('1010');
   });
 
   it('resumes a spin committed before a crash in its revealing phase and settles the same outcome', async () => {

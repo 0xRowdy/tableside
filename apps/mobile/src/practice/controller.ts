@@ -25,7 +25,7 @@ import {
 import { SINGLE_ZERO_ROULETTE } from '@tableside/definitions';
 
 import type { PracticeAdapters } from './adapters';
-import type { CompletedPracticeSession, NewActivity, StoredActivity } from './store';
+import type { CommitOutcome, CommittedTransition, CompletedPracticeSession, NewActivity, StoredActivity } from './store';
 
 /** How long the landed ball stays on screen before the automatic settle step. */
 export const REVEAL_MS = 1500;
@@ -58,6 +58,17 @@ export interface StartRequest {
 }
 
 type Pending = { readonly kind: 'transition'; readonly envelope: CommandEnvelope } | { readonly kind: 'completion' };
+
+/**
+ * How a command ended. "committed": this command is durable and published.
+ * "adopted": the store already held a later committed state, now shown instead.
+ * "not-saved": nothing is known to be durable, so play pauses for a retry.
+ * "rejected": the engine refused the envelope; nothing changed.
+ */
+type CommitResult = 'committed' | 'adopted' | 'not-saved' | 'rejected';
+
+/** Whether automatic steps may carry on after a command. */
+const settled = (result: CommitResult) => result === 'committed' || result === 'adopted';
 
 export class PracticeController {
   private current: PracticeSnapshot = { status: 'loading' };
@@ -93,6 +104,19 @@ export class PracticeController {
   /** Durability step 1: creates the activity and its random identity, then shows the table. */
   async start(request: StartRequest): Promise<void> {
     await this.exclusive(async () => {
+      // One unfinished practice session at a time: resume it rather than start another.
+      let unfinished: StoredActivity | null;
+      try {
+        unfinished = await this.adapters.store.findUnfinished();
+      } catch {
+        return this.showNone('save-failed');
+      }
+      if (unfinished) {
+        this.unacknowledgedStart = null;
+        this.adopt(unfinished, []);
+        return this.drive();
+      }
+
       const access = await this.adapters.access.beforeActivity({ game: request.game });
       if (access.status !== 'allowed') return this.showNone('access-not-allowed');
 
@@ -139,7 +163,10 @@ export class PracticeController {
 
   /** Sets the total stake on a target; "0" takes the wager down. The engine judges legality. */
   async placeWager(target: string, amount: string): Promise<void> {
-    await this.exclusive(() => this.send({ kind: 'place-wager', target, amount }));
+    await this.exclusive(async () => {
+      // A wager never starts an automatic step itself, but an adopted later state may.
+      if (settled(await this.send({ kind: 'place-wager', target, amount }))) await this.drive();
+    });
   }
 
   /** Begins a turn (the spin), then settles it automatically after the reveal. */
@@ -149,14 +176,14 @@ export class PracticeController {
       const access = await this.adapters.access.beforeTurn({ activityId: state.activity.id, turn: state.turn + 1 });
       this.accessNotAllowed = access.status !== 'allowed';
       if (this.accessNotAllowed) return this.publish();
-      if (await this.send({ kind: 'begin-turn' })) await this.drive();
+      if (settled(await this.send({ kind: 'begin-turn' }))) await this.drive();
     });
   }
 
   /** Ends the session: removable wagers come back, committed ones settle automatically, then one final result. */
   async endSession(): Promise<void> {
     await this.exclusive(async () => {
-      if (await this.send({ kind: 'request-stop' })) await this.drive();
+      if (settled(await this.send({ kind: 'request-stop' }))) await this.drive();
     });
   }
 
@@ -165,8 +192,8 @@ export class PracticeController {
     await this.exclusive(async () => {
       const pending = this.pending;
       if (!pending) return;
-      const saved = pending.kind === 'transition' ? await this.commit(pending.envelope) : await this.complete();
-      if (saved) await this.drive();
+      if (pending.kind === 'completion') return this.complete();
+      if (settled(await this.retryTransition(pending.envelope))) await this.drive();
     });
   }
 
@@ -200,10 +227,10 @@ export class PracticeController {
       const phase = this.requireState().phase;
       if (phase === 'revealing-outcome') {
         await this.adapters.clock.sleep(REVEAL_MS);
-        if (!(await this.send({ kind: 'settle-turn' }))) return;
+        if (!settled(await this.send({ kind: 'settle-turn' }))) return;
       } else if (phase === 'final-settlement') {
         await this.adapters.clock.sleep(ENDING_STEP_MS);
-        if (!(await this.send({ kind: 'advance-final-settlement' }))) return;
+        if (!settled(await this.send({ kind: 'advance-final-settlement' }))) return;
       } else if (phase === 'completed') {
         await this.complete();
         return;
@@ -213,21 +240,20 @@ export class PracticeController {
     }
   }
 
-  /** Durability steps 2-4 for one command. True once it is committed and published. */
-  private async send(command: Command): Promise<boolean> {
-    if (this.pending) return false;
+  /** Durability steps 2-4 for one command, identified by the sequence it was issued at. */
+  private async send(command: Command): Promise<CommitResult> {
+    if (this.pending) return 'not-saved';
     const state = this.requireState();
     return this.commit({ sequence: state.sequence, commandId: `${state.activity.id}/${state.sequence}`, command });
   }
 
-  private async commit(envelope: CommandEnvelope): Promise<boolean> {
+  private async commit(envelope: CommandEnvelope): Promise<CommitResult> {
     const state = this.requireState();
     const result = advanceActivity(state, envelope);
-    if (result.status !== 'committed') return false;
-    const { store } = this.adapters;
-    let committed: boolean;
+    if (result.status !== 'committed') return 'rejected';
+    let outcome: CommitOutcome;
     try {
-      const outcome = await store.commitTransition({
+      outcome = await this.adapters.store.commitTransition({
         activityId: state.activity.id,
         priorSequence: state.sequence,
         checkpoint: encodeCheckpoint(result.state),
@@ -235,34 +261,82 @@ export class PracticeController {
         facts: result.facts,
         effects: [],
       });
-      if (outcome.status === 'sequence-conflict') {
-        // Another writer moved the activity on: show what is durably there.
-        const stored = await store.load(state.activity.id);
-        if (stored) this.adopt(stored, []);
-        this.pending = null;
-        return false;
-      }
-      committed = true;
     } catch {
       // An uncertain acknowledgement: the receipt says whether it committed.
-      committed = (await store.readReceipt(state.activity.id, envelope.commandId).catch(() => null)) !== null;
+      return this.recover(envelope);
     }
-    if (!committed) {
+    if (outcome.status === 'sequence-conflict') return this.adoptStored(envelope);
+    this.accept(result.state, result.facts);
+    return 'committed';
+  }
+
+  /** A failed save's retry: recover it if it did commit after all, otherwise commit it again. */
+  private async retryTransition(envelope: CommandEnvelope): Promise<CommitResult> {
+    const recovered = await this.recover(envelope);
+    // No receipt (and the read worked): it never committed, so commit it now.
+    if (recovered !== 'not-saved' || this.pendingIsUnknown) return recovered;
+    return this.commit(envelope);
+  }
+
+  /** True when the last receipt read failed, so it is still unknown whether the pending command committed. */
+  private pendingIsUnknown = false;
+
+  /**
+   * Reads the receipt for a command whose acknowledgement was lost and returns
+   * the committed result from the store, never the candidate computed here.
+   */
+  private async recover(envelope: CommandEnvelope): Promise<CommitResult> {
+    const { store } = this.adapters;
+    const state = this.requireState();
+    const activityId = state.activity.id;
+    let found: CommittedTransition | null;
+    try {
+      found = await store.readReceipt(activityId, envelope.commandId);
+      this.pendingIsUnknown = false;
+    } catch {
+      found = null;
+      this.pendingIsUnknown = true;
+    }
+    if (found === null) {
       this.pending = { kind: 'transition', envelope };
       this.publish();
-      return false;
+      return 'not-saved';
     }
+    const candidate = advanceActivity(state, envelope);
+    // The id names "the command at this sequence"; a different command there means the activity moved on.
+    if (candidate.status !== 'committed' || found.receipt.command !== candidate.receipt.command) return this.adoptStored(envelope);
+    const decoded = decodeCheckpoint(found.checkpoint);
+    if (!decoded.ok) throw new Error(`activity ${activityId} has a damaged checkpoint: ${decoded.error.message}`);
+    this.accept(decoded.state, found.facts);
+    return 'committed';
+  }
+
+  /** The stored activity moved past this command (another writer): show what is durably there. */
+  private async adoptStored(envelope: CommandEnvelope): Promise<CommitResult> {
+    const stored = await this.adapters.store.load(this.requireState().activity.id).catch(() => null);
+    if (!stored) {
+      this.pending = { kind: 'transition', envelope };
+      this.pendingIsUnknown = true;
+      this.publish();
+      return 'not-saved';
+    }
+    this.adopt(stored, []);
+    return 'adopted';
+  }
+
+  private accept(state: ActivityState, facts: readonly DomainFact[]): void {
     this.pending = null;
-    this.state = result.state;
-    this.facts = result.facts;
+    this.pendingIsUnknown = false;
+    this.state = state;
+    this.facts = facts;
     this.publish();
-    return true;
   }
 
   /** Durability step 5: one final result and one outgoing synchronization record. */
   private async complete(): Promise<boolean> {
     const state = this.requireState();
-    const activity = this.activity as StoredActivity;
+    const activity = this.activity;
+    if (!activity) throw new Error('no practice session is active');
     const buyIn = activity.specification.funding;
     const record: CompletedPracticeSession = {
       activityId: state.activity.id,

@@ -13,7 +13,7 @@ import type {
   TransitionCommit,
 } from './store';
 
-type Operation = 'createActivity' | 'commitTransition' | 'complete';
+type Operation = 'createActivity' | 'commitTransition' | 'complete' | 'readReceipt';
 
 export class StoreWriteError extends Error {
   constructor(message: string) {
@@ -36,14 +36,14 @@ export class MemoryActivityStore implements ActivityStore {
 
   /**
    * Failure injection: the next call of `operation` fails. "before" writes
-   * nothing (a write failure); "after" writes, then fails the acknowledgement.
+   * nothing (a write or read failure); "after" writes, then fails the acknowledgement.
    */
   failNext(operation: Operation, when: 'before' | 'after'): void {
     this.failures.push({ operation, when });
   }
 
   createActivity(activity: NewActivity): Promise<StoredActivity> {
-    return this.write('createActivity', () => {
+    return this.injectable('createActivity', () => {
       const existing = this.rows.get(activity.activityId);
       if (existing) return parse<StoredActivity>(existing.activity);
       const stored: StoredActivity = { ...activity, sequence: 0, completion: null };
@@ -70,7 +70,7 @@ export class MemoryActivityStore implements ActivityStore {
   }
 
   commitTransition(commit: TransitionCommit): Promise<CommitOutcome> {
-    return this.write('commitTransition', (): CommitOutcome => {
+    return this.injectable('commitTransition', (): CommitOutcome => {
       const row = this.require(commit.activityId);
       const activity = parse<StoredActivity>(row.activity);
       if (activity.sequence !== commit.priorSequence) return { status: 'sequence-conflict', sequence: activity.sequence };
@@ -86,14 +86,14 @@ export class MemoryActivityStore implements ActivityStore {
   }
 
   readReceipt(activityId: string, commandId: string): Promise<CommittedTransition | null> {
-    return this.read(() => {
+    return this.injectable('readReceipt', () => {
       const text = this.rows.get(activityId)?.transitions.get(commandId);
       return text === undefined ? null : parse<CommittedTransition>(text);
     });
   }
 
   complete(record: CompletedPracticeSession): Promise<CompletedPracticeSession> {
-    return this.write('complete', () => {
+    return this.injectable('complete', () => {
       const row = this.require(record.activityId);
       const activity = parse<StoredActivity>(row.activity);
       if (activity.completion) return activity.completion;
@@ -118,7 +118,8 @@ export class MemoryActivityStore implements ActivityStore {
     return this.enqueue(run);
   }
 
-  private write<T>(operation: Operation, run: () => T): Promise<T> {
+  /** Runs an operation that failure injection can target. */
+  private injectable<T>(operation: Operation, run: () => T): Promise<T> {
     return this.enqueue(() => {
       const index = this.failures.findIndex((failure) => failure.operation === operation);
       const failure = index >= 0 ? this.failures.splice(index, 1)[0] : undefined;
