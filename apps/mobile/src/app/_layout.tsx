@@ -7,6 +7,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { PracticeProvider } from '@/practice/PracticeProvider';
 import { palette } from '@/theme/tokens';
 
 SplashScreen.preventAutoHideAsync();
@@ -37,7 +38,9 @@ export default function RootLayout() {
     <SafeAreaProvider>
       <ThemeProvider value={theme}>
         <StatusBar style="light" />
-        <Slot />
+        <PracticeProvider>
+          <Slot />
+        </PracticeProvider>
       </ThemeProvider>
     </SafeAreaProvider>
   );
