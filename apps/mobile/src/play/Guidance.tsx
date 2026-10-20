@@ -20,7 +20,10 @@ import {
   parametersText,
   pendingBlocked,
   pendingOverrideNote,
+  pendingPaidNote,
   pendingWaiting,
+  ROULETTE_WORDS,
+  type CoachWords,
   type CorrectionCopy,
   type DecisionUnit,
 } from './coaching-text';
@@ -166,6 +169,8 @@ export function CycleResultPanel({
   canEnd,
   onRestart,
   onEnd,
+  onPlayOn,
+  words = ROULETTE_WORDS,
 }: {
   strategy: StrategyView;
   balance: string;
@@ -176,6 +181,9 @@ export function CycleResultPanel({
   canEnd: boolean;
   onRestart: () => void;
   onEnd: () => void;
+  /** Where committed wagers stay after the cycle (craps), playing on without the strategy lets the dice settle them. */
+  onPlayOn?: () => void;
+  words?: CoachWords;
 }) {
   const { cycle } = strategy;
   return (
@@ -184,7 +192,7 @@ export function CycleResultPanel({
       <Text accessibilityRole="header" maxFontSizeMultiplier={textScale.display} style={styles.headline}>
         {strategy.cycleEnd ? CYCLE_HEADLINE[strategy.cycleEnd] : 'Strategy cycle ended'}
       </Text>
-      <Text maxFontSizeMultiplier={textScale.body} style={styles.body}>{cycleEndText(strategy)}</Text>
+      <Text maxFontSizeMultiplier={textScale.body} style={styles.body}>{cycleEndText(strategy, words)}</Text>
       <View style={styles.stats}>
         <View accessible accessibilityLabel={`Cycle result ${speakSigned(cycle.net)}, ${outcomeWord(cycle.net)}`} style={styles.stat}>
           <Text maxFontSizeMultiplier={textScale.body} style={styles.statLabel}>Cycle result</Text>
@@ -214,6 +222,7 @@ export function CycleResultPanel({
       })}
       <Button label={`Start another cycle with ${formatUnits(balance)}`} stretch disabled={!canRestart} onPress={onRestart} />
       <Button label="End session" variant="secondary" stretch disabled={!canEnd} onPress={onEnd} />
+      {onPlayOn && <Button label="Keep playing without the strategy" variant="secondary" stretch disabled={!canRestart} onPress={onPlayOn} />}
       <Text maxFontSizeMultiplier={textScale.body} style={styles.note}>
         Starting another cycle uses the balance you have now. It never adds chips, and the session keeps the strategy revision you started with.
       </Text>
@@ -232,10 +241,13 @@ export function PendingPanel({
   available,
   canRebuy,
   canOverride,
+  canCollect = null,
   canStop,
   onRebuy,
   onOverride,
+  onCollect,
   onStop,
+  words = ROULETTE_WORDS,
 }: {
   strategy: StrategyView;
   pending: PendingStrategyAction;
@@ -244,23 +256,40 @@ export function PendingPanel({
   /** Null when no rebuy is offered (a training bankroll); otherwise whether one can be made now. */
   canRebuy: boolean | null;
   canOverride: boolean;
+  /** Null when the table doesn't offer Collect instead; otherwise whether it can be chosen now. */
+  canCollect?: boolean | null;
   canStop: boolean;
   onRebuy: () => void;
   /** Opens the bets, so the player can place their own instead (an override, judged when they spin). */
   onOverride: () => void;
+  /** Keeps what was paid and ends the cycle instead of the pending step. */
+  onCollect?: () => void;
   onStop: () => void;
+  words?: CoachWords;
 }) {
+  const paid = pendingPaidNote(pending, words);
   return (
     <View style={styles.panel} testID="pending-panel">
       <Text maxFontSizeMultiplier={textScale.body} style={styles.badge}>{strategy.overrideEndsCycle ? cycleBadge(strategy) : strategy.name}</Text>
-      <Text accessibilityRole="header" maxFontSizeMultiplier={textScale.body} style={styles.stepTitle}>{pendingWaiting(pending)}</Text>
+      {paid && <Text maxFontSizeMultiplier={textScale.body} style={styles.body}>{paid}</Text>}
+      <Text accessibilityRole="header" maxFontSizeMultiplier={textScale.body} style={styles.stepTitle}>{pendingWaiting(pending, words)}</Text>
       <Text maxFontSizeMultiplier={textScale.body} style={styles.body}>{pendingBlocked(pending, available)}</Text>
       <Text maxFontSizeMultiplier={textScale.body} style={styles.note}>
         No new strategy bets until this is resolved. Tableside never makes a stake smaller or places part of a bet.
       </Text>
       {canRebuy !== null && <Button label="Resolve: rebuy" stretch disabled={!canRebuy} onPress={onRebuy} />}
       <Button label="Place my own bets (override)" variant="secondary" stretch disabled={!canOverride} onPress={onOverride} />
-      <Text maxFontSizeMultiplier={textScale.body} style={styles.note}>{pendingOverrideNote(strategy.overrideEndsCycle)}</Text>
+      <Text maxFontSizeMultiplier={textScale.body} style={styles.note}>{pendingOverrideNote(strategy.overrideEndsCycle, words)}</Text>
+      {canCollect !== null && (
+        <Button
+          label="Collect instead and end the cycle"
+          variant="secondary"
+          stretch
+          hint="Keeps what has been paid. Removable bets come back, nothing pending is placed, and you restart the strategy yourself."
+          disabled={!canCollect}
+          onPress={() => onCollect?.()}
+        />
+      )}
       <Button label="Stop strategy" variant="secondary" stretch disabled={!canStop} onPress={onStop} />
     </View>
   );

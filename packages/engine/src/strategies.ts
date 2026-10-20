@@ -5,6 +5,7 @@
 // situation); the session protocol and these operations reach games only
 // through this registry.
 
+import { CRAPS_STRATEGY } from './craps-strategy';
 import { BLACKJACK_STRATEGY, playSituationProblem, policyOf, prescribePlay, type BlackjackPlayRules, type PlayExplanation } from './blackjack-strategy';
 import { ROULETTE_STRATEGY } from './roulette-strategy';
 import {
@@ -23,6 +24,7 @@ import {
 
 const GAMES: Readonly<Record<string, StrategyGame<never>>> = {
   roulette: ROULETTE_STRATEGY as StrategyGame<never>,
+  craps: CRAPS_STRATEGY as StrategyGame<never>,
   blackjack: BLACKJACK_STRATEGY as unknown as StrategyGame<never>,
 };
 

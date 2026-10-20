@@ -196,7 +196,8 @@ export const guidedCases: TestCase[] = [
       const poor = createActivity(guided(TWO_DOZENS, { first: 'dozen-1', second: 'dozen-2' }, { funding: '25' }), STREAM);
       const spun = run(poor, [place('dozen-1', '10'), place('dozen-2', '10'), BEGIN]).state;
       const settled = step(spun, SETTLE);
-      t.equal(settled.facts.at(-1), { kind: 'strategy-paused', reason: 'unfunded-group', unavailable: [{ target: 'dozen-1', amount: '10' }, { target: 'dozen-2', amount: '10' }] });
+      // Tied to the outcome of turn 1, already settled.
+      t.equal(settled.facts.at(-1), { kind: 'strategy-paused', reason: 'unfunded-group', unavailable: [{ target: 'dozen-1', amount: '10' }, { target: 'dozen-2', amount: '10' }], turn: 1 });
       t.equal(kinds(step(settled.state, { kind: 'rebuy', amount: '5' }).facts), ['funding-added']);
       t.equal(strategyOf(step(settled.state, { kind: 'rebuy', amount: '15' }).state)?.pending, null);
     },
@@ -322,7 +323,9 @@ export const guidedCases: TestCase[] = [
               balance: readPermittedView(state).balance,
               lastPocket: (view as RoulettePermittedView).outcome?.pocket ?? null,
             };
-            const explained = explainPrescription(definition, parameters, situation, (state.strategy as NonNullable<ActivityState['strategy']>).progress);
+            // The strategy state includes an outcome's adjustment still waiting to execute.
+            const run = state.strategy as NonNullable<ActivityState['strategy']>;
+            const explained = explainPrescription(definition, parameters, situation, run.deferred?.progress ?? run.progress);
             if (!explained.ok) throw new Error(explained.error);
             const prescription = explained.explanation.prescription;
             const follow = prescription.status === 'prescribed' && pick(3) > 0;

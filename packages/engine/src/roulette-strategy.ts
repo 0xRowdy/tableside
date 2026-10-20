@@ -4,9 +4,9 @@
 // betting decision. The interpreter itself is game-agnostic (strategy.ts).
 
 import type { RoulettePocket, RouletteWheel } from './draws';
-import { add, compare, decodeMoney, encodeMoney, type Money } from './money';
+import { add, compare, decodeMoney, encodeMoney } from './money';
 import { isPocket, placementFor, pocketColor, type RouletteActivityState } from './roulette';
-import { BASE_WAGER_CEILING, isRecord } from './shape';
+import { isRecord, limitGroupProblems, parseMoney } from './shape';
 import type { BetRequirement, StrategyGame, StrategyVocabulary } from './strategy';
 
 const WHEELS: readonly RouletteWheel[] = ['single-zero', 'double-zero'];
@@ -32,33 +32,7 @@ export interface RouletteSituation {
   readonly lastPocket: RoulettePocket | null;
 }
 
-function parse(value: unknown): Money | undefined {
-  if (typeof value !== 'string' || value.length > 64) return undefined;
-  try {
-    return decodeMoney(value);
-  } catch {
-    return undefined;
-  }
-}
-
-const whole = (value: unknown) => {
-  const amount = parse(value);
-  return amount !== undefined && amount.d === 1n && amount.n >= 1n && amount.n <= BASE_WAGER_CEILING ? amount : undefined;
-};
-
-function limitsProblems(limits: unknown, path: string): { path: string; message: string }[] {
-  if (!isRecord(limits) || Object.keys(limits).sort().join() !== 'inside,outside') return [{ path, message: 'inside and outside limits are required' }];
-  const problems: { path: string; message: string }[] = [];
-  for (const kind of ['inside', 'outside'] as const) {
-    const limit = limits[kind];
-    const min = isRecord(limit) ? whole(limit.min) : undefined;
-    const max = isRecord(limit) ? whole(limit.max) : undefined;
-    if (!isRecord(limit) || Object.keys(limit).sort().join() !== 'max,min' || !min || !max || compare(min, max) > 0) {
-      problems.push({ path: `${path}/${kind}`, message: `${kind} limits are whole units from 1 to ${BASE_WAGER_CEILING} with min <= max` });
-    }
-  }
-  return problems;
-}
+const limitsProblems = (limits: unknown, path: string) => limitGroupProblems(limits, ['inside', 'outside'], path);
 
 
 function situationProblem(situation: unknown): string | undefined {
@@ -67,7 +41,7 @@ function situationProblem(situation: unknown): string | undefined {
   const rules = situation.rules;
   if (!isRecord(rules) || Object.keys(rules).sort().join() !== 'limits,wheel' || !WHEELS.includes(rules.wheel as RouletteWheel)) return 'unknown wheel';
   if (limitsProblems(rules.limits, '').length > 0) return 'the limits contradict the rules';
-  const balance = parse(situation.balance);
+  const balance = parseMoney(situation.balance);
   if (!balance || balance.n < 0n) return 'the balance must be canonical money, not negative';
   if (situation.lastPocket !== null && !isPocket(rules.wheel as RouletteWheel, situation.lastPocket)) return `${String(situation.lastPocket)} is not a pocket on this wheel`;
   return undefined;

@@ -69,13 +69,14 @@ import {
   type StrategyGame,
   type StrategyProgress,
   type StrategySelection,
+  type TurnResult,
 } from './strategy';
 import { ENGINE_VERSION } from './version';
 
 export type { Limit, VersionedIdentity } from './shape';
 
 /** The state-schema version, kept apart from engine, rule and protocol identities. */
-export const STATE_SCHEMA_VERSION = 5 as const;
+export const STATE_SCHEMA_VERSION = 6 as const;
 
 /** Fields every activity specification has, whatever the game. */
 interface SpecificationBase {
@@ -172,9 +173,10 @@ export type StrategyDeparture = PendingCorrection & { readonly resolution: 'retr
 /**
  * Why a strategy cycle ended: its completion rule matched; its next stake is
  * past a declared cap, or its stop rule matched (it is exhausted); a
- * progression was overridden; or an adjustment left the strategy envelope.
+ * progression was overridden; the player chose "Collect instead" at a pending
+ * strategy action; or an adjustment left the strategy envelope.
  */
-export type CycleEnd = 'completed' | 'cap' | 'stop' | 'override' | 'envelope';
+export type CycleEnd = 'completed' | 'cap' | 'stop' | 'override' | 'collected' | 'envelope';
 
 /** One turn of a strategy cycle, for the cycle result. */
 export interface CycleTurn {
@@ -202,6 +204,14 @@ export interface StrategyRun extends StrategySelection {
   /** Why the cycle ended, while it is ended. */
   readonly cycleEnd: CycleEnd | null;
   readonly progress: StrategyProgress;
+  /**
+   * An outcome's adjustment that can't execute yet (a press past the table
+   * maximum, a next bet the balance can't cover). The turn's settlement is
+   * final; the progress keeps its pre-adjustment values while this waits as a
+   * pending strategy action, and the strategy prescribes from it. It takes
+   * effect, paying nothing, once its prescription can execute.
+   */
+  readonly deferred: { readonly turn: number; readonly progress: StrategyProgress } | null;
   /** The current cycle: its number in the session (from 1) and its turns so far (for a strategy with cycles). */
   readonly cycle: { readonly number: number; readonly turns: readonly CycleTurn[] };
   /** True while the current turn began as the strategy prescribed, so its result adjusts the progress. */
@@ -219,6 +229,8 @@ export interface PendingStrategyAction {
   readonly unavailable: readonly PrescribedBet[];
   /** For a bet past its declared cap: that cap. */
   readonly cap?: string;
+  /** For an outcome's adjustment that waits: the turn whose outcome it follows (already settled and paid). */
+  readonly turn?: number;
 }
 
 export interface StrategyView {
@@ -311,11 +323,17 @@ export type Command =
   | { readonly kind: 'override-correction' }
   /** Starts another strategy cycle from the current balance (never a refill). */
   | { readonly kind: 'restart-cycle' }
+  /**
+   * At a pending strategy action: keep what has been paid and end the cycle
+   * instead. Removable wagers come back, contracts stay to settle, and nothing
+   * pending executes; another cycle starts only explicitly.
+   */
+  | { readonly kind: 'collect-instead' }
   /** Ends the strategy's bets: removable wagers come back, committed ones settle; the session stays open. */
   | { readonly kind: 'stop-strategy' };
 
 /** Commands the protocol handles itself for guided practice. */
-export type StrategyCommandKind = 'retry-correction' | 'override-correction' | 'restart-cycle' | 'stop-strategy';
+export type StrategyCommandKind = 'retry-correction' | 'override-correction' | 'restart-cycle' | 'collect-instead' | 'stop-strategy';
 
 /**
  * The commands a game module applies; the protocol itself handles funding and
@@ -498,6 +516,12 @@ export interface GameModule<S extends ActivityState, V extends PermittedView, C 
   legal?(state: S, common: readonly CommandKind[]): readonly CommandKind[];
   /** Applies a command already known to be well formed and legal in the phase. */
   apply(state: S, command: C): Step<S>;
+  /**
+   * A turn with nothing at stake, for a game whose turns go on without the
+   * player (craps: the dice roll and move the puck). Guided practice takes one
+   * while the strategy places nothing yet, as a place-after-the-point strategy waits for a point.
+   */
+  idleTurn?(state: S): Step<S>;
   /** The game's part of the permitted view; it may refine when wagers count as committed. */
   view(state: S): Omit<V, keyof PermittedViewBase> & Partial<Pick<PermittedViewBase, 'wagersCommitted'>>;
   /** The first problem with the game's part of a checkpoint (rules, wagers, outcome, table state), if any. */
@@ -520,22 +544,29 @@ const moduleOf = (state: ActivityState) => GAMES[state.identities.game];
 
 /**
  * Rebuys are offered only while the activity waits for input, and only with
- * practice funding; Stop strategy only while a strategy still runs.
+ * practice funding; Stop strategy only while a strategy still runs; Collect
+ * instead only at a pending strategy action.
  */
 function legalCommands(state: ActivityState): readonly CommandKind[] {
   const legal = GUIDED_PHASES.has(state.phase) ? LEGAL[state.phase] : (moduleOf(state).legal?.(state, LEGAL[state.phase]) ?? LEGAL[state.phase]);
   const running = state.strategy !== null && state.strategy.status !== 'stopped';
   // A held playing move is part of a hand in play: the hand finishes before the session can stop.
   const midHand = state.phase === 'correction' && state.strategy?.correction != null && isPlayCorrection(state.strategy.correction);
-  return legal.filter((kind) => (kind !== 'rebuy' || rebuysOffered(state.funding)) && (kind !== 'stop-strategy' || running) && !(midHand && kind === 'request-stop'));
+  return legal.filter(
+    (kind) =>
+      (kind !== 'rebuy' || rebuysOffered(state.funding)) &&
+      (kind !== 'stop-strategy' || running) &&
+      (kind !== 'collect-instead' || pendingAction(state) !== null) &&
+      !(midHand && kind === 'request-stop'),
+  );
 }
 
 const LEGAL: Record<Phase, readonly CommandKind[]> = {
-  'open-decision': ['place-wager', 'begin-turn', 'stop-strategy', 'request-stop', 'rebuy'],
+  'open-decision': ['place-wager', 'begin-turn', 'collect-instead', 'stop-strategy', 'request-stop', 'rebuy'],
   // The stop path may end a session holding a correction: the held move never executes.
   correction: ['retry-correction', 'override-correction', 'request-stop'],
   'revealing-outcome': ['settle-turn', 'stop-strategy', 'request-stop'],
-  'settled-outcome': ['place-wager', 'begin-turn', 'stop-strategy', 'request-stop', 'rebuy'],
+  'settled-outcome': ['place-wager', 'begin-turn', 'collect-instead', 'stop-strategy', 'request-stop', 'rebuy'],
   'cycle-completion': ['restart-cycle', 'stop-strategy', 'request-stop', 'rebuy'],
   'final-settlement': ['advance-final-settlement'],
   completed: [],
@@ -570,6 +601,7 @@ function isCommand(value: unknown): value is Command {
     case 'retry-correction':
     case 'override-correction':
     case 'restart-cycle':
+    case 'collect-instead':
     case 'stop-strategy':
       return hasExactKeys(value, ['kind']);
     default:
@@ -657,6 +689,7 @@ function strategyRun(game: GameId, value: unknown, rules: unknown): StrategyRun 
     status: 'active',
     cycleEnd: null,
     progress: initialProgress(definition),
+    deferred: null,
     cycle: { number: 1, turns: [] },
     coachedTurn: false,
     correction: null,
@@ -704,7 +737,7 @@ export function advanceActivity<S extends ActivityState>(state: S, envelope: Com
   };
   const change = 'illegal' in step ? {} : step.change;
   const facts: DomainFact[] = 'illegal' in step ? [{ kind: 'illegal-action', command, reason: step.illegal }] : step.facts;
-  const next = { ...state, ...change } as S;
+  const next = withDeferredResolved({ ...state, ...change } as S);
   // A pending strategy action is explicit: it is announced when it begins or changes.
   // After any input (a rebuy, say) the pending action is checked again against current funds.
   const pending = pendingAction(next);
@@ -723,6 +756,38 @@ export function advanceActivity<S extends ActivityState>(state: S, envelope: Com
     facts,
     receipt,
   };
+}
+
+/**
+ * A deferred adjustment takes effect once its prescription can execute (a
+ * rebuy covered it): the progress moves on and nothing is paid again.
+ */
+function withDeferredResolved<S extends ActivityState>(state: S): S {
+  const run = state.strategy;
+  if (!run?.deferred || run.status !== 'active' || !WAITING.has(state.phase) || heldAction(state, run)) return state;
+  return { ...state, strategy: { ...run, progress: run.deferred.progress, deferred: null } };
+}
+
+/**
+ * Takes down every wager the game lets come down now, as wager-returned facts;
+ * contracts (craps pass and come bases with their number set) stay to settle.
+ * The game applies each removal itself, so its own table state stays whole.
+ */
+function takeDown(state: ActivityState): { change: Change<ActivityState>; facts: DomainFact[] } {
+  const game = moduleOf(state);
+  let current = state;
+  const facts: DomainFact[] = [];
+  for (const wager of state.wagers) {
+    if (!current.wagers.some((item) => item.target === wager.target)) continue;
+    const removed = game.apply(current, { kind: 'place-wager', target: wager.target, amount: '0' });
+    if ('illegal' in removed) continue;
+    current = { ...current, ...removed.change } as ActivityState;
+    for (const fact of removed.facts) {
+      if (fact.kind === 'wager-changed' && fact.amount === '0') facts.push({ kind: 'wager-returned', target: fact.target, amount: fact.previous });
+    }
+  }
+  const extra = Object.fromEntries(Object.keys(game.extra).map((key) => [key, current[key as keyof ActivityState]]));
+  return { change: { ...extra, balance: current.balance, wagers: current.wagers } as Change<ActivityState>, facts };
 }
 
 /** A rebuy adds funds without placing or settling anything, whatever the game. */
@@ -757,9 +822,15 @@ function guidedStep(state: ActivityState, command: Exclude<Command, { readonly k
   switch (command.kind) {
     case 'begin-turn': {
       // Without betting instructions the player chooses the wagers; only the play is assessed.
-      if (run.status !== 'active' || state.wagers.length === 0 || leavesBetting(run.definition)) return undefined;
+      if (run.status !== 'active' || leavesBetting(run.definition)) return undefined;
       const explanation = explain(state, run);
-      if (follows(explanation, state.wagers)) {
+      if (state.wagers.length === 0) {
+        // Nothing at stake and nothing prescribed yet (a place bet waits for a point): a game whose turns go on without the player takes one.
+        if (explanation.prescription.status !== 'uncovered' || !game.idleTurn) return undefined;
+        return { step: withStrategy(game.idleTurn(state), { ...run, coachedTurn: true, decisions: counted(run, 'betting') }), assessed: false };
+      }
+      // While an outcome's adjustment waits, no roll follows the strategy: it waits on the player's choice.
+      if (!run.deferred && follows(explanation, state.wagers)) {
         return { step: withStrategy(apply(state, command), { ...run, coachedTurn: true, decisions: counted(run, 'betting') }), assessed: false };
       }
       // A departing move: hold it, before anything executes or is drawn.
@@ -826,6 +897,9 @@ function guidedStep(state: ActivityState, command: Exclude<Command, { readonly k
       const progression = overrideEndsCycle(run.definition);
       const strategy: StrategyRun = {
         ...run,
+        // A waiting adjustment is the outcome's own: it stands, and nothing waits on it any more.
+        progress: run.deferred?.progress ?? run.progress,
+        deferred: null,
         status: progression ? 'cycle-ended' : 'active',
         cycleEnd: progression ? 'override' : null,
         coachedTurn: false,
@@ -842,25 +916,37 @@ function guidedStep(state: ActivityState, command: Exclude<Command, { readonly k
         step: {
           change: {
             phase: 'open-decision',
-            strategy: { ...run, status: 'active', cycleEnd: null, progress: initialProgress(run.definition), cycle: { number: run.cycle.number + 1, turns: [] } },
+            strategy: {
+              ...run,
+              status: 'active',
+              cycleEnd: null,
+              progress: initialProgress(run.definition),
+              deferred: null,
+              cycle: { number: run.cycle.number + 1, turns: [] },
+            },
           },
           facts: [{ kind: 'cycle-restarted' }],
         },
         assessed: false,
       };
+    case 'collect-instead': {
+      // The pending action is dropped, never executed: what was paid stays paid, and nothing pays again.
+      const strategy: StrategyRun = { ...run, status: 'cycle-ended', cycleEnd: 'collected', deferred: null, coachedTurn: false };
+      const down = takeDown(state);
+      return {
+        step: { change: { ...down.change, phase: 'cycle-completion', strategy }, facts: [{ kind: 'cycle-ended', reason: 'collected' }, ...down.facts] },
+        assessed: false,
+      };
+    }
     case 'stop-strategy': {
-      const strategy: StrategyRun = { ...run, status: 'stopped', cycleEnd: null, coachedTurn: false };
+      const strategy: StrategyRun = { ...run, status: 'stopped', cycleEnd: null, coachedTurn: false, deferred: null };
       const facts: DomainFact[] = [{ kind: 'strategy-stopped' }];
       // A turn in progress keeps its committed wagers; they settle as usual.
       if (state.phase === 'revealing-outcome') return { step: { change: { strategy }, facts }, assessed: false };
-      // Between turns every stake is still removable (the games that run strategies today).
-      let balance = decodeMoney(state.balance);
-      for (const wager of state.wagers) {
-        balance = add(balance, decodeMoney(wager.amount));
-        facts.push({ kind: 'wager-returned', target: wager.target, amount: wager.amount });
-      }
+      // Between turns, removable stakes come back; committed contracts are never refunded and settle as the game goes on.
+      const down = takeDown(state);
       const phase = state.phase === 'cycle-completion' ? 'settled-outcome' : state.phase;
-      return { step: { change: { phase, strategy, balance: encodeMoney(balance), wagers: [] }, facts }, assessed: false };
+      return { step: { change: { ...down.change, phase, strategy }, facts: [...facts, ...down.facts] }, assessed: false };
     }
     case 'settle-turn': {
       const settled = apply(state, command);
@@ -877,13 +963,28 @@ function guidedStep(state: ActivityState, command: Exclude<Command, { readonly k
       if (run.coachedTurn && run.status === 'active') {
         // The strategy's adjustment is its own step after settlement: settlement is already final.
         const staked = state.wagers.reduce((sum, wager) => add(sum, decodeMoney(wager.amount)), decodeMoney('0'));
-        const progress = progressAfter(run.definition, run.progress, net.n > 0n ? 'win' : net.n < 0n ? 'loss' : 'push', staked);
-        const end = progress ? cycleEndAfter({ ...after, strategy: { ...strategy, progress } } as ActivityState, run.definition, progress) : 'envelope';
-        strategy = { ...strategy, ...(progress ? { progress } : {}), ...(end ? { status: 'cycle-ended' as const, cycleEnd: end } : {}) };
-        if (end) settled.facts.push({ kind: 'cycle-ended', reason: end });
+        const result = net.n > 0n ? 'win' : net.n < 0n ? 'loss' : 'push';
+        const progress = progressAfter(run.definition, run.progress, result, staked, wagerResults(state.wagers, settled.facts));
+        const adjusted = { ...after, strategy: { ...strategy, progress, deferred: null } } as ActivityState;
+        const end = progress ? cycleEndAfter(adjusted, run.definition, progress) : 'envelope';
+        if (end || !progress) {
+          const reason = end ?? 'envelope';
+          strategy = { ...strategy, ...(progress ? { progress } : {}), status: 'cycle-ended', cycleEnd: reason };
+          settled.facts.push({ kind: 'cycle-ended', reason });
+        } else if (blocked(heldAction(adjusted, adjusted.strategy as StrategyRun))) {
+          // The adjustment can't execute yet: it waits, tied to this outcome, and the progress keeps its values until it can.
+          strategy = { ...strategy, deferred: { turn: state.turn, progress } };
+        } else {
+          strategy = { ...strategy, progress };
+        }
       }
-      const change = strategy.status === 'cycle-ended' ? { ...settled.change, phase: 'cycle-completion' as const } : settled.change;
-      return { step: { change: { ...change, strategy }, facts: settled.facts }, assessed: false };
+      if (strategy.status !== 'cycle-ended') return { step: { change: { ...settled.change, strategy }, facts: settled.facts }, assessed: false };
+      // The cycle is over: its outstanding wagers resolve. Removable ones come back; contracts stay to settle.
+      const down = takeDown(after);
+      return {
+        step: { change: { ...settled.change, ...down.change, phase: 'cycle-completion', strategy }, facts: [...settled.facts, ...down.facts] },
+        assessed: false,
+      };
     }
     case 'request-stop':
       // A held correction is dropped: its move never executes, and it was never resolved into a departure.
@@ -896,6 +997,20 @@ function guidedStep(state: ActivityState, command: Exclude<Command, { readonly k
 
 /** The run's decision counts with one more of a kind. */
 const counted = (run: StrategyRun, kind: keyof StrategyRun['decisions']) => ({ ...run.decisions, [kind]: run.decisions[kind] + 1 });
+
+/** Each wager on the table for a turn, by target: its own net result once settled, or "none" while it stays unresolved. */
+function wagerResults(wagers: readonly Wager[], facts: readonly DomainFact[]): Record<string, TurnResult> {
+  const results: Record<string, TurnResult> = {};
+  for (const wager of wagers) {
+    let net: Money | undefined;
+    for (const fact of facts) if (fact.kind === 'wager-settled' && fact.target === wager.target) net = add(net ?? decodeMoney('0'), decodeMoney(fact.net));
+    results[wager.target] = net === undefined ? 'none' : net.n > 0n ? 'win' : net.n < 0n ? 'loss' : 'push';
+  }
+  return results;
+}
+
+/** A pending action the funds or the table limits block (not the strategy's own cap or stop rule). */
+const blocked = (action: PendingStrategyAction | null) => action !== null && (action.reason === 'unfunded-group' || action.reason === 'limit');
 
 /** A strategy without betting instructions leaves the wagers to the player (blackjack's playing policies): betting isn't assessed. */
 const leavesBetting = (definition: StrategyDefinition) => definition.instructions.length === 0;
@@ -919,7 +1034,7 @@ const gameStrategy = (state: ActivityState) => strategyGame(state.identities.gam
 /** What the strategy prescribes for the decision the activity waits on (the same function Explain prescription runs). */
 function explain(state: ActivityState, run: StrategyRun): Explanation {
   const game = gameStrategy(state);
-  return prescribe(game.vocabulary, run.definition, run.parameters, game.situation(state), run.progress);
+  return prescribe(game.vocabulary, run.definition, run.parameters, game.situation(state), run.deferred?.progress ?? run.progress);
 }
 
 /** True when the wagers are exactly the prescribed groups. A paused or uncovered prescription places no new bets. */
@@ -954,7 +1069,8 @@ function pendingAction(state: ActivityState): PendingStrategyAction | null {
   const run = state.strategy;
   if (!run || run.status !== 'active' || leavesBetting(run.definition) || !WAITING.has(state.phase)) return null;
   if (gameStrategy(state).hidesPending?.(state)) return null;
-  return heldAction(state, run);
+  const held = heldAction(state, run);
+  return held && run.deferred ? { ...held, turn: run.deferred.turn } : held;
 }
 
 /** What the strategy can't place now, and why, if anything. */
@@ -1001,8 +1117,13 @@ function strategyView(state: ActivityState, run: StrategyRun): StrategyView {
   };
 }
 
-/** A strategy with progression state (counters or lists) is a betting progression: an override ends its cycle. */
-const overrideEndsCycle = (definition: StrategyDefinition) => definition.counters.length > 0 || (definition.lists ?? []).length > 0;
+/**
+ * A strategy with progression state (counters or lists) is a betting
+ * progression: an override ends its cycle. So does any strategy in a game
+ * whose vocabulary says so (craps, where wagers persist across rolls).
+ */
+const overrideEndsCycle = (definition: StrategyDefinition) =>
+  definition.counters.length > 0 || (definition.lists ?? []).length > 0 || strategyGame(definition.game)?.vocabulary.overrideEndsCycle === true;
 
 /** A strategy whose cycles can end (a progression, or one with a completion rule) keeps a record of each cycle's turns. */
 const hasCycles = (definition: StrategyDefinition) => overrideEndsCycle(definition) || definition.completeWhen != null;
@@ -1142,12 +1263,13 @@ function stateDamage(value: unknown): string | undefined {
   if (funding) return funding;
   if (GUIDED_PHASES.has(phase as Phase) && value.strategy === null) return 'a guided phase without a strategy';
   if (phase === 'correction' && (value.wagers as unknown[]).length === 0) return 'damaged correction';
-  if (phase === 'cycle-completion' && (value.wagers as unknown[]).length > 0) return 'damaged cycle completion';
   // A game judges its own part as of the decision a guided phase waits on.
   const gameDamage = game.damage(GUIDED_PHASES.has(phase as Phase) ? { ...value, phase: 'open-decision' } : value);
   if (gameDamage) return gameDamage;
   const strategy = strategyDamage(value as unknown as ActivityState, identities.strategy as VersionedIdentity | null);
   if (strategy) return strategy;
+  // A cycle's outstanding wagers resolved when it ended: only contracts can still be on the table.
+  if (phase === 'cycle-completion' && takeDown(value as unknown as ActivityState).facts.length > 0) return 'damaged cycle completion';
   if (!Array.isArray(receipts) || receipts.length !== sequence) return 'receipts do not match the sequence';
   const ids = new Set<string>();
   for (const [index, receipt] of (receipts as unknown[]).entries()) {
@@ -1171,9 +1293,9 @@ const isMove = (value: unknown): value is PlayMove =>
   hasExactKeys(value, ['action', 'amount']) &&
   (value.action === 'insure' ? parseMoney(value.amount) !== undefined : isBlackjackAction(value.action) && value.amount === null);
 
-const RUN_KEYS = ['definition', 'parameters', 'status', 'cycleEnd', 'progress', 'cycle', 'coachedTurn', 'correction', 'departures', 'decisions'];
+const RUN_KEYS = ['definition', 'parameters', 'status', 'cycleEnd', 'progress', 'deferred', 'cycle', 'coachedTurn', 'correction', 'departures', 'decisions'];
 
-const CYCLE_ENDS: readonly unknown[] = ['completed', 'cap', 'stop', 'override', 'envelope'];
+const CYCLE_ENDS: readonly unknown[] = ['completed', 'cap', 'stop', 'override', 'collected', 'envelope'];
 
 const isCanonicalMoney = (value: unknown) => {
   const amount = parseMoney(value);
@@ -1223,6 +1345,12 @@ function strategyDamage(state: ActivityState, identity: VersionedIdentity | null
   if (state.phase === 'cycle-completion' && status !== 'cycle-ended') return 'damaged strategy cycle';
   const progress = progressProblem(definition, run.progress);
   if (progress) return progress;
+  const deferred = run.deferred;
+  // A waiting adjustment belongs to an active strategy and to a turn already played.
+  const playedTurn = (turn: unknown) => isCount(turn) && turn >= 1 && turn <= state.turn;
+  if (deferred !== null && (status !== 'active' || !hasExactKeys(deferred, ['turn', 'progress']) || !playedTurn(deferred.turn) || progressProblem(definition, deferred.progress))) {
+    return 'damaged strategy adjustment';
+  }
   const cycle = cycleDamage(state, definition, run.cycle);
   if (cycle) return cycle;
   if (typeof run.coachedTurn !== 'boolean' || (run.coachedTurn && !(status === 'active' && (state.phase === 'revealing-outcome' || state.phase === 'final-settlement')))) {
