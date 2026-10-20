@@ -4,7 +4,7 @@
 // promise resolves; a rejected promise is an uncertain acknowledgement (the
 // write may or may not have happened), which the caller resolves by reading.
 
-import type { ActivitySpecification, DomainFact, RandomStreamIdentity, Receipt, VersionedIdentity } from '@tableside/engine';
+import type { ActivitySpecification, DomainFact, FundingSource, RandomStreamIdentity, Receipt, VersionedIdentity } from '@tableside/engine';
 
 /** An allowance effect committed with a transition (spec 5). Spec 1 never produces one. */
 export interface AllowanceEffect {
@@ -70,12 +70,18 @@ export interface CompletedPracticeSession {
     readonly strategy: VersionedIdentity | null;
     readonly reference: VersionedIdentity | null;
   };
+  /** Practice funding, or spec 5's training bankroll (no rebuys; the allocation is the buy-in). */
+  readonly fundingSource: FundingSource;
+  /** The initial buy-in, or the training-bankroll allocation. */
   readonly buyIn: string;
+  /** Each rebuy, in order. */
   readonly rebuys: readonly string[];
   readonly cumulativeFunding: string;
   readonly finalCashOut: string;
   /** Final cash-out minus cumulative funding. */
   readonly netResult: string;
+  /** Largest buy-in-adjusted fall of the game result from a previous peak, including final settlement. */
+  readonly maxDrawdown: string;
   readonly completedAt: number;
 }
 

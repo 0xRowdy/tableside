@@ -12,7 +12,6 @@ export {
   encodeCheckpoint,
   readPermittedView,
   ActivitySpecificationError,
-  FUNDING_CEILING,
   STATE_SCHEMA_VERSION,
   type ActivitySpecification,
   type ActivityState,
@@ -30,6 +29,17 @@ export {
   type VersionedIdentity,
   type Wager,
 } from './activity';
+export {
+  cumulativeFunding,
+  FUNDING_CEILING,
+  FUNDING_SOURCES,
+  fundingHeadroom,
+  summarizeFunding,
+  type Funding,
+  type FundingResult,
+  type FundingSource,
+  type RebuyRefusal,
+} from './funding';
 
 export { philox4x32 } from './philox';
 export {

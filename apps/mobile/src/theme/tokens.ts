@@ -69,6 +69,7 @@ export const essentialPairs: readonly {
   { use: 'dialog text', kind: 'text', foreground: 'foreground', background: 'popover' },
   { use: 'dialog secondary text', kind: 'text', foreground: 'mutedForeground', background: 'popover' },
   { use: 'error text', kind: 'text', foreground: 'destructive', background: 'background' },
+  { use: 'error text in a sheet', kind: 'text', foreground: 'destructive', background: 'popover' },
   { use: 'saved banner icon', kind: 'graphic', foreground: 'correct', background: 'card' },
   { use: 'red pocket number', kind: 'text', foreground: 'onImage', background: 'pocketRed' },
   { use: 'black pocket number', kind: 'text', foreground: 'onImage', background: 'pocketBlack' },

@@ -185,7 +185,7 @@ describe('roulette free play', () => {
 
     expect(await screen.findByRole('header', { name: 'Session result' })).toBeOnTheScreen();
     expect(announcements).toContain('Ending your session. Straight 17 5 returned to your balance. Balance 1,025.');
-    expect(announcements).toContain('Session result. Win, net result plus 25. Final cash-out 1,025.');
+    expect(announcements).toContain('Session result. Win, net result plus 25. Final cash-out 1,025. Max drawdown 0.');
     expect(screen.getByLabelText('Buy-in 1,000')).toBeOnTheScreen();
     expect(screen.getByLabelText('Rebuys none')).toBeOnTheScreen();
     expect(screen.getByLabelText('Final cash-out 1,025')).toBeOnTheScreen();

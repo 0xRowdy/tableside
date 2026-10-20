@@ -1,5 +1,5 @@
-// The session result (design frame S1-10, free play). Max drawdown and the
-// full record arrive with #64 and #79.
+// The session result (design frame S1-10, free play): net result, maximum
+// drawdown and the funding lines. The full record arrives with #79.
 
 import { CircleCheck, Info } from 'lucide-react-native';
 import { useEffect } from 'react';
@@ -25,16 +25,25 @@ export function SessionResult({
 }) {
   useEffect(() => {
     AccessibilityInfo.announceForAccessibility(
-      `Session result. ${outcomeWord(result.netResult)}, net result ${speakSigned(result.netResult)}. Final cash-out ${formatUnits(result.finalCashOut)}.`,
+      `Session result. ${outcomeWord(result.netResult)}, net result ${speakSigned(result.netResult)}. Final cash-out ${formatUnits(result.finalCashOut)}. Max drawdown ${formatUnits(result.maxDrawdown)}.`,
     );
   }, [result]);
 
-  const rows = [
-    { label: 'Buy-in', value: formatUnits(result.buyIn) },
-    { label: 'Rebuys', value: result.rebuys.length === 0 ? 'none' : result.rebuys.map(formatUnits).join(', ') },
-    { label: 'Total funding', value: formatUnits(result.cumulativeFunding) },
+  // A training-bankroll session has its allocation instead of a buy-in, and never any rebuys.
+  const rows =
+    result.fundingSource === 'training-bankroll'
+      ? [{ label: 'From training bankroll', value: formatUnits(result.buyIn) }]
+      : [
+          { label: 'Buy-in', value: formatUnits(result.buyIn) },
+          result.rebuys.length === 0
+            ? { label: 'Rebuys', value: 'none' }
+            : { label: `Rebuys (${result.rebuys.length})`, value: result.rebuys.map(formatUnits).join(' + ') },
+          { label: 'Total funding', value: formatUnits(result.cumulativeFunding) },
+        ];
+  rows.push(
+
     { label: 'Final cash-out', value: formatUnits(result.finalCashOut) },
-  ];
+  );
 
   return (
     <Screen>
@@ -54,14 +63,25 @@ export function SessionResult({
       </View>
 
       <Text maxFontSizeMultiplier={textScale.body} style={styles.label}>MONEY</Text>
-      <View
-        style={styles.stat}
-        accessible
-        accessibilityLabel={`Net result ${speakSigned(result.netResult)}, ${outcomeWord(result.netResult)}`}
-      >
-        <Text maxFontSizeMultiplier={textScale.body} style={styles.muted}>Net result</Text>
-        <Text maxFontSizeMultiplier={textScale.display} style={styles.statValue}>{formatSigned(result.netResult)}</Text>
-        <Text maxFontSizeMultiplier={textScale.body} style={styles.muted}>{outcomeWord(result.netResult)}</Text>
+      <View style={styles.stats}>
+        <View
+          style={styles.stat}
+          accessible
+          accessibilityLabel={`Net result ${speakSigned(result.netResult)}, ${outcomeWord(result.netResult)}`}
+        >
+          <Text maxFontSizeMultiplier={textScale.body} style={styles.muted}>Net result</Text>
+          <Text maxFontSizeMultiplier={textScale.display} style={styles.statValue}>{formatSigned(result.netResult)}</Text>
+          <Text maxFontSizeMultiplier={textScale.body} style={styles.muted}>{outcomeWord(result.netResult)}</Text>
+        </View>
+        <View
+          style={styles.stat}
+          accessible
+          accessibilityLabel={`Max drawdown ${formatUnits(result.maxDrawdown)}, includes final settlement`}
+        >
+          <Text maxFontSizeMultiplier={textScale.body} style={styles.muted}>Max drawdown</Text>
+          <Text maxFontSizeMultiplier={textScale.display} style={styles.statValue}>{formatUnits(result.maxDrawdown)}</Text>
+          <Text maxFontSizeMultiplier={textScale.body} style={styles.muted}>Includes final settlement</Text>
+        </View>
       </View>
 
       <View style={styles.ledger}>
@@ -72,8 +92,8 @@ export function SessionResult({
           </View>
         ))}
         <View style={styles.divider} />
-        <View style={styles.kv} accessible accessibilityLabel={`Net result ${speakSigned(result.netResult)}`}>
-          <Text maxFontSizeMultiplier={textScale.body} style={styles.muted}>Net result</Text>
+        <View style={styles.kv} accessible accessibilityLabel={`Net result, cash-out minus funding, ${speakSigned(result.netResult)}`}>
+          <Text maxFontSizeMultiplier={textScale.body} style={styles.muted}>Net result = cash-out − funding</Text>
           <Text maxFontSizeMultiplier={textScale.body} style={styles.kvTotal}>{formatSigned(result.netResult)}</Text>
         </View>
       </View>
@@ -100,7 +120,8 @@ const styles = StyleSheet.create({
   bannerTitle: { fontFamily: fonts.uiBold, fontSize: 14, color: palette.foreground },
   label: { fontFamily: fonts.uiBold, fontSize: 12, letterSpacing: 0.5, color: palette.mutedForeground },
   muted: { fontFamily: fonts.ui, fontSize: 14, color: palette.mutedForeground },
-  stat: { gap: space[1], padding: space[4], borderRadius: radius.lg, backgroundColor: palette.card },
+  stats: { flexDirection: 'row', flexWrap: 'wrap', gap: space[3] },
+  stat: { flexGrow: 1, flexBasis: 140, gap: space[1], padding: space[4], borderRadius: radius.lg, backgroundColor: palette.card },
   statValue: { fontFamily: fonts.display, fontSize: 28, color: palette.foreground },
   ledger: { gap: space[2], padding: space[4], borderRadius: radius.lg, backgroundColor: palette.card },
   kv: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: space[2] },
