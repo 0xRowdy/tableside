@@ -72,3 +72,5 @@ export {
 } from './craps-strategies';
 
 export { QUARANTINE_LIST } from './quarantine';
+
+export { benchmarkProfile, BENCHMARK_PROFILES } from './benchmark-profiles';

@@ -1,7 +1,7 @@
 // The practice controller's substitute-able adapters: clock, secure entropy,
 // identifiers and the access supervisor port.
 
-import type { EntropySource, Phase, QuarantineList } from '@tableside/engine';
+import type { EntropySource, Phase, QuarantineList, VersionedIdentity } from '@tableside/engine';
 
 import type { ActivityStore, CompletedPracticeSession, MeteringBasis } from './store';
 
@@ -77,8 +77,8 @@ export const PRACTICE_FUNDING_TERMS: SetupTerms = { funding: { source: 'practice
 export interface AccessSupervisor {
   /** Before a new activity is created. "uncertain" blocks the start. */
   beforeActivity(context: { readonly game: string }): Promise<AdmissionDecision>;
-  /** Before each turn begins. */
-  beforeTurn(context: { readonly activityId: string; readonly turn: number }): Promise<TurnDecision>;
+  /** Before each turn begins. `strategy` is the revision a guided activity pins; null in free play. */
+  beforeTurn(context: { readonly activityId: string; readonly turn: number; readonly strategy: VersionedIdentity | null }): Promise<TurnDecision>;
   /** Before a suspended activity resumes. Any answer but "allowed" blocks the resume and changes nothing. */
   beforeResume(context: { readonly activityId: string; readonly phase: Phase }): Promise<AccessDecision>;
   /** On an app lifecycle or access event while an activity is unfinished. */
@@ -105,6 +105,31 @@ export const alwaysAllowed: AccessSupervisor = {
   beforeEndWhileSuspended: async () => ({ status: 'allowed' }),
   phaseChanged: () => undefined,
 };
+
+/** Strategy revisions a validated legal or privacy request requires removed (spec 6 keeps the list current). */
+export interface RequiredRemovals {
+  removed(strategy: VersionedIdentity): boolean;
+}
+
+const REQUIRED_REMOVAL: AccessDenial = {
+  status: 'denied',
+  provenance: 'required-removal',
+  disposition: 'stop',
+  reason: 'Removed after a validated legal or privacy request',
+};
+
+/**
+ * A supervisor that answers `stop` before the next turn of an activity whose
+ * pinned strategy revision a required removal covers (Amendment 6 §5): the
+ * practice session takes the stop path at that turn boundary, and nothing more is
+ * asked or charged. Everything else goes to the supervisor it wraps.
+ */
+export function withRequiredRemovals(access: AccessSupervisor, removals: RequiredRemovals): AccessSupervisor {
+  return {
+    ...access,
+    beforeTurn: async (context) => (context.strategy && removals.removed(context.strategy) ? REQUIRED_REMOVAL : access.beforeTurn(context)),
+  };
+}
 
 export interface PracticeAdapters {
   readonly store: ActivityStore;

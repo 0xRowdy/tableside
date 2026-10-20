@@ -7,7 +7,7 @@
 | `apps/mobile` | The Tableside app: React Native, Expo development builds, bundled Hermes. Routes live in `src/app`. |
 | `packages/engine` | The shared game engine: portable TypeScript that runs unchanged on Hermes and Node. |
 | `packages/definitions` | Versioned game content: rule presets, built-in strategies, the blackjack reference. |
-| `packages/runner` | The headless runner that runs the engine on Node (standardized simulation arrives with spec 6). |
+| `packages/runner` | The headless runner: standardized sessions of any built-in strategy on a benchmark profile, on Node (`pnpm --filter @tableside/runner start --strategy <id> --profile <id> --key <16 hex>`). Spec 6 adds the coordinator and analysis. |
 | `packages/harness` | The cross-runtime test harness. See [cross-runtime-harness.md](cross-runtime-harness.md). |
 
 ## Toolchain

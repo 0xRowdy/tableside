@@ -281,19 +281,9 @@ function apply(state: State, command: GameCommand): Step<State> {
   switch (command.kind) {
     case 'place-wager':
       return placeWager(state, command.target, decodeMoney(command.amount));
-    case 'begin-turn': {
+    case 'begin-turn':
       if (state.wagers.length === 0) return { illegal: 'no-wager' };
-      const stream = RandomStream.restore(state.random);
-      const pocket = spinRoulette(stream, state.rules.wheel);
-      const turn = state.turn + 1;
-      return {
-        change: { phase: 'revealing-outcome', turn, outcome: { turn, pocket }, random: stream.state() },
-        facts: [
-          { kind: 'turn-began', turn, wagers: state.wagers },
-          { kind: 'outcome-generated', turn, pocket },
-        ],
-      };
-    }
+      return spin(state);
     case 'settle-turn': {
       const { balance, facts } = settle(state);
       return { change: { phase: 'settled-outcome', balance, wagers: [] }, facts };
@@ -373,7 +363,7 @@ function settle(state: State): { balance: string; facts: DomainFact[] } {
 const payoutText = (payout: bigint) => `${payout.toString()}:1`;
 
 function damage(value: Record<string, unknown>): string | undefined {
-  const { rules, identities, phase, turn, wagers, outcome } = value;
+  const { rules, identities, phase, turn, wagers, outcome, strategy } = value;
   if (!hasExactKeys(rules, ['wheel', 'limits']) || !isWheel(rules.wheel) || !isLimits(rules.limits)) return 'damaged rules';
   const recorded = (identities as Record<string, unknown>).rules;
   if (!isIdentity(recorded) || !isRuleSet({ ...recorded, wheel: rules.wheel })) return 'the rules do not match their recorded identity';
@@ -384,10 +374,25 @@ function damage(value: Record<string, unknown>): string | undefined {
   }
   if ((outcome === null) !== (turn === 0)) return 'the outcome does not match the turn count';
   const committed = phase === 'revealing-outcome' || (phase === 'final-settlement' && wagers.length > 0 && outcome !== null);
-  if (phase === 'revealing-outcome' && wagers.length === 0) return 'a revealing turn has no committed wagers';
+  // Only guided practice takes a waiting spin, with nothing at stake.
+  if (phase === 'revealing-outcome' && wagers.length === 0 && strategy === null) return 'a revealing turn has no committed wagers';
   if ((phase === 'settled-outcome' || phase === 'completed') && wagers.length > 0) return 'wagers remain after settlement';
   if (phase === 'final-settlement' && wagers.length > 0 && !committed) return 'damaged final settlement';
   return undefined;
+}
+
+/** A spin: the wheel draws a pocket and the turn's wagers (none, for a waiting spin) are committed to it. */
+function spin(state: State): Step<State> {
+  const stream = RandomStream.restore(state.random);
+  const pocket = spinRoulette(stream, state.rules.wheel);
+  const turn = state.turn + 1;
+  return {
+    change: { phase: 'revealing-outcome', turn, outcome: { turn, pocket }, random: stream.state() },
+    facts: [
+      { kind: 'turn-began', turn, wagers: state.wagers },
+      { kind: 'outcome-generated', turn, pocket },
+    ],
+  };
 }
 
 /** Single- and double-zero roulette behind the session protocol. */
@@ -401,6 +406,8 @@ export const ROULETTE: GameModule<RouletteActivityState, RoulettePermittedView> 
     return { wheel: rules.wheel as RouletteWheel, limits: { inside: { min: inside.min, max: inside.max }, outside: { min: outside.min, max: outside.max } } };
   },
   apply,
+  // A waiting spin: guided practice spins on while the strategy places nothing yet (it waits for a pattern).
+  idleTurn: spin,
   view: (state) => ({
     game: 'roulette',
     outcome: state.outcome && { turn: state.outcome.turn, pocket: state.outcome.pocket },

@@ -433,7 +433,7 @@ export class PracticeController {
         return;
       }
       // Unanswered mid-activity: uncertain, so no new turn (Amendment 5 A1).
-      const access = await this.adapters.access.beforeTurn({ activityId: state.activity.id, turn: state.turn + 1 }).catch((): AccessDenial => UNANSWERED);
+      const access = await this.adapters.access.beforeTurn({ activityId: state.activity.id, turn: state.turn + 1, strategy: state.identities.strategy }).catch((): AccessDenial => UNANSWERED);
       if (access.status !== 'allowed') {
         // No turn starts: the stop path runs, or the session suspends here, at the boundary.
         this.applyDenial(access);

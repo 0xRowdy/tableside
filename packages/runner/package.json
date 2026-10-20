@@ -12,5 +12,8 @@
   "dependencies": {
     "@tableside/definitions": "workspace:*",
     "@tableside/engine": "workspace:*"
+  },
+  "devDependencies": {
+    "@tableside/harness": "workspace:*"
   }
 }
