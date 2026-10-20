@@ -27,6 +27,7 @@ export {
   type Card,
   type RoulettePocket,
   type RouletteWheel,
+  type Rank,
   type Suit,
 } from './draws';
 export {
@@ -34,17 +35,19 @@ export {
   commission,
   compare,
   decodeMoney,
-  decodeStrategyLiteral,
   div,
   encodeMoney,
   money,
   MoneyFormatError,
   mul,
   neg,
+  sub,
+  type Money,
+} from './money';
+export {
+  decodeStrategyLiteral,
   STRATEGY_LITERAL_DIGITS,
   STRATEGY_VALUE_BITS,
   StrategyEnvelopeError,
-  sub,
   withinStrategyBits,
-  type Money,
-} from './money';
+} from './strategy-envelope';

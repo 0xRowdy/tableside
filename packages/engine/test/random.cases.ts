@@ -1,7 +1,7 @@
 // Philox4x32-10 random protocol v1. Generator vectors are the Random123
 // known-answer tests (tests/kat_vectors, "philox4x32 10" rows). Application
 // vectors were produced by an independent Python implementation of the
-// protocol (checked against the same known answers) or derived by hand from
+// protocol (test/reference/philox_reference.py, checked against the same known answers) or derived by hand from
 // the known-answer outputs, as noted per case.
 import type { TestCase } from '@tableside/harness';
 
@@ -14,17 +14,7 @@ import {
   type RandomStreamState,
 } from '../src';
 
-const ZERO = { protocol: 1, key: [0, 0], session: [0, 0] } as const;
-const PI = { protocol: 1, key: [0xa4093822, 0x299f31d0], session: [0x13198a2e, 0x03707344] } as const;
-
-function throws(run: () => unknown): string {
-  try {
-    run();
-  } catch (error) {
-    return error instanceof Error ? error.name : 'non-error';
-  }
-  return 'no error';
-}
+import { PI, throws, ZERO } from './fixtures';
 
 const hex = (words: readonly number[]) => words.map((w) => w.toString(16).padStart(8, '0'));
 

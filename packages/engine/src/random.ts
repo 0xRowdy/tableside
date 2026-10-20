@@ -7,14 +7,18 @@
 
 import { philox4x32, type Words2 } from './philox';
 
-export const RANDOM_PROTOCOL_VERSION = 1;
+export const RANDOM_PROTOCOL_VERSION = 1 as const;
 
 /** Which stream an activity draws from. Recorded durably before first content. */
 export interface RandomStreamIdentity {
-  readonly protocol: 1;
+  readonly protocol: typeof RANDOM_PROTOCOL_VERSION;
   /** [keyLow32, keyHigh32] */
   readonly key: Words2;
-  /** [sessionLow32, sessionHigh32] */
+  /**
+   * [sessionLow32, sessionHigh32]: the counter's stream-session words, not a
+   * practice session. Device activities take them from secure entropy; server
+   * runs use the session index.
+   */
   readonly session: Words2;
 }
 
@@ -46,6 +50,9 @@ const isWord = (value: unknown): value is number =>
 
 const isWords2 = (value: unknown): value is Words2 =>
   Array.isArray(value) && value.length === 2 && value.every(isWord);
+
+/** Block 2^64 - 1, the last block before the counter would wrap. */
+const isLastBlock = (low: number, high: number) => low === 0xffffffff && high === 0xffffffff;
 
 export class RandomStream {
   private readonly key: Words2;
@@ -84,7 +91,7 @@ export class RandomStream {
       throw new RandomStreamStateError('lane must be 0, 1, 2 or 3');
     }
     if (typeof state.exhausted !== 'boolean') throw new RandomStreamStateError('exhausted must be a boolean');
-    const lastTuple = state.block[0] === 0xffffffff && state.block[1] === 0xffffffff && state.lane === 3;
+    const lastTuple = isLastBlock(state.block[0], state.block[1]) && state.lane === 3;
     if (state.exhausted && !lastTuple) throw new RandomStreamStateError('only the last tuple can be exhausted');
     return new RandomStream(state);
   }
@@ -111,7 +118,7 @@ export class RandomStream {
     const value = outputs[this.lane] as number;
     if (this.lane < 3) {
       this.lane++;
-    } else if (this.blockLow === 0xffffffff && this.blockHigh === 0xffffffff) {
+    } else if (isLastBlock(this.blockLow, this.blockHigh)) {
       this.exhausted = true;
     } else {
       this.outputs = undefined;

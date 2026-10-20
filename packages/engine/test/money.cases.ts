@@ -24,21 +24,14 @@ import {
   type Money,
 } from '../src';
 
-function throws(run: () => unknown): string {
-  try {
-    run();
-  } catch (error) {
-    return error instanceof Error ? error.name : 'non-error';
-  }
-  return 'no error';
-}
+import { throws, ZERO } from './fixtures';
 
-const m = (text: string) => decodeMoney(text);
-const e = encodeMoney;
+const decode = decodeMoney;
+const encode = encodeMoney;
 
 /** Random rationals: numerators up to ~200 bits either sign, denominators up to ~100 bits. */
 function operands(count: number): Money[] {
-  const stream = RandomStream.create({ protocol: 1, key: [0x6d6f6e65, 0x79000001], session: [0, 0] });
+  const stream = RandomStream.create({ ...ZERO, key: [0x6d6f6e65, 0x79000001] });
   const big = (words: number) => {
     let value = 0n;
     const length = uniformInt(stream, words) + 1;
@@ -51,47 +44,56 @@ function operands(count: number): Money[] {
   });
 }
 
-const gcd = (a: bigint, b: bigint): bigint => {
-  // Euclid's algorithm, independent of the engine's normalization.
-  let [x, y] = [a < 0n ? -a : a, b];
-  while (y !== 0n) [x, y] = [y, x % y];
-  return x;
-};
+/** Stein's binary GCD: a different algorithm from the engine's, so normalization is checked independently. */
+function binaryGcd(a: bigint, b: bigint): bigint {
+  let [x, y] = [a < 0n ? -a : a, b < 0n ? -b : b];
+  if (x === 0n) return y;
+  if (y === 0n) return x;
+  let shift = 0n;
+  while (((x | y) & 1n) === 0n) [x, y, shift] = [x >> 1n, y >> 1n, shift + 1n];
+  while ((x & 1n) === 0n) x >>= 1n;
+  while (y !== 0n) {
+    while ((y & 1n) === 0n) y >>= 1n;
+    if (x > y) [x, y] = [y, x];
+    y -= x;
+  }
+  return x << shift;
+}
 
 export const moneyCases: TestCase[] = [
   {
     name: 'money: worked payouts are exact fractions',
     run: (t) => {
-      t.equal(e(mul(m('15'), m('3/2'))), '45/2'); // blackjack 3:2 on 15
-      t.equal(e(mul(m('7'), m('6/5'))), '42/5'); // taking odds 6:5 on 7
-      t.equal(e(mul(m('10'), m('2/3'))), '20/3'); // laying 10 against 5 or 9 at 2:3
-      t.equal(e(add(m('1/3'), m('1/6'))), '1/2');
-      t.equal(e(sub(m('1/2'), m('1/2'))), '0');
-      t.equal(e(div(m('-7'), m('2'))), '-7/2');
-      t.equal(e(neg(m('0'))), '0');
+      t.equal(encode(mul(decode('15'), decode('3/2'))), '45/2'); // blackjack 3:2 on 15
+      t.equal(encode(mul(decode('7'), decode('6/5'))), '42/5'); // taking odds 6:5 on 7
+      t.equal(encode(mul(decode('10'), decode('2/3'))), '20/3'); // laying 10 against 5 or 9 at 2:3
+      t.equal(encode(add(decode('1/3'), decode('1/6'))), '1/2');
+      t.equal(encode(sub(decode('1/2'), decode('1/2'))), '0');
+      t.equal(encode(div(decode('-7'), decode('2'))), '-7/2');
+      t.equal(encode(neg(decode('0'))), '0');
     },
   },
   {
     name: 'money: construction normalizes sign and common factors',
     run: (t) => {
-      t.equal(e(money(6n, 4n)), '3/2');
-      t.equal(e(money(6n, -4n)), '-3/2');
-      t.equal(e(money(-6n, -4n)), '3/2');
-      t.equal(e(money(0n, -5n)), '0');
-      t.equal(e(money(12n)), '12');
+      t.equal(encode(money(6n, 4n)), '3/2');
+      t.equal(encode(money(6n, -4n)), '-3/2');
+      t.equal(encode(money(-6n, -4n)), '3/2');
+      t.equal(encode(money(0n, -5n)), '0');
+      t.equal(encode(money(12n)), '12');
       t.equal(money(10n, 5n), { n: 2n, d: 1n });
       t.equal(throws(() => money(1n, 0n)), 'RangeError');
-      t.equal(throws(() => div(m('1'), m('0'))), 'RangeError');
+      t.equal(throws(() => div(decode('1'), decode('0'))), 'RangeError');
     },
   },
   {
     name: 'money: the canonical form decodes only canonical text',
     run: (t) => {
       const good = ['0', '7', '-7', '45/2', '-1/3', '123456789012345678901234567890123456789012345678901234567890/11'];
-      t.equal(good.map((text) => e(m(text))), good);
+      t.equal(good.map((text) => encode(decode(text))), good);
       const bad = ['', '-0', '01', '+1', ' 1', '1 ', '1.5', '2/4', '3/1', '1/-2', '1/0', '0/5', '1/', '/2', '-', '1//2', '١'];
       t.equal(
-        bad.map((text) => throws(() => m(text))),
+        bad.map((text) => throws(() => decode(text))),
         bad.map(() => 'MoneyFormatError'),
       );
     },
@@ -101,7 +103,7 @@ export const moneyCases: TestCase[] = [
     run: (t) => {
       const values = operands(200);
       for (const value of values) {
-        t.equal({ reduced: gcd(value.n, value.d) === 1n, positiveDenominator: value.d > 0n }, {
+        t.equal({ reduced: binaryGcd(value.n, value.d) === 1n, positiveDenominator: value.d > 0n }, {
           reduced: true,
           positiveDenominator: true,
         });
@@ -138,7 +140,7 @@ export const moneyCases: TestCase[] = [
   {
     name: 'money: payouts and balances are never capped by the strategy guards',
     run: (t) => {
-      const huge = mul(money(2n ** 300n), m('3/2'));
+      const huge = mul(money(2n ** 300n), decode('3/2'));
       t.equal(withinStrategyBits(huge), false);
       t.equal(encodeMoney(huge), (3n * 2n ** 299n).toString());
       t.equal(decodeMoney(encodeMoney(huge)), huge);
@@ -147,9 +149,9 @@ export const moneyCases: TestCase[] = [
   {
     name: 'money: commission rounds up to a whole unit with a minimum of 1',
     run: (t) => {
-      const five = m('1/20');
+      const five = decode('1/20');
       // Buy: 5% of the stake.
-      t.equal(['20', '25', '100', '101', '10', '1'].map((stake) => e(commission(m(stake), five))), [
+      t.equal(['20', '25', '100', '101', '10', '1'].map((stake) => encode(commission(decode(stake), five))), [
         '1',
         '2',
         '5',
@@ -158,23 +160,23 @@ export const moneyCases: TestCase[] = [
         '1',
       ]);
       // Standalone lay against 4/10: 5% of the potential gross win (1:2).
-      t.equal(['40', '41', '200', '205'].map((lay) => e(commission(mul(m(lay), m('1/2')), five))), [
+      t.equal(['40', '41', '200', '205'].map((lay) => encode(commission(mul(decode(lay), decode('1/2')), five))), [
         '1',
         '2',
         '5',
         '6',
       ]);
-      t.equal(throws(() => commission(m('0'), five)), 'RangeError');
-      t.equal(throws(() => commission(m('20'), m('0'))), 'RangeError');
+      t.equal(throws(() => commission(decode('0'), five)), 'RangeError');
+      t.equal(throws(() => commission(decode('20'), decode('0'))), 'RangeError');
     },
   },
   {
     name: 'money: strategy literals are size-checked before decoding (40 digits per component)',
     run: (t) => {
       const forty = '9'.repeat(40);
-      t.equal(e(decodeStrategyLiteral(forty)), forty);
-      t.equal(e(decodeStrategyLiteral(`-${forty}`)), `-${forty}`);
-      t.equal(e(decodeStrategyLiteral(`1/${'7'.repeat(40)}`)), `1/${'7'.repeat(40)}`);
+      t.equal(encode(decodeStrategyLiteral(forty)), forty);
+      t.equal(encode(decodeStrategyLiteral(`-${forty}`)), `-${forty}`);
+      t.equal(encode(decodeStrategyLiteral(`1/${'7'.repeat(40)}`)), `1/${'7'.repeat(40)}`);
       t.equal(throws(() => decodeStrategyLiteral('9'.repeat(41))), 'StrategyEnvelopeError');
       t.equal(throws(() => decodeStrategyLiteral(`1/${'7'.repeat(41)}`)), 'StrategyEnvelopeError');
       t.equal(throws(() => decodeStrategyLiteral('9'.repeat(1_000_000))), 'StrategyEnvelopeError');

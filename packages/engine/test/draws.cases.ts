@@ -1,11 +1,11 @@
 // Application vectors for random protocol v1: shuffle, dice and roulette. The
 // expected draws come from an independent Python implementation of the
-// protocol, itself checked against the Random123 known-answer vectors.
+// protocol (test/reference/philox_reference.py), itself checked against the Random123 known-answer vectors.
 import type { TestCase } from '@tableside/harness';
 
 import { canonicalShoe, rollDice, RandomStream, shuffle, spinRoulette, type Card } from '../src';
 
-const PI = { protocol: 1, key: [0xa4093822, 0x299f31d0], session: [0x13198a2e, 0x03707344] } as const;
+import { PI } from './fixtures';
 
 const RANKS = ['A', '2', '3', '4', '5', '6', '7', '8', '9', 'T', 'J', 'Q', 'K'];
 const label = (card: Card) => `${card.deck}${card.suit[0]!.toUpperCase()}${RANKS[card.rank - 1]}`;

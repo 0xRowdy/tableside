@@ -5,12 +5,14 @@ import { uniformInt, type RandomStream } from './random';
 
 export type Suit = 'clubs' | 'diamonds' | 'hearts' | 'spades';
 
+/** 1 = ace, 2-10, 11 = jack, 12 = queen, 13 = king. */
+export type Rank = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13;
+
 export interface Card {
   /** Which deck of the shoe, from 0. */
   readonly deck: number;
   readonly suit: Suit;
-  /** 1 = ace, 2-10, 11 = jack, 12 = queen, 13 = king. */
-  readonly rank: number;
+  readonly rank: Rank;
 }
 
 const SUITS: readonly Suit[] = ['clubs', 'diamonds', 'hearts', 'spades'];
@@ -21,7 +23,7 @@ export function canonicalShoe(decks: number): Card[] {
   const shoe: Card[] = [];
   for (let deck = 0; deck < decks; deck++) {
     for (const suit of SUITS) {
-      for (let rank = 1; rank <= 13; rank++) shoe.push({ deck, suit, rank });
+      for (let rank = 1; rank <= 13; rank++) shoe.push({ deck, suit, rank: rank as Rank });
     }
   }
   return shoe;
