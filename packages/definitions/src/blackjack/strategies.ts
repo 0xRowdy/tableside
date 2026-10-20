@@ -178,5 +178,12 @@ export function blackjackStrategy(preset: BlackjackPreset, mode: BlackjackMode, 
   return definition;
 }
 
-/** The reference identity a guided blackjack activity pins alongside its strategy. */
-export const BLACKJACK_REFERENCE_IDENTITY = { id: 'blackjack-coaching-reference', version: 1 } as const;
+/**
+ * The reference identity a guided blackjack activity pins alongside its
+ * strategy, derived from the frozen manifest's hash (and the reference's major
+ * version), so different reference content can never share an identity.
+ */
+export const BLACKJACK_REFERENCE_IDENTITY = {
+  id: `blackjack-coaching-reference@${BLACKJACK_REFERENCE.manifest.slice(0, 16)}`,
+  version: Number(BLACKJACK_REFERENCE.version.split('.')[0]),
+} as const;

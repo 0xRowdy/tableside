@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   BENCHMARK_PROFILES,
+  BLACKJACK_REFERENCE_IDENTITY,
   blackjackStrategy,
   CRAPS_STRATEGIES,
   ROULETTE_STRATEGIES,
@@ -48,7 +49,7 @@ describe('benchmark profiles', () => {
       const preset = profile.id.replace('benchmark-blackjack-', '') as BlackjackPreset;
       expect(profile.rules).toMatchObject({ decks: 6, penetration: 75, dealer: preset.slice(0, 3), lateSurrender: preset.endsWith('_LS'), limits: { initial: { min: '10', max: '1000' } } });
       expect(profile.rules.players).toEqual({ learnerSeat: 1, otherWagers: ['10'], strategy: seatStrategy(preset) });
-      expect(profile.reference).toEqual({ id: 'blackjack-coaching-reference', version: 1 });
+      expect(profile.reference).toEqual(BLACKJACK_REFERENCE_IDENTITY);
     }
   });
 

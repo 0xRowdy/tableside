@@ -67,7 +67,8 @@ export const BLACKJACK_S17_LS: BenchmarkProfile = {
   ...PROTOCOL,
   game: 'blackjack',
   rules: { ...S17_LS, players: { learnerSeat: 1, otherWagers: ['10'], strategy: TEST_STRATEGY } },
-  reference: { id: 'blackjack-coaching-reference', version: 1 },
+  // The shipped identity: derived from the frozen reference manifest's SHA-256 (9892826d10a6d377…).
+  reference: { id: 'blackjack-coaching-reference@9892826d10a6d377', version: 1 },
   exposureBound: '5126500',
 };
 
