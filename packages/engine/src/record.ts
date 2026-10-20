@@ -13,6 +13,8 @@ import { readPermittedView, stopCause, type ActivityState, type GameId, type Sto
 import { summarizeFunding, type FundingSource } from './funding';
 import { add, compare, decodeMoney, div, encodeMoney, money, type Money } from './money';
 import type { DomainFact } from './activity';
+import { policyOf } from './blackjack-strategy';
+import type { StrategyDefinition } from './strategy';
 
 /** The record format's version; a field change bumps it. */
 export const RECORD_VERSION = 1 as const;
@@ -159,6 +161,13 @@ function wagerOutcomes(facts: readonly DomainFact[]): WagerOutcome[] {
   return outcomes;
 }
 
+/** A guided blackjack strategy's mode, read from its playing policy; null for other games. */
+function blackjackMode(definition: StrategyDefinition): string | null {
+  const play = policyOf(definition);
+  if (definition.game !== 'blackjack' || !play) return null;
+  return play.deviations.length === 0 ? 'basic' : 'basic-with-deviations';
+}
+
 /**
  * The completed practice session record for a completed activity and every
  * fact its committed transitions produced, in commit order. Throws unless the
@@ -187,7 +196,7 @@ export function completedPracticeRecord(state: ActivityState, facts: readonly Do
     startedAt: context.startedAt,
     endedAt: context.endedAt,
     mode: run ? 'guided' : 'free-play',
-    blackjackMode: null,
+    blackjackMode: run ? blackjackMode(run.definition) : null,
     betSchedule: null,
     strategy: run && { id: run.definition.id, revision: run.definition.revision, name: run.definition.name, parameters: { ...run.parameters } },
     rules: { ...state.identities.rules, content: state.rules },
@@ -207,8 +216,11 @@ export function completedPracticeRecord(state: ActivityState, facts: readonly Do
     noBet: state.turn === 0,
     outcomes,
     guidance: strategy && {
-      // Today's strategies (roulette) assess betting decisions only; blackjack adds playing and counting.
-      adherence: { betting: { decisions: strategy.adherence.decisions, followed: strategy.adherence.followed }, playing: null, counting: null },
+      // A strategy with a playing policy (blackjack) assesses playing decisions, the others betting decisions; counting arrives with #78.
+      adherence:
+        run && 'play' in run.definition
+          ? { playing: { decisions: strategy.adherence.decisions, followed: strategy.adherence.followed }, betting: null, counting: null }
+          : { betting: { decisions: strategy.adherence.decisions, followed: strategy.adherence.followed }, playing: null, counting: null },
       departures: strategy.departures,
     },
   };

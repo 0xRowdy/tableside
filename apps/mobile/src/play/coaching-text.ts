@@ -3,7 +3,7 @@
 // situation, the matching instruction, the prescription and the fallback.
 // Nothing here judges or praises, and nothing is added that the facts don't hold.
 
-import type { CycleEnd, Explanation, PendingCorrection, PendingStrategyAction, StrategyView, Wager } from '@tableside/engine';
+import type { BetCorrection, CycleEnd, Explanation, PendingStrategyAction, StrategyView, Wager } from '@tableside/engine';
 
 import { targetName } from './roulette-text';
 import { formatUnits } from './units';
@@ -41,7 +41,7 @@ export function prescriptionLine(strategyName: string, explanation: Explanation)
 const RESULT_WORDS = { win: 'won', loss: 'lost', push: 'broke even' } as const;
 
 /** The situation, the matching instruction and what the player submitted, as the correction's body. */
-export function correctionLines(correction: PendingCorrection): string[] {
+export function correctionLines(correction: BetCorrection): string[] {
   const { explanation, actual } = correction;
   const lines: string[] = [];
   const { available, subjects } = explanation.situation;
@@ -57,7 +57,7 @@ export function correctionLines(correction: PendingCorrection): string[] {
 }
 
 /** The retry button: what taking the move back does. */
-export function retryLabel(correction: PendingCorrection): string {
+export function retryLabel(correction: BetCorrection): string {
   const prescription = correction.explanation.prescription;
   return prescription.status === 'prescribed' ? `Take it back & bet ${betsText(prescription.bets)}` : 'Take my bets back';
 }
@@ -69,10 +69,45 @@ export function overrideNote(progression: boolean): string {
     : '"Keep my bets" is an override, recorded once. The spin goes ahead, and the strategy coaches your next spin.';
 }
 
+/** What a strategy decision is in each game: a spin, or a blackjack playing decision. */
+export type DecisionUnit = 'spin' | 'decision';
+
 /** Adherence in words, kept apart from winnings. */
-export function adherenceText(adherence: StrategyView['adherence']): string {
-  if (adherence.decisions === 0) return 'No strategy spins yet';
-  return `Followed ${adherence.followed} of ${adherence.decisions} ${adherence.decisions === 1 ? 'spin' : 'spins'}`;
+export function adherenceText(adherence: StrategyView['adherence'], unit: DecisionUnit = 'spin'): string {
+  if (adherence.decisions === 0) return `No strategy ${unit}s yet`;
+  return `Followed ${adherence.followed} of ${adherence.decisions} ${adherence.decisions === 1 ? unit : `${unit}s`}`;
+}
+
+/** The words a correction pause shows, whatever the game. */
+export interface CorrectionCopy {
+  /** "Marcus · guided practice, basic strategy". */
+  readonly coach: string;
+  /** "Before your spin", "Before your stand". */
+  readonly kicker: string;
+  readonly headline: string;
+  readonly lines: readonly string[];
+  /** A short fallback line set apart: "If you can't double: hit." */
+  readonly fallback: string | null;
+  readonly retry: string;
+  readonly override: string;
+  readonly note: string;
+  /** Why the taught index differs from published charts, when it does. */
+  readonly why: readonly string[];
+}
+
+/** A betting correction's copy (roulette, craps). */
+export function betCorrectionCopy(strategyName: string, correction: BetCorrection, overrideEndsCycle: boolean): CorrectionCopy {
+  return {
+    coach: `Marcus · guided practice, ${strategyName}`,
+    kicker: 'Before your spin',
+    headline: prescriptionLine(strategyName, correction.explanation),
+    lines: correctionLines(correction),
+    fallback: null,
+    retry: retryLabel(correction),
+    override: 'Keep my bets',
+    note: overrideNote(overrideEndsCycle),
+    why: [],
+  };
 }
 
 /** The strategy's choices: "Black", "1st dozen and 2nd dozen". */

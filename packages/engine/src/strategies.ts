@@ -5,6 +5,7 @@
 // situation); the session protocol and these operations reach games only
 // through this registry.
 
+import { BLACKJACK_STRATEGY, playSituationProblem, policyOf, prescribePlay, type BlackjackPlayRules, type PlayExplanation } from './blackjack-strategy';
 import { ROULETTE_STRATEGY } from './roulette-strategy';
 import {
   compatibilityWith,
@@ -22,6 +23,7 @@ import {
 
 const GAMES: Readonly<Record<string, StrategyGame<never>>> = {
   roulette: ROULETTE_STRATEGY as StrategyGame<never>,
+  blackjack: BLACKJACK_STRATEGY as unknown as StrategyGame<never>,
 };
 
 /** The strategy game for a game id, when that game supports guided practice. */
@@ -83,4 +85,26 @@ export function explainPrescription(definition: StrategyDefinition, parameters: 
   const progressError = progressProblem(definition, progress);
   if (progressError) return { ok: false, error: progressError };
   return { ok: true, explanation: prescribe(vocabulary, definition, parameters as Record<string, string>, situation, progress) };
+}
+
+export type ExplainPlayResult = { readonly ok: true; readonly explanation: PlayExplanation } | { readonly ok: false; readonly error: string };
+
+/**
+ * Explain play: what a validated blackjack strategy prescribes for one playing
+ * decision (the hand, the up card, hands held, balance and stake, and the
+ * shoe's exposed running count), after legal and funding fallbacks, with the
+ * structured explanation facts. Pure and read-only; it matches what the
+ * activity assesses for the same decision.
+ */
+export function explainPlay(definition: StrategyDefinition, situation: unknown): ExplainPlayResult {
+  if (gameOf(definition) !== GAMES.blackjack) return { ok: false, error: 'no playing policy for this game' };
+  if (!validateStrategy(definition).runnable) return { ok: false, error: 'the strategy is not runnable' };
+  const policy = policyOf(definition);
+  if (!policy) return { ok: false, error: 'the strategy has no playing policy' };
+  const problem = playSituationProblem(situation);
+  if (problem) return { ok: false, error: problem };
+  const playing = situation as Parameters<typeof prescribePlay>[1];
+  const table = definition.table as BlackjackPlayRules;
+  if (table.dealer !== playing.rules.dealer || table.lateSurrender !== playing.rules.lateSurrender) return { ok: false, error: "the strategy isn't declared for these rules" };
+  return { ok: true, explanation: prescribePlay(policy, playing) };
 }

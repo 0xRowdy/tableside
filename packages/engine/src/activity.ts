@@ -21,6 +21,7 @@ import {
   isBlackjackAction,
   type BlackjackAction,
   type BlackjackActivityState,
+  type BlackjackCount,
   type BlackjackDomainFact,
   type BlackjackIllegalActionReason,
   type BlackjackInsuranceOffer,
@@ -29,6 +30,7 @@ import {
   type BlackjackShoeView,
   type BlackjackTableView,
 } from './blackjack';
+import { moveCommand, type PlayExplanation, type PlayMove } from './blackjack-strategy';
 import { canonicalJson } from './canonical';
 import { CRAPS, type CrapsActivityState, type CrapsDomainFact, type CrapsIllegalActionReason, type CrapsRuleSet, type CrapsTable, type CrapsOutcome } from './craps';
 import type { RoulettePocket } from './draws';
@@ -61,6 +63,7 @@ import {
   type Explanation,
   type HeldGroup,
   type PauseReason,
+  type PlayAssessment,
   type PrescribedBet,
   type StrategyDefinition,
   type StrategyGame,
@@ -137,8 +140,8 @@ export interface Receipt {
   readonly disposition: 'applied' | 'assessed';
 }
 
-/** A departing move held for retry or override. Its id becomes the departure's. */
-export interface PendingCorrection {
+/** A departing betting move held for retry or override. Its id becomes the departure's. */
+export interface BetCorrection {
   readonly id: string;
   /** The turn the move would begin. */
   readonly turn: number;
@@ -147,11 +150,25 @@ export interface PendingCorrection {
   readonly actual: readonly Wager[];
 }
 
-/** A strategy departure: recorded once, never edited. */
-export interface StrategyDeparture extends PendingCorrection {
-  readonly resolution: 'retried' | 'overridden';
+/** A departing playing move (blackjack) held before it executes. Its id becomes the departure's. */
+export interface PlayCorrection {
+  readonly id: string;
+  /** The turn (round) the decision is in. */
+  readonly turn: number;
+  /** The decision's index among the strategy's assessed decisions. */
+  readonly decision: number;
+  readonly explanation: PlayExplanation;
+  /** The move the player made. */
+  readonly actual: PlayMove;
 }
 
+export type PendingCorrection = BetCorrection | PlayCorrection;
+
+/** True for a playing decision's correction (blackjack); otherwise it holds a betting move. */
+export const isPlayCorrection = (correction: PendingCorrection): correction is PlayCorrection => 'decision' in correction;
+
+/** A strategy departure: recorded once, never edited. */
+export type StrategyDeparture = PendingCorrection & { readonly resolution: 'retried' | 'overridden' };
 /**
  * Why a strategy cycle ended: its completion rule matched; its next stake is
  * past a declared cap, or its stop rule matched (it is exhausted); a
@@ -186,7 +203,7 @@ export interface StrategyRun extends StrategySelection {
   readonly correction: PendingCorrection | null;
   /** The departure log, in order. */
   readonly departures: readonly StrategyDeparture[];
-  /** Betting decisions assessed (turns begun under coaching). */
+  /** Decisions assessed: turns begun under betting instructions, and playing decisions. */
   readonly decisions: number;
 }
 
@@ -350,13 +367,10 @@ export type DomainFact =
   | { readonly kind: 'funding-added'; readonly amount: string; readonly cumulative: string; readonly balance: string }
   | { readonly kind: 'activity-completed'; readonly balance: string }
   /** A departing move was held before it executed. */
-  | {
-      readonly kind: 'correction-offered';
-      readonly departureId: string;
-      readonly turn: number;
-      readonly explanation: Explanation;
-      readonly actual: readonly Wager[];
-    }
+  | ({ readonly kind: 'correction-offered'; readonly departureId: string; readonly turn: number } & (
+      | { readonly explanation: Explanation; readonly actual: readonly Wager[] }
+      | { readonly decision: number; readonly explanation: PlayExplanation; readonly actual: PlayMove }
+    ))
   | { readonly kind: 'departure-recorded'; readonly departure: StrategyDeparture }
   /** The strategy now holds a pending action (or a different one) and places no new bets for it. */
   | ({ readonly kind: 'strategy-paused' } & PendingStrategyAction)
@@ -424,6 +438,8 @@ export interface BlackjackPermittedView extends PermittedViewBase {
   /** The open insurance or even-money offer, before the peek; null otherwise. */
   readonly insuranceOffer: BlackjackInsuranceOffer | null;
   readonly shoe: BlackjackShoeView;
+  /** The count, only where the pinned strategy has Tableside supply it (basic with deviations); null otherwise. */
+  readonly count: BlackjackCount | null;
 }
 
 export type PermittedView = RoulettePermittedView | CrapsPermittedView | BlackjackPermittedView;
@@ -500,7 +516,9 @@ const moduleOf = (state: ActivityState) => GAMES[state.identities.game];
 function legalCommands(state: ActivityState): readonly CommandKind[] {
   const legal = GUIDED_PHASES.has(state.phase) ? LEGAL[state.phase] : (moduleOf(state).legal?.(state, LEGAL[state.phase]) ?? LEGAL[state.phase]);
   const running = state.strategy !== null && state.strategy.status !== 'stopped';
-  return legal.filter((kind) => (kind !== 'rebuy' || rebuysOffered(state.funding)) && (kind !== 'stop-strategy' || running));
+  // A held playing move is part of a hand in play: the hand finishes before the session can stop.
+  const midHand = state.phase === 'correction' && state.strategy?.correction != null && isPlayCorrection(state.strategy.correction);
+  return legal.filter((kind) => (kind !== 'rebuy' || rebuysOffered(state.funding)) && (kind !== 'stop-strategy' || running) && !(midHand && kind === 'request-stop'));
 }
 
 const LEGAL: Record<Phase, readonly CommandKind[]> = {
@@ -729,7 +747,8 @@ function guidedStep(state: ActivityState, command: Exclude<Command, { readonly k
   const apply = (target: ActivityState, gameCommand: GameCommand) => game.apply(target, gameCommand);
   switch (command.kind) {
     case 'begin-turn': {
-      if (run.status !== 'active' || state.wagers.length === 0) return undefined;
+      // Without betting instructions the player chooses the wagers; only the play is assessed.
+      if (run.status !== 'active' || state.wagers.length === 0 || leavesBetting(run.definition)) return undefined;
       const explanation = explain(state, run);
       if (follows(explanation, state.wagers)) {
         return { step: withStrategy(apply(state, command), { ...run, coachedTurn: true, decisions: run.decisions + 1 }), assessed: false };
@@ -744,8 +763,32 @@ function guidedStep(state: ActivityState, command: Exclude<Command, { readonly k
         assessed: true,
       };
     }
+    case 'play':
+    case 'place-wager': {
+      if (run.status !== 'active') return undefined;
+      const assessment = gameStrategy(state).assessPlay?.(state, run.definition, command) as PlayAssessment<PlayExplanation, PlayMove, Command> | undefined;
+      if (!assessment) return undefined;
+      const applied = apply(state, command as GameCommand);
+      // An illegal move is an attempt, recorded as such; it is no decision.
+      if ('illegal' in applied) return { step: applied, assessed: false };
+      if (assessment.follows) return { step: withStrategy(applied, { ...run, decisions: run.decisions + 1 }), assessed: false };
+      // A departing move: hold it, before anything executes or is dealt.
+      const correction: PlayCorrection = {
+        id: `${state.activity.id}/departure/${state.sequence}`,
+        turn: state.turn,
+        decision: run.decisions,
+        explanation: assessment.explanation,
+        actual: assessment.actual,
+      };
+      const { explanation, actual, decision } = correction;
+      return {
+        step: { change: { phase: 'correction', strategy: { ...run, correction } }, facts: [{ kind: 'correction-offered', departureId: correction.id, turn: correction.turn, decision, explanation, actual }] },
+        assessed: true,
+      };
+    }
     case 'retry-correction': {
       const correction = run.correction as PendingCorrection;
+      if (isPlayCorrection(correction)) return { step: resolvePlay(state, run, correction, 'retried'), assessed: false };
       const departure: StrategyDeparture = { ...correction, resolution: 'retried' };
       const prescription = correction.explanation.prescription;
       const wanted = prescription.status === 'prescribed' ? prescription.bets : [];
@@ -767,7 +810,9 @@ function guidedStep(state: ActivityState, command: Exclude<Command, { readonly k
       return { step: { change: { phase: 'open-decision', balance: current.balance, wagers: current.wagers, strategy }, facts }, assessed: false };
     }
     case 'override-correction': {
-      const departure: StrategyDeparture = { ...(run.correction as PendingCorrection), resolution: 'overridden' };
+      const held = run.correction as PendingCorrection;
+      if (isPlayCorrection(held)) return { step: resolvePlay(state, run, held, 'overridden'), assessed: false };
+      const departure: StrategyDeparture = { ...held, resolution: 'overridden' };
       // Overriding a progression ends its cycle until an explicit restart; a flat strategy just goes on.
       const progression = overrideEndsCycle(run.definition);
       const strategy: StrategyRun = {
@@ -840,6 +885,23 @@ function guidedStep(state: ActivityState, command: Exclude<Command, { readonly k
   }
 }
 
+/** A strategy without betting instructions leaves the wagers to the player (blackjack's playing policies): betting isn't assessed. */
+const leavesBetting = (definition: StrategyDefinition) => definition.instructions.length === 0;
+
+/**
+ * A held playing move resolved: the departure is recorded once and the
+ * decision is made now, with the prescribed play (retry) or the player's own
+ * (override). A blackjack override applies to that one decision; the strategy
+ * coaches the next.
+ */
+function resolvePlay(state: ActivityState, run: StrategyRun, correction: PlayCorrection, resolution: StrategyDeparture['resolution']): AnyStep {
+  const departure: StrategyDeparture = { ...correction, resolution };
+  const move = resolution === 'retried' ? correction.explanation.prescribed : correction.actual;
+  const applied = moduleOf(state).apply({ ...state, phase: 'open-decision' } as ActivityState, moveCommand(move) as GameCommand);
+  const strategy: StrategyRun = { ...run, correction: null, departures: [...run.departures, departure], decisions: run.decisions + 1 };
+  return withStrategy(applied, strategy, [{ kind: 'departure-recorded', departure }]);
+}
+
 const gameStrategy = (state: ActivityState) => strategyGame(state.identities.game) as unknown as StrategyGame<ActivityState>;
 
 /** What the strategy prescribes for the decision the activity waits on (the same function Explain prescription runs). */
@@ -878,7 +940,7 @@ function cycleEndAfter(state: ActivityState, definition: StrategyDefinition, pro
 /** The strategy's pending action while it waits on a betting decision, if it holds one. */
 function pendingAction(state: ActivityState): PendingStrategyAction | null {
   const run = state.strategy;
-  if (!run || run.status !== 'active' || !WAITING.has(state.phase)) return null;
+  if (!run || run.status !== 'active' || leavesBetting(run.definition) || !WAITING.has(state.phase)) return null;
   return heldAction(state, run);
 }
 
@@ -896,8 +958,10 @@ function heldAction(state: ActivityState, run: StrategyRun): PendingStrategyActi
 
 function strategyView(state: ActivityState, run: StrategyRun): StrategyView {
   const { definition } = run;
-  // A departure at a turn still waiting to begin isn't a decision yet.
-  const departedTurns = [...new Set(run.departures.map((departure) => departure.turn))].filter((turn) => turn <= state.turn);
+  // A betting departure at a turn still waiting to begin isn't a decision yet; each playing departure is its own decision.
+  const departedDecisions = new Set(
+    run.departures.flatMap((departure) => (isPlayCorrection(departure) ? [`play ${departure.decision}`] : departure.turn <= state.turn ? [`turn ${departure.turn}`] : [])),
+  );
   return {
     id: definition.id,
     revision: definition.revision,
@@ -914,7 +978,7 @@ function strategyView(state: ActivityState, run: StrategyRun): StrategyView {
     exhaustion: run.status === 'cycle-ended' && (run.cycleEnd === 'cap' || run.cycleEnd === 'stop') ? heldAction(state, run) : null,
     correction: run.correction,
     departures: run.departures,
-    adherence: { decisions: run.decisions, followed: run.decisions - departedTurns.length, departures: run.departures.length },
+    adherence: { decisions: run.decisions, followed: run.decisions - departedDecisions.size, departures: run.departures.length },
     overrideAffected: run.departures.some((departure) => departure.resolution === 'overridden'),
     overrideEndsCycle: overrideEndsCycle(definition),
   };
@@ -1085,6 +1149,11 @@ function stateDamage(value: unknown): string | undefined {
   return undefined;
 }
 
+/** A stored playing move: an action, or insuring with an amount. */
+const isMove = (value: unknown): value is PlayMove =>
+  hasExactKeys(value, ['action', 'amount']) &&
+  (value.action === 'insure' ? parseMoney(value.amount) !== undefined : isBlackjackAction(value.action) && value.amount === null);
+
 const RUN_KEYS = ['definition', 'parameters', 'status', 'cycleEnd', 'progress', 'cycle', 'coachedTurn', 'correction', 'departures', 'decisions'];
 
 const CYCLE_ENDS: readonly unknown[] = ['completed', 'cap', 'stop', 'override', 'envelope'];
@@ -1146,12 +1215,23 @@ function strategyDamage(state: ActivityState, identity: VersionedIdentity | null
   const ids = new Set<string>();
   if (!Array.isArray(run.departures)) return 'damaged departure log';
   for (const departure of run.departures as unknown[]) {
-    if (!hasExactKeys(departure, ['id', 'turn', 'explanation', 'actual', 'resolution']) || !isText(departure.id) || ids.has(departure.id)) return 'damaged departure log';
-    if (!isCount(departure.turn) || !isRecord(departure.explanation) || !Array.isArray(departure.actual)) return 'damaged departure log';
+    const play = isRecord(departure) && 'decision' in departure;
+    const keys = ['id', 'turn', 'explanation', 'actual', 'resolution', ...(play ? ['decision'] : [])];
+    if (!hasExactKeys(departure, keys) || !isText(departure.id) || ids.has(departure.id)) return 'damaged departure log';
+    if (!isCount(departure.turn) || !isRecord(departure.explanation) || !(play ? isCount(departure.decision) && isMove(departure.actual) : Array.isArray(departure.actual))) return 'damaged departure log';
     if (departure.resolution !== 'retried' && departure.resolution !== 'overridden') return 'damaged departure log';
     ids.add(departure.id);
   }
   if (state.phase !== 'correction') return run.correction === null ? undefined : 'damaged correction';
+  if (isRecord(run.correction) && 'decision' in run.correction) {
+    // A held playing move is exactly what the pinned policy says about this decision.
+    const actual = run.correction.actual;
+    if (status !== 'active' || !isMove(actual)) return 'damaged correction';
+    const assessment = gameStrategy(state).assessPlay?.(state, definition, moveCommand(actual)) as PlayAssessment<PlayExplanation, PlayMove, Command> | undefined;
+    if (!assessment || assessment.follows) return 'damaged correction';
+    const held: PlayCorrection = { id: `${state.activity.id}/departure/${state.sequence - 1}`, turn: state.turn, decision: run.decisions as number, explanation: assessment.explanation, actual: assessment.actual };
+    return canonicalJson(run.correction) !== canonicalJson(held) || ids.has(held.id) ? 'damaged correction' : undefined;
+  }
   // A held move is exactly what the pinned strategy says about this state.
   const expected: PendingCorrection = {
     id: `${state.activity.id}/departure/${state.sequence - 1}`,

@@ -1,9 +1,19 @@
-// Blackjack session setup (design frame S1-02 i1tnq, free play): the four
-// named presets, which the dealer and surrender switches also set; penetration
-// and other players as steppers; editable initial-wager limits; the house edge
-// of these rules; and a fresh buy-in. Guided modes arrive with #77 and #78.
+// Blackjack session setup (design frame S1-02 i1tnq): free play or guided
+// practice in basic strategy or basic with deviations (the counting modes
+// arrive with #78); the four named presets, which the dealer and surrender
+// switches also set; penetration and other players as steppers; editable
+// initial-wager limits; the house edge of these rules; and a fresh buy-in.
+// Guided practice pins the preset's built-in strategy; the bets stay the player's.
 
-import { BLACKJACK_LIMITS, blackjackHouseEdge, blackjackRules, DEFAULT_PENETRATION, type BlackjackPreset } from '@tableside/definitions';
+import {
+  BLACKJACK_LIMITS,
+  blackjackHouseEdge,
+  blackjackRules,
+  blackjackStrategy,
+  DEFAULT_PENETRATION,
+  type BlackjackMode,
+  type BlackjackPreset,
+} from '@tableside/definitions';
 import { MAX_OTHER_PLAYERS, PENETRATIONS } from '@tableside/engine';
 import { router } from 'expo-router';
 import { useState } from 'react';
@@ -39,6 +49,8 @@ export function BlackjackSetup({ problem, problemReason = null, busy }: { proble
   const { controller } = usePractice();
   const { fontScale } = useWindowDimensions();
   const [preset, setPreset] = useState<BlackjackPreset>('S17_LS');
+  const [guided, setGuided] = useState(false);
+  const [mode, setMode] = useState<BlackjackMode>('basic');
   const [penetration, setPenetration] = useState(DEFAULT_PENETRATION);
   const [others, setOthers] = useState(0);
   const limits = useLimits(GROUPS, BLACKJACK_LIMITS);
@@ -52,12 +64,39 @@ export function BlackjackSetup({ problem, problemReason = null, busy }: { proble
 
   const start = () => {
     if (!accepted) return;
-    void funding.start((funds) => controller.start({ game: 'blackjack', ...funds, rules: blackjackRules(preset, penetration, others, accepted) }));
+    const strategy = guided ? { strategy: { definition: blackjackStrategy(preset, mode), parameters: {} } } : {};
+    void funding.start((funds) => controller.start({ game: 'blackjack', ...funds, rules: blackjackRules(preset, penetration, others, accepted), ...strategy }));
   };
 
   return (
     <Screen>
-      <SetupHeader title="Blackjack" subtitle="New session · free play" onBack={() => router.navigate('/')} />
+      <SetupHeader title="Blackjack" subtitle={`New session · ${guided ? 'guided practice' : 'free play'}`} onBack={() => router.navigate('/')} />
+
+      <Section label="HOW DO YOU WANT TO PLAY?">
+        <ChoiceGroup
+          label="How do you want to play?"
+          options={[
+            { label: 'Free play', selected: !guided, onPress: () => setGuided(false) },
+            { label: 'Guided practice', selected: guided, onPress: () => setGuided(true) },
+          ]}
+        />
+        {guided && (
+          <>
+            <ChoiceGroup
+              label="Strategy"
+              options={[
+                { label: 'Basic strategy', selected: mode === 'basic', onPress: () => setMode('basic') },
+                { label: 'Basic with deviations', selected: mode === 'basic-with-deviations', onPress: () => setMode('basic-with-deviations') },
+              ]}
+            />
+            <Help>
+              {mode === 'basic'
+                ? 'Rule-specific basic strategy for the preset below. Tableside pauses before a play that departs from it. Your bets are your own.'
+                : `Basic strategy plus the certified ${hits ? 'H17' : 'S17'} deviations${surrender ? ' and the Fab 4 surrenders' : ''}. Tableside supplies the true count before every deal and decision.`}
+            </Help>
+          </>
+        )}
+      </Section>
 
       <Section label="TABLE RULES">
         <ChoiceGroup
@@ -106,7 +145,7 @@ export function BlackjackSetup({ problem, problemReason = null, busy }: { proble
       <FundingSection funding={funding} opening={opening} problem={problem} problemReason={problemReason} />
       <LimitsBanner limits={limits} />
 
-      <Button label="Start free play" stretch disabled={busy || !accepted || funding.short} onPress={start} />
+      <Button label={guided ? 'Start guided practice' : 'Start free play'} stretch disabled={busy || !accepted || funding.short} onPress={start} />
     </Screen>
   );
 }
