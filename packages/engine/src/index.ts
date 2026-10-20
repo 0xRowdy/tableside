@@ -15,6 +15,8 @@ export {
   STATE_SCHEMA_VERSION,
   type ActivitySpecification,
   type ActivityState,
+  type BlackjackActivitySpecification,
+  type BlackjackPermittedView,
   type CrapsActivitySpecification,
   type CrapsPermittedView,
   type GameId,
@@ -27,8 +29,12 @@ export {
   type CommandEnvelope,
   type CommandKind,
   type DomainFact,
+  type GameCommand,
   type Phase,
   type PermittedView,
+  type PermittedViewBase,
+  type StateOf,
+  type ViewOf,
   type Receipt,
   type IllegalActionReason,
   type RejectionReason,
@@ -45,6 +51,23 @@ export {
   type FundingSource,
   type RebuyRefusal,
 } from './funding';
+export {
+  BLACKJACK_RULES,
+  PENETRATIONS,
+  type BlackjackAction,
+  type BlackjackActivityState,
+  type BlackjackDomainFact,
+  type BlackjackHand,
+  type BlackjackIllegalActionReason,
+  type BlackjackRound,
+  type BlackjackRoundView,
+  type BlackjackRuleSet,
+  type BlackjackShoeView,
+  type BlackjackTable,
+  type BlackjackTableView,
+  type HandTotal,
+  type Peek,
+} from './blackjack';
 export {
   CRAPS_POINTS,
   ODDS_CAPS,
@@ -110,6 +133,7 @@ export {
   sub,
   type Money,
 } from './money';
+export { canonicalJson } from './canonical';
 export { sha256Hex } from './sha256';
 export {
   decodeStrategyLiteral,

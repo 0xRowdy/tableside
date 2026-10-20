@@ -14,6 +14,7 @@ import type { ActivePracticeSnapshot, Suspension } from '@/practice/controller';
 import { usePractice } from '@/practice/PracticeProvider';
 import { fonts, palette, radius, space, textScale } from '@/theme/tokens';
 
+import { statusText } from './blackjack-text';
 import { crapsStatus } from './craps-text';
 import { EndSessionDialog } from './EndSessionDialog';
 import { formatUnits, STATUS, totalOnTable } from './roulette-text';
@@ -22,6 +23,7 @@ import { formatUnits, STATUS, totalOnTable } from './roulette-text';
 const WORDS = {
   roulette: { game: 'roulette', title: 'Roulette', turn: 'spin', drawn: 'spun', same: 'Same rules, wheel and spins as before.' },
   craps: { game: 'craps', title: 'Craps', turn: 'roll', drawn: 'rolled', same: 'Same rules, point and dice as before.' },
+  blackjack: { game: 'blackjack', title: 'Blackjack', turn: 'round', drawn: 'dealt', same: 'Same rules, shoe and cards as before.' },
 } as const;
 
 type Words = (typeof WORDS)[keyof typeof WORDS];
@@ -39,7 +41,7 @@ export function SuspendedSession({ snapshot, suspension }: { snapshot: ActivePra
   const [confirming, setConfirming] = useState(false);
   const { view, busy } = snapshot;
   const words = WORDS[view.game];
-  const status = view.game === 'craps' ? crapsStatus(view) : STATUS[view.phase];
+  const status = view.game === 'craps' ? crapsStatus(view) : view.game === 'blackjack' ? statusText(view) : STATUS[view.phase];
 
   return (
     <Screen>

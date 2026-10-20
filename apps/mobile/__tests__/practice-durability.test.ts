@@ -3,10 +3,10 @@
 // over a reopened in-memory store (same durable data, nothing in flight).
 // Spin outcomes come from the Random123 "pi digits" stream: 27 (red), then 0.
 
-import { createActivity, encodeCheckpoint, readPermittedView, decodeCheckpoint, type DomainFact } from '@tableside/engine';
+import { createActivity, encodeCheckpoint, readPermittedView, decodeCheckpoint, type DomainFact, type RoulettePermittedView } from '@tableside/engine';
 import { SINGLE_ZERO_ROULETTE } from '@tableside/definitions';
 
-import { PracticeController, REVEAL_MS, SAVE_RETRY_MS, type PracticeSnapshot } from '@/practice/controller';
+import { PracticeController, REVEAL_MS, SAVE_RETRY_MS, type ActiveSnapshot, type PracticeSnapshot } from '@/practice/controller';
 import type { ActivityStore } from '@/practice/store';
 import { alwaysAllowed, type AccessSupervisor } from '@/practice/adapters';
 import { FakeClock, PI_WORDS, substituteAdapters } from '@/practice/testing/substitutes';
@@ -40,9 +40,10 @@ async function restart(adapters: Adapters) {
   return next;
 }
 
-function active(snapshot: PracticeSnapshot) {
+function active(snapshot: PracticeSnapshot): ActiveSnapshot<RoulettePermittedView> {
   if (snapshot.status !== 'active') throw new Error(`expected an active session, got ${snapshot.status}`);
-  return snapshot;
+  if (snapshot.view.game !== 'roulette') throw new Error('expected a roulette session');
+  return { ...snapshot, view: snapshot.view };
 }
 
 async function waitFor(condition: () => boolean): Promise<void> {

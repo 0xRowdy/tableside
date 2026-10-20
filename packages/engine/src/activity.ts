@@ -9,6 +9,18 @@
 // game's part of the view and of checkpoint validation) sits behind a
 // GameModule, one per game, chosen by the activity's pinned game identity.
 
+import {
+  BLACKJACK,
+  isBlackjackAction,
+  type BlackjackAction,
+  type BlackjackActivityState,
+  type BlackjackDomainFact,
+  type BlackjackIllegalActionReason,
+  type BlackjackRoundView,
+  type BlackjackRuleSet,
+  type BlackjackShoeView,
+  type BlackjackTableView,
+} from './blackjack';
 import { canonicalJson } from './canonical';
 import { CRAPS, type CrapsActivityState, type CrapsDomainFact, type CrapsIllegalActionReason, type CrapsRuleSet, type CrapsTable, type CrapsOutcome } from './craps';
 import type { RoulettePocket } from './draws';
@@ -65,8 +77,13 @@ export interface CrapsActivitySpecification extends SpecificationBase {
   readonly rules: CrapsRuleSet;
 }
 
+export interface BlackjackActivitySpecification extends SpecificationBase {
+  readonly game: 'blackjack';
+  readonly rules: BlackjackRuleSet;
+}
+
 /** Everything an activity pins at creation. */
-export type ActivitySpecification = RouletteActivitySpecification | CrapsActivitySpecification;
+export type ActivitySpecification = RouletteActivitySpecification | CrapsActivitySpecification | BlackjackActivitySpecification;
 
 export type GameId = ActivitySpecification['game'];
 
@@ -113,12 +130,17 @@ export interface ActivityStateBase<G extends GameId> {
   readonly receipts: readonly Receipt[];
 }
 
-export type ActivityState = RouletteActivityState | CrapsActivityState;
+export type ActivityState = RouletteActivityState | CrapsActivityState | BlackjackActivityState;
+
+/** The state of one game's activity. */
+export type StateOf<G extends GameId> = Extract<ActivityState, { readonly identities: { readonly game: G } }>;
 
 export type Command =
   /** Sets the stake on a target; amount "0" takes the wager down. */
   | { readonly kind: 'place-wager'; readonly target: string; readonly amount: string }
   | { readonly kind: 'begin-turn' }
+  /** A blackjack playing action for the hand awaiting a decision. */
+  | { readonly kind: 'play'; readonly action: BlackjackAction }
   /** The automatic settle step after the reveal; the controller issues it, never a tap. */
   | { readonly kind: 'settle-turn' }
   | { readonly kind: 'request-stop' }
@@ -126,8 +148,8 @@ export type Command =
   /** Adds funds to a practice-funding session while it waits for input. Never places or settles anything. */
   | { readonly kind: 'rebuy'; readonly amount: string };
 
-/** The commands a game module applies; the protocol itself handles funding. */
-export type GameCommand = Exclude<Command, { readonly kind: 'rebuy' }>;
+/** The commands a game module applies; the protocol itself handles funding. Only blackjack takes playing actions. */
+export type GameCommand = Exclude<Command, { readonly kind: 'rebuy' | 'play' }>;
 
 export type CommandKind = Command['kind'];
 
@@ -148,7 +170,8 @@ export type IllegalActionReason =
   | 'no-wager-to-remove'
   | 'no-wager'
   | 'over-funding-ceiling'
-  | CrapsIllegalActionReason;
+  | CrapsIllegalActionReason
+  | BlackjackIllegalActionReason;
 
 export type DomainFact =
   | { readonly kind: 'wager-changed'; readonly target: string; readonly amount: string; readonly previous: string }
@@ -172,18 +195,19 @@ export type DomainFact =
   /** A rebuy: funds added, not a win. */
   | { readonly kind: 'funding-added'; readonly amount: string; readonly cumulative: string; readonly balance: string }
   | { readonly kind: 'activity-completed'; readonly balance: string }
-  | CrapsDomainFact;
+  | CrapsDomainFact
+  | BlackjackDomainFact;
 
 export type RejectionReason = 'malformed' | 'stale' | 'not-legal-in-phase' | 'conflicting-command-id';
 
-export type AdvanceResult =
-  | { readonly status: 'committed'; readonly state: ActivityState; readonly facts: readonly DomainFact[]; readonly receipt: Receipt }
+export type AdvanceResult<S extends ActivityState = ActivityState> =
+  | { readonly status: 'committed'; readonly state: S; readonly facts: readonly DomainFact[]; readonly receipt: Receipt }
   /** The command id was already committed; nothing changes and nothing is drawn. */
   | { readonly status: 'duplicate'; readonly receipt: Receipt }
   /** An invalid envelope: no transition, no receipt. */
   | { readonly status: 'rejected'; readonly reason: RejectionReason; readonly message: string };
 
-interface PermittedViewBase {
+export interface PermittedViewBase {
   readonly activityId: string;
   readonly phase: Phase;
   readonly sequence: number;
@@ -215,7 +239,20 @@ export interface CrapsPermittedView extends PermittedViewBase {
   readonly table: CrapsTable;
 }
 
-export type PermittedView = RoulettePermittedView | CrapsPermittedView;
+export interface BlackjackPermittedView extends PermittedViewBase {
+  readonly game: 'blackjack';
+  /** The current or latest round, exposed cards only. */
+  readonly outcome: BlackjackRoundView | null;
+  readonly table: BlackjackTableView;
+  /** Actions the rules offer the hand awaiting a decision; funding is judged when one is submitted. */
+  readonly playActions: readonly BlackjackAction[];
+  readonly shoe: BlackjackShoeView;
+}
+
+export type PermittedView = RoulettePermittedView | CrapsPermittedView | BlackjackPermittedView;
+
+/** The permitted view of one game's activity. */
+export type ViewOf<G extends GameId> = Extract<PermittedView, { readonly game: G }>;
 
 export type CheckpointResult =
   | { readonly ok: true; readonly state: ActivityState }
@@ -237,35 +274,45 @@ export type Change<S extends ActivityState> = Partial<Omit<S, 'schema' | 'activi
 export type Step<S extends ActivityState> = { change: Change<S>; facts: DomainFact[] } | { illegal: IllegalActionReason };
 
 /** Everything the protocol needs from one game. */
-export interface GameModule<S extends ActivityState, V extends PermittedView> {
+export interface GameModule<S extends ActivityState, V extends PermittedView, C extends Exclude<Command, { readonly kind: 'rebuy' }> = GameCommand> {
   /** The rule sets this build runs, each pinned by id and version. */
   readonly ruleSets: readonly VersionedIdentity[];
   /** Game state fields beyond the common ones (and their initial values). */
   readonly extra: Omit<S, keyof ActivityStateBase<GameId> | 'rules' | 'outcome'>;
   /** The rule content to pin from a specification's rules, or why they can't run. */
   pinRules(rules: Record<string, unknown>): S['rules'] | string;
+  /**
+   * The commands the state allows, when the game refines the phase table (a
+   * blackjack hand awaiting a decision takes only playing actions).
+   */
+  legal?(state: S): readonly CommandKind[];
   /** Applies a command already known to be well formed and legal in the phase. */
-  apply(state: S, command: GameCommand): Step<S>;
-  /** The game's part of the permitted view. */
-  view(state: S): Pick<V, 'game' | 'outcome' | 'table'>;
+  apply(state: S, command: C): Step<S>;
+  /** The game's part of the permitted view; it may refine when wagers count as committed. */
+  view(state: S): Omit<V, keyof PermittedViewBase> & Partial<Pick<PermittedViewBase, 'wagersCommitted'>>;
   /** The first problem with the game's part of a checkpoint (rules, wagers, outcome, table state), if any. */
   damage(value: Record<string, unknown>): string | undefined;
 }
 
 // The registry casts each module to the union: a module only ever receives states of its own game.
-const GAMES: Record<GameId, GameModule<ActivityState, PermittedView>> = {
-  roulette: ROULETTE as unknown as GameModule<ActivityState, PermittedView>,
-  craps: CRAPS as unknown as GameModule<ActivityState, PermittedView>,
+type AnyModule = GameModule<ActivityState, PermittedView, Exclude<Command, { readonly kind: 'rebuy' }>>;
+
+const GAMES: Record<GameId, AnyModule> = {
+  roulette: ROULETTE as unknown as AnyModule,
+  craps: CRAPS as unknown as AnyModule,
+  blackjack: BLACKJACK as unknown as AnyModule,
 };
 
-const gameFor = (game: unknown): GameModule<ActivityState, PermittedView> | undefined =>
+const gameFor = (game: unknown): AnyModule | undefined =>
   typeof game === 'string' && Object.hasOwn(GAMES, game) ? GAMES[game as GameId] : undefined;
 
 const moduleOf = (state: ActivityState) => GAMES[state.identities.game];
 
 /** Rebuys are offered only while the activity waits for input, and only with practice funding. */
-const legalCommands = (state: ActivityState): readonly CommandKind[] =>
-  rebuysOffered(state.funding) ? LEGAL[state.phase] : LEGAL[state.phase].filter((kind) => kind !== 'rebuy');
+function legalCommands(state: ActivityState): readonly CommandKind[] {
+  const legal = moduleOf(state).legal?.(state) ?? LEGAL[state.phase];
+  return rebuysOffered(state.funding) ? legal : legal.filter((kind) => kind !== 'rebuy');
+}
 
 const LEGAL: Record<Phase, readonly CommandKind[]> = {
   'open-decision': ['place-wager', 'begin-turn', 'request-stop', 'rebuy'],
@@ -286,6 +333,8 @@ function isCommand(value: unknown): value is Command {
       const amount = parseMoney(value.amount);
       return hasExactKeys(value, ['kind', 'amount']) && amount !== undefined && amount.n > 0n;
     }
+    case 'play':
+      return hasExactKeys(value, ['kind', 'action']) && isBlackjackAction(value.action);
     case 'begin-turn':
     case 'settle-turn':
     case 'request-stop':
@@ -303,6 +352,8 @@ function isCommand(value: unknown): value is Command {
  * random stream identity. Grants no access and consumes no allowance.
  * Throws ActivitySpecificationError for an incomplete or unsupported specification.
  */
+export function createActivity<G extends GameId>(spec: Extract<ActivitySpecification, { readonly game: G }>, random: RandomStreamIdentity): StateOf<G>;
+export function createActivity(spec: ActivitySpecification, random: RandomStreamIdentity): ActivityState;
 export function createActivity(spec: ActivitySpecification, random: RandomStreamIdentity): ActivityState {
   const fail = (message: string): never => {
     throw new ActivitySpecificationError(message);
@@ -352,13 +403,13 @@ export function createActivity(spec: ActivitySpecification, random: RandomStream
 
 // ---- advance ------------------------------------------------------------
 
-const reject = (reason: RejectionReason, message: string): AdvanceResult => ({ status: 'rejected', reason, message });
+const reject = (reason: RejectionReason, message: string) => ({ status: 'rejected', reason, message }) as const;
 
 /**
  * Applies one command envelope. Pure: the same state and envelope always give
  * the same result, and nothing outside the returned state changes.
  */
-export function advanceActivity(state: ActivityState, envelope: CommandEnvelope): AdvanceResult {
+export function advanceActivity<S extends ActivityState>(state: S, envelope: CommandEnvelope): AdvanceResult<S> {
   if (!hasExactKeys(envelope, ['sequence', 'commandId', 'command']) || !isCount(envelope.sequence) || !isText(envelope.commandId)) {
     return reject('malformed', 'an envelope needs a sequence, a command id and a command');
   }
@@ -387,7 +438,7 @@ export function advanceActivity(state: ActivityState, envelope: CommandEnvelope)
   };
   const change = 'illegal' in step ? {} : step.change;
   const facts: DomainFact[] = 'illegal' in step ? [{ kind: 'illegal-action', command, reason: step.illegal }] : step.facts;
-  const next = { ...state, ...change } as ActivityState;
+  const next = { ...state, ...change } as S;
   return {
     status: 'committed',
     state: {
@@ -425,6 +476,7 @@ const sessionValue = (state: Pick<ActivityState, 'balance' | 'wagers'>): Money =
  * What the stored phase permits the player to see. It never contains random
  * state or an outcome that hasn't been generated; there is no override flag.
  */
+export function readPermittedView<S extends ActivityState>(state: S): ViewOf<S['identities']['game']>;
 export function readPermittedView(state: ActivityState): PermittedView {
   return {
     activityId: state.activity.id,

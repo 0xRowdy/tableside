@@ -34,6 +34,13 @@ export const palette = {
   pocketRed: '#B83A33',
   pocketBlack: '#1D1F22',
   pocketGreen: '#2E7D4F',
+  // Playing cards: a light face with four-colour suits, so suits differ by glyph and colour.
+  cardFace: '#FBF8F1',
+  suitSpade: '#15171A',
+  suitHeart: '#C8312F',
+  suitDiamond: '#1F5FBF',
+  suitClub: '#1C7A3E',
+  feltText: '#F1EAD6',
 } as const;
 
 export type ColorToken = keyof typeof palette;
@@ -101,6 +108,16 @@ export const essentialPairs: readonly {
   { use: '500 chip value', kind: 'text', foreground: 'onImage', background: 'chip500' },
   { use: '1K chip value', kind: 'text', foreground: 'ink', background: 'chip1k' },
   { use: 'selected chip ring on the rail', kind: 'graphic', foreground: 'primary', background: 'rail' },
+  { use: 'spade rank and pip', kind: 'text', foreground: 'suitSpade', background: 'cardFace' },
+  { use: 'heart rank and pip', kind: 'text', foreground: 'suitHeart', background: 'cardFace' },
+  { use: 'diamond rank and pip', kind: 'text', foreground: 'suitDiamond', background: 'cardFace' },
+  { use: 'club rank and pip', kind: 'text', foreground: 'suitClub', background: 'cardFace' },
+  { use: 'card edge on the felt', kind: 'graphic', foreground: 'cardFace', background: 'felt' },
+  { use: 'felt labels', kind: 'text', foreground: 'feltText', background: 'felt' },
+  { use: 'shoe count, hand totals and bet spot text', kind: 'text', foreground: 'feltText', background: 'feltDeep' },
+  { use: 'bet spot boundary', kind: 'graphic', foreground: 'feltText', background: 'felt' },
+  { use: 'wagered bet spot outline', kind: 'graphic', foreground: 'cardFace', background: 'feltDeep' },
+  { use: 'focused control ring on the felt', kind: 'graphic', foreground: 'ring', background: 'felt' },
   { use: 'volume fill and switch on', kind: 'graphic', foreground: 'primary', background: 'card' },
   { use: 'volume thumb', kind: 'graphic', foreground: 'foreground', background: 'card' },
   { use: 'switch knob when off', kind: 'graphic', foreground: 'mutedForeground', background: 'muted' },

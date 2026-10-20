@@ -1,3 +1,4 @@
+import type { ActivitySpecification } from '@tableside/engine';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback } from 'react';
 import { AppState } from 'react-native';
@@ -5,6 +6,8 @@ import { AppState } from 'react-native';
 import { Button } from '@/components/Button';
 import { Placeholder } from '@/components/Placeholder';
 import { findGame } from '@/games';
+import { BlackjackSetup } from '@/play/BlackjackSetup';
+import { BlackjackTable } from '@/play/BlackjackTable';
 import { CrapsSetup } from '@/play/CrapsSetup';
 import { CrapsTable } from '@/play/CrapsTable';
 import { RouletteSetup } from '@/play/RouletteSetup';
@@ -12,6 +15,18 @@ import { RouletteTable } from '@/play/RouletteTable';
 import { SessionResult } from '@/play/SessionResult';
 import { SuspendedSession } from '@/play/SuspendedSession';
 import { usePractice } from '@/practice/PracticeProvider';
+
+/** The result's rules line where it says more than the game's default: "Blackjack · free play · S17 · LS". */
+function resultSubtitle(specification: ActivitySpecification): string | undefined {
+  switch (specification.game) {
+    case 'blackjack':
+      return `Blackjack · free play · ${specification.rules.dealer} · ${specification.rules.lateSurrender ? 'LS' : 'no LS'}`;
+    case 'roulette':
+      return `Roulette · free play · ${specification.rules.wheel === 'double-zero' ? 'double zero' : 'single zero'}`;
+    default:
+      return undefined;
+  }
+}
 
 /** Play shows the active practice session's table (or its result), or setup when there is none. */
 export default function Play() {
@@ -41,6 +56,7 @@ export default function Play() {
       if (suspension?.waitsForPlayer) {
         return <SuspendedSession snapshot={snapshot} suspension={suspension} />;
       }
+      if (snapshot.view.game === 'blackjack') return <BlackjackTable snapshot={{ ...snapshot, view: snapshot.view }} />;
       return snapshot.view.game === 'craps' ? (
         <CrapsTable snapshot={{ ...snapshot, view: snapshot.view }} />
       ) : (
@@ -51,6 +67,7 @@ export default function Play() {
       return (
         <SessionResult
           result={snapshot.result}
+          subtitle={resultSubtitle(snapshot.specification)}
           onNewSession={() => {
             controller.dismissResult();
             router.setParams({ game: snapshot.result.game });
@@ -66,6 +83,7 @@ export default function Play() {
   }
 
   if (game?.id === 'roulette') return <RouletteSetup problem={snapshot.problem} problemReason={snapshot.problemReason} busy={snapshot.busy} />;
+  if (game?.id === 'blackjack') return <BlackjackSetup problem={snapshot.problem} problemReason={snapshot.problemReason} busy={snapshot.busy} />;
   if (game?.id === 'craps') return <CrapsSetup problem={snapshot.problem} problemReason={snapshot.problemReason} busy={snapshot.busy} />;
   if (game) {
     return <Placeholder title={`${game.title} setup`} message="Rule presets, table limits and your buy-in come next." />;

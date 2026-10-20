@@ -76,8 +76,8 @@ function illegalMessage(reason: IllegalActionReason, target: string | null, view
       return 'Place a wager before you roll.';
     case 'not-whole-units':
       return target ? 'Stakes are whole units. Nothing was placed.' : 'Rebuys are whole units. Nothing was added.';
-    case 'no-wager-to-remove':
-    case 'unknown-target':
+    // no-wager-to-remove, unknown-target, and reasons only other games produce.
+    default:
       return `${name} can't be changed. Nothing was placed.`;
   }
 }

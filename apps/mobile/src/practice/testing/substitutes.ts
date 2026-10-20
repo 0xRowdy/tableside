@@ -70,7 +70,7 @@ export function entropyFromWords(words: readonly [number, number, number, number
  */
 export const PI_WORDS = [0xa4093822, 0x299f31d0, 0x13198a2e, 0x03707344] as const;
 
-export function substituteAdapters(options: { clock?: FakeClock } = {}): PracticeAdapters & {
+export function substituteAdapters(options: { clock?: FakeClock; words?: readonly [number, number, number, number] } = {}): PracticeAdapters & {
   store: MemoryActivityStore;
   clock: FakeClock;
 } {
@@ -79,7 +79,7 @@ export function substituteAdapters(options: { clock?: FakeClock } = {}): Practic
     store: new MemoryActivityStore(),
     access: alwaysAllowed,
     clock: options.clock ?? new FakeClock(),
-    entropy: entropyFromWords(PI_WORDS),
+    entropy: entropyFromWords(options.words ?? PI_WORDS),
     newId: () => `activity-${++next}`,
     device: 'test-device',
     owner: 'local',

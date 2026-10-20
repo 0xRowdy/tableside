@@ -31,19 +31,8 @@ export const wheelZeros = (wheel: RouletteWheel): RoulettePocket[] => (wheel ===
 /** "27 red", "0 green". */
 export const describePocket = (pocket: RoulettePocket) => `${pocket} ${pocketColor(pocket)}`;
 
-export { formatUnits };
-
-/** "+120", "−85" (minus sign), "0". */
-export function formatSigned(amount: string): string {
-  if (amount.startsWith('-')) return `−${formatUnits(amount.slice(1))}`;
-  return amount === '0' ? '0' : `+${formatUnits(amount)}`;
-}
-
-/** "plus 120", "minus 85", "0": for screen readers, which may skip a sign. */
-export function speakSigned(amount: string): string {
-  if (amount.startsWith('-')) return `minus ${formatUnits(amount.slice(1))}`;
-  return amount === '0' ? '0' : `plus ${formatUnits(amount)}`;
-}
+// Shared by every table; re-exported for the roulette screens' existing imports.
+export { formatSigned, formatUnits, speakSigned, totalOnTable } from './units';
 
 /** "1st", "2nd", "3rd": the dozens and columns. */
 export const ORDINAL = ['1st', '2nd', '3rd'] as const;
@@ -85,10 +74,6 @@ export function targetName(target: string): string {
 
 /** "35:1" → "35 to 1", as screen readers should say it. */
 export const spokenPayout = (payout: string) => payout.replace(':', ' to ');
-
-export const totalOnTable = (view: { readonly wagers: readonly { readonly amount: string }[] }): string =>
-  // Table stakes are whole units, so a plain integer sum is exact.
-  view.wagers.reduce((sum, wager) => sum + BigInt(wager.amount), 0n).toString();
 
 export const STATUS: Record<Phase, string> = {
   'open-decision': 'Betting',
