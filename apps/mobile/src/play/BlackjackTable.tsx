@@ -30,9 +30,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/Button';
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
-import { SAVE_RETRY_MS, type ActiveSnapshot as Active } from '@/practice/controller';
+import type { ActiveSnapshot as Active } from '@/practice/controller';
 import { usePractice } from '@/practice/PracticeProvider';
-import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale, type ColorToken } from '@/theme/tokens';
+import { fonts, palette, radius, space, textScale } from '@/theme/tokens';
 
 import { BetSelector } from './bet-selector/BetSelector';
 import { draftAmountText, EMPTY_DRAFT, findChoice, isDraftPending, type BetDraft } from './bet-selector/catalog';
@@ -58,11 +58,10 @@ import {
   SUIT_GLYPH,
   totalText,
 } from './blackjack-text';
-import { EndSessionDialog } from './EndSessionDialog';
 import { betCorrectionCopy, BLACKJACK_WORDS } from './coaching-text';
-import { CorrectionPanel, GuidedStrip, StopStrategyDialog, type TableNow } from './Guidance';
+import { CorrectionPanel, GuidedStrip, type TableNow } from './Guidance';
 import { RebuySheet } from './RebuySheet';
-import { AccessStopBanner, AllowanceLine, PhaseStepper, SessionStrip, TableTopBar, type PhaseStep } from './TableChrome';
+import { AccessStopBanner, AllowanceLine, ChipRack, PhaseStepper, SaveFailedBanner, SessionStrip, TableDialogs, TableTopBar, TurnBoundaryBanner, type PhaseStep } from './TableChrome';
 import { capitalize, formatSigned, formatUnits, halfUnits, sumUnits, totalOnTable } from './units';
 
 type ActiveSnapshot = Active<BlackjackPermittedView>;
@@ -72,13 +71,6 @@ const SIDE_BY_SIDE_MAX_FONT_SCALE = 1.35;
 const HAND = 'hand-1';
 const SAVE_FAILED_ANNOUNCEMENT = "Couldn't save. Play is paused and will retry automatically.";
 
-const CHIPS: readonly { value: string; label: string; color: ColorToken; ink: ColorToken }[] = [
-  { value: '5', label: '5', color: 'chip5', ink: 'onImage' },
-  { value: '25', label: '25', color: 'chip25', ink: 'onImage' },
-  { value: '100', label: '100', color: 'chip100', ink: 'onImage' },
-  { value: '500', label: '500', color: 'chip500', ink: 'onImage' },
-  { value: '1000', label: '1K', color: 'chip1k', ink: 'ink' },
-];
 
 const SUIT_TOKEN = { spades: 'suitSpade', hearts: 'suitHeart', diamonds: 'suitDiamond', clubs: 'suitClub' } as const;
 
@@ -191,29 +183,12 @@ export function BlackjackTable({ snapshot }: { snapshot: ActiveSnapshot }) {
         {view.count && <CountPanel view={view} count={view.count} betweenRounds={!inHand(view) && view.phase !== 'revealing-outcome'} />}
         {betting && <PresentationSwitch value={presentation} onChange={setPresentation} />}
 
-        {save === 'failed' && (
-          <View style={styles.banner}>
-            <Text accessibilityRole="alert" maxFontSizeMultiplier={textScale.body} style={styles.bannerTitle}>Couldn&apos;t save · play is paused</Text>
-            <Text maxFontSizeMultiplier={textScale.body} style={styles.bannerText}>
-              {busy
-                ? 'Saving your last move…'
-                : `Your last move hasn't been saved, so nothing has been revealed. Nothing is lost. Retrying automatically every ${SAVE_RETRY_MS / 1000} s.`}
-            </Text>
-            <Button label="Retry now" variant="secondary" disabled={busy} onPress={() => void controller.retrySave()} />
-          </View>
-        )}
+        {save === 'failed' && <SaveFailedBanner busy={busy} onRetry={() => void controller.retrySave()} />}
         <AccessStopBanner
           ending={snapshot.ending}
           detail={`${playing ? 'Finish this hand; then it settles automatically' : 'Your bets settle automatically'}, then you'll see the session result.`}
         />
-        {snapshot.suspension?.kind === 'turn-boundary' && !snapshot.suspension.reached && (
-          <View style={styles.banner}>
-            <Text accessibilityRole="alert" maxFontSizeMultiplier={textScale.body} style={styles.bannerTitle}>Suspending after this round</Text>
-            <Text maxFontSizeMultiplier={textScale.body} style={styles.bannerText}>
-              {snapshot.suspension.reason ?? 'This round finishes normally. No new round starts until the session resumes.'}
-            </Text>
-          </View>
-        )}
+        <TurnBoundaryBanner suspension={snapshot.suspension} turn="round" />
 
         <View testID="table-columns" style={[styles.columns, sideBySide && styles.columnsSideBySide]}>
           <View style={styles.column}>
@@ -302,7 +277,7 @@ export function BlackjackTable({ snapshot }: { snapshot: ActiveSnapshot }) {
                 onPress={() => setRebuying(true)}
               />
             )}
-            {betting && !playing && !selector && <ChipRack chip={chip} onChoose={setChip} />}
+            {betting && !playing && !selector && <ChipRack chip={chip} onChoose={setChip} from="5" spot="the bet spot" />}
             {inHand(view) && (
               <Text maxFontSizeMultiplier={textScale.body} style={styles.hint}>
                 Finish this hand before ending the session.
@@ -323,25 +298,14 @@ export function BlackjackTable({ snapshot }: { snapshot: ActiveSnapshot }) {
         />
       )}
 
-      <StopStrategyDialog
-        visible={stoppingStrategy}
+      <TableDialogs
+        view={view}
+        ending={confirming}
+        onCloseEnding={() => setConfirming(false)}
+        stoppingStrategy={stoppingStrategy}
+        onCloseStopping={() => setStoppingStrategy(false)}
         removable={view.wagersCommitted || view.wagers.length === 0 ? 'Nothing removable on the table' : `Your ${handsText} wager comes back`}
         committed={view.wagersCommitted ? `Your ${handsText} in play settles with this round.` : 'None between rounds.'}
-        onCancel={() => setStoppingStrategy(false)}
-        onConfirm={() => {
-          setStoppingStrategy(false);
-          void controller.stopStrategy();
-        }}
-      />
-
-      <EndSessionDialog
-        visible={confirming}
-        view={view}
-        onCancel={() => setConfirming(false)}
-        onConfirm={() => {
-          setConfirming(false);
-          void controller.endSession();
-        }}
       />
     </View>
   );
@@ -709,49 +673,12 @@ function BettingActions({
   );
 }
 
-function ChipRack({ chip, onChoose }: { chip: string; onChoose: (value: string) => void }) {
-  return (
-    <View style={styles.rack}>
-      <View accessibilityRole="radiogroup" accessibilityLabel="Chip value" style={styles.chips}>
-        {CHIPS.map((option) => (
-          <Chip key={option.value} option={option} selected={option.value === chip} onPress={() => onChoose(option.value)} />
-        ))}
-      </View>
-      <Text maxFontSizeMultiplier={textScale.body} style={styles.rackCaption}>
-        {formatUnits(chip)} selected · tap the bet spot to add it
-      </Text>
-    </View>
-  );
-}
-
-function Chip({ option, selected, onPress }: { option: (typeof CHIPS)[number]; selected: boolean; onPress: () => void }) {
-  const { focused, focusProps } = useKeyboardFocus();
-  return (
-    <Pressable
-      accessibilityRole="radio"
-      accessibilityLabel={`${formatUnits(option.value)} chip`}
-      accessibilityState={{ checked: selected }}
-      onPress={onPress}
-      {...focusProps}
-      style={[styles.chipSlot, selected && styles.chipSelected, focused && styles.focused]}
-    >
-      <View style={[styles.chip, { backgroundColor: palette[option.color] }]}>
-        <Text maxFontSizeMultiplier={textScale.display} style={[styles.chipText, { color: palette[option.ink] }]}>{option.label}</Text>
-      </View>
-      {selected && <Text maxFontSizeMultiplier={textScale.display} style={styles.chipCheck}>{'✓'}</Text>}
-    </Pressable>
-  );
-}
-
 const CARD_WIDTH = 56;
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: palette.background },
   flex: { flex: 1 },
   edge: { fontFamily: fonts.ui, fontSize: 12, color: palette.mutedForeground, paddingHorizontal: space[4] },
-  banner: { margin: space[4], padding: space[4], gap: space[2], borderRadius: radius.lg, backgroundColor: palette.card, borderWidth: 1, borderColor: palette.destructive },
-  bannerTitle: { fontFamily: fonts.uiBold, fontSize: 14, color: palette.foreground },
-  bannerText: { fontFamily: fonts.ui, fontSize: 13, color: palette.mutedForeground },
   columns: { gap: space[3], paddingTop: space[2] },
   columnsSideBySide: { flexDirection: 'row', alignItems: 'flex-start' },
   column: { flex: 1 },
@@ -821,20 +748,4 @@ const styles = StyleSheet.create({
   actions: { gap: space[2] },
   actionRow: { flexDirection: 'row', flexWrap: 'wrap', gap: space[2] },
   action: { flexGrow: 1, flexBasis: 96 },
-  rack: { gap: space[2], padding: space[3], borderRadius: radius.lg, backgroundColor: palette.rail },
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: space[1] },
-  chipSlot: {
-    minWidth: MIN_TOUCH_TARGET + 8,
-    minHeight: MIN_TOUCH_TARGET + 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radius.pill,
-    borderWidth: 2,
-    borderColor: palette.transparent,
-  },
-  chipSelected: { borderColor: palette.primary },
-  chip: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
-  chipText: { fontFamily: fonts.uiBold, fontSize: 15 },
-  chipCheck: { position: 'absolute', top: -2, right: -2, fontFamily: fonts.uiBold, fontSize: 12, color: palette.primary },
-  rackCaption: { fontFamily: fonts.ui, fontSize: 12, color: palette.foreground },
 });
