@@ -1106,7 +1106,7 @@ function strategyView(state: BlackjackActivityState, view: StrategyView): Strate
   if (countSupplied(state)) return view;
   const hidden = <C extends PendingCorrection>(correction: C): C => {
     if ('decision' in correction) return { ...correction, explanation: { ...correction.explanation, situation: { ...correction.explanation.situation, count: null } } };
-    const { 'true-count': _count, ...values } = correction.explanation.situation.values;
+    const values = Object.fromEntries(Object.entries(correction.explanation.situation.values).filter(([name]) => name !== 'true-count'));
     return { ...correction, explanation: { ...correction.explanation, situation: { ...correction.explanation.situation, values } } };
   };
   return { ...view, correction: view.correction && hidden(view.correction), departures: view.departures.map(hidden) };
