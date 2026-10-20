@@ -8,6 +8,7 @@ import { blackjackCases } from './blackjack.cases';
 import { blackjackGuidedCases } from './blackjack-guided.cases';
 import { blackjackTableCases } from './blackjack-table.cases';
 import { compatibilityCases } from './compatibility.cases';
+import { countingCases } from './counting.cases';
 import { crapsCases } from './craps.cases';
 import { crapsMenuCases } from './craps-menu.cases';
 import { crapsStrategyCases } from './craps-strategy.cases';
@@ -45,6 +46,7 @@ export const engineSuite: Suite = {
     ...strategyCases,
     ...guidedCases,
     ...blackjackGuidedCases,
+    ...countingCases,
     ...progressionCases,
     ...crapsStrategyCases,
     ...recordCases,

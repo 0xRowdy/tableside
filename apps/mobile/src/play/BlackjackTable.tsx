@@ -60,6 +60,7 @@ import {
   totalText,
 } from './blackjack-text';
 import { EndSessionDialog } from './EndSessionDialog';
+import { betCorrectionCopy, BLACKJACK_WORDS } from './coaching-text';
 import { CorrectionPanel, GuidedStrip, StopStrategyDialog, type TableNow } from './Guidance';
 import { RebuySheet } from './RebuySheet';
 import { ACCESS_ENDED } from './RouletteTable';
@@ -159,8 +160,11 @@ export function BlackjackTable({ snapshot }: { snapshot: ActiveSnapshot }) {
     void controller.beginTurn();
   };
   const strategy = view.strategy;
-  const held = view.phase === 'correction' && strategy?.correction && isPlayCorrection(strategy.correction) ? strategy.correction : null;
-  const betting = !held && (!playing || offer !== null) && view.phase !== 'final-settlement';
+  const correction = view.phase === 'correction' ? (strategy?.correction ?? null) : null;
+  const held = correction && isPlayCorrection(correction) ? correction : null;
+  // A bet off the Hi-Lo bet schedule, held before the deal.
+  const heldBet = correction && !isPlayCorrection(correction) ? correction : null;
+  const betting = !correction && (!playing || offer !== null) && view.phase !== 'final-settlement';
   const rules = { dealer: view.table.dealer, lateSurrender: view.table.lateSurrender };
   const handsText = view.wagers.length === 0 ? 'nothing' : `${formatUnits(totalOnTable(view))} (${view.wagers.length === 1 ? 'one hand' : `${view.wagers.length} hands`})`;
   const selector = presentation === 'selector' && betting;
@@ -256,7 +260,16 @@ export function BlackjackTable({ snapshot }: { snapshot: ActiveSnapshot }) {
             )}
             {held && strategy ? (
               <CorrectionPanel
-                copy={playCorrectionCopy(strategy.name, held, rules)}
+                copy={playCorrectionCopy(strategy.name, held, rules, view.count !== null)}
+                table={tableNow(view, handsText)}
+                fullScreen={fontScale > SIDE_BY_SIDE_MAX_FONT_SCALE}
+                busy={!ready}
+                onRetry={() => void controller.retryCorrection()}
+                onOverride={() => void controller.overrideCorrection()}
+              />
+            ) : heldBet && strategy ? (
+              <CorrectionPanel
+                copy={betCorrectionCopy(strategy.name, heldBet, strategy.overrideEndsCycle, BLACKJACK_WORDS)}
                 table={tableNow(view, handsText)}
                 fullScreen={fontScale > SIDE_BY_SIDE_MAX_FONT_SCALE}
                 busy={!ready}

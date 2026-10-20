@@ -146,8 +146,12 @@ const halfOf = (stake: string) => (BigInt(stake) % 2n === 0n ? (BigInt(stake) / 
 const moveName = (correction: PlayCorrection) =>
   correction.actual.action === 'insure' && correction.actual.amount ? `insurance of ${formatUnits(correction.actual.amount)}` : PLAY_NOUN[correction.actual.action];
 
-/** The correction pause for one blackjack decision. */
-export function playCorrectionCopy(strategyName: string, correction: PlayCorrection, rules: { dealer: 'S17' | 'H17'; lateSurrender: boolean }): CorrectionCopy {
+/**
+ * The correction pause for one blackjack decision. `countSupplied` is false in
+ * the counting modes, where the player keeps the count and play is assessed
+ * against the actual one.
+ */
+export function playCorrectionCopy(strategyName: string, correction: PlayCorrection, rules: { dealer: 'S17' | 'H17'; lateSurrender: boolean }, countSupplied = true): CorrectionCopy {
   const { explanation } = correction;
   const { situation, deviation, cell } = explanation;
   const play = explanation.prescribed.action;
@@ -172,7 +176,11 @@ export function playCorrectionCopy(strategyName: string, correction: PlayCorrect
     lines.push(`${source} ${verbPhrase(cell.play, hand)} against ${upValue(cell.up)}.`);
   } else if (!deviation) lines.push('Basic strategy never takes insurance.');
   if (deviation && count) {
-    lines.push(`The true count is ${signed(count.trueCount)}, supplied by Tableside in this mode (${countWorking(count)}).`);
+    lines.push(
+      countSupplied
+        ? `The true count is ${signed(count.trueCount)}, supplied by Tableside in this mode (${countWorking(count)}).`
+        : 'You keep the count in this mode; your play was checked against the actual count, which Tableside doesn\'t show.',
+    );
     lines.push(`${deviation.situation}: at ${signed(deviation.threshold)} or more, ${deviationPlay(deviation.atOrAbove)}; below ${signed(deviation.threshold)}, ${deviationPlay(deviation.below)}.`);
   }
   for (const missing of explanation.unavailable) lines.push(unavailableLine(missing.play, missing.reason, explanation));

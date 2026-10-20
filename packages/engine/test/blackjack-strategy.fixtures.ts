@@ -6,7 +6,7 @@
 // stand at 0 and hit below; 14 vs 10 surrender at +4; 15 vs 10 surrender at 0;
 // insurance at +3). The certified tables themselves are checked against the
 // engine in the definitions package. Rows: one letter per up card A, 2..9, 10.
-import type { BlackjackDeviation, BlackjackPlayPolicy, StrategyDefinition } from '../src';
+import type { BlackjackDeviation, BlackjackPlayPolicy, StrategyDefinition, StrategyInstruction } from '../src';
 
 const H = 'HHHHHHHHHH';
 const S = 'SSSSSSSSSS';
@@ -88,7 +88,7 @@ export const TEST_DEVIATIONS: readonly BlackjackDeviation[] = [
 ];
 
 export const TEST_POLICY: BlackjackPlayPolicy = {
-  countShown: false,
+  count: 'none',
   first: { hard: HARD, soft: SOFT, pair: PAIR },
   fallbacks: {
     double: { hard: withoutDouble(HARD), soft: withoutDouble(SOFT, 6), pair: withoutDouble(PAIR) },
@@ -102,7 +102,7 @@ export const TEST_POLICY: BlackjackPlayPolicy = {
   deviations: [],
 };
 
-const definition = (id: string, name: string, play: BlackjackPlayPolicy): StrategyDefinition => ({
+const definition = (id: string, name: string, play: BlackjackPlayPolicy, instructions: readonly StrategyInstruction[] = []): StrategyDefinition => ({
   format: 1,
   id,
   revision: 1,
@@ -111,7 +111,7 @@ const definition = (id: string, name: string, play: BlackjackPlayPolicy): Strate
   table: { dealer: 'S17', lateSurrender: true, limits: { initial: { min: '10', max: '1000' } } },
   parameters: [],
   counters: [],
-  instructions: [],
+  instructions,
   adjustments: [],
   stopWhen: null,
   play,
@@ -120,4 +120,23 @@ const definition = (id: string, name: string, play: BlackjackPlayPolicy): Strate
 /** Basic strategy: the play is assessed, the initial wager is the player's. */
 export const TEST_BASIC = definition('test-blackjack-basic', 'Basic strategy', TEST_POLICY);
 /** Basic with deviations: Tableside supplies the count. */
-export const TEST_DEVIATING = definition('test-blackjack-deviations', 'Basic with deviations', { ...TEST_POLICY, countShown: true, deviations: TEST_DEVIATIONS });
+export const TEST_DEVIATING = definition('test-blackjack-deviations', 'Basic with deviations', { ...TEST_POLICY, count: 'supplied', deviations: TEST_DEVIATIONS });
+/** Counting with basic: the player keeps the count; basic strategy doesn't depend on it. */
+export const TEST_COUNTING_BASIC = definition('test-blackjack-counting-basic', 'Counting with basic', { ...TEST_POLICY, count: 'player' });
+/** Counting with deviations: the player keeps the count; play is assessed against the actual count. */
+export const TEST_COUNTING_DEVIATING = definition('test-blackjack-counting-deviations', 'Counting with deviations', { ...TEST_POLICY, count: 'player', deviations: TEST_DEVIATIONS });
+
+/**
+ * The Hi-Lo bet schedule as spec #51 states it, with a 10-unit base: below +1
+ * one unit, +1 two, +2 four, +3 six, +4 or more eight. The highest band that
+ * the integer true count reaches wins by priority.
+ */
+const band = (from: number | null, units: number): StrategyInstruction => ({
+  id: from === null ? 'below-1' : `from-${from}`,
+  label: from === null ? `Below +1: ${units} unit` : `+${from}${from === 4 ? ' or more' : ''}: ${units} units`,
+  when: from === null ? { always: true } : { compare: { value: 'true-count' }, op: 'ge', to: { lit: String(from) } },
+  priority: from ?? 0,
+  bets: [{ target: { target: 'hand-1' }, amount: { lit: String(units * 10) } }],
+});
+export const TEST_SCHEDULE: readonly StrategyInstruction[] = [band(null, 1), band(1, 2), band(2, 4), band(3, 6), band(4, 8)];
+export const TEST_COUNTING_SCHEDULE = definition('test-blackjack-counting-schedule', 'Counting with basic', { ...TEST_POLICY, count: 'player' }, TEST_SCHEDULE);

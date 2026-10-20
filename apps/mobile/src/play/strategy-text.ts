@@ -4,7 +4,7 @@
 
 import type { CycleEnd, DomainFact, PauseReason } from '@tableside/engine';
 
-export type TurnWord = 'spin' | 'roll';
+export type TurnWord = 'spin' | 'roll' | 'round';
 
 /** How a cycle-end fact is announced. */
 const CYCLE_END_ANNOUNCEMENT: Record<CycleEnd, (turn: TurnWord) => string> = {

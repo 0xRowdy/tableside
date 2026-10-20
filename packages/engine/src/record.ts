@@ -9,11 +9,11 @@
 // the record's pinned identities with a shipped quarantine list, so an
 // accepted, immutable record can become quarantined later.
 
-import { readPermittedView, stopCause, type ActivityState, type GameId, type StopCause, type StrategyDeparture, type VersionedIdentity } from './activity';
+import { readPermittedView, stopCause, type ActivityState, type AdherenceMeasure, type GameId, type StopCause, type StrategyDeparture, type VersionedIdentity } from './activity';
 import { summarizeFunding, type FundingSource } from './funding';
 import { add, compare, decodeMoney, div, encodeMoney, money, type Money } from './money';
 import type { DomainFact } from './activity';
-import { policyOf } from './blackjack-strategy';
+import { blackjackModeOf, policyOf, type BlackjackMode } from './blackjack-strategy';
 import type { StrategyDefinition } from './strategy';
 
 /** The record format's version; a field change bumps it. */
@@ -54,11 +54,7 @@ export interface WagerCounts {
   readonly resolved: number;
 }
 
-/** One adherence measure: assessed decisions and how many followed the strategy. */
-export interface AdherenceMeasure {
-  readonly decisions: number;
-  readonly followed: number;
-}
+export type { AdherenceMeasure } from './activity';
 
 /** Playing, counting and betting adherence, kept apart; null where the session didn't assess that kind. */
 export interface Adherence {
@@ -85,9 +81,9 @@ export interface CompletedPracticeSessionRecord {
   readonly startedAt: number;
   readonly endedAt: number;
   readonly mode: 'free-play' | 'guided';
-  /** The blackjack mode (#77, #78); null for other games and until blackjack modes exist. */
-  readonly blackjackMode: string | null;
-  /** Whether blackjack's Hi-Lo bet schedule was on (#78); null for other games and until it exists. */
+  /** The guided blackjack mode; null in free play and for other games. */
+  readonly blackjackMode: BlackjackMode | null;
+  /** Whether a blackjack strategy assessed the bets (the Hi-Lo bet schedule); false in blackjack free play, null for other games. */
   readonly betSchedule: boolean | null;
   /** The strategy revision run (a built-in or a private revision), with the choices made at setup. Null in free play. */
   readonly strategy: {
@@ -162,10 +158,9 @@ function wagerOutcomes(facts: readonly DomainFact[]): WagerOutcome[] {
 }
 
 /** A guided blackjack strategy's mode, read from its playing policy; null for other games. */
-function blackjackMode(definition: StrategyDefinition): string | null {
+function blackjackMode(definition: StrategyDefinition): BlackjackMode | null {
   const play = policyOf(definition);
-  if (definition.game !== 'blackjack' || !play) return null;
-  return play.deviations.length === 0 ? 'basic' : 'basic-with-deviations';
+  return definition.game === 'blackjack' && play ? blackjackModeOf(play) : null;
 }
 
 /**
@@ -197,7 +192,8 @@ export function completedPracticeRecord(state: ActivityState, facts: readonly Do
     endedAt: context.endedAt,
     mode: run ? 'guided' : 'free-play',
     blackjackMode: run ? blackjackMode(run.definition) : null,
-    betSchedule: null,
+    // Blackjack's betting instructions are its bet schedule; without them the bets are the player's own.
+    betSchedule: state.identities.game === 'blackjack' ? run !== null && run.definition.instructions.length > 0 : null,
     strategy: run && { id: run.definition.id, revision: run.definition.revision, name: run.definition.name, parameters: { ...run.parameters } },
     rules: { ...state.identities.rules, content: state.rules },
     fundingSource: funding.source,
@@ -216,11 +212,8 @@ export function completedPracticeRecord(state: ActivityState, facts: readonly Do
     noBet: state.turn === 0,
     outcomes,
     guidance: strategy && {
-      // A strategy with a playing policy (blackjack) assesses playing decisions, the others betting decisions; counting arrives with #78.
-      adherence:
-        run && 'play' in run.definition
-          ? { playing: { decisions: strategy.adherence.decisions, followed: strategy.adherence.followed }, betting: null, counting: null }
-          : { betting: { decisions: strategy.adherence.decisions, followed: strategy.adherence.followed }, playing: null, counting: null },
+      // Each kind on its own. Counting adherence needs a learner-entered count, which spec 3's count checkpoints add.
+      adherence: { betting: strategy.adherence.betting, playing: strategy.adherence.playing, counting: null },
       departures: strategy.departures,
     },
   };

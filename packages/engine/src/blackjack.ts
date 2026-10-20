@@ -436,9 +436,27 @@ export const countOf = (shoe: { readonly running: number; readonly remaining: nu
   trueCount: trueCount(shoe.running, shoe.remaining),
 });
 
-/** True when the pinned strategy is still running and its policy has Tableside show the count. */
+/**
+ * The exposed-card count the decision the activity waits on sees: the hand's
+ * own during a round, else the count the next deal starts from (a fresh shoe
+ * once the cut card is out).
+ */
+export function decisionShoe(state: Pick<BlackjackActivityState, 'shoe' | 'outcome'>): { running: number; remaining: number } {
+  const { shoe, outcome } = state;
+  return outcome?.active == null && (shoe === null || shoe.next >= shoe.cut) ? { running: 0, remaining: SHOE.length } : shoeCount(state);
+}
+
+/**
+ * The reference count: Hi-Lo over exposed cards only, recomputed from the shoe
+ * at each decision and never stored, so nothing a learner enters can change
+ * it. Assessment uses it whether or not the count is shown; a learner-entered
+ * count (spec 3) is kept apart and compared against it.
+ */
+export const referenceCount = (state: Pick<BlackjackActivityState, 'shoe' | 'outcome'>): BlackjackCount => countOf(decisionShoe(state));
+
+/** True when the pinned strategy is still running and its policy has Tableside supply the count. */
 const countSupplied = (state: BlackjackActivityState) =>
-  state.strategy !== null && state.strategy.status !== 'stopped' && (state.strategy.definition.play as { countShown?: unknown } | undefined)?.countShown === true;
+  state.strategy !== null && state.strategy.status !== 'stopped' && (state.strategy.definition.play as { count?: unknown } | undefined)?.count === 'supplied';
 
 // ---- advance --------------------------------------------------------------
 
@@ -966,10 +984,8 @@ function view(
         hands: seat.hands.map((hand) => handView(hand, seat.hands)),
       })),
     },
-    // Supplied in "basic with deviations": the count the next decision or deal sees; a fresh shoe once the cut card is out between rounds.
-    count: countSupplied(state)
-      ? countOf(round?.active == null && (shoe === null || shoe.next >= shoe.cut) ? { running: 0, remaining: SHOE.length } : shoeCount(state))
-      : null,
+    // Supplied only in "basic with deviations"; the counting modes hide it (the player keeps it).
+    count: countSupplied(state) ? referenceCount(state) : null,
     shoe: {
       cards: SHOE.length,
       remaining: shoe === null ? SHOE.length : SHOE.length - shoe.next,

@@ -29,7 +29,7 @@ import {
 } from '../src';
 
 import { run, step } from './activity.fixtures';
-import { bet, BJ_SPEC, BJ_STREAM, DEAL, DOUBLE, HIT, insure, NO_INSURANCE, SETTLE, SPLIT, STAND, stacked, withPlayers } from './blackjack.fixtures';
+import { bet, BJ_SPEC, BJ_STREAM, counted, DEAL, DOUBLE, HIT, insure, NO_INSURANCE, PLUS_EIGHT, SETTLE, SPLIT, STAND, stacked, withPlayers } from './blackjack.fixtures';
 import { TEST_BASIC, TEST_DEVIATING, TEST_POLICY } from './blackjack-strategy.fixtures';
 
 const RETRY: Command = { kind: 'retry-correction' };
@@ -42,20 +42,6 @@ const guided = (definition: StrategyDefinition, extra: Partial<BlackjackActivity
 });
 const funded = (definition: StrategyDefinition, funding: string) => guided(definition, { funding });
 
-/**
- * A guided activity whose shoe deals `seen` first (cards already exposed in
- * earlier rounds) and then `round`; the rest in canonical order.
- */
-function counted(seen: string, round: string, spec: BlackjackActivitySpecification): BlackjackActivityState {
-  const base = stacked(`${seen} ${round}`, spec);
-  const next = seen.split(' ').filter(Boolean).length;
-  const decoded = decodeCheckpoint(encodeCheckpoint({ ...base, shoe: { ...(base.shoe as NonNullable<BlackjackActivityState['shoe']>), next } }));
-  if (!decoded.ok) throw new Error(decoded.error.message);
-  return decoded.state as BlackjackActivityState;
-}
-
-/** Eight low cards seen: running count +8. */
-const PLUS_EIGHT = '2 3 4 5 6 2 3 4';
 /** 4,3 against a 10 (hole 9), then a 9: a three-card 16 against a 10. */
 const SIXTEEN = '4 T 3 9 9';
 /** Eighteen low cards seen: running count +18. */
@@ -127,7 +113,7 @@ export const blackjackGuidedCases: TestCase[] = [
     run: (t) => {
       // Soft 17 (A,6) against a 5: basic strategy doubles. The player stands.
       const dealt = run(stacked('A 5 6 T', guided(TEST_BASIC)), [bet('25'), DEAL]).state;
-      t.equal([dealt.phase, adherence(dealt)], ['open-decision', { decisions: 0, followed: 0, departures: 0 }]);
+      t.equal([dealt.phase, adherence(dealt)], ['open-decision', { playing: { decisions: 0, followed: 0 }, betting: null, departures: 0 }]);
       const { state, facts } = step(dealt, STAND);
       t.equal([state.phase, kinds(facts), state.wagers, state.balance], ['correction', ['correction-offered'], [{ target: 'hand-1', amount: '25' }], '975']);
       // Nothing was played or dealt: the hand still has its two cards, the hole card is still down.
@@ -156,7 +142,7 @@ export const blackjackGuidedCases: TestCase[] = [
       t.equal([first.state.wagers, first.state.outcome?.hands[0]?.doubled, first.state.phase], [[{ target: 'hand-1', amount: '50' }], true, 'revealing-outcome']);
       t.equal(advanceActivity(first.state, envelope).status, 'duplicate');
       const strategy = view(first.state).strategy;
-      t.equal([strategy?.departures.length, strategy?.departures[0]?.resolution, strategy?.adherence], [1, 'retried', { decisions: 1, followed: 0, departures: 1 }]);
+      t.equal([strategy?.departures.length, strategy?.departures[0]?.resolution, strategy?.adherence], [1, 'retried', { playing: { decisions: 1, followed: 0 }, betting: null, departures: 1 }]);
     },
   },
   {
@@ -171,7 +157,7 @@ export const blackjackGuidedCases: TestCase[] = [
       t.equal([state.strategy?.status, state.phase], ['active', 'open-decision']);
       const next = step(state, STAND);
       t.equal([next.state.phase, kinds(next.facts).includes('correction-offered')], ['revealing-outcome', false]);
-      t.equal(view(next.state).strategy?.adherence, { decisions: 2, followed: 1, departures: 1 });
+      t.equal(view(next.state).strategy?.adherence, { playing: { decisions: 2, followed: 1 }, betting: null, departures: 1 });
       t.equal([view(next.state).strategy?.overrideAffected, view(next.state).strategy?.overrideEndsCycle], [true, false]);
     },
   },
@@ -183,7 +169,7 @@ export const blackjackGuidedCases: TestCase[] = [
       const tried = step(dealt, DOUBLE);
       t.equal([tried.state.phase, kinds(tried.facts)], ['open-decision', ['illegal-action']]);
       const hit = step(dealt, HIT);
-      t.equal([hit.state.phase === 'correction', adherence(hit.state)], [false, { decisions: 1, followed: 1, departures: 0 }]);
+      t.equal([hit.state.phase === 'correction', adherence(hit.state)], [false, { playing: { decisions: 1, followed: 1 }, betting: null, departures: 0 }]);
       const standing = step(dealt, STAND).state;
       t.equal(
         [held(standing)?.explanation.preferred, held(standing)?.explanation.unavailable, prescribed(held(standing)?.explanation as PlayExplanation)],
@@ -219,7 +205,7 @@ export const blackjackGuidedCases: TestCase[] = [
     run: (t) => {
       // 9,9 against a 6 splits; each hand draws a 2 for 11, which doubles. 30 funds the bet, the split and one double.
       let state = run(stacked('9 6 9 T 2 8 2 5', funded(TEST_BASIC, '30')), [bet('10'), DEAL, SPLIT]).state;
-      t.equal(adherence(state), { decisions: 1, followed: 1, departures: 0 });
+      t.equal(adherence(state), { playing: { decisions: 1, followed: 1 }, betting: null, departures: 0 });
       state = step(state, DOUBLE).state;
       t.equal([state.balance, state.outcome?.active, state.phase], ['0', 1, 'open-decision']);
       // Hand 2's 11 can't be funded: it hits, and standing departs from that fallback.

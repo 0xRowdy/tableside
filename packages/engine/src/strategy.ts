@@ -37,6 +37,8 @@ export type StrategyExpression =
   | { readonly length: string }
   /** What the settled turn staked in all: only an adjustment may read it. */
   | { readonly staked: true }
+  /** A number the game vocabulary reads off the situation (blackjack's "true-count"): only a condition may read it. */
+  | { readonly value: string }
   | { readonly add: readonly [StrategyExpression, StrategyExpression] }
   | { readonly sub: readonly [StrategyExpression, StrategyExpression] }
   | { readonly mul: readonly [StrategyExpression, StrategyExpression] }
@@ -196,6 +198,10 @@ export interface StrategyVocabulary<Situation = unknown> {
   readonly game: string;
   /** Enumerated situation subjects and their values. */
   readonly subjects: Readonly<Record<string, readonly string[]>>;
+  /** Whole-number situation values a condition may compare (blackjack's "true-count"); none when omitted. */
+  readonly values?: readonly string[];
+  /** A situation value, by name. */
+  value?(situation: Situation, name: string): Money;
   /** Problems with a declared table, as paths relative to it. */
   tableProblems(table: unknown): readonly { readonly path: string; readonly message: string }[];
   /** Why the target can't take the amount under the table, with the limit it fails, if any. */
@@ -243,6 +249,12 @@ export interface StrategyGame<State = never> {
   assessPlay?(state: State, definition: StrategyDefinition, command: unknown): PlayAssessment | undefined;
   /** The outcome of the turn a state has just settled, in the game's own words (a roulette pocket), for the cycle record. */
   outcome(state: State): string;
+  /**
+   * True when a pending strategy action would give away a reference answer
+   * the player must work out (a bet schedule's stake reveals a hidden count):
+   * it is then not announced, and the prescription shows only in a correction.
+   */
+  hidesPending?(state: State): boolean;
 }
 
 /** Where a strategy cycle stands. */
@@ -283,7 +295,12 @@ export type Prescription =
 
 /** Structured explanation facts; the app renders them as prose. */
 export interface Explanation {
-  readonly situation: { readonly available: string; readonly subjects: Readonly<Record<string, string>> };
+  readonly situation: {
+    readonly available: string;
+    readonly subjects: Readonly<Record<string, string>>;
+    /** The vocabulary's situation values (canonical numbers), keyed by name. */
+    readonly values: Readonly<Record<string, string>>;
+  };
   /** The matching instructions that prescribed, in priority order. */
   readonly instructions: readonly { readonly id: string; readonly label: string }[];
   readonly prescription: Prescription;
@@ -320,6 +337,8 @@ interface Checker {
   nodes: number;
   readonly counters: ReadonlySet<string>;
   readonly lists: ReadonlySet<string>;
+  /** The vocabulary's situation values. */
+  readonly values: ReadonlySet<string>;
 }
 
 /** What an expression reads: counters by id, lists as "list:<id>". */
@@ -341,11 +360,14 @@ function literal(checker: Checker, text: unknown, path: string): Money | undefin
   }
 }
 
+/** Where an expression sits: only an adjustment reads what the turn staked, only a condition reads a situation value. */
+type ExpressionPlace = 'amount' | 'adjustment' | 'condition';
+
 /**
  * Checks an expression; returns false when it is malformed (already reported).
- * Records the counters and lists it reads. Only an adjustment may read the staked amount.
+ * Records the counters and lists it reads.
  */
-function checkExpression(checker: Checker, value: unknown, path: string, depth: number, reads: Set<string>, staked = false): boolean {
+function checkExpression(checker: Checker, value: unknown, path: string, depth: number, reads: Set<string>, place: ExpressionPlace = 'amount'): boolean {
   checker.nodes++;
   if (depth > MAX_WALK_DEPTH) return report(checker, 'envelope', path, 'expressions are nested too deeply'), false;
   if (!isRecord(value) || Object.keys(value).length !== 1) return report(checker, 'incomplete', path, 'an expression is required'), false;
@@ -364,7 +386,11 @@ function checkExpression(checker: Checker, value: unknown, path: string, depth: 
       reads.add(listRead(operand as string));
       return true;
     case 'staked':
-      if (operand !== true || !staked) return report(checker, 'incomplete', path, 'only an adjustment can read what the turn staked'), false;
+      if (operand !== true || place !== 'adjustment') return report(checker, 'incomplete', path, 'only an adjustment can read what the turn staked'), false;
+      return true;
+    case 'value':
+      if (typeof operand !== 'string' || !checker.values.has(operand)) return report(checker, 'incomplete', path, `no situation value ${String(operand)}`), false;
+      if (place !== 'condition') return report(checker, 'incomplete', path, 'only a condition can read a situation value'), false;
       return true;
     case 'add':
     case 'sub':
@@ -376,7 +402,7 @@ function checkExpression(checker: Checker, value: unknown, path: string, depth: 
         return report(checker, 'incomplete', path, `${key} needs ${pair ? 'two operands' : 'operands'}`), false;
       }
       let ok = true;
-      for (const [index, item] of operand.entries()) ok = checkExpression(checker, item, `${path}/${key}/${index}`, depth + 1, reads, staked) && ok;
+      for (const [index, item] of operand.entries()) ok = checkExpression(checker, item, `${path}/${key}/${index}`, depth + 1, reads, place) && ok;
       return ok;
     }
     default:
@@ -411,8 +437,8 @@ function checkCondition(checker: Checker, vocabulary: StrategyVocabulary, value:
   if ('compare' in value) {
     if (Object.keys(value).length !== 3 || !COMPARISONS.includes(value.op as string)) return report(checker, 'incomplete', path, 'a comparison needs compare, op and to'), false;
     const reads = new Set<string>();
-    const left = checkExpression(checker, value.compare, `${path}/compare`, 0, reads);
-    return checkExpression(checker, value.to, `${path}/to`, 0, reads) && left;
+    const left = checkExpression(checker, value.compare, `${path}/compare`, 0, reads, 'condition');
+    return checkExpression(checker, value.to, `${path}/to`, 0, reads, 'condition') && left;
   }
   return report(checker, 'incomplete', path, 'unknown condition'), false;
 }
@@ -440,7 +466,7 @@ export function validateWith(vocabulary: StrategyVocabulary, definition: unknown
   const def = definition;
   const counterIds = new Set<string>();
   const listIds = new Set<string>();
-  const checker: Checker = { diagnostics, nodes: 0, counters: counterIds, lists: listIds };
+  const checker: Checker = { diagnostics, nodes: 0, counters: counterIds, lists: listIds, values: new Set(vocabulary.values ?? []) };
   const flag = (category: DiagnosticCategory, path: string, message: string) => report(checker, category, path, message);
 
   if (def.format !== STRATEGY_FORMAT) flag('incomplete', '/format', `unsupported strategy format ${String(def.format)}`);
@@ -646,7 +672,7 @@ export function validateWith(vocabulary: StrategyVocabulary, definition: unknown
         if (item.drop !== 'ends') flag('incomplete', `${path}/drop`, 'a list drops its ends');
       } else if (keys === 'append,id,list,on') {
         // Appending grows the list, whatever it appends.
-        if (checkExpression(checker, item.append, `${path}/append`, 0, reads, true)) grows.add(listRead(item.list as string));
+        if (checkExpression(checker, item.append, `${path}/append`, 0, reads, 'adjustment')) grows.add(listRead(item.list as string));
       } else {
         flag('incomplete', path, 'a list adjustment appends an amount or drops the ends');
       }
@@ -656,7 +682,7 @@ export function validateWith(vocabulary: StrategyVocabulary, definition: unknown
       flag('incomplete', `${path}/counter`, `no counter ${String(item.counter)}`);
       continue;
     }
-    if (checkExpression(checker, item.to, `${path}/to`, 0, reads, true) && reads.has(item.counter as string)) grows.add(item.counter as string);
+    if (checkExpression(checker, item.to, `${path}/to`, 0, reads, 'adjustment') && reads.has(item.counter as string)) grows.add(item.counter as string);
   }
 
   // Stop and completion rules.
@@ -728,11 +754,12 @@ function disjoint(a: StrategyCondition, b: StrategyCondition): boolean {
 
 // ---- evaluate -------------------------------------------------------------
 
-/** What an expression can read: counters, lists and, in an adjustment, what the settled turn staked. */
+/** What an expression can read: counters, lists, in an adjustment what the settled turn staked, and in a condition the situation's values. */
 interface Values {
   readonly counters: Readonly<Record<string, string>>;
   readonly lists: Readonly<Record<string, readonly string[]>>;
   readonly staked?: Money;
+  readonly situation?: Readonly<Record<string, Money>>;
 }
 
 const NO_VALUES: Values = { counters: {}, lists: {} };
@@ -752,6 +779,7 @@ function evaluate(expression: StrategyExpression, values: Values): Money | undef
     }
     if ('length' in expression) return money(BigInt((values.lists[expression.length] as readonly string[]).length));
     if ('staked' in expression) return values.staked ?? ZERO;
+    if ('value' in expression) return values.situation?.[expression.value];
     const operands = 'add' in expression ? expression.add : 'sub' in expression ? expression.sub : 'mul' in expression ? expression.mul : 'min' in expression ? expression.min : expression.max;
     const results: Money[] = [];
     for (const operand of operands) {
@@ -768,6 +796,24 @@ function evaluate(expression: StrategyExpression, values: Values): Money | undef
   })();
   return value && withinStrategyBits(value) ? value : undefined;
 }
+
+/** Whether an expression reads a situation value. */
+const expressionReads = (expression: StrategyExpression, name: string): boolean => {
+  if ('value' in expression) return expression.value === name;
+  const operands = 'add' in expression ? expression.add : 'sub' in expression ? expression.sub : 'mul' in expression ? expression.mul : 'min' in expression ? expression.min : 'max' in expression ? expression.max : [];
+  return operands.some((operand) => expressionReads(operand, name));
+};
+
+/** Whether a valid definition's instructions read a situation value (blackjack's "true-count") to decide its bets. */
+export function instructionsRead(definition: StrategyDefinition, name: string): boolean {
+  const reads = (condition: StrategyCondition): boolean =>
+    'all' in condition ? condition.all.some(reads) : 'any' in condition ? condition.any.some(reads) : 'compare' in condition ? expressionReads(condition.compare, name) || expressionReads(condition.to, name) : false;
+  return definition.instructions.some((instruction) => reads(instruction.when));
+}
+
+/** The vocabulary's situation values for a situation. */
+const situationValues = <S>(vocabulary: StrategyVocabulary<S>, situation: S): Record<string, Money> =>
+  Object.fromEntries((vocabulary.values ?? []).map((name) => [name, (vocabulary.value as NonNullable<StrategyVocabulary<S>['value']>)(situation, name)]));
 
 function holds<S>(vocabulary: StrategyVocabulary<S>, condition: StrategyCondition, situation: S, progress: StrategyProgress): boolean | undefined {
   if ('always' in condition) return true;
@@ -793,8 +839,9 @@ function holds<S>(vocabulary: StrategyVocabulary<S>, condition: StrategyConditio
     const actual = condition.subject === 'last-result' ? progress.lastResult : vocabulary.subject(situation, condition.subject);
     return actual === condition.is;
   }
-  const left = evaluate(condition.compare, progress);
-  const right = evaluate(condition.to, progress);
+  const values = { ...progress, situation: situationValues(vocabulary, situation) };
+  const left = evaluate(condition.compare, values);
+  const right = evaluate(condition.to, values);
   if (!left || !right) return undefined;
   const order = compare(left, right);
   return { lt: order < 0, le: order <= 0, eq: order === 0, ge: order >= 0, gt: order > 0 }[condition.op];
@@ -861,7 +908,8 @@ export function prescribe<S>(
   const available = vocabulary.available(situation);
   const subjects: Record<string, string> = { 'last-result': progress.lastResult };
   for (const name of Object.keys(vocabulary.subjects).sort()) subjects[name] = vocabulary.subject(situation, name);
-  const base = { situation: { available: encodeMoney(available), subjects }, state: progress };
+  const values = Object.fromEntries(Object.entries(situationValues(vocabulary, situation)).map(([name, value]) => [name, encodeMoney(value)]));
+  const base = { situation: { available: encodeMoney(available), subjects, values }, state: progress };
   const pause = (reason: PauseReason, unavailable: PrescribedBet[], instructions: Explanation['instructions'] = []): Explanation => ({
     ...base,
     instructions,

@@ -308,7 +308,7 @@ export function describeFacts(facts: readonly DomainFact[], view: BlackjackPermi
         for (const wager of fact.wagers) parts.push(`Wager ${formatUnits(wager.amount)} in play.`);
         break;
       case 'correction-offered':
-        if ('decision' in fact) parts.push(`Paused before your ${PLAY_NOUN[fact.actual.action]}: nothing has been played yet.`);
+        parts.push('decision' in fact ? `Paused before your ${PLAY_NOUN[fact.actual.action]}: nothing has been played yet.` : 'Paused before the deal: nothing has been dealt yet.');
         break;
       case 'departure-recorded':
         parts.push(`Recorded once in Departures as ${fact.departure.resolution === 'retried' ? 'taken back' : 'an override'}.`);
