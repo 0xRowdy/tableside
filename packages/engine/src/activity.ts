@@ -228,6 +228,11 @@ export type ActivityState = RouletteActivityState | CrapsActivityState | Blackja
 /** The state of one game's activity. */
 export type StateOf<G extends GameId> = Extract<ActivityState, { readonly identities: { readonly game: G } }>;
 
+/** Why the stop path ran: the player's stop, reset or switch, or an access-ended stop (which includes a content-removal stop). */
+export type StopCause = 'stop' | 'reset' | 'switch' | 'access-ended';
+
+export const STOP_CAUSES: readonly StopCause[] = ['stop', 'reset', 'switch', 'access-ended'];
+
 export type Command =
   /** Sets the stake on a target; amount "0" takes the wager down. */
   | { readonly kind: 'place-wager'; readonly target: string; readonly amount: string }
@@ -242,7 +247,8 @@ export type Command =
   | { readonly kind: 'play'; readonly action: BlackjackAction }
   /** The automatic settle step after the reveal; the controller issues it, never a tap. */
   | { readonly kind: 'settle-turn' }
-  | { readonly kind: 'request-stop' }
+  /** Starts the stop path. The cause (the player's stop when omitted) is kept in the receipt for the completed record. */
+  | { readonly kind: 'request-stop'; readonly cause?: StopCause }
   | { readonly kind: 'advance-final-settlement' }
   /** Adds funds to a practice-funding session while it waits for input. Never places or settles anything. */
   | { readonly kind: 'rebuy'; readonly amount: string }
@@ -296,11 +302,15 @@ export type DomainFact =
       readonly turn: number;
       readonly target: string;
       readonly stake: string;
-      /** A push returns the stake with no win or loss (craps odds that are off). */
-      readonly result: 'win' | 'loss' | 'push';
-      /** Net result: payout on a win, minus the stake on a loss, 0 on a push. */
+      /**
+       * By net result after commission. A push is an outcome that nets 0 (a
+       * blackjack tie); "returned" gives the stake back without an outcome (craps
+       * odds that are off when their base resolves), so it is outside W/L/P.
+       */
+      readonly result: 'win' | 'loss' | 'push' | 'returned';
+      /** Net result: payout on a win, minus the stake on a loss, 0 on a push or a return. */
       readonly net: string;
-      /** Paid back to the balance: stake plus payout, the stake on a push, or 0. A craps place, buy, lay or hardway win stays up, so only its net comes back. */
+      /** Paid back to the balance: stake plus payout, the stake on a push or a return, or 0. A craps place, buy, lay or hardway win stays up, so only its net comes back. */
       readonly returned: string;
       /** A craps horn part (2, 3, 11 or 12): each part of one wager settles as its own bet. */
       readonly component?: number;
@@ -493,9 +503,13 @@ function isCommand(value: unknown): value is Command {
     }
     case 'play':
       return hasExactKeys(value, ['kind', 'action']) && isBlackjackAction(value.action);
+    case 'request-stop':
+    {
+      const { cause } = value as Record<string, unknown>;
+      return hasExactKeys(value, cause === undefined ? ['kind'] : ['kind', 'cause']) && (cause === undefined || STOP_CAUSES.includes(cause as StopCause));
+    }
     case 'begin-turn':
     case 'settle-turn':
-    case 'request-stop':
     case 'advance-final-settlement':
     case 'retry-correction':
     case 'override-correction':
@@ -838,6 +852,15 @@ const overrideEndsCycle = (definition: StrategyDefinition) => definition.counter
 /** Funds off the table plus outstanding stakes at their original value. */
 const sessionValue = (state: Pick<ActivityState, 'balance' | 'wagers'>): Money =>
   state.wagers.reduce((sum, wager) => add(sum, decodeMoney(wager.amount)), decodeMoney(state.balance));
+
+/** The cause the latest request-stop carried, read from its receipt; the player's stop when it named none. */
+export function stopCause(state: ActivityState): StopCause {
+  for (const receipt of [...state.receipts].reverse()) {
+    const command = JSON.parse(receipt.command) as Command;
+    if (command.kind === 'request-stop') return command.cause ?? 'stop';
+  }
+  return 'stop';
+}
 
 // ---- read permitted view ------------------------------------------------
 

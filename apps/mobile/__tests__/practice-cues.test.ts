@@ -145,7 +145,7 @@ describe('cues during blackjack play', () => {
 });
 
 describe('cues during craps play', () => {
-  it('throws the dice on every roll and gives one net-result cue for a roll that settles several wagers', async () => {
+  it('throws the dice on every roll and gives one net-result cue per roll, "no change" for a roll that settles nothing', async () => {
     const { controller, ports } = await setup();
     await controller.endSession();
     controller.dismissResult();
@@ -163,12 +163,28 @@ describe('cues during craps play', () => {
     expect(ports.sound.played.map((play) => play.cue)).toEqual([
       'stake-set',
       'dice-thrown',
+      'net-even', // the point is set: nothing settles
       'stake-set',
       'stake-set',
       'dice-thrown',
       'net-win',
     ]);
+    // "No change" has no haptic.
     expect(ports.haptics.fired).toEqual(['selection', 'impact-medium', 'selection', 'selection', 'impact-medium', 'success']);
+  });
+
+  it('gives one net-result cue for each final-settlement roll, "no change" when it settles nothing', async () => {
+    const { controller, ports } = await setup();
+    await controller.endSession();
+    controller.dismissResult();
+    await controller.start({ game: 'craps', odds: '3-4-5x', buyIn: '1000' });
+    // Pi stream rolls: 8 sets the point. Ending keeps the pass contract, which rolls on: 11, 6, 4 and 12 settle nothing, then 8 wins.
+    await controller.placeWager('pass', '10');
+    await controller.beginTurn();
+    ports.sound.played.length = 0;
+    await controller.endSession();
+    const cues = ports.sound.played.map((play) => play.cue).filter((cue) => cue.startsWith('net-'));
+    expect(cues).toEqual(['net-even', 'net-even', 'net-even', 'net-even', 'net-win']);
   });
 });
 

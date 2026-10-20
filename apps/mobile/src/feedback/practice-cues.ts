@@ -5,16 +5,18 @@
 
 import { add, compare, decodeMoney, money, type DomainFact, type Money } from '@tableside/engine';
 
-import type { PracticeController } from '@/practice/controller';
+import type { ActivePracticeSnapshot, PracticeController, PracticeSnapshot } from '@/practice/controller';
 
 import type { CueName } from './catalog';
 import type { FeedbackService } from './service';
 
 /**
  * The cues for one committed transition's facts. A turn's settled wagers give
- * one cue on the turn's net result, however many wagers settle.
+ * one cue on the turn's net result, however many wagers settle; a transition
+ * that ends a turn settling nothing (a craps roll that only sets the point)
+ * gives the "no change" cue, so every turn has exactly one.
  */
-export function cuesForFacts(facts: readonly DomainFact[]): CueName[] {
+export function cuesForFacts(facts: readonly DomainFact[], turnEnded = false): CueName[] {
   const cues: CueName[] = [];
   let net: Money | null = null;
   let returned = false;
@@ -52,8 +54,19 @@ export function cuesForFacts(facts: readonly DomainFact[]): CueName[] {
     }
   }
   if (returned) cues.push('wager-removed');
+  if (!net && turnEnded) net = money(0n);
   if (net) cues.push(({ 1: 'net-win', [-1]: 'net-loss', 0: 'net-even' } as const)[compare(net, money(0n))]);
   return cues;
+}
+
+/**
+ * Whether this transition ends a turn: it leaves the reveal (the settle step),
+ * or rolls and settles in one step (a craps roll during final settlement).
+ */
+function endsTurn(previous: PracticeSnapshot, next: ActivePracticeSnapshot): boolean {
+  if (next.view.phase === 'revealing-outcome') return false;
+  const leftReveal = previous.status === 'active' && previous.view.phase === 'revealing-outcome';
+  return leftReveal || next.facts.some((fact) => fact.kind === 'dice-rolled');
 }
 
 /** Plays the cues for everything the controller shows from now on. Returns a function that stops. */
@@ -66,7 +79,7 @@ export function followPractice(controller: PracticeController, feedback: Feedbac
     if (next.status === 'active') {
       // The controller republishes the same transition as input opens and closes; cue it once.
       const newTransition = previous.status !== 'active' || previous.view.sequence !== next.view.sequence || previous.view.activityId !== next.view.activityId;
-      if (newTransition) for (const cue of cuesForFacts(next.facts)) feedback.cue(cue);
+      if (newTransition) for (const cue of cuesForFacts(next.facts, endsTurn(previous, next))) feedback.cue(cue);
     } else if (next.status === 'completed' && previous.status === 'active') {
       // Results ready, on arrival from the session itself (never when reviewing history).
       feedback.cue('attempt-ended');

@@ -193,7 +193,7 @@ export const crapsCases: TestCase[] = [
         [],
         [],
         [['pass', 'win', '10', '20'], ['pass-odds', 'win', '60', '110']],
-        [['come-6', 'win', '10', '20'], ['come-6-odds', 'push', '0', '50']],
+        [['come-6', 'win', '10', '20'], ['come-6-odds', 'returned', '0', '50']],
         [['come-4', 'loss', '-10', '0'], ['come-4-odds', 'loss', '-30', '0']],
       ]);
       t.equal([state.balance, state.wagers, point(state)], ['1050', [], null]);

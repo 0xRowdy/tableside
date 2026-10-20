@@ -68,20 +68,39 @@ export function turnCharge(activityId: string, sequence: number): AllowanceEffec
 
 export function completedRecord(activityId: string, overrides: Partial<CompletedPracticeSession> = {}): CompletedPracticeSession {
   return {
+    recordVersion: 1,
     activityId,
+    owner: 'local',
+    device: 'test-device',
     game: 'roulette',
+    identities: { engine: '0.0.0', rules: { id: 'roulette/single-zero', version: 1 }, strategy: null, reference: null, randomProtocol: 1 },
+    startedAt: 1_790_000_000_000,
+    endedAt: 1_790_000_100_000,
     mode: 'free-play',
-    identities: { engine: '0.0.0', rules: { id: 'roulette/single-zero', version: 1 }, strategy: null, reference: null },
+    blackjackMode: null,
+    betSchedule: null,
+    strategy: null,
+    rules: {
+      id: 'roulette/single-zero',
+      version: 1,
+      content: { wheel: 'single-zero', limits: { inside: { min: '1', max: '100' }, outside: { min: '10', max: '1000' } } },
+    },
     fundingSource: 'practice-funding',
     meteringBasis: 'free-play',
+    allowancePolicyVersion: null,
     buyIn: '1000',
     rebuys: [],
     cumulativeFunding: '1000',
     finalCashOut: '1010',
     netResult: '10',
     maxDrawdown: '0',
+    turnsPlayed: 1,
+    endingReason: 'stop',
+    overrideAffected: false,
+    wagers: { wins: 1, losses: 0, pushes: 0, resolved: 1 },
+    noBet: false,
+    outcomes: [{ turn: 1, target: 'red', stake: '10', result: 'win', net: '10', returned: '20' }],
     guidance: null,
-    completedAt: 1_790_000_100_000,
     ...overrides,
   };
 }
@@ -137,6 +156,24 @@ export function describeActivityStoreContract(name: string, open: () => Promise<
         expect(stored?.sequence).toBe(1);
         expect(stored?.checkpoint).toBe(commit.checkpoint);
         expect(await store.readReceipt('a1', 'cmd-0')).toEqual({ receipt: commit.receipt, checkpoint: commit.checkpoint, facts: commit.facts });
+      });
+
+      it('reads back every committed transition in commit order, once each, across a restart', async () => {
+        const { store, reopen } = await open();
+        await store.createActivity(newActivity('a1'));
+        expect(await store.readTransitions('a1')).toEqual([]);
+        const first = transition('a1', 0, { facts: [{ kind: 'turn-began', turn: 1, wagers: [] }] });
+        const second = transition('a1', 1, { facts: [{ kind: 'outcome-generated', turn: 1, pocket: 0 }] });
+        await store.commitTransition(first);
+        // A second delivery and a stale commit add nothing.
+        await store.commitTransition(first);
+        const stale = transition('a1', 0);
+        await store.commitTransition({ ...stale, receipt: { ...stale.receipt, commandId: 'stale' } });
+        await store.commitTransition(second);
+        const expected = [first, second].map((commit) => ({ receipt: commit.receipt, checkpoint: commit.checkpoint, facts: commit.facts }));
+        expect(await store.readTransitions('a1')).toEqual(expected);
+        expect(await (await reopen()).readTransitions('a1')).toEqual(expected);
+        expect(await store.readTransitions('missing')).toEqual([]);
       });
 
       it('applies a commit only at its prior sequence; a stale one writes nothing and reports the stored sequence', async () => {
@@ -252,7 +289,7 @@ export function describeActivityStoreContract(name: string, open: () => Promise<
         await store.createActivity(newActivity('a1'));
         await store.complete(completedRecord('a1'));
 
-        const repeat = await store.complete(completedRecord('a1', { finalCashOut: '0', netResult: '-1000', completedAt: 9 }));
+        const repeat = await store.complete(completedRecord('a1', { finalCashOut: '0', netResult: '-1000', endedAt: 9 }));
 
         expect(repeat).toEqual(completedRecord('a1'));
         expect(await store.readOutgoing()).toHaveLength(1);

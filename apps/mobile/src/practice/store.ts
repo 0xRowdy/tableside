@@ -5,17 +5,7 @@
 // write may or may not have happened), which the caller resolves by reading.
 // Every implementation must pass the contract suite in testing/store-contract.ts.
 
-import type {
-  ActivitySpecification,
-  DomainFact,
-  FundingSource,
-  GameId,
-  RandomStreamIdentity,
-  Receipt,
-  StrategyDeparture,
-  StrategyView,
-  VersionedIdentity,
-} from '@tableside/engine';
+import type { ActivitySpecification, CompletedPracticeSessionRecord, DomainFact, MeteringBasis, RandomStreamIdentity, Receipt } from '@tableside/engine';
 
 /**
  * An allowance effect (spec 5): a turn charge committed with the transition that
@@ -30,13 +20,17 @@ export interface AllowanceEffect {
   readonly amount: string;
 }
 
-/** How spec 5 meters an activity, as its admission said (Amendment 4 A3). */
-export type MeteringBasis = 'free-play' | 'premium' | 'time' | 'turns' | 'training-bankroll' | 'challenge-attempt';
+export type { MeteringBasis };
 
 export interface NewActivity {
   readonly activityId: string;
   /** The access supervisor's admission: who allowed it and how it is metered. */
-  readonly admission: { readonly provenance: string; readonly meteringBasis: MeteringBasis };
+  readonly admission: {
+    readonly provenance: string;
+    readonly meteringBasis: MeteringBasis;
+    /** The allowance-policy version in force, when the supervisor names one (Amendment 3 §4). */
+    readonly allowancePolicyVersion?: string;
+  };
   readonly specification: ActivitySpecification;
   /** The random identity, recorded before any content is generated from it. */
   readonly random: RandomStreamIdentity;
@@ -80,42 +74,11 @@ export interface CommittedTransition {
   readonly facts: readonly DomainFact[];
 }
 
-/** The completed practice session record (its full field set grows with #79). */
-export interface CompletedPracticeSession {
-  readonly activityId: string;
-  readonly game: GameId;
-  readonly mode: 'free-play' | 'guided';
-  readonly identities: {
-    readonly engine: string;
-    readonly rules: VersionedIdentity;
-    readonly strategy: VersionedIdentity | null;
-    readonly reference: VersionedIdentity | null;
-  };
-  /** Practice funding, or spec 5's training bankroll (no rebuys; the allocation is the buy-in). */
-  readonly fundingSource: FundingSource;
-  /** How the session was metered, from its admission (Amendment 4 C). */
-  readonly meteringBasis: MeteringBasis;
-  /** The initial buy-in, or the training-bankroll allocation. */
-  readonly buyIn: string;
-  /** Each rebuy, in order. */
-  readonly rebuys: readonly string[];
-  readonly cumulativeFunding: string;
-  readonly finalCashOut: string;
-  /** Final cash-out minus cumulative funding. */
-  readonly netResult: string;
-  /** Largest buy-in-adjusted fall of the game result from a previous peak, including final settlement. */
-  readonly maxDrawdown: string;
-  /**
-   * Guided practice: betting adherence (kept apart from the money), the
-   * departure log in order, and whether any explicit override happened. Null in free play.
-   */
-  readonly guidance: {
-    readonly adherence: StrategyView['adherence'];
-    readonly departures: readonly StrategyDeparture[];
-    readonly overrideAffected: boolean;
-  } | null;
-  readonly completedAt: number;
-}
+/**
+ * The completed practice session record: the engine's contract for specs 2, 4,
+ * 5 and 6 (see completedPracticeRecord). The store keeps it as given.
+ */
+export type CompletedPracticeSession = CompletedPracticeSessionRecord;
 
 /** A durable outgoing synchronization record (consumed by spec 2). */
 export interface OutgoingSyncRecord {
@@ -139,6 +102,8 @@ export interface ActivityStore {
   recordEffects(activityId: string, effects: readonly AllowanceEffect[]): Promise<void>;
   /** Every allowance effect recorded for the activity, in the order first recorded. */
   readEffects(activityId: string): Promise<readonly AllowanceEffect[]>;
+  /** Every committed transition of the activity in commit order (none for an unknown activity), for building its completed record. */
+  readTransitions(activityId: string): Promise<readonly CommittedTransition[]>;
   /** The committed transition for a command id, for resolving an uncertain acknowledgement. */
   readReceipt(activityId: string, commandId: string): Promise<CommittedTransition | null>;
   /**

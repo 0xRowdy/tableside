@@ -162,7 +162,7 @@ function workingSentence(target: string, working: boolean, view: CrapsPermittedV
 function settledSentence(fact: Extract<DomainFact, { kind: 'wager-settled' }>): string {
   const name = fact.component === undefined ? crapsTargetName(fact.target) : `Horn ${fact.component} part`;
   const stake = formatUnits(fact.stake);
-  if (fact.result === 'push') return `${name} ${stake} was off and comes back.`;
+  if (fact.result === 'returned') return `${name} ${stake} was off and comes back.`;
   if (fact.result === 'loss') return `${name} ${stake} loses.`;
   const commission = fact.commission === undefined ? '' : `, after commission ${formatUnits(fact.commission)}`;
   // A standing bet that wins is paid and stays up: only the win came back.

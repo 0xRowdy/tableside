@@ -350,7 +350,7 @@ export const crapsMenuCases: TestCase[] = [
       const pi = createActivity(CRAPS_SPEC, { ...ZERO, key: [0xa4093822, 0x299f31d0], session: [0x13198a2e, 0x03707344] });
       const before = run(pi, [place('pass', '10'), ...roll(), place('come', '10'), ...roll(), place('come', '10'), ...roll(), place('come-6-odds', '50'), ...roll(3)]).state;
       t.equal(view(before).table.wagers.map((w) => [w.target, w.working]), [['come-6', true], ['come-6-odds', false]]);
-      t.equal(settled(run(before, roll()).facts), [['come-6', 'win', '10', '20'], ['come-6-odds', 'push', '0', '50']]);
+      t.equal(settled(run(before, roll()).facts), [['come-6', 'win', '10', '20'], ['come-6-odds', 'returned', '0', '50']]);
       t.equal(settled(run(before, [working('come-6-odds', true), ...roll()]).facts), [['come-6', 'win', '10', '20'], ['come-6-odds', 'win', '60', '110']]);
     },
   },
