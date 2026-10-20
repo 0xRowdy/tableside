@@ -27,6 +27,10 @@ export function compareReports(reports: readonly Report[], options: { requiredLe
     const present = reports.some((r) => r.runtime.jsEngine === leg.jsEngine && r.runtime.platform === leg.platform);
     if (!present) problems.push(`missing report from ${legName(leg)}`);
   }
+  for (const r of reports) {
+    const isLaunchLeg = LAUNCH_LEGS.some((leg) => leg.jsEngine === r.runtime.jsEngine && leg.platform === r.runtime.platform);
+    if (!isLaunchLeg) problems.push(`${legName(r.runtime)} is not a launch runtime`);
+  }
 
   const [reference, ...others] = reports;
   if (!reference) return { ok: false, problems: [...problems, 'no reports to compare'] };

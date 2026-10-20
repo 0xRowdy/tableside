@@ -62,7 +62,20 @@ describe('compareReports', () => {
     const notHermes: Runtime = { jsEngine: 'other', platform: 'android', version: 'JSC' };
     const verdict = compareReports([report(NODE, agreed), report(notHermes, agreed)], { requiredLegs: LAUNCH_LEGS });
 
-    expect(verdict.problems).toEqual(['missing report from hermes/ios', 'missing report from hermes/android']);
+    expect(verdict.problems).toEqual([
+      'missing report from hermes/ios',
+      'missing report from hermes/android',
+      'other/android is not a launch runtime',
+    ]);
+  });
+
+  it('fails on a non-Hermes device report even when the Hermes report is also present', () => {
+    const notHermes: Runtime = { jsEngine: 'other', platform: 'ios', version: 'JSC' };
+    const verdict = compareReports([report(NODE, agreed), report(IOS, agreed), report(notHermes, agreed)], {
+      requiredLegs: LAUNCH_LEGS.slice(0, 2),
+    });
+
+    expect(verdict.problems).toEqual(['other/ios is not a launch runtime']);
   });
 
   it('fails when there is nothing to compare', () => {
