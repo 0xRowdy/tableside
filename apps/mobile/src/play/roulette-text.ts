@@ -1,7 +1,7 @@
 // How roulette sessions read on screen and aloud. Amounts are plain units (no
 // currency symbol); formatting never changes a ledger value.
 
-import type { DomainFact, IllegalActionReason, PermittedView, Phase, RoulettePocket } from '@tableside/engine';
+import type { DomainFact, IllegalActionReason, RoulettePermittedView, Phase, RoulettePocket } from '@tableside/engine';
 
 /** Pocket colors on the layout. Presentation only: the engine owns what each placement covers. */
 const RED_POCKETS: ReadonlySet<number> = new Set([1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36]);
@@ -14,10 +14,29 @@ export const pocketColor = (pocket: RoulettePocket): PocketColor =>
 /** "27 red", "0 green". */
 export const describePocket = (pocket: RoulettePocket) => `${pocket} ${pocketColor(pocket)}`;
 
-/** Canonical money text with thousands separators: "1000" → "1,000", "-2.5" → "-2.5". */
+/**
+ * Canonical money text with thousands separators: "1000" → "1,000",
+ * "2045/2" → "1,022.5". A fraction shows as its exact decimal; one without a
+ * finite decimal (never produced by launch payouts) stays a fraction.
+ */
 export function formatUnits(amount: string): string {
   const negative = amount.startsWith('-');
-  const [whole = '0', fraction] = (negative ? amount.slice(1) : amount).split('.');
+  const [numerator = '0', denominator] = (negative ? amount.slice(1) : amount).split('/');
+  let whole = numerator;
+  let fraction = '';
+  if (denominator) {
+    const n = BigInt(numerator);
+    const d = BigInt(denominator);
+    let rest = n % d;
+    whole = (n / d).toString();
+    // An exact decimal needs a denominator of only 2s and 5s; cap the digits to stay finite.
+    for (let digits = 0; rest !== 0n && digits < 12; digits++) {
+      rest *= 10n;
+      fraction += (rest / d).toString();
+      rest %= d;
+    }
+    if (rest !== 0n) return amount;
+  }
   const grouped = whole.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
   return `${negative ? '-' : ''}${grouped}${fraction ? `.${fraction}` : ''}`;
 }
@@ -41,7 +60,7 @@ export function targetName(target: string): string {
   return target.charAt(0).toUpperCase() + target.slice(1);
 }
 
-export const totalOnTable = (view: PermittedView): string =>
+export const totalOnTable = (view: RoulettePermittedView): string =>
   // Roulette stakes are whole units, so a plain integer sum is exact.
   view.wagers.reduce((sum, wager) => sum + BigInt(wager.amount), 0n).toString();
 
@@ -53,7 +72,7 @@ export const STATUS: Record<Phase, string> = {
   completed: 'Ended',
 };
 
-function illegalMessage(reason: IllegalActionReason, target: string | null, view: PermittedView): string {
+function illegalMessage(reason: IllegalActionReason, target: string | null, view: RoulettePermittedView): string {
   const placement = target ? view.table.placements.find((p) => p.target === target) : undefined;
   const name = target ? targetName(target) : 'That wager';
   switch (reason) {
@@ -69,6 +88,7 @@ function illegalMessage(reason: IllegalActionReason, target: string | null, view
       return 'Stakes are whole units. Nothing was placed.';
     case 'no-wager-to-remove':
     case 'unknown-target':
+    case 'action-not-available':
       return `${name} can't be changed. Nothing was placed.`;
   }
 }
@@ -77,7 +97,7 @@ function illegalMessage(reason: IllegalActionReason, target: string | null, view
  * What the latest committed transition changed, in one message for the screen
  * and for screen readers. Built only from committed facts and the permitted view.
  */
-export function describeFacts(facts: readonly DomainFact[], view: PermittedView): string | null {
+export function describeFacts(facts: readonly DomainFact[], view: RoulettePermittedView): string | null {
   const parts: string[] = [];
   let balanceChanged = false;
   for (const fact of facts) {

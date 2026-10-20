@@ -2,21 +2,21 @@
 // the engine's permitted view and forwards taps to the practice controller;
 // it never advances the game or decides what is legal.
 
-import type { PermittedView } from '@tableside/engine';
+import type { RoulettePermittedView } from '@tableside/engine';
 import { useEffect, useMemo, useState } from 'react';
 import { AccessibilityInfo, Modal, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/Button';
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
-import type { PracticeSnapshot } from '@/practice/controller';
+import type { ActiveSnapshot as Active } from '@/practice/controller';
 import { usePractice } from '@/practice/PracticeProvider';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale, type ColorToken } from '@/theme/tokens';
 
 import { describeFacts, describePocket, formatUnits, pocketColor, STATUS, targetName, totalOnTable } from './roulette-text';
 import { PhaseStepper, SessionStrip, TableTopBar, type PhaseStep } from './TableChrome';
 
-type ActiveSnapshot = Extract<PracticeSnapshot, { status: 'active' }>;
+type ActiveSnapshot = Active<RoulettePermittedView>;
 
 /** Above this text scale, a wide window stacks the felt and the controls so text has room. */
 const SIDE_BY_SIDE_MAX_FONT_SCALE = 1.35;
@@ -32,7 +32,7 @@ const CHIPS: readonly { value: string; label: string; color: ColorToken; ink: Co
 
 const ROWS = Array.from({ length: 12 }, (_, row) => [row * 3 + 1, row * 3 + 2, row * 3 + 3]);
 
-function phaseSteps(view: PermittedView): PhaseStep[] {
+function phaseSteps(view: RoulettePermittedView): PhaseStep[] {
   const reached = { 'open-decision': 0, 'revealing-outcome': 1, 'settled-outcome': 2, 'final-settlement': 2, completed: 3 }[view.phase];
   return ['Betting', 'Spin', 'Settle'].map((label, index) => ({
     label,
@@ -40,7 +40,7 @@ function phaseSteps(view: PermittedView): PhaseStep[] {
   }));
 }
 
-function limitsText(view: PermittedView): string {
+function limitsText(view: RoulettePermittedView): string {
   const limit = (limitClass: 'inside' | 'outside') => {
     const placement = view.table.placements.find((p) => p.limitClass === limitClass);
     return placement ? `${formatUnits(placement.min)}–${formatUnits(placement.max)}` : '';
@@ -58,7 +58,7 @@ export function RouletteTable({ snapshot }: { snapshot: ActiveSnapshot }) {
   const { view, facts, busy, save } = snapshot;
 
   const ready = !busy && save === 'saved';
-  const legal = (kind: PermittedView['legalCommands'][number]) => ready && view.legalCommands.includes(kind);
+  const legal = (kind: RoulettePermittedView['legalCommands'][number]) => ready && view.legalCommands.includes(kind);
   const message = useMemo(() => describeFacts(facts, view), [facts, view]);
 
   // Announce every committed transition as it is published, including ones
@@ -70,7 +70,7 @@ export function RouletteTable({ snapshot }: { snapshot: ActiveSnapshot }) {
     let failed = initial.status === 'active' && initial.save === 'failed';
     return controller.subscribe(() => {
       const latest = controller.snapshot();
-      if (latest.status !== 'active') return;
+      if (latest.status !== 'active' || latest.view.game !== 'roulette') return;
       const nowFailed = latest.save === 'failed';
       if (nowFailed && !failed) AccessibilityInfo.announceForAccessibility(NOT_SAVED);
       failed = nowFailed;
@@ -167,7 +167,7 @@ export function RouletteTable({ snapshot }: { snapshot: ActiveSnapshot }) {
 
 const POCKET_TOKEN = { red: 'pocketRed', black: 'pocketBlack', green: 'pocketGreen' } as const;
 
-const WHEEL_NAMES: Record<PermittedView['table']['wheel'], string> = { 'single-zero': 'Single zero' };
+const WHEEL_NAMES: Record<RoulettePermittedView['table']['wheel'], string> = { 'single-zero': 'Single zero' };
 
 const NOT_SAVED = 'Not saved yet. Play is paused.';
 
@@ -180,7 +180,7 @@ function Felt({
   wagerOn,
   onSpot,
 }: {
-  view: PermittedView;
+  view: RoulettePermittedView;
   canPlace: boolean;
   chip: string;
   wagerOn: (target: string) => string | undefined;
@@ -331,7 +331,7 @@ function EndSessionDialog({
   onConfirm,
 }: {
   visible: boolean;
-  view: PermittedView;
+  view: RoulettePermittedView;
   onCancel: () => void;
   onConfirm: () => void;
 }) {

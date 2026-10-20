@@ -16,10 +16,12 @@ const outcomeWord = (net: string) => (net.startsWith('-') ? 'Loss' : net === '0'
 
 export function SessionResult({
   result,
+  subtitle,
   onNewSession,
   onHome,
 }: {
   result: CompletedPracticeSession;
+  subtitle: string;
   onNewSession: () => void;
   onHome: () => void;
 }) {
@@ -42,7 +44,7 @@ export function SessionResult({
         <Text accessibilityRole="header" maxFontSizeMultiplier={textScale.display} style={styles.title}>
           Session result
         </Text>
-        <Text maxFontSizeMultiplier={textScale.body} style={styles.subtitle}>Roulette · free play · single zero</Text>
+        <Text maxFontSizeMultiplier={textScale.body} style={styles.subtitle}>{subtitle}</Text>
       </View>
 
       <View style={styles.banner} accessible accessibilityLabel="Saved. This session is in Saved, Practice.">

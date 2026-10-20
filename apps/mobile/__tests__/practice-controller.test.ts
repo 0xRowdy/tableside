@@ -2,7 +2,9 @@
 // fake clock, deterministic entropy, always-allowed access supervisor).
 // Spin outcomes come from the Random123 "pi digits" stream: 27, 0, 25, 31, 9.
 
-import { ENDING_STEP_MS, PracticeController, REVEAL_MS, type PracticeSnapshot } from '@/practice/controller';
+import type { RoulettePermittedView } from '@tableside/engine';
+
+import { ENDING_STEP_MS, PracticeController, REVEAL_MS, type ActiveSnapshot, type PracticeSnapshot } from '@/practice/controller';
 import { FakeClock, PI_WORDS, substituteAdapters } from '@/practice/testing/substitutes';
 
 function setup(options: { autoClock?: boolean } = {}) {
@@ -20,9 +22,10 @@ async function started(options: { autoClock?: boolean } = {}) {
   return context;
 }
 
-function active(snapshot: PracticeSnapshot) {
+function active(snapshot: PracticeSnapshot): ActiveSnapshot<RoulettePermittedView> {
   if (snapshot.status !== 'active') throw new Error(`expected an active session, got ${snapshot.status}`);
-  return snapshot;
+  if (snapshot.view.game !== 'roulette') throw new Error('expected a roulette session');
+  return { ...snapshot, view: snapshot.view };
 }
 
 async function waitFor(condition: () => boolean): Promise<void> {
@@ -161,7 +164,7 @@ describe('spinning', () => {
     const paused = active(controller.snapshot());
     expect(paused.save).toBe('failed');
     expect(paused.view.phase).toBe('open-decision');
-    expect(published.some((snapshot) => snapshot.status === 'active' && snapshot.view.outcome !== null)).toBe(false);
+    expect(published.some((snapshot) => snapshot.status === 'active' && snapshot.view.game === 'roulette' && snapshot.view.outcome !== null)).toBe(false);
     expect((await store.load(paused.view.activityId))?.sequence).toBe(1);
 
     await controller.retrySave();

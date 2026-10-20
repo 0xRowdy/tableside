@@ -16,7 +16,10 @@ import {
   readPermittedView,
   streamIdentityFromEntropy,
   sub,
+  type ActivitySpecification,
   type ActivityState,
+  type BlackjackAction,
+  type BlackjackRuleSet,
   type Command,
   type CommandEnvelope,
   type DomainFact,
@@ -49,13 +52,14 @@ export type PracticeSnapshot =
       readonly save: 'saved' | 'failed';
       readonly accessNotAllowed: boolean;
     }
-  | { readonly status: 'completed'; readonly result: CompletedPracticeSession };
+  | { readonly status: 'completed'; readonly result: CompletedPracticeSession; readonly specification: ActivitySpecification };
 
-export interface StartRequest {
-  readonly game: 'roulette';
-  /** Whole units, as canonical decimal text. */
-  readonly buyIn: string;
-}
+export type ActiveSnapshot<V extends PermittedView = PermittedView> = Extract<PracticeSnapshot, { status: 'active' }> & { readonly view: V };
+
+/** The buy-in is whole units, as canonical decimal text. */
+export type StartRequest =
+  | { readonly game: 'roulette'; readonly buyIn: string }
+  | { readonly game: 'blackjack'; readonly buyIn: string; /** The chosen preset and penetration. */ readonly rules: BlackjackRuleSet };
 
 type Pending = { readonly kind: 'transition'; readonly envelope: CommandEnvelope } | { readonly kind: 'completion' };
 
@@ -126,16 +130,11 @@ export class PracticeController {
       } else {
         const activityId = this.adapters.newId();
         const random = streamIdentityFromEntropy(this.adapters.entropy);
-        const specification = {
-          activityId,
-          owner: this.adapters.owner,
-          device: this.adapters.device,
-          game: request.game,
-          rules: SINGLE_ZERO_ROULETTE,
-          strategy: null,
-          reference: null,
-          funding: request.buyIn,
-        };
+        const common = { activityId, owner: this.adapters.owner, device: this.adapters.device, strategy: null, reference: null, funding: request.buyIn };
+        const specification: ActivitySpecification =
+          request.game === 'blackjack'
+            ? { ...common, game: 'blackjack', rules: request.rules }
+            : { ...common, game: 'roulette', rules: SINGLE_ZERO_ROULETTE };
         let initial: ActivityState;
         try {
           initial = createActivity(specification, random);
@@ -169,14 +168,24 @@ export class PracticeController {
     });
   }
 
-  /** Begins a turn (the spin), then settles it automatically after the reveal. */
-  async spin(): Promise<void> {
+  /** Begins a turn (a spin or a deal); a turn that needs no decision settles automatically after the reveal. */
+  async beginTurn(): Promise<void> {
     await this.exclusive(async () => {
       const state = this.requireState();
       const access = await this.adapters.access.beforeTurn({ activityId: state.activity.id, turn: state.turn + 1 });
       this.accessNotAllowed = access.status !== 'allowed';
       if (this.accessNotAllowed) return this.publish();
       if (settled(await this.send({ kind: 'begin-turn' }))) await this.drive();
+    });
+  }
+
+  /** Roulette's spin begins the turn. */
+  spin = (): Promise<void> => this.beginTurn();
+
+  /** A blackjack playing action; once the hand is done the round settles automatically after the reveal. */
+  async play(action: BlackjackAction): Promise<void> {
+    await this.exclusive(async () => {
+      if (settled(await this.send({ kind: 'play', action }))) await this.drive();
     });
   }
 
@@ -367,7 +376,7 @@ export class PracticeController {
       return false;
     }
     this.pending = null;
-    this.current = { status: 'completed', result };
+    this.current = { status: 'completed', result, specification: activity.specification };
     this.notify();
     return true;
   }
@@ -417,4 +426,4 @@ export class PracticeController {
   }
 }
 
-const sameRequest = (a: StartRequest, b: StartRequest) => a.game === b.game && a.buyIn === b.buyIn;
+const sameRequest = (a: StartRequest, b: StartRequest) => JSON.stringify(a) === JSON.stringify(b);
