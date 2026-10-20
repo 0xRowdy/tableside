@@ -5,7 +5,17 @@
 // write may or may not have happened), which the caller resolves by reading.
 // Every implementation must pass the contract suite in testing/store-contract.ts.
 
-import type { ActivitySpecification, DomainFact, FundingSource, GameId, RandomStreamIdentity, Receipt, VersionedIdentity } from '@tableside/engine';
+import type {
+  ActivitySpecification,
+  DomainFact,
+  FundingSource,
+  GameId,
+  RandomStreamIdentity,
+  Receipt,
+  StrategyDeparture,
+  StrategyView,
+  VersionedIdentity,
+} from '@tableside/engine';
 
 /**
  * An allowance effect (spec 5): a turn charge committed with the transition that
@@ -74,7 +84,7 @@ export interface CommittedTransition {
 export interface CompletedPracticeSession {
   readonly activityId: string;
   readonly game: GameId;
-  readonly mode: 'free-play';
+  readonly mode: 'free-play' | 'guided';
   readonly identities: {
     readonly engine: string;
     readonly rules: VersionedIdentity;
@@ -95,6 +105,15 @@ export interface CompletedPracticeSession {
   readonly netResult: string;
   /** Largest buy-in-adjusted fall of the game result from a previous peak, including final settlement. */
   readonly maxDrawdown: string;
+  /**
+   * Guided practice: betting adherence (kept apart from the money), the
+   * departure log in order, and whether any explicit override happened. Null in free play.
+   */
+  readonly guidance: {
+    readonly adherence: StrategyView['adherence'];
+    readonly departures: readonly StrategyDeparture[];
+    readonly overrideAffected: boolean;
+  } | null;
   readonly completedAt: number;
 }
 

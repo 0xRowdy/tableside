@@ -14,6 +14,7 @@ import { usePractice } from '@/practice/PracticeProvider';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale, type ColorToken } from '@/theme/tokens';
 
 import { BetSelector } from './bet-selector/BetSelector';
+import { CorrectionPanel, CycleEndPanel, GuidedStrip, StopStrategyDialog } from './Guidance';
 import { draftAmountText, EMPTY_DRAFT, findChoice, isDraftPending, type BetDraft } from './bet-selector/catalog';
 import { DraftBar, PresentationSwitch, type Presentation } from './bet-selector/Presentation';
 import { EndSessionDialog } from './EndSessionDialog';
@@ -39,7 +40,7 @@ const CHIPS: readonly { value: string; label: string; color: ColorToken; ink: Co
 
 
 function phaseSteps(view: PermittedView): PhaseStep[] {
-  const reached = { 'open-decision': 0, 'revealing-outcome': 1, 'settled-outcome': 2, 'final-settlement': 2, completed: 3 }[view.phase];
+  const reached = { 'open-decision': 0, correction: 0, 'revealing-outcome': 1, 'settled-outcome': 2, 'cycle-completion': 2, 'final-settlement': 2, completed: 3 }[view.phase];
   return ['Betting', 'Spin', 'Settle'].map((label, index) => ({
     label,
     state: index < reached ? 'done' : index === reached ? 'current' : 'upcoming',
@@ -51,7 +52,8 @@ function limitsText(view: PermittedView): string {
     const placement = view.table.placements.find((p) => p.limitClass === limitClass);
     return placement ? `${formatUnits(placement.min)}–${formatUnits(placement.max)}` : '';
   };
-  return `${WHEEL_NAMES[view.table.wheel]} · inside ${limit('inside')} · outside ${limit('outside')}`;
+  const guided = view.strategy ? ` · guided practice, ${view.strategy.name}` : '';
+  return `${WHEEL_NAMES[view.table.wheel]} · inside ${limit('inside')} · outside ${limit('outside')}${guided}`;
 }
 
 export function RouletteTable({ snapshot }: { snapshot: ActiveSnapshot }) {
@@ -62,6 +64,7 @@ export function RouletteTable({ snapshot }: { snapshot: ActiveSnapshot }) {
   const [chip, setChip] = useState('5');
   const [confirming, setConfirming] = useState(false);
   const [rebuying, setRebuying] = useState(false);
+  const [stoppingStrategy, setStoppingStrategy] = useState(false);
   // Held here, above both presentations, so rotation, resizing and switching keep the draft.
   const [presentation, setPresentation] = useState<Presentation>('table');
   const [draft, setDraft] = useState<BetDraft>(EMPTY_DRAFT);
@@ -109,6 +112,8 @@ export function RouletteTable({ snapshot }: { snapshot: ActiveSnapshot }) {
     void controller.placeWager(target, total.toString());
   };
   const canPlace = legal('place-wager');
+  const wagersText = view.wagers.length === 0 ? 'nothing' : view.wagers.map((wager) => `${targetName(wager.target)} ${formatUnits(wager.amount)}`).join(' · ');
+  const strategy = view.strategy;
 
   return (
     <View style={styles.screen}>
@@ -116,6 +121,7 @@ export function RouletteTable({ snapshot }: { snapshot: ActiveSnapshot }) {
         <TableTopBar title="Roulette" subtitle={limitsText(view)} canEnd={legal('request-stop')} onEnd={() => setConfirming(true)} />
         <PhaseStepper steps={phaseSteps(view)} />
         <SessionStrip balance={formatUnits(view.balance)} onTable={formatUnits(totalOnTable(view))} status={save === 'failed' ? 'Paused · not saved' : STATUS[view.phase]} />
+        {strategy && <GuidedStrip strategy={strategy} canStop={legal('stop-strategy')} onStop={() => setStoppingStrategy(true)} />}
         {view.phase !== 'final-settlement' && <PresentationSwitch value={presentation} onChange={setPresentation} />}
 
         {save === 'failed' && (
@@ -182,6 +188,26 @@ export function RouletteTable({ snapshot }: { snapshot: ActiveSnapshot }) {
               )}
             </View>
             <View style={[styles.column, styles.controls]}>
+              {strategy?.correction && view.phase === 'correction' && (
+                <CorrectionPanel
+                  strategyName={strategy.name}
+                  correction={strategy.correction}
+                  overrideEndsCycle={strategy.overrideEndsCycle}
+                  table={{ phase: 'Strategy check before your spin', balance: formatUnits(view.balance), wagers: wagersText }}
+                  fullScreen={fontScale > SIDE_BY_SIDE_MAX_FONT_SCALE}
+                  busy={!ready}
+                  onRetry={() => void controller.retryCorrection()}
+                  onOverride={() => void controller.overrideCorrection()}
+                />
+              )}
+              {strategy && view.phase === 'cycle-completion' && (
+                <CycleEndPanel
+                  strategy={strategy}
+                  busy={!ready}
+                  onRestart={() => void controller.restartCycle()}
+                  onStopStrategy={() => setStoppingStrategy(true)}
+                />
+              )}
               {message && (
                 <Text maxFontSizeMultiplier={textScale.body} style={styles.message} testID="latest-event">
                   {message}
@@ -203,9 +229,7 @@ export function RouletteTable({ snapshot }: { snapshot: ActiveSnapshot }) {
               <View style={styles.summary}>
                 <Text maxFontSizeMultiplier={textScale.body} style={styles.summaryTitle}>On table {formatUnits(totalOnTable(view))}</Text>
                 <Text maxFontSizeMultiplier={textScale.body} style={styles.summaryText}>
-                  {view.wagers.length === 0
-                    ? 'No wagers yet'
-                    : view.wagers.map((wager) => `${targetName(wager.target)} ${formatUnits(wager.amount)}`).join(' · ')}
+                  {view.wagers.length === 0 ? 'No wagers yet' : wagersText}
                 </Text>
               </View>
               <Button label="Spin" stretch disabled={!legal('begin-turn')} onPress={() => void controller.spin()} />
@@ -235,6 +259,17 @@ export function RouletteTable({ snapshot }: { snapshot: ActiveSnapshot }) {
           onClose={() => setRebuying(false)}
         />
       )}
+
+      <StopStrategyDialog
+        visible={stoppingStrategy}
+        removable={view.wagersCommitted || view.wagers.length === 0 ? 'Nothing removable on the table' : wagersText}
+        committed={view.wagersCommitted ? `${wagersText} settle with this spin.` : 'None between spins.'}
+        onCancel={() => setStoppingStrategy(false)}
+        onConfirm={() => {
+          setStoppingStrategy(false);
+          void controller.stopStrategy();
+        }}
+      />
 
       <EndSessionDialog
         visible={confirming}

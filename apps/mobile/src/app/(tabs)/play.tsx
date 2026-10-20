@@ -22,7 +22,7 @@ function resultSubtitle(specification: ActivitySpecification): string | undefine
     case 'blackjack':
       return `Blackjack · free play · ${specification.rules.dealer} · ${specification.rules.lateSurrender ? 'LS' : 'no LS'}`;
     case 'roulette':
-      return `Roulette · free play · ${specification.rules.wheel === 'double-zero' ? 'double zero' : 'single zero'}`;
+      return `Roulette · ${specification.strategy ? `guided practice, ${specification.strategy.definition.name}` : 'free play'} · ${specification.rules.wheel === 'double-zero' ? 'double zero' : 'single zero'}`;
     default:
       return undefined;
   }

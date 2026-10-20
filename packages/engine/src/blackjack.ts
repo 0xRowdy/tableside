@@ -8,7 +8,7 @@
 // shows only exposed cards: the hole card is face down until the round ends,
 // and a negative peek reveals no rank.
 
-import type { ActivityStateBase, BlackjackPermittedView, Command, CommandKind, DomainFact, GameModule, PermittedViewBase, Step, Wager } from './activity';
+import type { ActivityStateBase, BlackjackPermittedView, Command, CommandKind, DomainFact, GameModule, PermittedViewBase, Step, StrategyCommandKind, Wager } from './activity';
 import { canonicalShoe, shuffle, type Card, type Rank, type Suit } from './draws';
 import { add, compare, decodeMoney, encodeMoney, money, mul, neg, sub, type Money } from './money';
 import { RandomStream } from './random';
@@ -38,7 +38,7 @@ export type BlackjackAction = 'hit' | 'stand' | 'double';
 const ACTIONS: readonly BlackjackAction[] = ['hit', 'stand', 'double'];
 
 /** The commands the blackjack module applies: every game command plus the playing action. */
-export type BlackjackCommand = Exclude<Command, { readonly kind: 'rebuy' }>;
+export type BlackjackCommand = Exclude<Command, { readonly kind: 'rebuy' | StrategyCommandKind }>;
 
 /** Why a blackjack action fails legality beyond the common reasons. */
 export type BlackjackIllegalActionReason =
@@ -201,6 +201,9 @@ function legal(state: BlackjackActivityState): CommandKind[] {
     case 'final-settlement':
       return ['advance-final-settlement'];
     case 'completed':
+    // Guided phases are the protocol's to decide.
+    case 'correction':
+    case 'cycle-completion':
       return [];
   }
 }

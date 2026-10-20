@@ -72,6 +72,10 @@ const PAYOUT: Record<PlacementKind, bigint> = {
 };
 
 const RED: ReadonlySet<number> = new Set([1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36]);
+
+/** A pocket's colour on the layout: the zeros are green. */
+export const pocketColor = (pocket: RoulettePocket): 'red' | 'black' | 'green' =>
+  typeof pocket !== 'number' || pocket === 0 ? 'green' : RED.has(pocket) ? 'red' : 'black';
 const NUMBERS = Array.from({ length: 36 }, (_, i) => i + 1);
 /** The layout column (1-3) of a number. */
 const columnOf = (n: number) => ((n - 1) % 3) + 1;

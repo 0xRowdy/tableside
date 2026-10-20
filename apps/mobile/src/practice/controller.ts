@@ -9,6 +9,11 @@
 // before resuming and on lifecycle events. Its dispositions and the direct
 // suspend live here, outside the engine, so suspending never adds a command:
 // a suspended-then-resumed session commits exactly the trace it would have.
+//
+// Guided practice: the engine assesses each turn against the pinned strategy.
+// A correction, a pending strategy action and a cycle completion all wait for
+// the player; access is asked, and a turn charged, only for a transition that
+// really begins a turn (a correction begins nothing).
 
 import {
   advanceActivity,
@@ -19,6 +24,7 @@ import {
   decodeMoney,
   encodeCheckpoint,
   readPermittedView,
+  StrategySpecificationError,
   streamIdentityFromEntropy,
   summarizeFunding,
   type ActivitySpecification,
@@ -34,6 +40,7 @@ import {
   type PermittedView,
   type Phase,
   type RouletteWheel,
+  type StrategySelection,
 } from '@tableside/engine';
 import { ROULETTE_PRESETS, standardCraps } from '@tableside/definitions';
 
@@ -47,7 +54,7 @@ export const ENDING_STEP_MS = 1000;
 /** How long play stays paused after a failed save before it retries by itself. */
 export const SAVE_RETRY_MS = 5000;
 
-export type StartProblem = 'invalid-buy-in' | 'save-failed' | 'access-denied' | 'access-uncertain';
+export type StartProblem = 'invalid-buy-in' | 'strategy-incompatible' | 'save-failed' | 'access-denied' | 'access-uncertain';
 
 /** Shown whenever access can't be confirmed at a start or a resume (Amendment 5 A1). */
 export const RECONNECT_TO_VERIFY = 'Reconnect to verify access';
@@ -111,6 +118,8 @@ interface StartRequestBase {
   readonly buyIn: string;
   /** Practice funding unless spec 5 starts the session from the training bankroll. */
   readonly fundingSource?: FundingSource;
+  /** Guided practice: the strategy revision to pin, with the choices made at setup. Free play when omitted. */
+  readonly strategy?: StrategySelection;
 }
 
 export type StartRequest =
@@ -251,7 +260,7 @@ export class PracticeController {
           activityId,
           owner: this.adapters.owner,
           device: this.adapters.device,
-          strategy: null,
+          strategy: request.strategy ? { definition: request.strategy.definition, parameters: { ...request.strategy.parameters } } : null,
           reference: null,
           fundingSource: request.fundingSource,
           funding: request.buyIn,
@@ -266,6 +275,8 @@ export class PracticeController {
         try {
           initial = createActivity(specification, random);
         } catch (error) {
+          // The engine judges whether the strategy runs at this table; setup explains why it doesn't.
+          if (error instanceof StrategySpecificationError) return this.showNone('strategy-incompatible');
           if (error instanceof ActivitySpecificationError) return this.showNone('invalid-buy-in');
           throw error;
         }
@@ -296,11 +307,58 @@ export class PracticeController {
     });
   }
 
-  /** Begins a turn (a spin, a roll or a deal); a turn that needs no decision settles automatically after the reveal. */
+  /**
+   * Begins a turn (a spin, a roll or a deal); a turn that needs no decision
+   * settles automatically after the reveal. In guided practice a departing
+   * move stops at a correction instead.
+   */
   async beginTurn(): Promise<void> {
+    await this.exclusive(() => this.turnCommand({ kind: 'begin-turn' }));
+  }
+
+  /** From a correction: takes the move back and sets the strategy's bets. */
+  async retryCorrection(): Promise<void> {
     await this.exclusive(async () => {
       if (!this.playOpen()) return;
+      if (settled(await this.send({ kind: 'retry-correction' }))) await this.drive();
+    });
+  }
+
+  /** From a correction: keeps the move (a strategy override), which begins the turn at once. */
+  async overrideCorrection(): Promise<void> {
+    await this.exclusive(() => this.turnCommand({ kind: 'override-correction' }));
+  }
+
+  /** Starts another strategy cycle with the remaining balance. */
+  async restartCycle(): Promise<void> {
+    await this.exclusive(async () => {
+      if (!this.playOpen()) return;
+      if (settled(await this.send({ kind: 'restart-cycle' }))) await this.drive();
+    });
+  }
+
+  /** Stops the strategy's bets; the practice session stays open. */
+  async stopStrategy(): Promise<void> {
+    await this.exclusive(async () => {
+      if (!this.playOpen()) return;
+      if (settled(await this.send({ kind: 'stop-strategy' }))) await this.drive();
+    });
+  }
+
+  /**
+   * Sends a command that may begin a turn. The supervisor is asked, and a turn
+   * charge committed with it, only when the engine's transition begins one.
+   */
+  private async turnCommand(command: Command): Promise<void> {
+    {
+      if (!this.playOpen() || this.pending) return;
       const state = this.requireState();
+      const candidate = advanceActivity(state, { sequence: state.sequence, commandId: `${state.activity.id}/${state.sequence}`, command });
+      if (candidate.status === 'committed' && candidate.state.turn === state.turn) {
+        // Nothing begins (a correction, or an illegal attempt): no access question, no charge.
+        if (settled(await this.send(command))) await this.drive();
+        return;
+      }
       // Unanswered mid-activity: uncertain, so no new turn (Amendment 5 A1).
       const access = await this.adapters.access.beforeTurn({ activityId: state.activity.id, turn: state.turn + 1 }).catch((): AccessDenial => UNANSWERED);
       if (access.status !== 'allowed') {
@@ -315,8 +373,8 @@ export class PracticeController {
       const effects: AllowanceEffect[] = charge
         ? [{ effectId: { grant: charge.grant, activity: state.activity.id, sequence: state.sequence }, kind: 'turn-charge', amount: charge.amount }]
         : [];
-      if (settled(await this.send({ kind: 'begin-turn' }, effects))) await this.drive();
-    });
+      if (settled(await this.send(command, effects))) await this.drive();
+    }
   }
 
   /**
@@ -706,10 +764,11 @@ export class PracticeController {
     if (!activity) throw new Error('no practice session is active');
     // Completed: nothing is left on the table, so the balance is the final cash-out.
     const funding = summarizeFunding(state.funding, decodeMoney(state.balance));
+    const guided = readPermittedView(state).strategy;
     const record: CompletedPracticeSession = {
       activityId: state.activity.id,
       game: state.identities.game,
-      mode: 'free-play',
+      mode: guided ? 'guided' : 'free-play',
       identities: {
         engine: state.identities.engine,
         rules: state.identities.rules,
@@ -724,6 +783,7 @@ export class PracticeController {
       finalCashOut: funding.finalCashOut,
       netResult: funding.netResult,
       maxDrawdown: funding.maxDrawdown,
+      guidance: guided && { adherence: guided.adherence, departures: guided.departures, overrideAffected: guided.overrideAffected },
       completedAt: this.adapters.clock.now(),
     };
     let result: CompletedPracticeSession | null;
@@ -817,6 +877,7 @@ const wheelOf = (request: Extract<StartRequest, { game: 'roulette' }>): Roulette
 /** Whether a retried start asks for the same table, so it may recover the unacknowledged activity. */
 function sameRequest(a: StartRequest, b: StartRequest): boolean {
   if (a.buyIn !== b.buyIn || a.fundingSource !== b.fundingSource) return false;
+  if (canonicalJson(a.strategy ?? null) !== canonicalJson(b.strategy ?? null)) return false;
   if (a.game === 'craps') return b.game === 'craps' && a.odds === b.odds;
   if (a.game === 'blackjack') return b.game === 'blackjack' && canonicalJson(a.rules) === canonicalJson(b.rules);
   return b.game === 'roulette' && wheelOf(a) === wheelOf(b);
