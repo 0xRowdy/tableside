@@ -797,6 +797,20 @@ function evaluate(expression: StrategyExpression, values: Values): Money | undef
   return value && withinStrategyBits(value) ? value : undefined;
 }
 
+/** Whether an expression reads a situation value. */
+const expressionReads = (expression: StrategyExpression, name: string): boolean => {
+  if ('value' in expression) return expression.value === name;
+  const operands = 'add' in expression ? expression.add : 'sub' in expression ? expression.sub : 'mul' in expression ? expression.mul : 'min' in expression ? expression.min : 'max' in expression ? expression.max : [];
+  return operands.some((operand) => expressionReads(operand, name));
+};
+
+/** Whether a valid definition's instructions read a situation value (blackjack's "true-count") to decide its bets. */
+export function instructionsRead(definition: StrategyDefinition, name: string): boolean {
+  const reads = (condition: StrategyCondition): boolean =>
+    'all' in condition ? condition.all.some(reads) : 'any' in condition ? condition.any.some(reads) : 'compare' in condition ? expressionReads(condition.compare, name) || expressionReads(condition.to, name) : false;
+  return definition.instructions.some((instruction) => reads(instruction.when));
+}
+
 /** The vocabulary's situation values for a situation. */
 const situationValues = <S>(vocabulary: StrategyVocabulary<S>, situation: S): Record<string, Money> =>
   Object.fromEntries((vocabulary.values ?? []).map((name) => [name, (vocabulary.value as NonNullable<StrategyVocabulary<S>['value']>)(situation, name)]));

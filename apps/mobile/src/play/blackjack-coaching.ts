@@ -179,7 +179,7 @@ export function playCorrectionCopy(strategyName: string, correction: PlayCorrect
     lines.push(
       countSupplied
         ? `The true count is ${signed(count.trueCount)}, supplied by Tableside in this mode (${countWorking(count)}).`
-        : `You keep the count in this mode; the actual true count is ${signed(count.trueCount)} (${countWorking(count)}).`,
+        : 'You keep the count in this mode; your play was checked against the actual count, which Tableside doesn\'t show.',
     );
     lines.push(`${deviation.situation}: at ${signed(deviation.threshold)} or more, ${deviationPlay(deviation.atOrAbove)}; below ${signed(deviation.threshold)}, ${deviationPlay(deviation.below)}.`);
   }

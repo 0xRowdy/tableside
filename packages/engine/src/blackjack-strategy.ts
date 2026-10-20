@@ -34,7 +34,7 @@ import {
 import type { Card } from './draws';
 import { add, compare, decodeMoney, encodeMoney, money, mul, type Money } from './money';
 import { BASE_WAGER_CEILING, hasExactKeys, isRecord, isText, parseMoney } from './shape';
-import type { BetRequirement, PlayAssessment, StrategyDefinition, StrategyGame, StrategyVocabulary } from './strategy';
+import { instructionsRead, type BetRequirement, type PlayAssessment, type StrategyDefinition, type StrategyGame, type StrategyVocabulary } from './strategy';
 
 /** Ten letters per row, one per dealer up card in the order A, 2, 3, ..., 9, 10. */
 export type PlayRows = readonly string[];
@@ -667,7 +667,7 @@ export const BLACKJACK_STRATEGY: StrategyGame<BlackjackActivityState> = {
   // A schedule's next bet would tell the player the count it reads, so it stays hidden unless Tableside shows the count.
   hidesPending: (state) => {
     const definition = state.strategy?.definition;
-    return definition !== undefined && policyOf(definition)?.count !== 'supplied' && JSON.stringify(definition.instructions).includes('"value":"true-count"');
+    return definition !== undefined && policyOf(definition)?.count !== 'supplied' && instructionsRead(definition, 'true-count');
   },
   assessPlay,
   // "19 v 20": the learner's hand totals against the dealer's.

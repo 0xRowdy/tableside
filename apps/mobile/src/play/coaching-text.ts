@@ -9,7 +9,7 @@ import type { AdherenceMeasure, BetCorrection, CycleEnd, Explanation, PendingStr
 import { crapsTargetName } from './craps-text';
 import { targetName } from './roulette-text';
 import type { TurnWord } from './strategy-text';
-import { formatSigned, formatUnits } from './units';
+import { formatUnits } from './units';
 
 /** How a game words its wagers and its turns. */
 export interface CoachWords {
@@ -69,9 +69,9 @@ export function correctionLines(correction: BetCorrection, words: CoachWords = R
   if (color !== undefined && color !== 'none') lines.push(`The last spin landed on ${color}.`);
   const point = subjects.point;
   if (point !== undefined) lines.push(point === 'none' ? 'The puck is off: the next roll is a come-out roll.' : `The point is ${point}.`);
-  // A bet schedule reads the true count; it is stated only here, after the player has bet.
+  // A bet schedule reads the true count the player keeps: the correction names the band, never the count itself.
   const trueCount = explanation.situation.values['true-count'];
-  if (trueCount !== undefined) lines.push(`The true count for this deal is ${formatSigned(trueCount)}.`);
+  if (trueCount !== undefined) lines.push('Checked against the actual true count, which you keep in this mode.');
   const last = explanation.state.lastResult;
   if (last !== 'none' && trueCount === undefined) lines.push(`The strategy's last ${words.turn} ${RESULT_WORDS[last]}.`);
   lines.push(`Available for this ${words.turn}: ${formatUnits(available)}.`);

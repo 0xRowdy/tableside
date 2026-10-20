@@ -5,9 +5,14 @@
 // against a dealer 10 of spades with the 6 of spades face down. A fresh shoe's
 // true count is 0, where the schedule bets 1 unit (10).
 
-import { act, cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react-native';
+import { blackjackStrategy } from '@tableside/definitions';
+import { explainPlay, type Card, type PlayCorrection } from '@tableside/engine';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
 import { renderRouter } from 'expo-router/testing-library';
-import { AccessibilityInfo, StyleSheet } from 'react-native';
+import { AccessibilityInfo, Dimensions, StyleSheet } from 'react-native';
+
+import { playCorrectionCopy } from '@/play/blackjack-coaching';
+import { CorrectionPanel } from '@/play/Guidance';
 
 jest.mock('@/practice/app-adapters', () => {
   const { FakeClock, substituteAdapters: create } = jest.requireActual('@/practice/testing/substitutes');
@@ -27,6 +32,11 @@ beforeEach(() => {
 });
 
 const SCHEDULE = 'Practice the Hi-Lo bet schedule';
+
+async function setWindow(width: number, height: number, fontScale = 1) {
+  const window = Dimensions.get('window');
+  await act(() => Dimensions.set({ window: { ...window, width, height, fontScale }, screen: { ...window, width, height, fontScale } }));
+}
 
 async function openSetup() {
   await renderRouter('./src/app', { initialUrl: '/play?game=blackjack' });
@@ -57,17 +67,21 @@ describe('blackjack counting modes', () => {
     await cleanup();
   }, 180_000);
 
+  afterEach(async () => {
+    await setWindow(390, 844, 1);
+  });
+
   it('setup offers the four modes; the bet schedule only alongside a counting mode', async () => {
     await openSetup();
     const modes = ['Basic strategy', 'Basic with deviations', 'Counting with basic', 'Counting with deviations'].map((name) => screen.getByRole('radio', { name }));
-    expect(screen.getByRole('radio', { name: 'Counting with basic' })).toHaveProp('accessibilityHint', 'You keep the Hi-Lo count. Play is checked against the real count; Tableside never shows it.');
+    expect(screen.getByRole('radio', { name: 'Counting with basic' })).toHaveProp('accessibilityHint', 'You keep the Hi-Lo count. Play is checked against the real count.');
     for (const radio of modes) expect(StyleSheet.flatten(radio.props.style).minHeight).toBeGreaterThanOrEqual(48);
     expect(screen.queryByRole('switch', { name: SCHEDULE })).toBeNull();
 
     await fireEvent.press(screen.getByRole('radio', { name: 'Counting with deviations' }));
     const schedule = screen.getByRole('switch', { name: SCHEDULE });
     expect(schedule).toHaveProp('accessibilityState', { checked: false, disabled: false });
-    expect(schedule).toHaveProp('accessibilityHint', '1 / 2 / 4 / 6 / 8 units of 10 by true count. Scored separately from your play.');
+    expect(schedule).toHaveProp('accessibilityHint', '1 / 2 / 4 / 6 / 8 units by true count. Scored separately from your play.');
     await fireEvent.press(schedule);
     expect(screen.getByRole('switch', { name: SCHEDULE })).toHaveProp('accessibilityState', { checked: true, disabled: false });
     expect(screen.getByText('Tableside checks each bet against the schedule before the deal.')).toBeOnTheScreen();
@@ -114,7 +128,9 @@ describe('blackjack counting modes', () => {
     const panel = within(await screen.findByTestId('correction-panel'));
     expect(panel.getByRole('header', { name: 'Before your round' })).toBeOnTheScreen();
     expect(panel.getByText('Counting with deviations · bet schedule bets 10 on your hand.')).toBeOnTheScreen();
-    expect(panel.getByText('The true count for this deal is 0.')).toBeOnTheScreen();
+    // The count is the player's to keep: the correction names the band, never the count.
+    expect(panel.getByText('Checked against the actual true count, which you keep in this mode.')).toBeOnTheScreen();
+    expect(JSON.stringify(screen.toJSON())).not.toMatch(/[Tt]rue count (is|for)|Running/);
     expect(panel.getByText('Matching instruction: "True count below +1: 1 unit (10)".')).toBeOnTheScreen();
     expect(panel.getByText("You've set 25 on your hand. Nothing has been placed yet.")).toBeOnTheScreen();
     expect(announcements.join(' ')).toContain('Paused before the deal: nothing has been dealt yet.');
@@ -132,5 +148,50 @@ describe('blackjack counting modes', () => {
     expect(
       screen.getByLabelText('Strategy adherence: Playing: followed 1 of 1 decision · Betting: followed 0 of 1 round. Departures 1.'),
     ).toBeOnTheScreen();
+  });
+
+  it('in landscape at the largest text the bet correction is a full-screen panel restating the table, with full-size targets', async () => {
+    await start('Counting with basic', true);
+    await setWindow(844, 390, 3.1);
+    await bet25AndDeal();
+    const panel = within(await screen.findByTestId('correction-panel'));
+    expect(panel.getByRole('header', { name: 'The table right now' })).toBeOnTheScreen();
+    expect(panel.getByText('Balance: 975')).toBeOnTheScreen();
+    expect(panel.getByText('On the table: 25 (one hand)')).toBeOnTheScreen();
+    for (const name of ['Take it back & bet 10 on your hand', 'Keep my bets']) {
+      expect(StyleSheet.flatten(panel.getByRole('button', { name }).props.style).minHeight).toBeGreaterThanOrEqual(48);
+    }
+  });
+
+  it('a counting-with-deviations play correction states the index, never the count the player keeps', async () => {
+    // 16 (10, 2, 4) against a 10 at an actual true count of +1: the index stands.
+    const card = (rank: number): Card => ({ deck: 0, suit: 'clubs', rank: rank as Card['rank'] });
+    const definition = blackjackStrategy('S17_LS', 'counting-with-deviations');
+    const result = explainPlay(definition, {
+      game: 'blackjack',
+      rules: { dealer: 'S17', lateSurrender: true },
+      decision: 'hand',
+      cards: [card(10), card(2), card(4)],
+      hands: 1,
+      up: card(10),
+      balance: '975',
+      stake: '25',
+      shoe: { running: 5, remaining: 260 },
+    });
+    if (!result.ok) throw new Error(result.error);
+    const correction: PlayCorrection = { id: 'd1', turn: 1, decision: 0, explanation: result.explanation, actual: { action: 'hit', amount: null } };
+    await render(
+      <CorrectionPanel
+        copy={playCorrectionCopy(definition.name, correction, { dealer: 'S17', lateSurrender: true }, false)}
+        table={{ phase: 'Play', balance: '975', wagers: '25' }}
+        fullScreen={false}
+        busy={false}
+        onRetry={() => undefined}
+        onOverride={() => undefined}
+      />,
+    );
+    expect(screen.getByText('Counting with deviations stands on 16 against a 10 at this count.')).toBeOnTheScreen();
+    expect(screen.getByText("You keep the count in this mode; your play was checked against the actual count, which Tableside doesn't show.")).toBeOnTheScreen();
+    expect(JSON.stringify(screen.toJSON())).not.toMatch(/true count is|Running/);
   });
 });
