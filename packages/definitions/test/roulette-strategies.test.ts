@@ -1,5 +1,6 @@
 import {
   advanceActivity,
+  checkpointHash,
   createActivity,
   explainPrescription,
   RANDOM_PROTOCOL_VERSION,
@@ -148,6 +149,54 @@ describe('roulette built-in progressions', () => {
     const { steps, state } = follow(THREE_WIN_PARLAY, 'red', 10);
     expect(steps.map((s) => s.stake)).toEqual(['10']);
     expect(readPermittedView(state).strategy?.cycleEnd).toBe('completed');
+  });
+
+  it('a builder copy of the same data runs to an identical trace and checkpoint hash (Amendment 2 A3)', () => {
+    /** Each spin's checkpoint hash, following the strategy for up to eight spins on black (six losses, then 3 red). */
+    const hashes = (definition: StrategyDefinition) => {
+      let state: ActivityState = createActivity(
+        {
+          activityId: 'a',
+          owner: 'local',
+          device: 'd',
+          game: 'roulette',
+          rules: ROULETTE_PRESETS['single-zero'],
+          strategy: { definition, parameters: strategyDefaults(definition) },
+          reference: null,
+          fundingSource: 'practice-funding',
+          funding: '1000',
+        },
+        ZERO_STREAM,
+      );
+      const send = (command: Command) => {
+        const result = advanceActivity(state, { sequence: state.sequence, commandId: `c${state.sequence}`, command });
+        if (result.status !== 'committed') throw new Error(result.status);
+        state = result.state;
+      };
+      const seen: string[] = [];
+      for (let spin = 0; spin < 8 && state.phase !== 'cycle-completion'; spin++) {
+        const run = state.strategy as NonNullable<ActivityState['strategy']>;
+        const explained = explainPrescription(
+          run.definition,
+          run.parameters,
+          { game: 'roulette', rules: { wheel: 'single-zero', limits: ROULETTE_PRESETS['single-zero'].limits }, balance: state.balance, lastPocket: null },
+          run.progress,
+        );
+        if (!explained.ok) throw new Error(explained.error);
+        const prescription = explained.explanation.prescription;
+        for (const bet of prescription.status === 'prescribed' ? prescription.bets : []) send({ kind: 'place-wager', target: bet.target, amount: bet.amount });
+        send({ kind: 'begin-turn' });
+        send({ kind: 'settle-turn' });
+        seen.push(checkpointHash(state));
+      }
+      return seen;
+    };
+    for (const definition of ROULETTE_STRATEGIES) {
+      const copy = JSON.parse(JSON.stringify(definition)) as StrategyDefinition;
+      const original = hashes(definition);
+      expect(original.length).toBeGreaterThan(0);
+      expect(hashes(copy)).toEqual(original);
+    }
   });
 
   it('Labouchere bets 40 from 1, 2, 3, adds a loss, crosses off wins and completes on an empty line', () => {
