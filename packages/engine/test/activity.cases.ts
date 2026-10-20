@@ -17,6 +17,7 @@ import {
   uniformInt,
   type ActivityState,
   type Command,
+  type RouletteActivityState,
   type DomainFact,
   type RoulettePermittedView,
 } from '../src';
@@ -386,7 +387,7 @@ export const activityCases: TestCase[] = [
     run: (t) => {
       const states = [fresh()];
       for (const command of [place('red', '10'), BEGIN, SETTLE, place('straight-0', '1'), BEGIN, STOP, FINAL]) {
-        states.push(step(states.at(-1) as ActivityState, command).state);
+        states.push(step(states.at(-1) as RouletteActivityState, command).state);
       }
       for (const state of states) {
         const text = encodeCheckpoint(state);
@@ -460,7 +461,8 @@ export const activityCases: TestCase[] = [
       const unsupported = [
         edit((v) => ((v as Record<string, unknown>).schema = 1)),
         edit((v) => (v.identities!.engine = '9.9.9')),
-        edit((v) => (v.identities!.game = 'blackjack')),
+        edit((v) => (v.identities!.game = 'baccarat')),
+        edit((v) => (v.identities!.game = 'toString')),
         edit((v) => (v.identities!.rules = { id: 'roulette-triple-zero', version: 1 })),
         edit((v) => (v.identities!.rules = { id: 'roulette-double-zero', version: 2 })),
         edit((v) => (v.identities!.rules = { id: 'roulette-single-zero', version: 2 })),

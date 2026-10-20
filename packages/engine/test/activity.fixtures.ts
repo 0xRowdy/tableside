@@ -35,14 +35,14 @@ export const DOUBLE_ZERO: RouletteActivitySpecification['rules'] = { ...SPEC.rul
 export const STREAM = PI;
 
 /** Advances with the state's expected sequence and a command id derived from it; throws unless committed. */
-export function step(state: ActivityState, command: Command): { state: ActivityState; facts: readonly DomainFact[] } {
+export function step<S extends ActivityState>(state: S, command: Command): { state: S; facts: readonly DomainFact[] } {
   const result = advanceActivity(state, { sequence: state.sequence, commandId: `c${state.sequence}`, command });
   if (result.status !== 'committed') throw new Error(`expected a committed transition, got ${JSON.stringify(result)}`);
   return { state: result.state, facts: result.facts };
 }
 
 /** Folds commands through `step`, collecting every fact. */
-export function run(state: ActivityState, commands: Command[]): { state: ActivityState; facts: readonly DomainFact[] } {
+export function run<S extends ActivityState>(state: S, commands: Command[]): { state: S; facts: readonly DomainFact[] } {
   const facts: DomainFact[] = [];
   for (const command of commands) {
     const next = step(state, command);
@@ -52,5 +52,5 @@ export function run(state: ActivityState, commands: Command[]): { state: Activit
   return { state, facts };
 }
 
-export const status = (result: AdvanceResult) =>
+export const status = (result: AdvanceResult<ActivityState>) =>
   result.status === 'rejected' ? `rejected:${result.reason}` : result.status;

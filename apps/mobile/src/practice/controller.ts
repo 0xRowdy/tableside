@@ -12,6 +12,7 @@
 
 import {
   advanceActivity,
+  canonicalJson,
   ActivitySpecificationError,
   createActivity,
   decodeCheckpoint,
@@ -22,6 +23,9 @@ import {
   summarizeFunding,
   type ActivitySpecification,
   type ActivityState,
+  type BlackjackAction,
+  type BlackjackActivityState,
+  type BlackjackRuleSet,
   type Command,
   type CommandEnvelope,
   type DomainFact,
@@ -99,7 +103,9 @@ export type PracticeSnapshot =
       /** "access-ended": the stop path runs because access or allowance ended. */
       readonly ending: 'access-ended' | null;
     }
-  | { readonly status: 'completed'; readonly result: CompletedPracticeSession };
+  | { readonly status: 'completed'; readonly result: CompletedPracticeSession; readonly specification: ActivitySpecification };
+
+export type ActiveSnapshot<V extends PermittedView = PermittedView> = Extract<PracticeSnapshot, { status: 'active' }> & { readonly view: V };
 
 interface StartRequestBase {
   /** Whole units, as canonical decimal text: the buy-in, or the whole training bankroll allocated to the session. */
@@ -119,7 +125,8 @@ export type StartRequest =
       readonly odds: OddsCap;
       /** What a field 12 pays; triple when omitted. */
       readonly field?: FieldPayout;
-    });
+    })
+  | (StartRequestBase & { readonly game: 'blackjack'; /** The chosen preset and penetration. */ readonly rules: BlackjackRuleSet });
 
 /** A command as sent to the store, with the allowance effects that commit with it. */
 interface Outbound {
@@ -148,6 +155,15 @@ const settled = (result: CommitResult) => result === 'committed' || result === '
  * blackjack round) must list its mid-turn ones here.
  */
 const TURN_PHASES: ReadonlySet<Phase> = new Set(['revealing-outcome']);
+
+/**
+ * True while a turn is under way. Roulette's turn is the spin (a TURN_PHASES
+ * phase); a blackjack round is under way from the deal until it settles,
+ * including while a hand awaits the player's decision in the open-decision phase.
+ */
+const turnInProgress = (state: ActivityState): boolean =>
+  TURN_PHASES.has(state.phase) ||
+  (state.identities.game === 'blackjack' && state.phase === 'open-decision' && (state as BlackjackActivityState).outcome?.active != null);
 
 /** Phases whose time counts as active training (Amendment 4 A4); every other phase is excluded. */
 const TIMED_PHASES: ReadonlySet<Phase> = new Set(['open-decision', 'revealing-outcome', 'settled-outcome']);
@@ -249,7 +265,9 @@ export class PracticeController {
         const specification: ActivitySpecification =
           request.game === 'craps'
             ? { ...base, game: 'craps', rules: standardCraps(request.odds, request.field) }
-            : { ...base, game: 'roulette', rules: ROULETTE_PRESETS[wheelOf(request)] };
+            : request.game === 'blackjack'
+              ? { ...base, game: 'blackjack', rules: request.rules }
+              : { ...base, game: 'roulette', rules: ROULETTE_PRESETS[wheelOf(request)] };
         let initial: ActivityState;
         try {
           initial = createActivity(specification, random);
@@ -292,7 +310,7 @@ export class PracticeController {
     });
   }
 
-  /** Begins a turn (a spin or a roll), then settles it automatically after the reveal. */
+  /** Begins a turn (a spin, a roll or a deal); a turn that needs no decision settles automatically after the reveal. */
   async beginTurn(): Promise<void> {
     await this.exclusive(async () => {
       if (!this.playOpen()) return;
@@ -330,6 +348,19 @@ export class PracticeController {
   spin = (): Promise<void> => this.beginTurn();
 
   /**
+   * A blackjack playing action. The hand in play always finishes: actions stay
+   * open on the stop path and before a turn-boundary suspension is reached.
+   * Once the hand is done the round settles automatically after the reveal.
+   */
+  async play(action: BlackjackAction): Promise<void> {
+    await this.exclusive(async () => {
+      if (this.suspension?.reached ?? false) return;
+      if (this.suspension?.kind === 'immediate') return;
+      if (settled(await this.send({ kind: 'play', action }))) await this.drive();
+    });
+  }
+
+  /**
    * Ends the session: removable wagers come back, committed ones settle
    * automatically, then one final result. While suspended it works only between
    * turns and when the gate states allow it (Amendment 5 A3); it then runs
@@ -354,8 +385,9 @@ export class PracticeController {
         }
         this.suspension = null;
       }
-      // Mid-spin, the engine keeps the committed wagers for final settlement.
-      if (TURN_PHASES.has(this.state.phase)) {
+      // Mid-reveal, the engine keeps the committed wagers for final settlement. Anywhere
+      // else the stop path runs between turns, after a blackjack hand in play finishes.
+      if (this.state.phase === 'revealing-outcome') {
         if (!settled(await this.send({ kind: 'request-stop' }))) return;
       } else {
         this.stopping ??= 'player';
@@ -476,7 +508,7 @@ export class PracticeController {
   private refreshSuspension(): void {
     const suspension = this.suspension;
     if (!suspension || !this.state) return;
-    const betweenTurns = !TURN_PHASES.has(this.state.phase);
+    const betweenTurns = !turnInProgress(this.state);
     const reached = suspension.kind === 'immediate' || betweenTurns;
     const canEnd = reached && betweenTurns;
     const waitsForPlayer = reached && (!resumesOnReturn(suspension) || suspension.resumeBlocked !== null);
@@ -566,8 +598,9 @@ export class PracticeController {
       } else if (phase === 'completed') {
         await this.complete();
         return;
-      } else if (this.stopping) {
+      } else if (this.stopping && !turnInProgress(this.requireState())) {
         // The stop path, between turns: removable wagers come back, then final settlement.
+        // A blackjack hand still in play finishes first; the player's actions stay open.
         if (!settled(await this.send({ kind: 'request-stop' }))) return;
       } else {
         return;
@@ -721,7 +754,7 @@ export class PracticeController {
     this.pending = null;
     this.suspension = null;
     this.stopping = null;
-    this.current = { status: 'completed', result };
+    this.current = { status: 'completed', result, specification: activity.specification };
     this.report({ activityId: result.activityId, phase: 'completed', suspended: false, timed: false });
     this.notify();
     return true;
@@ -799,5 +832,6 @@ const wheelOf = (request: Extract<StartRequest, { game: 'roulette' }>): Roulette
 function sameRequest(a: StartRequest, b: StartRequest): boolean {
   if (a.buyIn !== b.buyIn || a.fundingSource !== b.fundingSource) return false;
   if (a.game === 'craps') return b.game === 'craps' && a.odds === b.odds && standardCraps(a.odds, a.field).field === standardCraps(b.odds, b.field).field;
+  if (a.game === 'blackjack') return b.game === 'blackjack' && canonicalJson(a.rules) === canonicalJson(b.rules);
   return b.game === 'roulette' && wheelOf(a) === wheelOf(b);
 }

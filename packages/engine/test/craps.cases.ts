@@ -436,7 +436,7 @@ export const crapsCases: TestCase[] = [
   {
     name: 'craps: checkpoints round-trip in every phase and continue exactly',
     run: (t) => {
-      const states = [craps(PI)];
+      const states: ActivityState[] = [craps(PI)];
       for (const command of [place('pass', '10'), ROLL, SETTLE, place('pass-odds', '50'), place('come', '10'), ROLL, SETTLE, STOP, FINAL, FINAL]) {
         states.push(step(states.at(-1) as ActivityState, command).state);
       }

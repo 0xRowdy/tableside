@@ -30,6 +30,11 @@ export function cuesForFacts(facts: readonly DomainFact[]): CueName[] {
         // A roulette outcome is a pocket; other games' outcomes get their own cues (dice thrown, card dealt).
         if ('pocket' in fact) cues.push('ball-landed');
         break;
+      case 'card-dealt':
+      case 'hole-card-revealed':
+        // One cue per transition, however many cards it deals or turns.
+        if (!cues.includes('card-dealt')) cues.push('card-dealt');
+        break;
       case 'dice-rolled':
         cues.push('dice-thrown');
         break;

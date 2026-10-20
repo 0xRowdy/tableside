@@ -13,9 +13,13 @@ import { formatUnits, targetName } from './roulette-text';
 /**
  * What ending would do with each wager. Roulette: every wager comes back
  * between spins. Craps: contracts on their number stay and roll on to settle.
+ * Blackjack: the initial wager comes back between rounds; a dealt round settles.
  */
 function endingWagers(view: PermittedView): { removable: readonly Wager[]; committed: readonly Wager[]; name: (target: string) => string } {
-  if (view.wagersCommitted) return { removable: [], committed: view.wagers, name: view.game === 'craps' ? crapsTargetName : targetName };
+  if (view.wagersCommitted) {
+    return { removable: [], committed: view.wagers, name: view.game === 'craps' ? crapsTargetName : view.game === 'blackjack' ? () => 'Initial wager' : targetName };
+  }
+  if (view.game === 'blackjack') return { removable: view.wagers, committed: [], name: () => 'Initial wager' };
   if (view.game !== 'craps') return { removable: view.wagers, committed: [], name: targetName };
   const contract = (wager: Wager) => view.table.wagers.find((item) => item.target === wager.target)?.removable === false;
   return { removable: view.wagers.filter((w) => !contract(w)), committed: view.wagers.filter(contract), name: crapsTargetName };
@@ -55,7 +59,12 @@ export function EndSessionDialog({
               },
               {
                 title: 'Committed wagers settle automatically',
-                detail: view.game === 'craps' ? list(committed, 'No contracts on the table') : 'None between spins',
+                detail:
+                  view.game === 'craps'
+                    ? list(committed, 'No contracts on the table')
+                    : view.game === 'blackjack'
+                      ? list(committed, 'None between rounds')
+                      : 'None between spins',
               },
               { title: 'You see the session result', detail: 'Buy-in, rebuys, final cash-out, net result and maximum drawdown' },
             ].map((step, index) => (

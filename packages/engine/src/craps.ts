@@ -9,7 +9,7 @@
 // own module; a strategy compatible with this one is not automatically
 // compatible with it. Rules: #3 (Launch game rules) and spec #51.
 
-import type { ActivityStateBase, CrapsPermittedView, DomainFact, GameCommand, GameModule, Step, Wager } from './activity';
+import type { ActivityStateBase, Command, CommandKind, CrapsPermittedView, DomainFact, GameCommand, GameModule, Phase, Step, Wager } from './activity';
 import { rollDice } from './draws';
 import { add, commission, compare, decodeMoney, encodeMoney, money, mul, neg, sub, type Money } from './money';
 import { RandomStream } from './random';
@@ -380,7 +380,19 @@ const sorted = <T extends { target: string }>(items: T[]) => items.sort((a, b) =
 const keptInstructions = (instructions: readonly WorkingInstruction[], wagers: readonly Wager[]) =>
   instructions.filter((item) => wagers.some((wager) => wager.target === item.target));
 
-function apply(state: State, command: GameCommand): Step<State> {
+/** Craps adds per-bet working instructions to the common commands. */
+type CrapsCommand = GameCommand | Extract<Command, { readonly kind: 'set-working' }>;
+
+/** The common phase table, plus working instructions whenever bets are open. */
+const LEGAL: Record<Phase, readonly CommandKind[]> = {
+  'open-decision': ['place-wager', 'set-working', 'begin-turn', 'request-stop', 'rebuy'],
+  'revealing-outcome': ['settle-turn', 'request-stop'],
+  'settled-outcome': ['place-wager', 'set-working', 'begin-turn', 'request-stop', 'rebuy'],
+  'final-settlement': ['advance-final-settlement'],
+  completed: [],
+};
+
+function apply(state: State, command: CrapsCommand): Step<State> {
   switch (command.kind) {
     case 'place-wager':
       return placeWager(state, command.target, decodeMoney(command.amount));
@@ -750,7 +762,7 @@ function damage(value: Record<string, unknown>): string | undefined {
 }
 
 /** Standard craps behind the session protocol. */
-export const CRAPS: GameModule<CrapsActivityState, CrapsPermittedView> = {
+export const CRAPS: GameModule<CrapsActivityState, CrapsPermittedView, CrapsCommand> = {
   ruleSets: [{ id: STANDARD_CRAPS.id, version: STANDARD_CRAPS.version }],
   extra: { point: null, instructions: [] },
   pinRules: (rules) => {
@@ -767,8 +779,8 @@ export const CRAPS: GameModule<CrapsActivityState, CrapsPermittedView> = {
       limits: { flat: { min: limits.flat.min, max: limits.flat.max }, props: { min: limits.props.min, max: limits.props.max } },
     };
   },
+  legal: (state) => LEGAL[state.phase],
   apply,
-  workingInstructions: true,
   view: (state) => ({
     game: 'craps',
     outcome: state.outcome && { turn: state.outcome.turn, dice: [state.outcome.dice[0], state.outcome.dice[1]] },

@@ -22,3 +22,6 @@ harness-reports/
 
 # Python bytecode (the engine reference script)
 __pycache__/
+
+# Python bytecode
+*.pyc

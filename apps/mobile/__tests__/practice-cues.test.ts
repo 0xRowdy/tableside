@@ -3,6 +3,8 @@
 // play is identical with sound and haptics off.
 // Spins come from the Random123 "pi digits" stream: 27 (red), 0, 25 (red).
 
+import { blackjackRules } from '@tableside/definitions';
+
 import { followPractice } from '@/feedback/practice-cues';
 import { FeedbackService } from '@/feedback/service';
 import { DeviceSettings } from '@/feedback/settings';
@@ -118,6 +120,27 @@ describe('cues during roulette play', () => {
     await controller.placeWager('red', '10');
 
     expect(ports.sound.played).toEqual([]);
+  });
+});
+
+describe('cues during blackjack play', () => {
+  // The "pi digits" shoe: you 10 and Jack against a dealer 10 up and 6 down; standing, the dealer draws an Ace to 17.
+  it('fires one card cue per dealing transition, no haptic for cards, and one net-result cue per round', async () => {
+    const adapters = substituteAdapters({ clock: new FakeClock(undefined, true) });
+    const controller = new PracticeController(adapters);
+    const ports = substituteFeedbackPorts(null);
+    const settings = new DeviceSettings(ports.storage);
+    await settings.load();
+    followPractice(controller, new FeedbackService(ports, settings));
+    await controller.load();
+    await controller.start({ game: 'blackjack', buyIn: '1000', rules: blackjackRules() });
+
+    await controller.placeWager('hand-1', '10');
+    await controller.beginTurn();
+    await controller.play('stand');
+
+    expect(ports.sound.played.map((play) => play.cue)).toEqual(['stake-set', 'card-dealt', 'card-dealt', 'net-win']);
+    expect(ports.haptics.fired).toEqual(['selection', 'success']);
   });
 });
 

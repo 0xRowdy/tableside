@@ -26,6 +26,7 @@ export {
   type PlayAction,
 } from './blackjack/reference';
 
+export { blackjackRules, DEFAULT_BLACKJACK_PRESET, DEFAULT_PENETRATION } from './blackjack/rules';
 export {
   CRAPS_EDGE_WAGERS,
   CRAPS_HOUSE_EDGE_VERSION,
