@@ -83,6 +83,7 @@ const CYCLE_END_ANNOUNCEMENT: Record<CycleEnd, string> = {
   cap: 'The strategy cycle ended at its cap.',
   stop: 'The strategy cycle ended at its stop rule.',
   override: 'The strategy cycle ends once this spin settles.',
+  collected: 'You collected instead. The strategy cycle ended.',
   envelope: 'The strategy cycle ended: its next stake is too large to compute.',
 };
 

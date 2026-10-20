@@ -8,7 +8,7 @@
 // field; place, buy, lay, hardways and propositions are in the bet list.
 
 import { crapsHouseEdge } from '@tableside/definitions';
-import { CRAPS_POINTS, type CrapsPermittedView as PermittedView } from '@tableside/engine';
+import { CRAPS_POINTS, type CrapsPermittedView as PermittedView, type CycleTurn, type DomainFact } from '@tableside/engine';
 import { useEffect, useMemo, useState } from 'react';
 import { AccessibilityInfo, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -22,8 +22,10 @@ import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/th
 import { BetSelector } from './bet-selector/BetSelector';
 import { draftAmountText, EMPTY_DRAFT, findChoice, isDraftPending, type BetDraft } from './bet-selector/catalog';
 import { DraftBar, PresentationSwitch, type Presentation } from './bet-selector/Presentation';
+import { betsText, CRAPS_WORDS, strategyFactSentence } from './coaching-text';
 import { crapsCatalog, crapsPlacedWagers, placedToggle } from './craps-catalog';
 import { EndSessionDialog } from './EndSessionDialog';
+import { CorrectionPanel, CycleResultPanel, GuidedStrip, PendingPanel, StopStrategyDialog, type TurnWords } from './Guidance';
 import { RebuySheet } from './RebuySheet';
 import { commitmentText, crapsStatus, crapsTargetName, describeCrapsFacts, puckText, workingText } from './craps-text';
 import { ACCESS_ENDED, ChipRack } from './RouletteTable';
@@ -48,6 +50,23 @@ function phaseSteps(view: PermittedView): PhaseStep[] {
 
 const rollText = (dice: readonly [number, number]) => `${dice[0]} and ${dice[1]}, total ${dice[0] + dice[1]}`;
 
+/** The table's own words for a transition, then guided practice's (corrections, pending actions, cycles). */
+function describe(facts: readonly DomainFact[], view: PermittedView): string | null {
+  const parts = [describeCrapsFacts(facts, view), ...facts.map((fact) => strategyFactSentence(fact, CRAPS_WORDS))].filter((part): part is string => part !== null);
+  return parts.length === 0 ? null : parts.join(' ');
+}
+
+/** A cycle's roll for the cycle result: "Roll 3 · 12 on Place 6 and 12 on Place 8", "Rolled 4 and 2". */
+function describeTurn(turn: CycleTurn, index: number): TurnWords {
+  const [a, b] = turn.outcome.split('+');
+  const result = turn.net.startsWith('-') ? 'Lost' : turn.net === '0' ? 'Even' : 'Won';
+  const bets = turn.wagers.length === 0 ? 'nothing at stake' : betsText(turn.wagers, CRAPS_WORDS);
+  return {
+    title: `Roll ${index + 1} · ${bets}${turn.followed ? '' : ' (override)'}`,
+    detail: `${result} · rolled ${a} and ${b}, total ${Number(a) + Number(b)}`,
+  };
+}
+
 export function CrapsTable({ snapshot }: { snapshot: ActiveSnapshot }) {
   const { controller } = usePractice();
   const insets = useSafeAreaInsets();
@@ -56,6 +75,7 @@ export function CrapsTable({ snapshot }: { snapshot: ActiveSnapshot }) {
   const [chip, setChip] = useState('25');
   const [confirming, setConfirming] = useState(false);
   const [rebuying, setRebuying] = useState(false);
+  const [stoppingStrategy, setStoppingStrategy] = useState(false);
   // Held here, above both presentations, so rotation, resizing and switching keep the draft.
   const [presentation, setPresentation] = useState<Presentation>('table');
   const [draft, setDraft] = useState<BetDraft>(EMPTY_DRAFT);
@@ -75,7 +95,12 @@ export function CrapsTable({ snapshot }: { snapshot: ActiveSnapshot }) {
 
   const ready = !busy && save === 'saved';
   const legal = (kind: PermittedView['legalCommands'][number]) => ready && view.legalCommands.includes(kind);
-  const message = useMemo(() => describeCrapsFacts(facts, view), [facts, view]);
+  const message = useMemo(() => describe(facts, view), [facts, view]);
+  const strategy = view.strategy;
+  const wagersText = view.wagers.length === 0 ? 'nothing' : view.wagers.map((wager) => `${crapsTargetName(wager.target)} ${formatUnits(wager.amount)}`).join(' · ');
+  const contracts = view.wagers.filter((wager) => table.wagers.find((status) => status.target === wager.target)?.removable === false);
+  const removable = view.wagers.filter((wager) => !contracts.includes(wager));
+  const listText = (list: typeof view.wagers) => list.map((wager) => `${crapsTargetName(wager.target)} ${formatUnits(wager.amount)}`).join(' · ');
   const edge = (wager: 'pass' | 'dont-pass') => crapsHouseEdge(wager, { ...table.variant, odds: table.odds, field: table.field }).percent;
 
   // Announce every committed transition as it is published, including ones
@@ -93,7 +118,7 @@ export function CrapsTable({ snapshot }: { snapshot: ActiveSnapshot }) {
       if (latest.view.sequence === announced) return;
       announced = latest.view.sequence;
       // A state adopted from the store carries no facts of its own: restate where things stand.
-      const text = describeCrapsFacts(latest.facts, latest.view) ?? `${crapsStatus(latest.view)}. Balance ${formatUnits(latest.view.balance)}.`;
+      const text = describe(latest.facts, latest.view) ?? `${crapsStatus(latest.view)}. Balance ${formatUnits(latest.view.balance)}.`;
       AccessibilityInfo.announceForAccessibility(text);
     });
   }, [controller]);
@@ -136,6 +161,7 @@ export function CrapsTable({ snapshot }: { snapshot: ActiveSnapshot }) {
           onTable={formatUnits(totalOnTable(view))}
           status={save === 'failed' ? 'Paused · not saved' : crapsStatus(view)}
         />
+        {strategy && <GuidedStrip strategy={strategy} canStop={legal('stop-strategy')} onStop={() => setStoppingStrategy(true)} words={CRAPS_WORDS} />}
         {view.phase !== 'final-settlement' && <PresentationSwitch value={presentation} onChange={setPresentation} />}
 
         {save === 'failed' && (
@@ -208,6 +234,48 @@ export function CrapsTable({ snapshot }: { snapshot: ActiveSnapshot }) {
               )}
             </View>
             <View style={[styles.column, styles.controls]}>
+              {strategy?.correction && view.phase === 'correction' && (
+                <CorrectionPanel
+                  strategyName={strategy.name}
+                  correction={strategy.correction}
+                  overrideEndsCycle={strategy.overrideEndsCycle}
+                  table={{ phase: `Strategy check before your roll · ${puckText(table.point)}`, balance: formatUnits(view.balance), wagers: wagersText }}
+                  fullScreen={fontScale > SIDE_BY_SIDE_MAX_FONT_SCALE}
+                  busy={!ready}
+                  onRetry={() => void controller.retryCorrection()}
+                  onOverride={() => void controller.overrideCorrection()}
+                  words={CRAPS_WORDS}
+                />
+              )}
+              {strategy && view.phase === 'cycle-completion' && (
+                <CycleResultPanel
+                  strategy={strategy}
+                  balance={view.balance}
+                  rebought={view.funding.rebuys.length > 0}
+                  describeTurn={describeTurn}
+                  canRestart={legal('restart-cycle')}
+                  canEnd={legal('request-stop')}
+                  onRestart={() => void controller.restartCycle()}
+                  onEnd={() => setConfirming(true)}
+                  words={CRAPS_WORDS}
+                />
+              )}
+              {strategy?.pending && (
+                <PendingPanel
+                  strategy={strategy}
+                  pending={strategy.pending}
+                  available={(BigInt(view.balance) + BigInt(totalOnTable(view))).toString()}
+                  canRebuy={view.legalCommands.includes('rebuy') ? legal('rebuy') : null}
+                  canOverride={legal('place-wager')}
+                  canCollect={legal('collect-instead')}
+                  canStop={legal('stop-strategy')}
+                  onRebuy={() => setRebuying(true)}
+                  onOverride={() => setPresentation('selector')}
+                  onCollect={() => void controller.collectInstead()}
+                  onStop={() => setStoppingStrategy(true)}
+                  words={CRAPS_WORDS}
+                />
+              )}
               {message && (
                 <Text maxFontSizeMultiplier={textScale.body} style={styles.message} testID="latest-event">
                   {message}
@@ -248,6 +316,23 @@ export function CrapsTable({ snapshot }: { snapshot: ActiveSnapshot }) {
           onClose={() => setRebuying(false)}
         />
       )}
+
+      <StopStrategyDialog
+        visible={stoppingStrategy}
+        removable={view.wagersCommitted || removable.length === 0 ? 'Nothing removable on the table' : listText(removable)}
+        committed={
+          view.wagersCommitted
+            ? `${wagersText} settle with this roll.`
+            : contracts.length === 0
+              ? 'None between rolls.'
+              : `${listText(contracts)} can't be taken down or refunded. The dice settle them as you play on.`
+        }
+        onCancel={() => setStoppingStrategy(false)}
+        onConfirm={() => {
+          setStoppingStrategy(false);
+          void controller.stopStrategy();
+        }}
+      />
 
       <EndSessionDialog
         visible={confirming}

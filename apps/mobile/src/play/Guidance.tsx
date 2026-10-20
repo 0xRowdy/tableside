@@ -22,9 +22,12 @@ import {
   parametersText,
   pendingBlocked,
   pendingOverrideNote,
+  pendingPaidNote,
   pendingWaiting,
   prescriptionLine,
   retryLabel,
+  ROULETTE_WORDS,
+  type CoachWords,
 } from './coaching-text';
 import { formatSigned, formatUnits, speakSigned } from './units';
 
@@ -39,20 +42,31 @@ export interface TableNow {
 }
 
 /** The strategy, its choices and adherence; separate from the session balance. */
-export function GuidedStrip({ strategy, canStop, onStop }: { strategy: StrategyView; canStop: boolean; onStop: () => void }) {
+export function GuidedStrip({
+  strategy,
+  canStop,
+  onStop,
+  words = ROULETTE_WORDS,
+}: {
+  strategy: StrategyView;
+  canStop: boolean;
+  onStop: () => void;
+  words?: CoachWords;
+}) {
   const cycle = strategy.overrideEndsCycle ? ` · cycle ${strategy.cycle.number}` : '';
-  const status = strategy.status === 'stopped' ? 'Strategy stopped · playing on your own' : `Guided · ${strategy.name} · ${parametersText(strategy)}${cycle}`;
+  const parameters = parametersText(strategy, words);
+  const status = strategy.status === 'stopped' ? 'Strategy stopped · playing on your own' : `Guided · ${strategy.name}${parameters ? ` · ${parameters}` : ''}${cycle}`;
   return (
     <View style={styles.strip} testID="guided-strip">
       <Text maxFontSizeMultiplier={textScale.body} style={styles.stripTitle}>{status}</Text>
       <View
         accessible
-        accessibilityLabel={`Strategy adherence: ${adherenceText(strategy.adherence)}. Departures ${strategy.adherence.departures}.`}
+        accessibilityLabel={`Strategy adherence: ${adherenceText(strategy.adherence, words)}. Departures ${strategy.adherence.departures}.`}
         style={styles.adherence}
       >
         <Text maxFontSizeMultiplier={textScale.body} style={styles.stripLabel}>ADHERENCE</Text>
         <Text maxFontSizeMultiplier={textScale.body} style={styles.stripText}>
-          {adherenceText(strategy.adherence)} · Departures {strategy.adherence.departures}
+          {adherenceText(strategy.adherence, words)} · Departures {strategy.adherence.departures}
         </Text>
       </View>
       {strategy.status !== 'stopped' && (
@@ -69,6 +83,7 @@ function CorrectionBody({
   busy,
   onRetry,
   onOverride,
+  words = ROULETTE_WORDS,
 }: {
   strategyName: string;
   correction: PendingCorrection;
@@ -76,20 +91,21 @@ function CorrectionBody({
   busy: boolean;
   onRetry: () => void;
   onOverride: () => void;
+  words?: CoachWords;
 }) {
   return (
     <>
       <Text maxFontSizeMultiplier={textScale.body} style={styles.coach}>Marcus · guided practice, {strategyName}</Text>
       <Text accessibilityRole="header" maxFontSizeMultiplier={textScale.display} style={styles.kicker}>
-        Before your spin
+        Before your {words.turn}
       </Text>
-      <Text maxFontSizeMultiplier={textScale.display} style={styles.headline}>{prescriptionLine(strategyName, correction.explanation)}</Text>
-      {correctionLines(correction).map((line) => (
+      <Text maxFontSizeMultiplier={textScale.display} style={styles.headline}>{prescriptionLine(strategyName, correction.explanation, words)}</Text>
+      {correctionLines(correction, words).map((line) => (
         <Text key={line} maxFontSizeMultiplier={textScale.body} style={styles.body}>{line}</Text>
       ))}
-      <Button label={retryLabel(correction)} stretch disabled={busy} onPress={onRetry} />
+      <Button label={retryLabel(correction, words)} stretch disabled={busy} onPress={onRetry} />
       <Button label="Keep my bets" variant="secondary" stretch disabled={busy} onPress={onOverride} />
-      <Text maxFontSizeMultiplier={textScale.body} style={styles.note}>{overrideNote(overrideEndsCycle)}</Text>
+      <Text maxFontSizeMultiplier={textScale.body} style={styles.note}>{overrideNote(overrideEndsCycle, words)}</Text>
     </>
   );
 }
@@ -107,6 +123,7 @@ export function CorrectionPanel(props: {
   busy: boolean;
   onRetry: () => void;
   onOverride: () => void;
+  words?: CoachWords;
 }) {
   const { table, fullScreen } = props;
   if (!fullScreen) {
@@ -156,6 +173,7 @@ export function CycleResultPanel({
   canEnd,
   onRestart,
   onEnd,
+  words = ROULETTE_WORDS,
 }: {
   strategy: StrategyView;
   balance: string;
@@ -166,6 +184,7 @@ export function CycleResultPanel({
   canEnd: boolean;
   onRestart: () => void;
   onEnd: () => void;
+  words?: CoachWords;
 }) {
   const { cycle } = strategy;
   return (
@@ -174,7 +193,7 @@ export function CycleResultPanel({
       <Text accessibilityRole="header" maxFontSizeMultiplier={textScale.display} style={styles.headline}>
         {strategy.cycleEnd ? CYCLE_HEADLINE[strategy.cycleEnd] : 'Strategy cycle ended'}
       </Text>
-      <Text maxFontSizeMultiplier={textScale.body} style={styles.body}>{cycleEndText(strategy)}</Text>
+      <Text maxFontSizeMultiplier={textScale.body} style={styles.body}>{cycleEndText(strategy, words)}</Text>
       <View style={styles.stats}>
         <View accessible accessibilityLabel={`Cycle result ${speakSigned(cycle.net)}, ${outcomeWord(cycle.net)}`} style={styles.stat}>
           <Text maxFontSizeMultiplier={textScale.body} style={styles.statLabel}>Cycle result</Text>
@@ -222,10 +241,13 @@ export function PendingPanel({
   available,
   canRebuy,
   canOverride,
+  canCollect = null,
   canStop,
   onRebuy,
   onOverride,
+  onCollect,
   onStop,
+  words = ROULETTE_WORDS,
 }: {
   strategy: StrategyView;
   pending: PendingStrategyAction;
@@ -234,23 +256,40 @@ export function PendingPanel({
   /** Null when no rebuy is offered (a training bankroll); otherwise whether one can be made now. */
   canRebuy: boolean | null;
   canOverride: boolean;
+  /** Null when the table doesn't offer Collect instead; otherwise whether it can be chosen now. */
+  canCollect?: boolean | null;
   canStop: boolean;
   onRebuy: () => void;
   /** Opens the bets, so the player can place their own instead (an override, judged when they spin). */
   onOverride: () => void;
+  /** Keeps what was paid and ends the cycle instead of the pending step. */
+  onCollect?: () => void;
   onStop: () => void;
+  words?: CoachWords;
 }) {
+  const paid = pendingPaidNote(pending, words);
   return (
     <View style={styles.panel} testID="pending-panel">
       <Text maxFontSizeMultiplier={textScale.body} style={styles.badge}>{strategy.overrideEndsCycle ? cycleBadge(strategy) : strategy.name}</Text>
-      <Text accessibilityRole="header" maxFontSizeMultiplier={textScale.body} style={styles.stepTitle}>{pendingWaiting(pending)}</Text>
+      {paid && <Text maxFontSizeMultiplier={textScale.body} style={styles.body}>{paid}</Text>}
+      <Text accessibilityRole="header" maxFontSizeMultiplier={textScale.body} style={styles.stepTitle}>{pendingWaiting(pending, words)}</Text>
       <Text maxFontSizeMultiplier={textScale.body} style={styles.body}>{pendingBlocked(pending, available)}</Text>
       <Text maxFontSizeMultiplier={textScale.body} style={styles.note}>
         No new strategy bets until this is resolved. Tableside never makes a stake smaller or places part of a bet.
       </Text>
       {canRebuy !== null && <Button label="Resolve: rebuy" stretch disabled={!canRebuy} onPress={onRebuy} />}
       <Button label="Place my own bets (override)" variant="secondary" stretch disabled={!canOverride} onPress={onOverride} />
-      <Text maxFontSizeMultiplier={textScale.body} style={styles.note}>{pendingOverrideNote(strategy.overrideEndsCycle)}</Text>
+      <Text maxFontSizeMultiplier={textScale.body} style={styles.note}>{pendingOverrideNote(strategy.overrideEndsCycle, words)}</Text>
+      {canCollect !== null && (
+        <Button
+          label="Collect instead and end the cycle"
+          variant="secondary"
+          stretch
+          hint="Keeps what has been paid. Removable bets come back, nothing pending is placed, and you restart the strategy yourself."
+          disabled={!canCollect}
+          onPress={() => onCollect?.()}
+        />
+      )}
       <Button label="Stop strategy" variant="secondary" stretch disabled={!canStop} onPress={onStop} />
     </View>
   );

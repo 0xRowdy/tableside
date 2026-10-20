@@ -20,14 +20,13 @@ import {
 import { ROULETTE_LIMITS, ROULETTE_STRATEGIES, rouletteHouseEdge, rouletteRules, strategyDefaults } from '@tableside/definitions';
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
 import { Button } from '@/components/Button';
 import { Screen } from '@/components/Screen';
-import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
 import type { StartProblem } from '@/practice/controller';
 import { usePractice } from '@/practice/PracticeProvider';
-import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/theme/tokens';
+import { space } from '@/theme/tokens';
 
 import { betsText } from './coaching-text';
 import { formatUnits, targetName } from './roulette-text';
@@ -35,6 +34,7 @@ import { FundingSection, useFunding, type Opening } from './setup/Funding';
 import { GroupFields, LimitsBanner, useLimits } from './setup/Limits';
 import type { LimitGroup } from './setup/limit-drafts';
 import { ChoiceGroup, FieldLabel, Help, Section, SetupHeader } from './setup/SetupParts';
+import { StrategyPicker } from './setup/StrategyPicker';
 
 type Mode = 'free-play' | 'guided';
 type Group = 'inside' | 'outside';
@@ -82,7 +82,6 @@ export function RouletteSetup({
   const [mode, setMode] = useState<Mode>('free-play');
   const [strategy, setStrategy] = useState<StrategyDefinition>(ROULETTE_STRATEGIES[0] as StrategyDefinition);
   const [choices, setChoices] = useState<Record<string, string>>(strategyDefaults(strategy));
-  const [customizeNote, setCustomizeNote] = useState(false);
   const limits = useLimits(GROUPS, ROULETTE_LIMITS);
   const accepted = limits.accepted;
   const rules = accepted ? rouletteRules(wheel, accepted) : null;
@@ -96,7 +95,6 @@ export function RouletteSetup({
   const chooseStrategy = (next: StrategyDefinition) => {
     setStrategy(next);
     setChoices(strategyDefaults(next));
-    setCustomizeNote(false);
   };
 
   // Under a limit the strategy's bets fall outside (S4-13 YwrCf).
@@ -153,28 +151,17 @@ export function RouletteSetup({
       </Section>
 
       {guided && (
-        <View style={styles.section}>
-          <Text maxFontSizeMultiplier={textScale.body} style={styles.label}>STRATEGY</Text>
-          <View accessibilityRole="radiogroup" accessibilityLabel="Strategy" style={styles.strategies}>
-            {ROULETTE_STRATEGIES.map((option) => (
-              <StrategyChoice key={option.id} definition={option} selected={strategy.id === option.id} onPress={() => chooseStrategy(option)} />
-            ))}
-          </View>
+        <StrategyPicker
+          builtIns={ROULETTE_STRATEGIES}
+          myStrategies={myStrategies}
+          selected={strategy}
+          onChoose={chooseStrategy}
+          fit={fit}
+          describe={(requirement) => requirementText(strategy, requirement)}
+          tableParts="the wheel or limits"
+        >
           <StrategyParameters definition={strategy} choices={choices} onChange={setChoices} />
-          <Text accessibilityRole="header" maxFontSizeMultiplier={textScale.body} style={styles.label}>MY STRATEGIES</Text>
-          {myStrategies.length === 0 ? (
-            <Text maxFontSizeMultiplier={textScale.body} style={styles.help}>Strategies you save in the builder appear here.</Text>
-          ) : (
-            <View accessibilityRole="radiogroup" accessibilityLabel="My strategies" style={styles.strategies}>
-              {myStrategies.map((option) => (
-                <StrategyChoice key={option.id} definition={option} selected={strategy.id === option.id} onPress={() => chooseStrategy(option)} />
-              ))}
-            </View>
-          )}
-          {fit && !fit.compatible && (
-            <Incompatible strategy={strategy} requirements={fit.requirements} customizeNote={customizeNote} onCustomize={() => setCustomizeNote(true)} />
-          )}
-        </View>
+        </StrategyPicker>
       )}
 
       <Section label="TABLE LIMITS">
@@ -219,60 +206,6 @@ function requirementText(strategy: StrategyDefinition, requirement: TableRequire
   }
 }
 
-function Incompatible({
-  strategy,
-  requirements,
-  customizeNote,
-  onCustomize,
-}: {
-  strategy: StrategyDefinition;
-  requirements: readonly TableRequirement[];
-  customizeNote: boolean;
-  onCustomize: () => void;
-}) {
-  return (
-    <View style={styles.incompatible} testID="strategy-incompatible">
-      <Text accessibilityRole="alert" maxFontSizeMultiplier={textScale.body} style={styles.value}>
-        This strategy doesn&apos;t fit your table
-      </Text>
-      {requirements.map((requirement) => (
-        <Text key={requirement.path} maxFontSizeMultiplier={textScale.body} style={styles.help}>
-          {requirementText(strategy, requirement)}
-        </Text>
-      ))}
-      <Text maxFontSizeMultiplier={textScale.body} style={styles.help}>Tableside won&apos;t change a strategy&apos;s amounts for you.</Text>
-      <Text maxFontSizeMultiplier={textScale.body} style={styles.help}>Choose a compatible table (the wheel or limits) or another strategy, or:</Text>
-      <Button label="Customize a copy for this table" variant="secondary" stretch onPress={onCustomize} />
-      {customizeNote && (
-        <Text accessibilityRole="alert" maxFontSizeMultiplier={textScale.body} style={styles.help}>
-          The strategy builder arrives in a later update. It will make your own private copy declared for this table, with the same amounts until you choose new ones.
-        </Text>
-      )}
-    </View>
-  );
-}
-
-function StrategyChoice({ definition, selected, onPress }: { definition: StrategyDefinition; selected: boolean; onPress: () => void }) {
-  const { focused, focusProps } = useKeyboardFocus();
-  return (
-    <Pressable
-      accessibilityRole="radio"
-      accessibilityLabel={definition.name}
-      accessibilityHint={definition.note}
-      accessibilityState={{ checked: selected }}
-      onPress={onPress}
-      {...focusProps}
-      style={[styles.choice, styles.strategy, selected && styles.choiceSelected, focused && styles.choiceFocused]}
-    >
-      <Text maxFontSizeMultiplier={textScale.body} style={styles.value}>
-        {selected ? '✓ ' : ''}
-        {definition.name}
-      </Text>
-      {definition.note !== undefined && <Text maxFontSizeMultiplier={textScale.body} style={styles.help}>{definition.note}</Text>}
-    </Pressable>
-  );
-}
-
 /**
  * The strategy's targets, fixed for the cycle once play starts. A parameter
  * that must differ from another can't take that one's choice.
@@ -312,23 +245,4 @@ function StrategyParameters({
 
 const styles = StyleSheet.create({
   section: { gap: space[2] },
-  label: { fontFamily: fonts.uiBold, fontSize: 12, letterSpacing: 0.5, color: palette.mutedForeground },
-  value: { fontFamily: fonts.uiMedium, fontSize: 15, color: palette.foreground },
-  help: { fontFamily: fonts.ui, fontSize: 13, color: palette.mutedForeground },
-  strategies: { gap: space[2] },
-  choice: {
-    flexGrow: 1,
-    minHeight: MIN_TOUCH_TARGET,
-    minWidth: MIN_TOUCH_TARGET,
-    justifyContent: 'center',
-    paddingHorizontal: space[3],
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: palette.controlBorder,
-    backgroundColor: palette.card,
-  },
-  strategy: { paddingVertical: space[2], gap: 2, justifyContent: 'flex-start' },
-  choiceSelected: { borderColor: palette.primary, borderWidth: 2 },
-  choiceFocused: { borderColor: palette.ring, borderWidth: 2 },
-  incompatible: { gap: space[2], padding: space[4], borderRadius: radius.lg, borderWidth: 2, borderColor: palette.destructive, backgroundColor: palette.card },
 });

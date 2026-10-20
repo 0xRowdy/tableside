@@ -61,4 +61,13 @@ export {
   THREE_WIN_PARLAY,
 } from './roulette-strategies';
 
+export {
+  CRAPS_STRATEGIES,
+  DONT_PASS_WITH_LAY_ODDS,
+  FLAT_PLACE_6_8,
+  PASS_WITH_ODDS,
+  PRESS_AND_COLLECT_6_8,
+  THREE_POINT_MOLLY,
+} from './craps-strategies';
+
 export { QUARANTINE_LIST } from './quarantine';
