@@ -24,5 +24,4 @@ harness-reports/
 __pycache__/
 
 # Python bytecode
-__pycache__/
 *.pyc
