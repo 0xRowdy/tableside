@@ -50,7 +50,7 @@ function handWords(explanation: PlayExplanation): string {
   const { situation } = explanation;
   if (situation.pair) {
     const value = situation.cards[0]?.rank ?? 0;
-    return value === 1 ? 'a pair of aces' : `a pair of ${value >= 10 ? 'tens' : `${value}s`}`;
+    return `${value === 1 ? 'a pair of aces' : `a pair of ${value >= 10 ? 'tens' : `${value}s`}`} (${totalText(situation.total)})`;
   }
   return totalText(situation.total);
 }
@@ -176,7 +176,7 @@ export function playCorrectionCopy(strategyName: string, correction: PlayCorrect
   if (insurance) lines.push(`You have ${cards} (${situation.total.value === 21 ? 'blackjack' : totalText(situation.total)}). The dealer shows ${cardShort(situation.up)}, before checking for blackjack.`);
   else {
     const which = situation.hands > 1 ? `Hand ${situation.hand + 1} of ${situation.hands}: ` : 'You have ';
-    lines.push(`${which}${cards} (${hand}${situation.cards.length > 2 ? `, ${situation.cards.length} cards` : ''}). The dealer shows ${cardShort(situation.up)}.`);
+    lines.push(`${which}${cards} (${totalText(situation.total)}${situation.cards.length > 2 ? `, ${situation.cards.length} cards` : ''}). The dealer shows ${cardShort(situation.up)}.`);
   }
   if (cell) {
     const source = cell.table === 'first' ? `Basic strategy (${rulesName})` : `For later decisions (after a hit or a split), Tableside's table (${rules.dealer})`;
