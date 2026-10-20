@@ -29,7 +29,7 @@ import {
 
 import { run, SPEC, status, step, STREAM } from './activity.fixtures';
 import { PI, throws, ZERO } from './fixtures';
-import { DOUBLING, FLAT_EVEN_MONEY, TWO_DOZENS } from './strategy.fixtures';
+import { DOUBLING, FLAT_EVEN_MONEY, LABOUCHERE, MARTINGALE, PARLAY, TWO_DOZENS } from './strategy.fixtures';
 
 const place = (target: string, amount: string): Command => ({ kind: 'place-wager', target, amount });
 const BEGIN: Command = { kind: 'begin-turn' };
@@ -63,7 +63,9 @@ export const guidedCases: TestCase[] = [
         parameters: [{ id: 'target', label: 'Target', value: 'black' }],
         status: 'active',
         cycleEnd: null,
+        cycle: { number: 1, net: '0', turns: [] },
         pending: null,
+        exhaustion: null,
         correction: null,
         departures: [],
         adherence: { decisions: 0, followed: 0, departures: 0 },
@@ -105,7 +107,7 @@ export const guidedCases: TestCase[] = [
       t.equal(after.random, before.random);
       t.equal(result.receipt.disposition, 'assessed');
       const situation = { game: 'roulette' as const, rules: { wheel: 'single-zero' as const, limits: SPEC.rules.limits }, balance: '1000', lastPocket: null };
-      const explained = explainPrescription(FLAT_EVEN_MONEY, { target: 'red' }, situation, { counters: {}, lastResult: 'none', cycleTurn: 0 });
+      const explained = explainPrescription(FLAT_EVEN_MONEY, { target: 'red' }, situation, { counters: {}, lists: {}, lastResult: 'none', cycleTurn: 0 });
       t.equal(result.facts, [
         {
           kind: 'correction-offered',
@@ -170,7 +172,7 @@ export const guidedCases: TestCase[] = [
       t.equal(readPermittedView(settled).legalCommands, ['restart-cycle', 'stop-strategy', 'request-stop', 'rebuy']);
       t.equal([strategyOf(settled)?.status, strategyOf(settled)?.cycleEnd, strategyOf(settled)?.overrideAffected], ['cycle-ended', 'override', true]);
       // The overridden spin adjusts nothing.
-      t.equal(settled.strategy?.progress, { counters: { stake: '10' }, lastResult: 'none', cycleTurn: 0 });
+      t.equal(settled.strategy?.progress, { counters: { stake: '10' }, lists: {}, lastResult: 'none', cycleTurn: 0 });
       const restarted = step(settled, RESTART);
       t.equal(kinds(restarted.facts), ['cycle-restarted']);
       t.equal([restarted.state.phase, strategyOf(restarted.state)?.status, restarted.state.strategy?.definition.revision], ['open-decision', 'active', 3]);
@@ -218,7 +220,7 @@ export const guidedCases: TestCase[] = [
       const { state, facts } = step(spinning, STOP_STRATEGY);
       t.equal([kinds(facts), state.phase, state.wagers], [['strategy-stopped'], 'revealing-outcome', [{ target: 'red', amount: '10' }]]);
       const settled = step(state, SETTLE).state;
-      t.equal([settled.phase, settled.balance, settled.strategy?.progress], ['settled-outcome', '1010', { counters: { stake: '10' }, lastResult: 'none', cycleTurn: 0 }]);
+      t.equal([settled.phase, settled.balance, settled.strategy?.progress], ['settled-outcome', '1010', { counters: { stake: '10' }, lists: {}, lastResult: 'none', cycleTurn: 0 }]);
     },
   },
   {
@@ -227,7 +229,7 @@ export const guidedCases: TestCase[] = [
       let state = createActivity(guided(DOUBLING, {}), STREAM);
       // 27 red wins (stake back to 10); 0 loses (stake 20); 25 red wins with 20 (stake 10).
       state = run(state, [place('red', '10'), BEGIN, SETTLE, place('red', '10'), BEGIN, SETTLE]).state;
-      t.equal(state.strategy?.progress, { counters: { stake: '20' }, lastResult: 'loss', cycleTurn: 2 });
+      t.equal(state.strategy?.progress, { counters: { stake: '20' }, lists: {}, lastResult: 'loss', cycleTurn: 2 });
       const wrong = step(run(state, [place('red', '10')]).state, BEGIN);
       t.equal(wrong.state.phase, 'correction');
       state = run(state, [place('red', '20'), BEGIN, SETTLE]).state;
@@ -287,14 +289,17 @@ export const guidedCases: TestCase[] = [
         [FLAT_EVEN_MONEY, { target: 'odd' }],
         [TWO_DOZENS, { first: 'dozen-3', second: 'dozen-2' }],
         [DOUBLING, {}],
+        [MARTINGALE, { target: 'black' }],
+        [PARLAY, { target: 'odd' }],
+        [LABOUCHERE, { target: 'even' }],
       ];
       const others = ['red', 'black', 'dozen-1', 'straight-0', 'high'];
       const hashes: string[] = [];
       let checked = 0;
       let mismatches = 0;
       let corrections = 0;
-      for (let session = 0; session < 12; session++) {
-        const [definition, parameters] = strategies[session % 3] as [StrategyDefinition, Record<string, string>];
+      for (let session = 0; session < 24; session++) {
+        const [definition, parameters] = strategies[session % strategies.length] as [StrategyDefinition, Record<string, string>];
         let state = createActivity(guided(definition, parameters, { activityId: `walk-${session}`, funding: String(15 + pick(80)) }), session % 2 ? PI : ZERO);
         for (let move = 0; move < 40 && state.phase !== 'completed'; move++) {
           const view = readPermittedView(state);
