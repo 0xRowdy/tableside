@@ -22,8 +22,9 @@ Simulated table-game play without a required strategy to follow.
 **Guided practice**:
 Simulated play against a selected strategy, with corrections offered before a deviating move is executed. The player can retry or explicitly override the correction.
 
-**Training turn**:
+**Turn**:
 One blackjack round including its split hands, one craps roll, or one roulette spin. Multiple wagers and their individual outcomes remain within that turn.
+_Avoid_: hand (for craps or roulette), round (for craps or roulette)
 
 **Wager outcome**:
 The win, loss, or push of an individual resolved wager, determined by its net result after applicable commissions. It is distinct from the combined result of simultaneous wagers or an entire session.
@@ -107,13 +108,15 @@ A prescribed action or adjustment waiting to execute, distinct from a game outco
 ### Sessions and records
 
 **Practice session**:
-A period of simulated play at one game, explicitly started and explicitly ended by stopping, resetting, or switching games. It has its own performance history, simulated balance, and deviation log.
+A period of simulated play at one game, explicitly started and explicitly ended by stopping, resetting, or switching games. It has its own performance history, simulated balance, and departure log.
+_Avoid_: session (unqualified), game
 
 **Final settlement**:
 The automatic resolution of outstanding wagers when a practice session ends, after legally removable wagers are returned. No new bets are placed during it.
 
 **Practice funding**:
 Simulated buy-ins and rebuys supplied to an ordinary practice session, rather than drawn from a shared spendable wallet. It is separate from the daily training bankroll and from casino-session balances.
+_Avoid_: bankroll, wallet, balance (as an account-wide pool)
 
 **Rebuy**:
 An additional buy-in recorded within a session before its final cash-out. A session's net result sums all its buy-ins, including rebuys, against the one final cash-out.
@@ -121,14 +124,16 @@ An additional buy-in recorded within a session before its final cash-out. A sess
 **Session drawdown**:
 The fall from a session's previous balance peak, adjusted so rebuys do not reduce the drawdown and outstanding stakes retain their original value until resolution. Maximum session drawdown is the largest such fall during the session, including final settlement.
 
-**Deviation event**:
-A single point during a practice session where the player's actual action differed from the strategy's prescribed action, recording whether the player retried into the correct action or explicitly overrode it. Deviation events are never edited afterward; a session's deviation log is their ordered record, and an empty log means the session was flawless.
+**Strategy departure**:
+A single point during a practice session where the player's submitted action differed from the strategy's prescribed action, recording whether the player retried into the prescribed action or explicitly overrode it. Departures are never edited afterward; a session's departure log is their ordered record, and an empty log means the session was flawless. It is the opposite of following a playing deviation.
+_Avoid_: deviation event, deviation log, mistake
 
 **Override-affected session**:
 A practice session in which the player made at least one explicit strategy override. The marking persists across strategy-cycle restarts.
 
 **Casino session**:
-A manually recorded period of real casino play at one game, in the account's real currency. It records a game, a start time, one or more buy-ins and a cash-out; table conditions, end time and casino name are optional. It never carries a deviation log and is strictly private.
+A manually recorded period of real casino play at one game, in the account's real currency. It records a game, a start time, one or more buy-ins and a cash-out; table conditions, end time and casino name are optional. It never carries a departure log and is strictly private.
+_Avoid_: session (unqualified)
 
 **Visit**:
 An automatic grouping of two or more casino sessions that share the same casino name and local date. A visit has no identity, record, or fields of its own.
@@ -138,9 +143,6 @@ Lifetime figures summarizing a player's completed practice sessions by game. The
 
 **Casino totals**:
 Lifetime figures summarizing a player's recorded casino sessions by game and overall. They describe what was recorded only.
-
-**Bankroll**:
-A tracked balance allocated to play, rather than money held or wagered by Tableside. Simulated and real-play balances remain separate.
 
 ### Counting training and lessons
 
@@ -176,6 +178,9 @@ The set of challenge attempts with identical settings, variant and assistance, w
 
 **Readiness streak**:
 Consecutive qualifying unassisted Check attempts in one comparison group on one installation. Learn and assisted attempts leave it unchanged; a below-threshold, abandoned or insufficient-funds Check attempt breaks it.
+
+**Personal best**:
+The best result among a learner's completed challenge attempts in one comparison group. It is derived from those attempts; abandoned and insufficient-funds attempts never count.
 
 **Readiness milestone**:
 An earned indication that a learner met the counting-accuracy standard for a particular challenge configuration. It supports a next-step recommendation without restricting access to other challenges.
@@ -221,6 +226,9 @@ A day's training allowance obtained online for an account's allowance device und
 
 **Training bankroll**:
 A daily simulated balance shared across games to limit guided practice under a bankroll-based allowance. It is separate from practice funding, casino balances and counting-challenge attempts.
+
+**Training turn**:
+A turn counted against a free account's turn-based training allowance.
 
 **Metering basis**:
 How an activity's training is counted against an allowance: by time, by training turns, by training bankroll, by challenge attempt, or not at all.
@@ -284,7 +292,8 @@ A player's public identity for publishing and rating community strategies, inclu
 A player's assessment of a community strategy's practice usefulness and clarity, tied to the revision of their qualifying practice session. It is distinct from the strategy's financial performance.
 
 **Strategy remix**:
-A separately published strategy derived from another strategy revision, retaining attribution and a link to its source. It has its own ratings and performance evidence.
+A separately published strategy derived from another strategy revision, retaining attribution and a link to its source. It has its own ratings and performance evidence. A private strategy customized from a community source becomes a remix only when it is published.
+_Avoid_: fork
 
 **Sharing period**:
 A span during which an account has enabled sharing of eligible practice results. Disabling sharing invalidates that period; enabling it again starts a new period for future sessions.
