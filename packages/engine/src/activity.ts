@@ -30,7 +30,7 @@ import {
   type BlackjackShoeView,
   type BlackjackTableView,
 } from './blackjack';
-import { moveCommand, type PlayExplanation, type PlayMove } from './blackjack-strategy';
+import type { BlackjackDeviation, PlayExplanation, PlayMove } from './blackjack-strategy';
 import { canonicalJson } from './canonical';
 import { CRAPS, type CrapsActivityState, type CrapsDomainFact, type CrapsIllegalActionReason, type CrapsRuleSet, type CrapsTable, type CrapsOutcome } from './craps';
 import type { RoulettePocket } from './draws';
@@ -293,10 +293,14 @@ export type ActivityState = RouletteActivityState | CrapsActivityState | Blackja
 /** The state of one game's activity. */
 export type StateOf<G extends GameId> = Extract<ActivityState, { readonly identities: { readonly game: G } }>;
 
-/** Why the stop path ran: the player's stop, reset or switch, or an access-ended stop (which includes a content-removal stop). */
-export type StopCause = 'stop' | 'reset' | 'switch' | 'access-ended';
+/**
+ * Why the stop path ran: the player's stop, reset or switch; an access-ended
+ * stop; or a content-removal stop, when a required removal covers the pinned
+ * strategy revision (Amendment 6 §5). Records keep the two apart (§2).
+ */
+export type StopCause = 'stop' | 'reset' | 'switch' | 'access-ended' | 'content-removed';
 
-export const STOP_CAUSES: readonly StopCause[] = ['stop', 'reset', 'switch', 'access-ended'];
+export const STOP_CAUSES: readonly StopCause[] = ['stop', 'reset', 'switch', 'access-ended', 'content-removed'];
 
 export type Command =
   /** Sets the stake on a target; amount "0" takes the wager down. */
@@ -467,6 +471,8 @@ export interface BlackjackPermittedView extends PermittedViewBase {
   readonly shoe: BlackjackShoeView;
   /** The count, only where the pinned strategy has Tableside supply it (basic with deviations); null otherwise. */
   readonly count: BlackjackCount | null;
+  /** The pinned strategy revision's deviation indices, beside the count it supplies; empty wherever `count` is null. */
+  readonly deviations: readonly BlackjackDeviation[];
 }
 
 export type PermittedView = RoulettePermittedView | CrapsPermittedView | BlackjackPermittedView;
@@ -524,8 +530,22 @@ export interface GameModule<S extends ActivityState, V extends PermittedView, C 
   idleTurn?(state: S): Step<S>;
   /** The game's part of the permitted view; it may refine when wagers count as committed. */
   view(state: S): Omit<V, keyof PermittedViewBase> & Partial<Pick<PermittedViewBase, 'wagersCommitted'>>;
+  /**
+   * The strategy's part of the view as this game may show it: a game whose
+   * explanations carry information the player keeps hidden (the blackjack count
+   * in the counting modes) takes it out of each correction and departure.
+   */
+  strategyView?(state: S, view: StrategyView): StrategyView;
   /** The first problem with the game's part of a checkpoint (rules, wagers, outcome, table state), if any. */
   damage(value: Record<string, unknown>): string | undefined;
+  /** The most a player can stake on one turn under these rules, and the largest profit per unit staked (spec 6 exposure bound). */
+  turnExposure(rules: S['rules']): { readonly stake: Money; readonly payout: Money };
+  /**
+   * Where a standardized runner bets the profile's base when the strategy
+   * leaves the bets to the player (a blackjack playing policy without a bet
+   * schedule); undefined where every strategy places its own bets.
+   */
+  readonly ownBetTarget?: string;
 }
 
 // The registry casts each module to the union: a module only ever receives states of its own game.
@@ -541,6 +561,15 @@ const gameFor = (game: unknown): AnyModule | undefined =>
   typeof game === 'string' && Object.hasOwn(GAMES, game) ? GAMES[game as GameId] : undefined;
 
 const moduleOf = (state: ActivityState) => GAMES[state.identities.game];
+
+/** A game's module, for the standardized runner: its turn exposure and where it bets for the player. */
+export const gameModule = (game: GameId): AnyModule => GAMES[game];
+
+/** The pinned strategy's play for the decision the state awaits (a blackjack hand), after its fallbacks; undefined when none awaits. */
+export function strategyPlay(state: ActivityState): Command | undefined {
+  const run = state.strategy;
+  return run ? gameStrategy(state).followPlay?.(state, run.definition) : undefined;
+}
 
 /**
  * Rebuys are offered only while the activity waits for input, and only with
@@ -1024,7 +1053,7 @@ const leavesBetting = (definition: StrategyDefinition) => definition.instruction
 function resolvePlay(state: ActivityState, run: StrategyRun, correction: PlayCorrection, resolution: StrategyDeparture['resolution']): AnyStep {
   const departure: StrategyDeparture = { ...correction, resolution };
   const move = resolution === 'retried' ? correction.explanation.prescribed : correction.actual;
-  const applied = moduleOf(state).apply({ ...state, phase: 'open-decision' } as ActivityState, moveCommand(move) as GameCommand);
+  const applied = moduleOf(state).apply({ ...state, phase: 'open-decision' } as ActivityState, gameStrategy(state).playCommand?.(move) as GameCommand);
   const strategy: StrategyRun = { ...run, correction: null, departures: [...run.departures, departure], decisions: counted(run, 'playing') };
   return withStrategy(applied, strategy, [{ kind: 'departure-recorded', departure }]);
 }
@@ -1034,7 +1063,7 @@ const gameStrategy = (state: ActivityState) => strategyGame(state.identities.gam
 /** What the strategy prescribes for the decision the activity waits on (the same function Explain prescription runs). */
 function explain(state: ActivityState, run: StrategyRun): Explanation {
   const game = gameStrategy(state);
-  return prescribe(game.vocabulary, run.definition, run.parameters, game.situation(state), run.deferred?.progress ?? run.progress);
+  return prescribe(game.vocabulary, run, game.situation(state), run.deferred?.progress ?? run.progress);
 }
 
 /** True when the wagers are exactly the prescribed groups. A paused or uncovered prescription places no new bets. */
@@ -1096,6 +1125,9 @@ function heldAction(state: ActivityState, run: StrategyRun): PendingStrategyActi
   }
   return null;
 }
+
+/** The strategy view after the game takes out what its player keeps hidden. */
+const shownStrategy = (state: ActivityState, view: StrategyView): StrategyView => moduleOf(state).strategyView?.(state, view) ?? view;
 
 function strategyView(state: ActivityState, run: StrategyRun): StrategyView {
   const { definition } = run;
@@ -1177,7 +1209,7 @@ export function readPermittedView(state: ActivityState): PermittedView {
       cumulative: encodeMoney(cumulativeFunding(state.funding)),
       headroom: encodeMoney(fundingHeadroom(state.funding)),
     },
-    strategy: state.strategy && strategyView(state, state.strategy),
+    strategy: state.strategy && shownStrategy(state, strategyView(state, state.strategy)),
     ...moduleOf(state).view(state),
   } as PermittedView;
 }
@@ -1278,6 +1310,8 @@ function stateDamage(value: unknown): string | undefined {
   // A game judges its own part as of the decision a guided phase waits on.
   const gameDamage = game.damage(GUIDED_PHASES.has(phase as Phase) ? { ...value, phase: 'open-decision' } : value);
   if (gameDamage) return gameDamage;
+  // Every game: an outcome from the first turn on, and never before.
+  if ((value.outcome === null) !== (turn === 0)) return 'the outcome does not match the turn count';
   const strategy = strategyDamage(value as unknown as ActivityState, identities.strategy as VersionedIdentity | null);
   if (strategy) return strategy;
   // A cycle's outstanding wagers resolved when it ended: only contracts can still be on the table.
@@ -1384,7 +1418,7 @@ function strategyDamage(state: ActivityState, identity: VersionedIdentity | null
     // A held playing move is exactly what the pinned policy says about this decision.
     const actual = run.correction.actual;
     if (status !== 'active' || !isMove(actual)) return 'damaged correction';
-    const assessment = gameStrategy(state).assessPlay?.(state, definition, moveCommand(actual)) as PlayAssessment<PlayExplanation, PlayMove, Command> | undefined;
+    const assessment = gameStrategy(state).assessPlay?.(state, definition, gameStrategy(state).playCommand?.(actual)) as PlayAssessment<PlayExplanation, PlayMove, Command> | undefined;
     if (!assessment || assessment.follows) return 'damaged correction';
     const held: PlayCorrection = { id: `${state.activity.id}/departure/${state.sequence - 1}`, turn: state.turn, decision: (run.decisions as StrategyRun['decisions']).playing, explanation: assessment.explanation, actual: assessment.actual };
     return canonicalJson(run.correction) !== canonicalJson(held) || ids.has(held.id) ? 'damaged correction' : undefined;

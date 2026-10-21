@@ -21,10 +21,11 @@
 // shows only exposed cards: the hole card is face down until the round ends,
 // and a negative peek reveals no rank.
 
-import type { ActivityStateBase, BlackjackPermittedView, Command, CommandKind, DomainFact, GameCommand, GameModule, PermittedViewBase, Step, Wager } from './activity';
+import type { ActivityStateBase, BlackjackPermittedView, Command, CommandKind, DomainFact, GameCommand, GameModule, PendingCorrection, PermittedViewBase, Step, StrategyView, Wager } from './activity';
 import { canonicalShoe, shuffle, type Card, type Rank, type Suit } from './draws';
 import { add, compare, decodeMoney, encodeMoney, money, mul, neg, sub, type Money } from './money';
 import { RandomStream } from './random';
+import type { BlackjackPlayPolicy } from './blackjack-strategy';
 import { BASE_WAGER_CEILING, hasExactKeys, isCount, isLimit, isWagerList, parseMoney, type Limit, type VersionedIdentity } from './shape';
 
 /** The rule identity this engine can run. Dealer rule, surrender, penetration, players and limits are pinned table content. */
@@ -329,7 +330,8 @@ const otherPositions = (rules: BlackjackTable) => rules.players.otherWagers.map(
 
 // ---- totals ---------------------------------------------------------------
 
-const cardValue = (card: Card) => (card.rank >= 10 ? 10 : card.rank);
+/** A card's blackjack value: the ace is 1 and every ten-valued card is 10. */
+export const cardValue = (card: Card): number => (card.rank >= 10 ? 10 : card.rank);
 
 export function handTotal(cards: readonly Card[]): HandTotal {
   const hard = cards.reduce((sum, card) => sum + cardValue(card), 0);
@@ -986,6 +988,8 @@ function view(
     },
     // Supplied only in "basic with deviations"; the counting modes hide it (the player keeps it).
     count: countSupplied(state) ? referenceCount(state) : null,
+    // The revision this practice session pinned, never the one the app ships now.
+    deviations: countSupplied(state) ? [...((state.strategy?.definition.play as BlackjackPlayPolicy | undefined)?.deviations ?? [])] : [],
     shoe: {
       cards: SHOE.length,
       remaining: shoe === null ? SHOE.length : SHOE.length - shoe.next,
@@ -1077,11 +1081,11 @@ function damage(value: Record<string, unknown>): string | undefined {
   if (shoe) return shoe;
   const round = roundDamage(value.outcome, value.rules);
   if (round) return round;
-  const { phase, wagers, turn } = value;
+  const { phase, wagers } = value;
   const r = value.outcome as BlackjackRound | null;
   const targets = r === null ? [HAND_TARGET] : r.hands.map((hand) => hand.target);
   if (!isWagerList(wagers, (target) => targets.indexOf(target))) return 'damaged wagers';
-  if ((value.outcome === null) !== (turn === 0) || (value.outcome !== null && value.shoe === null)) return 'the round does not match the turn count';
+  if (value.outcome !== null && value.shoe === null) return 'a round dealt from no shoe';
   const inPlay = phase === 'open-decision' && r !== null && r.active !== null;
   const unsettled = inPlay || phase === 'revealing-outcome' || (phase === 'final-settlement' && wagers.length > 0);
   // A dealt round stakes every learner hand; between rounds only the initial wager sits on the box.
@@ -1091,6 +1095,21 @@ function damage(value: Record<string, unknown>): string | undefined {
   if (phase === 'final-settlement' && wagers.length > 0 && (r === null || r.active !== null)) return 'damaged final settlement';
   if ((phase === 'settled-outcome' || phase === 'completed') && wagers.length > 0) return 'wagers remain after settlement';
   return undefined;
+}
+
+/**
+ * In the counting modes the player keeps the count, so no view field may carry
+ * it (spec Counting): each held or recorded move keeps its explanation, minus
+ * the count it was checked against. The state and the facts keep it for the record.
+ */
+function strategyView(state: BlackjackActivityState, view: StrategyView): StrategyView {
+  if (countSupplied(state)) return view;
+  const hidden = <C extends PendingCorrection>(correction: C): C => {
+    if ('decision' in correction) return { ...correction, explanation: { ...correction.explanation, situation: { ...correction.explanation.situation, count: null } } };
+    const values = Object.fromEntries(Object.entries(correction.explanation.situation.values).filter(([name]) => name !== 'true-count'));
+    return { ...correction, explanation: { ...correction.explanation, situation: { ...correction.explanation.situation, values } } };
+  };
+  return { ...view, correction: view.correction && hidden(view.correction), departures: view.departures.map(hidden) };
 }
 
 /** Six-deck blackjack behind the session protocol. */
@@ -1104,5 +1123,13 @@ export const BLACKJACK: GameModule<BlackjackActivityState, BlackjackPermittedVie
   legal,
   apply,
   view,
+  strategyView,
   damage,
+  // Every hand split to the cap and doubled, plus full insurance; a doubled win or insurance pays at most 2 per unit.
+  turnExposure: (rules) => {
+    const initial = decodeMoney(rules.limits.initial.max);
+    return { stake: add(mul(initial, money(BigInt(MAX_SPLIT_HANDS * 2))), mul(initial, money(1n, 2n))), payout: money(2n) };
+  },
+  // A playing policy without a bet schedule leaves the initial wager to the player.
+  ownBetTarget: HAND_TARGET,
 };

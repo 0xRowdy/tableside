@@ -9,7 +9,7 @@
 // controller; it never advances the game or decides what is legal. A face-down
 // card is drawn as a card back and read as "Face-down card".
 
-import { blackjackHouseEdge, blackjackStrategy } from '@tableside/definitions';
+import { blackjackHouseEdge } from '@tableside/definitions';
 import {
   decodeMoney,
   encodeMoney,
@@ -22,7 +22,6 @@ import {
   type BlackjackCount,
   type BlackjackHandView,
   type BlackjackPermittedView,
-  type BlackjackPlayPolicy,
   type Card,
 } from '@tableside/engine';
 import { useEffect, useMemo, useState } from 'react';
@@ -31,9 +30,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/Button';
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
-import { SAVE_RETRY_MS, type ActiveSnapshot as Active } from '@/practice/controller';
+import type { ActiveSnapshot as Active } from '@/practice/controller';
 import { usePractice } from '@/practice/PracticeProvider';
-import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale, type ColorToken } from '@/theme/tokens';
+import { fonts, palette, radius, space, textScale } from '@/theme/tokens';
 
 import { BetSelector } from './bet-selector/BetSelector';
 import { draftAmountText, EMPTY_DRAFT, findChoice, isDraftPending, type BetDraft } from './bet-selector/catalog';
@@ -59,13 +58,11 @@ import {
   SUIT_GLYPH,
   totalText,
 } from './blackjack-text';
-import { EndSessionDialog } from './EndSessionDialog';
 import { betCorrectionCopy, BLACKJACK_WORDS } from './coaching-text';
-import { CorrectionPanel, GuidedStrip, StopStrategyDialog, type TableNow } from './Guidance';
+import { CorrectionPanel, GuidedStrip, type TableNow } from './Guidance';
 import { RebuySheet } from './RebuySheet';
-import { ACCESS_ENDED } from './RouletteTable';
-import { PhaseStepper, SessionStrip, TableTopBar, type PhaseStep } from './TableChrome';
-import { formatSigned, formatUnits, totalOnTable } from './units';
+import { AccessStopBanner, AllowanceLine, ChipRack, PhaseStepper, SaveFailedBanner, SessionStrip, TableDialogs, TableTopBar, TurnBoundaryBanner, type PhaseStep } from './TableChrome';
+import { capitalize, formatSigned, formatUnits, halfUnits, sumUnits, totalOnTable } from './units';
 
 type ActiveSnapshot = Active<BlackjackPermittedView>;
 
@@ -74,13 +71,6 @@ const SIDE_BY_SIDE_MAX_FONT_SCALE = 1.35;
 const HAND = 'hand-1';
 const SAVE_FAILED_ANNOUNCEMENT = "Couldn't save. Play is paused and will retry automatically.";
 
-const CHIPS: readonly { value: string; label: string; color: ColorToken; ink: ColorToken }[] = [
-  { value: '5', label: '5', color: 'chip5', ink: 'onImage' },
-  { value: '25', label: '25', color: 'chip25', ink: 'onImage' },
-  { value: '100', label: '100', color: 'chip100', ink: 'onImage' },
-  { value: '500', label: '500', color: 'chip500', ink: 'onImage' },
-  { value: '1000', label: '1K', color: 'chip1k', ink: 'ink' },
-];
 
 const SUIT_TOKEN = { spades: 'suitSpade', hearts: 'suitHeart', diamonds: 'suitDiamond', clubs: 'suitClub' } as const;
 
@@ -154,7 +144,7 @@ export function BlackjackTable({ snapshot }: { snapshot: ActiveSnapshot }) {
     });
   }, [controller]);
 
-  const addChip = () => void controller.placeWager(HAND, (BigInt(wager ?? '0') + BigInt(chip)).toString());
+  const addChip = () => void controller.placeWager(HAND, sumUnits(wager ?? '0', chip));
   const deal = () => {
     if (wager) setLastBet(wager);
     void controller.beginTurn();
@@ -188,37 +178,17 @@ export function BlackjackTable({ snapshot }: { snapshot: ActiveSnapshot }) {
           onTable={formatUnits(totalOnTable(view))}
           status={save === 'failed' ? 'Paused · not saved' : statusText(view)}
         />
+        <AllowanceLine game="blackjack" />
         {strategy && <GuidedStrip strategy={strategy} detail={null} unit="decision" canStop={legal('stop-strategy')} onStop={() => setStoppingStrategy(true)} />}
         {view.count && <CountPanel view={view} count={view.count} betweenRounds={!inHand(view) && view.phase !== 'revealing-outcome'} />}
         {betting && <PresentationSwitch value={presentation} onChange={setPresentation} />}
 
-        {save === 'failed' && (
-          <View style={styles.banner}>
-            <Text accessibilityRole="alert" maxFontSizeMultiplier={textScale.body} style={styles.bannerTitle}>Couldn&apos;t save · play is paused</Text>
-            <Text maxFontSizeMultiplier={textScale.body} style={styles.bannerText}>
-              {busy
-                ? 'Saving your last move…'
-                : `Your last move hasn't been saved, so nothing has been revealed. Nothing is lost. Retrying automatically every ${SAVE_RETRY_MS / 1000} s.`}
-            </Text>
-            <Button label="Retry now" variant="secondary" disabled={busy} onPress={() => void controller.retrySave()} />
-          </View>
-        )}
-        {snapshot.ending === 'access-ended' && (
-          <View style={styles.banner} testID="access-ended">
-            <Text accessibilityRole="alert" maxFontSizeMultiplier={textScale.body} style={styles.bannerTitle}>{ACCESS_ENDED}</Text>
-            <Text maxFontSizeMultiplier={textScale.body} style={styles.bannerText}>
-              {playing ? 'Finish this hand; then it settles automatically' : 'Your bets settle automatically'}, then you&apos;ll see the session result.
-            </Text>
-          </View>
-        )}
-        {snapshot.suspension?.kind === 'turn-boundary' && !snapshot.suspension.reached && (
-          <View style={styles.banner}>
-            <Text accessibilityRole="alert" maxFontSizeMultiplier={textScale.body} style={styles.bannerTitle}>Suspending after this round</Text>
-            <Text maxFontSizeMultiplier={textScale.body} style={styles.bannerText}>
-              {snapshot.suspension.reason ?? 'This round finishes normally. No new round starts until the session resumes.'}
-            </Text>
-          </View>
-        )}
+        {save === 'failed' && <SaveFailedBanner busy={busy} onRetry={() => void controller.retrySave()} />}
+        <AccessStopBanner
+          ending={snapshot.ending}
+          detail={`${playing ? 'Finish this hand; then it settles automatically' : 'Your bets settle automatically'}, then you'll see the session result.`}
+        />
+        <TurnBoundaryBanner suspension={snapshot.suspension} turn="round" />
 
         <View testID="table-columns" style={[styles.columns, sideBySide && styles.columnsSideBySide]}>
           <View style={styles.column}>
@@ -269,7 +239,7 @@ export function BlackjackTable({ snapshot }: { snapshot: ActiveSnapshot }) {
               />
             ) : heldBet && strategy ? (
               <CorrectionPanel
-                copy={betCorrectionCopy(strategy.name, heldBet, strategy.overrideEndsCycle, BLACKJACK_WORDS)}
+                copy={betCorrectionCopy(strategy.name, heldBet, strategy.overrideEndsCycle, BLACKJACK_WORDS, view.count === null)}
                 table={tableNow(view, handsText)}
                 fullScreen={fontScale > SIDE_BY_SIDE_MAX_FONT_SCALE}
                 busy={!ready}
@@ -307,7 +277,7 @@ export function BlackjackTable({ snapshot }: { snapshot: ActiveSnapshot }) {
                 onPress={() => setRebuying(true)}
               />
             )}
-            {betting && !playing && !selector && <ChipRack chip={chip} onChoose={setChip} />}
+            {betting && !playing && !selector && <ChipRack chip={chip} onChoose={setChip} from="5" spot="the bet spot" />}
             {inHand(view) && (
               <Text maxFontSizeMultiplier={textScale.body} style={styles.hint}>
                 Finish this hand before ending the session.
@@ -328,25 +298,14 @@ export function BlackjackTable({ snapshot }: { snapshot: ActiveSnapshot }) {
         />
       )}
 
-      <StopStrategyDialog
-        visible={stoppingStrategy}
+      <TableDialogs
+        view={view}
+        ending={confirming}
+        onCloseEnding={() => setConfirming(false)}
+        stoppingStrategy={stoppingStrategy}
+        onCloseStopping={() => setStoppingStrategy(false)}
         removable={view.wagersCommitted || view.wagers.length === 0 ? 'Nothing removable on the table' : `Your ${handsText} wager comes back`}
         committed={view.wagersCommitted ? `Your ${handsText} in play settles with this round.` : 'None between rounds.'}
-        onCancel={() => setStoppingStrategy(false)}
-        onConfirm={() => {
-          setStoppingStrategy(false);
-          void controller.stopStrategy();
-        }}
-      />
-
-      <EndSessionDialog
-        visible={confirming}
-        view={view}
-        onCancel={() => setConfirming(false)}
-        onConfirm={() => {
-          setConfirming(false);
-          void controller.endSession();
-        }}
       />
     </View>
   );
@@ -375,10 +334,8 @@ function tableNow(view: BlackjackPermittedView, handsText: string): TableNow {
  * count and the next index up; never during a decision, where that would be the answer.
  */
 function CountPanel({ view, count, betweenRounds }: { view: BlackjackPermittedView; count: BlackjackCount; betweenRounds: boolean }) {
-  const preset = presetOf(view);
-  const builtIn = blackjackStrategy(preset, 'basic-with-deviations');
-  const deviations = view.strategy?.id === builtIn.id ? (builtIn.play as BlackjackPlayPolicy).deviations : [];
-  const { at, next } = deviationsAtCount(deviations, count.trueCount);
+  // The pinned revision's indices, as the engine shows them beside the count.
+  const { at, next } = deviationsAtCount(view.deviations, count.trueCount);
   return (
     <View
       style={styles.countPanel}
@@ -534,8 +491,6 @@ function SplitHand({ view, hand, index, last }: { view: BlackjackPermittedView; 
   );
 }
 
-const capitalize = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
-
 function PlayingCard({ card, small = false }: { card: Card | null; small?: boolean }) {
   if (card === null) {
     return (
@@ -602,9 +557,6 @@ function unavailable(action: TableAction, view: BlackjackPermittedView): string 
   }
 }
 
-/** Half of a canonical amount, exactly. */
-const half = (amount: string) => encodeMoney(mul(decodeMoney(amount), money(1n, 2n)));
-
 function PlayActions({ view, enabled, onPlay }: { view: BlackjackPermittedView; enabled: boolean; onPlay: (action: BlackjackAction) => void }) {
   const offered = (action: BlackjackAction) => view.playActions.includes(action);
   // Surrender shows only at tables that offer it.
@@ -633,7 +585,7 @@ function PlayActions({ view, enabled, onPlay }: { view: BlackjackPermittedView; 
       {offered('surrender') && stake && (
         <Text maxFontSizeMultiplier={textScale.body} style={styles.hint}>
           {round?.dealer.peek === 'no-blackjack' ? 'The dealer checked for blackjack and has none. ' : ''}
-          Late surrender is only on your first two cards. Surrendering returns half your bet ({formatUnits(half(stake))}) and ends the hand.
+          Late surrender is only on your first two cards. Surrendering returns half your bet ({formatUnits(halfUnits(stake))}) and ends the hand.
         </Text>
       )}
     </View>
@@ -721,49 +673,12 @@ function BettingActions({
   );
 }
 
-function ChipRack({ chip, onChoose }: { chip: string; onChoose: (value: string) => void }) {
-  return (
-    <View style={styles.rack}>
-      <View accessibilityRole="radiogroup" accessibilityLabel="Chip value" style={styles.chips}>
-        {CHIPS.map((option) => (
-          <Chip key={option.value} option={option} selected={option.value === chip} onPress={() => onChoose(option.value)} />
-        ))}
-      </View>
-      <Text maxFontSizeMultiplier={textScale.body} style={styles.rackCaption}>
-        {formatUnits(chip)} selected · tap the bet spot to add it
-      </Text>
-    </View>
-  );
-}
-
-function Chip({ option, selected, onPress }: { option: (typeof CHIPS)[number]; selected: boolean; onPress: () => void }) {
-  const { focused, focusProps } = useKeyboardFocus();
-  return (
-    <Pressable
-      accessibilityRole="radio"
-      accessibilityLabel={`${formatUnits(option.value)} chip`}
-      accessibilityState={{ checked: selected }}
-      onPress={onPress}
-      {...focusProps}
-      style={[styles.chipSlot, selected && styles.chipSelected, focused && styles.focused]}
-    >
-      <View style={[styles.chip, { backgroundColor: palette[option.color] }]}>
-        <Text maxFontSizeMultiplier={textScale.display} style={[styles.chipText, { color: palette[option.ink] }]}>{option.label}</Text>
-      </View>
-      {selected && <Text maxFontSizeMultiplier={textScale.display} style={styles.chipCheck}>{'✓'}</Text>}
-    </Pressable>
-  );
-}
-
 const CARD_WIDTH = 56;
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: palette.background },
   flex: { flex: 1 },
   edge: { fontFamily: fonts.ui, fontSize: 12, color: palette.mutedForeground, paddingHorizontal: space[4] },
-  banner: { margin: space[4], padding: space[4], gap: space[2], borderRadius: radius.lg, backgroundColor: palette.card, borderWidth: 1, borderColor: palette.destructive },
-  bannerTitle: { fontFamily: fonts.uiBold, fontSize: 14, color: palette.foreground },
-  bannerText: { fontFamily: fonts.ui, fontSize: 13, color: palette.mutedForeground },
   columns: { gap: space[3], paddingTop: space[2] },
   columnsSideBySide: { flexDirection: 'row', alignItems: 'flex-start' },
   column: { flex: 1 },
@@ -833,20 +748,4 @@ const styles = StyleSheet.create({
   actions: { gap: space[2] },
   actionRow: { flexDirection: 'row', flexWrap: 'wrap', gap: space[2] },
   action: { flexGrow: 1, flexBasis: 96 },
-  rack: { gap: space[2], padding: space[3], borderRadius: radius.lg, backgroundColor: palette.rail },
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: space[1] },
-  chipSlot: {
-    minWidth: MIN_TOUCH_TARGET + 8,
-    minHeight: MIN_TOUCH_TARGET + 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radius.pill,
-    borderWidth: 2,
-    borderColor: palette.transparent,
-  },
-  chipSelected: { borderColor: palette.primary },
-  chip: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
-  chipText: { fontFamily: fonts.uiBold, fontSize: 15 },
-  chipCheck: { position: 'absolute', top: -2, right: -2, fontFamily: fonts.uiBold, fontSize: 12, color: palette.primary },
-  rackCaption: { fontFamily: fonts.ui, fontSize: 12, color: palette.foreground },
 });

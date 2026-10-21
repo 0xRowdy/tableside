@@ -15,7 +15,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/Button';
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
-import { SAVE_RETRY_MS, type ActivePracticeSnapshot } from '@/practice/controller';
+import type { ActivePracticeSnapshot } from '@/practice/controller';
 import { usePractice } from '@/practice/PracticeProvider';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/theme/tokens';
 
@@ -24,14 +24,11 @@ import { draftAmountText, EMPTY_DRAFT, findChoice, isDraftPending, type BetDraft
 import { DraftBar, PresentationSwitch, type Presentation } from './bet-selector/Presentation';
 import { betCorrectionCopy, betsText, CRAPS_WORDS } from './coaching-text';
 import { crapsCatalog, crapsPlacedWagers, placedToggle } from './craps-catalog';
-import { EndSessionDialog } from './EndSessionDialog';
-import { CorrectionPanel, CycleResultPanel, GuidedStrip, PendingPanel, StopStrategyDialog, type TurnWords } from './Guidance';
+import { CorrectionPanel, CycleResultPanel, GuidedStrip, PendingPanel, type TurnWords } from './Guidance';
 import { RebuySheet } from './RebuySheet';
 import { commitmentText, crapsStatus, crapsTargetName, describeCrapsFacts, puckText, workingText } from './craps-text';
-import { ACCESS_ENDED, ChipRack } from './RouletteTable';
-import { totalOnTable } from './roulette-text';
-import { formatUnits } from './units';
-import { PhaseStepper, SessionStrip, TableTopBar, type PhaseStep } from './TableChrome';
+import { formatUnits, sumUnits, totalOnTable } from './units';
+import { AccessStopBanner, AllowanceLine, ChipRack, EndingSteps, PhaseStepper, SaveFailedBanner, SessionStrip, TableDialogs, TableTopBar, TurnBoundaryBanner, type PhaseStep } from './TableChrome';
 
 type ActiveSnapshot = ActivePracticeSnapshot & { readonly view: PermittedView };
 
@@ -120,8 +117,7 @@ export function CrapsTable({ snapshot }: { snapshot: ActiveSnapshot }) {
   const stakeOn = (target: string) => view.wagers.find((wager) => wager.target === target)?.amount;
   const placeable = (target: string) => table.placements.some((placement) => placement.target === target);
   const addChip = (target: string) => {
-    const total = BigInt(stakeOn(target) ?? '0') + BigInt(chip);
-    void controller.placeWager(target, total.toString());
+    void controller.placeWager(target, sumUnits(stakeOn(target) ?? '0', chip));
   };
   const canPlace = legal('place-wager');
   // The stake editor sets the stake, then the working option (design frame
@@ -155,39 +151,25 @@ export function CrapsTable({ snapshot }: { snapshot: ActiveSnapshot }) {
           onTable={formatUnits(totalOnTable(view))}
           status={save === 'failed' ? 'Paused · not saved' : crapsStatus(view)}
         />
+        <AllowanceLine game="craps" />
         {strategy && <GuidedStrip strategy={strategy} canStop={legal('stop-strategy')} onStop={() => setStoppingStrategy(true)} detail={null} unit="roll" />}
         {view.phase !== 'final-settlement' && <PresentationSwitch value={presentation} onChange={setPresentation} />}
 
-        {save === 'failed' && (
-          <View style={styles.banner}>
-            <Text accessibilityRole="alert" maxFontSizeMultiplier={textScale.body} style={styles.bannerTitle}>Couldn&apos;t save · play is paused</Text>
-            <Text maxFontSizeMultiplier={textScale.body} style={styles.bannerText}>
-              {busy
-                ? 'Saving your last move…'
-                : `Your last move hasn't been saved, so nothing has been revealed. Nothing is lost. Retrying automatically every ${SAVE_RETRY_MS / 1000} s.`}
-            </Text>
-            <Button label="Retry now" variant="secondary" disabled={busy} onPress={() => void controller.retrySave()} />
-          </View>
-        )}
-        {snapshot.ending === 'access-ended' && (
-          <View style={styles.banner} testID="access-ended">
-            <Text accessibilityRole="alert" maxFontSizeMultiplier={textScale.body} style={styles.bannerTitle}>{ACCESS_ENDED}</Text>
-            <Text maxFontSizeMultiplier={textScale.body} style={styles.bannerText}>
-              The dice roll on to settle only the bets already working. No new bets, odds or rolls of your own.
-            </Text>
-          </View>
-        )}
-        {snapshot.suspension?.kind === 'turn-boundary' && !snapshot.suspension.reached && (
-          <View style={styles.banner}>
-            <Text accessibilityRole="alert" maxFontSizeMultiplier={textScale.body} style={styles.bannerTitle}>Suspending after this roll</Text>
-            <Text maxFontSizeMultiplier={textScale.body} style={styles.bannerText}>
-              {snapshot.suspension.reason ?? 'This roll finishes normally. No new roll starts until the session resumes.'}
-            </Text>
-          </View>
-        )}
+        {save === 'failed' && <SaveFailedBanner busy={busy} onRetry={() => void controller.retrySave()} />}
+        <AccessStopBanner ending={snapshot.ending} detail="The dice roll on to settle only the bets already working. No new bets, odds or rolls of your own." />
+        <TurnBoundaryBanner suspension={snapshot.suspension} turn="roll" />
 
         {view.phase === 'final-settlement' ? (
-          <EndingSteps snapshot={snapshot} />
+          <EndingSteps
+            facts={snapshot.facts}
+            noneReturned="Nothing removable was on the table"
+            settle={{
+              title: 'Contracts settle automatically',
+              detail: view.wagers.length > 0 ? `Rolling on for ${listText(view.wagers)}. No new bets, odds or presses.` : 'Nothing left to settle.',
+            }}
+            lead={view.outcome ? `Last roll: ${rollText(view.outcome.dice)} · ${puckText(view.table.point)}` : null}
+            footer="The dice roll on their own until every contract is settled. There's nothing to tap."
+          />
         ) : (
           <View testID="table-columns" style={[styles.columns, sideBySide && styles.columnsSideBySide]}>
             <View style={styles.column}>
@@ -256,7 +238,7 @@ export function CrapsTable({ snapshot }: { snapshot: ActiveSnapshot }) {
                 <PendingPanel
                   strategy={strategy}
                   pending={strategy.pending}
-                  available={(BigInt(view.balance) + BigInt(totalOnTable(view))).toString()}
+                  available={sumUnits(view.balance, totalOnTable(view))}
                   canRebuy={view.legalCommands.includes('rebuy') ? legal('rebuy') : null}
                   canOverride={legal('place-wager')}
                   canCollect={legal('collect-instead')}
@@ -309,8 +291,12 @@ export function CrapsTable({ snapshot }: { snapshot: ActiveSnapshot }) {
         />
       )}
 
-      <StopStrategyDialog
-        visible={stoppingStrategy}
+      <TableDialogs
+        view={view}
+        ending={confirming}
+        onCloseEnding={() => setConfirming(false)}
+        stoppingStrategy={stoppingStrategy}
+        onCloseStopping={() => setStoppingStrategy(false)}
         removable={view.wagersCommitted || removable.length === 0 ? 'Nothing removable on the table' : listText(removable)}
         committed={
           view.wagersCommitted
@@ -319,21 +305,6 @@ export function CrapsTable({ snapshot }: { snapshot: ActiveSnapshot }) {
               ? 'None between rolls.'
               : `${listText(contracts)} can't be taken down or refunded. The dice settle them as you play on.`
         }
-        onCancel={() => setStoppingStrategy(false)}
-        onConfirm={() => {
-          setStoppingStrategy(false);
-          void controller.stopStrategy();
-        }}
-      />
-
-      <EndSessionDialog
-        visible={confirming}
-        view={view}
-        onCancel={() => setConfirming(false)}
-        onConfirm={() => {
-          setConfirming(false);
-          void controller.endSession();
-        }}
       />
     </View>
   );
@@ -550,51 +521,9 @@ function WagerList({
   );
 }
 
-function EndingSteps({ snapshot }: { snapshot: ActiveSnapshot }) {
-  const { view } = snapshot;
-  let returned = 0n;
-  for (const fact of snapshot.facts) if (fact.kind === 'wager-returned') returned += BigInt(fact.amount);
-  const contracts = view.wagers.map((wager) => `${crapsTargetName(wager.target)} ${formatUnits(wager.amount)}`).join(' · ');
-  const steps = [
-    { title: 'Removable wagers returned', detail: returned > 0n ? `+${formatUnits(returned.toString())} to your balance` : 'Nothing removable was on the table', state: 'done' },
-    {
-      title: 'Contracts settle automatically',
-      detail: contracts ? `Rolling on for ${contracts}. No new bets, odds or presses.` : 'Nothing left to settle.',
-      state: 'current',
-    },
-    { title: 'Session result', detail: '', state: 'upcoming' },
-  ] as const;
-  return (
-    <View style={styles.ending}>
-      <Text accessibilityRole="header" maxFontSizeMultiplier={textScale.display} style={styles.endingTitle}>
-        Ending your session
-      </Text>
-      {view.outcome && (
-        <Text maxFontSizeMultiplier={textScale.body} style={styles.endingStepDetail}>
-          Last roll: {rollText(view.outcome.dice)} · {puckText(view.table.point)}
-        </Text>
-      )}
-      {steps.map((step, index) => (
-        <View key={step.title} accessible accessibilityLabel={`Step ${index + 1}, ${step.title}, ${step.state}. ${step.detail}`} style={styles.endingStep}>
-          <Text maxFontSizeMultiplier={textScale.body} style={[styles.endingStepTitle, step.state === 'upcoming' && styles.muted]}>
-            {step.state === 'done' ? '✓' : index + 1}  {step.title}
-          </Text>
-          {step.detail !== '' && <Text maxFontSizeMultiplier={textScale.body} style={styles.endingStepDetail}>{step.detail}</Text>}
-        </View>
-      ))}
-      <Text maxFontSizeMultiplier={textScale.body} style={styles.endingStepTitle}>
-        The dice roll on their own until every contract is settled. There&apos;s nothing to tap.
-      </Text>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: palette.background },
   edge: { fontFamily: fonts.ui, fontSize: 12, color: palette.mutedForeground, paddingHorizontal: space[4] },
-  banner: { margin: space[4], padding: space[4], gap: space[2], borderRadius: radius.lg, backgroundColor: palette.card, borderWidth: 1, borderColor: palette.destructive },
-  bannerTitle: { fontFamily: fonts.uiBold, fontSize: 14, color: palette.foreground },
-  bannerText: { fontFamily: fonts.ui, fontSize: 13, color: palette.mutedForeground },
   columns: { gap: space[3], paddingTop: space[2] },
   columnsSideBySide: { flexDirection: 'row', alignItems: 'flex-start' },
   column: { flex: 1 },
@@ -641,9 +570,4 @@ const styles = StyleSheet.create({
   row: { gap: space[1], padding: space[3], borderRadius: radius.lg, backgroundColor: palette.card },
   rowHeader: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: space[2] },
   rowTitle: { fontFamily: fonts.uiBold, fontSize: 15, color: palette.foreground },
-  ending: { gap: space[3], padding: space[4] },
-  endingTitle: { fontFamily: fonts.display, fontSize: 24, color: palette.foreground },
-  endingStep: { gap: 2 },
-  endingStepTitle: { fontFamily: fonts.uiMedium, fontSize: 15, color: palette.foreground },
-  endingStepDetail: { fontFamily: fonts.ui, fontSize: 13, color: palette.mutedForeground },
 });

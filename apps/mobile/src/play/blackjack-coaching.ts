@@ -6,18 +6,18 @@
 // the published index comparison. Nothing is judged and nothing added that the
 // facts don't hold.
 
-import type { BlackjackCount, BlackjackDeviation, Card, DeviationPlay, PlayChoice, PlayCorrection, PlayExplanation, PublishedIndex } from '@tableside/engine';
+import { cardValue, type BlackjackCount, type BlackjackDeviation, type Card, type DeviationPlay, type PlayChoice, type PlayCorrection, type PlayExplanation, type PublishedIndex } from '@tableside/engine';
 
 import { cardRank, PLAY_NOUN, signed, SUIT_GLYPH, totalText } from './blackjack-text';
 import type { CorrectionCopy } from './coaching-text';
-import { formatUnits } from './units';
+import { formatUnits, halfUnits } from './units';
 
 /** "A♥": a card as the table shows it. */
 export const cardShort = (card: Card) => `${cardRank(card)}${SUIT_GLYPH[card.suit]}`;
 
 
 /** The up card by value: "a 5", "an ace", "a 10". */
-const upName = (card: Card) => (card.rank === 1 ? 'an ace' : card.rank === 8 ? 'an 8' : `a ${card.rank >= 10 ? 10 : card.rank}`);
+const upName = (card: Card) => (card.rank === 1 ? 'an ace' : card.rank === 8 ? 'an 8' : `a ${cardValue(card)}`);
 /** An up-card value: "A" or "10". */
 const upValue = (value: number) => (value === 1 ? 'A' : String(value));
 
@@ -126,7 +126,7 @@ export function deviationsAtCount(deviations: readonly BlackjackDeviation[], tru
 function unavailableLine(play: PlayChoice, reason: 'rule' | 'balance', explanation: PlayExplanation): string {
   const { situation } = explanation;
   if (reason === 'balance') {
-    if (play === 'insure') return `Insurance needs ${formatUnits(halfOf(situation.stake))} and your balance is ${formatUnits(situation.available)}, so you can't take it.`;
+    if (play === 'insure') return `Insurance needs ${formatUnits(halfUnits(situation.stake))} and your balance is ${formatUnits(situation.available)}, so you can't take it.`;
     return `${play === 'split' ? 'Splitting' : 'Doubling'} needs another ${formatUnits(situation.stake)} and your balance is ${formatUnits(situation.available)}, so you can't ${play}.`;
   }
   switch (play) {
@@ -139,8 +139,6 @@ function unavailableLine(play: PlayChoice, reason: 'rule' | 'balance', explanati
   }
 }
 
-/** Half a whole-unit stake, exactly: "12.5" for 25. */
-const halfOf = (stake: string) => (BigInt(stake) % 2n === 0n ? (BigInt(stake) / 2n).toString() : `${(BigInt(stake) / 2n).toString()}.5`);
 
 /** The moves as words: "your stand", "your insurance of 5". */
 const moveName = (correction: PlayCorrection) =>
@@ -175,9 +173,10 @@ export function playCorrectionCopy(strategyName: string, correction: PlayCorrect
     const source = cell.table === 'first' ? `Basic strategy (${rulesName})` : `For later decisions (after a hit or a split), Tableside's table (${rules.dealer})`;
     lines.push(`${source} ${verbPhrase(cell.play, hand)} against ${upValue(cell.up)}.`);
   } else if (!deviation) lines.push('Basic strategy never takes insurance.');
-  if (deviation && count) {
+  if (deviation) {
+    // In the counting modes the engine's view carries no count: the player keeps it.
     lines.push(
-      countSupplied
+      countSupplied && count
         ? `The true count is ${signed(count.trueCount)}, supplied by Tableside in this mode (${countWorking(count)}).`
         : 'You keep the count in this mode; your play was checked against the actual count, which Tableside doesn\'t show.',
     );

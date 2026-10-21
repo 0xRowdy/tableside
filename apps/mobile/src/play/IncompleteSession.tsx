@@ -16,9 +16,9 @@ import type { IncompleteSessionSummary } from '@/practice/controller';
 import { usePractice } from '@/practice/PracticeProvider';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/theme/tokens';
 
+import { GAME_WORDS } from './game-words';
 import { formatUnits } from './units';
 
-const TURNS = { roulette: 'Spins', craps: 'Rolls', blackjack: 'Rounds' } as const;
 
 const SET_ASIDE = "We won't invent a result, so it's set aside and doesn't count toward your totals or adherence.";
 
@@ -35,8 +35,9 @@ export function IncompleteSession({ session }: { session: IncompleteSessionSumma
   const copy = COPY[session.reason.kind];
   const rows = [
     { label: 'Game', value: gameTitle },
-    { label: 'Buy-in', value: formatUnits(session.buyIn) },
-    ...(session.turnsRecorded === null ? [] : [{ label: `${TURNS[session.game]} recorded`, value: `${session.turnsRecorded}` }]),
+    // A training-bankroll session was allocated its funds, never bought in (Amendment 4 B).
+    { label: session.fundingSource === 'training-bankroll' ? 'From training bankroll' : 'Buy-in', value: formatUnits(session.buyIn) },
+    ...(session.turnsRecorded === null ? [] : [{ label: `${GAME_WORDS[session.game].Turn}s recorded`, value: `${session.turnsRecorded}` }]),
     { label: 'Result', value: 'Not available' },
     ...(session.engine === null ? [] : [{ label: 'Engine', value: copy.engine(session.engine) }]),
   ];

@@ -25,6 +25,11 @@ export interface AccessDenial {
   readonly disposition: Disposition;
   /** Player-facing reason, if the policy has one. */
   readonly reason?: string;
+  /**
+   * For a "stop": why play ends, as the record keeps it. Access or allowance
+   * ending when omitted; "content-removed" for a required removal (Amendment 6 §5).
+   */
+  readonly stopCause?: 'access-ended' | 'content-removed';
 }
 
 /** Allowed (with any extra the question carries), denied or uncertain, always with provenance. */
@@ -32,8 +37,11 @@ export type AccessDecision<Allowed extends object = object> =
   | ({ readonly status: 'allowed'; readonly provenance: string } & Allowed)
   | AccessDenial;
 
-/** The admission answer carries how the activity is metered (spec 5). */
-export type AdmissionDecision = AccessDecision<{ readonly meteringBasis: MeteringBasis; readonly allowancePolicyVersion?: string }>;
+/**
+ * The admission answer carries how the activity is metered (spec 5). A
+ * time-metered admission names the grant its time-usage checkpoints draw on.
+ */
+export type AdmissionDecision = AccessDecision<{ readonly meteringBasis: MeteringBasis; readonly allowancePolicyVersion?: string; readonly timeGrant?: string }>;
 
 /** Before a turn only: the allowance this turn uses, charged once with the turn's beginning. */
 export type TurnDecision = AccessDecision<{ readonly turnCharge?: { readonly grant: string; readonly amount: string } }>;
@@ -115,6 +123,7 @@ const REQUIRED_REMOVAL: AccessDenial = {
   status: 'denied',
   provenance: 'required-removal',
   disposition: 'stop',
+  stopCause: 'content-removed',
   reason: 'Removed after a validated legal or privacy request',
 };
 

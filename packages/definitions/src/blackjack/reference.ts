@@ -4,12 +4,14 @@
 // through typed lookups. Objective: highest expected net return per original
 // bet; ties resolve toward the no-extra-wager action.
 import { parseCsv, type CsvRow } from './csv';
-import { REFERENCE_FILES } from './reference-files.generated';
+import { REFERENCE_FILES, REFERENCE_MANIFEST_SHA256 } from './reference-files.generated';
 
 /** Identity of this reference; activities pin it alongside rule and strategy identities. */
 export const BLACKJACK_REFERENCE = {
   version: '1.0.0',
   source: 'research/blackjack-coaching-validation@ae3776d151f5ebf35432abb4ce7ae1b0bd9b69c3',
+  /** SHA-256 of the frozen reference-manifest.json, which hashes every file. */
+  manifest: REFERENCE_MANIFEST_SHA256,
   files: Object.fromEntries(Object.entries(REFERENCE_FILES).map(([file, { sha256 }]) => [file, sha256])) as Readonly<
     Record<keyof typeof REFERENCE_FILES, string>
   >,

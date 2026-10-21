@@ -32,6 +32,7 @@ import { usePractice } from '@/practice/PracticeProvider';
 
 import { otherPlayersText } from './blackjack-text';
 import { betsText, BLACKJACK_WORDS } from './coaching-text';
+import { totalStake } from './units';
 import { limitRequirementText } from './setup/StrategyPicker';
 import { FundingSection, useFunding, type Opening } from './setup/Funding';
 import { GroupFields, LimitsBanner, useLimits } from './setup/Limits';
@@ -72,7 +73,7 @@ function scheduleOpening(strategy: StrategyDefinition, rules: ReturnType<typeof 
   const explained = explainPrescription(strategy, {}, situation, initialProgress(strategy));
   if (!explained.ok || explained.explanation.prescription.status !== 'prescribed') return null;
   const { bets } = explained.explanation.prescription;
-  return { kind: 'strategy', amount: bets.reduce((sum, bet) => sum + BigInt(bet.amount), 0n).toString(), strategyName: strategy.name, bets: betsText(bets, BLACKJACK_WORDS) };
+  return { kind: 'strategy', amount: totalStake(bets), strategyName: strategy.name, bets: betsText(bets, BLACKJACK_WORDS) };
 }
 
 /** Above this text scale the preset chips become a list (annotation V0ckk). */

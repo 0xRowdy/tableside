@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 import { buildProblems, MODULE_PATH, REFERENCE_DIR } from '../scripts/blackjack-reference';
-import { BLACKJACK_REFERENCE } from '../src/index';
+import { BLACKJACK_REFERENCE, BLACKJACK_REFERENCE_IDENTITY } from '../src/index';
 import { REFERENCE_FILES } from '../src/blackjack/reference-files.generated';
 
 // SHA-256 per file from reference-manifest.json at
@@ -73,6 +73,11 @@ describe('certified blackjack reference integrity (launch gate 2)', () => {
     const script = fileURLToPath(new URL('../scripts/blackjack-reference.ts', import.meta.url));
     expect(() => execFileSync(process.execPath, ['--import', 'tsx', script, 'check'], { stdio: 'pipe' })).not.toThrow();
     expect(() => execFileSync(process.execPath, ['--import', 'tsx', script, 'nonsense'], { stdio: 'pipe' })).toThrow();
+  });
+
+  it('the identity a guided activity pins is derived from the frozen manifest, never kept by hand', () => {
+    const manifest = sha256(readFileSync(join(REFERENCE_DIR, 'reference-manifest.json')));
+    expect(BLACKJACK_REFERENCE_IDENTITY).toEqual({ id: `blackjack-coaching-reference@${manifest.slice(0, 16)}`, version: 1 });
   });
 
   it('ships no research calculator code', () => {

@@ -31,6 +31,8 @@ import {
 
 import { run, SPEC, STREAM } from './activity.fixtures';
 import { CRAPS_SPEC } from './craps.cases';
+import { FLAT_PLACE } from './craps-strategy.fixtures';
+import { guidedCraps } from './craps-strategy.helpers';
 import { PI, throws } from './fixtures';
 import { FLAT_EVEN_MONEY } from './strategy.fixtures';
 
@@ -118,7 +120,14 @@ export const recordCases: TestCase[] = [
     },
   },
   {
-    name: 'record: a stop cause outside stop, reset, switch and access-ended is a malformed command',
+    name: 'record: a content-removal stop is recorded apart from an access-ended stop (Amendment 6 §2, §5)',
+    run: (t) => {
+      const removed = run(createActivity(SPEC, STREAM), [{ kind: 'request-stop', cause: 'content-removed' }, FINAL]);
+      t.equal(completedPracticeRecord(removed.state, removed.facts, CONTEXT).endingReason, 'content-removed');
+    },
+  },
+  {
+    name: 'record: a stop cause outside stop, reset, switch, access-ended and content-removed is a malformed command',
     run: (t) => {
       const state = createActivity(SPEC, STREAM);
       const result = advanceActivity(state, { sequence: 0, commandId: 'c0', command: { kind: 'request-stop', cause: 'bored' } as unknown as Command });
@@ -133,6 +142,20 @@ export const recordCases: TestCase[] = [
       t.equal([result.noBet, result.turnsPlayed, result.wagers, result.netResult, classifySession(result)], [true, 0, counts(0, 0, 0), '0', 'unchanged']);
       // The wager taken back by the stop path is a return, outside W/L/P.
       t.equal(result.outcomes, [{ turn: 0, target: 'red', stake: '10', result: 'returned', net: '0', returned: '10' }]);
+    },
+  },
+  {
+    name: 'record: a turn with nothing at stake is no bet, and final-settlement rolls are not turns played (as the standardized record derives them)',
+    run: (t) => {
+      // Flat place 6 and 8 waits for a point: the first roll (8) has nothing at stake, then the player stops.
+      const idle = run(guidedCraps(FLAT_PLACE, PI), [BEGIN, SETTLE, STOP, FINAL]);
+      const idleRecord = completedPracticeRecord(idle.state, idle.facts, CONTEXT);
+      t.equal([idleRecord.noBet, idleRecord.turnsPlayed], [true, 1]);
+      // A pass line set at 8, then the stop: the dice roll on (11 6 4 12 8) only to settle it; one turn was played.
+      const ended = run(createActivity(CRAPS_SPEC, PI), [place('pass', '10'), BEGIN, SETTLE, STOP, FINAL, FINAL, FINAL, FINAL, FINAL]);
+      t.equal(ended.state.phase, 'completed');
+      const endedRecord = completedPracticeRecord(ended.state, ended.facts, CONTEXT);
+      t.equal([endedRecord.noBet, endedRecord.turnsPlayed, endedRecord.netResult], [false, 1, '10']);
     },
   },
   {

@@ -3,7 +3,7 @@
 // the sessions the engine's cross-runtime suite records, so its traces are
 // the ones the app's runtimes produce.
 import { BENCHMARK_PROFILES } from '@tableside/definitions';
-import { canonicalJson, canonicalStrategy, STANDARDIZED_STOP_CAUSES, type BenchmarkProfile, type StandardizedSessionRecord, type Words2 } from '@tableside/engine';
+import { canonicalJson, canonicalStrategy, defaultSelection, STANDARDIZED_STOP_CAUSES, type BenchmarkProfile, type StandardizedSessionRecord, type Words2 } from '@tableside/engine';
 import { engineSuite } from '@tableside/engine/test-suite';
 import { runSuite } from '@tableside/harness';
 import { describe, expect, it } from 'vitest';
@@ -28,7 +28,7 @@ function tracedSessions(): Traced[] {
 
 describe('headless runner', () => {
   it('reproduces the cross-runtime suite’s sessions with the shipped built-ins and profiles', () => {
-    const builtIns = new Map(builtInStrategies().map((definition) => [canonicalJson(canonicalStrategy(definition)), definition]));
+    const builtIns = new Map(builtInStrategies().map((definition) => [canonicalJson(canonicalStrategy(defaultSelection(definition))), definition]));
     let replayed = 0;
     for (const traced of tracedSessions()) {
       const definition = builtIns.get(canonicalJson(traced.strategy));
@@ -36,7 +36,7 @@ describe('headless runner', () => {
       if (!definition) continue;
       const profile = BENCHMARK_PROFILES.find((p) => p.id === traced.profile.id);
       expect(profile).toEqual(traced.profile);
-      expect(runStandardized({ profile: profile as BenchmarkProfile, definition, key: traced.key, indices: [traced.index] })).toEqual([traced.record]);
+      expect(runStandardized({ profile: profile as BenchmarkProfile, strategy: defaultSelection(definition), key: traced.key, indices: [traced.index] })).toEqual([traced.record]);
       replayed++;
     }
     // Every roulette and craps built-in on each profile it fits, and two certified blackjack ones, two sessions each.
@@ -46,10 +46,10 @@ describe('headless runner', () => {
   it('runs every built-in strategy on every profile it fits, with complete, bounded records', () => {
     const key = parseKey('0123456789abcdef');
     for (const definition of builtInStrategies()) {
-      const profiles = compatibleProfiles(definition);
+      const profiles = compatibleProfiles(defaultSelection(definition));
       expect(profiles.length, definition.id).toBeGreaterThan(0);
       for (const profile of profiles) {
-        const records = runStandardized({ profile, definition, key, indices: [0, 1] });
+        const records = runStandardized({ profile, strategy: defaultSelection(definition), key, indices: [0, 1] });
         for (const record of records) {
           expect(STANDARDIZED_STOP_CAUSES).toContain(record.stopCause);
           expect(record.opportunities).toBeLessThanOrEqual(200);
@@ -58,7 +58,7 @@ describe('headless runner', () => {
           expect(record.literalZero).toBe(record.finalBalance === '0');
         }
         // Same key and index, same session; another index, another session.
-        expect(runStandardized({ profile, definition, key, indices: [1] })).toEqual([records[1]]);
+        expect(runStandardized({ profile, strategy: defaultSelection(definition), key, indices: [1] })).toEqual([records[1]]);
         expect(records[0]).not.toEqual({ ...records[1], index: 0 });
       }
     }
@@ -72,6 +72,6 @@ describe('headless runner', () => {
   it('refuses a profile whose exposure bound fails validation before running any session', () => {
     const profile = { ...(BENCHMARK_PROFILES[6] as BenchmarkProfile), exposureBound: '999' };
     const definition = builtInStrategies()[0];
-    expect(() => runStandardized({ profile, definition: definition as never, key: [0, 0], indices: [0] })).toThrow(/exposure bound/);
+    expect(() => runStandardized({ profile, strategy: { definition: definition as never, parameters: {} }, key: [0, 0], indices: [0] })).toThrow(/exposure bound/);
   });
 });

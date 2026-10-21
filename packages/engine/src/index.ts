@@ -74,6 +74,7 @@ export {
   INSURANCE_TARGET,
   MAX_OTHER_PLAYERS,
   MAX_SPLIT_HANDS,
+  cardValue,
   PENETRATIONS,
   countOf,
   hiLoTag,
@@ -220,6 +221,7 @@ export {
   type TableCompatibility,
 } from './strategies';
 export {
+  defaultSelection,
   initialProgress,
   STRATEGY_ENVELOPE,
   STRATEGY_FORMAT,

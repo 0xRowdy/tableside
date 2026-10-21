@@ -6,6 +6,7 @@
 // strategy vocabulary (its situation subjects, targets and table conditions),
 // so the same interpreter serves every game. Every function is pure.
 
+import type { Command } from './activity';
 import { canonicalJson } from './canonical';
 import { add, compare, decodeMoney, encodeMoney, money, mul, sub, MoneyFormatError, type Money } from './money';
 import { hasExactKeys, isRecord } from './shape';
@@ -158,6 +159,12 @@ export interface StrategySelection {
   readonly parameters: Readonly<Record<string, string>>;
 }
 
+/** A strategy with every parameter at its declared default. */
+export const defaultSelection = (definition: StrategyDefinition): StrategySelection => ({
+  definition,
+  parameters: Object.fromEntries(definition.parameters.map((param) => [param.id, param.default])),
+});
+
 export type DiagnosticCategory = 'incomplete' | 'conflict' | 'incompatible' | 'envelope' | 'unbounded';
 
 export interface StrategyDiagnostic {
@@ -247,6 +254,10 @@ export interface StrategyGame<State = never> {
   situation(state: State): unknown;
   /** The command's playing decision assessed against the definition's policy; undefined when the command makes none. */
   assessPlay?(state: State, definition: StrategyDefinition, command: unknown): PlayAssessment | undefined;
+  /** A playing move (one an assessment explains) as the game's command. */
+  playCommand?(move: unknown): Command;
+  /** The policy's play for the decision the state awaits, after its legal and funding fallbacks; undefined when none awaits. */
+  followPlay?(state: State, definition: StrategyDefinition): Command | undefined;
   /** The outcome of the turn a state has just settled, in the game's own words (a roulette pocket), for the cycle record. */
   outcome(state: State): string;
   /**
@@ -341,8 +352,9 @@ interface Checker {
   readonly values: ReadonlySet<string>;
 }
 
-/** What an expression reads: counters by id, lists as "list:<id>". */
+/** What an expression reads: counters by id, lists as "list:<id>", and what the turn staked as STAKED_READ. */
 const listRead = (id: string) => `list:${id}`;
+const STAKED_READ = 'staked:';
 
 const report = (checker: Checker, category: DiagnosticCategory, path: string, message: string) => {
   checker.diagnostics.push({ category, path, message });
@@ -387,6 +399,7 @@ function checkExpression(checker: Checker, value: unknown, path: string, depth: 
       return true;
     case 'staked':
       if (operand !== true || place !== 'adjustment') return report(checker, 'incomplete', path, 'only an adjustment can read what the turn staked'), false;
+      reads.add(STAKED_READ);
       return true;
     case 'value':
       if (typeof operand !== 'string' || !checker.values.has(operand)) return report(checker, 'incomplete', path, `no situation value ${String(operand)}`), false;
@@ -637,6 +650,26 @@ export function validateWith(vocabulary: StrategyVocabulary, definition: unknown
     }
   }
 
+  // Exceptions that run in a circle (a overrides b, b overrides a) rank nothing: Explain would find no winner.
+  const overridesOf = new Map(usable.map((item) => [item.id, item.overrides]));
+  const inCircle = (start: string): boolean => {
+    const seen = new Set<string>();
+    const stack = [...(overridesOf.get(start) ?? [])];
+    while (stack.length > 0) {
+      const id = stack.pop() as string;
+      if (id === start) return true;
+      if (seen.has(id)) continue;
+      seen.add(id);
+      stack.push(...(overridesOf.get(id) ?? []));
+    }
+    return false;
+  };
+  const circular = usable.filter((item) => inCircle(item.id));
+  const lastCircular = circular.at(-1);
+  if (lastCircular) {
+    flag('conflict', `/instructions/${lastCircular.index}`, `instructions ${circular.map((item) => item.id).join(', ')} override each other in a circle; none can win`);
+  }
+
   // Conservative conflicts: two instructions that may match together and may bet the same target,
   // unless one has an explicit priority or exception over the other, or their conditions are provably disjoint.
   for (let a = 0; a < usable.length; a++) {
@@ -651,6 +684,8 @@ export function validateWith(vocabulary: StrategyVocabulary, definition: unknown
   // Adjustments.
   const adjustments = Array.isArray(def.adjustments) ? def.adjustments : (flag('incomplete', '/adjustments', 'adjustments are a list'), []);
   const grows = new Set<string>();
+  /** What each counter's adjustments read: it grows when what it reads leads back to it. */
+  const feeds = new Map<string, Set<string>>();
   for (const [index, item] of adjustments.entries()) {
     const path = `/adjustments/${index}`;
     if (!isRecord(item) || !isText(item.id) || !['win', 'loss', 'push', 'any'].includes(item.on as string)) {
@@ -682,7 +717,28 @@ export function validateWith(vocabulary: StrategyVocabulary, definition: unknown
       flag('incomplete', `${path}/counter`, `no counter ${String(item.counter)}`);
       continue;
     }
-    if (checkExpression(checker, item.to, `${path}/to`, 0, reads, 'adjustment') && reads.has(item.counter as string)) grows.add(item.counter as string);
+    if (checkExpression(checker, item.to, `${path}/to`, 0, reads, 'adjustment')) {
+      const fed = feeds.get(item.counter as string) ?? new Set<string>();
+      for (const read of reads) fed.add(read);
+      feeds.set(item.counter as string, fed);
+    }
+  }
+  // What the turn staked is whatever the bets read, so `stake := staked × 2` feeds the stake back to itself.
+  feeds.set(STAKED_READ, new Set(betReads.flatMap((bet) => [...bet.reads])));
+  for (const counter of feeds.keys()) {
+    if (counter === STAKED_READ) continue;
+    const seen = new Set<string>();
+    const stack = [...(feeds.get(counter) ?? [])];
+    while (stack.length > 0) {
+      const read = stack.pop() as string;
+      if (read === counter) {
+        grows.add(counter);
+        break;
+      }
+      if (seen.has(read)) continue;
+      seen.add(read);
+      stack.push(...(feeds.get(read) ?? []));
+    }
   }
 
   // Stop and completion rules.
@@ -898,13 +954,7 @@ export function progressProblem(definition: StrategyDefinition, progress: unknow
  * definition, parameters, situation and progress must already be valid. Pure;
  * draws nothing.
  */
-export function prescribe<S>(
-  vocabulary: StrategyVocabulary<S>,
-  definition: StrategyDefinition,
-  parameters: Readonly<Record<string, string>>,
-  situation: S,
-  progress: StrategyProgress,
-): Explanation {
+export function prescribe<S>(vocabulary: StrategyVocabulary<S>, { definition, parameters }: StrategySelection, situation: S, progress: StrategyProgress): Explanation {
   const available = vocabulary.available(situation);
   const subjects: Record<string, string> = { 'last-result': progress.lastResult };
   for (const name of Object.keys(vocabulary.subjects).sort()) subjects[name] = vocabulary.subject(situation, name);

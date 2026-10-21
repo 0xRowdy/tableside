@@ -18,8 +18,7 @@ import { fonts, palette, radius, space, textScale } from '@/theme/tokens';
 
 import { cardShort } from './blackjack-coaching';
 import { moveText } from './blackjack-text';
-import { crapsTargetName } from './craps-text';
-import { targetName } from './roulette-text';
+import { GAME_WORDS } from './game-words';
 import { formatSigned, formatUnits, speakSigned } from './units';
 
 /** How many departures show before "Show all". */
@@ -36,13 +35,10 @@ export function resultSubtitle(record: CompletedPracticeSession): string {
   return `Blackjack · ${mode} · ${content.dealer} · ${content.lateSurrender ? 'LS' : 'no LS'}`;
 }
 
-const TURN_NOUN: Record<CompletedPracticeSession['game'], string> = { roulette: 'Spin', craps: 'Roll', blackjack: 'Hand' };
-
 /** "10 on Red and 10 on 1st dozen", in the game's own target names. */
 function betsText(game: CompletedPracticeSession['game'], bets: readonly { readonly target: string; readonly amount: string }[]): string {
   if (bets.length === 0) return 'no new bets';
-  const name = game === 'craps' ? crapsTargetName : targetName;
-  const items = bets.map((bet) => `${formatUnits(bet.amount)} on ${name(bet.target)}`);
+  const items = bets.map((bet) => `${formatUnits(bet.amount)} on ${GAME_WORDS[game].targetName(bet.target)}`);
   return items.length < 2 ? items.join('') : `${items.slice(0, -1).join(', ')} and ${items.at(-1)}`;
 }
 
@@ -53,7 +49,7 @@ function departureLines(game: CompletedPracticeSession['game'], departure: Strat
     // A blackjack playing decision: the hand and up card, the strategy's play and the player's.
     const { situation, prescribed } = departure.explanation;
     return {
-      title: `${TURN_NOUN[game]} ${departure.turn} · ${situation.cards.map(cardShort).join(' ')} v ${cardShort(situation.up)}`,
+      title: `${GAME_WORDS[game].Turn} ${departure.turn} · ${situation.cards.map(cardShort).join(' ')} v ${cardShort(situation.up)}`,
       strategy: `Strategy: ${moveText(prescribed)}`,
       you: `You: ${moveText(departure.actual)}`,
       resolution,
@@ -64,7 +60,7 @@ function departureLines(game: CompletedPracticeSession['game'], departure: Strat
   const color = situation.subjects['last-pocket-color'];
   const after = color !== undefined && color !== 'none' ? ` · after ${color}` : '';
   return {
-    title: `${TURN_NOUN[game]} ${departure.turn}${after}`,
+    title: `${GAME_WORDS[game].Turn} ${departure.turn}${after}`,
     strategy: `Strategy: ${betsText(game, prescription.status === 'prescribed' ? prescription.bets : [])}`,
     you: `You: ${betsText(game, departure.actual)}`,
     resolution,

@@ -164,6 +164,45 @@ export const strategyCases: TestCase[] = [
     },
   },
   {
+    name: 'strategy: a counter that grows through what the turn staked, or through another counter, is unbounded too (Amendment 2 A2)',
+    run: (t) => {
+      const { cap: _cap, ...uncapped } = DOUBLING.counters[0] as { id: string; initial: string; cap: string };
+      void _cap;
+      // stake := staked × 2, where the bet is the stake: it doubles each loss as surely as stake × 2.
+      const throughStaked = {
+        ...DOUBLING,
+        counters: [uncapped],
+        adjustments: [{ id: 'double', on: 'loss', counter: 'stake', to: { mul: [{ staked: true }, { lit: '2' }] } }, DOUBLING.adjustments[1]],
+      };
+      t.equal(found(throughStaked), ['unbounded /counters/0']);
+      // Two counters that double each other, both sizing the bet.
+      const mutual = {
+        ...DOUBLING,
+        counters: [{ id: 'a', initial: '10' }, { id: 'b', initial: '10' }],
+        instructions: [{ id: 'bet', label: 'a + b on red', when: { always: true }, bets: [{ target: { target: 'red' }, amount: { add: [{ counter: 'a' }, { counter: 'b' }] } }] }],
+        adjustments: [
+          { id: 'a-doubles-b', on: 'loss', counter: 'a', to: { mul: [{ counter: 'b' }, { lit: '2' }] } },
+          { id: 'b-doubles-a', on: 'loss', counter: 'b', to: { mul: [{ counter: 'a' }, { lit: '2' }] } },
+        ],
+      };
+      t.equal(found(mutual), ['unbounded /counters/0', 'unbounded /counters/1']);
+      // A counter set from what a flat bet staked never grows.
+      const flat = { ...throughStaked, instructions: [{ ...DOUBLING.instructions[0], bets: [{ target: { target: 'red' }, amount: { lit: '10' } }] }] };
+      t.equal(found(flat), []);
+    },
+  },
+  {
+    name: 'strategy: two instructions that each override the other conflict: Validate reports it rather than Explain finding neither (Amendment 2 A2)',
+    run: (t) => {
+      const mutual = withInstructions([instruction('a', { overrides: ['b'] }), instruction('b', { overrides: ['a'] })]);
+      t.equal(found(mutual), ['conflict /instructions/1']);
+      t.equal(validateStrategy(mutual).runnable, false);
+      // A longer cycle of exceptions is the same contradiction.
+      const cycle = withInstructions([instruction('a', { overrides: ['c'] }), instruction('b', { overrides: ['a'] }), instruction('c', { overrides: ['b'] })]);
+      t.equal(found(cycle).every((d) => d.startsWith('conflict ')) && found(cycle).length > 0, true);
+    },
+  },
+  {
     name: 'strategy: the envelope (256 instructions, depth 8, 4,096 expression nodes, 40-digit literals) is reported',
     run: (t) => {
       const many = Array.from({ length: 257 }, (_, i) => instruction(`i${i}`, { priority: i }));

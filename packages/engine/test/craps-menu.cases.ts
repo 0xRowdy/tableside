@@ -219,6 +219,13 @@ export const crapsMenuCases: TestCase[] = [
         [place('buy-6', '30'), place('buy-6', '25'), place('lay-4', '30'), place('lay-4', '28'), place('place-6', '30')].map((c) => illegal(poor, c)),
         ['commission-unfunded', 'legal', 'commission-unfunded', 'legal', 'legal'],
       );
+      // Commissions are funded across every buy and lay on the table: with 41, buy 4 of 20 leaves 21; buy 10 of 20
+      // would leave 1 for two commissions of 1 each, while 19 leaves 2.
+      const buy4 = step(craps(4, 'triple-12', '41'), place('buy-4', '20')).state;
+      t.equal([illegal(buy4, place('buy-10', '20')), illegal(buy4, place('buy-10', '19'))], ['commission-unfunded', 'legal']);
+      // With 44, buy 4 of 20 leaves 24: a place 6 of 24 would leave nothing for its commission; 18 leaves 6.
+      const buy4of44 = step(craps(4, 'triple-12', '44'), place('buy-4', '20')).state;
+      t.equal([illegal(buy4of44, place('place-6', '24')), illegal(buy4of44, place('place-6', '18'))], ['commission-unfunded', 'legal']);
       // Nothing changes on a refusal.
       const refused = step(poor, place('buy-6', '30'));
       t.equal([refused.state.balance, refused.state.wagers], ['30', []]);
@@ -341,6 +348,20 @@ export const crapsMenuCases: TestCase[] = [
       // During a point a place bet already works, so "on" still means working on the come-out too.
       const pointOn = run(table, [place('pass', '10'), ...roll()]).state;
       t.equal((run(pointOn, [working('place-6', true)]).state as CrapsActivityState).instructions, [{ target: 'place-6', working: true }]);
+    },
+  },
+  {
+    name: 'craps menu: a place bet told "off" while the point is on is off: it takes no action until told otherwise',
+    run: (t) => {
+      // k = 93 rolls 6 (3,3): with a pass line it sets the point at 6; the next rolls are a point roll.
+      const pointOn = run(craps(93), [place('pass', '10'), ...roll(), place('place-8', '12')]).state;
+      t.equal(view(pointOn).table.wagers.find((w) => w.target === 'place-8')?.working, true);
+      const off = run(pointOn, [working('place-8', false)]);
+      t.equal(off.facts, [{ kind: 'working-changed', target: 'place-8', working: false }]);
+      t.equal(view(off.state).table.wagers.find((w) => w.target === 'place-8'), { target: 'place-8', working: false, instruction: false, switchable: true, removable: true });
+      // Off holds on the come-out too, until the player says otherwise; "on" then clears nothing it shouldn't.
+      const on = run(off.state, [working('place-8', true)]);
+      t.equal([on.facts, view(on.state).table.wagers.find((w) => w.target === 'place-8')?.working], [[{ kind: 'working-changed', target: 'place-8', working: true }], true]);
     },
   },
   {

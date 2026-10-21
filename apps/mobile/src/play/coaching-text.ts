@@ -6,25 +6,16 @@
 
 import type { AdherenceMeasure, BetCorrection, CycleEnd, Explanation, PendingStrategyAction, StrategyView, Wager } from '@tableside/engine';
 
-import { crapsTargetName } from './craps-text';
-import { targetName } from './roulette-text';
-import type { TurnWord } from './strategy-text';
-import { formatUnits } from './units';
+import { GAME_WORDS, type GameWords } from './game-words';
+import { capitalize, formatUnits, totalStake } from './units';
 
-/** How a game words its wagers and its turns. */
-export interface CoachWords {
-  readonly targetName: (target: string) => string;
-  readonly turn: TurnWord;
-  /** The turn as a title: "Spin", "Roll". */
-  readonly Turn: string;
-  /** True where some wagers are contracts that stay until the game settles them (craps line bets). */
-  readonly contracts: boolean;
-}
+/** How a game words its wagers and its turns (game-words.ts). */
+export type CoachWords = Pick<GameWords, 'targetName' | 'turn' | 'Turn' | 'contracts'>;
 
-export const ROULETTE_WORDS: CoachWords = { targetName, turn: 'spin', Turn: 'Spin', contracts: false };
-export const CRAPS_WORDS: CoachWords = { targetName: crapsTargetName, turn: 'roll', Turn: 'Roll', contracts: true };
+export const ROULETTE_WORDS: CoachWords = GAME_WORDS.roulette;
+export const CRAPS_WORDS: CoachWords = GAME_WORDS.craps;
 /** Blackjack's betting decision is the initial wager before a round. */
-export const BLACKJACK_WORDS: CoachWords = { targetName: () => 'your hand', turn: 'round', Turn: 'Round', contracts: false };
+export const BLACKJACK_WORDS: CoachWords = GAME_WORDS.blackjack;
 
 /** "a, b and c". */
 const listed = (items: readonly string[]) => (items.length < 2 ? items.join('') : `${items.slice(0, -1).join(', ')} and ${items.at(-1)}`);
@@ -33,7 +24,6 @@ const listed = (items: readonly string[]) => (items.length < 2 ? items.join('') 
 export const betsText = (bets: readonly Wager[], words: CoachWords = ROULETTE_WORDS) =>
   listed(bets.map((bet) => `${formatUnits(bet.amount)} on ${words.targetName(bet.target)}`));
 
-const total = (bets: readonly Wager[]) => bets.reduce((sum, bet) => sum + BigInt(bet.amount), 0n).toString();
 
 /** The prescription in one sentence: what the strategy does now, or why it places nothing. */
 export function prescriptionLine(strategyName: string, explanation: Explanation, words: CoachWords = ROULETTE_WORDS): string {
@@ -47,7 +37,7 @@ export function prescriptionLine(strategyName: string, explanation: Explanation,
     case 'paused':
       switch (prescription.reason) {
         case 'unfunded-group':
-          return `${strategyName} places no new bets: its ${bets(prescription.unavailable)} needs ${formatUnits(total(prescription.unavailable))}, and ${formatUnits(explanation.situation.available)} is available.`;
+          return `${strategyName} places no new bets: its ${bets(prescription.unavailable)} needs ${formatUnits(totalStake(prescription.unavailable))}, and ${formatUnits(explanation.situation.available)} is available.`;
         case 'limit':
           return `${strategyName} places no new bets: ${bets(prescription.unavailable)} is outside the table limits.`;
         case 'cap':
@@ -61,7 +51,7 @@ export function prescriptionLine(strategyName: string, explanation: Explanation,
 const RESULT_WORDS = { win: 'won', loss: 'lost', push: 'broke even' } as const;
 
 /** The situation, the matching instruction and what the player submitted, as the correction's body. */
-export function correctionLines(correction: BetCorrection, words: CoachWords = ROULETTE_WORDS): string[] {
+export function correctionLines(correction: BetCorrection, words: CoachWords = ROULETTE_WORDS, countKept = false): string[] {
   const { explanation, actual } = correction;
   const lines: string[] = [];
   const { available, subjects } = explanation.situation;
@@ -69,11 +59,13 @@ export function correctionLines(correction: BetCorrection, words: CoachWords = R
   if (color !== undefined && color !== 'none') lines.push(`The last spin landed on ${color}.`);
   const point = subjects.point;
   if (point !== undefined) lines.push(point === 'none' ? 'The puck is off: the next roll is a come-out roll.' : `The point is ${point}.`);
-  // A bet schedule reads the true count the player keeps: the correction names the band, never the count itself.
+  // A bet schedule reads the true count. Where the player keeps it, the engine's view leaves it out and
+  // the correction names the band, never the count; where Tableside supplies it, the correction states it.
   const trueCount = explanation.situation.values['true-count'];
-  if (trueCount !== undefined) lines.push('Checked against the actual true count, which you keep in this mode.');
+  if (countKept) lines.push('Checked against the actual true count, which you keep in this mode.');
+  else if (trueCount !== undefined) lines.push(`The true count is ${Number(trueCount) > 0 ? '+' : ''}${trueCount}, supplied by Tableside in this mode.`);
   const last = explanation.state.lastResult;
-  if (last !== 'none' && trueCount === undefined) lines.push(`The strategy's last ${words.turn} ${RESULT_WORDS[last]}.`);
+  if (last !== 'none' && trueCount === undefined && !countKept) lines.push(`The strategy's last ${words.turn} ${RESULT_WORDS[last]}.`);
   lines.push(`Available for this ${words.turn}: ${formatUnits(available)}.`);
   for (const instruction of explanation.instructions) lines.push(`Matching instruction: "${instruction.label}".`);
   if (explanation.fallback === 'no-new-bets') lines.push('Fallback: no new bets.');
@@ -99,7 +91,6 @@ export type DecisionUnit = 'spin' | 'roll' | 'decision' | 'round';
 
 const measureText = (measure: AdherenceMeasure, unit: DecisionUnit) =>
   measure.decisions === 0 ? `no strategy ${unit}s yet` : `followed ${measure.followed} of ${measure.decisions} ${measure.decisions === 1 ? unit : `${unit}s`}`;
-const capitalized = (text: string) => `${text.charAt(0).toUpperCase()}${text.slice(1)}`;
 
 /**
  * Adherence in words, kept apart from winnings. A strategy that assesses both
@@ -109,7 +100,7 @@ export function adherenceText(adherence: StrategyView['adherence'], unit: Decisi
   const { betting, playing } = adherence;
   if (betting && playing) return `Playing: ${measureText(playing, 'decision')} · Betting: ${measureText(betting, 'round')}`;
   const only = playing ?? betting;
-  return only ? capitalized(measureText(only, unit)) : 'Nothing assessed yet';
+  return only ? capitalize(measureText(only, unit)) : 'Nothing assessed yet';
 }
 
 /** The words a correction pause shows, whatever the game. */
@@ -130,12 +121,13 @@ export interface CorrectionCopy {
 }
 
 /** A betting correction's copy (roulette, craps). */
-export function betCorrectionCopy(strategyName: string, correction: BetCorrection, overrideEndsCycle: boolean, words: CoachWords = ROULETTE_WORDS): CorrectionCopy {
+/** `countKept`: a blackjack counting mode, where the player keeps the count the bet schedule reads. */
+export function betCorrectionCopy(strategyName: string, correction: BetCorrection, overrideEndsCycle: boolean, words: CoachWords = ROULETTE_WORDS, countKept = false): CorrectionCopy {
   return {
     coach: `Marcus · guided practice, ${strategyName}`,
     kicker: `Before your ${words.turn}`,
     headline: prescriptionLine(strategyName, correction.explanation, words),
-    lines: correctionLines(correction, words),
+    lines: correctionLines(correction, words, countKept),
     fallback: null,
     retry: retryLabel(correction, words),
     override: 'Keep my bets',
@@ -159,7 +151,7 @@ export const pendingWaiting = (pending: PendingStrategyAction, words: CoachWords
 export function pendingBlocked(pending: PendingStrategyAction, available: string): string {
   switch (pending.reason) {
     case 'unfunded-group':
-      return `Blocked: not enough chips (${formatUnits(available)} of ${formatUnits(total(pending.unavailable))})`;
+      return `Blocked: not enough chips (${formatUnits(available)} of ${formatUnits(totalStake(pending.unavailable))})`;
     case 'limit':
       return 'Blocked: outside the table limits';
     case 'cap':

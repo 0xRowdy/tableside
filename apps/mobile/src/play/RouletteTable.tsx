@@ -2,42 +2,32 @@
 // the engine's permitted view and forwards taps to the practice controller;
 // it never advances the game or decides what is legal.
 
-import { add, decodeMoney, encodeMoney, isPlayCorrection, type CycleTurn, type RoulettePermittedView as PermittedView, type RoulettePocket } from '@tableside/engine';
+import { isPlayCorrection, type CycleTurn, type RoulettePermittedView as PermittedView, type RoulettePocket } from '@tableside/engine';
 import { useEffect, useMemo, useState } from 'react';
-import { AccessibilityInfo, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { AccessibilityInfo, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/Button';
-import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
-import { SAVE_RETRY_MS, type ActivePracticeSnapshot } from '@/practice/controller';
+import type { ActivePracticeSnapshot } from '@/practice/controller';
 import { usePractice } from '@/practice/PracticeProvider';
-import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale, type ColorToken } from '@/theme/tokens';
+import { fonts, palette, space, textScale } from '@/theme/tokens';
 
 import { BetSelector } from './bet-selector/BetSelector';
 import { betCorrectionCopy, betsText } from './coaching-text';
-import { CorrectionPanel, CycleResultPanel, GuidedStrip, PendingPanel, StopStrategyDialog, type TurnWords } from './Guidance';
+import { CorrectionPanel, CycleResultPanel, GuidedStrip, PendingPanel, type TurnWords } from './Guidance';
 import { draftAmountText, EMPTY_DRAFT, findChoice, isDraftPending, type BetDraft } from './bet-selector/catalog';
 import { DraftBar, PresentationSwitch, type Presentation } from './bet-selector/Presentation';
-import { EndSessionDialog } from './EndSessionDialog';
 import { RebuySheet } from './RebuySheet';
 import { rouletteCatalog, roulettePlacedWagers } from './roulette-catalog';
-import { describeFacts, describePocket, formatUnits, POCKET_TOKEN, pocketColor, STATUS, targetName, totalOnTable } from './roulette-text';
+import { describeFacts, describePocket, POCKET_TOKEN, pocketColor, STATUS, targetName } from './roulette-text';
+import { capitalize, formatUnits, sumUnits, totalOnTable } from './units';
 import { RouletteFelt } from './RouletteFelt';
-import { PhaseStepper, SessionStrip, TableTopBar, type PhaseStep } from './TableChrome';
+import { AccessStopBanner, AllowanceLine, ChipRack, EndingSteps, PhaseStepper, SaveFailedBanner, SessionStrip, TableDialogs, TableTopBar, TurnBoundaryBanner, type PhaseStep } from './TableChrome';
 
 type ActiveSnapshot = ActivePracticeSnapshot & { readonly view: PermittedView };
 
 /** Above this text scale, a wide window stacks the felt and the controls so text has room. */
 const SIDE_BY_SIDE_MAX_FONT_SCALE = 1.35;
-
-const CHIPS: readonly { value: string; label: string; color: ColorToken; ink: ColorToken }[] = [
-  { value: '1', label: '1', color: 'chip1', ink: 'ink' },
-  { value: '5', label: '5', color: 'chip5', ink: 'onImage' },
-  { value: '25', label: '25', color: 'chip25', ink: 'onImage' },
-  { value: '100', label: '100', color: 'chip100', ink: 'onImage' },
-  { value: '500', label: '500', color: 'chip500', ink: 'onImage' },
-  { value: '1000', label: '1K', color: 'chip1k', ink: 'ink' },
-];
 
 
 function phaseSteps(view: PermittedView): PhaseStep[] {
@@ -109,8 +99,7 @@ export function RouletteTable({ snapshot }: { snapshot: ActiveSnapshot }) {
 
   const wagerOn = (target: string) => view.wagers.find((wager) => wager.target === target)?.amount;
   const addChip = (target: string) => {
-    const total = BigInt(wagerOn(target) ?? '0') + BigInt(chip);
-    void controller.placeWager(target, total.toString());
+    void controller.placeWager(target, sumUnits(wagerOn(target) ?? '0', chip));
   };
   const canPlace = legal('place-wager');
   const wagersText = view.wagers.length === 0 ? 'nothing' : view.wagers.map((wager) => `${targetName(wager.target)} ${formatUnits(wager.amount)}`).join(' · ');
@@ -122,39 +111,21 @@ export function RouletteTable({ snapshot }: { snapshot: ActiveSnapshot }) {
         <TableTopBar title="Roulette" subtitle={limitsText(view)} canEnd={legal('request-stop')} onEnd={() => setConfirming(true)} />
         <PhaseStepper steps={phaseSteps(view)} />
         <SessionStrip balance={formatUnits(view.balance)} onTable={formatUnits(totalOnTable(view))} status={save === 'failed' ? 'Paused · not saved' : STATUS[view.phase]} />
+        <AllowanceLine game="roulette" />
         {strategy && <GuidedStrip strategy={strategy} canStop={legal('stop-strategy')} onStop={() => setStoppingStrategy(true)} />}
         {view.phase !== 'final-settlement' && <PresentationSwitch value={presentation} onChange={setPresentation} />}
 
-        {save === 'failed' && (
-          <View style={styles.banner}>
-            <Text accessibilityRole="alert" maxFontSizeMultiplier={textScale.body} style={styles.bannerTitle}>Couldn&apos;t save · play is paused</Text>
-            <Text maxFontSizeMultiplier={textScale.body} style={styles.bannerText}>
-              {busy
-                ? 'Saving your last move…'
-                : `Your last move hasn't been saved, so nothing has been revealed. Nothing is lost. Retrying automatically every ${SAVE_RETRY_MS / 1000} s.`}
-            </Text>
-            <Button label="Retry now" variant="secondary" disabled={busy} onPress={() => void controller.retrySave()} />
-          </View>
-        )}
-        {snapshot.ending === 'access-ended' && (
-          <View style={styles.banner} testID="access-ended">
-            <Text accessibilityRole="alert" maxFontSizeMultiplier={textScale.body} style={styles.bannerTitle}>{ACCESS_ENDED}</Text>
-            <Text maxFontSizeMultiplier={textScale.body} style={styles.bannerText}>
-              Your bets settle automatically, then you&apos;ll see the session result.
-            </Text>
-          </View>
-        )}
-        {snapshot.suspension?.kind === 'turn-boundary' && !snapshot.suspension.reached && (
-          <View style={styles.banner}>
-            <Text accessibilityRole="alert" maxFontSizeMultiplier={textScale.body} style={styles.bannerTitle}>Suspending after this spin</Text>
-            <Text maxFontSizeMultiplier={textScale.body} style={styles.bannerText}>
-              {snapshot.suspension.reason ?? 'This spin finishes normally. No new spin starts until the session resumes.'}
-            </Text>
-          </View>
-        )}
+        {save === 'failed' && <SaveFailedBanner busy={busy} onRetry={() => void controller.retrySave()} />}
+        <AccessStopBanner ending={snapshot.ending} detail="Your bets settle automatically, then you'll see the session result." />
+        <TurnBoundaryBanner suspension={snapshot.suspension} turn="spin" />
 
         {view.phase === 'final-settlement' ? (
-          <EndingSteps snapshot={snapshot} />
+          <EndingSteps
+            facts={snapshot.facts}
+            noneReturned="Nothing was on the table"
+            settle={{ title: 'Final settlement', detail: 'Runs on its own. No more bets.' }}
+            footer="Final settlement starts on its own. There's nothing to tap."
+          />
         ) : (
           <View testID="table-columns" style={[styles.columns, sideBySide && styles.columnsSideBySide]}>
             <View style={styles.column}>
@@ -215,7 +186,7 @@ export function RouletteTable({ snapshot }: { snapshot: ActiveSnapshot }) {
                 <PendingPanel
                   strategy={strategy}
                   pending={strategy.pending}
-                  available={encodeMoney(add(decodeMoney(view.balance), decodeMoney(totalOnTable(view))))}
+                  available={sumUnits(view.balance, totalOnTable(view))}
                   canRebuy={view.legalCommands.includes('rebuy') ? legal('rebuy') : null}
                   canOverride={legal('place-wager')}
                   canStop={legal('stop-strategy')}
@@ -276,25 +247,14 @@ export function RouletteTable({ snapshot }: { snapshot: ActiveSnapshot }) {
         />
       )}
 
-      <StopStrategyDialog
-        visible={stoppingStrategy}
+      <TableDialogs
+        view={view}
+        ending={confirming}
+        onCloseEnding={() => setConfirming(false)}
+        stoppingStrategy={stoppingStrategy}
+        onCloseStopping={() => setStoppingStrategy(false)}
         removable={view.wagersCommitted || view.wagers.length === 0 ? 'Nothing removable on the table' : wagersText}
         committed={view.wagersCommitted ? `${wagersText} settle with this spin.` : 'None between spins.'}
-        onCancel={() => setStoppingStrategy(false)}
-        onConfirm={() => {
-          setStoppingStrategy(false);
-          void controller.stopStrategy();
-        }}
-      />
-
-      <EndSessionDialog
-        visible={confirming}
-        view={view}
-        onCancel={() => setConfirming(false)}
-        onConfirm={() => {
-          setConfirming(false);
-          void controller.endSession();
-        }}
       />
     </View>
   );
@@ -312,80 +272,10 @@ function describeTurn(turn: CycleTurn, index: number): TurnWords {
 
 const WHEEL_NAMES: Record<PermittedView['table']['wheel'], string> = { 'single-zero': 'Single zero', 'double-zero': 'Double zero' };
 
-/** The access-ended stop (spec 5, Amendment 4 D). */
-export const ACCESS_ENDED = 'Training ended — settling existing bets; no further allowance used';
-
 const SAVE_FAILED_ANNOUNCEMENT = "Couldn't save. Play is paused and will retry automatically.";
-
-const capitalize = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
-
-export function ChipRack({ chip, onChoose }: { chip: string; onChoose: (value: string) => void }) {
-  return (
-    <View style={styles.rack}>
-      <View accessibilityRole="radiogroup" accessibilityLabel="Chip value" style={styles.chips}>
-        {CHIPS.map((option) => (
-          <Chip key={option.value} option={option} selected={option.value === chip} onPress={() => onChoose(option.value)} />
-        ))}
-      </View>
-      <Text maxFontSizeMultiplier={textScale.body} style={styles.rackCaption}>
-        {formatUnits(chip)} selected · tap a spot to add it
-      </Text>
-    </View>
-  );
-}
-
-function Chip({ option, selected, onPress }: { option: (typeof CHIPS)[number]; selected: boolean; onPress: () => void }) {
-  const { focused, focusProps } = useKeyboardFocus();
-  return (
-    <Pressable
-      accessibilityRole="radio"
-      accessibilityLabel={`${formatUnits(option.value)} chip`}
-      accessibilityState={{ checked: selected }}
-      onPress={onPress}
-      {...focusProps}
-      style={[styles.chipSlot, selected && styles.chipSelected, focused && styles.chipFocused]}
-    >
-      <View style={[styles.chip, { backgroundColor: palette[option.color] }]}>
-        <Text maxFontSizeMultiplier={textScale.display} style={[styles.chipText, { color: palette[option.ink] }]}>{option.label}</Text>
-      </View>
-      {selected && <Text maxFontSizeMultiplier={textScale.display} style={styles.chipCheck}>{'✓'}</Text>}
-    </Pressable>
-  );
-}
-
-function EndingSteps({ snapshot }: { snapshot: ActivePracticeSnapshot }) {
-  let returned = 0n;
-  for (const fact of snapshot.facts) if (fact.kind === 'wager-returned') returned += BigInt(fact.amount);
-  const steps = [
-    { title: 'Removable wagers returned', detail: returned > 0n ? `+${formatUnits(returned.toString())} to your balance` : 'Nothing was on the table', state: 'done' },
-    { title: 'Final settlement', detail: 'Runs on its own. No more bets.', state: 'current' },
-    { title: 'Session result', detail: '', state: 'upcoming' },
-  ] as const;
-  return (
-    <View style={styles.ending}>
-      <Text accessibilityRole="header" maxFontSizeMultiplier={textScale.display} style={styles.endingTitle}>
-        Ending your session
-      </Text>
-      {steps.map((step, index) => (
-        <View key={step.title} accessible accessibilityLabel={`Step ${index + 1}, ${step.title}, ${step.state}. ${step.detail}`} style={styles.endingStep}>
-          <Text maxFontSizeMultiplier={textScale.body} style={[styles.endingStepTitle, step.state === 'upcoming' && styles.muted]}>
-            {step.state === 'done' ? '✓' : index + 1}  {step.title}
-          </Text>
-          {step.detail !== '' && <Text maxFontSizeMultiplier={textScale.body} style={styles.endingStepDetail}>{step.detail}</Text>}
-        </View>
-      ))}
-      <Text maxFontSizeMultiplier={textScale.body} style={styles.endingStepTitle}>
-        Final settlement starts on its own. There&apos;s nothing to tap.
-      </Text>
-    </View>
-  );
-}
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: palette.background },
-  banner: { margin: space[4], padding: space[4], gap: space[2], borderRadius: radius.lg, backgroundColor: palette.card, borderWidth: 1, borderColor: palette.destructive },
-  bannerTitle: { fontFamily: fonts.uiBold, fontSize: 14, color: palette.foreground },
-  bannerText: { fontFamily: fonts.ui, fontSize: 13, color: palette.mutedForeground },
   columns: { gap: space[3], paddingTop: space[2] },
   columnsSideBySide: { flexDirection: 'row', alignItems: 'flex-start' },
   column: { flex: 1 },
@@ -401,27 +291,4 @@ const styles = StyleSheet.create({
   summary: { gap: 2 },
   summaryTitle: { fontFamily: fonts.uiBold, fontSize: 15, color: palette.foreground },
   summaryText: { fontFamily: fonts.ui, fontSize: 12, color: palette.mutedForeground },
-  chipFocused: { borderColor: palette.ring },
-  rack: { gap: space[2], padding: space[3], borderRadius: radius.lg, backgroundColor: palette.rail },
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: space[1] },
-  chipSlot: {
-    minWidth: MIN_TOUCH_TARGET + 8,
-    minHeight: MIN_TOUCH_TARGET + 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radius.pill,
-    borderWidth: 2,
-    borderColor: palette.transparent,
-  },
-  chipSelected: { borderColor: palette.primary },
-  chip: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
-  chipText: { fontFamily: fonts.uiBold, fontSize: 15 },
-  chipCheck: { position: 'absolute', top: -2, right: -2, fontFamily: fonts.uiBold, fontSize: 12, color: palette.primary },
-  rackCaption: { fontFamily: fonts.ui, fontSize: 12, color: palette.foreground },
-  ending: { gap: space[3], padding: space[4] },
-  endingTitle: { fontFamily: fonts.display, fontSize: 24, color: palette.foreground },
-  endingStep: { gap: 2 },
-  endingStepTitle: { fontFamily: fonts.uiMedium, fontSize: 15, color: palette.foreground },
-  endingStepDetail: { fontFamily: fonts.ui, fontSize: 13, color: palette.mutedForeground },
-  muted: { color: palette.mutedForeground },
 });

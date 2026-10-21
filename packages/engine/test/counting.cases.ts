@@ -131,6 +131,31 @@ export const countingCases: TestCase[] = [
     },
   },
   {
+    name: 'counting: no view field carries the count the player keeps: not a held play, a held bet, nor a recorded departure; basic with deviations still shows it',
+    run: (t) => {
+      // +8 seen, then 4, T, 3 and the hit 9: +9 over 300 cards is +1, where 16 against a 10 stands; the player hits.
+      const heldPlay = run(counted(PLUS_EIGHT, SIXTEEN, guided(COUNTING_DEVIATIONS_SCHEDULE)), [bet('20'), DEAL, HIT, HIT]).state;
+      t.equal(heldPlay.phase, 'correction');
+      const shown = view(heldPlay).strategy?.correction;
+      t.equal(shown && isPlayCorrection(shown) ? [shown.explanation.situation.count, shown.explanation.prescribed.action] : null, [null, 'stand']);
+      // (A deviation's published cost is binned by true count: that is the index's data, not this shoe's count.)
+      t.equal(JSON.stringify(view(heldPlay)).includes('"running"'), false);
+      // Overridden: the departure log keeps no count either.
+      const overridden = step(heldPlay, OVERRIDE).state;
+      t.equal([view(overridden).strategy?.departures.length, JSON.stringify(view(overridden)).includes('"running"')], [1, false]);
+      // A bet off the schedule (10 where +1 bets 20): held before the deal, without the true-count value it was checked against.
+      const heldBet = run(counted(PLUS_EIGHT, SIXTEEN, guided(COUNTING_DEVIATIONS_SCHEDULE)), [bet('10'), DEAL]).state;
+      const bet10 = view(heldBet).strategy?.correction;
+      t.equal(bet10 && !isPlayCorrection(bet10) ? [bet10.explanation.situation.values, bet10.explanation.prescription.status] : null, [{}, 'prescribed']);
+      const kept = view(step(heldBet, OVERRIDE).state);
+      t.equal([kept.strategy?.departures.length, JSON.stringify(kept.strategy?.departures).includes('true-count')], [1, false]);
+      // Basic with deviations: Tableside supplies the count, so the correction states it.
+      const supplied = run(counted(PLUS_EIGHT, SIXTEEN, guided(TEST_DEVIATING)), [bet('10'), DEAL, HIT, HIT]).state;
+      const suppliedShown = view(supplied).strategy?.correction;
+      t.equal(suppliedShown && isPlayCorrection(suppliedShown) ? suppliedShown.explanation.situation.count : null, { running: 9, decks: '6', trueCount: 1 });
+    },
+  },
+  {
     name: 'counting: the reference count is derived from the exposed cards, never stored, so no learner entry can change it',
     run: (t) => {
       const state = run(counted(PLUS_EIGHT, SIXTEEN, guided(TEST_COUNTING_DEVIATING)), [bet('10'), DEAL]).state;

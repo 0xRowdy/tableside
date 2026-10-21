@@ -13,7 +13,7 @@ import { SwitchRow } from '@/components/SwitchRow';
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/theme/tokens';
 
-import { formatUnits } from '../units';
+import { capitalize, formatUnits, sumUnits } from '../units';
 import {
   draftToggle,
   findChoice,
@@ -104,11 +104,7 @@ export function BetSelector(props: BetSelectorProps) {
 }
 
 function WagerList({ catalog, wagers, draft, openEditor, onFind }: BetSelectorProps & { openEditor: OpenEditor; onFind: () => void }) {
-  const staked = (kind: WagerKind) => {
-    let total = 0n;
-    for (const wager of wagers) if (kind.choices.some((c) => c.target === wager.target)) total += BigInt(wager.amount);
-    return total;
-  };
+  const staked = (kind: WagerKind) => sumUnits(...wagers.flatMap((wager) => (kind.choices.some((c) => c.target === wager.target) ? [wager.amount] : [])));
   // The draft stays whatever kind is opened; it is replaced only when another wager is chosen.
   const open = (kind: WagerKind) => openEditor({ ...draft, kind: kind.id });
   return (
@@ -132,7 +128,7 @@ function WagerList({ catalog, wagers, draft, openEditor, onFind }: BetSelectorPr
               <Row
                 key={kind.id}
                 label={`${kind.name}, ${kind.detail}`}
-                value={total > 0n ? `${formatUnits(total.toString())} on the table` : 'no wager'}
+                value={total !== '0' ? `${formatUnits(total)} on the table` : 'no wager'}
                 hint="Opens its editor. Nothing is placed until you set a stake."
                 onPress={() => open(kind)}
               >
@@ -141,7 +137,7 @@ function WagerList({ catalog, wagers, draft, openEditor, onFind }: BetSelectorPr
                   <Text maxFontSizeMultiplier={textScale.body} style={styles.rowDetail}>{kind.detail}</Text>
                 </View>
                 <Text maxFontSizeMultiplier={textScale.body} style={styles.rowValue}>
-                  {total > 0n ? formatUnits(total.toString()) : '—'}
+                  {total !== '0' ? formatUnits(total) : '—'}
                 </Text>
               </Row>
             );
@@ -423,7 +419,6 @@ function submissionProblem({ draft, choice, facts, sequence, ...funds }: BetSele
 /** "whole units", "multiples of 6". */
 const increments = (choice: WagerChoice) => (choice.step === '1' ? 'whole units' : `multiples of ${formatUnits(choice.step)}`);
 
-const capitalize = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
 
 type Funds = Pick<BetSelectorProps, 'balance' | 'wagers' | 'canRebuy'>;
 

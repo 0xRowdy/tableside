@@ -174,7 +174,7 @@ export const CERTIFIED_BLACKJACK = {
     }
    },
    "reference": {
-    "id": "blackjack-coaching-reference",
+    "id": "blackjack-coaching-reference@9892826d10a6d377",
     "version": 1
    },
    "exposureBound": "5126500"
@@ -645,7 +645,7 @@ export const CERTIFIED_BLACKJACK = {
     }
    },
    "reference": {
-    "id": "blackjack-coaching-reference",
+    "id": "blackjack-coaching-reference@9892826d10a6d377",
     "version": 1
    },
    "exposureBound": "5126500"

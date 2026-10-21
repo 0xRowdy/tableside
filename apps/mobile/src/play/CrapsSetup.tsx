@@ -35,7 +35,7 @@ import type { LimitGroup } from './setup/limit-drafts';
 import { ChoiceGroup, FieldLabel, Help, Section, SetupHeader } from './setup/SetupParts';
 import { limitRequirementText, StrategyPicker } from './setup/StrategyPicker';
 import { betsText, CRAPS_WORDS } from './coaching-text';
-import { formatUnits } from './units';
+import { formatUnits, smallerUnits, totalStake } from './units';
 
 type Mode = 'free-play' | 'guided';
 
@@ -53,8 +53,7 @@ function strategyOpening(strategy: StrategyDefinition, rules: CrapsRuleSet): Ope
   );
   if (!explained.ok || explained.explanation.prescription.status !== 'prescribed') return null;
   const { bets } = explained.explanation.prescription;
-  const amount = bets.reduce((sum, bet) => sum + BigInt(bet.amount), 0n).toString();
-  return { kind: 'strategy', amount, strategyName: strategy.name, bets: betsText(bets, CRAPS_WORDS) };
+  return { kind: 'strategy', amount: totalStake(bets), strategyName: strategy.name, bets: betsText(bets, CRAPS_WORDS) };
 }
 
 type Group = 'flat' | 'props';
@@ -105,7 +104,7 @@ export function CrapsSetup({
   const limits = useLimits(GROUPS, CRAPS_LIMITS);
   const accepted = limits.accepted;
   const rules = standardCraps(odds, field, accepted ?? CRAPS_LIMITS);
-  const smallest = accepted ? (BigInt(accepted.props.min) < BigInt(accepted.flat.min) ? accepted.props.min : accepted.flat.min) : null;
+  const smallest = accepted ? smallerUnits(accepted.flat.min, accepted.props.min) : null;
   // Compatibility is judged at the table as edited, once its limits are good.
   const fit = guided && accepted ? strategyTableCompatibility(strategy, {}, rules) : null;
   let opening: Opening | null = !guided && smallest ? { kind: 'table', amount: smallest } : null;

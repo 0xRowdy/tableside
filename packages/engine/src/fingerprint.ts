@@ -26,9 +26,9 @@ import {
   type StrategyAdjustment,
   type StrategyBet,
   type StrategyCondition,
-  type StrategyDefinition,
   type StrategyExpression,
   type StrategyInstruction,
+  type StrategySelection,
 } from './strategy';
 import type { BenchmarkProfile } from './standardized';
 import { ENGINE_VERSION } from './version';
@@ -149,14 +149,13 @@ function play(value: unknown): unknown {
 }
 
 /**
- * The canonical form of what a validated strategy executes with these
- * parameters (the defaults when omitted). Throws when the strategy isn't
- * runnable or the parameters don't fit it.
+ * The canonical form of what a validated strategy executes with the chosen
+ * parameters (defaultSelection gives the defaults). Throws when the strategy
+ * isn't runnable or the parameters don't fit it.
  */
-export function canonicalStrategy(definition: StrategyDefinition, parameters?: Readonly<Record<string, string>>): unknown {
+export function canonicalStrategy({ definition, parameters: chosen }: StrategySelection): unknown {
   const validation = validateStrategy(definition);
   if (!validation.runnable) throw new FingerprintIntegrityError(`the strategy is not runnable: ${validation.diagnostics.map((d) => `${d.category} ${d.path}`).join('; ')}`);
-  const chosen = parameters ?? Object.fromEntries(definition.parameters.map((param) => [param.id, param.default]));
   const problem = parameterProblem(definition, chosen);
   if (problem) throw new FingerprintIntegrityError(problem);
   const position = (prefix: string, items: readonly { readonly id: string }[]) => new Map(items.map((item, index) => [item.id, `${prefix}${index}`]));
@@ -188,15 +187,14 @@ export function canonicalStrategy(definition: StrategyDefinition, parameters?: R
  * every runtime.
  */
 export function canonicalSpecification(input: {
-  readonly definition: StrategyDefinition;
-  readonly parameters?: Readonly<Record<string, string>>;
+  readonly strategy: StrategySelection;
   readonly profile: BenchmarkProfile;
   readonly analysis: VersionedIdentity;
 }): CanonicalSpecification {
   const { profile } = input;
   const manifest = canonicalJson({
     encoding: CANONICAL_ENCODING,
-    strategy: canonicalStrategy(input.definition, input.parameters),
+    strategy: canonicalStrategy(input.strategy),
     profile,
     identities: {
       engine: ENGINE_VERSION,

@@ -6,7 +6,7 @@ import { CAPPED_MARTINGALE, FLAT_EVEN_MONEY } from '@tableside/definitions';
 import type { DomainFact } from '@tableside/engine';
 
 import { alwaysAllowed, withRequiredRemovals, type AccessDecision, type AccessSupervisor, type AdmissionDecision, type PhaseReport, type TurnDecision } from '@/practice/adapters';
-import { PracticeController, REVEAL_MS, type PracticeSnapshot } from '@/practice/controller';
+import { PracticeController, REVEAL_MS, SAVE_RETRY_MS, type PracticeSnapshot } from '@/practice/controller';
 import type { ActivityStore, TransitionCommit } from '@/practice/store';
 import { FakeClock, substituteAdapters } from '@/practice/testing/substitutes';
 
@@ -614,6 +614,11 @@ describe('required content removal (Amendment 6 §5)', () => {
     const adapters = { ...substituteAdapters({ clock: new FakeClock(undefined, true) }), access };
     const commits = recordCommits(adapters.store);
     const controller = new PracticeController(adapters);
+    const shown: (string | null)[] = [];
+    controller.subscribe(() => {
+      const snapshot = controller.snapshot();
+      if (snapshot.status === 'active') shown.push(snapshot.ending);
+    });
     await controller.load();
     await controller.start({ game: 'roulette', buyIn: '1000', strategy: { definition: FLAT_EVEN_MONEY, parameters: { target: 'red' } } });
 
@@ -625,7 +630,10 @@ describe('required content removal (Amendment 6 §5)', () => {
     await controller.spin();
 
     expect(kinds(commits)).toEqual(['place-wager', 'begin-turn', 'settle-turn', 'place-wager', 'request-stop', 'advance-final-settlement']);
-    expect(controller.snapshot()).toMatchObject({ status: 'completed', result: { endingReason: 'access-ended' } });
+    // Recorded and announced as a content removal, never as access or allowance ending.
+    expect(shown).toContain('content-removed');
+    expect(shown).not.toContain('access-ended');
+    expect(controller.snapshot()).toMatchObject({ status: 'completed', result: { endingReason: 'content-removed' } });
     // The supervisor behind it is never asked about the turn the removal stopped.
     expect(script.asked.filter((q) => q.startsWith('turn'))).toEqual(['turn 1']);
   });
@@ -635,5 +643,110 @@ describe('required content removal (Amendment 6 §5)', () => {
     expect(await access.beforeTurn({ activityId: 'a', turn: 1, strategy: null })).toMatchObject({ status: 'allowed' });
     expect(await access.beforeTurn({ activityId: 'a', turn: 1, strategy: { id: FLAT_EVEN_MONEY.id, version: 1 } })).toMatchObject({ status: 'allowed' });
     expect(await access.beforeTurn({ activityId: 'a', turn: 1, strategy: { id: 'another', version: 1 } })).toMatchObject({ status: 'denied', disposition: 'stop' });
+  });
+});
+
+describe('a failed save that begins a turn', () => {
+  it('is never retried, revealed or charged once the session is suspended with access stopped', async () => {
+    const { controller, store, next, clock, commits } = await started();
+    await controller.placeWager('red', '10');
+    store.failNext('commitTransition', 'before');
+    await controller.spin();
+    expect(active(controller.snapshot())).toMatchObject({ save: 'failed', view: { phase: 'open-decision' } });
+
+    next.lifecycle = { status: 'denied', provenance: 'test', disposition: 'stop' };
+    await controller.lifecycle('backgrounded');
+    clock.advance(SAVE_RETRY_MS);
+    await waitFor(() => active(controller.snapshot()).save === 'saved' && !active(controller.snapshot()).busy);
+
+    expect(kinds(commits)).toEqual(['place-wager']);
+    expect(await store.readEffects('activity-1')).toEqual([]);
+    expect(active(controller.snapshot())).toMatchObject({ save: 'saved', view: { phase: 'open-decision', outcome: null }, suspension: { reached: true } });
+  });
+
+  it('is dropped, not retried, after a direct suspend; resuming asks again before the turn', async () => {
+    const { controller, store, clock, commits, asked } = await started();
+    await controller.placeWager('red', '10');
+    store.failNext('commitTransition', 'before');
+    await controller.spin();
+    controller.suspend('navigation');
+    clock.advance(SAVE_RETRY_MS);
+    await waitFor(() => active(controller.snapshot()).save === 'saved' && !active(controller.snapshot()).busy);
+
+    expect(kinds(commits)).toEqual(['place-wager']);
+    expect(await store.readEffects('activity-1')).toEqual([]);
+
+    await controller.resume();
+    await controller.spin();
+    await waitFor(() => active(controller.snapshot()).view.phase === 'settled-outcome' && !active(controller.snapshot()).busy);
+    expect(kinds(commits)).toEqual(['place-wager', 'begin-turn', 'settle-turn']);
+    expect(asked.filter((question) => question.startsWith('turn'))).toEqual(['turn 1', 'turn 1']);
+    expect(await store.readEffects('activity-1')).toHaveLength(1);
+  });
+});
+
+describe('time-usage checkpoints (Amendment 4 A4)', () => {
+  const TIME = { status: 'allowed', provenance: 'test', meteringBasis: 'time', timeGrant: 'time-grant-1' } as const;
+  const usage = (sequence: number, amount: string) => ({ effectId: { grant: 'time-grant-1', activity: 'activity-1', sequence }, kind: 'time-usage', amount });
+
+  async function timed() {
+    const context = setup({ autoClock: false });
+    context.next.admission = TIME;
+    await context.controller.load();
+    await context.controller.start({ game: 'roulette', buyIn: '1000' });
+    return context;
+  }
+
+  /** Lets the clock's sleepers and the store's writes run. */
+  const settle = async () => {
+    for (let i = 0; i < 20; i++) await new Promise((resolve) => setImmediate(resolve));
+  };
+
+  it('records active time about every second, and with each action, through the store', async () => {
+    const { controller, store, clock } = await timed();
+    await settle();
+    clock.advance(1000);
+    await settle();
+    clock.advance(1000);
+    await settle();
+    expect(await store.readEffects('activity-1')).toEqual([usage(0, '1000'), usage(1, '1000')]);
+
+    // An action commits the time since the last checkpoint with its transition.
+    clock.advance(400);
+    await controller.placeWager('red', '10');
+    expect(await store.readEffects('activity-1')).toEqual([usage(0, '1000'), usage(1, '1000'), usage(2, '400')]);
+  });
+
+  it('charges nothing while suspended, and nothing under another metering basis', async () => {
+    const { controller, store, clock } = await timed();
+    await settle();
+    controller.suspend('navigation');
+    await settle();
+    clock.advance(5000);
+    await settle();
+    expect(await store.readEffects('activity-1')).toEqual([]);
+
+    const untimed = setup({ autoClock: false });
+    await untimed.controller.load();
+    await untimed.controller.start({ game: 'roulette', buyIn: '1000' });
+    await settle();
+    untimed.clock.advance(3000);
+    await settle();
+    expect(await untimed.store.readEffects('activity-1')).toEqual([]);
+  });
+
+  it('pauses training when a checkpoint fails to save, and records it once the retry succeeds', async () => {
+    const { controller, store, clock, reports } = await timed();
+    await settle();
+    store.failNext('recordEffects', 'before');
+    clock.advance(1000);
+    await settle();
+    expect(active(controller.snapshot())).toMatchObject({ save: 'failed' });
+    expect(reports.at(-1)).toMatchObject({ timed: false });
+    clock.advance(SAVE_RETRY_MS);
+    await settle();
+    expect(active(controller.snapshot())).toMatchObject({ save: 'saved' });
+    expect(await store.readEffects('activity-1')).toEqual([usage(0, '1000')]);
+    expect(reports.at(-1)).toMatchObject({ timed: true });
   });
 });

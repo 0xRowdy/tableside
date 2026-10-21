@@ -113,7 +113,7 @@ export type CrapsDomainFact =
   | { readonly kind: 'wager-moved'; readonly turn: number; readonly from: string; readonly to: string; readonly amount: string }
   /** A don't bet's bar-12 standoff: no money moves and the wager stays on the table. */
   | { readonly kind: 'wager-pushed'; readonly turn: number; readonly target: string; readonly stake: string }
-  /** A working instruction was given or cleared: the wager's status on a come-out roll from now on. */
+  /** A working instruction was given or cleared: the wager works, or is off, from now on (a cleared one: its usual status). */
   | { readonly kind: 'working-changed'; readonly target: string; readonly working: boolean };
 
 export interface CrapsWagerStatus {
@@ -376,6 +376,13 @@ function stakeIncrement(target: Exclude<TargetInfo, LineTarget>): bigint {
   }
 }
 
+/** The commissions every buy and lay on the table would charge on a win, together. */
+const commissionsDue = (wagers: readonly Wager[]): Money =>
+  wagers.reduce((sum, wager) => {
+    const target = targetInfo(wager.target);
+    return target ? add(sum, commissionFor(target, decodeMoney(wager.amount))) : sum;
+  }, money(0n));
+
 /** The commission a winning buy or lay with this stake would charge; zero for every other wager. */
 function commissionFor(target: TargetInfo, stake: Money): Money {
   if (target.family === 'buy') return commission(stake, COMMISSION_RATE);
@@ -461,9 +468,10 @@ function roll(state: State): Step<State> {
 /**
  * A legal per-bet working instruction. Each switchable wager has one usual
  * come-out status: place, buy and come odds are off, lays, hardways and don't
- * come odds work. The instruction is the other one ("working on the come-out",
- * or "off"), and holds until it changes or the wager leaves the table; giving
- * the usual status clears it.
+ * come odds work. An instruction makes the wager work, or be off, on every roll
+ * ("working on the come-out", or "off", including a place bet turned off while
+ * the point is on), and holds until it changes or the wager leaves the table.
+ * Giving the status the wager has anyway, now and on the come-out, clears it.
  */
 function setWorking(state: State, target: string, working: boolean): Step<State> {
   const placed = targetInfo(target);
@@ -471,7 +479,8 @@ function setWorking(state: State, target: string, working: boolean): Step<State>
   if (!isSwitchable(placed)) return { illegal: 'working-fixed' };
   if (!stakeOf(state.wagers, target)) return { illegal: 'not-available-now' };
   const others = state.instructions.filter((item) => item.target !== target);
-  const instructions = working === worksByDefault(placed, null) ? others : sorted([...others, { target, working }]);
+  const usual = working === worksByDefault(placed, null) && working === worksByDefault(placed, state.point);
+  const instructions = usual ? others : sorted([...others, { target, working }]);
   return { change: { phase: 'open-decision', instructions }, facts: [{ kind: 'working-changed', target, working }] };
 }
 
@@ -529,8 +538,8 @@ function placeWager(state: State, target: string, amount: Money): Step<State> {
     facts.push({ kind: 'wager-changed', target: change.target, amount: encodeMoney(change.amount), previous: encodeMoney(previous) });
   }
   if (balance.n < 0n) return { illegal: 'insufficient-funds' };
-  // A buy or lay must be able to pay its commission on top of the stake.
-  if (amount.n !== 0n && compare(balance, commissionFor(placed, amount)) < 0) return { illegal: 'commission-unfunded' };
+  // Every buy and lay on the table must be able to pay its commission on top of the stakes.
+  if (amount.n !== 0n && compare(balance, commissionsDue(wagers)) < 0) return { illegal: 'commission-unfunded' };
   return {
     change: { phase: 'open-decision', balance: encodeMoney(balance), wagers: sorted(wagers), instructions: keptInstructions(state.instructions, wagers) },
     facts,
@@ -780,7 +789,6 @@ function damage(value: Record<string, unknown>): string | undefined {
   if (outcome !== null && !(hasExactKeys(outcome, ['turn', 'dice']) && isCount(outcome.turn) && outcome.turn >= 1 && outcome.turn === turn && isDice(outcome.dice))) {
     return 'damaged outcome';
   }
-  if ((outcome === null) !== (turn === 0)) return 'the outcome does not match the turn count';
   if (outcome === null && puck !== null) return 'the point is set before any roll';
   if (!isWagerList(wagers, targetOrder)) return 'damaged wager';
   for (const wager of wagers) {
@@ -872,6 +880,7 @@ export function crapsBetProblem(
 /** Standard craps behind the session protocol. */
 export const CRAPS: GameModule<CrapsActivityState, CrapsPermittedView, CrapsCommand> = {
   ruleSets: [{ id: STANDARD_CRAPS.id, version: STANDARD_CRAPS.version }],
+  turnExposure: crapsTurnExposure,
   extra: { point: null, instructions: [] },
   pinRules: (rules) => {
     if (rules.id !== STANDARD_CRAPS.id || rules.version !== STANDARD_CRAPS.version) return 'unsupported craps rules';

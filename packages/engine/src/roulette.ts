@@ -372,7 +372,6 @@ function damage(value: Record<string, unknown>): string | undefined {
   if (outcome !== null && !(hasExactKeys(outcome, ['turn', 'pocket']) && isCount(outcome.turn) && outcome.turn >= 1 && outcome.turn === turn && isPocket(wheel, outcome.pocket))) {
     return 'damaged outcome';
   }
-  if ((outcome === null) !== (turn === 0)) return 'the outcome does not match the turn count';
   const committed = phase === 'revealing-outcome' || (phase === 'final-settlement' && wagers.length > 0 && outcome !== null);
   // Only guided practice takes a waiting spin, with nothing at stake.
   if (phase === 'revealing-outcome' && wagers.length === 0 && strategy === null) return 'a revealing turn has no committed wagers';
@@ -408,6 +407,13 @@ export const ROULETTE: GameModule<RouletteActivityState, RoulettePermittedView> 
   apply,
   // A waiting spin: guided practice spins on while the strategy places nothing yet (it waits for a pattern).
   idleTurn: spin,
+  // Every placement at its own maximum: chips on one target never pass its limit, and there is no aggregate cap.
+  turnExposure: (rules) => {
+    const placements = rouletteLayout(rules.wheel);
+    const stake = placements.reduce((sum, placement) => add(sum, decodeMoney(rules.limits[placement.limitClass].max)), money(0n));
+    const payout = placements.reduce((most, placement) => (placement.payout > most ? placement.payout : most), 0n);
+    return { stake, payout: money(payout) };
+  },
   view: (state) => ({
     game: 'roulette',
     outcome: state.outcome && { turn: state.outcome.turn, pocket: state.outcome.pocket },

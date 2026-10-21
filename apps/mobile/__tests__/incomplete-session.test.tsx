@@ -80,6 +80,15 @@ describe('a quarantined unfinished session', () => {
     expect(screen.getByLabelText('Result: Not available')).toBeOnTheScreen();
     expect(screen.queryByRole('button', { name: 'What happened?' })).toBeNull();
   });
+
+  it('a training-bankroll session names its allocation, never a buy-in (Amendment 4 B)', async () => {
+    const stored = leftBy(CRAPS.checkpoint.replace('"balance":"', '"balance":"-'));
+    mockApp.stored = { ...stored, specification: { ...stored.specification, fundingSource: 'training-bankroll' } };
+    await renderRouter('./src/app', { initialUrl: '/play' });
+
+    expect(await screen.findByLabelText('From training bankroll: 1,000')).toBeOnTheScreen();
+    expect(screen.queryByLabelText(/^Buy-in/)).toBeNull();
+  });
 });
 
 describe('a session a later build saved', () => {
