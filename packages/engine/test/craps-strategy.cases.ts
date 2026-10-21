@@ -299,6 +299,7 @@ export const crapsStrategyCases: TestCase[] = [
     run: (t) => {
       let { state } = follow(guidedCraps(PRESS_AND_COLLECT, keyed(0), { flatMax: '20' }), 9);
       state = send(send(state, ROLL).state, SETTLE).state;
+      t.equal(crapsView(state).strategy?.overrideAffected, false);
       const collected = send(state, { kind: 'collect-instead' });
       t.equal(collected.facts, [
         { kind: 'cycle-ended', reason: 'collected' },
@@ -311,14 +312,16 @@ export const crapsStrategyCases: TestCase[] = [
       t.equal(view.legalCommands, ['restart-cycle', 'stop-strategy', 'request-stop', 'rebuy']);
       // The cycle's record: 10 rolls followed, net +42 (14 + 14 + 14 kept from the place bets).
       t.equal([view.strategy?.cycle.turns.length, view.strategy?.cycle.net], [10, '42']);
+      // Collect instead is an explicit override (user story 51): it marks the session, though it logs no departure.
+      t.equal([view.strategy?.overrideAffected, view.strategy?.departures], [true, []]);
       const restarted = send(state, { kind: 'restart-cycle' }).state;
       t.equal([restarted.phase, restarted.strategy?.progress.counters, restarted.strategy?.deferred], ['open-decision', { 'stake-6': '12', 'press-6': '0', 'stake-8': '12', 'press-8': '0', up: '0' }, null]);
-      // Collect instead is offered only at a pending strategy action.
-      t.equal(crapsView(restarted).legalCommands.includes('collect-instead'), false);
+      // Collect instead is offered only at a pending strategy action; the restart keeps the session marked.
+      t.equal([crapsView(restarted).legalCommands.includes('collect-instead'), crapsView(restarted).strategy?.overrideAffected], [false, true]);
     },
   },
   {
-    name: 'craps strategy: an override ends the cycle; removable wagers come back, the pass line contract stays, and a restart picks it up',
+    name: 'craps strategy: an override ends the cycle; removable wagers come back and the pass line contract settles by automatic rolls before the cycle result',
     run: (t) => {
       // Point 8; the player sets 30 odds instead of 10.
       let state = follow(guidedCraps(PASS_WITH_ODDS, PI), 1).state;

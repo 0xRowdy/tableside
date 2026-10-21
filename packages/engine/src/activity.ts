@@ -253,7 +253,7 @@ export interface StrategyView {
    * their own (null where the strategy doesn't assess that kind), and every departure.
    */
   readonly adherence: { readonly betting: AdherenceMeasure | null; readonly playing: AdherenceMeasure | null; readonly departures: number };
-  /** Any explicit override in the session; a cycle restart doesn't clear it. */
+  /** Any explicit override in the session (an overridden correction, or Collect instead); a cycle restart doesn't clear it. */
   readonly overrideAffected: boolean;
   /** True for a progression, whose cycle an override ends until an explicit restart. */
   readonly overrideEndsCycle: boolean;
@@ -1156,10 +1156,17 @@ function strategyView(state: ActivityState, run: StrategyRun): StrategyView {
       playing: definition.play === undefined ? null : measure(run.decisions.playing, departedPlays.size),
       departures: run.departures.length,
     },
-    overrideAffected: run.departures.some((departure) => departure.resolution === 'overridden'),
+    overrideAffected: run.departures.some((departure) => departure.resolution === 'overridden') || state.receipts.some((receipt) => receipt.command === COLLECT_INSTEAD),
     overrideEndsCycle: overrideEndsCycle(definition),
   };
 }
+
+/**
+ * "Collect instead" is an explicit override of the pending strategy action
+ * (user story 51): it marks the session, though no submitted move was held, so
+ * it adds no departure. Its receipt keeps the mark across cycle restarts.
+ */
+const COLLECT_INSTEAD = canonicalJson({ kind: 'collect-instead' } satisfies Command);
 
 /**
  * A strategy with progression state (counters or lists) is a betting
