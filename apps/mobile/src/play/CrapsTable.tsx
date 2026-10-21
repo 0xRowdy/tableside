@@ -14,6 +14,7 @@ import { AccessibilityInfo, Pressable, ScrollView, StyleSheet, Text, useWindowDi
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/Button';
+import { Notice, NoticeText } from '@/components/Notice';
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
 import type { ActivePracticeSnapshot } from '@/practice/controller';
 import { usePractice } from '@/practice/PracticeProvider';
@@ -38,7 +39,7 @@ const SIDE_BY_SIDE_MAX_FONT_SCALE = 1.35;
 const SAVE_FAILED_ANNOUNCEMENT = "Couldn't save. Play is paused and will retry automatically.";
 
 function phaseSteps(view: PermittedView): PhaseStep[] {
-  const reached = { 'open-decision': 0, correction: 0, 'revealing-outcome': 1, 'settled-outcome': 2, 'cycle-completion': 2, 'final-settlement': 2, completed: 3 }[view.phase];
+  const reached = { 'open-decision': 0, correction: 0, 'revealing-outcome': 1, 'settled-outcome': 2, 'cycle-completion': 2, 'strategy-settlement': 2, 'final-settlement': 2, completed: 3 }[view.phase];
   return [view.table.point === null ? 'Come-out' : 'Betting', 'Roll', 'Settle'].map((label, index) => ({
     label,
     state: index < reached ? 'done' : index === reached ? 'current' : 'upcoming',
@@ -153,7 +154,7 @@ export function CrapsTable({ snapshot }: { snapshot: ActiveSnapshot }) {
         />
         <AllowanceLine game="craps" />
         {strategy && <GuidedStrip strategy={strategy} canStop={legal('stop-strategy')} onStop={() => setStoppingStrategy(true)} detail={null} unit="roll" />}
-        {view.phase !== 'final-settlement' && <PresentationSwitch value={presentation} onChange={setPresentation} />}
+        {view.phase !== 'final-settlement' && view.phase !== 'strategy-settlement' && <PresentationSwitch value={presentation} onChange={setPresentation} />}
 
         {save === 'failed' && <SaveFailedBanner busy={busy} onRetry={() => void controller.retrySave()} />}
         <AccessStopBanner ending={snapshot.ending} detail="The dice roll on to settle only the bets already working. No new bets, odds or rolls of your own." />
@@ -170,6 +171,16 @@ export function CrapsTable({ snapshot }: { snapshot: ActiveSnapshot }) {
             lead={view.outcome ? `Last roll: ${rollText(view.outcome.dice)} · ${puckText(view.table.point)}` : null}
             footer="The dice roll on their own until every contract is settled. There's nothing to tap."
           />
+        ) : view.phase === 'strategy-settlement' ? (
+          <Notice title={strategy?.status === 'stopped' ? 'Strategy stopped · its contracts settle' : 'Cycle ended · its contracts settle'} testID="strategy-settlement">
+            <NoticeText>{`Rolling on for ${listText(view.wagers)}. They can't come down, and nothing new is bet: no odds or presses.`}</NoticeText>
+            {view.outcome && <NoticeText>{`Last roll: ${rollText(view.outcome.dice)} · ${puckText(table.point)}`}</NoticeText>}
+            <NoticeText>
+              {strategy?.status === 'stopped'
+                ? "The dice roll on their own until these settle. Then you play on your own or end the session. There's nothing to tap."
+                : "The dice roll on their own until these settle. Then the cycle result shows. There's nothing to tap."}
+            </NoticeText>
+          </Notice>
         ) : (
           <View testID="table-columns" style={[styles.columns, sideBySide && styles.columnsSideBySide]}>
             <View style={styles.column}>
@@ -303,7 +314,7 @@ export function CrapsTable({ snapshot }: { snapshot: ActiveSnapshot }) {
             ? `${wagersText} settle with this roll.`
             : contracts.length === 0
               ? 'None between rolls.'
-              : `${listText(contracts)} can't be taken down or refunded. The dice settle them as you play on.`
+              : `${listText(contracts)} can't be taken down or refunded. The dice roll on their own to settle them.`
         }
       />
     </View>

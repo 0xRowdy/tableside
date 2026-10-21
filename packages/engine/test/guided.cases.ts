@@ -216,12 +216,11 @@ export const guidedCases: TestCase[] = [
     },
   },
   {
-    name: 'guided: Stop strategy during a spin lets the committed wagers settle and adjusts nothing',
+    name: 'guided: Stop strategy during a spin settles the spin now and adjusts nothing',
     run: (t) => {
       const spinning = run(createActivity(guided(DOUBLING, {}), STREAM), [place('red', '10'), BEGIN]).state;
-      const { state, facts } = step(spinning, STOP_STRATEGY);
-      t.equal([kinds(facts), state.phase, state.wagers], [['strategy-stopped'], 'revealing-outcome', [{ target: 'red', amount: '10' }]]);
-      const settled = step(state, SETTLE).state;
+      const { state: settled, facts } = step(spinning, STOP_STRATEGY);
+      t.equal([kinds(facts), settled.wagers], [['strategy-stopped', 'wager-settled'], []]);
       t.equal([settled.phase, settled.balance, settled.strategy?.progress], ['settled-outcome', '1010', { counters: { stake: '10' }, lists: {}, lastResult: 'none', cycleTurn: 0 }]);
     },
   },

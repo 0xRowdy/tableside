@@ -84,6 +84,7 @@ export function crapsStatus(view: CrapsPermittedView): string {
     'settled-outcome': 'Settled',
     correction: 'Strategy check',
     'cycle-completion': 'Cycle ended',
+    'strategy-settlement': "Settling the strategy's contracts",
     'final-settlement': 'Final settlement',
     completed: 'Ended',
   };
@@ -241,6 +242,10 @@ export function describeCrapsFacts(facts: readonly DomainFact[], view: CrapsPerm
   }
   if (puck && following(followsPuck)) {
     parts.push(puck.point === null ? 'Place and buy bets are OFF for the come-out roll.' : 'Place and buy bets are ON again.');
+  }
+  // The strategy's cycle ended or it stopped with contracts up: they settle before anything else.
+  if (view.phase === 'strategy-settlement' && facts.some((fact) => fact.kind === 'strategy-stopped' || fact.kind === 'cycle-ended')) {
+    parts.push(`The dice roll on their own to settle ${view.wagers.map((wager) => `${crapsTargetName(wager.target)} ${formatUnits(wager.amount)}`).join(', ')}. No new bets.`);
   }
   if (parts.length === 0) return null;
   if (balanceChanged) parts.push(`Balance ${formatUnits(view.balance)}.`);

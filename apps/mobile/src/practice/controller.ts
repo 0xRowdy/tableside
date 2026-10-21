@@ -767,7 +767,9 @@ export class PracticeController {
   /**
    * The automatic, no-tap steps: settle a revealed spin or roll, run the stop
    * path and final settlement (craps rolls on, one committed step per roll,
-   * until its contracts settle), complete. A suspension stops them where it applies.
+   * until its contracts settle), complete, and strategy settlement (the same
+   * rolls for the contracts a strategy left when its cycle ended or it stopped;
+   * a stop hands them to final settlement). A suspension stops them where it applies.
    */
   private async drive(): Promise<void> {
     for (;;) {
@@ -793,6 +795,11 @@ export class PracticeController {
         // The stop path, between turns: removable wagers come back, then final settlement.
         // A blackjack hand still in play finishes first; the player's actions stay open.
         if (!settled(await this.send(stopCommand(this.stopping)))) return;
+      } else if (phase === 'strategy-settlement') {
+        // Like final settlement, these rolls only settle what is already committed: no access question, no charge.
+        await this.adapters.clock.sleep(ENDING_STEP_MS);
+        if (this.suspension) return;
+        if (!settled(await this.send({ kind: 'advance-strategy-settlement' }))) return;
       } else {
         return;
       }

@@ -369,6 +369,7 @@ function legal(state: BlackjackActivityState): CommandKind[] {
     // Guided phases are the protocol's to decide.
     case 'correction':
     case 'cycle-completion':
+    case 'strategy-settlement':
       return [];
   }
 }

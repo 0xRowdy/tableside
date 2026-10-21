@@ -72,7 +72,7 @@ export interface Decision {
 /**
  * Follows the prescription for up to `rolls` rolls: sets the table to exactly
  * the prescribed wagers, rolls, settles. Stops early at a pending action,
- * a correction or a cycle completion.
+ * a correction, a cycle completion or strategy settlement.
  */
 export function follow(state: ActivityState, rolls: number): { state: ActivityState; decisions: Decision[]; facts: DomainFact[] } {
   const decisions: Decision[] = [];
@@ -84,7 +84,7 @@ export function follow(state: ActivityState, rolls: number): { state: ActivitySt
     return next;
   };
   for (let i = 0; i < rolls; i++) {
-    if (crapsView(state).strategy?.pending || state.phase === 'cycle-completion') break;
+    if (crapsView(state).strategy?.pending || state.phase === 'cycle-completion' || state.phase === 'strategy-settlement') break;
     const prescription = prescriptionNow(state);
     const wanted = prescription.status === 'prescribed' ? prescription.bets : [];
     for (const wager of state.wagers) if (!wanted.some((bet) => bet.target === wager.target)) go(place(wager.target, '0'));

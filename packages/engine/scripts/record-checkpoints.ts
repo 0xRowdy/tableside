@@ -29,6 +29,7 @@ import {
 import { SPEC } from '../test/activity.fixtures';
 import { BJ_SPEC, BJ_STREAM } from '../test/blackjack.fixtures';
 import { CRAPS_SPEC } from '../test/craps.cases';
+import { PASS_WITH_ODDS } from '../test/craps-strategy.fixtures';
 import { PI, ZERO } from '../test/fixtures';
 import type { RecordedBuild, RecordedCheckpoint } from '../test/recorded';
 import { TEST_COUNTING_SCHEDULE } from '../test/blackjack-strategy.fixtures';
@@ -65,6 +66,12 @@ const SCENARIOS: Scenario[] = [
   },
   // Key [1, 0] rolls a six first: the point is on, the pass line is committed.
   { name: 'craps, a point established', specification: CRAPS_SPEC, random: { ...ZERO, key: [1, 0] }, commands: [place('pass', '10'), place('field', '5'), BEGIN, SETTLE] },
+  {
+    name: 'craps guided, Stop strategy with the pass line contract settling',
+    specification: { ...CRAPS_SPEC, strategy: { definition: PASS_WITH_ODDS, parameters: {} } },
+    random: { ...ZERO, key: [1, 0] },
+    commands: [place('pass', '10'), BEGIN, SETTLE, { kind: 'stop-strategy' }],
+  },
   { name: 'blackjack, dealt and waiting for the decision', specification: BJ_SPEC, random: BJ_STREAM, commands: [place('hand-1', '10'), BEGIN] },
   {
     name: 'blackjack guided, counting with the bet schedule, a betting correction waiting',
@@ -74,12 +81,13 @@ const SCENARIOS: Scenario[] = [
   },
 ];
 
-/** The next command toward completion: settle what is revealed, resolve guidance, then stop and settle finally. */
+/** The next command toward completion: settle what is revealed or a strategy left, resolve guidance, then stop and settle finally. */
 function nextCommand(state: ActivityState): Command {
   const view = readPermittedView(state);
   const legal = view.legalCommands;
   if (state.phase === 'revealing-outcome') return SETTLE;
   if (state.phase === 'final-settlement') return { kind: 'advance-final-settlement' };
+  if (state.phase === 'strategy-settlement') return { kind: 'advance-strategy-settlement' };
   if (state.phase === 'correction') return { kind: 'retry-correction' };
   if (view.game === 'blackjack' && view.playActions.length > 0) {
     return { kind: 'play', action: view.playActions.includes('decline-insurance') ? 'decline-insurance' : 'stand' };
