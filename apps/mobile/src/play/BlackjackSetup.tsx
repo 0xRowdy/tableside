@@ -32,7 +32,7 @@ import { usePractice } from '@/practice/PracticeProvider';
 
 import { otherPlayersText } from './blackjack-text';
 import { betsText, BLACKJACK_WORDS } from './coaching-text';
-import { totalStake } from './units';
+import { formatUnits, totalStake } from './units';
 import { limitRequirementText } from './setup/StrategyPicker';
 import { FundingSection, useFunding, type Opening } from './setup/Funding';
 import { GroupFields, LimitsBanner, useLimits } from './setup/Limits';
@@ -50,8 +50,8 @@ const GROUPS: readonly LimitGroup<'initial'>[] = [
   { key: 'initial', label: 'Initial wager', help: 'Whole units of 1 or more. Insurance, splits and doubles can go over the maximum.' },
 ];
 
-/** "1 / 2 / 4 / 6 / 8 units by true count…" (S1-02 i1tnq), from the schedule itself. */
-const SCHEDULE_DETAIL = `${BET_SCHEDULE.map((band) => band.units).join(' / ')} units by true count. Scored separately from your play.`;
+/** "10 / 20 / 40 / 60 / 80 by true count…" (S1-02 i1tnq, stated as amounts per Amendment 9 §7), from the schedule itself. */
+const SCHEDULE_DETAIL = `${BET_SCHEDULE.map((band) => formatUnits(band.amount)).join(' / ')} by true count. Scored separately from your play.`;
 
 /** Each mode as the setup frame (S1-02 i1tnq) words it. */
 const MODE_TEXT: Record<BlackjackMode, { label: string; help: string }> = {

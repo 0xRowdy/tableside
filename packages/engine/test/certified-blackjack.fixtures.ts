@@ -671,7 +671,7 @@ export const CERTIFIED_BLACKJACK = {
    "instructions": [
     {
      "id": "true-count-below-1",
-     "label": "True count below +1: 1 unit (10)",
+     "label": "True count below +1: 10",
      "when": {
       "always": true
      },
@@ -689,7 +689,7 @@ export const CERTIFIED_BLACKJACK = {
     },
     {
      "id": "true-count-1",
-     "label": "True count +1: 2 units (20)",
+     "label": "True count +1: 20",
      "when": {
       "compare": {
        "value": "true-count"
@@ -713,7 +713,7 @@ export const CERTIFIED_BLACKJACK = {
     },
     {
      "id": "true-count-2",
-     "label": "True count +2: 4 units (40)",
+     "label": "True count +2: 40",
      "when": {
       "compare": {
        "value": "true-count"
@@ -737,7 +737,7 @@ export const CERTIFIED_BLACKJACK = {
     },
     {
      "id": "true-count-3",
-     "label": "True count +3: 6 units (60)",
+     "label": "True count +3: 60",
      "when": {
       "compare": {
        "value": "true-count"
@@ -761,7 +761,7 @@ export const CERTIFIED_BLACKJACK = {
     },
     {
      "id": "true-count-4",
-     "label": "True count +4 or more: 8 units (80)",
+     "label": "True count +4 or more: 80",
      "when": {
       "compare": {
        "value": "true-count"
