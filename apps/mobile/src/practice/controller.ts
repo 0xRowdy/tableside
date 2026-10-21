@@ -27,6 +27,7 @@ import {
   isPlayCorrection,
   quarantineStatus,
   readPermittedView,
+  stopCause,
   StrategySpecificationError,
   streamIdentityFromEntropy,
   type ActivitySpecification,
@@ -1015,8 +1016,8 @@ export class PracticeController {
     this.facts = facts;
     this.pending = null;
     this.suspension = null;
-    // Final settlement already started: the stop path is under way and play never reopens.
-    this.stopping = decoded.state.phase === 'final-settlement' ? (this.stopping ?? 'stop') : null;
+    // Final settlement already started: the stop path is under way, for the cause its request-stop recorded, and play never reopens.
+    this.stopping = decoded.state.phase === 'final-settlement' ? stopCause(decoded.state) : null;
     this.publish();
   }
 
