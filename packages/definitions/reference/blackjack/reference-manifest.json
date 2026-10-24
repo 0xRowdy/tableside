@@ -1,0 +1,169 @@
+{
+  "generated": "2026-09-14 (sampling, two-card and first occurrence pass) to 2026-09-15 00:09 MDT (supplementary pass, final files, freeze)",
+  "issue": "https://github.com/0xRowdy/true-count/issues/15",
+  "report": "docs/research/blackjack-coaching-validation.md",
+  "calculator": {
+    "name": "Eric Farmer, blackjack (GPL-3.0-or-later), not vendored",
+    "repository": "https://github.com/possibly-wrong/blackjack",
+    "commit": "a1f7dbb74266fb39296292bdff568b076120a61c",
+    "files_used": [
+      "src/blackjack.cpp",
+      "src/blackjack.h"
+    ],
+    "build": "g++ (GCC) 16.2.1, -O2 -std=c++17, farmer_driver.cpp compiled against the pinned source"
+  },
+  "toolchain": {
+    "python": "3.14.7 (standard library only)",
+    "platform": "Linux x86_64, 8 cores"
+  },
+  "methodology": {
+    "objective": "highest expected net return per original bet; legal and funding restrictions through the validated fallback",
+    "state_weighting": "default configuration (six decks, 75% penetration finishing the cut-card round, learner alone, every spot on the preset's total-dependent basic table, no insurance), frequency-weighted; one curriculum per rule set (S17, H17)",
+    "continuation": "taught total-dependent table (tdb) for later decisions and split hands",
+    "tie_handling": "ties within tolerance resolve toward the basic action that adds no wager; no running-count sign exceptions",
+    "tolerance": "0.001 of the original bet; a bin is decisive only beyond max(0.001, 2 SE)",
+    "true_count": "RC of exposed cards / physical cards remaining to the nearest half deck (ties upward, minimum 0.5), truncated toward zero",
+    "occurrence_weighting": "all-occurrence threshold = (1 - f) * two-card state estimate + f * multi-card/post-split occurrence estimate per bin, f = measured population share",
+    "funding_rule": "fund hands in play order; the earliest live hand that prescribes a double receives the last affordable wager; later hands use their fallback"
+  },
+  "sampling": {
+    "round_start_states": {
+      "script": "sample_shoe_states.py",
+      "shoes_per_configuration": 400000,
+      "seeds": {
+        "p75_n0": 101,
+        "p50_n0": 102,
+        "p80_n0": 103,
+        "p75_n4": 104,
+        "h17nols_p75_n0": 105
+      },
+      "reservoir_cap": 2500,
+      "subsample_caps": {
+        "main": 1200,
+        "stability": 400
+      },
+      "subsample_seeds": {
+        "p75_n0": 11,
+        "p50_n0": 12,
+        "p80_n0": 13,
+        "p75_n4": 14,
+        "h17nols_p75_n0": 15
+      },
+      "main_states_evaluated": 34967,
+      "main_rounds": 17287008
+    },
+    "decision_occurrences": {
+      "script": "sample_decisions.py",
+      "replicas": 8,
+      "shoes_per_replica": 400000,
+      "rounds": 138301682,
+      "learner_decisions": 179621030,
+      "occurrences_in_population": 36133337,
+      "seeds": [
+        201,
+        202,
+        203,
+        204,
+        205,
+        206,
+        207,
+        208
+      ],
+      "reservoir_cap_per_stratum": 150,
+      "subsample": {
+        "script": "aggregate_occurrences.py prepare",
+        "focus": "t-1..t+1 around every two-card tolerance threshold",
+        "caps": "focus non-original 200 / focus original two-card 50 / other 6 / tail 2",
+        "seed": 21,
+        "occurrences_valued": 60147
+      },
+      "supplement": {
+        "script": "aggregate_occurrences.py supplement",
+        "focus": "t-2..t+2 around every curriculum two-card threshold",
+        "cap": 200,
+        "seed": 22,
+        "strata_redrawn": 120,
+        "occurrences_added": 16407,
+        "thin_occurrences_dropped": 528,
+        "occurrences_valued_total": 76026
+      },
+      "support_rule": "a bin with non-original share >= 5% is usable only with >= 50 sampled non-original occurrences"
+    },
+    "monte_carlo": {
+      "script": "mc_check.py",
+      "trials_per_cell": 8000000,
+      "seed": 1,
+      "worker_seeds": "1000-1007"
+    },
+    "insurance_simulation": {
+      "script": "insurance_sim.py",
+      "shoes": 300000,
+      "seed": 5
+    }
+  },
+  "frozen_files": {
+    "basic_tables": {
+      "basic_S17_LS.csv": "77fd89fe6491380c15d077a1e58eea24739ea87ae7db89a8fac11b9c096e63d8",
+      "basic_S17_noLS.csv": "8c9c38381e60bd11eecb8eed3c0e434efcfed246c5fc6fd9c04819382fca47f7",
+      "basic_H17_LS.csv": "ddcc77135aa6a0be5aeed62a71d052732a46324d5ea29cf76dd3eab55c96c36e",
+      "basic_H17_noLS.csv": "8918f41bd80a34065ed771a255ee6d273efd4f22ee7fac7ccf2c262b04f7c745",
+      "tables_S17_LS.md": "9e276f09ad7adc96c28cc35ed1ae8019dafd249bbf1b37b04487fd7abd37f59e",
+      "tables_S17_noLS.md": "d854009b4092ca17fcfbe395305aafc8afa4e53816f7631bb1cbf1d1f2c9d005",
+      "tables_H17_LS.md": "50c37911c42e6916258e172895cc79b876c8e5a01806d4f39dc005116e4782cb",
+      "tables_H17_noLS.md": "e8a9fb2eeb7a24040e62ae2915b772c329f9689d37de8d5b2d62f12c87884b13"
+    },
+    "continuation_tables": {
+      "continuation_S17.csv": "b9a8fface72b73cacbabc2e5d8ae2f637591671846f27bd6fbb92bdf2d00f915",
+      "continuation_H17.csv": "7ebca8577e43f9e9003d8019928a5e991a666c25b0e124fc3ff9ec63876d0b32"
+    },
+    "final_indices": {
+      "indices_S17_final.csv": "46dae4e25b3fa4d54370bdee6fa40252bf6176f6169b43eda1c547dcd1f10754",
+      "indices_H17_final.csv": "38f20e116b5fbf9428823b6ba9d1cebbd9fab39221691dbf3e2c666c98a09719"
+    },
+    "comparators": {
+      "wizard_appendix9_6deck.csv": "2f6f6bf709cf7b8977db3cbb88fba4101d2235fa651c40f8ff95945d49469ecf",
+      "published_indices.csv": "65faf68d59c96ff49e78208762c6f88ce5ddd60105e3092cf85a56a29a6775fd"
+    },
+    "index_evidence": {
+      "indices_p75_n0_S17_tdb_thresholds.csv": "f6f5ba34c8af7d95c84355394a96517609881f94ddf6ee56b1d3bf0a7db081b4",
+      "indices_p75_n0_S17_tdb_bins.csv": "35a45db3441ab8f314c0354fcaae6ca3be3709e2499d0ebf50d331f82f0e8c22",
+      "indices_p75_n0_H17_tdb_thresholds.csv": "14b66b09a2c2b01e300f485056da7da007eed4df3f88aaf636e971cb83ffd56c",
+      "indices_p75_n0_H17_tdb_bins.csv": "52e82a5031dc1bd8d44397112883d411ab3df3f6aa94aa6bee3e397028dcab37",
+      "indices_p75_n0_insurance_bins.csv": "7460d756c4655f039ce153b9157018e855bc06f1c03174ed322d1651abf25de4",
+      "occurrences_S17_tdb_thresholds.csv": "a62f13aa32013137ed331c5256fec1950778412da9f7475abb5b5bd86fab3890",
+      "occurrences_S17_tdb_bins.csv": "da9f20886c3b00b87f02130e9ed5641d7f7573ebac8bca3077ba0cde0d10199b",
+      "occurrences_H17_tdb_thresholds.csv": "c8d224300417b53266ff9e69b8fbb0e14c6ff7d8215d951bcb24476810de0d7d",
+      "occurrences_H17_tdb_bins.csv": "2334d0add9689147452c174b1969b328052fbf03e0648cb113d62fa6b047c2a6"
+    }
+  },
+  "scripts": {
+    "farmer_driver.cpp": "a9c8a07e67d069adc18fe3568966c012e53c9bd690314eae80125b3dd3b5f7ae",
+    "parse_wizard_appendix9.py": "0e57c126207a643a03484ca4b79c9d5affdd626a0e776a0b47ad084f89f26fe0",
+    "compare_appendix9.py": "1366ff0826602ea42129e16ab62edabb43583026385bebdf51da2c0b980105d2",
+    "generate_basic_tables.py": "1a765796e33ee70e1eb23709d206fe26af2172a1073b97de9c2755e59eeed669",
+    "compare_basic_sources.py": "dc935905a98ba6a844124d616bca172d7a8df64614a5975a07fe29b596496dd8",
+    "check_pair_flips.py": "bdb59dfc619d97ca94429e37175bb793ab42c52a32f281d678a2a8520451f813",
+    "mc_check.py": "606daba63a69af4b1933bf31a3a20627f9cd8f368a1671d1cf63ee7a3a578285",
+    "sample_shoe_states.py": "2ca19e0e33c3f0d459c8e8204d0381fde0b78a496697f373c4d12b4ff7353911",
+    "evaluate_indices.py": "ef586c1fc47bdea352fbbe9412635ef73c23173e494f5a02f06f4ffcc702b0e2",
+    "run_driver_parallel.py": "08109ad1b026489ca892b3d0f234f01ca768f48dd08653351e43b9d5f6d1b166",
+    "subsample_states.py": "13408df463b4782adb0d3896045c15a9de4107586f8d29461f2f5ccf6d80b140",
+    "insurance_sim.py": "d9a7f982e09cc9f4e8db6a023c8fe681342c2d406a40f79225629967572785af",
+    "sample_decisions.py": "04ba0e929ae726fdefd9a5ee3c218b89aaff8b74bdd3ba8710e56778937819c2",
+    "aggregate_occurrences.py": "f01fb480addef55b39a1faa292f522bb5e50601461303d8a7d5fce2fee2e7a38",
+    "make_final_indices.py": "1a27a0a6020c33607dd115824ec9ed9644f01ea1350ea186b7917f6bfb72797b",
+    "freeze_reference.py": "5f8b2f188c76cf78928cdd13bfeb52a7b8352208ef33d5706e89b7f0a5b87f20",
+    "format_occurrence_tables.py": "a7b08f8db8e5623b0b12477310fd5b27a3e44e2dddc393d4e5e7cdbaac29b263",
+    "check_direct_estimator.py": "17c647c22829d269e8e5b2c9bae05755e0575c178e980cd937e2fa61bf0de70a",
+    "compare_indices.py": "c991209b6495b371540a2e050a59c9d1fa8dff4fab3e0ed9294be4ee448bb6ea",
+    "run_fresh.sh": "bddc7babf7e398a0b1d53b30545d4e8434e7b96e3c1fd62ad7bbf7ceee0e7b90",
+    "run_split_checks.sh": "99eaa557c74ebab8f897a2b98d5c13db0bc8519822a359fe3d95e52d482df82a",
+    "run_sampling.sh": "78fe474f213b9b7e1d0d0a00801546bf4ecc8c11bfe791dd028c4119a93ac17d",
+    "run_indices.sh": "1e9f4580ab8743e732117ee40318a92f49c8ce2e5a9130d28414cf26fc3f048d",
+    "run_all_indices.sh": "3aa0fe2dfe9f5d8551c2e5a91b8dc6aa7779d21844f8d60f4bf2e0eb5de94294",
+    "run_decisions.sh": "aafee06d1d38cfc702f065d81e28efa47486f8650c30908e929fea96634d47e2",
+    "run_occurrences.sh": "adc5abf5cfe1bef2df19abca83c270dc5cae414cc167721f87e51acc49afeded",
+    "run_supplement.sh": "e74ac6fe9039d482aa1189077ac6f0ad6515903db1ca05b393c979fbb07b22b3",
+    "run_multicard_checks.sh": "5a65a6ad57008e6aceaf4a827d01e8d3a6d3c339d38a7615962dcb8225c0fbf3"
+  }
+}

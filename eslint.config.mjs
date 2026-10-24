@@ -70,7 +70,7 @@ const portabilityRules = (allowedImports) => ({
 });
 
 export default defineConfig(
-  { ignores: ['**/node_modules/**', 'apps/mobile/**', 'harness-reports/**'] },
+  { ignores: ['**/node_modules/**', 'apps/mobile/**', 'harness-reports/**', '.claude/**'] },
   ...tseslint.configs.recommended,
   { files: ['packages/engine/**/*.ts', 'packages/definitions/**/*.ts'], plugins: { portability } },
   {
@@ -84,5 +84,17 @@ export default defineConfig(
   {
     files: ['packages/definitions/**/*.ts'],
     rules: portabilityRules(['@tableside/engine']),
+  },
+  {
+    // Build-time checks and tests of the definitions package, and the engine's
+    // checkpoint recorder, run on Node and never ship; only src/ (and the
+    // engine's cross-runtime suite) must stay portable.
+    files: ['packages/definitions/scripts/**/*.ts', 'packages/definitions/test/**/*.ts', 'packages/engine/scripts/**/*.ts'],
+    rules: {
+      'no-restricted-imports': 'off',
+      'portability/no-relative-outside-package': 'error',
+      'no-restricted-globals': 'off',
+      'no-console': 'off',
+    },
   },
 );

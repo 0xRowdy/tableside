@@ -4,10 +4,12 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./test-suite": "./test/suite.ts"
+    "./test-suite": "./test/suite.ts",
+    "./recorded-checkpoints": "./test/recorded/index.ts"
   },
   "scripts": {
-    "typecheck": "tsc -p .",
+    "typecheck": "tsc -p . && tsc -p tsconfig.node.json",
+    "record-checkpoints": "tsx scripts/record-checkpoints.ts",
     "test": "tsx ../harness/src/cli.ts node"
   },
   "devDependencies": {

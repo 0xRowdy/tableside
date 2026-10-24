@@ -7,7 +7,7 @@
 | `apps/mobile` | The Tableside app: React Native, Expo development builds, bundled Hermes. Routes live in `src/app`. |
 | `packages/engine` | The shared game engine: portable TypeScript that runs unchanged on Hermes and Node. |
 | `packages/definitions` | Versioned game content: rule presets, built-in strategies, the blackjack reference. |
-| `packages/runner` | The headless runner that runs the engine on Node (standardized simulation arrives with spec 6). |
+| `packages/runner` | The headless runner: standardized sessions of any built-in strategy on a benchmark profile, on Node (`pnpm --filter @tableside/runner start --strategy <id> --profile <id> --key <16 hex>`). Spec 6 adds the coordinator and analysis. |
 | `packages/harness` | The cross-runtime test harness. See [cross-runtime-harness.md](cross-runtime-harness.md). |
 
 ## Toolchain
@@ -60,7 +60,17 @@ The engine and definitions packages must run unchanged on Hermes and Node, so `e
 - relative imports only, and only within the package (definitions may also import the engine by name), so no React, Expo, Node, network, account, advertising or subscription packages;
 - no clocks (`Date`, `performance`), timers, network, storage, platform globals, `Math.random`, `Intl` or `console`.
 
-The engine has no package dependencies, and its TypeScript config includes only the standard ES library. `tests/engine-portability.test.ts` checks that the rule rejects each category.
+The engine has no package dependencies, and its TypeScript config includes only the standard ES library. `tests/engine-portability.test.ts` checks that the rule rejects each category. Only `src/` ships: the definitions package's `scripts/` and `test/` run on Node and may use it.
+
+## Blackjack reference
+
+`packages/definitions/reference/blackjack` holds the certified research files byte for byte (research/blackjack-coaching-validation@ae3776d) and their `reference-manifest.json`. The app can't read files, so `src/blackjack/reference-files.generated.ts` embeds the same bytes. The package's `build` script (also the first step of its `typecheck`) fails if the manifest, any file's SHA-256, or the embedded copy differs. Never edit the files; after a new certified freeze, copy it in and run `pnpm --filter @tableside/definitions reference:write`. No research script or calculator code is copied: `test/reference-integrity.test.ts` checks for them.
+
+## Releases: recorded checkpoints and the quarantine list
+
+Each release must keep resuming every unfinished practice session an earlier release can leave (spec 1, *Durability › Updates*). `pnpm --filter @tableside/engine record-checkpoints` writes `packages/engine/test/recorded/engine-<version>-schema-<schema>.ts` with this build's checkpoints in each game and unfinished phase, and the outcomes it reached from them; add a new module to `test/recorded/index.ts`. The build under development must have a recording (`tests/recorded-checkpoints.test.ts` fails after a schema or engine version bump until it does); while it is unreleased, re-record it with `--replace` when its behaviour changes, and delete an older unreleased one. When you cut a release, add its recording's SHA-256 to `test/recorded/released.json`. Released recordings are never regenerated, edited or removed, so an unfinished session is never aged out: the engine suite decodes every recording directly with the current build (skipped versions included) and checks the recorded outcomes. A change that breaks one needs a migration in `decodeCheckpoint`, or the old behaviour kept for that pinned engine identity. A checkpoint the build can't run (a rollback) is `unsupported`: the controller leaves it untouched and asks for the update.
+
+A proven engine defect goes in `packages/definitions/src/quarantine.ts`: add an entry naming the affected identities and bump the list's version; never edit or remove an entry. Completed records are judged against it on every read (never stored), and an unfinished session it names is marked incomplete and explained instead of resuming.
 
 ## Accessibility notes for the shell
 

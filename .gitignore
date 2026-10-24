@@ -19,3 +19,9 @@ apps/mobile/web-build/
 
 # Cross-runtime harness reports
 harness-reports/
+
+# Python bytecode (the engine reference script)
+__pycache__/
+
+# Python bytecode
+*.pyc
