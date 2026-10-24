@@ -12,7 +12,7 @@ import { Button } from '@/components/Button';
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/theme/tokens';
 
-import { formatUnits, sumUnits } from './units';
+import { formatUnits, sumUnits, wholeUnits } from './units';
 
 /** Above this text scale the sheet becomes a full-screen page. */
 const FULL_SCREEN_FONT_SCALE = 1.35;
@@ -23,8 +23,8 @@ const MAX_DIGITS = 13;
 function parseDraft(draft: string): string | null {
   const digits = draft.replace(/[,\s]/g, '');
   if (!/^\d+$/.test(digits) || digits.length > MAX_DIGITS) return null;
-  const amount = BigInt(digits);
-  return amount > 0n ? amount.toString() : null;
+  const amount = wholeUnits(digits);
+  return amount !== '0' ? amount : null;
 }
 
 /** True when the latest committed transition refused a rebuy of exactly this amount. */

@@ -15,7 +15,7 @@ import { RECONNECT_TO_VERIFY, type StartProblem } from '@/practice/controller';
 import { usePractice } from '@/practice/PracticeProvider';
 import { space } from '@/theme/tokens';
 
-import { formatUnits, lessUnits, withoutGrouping } from '../units';
+import { formatUnits, lessUnits, wholeUnits, withoutGrouping } from '../units';
 
 import { AllowanceCard, AmountField, InlineProblem, ProblemBanner, Section, type AmountInput } from './SetupParts';
 import { useSetupPreferences } from './SetupPreferencesProvider';
@@ -64,7 +64,7 @@ export function useFunding(game: GameId, opening: Opening | null) {
   const training = terms.funding.source === 'training-bankroll' ? terms.funding : null;
   const digits = withoutGrouping(text);
   // A buy-in that isn't positive whole units is explained at Start, not as a shortfall.
-  const funds = training ? training.available : wholeDigits(digits) && BigInt(digits) > 0n ? BigInt(digits).toString() : null;
+  const funds = training ? training.available : wholeDigits(digits) && wholeUnits(digits) !== '0' ? wholeUnits(digits) : null;
   const short = opening !== null && funds !== null && lessUnits(funds, opening.amount);
 
   const change = (next: string) => {
@@ -81,7 +81,7 @@ export function useFunding(game: GameId, opening: Opening | null) {
     const ok = wholeDigits(digits);
     setNotWhole(!ok);
     if (!ok) return feedback.cue('input-rejected');
-    const buyIn = BigInt(digits).toString();
+    const buyIn = wholeUnits(digits);
     await begin({ buyIn, fundingSource: 'practice-funding' });
     if (controller.snapshot().status === 'active') await preferences.rememberBuyIn(game, buyIn);
   };

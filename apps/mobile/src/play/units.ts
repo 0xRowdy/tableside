@@ -1,7 +1,7 @@
 // Amounts on screen and aloud, for every table. Plain units (no currency
 // symbol); formatting never changes a ledger value.
 
-import { add, compare, decodeMoney, encodeMoney, money, mul, type Wager } from '@tableside/engine';
+import { add, compare, decodeMoney, encodeMoney, money, mul, sub, type Wager } from '@tableside/engine';
 
 /**
  * Canonical money text with thousands separators: "1000" → "1,000",
@@ -41,6 +41,13 @@ export function withoutGrouping(text: string): string {
   return /^[+-]?\d{1,3}(,\d{3})+(\.\d+)?$/.test(trimmed) ? trimmed.replace(/,/g, '') : trimmed;
 }
 
+/** Canonical whole units from typed digits: "0042" → "42". */
+export const wholeUnits = (digits: string): string => BigInt(digits).toString();
+
+/** Canonical money text from a decimal's digits: ("12", "50") → "25/2". */
+export const decimalUnits = (whole: string, fraction: string): string =>
+  encodeMoney(money(BigInt(whole + fraction), 10n ** BigInt(fraction.length)));
+
 /** "+120", "−85" (minus sign), "0". */
 export function formatSigned(amount: string): string {
   if (amount.startsWith('-')) return `−${formatUnits(amount.slice(1))}`;
@@ -56,6 +63,9 @@ export function speakSigned(amount: string): string {
 /** The exact sum of canonical amounts, fractions included ("2045/2" + "10" is "2065/2"). */
 export const sumUnits = (...amounts: readonly string[]): string =>
   encodeMoney(amounts.reduce((sum, amount) => add(sum, decodeMoney(amount)), money(0n)));
+
+/** The exact difference a − b ("10" − "25" is "-15"). */
+export const differenceUnits = (a: string, b: string): string => encodeMoney(sub(decodeMoney(a), decodeMoney(b)));
 
 /** The exact total a list of bets stakes. */
 export const totalStake = (bets: readonly Wager[]): string => sumUnits(...bets.map((bet) => bet.amount));
