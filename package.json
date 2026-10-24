@@ -9,7 +9,7 @@
   "scripts": {
     "preinstall": "node scripts/require-pnpm.mjs",
     "typecheck": "pnpm -r --parallel typecheck",
-    "lint": "node scripts/check-case-collisions.mjs && eslint . && pnpm --filter @tableside/mobile lint",
+    "lint": "node scripts/check-case-collisions.mjs && node scripts/check-glossary-copy.mjs && eslint . && pnpm --filter @tableside/mobile lint",
     "test": "vitest run && pnpm --filter @tableside/engine test && pnpm --filter @tableside/mobile test",
     "harness": "pnpm --filter @tableside/harness harness"
   },
