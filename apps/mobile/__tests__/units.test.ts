@@ -3,7 +3,7 @@
 // fractional balance ("2045/2" is 1,022.5), and every sum the screens show must
 // take it. Expected values are worked by hand.
 
-import { formatUnits, halfUnits, smallerUnits, sumUnits, totalStake } from '@/play/units';
+import { decimalUnits, differenceUnits, formatUnits, halfUnits, smallerUnits, sumUnits, totalStake, wholeUnits } from '@/play/units';
 
 describe('amount arithmetic', () => {
   it('adds fractional balances exactly', () => {
@@ -25,5 +25,17 @@ describe('amount arithmetic', () => {
   it('picks the smaller of two amounts, fractions included', () => {
     expect(smallerUnits('2045/2', '1023')).toBe('2045/2');
     expect(smallerUnits('10', '5')).toBe('5');
+  });
+
+  it('reads typed digits as canonical money', () => {
+    expect(wholeUnits('0042')).toBe('42');
+    expect(wholeUnits('000')).toBe('0');
+    expect(decimalUnits('12', '50')).toBe('25/2');
+    expect(decimalUnits('7', '')).toBe('7');
+  });
+
+  it('subtracts exactly, below zero included', () => {
+    expect(differenceUnits('2045/2', '10')).toBe('2025/2');
+    expect(differenceUnits('10', '25')).toBe('-15');
   });
 });
