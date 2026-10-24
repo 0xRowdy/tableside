@@ -20,6 +20,10 @@ Single-context: `CONTEXT.md` at the repo root, ADRs under `docs/adr/`. See `docs
 
 Reading or matching screens: see `docs/agents/design-frames.md`.
 
+### Code review
+
+Reviewing code: apply `CODING_STANDARDS.md`.
+
 ### Spec tickets
 
 Implementing or merging a spec ticket: see `docs/agents/implement-spec.md`.
