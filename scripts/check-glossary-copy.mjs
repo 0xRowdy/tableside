@@ -9,10 +9,11 @@
 
 import { readdirSync, readFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import ts from 'typescript';
 
-const ROOT = new URL('..', import.meta.url).pathname;
+const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const SOURCE = join(ROOT, 'apps/mobile/src');
 
 // Avoided only as the name of something the glossary names otherwise, so a
