@@ -1,6 +1,6 @@
 // Fails when player copy in apps/mobile/src uses a term CONTEXT.md lists
-// under "Avoid". Copy is JSX text and string literals that read as words (a
-// space or a capital letter), so identifiers like 'alert' pass. Phrases in
+// under "Avoid". Copy is all JSX text, and string literals that read as words
+// (a space or a capital letter), so identifiers like 'alert' pass. Phrases in
 // glossary-copy-allowlist.json are final-frame copy and pass, matched exactly.
 //
 // Checked: avoided terms with no qualifier, or qualified "(as a term)". A
@@ -54,7 +54,7 @@ function copyIn(source) {
     else if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) {
       if (!ts.isLiteralTypeNode(node.parent) && !ts.isImportDeclaration(node.parent) && !ts.isExportDeclaration(node.parent)) text = node.text;
     } else if (ts.isTemplateExpression(node)) text = [node.head.text, ...node.templateSpans.map((span) => span.literal.text)].join(' … ');
-    if (text !== null && /\s|[A-Z]/.test(text.trim())) found.push({ text, line: source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1 });
+    if (text !== null && (ts.isJsxText(node) || /\s|[A-Z]/.test(text.trim()))) found.push({ text, line: source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1 });
     ts.forEachChild(node, visit);
   };
   visit(source);
