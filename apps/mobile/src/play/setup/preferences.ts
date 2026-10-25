@@ -6,6 +6,8 @@ import { FUNDING_CEILING } from '@tableside/engine';
 
 import { LAUNCH_GAMES, type GameId } from '@/games';
 
+import { lessUnits } from '../units';
+
 /** Where the preferences live on this device. */
 export interface SetupPreferencesStorage {
   read(): Promise<string | null>;
@@ -16,7 +18,7 @@ export interface SetupPreferencesStorage {
 export type RememberedBuyIns = Readonly<Partial<Record<GameId, string>>>;
 
 /** A buy-in worth keeping: canonical whole units from 1 to the funding ceiling. */
-const keepable = (amount: unknown): amount is string => typeof amount === 'string' && /^[1-9]\d*$/.test(amount) && amount.length <= 13 && BigInt(amount) <= FUNDING_CEILING;
+const keepable = (amount: unknown): amount is string => typeof amount === 'string' && /^[1-9]\d*$/.test(amount) && amount.length <= 13 && !lessUnits(FUNDING_CEILING.toString(), amount);
 
 function parse(text: string | null): RememberedBuyIns {
   if (text === null) return {};
