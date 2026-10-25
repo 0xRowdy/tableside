@@ -35,4 +35,4 @@ Run from the checkout that has the integration branch.
 
 ## Recorded checkpoints
 
-A change to `STATE_SCHEMA_VERSION` or to engine behaviour fails `tests/recorded-checkpoints.test.ts` until the build's recording is redone; the failure prints the steps, and `docs/development.md` (*Releases*) explains the rule. Commit the new recording referencing the ticket.
+A bump to `STATE_SCHEMA_VERSION` or `ENGINE_VERSION` fails `tests/recorded-checkpoints.test.ts` until this build has a recording; the failure prints the steps. A behaviour change without a bump never fails that test, and fails the engine suite only when a recorded outcome moves, so after any engine behaviour change run `pnpm --filter @tableside/engine record-checkpoints --replace` yourself. `docs/development.md` (*Releases*) explains the rule. Commit the new recording referencing the ticket.
