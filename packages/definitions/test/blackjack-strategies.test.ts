@@ -57,7 +57,7 @@ describe('blackjack built-in strategies', () => {
     }
   });
 
-  it('a counting mode may add the Hi-Lo bet schedule: 1 unit below +1, 2 at +1, 4 at +2, 6 at +3, 8 at +4 or more (10-unit base)', () => {
+  it('a counting mode may add the Hi-Lo bet schedule: 10 below +1, 20 at +1, 40 at +2, 60 at +3, 80 at +4 or more', () => {
     // Spec #51, Counting (Hi-Lo): the schedule by integer true count; a base unit of 10.
     const expected: [number, string][] = [[-3, '10'], [0, '10'], [1, '20'], [2, '40'], [3, '60'], [4, '80'], [9, '80']];
     for (const preset of PRESETS) {

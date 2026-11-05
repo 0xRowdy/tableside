@@ -199,14 +199,15 @@ function nextMove(session: StandardizedSession): { command: Command; stop?: Stan
   const game = gameModule(state.identities.game);
   const stop = (cause: StandardizedStopCause, opportunities = state.turn) => ({ command: { kind: 'request-stop' } as Command, stop: cause, opportunities });
   if (state.turn >= session.horizon) return stop('horizon');
-  if (state.phase === 'cycle-completion') {
+  if (state.phase === 'cycle-completion' || state.phase === 'strategy-settlement') {
     switch (run.cycleEnd) {
       case 'completed':
-        // The runner policy: a completed cycle restarts at once with the remaining balance.
-        return { command: { kind: 'restart-cycle' } };
+        // The runner policy: a completed cycle restarts at once with the remaining balance, once its contracts settle.
+        return { command: { kind: state.phase === 'strategy-settlement' ? 'advance-strategy-settlement' : 'restart-cycle' } };
       case 'cap':
       case 'stop':
       case 'envelope':
+        // The session stops here; any contracts settle in final settlement, outside its opportunities.
         return stop(run.cycleEnd);
       default:
         throw new StandardizedRunError(`a cycle ended by ${String(run.cycleEnd)}`);

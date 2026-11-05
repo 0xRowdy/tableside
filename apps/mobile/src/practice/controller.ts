@@ -27,6 +27,7 @@ import {
   isPlayCorrection,
   quarantineStatus,
   readPermittedView,
+  stopCause,
   StrategySpecificationError,
   streamIdentityFromEntropy,
   type ActivitySpecification,
@@ -766,7 +767,9 @@ export class PracticeController {
   /**
    * The automatic, no-tap steps: settle a revealed spin or roll, run the stop
    * path and final settlement (craps rolls on, one committed step per roll,
-   * until its contracts settle), complete. A suspension stops them where it applies.
+   * until its contracts settle), complete, and strategy settlement (the same
+   * rolls for the contracts a strategy left when its cycle ended or it stopped;
+   * a stop hands them to final settlement). A suspension stops them where it applies.
    */
   private async drive(): Promise<void> {
     for (;;) {
@@ -792,6 +795,11 @@ export class PracticeController {
         // The stop path, between turns: removable wagers come back, then final settlement.
         // A blackjack hand still in play finishes first; the player's actions stay open.
         if (!settled(await this.send(stopCommand(this.stopping)))) return;
+      } else if (phase === 'strategy-settlement') {
+        // Like final settlement, these rolls only settle what is already committed: no access question, no charge.
+        await this.adapters.clock.sleep(ENDING_STEP_MS);
+        if (this.suspension) return;
+        if (!settled(await this.send({ kind: 'advance-strategy-settlement' }))) return;
       } else {
         return;
       }
@@ -1015,8 +1023,8 @@ export class PracticeController {
     this.facts = facts;
     this.pending = null;
     this.suspension = null;
-    // Final settlement already started: the stop path is under way and play never reopens.
-    this.stopping = decoded.state.phase === 'final-settlement' ? (this.stopping ?? 'stop') : null;
+    // Final settlement already started: the stop path is under way, for the cause its request-stop recorded, and play never reopens.
+    this.stopping = decoded.state.phase === 'final-settlement' ? stopCause(decoded.state) : null;
     this.publish();
   }
 

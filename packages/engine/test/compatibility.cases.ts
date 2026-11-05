@@ -35,7 +35,7 @@ export const compatibilityCases: TestCase[] = [
       t.record('recorded builds', builds);
       for (const build of builds) {
         t.equal(build.games, ['blackjack', 'craps', 'roulette']);
-        t.equal(build.phases, ['correction', 'cycle-completion', 'final-settlement', 'open-decision', 'revealing-outcome', 'settled-outcome']);
+        t.equal(build.phases, ['correction', 'cycle-completion', 'final-settlement', 'open-decision', 'revealing-outcome', 'settled-outcome', 'strategy-settlement']);
       }
     },
   },

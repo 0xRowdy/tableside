@@ -142,6 +142,25 @@ describe('cues during blackjack play', () => {
     expect(ports.sound.played.map((play) => play.cue)).toEqual(['stake-set', 'card-dealt', 'card-dealt', 'net-win']);
     expect(ports.haptics.fired).toEqual(['selection', 'success']);
   });
+
+  // A stream whose first round deals 2♥ J♦ against an A♥ up with a 2♠ in the hole, then 5♥.
+  it('gives one net-result cue for a round with insurance: the insurance settled at the peek joins the round', async () => {
+    const adapters = substituteAdapters({ clock: new FakeClock(undefined, true), words: [3, 0x5441424c, 0x45534944, 0x45] });
+    const controller = new PracticeController(adapters);
+    const ports = substituteFeedbackPorts(null);
+    const settings = new DeviceSettings(ports.storage);
+    await settings.load();
+    followPractice(controller, new FeedbackService(ports, settings));
+    await controller.load();
+    await controller.start({ game: 'blackjack', buyIn: '1000', rules: blackjackRules() });
+
+    await controller.placeWager('hand-1', '10');
+    await controller.beginTurn();
+    await controller.insure('5'); // no dealer blackjack: the insurance loses 5 at the peek
+    await controller.play('stand'); // the dealer's A,2 draws the 5♥ to 18 over 12: the hand loses 10
+
+    expect(ports.sound.played.map((play) => play.cue)).toEqual(['stake-set', 'card-dealt', 'stake-set', 'card-dealt', 'net-loss']);
+  });
 });
 
 describe('cues during craps play', () => {

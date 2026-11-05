@@ -104,6 +104,8 @@ export function statusText(view: BlackjackPermittedView): string {
       return 'Settled automatically';
     case 'final-settlement':
       return 'Final settlement';
+    case 'strategy-settlement':
+      return 'Settling the strategy\'s contracts';
     case 'completed':
       return 'Ended';
     case 'correction':

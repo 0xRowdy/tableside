@@ -528,7 +528,7 @@ describe('dispositions', () => {
     expect(active(controller.snapshot()).view.phase).toBe('revealing-outcome');
   });
 
-  it('after a restart in the stop path, resumes settlement but never reopens play', async () => {
+  it('after a restart in the stop path, resumes settlement but never reopens play, and still announces the access-ended stop', async () => {
     const { controller, next, clock, adapters } = await started({ autoClock: false });
     await controller.placeWager('red', '10');
     next.turn = { status: 'denied', provenance: 'test', disposition: 'stop' };
@@ -538,6 +538,8 @@ describe('dispositions', () => {
     const relaunched = new PracticeController({ ...adapters, store: adapters.store.reopen(), clock: new FakeClock(undefined, true) });
     await relaunched.load();
     expect(active(relaunched.snapshot()).view.legalCommands).toEqual(['advance-final-settlement']);
+    // The banner reads the cause the stop recorded, not the player's own stop.
+    expect(active(relaunched.snapshot()).ending).toBe('access-ended');
     await relaunched.resume();
 
     expect(relaunched.snapshot()).toMatchObject({ status: 'completed', result: { finalCashOut: '1000' } });

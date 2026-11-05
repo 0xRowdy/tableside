@@ -40,29 +40,27 @@ const MODE_NAMES: Readonly<Record<BlackjackMode, string>> = {
 export const countingMode = (mode: BlackjackMode) => mode === 'counting-with-basic' || mode === 'counting-with-deviations';
 const deviating = (mode: BlackjackMode) => mode === 'basic-with-deviations' || mode === 'counting-with-deviations';
 
-/** The strategy base unit (spec #51: defaults to 10). */
-export const BET_SCHEDULE_UNIT = 10;
-
-/** The Hi-Lo bet schedule: units by integer true count, from each band's lower edge (null: below +1). */
-export const BET_SCHEDULE: readonly { readonly from: number | null; readonly units: number }[] = [
-  { from: null, units: 1 },
-  { from: 1, units: 2 },
-  { from: 2, units: 4 },
-  { from: 3, units: 6 },
-  { from: 4, units: 8 },
+/**
+ * The Hi-Lo bet schedule: the amount bet by integer true count, from each
+ * band's lower edge (null: below +1). Spec #51 gives it as 1/2/4/6/8 times a
+ * base of 10; player copy states the amounts (Amendment 9 §7).
+ */
+export const BET_SCHEDULE: readonly { readonly from: number | null; readonly amount: string }[] = [
+  { from: null, amount: '10' },
+  { from: 1, amount: '20' },
+  { from: 2, amount: '40' },
+  { from: 3, amount: '60' },
+  { from: 4, amount: '80' },
 ];
 
 /** The schedule as betting instructions: the highest band the true count reaches wins by priority. */
 const scheduleInstructions = (): StrategyInstruction[] =>
-  BET_SCHEDULE.map(({ from, units }) => ({
+  BET_SCHEDULE.map(({ from, amount }) => ({
     id: from === null ? 'true-count-below-1' : `true-count-${from}`,
-    label:
-      from === null
-        ? `True count below +1: ${units} unit (${units * BET_SCHEDULE_UNIT})`
-        : `True count +${from}${from === 4 ? ' or more' : ''}: ${units} units (${units * BET_SCHEDULE_UNIT})`,
+    label: from === null ? `True count below +1: ${amount}` : `True count +${from}${from === 4 ? ' or more' : ''}: ${amount}`,
     when: from === null ? { always: true } : { compare: { value: 'true-count' }, op: 'ge', to: { lit: String(from) } },
     priority: from ?? 0,
-    bets: [{ target: { target: HAND_TARGET }, amount: { lit: String(units * BET_SCHEDULE_UNIT) } }],
+    bets: [{ target: { target: HAND_TARGET }, amount: { lit: amount } }],
   }));
 
 const LETTERS: Readonly<Record<string, string>> = { hit: 'H', stand: 'S', double: 'D', split: 'P', surrender: 'R' };

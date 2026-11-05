@@ -121,6 +121,9 @@ _Avoid_: failed session, cancelled session
 **Final settlement**:
 The automatic resolution of outstanding wagers when a practice session ends, after legally removable wagers are returned. No new bets are placed during it.
 
+**Strategy settlement**:
+The automatic resolution of the contracts a strategy leaves on the table (craps pass and come bets with their number set) when its cycle ends or the player stops it, after legally removable wagers are returned. No new bets are placed during it; the practice session stays open, and the cycle result (or uncoached play) follows.
+
 **Practice funding**:
 Simulated buy-ins and rebuys supplied to an ordinary practice session, rather than drawn from a shared spendable wallet. It is separate from the daily training bankroll and from casino-session balances.
 _Avoid_: bankroll, wallet, balance (as an account-wide pool)

@@ -104,7 +104,7 @@ describe('guided roulette practice', () => {
     const panel = within(await screen.findByTestId('correction-panel'));
     expect(panel.getByRole('header', { name: 'Before your spin' })).toBeOnTheScreen();
     expect(panel.getByText('Flat even-money bets 10 on Black.')).toBeOnTheScreen();
-    expect(panel.getByText('Matching instruction: "1 unit on your even-money target, every spin".')).toBeOnTheScreen();
+    expect(panel.getByText('Matching instruction: "10 on your even-money target, every spin".')).toBeOnTheScreen();
     expect(panel.getByText("You've set 25 on Red. Nothing has been placed yet.")).toBeOnTheScreen();
     expect(panel.getByText('Available for this spin: 1,000.')).toBeOnTheScreen();
     expect(announcements).toContain('Strategy check before your spin. Nothing has been placed yet.');
