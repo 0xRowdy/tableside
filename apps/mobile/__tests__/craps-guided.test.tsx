@@ -181,16 +181,20 @@ describe('guided craps practice', () => {
     await waitFor(() => expect(screen.getByText('Strategy stopped · playing on your own')).toBeOnTheScreen());
   });
 
-  it('Stop strategy says a committed pass line is never refunded', async () => {
+  it('Stop strategy says a committed pass line is never refunded, then the dice settle it on their own', async () => {
     await startGuided('Pass with odds');
     await setBet(/^Pass line and/, 'Pass line', '10');
     await roll(); // 8: the point
     await fireEvent.press(screen.getByRole('button', { name: 'Stop strategy' }));
-    expect(screen.getByLabelText(/^3\. Committed wagers settle automatically\. Pass line 10 can't be taken down or refunded/)).toBeOnTheScreen();
+    expect(screen.getByLabelText(/^3\. Committed wagers settle automatically\. Pass line 10 can't be taken down or refunded\. The dice roll on their own to settle them\./)).toBeOnTheScreen();
     // The dialog's own button comes after the strip's.
     const buttons = screen.getAllByRole('button', { name: 'Stop strategy' });
     await fireEvent.press(buttons[buttons.length - 1] as (typeof buttons)[number]);
+    // The next roll, 8, makes the point and pays the pass line; then play goes on uncoached.
     await waitFor(() => expect(screen.getByText('Strategy stopped · playing on your own')).toBeOnTheScreen());
-    expect(screen.getByLabelText('Pass line 10, ON, committed')).toBeOnTheScreen();
+    announced('The dice roll on their own to settle Pass line 10. No new bets.');
+    expect(screen.getByLabelText('Session balance 1,010')).toBeOnTheScreen();
+    expect(screen.queryByLabelText('Pass line 10, ON, committed')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Roll' })).toBeOnTheScreen();
   });
 });

@@ -31,7 +31,7 @@ const SIDE_BY_SIDE_MAX_FONT_SCALE = 1.35;
 
 
 function phaseSteps(view: PermittedView): PhaseStep[] {
-  const reached = { 'open-decision': 0, correction: 0, 'revealing-outcome': 1, 'settled-outcome': 2, 'cycle-completion': 2, 'final-settlement': 2, completed: 3 }[view.phase];
+  const reached = { 'open-decision': 0, correction: 0, 'revealing-outcome': 1, 'settled-outcome': 2, 'cycle-completion': 2, 'strategy-settlement': 2, 'final-settlement': 2, completed: 3 }[view.phase];
   return ['Betting', 'Spin', 'Settle'].map((label, index) => ({
     label,
     state: index < reached ? 'done' : index === reached ? 'current' : 'upcoming',

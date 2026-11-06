@@ -76,7 +76,7 @@ import { ENGINE_VERSION } from './version';
 export type { Limit, VersionedIdentity } from './shape';
 
 /** The state-schema version, kept apart from engine, rule and protocol identities. */
-export const STATE_SCHEMA_VERSION = 6 as const;
+export const STATE_SCHEMA_VERSION = 7 as const;
 
 /** Fields every activity specification has, whatever the game. */
 interface SpecificationBase {
@@ -124,6 +124,13 @@ export type Phase =
   | 'settled-outcome'
   /** A strategy cycle ended; another starts only explicitly. */
   | 'cycle-completion'
+  /**
+   * A strategy cycle ended, or the strategy stopped, with contracts still on
+   * the table (craps pass and come bases with their number set): automatic
+   * rolls resolve only those, with no new bets, before the cycle result (or,
+   * after Stop strategy, before play goes on uncoached).
+   */
+  | 'strategy-settlement'
   | 'final-settlement'
   | 'completed';
 
@@ -253,7 +260,7 @@ export interface StrategyView {
    * their own (null where the strategy doesn't assess that kind), and every departure.
    */
   readonly adherence: { readonly betting: AdherenceMeasure | null; readonly playing: AdherenceMeasure | null; readonly departures: number };
-  /** Any explicit override in the session; a cycle restart doesn't clear it. */
+  /** Any explicit override in the session (an overridden correction, or Collect instead); a cycle restart doesn't clear it. */
   readonly overrideAffected: boolean;
   /** True for a progression, whose cycle an override ends until an explicit restart. */
   readonly overrideEndsCycle: boolean;
@@ -329,15 +336,21 @@ export type Command =
   | { readonly kind: 'restart-cycle' }
   /**
    * At a pending strategy action: keep what has been paid and end the cycle
-   * instead. Removable wagers come back, contracts stay to settle, and nothing
-   * pending executes; another cycle starts only explicitly.
+   * instead (an explicit override). Removable wagers come back, contracts
+   * settle in strategy settlement, and nothing pending executes; another cycle
+   * starts only explicitly.
    */
   | { readonly kind: 'collect-instead' }
-  /** Ends the strategy's bets: removable wagers come back, committed ones settle; the session stays open. */
-  | { readonly kind: 'stop-strategy' };
+  /**
+   * Ends the strategy's bets: a turn already revealed settles, removable wagers
+   * come back and contracts settle in strategy settlement; the session stays open.
+   */
+  | { readonly kind: 'stop-strategy' }
+  /** One automatic roll of strategy settlement; the controller issues it, never a tap. */
+  | { readonly kind: 'advance-strategy-settlement' };
 
 /** Commands the protocol handles itself for guided practice. */
-export type StrategyCommandKind = 'retry-correction' | 'override-correction' | 'restart-cycle' | 'collect-instead' | 'stop-strategy';
+export type StrategyCommandKind = 'retry-correction' | 'override-correction' | 'restart-cycle' | 'collect-instead' | 'stop-strategy' | 'advance-strategy-settlement';
 
 /**
  * The commands a game module applies; the protocol itself handles funding and
@@ -528,6 +541,13 @@ export interface GameModule<S extends ActivityState, V extends PermittedView, C 
    * while the strategy places nothing yet, as a place-after-the-point strategy waits for a point.
    */
   idleTurn?(state: S): Step<S>;
+  /**
+   * One automatic turn with only contracts on the table, resolving what it can
+   * and betting nothing new (a craps roll): final settlement and strategy
+   * settlement both run on it. The caller sets the phase. Only a game with
+   * contracts has one; no other game leaves wagers that can't come down between turns.
+   */
+  settleContracts?(state: S): { change: Change<S>; facts: DomainFact[] };
   /** The game's part of the permitted view; it may refine when wagers count as committed. */
   view(state: S): Omit<V, keyof PermittedViewBase> & Partial<Pick<PermittedViewBase, 'wagersCommitted'>>;
   /**
@@ -597,12 +617,14 @@ const LEGAL: Record<Phase, readonly CommandKind[]> = {
   'revealing-outcome': ['settle-turn', 'stop-strategy', 'request-stop'],
   'settled-outcome': ['place-wager', 'begin-turn', 'collect-instead', 'stop-strategy', 'request-stop', 'rebuy'],
   'cycle-completion': ['restart-cycle', 'stop-strategy', 'request-stop', 'rebuy'],
+  // Ending the session hands the contracts on to final settlement.
+  'strategy-settlement': ['advance-strategy-settlement', 'request-stop'],
   'final-settlement': ['advance-final-settlement'],
   completed: [],
 };
 
 /** Phases only guided practice reaches; the protocol, not the game, decides what they allow. */
-const GUIDED_PHASES: ReadonlySet<Phase> = new Set(['correction', 'cycle-completion']);
+const GUIDED_PHASES: ReadonlySet<Phase> = new Set(['correction', 'cycle-completion', 'strategy-settlement']);
 
 function isCommand(value: unknown): value is Command {
   if (!isRecord(value)) return false;
@@ -632,6 +654,7 @@ function isCommand(value: unknown): value is Command {
     case 'restart-cycle':
     case 'collect-instead':
     case 'stop-strategy':
+    case 'advance-strategy-settlement':
       return hasExactKeys(value, ['kind']);
     default:
       return false;
@@ -798,6 +821,21 @@ function withDeferredResolved<S extends ActivityState>(state: S): S {
 }
 
 /**
+ * Where a strategy's outstanding wagers go when its cycle ends or it stops:
+ * removable ones come back, and contracts settle in strategy settlement before
+ * the activity goes on to `then`.
+ */
+function resolveOutstanding(state: ActivityState, then: Phase): { change: Change<ActivityState>; facts: DomainFact[] } {
+  const down = takeDown(state);
+  const contracts = (down.change.wagers ?? []).length > 0;
+  return { change: { ...down.change, phase: contracts ? 'strategy-settlement' : then }, facts: down.facts };
+}
+
+/** The net result of the wagers a step settled. */
+const settledNet = (facts: readonly DomainFact[]): Money =>
+  facts.reduce((sum, fact) => (fact.kind === 'wager-settled' ? add(sum, decodeMoney(fact.net)) : sum), decodeMoney('0'));
+
+/**
  * Takes down every wager the game lets come down now, as wager-returned facts;
  * contracts (craps pass and come bases with their number set) stay to settle.
  * The game applies each removal itself, so its own table state stays whole.
@@ -961,27 +999,47 @@ function guidedStep(state: ActivityState, command: Exclude<Command, { readonly k
     case 'collect-instead': {
       // The pending action is dropped, never executed: what was paid stays paid, and nothing pays again.
       const strategy: StrategyRun = { ...run, status: 'cycle-ended', cycleEnd: 'collected', deferred: null, coachedTurn: false };
-      const down = takeDown(state);
+      const outstanding = resolveOutstanding(state, 'cycle-completion');
       return {
-        step: { change: { ...down.change, phase: 'cycle-completion', strategy }, facts: [{ kind: 'cycle-ended', reason: 'collected' }, ...down.facts] },
+        step: { change: { ...outstanding.change, strategy }, facts: [{ kind: 'cycle-ended', reason: 'collected' }, ...outstanding.facts] },
         assessed: false,
       };
     }
     case 'stop-strategy': {
       const strategy: StrategyRun = { ...run, status: 'stopped', cycleEnd: null, coachedTurn: false, deferred: null };
       const facts: DomainFact[] = [{ kind: 'strategy-stopped' }];
-      // A turn in progress keeps its committed wagers; they settle as usual.
-      if (state.phase === 'revealing-outcome') return { step: { change: { strategy }, facts }, assessed: false };
-      // Between turns, removable stakes come back; committed contracts are never refunded and settle as the game goes on.
-      const down = takeDown(state);
-      const phase = state.phase === 'cycle-completion' ? 'settled-outcome' : state.phase;
-      return { step: { change: { ...down.change, phase, strategy }, facts: [...facts, ...down.facts] }, assessed: false };
+      // A turn already revealed settles now, as at a stop (Amendment 9 §4); the stopped strategy takes no adjustment from it.
+      let current = state;
+      let settledChange: Change<ActivityState> = {};
+      if (state.phase === 'revealing-outcome') {
+        const settled = apply(state, { kind: 'settle-turn' });
+        if ('illegal' in settled) return { step: settled, assessed: false };
+        settledChange = settled.change;
+        current = { ...state, ...settled.change } as ActivityState;
+        facts.push(...settled.facts);
+      }
+      // Removable stakes come back; committed contracts are never refunded and settle automatically. Then play goes on uncoached.
+      const outstanding = resolveOutstanding(current, current.phase === 'cycle-completion' ? 'settled-outcome' : current.phase);
+      return { step: { change: { ...settledChange, ...outstanding.change, strategy }, facts: [...facts, ...outstanding.facts] }, assessed: false };
+    }
+    case 'advance-strategy-settlement': {
+      // Only a game with contracts reaches strategy settlement.
+      const rolled = (game.settleContracts as NonNullable<AnyModule['settleContracts']>)(state);
+      const after = { ...state, ...rolled.change } as ActivityState;
+      let strategy = run;
+      // An ended cycle's contracts are part of its result: each roll joins the cycle's record.
+      if (run.status === 'cycle-ended' && hasCycles(run.definition)) {
+        const turn: CycleTurn = { turn: after.turn, wagers: state.wagers, outcome: gameStrategy(state).outcome(after), net: encodeMoney(settledNet(rolled.facts)), followed: true };
+        strategy = { ...run, cycle: { ...run.cycle, turns: [...run.cycle.turns, turn] } };
+      }
+      const phase: Phase = after.wagers.length > 0 ? 'strategy-settlement' : run.status === 'cycle-ended' ? 'cycle-completion' : 'settled-outcome';
+      return { step: { change: { ...rolled.change, phase, strategy }, facts: rolled.facts }, assessed: false };
     }
     case 'settle-turn': {
       const settled = apply(state, command);
       if ('illegal' in settled) return { step: settled, assessed: false };
       let strategy: StrategyRun = { ...run, coachedTurn: false };
-      const net = settled.facts.reduce((sum, fact) => (fact.kind === 'wager-settled' ? add(sum, decodeMoney(fact.net)) : sum), decodeMoney('0'));
+      const net = settledNet(settled.facts);
       const after = { ...state, ...settled.change } as ActivityState;
       // The turn joins the cycle's record: a coached turn, or the overridden one that ends the cycle.
       const overridden = run.status === 'cycle-ended' && run.cycleEnd === 'override';
@@ -1008,10 +1066,10 @@ function guidedStep(state: ActivityState, command: Exclude<Command, { readonly k
         }
       }
       if (strategy.status !== 'cycle-ended') return { step: { change: { ...settled.change, strategy }, facts: settled.facts }, assessed: false };
-      // The cycle is over: its outstanding wagers resolve. Removable ones come back; contracts stay to settle.
-      const down = takeDown(after);
+      // The cycle is over: its outstanding wagers resolve before its result. Removable ones come back; contracts settle automatically.
+      const outstanding = resolveOutstanding(after, 'cycle-completion');
       return {
-        step: { change: { ...settled.change, ...down.change, phase: 'cycle-completion', strategy }, facts: [...settled.facts, ...down.facts] },
+        step: { change: { ...settled.change, ...outstanding.change, strategy }, facts: [...settled.facts, ...outstanding.facts] },
         assessed: false,
       };
     }
@@ -1156,10 +1214,17 @@ function strategyView(state: ActivityState, run: StrategyRun): StrategyView {
       playing: definition.play === undefined ? null : measure(run.decisions.playing, departedPlays.size),
       departures: run.departures.length,
     },
-    overrideAffected: run.departures.some((departure) => departure.resolution === 'overridden'),
+    overrideAffected: run.departures.some((departure) => departure.resolution === 'overridden') || state.receipts.some((receipt) => receipt.command === COLLECT_INSTEAD),
     overrideEndsCycle: overrideEndsCycle(definition),
   };
 }
+
+/**
+ * "Collect instead" is an explicit override of the pending strategy action
+ * (user story 51): it marks the session, though no submitted move was held, so
+ * it adds no departure. Its receipt keeps the mark across cycle restarts.
+ */
+const COLLECT_INSTEAD = canonicalJson({ kind: 'collect-instead' } satisfies Command);
 
 /**
  * A strategy with progression state (counters or lists) is a betting
@@ -1200,7 +1265,7 @@ export function readPermittedView(state: ActivityState): PermittedView {
     turn: state.turn,
     balance: state.balance,
     wagers: state.wagers.map((wager) => ({ target: wager.target, amount: wager.amount })),
-    wagersCommitted: state.wagers.length > 0 && (state.phase === 'revealing-outcome' || state.phase === 'final-settlement'),
+    wagersCommitted: state.wagers.length > 0 && (state.phase === 'revealing-outcome' || state.phase === 'strategy-settlement' || state.phase === 'final-settlement'),
     legalCommands: [...legalCommands(state)],
     funding: {
       source: state.funding.source,
@@ -1314,8 +1379,12 @@ function stateDamage(value: unknown): string | undefined {
   if ((value.outcome === null) !== (turn === 0)) return 'the outcome does not match the turn count';
   const strategy = strategyDamage(value as unknown as ActivityState, identities.strategy as VersionedIdentity | null);
   if (strategy) return strategy;
-  // A cycle's outstanding wagers resolved when it ended: only contracts can still be on the table.
-  if (phase === 'cycle-completion' && takeDown(value as unknown as ActivityState).facts.length > 0) return 'damaged cycle completion';
+  // A cycle's outstanding wagers resolved before its result: removable ones came back, and contracts settled.
+  if (phase === 'cycle-completion' && (value.wagers as unknown[]).length > 0) return 'damaged cycle completion';
+  // Strategy settlement holds only contracts, and ends once they are settled.
+  if (phase === 'strategy-settlement' && ((value.wagers as unknown[]).length === 0 || takeDown(value as unknown as ActivityState).facts.length > 0)) {
+    return 'damaged strategy settlement';
+  }
   if (!Array.isArray(receipts) || receipts.length !== sequence) return 'receipts do not match the sequence';
   const ids = new Set<string>();
   for (const [index, receipt] of (receipts as unknown[]).entries()) {
@@ -1389,6 +1458,7 @@ function strategyDamage(state: ActivityState, identity: VersionedIdentity | null
   const ended = CYCLE_ENDS.includes(cycleEnd);
   if ((status === 'cycle-ended') !== ended || (!ended && cycleEnd !== null)) return 'damaged strategy cycle';
   if (state.phase === 'cycle-completion' && status !== 'cycle-ended') return 'damaged strategy cycle';
+  if (state.phase === 'strategy-settlement' && status === 'active') return 'damaged strategy settlement';
   const progress = progressProblem(definition, run.progress);
   if (progress) return progress;
   const deferred = run.deferred;

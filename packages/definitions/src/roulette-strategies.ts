@@ -1,7 +1,7 @@
 // Built-in roulette strategies (spec #51, Built-in strategies): executable
 // data in the roulette strategy vocabulary, with no special-cased code, so a
 // builder-authored equivalent runs identically. Amounts are on the default
-// 10-minimum table, where 1 strategy unit is 10. Targets are chosen before the
+// 10-minimum table: the spec's 1-unit stake is 10. Targets are chosen before the
 // session starts and stay fixed for every cycle. The progressions (capped
 // Martingale, three-win parlay, bounded Labouchere) declare caps and a
 // completion rule, so each cycle ends on completion or at its cap.
@@ -26,14 +26,14 @@ export const FLAT_EVEN_MONEY: StrategyDefinition = {
   instructions: [
     {
       id: 'flat',
-      label: '1 unit on your even-money target, every spin',
+      label: '10 on your even-money target, every spin',
       when: { always: true },
       bets: [{ target: { param: 'target' }, amount: { lit: '10' } }],
     },
   ],
   adjustments: [],
   stopWhen: null,
-  note: '1 unit on one even-money target, every spin.',
+  note: '10 on one even-money target, every spin.',
 };
 
 export const FIXED_TWO_DOZENS: StrategyDefinition = {
@@ -51,7 +51,7 @@ export const FIXED_TWO_DOZENS: StrategyDefinition = {
   instructions: [
     {
       id: 'cover',
-      label: '1 unit on each of your two dozens, every spin',
+      label: '10 on each of your two dozens, every spin',
       when: { always: true },
       bets: [
         { target: { param: 'first' }, amount: { lit: '10' } },
@@ -61,7 +61,7 @@ export const FIXED_TWO_DOZENS: StrategyDefinition = {
   ],
   adjustments: [],
   stopWhen: null,
-  note: '1 unit on each of two dozens you choose.',
+  note: '10 on each of two dozens you choose.',
 };
 
 /** An even-money target chosen before the session, fixed for every cycle. */
@@ -81,14 +81,14 @@ export const CAPPED_MARTINGALE: StrategyDefinition = {
       id: 'stake',
       label: 'The current stake on your even-money target',
       when: { always: true },
-      // 32 units is the cap: a loss at 32 ends the cycle rather than betting 64.
+      // 320 is the cap: a loss at 320 ends the cycle rather than betting 640.
       bets: [{ target: { param: 'target' }, amount: { counter: 'stake' }, cap: '320' }],
     },
   ],
   adjustments: [{ id: 'double', on: 'loss', counter: 'stake', to: { mul: [{ counter: 'stake' }, { lit: '2' }] } }],
   stopWhen: null,
   completeWhen: { subject: 'last-result', is: 'win' },
-  note: '1, 2, 4, 8, 16, 32 units after each loss. A win completes the cycle; a loss at 32 ends it at the cap.',
+  note: '10, 20, 40, 80, 160, 320 after each loss. A win completes the cycle; a loss at 320 ends it at the cap.',
 };
 
 export const THREE_WIN_PARLAY: StrategyDefinition = {
@@ -110,7 +110,7 @@ export const THREE_WIN_PARLAY: StrategyDefinition = {
   ],
   stopWhen: null,
   completeWhen: { any: [{ subject: 'last-result', is: 'loss' }, { compare: { counter: 'wins' }, op: 'ge', to: { lit: '3' } }] },
-  note: '1, 2, 4 units after each win. A loss or the third win completes the cycle.',
+  note: '10, 20, 40 after each win. A loss or the third win completes the cycle.',
 };
 
 export const BOUNDED_LABOUCHERE: StrategyDefinition = {
@@ -144,7 +144,7 @@ export const BOUNDED_LABOUCHERE: StrategyDefinition = {
   ],
   stopWhen: null,
   completeWhen: { compare: { length: 'line' }, op: 'eq', to: { lit: '0' } },
-  note: 'Line 1, 2, 3: bet first plus last. A win crosses them off, a loss adds the stake. An empty line completes the cycle; a stake over 32 units ends it at the cap.',
+  note: 'Line 10, 20, 30: bet first plus last. A win crosses them off, a loss adds the stake. An empty line completes the cycle; a stake over 320 ends it at the cap.',
 };
 
 /** The built-in roulette strategies, in picker order. */

@@ -82,6 +82,7 @@ export const STATUS: Record<Phase, string> = {
   'settled-outcome': 'Settled',
   correction: 'Strategy check',
   'cycle-completion': 'Cycle ended',
+  'strategy-settlement': "Settling the strategy's contracts",
   'final-settlement': 'Final settlement',
   completed: 'Ended',
 };

@@ -3,7 +3,7 @@
 // through the accessibility tree. The shoe is the Random123 "pi digits"
 // shuffle: round 1 deals you the 10 of spades and Jack of diamonds (20)
 // against a dealer 10 of spades with the 6 of spades face down. A fresh shoe's
-// true count is 0, where the schedule bets 1 unit (10).
+// true count is 0, where the schedule bets 10.
 
 import { blackjackStrategy } from '@tableside/definitions';
 import { explainPlay, type Card, type PlayCorrection } from '@tableside/engine';
@@ -81,7 +81,7 @@ describe('blackjack counting modes', () => {
     await fireEvent.press(screen.getByRole('radio', { name: 'Counting with deviations' }));
     const schedule = screen.getByRole('switch', { name: SCHEDULE });
     expect(schedule).toHaveProp('accessibilityState', { checked: false, disabled: false });
-    expect(schedule).toHaveProp('accessibilityHint', '1 / 2 / 4 / 6 / 8 units by true count. Scored separately from your play.');
+    expect(schedule).toHaveProp('accessibilityHint', '10 / 20 / 40 / 60 / 80 by true count. Scored separately from your play.');
     await fireEvent.press(schedule);
     expect(screen.getByRole('switch', { name: SCHEDULE })).toHaveProp('accessibilityState', { checked: true, disabled: false });
     expect(screen.getByText('Tableside checks each bet against the schedule before the deal.')).toBeOnTheScreen();
@@ -131,7 +131,7 @@ describe('blackjack counting modes', () => {
     // The count is the player's to keep: the correction names the band, never the count.
     expect(panel.getByText('Checked against the actual true count, which you keep in this mode.')).toBeOnTheScreen();
     expect(JSON.stringify(screen.toJSON())).not.toMatch(/[Tt]rue count (is|for)|Running/);
-    expect(panel.getByText('Matching instruction: "True count below +1: 1 unit (10)".')).toBeOnTheScreen();
+    expect(panel.getByText('Matching instruction: "True count below +1: 10".')).toBeOnTheScreen();
     expect(panel.getByText("You've set 25 on your hand. Nothing has been placed yet.")).toBeOnTheScreen();
     expect(announcements.join(' ')).toContain('Paused before the deal: nothing has been dealt yet.');
     // Nothing was dealt.

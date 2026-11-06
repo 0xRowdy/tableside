@@ -299,6 +299,7 @@ export const crapsStrategyCases: TestCase[] = [
     run: (t) => {
       let { state } = follow(guidedCraps(PRESS_AND_COLLECT, keyed(0), { flatMax: '20' }), 9);
       state = send(send(state, ROLL).state, SETTLE).state;
+      t.equal(crapsView(state).strategy?.overrideAffected, false);
       const collected = send(state, { kind: 'collect-instead' });
       t.equal(collected.facts, [
         { kind: 'cycle-ended', reason: 'collected' },
@@ -311,14 +312,16 @@ export const crapsStrategyCases: TestCase[] = [
       t.equal(view.legalCommands, ['restart-cycle', 'stop-strategy', 'request-stop', 'rebuy']);
       // The cycle's record: 10 rolls followed, net +42 (14 + 14 + 14 kept from the place bets).
       t.equal([view.strategy?.cycle.turns.length, view.strategy?.cycle.net], [10, '42']);
+      // Collect instead is an explicit override (user story 51): it marks the session, though it logs no departure.
+      t.equal([view.strategy?.overrideAffected, view.strategy?.departures], [true, []]);
       const restarted = send(state, { kind: 'restart-cycle' }).state;
       t.equal([restarted.phase, restarted.strategy?.progress.counters, restarted.strategy?.deferred], ['open-decision', { 'stake-6': '12', 'press-6': '0', 'stake-8': '12', 'press-8': '0', up: '0' }, null]);
-      // Collect instead is offered only at a pending strategy action.
-      t.equal(crapsView(restarted).legalCommands.includes('collect-instead'), false);
+      // Collect instead is offered only at a pending strategy action; the restart keeps the session marked.
+      t.equal([crapsView(restarted).legalCommands.includes('collect-instead'), crapsView(restarted).strategy?.overrideAffected], [false, true]);
     },
   },
   {
-    name: 'craps strategy: an override ends the cycle; removable wagers come back, the pass line contract stays, and a restart picks it up',
+    name: 'craps strategy: an override ends the cycle; removable wagers come back and the pass line contract settles by automatic rolls before the cycle result',
     run: (t) => {
       // Point 8; the player sets 30 odds instead of 10.
       let state = follow(guidedCraps(PASS_WITH_ODDS, PI), 1).state;
@@ -326,21 +329,43 @@ export const crapsStrategyCases: TestCase[] = [
       const held = state.strategy?.correction?.explanation;
       t.equal([state.phase, held && 'prescription' in held ? held.prescription : null], ['correction', { status: 'prescribed', bets: bets(['pass', '10'], ['pass-odds', '10']), held: [] }]);
       state = send(state, { kind: 'override-correction' }).state;
-      // 11: nothing resolves; the cycle ends and the 30 odds come back.
+      // 11: nothing resolves; the cycle ends, the 30 odds come back, and the pass line contract settles first.
       const settled = send(state, SETTLE);
       t.equal(kinds(settled.facts), ['wager-returned']);
       state = settled.state;
-      t.equal([state.phase, state.balance, state.wagers, crapsView(state).strategy?.cycleEnd], ['cycle-completion', '990', bets(['pass', '10']), 'override']);
-      const decoded = decodeCheckpoint(encodeCheckpoint(state));
-      t.equal(decoded.ok, true);
+      const settling = crapsView(state);
+      t.equal(
+        [state.phase, state.balance, state.wagers, settling.strategy?.cycleEnd, settling.legalCommands, settling.wagersCommitted],
+        ['strategy-settlement', '990', bets(['pass', '10']), 'override', ['advance-strategy-settlement', 'request-stop'], true],
+      );
+      t.equal(decodeCheckpoint(encodeCheckpoint(state)).ok, true);
+      // 6, 4 and 12 leave the pass line; 8 makes the point and pays it. Nothing new is bet.
+      const rolls: (readonly DomainFact[])[] = [];
+      while (state.phase === 'strategy-settlement') {
+        const next = send(state, { kind: 'advance-strategy-settlement' });
+        rolls.push(next.facts);
+        state = next.state;
+      }
+      t.equal(rolls.map((facts) => facts.flatMap((fact) => (fact.kind === 'wager-settled' ? [[fact.target, fact.result]] : []))), [[], [], [], [['pass', 'win']]]);
+      t.equal(rolls.flat().some((fact) => fact.kind === 'wager-changed'), false);
+      const view = crapsView(state);
+      t.equal([state.phase, state.balance, state.wagers, view.table.point], ['cycle-completion', '1010', [], null]);
+      // The cycle result includes its contract: the followed 8, the overridden 11, then the rolls that settled the pass line.
+      const total = (outcome: string) => outcome.split('+').reduce((sum, die) => sum + Number(die), 0);
+      t.equal(
+        view.strategy?.cycle.turns.map((turn) => [total(turn.outcome), turn.net, turn.followed]),
+        [[8, '0', true], [11, '0', false], [6, '0', true], [4, '0', true], [12, '0', true], [8, '10', true]],
+      );
+      t.equal(view.strategy?.cycle.net, '10');
+      // A fresh come-out: the restart carries nothing over.
       state = send(state, { kind: 'restart-cycle' }).state;
-      t.equal(prescriptionNow(state), { status: 'prescribed', bets: bets(['pass', '10'], ['pass-odds', '10']), held: [] });
+      t.equal([state.wagers, prescriptionNow(state)], [[], { status: 'prescribed', bets: bets(['pass', '10']), held: [] }]);
     },
   },
   {
-    name: 'craps strategy: Stop strategy never refunds a committed pass or come base; removable wagers come back',
+    name: 'craps strategy: Stop strategy never refunds a committed pass or come base: removable wagers come back and the contracts settle automatically',
     run: (t) => {
-      const state = follow(guidedCraps(THREE_POINT_MOLLY, PI), 4).state;
+      let state = follow(guidedCraps(THREE_POINT_MOLLY, PI), 4).state;
       // The 4 just carried the come bet to its number.
       t.equal(state.wagers, bets(['pass', '10'], ['pass-odds', '10'], ['come-4', '10'], ['come-6', '10'], ['come-6-odds', '10']));
       const stopped = send(state, { kind: 'stop-strategy' });
@@ -349,10 +374,59 @@ export const crapsStrategyCases: TestCase[] = [
         { kind: 'wager-returned', target: 'pass-odds', amount: '10' },
         { kind: 'wager-returned', target: 'come-6-odds', amount: '10' },
       ]);
-      t.equal([stopped.state.balance, stopped.state.wagers], ['980', bets(['pass', '10'], ['come-4', '10'], ['come-6', '10'])]);
-      // The contracts play on uncoached: 12 then 8 makes the point and pays the pass line.
-      const after = send(send(send(send(stopped.state, ROLL).state, SETTLE).state, ROLL).state, SETTLE).state;
-      t.equal([after.balance, after.wagers], ['1000', bets(['come-4', '10'], ['come-6', '10'])]);
+      state = stopped.state;
+      t.equal([state.phase, state.balance, state.wagers], ['strategy-settlement', '980', bets(['pass', '10'], ['come-4', '10'], ['come-6', '10'])]);
+      // 12 settles nothing; 8 pays the pass line; on the come-out 6 pays the come bet on 6 and 7 takes the one on 4.
+      const settled: [string, string][] = [];
+      while (state.phase === 'strategy-settlement') {
+        const next = send(state, { kind: 'advance-strategy-settlement' });
+        for (const fact of next.facts) if (fact.kind === 'wager-settled') settled.push([fact.target, fact.result]);
+        state = next.state;
+      }
+      t.equal(settled, [['pass', 'win'], ['come-6', 'win'], ['come-4', 'loss']]);
+      // Then play goes on uncoached: no cycle record, no Stop strategy, the player's own bets.
+      const view = crapsView(state);
+      t.equal([state.phase, state.balance, state.wagers, view.strategy?.status, view.strategy?.cycle.turns.length], ['settled-outcome', '1020', [], 'stopped', 4]);
+      t.equal(view.legalCommands.includes('stop-strategy') || !view.legalCommands.includes('begin-turn'), false);
+    },
+  },
+  {
+    name: 'craps strategy: Stop strategy during a revealed roll settles the roll, then returns the place bets left up',
+    run: (t) => {
+      // The 8 sets the point; place 6 and 8 at 12 each go up; the 11 is revealed and Stop strategy comes before its settle.
+      let state = follow(guidedCraps(FLAT_PLACE, PI), 1).state;
+      state = send(send(send(state, place('place-6', '12')).state, place('place-8', '12')).state, ROLL).state;
+      t.equal(state.phase, 'revealing-outcome');
+      const stopped = send(state, { kind: 'stop-strategy' });
+      t.equal(kinds(stopped.facts), ['strategy-stopped', 'wager-returned', 'wager-returned']);
+      t.equal([stopped.state.phase, stopped.state.balance, stopped.state.wagers, stopped.state.strategy?.progress], ['settled-outcome', '1000', [], state.strategy?.progress]);
+    },
+  },
+  {
+    name: 'craps strategy: ending the practice session during strategy settlement hands the contracts to final settlement',
+    run: (t) => {
+      const state = send(follow(guidedCraps(THREE_POINT_MOLLY, PI), 4).state, { kind: 'stop-strategy' }).state;
+      const ending = send(state, { kind: 'request-stop' });
+      t.equal([kinds(ending.facts), ending.state.phase, ending.state.wagers], [['stop-requested'], 'final-settlement', state.wagers]);
+    },
+  },
+  {
+    name: 'craps strategy: strategy settlement holds only contracts, for a strategy that no longer runs; anything else is damage',
+    run: (t) => {
+      const state = send(follow(guidedCraps(THREE_POINT_MOLLY, PI), 4).state, { kind: 'stop-strategy' }).state;
+      const damage = (edit: (value: Record<string, unknown> & { strategy: Record<string, unknown> }) => void) => {
+        const value = JSON.parse(encodeCheckpoint(state));
+        edit(value);
+        const result = decodeCheckpoint(encodeCheckpoint(value));
+        return result.ok ? 'ok' : result.error.message;
+      };
+      t.equal(damage(() => undefined), 'ok');
+      t.equal(damage((v) => (v.strategy.status = 'active')), 'damaged strategy settlement');
+      t.equal(damage((v) => ((v.wagers = []), (v.balance = '1010'))), 'damaged strategy settlement');
+      t.equal(
+        damage((v) => ((v.wagers = [...(v.wagers as unknown[]), { target: 'come-6-odds', amount: '10' }]), (v.balance = '970'))),
+        'damaged strategy settlement',
+      );
     },
   },
   {

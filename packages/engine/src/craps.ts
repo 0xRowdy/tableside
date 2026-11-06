@@ -9,7 +9,7 @@
 // own module; a strategy compatible with this one is not automatically
 // compatible with it. Rules: #3 (Launch game rules) and spec #51.
 
-import type { ActivityStateBase, Command, CommandKind, CrapsPermittedView, DomainFact, GameCommand, GameModule, Step, Wager } from './activity';
+import type { ActivityStateBase, Change, Command, CommandKind, CrapsPermittedView, DomainFact, GameCommand, GameModule, Step, Wager } from './activity';
 import { rollDice } from './draws';
 import { add, commission, compare, decodeMoney, encodeMoney, money, mul, neg, sub, type Money } from './money';
 import { RandomStream } from './random';
@@ -442,16 +442,19 @@ function apply(state: State, command: CrapsCommand): Step<State> {
       return requestStop(state);
     case 'advance-final-settlement': {
       if (state.wagers.length === 0) return { change: { phase: 'completed' }, facts: [{ kind: 'activity-completed', balance: state.balance }] };
-      // Further rolls resolve only the contracts already on the table.
-      const rolled = roll(state) as Extract<Step<State>, { change: unknown }>;
-      const next = { ...state, ...rolled.change } as State;
-      const settled = settle(next);
-      const facts = [...rolled.facts, ...settled.facts];
-      const done = settled.change.wagers.length === 0;
-      if (done) facts.push({ kind: 'activity-completed', balance: settled.change.balance });
-      return { change: { ...rolled.change, ...settled.change, phase: done ? 'completed' : 'final-settlement' }, facts };
+      const { change, facts } = settleContracts(state);
+      const done = change.wagers.length === 0;
+      if (done) facts.push({ kind: 'activity-completed', balance: change.balance });
+      return { change: { ...change, phase: done ? 'completed' : 'final-settlement' }, facts };
     }
   }
+}
+
+/** A roll with only contracts on the table (final or strategy settlement): it resolves what it can, and nothing new is bet. */
+function settleContracts(state: State): { change: Change<State> & Settled['change']; facts: DomainFact[] } {
+  const rolled = roll(state) as Extract<Step<State>, { change: unknown }>;
+  const settled = settle({ ...state, ...rolled.change } as State);
+  return { change: { ...rolled.change, ...settled.change }, facts: [...rolled.facts, ...settled.facts] };
 }
 
 /** One roll of the dice from the random protocol: one turn. */
@@ -899,6 +902,7 @@ export const CRAPS: GameModule<CrapsActivityState, CrapsPermittedView, CrapsComm
   legal,
   apply,
   idleTurn: roll,
+  settleContracts,
   view: (state) => ({
     game: 'craps',
     outcome: state.outcome && { turn: state.outcome.turn, dice: [state.outcome.dice[0], state.outcome.dice[1]] },
