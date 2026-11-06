@@ -48589,7 +48589,7 @@
                           "content": "Practice the Hi-Lo bet schedule"
                         },
                         "q8Hc4w": {
-                          "content": "1 / 2 / 4 / 6 / 8 units by true count. Scored separately from your play."
+                          "content": "10 / 20 / 40 / 60 / 80 by true count. Scored separately from your play."
                         }
                       }
                     }
@@ -50147,7 +50147,7 @@
                       "content": "Flat even-money"
                     },
                     "husP9": {
-                      "content": "1 unit on one even-money target, every spin."
+                      "content": "10 on one even-money target, every spin."
                     },
                     "p6HA5": {
                       "enabled": false
@@ -50417,7 +50417,7 @@
                       "content": "Fixed two-dozen coverage"
                     },
                     "husP9": {
-                      "content": "1 unit on each of two dozens you choose."
+                      "content": "10 on each of two dozens you choose."
                     },
                     "p6HA5": {
                       "enabled": false
@@ -50438,7 +50438,7 @@
                       "content": "Capped Martingale"
                     },
                     "husP9": {
-                      "content": "Doubles after each loss: 1, 2, 4, 8, 16, 32 units."
+                      "content": "10, 20, 40, 80, 160, 320 after each loss. A win completes the cycle; a loss at 320 ends it at the cap."
                     },
                     "p6HA5": {
                       "enabled": false
@@ -50459,7 +50459,7 @@
                       "content": "Three-win parlay"
                     },
                     "husP9": {
-                      "content": "1, 2, 4 units after consecutive wins."
+                      "content": "10, 20, 40 after each win. A loss or the third win completes the cycle."
                     },
                     "p6HA5": {
                       "enabled": false
@@ -50480,7 +50480,7 @@
                       "content": "Bounded Labouchere"
                     },
                     "husP9": {
-                      "content": "Starts from 1-2-3. Never more than 32 units on a spin."
+                      "content": "Line 10, 20, 30: bet first plus last. A win crosses them off, a loss adds the stake. An empty line completes the cycle; a stake over 320 ends it at the cap."
                     },
                     "p6HA5": {
                       "enabled": false
@@ -50677,7 +50677,7 @@
                       "fill": "$--muted-foreground",
                       "textGrowth": "fixed-width",
                       "width": "fill_container",
-                      "content": "Per placement. Your strategy unit is 10.",
+                      "content": "Per placement.",
                       "lineHeight": 1.5,
                       "fontFamily": "$--font-ui",
                       "fontSize": 12.5,
@@ -61266,7 +61266,7 @@
               "fill": "$--muted-foreground",
               "textGrowth": "fixed-width",
               "width": "fill_container",
-              "content": "“Keep my stand” is recorded once in your deviation log as an override. The strategy picks up again at your next decision.",
+              "content": "“Keep my stand” is recorded once in Departures as an override. The strategy picks up again at your next decision.",
               "lineHeight": 1.5,
               "fontFamily": "$--font-ui",
               "fontSize": 12.5,
@@ -64947,7 +64947,7 @@
               "fill": "$--foreground",
               "textGrowth": "fixed-width",
               "width": "fill_container",
-              "content": "This cycle ended at the 32-unit cap",
+              "content": "This cycle ended at the strategy's cap",
               "lineHeight": 1.15,
               "fontFamily": "$--font-display",
               "fontSize": 26,
@@ -64960,7 +64960,7 @@
               "fill": "$--muted-foreground",
               "textGrowth": "fixed-width",
               "width": "fill_container",
-              "content": "Six losses in a row. The next stake would be 64 units (640), past the strategy's 32-unit cap, so no new bet was placed.",
+              "content": "Six losses in a row. The next stake would be 640, past the strategy's cap of 320, so no new bet was placed.",
               "lineHeight": 1.5,
               "fontFamily": "$--font-ui",
               "fontSize": 14,
@@ -65430,7 +65430,7 @@
               "fill": "$--muted-foreground",
               "textGrowth": "fixed-width",
               "width": "fill_container",
-              "content": "The parlay finished after its third win, so it resets to 1 unit for the next cycle.",
+              "content": "The parlay finished after its third win, so the next cycle starts again from 10.",
               "lineHeight": 1.5,
               "fontFamily": "$--font-ui",
               "fontSize": 14,
@@ -71566,7 +71566,7 @@
               "fill": "$--muted-foreground",
               "textGrowth": "fixed-width",
               "width": "fill_container",
-              "content": "DEVIATION LOG · 6",
+              "content": "DEPARTURES · 6",
               "lineHeight": 1.4,
               "fontFamily": "$--font-ui",
               "fontSize": 12,
@@ -71766,7 +71766,7 @@
                           "fill": "$--muted-foreground",
                           "textGrowth": "fixed-width",
                           "width": "fill_container",
-                          "content": "Schedule: 6 units · You: 2 units",
+                          "content": "Schedule: 60 · You: 20",
                           "lineHeight": 1.4,
                           "fontFamily": "$--font-ui",
                           "fontSize": 13,
@@ -72305,7 +72305,7 @@
                   "fill": "$--muted-foreground",
                   "textGrowth": "fixed-width",
                   "width": "fill_container",
-                  "content": "Free play has no strategy, so there's no adherence score or deviation log.",
+                  "content": "Free play has no strategy, so there's no adherence score or Departures.",
                   "lineHeight": 1.5,
                   "fontFamily": "$--font-ui",
                   "fontSize": 14,
@@ -72770,7 +72770,7 @@
               "fill": "$--muted-foreground",
               "textGrowth": "fixed-width",
               "width": "fill_container",
-              "content": "DEVIATION LOG",
+              "content": "DEPARTURES",
               "lineHeight": 1.4,
               "fontFamily": "$--font-ui",
               "fontSize": 18,
@@ -119572,7 +119572,7 @@
       "id": "L7j92F",
       "x": 5500,
       "y": 12280,
-      "name": "[MVP] S1-04 Blackjack — insurance offered (dealer ace, before the peek)",
+      "name": "[Superseded] S1-04 Blackjack — insurance offered (dealer ace, before the peek) — replaced by gu2Jd (Amendment 9 §8)",
       "clip": true,
       "width": 390,
       "fill": "$--background",
@@ -128898,7 +128898,7 @@
                   "fill": "$--muted-foreground",
                   "textGrowth": "fixed-width",
                   "width": "fill_container",
-                  "content": "Starting roulette ends this craps session first. Resetting the table does the same.",
+                  "content": "Starting roulette ends this craps session first.",
                   "lineHeight": 1.5,
                   "fontFamily": "$--font-ui",
                   "fontSize": 14,
@@ -129123,7 +129123,7 @@
                               "fill": "$--muted-foreground",
                               "textGrowth": "fixed-width",
                               "width": "fill_container",
-                              "content": "Results and deviation log in Saved › Practice",
+                              "content": "Results and departures in Saved › Practice",
                               "lineHeight": 1.4,
                               "fontFamily": "$--font-ui",
                               "fontSize": 13,
@@ -432704,6 +432704,4354 @@
               "height": 5
             }
           ]
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "gu2Jd",
+      "x": 8650,
+      "y": 12280,
+      "name": "[MVP] S1-04 Blackjack — insurance offered, amount set in the panel (supersedes L7j92F)",
+      "clip": true,
+      "width": 390,
+      "fill": "$--background",
+      "cornerRadius": 32,
+      "layout": "vertical",
+      "children": [
+        {
+          "id": "kjWtz",
+          "type": "ref",
+          "ref": "g3jlEe",
+          "name": "Status Bar",
+          "width": "fill_container"
+        },
+        {
+          "id": "kUNgf",
+          "type": "ref",
+          "ref": "DqrMq",
+          "name": "Table Top Bar",
+          "width": "fill_container",
+          "padding": [
+            0,
+            8,
+            0,
+            16
+          ],
+          "descendants": {
+            "t2c3l": {
+              "enabled": false
+            },
+            "oFBQO": {
+              "content": "Blackjack"
+            },
+            "x6gZY1": {
+              "content": "6 decks · S17 · LS · 10–1,000"
+            },
+            "LVGvP": {
+              "content": "Edge with basic strategy: 0.33% (this preset)"
+            },
+            "Phsv6": {
+              "enabled": false
+            },
+            "S9na0": {
+              "icon": "circle-stop"
+            }
+          }
+        },
+        {
+          "id": "zXfSO",
+          "type": "ref",
+          "ref": "bXiVQ",
+          "name": "Phase Stepper",
+          "width": "fill_container",
+          "descendants": {
+            "E2qVs": {
+              "fill": "$--primary"
+            },
+            "ZgIKm": {
+              "content": "✓ Bet",
+              "fill": "$--muted-foreground",
+              "fontWeight": "500"
+            },
+            "Q4FWX": {
+              "fill": "$--primary"
+            },
+            "h26bxp": {
+              "content": "2  Deal",
+              "fill": "$--foreground",
+              "fontWeight": "700"
+            },
+            "GEaqx": {
+              "fill": "$--border"
+            },
+            "d2dhWu": {
+              "content": "3  Play",
+              "fill": "$--muted-foreground",
+              "fontWeight": "500"
+            },
+            "EIejm": {
+              "fill": "$--border"
+            },
+            "tYpMh": {
+              "content": "4  Settle",
+              "fill": "$--muted-foreground",
+              "fontWeight": "500"
+            }
+          }
+        },
+        {
+          "id": "vPaqQ",
+          "type": "ref",
+          "ref": "y7MfZ",
+          "name": "Session Strip",
+          "width": "fill_container",
+          "descendants": {
+            "a9ts4": {
+              "content": "950"
+            },
+            "mI11A": {
+              "content": "50"
+            },
+            "mrSBY": {
+              "icon": "shield",
+              "fill": "$--warning"
+            },
+            "leoQv": {
+              "content": "Insurance offered"
+            }
+          }
+        },
+        {
+          "type": "frame",
+          "id": "NPVHK",
+          "name": "Felt",
+          "width": 390,
+          "height": 410,
+          "fill": {
+            "type": "gradient",
+            "gradientType": "radial",
+            "enabled": true,
+            "rotation": 0,
+            "size": {
+              "width": 1.5,
+              "height": 1.2
+            },
+            "colors": [
+              {
+                "color": "$--felt-light",
+                "position": 0
+              },
+              {
+                "color": "$--felt-deep",
+                "position": 1
+              }
+            ],
+            "center": {
+              "y": 0.45
+            }
+          },
+          "cornerRadius": [
+            0,
+            0,
+            150,
+            150
+          ],
+          "stroke": "$--rail",
+          "strokeWidth": {
+            "bottom": 10
+          },
+          "layout": "none",
+          "children": [
+            {
+              "type": "frame",
+              "id": "vI08l",
+              "x": 115,
+              "y": 0,
+              "name": "Dealer Tray",
+              "width": 160,
+              "height": 22,
+              "fill": "$--felt-ink",
+              "cornerRadius": [
+                0,
+                0,
+                8,
+                8
+              ],
+              "gap": 3,
+              "padding": [
+                3,
+                8
+              ],
+              "justifyContent": "center",
+              "children": [
+                {
+                  "type": "rectangle",
+                  "cornerRadius": 3,
+                  "id": "xPXl9",
+                  "name": "Stack 0",
+                  "fill": "$--chip-1",
+                  "width": 20,
+                  "height": 14
+                },
+                {
+                  "type": "rectangle",
+                  "cornerRadius": 3,
+                  "id": "Aqvw3",
+                  "name": "Stack 1",
+                  "fill": "$--chip-5",
+                  "width": 20,
+                  "height": 14
+                },
+                {
+                  "type": "rectangle",
+                  "cornerRadius": 3,
+                  "id": "IIWML",
+                  "name": "Stack 2",
+                  "fill": "$--chip-25",
+                  "width": 20,
+                  "height": 14
+                },
+                {
+                  "type": "rectangle",
+                  "cornerRadius": 3,
+                  "id": "BCYYL",
+                  "name": "Stack 3",
+                  "fill": "$--chip-100",
+                  "width": 20,
+                  "height": 14
+                },
+                {
+                  "type": "rectangle",
+                  "cornerRadius": 3,
+                  "id": "UrmJZ",
+                  "name": "Stack 4",
+                  "fill": "$--chip-500",
+                  "width": 20,
+                  "height": 14
+                },
+                {
+                  "type": "rectangle",
+                  "cornerRadius": 3,
+                  "id": "gWXSO",
+                  "name": "Stack 5",
+                  "fill": "$--chip-1",
+                  "width": 20,
+                  "height": 14
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "zyKof",
+              "x": 318,
+              "y": 34,
+              "name": "Shoe",
+              "width": 52,
+              "height": 40,
+              "fill": "$--felt-ink",
+              "cornerRadius": 6,
+              "stroke": "$--primary-40",
+              "strokeWidth": 1,
+              "justifyContent": "center",
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "r5IWK",
+                  "name": "Pen",
+                  "fill": "$--felt-text",
+                  "content": "SHOE",
+                  "fontFamily": "$--font-ui",
+                  "fontSize": 8,
+                  "fontWeight": "700",
+                  "letterSpacing": 1
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "id": "j1o7BD",
+              "x": 0,
+              "y": 36,
+              "name": "Dealer Label",
+              "fill": "$--felt-text",
+              "textGrowth": "fixed-width",
+              "width": 390,
+              "content": "DEALER",
+              "textAlign": "center",
+              "fontFamily": "$--font-ui",
+              "fontSize": 11,
+              "fontWeight": "700",
+              "letterSpacing": 2
+            },
+            {
+              "type": "frame",
+              "id": "O298U",
+              "x": 131,
+              "y": 58,
+              "name": "Dealer Hand",
+              "width": 128,
+              "height": 82,
+              "cornerRadius": 8,
+              "stroke": "$--felt-line-25",
+              "gap": 8,
+              "justifyContent": "center",
+              "alignItems": "center",
+              "children": [
+                {
+                  "id": "x4dB4I",
+                  "type": "ref",
+                  "ref": "I9Udbi",
+                  "name": "Hole Card"
+                },
+                {
+                  "id": "cHhcj",
+                  "type": "ref",
+                  "ref": "zqstp",
+                  "name": "Card As",
+                  "descendants": {
+                    "H25l8L": {
+                      "content": "A",
+                      "fill": "$--suit-spade"
+                    },
+                    "eG77y": {
+                      "content": "♠︎",
+                      "fill": "$--suit-spade"
+                    },
+                    "MnuHe": {
+                      "content": "♠︎",
+                      "fill": "$--suit-spade"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "id": "J4jE9T",
+              "x": 0,
+              "y": 160,
+              "name": "Pays",
+              "fill": "$--felt-print",
+              "textGrowth": "fixed-width",
+              "width": 390,
+              "content": "BLACKJACK PAYS 3 TO 2",
+              "textAlign": "center",
+              "fontFamily": "$--font-display",
+              "fontSize": 18,
+              "fontWeight": "normal",
+              "letterSpacing": 2.5
+            },
+            {
+              "type": "text",
+              "id": "UrVQd",
+              "x": 0,
+              "y": 186,
+              "name": "Rule",
+              "fill": "$--felt-print",
+              "textGrowth": "fixed-width",
+              "width": 390,
+              "content": "DEALER STANDS ON ALL 17s",
+              "textAlign": "center",
+              "fontFamily": "$--font-ui",
+              "fontSize": 10,
+              "fontWeight": "normal",
+              "letterSpacing": 2
+            },
+            {
+              "type": "frame",
+              "id": "jiaNd",
+              "x": 140,
+              "y": 214,
+              "name": "Player Hand",
+              "width": 110,
+              "height": 82,
+              "cornerRadius": 8,
+              "stroke": "$--felt-line-25",
+              "gap": -24,
+              "justifyContent": "center",
+              "alignItems": "center",
+              "children": [
+                {
+                  "id": "OcLgk",
+                  "type": "ref",
+                  "ref": "zqstp",
+                  "name": "Card P1",
+                  "rotation": 3.0000000000000004,
+                  "descendants": {
+                    "H25l8L": {
+                      "content": "10",
+                      "fill": "$--suit-diamond"
+                    },
+                    "eG77y": {
+                      "content": "♦︎",
+                      "fill": "$--suit-diamond"
+                    },
+                    "MnuHe": {
+                      "content": "♦︎",
+                      "fill": "$--suit-diamond"
+                    }
+                  }
+                },
+                {
+                  "id": "MkovT",
+                  "type": "ref",
+                  "ref": "zqstp",
+                  "name": "Card P2",
+                  "rotation": -2,
+                  "descendants": {
+                    "H25l8L": {
+                      "content": "9",
+                      "fill": "$--suit-club"
+                    },
+                    "eG77y": {
+                      "content": "♣︎",
+                      "fill": "$--suit-club"
+                    },
+                    "MnuHe": {
+                      "content": "♣︎",
+                      "fill": "$--suit-club"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "mV1Fr",
+              "x": 150,
+              "y": 308,
+              "name": "Bet Spot",
+              "width": 90,
+              "height": 90,
+              "fill": "$--white-4",
+              "cornerRadius": 45,
+              "stroke": "$--felt-line",
+              "strokeWidth": 1.5,
+              "layout": "none",
+              "children": [
+                {
+                  "id": "ZqpgU",
+                  "type": "ref",
+                  "ref": "R2Oc4o",
+                  "name": "Chip 25",
+                  "x": 19,
+                  "y": 24,
+                  "descendants": {
+                    "Cjanw": {
+                      "fill": "$--chip-25"
+                    },
+                    "W7zpu": {
+                      "content": "25",
+                      "fill": "$--on-image"
+                    }
+                  }
+                },
+                {
+                  "id": "Fv2eM",
+                  "type": "ref",
+                  "ref": "R2Oc4o",
+                  "name": "Chip 25",
+                  "x": 19,
+                  "y": 17,
+                  "descendants": {
+                    "Cjanw": {
+                      "fill": "$--chip-25"
+                    },
+                    "W7zpu": {
+                      "content": "25",
+                      "fill": "$--on-image"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "kLxaT",
+              "x": 246,
+              "y": 338,
+              "name": "Bet Amount",
+              "fill": "$--felt-ink-90",
+              "cornerRadius": 999,
+              "stroke": "$--felt-line",
+              "strokeWidth": 1,
+              "padding": [
+                4,
+                10
+              ],
+              "children": [
+                {
+                  "type": "text",
+                  "id": "i02xxd",
+                  "name": "T",
+                  "fill": "$--felt-text",
+                  "content": "50",
+                  "fontFamily": "$--font-ui",
+                  "fontSize": 14,
+                  "fontWeight": "700"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "B5bfr",
+              "x": 258,
+              "y": 242,
+              "name": "Hand Total",
+              "fill": "$--felt-ink-90",
+              "cornerRadius": 999,
+              "stroke": "$--felt-line",
+              "strokeWidth": 1,
+              "padding": [
+                4,
+                10
+              ],
+              "children": [
+                {
+                  "type": "text",
+                  "id": "r8NnPE",
+                  "name": "T",
+                  "fill": "$--felt-text",
+                  "content": "Hard 19",
+                  "fontFamily": "$--font-ui",
+                  "fontSize": 13,
+                  "fontWeight": "700"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "PiAB6",
+              "x": 44,
+              "y": 242,
+              "name": "Your Move",
+              "enabled": false,
+              "fill": "$--mistake",
+              "cornerRadius": 999,
+              "gap": 5,
+              "padding": [
+                4,
+                10
+              ],
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "icon",
+                  "id": "wdlTd",
+                  "name": "I",
+                  "width": 12,
+                  "height": 12,
+                  "icon": "hand",
+                  "library": "lucide",
+                  "fill": "$--on-mistake"
+                },
+                {
+                  "type": "text",
+                  "id": "hGqEw",
+                  "name": "T",
+                  "fill": "$--on-mistake",
+                  "content": "You: Stand",
+                  "fontFamily": "$--font-ui",
+                  "fontSize": 12,
+                  "fontWeight": "700"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "AvIqK",
+          "name": "Decision panel",
+          "width": "fill_container",
+          "fill": "$--card",
+          "stroke": "$--border",
+          "strokeWidth": {
+            "top": 1
+          },
+          "layout": "vertical",
+          "gap": 10,
+          "padding": 16,
+          "children": [
+            {
+              "type": "text",
+              "id": "cvoZ9",
+              "name": "Title",
+              "fill": "$--foreground",
+              "textGrowth": "fixed-width",
+              "width": "fill_container",
+              "content": "Insurance?",
+              "fontFamily": "$--font-display",
+              "fontSize": 22,
+              "fontWeight": "normal"
+            },
+            {
+              "type": "text",
+              "id": "lZPE7",
+              "name": "Body",
+              "fill": "$--muted-foreground",
+              "textGrowth": "fixed-width",
+              "width": "fill_container",
+              "content": "The dealer shows an ace. Before checking for blackjack, you can insure up to half your bet, so up to 25. Insurance pays 2:1 and settles separately from your hand.",
+              "lineHeight": 1.45,
+              "fontFamily": "$--font-ui",
+              "fontSize": 14,
+              "fontWeight": "normal"
+            },
+            {
+              "id": "TVfMJ",
+              "type": "ref",
+              "ref": "q7tKG1",
+              "name": "Field Insurance amount",
+              "width": "fill_container",
+              "descendants": {
+                "Bn1EQ": {
+                  "content": "Insurance amount"
+                },
+                "GixSU": {
+                  "content": "25"
+                },
+                "oDMpN": {
+                  "content": "units"
+                },
+                "nTdiH": {
+                  "content": "Whole units, or exactly half your bet · up to 25"
+                }
+              }
+            },
+            {
+              "type": "frame",
+              "id": "PLViI",
+              "name": "Insurance chips",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "HBIXS",
+                  "name": "Chip Row",
+                  "width": "fill_container",
+                  "gap": 8,
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "zSarf",
+                      "name": "Chip 10",
+                      "width": "fill_container",
+                      "height": 44,
+                      "fill": "$--transparent",
+                      "cornerRadius": 999,
+                      "stroke": "$--control-border",
+                      "strokeWidth": 1.5,
+                      "gap": 6,
+                      "padding": [
+                        0,
+                        8
+                      ],
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "Db8JP",
+                          "name": "10",
+                          "fill": "$--foreground",
+                          "content": "10",
+                          "fontFamily": "$--font-ui",
+                          "fontSize": 14,
+                          "fontWeight": "600"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "HFsnR",
+                      "name": "Chip 25",
+                      "width": "fill_container",
+                      "height": 44,
+                      "fill": "$--primary",
+                      "cornerRadius": 999,
+                      "stroke": "$--primary",
+                      "strokeWidth": 1.5,
+                      "gap": 6,
+                      "padding": [
+                        0,
+                        8
+                      ],
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon",
+                          "id": "HWgTC",
+                          "name": "check",
+                          "width": 16,
+                          "height": 16,
+                          "icon": "check",
+                          "library": "lucide",
+                          "fill": "$--primary-foreground"
+                        },
+                        {
+                          "type": "text",
+                          "id": "k7ZnsP",
+                          "name": "25",
+                          "fill": "$--primary-foreground",
+                          "content": "Max 25",
+                          "fontFamily": "$--font-ui",
+                          "fontSize": 14,
+                          "fontWeight": "600"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "b8NCiM",
+                      "x": 179,
+                      "y": 0,
+                      "name": "Chip 100",
+                      "enabled": false,
+                      "width": "fill_container(81.5)",
+                      "height": 44,
+                      "fill": "$--transparent",
+                      "cornerRadius": 999,
+                      "stroke": "$--control-border",
+                      "strokeWidth": 1.5,
+                      "gap": 6,
+                      "padding": [
+                        0,
+                        8
+                      ],
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "ako2q",
+                          "name": "100",
+                          "fill": "$--foreground",
+                          "content": "100",
+                          "fontFamily": "$--font-ui",
+                          "fontSize": 14,
+                          "fontWeight": "600"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "MtxGv",
+                      "x": 268.5,
+                      "y": 0,
+                      "name": "Chip Last: 25",
+                      "enabled": false,
+                      "width": "fill_container(81.5)",
+                      "height": 44,
+                      "fill": "$--transparent",
+                      "cornerRadius": 999,
+                      "stroke": "$--control-border",
+                      "strokeWidth": 1.5,
+                      "gap": 6,
+                      "padding": [
+                        0,
+                        8
+                      ],
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "HNM83",
+                          "name": "Last: 25",
+                          "fill": "$--foreground",
+                          "content": "Last: 25",
+                          "fontFamily": "$--font-ui",
+                          "fontSize": 14,
+                          "fontWeight": "600"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "tklGJ",
+              "name": "Buttons",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "id": "nhhop",
+                  "type": "ref",
+                  "ref": "CF3yA",
+                  "name": "Button Insure 25",
+                  "width": "fill_container",
+                  "descendants": {
+                    "Ostw3": {
+                      "icon": "shield-check"
+                    },
+                    "lehj6": {
+                      "content": "Insure 25"
+                    }
+                  }
+                },
+                {
+                  "id": "XRny9",
+                  "type": "ref",
+                  "ref": "uAI8V",
+                  "name": "Button No insurance",
+                  "width": "fill_container",
+                  "descendants": {
+                    "aQg5h": {
+                      "icon": "x"
+                    },
+                    "JPqtW": {
+                      "content": "No insurance"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "id": "u4rbZ",
+              "name": "Note",
+              "fill": "$--muted-foreground",
+              "textGrowth": "fixed-width",
+              "width": "fill_container",
+              "content": "Late surrender is still available after the peek.",
+              "lineHeight": 1.45,
+              "fontFamily": "$--font-ui",
+              "fontSize": 12.5,
+              "fontWeight": "normal"
+            }
+          ]
+        },
+        {
+          "id": "DAqV0",
+          "type": "ref",
+          "ref": "thF4f",
+          "name": "Tab Bar",
+          "width": "fill_container",
+          "descendants": {
+            "W3xcp3/n3nPM": {
+              "fill": "$--secondary",
+              "stroke": "$--primary",
+              "strokeWidth": 1.5
+            },
+            "W3xcp3/w9JZY0": {
+              "fill": "$--primary"
+            },
+            "W3xcp3/I1qtr": {
+              "fill": "$--foreground",
+              "fontWeight": "700"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "gVCXm",
+      "x": 9100,
+      "y": 12280,
+      "name": "[MVP] S1-04 Strategy removed — settling existing bets (content-removal stop)",
+      "clip": true,
+      "width": 390,
+      "height": 844,
+      "fill": "$--background",
+      "cornerRadius": 32,
+      "layout": "vertical",
+      "children": [
+        {
+          "id": "C4ppyt",
+          "type": "ref",
+          "ref": "g3jlEe",
+          "name": "Status Bar",
+          "width": "fill_container"
+        },
+        {
+          "id": "qx9MH",
+          "type": "ref",
+          "ref": "DqrMq",
+          "name": "Table Top Bar",
+          "width": "fill_container",
+          "padding": [
+            0,
+            8,
+            0,
+            16
+          ],
+          "descendants": {
+            "t2c3l": {
+              "enabled": false
+            },
+            "oFBQO": {
+              "content": "Craps"
+            },
+            "x6gZY1": {
+              "content": "3-4-5x odds · field 12 pays 3:1 · 10–1,000"
+            },
+            "LVGvP": {
+              "content": "House edge varies by bet · see Bet list"
+            },
+            "Phsv6": {
+              "enabled": false
+            },
+            "S9na0": {
+              "icon": "circle-stop"
+            }
+          }
+        },
+        {
+          "id": "MPqD6",
+          "type": "ref",
+          "ref": "bXiVQ",
+          "name": "Phase Stepper",
+          "width": "fill_container",
+          "descendants": {
+            "E2qVs": {
+              "fill": "$--primary"
+            },
+            "ZgIKm": {
+              "content": "✓ Betting",
+              "fill": "$--muted-foreground",
+              "fontWeight": "500"
+            },
+            "Q4FWX": {
+              "fill": "$--primary"
+            },
+            "h26bxp": {
+              "content": "✓ Roll",
+              "fill": "$--muted-foreground",
+              "fontWeight": "500"
+            },
+            "GEaqx": {
+              "fill": "$--primary"
+            },
+            "d2dhWu": {
+              "content": "3  Settle",
+              "fill": "$--foreground",
+              "fontWeight": "700"
+            },
+            "bqdrk": {
+              "enabled": false
+            },
+            "tYpMh": {
+              "content": ""
+            }
+          }
+        },
+        {
+          "id": "d0i9Id",
+          "type": "ref",
+          "ref": "y7MfZ",
+          "name": "Session Strip",
+          "width": "fill_container",
+          "descendants": {
+            "a9ts4": {
+              "content": "964"
+            },
+            "mI11A": {
+              "content": "10"
+            },
+            "mrSBY": {
+              "icon": "loader",
+              "fill": "$--warning"
+            },
+            "leoQv": {
+              "content": "Final settlement"
+            }
+          }
+        },
+        {
+          "type": "frame",
+          "id": "haHUC",
+          "name": "Felt viewport",
+          "clip": true,
+          "width": "fill_container",
+          "height": 96,
+          "layout": "none",
+          "children": [
+            {
+              "type": "frame",
+              "id": "x95bpV",
+              "x": 0,
+              "y": -80,
+              "name": "Felt Layout",
+              "width": 390,
+              "fill": {
+                "type": "gradient",
+                "gradientType": "radial",
+                "enabled": true,
+                "rotation": 0,
+                "size": {
+                  "width": 1.6,
+                  "height": 1.3
+                },
+                "colors": [
+                  {
+                    "color": "$--felt-light",
+                    "position": 0
+                  },
+                  {
+                    "color": "$--felt-deep",
+                    "position": 1
+                  }
+                ],
+                "center": {
+                  "y": 0.3
+                }
+              },
+              "layout": "vertical",
+              "gap": 6,
+              "padding": 12,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "AZixl",
+                  "name": "Dice Result",
+                  "width": "fill_container",
+                  "gap": 14,
+                  "padding": [
+                    8,
+                    8,
+                    12,
+                    8
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "f41Kw",
+                      "name": "Dice",
+                      "height": 52,
+                      "gap": 8,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "U6UED2",
+                          "name": "Die 3",
+                          "rotation": -8,
+                          "width": 46,
+                          "height": 46,
+                          "fill": "$--suit-heart",
+                          "cornerRadius": 9,
+                          "stroke": "$--white-20",
+                          "strokeWidth": 1,
+                          "effect": {
+                            "type": "shadow",
+                            "shadowType": "outer",
+                            "color": "$--black-53",
+                            "offset": {
+                              "x": 0,
+                              "y": 4
+                            },
+                            "blur": 8
+                          },
+                          "layout": "none",
+                          "children": [
+                            {
+                              "type": "ellipse",
+                              "id": "sCmGe",
+                              "x": 9,
+                              "y": 9,
+                              "name": "Pip",
+                              "fill": "$--on-image",
+                              "width": 7,
+                              "height": 7
+                            },
+                            {
+                              "type": "ellipse",
+                              "id": "N5kQw9",
+                              "x": 31,
+                              "y": 31,
+                              "name": "Pip",
+                              "fill": "$--on-image",
+                              "width": 7,
+                              "height": 7
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "e8Pxwm",
+                          "name": "Die 3",
+                          "rotation": 6.000000000000001,
+                          "width": 46,
+                          "height": 46,
+                          "fill": "$--suit-heart",
+                          "cornerRadius": 9,
+                          "stroke": "$--white-20",
+                          "strokeWidth": 1,
+                          "effect": {
+                            "type": "shadow",
+                            "shadowType": "outer",
+                            "color": "$--black-53",
+                            "offset": {
+                              "x": 0,
+                              "y": 4
+                            },
+                            "blur": 8
+                          },
+                          "layout": "none",
+                          "children": [
+                            {
+                              "type": "ellipse",
+                              "id": "q24Cz",
+                              "x": 20,
+                              "y": 20,
+                              "name": "Pip",
+                              "fill": "$--on-image",
+                              "width": 7,
+                              "height": 7
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "B99wk",
+                      "name": "Call",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 2,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "t4B6b",
+                          "name": "Call",
+                          "fill": "$--felt-text",
+                          "content": "Point is 6",
+                          "fontFamily": "$--font-display",
+                          "fontSize": 24,
+                          "fontWeight": "500"
+                        },
+                        {
+                          "type": "text",
+                          "id": "m2vntW",
+                          "name": "Sub",
+                          "fill": "$--felt-win-text",
+                          "content": "Final settlement · rolling automatically",
+                          "fontFamily": "$--font-ui",
+                          "fontSize": 13,
+                          "fontWeight": "600"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "llpiE",
+                  "name": "Place Numbers",
+                  "width": "fill_container",
+                  "gap": 4,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "mBmqP",
+                      "name": "Place 4",
+                      "width": "fill_container",
+                      "height": 68,
+                      "cornerRadius": 6,
+                      "stroke": "$--felt-line",
+                      "strokeWidth": 1.5,
+                      "layout": "vertical",
+                      "gap": 2,
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "mrfh3",
+                          "name": "N",
+                          "fill": "$--felt-text",
+                          "content": "4",
+                          "fontFamily": "$--font-display",
+                          "fontSize": 22,
+                          "fontWeight": "600"
+                        },
+                        {
+                          "type": "text",
+                          "id": "q2pXmT",
+                          "name": "P",
+                          "fill": "$--felt-text",
+                          "content": "9:5",
+                          "fontFamily": "$--font-ui",
+                          "fontSize": 10,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "pyUCE",
+                      "name": "Place 5",
+                      "width": "fill_container",
+                      "height": 68,
+                      "cornerRadius": 6,
+                      "stroke": "$--felt-line",
+                      "strokeWidth": 1.5,
+                      "layout": "vertical",
+                      "gap": 2,
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "RLpDe",
+                          "name": "N",
+                          "fill": "$--felt-text",
+                          "content": "5",
+                          "fontFamily": "$--font-display",
+                          "fontSize": 22,
+                          "fontWeight": "600"
+                        },
+                        {
+                          "type": "text",
+                          "id": "EaK9T",
+                          "name": "P",
+                          "fill": "$--felt-text",
+                          "content": "7:5",
+                          "fontFamily": "$--font-ui",
+                          "fontSize": 10,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "qgBQq",
+                      "name": "Place SIX",
+                      "width": "fill_container",
+                      "height": 68,
+                      "cornerRadius": 6,
+                      "stroke": "$--felt-line",
+                      "strokeWidth": 1.5,
+                      "layout": "vertical",
+                      "gap": 2,
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "H3aPMs",
+                          "name": "N",
+                          "fill": "$--felt-text",
+                          "content": "SIX",
+                          "fontFamily": "$--font-display",
+                          "fontSize": 15,
+                          "fontWeight": "600"
+                        },
+                        {
+                          "type": "text",
+                          "id": "i76lh7",
+                          "name": "P",
+                          "fill": "$--felt-text",
+                          "content": "7:6",
+                          "fontFamily": "$--font-ui",
+                          "fontSize": 10,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "T5Nt9",
+                          "layoutPosition": "absolute",
+                          "x": 14,
+                          "y": -12,
+                          "name": "Puck ON",
+                          "width": 28,
+                          "height": 28,
+                          "fill": "$--on-image",
+                          "cornerRadius": 14,
+                          "stroke": "$--chip-100",
+                          "strokeWidth": 2,
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "piv6u",
+                              "name": "T",
+                              "fill": "$--chip-100",
+                              "content": "ON",
+                              "fontFamily": "$--font-ui",
+                              "fontSize": 10,
+                              "fontWeight": "800"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "AyVXp",
+                      "name": "Place 8",
+                      "width": "fill_container",
+                      "height": 68,
+                      "cornerRadius": 6,
+                      "stroke": "$--felt-line",
+                      "strokeWidth": 1.5,
+                      "layout": "vertical",
+                      "gap": 2,
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "FauIg",
+                          "name": "N",
+                          "fill": "$--felt-text",
+                          "content": "8",
+                          "fontFamily": "$--font-display",
+                          "fontSize": 22,
+                          "fontWeight": "600"
+                        },
+                        {
+                          "type": "text",
+                          "id": "Bfqtx",
+                          "name": "P",
+                          "fill": "$--felt-text",
+                          "content": "7:6",
+                          "fontFamily": "$--font-ui",
+                          "fontSize": 10,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "i3jguk",
+                          "layoutPosition": "absolute",
+                          "x": 14,
+                          "y": 42,
+                          "name": "Mini Chip 12",
+                          "enabled": false,
+                          "width": 28,
+                          "height": 28,
+                          "fill": "$--chip-5",
+                          "cornerRadius": 14,
+                          "stroke": "$--white-80",
+                          "strokeWidth": 2,
+                          "effect": {
+                            "type": "shadow",
+                            "shadowType": "outer",
+                            "color": "$--black-53",
+                            "offset": {
+                              "x": 0,
+                              "y": 2
+                            },
+                            "blur": 3
+                          },
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "aRziK",
+                              "name": "V",
+                              "fill": "$--on-image",
+                              "content": "24",
+                              "fontFamily": "$--font-ui",
+                              "fontSize": 10,
+                              "fontWeight": "800"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "W61jDx",
+                      "name": "Place NINE",
+                      "width": "fill_container",
+                      "height": 68,
+                      "cornerRadius": 6,
+                      "stroke": "$--felt-line",
+                      "strokeWidth": 1.5,
+                      "layout": "vertical",
+                      "gap": 2,
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "GHoLV",
+                          "name": "N",
+                          "fill": "$--felt-text",
+                          "content": "NINE",
+                          "fontFamily": "$--font-display",
+                          "fontSize": 15,
+                          "fontWeight": "600"
+                        },
+                        {
+                          "type": "text",
+                          "id": "ShLOT",
+                          "name": "P",
+                          "fill": "$--felt-text",
+                          "content": "7:5",
+                          "fontFamily": "$--font-ui",
+                          "fontSize": 10,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "mq1Lg",
+                      "name": "Place 10",
+                      "width": "fill_container",
+                      "height": 68,
+                      "cornerRadius": 6,
+                      "stroke": "$--felt-line",
+                      "strokeWidth": 1.5,
+                      "layout": "vertical",
+                      "gap": 2,
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "yJnpj",
+                          "name": "N",
+                          "fill": "$--felt-text",
+                          "content": "10",
+                          "fontFamily": "$--font-display",
+                          "fontSize": 22,
+                          "fontWeight": "600"
+                        },
+                        {
+                          "type": "text",
+                          "id": "j6s16b",
+                          "name": "P",
+                          "fill": "$--felt-text",
+                          "content": "9:5",
+                          "fontFamily": "$--font-ui",
+                          "fontSize": 10,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "pvZGC",
+                  "name": "COME",
+                  "width": "fill_container",
+                  "height": 52,
+                  "cornerRadius": 6,
+                  "stroke": "$--felt-line",
+                  "strokeWidth": 1.5,
+                  "layout": "vertical",
+                  "gap": 2,
+                  "justifyContent": "center",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "N4Qkdt",
+                      "name": "N",
+                      "fill": "$--felt-text",
+                      "content": "COME",
+                      "fontFamily": "$--font-display",
+                      "fontSize": 20,
+                      "fontWeight": "600",
+                      "letterSpacing": 2
+                    },
+                    {
+                      "type": "text",
+                      "id": "EGz2m",
+                      "name": "S",
+                      "fill": "$--felt-text",
+                      "content": "pays 1:1",
+                      "fontFamily": "$--font-ui",
+                      "fontSize": 10,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "K9pnVU",
+                  "name": "FIELD",
+                  "width": "fill_container",
+                  "height": 56,
+                  "cornerRadius": 6,
+                  "stroke": "$--felt-line",
+                  "strokeWidth": 1.5,
+                  "layout": "vertical",
+                  "gap": 2,
+                  "justifyContent": "center",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "BWJZv",
+                      "name": "N",
+                      "fill": "$--felt-text",
+                      "content": "FIELD",
+                      "fontFamily": "$--font-display",
+                      "fontSize": 20,
+                      "fontWeight": "600",
+                      "letterSpacing": 2
+                    },
+                    {
+                      "type": "text",
+                      "id": "K5FGrC",
+                      "name": "S",
+                      "fill": "$--felt-text",
+                      "content": "2 · 3 · 4 · 9 · 10 · 11 · 12   •   2 pays double, 12 pays triple",
+                      "fontFamily": "$--font-ui",
+                      "fontSize": 10,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "n2Knji",
+                  "name": "Don't Row",
+                  "width": "fill_container",
+                  "gap": 4,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "FqLod",
+                      "name": "DON'T COME",
+                      "width": "fill_container",
+                      "height": 44,
+                      "cornerRadius": 6,
+                      "stroke": "$--felt-line",
+                      "strokeWidth": 1.5,
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "ohDcu",
+                          "name": "N",
+                          "fill": "$--felt-text",
+                          "content": "DON'T COME · BAR 12",
+                          "fontFamily": "$--font-ui",
+                          "fontSize": 11,
+                          "fontWeight": "700",
+                          "letterSpacing": 1
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "lCjKp",
+                      "name": "Center Bets",
+                      "width": 128,
+                      "height": 44,
+                      "fill": "$--felt-ink-80",
+                      "cornerRadius": 6,
+                      "stroke": "$--felt-line",
+                      "strokeWidth": 1.5,
+                      "gap": 6,
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon",
+                          "id": "xBMW9",
+                          "name": "I",
+                          "width": 14,
+                          "height": 14,
+                          "icon": "layout-grid",
+                          "library": "lucide",
+                          "fill": "$--felt-text"
+                        },
+                        {
+                          "type": "text",
+                          "id": "rYmUi",
+                          "name": "N",
+                          "fill": "$--felt-text",
+                          "content": "Center bets",
+                          "fontFamily": "$--font-ui",
+                          "fontSize": 12,
+                          "fontWeight": "700"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "mZ1Qp",
+                  "name": "PASS LINE",
+                  "width": "fill_container",
+                  "height": 64,
+                  "cornerRadius": 6,
+                  "stroke": "$--primary",
+                  "strokeWidth": 2,
+                  "layout": "vertical",
+                  "gap": 2,
+                  "justifyContent": "center",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "x36Vr",
+                      "name": "N",
+                      "fill": "$--felt-text",
+                      "content": "PASS LINE",
+                      "fontFamily": "$--font-display",
+                      "fontSize": 20,
+                      "fontWeight": "600",
+                      "letterSpacing": 2
+                    },
+                    {
+                      "type": "frame",
+                      "id": "ynv4c",
+                      "layoutPosition": "absolute",
+                      "x": 60,
+                      "y": 18,
+                      "name": "Mini Chip 10",
+                      "width": 28,
+                      "height": 28,
+                      "fill": "$--chip-1",
+                      "cornerRadius": 14,
+                      "stroke": "$--white-80",
+                      "strokeWidth": 2,
+                      "effect": {
+                        "type": "shadow",
+                        "shadowType": "outer",
+                        "color": "$--black-53",
+                        "offset": {
+                          "x": 0,
+                          "y": 2
+                        },
+                        "blur": 3
+                      },
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "zh979",
+                          "name": "V",
+                          "fill": "$--ink",
+                          "content": "10",
+                          "fontFamily": "$--font-ui",
+                          "fontSize": 10,
+                          "fontWeight": "800"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "LFflg",
+                      "layoutPosition": "absolute",
+                      "x": 94,
+                      "y": 18,
+                      "name": "Mini Chip 30",
+                      "enabled": false,
+                      "width": 28,
+                      "height": 28,
+                      "fill": "$--chip-25",
+                      "cornerRadius": 14,
+                      "stroke": "$--white-80",
+                      "strokeWidth": 2,
+                      "effect": {
+                        "type": "shadow",
+                        "shadowType": "outer",
+                        "color": "$--black-53",
+                        "offset": {
+                          "x": 0,
+                          "y": 2
+                        },
+                        "blur": 3
+                      },
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "EHSKN",
+                          "name": "V",
+                          "fill": "$--on-image",
+                          "content": "10",
+                          "fontFamily": "$--font-ui",
+                          "fontSize": 10,
+                          "fontWeight": "800"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "W0763",
+                      "layoutPosition": "absolute",
+                      "x": 86,
+                      "y": 48,
+                      "name": "Odds Label",
+                      "enabled": false,
+                      "fill": "$--felt-ink",
+                      "cornerRadius": 4,
+                      "padding": [
+                        1,
+                        5
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "ZUI0D",
+                          "name": "T",
+                          "fill": "$--felt-text",
+                          "content": "ODDS",
+                          "fontFamily": "$--font-ui",
+                          "fontSize": 8,
+                          "fontWeight": "800",
+                          "letterSpacing": 0.5
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "ifkAD",
+                      "layoutPosition": "absolute",
+                      "x": 262,
+                      "y": 16,
+                      "name": "Win Tag",
+                      "fill": "$--correct",
+                      "cornerRadius": 8,
+                      "layout": "vertical",
+                      "padding": [
+                        4,
+                        8
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "Rke8b",
+                          "name": "T",
+                          "fill": "$--felt-shadow-ink",
+                          "content": "WORKING",
+                          "fontFamily": "$--font-ui",
+                          "fontSize": 14,
+                          "fontWeight": "800"
+                        },
+                        {
+                          "type": "text",
+                          "id": "v0byW",
+                          "name": "S",
+                          "fill": "$--felt-shadow-ink",
+                          "content": "10 · contract",
+                          "fontFamily": "$--font-ui",
+                          "fontSize": 9,
+                          "fontWeight": "600"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "E1eDjC",
+                  "name": "DON'T PASS BAR",
+                  "width": "fill_container",
+                  "height": 44,
+                  "cornerRadius": 6,
+                  "stroke": "$--felt-line",
+                  "strokeWidth": 1.5,
+                  "layout": "vertical",
+                  "gap": 2,
+                  "justifyContent": "center",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "F99aUn",
+                      "name": "N",
+                      "fill": "$--felt-text",
+                      "content": "DON'T PASS BAR",
+                      "fontFamily": "$--font-display",
+                      "fontSize": 15,
+                      "fontWeight": "600",
+                      "letterSpacing": 2
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "CCq1H",
+          "name": "Body",
+          "width": "fill_container",
+          "height": "fill_container",
+          "layout": "vertical",
+          "gap": 14,
+          "padding": [
+            8,
+            20,
+            24,
+            20
+          ],
+          "children": [
+            {
+              "id": "bTVKr",
+              "type": "ref",
+              "ref": "JF3sr",
+              "name": "Banner Strategy removed — settling existing bets",
+              "width": "fill_container",
+              "descendants": {
+                "eLpEN": {
+                  "icon": "octagon-pause",
+                  "fill": "$--warning"
+                },
+                "EEgQC": {
+                  "content": "Strategy removed — settling existing bets",
+                  "fontSize": 14
+                },
+                "EzSwo": {
+                  "content": "Removed after a validated legal or privacy request. The dice roll on to settle only the bets already working. No new bets, odds or rolls of your own.",
+                  "fontSize": 13
+                },
+                "yyGL5": {
+                  "enabled": false
+                }
+              }
+            },
+            {
+              "type": "frame",
+              "id": "VctWT",
+              "name": "Ending steps",
+              "width": "fill_container",
+              "layout": "vertical",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "d5Kj5o",
+                  "name": "Step 1",
+                  "width": "fill_container",
+                  "gap": 12,
+                  "padding": [
+                    8,
+                    0
+                  ],
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "zmNs7",
+                      "name": "Dot",
+                      "width": 28,
+                      "height": 28,
+                      "fill": "$--correct",
+                      "cornerRadius": 14,
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon",
+                          "id": "gpGIW",
+                          "name": "check",
+                          "width": 16,
+                          "height": 16,
+                          "icon": "check",
+                          "library": "lucide",
+                          "fill": "$--background"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "hL3du",
+                      "name": "Text",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 2,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "La07f",
+                          "name": "Removable wagers returned",
+                          "fill": "$--foreground",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "Removable wagers returned",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$--font-ui",
+                          "fontSize": 15,
+                          "fontWeight": "600"
+                        },
+                        {
+                          "type": "text",
+                          "id": "L1JUyW",
+                          "name": "+34",
+                          "fill": "$--muted-foreground",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "+34",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$--font-ui",
+                          "fontSize": 13,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "deElp",
+                  "name": "Step 2",
+                  "width": "fill_container",
+                  "gap": 12,
+                  "padding": [
+                    8,
+                    0
+                  ],
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "WYur5",
+                      "name": "Dot",
+                      "width": 28,
+                      "height": 28,
+                      "fill": "$--primary",
+                      "cornerRadius": 14,
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "Vrup0",
+                          "name": "2",
+                          "fill": "$--primary-foreground",
+                          "content": "2",
+                          "fontFamily": "$--font-ui",
+                          "fontSize": 13,
+                          "fontWeight": "700"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "Q8Bet2",
+                      "name": "Text",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 2,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "i3fqc",
+                          "name": "Final settlement · running",
+                          "fill": "$--foreground",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "Final settlement · running",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$--font-ui",
+                          "fontSize": 15,
+                          "fontWeight": "700"
+                        },
+                        {
+                          "type": "text",
+                          "id": "lBa0v",
+                          "name": "Pass line 10 on point 6. Rolli",
+                          "fill": "$--muted-foreground",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "Pass line 10 on point 6. Rolling automatically.",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$--font-ui",
+                          "fontSize": 13,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "v18vCz",
+                  "name": "Step 3",
+                  "width": "fill_container",
+                  "gap": 12,
+                  "padding": [
+                    8,
+                    0
+                  ],
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "w3HAz",
+                      "name": "Dot",
+                      "width": 28,
+                      "height": 28,
+                      "fill": "$--transparent",
+                      "cornerRadius": 14,
+                      "stroke": "$--control-border",
+                      "strokeWidth": 1.5,
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "KGbad",
+                          "name": "3",
+                          "fill": "$--muted-foreground",
+                          "content": "3",
+                          "fontFamily": "$--font-ui",
+                          "fontSize": 13,
+                          "fontWeight": "700"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "kxbp3",
+                      "name": "Text",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 2,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "LTtYp",
+                          "name": "Session result",
+                          "fill": "$--muted-foreground",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "Session result",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$--font-ui",
+                          "fontSize": 15,
+                          "fontWeight": "600"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "O3H1g",
+              "name": "Settlement log",
+              "clip": true,
+              "width": "fill_container",
+              "fill": "$--card",
+              "cornerRadius": 16,
+              "stroke": "$--border",
+              "strokeWidth": 1,
+              "layout": "vertical",
+              "children": [
+                {
+                  "id": "IOeHJ",
+                  "type": "ref",
+                  "ref": "YqcmY",
+                  "name": "Row Roll 2 · 2 + 1 = 3",
+                  "width": "fill_container",
+                  "descendants": {
+                    "laibs": {
+                      "icon": "dice-3"
+                    },
+                    "YsOgK": {
+                      "content": "Roll 1 · 2 + 1 = 3"
+                    },
+                    "AXfKi": {
+                      "content": "No decision for pass line"
+                    },
+                    "zwbRu": {
+                      "enabled": false,
+                      "content": "0"
+                    },
+                    "vgxOC": {
+                      "enabled": false
+                    }
+                  }
+                },
+                {
+                  "id": "lPOY7",
+                  "type": "ref",
+                  "ref": "YqcmY",
+                  "name": "Row Roll 3 · rolling…",
+                  "width": "fill_container",
+                  "strokeWidth": 0,
+                  "descendants": {
+                    "laibs": {
+                      "icon": "loader"
+                    },
+                    "YsOgK": {
+                      "content": "Roll 2 · rolling…"
+                    },
+                    "AXfKi": {
+                      "enabled": false,
+                      "content": "Saved before it's shown"
+                    },
+                    "zwbRu": {
+                      "enabled": false,
+                      "content": "—"
+                    },
+                    "vgxOC": {
+                      "enabled": false
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "PiHVJ",
+          "type": "ref",
+          "ref": "thF4f",
+          "name": "Tab Bar",
+          "width": "fill_container",
+          "descendants": {
+            "W3xcp3/n3nPM": {
+              "fill": "$--secondary",
+              "stroke": "$--primary",
+              "strokeWidth": 1.5
+            },
+            "W3xcp3/w9JZY0": {
+              "fill": "$--primary"
+            },
+            "W3xcp3/I1qtr": {
+              "fill": "$--foreground",
+              "fontWeight": "700"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "PWYp8",
+      "x": 5000,
+      "y": 14774,
+      "name": "[MVP] S1-11 Damaged session — can't be recovered",
+      "clip": true,
+      "width": 390,
+      "height": 844,
+      "fill": "$--background",
+      "cornerRadius": 32,
+      "layout": "vertical",
+      "children": [
+        {
+          "id": "h8cdf",
+          "type": "ref",
+          "ref": "g3jlEe",
+          "name": "Status Bar",
+          "width": "fill_container"
+        },
+        {
+          "id": "oqL6F",
+          "type": "ref",
+          "ref": "OhMJB",
+          "name": "Header",
+          "width": "fill_container",
+          "descendants": {
+            "q0sEP1": {
+              "content": "Craps session"
+            },
+            "ywbdp": {
+              "content": "Saved › Practice · 14 Oct"
+            },
+            "i2RY9": {
+              "enabled": false
+            }
+          }
+        },
+        {
+          "type": "frame",
+          "id": "F6lcI",
+          "name": "Body",
+          "width": "fill_container",
+          "height": "fill_container",
+          "layout": "vertical",
+          "gap": 16,
+          "padding": [
+            8,
+            20,
+            24,
+            20
+          ],
+          "children": [
+            {
+              "id": "lGjWJ",
+              "type": "ref",
+              "ref": "JF3sr",
+              "name": "Banner This session can't be recovered",
+              "width": "fill_container",
+              "stroke": "$--warning",
+              "descendants": {
+                "eLpEN": {
+                  "icon": "shield-alert",
+                  "fill": "$--warning"
+                },
+                "EEgQC": {
+                  "content": "This session can't be recovered"
+                },
+                "EzSwo": {
+                  "content": "Its saved state is damaged. We won't invent a result, so it's set aside and doesn't count toward your totals or adherence."
+                },
+                "yyGL5": {
+                  "enabled": false
+                },
+                "sFEVJ": {
+                  "content": "What happened?"
+                }
+              }
+            },
+            {
+              "type": "frame",
+              "id": "SS90j",
+              "name": "Details",
+              "clip": true,
+              "width": "fill_container",
+              "fill": "$--card",
+              "cornerRadius": 16,
+              "stroke": "$--border",
+              "strokeWidth": 1,
+              "layout": "vertical",
+              "gap": 8,
+              "padding": 16,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "JGgqG",
+                  "name": "KV Game",
+                  "width": "fill_container",
+                  "gap": 12,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "jyvv7",
+                      "name": "Game",
+                      "fill": "$--muted-foreground",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "Game",
+                      "lineHeight": 1.35,
+                      "fontFamily": "$--font-ui",
+                      "fontSize": 14,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "q8vjwG",
+                      "name": "Value Game",
+                      "fill": "$--foreground",
+                      "content": "Standard craps",
+                      "fontFamily": "$--font-ui",
+                      "fontSize": 15,
+                      "fontWeight": "600"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "sdtWw",
+                  "name": "KV Buy-in",
+                  "width": "fill_container",
+                  "gap": 12,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "XVCUx",
+                      "name": "Buy-in",
+                      "fill": "$--muted-foreground",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "Buy-in",
+                      "lineHeight": 1.35,
+                      "fontFamily": "$--font-ui",
+                      "fontSize": 14,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "YeypD",
+                      "name": "Value Buy-in",
+                      "fill": "$--foreground",
+                      "content": "1,000",
+                      "fontFamily": "$--font-ui",
+                      "fontSize": 15,
+                      "fontWeight": "600"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "SMG7z",
+                  "x": 16,
+                  "y": 70,
+                  "name": "KV Rolls recorded",
+                  "enabled": false,
+                  "width": "fill_container(318)",
+                  "gap": 12,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "ydEjM",
+                      "name": "Rolls recorded",
+                      "fill": "$--muted-foreground",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "Rolls recorded",
+                      "lineHeight": 1.35,
+                      "fontFamily": "$--font-ui",
+                      "fontSize": 14,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "LCrrv",
+                      "name": "Value Rolls recorded",
+                      "fill": "$--foreground",
+                      "content": "38 before the defect",
+                      "fontFamily": "$--font-ui",
+                      "fontSize": 15,
+                      "fontWeight": "600"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "Vi0qE",
+                  "name": "KV Result",
+                  "width": "fill_container",
+                  "gap": 12,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "y8HDBD",
+                      "name": "Result",
+                      "fill": "$--muted-foreground",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "Result",
+                      "lineHeight": 1.35,
+                      "fontFamily": "$--font-ui",
+                      "fontSize": 14,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "XLtAl",
+                      "name": "Value Result",
+                      "fill": "$--foreground",
+                      "content": "Not available",
+                      "fontFamily": "$--font-ui",
+                      "fontSize": 15,
+                      "fontWeight": "600"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "yJczS",
+                  "x": 16,
+                  "y": 124,
+                  "name": "KV Engine",
+                  "enabled": false,
+                  "width": "fill_container(318)",
+                  "gap": 12,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "ncgmA",
+                      "name": "Engine",
+                      "fill": "$--muted-foreground",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "Engine",
+                      "lineHeight": 1.35,
+                      "fontFamily": "$--font-ui",
+                      "fontSize": 14,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "qdfZZ",
+                      "name": "Value Engine",
+                      "fill": "$--foreground",
+                      "content": "1.2.0 (affected)",
+                      "fontFamily": "$--font-ui",
+                      "fontSize": 15,
+                      "fontWeight": "600"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "id": "E8Yiaz",
+              "name": "Your other sessions aren't aff",
+              "fill": "$--muted-foreground",
+              "textGrowth": "fixed-width",
+              "width": "fill_container",
+              "content": "Your other sessions aren't affected.",
+              "lineHeight": 1.5,
+              "fontFamily": "$--font-ui",
+              "fontSize": 13,
+              "fontWeight": "normal"
+            },
+            {
+              "id": "zzjIb",
+              "type": "ref",
+              "ref": "CF3yA",
+              "name": "Button Back to Home",
+              "width": "fill_container",
+              "descendants": {
+                "lehj6": {
+                  "content": "Back to Home"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "HPkeP",
+          "type": "ref",
+          "ref": "thF4f",
+          "name": "Tab Bar",
+          "width": "fill_container",
+          "descendants": {
+            "tc5Fu/n3nPM": {
+              "fill": "$--secondary",
+              "stroke": "$--primary",
+              "strokeWidth": 1.5
+            },
+            "tc5Fu/w9JZY0": {
+              "fill": "$--primary"
+            },
+            "tc5Fu/I1qtr": {
+              "fill": "$--foreground",
+              "fontWeight": "700"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "eeWvw",
+      "x": 5450,
+      "y": 14774,
+      "name": "[MVP] S1-11 Update to resume — saved by a newer version",
+      "clip": true,
+      "width": 390,
+      "height": 844,
+      "fill": "$--background",
+      "cornerRadius": 32,
+      "layout": "vertical",
+      "children": [
+        {
+          "id": "wAthI",
+          "type": "ref",
+          "ref": "g3jlEe",
+          "name": "Status Bar",
+          "width": "fill_container"
+        },
+        {
+          "id": "Hwtoq",
+          "type": "ref",
+          "ref": "OhMJB",
+          "name": "Header",
+          "width": "fill_container",
+          "padding": [
+            0,
+            8,
+            0,
+            20
+          ],
+          "descendants": {
+            "pWOeg": {
+              "enabled": false
+            },
+            "q0sEP1": {
+              "content": "Play",
+              "fontSize": 22
+            },
+            "ywbdp": {
+              "enabled": false
+            },
+            "i2RY9": {
+              "enabled": false
+            }
+          }
+        },
+        {
+          "type": "frame",
+          "id": "WFDny",
+          "name": "Body",
+          "width": "fill_container",
+          "height": "fill_container",
+          "layout": "vertical",
+          "gap": 16,
+          "padding": [
+            8,
+            20,
+            24,
+            20
+          ],
+          "children": [
+            {
+              "type": "text",
+              "id": "UBJ5D",
+              "name": "Title Pick up where you le",
+              "fill": "$--foreground",
+              "textGrowth": "fixed-width",
+              "width": "fill_container",
+              "content": "Update to resume",
+              "lineHeight": 1.15,
+              "fontFamily": "$--font-display",
+              "fontSize": 26,
+              "fontWeight": "normal"
+            },
+            {
+              "type": "text",
+              "id": "JG5ec",
+              "name": "Tableside closed during your ",
+              "fill": "$--muted-foreground",
+              "textGrowth": "fixed-width",
+              "width": "fill_container",
+              "content": "Your blackjack session was saved by a newer version of Tableside. Update the app to pick it up exactly where you left off. Nothing has changed.",
+              "lineHeight": 1.5,
+              "fontFamily": "$--font-ui",
+              "fontSize": 14,
+              "fontWeight": "normal"
+            },
+            {
+              "type": "frame",
+              "id": "lVxIi",
+              "x": 20,
+              "y": 133,
+              "name": "Session card",
+              "enabled": false,
+              "clip": true,
+              "width": "fill_container(350)",
+              "fill": "$--card",
+              "cornerRadius": 16,
+              "stroke": "$--border",
+              "strokeWidth": 1,
+              "layout": "vertical",
+              "gap": 10,
+              "padding": 16,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "MN4RG",
+                  "name": "Head",
+                  "width": "fill_container",
+                  "gap": 8,
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "z4EXYo",
+                      "name": "Blackjack · guided practice",
+                      "fill": "$--foreground",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "Blackjack · guided practice",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$--font-ui",
+                      "fontSize": 16,
+                      "fontWeight": "700"
+                    },
+                    {
+                      "id": "jp7t0",
+                      "type": "ref",
+                      "ref": "VMvcV",
+                      "name": "Badge Paused",
+                      "descendants": {
+                        "YzOJ0": {
+                          "icon": "circle-pause"
+                        },
+                        "KRoRg": {
+                          "content": "Paused"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "f9jk9",
+                  "name": "KV Where you were",
+                  "width": "fill_container",
+                  "gap": 12,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "rfxQx",
+                      "name": "Where you were",
+                      "fill": "$--muted-foreground",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "Where you were",
+                      "lineHeight": 1.35,
+                      "fontFamily": "$--font-ui",
+                      "fontSize": 14,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "k7Dm9q",
+                      "name": "Value Where you were",
+                      "fill": "$--foreground",
+                      "content": "Your decision, hand 14",
+                      "fontFamily": "$--font-ui",
+                      "fontSize": 15,
+                      "fontWeight": "600"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "N1gLyF",
+                  "name": "KV Your hand",
+                  "width": "fill_container",
+                  "gap": 12,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "UW9BF",
+                      "name": "Your hand",
+                      "fill": "$--muted-foreground",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "Your hand",
+                      "lineHeight": 1.35,
+                      "fontFamily": "$--font-ui",
+                      "fontSize": 14,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "Vv89j",
+                      "name": "Value Your hand",
+                      "fill": "$--foreground",
+                      "content": "A♥ 6♣ vs dealer 5♠",
+                      "fontFamily": "$--font-ui",
+                      "fontSize": 15,
+                      "fontWeight": "600"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "A6999Z",
+                  "name": "KV Session balance",
+                  "width": "fill_container",
+                  "gap": 12,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "zTqKr",
+                      "name": "Session balance",
+                      "fill": "$--muted-foreground",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "Session balance",
+                      "lineHeight": 1.35,
+                      "fontFamily": "$--font-ui",
+                      "fontSize": 14,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "kh8Qe",
+                      "name": "Value Session balance",
+                      "fill": "$--foreground",
+                      "content": "950",
+                      "fontFamily": "$--font-ui",
+                      "fontSize": 15,
+                      "fontWeight": "600"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "BVSuP",
+                  "name": "KV Strategy",
+                  "width": "fill_container",
+                  "gap": 12,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "Bu3jO",
+                      "name": "Strategy",
+                      "fill": "$--muted-foreground",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "Strategy",
+                      "lineHeight": 1.35,
+                      "fontFamily": "$--font-ui",
+                      "fontSize": 14,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "tYpsz",
+                      "name": "Value Strategy",
+                      "fill": "$--foreground",
+                      "content": "Basic strategy · S17 LS",
+                      "fontFamily": "$--font-ui",
+                      "fontSize": 15,
+                      "fontWeight": "600"
+                    }
+                  ]
+                },
+                {
+                  "type": "text",
+                  "id": "kxar9",
+                  "name": "Same rules, strategy revision ",
+                  "fill": "$--muted-foreground",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "Same rules, strategy revision and shoe as before.",
+                  "lineHeight": 1.5,
+                  "fontFamily": "$--font-ui",
+                  "fontSize": 12.5,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "id": "YI8FV",
+              "type": "ref",
+              "ref": "CF3yA",
+              "name": "Button Back to Home",
+              "width": "fill_container",
+              "descendants": {
+                "lehj6": {
+                  "content": "Back to Home"
+                }
+              }
+            },
+            {
+              "id": "ow13K",
+              "type": "ref",
+              "ref": "uAI8V",
+              "enabled": false,
+              "name": "Button End session",
+              "height": 48,
+              "width": "fill_container(350)",
+              "descendants": {
+                "aQg5h": {
+                  "icon": "circle-stop"
+                },
+                "JPqtW": {
+                  "content": "End session"
+                }
+              }
+            },
+            {
+              "type": "text",
+              "id": "x4G0vw",
+              "x": 20,
+              "y": 477,
+              "name": "Resuming isn't a new buy-in. E",
+              "enabled": false,
+              "fill": "$--muted-foreground",
+              "textGrowth": "fixed-width",
+              "width": "fill_container(350)",
+              "content": "Resuming isn't a new buy-in. Ending returns removable wagers and settles the rest.",
+              "lineHeight": 1.5,
+              "fontFamily": "$--font-ui",
+              "fontSize": 12.5,
+              "fontWeight": "normal"
+            }
+          ]
+        },
+        {
+          "id": "sWy54",
+          "type": "ref",
+          "ref": "thF4f",
+          "name": "Tab Bar",
+          "width": "fill_container",
+          "descendants": {
+            "W3xcp3/n3nPM": {
+              "fill": "$--secondary",
+              "stroke": "$--primary",
+              "strokeWidth": 1.5
+            },
+            "W3xcp3/w9JZY0": {
+              "fill": "$--primary"
+            },
+            "W3xcp3/I1qtr": {
+              "fill": "$--foreground",
+              "fontWeight": "700"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "ELaGj",
+      "x": 5900,
+      "y": 14774,
+      "name": "[MVP] S1-11 Resume an interrupted session — training-bankroll session",
+      "clip": true,
+      "width": 390,
+      "height": 844,
+      "fill": "$--background",
+      "cornerRadius": 32,
+      "layout": "vertical",
+      "children": [
+        {
+          "id": "i7BpNI",
+          "type": "ref",
+          "ref": "g3jlEe",
+          "name": "Status Bar",
+          "width": "fill_container"
+        },
+        {
+          "id": "iv4u0",
+          "type": "ref",
+          "ref": "OhMJB",
+          "name": "Header",
+          "width": "fill_container",
+          "padding": [
+            0,
+            8,
+            0,
+            20
+          ],
+          "descendants": {
+            "pWOeg": {
+              "enabled": false
+            },
+            "q0sEP1": {
+              "content": "Play",
+              "fontSize": 22
+            },
+            "ywbdp": {
+              "enabled": false
+            },
+            "i2RY9": {
+              "enabled": false
+            }
+          }
+        },
+        {
+          "type": "frame",
+          "id": "r1vfo",
+          "name": "Body",
+          "width": "fill_container",
+          "height": "fill_container",
+          "layout": "vertical",
+          "gap": 16,
+          "padding": [
+            8,
+            20,
+            24,
+            20
+          ],
+          "children": [
+            {
+              "type": "text",
+              "id": "UoP6s",
+              "name": "Title Pick up where you le",
+              "fill": "$--foreground",
+              "textGrowth": "fixed-width",
+              "width": "fill_container",
+              "content": "Pick up where you left off",
+              "lineHeight": 1.15,
+              "fontFamily": "$--font-display",
+              "fontSize": 26,
+              "fontWeight": "normal"
+            },
+            {
+              "type": "text",
+              "id": "A6DnO",
+              "name": "Tableside closed during your ",
+              "fill": "$--muted-foreground",
+              "textGrowth": "fixed-width",
+              "width": "fill_container",
+              "content": "Tableside closed during your blackjack session. It's saved exactly as it was. Nothing was dealt or decided while you were away.",
+              "lineHeight": 1.5,
+              "fontFamily": "$--font-ui",
+              "fontSize": 14,
+              "fontWeight": "normal"
+            },
+            {
+              "type": "frame",
+              "id": "HCFDU",
+              "name": "Session card",
+              "clip": true,
+              "width": "fill_container",
+              "fill": "$--card",
+              "cornerRadius": 16,
+              "stroke": "$--border",
+              "strokeWidth": 1,
+              "layout": "vertical",
+              "gap": 10,
+              "padding": 16,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "K2uhW2",
+                  "name": "Head",
+                  "width": "fill_container",
+                  "gap": 8,
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "g15hO",
+                      "name": "Blackjack · guided practice",
+                      "fill": "$--foreground",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "Blackjack · guided practice",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$--font-ui",
+                      "fontSize": 16,
+                      "fontWeight": "700"
+                    },
+                    {
+                      "id": "FthyA",
+                      "type": "ref",
+                      "ref": "VMvcV",
+                      "name": "Badge Paused",
+                      "descendants": {
+                        "YzOJ0": {
+                          "icon": "circle-pause"
+                        },
+                        "KRoRg": {
+                          "content": "Paused"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "uBT5B",
+                  "name": "KV Where you were",
+                  "width": "fill_container",
+                  "gap": 12,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "cprMF",
+                      "name": "Where you were",
+                      "fill": "$--muted-foreground",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "Where you were",
+                      "lineHeight": 1.35,
+                      "fontFamily": "$--font-ui",
+                      "fontSize": 14,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "GNscF",
+                      "name": "Value Where you were",
+                      "fill": "$--foreground",
+                      "content": "Your decision, hand 14",
+                      "fontFamily": "$--font-ui",
+                      "fontSize": 15,
+                      "fontWeight": "600"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "Lj1PH",
+                  "name": "KV Your hand",
+                  "width": "fill_container",
+                  "gap": 12,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "B8xLB",
+                      "name": "Your hand",
+                      "fill": "$--muted-foreground",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "Your hand",
+                      "lineHeight": 1.35,
+                      "fontFamily": "$--font-ui",
+                      "fontSize": 14,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "NpzUP",
+                      "name": "Value Your hand",
+                      "fill": "$--foreground",
+                      "content": "A♥ 6♣ vs dealer 5♠",
+                      "fontFamily": "$--font-ui",
+                      "fontSize": 15,
+                      "fontWeight": "600"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "T987a8",
+                  "name": "KV Session balance",
+                  "width": "fill_container",
+                  "gap": 12,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "K8nJN",
+                      "name": "Session balance",
+                      "fill": "$--muted-foreground",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "Session balance",
+                      "lineHeight": 1.35,
+                      "fontFamily": "$--font-ui",
+                      "fontSize": 14,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "wnJS4",
+                      "name": "Value Session balance",
+                      "fill": "$--foreground",
+                      "content": "950",
+                      "fontFamily": "$--font-ui",
+                      "fontSize": 15,
+                      "fontWeight": "600"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "eYwgm",
+                  "name": "KV Strategy",
+                  "width": "fill_container",
+                  "gap": 12,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "mENbx",
+                      "name": "Strategy",
+                      "fill": "$--muted-foreground",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "Strategy",
+                      "lineHeight": 1.35,
+                      "fontFamily": "$--font-ui",
+                      "fontSize": 14,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "PdHCl",
+                      "name": "Value Strategy",
+                      "fill": "$--foreground",
+                      "content": "Basic strategy · S17 LS",
+                      "fontFamily": "$--font-ui",
+                      "fontSize": 15,
+                      "fontWeight": "600"
+                    }
+                  ]
+                },
+                {
+                  "type": "text",
+                  "id": "s9TnLb",
+                  "name": "Same rules, strategy revision ",
+                  "fill": "$--muted-foreground",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "Same rules, strategy revision and shoe as before.",
+                  "lineHeight": 1.5,
+                  "fontFamily": "$--font-ui",
+                  "fontSize": 12.5,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "id": "R2YCt",
+              "type": "ref",
+              "ref": "CF3yA",
+              "name": "Button Resume session",
+              "height": 48,
+              "width": "fill_container",
+              "descendants": {
+                "Ostw3": {
+                  "icon": "play"
+                },
+                "lehj6": {
+                  "content": "Resume session"
+                }
+              }
+            },
+            {
+              "id": "vkSoC",
+              "type": "ref",
+              "ref": "uAI8V",
+              "name": "Button End session",
+              "height": 48,
+              "width": "fill_container",
+              "descendants": {
+                "aQg5h": {
+                  "icon": "circle-stop"
+                },
+                "JPqtW": {
+                  "content": "End session"
+                }
+              }
+            },
+            {
+              "type": "text",
+              "id": "fSlv7",
+              "name": "Resuming isn't a new buy-in. E",
+              "fill": "$--muted-foreground",
+              "textGrowth": "fixed-width",
+              "width": "fill_container",
+              "content": "Resuming doesn't allocate your training bankroll again. Ending returns removable wagers and settles the rest.",
+              "lineHeight": 1.5,
+              "fontFamily": "$--font-ui",
+              "fontSize": 12.5,
+              "fontWeight": "normal"
+            }
+          ]
+        },
+        {
+          "id": "pvcdX",
+          "type": "ref",
+          "ref": "thF4f",
+          "name": "Tab Bar",
+          "width": "fill_container",
+          "descendants": {
+            "W3xcp3/n3nPM": {
+              "fill": "$--secondary",
+              "stroke": "$--primary",
+              "strokeWidth": 1.5
+            },
+            "W3xcp3/w9JZY0": {
+              "fill": "$--primary"
+            },
+            "W3xcp3/I1qtr": {
+              "fill": "$--foreground",
+              "fontWeight": "700"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "aXinl",
+      "x": 6350,
+      "y": 14774,
+      "name": "[MVP] S1-11 Quarantined session — training-bankroll session",
+      "clip": true,
+      "width": 390,
+      "height": 844,
+      "fill": "$--background",
+      "cornerRadius": 32,
+      "layout": "vertical",
+      "children": [
+        {
+          "id": "ittPK",
+          "type": "ref",
+          "ref": "g3jlEe",
+          "name": "Status Bar",
+          "width": "fill_container"
+        },
+        {
+          "id": "q4uGU",
+          "type": "ref",
+          "ref": "OhMJB",
+          "name": "Header",
+          "width": "fill_container",
+          "descendants": {
+            "q0sEP1": {
+              "content": "Craps session"
+            },
+            "ywbdp": {
+              "content": "Saved › Practice · 14 Oct"
+            },
+            "i2RY9": {
+              "enabled": false
+            }
+          }
+        },
+        {
+          "type": "frame",
+          "id": "OWrnq",
+          "name": "Body",
+          "width": "fill_container",
+          "height": "fill_container",
+          "layout": "vertical",
+          "gap": 16,
+          "padding": [
+            8,
+            20,
+            24,
+            20
+          ],
+          "children": [
+            {
+              "id": "QuDYf",
+              "type": "ref",
+              "ref": "JF3sr",
+              "name": "Banner This session is quarantined",
+              "width": "fill_container",
+              "stroke": "$--warning",
+              "descendants": {
+                "eLpEN": {
+                  "icon": "shield-alert",
+                  "fill": "$--warning"
+                },
+                "EEgQC": {
+                  "content": "This session is quarantined"
+                },
+                "EzSwo": {
+                  "content": "We found a defect in the game engine that affected this session. We won't invent a result, so it's set aside and doesn't count toward your totals or adherence."
+                },
+                "sFEVJ": {
+                  "content": "What happened?"
+                }
+              }
+            },
+            {
+              "type": "frame",
+              "id": "dJYAT",
+              "name": "Details",
+              "clip": true,
+              "width": "fill_container",
+              "fill": "$--card",
+              "cornerRadius": 16,
+              "stroke": "$--border",
+              "strokeWidth": 1,
+              "layout": "vertical",
+              "gap": 8,
+              "padding": 16,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "q20dp",
+                  "name": "KV Game",
+                  "width": "fill_container",
+                  "gap": 12,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "GhIUo",
+                      "name": "Game",
+                      "fill": "$--muted-foreground",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "Game",
+                      "lineHeight": 1.35,
+                      "fontFamily": "$--font-ui",
+                      "fontSize": 14,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "O6dRpO",
+                      "name": "Value Game",
+                      "fill": "$--foreground",
+                      "content": "Standard craps",
+                      "fontFamily": "$--font-ui",
+                      "fontSize": 15,
+                      "fontWeight": "600"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "mf2p6",
+                  "name": "KV From training bankroll",
+                  "width": "fill_container",
+                  "gap": 12,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "bLNfm",
+                      "name": "Buy-in",
+                      "fill": "$--muted-foreground",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "From training bankroll",
+                      "lineHeight": 1.35,
+                      "fontFamily": "$--font-ui",
+                      "fontSize": 14,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "yaNBw",
+                      "name": "Value Buy-in",
+                      "fill": "$--foreground",
+                      "content": "500",
+                      "fontFamily": "$--font-ui",
+                      "fontSize": 15,
+                      "fontWeight": "600"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "W5TCG",
+                  "name": "KV Rolls recorded",
+                  "width": "fill_container",
+                  "gap": 12,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "CBW7r",
+                      "name": "Rolls recorded",
+                      "fill": "$--muted-foreground",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "Rolls recorded",
+                      "lineHeight": 1.35,
+                      "fontFamily": "$--font-ui",
+                      "fontSize": 14,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "XwDDO",
+                      "name": "Value Rolls recorded",
+                      "fill": "$--foreground",
+                      "content": "38 before the defect",
+                      "fontFamily": "$--font-ui",
+                      "fontSize": 15,
+                      "fontWeight": "600"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "gSm7T",
+                  "name": "KV Result",
+                  "width": "fill_container",
+                  "gap": 12,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "wau39",
+                      "name": "Result",
+                      "fill": "$--muted-foreground",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "Result",
+                      "lineHeight": 1.35,
+                      "fontFamily": "$--font-ui",
+                      "fontSize": 14,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "OUSD6",
+                      "name": "Value Result",
+                      "fill": "$--foreground",
+                      "content": "Not available",
+                      "fontFamily": "$--font-ui",
+                      "fontSize": 15,
+                      "fontWeight": "600"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "BW1tv",
+                  "name": "KV Engine",
+                  "width": "fill_container",
+                  "gap": 12,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "klbEP",
+                      "name": "Engine",
+                      "fill": "$--muted-foreground",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "Engine",
+                      "lineHeight": 1.35,
+                      "fontFamily": "$--font-ui",
+                      "fontSize": 14,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "Dvs44",
+                      "name": "Value Engine",
+                      "fill": "$--foreground",
+                      "content": "1.2.0 (affected)",
+                      "fontFamily": "$--font-ui",
+                      "fontSize": 15,
+                      "fontWeight": "600"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "id": "hDCOl",
+              "name": "Your other sessions aren't aff",
+              "fill": "$--muted-foreground",
+              "textGrowth": "fixed-width",
+              "width": "fill_container",
+              "content": "Your other sessions aren't affected. You can still see this one's recorded rolls.",
+              "lineHeight": 1.5,
+              "fontFamily": "$--font-ui",
+              "fontSize": 13,
+              "fontWeight": "normal"
+            },
+            {
+              "id": "GNPPI",
+              "type": "ref",
+              "ref": "uAI8V",
+              "name": "Button View recorded rolls",
+              "height": 48,
+              "width": "fill_container",
+              "descendants": {
+                "aQg5h": {
+                  "icon": "list"
+                },
+                "JPqtW": {
+                  "content": "View recorded rolls"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "K2HDj",
+          "type": "ref",
+          "ref": "thF4f",
+          "name": "Tab Bar",
+          "width": "fill_container",
+          "descendants": {
+            "tc5Fu/n3nPM": {
+              "fill": "$--secondary",
+              "stroke": "$--primary",
+              "strokeWidth": 1.5
+            },
+            "tc5Fu/w9JZY0": {
+              "fill": "$--primary"
+            },
+            "tc5Fu/I1qtr": {
+              "fill": "$--foreground",
+              "fontWeight": "700"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "XDvvs",
+      "x": 6600,
+      "y": 8250,
+      "name": "[MVP] S1-02 Session setup — Roulette guided · strategy can outgrow the table max (non-blocking note)",
+      "clip": true,
+      "width": 390,
+      "fill": "$--background",
+      "cornerRadius": 32,
+      "layout": "vertical",
+      "children": [
+        {
+          "id": "nRw6t",
+          "type": "ref",
+          "ref": "g3jlEe",
+          "name": "Status Bar",
+          "width": "fill_container"
+        },
+        {
+          "id": "xlmAM",
+          "type": "ref",
+          "ref": "OhMJB",
+          "name": "Header",
+          "width": "fill_container",
+          "descendants": {
+            "q0sEP1": {
+              "content": "Roulette"
+            },
+            "ywbdp": {
+              "content": "New session"
+            },
+            "tuIR3": {
+              "icon": "info"
+            }
+          }
+        },
+        {
+          "type": "frame",
+          "id": "nxWfI",
+          "name": "Body",
+          "width": "fill_container",
+          "layout": "vertical",
+          "gap": 24,
+          "padding": [
+            8,
+            20,
+            24,
+            20
+          ],
+          "children": [
+            {
+              "type": "frame",
+              "id": "IWTzr",
+              "name": "Mode",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 10,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "BRjn3",
+                  "name": "Section How do you want to play?",
+                  "fill": "$--muted-foreground",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "HOW DO YOU WANT TO PLAY?",
+                  "lineHeight": 1.4,
+                  "fontFamily": "$--font-ui",
+                  "fontSize": 12,
+                  "fontWeight": "700",
+                  "letterSpacing": 1
+                },
+                {
+                  "id": "I3E6Cb",
+                  "type": "ref",
+                  "ref": "IZz7B",
+                  "name": "Segmented",
+                  "width": "fill_container",
+                  "descendants": {
+                    "c2OS6v": {
+                      "fill": "$--transparent"
+                    },
+                    "dZTOO": {
+                      "enabled": false
+                    },
+                    "yJN6t": {
+                      "content": "Free play",
+                      "fill": "$--foreground"
+                    },
+                    "V4AScD": {
+                      "fill": "$--primary"
+                    },
+                    "b5FUdy": {
+                      "icon": "check",
+                      "enabled": true,
+                      "fill": "$--primary-foreground"
+                    },
+                    "J0SJcq": {
+                      "content": "Guided practice",
+                      "fill": "$--primary-foreground"
+                    },
+                    "beCLo": {
+                      "enabled": false
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "NRqpi",
+              "name": "Learn this game",
+              "clip": true,
+              "width": "fill_container",
+              "fill": "$--card",
+              "cornerRadius": 16,
+              "stroke": "$--border",
+              "strokeWidth": 1,
+              "layout": "vertical",
+              "children": [
+                {
+                  "id": "SBDkH",
+                  "type": "ref",
+                  "ref": "YqcmY",
+                  "name": "Row Learn this game",
+                  "width": "fill_container",
+                  "strokeWidth": 0,
+                  "descendants": {
+                    "laibs": {
+                      "icon": "graduation-cap"
+                    },
+                    "YsOgK": {
+                      "content": "Learn this game"
+                    },
+                    "AXfKi": {
+                      "content": "Roulette lessons · Roulette basics and the five built-in strategies"
+                    },
+                    "zwbRu": {
+                      "enabled": false
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "y66SgM",
+              "name": "Wheel",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 10,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "d3q27B",
+                  "name": "Section Wheel",
+                  "fill": "$--muted-foreground",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "WHEEL",
+                  "lineHeight": 1.4,
+                  "fontFamily": "$--font-ui",
+                  "fontSize": 12,
+                  "fontWeight": "700",
+                  "letterSpacing": 1
+                },
+                {
+                  "id": "Opuse",
+                  "type": "ref",
+                  "ref": "IZz7B",
+                  "name": "Segmented",
+                  "width": "fill_container",
+                  "descendants": {
+                    "c2OS6v": {
+                      "fill": "$--primary"
+                    },
+                    "dZTOO": {
+                      "icon": "check",
+                      "enabled": true,
+                      "fill": "$--primary-foreground"
+                    },
+                    "yJN6t": {
+                      "content": "Single zero (0)",
+                      "fill": "$--primary-foreground",
+                      "fontSize": 13
+                    },
+                    "V4AScD": {
+                      "fill": "$--transparent"
+                    },
+                    "b5FUdy": {
+                      "enabled": false
+                    },
+                    "J0SJcq": {
+                      "content": "Double zero (0, 00)",
+                      "fill": "$--foreground",
+                      "fontSize": 13
+                    },
+                    "beCLo": {
+                      "enabled": false
+                    }
+                  }
+                },
+                {
+                  "type": "text",
+                  "id": "Tk5mv",
+                  "name": "Even-money bets lose in full w",
+                  "fill": "$--muted-foreground",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "Even-money bets lose in full when the ball lands on zero.",
+                  "lineHeight": 1.5,
+                  "fontFamily": "$--font-ui",
+                  "fontSize": 13,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "RoVSg",
+              "name": "Strategy",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 10,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "fJIy1",
+                  "name": "Section Strategy",
+                  "fill": "$--muted-foreground",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "STRATEGY",
+                  "lineHeight": 1.4,
+                  "fontFamily": "$--font-ui",
+                  "fontSize": 12,
+                  "fontWeight": "700",
+                  "letterSpacing": 1
+                },
+                {
+                  "id": "ymI1C",
+                  "type": "ref",
+                  "ref": "jx5KQ",
+                  "name": "Option Flat even-money",
+                  "width": "fill_container",
+                  "descendants": {
+                    "CWIau": {
+                      "icon": "circle"
+                    },
+                    "nTFvj": {
+                      "content": "Flat even-money"
+                    },
+                    "husP9": {
+                      "content": "10 on one even-money target, every spin."
+                    },
+                    "p6HA5": {
+                      "enabled": false
+                    }
+                  }
+                },
+                {
+                  "id": "JDJ5Q",
+                  "type": "ref",
+                  "ref": "jx5KQ",
+                  "name": "Option Fixed two-dozen coverage",
+                  "width": "fill_container",
+                  "descendants": {
+                    "CWIau": {
+                      "icon": "circle"
+                    },
+                    "nTFvj": {
+                      "content": "Fixed two-dozen coverage"
+                    },
+                    "husP9": {
+                      "content": "10 on each of two dozens you choose."
+                    },
+                    "p6HA5": {
+                      "enabled": false
+                    }
+                  }
+                },
+                {
+                  "id": "oYm7b",
+                  "type": "ref",
+                  "ref": "jx5KQ",
+                  "name": "Option Capped Martingale",
+                  "width": "fill_container",
+                  "stroke": "$--primary",
+                  "strokeWidth": 2,
+                  "descendants": {
+                    "CWIau": {
+                      "icon": "circle-dot",
+                      "fill": "$--primary"
+                    },
+                    "nTFvj": {
+                      "content": "Capped Martingale"
+                    },
+                    "husP9": {
+                      "content": "10, 20, 40, 80, 160, 320 after each loss. A win completes the cycle; a loss at 320 ends it at the cap."
+                    },
+                    "p6HA5": {
+                      "enabled": false
+                    }
+                  }
+                },
+                {
+                  "type": "frame",
+                  "id": "xN37O",
+                  "name": "Target",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 8,
+                  "padding": [
+                    0,
+                    0,
+                    6,
+                    34
+                  ],
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "XJMqY",
+                      "name": "Target",
+                      "fill": "$--foreground",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "Target",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$--font-ui",
+                      "fontSize": 13,
+                      "fontWeight": "600"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "tF2oV",
+                      "name": "Chips",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 8,
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "hfjAF",
+                          "name": "Chip Row",
+                          "width": "fill_container",
+                          "gap": 8,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "zoXcd",
+                              "name": "Chip Red",
+                              "width": "fill_container",
+                              "height": 44,
+                              "fill": "$--primary",
+                              "cornerRadius": 999,
+                              "stroke": "$--primary",
+                              "strokeWidth": 1.5,
+                              "gap": 6,
+                              "padding": [
+                                0,
+                                14
+                              ],
+                              "justifyContent": "center",
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "icon",
+                                  "id": "YnLaC",
+                                  "name": "check",
+                                  "width": 16,
+                                  "height": 16,
+                                  "icon": "check",
+                                  "library": "lucide",
+                                  "fill": "$--primary-foreground"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "B7DvhF",
+                                  "name": "Red",
+                                  "fill": "$--primary-foreground",
+                                  "content": "Red",
+                                  "fontFamily": "$--font-ui",
+                                  "fontSize": 14,
+                                  "fontWeight": "600"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "S2ARji",
+                              "name": "Chip Black",
+                              "width": "fill_container",
+                              "height": 44,
+                              "fill": "$--transparent",
+                              "cornerRadius": 999,
+                              "stroke": "$--control-border",
+                              "strokeWidth": 1.5,
+                              "gap": 6,
+                              "padding": [
+                                0,
+                                14
+                              ],
+                              "justifyContent": "center",
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "WWO3K",
+                                  "name": "Black",
+                                  "fill": "$--foreground",
+                                  "content": "Black",
+                                  "fontFamily": "$--font-ui",
+                                  "fontSize": 14,
+                                  "fontWeight": "600"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "JtxqK",
+                              "name": "Chip Odd",
+                              "width": "fill_container",
+                              "height": 44,
+                              "fill": "$--transparent",
+                              "cornerRadius": 999,
+                              "stroke": "$--control-border",
+                              "strokeWidth": 1.5,
+                              "gap": 6,
+                              "padding": [
+                                0,
+                                14
+                              ],
+                              "justifyContent": "center",
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "G021nd",
+                                  "name": "Odd",
+                                  "fill": "$--foreground",
+                                  "content": "Odd",
+                                  "fontFamily": "$--font-ui",
+                                  "fontSize": 14,
+                                  "fontWeight": "600"
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "E7gmf",
+                          "name": "Chip Row",
+                          "width": "fill_container",
+                          "gap": 8,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "iei2B",
+                              "name": "Chip Even",
+                              "width": "fill_container",
+                              "height": 44,
+                              "fill": "$--transparent",
+                              "cornerRadius": 999,
+                              "stroke": "$--control-border",
+                              "strokeWidth": 1.5,
+                              "gap": 6,
+                              "padding": [
+                                0,
+                                14
+                              ],
+                              "justifyContent": "center",
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "pRehN",
+                                  "name": "Even",
+                                  "fill": "$--foreground",
+                                  "content": "Even",
+                                  "fontFamily": "$--font-ui",
+                                  "fontSize": 14,
+                                  "fontWeight": "600"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "EciIz",
+                              "name": "Chip 1–18",
+                              "width": "fill_container",
+                              "height": 44,
+                              "fill": "$--transparent",
+                              "cornerRadius": 999,
+                              "stroke": "$--control-border",
+                              "strokeWidth": 1.5,
+                              "gap": 6,
+                              "padding": [
+                                0,
+                                14
+                              ],
+                              "justifyContent": "center",
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "Lkzen",
+                                  "name": "1–18",
+                                  "fill": "$--foreground",
+                                  "content": "1–18",
+                                  "fontFamily": "$--font-ui",
+                                  "fontSize": 14,
+                                  "fontWeight": "600"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "in1BV",
+                              "name": "Chip 19–36",
+                              "width": "fill_container",
+                              "height": 44,
+                              "fill": "$--transparent",
+                              "cornerRadius": 999,
+                              "stroke": "$--control-border",
+                              "strokeWidth": 1.5,
+                              "gap": 6,
+                              "padding": [
+                                0,
+                                14
+                              ],
+                              "justifyContent": "center",
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "TMedY",
+                                  "name": "19–36",
+                                  "fill": "$--foreground",
+                                  "content": "19–36",
+                                  "fontFamily": "$--font-ui",
+                                  "fontSize": 14,
+                                  "fontWeight": "600"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "id": "L2Yb6e",
+                  "type": "ref",
+                  "ref": "jx5KQ",
+                  "name": "Option Three-win parlay",
+                  "width": "fill_container",
+                  "descendants": {
+                    "CWIau": {
+                      "icon": "circle"
+                    },
+                    "nTFvj": {
+                      "content": "Three-win parlay"
+                    },
+                    "husP9": {
+                      "content": "10, 20, 40 after each win. A loss or the third win completes the cycle."
+                    },
+                    "p6HA5": {
+                      "enabled": false
+                    }
+                  }
+                },
+                {
+                  "id": "zSYJm",
+                  "type": "ref",
+                  "ref": "jx5KQ",
+                  "name": "Option Bounded Labouchere",
+                  "width": "fill_container",
+                  "descendants": {
+                    "CWIau": {
+                      "icon": "circle"
+                    },
+                    "nTFvj": {
+                      "content": "Bounded Labouchere"
+                    },
+                    "husP9": {
+                      "content": "Line 10, 20, 30: bet first plus last. A win crosses them off, a loss adds the stake. An empty line completes the cycle; a stake over 320 ends it at the cap."
+                    },
+                    "p6HA5": {
+                      "enabled": false
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "RPUUe",
+              "name": "Limits",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 12,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "iNIgn",
+                  "name": "Section Table limits",
+                  "fill": "$--muted-foreground",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "TABLE LIMITS",
+                  "lineHeight": 1.4,
+                  "fontFamily": "$--font-ui",
+                  "fontSize": 12,
+                  "fontWeight": "700",
+                  "letterSpacing": 1
+                },
+                {
+                  "type": "frame",
+                  "id": "fOheP",
+                  "name": "Inside bets",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 8,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "i1z2J",
+                      "name": "Inside bets",
+                      "fill": "$--foreground",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "Inside bets",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$--font-ui",
+                      "fontSize": 14,
+                      "fontWeight": "700"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "yr75U",
+                      "name": "Min Max",
+                      "width": "fill_container",
+                      "gap": 12,
+                      "children": [
+                        {
+                          "id": "hcUUR",
+                          "type": "ref",
+                          "ref": "q7tKG1",
+                          "name": "Field Minimum",
+                          "width": "fill_container",
+                          "descendants": {
+                            "Bn1EQ": {
+                              "content": "Minimum"
+                            },
+                            "GixSU": {
+                              "content": "1"
+                            },
+                            "oDMpN": {
+                              "content": "units"
+                            },
+                            "nTdiH": {
+                              "enabled": false
+                            }
+                          }
+                        },
+                        {
+                          "id": "Cmr9O",
+                          "type": "ref",
+                          "ref": "q7tKG1",
+                          "name": "Field Maximum",
+                          "width": "fill_container",
+                          "descendants": {
+                            "Bn1EQ": {
+                              "content": "Maximum"
+                            },
+                            "GixSU": {
+                              "content": "100"
+                            },
+                            "oDMpN": {
+                              "content": "units"
+                            },
+                            "nTdiH": {
+                              "enabled": false
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "krYky",
+                      "name": "Per placement.",
+                      "fill": "$--muted-foreground",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "Per placement.",
+                      "lineHeight": 1.5,
+                      "fontFamily": "$--font-ui",
+                      "fontSize": 12.5,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "u89t6",
+                  "name": "Outside bets",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 8,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "mOiCx",
+                      "name": "Outside bets",
+                      "fill": "$--foreground",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "Outside bets",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$--font-ui",
+                      "fontSize": 14,
+                      "fontWeight": "700"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "kF7U6",
+                      "name": "Min Max",
+                      "width": "fill_container",
+                      "gap": 12,
+                      "children": [
+                        {
+                          "id": "Y0e8n",
+                          "type": "ref",
+                          "ref": "q7tKG1",
+                          "name": "Field Minimum",
+                          "width": "fill_container",
+                          "descendants": {
+                            "Bn1EQ": {
+                              "content": "Minimum"
+                            },
+                            "GixSU": {
+                              "content": "10"
+                            },
+                            "oDMpN": {
+                              "content": "units"
+                            },
+                            "nTdiH": {
+                              "enabled": false
+                            }
+                          }
+                        },
+                        {
+                          "id": "ld0Zy",
+                          "type": "ref",
+                          "ref": "q7tKG1",
+                          "name": "Field Maximum",
+                          "width": "fill_container",
+                          "descendants": {
+                            "Bn1EQ": {
+                              "content": "Maximum"
+                            },
+                            "GixSU": {
+                              "content": "100"
+                            },
+                            "oDMpN": {
+                              "content": "units"
+                            },
+                            "nTdiH": {
+                              "enabled": false
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "V6QQc",
+                      "name": "Per placement. Your strategy u",
+                      "fill": "$--muted-foreground",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "Per placement.",
+                      "lineHeight": 1.5,
+                      "fontFamily": "$--font-ui",
+                      "fontSize": 12.5,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "id": "kYAdl",
+                  "type": "ref",
+                  "ref": "JF3sr",
+                  "name": "Banner Capped Martingale can reach 320",
+                  "width": "fill_container",
+                  "descendants": {
+                    "EEgQC": {
+                      "content": "Capped Martingale can reach 320"
+                    },
+                    "EzSwo": {
+                      "content": "This table's outside-bet max is 100, so it will pause there. You can still start."
+                    },
+                    "yyGL5": {
+                      "enabled": false
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "u3uj1A",
+              "name": "Buy-in",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 10,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "UNokU",
+                  "name": "Section Buy-in",
+                  "fill": "$--muted-foreground",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "BUY-IN",
+                  "lineHeight": 1.4,
+                  "fontFamily": "$--font-ui",
+                  "fontSize": 12,
+                  "fontWeight": "700",
+                  "letterSpacing": 1
+                },
+                {
+                  "id": "XZMbx",
+                  "type": "ref",
+                  "ref": "q7tKG1",
+                  "name": "Field Starting chips for this session",
+                  "width": "fill_container",
+                  "descendants": {
+                    "Bn1EQ": {
+                      "content": "Starting chips for this session"
+                    },
+                    "GixSU": {
+                      "content": "1,000"
+                    },
+                    "oDMpN": {
+                      "content": "units"
+                    },
+                    "nTdiH": {
+                      "content": "Your last roulette buy-in. Each session starts fresh."
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "id": "kIrkw",
+              "type": "ref",
+              "ref": "CF3yA",
+              "name": "Button Start guided practice",
+              "height": 48,
+              "width": "fill_container",
+              "descendants": {
+                "Ostw3": {
+                  "icon": "play"
+                },
+                "lehj6": {
+                  "content": "Start guided practice"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "OUVVv",
+          "type": "ref",
+          "ref": "thF4f",
+          "name": "Tab Bar",
+          "width": "fill_container",
+          "descendants": {
+            "Ms9hC/n3nPM": {
+              "fill": "$--secondary",
+              "stroke": "$--primary",
+              "strokeWidth": 1.5
+            },
+            "Ms9hC/w9JZY0": {
+              "fill": "$--primary"
+            },
+            "Ms9hC/I1qtr": {
+              "fill": "$--foreground",
+              "fontWeight": "700"
+            }
+          }
         }
       ]
     }
