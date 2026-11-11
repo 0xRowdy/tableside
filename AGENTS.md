@@ -18,7 +18,7 @@ Single-context: `CONTEXT.md` at the repo root, ADRs under `docs/adr/`. See `docs
 
 ### Design frames
 
-Reading or matching screens: see `docs/agents/design-frames.md`.
+Reading, matching or editing screens: see `docs/agents/design-frames.md`.
 
 ### Code review
 

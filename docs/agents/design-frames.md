@@ -6,7 +6,7 @@
 
 - The file is encrypted: read it through the pencil MCP tools only. Load them with ToolSearch (`mcp__pencil__*`), then read the server's skill with `read_skill` before the first `execute`.
 - `execute` needs the file open in the Pen app and `filePath` set to the absolute path of `design/Tableside.pen`.
-- Read-only: use `Get`, `Print`, `GetVariables` and `TakeScreenshot`. The file is edited only in the Pen app by its owner.
+- Read with `Get`, `Print`, `GetVariables` and `TakeScreenshot`. Edit only for a ticket that asks for frame changes (see Editing).
 - The file keeps hidden leftovers. Skip every subtree with `enabled === false` or `visible === false`.
 - Functions don't persist between `execute` calls: define helpers in the same call that uses them.
 
@@ -49,6 +49,17 @@ Get((n, c) => { if (c.depth === 0) { c.skipChildren(); if (/S1-/.test(n.name || 
 - `Annotation — … (not UI)` frames under a screen are designer notes, in the pink `--annotation` color: read them, never draw them.
 - The NOTES frame (`egBbr`, x 3700, y 5800) records design rulings per spec in columns, by question id (`Q3`, `S6-Q4`, …). Read the column for your spec.
 - Phone frames are 390 wide; a frame without a fixed height scrolls.
+
+## Editing
+
+A ticket that asks for frame changes runs in a live session: the owner opens the file in Pen, the agent edits.
+
+- Check out the design branch first: Pen loads and saves whichever branch is checked out. Commit `design/Tableside.pen` alone on that branch.
+- Edit with `Insert`, `Copy`, `Update` and `Move`. Check each new frame with `TakeScreenshot`.
+- Place new frames inside the spec's canvas band, clear of other frames. The NOTES board `egBbr` covers x 3700–6532, y 5800–9971.
+- Scope each `Get` to a frame id, or skip children at depth 0. A whole-document walk gets interrupted.
+- Save with the pencil `save` tool; if it fails, ask the owner to press Cmd+S. Confirm `git status` shows the file changed.
+- A newer Pen raises the file's `"version"` when it saves (2.21 → 2.22). Commit that line with design work and leave it out of other commits.
 
 ## Copy
 
