@@ -29,7 +29,7 @@ function controllerFor(session: AccountSession) {
 }
 
 function active(snapshot: PracticeSnapshot) {
-  if (snapshot.status !== 'active') throw new Error(`expected an active session, got ${snapshot.status}`);
+  if (snapshot.status !== 'active') throw new Error(`expected an active practice session, got ${snapshot.status}`);
   return snapshot;
 }
 
@@ -51,7 +51,7 @@ describe('practice on an account', () => {
     expect(snapshot.status === 'completed' && snapshot.result).toEqual(records[0]);
   });
 
-  it('resumes an unfinished session after a restart, from the account database', async () => {
+  it('resumes an unfinished practice session after a restart, from the account database', async () => {
     const device = newDevice();
     const first = opened(await device.vault().signIn('account-a'));
     const controller = controllerFor(first);
@@ -67,7 +67,7 @@ describe('practice on an account', () => {
     expect(active(restarted.snapshot()).view).toMatchObject({ wagers: [{ target: 'red', amount: '10' }] });
   });
 
-  it('lets an account switch leave nothing half-saved: the old session writes and reveals nothing, and the next account sees none of it', async () => {
+  it('lets an account switch leave nothing half-saved: the earlier account session\'s practice writes and reveals nothing, and the next account sees none of it', async () => {
     const vault = newDevice().vault();
     const a = opened(await vault.signIn('account-a'));
     const controller = controllerFor(a);

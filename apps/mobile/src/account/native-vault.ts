@@ -10,7 +10,7 @@ import * as SQLite from 'expo-sqlite';
 import { AppState } from 'react-native';
 
 import { excludeFromBackup } from '../../modules/backup-exclusion';
-import { classifySqlError, openVerifiedConnection, SqlError, type RawSqlConnection, type SqlDriver } from './sql';
+import { classifySqlError, isDatabaseKey, openVerifiedConnection, SqlError, type RawSqlConnection, type SqlDriver } from './sql';
 import { AccountVault, type VaultFiles, type VaultKeyStore } from './vault';
 
 /** The vault's directory under the app's documents (Android: files) directory. plugins/with-backup-exclusion.js names it too. */
@@ -50,7 +50,7 @@ export function createNativeVault(environment: string): AccountVault {
  */
 export const expoSqlCipherDriver: SqlDriver = {
   async open(path, keyHex) {
-    if (!/^[0-9a-f]{64}$/.test(keyHex)) throw new SqlError('other', 'the key must be 64 hex digits');
+    if (!isDatabaseKey(keyHex)) throw new SqlError('other', 'the key must be 64 hex digits');
     const slash = path.lastIndexOf('/');
     let db: SQLite.SQLiteDatabase;
     try {
@@ -123,6 +123,10 @@ function appFiles(): VaultFiles {
       const directory = new Directory(path);
       directory.create({ idempotent: true, intermediates: true });
       await excludeFromBackup(directory.uri);
+    },
+    async list(path) {
+      const directory = new Directory(path);
+      return directory.exists ? directory.list().map((entry) => entry.name) : [];
     },
     async size(path) {
       const file = new File(path);

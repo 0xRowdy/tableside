@@ -9,6 +9,3 @@ allowBuilds:
   esbuild: true
   '@parcel/watcher': false
   unrs-resolver: false
-
-minimumReleaseAgeExclude:
-  - expo-sqlite@58.0.17

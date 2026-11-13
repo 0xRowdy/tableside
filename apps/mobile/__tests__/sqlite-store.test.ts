@@ -211,6 +211,26 @@ describe('the SQLCipher store', () => {
     expect((await (await openStore(path)).load('a1'))?.sequence).toBe(0);
   });
 
+  it('commits nothing when the account session ends while its transaction is running', async () => {
+    const path = databasePath();
+    let current = true;
+    let endSessionOnWrite = false;
+    const driver = nodeSqlCipherDriver({
+      fault: () => {
+        if (endSessionOnWrite) current = false;
+        return undefined;
+      },
+    });
+    const store = await SqliteActivityStore.open(await driver.open(path, KEY), CONTRACT_IDENTITY, { isCurrent: () => current });
+    opened.push(store);
+    await store.createActivity(newActivity('a1'));
+
+    endSessionOnWrite = true;
+
+    await expect(store.commitTransition(transition('a1', 0))).rejects.toBeInstanceOf(StaleSessionError);
+    expect((await (await openStore(path)).load('a1'))?.sequence).toBe(0);
+  });
+
   it('pauses play before any unsaved reveal when the disk is full, with a save status and a retry that carries on', async () => {
     let fault: 'full' | 'io' | undefined;
     const store = await openStore(databasePath(), CONTRACT_IDENTITY, nodeSqlCipherDriver({ fault: () => fault }));

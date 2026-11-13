@@ -106,6 +106,25 @@ describe('the account vault', () => {
       expect(await after.store.readOutgoing()).toEqual([]);
     });
 
+    it('reports a sign-in that a sign-out overtook as superseded, never as an open session', async () => {
+      const device = new Device();
+      let release: () => void = () => undefined;
+      const opening = new Promise<void>((resolve) => (release = resolve));
+      const driver = nodeSqlCipherDriver();
+      const vault = device.vault('production', { open: async (path, key) => (await opening, driver.open(path, key)) });
+
+      const signIn = vault.signIn('account-a');
+      await settle();
+      // The generation moves on at once; the sign-out's close waits for the open in flight.
+      const signOut = vault.signOut();
+      release();
+      await signOut;
+
+      expect(await signIn).toEqual({ status: 'superseded' });
+      const next = opened(await vault.signIn('account-a'));
+      expect(next.generation).toBe(vault.generation);
+    });
+
     it('drops an asynchronous completion that arrives after the generation moved on', async () => {
       const vault = new Device().vault();
       const session = opened(await vault.signIn('account-a'));
@@ -265,24 +284,29 @@ describe('the account vault', () => {
   });
 
   describe('installation identity', () => {
-    it('never infers identity from restored files: a restored installation file without its device-only keychain entry starts a new installation', async () => {
+    it('never infers identity from restored files, and never replaces their databases: an account with one is Recovery needed', async () => {
       const original = new Device();
       const old = opened(await original.vault().signIn('account-a'));
       await old.store.createActivity(practiceIn(old, 'a1'));
       await old.store.close();
 
-      // A new phone restored from a backup of the old one's files (were they ever backed up); device-only keychain entries don't move.
+      // Files that came back without their device-only keychain entries (a restore, were they ever backed up, or a lost keychain).
       const restored = new Device();
       restored.files = original.files;
       const before = snapshot(original.files);
-      const session = opened(await restored.vault().signIn('account-a'));
+      const vault = restored.vault();
+      const other = opened(await vault.signIn('account-b'));
+      const outcome = await vault.signIn('account-a');
+      const afterRestart = await restored.vault().signIn('account-a');
 
-      expect(session.installationId).not.toBe(old.installationId);
-      expect(await session.store.findUnfinished()).toBeNull();
-      // The restored installation's databases are left exactly as they were.
-      const restoredDatabases = Object.entries(before).filter(([path]) => path.includes(`/${old.installationId}/`));
-      expect(restoredDatabases.length).toBeGreaterThan(0);
-      expect(restoredDatabases.every(([path, bytes]) => snapshot(original.files)[path] === bytes)).toBe(true);
+      expect(other.installationId).not.toBe(old.installationId);
+      expect(outcome).toMatchObject({ status: 'recovery-needed', reason: 'key-missing' });
+      expect(afterRestart).toMatchObject({ status: 'recovery-needed', reason: 'key-missing' });
+      // The earlier installation's databases are left exactly as they were, and no empty one is made for account A.
+      const earlier = Object.entries(before).filter(([path]) => path.includes(`/${old.installationId}/`));
+      expect(earlier.length).toBeGreaterThan(0);
+      expect(earlier.every(([path, bytes]) => snapshot(original.files)[path] === bytes)).toBe(true);
+      expect(original.files.written().filter((path) => path.endsWith('account-a.db'))).toHaveLength(1);
     });
 
     it('never infers identity from surviving keychain entries: a reinstall gets a new installation and ignores the old keys', async () => {

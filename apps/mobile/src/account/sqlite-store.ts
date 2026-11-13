@@ -127,6 +127,9 @@ const SCHEMA = [
   ) STRICT`,
 ];
 
+/** The columns every stored value carries: its text, and the format, length and hash its reads check. */
+const BODY = 'body, body_format, body_length, body_sha256';
+
 interface BodyRow {
   readonly body: string;
   readonly body_format: number;
@@ -190,7 +193,7 @@ export class SqliteActivityStore implements ActivityStore {
       if (existing) return existing;
       const stored: StoredActivity = { ...activity, sequence: 0, completion: null, incomplete: null };
       await tx.run(
-        `INSERT INTO activities (activity_id, position, status, sequence, body, body_format, body_length, body_sha256)
+        `INSERT INTO activities (activity_id, position, status, sequence, ${BODY})
          VALUES (?, (SELECT coalesce(max(position), 0) + 1 FROM activities), ?, 0, ?, ?, ?, ?)`,
         [activity.activityId, statusOf(stored), ...encode(stored)],
       );
@@ -205,7 +208,7 @@ export class SqliteActivityStore implements ActivityStore {
   findUnfinished(): Promise<StoredActivity | null> {
     return this.transaction(async (tx) => {
       const row = await tx.get<BodyRow>(
-        `SELECT body, body_format, body_length, body_sha256 FROM activities WHERE status = 'unfinished' ORDER BY position LIMIT 1`,
+        `SELECT ${BODY} FROM activities WHERE status = 'unfinished' ORDER BY position LIMIT 1`,
       );
       return row ? decode<StoredActivity>(row) : null;
     });
@@ -220,7 +223,7 @@ export class SqliteActivityStore implements ActivityStore {
       await addEffects(tx, commit.activityId, commit.effects);
       const transition: CommittedTransition = { receipt: commit.receipt, checkpoint: commit.checkpoint, facts: commit.facts };
       await tx.run(
-        `INSERT INTO transitions (activity_id, command_id, sequence, body, body_format, body_length, body_sha256) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO transitions (activity_id, command_id, sequence, ${BODY}) VALUES (?, ?, ?, ?, ?, ?, ?)`,
         [commit.activityId, commit.receipt.commandId, commit.priorSequence, ...encode(transition)],
       );
       await writeActivity(tx, { ...activity, checkpoint: commit.checkpoint, sequence: commit.priorSequence + 1 });
@@ -237,7 +240,7 @@ export class SqliteActivityStore implements ActivityStore {
 
   readEffects(activityId: string): Promise<readonly AllowanceEffect[]> {
     return this.transaction(async (tx) =>
-      (await tx.all<BodyRow>('SELECT body, body_format, body_length, body_sha256 FROM effects WHERE activity_id = ? ORDER BY position', [activityId])).map((row) =>
+      (await tx.all<BodyRow>(`SELECT ${BODY} FROM effects WHERE activity_id = ? ORDER BY position`, [activityId])).map((row) =>
         decode<AllowanceEffect>(row),
       ),
     );
@@ -245,7 +248,7 @@ export class SqliteActivityStore implements ActivityStore {
 
   readTransitions(activityId: string): Promise<readonly CommittedTransition[]> {
     return this.transaction(async (tx) =>
-      (await tx.all<BodyRow>('SELECT body, body_format, body_length, body_sha256 FROM transitions WHERE activity_id = ? ORDER BY sequence', [activityId])).map((row) =>
+      (await tx.all<BodyRow>(`SELECT ${BODY} FROM transitions WHERE activity_id = ? ORDER BY sequence`, [activityId])).map((row) =>
         decode<CommittedTransition>(row),
       ),
     );
@@ -265,7 +268,7 @@ export class SqliteActivityStore implements ActivityStore {
       await writeActivity(tx, { ...activity, completion: record });
       const sync: OutgoingSyncRecord = { id: `completed/${record.activityId}`, kind: 'completed-practice-session', record };
       await tx.run(
-        `INSERT INTO outgoing (id, activity_id, position, body, body_format, body_length, body_sha256)
+        `INSERT INTO outgoing (id, activity_id, position, ${BODY})
          VALUES (?, ?, (SELECT coalesce(max(position), 0) + 1 FROM outgoing), ?, ?, ?, ?)`,
         [sync.id, record.activityId, ...encode(sync)],
       );
@@ -285,16 +288,19 @@ export class SqliteActivityStore implements ActivityStore {
 
   readOutgoing(): Promise<readonly OutgoingSyncRecord[]> {
     return this.transaction(async (tx) =>
-      (await tx.all<BodyRow>('SELECT body, body_format, body_length, body_sha256 FROM outgoing ORDER BY position')).map((row) => decode<OutgoingSyncRecord>(row)),
+      (await tx.all<BodyRow>(`SELECT ${BODY} FROM outgoing ORDER BY position`)).map((row) => decode<OutgoingSyncRecord>(row)),
     );
   }
 
   private transaction<T>(work: (tx: SqlExecutor) => Promise<T>): Promise<T> {
-    // Checked before queuing (the session's connection may be closed already) and again when the transaction runs.
+    // Checked before queuing (the session's connection may be closed already), when the transaction starts, and before it commits.
     if (!this.isCurrent()) return Promise.reject(new StaleSessionError());
     return this.connection.transaction(async (tx) => {
       if (!this.isCurrent()) throw new StaleSessionError();
-      return work(tx);
+      const result = await work(tx);
+      // The session may have ended while the work ran: then nothing commits.
+      if (!this.isCurrent()) throw new StaleSessionError();
+      return result;
     });
   }
 }
@@ -302,7 +308,7 @@ export class SqliteActivityStore implements ActivityStore {
 const statusOf = (activity: StoredActivity) => (activity.completion ? 'completed' : activity.incomplete ? 'incomplete' : 'unfinished');
 
 async function readActivity(tx: SqlExecutor, activityId: string): Promise<StoredActivity | null> {
-  const row = await tx.get<BodyRow>('SELECT body, body_format, body_length, body_sha256 FROM activities WHERE activity_id = ?', [activityId]);
+  const row = await tx.get<BodyRow>(`SELECT ${BODY} FROM activities WHERE activity_id = ?`, [activityId]);
   return row ? decode<StoredActivity>(row) : null;
 }
 
@@ -320,7 +326,7 @@ async function writeActivity(tx: SqlExecutor, activity: StoredActivity): Promise
 }
 
 async function readTransition(tx: SqlExecutor, activityId: string, commandId: string): Promise<CommittedTransition | null> {
-  const row = await tx.get<BodyRow>('SELECT body, body_format, body_length, body_sha256 FROM transitions WHERE activity_id = ? AND command_id = ?', [
+  const row = await tx.get<BodyRow>(`SELECT ${BODY} FROM transitions WHERE activity_id = ? AND command_id = ?`, [
     activityId,
     commandId,
   ]);
@@ -332,7 +338,7 @@ async function addEffects(tx: SqlExecutor, activityId: string, effects: readonly
   for (const effect of effects) {
     const { grant, activity, sequence } = effect.effectId;
     await tx.run(
-      `INSERT OR IGNORE INTO effects (activity_id, effect_key, position, body, body_format, body_length, body_sha256)
+      `INSERT OR IGNORE INTO effects (activity_id, effect_key, position, ${BODY})
        VALUES (?, ?, (SELECT coalesce(max(position), 0) + 1 FROM effects WHERE activity_id = ?), ?, ?, ?, ?)`,
       [activityId, JSON.stringify([grant, activity, sequence]), activityId, ...encode(effect)],
     );

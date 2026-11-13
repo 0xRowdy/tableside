@@ -9,6 +9,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { AccountVault, type KeyRead, type VaultFiles, type VaultKeyStore } from '../vault';
+import type { SqlDriver } from '../sql';
 import { nodeSqlCipherDriver } from './node-sqlcipher';
 
 /** A device keychain. While `locked`, it answers nothing, as iOS does for a device-only entry on a locked device. */
@@ -67,6 +68,9 @@ export function nodeVaultFiles(root: string): NodeVaultFiles {
       mkdirSync(path, { recursive: true });
       excluded.add(path);
     },
+    async list(path) {
+      return existsSync(path) ? readdirSync(path) : [];
+    },
     async size(path) {
       return existsSync(path) ? statSync(path).size : null;
     },
@@ -88,12 +92,12 @@ export class TestDevice {
   files: NodeVaultFiles = nodeVaultFiles(this.root);
   private unlockWaiters: (() => void)[] = [];
 
-  vault(environment = 'production'): AccountVault {
+  vault(environment = 'production', driver: SqlDriver = nodeSqlCipherDriver()): AccountVault {
     return new AccountVault({
       environment,
       keys: this.keychain,
       files: this.files,
-      driver: nodeSqlCipherDriver(),
+      driver,
       randomBytes: (length) => new Uint8Array(randomBytes(length)),
       newId: () => `installation-${randomUUID()}`,
       unlocked: () => new Promise((resolve) => this.unlockWaiters.push(resolve)),

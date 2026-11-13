@@ -245,8 +245,8 @@ importers:
         specifier: ~58.0.0
         version: 58.0.10(expo@58.0.14)(supports-color@8.1.1)(typescript@6.0.3)
       expo-sqlite:
-        specifier: ~58.0.17
-        version: 58.0.17(expo@58.0.14)(react-native@0.88.0(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.0(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.3.0)(react@19.3.0)(supports-color@8.1.1))(react@19.3.0)
+        specifier: ~58.0.16
+        version: 58.0.16(expo@58.0.14)(react-native@0.88.0(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.0(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.3.0)(react@19.3.0)(supports-color@8.1.1))(react@19.3.0)
       expo-status-bar:
         specifier: ~58.0.0
         version: 58.0.3(expo@58.0.14)(react-native@0.88.0(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.0(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.3.0)(react@19.3.0)(supports-color@8.1.1))(react@19.3.0)
@@ -3197,8 +3197,8 @@ packages:
     peerDependencies:
       expo: '*'
 
-  expo-sqlite@58.0.17:
-    resolution: {integrity: sha512-nzIS8doaxGYPBu+jJD1aa1wsF5vsafLEr3ji4wwR1MWd66KV3u4lKotJPylxJkP08DZWn2uUnTXyMw9t7BdGUA==}
+  expo-sqlite@58.0.16:
+    resolution: {integrity: sha512-ASQX8NBNDl/A40mcNdwsu3uHEWKmza8pvsQfuGbo/rgPULbhaiZTqrug+bK1XtoXT5In/4vjc5gHUQnHB+fsgg==}
     peerDependencies:
       expo: '*'
       react: '*'
@@ -8848,7 +8848,7 @@ snapshots:
       - supports-color
       - typescript
 
-  expo-sqlite@58.0.17(expo@58.0.14)(react-native@0.88.0(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.0(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.3.0)(react@19.3.0)(supports-color@8.1.1))(react@19.3.0):
+  expo-sqlite@58.0.16(expo@58.0.14)(react-native@0.88.0(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.0(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.3.0)(react@19.3.0)(supports-color@8.1.1))(react@19.3.0):
     dependencies:
       await-lock: 2.2.2
       expo: 58.0.14(@babel/core@7.29.7(supports-color@8.1.1))(@expo/metro-runtime@58.0.14)(expo-router@58.0.23)(react-dom@19.3.1(react@19.3.0))(react-native-worklets@0.13.0(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.0(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(react-native@0.88.0(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.0(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.3.0)(react@19.3.0)(supports-color@8.1.1))(react@19.3.0)(supports-color@8.1.1))(react-native@0.88.0(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.0(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.3.0)(react@19.3.0)(supports-color@8.1.1))(react@19.3.0)(supports-color@8.1.1)(typescript@6.0.3)

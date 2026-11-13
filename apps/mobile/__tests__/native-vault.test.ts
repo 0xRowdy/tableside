@@ -1,5 +1,5 @@
 // The vault's native adapters at their platform boundary: what they ask of
-// SecureStore and Expo SQLite, and the Android backup rules. Native behaviour
+// SecureStore and Expo SQLite, and the Android backup rules. Native behavior
 // itself (the keychain, SQLCipher, iCloud and Auto Backup) is qualified on
 // devices (spec 2, launch gate 1).
 

@@ -266,6 +266,9 @@ One installation of the app on one device. Reinstalling creates a new installati
 **Account gate**:
 The account's current access state on an installation (active, signed out, revoked, deletion scheduled, recovery needed, or age unresolved), which decides whether ordinary access is open.
 
+**Account session**:
+One signed-in period of an account on an installation, from signing in (or switching to the account) until the next sign-in, sign-out or account switch. Work begun in an earlier account session never reads or writes the account's data.
+
 **Age eligibility**:
 An account's current established age band, or its unresolved or ineligible status, which governs access and protections. Only the current decision is kept.
 

@@ -5,7 +5,7 @@
 
 import Database from 'better-sqlite3-multiple-ciphers';
 
-import { classifySqlError, openVerifiedConnection, SqlError, type RawSqlConnection, type SqlDriver, type SqlValue } from '../sql';
+import { classifySqlError, isDatabaseKey, openVerifiedConnection, SqlError, type RawSqlConnection, type SqlDriver, type SqlValue } from '../sql';
 
 export interface NodeSqlCipherOptions {
   /**
@@ -24,7 +24,7 @@ const FAULTS = {
 export function nodeSqlCipherDriver(options: NodeSqlCipherOptions = {}): SqlDriver {
   return {
     async open(path, keyHex) {
-      if (!/^[0-9a-f]{64}$/.test(keyHex)) throw new SqlError('other', 'the key must be 64 hex digits');
+      if (!isDatabaseKey(keyHex)) throw new SqlError('other', 'the key must be 64 hex digits');
       let db: Database.Database;
       try {
         db = new Database(path);

@@ -33,6 +33,9 @@ export interface SqlConnection {
   close(): Promise<void>;
 }
 
+/** A database key: 32 random bytes as 64 lowercase hex digits. */
+export const isDatabaseKey = (keyHex: string): boolean => /^[0-9a-f]{64}$/.test(keyHex);
+
 export interface SqlDriver {
   /**
    * Opens the database file at `path` (creating it when absent) keyed with
