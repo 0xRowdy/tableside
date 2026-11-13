@@ -100,7 +100,7 @@ function bootedIosSimulator(): string {
 
 async function ensureAndroidDevice(): Promise<void> {
   if (androidDevices().length > 0) return;
-  const [avd] = execFileSync('emulator', ['-list-avds'], { encoding: 'utf8' }).split('\n').filter(Boolean);
+  const [avd] = parseAvdList(execFileSync('emulator', ['-list-avds'], { encoding: 'utf8' }));
   if (!avd) throw new Error('no Android device or emulator; create an AVD in Android Studio');
   const logFile = path.join(REPO_ROOT, 'harness-reports', 'emulator.log');
   mkdirSync(path.dirname(logFile), { recursive: true });
@@ -155,4 +155,16 @@ function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promi
 
 function log(message: string): void {
   console.log(`[harness] ${message}`);
+}
+
+/**
+ * The AVD names in `emulator -list-avds` output. Newer emulators print log
+ * lines (`INFO    | Storing crashdata in: …`) on the same stream; AVD names
+ * never contain spaces or `|`, so those lines are dropped.
+ */
+export function parseAvdList(output: string): string[] {
+  return output
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => /^[\w.-]+$/.test(line));
 }
