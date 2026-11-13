@@ -46,6 +46,11 @@ const config: ExpoConfig = {
     ],
     // Cues only: nothing plays in the background and nothing records.
     ['expo-audio', { microphonePermission: false, recordAudioAndroid: false, enableBackgroundPlayback: false, enableBackgroundRecording: false }],
+    // Account databases are SQLCipher: never stored unencrypted (src/account/native-vault.ts checks it at open).
+    ['expo-sqlite', { useSQLCipher: true }],
+    // Backup rules come from with-backup-exclusion, which also excludes SecureStore.
+    ['expo-secure-store', { configureAndroidBackup: false }],
+    './plugins/with-backup-exclusion',
     './plugins/with-engine-harness',
   ],
   experiments: {
