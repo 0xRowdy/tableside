@@ -1,7 +1,7 @@
 // When sync runs, for one account session (spec 2, *Timing*): upload after a
 // save; reconcile when the session opens, on entering the foreground, on
 // reconnection and every 60 s while foregrounded and connected; and on a live
-// "account changed" hint, which only the newest foregrounded device receives.
+// "account changed" hint, which only the newest foregrounded installation receives.
 // Every trigger coalesces into the engine's one run, so a hint arriving with
 // pending work makes no extra request. Ending the session stops everything:
 // timers, the live connection, and any answer still in flight.
@@ -42,16 +42,9 @@ export class SyncSession {
     this.live = new LiveUpdates(connect, () => this.reconcile());
     this.stops.push(
       store.onUploadQueued(() => this.reconcile()),
-      device.foreground.subscribe((foreground) => {
-        if (!foreground) return this.live.close();
-        this.reconcile();
-        this.goLive();
-      }),
-      device.online.subscribe((online) => {
-        if (!online) return this.live.close();
-        this.reconcile();
-        this.goLive();
-      }),
+      // Entering the foreground and reconnecting both reconcile and go live; leaving either ends the live connection.
+      device.foreground.subscribe((foreground) => this.activeChanged(foreground)),
+      device.online.subscribe((online) => this.activeChanged(online)),
       device.every(RECONCILE_INTERVAL_MS, () => {
         if (this.active()) this.reconcile();
       }),
@@ -60,7 +53,7 @@ export class SyncSession {
     this.goLive();
   }
 
-  /** Whether this device holds the live connection. */
+  /** Whether this installation holds the live connection. */
   get isLive(): boolean {
     return this.live.live;
   }
@@ -75,6 +68,12 @@ export class SyncSession {
     this.engine.stop();
     this.live.end();
     for (const stop of this.stops.splice(0)) stop();
+  }
+
+  private activeChanged(entered: boolean): void {
+    if (!entered) return this.live.close();
+    this.reconcile();
+    this.goLive();
   }
 
   private active(): boolean {

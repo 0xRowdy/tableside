@@ -31,8 +31,9 @@ export interface SyncBackend {
  * unsendable: an entry can't be sent (unknown type, invalid payload, operation reused).
  * unreadable-change: the feed holds a change this build can't apply; the cursor stays before it.
  * receipt-mismatch: a receipt doesn't match the request sent.
+ * storage: a local write failed (a full disk, an I/O error); nothing was half applied.
  */
-export type SyncErrorCode = 'offline' | 'incompatible' | 'unsendable' | 'unreadable-change' | 'receipt-mismatch';
+export type SyncErrorCode = 'offline' | 'incompatible' | 'unsendable' | 'unreadable-change' | 'receipt-mismatch' | 'storage';
 
 export interface SyncEngineOptions {
   readonly store: SyncStore;
@@ -47,7 +48,7 @@ export const FEED_PAGE_SIZE = 50;
 
 export class SyncEngine {
   private running: Promise<void> | null = null;
-  private again = false;
+  private rerunRequested = false;
   private stopped = false;
   private lastError: SyncErrorCode | null = null;
 
@@ -62,15 +63,15 @@ export class SyncEngine {
   reconcile(): Promise<void> {
     if (this.stopped) return Promise.resolve();
     if (this.running) {
-      this.again = true;
+      this.rerunRequested = true;
       return this.running;
     }
     this.running = (async () => {
       try {
         do {
-          this.again = false;
+          this.rerunRequested = false;
           this.lastError = await this.run();
-        } while (this.again && !this.stopped);
+        } while (this.rerunRequested && !this.stopped);
       } finally {
         this.running = null;
       }
@@ -91,10 +92,11 @@ export class SyncEngine {
   private async run(): Promise<SyncErrorCode | null> {
     try {
       return (await this.upload()) ?? (await this.pull());
-    } catch (error) {
-      // A stale session's store refuses; a dropped answer is not an error.
-      if (this.stopped) return null;
-      throw error;
+    } catch {
+      // A local transaction failed and rolled back: the queue and cursor are as
+      // they were, so the next run retries. After the session ended (the store
+      // refuses a stale session), the dropped work is not an error.
+      return this.stopped ? null : 'storage';
     }
   }
 
@@ -102,20 +104,17 @@ export class SyncEngine {
     const { store, registry } = this.options;
     const queue = await store.readUploadQueue();
     const pending = new Set(queue.map((entry) => entry.id));
-    const blockedTypes = new Set<string>();
+    // A barrier holds while any upload of its type is unacknowledged, wherever it sits in the queue.
+    const barrierPending = (recordType: string) => queue.some((entry) => entry.recordType === recordType && pending.has(entry.id));
     let error: SyncErrorCode | null = null;
     for (const entry of queue) {
       const type = registry.get(entry.recordType);
       if (!type || !type.isPayload(entry.payload)) {
         error ??= 'unsendable';
-        blockedTypes.add(entry.recordType);
         continue;
       }
-      // Its prerequisites are still pending: it waits, and so does anything behind it.
-      if (entry.dependencies.some((id) => pending.has(id)) || type.barriers.some((barrier) => blockedTypes.has(barrier))) {
-        blockedTypes.add(entry.recordType);
-        continue;
-      }
+      // Its prerequisites are still unacknowledged: it waits.
+      if (entry.dependencies.some((id) => pending.has(id)) || type.barriers.some(barrierPending)) continue;
       const operation = entry.operation ?? (await store.prepareUpload(entry.id, this.envelope(type, entry)));
       let answer: UploadAnswer;
       try {
@@ -124,13 +123,10 @@ export class SyncEngine {
         return 'offline';
       }
       if (this.stopped) return null;
-      const outcome = await this.apply(entry, type, operation, answer);
+      const outcome = await this.settleUpload(entry, type, operation, answer);
       if (outcome === 'acknowledged') pending.delete(entry.id);
-      else {
-        blockedTypes.add(entry.recordType);
-        if (outcome === 'incompatible') return 'incompatible';
-        error ??= outcome;
-      }
+      else if (outcome === 'incompatible') return 'incompatible';
+      else error ??= outcome;
     }
     return error;
   }
@@ -147,7 +143,8 @@ export class SyncEngine {
     });
   }
 
-  private async apply(
+  /** Applies the server's answer to an upload: a receipt is acknowledged; anything else leaves it pending. */
+  private async settleUpload(
     entry: QueuedUpload,
     type: RecordType,
     operation: PreparedOperation,

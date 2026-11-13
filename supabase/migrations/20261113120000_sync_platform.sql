@@ -1,7 +1,7 @@
 -- Synchronization platform (spec 2, #91): the per-account synchronization
 -- head, the server side of the record-type registry, durable operation
 -- receipts, the content-change feed, accepted practice results, and the
--- Realtime "account changed" hint with its newest-foregrounded-device claim.
+-- Realtime "account changed" hint with its newest-foregrounded-installation claim.
 --
 -- Lock order, for every operation and job that touches an account's
 -- authoritative state: the account's synchronization head, then its receipts,
@@ -68,7 +68,7 @@ create table private.practice_results (
   primary key (account_id, result_id)
 );
 
--- The newest Realtime claim per account: the device holding it keeps the live connection.
+-- The newest Realtime claim per account: the installation holding it keeps the live connection.
 create table private.realtime_claims (
   account_id uuid primary key references public.accounts (account_id),
   claim bigint not null
@@ -99,7 +99,7 @@ begin
     return jsonb_build_object('status', 'rejected', 'code', 'invalid-payload');
   end if;
   -- The item is the result's own identity; the owner is the authenticated
-  -- account, never a field the caller chose; the device is the installation that sent it.
+  -- account, never a field the caller chose; the record's device is the installation that sent it.
   if v_payload ->> 'activityId' is distinct from v_item then
     return jsonb_build_object('status', 'rejected', 'code', 'item-mismatch');
   end if;
@@ -173,13 +173,19 @@ begin
     or coalesce(v_request ->> 'installation', '') !~ '^[A-Za-z0-9_-]{1,128}$'
     or coalesce(v_request ->> 'item', '') !~ '^[A-Za-z0-9_:/.-]{1,200}$'
     or jsonb_typeof(v_request -> 'recordType') is distinct from 'string'
-    or jsonb_typeof(v_request -> 'payloadVersion') is distinct from 'number' then
+    or coalesce(v_request ->> 'payloadVersion', '') !~ '^[1-9][0-9]{0,8}$' then
     return jsonb_build_object('status', 'malformed');
   end if;
   v_hash := encode(extensions.digest(request, 'sha256'), 'hex');
 
   insert into private.sync_heads (account_id) values (v_account) on conflict do nothing;
   select sequence into v_head from private.sync_heads where account_id = v_account for update;
+  -- The gate again, now that the head serializes this upload with every other
+  -- authoritative change: a deletion scheduled or a session revoked while this
+  -- upload waited is seen here, and the upload is denied.
+  if private.active_account() is distinct from v_account then
+    raise exception 'not authorized' using errcode = '42501';
+  end if;
 
   select * into v_receipt from private.sync_receipts where account_id = v_account and operation_id = v_operation;
   if found then
@@ -243,8 +249,8 @@ end $$;
 -- Realtime: the private "account changed" hint and the live-connection claim
 -- ---------------------------------------------------------------------------
 
--- A foregrounded device claims the live connection. The newest claim wins:
--- every connected device hears it and only its holder stays connected.
+-- A foregrounded installation claims the live connection. The newest claim
+-- wins: every joined installation hears it and only its holder stays joined.
 create function public.realtime_claim_v1() returns jsonb
 language plpgsql volatile security definer set search_path = '' as $$
 declare

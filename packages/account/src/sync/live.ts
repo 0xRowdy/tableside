@@ -1,10 +1,10 @@
 // Live updates (spec 2, *Timing*; #50's Realtime amendment): while
-// foregrounded and connected, a device joins its account's private Realtime
-// topic, which carries only an "account changed" hint. The newest foregrounded
-// device holds the connection: each device that joins claims it, the server
-// tells every joined device the newest claim, and older holders leave. Devices
-// without the connection, and connections that are refused, rely on the 60 s
-// reconciliation. A hint only prompts a reconcile; it is never the record of a change.
+// foregrounded and connected, an installation joins its account's private
+// Realtime topic, which carries only an "account changed" hint. The newest
+// foregrounded installation holds the connection: each one that joins claims
+// it, the server tells every joined installation the newest claim, and older
+// holders leave. Installations without the connection, and connections that
+// are refused, rely on the 60 s reconciliation. A hint only prompts a reconcile; it is never the record of a change.
 
 export type LiveChannelStatus = 'joined' | 'closed';
 
@@ -17,7 +17,7 @@ export interface LiveChannel {
     readonly holder: (claim: number) => void;
     readonly status: (status: LiveChannelStatus) => void;
   }): void;
-  /** Claims the live connection for this device; resolves to the claim number. */
+  /** Claims the live connection for this installation; resolves to the claim number. */
   claim(): Promise<number>;
   leave(): void;
 }
@@ -35,7 +35,7 @@ export class LiveUpdates {
     private readonly onHint: () => void,
   ) {}
 
-  /** Whether this device holds the live connection now. */
+  /** Whether this installation holds the live connection now. */
   get live(): boolean {
     return this.channel !== null && this.joined && this.claim !== null;
   }
@@ -55,7 +55,7 @@ export class LiveUpdates {
       holder: (claim) => {
         if (this.channel !== channel) return;
         this.newest = Math.max(this.newest, claim);
-        // A newer device took over: give the connection up and use the 60 s path.
+        // A newer installation took over: give the connection up and use the 60 s path.
         if (this.claim !== null && claim > this.claim) this.close();
       },
       status: (status) => {

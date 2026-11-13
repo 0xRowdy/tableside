@@ -165,7 +165,7 @@ const SCHEMA = [
     receipt TEXT
   ) STRICT`,
   'CREATE INDEX outgoing_pending ON outgoing (status, position)',
-  // Records the account has accepted: this device's acknowledged uploads and the feed's changes.
+  // Records the account has accepted: this installation's acknowledged uploads and the feed's changes.
   `CREATE TABLE accepted_records (
     record_type TEXT NOT NULL,
     item_id TEXT NOT NULL,
@@ -174,8 +174,8 @@ const SCHEMA = [
     PRIMARY KEY (record_type, item_id)
   ) STRICT`,
   // The account sequence the feed has been applied through.
-  'CREATE TABLE feed_cursor (only INTEGER PRIMARY KEY CHECK (only = 1), sequence INTEGER NOT NULL) STRICT',
-  'INSERT INTO feed_cursor (only, sequence) VALUES (1, 0)',
+  'CREATE TABLE feed_cursor (singleton INTEGER PRIMARY KEY CHECK (singleton = 1), sequence INTEGER NOT NULL) STRICT',
+  'INSERT INTO feed_cursor (singleton, sequence) VALUES (1, 0)',
 ];
 
 /** The columns every stored value carries: its text, and the format, length and hash its reads check. */
@@ -418,7 +418,7 @@ export class SqliteActivityStore implements ActivityStore {
         if (record.sequence !== from + index + 1) throw new StoreError(`feed entry ${record.sequence} does not follow ${from + index}`);
         await putAccepted(tx, record);
       }
-      if (records.length > 0) await tx.run('UPDATE feed_cursor SET sequence = ? WHERE only = 1', [from + records.length]);
+      if (records.length > 0) await tx.run('UPDATE feed_cursor SET sequence = ? WHERE singleton = 1', [from + records.length]);
       return true;
     });
   }
@@ -473,7 +473,7 @@ function preparedOf(row: QueueRow): PreparedOperation | null {
 }
 
 async function readCursor(tx: SqlExecutor): Promise<number> {
-  const row = await tx.get<{ sequence: number }>('SELECT sequence FROM feed_cursor WHERE only = 1');
+  const row = await tx.get<{ sequence: number }>('SELECT sequence FROM feed_cursor WHERE singleton = 1');
   if (!row) throw new StoreIntegrityError('the feed cursor is missing');
   return row.sequence;
 }

@@ -8,7 +8,7 @@ import { SyncEngine, type SyncErrorCode } from './sync/engine';
 import { recordTypes } from './sync/registry';
 import { type DevicePorts, SyncSession } from './sync/session';
 import type { SyncStore } from './sync/store';
-import { supabaseLiveChannel, supabaseSyncBackend } from './sync/supabase';
+import { supabaseLiveChannels, supabaseSyncBackend } from './sync/supabase';
 
 /** The account's access state on this installation (spec 2, *Account gate*). Later tickets add the other states. */
 export type AccountGate =
@@ -58,7 +58,7 @@ export type VaultOpening =
   | { readonly status: 'superseded' };
 
 export interface SyncStatus {
-  /** Whether this device holds the account's live connection (the newest foregrounded device). */
+  /** Whether this installation holds the account's live connection (the newest foregrounded one). */
   readonly live: boolean;
   /** How the last synchronization run ended, if on an error. */
   readonly error: SyncErrorCode | null;
@@ -122,6 +122,12 @@ export interface AccountService {
 /** Where the signed-in account is remembered beside Auth's credentials. */
 const REMEMBERED_ACCOUNT = 'tableside.account';
 
+/** The account this installation is signed in to, with its established band. */
+interface RememberedAccount {
+  readonly accountId: string;
+  readonly eligibility: EligibilityBand;
+}
+
 interface Assertion {
   readonly token: string;
   readonly expiresAt: number;
@@ -145,7 +151,7 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
   };
 
   /** Opens the account's database for a new account session, and starts its sync. */
-  const openAccount = async (accountId: string, eligibility: EligibilityBand) => {
+  const openAccount = async ({ accountId, eligibility }: RememberedAccount) => {
     sync?.session.end();
     sync = null;
     const opening = await options.vault.open(accountId);
@@ -159,7 +165,7 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
       installationId,
       newOperationId: () => hex(options.randomBytes(16)),
     });
-    sync = { engine, session: new SyncSession(engine, store, options.device, () => supabaseLiveChannel(supabase, accountId)) };
+    sync = { engine, session: new SyncSession(engine, store, options.device, supabaseLiveChannels(supabase, accountId)) };
   };
 
   supabase.auth.onAuthStateChange((event) => {
@@ -223,8 +229,9 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
           return { status: 'failed' };
         }
         assertion = null;
-        await options.credentials.setItem(REMEMBERED_ACCOUNT, JSON.stringify({ accountId: account.account_id, eligibility: account.eligibility }));
-        await openAccount(account.account_id, account.eligibility);
+        const remembered: RememberedAccount = { accountId: account.account_id, eligibility: account.eligibility };
+        await options.credentials.setItem(REMEMBERED_ACCOUNT, JSON.stringify(remembered));
+        await openAccount(remembered);
         return { status: 'signed-in' };
       } catch {
         return { status: 'failed' };
@@ -235,7 +242,7 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
       const remembered = parseRemembered(await options.credentials.getItem(REMEMBERED_ACCOUNT));
       const { data } = await supabase.auth.getSession();
       if (!remembered || !data.session) return { status: 'no-account' };
-      await openAccount(remembered.accountId, remembered.eligibility);
+      await openAccount(remembered);
       return { status: 'resumed' };
     },
 
@@ -249,7 +256,7 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
   };
 }
 
-function parseRemembered(text: string | null): { accountId: string; eligibility: EligibilityBand } | null {
+function parseRemembered(text: string | null): RememberedAccount | null {
   try {
     const value = JSON.parse(text ?? 'null') as { accountId?: unknown; eligibility?: unknown } | null;
     if (value && typeof value.accountId === 'string' && typeof value.eligibility === 'string' && isEligible(value.eligibility)) {

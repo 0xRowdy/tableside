@@ -2,7 +2,7 @@
 // operations (supabase/migrations, `sync_upload_v1`, `sync_feed_v1`,
 // `realtime_claim_v1`) and the account's private Realtime topic.
 
-import type { SupabaseClient } from '@supabase/supabase-js';
+import type { RealtimeChannel, SupabaseClient } from '@supabase/supabase-js';
 
 import type { SyncBackend } from './engine';
 import type { LiveChannel } from './live';
@@ -10,53 +10,69 @@ import type { FeedPage, UploadAnswer } from './protocol';
 
 /**
  * Transaction contention the server reports instead of waiting without bound:
- * a lock wait timeout, a serialization failure or a deadlock. The operation
- * is idempotent, so it is retried, a bounded number of times.
+ * a lock wait timeout, a serialization failure or a deadlock. The operations
+ * are idempotent, so they are retried a bounded number of times, after a short pause.
  */
 const CONTENTION = new Set(['55P03', '40001', '40P01']);
 const CONTENTION_ATTEMPTS = 3;
+const CONTENTION_PAUSE_MS = 100;
 
-async function call<T>(supabase: SupabaseClient, operation: string, args: Record<string, unknown>): Promise<T> {
+async function callOperation<T>(supabase: SupabaseClient, operation: string, args: Record<string, unknown>): Promise<T> {
   for (let attempt = 1; ; attempt++) {
     const { data, error } = await supabase.rpc(operation, args);
     if (!error) return data as T;
     if (!CONTENTION.has(error.code) || attempt >= CONTENTION_ATTEMPTS) throw new Error(`${operation} failed: ${error.code}`);
+    await new Promise((resolve) => setTimeout(resolve, CONTENTION_PAUSE_MS * attempt));
   }
 }
 
 export function supabaseSyncBackend(supabase: SupabaseClient): SyncBackend {
   return {
-    upload: (request) => call<UploadAnswer>(supabase, 'sync_upload_v1', { request }),
-    feed: (after, pageSize) => call<FeedPage>(supabase, 'sync_feed_v1', { after, page_size: pageSize }),
+    upload: (request) => callOperation<UploadAnswer>(supabase, 'sync_upload_v1', { request }),
+    feed: (after, pageSize) => callOperation<FeedPage>(supabase, 'sync_feed_v1', { after, page_size: pageSize }),
   };
 }
 
-/** The account's private topic. Only the server sends on it. */
-export function supabaseLiveChannel(supabase: SupabaseClient, accountId: string): LiveChannel {
-  const channel = supabase.channel(`account:${accountId}`, { config: { private: true } });
-  return {
-    join(handlers) {
-      channel
-        .on('broadcast', { event: 'account-changed' }, () => handlers.hint())
-        .on('broadcast', { event: 'live-holder' }, ({ payload }) => {
-          const claim = (payload as { claim?: unknown } | undefined)?.claim;
-          if (typeof claim === 'number') handlers.holder(claim);
-        });
-      // Private topics authorize with the session's current access token.
-      void supabase.realtime.setAuth().then(
-        () =>
-          channel.subscribe((status) => {
-            if (status === 'SUBSCRIBED') handlers.status('joined');
-            else handlers.status('closed');
-          }),
-        () => handlers.status('closed'),
-      );
-    },
-    claim: async () => (await call<{ claim: number }>(supabase, 'realtime_claim_v1', {})).claim,
-    leave() {
-      // Removing the last channel also closes the socket, so a device without
-      // the live connection holds no Realtime connection at all.
-      void supabase.removeChannel(channel);
-    },
+/**
+ * Connections to the account's private topic, one at a time. Only the server
+ * sends on it. The client hands back a topic's channel until it has finished
+ * leaving, so a new connection waits for the previous one to be gone.
+ */
+export function supabaseLiveChannels(supabase: SupabaseClient, accountId: string): () => LiveChannel {
+  let leaving: Promise<unknown> = Promise.resolve();
+  return () => {
+    let channel: RealtimeChannel | null = null;
+    let left = false;
+    return {
+      join(handlers) {
+        void (async () => {
+          await leaving;
+          if (left) return;
+          const joined = supabase
+            .channel(`account:${accountId}`, { config: { private: true } })
+            .on('broadcast', { event: 'account-changed' }, () => handlers.hint())
+            .on('broadcast', { event: 'live-holder' }, ({ payload }) => {
+              const claim = (payload as { claim?: unknown } | undefined)?.claim;
+              if (typeof claim === 'number') handlers.holder(claim);
+            });
+          channel = joined;
+          try {
+            // Private topics authorize with the session's current access token.
+            await supabase.realtime.setAuth();
+          } catch {
+            return handlers.status('closed');
+          }
+          if (left) return;
+          joined.subscribe((status) => handlers.status(status === 'SUBSCRIBED' ? 'joined' : 'closed'));
+        })();
+      },
+      claim: async () => (await callOperation<{ claim: number }>(supabase, 'realtime_claim_v1', {})).claim,
+      leave() {
+        left = true;
+        // Removing the last channel also closes the socket, so an installation
+        // without the live connection holds no Realtime connection at all.
+        if (channel) leaving = supabase.removeChannel(channel).catch(() => undefined);
+      },
+    };
   };
 }

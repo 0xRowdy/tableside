@@ -7,7 +7,7 @@
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { RECONCILE_INTERVAL_MS, completedPracticeSession, recordTypes } from '../src';
+import { PLATFORM_TABLES, RECONCILE_INTERVAL_MS, completedPracticeSession, recordTypes } from '../src';
 import { type SimulatedDevice, createAccountByEmail, createDevice, localStack, signInByEmail, uniqueEmail } from '../src/testing';
 
 const devices: SimulatedDevice[] = [];
@@ -260,6 +260,36 @@ describe('kills, lost answers and duplicates count each session exactly once', (
   });
 });
 
+describe('the synchronization head', () => {
+  it('makes an upload wait for a contending transaction on the account, then commit after it', async () => {
+    const { phone } = await twoDevices();
+    const gate = phone.account.gate;
+    if (gate.state !== 'active') throw new Error('unreachable');
+    const { sql } = localStack();
+    let release!: () => void;
+    const released = new Promise<void>((resolve) => (release = resolve));
+    let locked!: () => void;
+    const isLocked = new Promise<void>((resolve) => (locked = resolve));
+    // Another authoritative change (a job, another device) holding the head.
+    const contender = sql.begin(async (tx) => {
+      await tx`insert into private.sync_heads (account_id) values (${gate.accountId}) on conflict do nothing`;
+      await tx`select 1 from private.sync_heads where account_id = ${gate.accountId} for update`;
+      locked();
+      await released;
+    });
+    await isLocked;
+
+    const result = await phone.playPracticeSession();
+    await new Promise((resolve) => setTimeout(resolve, 1_000));
+    expect(await phone.vault.store().readUploadQueue()).toHaveLength(1);
+
+    release();
+    await contender;
+    await phone.account.sync.idle();
+    expect(await sessionsOn(phone)).toEqual([{ item: result.activityId, sequence: 1 }]);
+  });
+});
+
 describe('live updates', () => {
   it('bring a change to the live device without waiting for the 60 s reconciliation', async () => {
     const { phone, tablet } = await twoDevices();
@@ -422,7 +452,7 @@ describe('the record-type registry', () => {
         select kind, accept::regproc::text as accept from private.record_types
         where record_type = ${type.name} and payload_version = ${type.payloadVersion}`;
       expect(row).toEqual({ kind: type.kind, accept: type.acceptance });
-      for (const table of type.deletion.serverTables) {
+      for (const table of [...type.deletion.serverTables, ...PLATFORM_TABLES]) {
         const [schema, name] = table.split('.');
         const columns = await sql`select 1 from information_schema.columns where table_schema = ${schema!} and table_name = ${name!} and column_name = 'account_id'`;
         expect(columns, table).toHaveLength(1);

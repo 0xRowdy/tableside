@@ -158,7 +158,7 @@ export function createDevice(stack: LocalStack, options: { readonly name: string
   const proxy = new FaultProxy();
   const clock = new FakeClock();
   const credentials = new MemoryCredentials();
-  const hardware = new TestDevice();
+  const storage = new TestDevice(); // the files and keychain, which outlive the app process
   const foreground = new Signal(true);
   const disk = { failing: false };
   const driver = nodeSqlCipherDriver({ fault: () => (disk.failing ? 'io' : undefined) });
@@ -166,7 +166,7 @@ export function createDevice(stack: LocalStack, options: { readonly name: string
   const launch = (): AppProcess => {
     let dead = false;
     const cancels: (() => void)[] = [];
-    const appVault = hardware.vault('local', driver);
+    const appVault = storage.vault('local', driver);
     let opening: AppVaultOpening | null = null;
 
     const vault: AccountVault = {
@@ -296,7 +296,7 @@ export function createDevice(stack: LocalStack, options: { readonly name: string
     },
     dispose() {
       app.kill();
-      hardware.remove();
+      storage.remove();
     },
   };
 }

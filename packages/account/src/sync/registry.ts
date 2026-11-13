@@ -6,7 +6,7 @@
 // (supabase/migrations): each registration here names the acceptance operation
 // registered there for the same type and payload version.
 
-import type { CompletedPracticeSessionRecord } from '@tableside/engine';
+import { type CompletedPracticeSessionRecord, decodeMoney } from '@tableside/engine';
 
 /**
  * immutable-result: accepted once, never edited (a completed practice session).
@@ -49,6 +49,22 @@ export interface RecordType<Payload = unknown> {
   readonly deletion: { readonly serverTables: readonly string[] };
 }
 
+/**
+ * The platform's own per-account tables, whatever types are registered: the
+ * synchronization head and the live claim. Account deletion clears these too.
+ */
+export const PLATFORM_TABLES: readonly string[] = ['private.sync_heads', 'private.realtime_claims', 'private.sync_receipts', 'private.sync_feed'];
+
+/** Canonical money text (spec 1's encoding). */
+function isMoney(value: unknown): value is string {
+  try {
+    decodeMoney(value as string);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 const isObject = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
 
 /** Spec 1's completion record and its outgoing synchronization record. */
@@ -67,8 +83,8 @@ export const completedPracticeSession: RecordType<CompletedPracticeSessionRecord
       typeof value.game === 'string' &&
       typeof value.startedAt === 'number' &&
       typeof value.endedAt === 'number' &&
-      typeof value.netResult === 'string' &&
-      typeof value.finalCashOut === 'string'
+      isMoney(value.netResult) &&
+      isMoney(value.finalCashOut)
     );
   },
   barriers: [],
@@ -80,7 +96,7 @@ export const completedPracticeSession: RecordType<CompletedPracticeSessionRecord
   contribution: null,
   export: {
     csv: {
-      header: ['session_id', 'game', 'mode', 'started_at', 'ended_at', 'buy_in', 'total_funding', 'final_cash_out', 'net_result', 'turns_played'],
+      header: ['practice_session_id', 'game', 'mode', 'started_at', 'ended_at', 'buy_in', 'total_funding', 'final_cash_out', 'net_result', 'turns_played'],
       row: (record) => [
         record.activityId,
         record.game,

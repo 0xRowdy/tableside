@@ -17,7 +17,7 @@ export interface QueuedUpload {
   readonly operation: PreparedOperation | null;
 }
 
-/** A record the account has accepted, as this device holds it. */
+/** A record the account has accepted, as this installation holds it. */
 export interface AcceptedRecord {
   readonly recordType: string;
   readonly item: string;
@@ -40,7 +40,7 @@ export interface SyncStore {
    * entry's own operation can acknowledge it.
    */
   acknowledgeUpload(id: string, disposition: Disposition, accepted: AcceptedRecord | null): Promise<void>;
-  /** The account sequence this device has applied the feed through. */
+  /** The account sequence this installation has applied the feed through. */
   readFeedCursor(): Promise<number>;
   /**
    * Applies feed entries that follow `from` without a gap, and moves the cursor
