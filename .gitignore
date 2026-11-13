@@ -25,3 +25,6 @@ __pycache__/
 
 # Python bytecode
 *.pyc
+
+# Local Supabase stacks for slots 1-9 (scripts/stack.mjs)
+.stacks/

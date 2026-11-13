@@ -9,6 +9,8 @@
 | `packages/definitions` | Versioned game content: rule presets, built-in strategies, the blackjack reference. |
 | `packages/runner` | The headless runner: standardized sessions of any built-in strategy on a benchmark profile, on Node (`pnpm --filter @tableside/runner start --strategy <id> --profile <id> --key <16 hex>`). Spec 6 adds the coordinator and analysis. |
 | `packages/harness` | The cross-runtime test harness. See [cross-runtime-harness.md](cross-runtime-harness.md). |
+| `packages/account` | The Account service (spec 2): the app's one interface for anything account-shaped, with its observable account gate. `src/testing` is seam 2's multi-device scenario harness. |
+| `supabase` | The backend: local stack configuration, migrations (the account authority schema, RLS, storage policies, jobs) and email templates. |
 
 ## Toolchain
 
@@ -41,6 +43,17 @@ pnpm lint        # shared packages (including the engine portability rule), then
 pnpm test        # unit tests, the engine suite on Node, and the app tests on iOS and Android behavior
 pnpm harness     # the engine suite on Node, iOS Hermes and Android Hermes, compared
 ```
+
+Seam 2 (Account-service scenarios) runs against the local Supabase stack, so it needs Docker and the [Supabase CLI](https://supabase.com/docs/guides/local-development/cli/getting-started) and is not part of `pnpm test`:
+
+```sh
+pnpm stack start      # the stack, with this checkout's migrations and config
+pnpm test:accounts    # seam 2 scenarios (CI runs them in the accounts job)
+pnpm stack db reset   # reapply the migrations after changing one
+pnpm stack stop
+```
+
+New migrations go in `supabase/migrations` (`supabase migration new <name>`); never edit one that has merged. Email sent locally lands in the stack's mail catcher (`supabase status` prints its URL). `pnpm stack <command>` runs a Supabase CLI command against this checkout's stack. To run stacks in several worktrees at once, give each worktree its own `TABLESIDE_STACK_SLOT` (1–9) for both `pnpm stack` and `pnpm test:accounts`: slot N gets its own project id and every port moved up by N × 100, generated under `.stacks/<N>` from this checkout's config with symlinked migrations. Slot 0 (the default) is the plain `supabase/` project on the default ports, which is what CI and `supabase` itself use.
 
 The app:
 
