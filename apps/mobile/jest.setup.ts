@@ -36,3 +36,19 @@ jest.mock('@/play/setup/device-storage', () => {
   };
   return mock;
 });
+
+// The account is native (SecureStore, the vault, the network). App tests run on
+// Account-service fakes: by default the app reopens signed in, with its offline
+// game chosen, so it opens on Home. `jest.requireMock('@/account/app-account')`
+// holds what the next launch finds (`stored`, `offlineGame`) and the account
+// the app created most recently (`latest`).
+jest.mock('@/account/app-account', () => {
+  const { fakeAppAccount, SIGNED_IN } = jest.requireActual('@/account/testing/fake-account') as typeof import('@/account/testing/fake-account');
+  const launch: Required<Parameters<typeof fakeAppAccount>[0]> = { stored: SIGNED_IN, offlineGame: 'blackjack' };
+  const mock = {
+    latest: null as ReturnType<typeof fakeAppAccount> | null,
+    ...launch,
+    createAppAccount: () => (mock.latest = fakeAppAccount({ stored: mock.stored, offlineGame: mock.offlineGame })),
+  };
+  return mock;
+});

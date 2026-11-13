@@ -53,6 +53,12 @@ const config: ExpoConfig = {
     './plugins/with-backup-exclusion',
     './plugins/with-engine-harness',
   ],
+  // The backend this build signs in to; the local stack by default (src/account/app-account.ts).
+  // Environment isolation (#87) replaces this.
+  extra: {
+    backendUrl: process.env.TABLESIDE_BACKEND_URL,
+    publishableKey: process.env.TABLESIDE_PUBLISHABLE_KEY,
+  },
   experiments: {
     typedRoutes: true,
     reactCompiler: true,
