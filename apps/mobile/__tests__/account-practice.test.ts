@@ -36,7 +36,7 @@ function active(snapshot: PracticeSnapshot) {
 describe('practice on an account', () => {
   it('records the account as owner and the installation as device, saves the result before showing it, and queues it once for sync', async () => {
     const vault = newDevice().vault();
-    const session = opened(await vault.signIn('account-a'));
+    const session = opened(await vault.open('account-a'));
     const controller = controllerFor(session);
     await controller.load();
     await controller.start({ game: 'roulette', buyIn: '1000' });
@@ -53,14 +53,14 @@ describe('practice on an account', () => {
 
   it('resumes an unfinished practice session after a restart, from the account database', async () => {
     const device = newDevice();
-    const first = opened(await device.vault().signIn('account-a'));
+    const first = opened(await device.vault().open('account-a'));
     const controller = controllerFor(first);
     await controller.load();
     await controller.start({ game: 'roulette', buyIn: '1000' });
     await controller.placeWager('red', '10');
     await first.store.close();
 
-    const restarted = controllerFor(opened(await device.vault().signIn('account-a')));
+    const restarted = controllerFor(opened(await device.vault().open('account-a')));
     await restarted.load();
     await restarted.resume();
 
@@ -69,18 +69,18 @@ describe('practice on an account', () => {
 
   it('lets an account switch leave nothing half-saved: the earlier account session\'s practice writes and reveals nothing, and the next account sees none of it', async () => {
     const vault = newDevice().vault();
-    const a = opened(await vault.signIn('account-a'));
+    const a = opened(await vault.open('account-a'));
     const controller = controllerFor(a);
     await controller.load();
     await controller.start({ game: 'roulette', buyIn: '1000' });
     await controller.placeWager('red', '10');
 
-    const b = opened(await vault.signIn('account-b'));
+    const b = opened(await vault.open('account-b'));
     await controller.spin();
 
     expect(active(controller.snapshot())).toMatchObject({ save: 'failed', view: { outcome: null } });
     expect(await b.store.findUnfinished()).toBeNull();
-    const back = opened(await vault.signIn('account-a'));
+    const back = opened(await vault.open('account-a'));
     expect(await back.store.findUnfinished()).toMatchObject({ sequence: 1 });
   });
 });

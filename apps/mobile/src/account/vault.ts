@@ -1,7 +1,8 @@
 // The account vault (spec 2, *Modules*): one encrypted database and one random
 // key per (environment, account, installation), the account-session
 // generation, locked-versus-lost key handling and backup exclusion. The
-// account service drives it on sign-in, sign-out and account switch; nothing
+// account service (packages/account) drives it through its vault port: `open`
+// on sign-in and account switch, `close` on sign-out; nothing
 // else opens an account database.
 //
 // Layout, all under `files.root`, in directories excluded from backup and
@@ -115,11 +116,11 @@ export class AccountVault {
   }
 
   /**
-   * Opens the account's database for a new account session, closing any other
-   * first: a sign-in, or an account switch when another account is open.
+   * Starts a new account session (a sign-in, or an account switch when another
+   * account is open): closes any open database, then opens this account's.
    * Waits while the device is locked.
    */
-  async signIn(accountId: string): Promise<VaultOpening> {
+  async open(accountId: string): Promise<VaultOpening> {
     if (!ID_PATTERN.test(accountId)) throw new Error('invalid account id');
     const generation = ++this.currentGeneration;
     for (;;) {
@@ -133,8 +134,8 @@ export class AccountVault {
     }
   }
 
-  /** Ends the account session: closes the database and keeps it, with its key, for the next sign-in. */
-  async signOut(): Promise<void> {
+  /** Ends the account session (a sign-out): closes the database and keeps it, with its key, for the next sign-in. */
+  async close(): Promise<void> {
     this.currentGeneration++;
     await this.serial(() => this.closeOpen());
   }
