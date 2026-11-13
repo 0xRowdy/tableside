@@ -3,6 +3,7 @@
 // makes about what exists on the server.
 
 import { execFileSync } from 'node:child_process';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { type SupabaseClient, createClient } from '@supabase/supabase-js';
@@ -27,6 +28,18 @@ export interface LocalStack {
 
 const repositoryRoot = fileURLToPath(new URL('../../../../', import.meta.url));
 
+/**
+ * The checkout's stack slot (`TABLESIDE_STACK_SLOT`, default 0). Slot N runs
+ * the generated project in `.stacks/<N>` with every port moved up by N * 100,
+ * so worktrees can run stacks side by side (`scripts/stack.mjs`).
+ */
+export const stackSlot = Number(process.env.TABLESIDE_STACK_SLOT ?? '0');
+
+/** A port from supabase/config.toml, as this checkout's slot runs it. */
+export const slotPort = (port: number): number => port + stackSlot * 100;
+
+const stackWorkdir = stackSlot > 0 ? join(repositoryRoot, '.stacks', String(stackSlot)) : repositoryRoot;
+
 let stack: LocalStack | null = null;
 
 /** The running local stack. Throws with the command to run when it isn't up. */
@@ -34,9 +47,9 @@ export function localStack(): LocalStack {
   if (stack) return stack;
   let status: string;
   try {
-    status = execFileSync('supabase', ['status', '-o', 'env'], { cwd: repositoryRoot, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+    status = execFileSync('supabase', ['status', '-o', 'env', '--workdir', stackWorkdir], { cwd: repositoryRoot, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
   } catch {
-    throw new Error('The local Supabase stack is not running. Start it from the repository root with `supabase start`.');
+    throw new Error(`The local Supabase stack (slot ${stackSlot}) is not running. Start it from the repository root with \`pnpm stack start\`.`);
   }
   const env = Object.fromEntries(
     status

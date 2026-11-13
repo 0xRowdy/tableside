@@ -6,8 +6,10 @@
 import { createSign, generateKeyPairSync, randomUUID } from 'node:crypto';
 import { type Server, createServer } from 'node:http';
 
+import { slotPort } from './stack';
+
 /** Must match [auth.external.keycloak] in supabase/config.toml. */
-const PORT = 54330;
+const PORT = slotPort(54330);
 const ISSUER = `http://host.docker.internal:${PORT}`;
 const CLIENT_ID = 'tableside-test-idp';
 

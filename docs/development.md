@@ -47,12 +47,13 @@ pnpm harness     # the engine suite on Node, iOS Hermes and Android Hermes, comp
 Seam 2 (Account-service scenarios) runs against the local Supabase stack, so it needs Docker and the [Supabase CLI](https://supabase.com/docs/guides/local-development/cli/getting-started) and is not part of `pnpm test`:
 
 ```sh
-supabase start        # the stack, with this checkout's migrations and config
+pnpm stack start      # the stack, with this checkout's migrations and config
 pnpm test:accounts    # seam 2 scenarios (CI runs them in the accounts job)
-supabase db reset     # reapply the migrations after changing one
+pnpm stack db reset   # reapply the migrations after changing one
+pnpm stack stop
 ```
 
-New migrations go in `supabase/migrations` (`supabase migration new <name>`); never edit one that has merged. Email sent locally lands in the stack's mail catcher (`supabase status` prints its URL). One stack runs per machine at a time, on the default ports; stop it (`supabase stop`) before starting it from another worktree.
+New migrations go in `supabase/migrations` (`supabase migration new <name>`); never edit one that has merged. Email sent locally lands in the stack's mail catcher (`supabase status` prints its URL). `pnpm stack <command>` runs a Supabase CLI command against this checkout's stack. To run stacks in several worktrees at once, give each worktree its own `TABLESIDE_STACK_SLOT` (1–9) for both `pnpm stack` and `pnpm test:accounts`: slot N gets its own project id and every port moved up by N × 100, generated under `.stacks/<N>` from this checkout's config with symlinked migrations. Slot 0 (the default) is the plain `supabase/` project on the default ports, which is what CI and `supabase` itself use.
 
 The app:
 
