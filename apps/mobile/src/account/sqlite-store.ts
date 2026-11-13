@@ -14,7 +14,7 @@
 // - Pinned definitions (rule content, strategy revision) travel inside the
 //   activity's specification, so they live exactly as long as the activity row.
 // - Schema changes are the migration runner's (#86): this store opens only the
-//   schema it creates and refuses any other.
+//   schema it creates and refuses any other (UnsupportedSchemaError).
 
 import { canonicalJson, sha256Hex } from '@tableside/engine';
 
@@ -73,11 +73,23 @@ export class StaleSessionError extends StoreError {
   }
 }
 
-/** The database belongs to another account, installation or environment, or has a schema this build doesn't open. */
+/** The database, activity or result belongs to another environment, account or installation. */
 export class StoreMismatchError extends StoreError {
   constructor(message: string) {
     super(message);
     this.name = 'StoreMismatchError';
+  }
+}
+
+/**
+ * The database has a schema version this build doesn't open: an older one
+ * awaits the migration runner (#86), a newer one is a rollback. Either way the
+ * data is left as it is; it is not Recovery needed.
+ */
+export class UnsupportedSchemaError extends StoreError {
+  constructor(readonly version: string) {
+    super(`the database has schema version ${version}; this build opens version ${STORE_SCHEMA_VERSION}`);
+    this.name = 'UnsupportedSchemaError';
   }
 }
 
@@ -151,6 +163,7 @@ export class SqliteActivityStore implements ActivityStore {
         }
         const rows = await tx.all<{ name: string; value: string }>('SELECT name, value FROM meta').catch(() => []);
         const stored = Object.fromEntries(rows.map((row) => [row.name, row.value]));
+        if (stored.schema_version !== meta.schema_version) throw new UnsupportedSchemaError(stored.schema_version ?? 'missing');
         for (const [name, value] of Object.entries(meta)) {
           if (stored[name] !== value) throw new StoreMismatchError(`the database's ${name} is ${stored[name] ?? 'missing'}, not ${value}`);
         }
@@ -277,6 +290,8 @@ export class SqliteActivityStore implements ActivityStore {
   }
 
   private transaction<T>(work: (tx: SqlExecutor) => Promise<T>): Promise<T> {
+    // Checked before queuing (the session's connection may be closed already) and again when the transaction runs.
+    if (!this.isCurrent()) return Promise.reject(new StaleSessionError());
     return this.connection.transaction(async (tx) => {
       if (!this.isCurrent()) throw new StaleSessionError();
       return work(tx);
