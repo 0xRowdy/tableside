@@ -264,7 +264,7 @@ A store purchase that is no longer linked to any usable Tableside account. It is
 One installation of the app on one device. Reinstalling creates a new installation.
 
 **Account gate**:
-The account's current access state on an installation (active, signed out, revoked, deletion scheduled, recovery needed, or age unresolved), which decides whether ordinary access is open.
+The account's current access state on an installation (no account, active, signed out, revoked, deletion scheduled, recovery needed, or age unresolved), which decides whether ordinary access is open.
 
 **Age eligibility**:
 An account's current established age band, or its unresolved or ineligible status, which governs access and protections. Only the current decision is kept.
