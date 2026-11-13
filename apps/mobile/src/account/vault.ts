@@ -24,8 +24,10 @@
 // key or database means Recovery needed: the original bytes stay exactly as
 // they are and no empty replacement is ever created.
 
+import { openMigrated } from './migration-runner';
 import { SqliteActivityStore, StoreMismatchError, type StoreIdentity } from './sqlite-store';
 import { isDatabaseKey, SqlError, type SqlDriver } from './sql';
+import { STORE_MIGRATIONS, type StoreMigration } from './store-schema';
 
 export type KeyRead = { readonly status: 'found'; readonly value: string } | { readonly status: 'missing' } | { readonly status: 'locked' };
 
@@ -50,6 +52,12 @@ export interface VaultFiles {
   size(path: string): Promise<number | null>;
   readText(path: string): Promise<string | null>;
   writeText(path: string, text: string): Promise<void>;
+  /** Copies a file, replacing `to`, and flushes the copy to disk. */
+  copy(from: string, to: string): Promise<void>;
+  /** Renames a file to `to`, which must not exist: atomically, so `to` is absent or the whole file, never part of it. */
+  move(from: string, to: string): Promise<void>;
+  /** Deletes a file; nothing happens when there is none. */
+  remove(path: string): Promise<void>;
 }
 
 export interface VaultPorts {
@@ -64,6 +72,8 @@ export interface VaultPorts {
   newId(): string;
   /** Resolves when the device may have been unlocked (the app came to the foreground); the vault then tries again. */
   unlocked(): Promise<void>;
+  /** This build's store migrations (store-schema.ts); tests stand in a later build's. */
+  readonly migrations?: readonly StoreMigration[];
 }
 
 /** An account's database, open for the current account session. */
@@ -86,6 +96,16 @@ export type VaultOpening =
   | { readonly status: 'open'; readonly session: AccountSession }
   /** The account gate's Recovery needed: nothing was opened, changed or created. */
   | { readonly status: 'recovery-needed'; readonly accountId: string; readonly generation: number; readonly reason: RecoveryReason }
+  /**
+   * The database has a later build's schema (a rollback): this build can't read
+   * it, so nothing was opened or changed. The app needs updating.
+   */
+  | { readonly status: 'needs-update'; readonly accountId: string; readonly generation: number; readonly schema: number | null }
+  /**
+   * Bringing the database to this build's schema failed (for example a full
+   * disk): it is exactly as the earlier build left it, and the next open tries again.
+   */
+  | { readonly status: 'migration-failed'; readonly accountId: string; readonly generation: number; readonly reason: string }
   /** A later sign-in or sign-out replaced this one while it waited. */
   | { readonly status: 'superseded' };
 
@@ -161,26 +181,29 @@ export class AccountVault {
 
     const read = await keys.read(keyName);
     if (read.status === 'locked') return 'locked';
-    const exists = ((await files.size(path)) ?? 0) > 0;
 
     let record: KeyRecord;
     if (read.status === 'missing') {
       // A database without its key, here or left by an earlier installation: keep it as it is.
-      if (exists || (await files.size(`${path}-wal`)) !== null || (await this.earlierDatabase(installationId, accountId))) return recovery('key-missing');
+      if (((await files.size(path)) ?? 0) > 0 || (await files.size(`${path}-wal`)) !== null || (await this.earlierDatabase(installationId, accountId))) return recovery('key-missing');
       record = { v: 1, key: hex(this.ports.randomBytes(KEY_BYTES)), created: false };
       if ((await keys.write(keyName, JSON.stringify(record))) === 'locked') return 'locked';
     } else {
       const parsed = parseKeyRecord(read.value);
       if (!parsed) return recovery('key-corrupt');
       record = parsed;
-      // The key says its database was made: never make an empty one in its place.
-      if (!exists && record.created) return recovery('database-missing');
     }
 
     const identity: StoreIdentity = { environment, accountId, installationId };
+    const migrations = this.ports.migrations ?? STORE_MIGRATIONS;
     let store: SqliteActivityStore;
     try {
-      store = await SqliteActivityStore.open(await this.ports.driver.open(path, record.key), identity, { isCurrent: () => this.currentGeneration === generation });
+      // The key says whether its database was made: then a missing one is never replaced by an empty one.
+      const database = await openMigrated({ driver: this.ports.driver, files, migrations }, path, record.key, record.created);
+      if (database.status === 'missing') return recovery('database-missing');
+      if (database.status === 'needs-update') return { status: 'needs-update', accountId, generation, schema: database.schema };
+      if (database.status === 'migration-failed') return { status: 'migration-failed', accountId, generation, reason: database.reason };
+      store = await SqliteActivityStore.open(database.connection, identity, { isCurrent: () => this.currentGeneration === generation, migrations });
     } catch (error) {
       if ((error instanceof SqlError && error.kind === 'unreadable') || error instanceof StoreMismatchError) return recovery('database-unreadable');
       throw error;

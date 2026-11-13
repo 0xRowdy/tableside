@@ -13,8 +13,11 @@
 //   it refuses activities and results for anyone else.
 // - Pinned definitions (rule content, strategy revision) travel inside the
 //   activity's specification, so they live exactly as long as the activity row.
-// - Schema changes are the migration runner's (#86): this store opens only the
-//   schema it creates and refuses any other (UnsupportedSchemaError).
+// - The schema is store-schema.ts's. This store creates it in an empty
+//   database and opens only the version its migrations reach: an existing
+//   database is brought there by the migration runner (migration-runner.ts)
+//   before the store opens it, and any other version is refused
+//   (UnsupportedSchemaError).
 
 import { canonicalJson, sha256Hex } from '@tableside/engine';
 
@@ -31,6 +34,9 @@ import type {
   TransitionCommit,
 } from '../practice/store';
 import type { SqlConnection, SqlExecutor } from './sql';
+import { createSchema, schemaVersionOf, STORE_MIGRATIONS, STORE_SCHEMA_VERSION, type StoreMigration } from './store-schema';
+
+export { STORE_SCHEMA_VERSION };
 
 /** Whose database this is. */
 export interface StoreIdentity {
@@ -45,9 +51,9 @@ export interface StoreOptions {
    * one. Checked inside every transaction: a stale session reads and writes nothing.
    */
   readonly isCurrent?: () => boolean;
+  /** This build's migrations (store-schema.ts); tests stand in later builds' with their own. */
+  readonly migrations?: readonly StoreMigration[];
 }
-
-export const STORE_SCHEMA_VERSION = 1;
 const BODY_FORMAT = 1;
 
 export class StoreError extends Error {
@@ -83,49 +89,18 @@ export class StoreMismatchError extends StoreError {
 
 /**
  * The database has a schema version this build doesn't open: an older one
- * awaits the migration runner (#86), a newer one is a rollback. Either way the
+ * awaits the migration runner, a newer one is a rollback. Either way the
  * data is left as it is; it is not Recovery needed.
  */
 export class UnsupportedSchemaError extends StoreError {
-  constructor(readonly version: string) {
-    super(`the database has schema version ${version}; this build opens version ${STORE_SCHEMA_VERSION}`);
+  constructor(
+    readonly version: string,
+    readonly supported: number = STORE_SCHEMA_VERSION,
+  ) {
+    super(`the database has schema version ${version}; this build opens version ${supported}`);
     this.name = 'UnsupportedSchemaError';
   }
 }
-
-const SCHEMA = [
-  'CREATE TABLE meta (name TEXT PRIMARY KEY, value TEXT NOT NULL) STRICT',
-  `CREATE TABLE activities (
-    activity_id TEXT PRIMARY KEY,
-    position INTEGER NOT NULL UNIQUE,
-    status TEXT NOT NULL CHECK (status IN ('unfinished', 'completed', 'incomplete')),
-    sequence INTEGER NOT NULL,
-    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL
-  ) STRICT`,
-  'CREATE INDEX activities_unfinished ON activities (status, position)',
-  `CREATE TABLE transitions (
-    activity_id TEXT NOT NULL REFERENCES activities (activity_id),
-    command_id TEXT NOT NULL,
-    sequence INTEGER NOT NULL,
-    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,
-    PRIMARY KEY (activity_id, command_id),
-    UNIQUE (activity_id, sequence)
-  ) STRICT`,
-  `CREATE TABLE effects (
-    activity_id TEXT NOT NULL REFERENCES activities (activity_id),
-    effect_key TEXT NOT NULL,
-    position INTEGER NOT NULL,
-    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,
-    PRIMARY KEY (activity_id, effect_key)
-  ) STRICT`,
-  // One outgoing synchronization record per completion: the activity id is unique.
-  `CREATE TABLE outgoing (
-    id TEXT PRIMARY KEY,
-    activity_id TEXT NOT NULL UNIQUE REFERENCES activities (activity_id),
-    position INTEGER NOT NULL UNIQUE,
-    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL
-  ) STRICT`,
-];
 
 /** The columns every stored value carries: its text, and the format, length and hash its reads check. */
 const BODY = 'body, body_format, body_length, body_sha256';
@@ -150,8 +125,9 @@ export class SqliteActivityStore implements ActivityStore {
    * build's schema. Closes the connection when it refuses.
    */
   static async open(connection: SqlConnection, identity: StoreIdentity, options: StoreOptions = {}): Promise<SqliteActivityStore> {
-    const meta: Record<string, string> = {
-      schema_version: String(STORE_SCHEMA_VERSION),
+    const migrations = options.migrations ?? STORE_MIGRATIONS;
+    const version = String(schemaVersionOf(migrations));
+    const owner: Record<string, string> = {
       environment: identity.environment,
       account_id: identity.accountId,
       installation_id: identity.installationId,
@@ -159,15 +135,12 @@ export class SqliteActivityStore implements ActivityStore {
     try {
       await connection.transaction(async (tx) => {
         const tables = await tx.get<{ count: number }>("SELECT count(*) AS count FROM sqlite_master WHERE type = 'table'");
-        if (tables?.count === 0) {
-          for (const statement of SCHEMA) await tx.run(statement);
-          for (const [name, value] of Object.entries(meta)) await tx.run('INSERT INTO meta (name, value) VALUES (?, ?)', [name, value]);
-          return;
-        }
-        const rows = await tx.all<{ name: string; value: string }>('SELECT name, value FROM meta').catch(() => []);
+        if (tables?.count === 0) return createSchema(tx, owner, migrations);
+        const hasMeta = await tx.get("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'meta'");
+        const rows = hasMeta ? await tx.all<{ name: string; value: string }>('SELECT name, value FROM meta') : [];
         const stored = Object.fromEntries(rows.map((row) => [row.name, row.value]));
-        if (stored.schema_version !== meta.schema_version) throw new UnsupportedSchemaError(stored.schema_version ?? 'missing');
-        for (const [name, value] of Object.entries(meta)) {
+        if (stored.schema_version !== version) throw new UnsupportedSchemaError(stored.schema_version ?? 'missing', Number(version));
+        for (const [name, value] of Object.entries(owner)) {
           if (stored[name] !== value) throw new StoreMismatchError(`the database's ${name} is ${stored[name] ?? 'missing'}, not ${value}`);
         }
       });

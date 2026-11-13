@@ -139,5 +139,18 @@ function appFiles(): VaultFiles {
     async writeText(path, text) {
       new File(path).write(text);
     },
+    // Durability of a copy (no fsync is exposed) is part of launch gate 2's native qualification.
+    async copy(from, to) {
+      const target = new File(to);
+      if (target.exists) target.delete();
+      new File(from).copy(target);
+    },
+    async move(from, to) {
+      new File(from).move(new File(to));
+    },
+    async remove(path) {
+      const file = new File(path);
+      if (file.exists) file.delete();
+    },
   };
 }
