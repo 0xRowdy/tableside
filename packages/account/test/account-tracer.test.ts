@@ -3,7 +3,8 @@
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { type SimulatedDevice, createDevice, localStack, uniqueEmail } from '../src/testing';
+import type { EligibilityBand } from '../src';
+import { type SimulatedDevice, createAccountByEmail, createDevice, localStack, uniqueEmail } from '../src/testing';
 
 const devices: SimulatedDevice[] = [];
 function device(name: string): SimulatedDevice {
@@ -13,11 +14,8 @@ function device(name: string): SimulatedDevice {
 }
 afterEach(() => devices.splice(0).forEach((d) => d.dispose()));
 
-async function createAccount(d: SimulatedDevice, email: string, range: '13-15' | '16-17' | '18+' = '18+') {
-  expect(await d.account.answerAgeQuestion(range)).toEqual({ status: 'eligible' });
-  expect(await d.account.requestEmailCode({ email, intent: 'create' })).toEqual({ status: 'sent' });
-  const code = await d.mailbox.latestCode(email);
-  return d.account.verifyEmailCode({ email, code });
+async function createAccount(d: SimulatedDevice, email: string, band: EligibilityBand = '18+') {
+  expect(await createAccountByEmail(d, email, band)).toEqual({ status: 'signed-in' });
 }
 
 describe('creating an account by email code', () => {
@@ -28,13 +26,25 @@ describe('creating an account by email code', () => {
     phone.account.subscribe((gate) => seen.push(gate.state));
 
     expect(phone.account.gate).toEqual({ state: 'no-account' });
-    expect(await createAccount(phone, email)).toEqual({ status: 'signed-in' });
+    await createAccount(phone, email);
 
     const gate = phone.account.gate;
     expect(gate).toMatchObject({ state: 'active', eligibility: '18+' });
     expect(seen).toEqual(['active']);
     if (gate.state !== 'active') throw new Error('unreachable');
     expect(phone.vault.openAccount).toBe(gate.accountId);
+  });
+
+  it('opens no account until the code proves the address', async () => {
+    const phone = device('phone');
+    const email = uniqueEmail('unproven');
+    await phone.account.answerAgeQuestion('18+');
+    await phone.account.requestEmailCode({ email, intent: 'create' });
+    expect(await localStack().authUserId(email)).not.toBeNull();
+    expect(await localStack().accountId(email)).toBeNull();
+
+    await phone.account.verifyEmailCode({ email, code: await phone.mailbox.latestCode(email) });
+    expect(await localStack().accountId(email)).not.toBeNull();
   });
 
   it('records the declared band and gives each account its own random ID, kept across sign-ins', async () => {
@@ -96,6 +106,19 @@ describe('email-code sign-in', () => {
     expect(forUnknown).toEqual({ status: 'sent' });
     expect(await localStack().authUserId(unknown)).toBeNull();
     expect(phone.account.gate).toEqual({ state: 'no-account' });
+  });
+
+  it('never reaches Active for an account whose eligibility isn’t established 13+', async () => {
+    const email = uniqueEmail('restricted');
+    await createAccount(device('setup'), email);
+    const accountId = await localStack().accountId(email);
+    await localStack().sql`update public.eligibility set band = 'under-13' where account_id = ${accountId}`;
+
+    const phone = device('phone');
+    await phone.account.requestEmailCode({ email, intent: 'sign-in' });
+    expect(await phone.account.verifyEmailCode({ email, code: await phone.mailbox.latestCode(email) })).toEqual({ status: 'failed' });
+    expect(phone.account.gate).toEqual({ state: 'no-account' });
+    expect(phone.vault.openAccount).toBeNull();
   });
 
   it('a wrong code leaves the gate at No account', async () => {

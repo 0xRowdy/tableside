@@ -113,16 +113,21 @@ revoke execute on function private.before_user_created(jsonb) from public;
 grant usage on schema private to supabase_auth_admin;
 grant execute on function private.before_user_created(jsonb) to supabase_auth_admin;
 
+-- The band an assertion declared, held for an Auth user whose address isn't
+-- proven yet. No account exists until it is.
+create table private.pending_eligibility (
+  auth_user_id uuid primary key,
+  band text not null check (band in ('13-15', '16-17', '18+'))
+);
+
 -- The enforcement point, in the same transaction as the Auth user insert, so
 -- it also covers paths the hook doesn't see (admin creation) and two sign-ups
--- racing on one assertion. It consumes the assertion and opens the account
--- with its eligibility record. (Auth keeps the consumed token in the user's
--- metadata; it can never pass again.)
-create function private.open_account_for_new_auth_user() returns trigger
+-- racing on one assertion. It consumes the assertion and holds its band.
+-- (Auth keeps the consumed token in the user's metadata; it can never pass again.)
+create function private.consume_eligibility_assertion() returns trigger
 language plpgsql security definer set search_path = '' as $$
 declare
   v_band text;
-  v_account uuid;
 begin
   update private.eligibility_assertions
     set consumed_at = now()
@@ -133,16 +138,38 @@ begin
   if v_band is null then
     raise exception 'eligibility assertion required' using errcode = '42501';
   end if;
-  insert into public.accounts (auth_user_id) values (new.id) returning account_id into v_account;
-  insert into public.eligibility (account_id, band, source, checked_at, policy_version)
-    values (v_account, v_band, 'declaration', now(), 1);
+  insert into private.pending_eligibility (auth_user_id, band) values (new.id, v_band);
   return new;
 end $$;
 
-revoke execute on function private.open_account_for_new_auth_user() from public;
+-- Opens the account, with its eligibility record, once the Auth user's address
+-- is proven (a verified code, or a provider that vouches for it).
+create function private.open_account_when_confirmed() returns trigger
+language plpgsql security definer set search_path = '' as $$
+declare
+  v_band text;
+  v_account uuid;
+begin
+  if new.email_confirmed_at is null or (tg_op = 'UPDATE' and old.email_confirmed_at is not null) then
+    return null;
+  end if;
+  delete from private.pending_eligibility where auth_user_id = new.id returning band into v_band;
+  if v_band is null then
+    return null;
+  end if;
+  insert into public.accounts (auth_user_id) values (new.id) returning account_id into v_account;
+  insert into public.eligibility (account_id, band, source, checked_at, policy_version)
+    values (v_account, v_band, 'declaration', now(), 1);
+  return null;
+end $$;
 
-create trigger open_account before insert on auth.users
-  for each row execute function private.open_account_for_new_auth_user();
+revoke execute on function private.consume_eligibility_assertion() from public;
+revoke execute on function private.open_account_when_confirmed() from public;
+
+create trigger consume_eligibility_assertion before insert on auth.users
+  for each row execute function private.consume_eligibility_assertion();
+create trigger open_account_when_confirmed after insert or update of email_confirmed_at on auth.users
+  for each row execute function private.open_account_when_confirmed();
 
 -- ---------------------------------------------------------------------------
 -- Operations
@@ -167,15 +194,23 @@ grant execute on function public.current_account() to authenticated;
 
 insert into storage.buckets (id, name, public) values ('account-private', 'account-private', false);
 
+-- Whether an object sits in the caller's own folder of the private bucket.
+create function private.in_own_folder(bucket text, object_name text) returns boolean
+language sql stable set search_path = '' as $$
+  select bucket = 'account-private' and (storage.foldername(object_name))[1] = private.active_account()::text
+$$;
+
+revoke execute on function private.in_own_folder(text, text) from public;
+grant execute on function private.in_own_folder(text, text) to authenticated;
+
 create policy account_private_read on storage.objects for select to authenticated
-  using (bucket_id = 'account-private' and (storage.foldername(name))[1] = private.active_account()::text);
+  using (private.in_own_folder(bucket_id, name));
 create policy account_private_insert on storage.objects for insert to authenticated
-  with check (bucket_id = 'account-private' and (storage.foldername(name))[1] = private.active_account()::text);
+  with check (private.in_own_folder(bucket_id, name));
 create policy account_private_update on storage.objects for update to authenticated
-  using (bucket_id = 'account-private' and (storage.foldername(name))[1] = private.active_account()::text)
-  with check (bucket_id = 'account-private' and (storage.foldername(name))[1] = private.active_account()::text);
+  using (private.in_own_folder(bucket_id, name)) with check (private.in_own_folder(bucket_id, name));
 create policy account_private_delete on storage.objects for delete to authenticated
-  using (bucket_id = 'account-private' and (storage.foldername(name))[1] = private.active_account()::text);
+  using (private.in_own_folder(bucket_id, name));
 
 -- ---------------------------------------------------------------------------
 -- Jobs

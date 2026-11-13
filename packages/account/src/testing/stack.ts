@@ -5,6 +5,7 @@
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
+import { type SupabaseClient, createClient } from '@supabase/supabase-js';
 import postgres from 'postgres';
 
 export interface LocalStack {
@@ -13,6 +14,10 @@ export interface LocalStack {
   readonly mailUrl: string;
   /** Privileged SQL, for faults no client can cause (server clock, lifecycle states later tickets set). */
   readonly sql: postgres.Sql;
+  /** A raw client calling the stack directly, with no Account service: the adversary's view. */
+  rawClient(accessToken?: string): SupabaseClient;
+  /** Moves an eligibility assertion's expiry into the past, as if its lifetime had run out on the server. */
+  expireAssertion(assertion: string): Promise<void>;
   /** The Auth user for an address, or null when none exists. */
   authUserId(email: string): Promise<string | null>;
   /** The account signed in by an address, or null. */
@@ -46,29 +51,35 @@ export function localStack(): LocalStack {
     return value;
   };
   const sql = postgres(need('DB_URL'), { max: 2, idle_timeout: 1, onnotice: () => {} });
-  const authUser = async (email: string) => {
-    const rows = await sql<{ id: string }[]>`select id from auth.users where lower(email) = lower(${email})`;
-    return rows[0] ?? null;
-  };
+  const accountIds = (email: string) => sql<{ account_id: string }[]>`
+    select a.account_id from public.accounts a join auth.users u on u.id = a.auth_user_id
+    where lower(u.email) = lower(${email})`;
+  const url = need('API_URL');
+  const publishableKey = need('PUBLISHABLE_KEY');
   stack = {
-    url: need('API_URL'),
-    publishableKey: need('PUBLISHABLE_KEY'),
+    url,
+    publishableKey,
     mailUrl: need('MAILPIT_URL'),
     sql,
+    rawClient(accessToken) {
+      return createClient(url, publishableKey, {
+        auth: { persistSession: false, autoRefreshToken: false },
+        ...(accessToken ? { global: { headers: { Authorization: `Bearer ${accessToken}` } } } : {}),
+      });
+    },
+    async expireAssertion(assertion) {
+      await sql`update private.eligibility_assertions set expires_at = now() - interval '1 second'
+        where token_hash = extensions.digest(${assertion}, 'sha256')`;
+    },
     async authUserId(email) {
-      return (await authUser(email))?.id ?? null;
+      const rows = await sql<{ id: string }[]>`select id from auth.users where lower(email) = lower(${email})`;
+      return rows[0]?.id ?? null;
     },
     async accountId(email) {
-      const rows = await sql<{ account_id: string }[]>`
-        select a.account_id from public.accounts a join auth.users u on u.id = a.auth_user_id
-        where lower(u.email) = lower(${email})`;
-      return rows[0]?.account_id ?? null;
+      return (await accountIds(email))[0]?.account_id ?? null;
     },
     async accountCount(email) {
-      const rows = await sql<{ count: number }[]>`
-        select count(*)::int as count from public.accounts a join auth.users u on u.id = a.auth_user_id
-        where lower(u.email) = lower(${email})`;
-      return rows[0]?.count ?? 0;
+      return (await accountIds(email)).length;
     },
   };
   return stack;

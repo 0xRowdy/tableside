@@ -10,13 +10,17 @@ export type AccountGate =
   | { readonly state: 'active'; readonly accountId: string; readonly eligibility: EligibilityBand };
 
 /** The fallback age-range question's answers. */
-export type AgeRange = 'under-13' | '13-15' | '16-17' | '18+';
-/** An established eligibility band. */
-export type EligibilityBand = AgeRange;
+export type AgeRange = 'under-13' | EligibilityBand;
+/** An established 13+ age band: the only bands that open ordinary access. */
+export type EligibilityBand = '13-15' | '16-17' | '18+';
+const ELIGIBLE_BANDS: readonly string[] = ['13-15', '16-17', '18+'] satisfies EligibilityBand[];
 
-export type AgeAnswer = { readonly status: 'eligible' } | { readonly status: 'ineligible' } | { readonly status: 'failed' };
-export type CodeRequest = { readonly status: 'sent' } | { readonly status: 'age-required' } | { readonly status: 'failed' };
-export type CodeVerification = { readonly status: 'signed-in' } | { readonly status: 'invalid-code' } | { readonly status: 'failed' };
+export type AgeAnswerResult = { readonly status: 'eligible' } | { readonly status: 'ineligible' } | { readonly status: 'failed' };
+export type CodeRequestResult = { readonly status: 'sent' } | { readonly status: 'age-required' } | { readonly status: 'failed' };
+export type CodeVerificationResult =
+  | { readonly status: 'signed-in' }
+  | { readonly status: 'invalid-code' }
+  | { readonly status: 'failed' };
 
 /** Where refresh credentials live: SecureStore on a device. */
 export interface CredentialStorage {
@@ -53,13 +57,18 @@ export interface AccountService {
    * server; any other range obtains a short-lived, single-use eligibility
    * assertion for creating the account.
    */
-  answerAgeQuestion(range: AgeRange): Promise<AgeAnswer>;
+  answerAgeQuestion(range: AgeRange): Promise<AgeAnswerResult>;
   /**
    * Sends a sign-in code. Create needs a current eligibility assertion.
    * Sign-in never creates an account, and answers the same whether or not one exists.
    */
-  requestEmailCode(request: { readonly email: string; readonly intent: 'create' | 'sign-in' }): Promise<CodeRequest>;
-  verifyEmailCode(request: { readonly email: string; readonly code: string }): Promise<CodeVerification>;
+  requestEmailCode(request: { readonly email: string; readonly intent: 'create' | 'sign-in' }): Promise<CodeRequestResult>;
+  /**
+   * Signs in with the emailed code. The gate becomes Active only for an
+   * active account with an established 13+ band; other eligibility states are
+   * #90's restricted gate states, so until then the sign-in fails.
+   */
+  verifyEmailCode(request: { readonly email: string; readonly code: string }): Promise<CodeVerificationResult>;
 }
 
 interface Assertion {
@@ -132,8 +141,8 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
         const { error } = await supabase.auth.verifyOtp({ email, token: code, type: 'email' });
         if (error) return { status: error.code === 'otp_expired' ? 'invalid-code' : 'failed' };
         const { data, error: accountError } = await supabase.rpc('current_account');
-        const account = data as { account_id: string; eligibility: EligibilityBand } | null;
-        if (accountError || !account) {
+        const account = data as { account_id: string; eligibility: string | null } | null;
+        if (accountError || !account || !isEligible(account.eligibility)) {
           await supabase.auth.signOut({ scope: 'local' });
           return { status: 'failed' };
         }
@@ -146,4 +155,8 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
       }
     },
   };
+}
+
+function isEligible(band: string | null): band is EligibilityBand {
+  return band !== null && ELIGIBLE_BANDS.includes(band);
 }

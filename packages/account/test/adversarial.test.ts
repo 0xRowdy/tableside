@@ -1,20 +1,23 @@
 // Seam 2 adversarial cases (#84): a raw client calls the stack directly, with
 // no Account service in between, and is denied wherever the contract says.
 
-import { type SupabaseClient, createClient } from '@supabase/supabase-js';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 
-import { Mailbox, type SimulatedDevice, TestIdentityProvider, createDevice, localStack, uniqueEmail } from '../src/testing';
+import {
+  Mailbox,
+  type SimulatedDevice,
+  TestIdentityProvider,
+  createAccountByEmail,
+  createDevice,
+  localStack,
+  uniqueEmail,
+} from '../src/testing';
 
 const stack = localStack();
 const mailbox = new Mailbox(stack.mailUrl);
 
-function rawClient(accessToken?: string): SupabaseClient {
-  return createClient(stack.url, stack.publishableKey, {
-    auth: { persistSession: false, autoRefreshToken: false },
-    ...(accessToken ? { global: { headers: { Authorization: `Bearer ${accessToken}` } } } : {}),
-  });
-}
+const rawClient = (accessToken?: string) => stack.rawClient(accessToken);
 
 async function issueAssertion(client: SupabaseClient, range = '18+'): Promise<string> {
   const { data, error } = await client.rpc('issue_eligibility_assertion', { age_range: range });
@@ -30,9 +33,7 @@ async function signedInAccount(label: string) {
   const email = uniqueEmail(label);
   const device = createDevice(stack, { name: label });
   devices.push(device);
-  await device.account.answerAgeQuestion('18+');
-  await device.account.requestEmailCode({ email, intent: 'create' });
-  await device.account.verifyEmailCode({ email, code: await device.mailbox.latestCode(email) });
+  await createAccountByEmail(device, email);
   const gate = device.account.gate;
   if (gate.state !== 'active') throw new Error('account setup failed');
 
@@ -89,8 +90,7 @@ describe('creating an Auth user', () => {
   it('is refused once the assertion has expired on the server', async () => {
     const client = rawClient();
     const assertion = await issueAssertion(client);
-    await stack.sql`update private.eligibility_assertions set expires_at = now() - interval '1 second'
-      where token_hash = extensions.digest(${assertion}, 'sha256')`;
+    await stack.expireAssertion(assertion);
     const email = uniqueEmail('expired');
     const { error } = await client.auth.signInWithOtp({ email, options: { data: { eligibility_assertion: assertion } } });
     expect(error).not.toBeNull();

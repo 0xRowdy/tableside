@@ -2,13 +2,13 @@
 // the device's whole network: connectivity, dropped, delayed and duplicated
 // exchanges are injected here, never by stubbing the Account service.
 
-/** A request URL contains this text. */
-type Match = string;
+/** Text a request's URL contains, such as a path. */
+type UrlFragment = string;
 
 type Fault =
-  | { readonly kind: 'drop'; readonly match: Match }
-  | { readonly kind: 'duplicate'; readonly match: Match }
-  | { readonly kind: 'delay'; readonly match: Match; readonly arrived: () => void; readonly released: Promise<void> };
+  | { readonly kind: 'drop'; readonly match: UrlFragment }
+  | { readonly kind: 'duplicate'; readonly match: UrlFragment }
+  | { readonly kind: 'delay'; readonly match: UrlFragment; readonly arrived: () => void; readonly released: Promise<void> };
 
 export interface HeldResponse {
   /** Resolves once the stack has answered and the response is being held. */
@@ -27,17 +27,17 @@ export class FaultProxy {
   constructor(private readonly upstream: typeof fetch = globalThis.fetch) {}
 
   /** The next matching request reaches the stack, but its response is lost. */
-  dropNextResponse(match: Match = ''): void {
+  dropNextResponse(match: UrlFragment = ''): void {
     this.faults.push({ kind: 'drop', match });
   }
 
   /** The next matching request reaches the stack twice; the device gets the first response. */
-  duplicateNextRequest(match: Match = ''): void {
+  duplicateNextRequest(match: UrlFragment = ''): void {
     this.faults.push({ kind: 'duplicate', match });
   }
 
   /** The next matching response is held until released. */
-  delayNextResponse(match: Match = ''): HeldResponse {
+  delayNextResponse(match: UrlFragment = ''): HeldResponse {
     let arrived!: () => void;
     let release!: () => void;
     const arrival = new Promise<void>((resolve) => (arrived = resolve));

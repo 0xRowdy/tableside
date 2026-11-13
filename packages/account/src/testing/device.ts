@@ -7,7 +7,13 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
-import { type AccountService, type CredentialStorage, createAccountService } from '../service';
+import {
+  type AccountService,
+  type CodeVerificationResult,
+  type CredentialStorage,
+  type EligibilityBand,
+  createAccountService,
+} from '../service';
 import { FaultProxy } from './fault-proxy';
 import { Mailbox } from './mailbox';
 import type { LocalStack } from './stack';
@@ -105,4 +111,15 @@ export function createDevice(stack: LocalStack, options: { readonly name: string
 /** An address no earlier run has used. */
 export function uniqueEmail(label: string): string {
   return `${label}-${randomUUID().slice(0, 8)}@example.com`;
+}
+
+/** The Create path end to end on a device: age step, code request, the emailed code. */
+export async function createAccountByEmail(
+  device: SimulatedDevice,
+  email: string,
+  band: EligibilityBand = '18+',
+): Promise<CodeVerificationResult> {
+  if ((await device.account.answerAgeQuestion(band)).status !== 'eligible') return { status: 'failed' };
+  if ((await device.account.requestEmailCode({ email, intent: 'create' })).status !== 'sent') return { status: 'failed' };
+  return device.account.verifyEmailCode({ email, code: await device.mailbox.latestCode(email) });
 }

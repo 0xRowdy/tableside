@@ -1,6 +1,5 @@
 // The stack's scheduled jobs (#84).
 
-import { createClient } from '@supabase/supabase-js';
 import { describe, expect, it } from 'vitest';
 
 import { localStack, uniqueEmail } from '../src/testing';
@@ -9,13 +8,12 @@ const stack = localStack();
 
 describe('the eligibility-assertion cleanup job', () => {
   it('is scheduled, and removes only assertions that can never pass again', async () => {
-    const client = createClient(stack.url, stack.publishableKey, { auth: { persistSession: false, autoRefreshToken: false } });
+    const client = stack.rawClient();
     const issue = async () =>
       ((await client.rpc('issue_eligibility_assertion', { age_range: '18+' })).data as { assertion: string }).assertion;
     const [consumed, expired, fresh] = [await issue(), await issue(), await issue()];
     await client.auth.signInWithOtp({ email: uniqueEmail('job'), options: { data: { eligibility_assertion: consumed } } });
-    await stack.sql`update private.eligibility_assertions set expires_at = now() - interval '1 second'
-      where token_hash = extensions.digest(${expired}, 'sha256')`;
+    await stack.expireAssertion(expired);
 
     const [job] = await stack.sql<{ command: string }[]>`select command from cron.job where jobname = 'expire-eligibility-assertions'`;
     expect(job).toBeDefined();
