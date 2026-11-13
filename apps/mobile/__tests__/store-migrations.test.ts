@@ -8,7 +8,8 @@
 import { closeSync, existsSync, openSync, readFileSync, writeFileSync, writeSync } from 'node:fs';
 
 import type { AccountSession, VaultOpening } from '@/account/vault';
-import type { StoreMigration } from '@/account/store-schema';
+import { schemaVersionOf } from '@/account/store-schema';
+import { laterBuild } from '@/account/testing/later-build';
 import { nodeSqlCipherDriver } from '@/account/testing/node-sqlcipher';
 import { TestDevice } from '@/account/testing/vault-substitutes';
 import { completedRecord, newActivity, transition } from '@/practice/testing/store-contract';
@@ -27,29 +28,9 @@ function opened(opening: VaultOpening): AccountSession {
   return opening.session;
 }
 
-/**
- * Two later releases' migrations, as a build that skipped both finds them: one
- * adds a column, the next rebuilds a table. The store's own statements work
- * unchanged over either.
- */
-const LATER_BUILD: readonly StoreMigration[] = [
-  { to: 2, migrate: async (tx) => void (await tx.run('ALTER TABLE outgoing ADD COLUMN uploaded INTEGER NOT NULL DEFAULT 0')) },
-  {
-    to: 3,
-    migrate: async (tx) => {
-      await tx.run(`CREATE TABLE effects_v3 (
-        activity_id TEXT NOT NULL REFERENCES activities (activity_id),
-        effect_key TEXT NOT NULL,
-        position INTEGER NOT NULL,
-        body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,
-        PRIMARY KEY (activity_id, effect_key)
-      ) STRICT`);
-      await tx.run('INSERT INTO effects_v3 SELECT * FROM effects');
-      await tx.run('DROP TABLE effects');
-      await tx.run('ALTER TABLE effects_v3 RENAME TO effects');
-    },
-  },
-];
+/** A build two releases later: a device that updates straight to it skips both. */
+const LATER_BUILD = laterBuild();
+const LATER_SCHEMA = schemaVersionOf(LATER_BUILD);
 
 const practiceIn = (session: AccountSession, activityId: string) => {
   const base = newActivity(activityId);
@@ -178,7 +159,7 @@ describe('a kill during the migration', () => {
         expect(await contents(earlier.session, IDS)).toEqual(before);
         seen.add('old');
       } else {
-        expect(earlier).toMatchObject({ status: 'needs-update', schema: 3 });
+        expect(earlier).toMatchObject({ status: 'needs-update', schema: LATER_SCHEMA });
         seen.add('new');
       }
       const session = opened(await phone.vault('production', undefined, LATER_BUILD).open('account-a'));
@@ -244,7 +225,7 @@ describe('a rollback', () => {
 
     const rolledBack = await phone.vault().open('account-a');
 
-    expect(rolledBack).toMatchObject({ status: 'needs-update', accountId: 'account-a', schema: 3 });
+    expect(rolledBack).toMatchObject({ status: 'needs-update', accountId: 'account-a', schema: LATER_SCHEMA });
     expect(snapshot(phone)).toEqual(files);
     // Updating again finds everything the later build kept.
     expect(await contents(opened(await phone.vault('production', undefined, LATER_BUILD).open('account-a')), ['done', 'unfinished'])).toEqual(before);

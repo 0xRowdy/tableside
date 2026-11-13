@@ -1,0 +1,131 @@
+// Direct upgrades from recorded databases (#86, launch gate 2): every
+// database recorded by every store schema (one per unfinished phase of every
+// game, and one of finished practice) is put on a device as its build left it,
+// then opened by this build and by a build two releases later (both skipped).
+// Each time every stored value reads back exactly as recorded, and the
+// unfinished session resumes and ends with the engine recording's final
+// cash-out.
+
+import { createHash } from 'node:crypto';
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+import { forAccountSession } from '@/account/practice';
+import { STORE_SCHEMA_VERSION } from '@/account/store-schema';
+import { restoreDatabase } from '@/account/testing/database-dump';
+import { laterBuild } from '@/account/testing/later-build';
+import { RECORDED_STORE_SCHEMAS, type RecordedDatabase, type RecordedStoreSchema } from '@/account/testing/recorded';
+import { TestDevice } from '@/account/testing/vault-substitutes';
+import type { StoreMigration } from '@/account/store-schema';
+import type { AccountSession } from '@/account/vault';
+import { PracticeController } from '@/practice/controller';
+import { FakeClock, substituteAdapters } from '@/practice/testing/substitutes';
+
+const devices: TestDevice[] = [];
+afterAll(() => devices.forEach((device) => device.remove()));
+
+const BUILDS: readonly (readonly [string, readonly StoreMigration[] | undefined])[] = [
+  ['this build', undefined],
+  ['a build two releases later', laterBuild()],
+];
+
+const cases = RECORDED_STORE_SCHEMAS.flatMap((recording) =>
+  recording.databases.flatMap((database) => BUILDS.map(([build, migrations]) => [`schema ${recording.storeSchema}: ${database.name}, on ${build}`, recording, database, migrations] as const)),
+);
+
+/** The stored values a table's rows hold, decoded: what the recording build's store would read back. */
+const stored = (database: RecordedDatabase, table: string, where: (row: Readonly<Record<string, unknown>>) => boolean = () => true) =>
+  (database.rows[table] ?? []).filter(where).map((row) => JSON.parse(row.body as string) as unknown);
+
+async function onDevice(database: RecordedDatabase, migrations: readonly StoreMigration[] | undefined): Promise<AccountSession> {
+  const device = new TestDevice();
+  devices.push(device);
+  await device.leaveDatabase(database, (connection) => restoreDatabase(connection, database));
+  const opening = await device.vault(database.environment, undefined, migrations).open(database.accountId);
+  if (opening.status !== 'open') throw new Error(`expected an open database, got ${JSON.stringify(opening)}`);
+  return opening.session;
+}
+
+async function waitFor(condition: () => boolean): Promise<void> {
+  for (let i = 0; i < 200 && !condition(); i++) await new Promise((resolve) => setImmediate(resolve));
+  if (!condition()) throw new Error('condition never held');
+}
+
+describe('a recorded database', () => {
+  it.each(cases)('upgrades directly (%s), every stored value as it was', async (_, recording: RecordedStoreSchema, database, migrations) => {
+    const session = await onDevice(database, migrations);
+    const { store } = session;
+
+    for (const activity of stored(database, 'activities') as { activityId: string; checkpoint: string }[]) {
+      const id = activity.activityId;
+      expect(await store.load(id)).toEqual(activity);
+      expect(await store.readTransitions(id)).toEqual(stored(database, 'transitions', (row) => row.activity_id === id));
+      expect(await store.readEffects(id)).toEqual(stored(database, 'effects', (row) => row.activity_id === id));
+      // Version identities stay distinct: the store schema moved on, the checkpoint's own engine and state schema didn't.
+      expect(JSON.parse(activity.checkpoint)).toMatchObject({ schema: recording.stateSchema, identities: { engine: recording.engine } });
+    }
+    expect(await store.readOutgoing()).toEqual(stored(database, 'outgoing'));
+    expect((await store.findUnfinished())?.activityId ?? null).toBe(database.unfinished?.activityId ?? null);
+  });
+
+  it.each(cases.filter(([, , database]) => database.unfinished))('resumes its unfinished session after the upgrade (%s) and ends with the recorded result', async (_, recording, database, migrations) => {
+    const session = await onDevice(database, migrations);
+    const controller = new PracticeController(forAccountSession({ ...substituteAdapters({ clock: new FakeClock(undefined, true) }), store: session.store }, session));
+
+    await controller.load();
+    expect(controller.snapshot()).toMatchObject({ status: 'active', suspension: { cause: 'interrupted' } });
+    await controller.resume();
+    // A blackjack round under way finishes first; ending stops the session between turns.
+    if (database.unfinished?.game === 'blackjack') await controller.play('stand');
+    await controller.endSession();
+    await waitFor(() => controller.snapshot().status === 'completed');
+
+    const snapshot = controller.snapshot();
+    if (snapshot.status !== 'completed') throw new Error('not completed');
+    expect(snapshot.result.finalCashOut).toBe(database.unfinished?.finalBalance);
+    expect(snapshot.result.identities.engine).toBe(recording.engine);
+  });
+});
+
+// Every released store schema's recording stays exactly as that build wrote it
+// (its SHA-256 is in released.json, added when the build ships). The schema
+// under development keeps its own recording, re-recorded while it changes.
+const RECORDED = join(__dirname, '../src/account/testing/recorded');
+const CURRENT = `store-schema-${STORE_SCHEMA_VERSION}.ts`;
+const released = () => JSON.parse(readFileSync(join(RECORDED, 'released.json'), 'utf8')) as Record<string, string>;
+const recordings = () => readdirSync(RECORDED).filter((file) => file.endsWith('.ts') && file !== 'index.ts').sort();
+
+const FIX = `To fix:
+  1. pnpm --filter @tableside/mobile record-databases   (add --replace if STORE_SCHEMA_VERSION didn't change)
+  2. Delete the older unreleased recording (one not listed in apps/mobile/src/account/testing/recorded/released.json).
+  3. In apps/mobile/src/account/testing/recorded/index.ts, import the new recording and drop the deleted one.
+Never edit, regenerate or remove a released recording.`;
+
+/** Fails with how to fix it, when `problem` names one. */
+function check(problem: string | null): void {
+  if (problem) throw new Error(`${problem}\n${FIX}`);
+}
+
+describe('recorded databases', () => {
+  it('of released schemas are kept byte for byte: none edited or removed', () => {
+    for (const [file, hash] of Object.entries(released())) {
+      const actual = createHash('sha256').update(readFileSync(join(RECORDED, file))).digest('hex');
+      check(actual === hash ? null : `${file} is a released recording and changed. Restore it from git.`);
+    }
+  });
+
+  it("include this build's schema, so a schema change needs a recording", () => {
+    check(recordings().includes(CURRENT) ? null : `This build's store schema (${CURRENT}) has no recording.`);
+  });
+
+  it("are a released schema's or this build's: an unreleased schema's recording is replaced, not kept", () => {
+    const frozen = released();
+    const stale = recordings().filter((file) => file !== CURRENT && !(file in frozen));
+    check(stale.length === 0 ? null : `Only this build's recording may be unreleased, not ${stale.join(', ')}.`);
+  });
+
+  it('are all upgraded by the tests above', () => {
+    const listed = RECORDED_STORE_SCHEMAS.map((recording) => `store-schema-${recording.storeSchema}.ts`).sort();
+    check(JSON.stringify(listed) === JSON.stringify(recordings()) ? null : `index.ts lists ${listed.join(', ')}, not every recording (${recordings().join(', ')}).`);
+  });
+});

@@ -226,6 +226,31 @@ export class TestDevice {
     return this.unlockWaiters.length;
   }
 
+  /**
+   * Leaves an account database as an earlier build of this installation did:
+   * the installation's identity, the account's key (its database made) and the
+   * database file, which `fill` writes through a keyed connection.
+   */
+  async leaveDatabase(
+    identity: { readonly environment: string; readonly accountId: string; readonly installationId: string },
+    fill: (connection: SqlConnection) => Promise<void>,
+    driver: SqlDriver = nodeSqlCipherDriver(),
+  ): Promise<void> {
+    const { environment, accountId, installationId } = identity;
+    const directory = join(this.root, environment, installationId);
+    mkdirSync(directory, { recursive: true });
+    writeFileSync(join(this.root, environment, 'installation'), installationId);
+    this.keychain.set(`tableside.${environment}.installation`, installationId);
+    const key = randomBytes(32).toString('hex');
+    this.keychain.set(`tableside.${environment}.${installationId}.${accountId}.key`, JSON.stringify({ v: 1, key, created: true }));
+    const connection = await driver.open(join(directory, `${accountId}.db`), key);
+    try {
+      await fill(connection);
+    } finally {
+      await connection.close();
+    }
+  }
+
   /** Deletes the device's files. */
   remove(): void {
     rmSync(this.root, { recursive: true, force: true });
