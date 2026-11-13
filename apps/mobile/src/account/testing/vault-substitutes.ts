@@ -1,11 +1,15 @@
 // Substitutes for the account vault's device ports in tests: a keychain that
-// can be locked, and real files under a temporary root that remember which
-// directories were excluded from backup.
+// can be locked, real files under a temporary root that remember which
+// directories were excluded from backup, and a test device putting them
+// together with real SQLCipher (Node).
 
-import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { randomBytes, randomUUID } from 'node:crypto';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import type { KeyRead, VaultFiles, VaultKeyStore } from '../vault';
+import { AccountVault, type KeyRead, type VaultFiles, type VaultKeyStore } from '../vault';
+import { nodeSqlCipherDriver } from './node-sqlcipher';
 
 /** A device keychain. While `locked`, it answers nothing, as iOS does for a device-only entry on a locked device. */
 export class FakeKeychain implements VaultKeyStore {
@@ -75,4 +79,41 @@ export function nodeVaultFiles(root: string): NodeVaultFiles {
     written: () => walk(root),
     excluded: () => [...excluded],
   };
+}
+
+/** One device: its keychain and files survive across vault instances (app restarts). */
+export class TestDevice {
+  readonly root = mkdtempSync(join(tmpdir(), 'tableside-vault-'));
+  keychain = new FakeKeychain();
+  files: NodeVaultFiles = nodeVaultFiles(this.root);
+  private unlockWaiters: (() => void)[] = [];
+
+  vault(environment = 'production'): AccountVault {
+    return new AccountVault({
+      environment,
+      keys: this.keychain,
+      files: this.files,
+      driver: nodeSqlCipherDriver(),
+      randomBytes: (length) => new Uint8Array(randomBytes(length)),
+      newId: () => `installation-${randomUUID()}`,
+      unlocked: () => new Promise((resolve) => this.unlockWaiters.push(resolve)),
+    });
+  }
+
+  /** The device unlocks: the keychain answers again and the vault hears about it. */
+  unlock(): void {
+    this.keychain.locked = false;
+    const waiters = this.unlockWaiters;
+    this.unlockWaiters = [];
+    waiters.forEach((resolve) => resolve());
+  }
+
+  get waitingForUnlock(): number {
+    return this.unlockWaiters.length;
+  }
+
+  /** Deletes the device's files. */
+  remove(): void {
+    rmSync(this.root, { recursive: true, force: true });
+  }
 }

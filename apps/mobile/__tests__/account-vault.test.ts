@@ -4,53 +4,21 @@
 // is one device: a fake keychain, real files in a temporary directory and real
 // SQLCipher (Node).
 
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 
-import { AccountVault, type AccountSession, type VaultOpening } from '@/account/vault';
+import type { AccountSession, VaultOpening } from '@/account/vault';
 import { StaleSessionError } from '@/account/sqlite-store';
 import { nodeSqlCipherDriver } from '@/account/testing/node-sqlcipher';
-import { FakeKeychain, nodeVaultFiles, type NodeVaultFiles } from '@/account/testing/vault-substitutes';
+import { nodeVaultFiles, TestDevice, type NodeVaultFiles } from '@/account/testing/vault-substitutes';
 import { completedRecord, newActivity, transition } from '@/practice/testing/store-contract';
 
-const roots: string[] = [];
-afterAll(() => roots.forEach((root) => rmSync(root, { recursive: true, force: true })));
+const devices: TestDevice[] = [];
+afterAll(() => devices.forEach((device) => device.remove()));
 
-/** One device: its keychain and files survive across vault instances (app restarts). */
-class Device {
-  readonly root = mkdtempSync(join(tmpdir(), 'tableside-vault-'));
-  keychain = new FakeKeychain();
-  files: NodeVaultFiles = nodeVaultFiles(this.root);
-  private ids = 0;
-  private unlockWaiters: (() => void)[] = [];
-
+class Device extends TestDevice {
   constructor() {
-    roots.push(this.root);
-  }
-
-  vault(environment = 'production'): AccountVault {
-    return new AccountVault({
-      environment,
-      keys: this.keychain,
-      files: this.files,
-      driver: nodeSqlCipherDriver(),
-      randomBytes: (length) => Uint8Array.from({ length }, () => Math.floor(Math.random() * 256)),
-      newId: () => `installation-${++this.ids}-${Math.random().toString(16).slice(2, 10)}`,
-      unlocked: () => new Promise((resolve) => this.unlockWaiters.push(resolve)),
-    });
-  }
-
-  /** The device unlocks: the keychain answers again and the vault hears about it. */
-  unlock(): void {
-    this.keychain.locked = false;
-    const waiters = this.unlockWaiters;
-    this.unlockWaiters = [];
-    waiters.forEach((resolve) => resolve());
-  }
-
-  get waitingForUnlock(): number {
-    return this.unlockWaiters.length;
+    super();
+    devices.push(this);
   }
 }
 
