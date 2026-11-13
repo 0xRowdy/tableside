@@ -1,0 +1,140 @@
+{
+  "register": "Tableside provenance register (content rights, spec 7): visual assets the app bundles",
+  "policy": "docs/decisions/built-in-reference-content-rights.md, Minimal provenance record and AI-generated material",
+  "checked": "2026-11-06",
+  "records": [
+    {
+      "item": "Home game card images, revision 1",
+      "files": [
+        {
+          "path": "apps/mobile/assets/games/blackjack.jpg",
+          "sha256": "eae01df74c144d28a0237950dc39a8a2578214d0ab9871255a2d78ff9283814d"
+        },
+        {
+          "path": "apps/mobile/assets/games/craps.jpg",
+          "sha256": "5d4d80e293c941d63e7cca366afc8a4eb67ac6bdbc0f39d475fcf8e96c2d7153"
+        },
+        {
+          "path": "apps/mobile/assets/games/roulette.jpg",
+          "sha256": "27a8555a3e978fc89b4bab03c8feee72d4c47e4f777e3c1c25726e1f8abed3b9"
+        }
+      ],
+      "usedIn": "Home's three game cards (apps/mobile/src/games.ts). The same images fill S1-01 Home and the 01 Landing Page (marketing site) frames in design/Tableside.pen, so they reach store and web materials unless replaced.",
+      "origin": "AI-generated. The app files are 1408 x 768 JPEG copies, with metadata stripped, of design/Tableside-assets/generated-5.png (blackjack), generated-3.png (craps) and generated-4.png (roulette). That pairing was matched by pixel comparison. The PNGs are dated 2026-10-12 and were committed in 8780074 (2026-10-17); the JPEG copies arrived in fd964b4 (2026-10-19). Each PNG carries a C2PA manifest saying 'Created by Google Generative AI' (digitalSourceType trainedAlgorithmicMedia) and 'Applied imperceptible SynthID watermark'. The files sit in the design file's asset folder with pen.dev's generated-N names, and pen.dev's terms list Google Gemini among its image providers, so they were most likely made with pen.dev's Generate; the owner should confirm. The prompts weren't kept. No supplied input images are known.",
+      "rightsBasis": "pen.dev Terms of Use (https://pen.dev/terms-of-use, effective 2026-10-26, read 2026-11-06), section 5: 'As between you and us, you own the AI-generated outputs produced for you (\"Outputs\"), subject to any third-party rights.' The terms point to the model provider's own terms. Gemini API Additional Terms of Service (https://aistudio.google.com/docs/terms, effective 2026-03-23), Use of Generated Content: 'Google won't claim ownership over that content.' Google may generate the same or similar content for others. Neither document claims exclusivity or guarantees the output doesn't infringe. The terms in force on 2026-10-12, when the product was named pencil.dev, weren't retrieved.",
+      "usageLimits": "Neither document requires attribution. Use mustn't violate others' rights. Tableside makes no claim of exclusive ownership or copyright in the images. The outputs mustn't be used to train a model that competes with pen.dev. Commercial distribution, offline bundling and store marketing aren't restricted by either document.",
+      "changesAndValidation": "Converted to JPEG at the same size for the app. The images are decorative and teach nothing, so no content validation applies. Reviewed at 900 px wide on 2026-11-06: no logos, brand names or identifiable people were seen. Quality issues: the roulette wheel's number ring is wrong (0 and 32 each appear twice, and 35 sits beside 34), and the blackjack felt lettering is garbled. Check the craps dice pips at full size.",
+      "releaseReview": {
+        "owner": null,
+        "date": null,
+        "decision": "Pending owner review before external distribution. Outstanding: confirm the tool and, if possible, the prompts; accept or regenerate the roulette image."
+      }
+    },
+    {
+      "item": "App icon and splash image (placeholders)",
+      "files": [
+        {
+          "path": "apps/mobile/assets/images/icon.png",
+          "sha256": "7a667804bb80a6a424a5daf18a2599c4f32237cf06fe78fc0de45dbb09e0eccf"
+        },
+        {
+          "path": "apps/mobile/assets/images/android-icon-foreground.png",
+          "sha256": "9e3d0315a33c6799de601dd34cd8bf8cc3a8d16f3bf75592baec2ceb7240b391"
+        },
+        {
+          "path": "apps/mobile/assets/images/android-icon-background.png",
+          "sha256": "fb139c2dee362ebf2070e23b96da6fc0d43f8492de38b8af1fd7223e19b5861d"
+        },
+        {
+          "path": "apps/mobile/assets/images/android-icon-monochrome.png",
+          "sha256": "6371fc2c12e33ad2215a86c281db3d682a81bebe7c957a842c13b8bf00cceb83"
+        },
+        {
+          "path": "apps/mobile/assets/images/splash-icon.png",
+          "sha256": "27b060a757a29038c9618586baa0ba3894dbe60d084c6059df497ff429c2d92f"
+        },
+        {
+          "path": "apps/mobile/assets/expo.icon/icon.json",
+          "sha256": "747c56e178222a6255c6dd61c5de011b286cdc935febe89f04d1b191c3d076fe"
+        },
+        {
+          "path": "apps/mobile/assets/expo.icon/Assets/expo-symbol 2.svg",
+          "sha256": "ad117d20fd819f4ec71876ce09c0e8b9275b1f20c5ec3c9d7d1914977ceffec6"
+        },
+        {
+          "path": "apps/mobile/assets/expo.icon/Assets/grid.png",
+          "sha256": "8247d79a2b31328fe4e330a973e6fae16924ed9aebd72c64d464d6856ab18c72"
+        }
+      ],
+      "usedIn": "app.config.ts: icon, ios.icon, android.adaptiveIcon and the expo-splash-screen image.",
+      "origin": "Expo's SDK 58 default template (npm expo-template-default@58.0.32), byte-identical, copied when the workspace was scaffolded in fd964b4. splash-icon.png is the template's expo-logo.png, and expo.icon draws the Expo symbol.",
+      "rightsBasis": "The template package is licensed 0BSD, but the images are Expo's logo and branding, not Tableside's.",
+      "usageLimits": "Development builds only. They must not reach external testers, the stores or marketing.",
+      "changesAndValidation": "None.",
+      "releaseReview": {
+        "owner": null,
+        "date": null,
+        "decision": "Not approved for external distribution: replace with Tableside's icon and splash (#123)."
+      }
+    },
+    {
+      "item": "Fonts: Fraunces Regular (display) and Inter Regular, Medium and Bold (interface)",
+      "files": [
+        {
+          "module": "@expo-google-fonts/fraunces/400Regular/Fraunces_400Regular.ttf",
+          "sha256": "9cede435056e96eb39ac587d57cc9509484d7fa18fbb0532f149f183af13b14d"
+        },
+        {
+          "module": "@expo-google-fonts/inter/400Regular/Inter_400Regular.ttf",
+          "sha256": "a414b48aa577ef2c62ebb135341ddeef33ee26a4f5dc9f787f93c1aab08ebb50"
+        },
+        {
+          "module": "@expo-google-fonts/inter/500Medium/Inter_500Medium.ttf",
+          "sha256": "f1738576525e86db1d5cf63a6c1b56e0a7e2a2898b499ac93db95f2e7a9f9cd5"
+        },
+        {
+          "module": "@expo-google-fonts/inter/700Bold/Inter_700Bold.ttf",
+          "sha256": "fbe825cbfc749317f57a1433d3905aa9d3f388732fd29b8e8a36f34845e3bc3e"
+        }
+      ],
+      "usedIn": "Loaded by apps/mobile/src/app/_layout.tsx and bundled in the app install.",
+      "origin": "Fraunces Version 1.000, 'Copyright 2020 The Fraunces Project Authors (github.com/undercasetype/Fraunces)'. Inter Version 4.001, 'Copyright 2016 The Inter Project Authors (https://github.com/rsms/inter)'. Both are packaged by @expo-google-fonts/fraunces 0.4.1 and @expo-google-fonts/inter 0.4.2 (license 'MIT AND OFL-1.1'). The notices are copied from each font's name table.",
+      "rightsBasis": "SIL Open Font License 1.1, as each font's license field states.",
+      "usageLimits": "Bundling in a commercial app is allowed. Each font's copyright notice and the OFL text must go with the fonts, so Sources & credits carries them, readable offline. The fonts mustn't be sold on their own.",
+      "changesAndValidation": "Unmodified.",
+      "releaseReview": {
+        "owner": null,
+        "date": null,
+        "decision": "Pending owner review; Sources & credits must carry the notices first."
+      }
+    },
+    {
+      "item": "Interface icons (Lucide)",
+      "files": [],
+      "usedIn": "Icons across the app, drawn as SVG components by lucide-react-native 1.59.0.",
+      "origin": "Lucide (https://lucide.dev), 'Copyright (c) 2026 Lucide Icons and Contributors'.",
+      "rightsBasis": "ISC License, a software dependency under its own license.",
+      "usageLimits": "The copyright and permission notice must go with copies, so Sources & credits carries them.",
+      "changesAndValidation": "Unmodified.",
+      "releaseReview": {
+        "owner": null,
+        "date": null,
+        "decision": "Pending owner review; Sources & credits must carry the notice first."
+      }
+    },
+    {
+      "item": "Cards, chips, felt and table layouts",
+      "files": [],
+      "usedIn": "Every table screen.",
+      "origin": "Original work: drawn in code by the app's components from Unicode suit characters, the fonts above and the design tokens. No image asset ships for them.",
+      "rightsBasis": "Original work created for Tableside.",
+      "usageLimits": "None beyond the project's own.",
+      "changesAndValidation": "Screen tests cover the layouts. Rights approval isn't a correctness result.",
+      "releaseReview": {
+        "owner": null,
+        "date": null,
+        "decision": "Pending owner review before external distribution."
+      }
+    }
+  ]
+}
