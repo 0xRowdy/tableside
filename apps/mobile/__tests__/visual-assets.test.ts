@@ -3,7 +3,7 @@
 
 import { createHash } from 'node:crypto';
 import { readdirSync, readFileSync } from 'node:fs';
-import { join, relative } from 'node:path';
+import { join, relative, sep } from 'node:path';
 
 const APP = join(__dirname, '..');
 const REPO = join(APP, '..', '..');
@@ -20,7 +20,20 @@ function bundled(dir = ASSETS): string[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
     const path = join(dir, entry.name);
     if (entry.isDirectory()) return entry.name === 'sounds' ? [] : bundled(path);
-    return entry.name === 'visual-provenance.json' || entry.name.startsWith('.') ? [] : [relative(REPO, path)];
+    return entry.name === 'visual-provenance.json' || entry.name.startsWith('.') ? [] : [relative(REPO, path).split(sep).join('/')];
+  });
+}
+
+/** Font files the app imports from @expo-google-fonts, as register module ids. */
+function bundledFonts(dir = join(APP, 'src')): string[] {
+  return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    const path = join(dir, entry.name);
+    if (entry.isDirectory()) return bundledFonts(path);
+    if (!/\.tsx?$/.test(entry.name)) return [];
+    return [...readFileSync(path, 'utf8').matchAll(/import\s*{([^}]*)}\s*from\s*'@expo-google-fonts\/([\w-]+)'/g)].flatMap(([, names = '', pkg]) =>
+      names.split(',').map((name) => name.trim()).filter((name) => /^\w+_\d+\w+$/.test(name))
+        .map((name) => `@expo-google-fonts/${pkg}/${name.slice(name.indexOf('_') + 1)}/${name}.ttf`),
+    );
   });
 }
 
@@ -28,6 +41,13 @@ describe('visual asset provenance', () => {
   it('has a record for every bundled visual asset, matching the file', () => {
     const recorded = new Map(files.flatMap((file) => ('path' in file ? [[file.path, file.sha256] as const] : [])));
     for (const path of bundled()) expect({ path, sha256: recorded.get(path) }).toEqual({ path, sha256: sha256(join(REPO, path)) });
+  });
+
+  it('has a record for every font the app imports', () => {
+    const modules = new Set(files.flatMap((file) => ('module' in file ? [file.module] : [])));
+    const fonts = bundledFonts();
+    expect(fonts.length).toBeGreaterThan(0);
+    expect(fonts.filter((font) => !modules.has(font))).toEqual([]);
   });
 
   it('records only files that still exist, unchanged, including the bundled fonts', () => {
