@@ -12,6 +12,7 @@
 // Secure storage (device-only entries), keyed the same way:
 //   tableside.<environment>.installation           the installation ID, again
 //   tableside.<environment>.<installation>.<account>.key
+//   tableside.<environment>.keys                   every key name above, recorded before it is written
 //
 // The installation ID counts only when the file and the device-only keychain
 // entry agree, so neither restored files nor keychain entries that outlive a
@@ -22,11 +23,15 @@
 //
 // Another environment's namespace (a beta build's, under a production build
 // installed over it) is never opened; `removeEnvironment` erases it: its keys,
-// installation identity, databases and sidecars.
+// installation identity, databases and sidecars. Secure storage can't list its
+// entries, so the vault records each key name before writing the key, and
+// removal finds every key that way, even one whose files are gone.
 //
 // Key states: a locked device means wait for the unlock. A lost or unreadable
 // key or database means Recovery needed: the original bytes stay exactly as
 // they are and no empty replacement is ever created.
+
+import { ENVIRONMENT_NAMES, type EnvironmentName } from '@tableside/account/environment';
 
 import { SqliteActivityStore, StoreMismatchError, type StoreIdentity } from './sqlite-store';
 import { isDatabaseKey, SqlError, type SqlDriver } from './sql';
@@ -62,7 +67,7 @@ export interface VaultFiles {
 
 export interface VaultPorts {
   /** The backend environment this build talks to (#39): data and keys are namespaced by it. */
-  readonly environment: string;
+  readonly environment: EnvironmentName;
   readonly keys: VaultKeyStore;
   readonly files: VaultFiles;
   readonly driver: SqlDriver;
@@ -105,7 +110,14 @@ interface KeyRecord {
 }
 
 const ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
-const ENVIRONMENT_PATTERN = /^[a-z0-9-]{1,32}$/;
+
+/** Where an environment's files and secure-storage entries live. */
+const namespace = {
+  directory: (root: string, environment: EnvironmentName) => `${root}/${environment}`,
+  installationKey: (environment: EnvironmentName) => `tableside.${environment}.installation`,
+  accountKey: (environment: EnvironmentName, installationId: string, accountId: string) => `tableside.${environment}.${installationId}.${accountId}.key`,
+  keyIndex: (environment: EnvironmentName) => `tableside.${environment}.keys`,
+};
 const KEY_BYTES = 32;
 
 export class AccountVault {
@@ -115,7 +127,7 @@ export class AccountVault {
   private queue: Promise<unknown> = Promise.resolve();
 
   constructor(private readonly ports: VaultPorts) {
-    if (!ENVIRONMENT_PATTERN.test(ports.environment)) throw new Error(`invalid environment ${ports.environment}`);
+    if (!ENVIRONMENT_NAMES.includes(ports.environment)) throw new Error(`invalid environment ${ports.environment}`);
   }
 
   /** The account-session generation: it moves on at every sign-in, sign-out and account switch. */
@@ -155,8 +167,8 @@ export class AccountVault {
    * interrupted removal finishes the next time. Waits while the device is
    * locked.
    */
-  async removeEnvironment(environment: string): Promise<void> {
-    if (!ENVIRONMENT_PATTERN.test(environment)) throw new Error(`invalid environment ${environment}`);
+  async removeEnvironment(environment: EnvironmentName): Promise<void> {
+    if (!ENVIRONMENT_NAMES.includes(environment)) throw new Error(`invalid environment ${environment}`);
     if (environment === this.ports.environment) throw new Error('a vault never removes its own environment');
     while ((await this.serial(() => this.removeNamespace(environment))) === 'locked') await this.ports.unlocked();
   }
@@ -174,10 +186,10 @@ export class AccountVault {
     const { environment, files, keys } = this.ports;
     const installationId = await this.installationId();
     if (installationId === 'locked') return 'locked';
-    const directory = `${files.root}/${environment}/${installationId}`;
+    const directory = `${namespace.directory(files.root, environment)}/${installationId}`;
     await files.ensureDirectory(directory);
     const path = `${directory}/${accountId}.db`;
-    const keyName = `tableside.${environment}.${installationId}.${accountId}.key`;
+    const keyName = namespace.accountKey(environment, installationId, accountId);
     const recovery = (reason: RecoveryReason): VaultOpening => ({ status: 'recovery-needed', accountId, generation, reason });
 
     const read = await keys.read(keyName);
@@ -189,6 +201,7 @@ export class AccountVault {
       // A database without its key, here or left by an earlier installation: keep it as it is.
       if (exists || (await files.size(`${path}-wal`)) !== null || (await this.earlierDatabase(installationId, accountId))) return recovery('key-missing');
       record = { v: 1, key: hex(this.ports.randomBytes(KEY_BYTES)), created: false };
+      if ((await this.recordKeyName(keyName)) === 'locked') return 'locked';
       if ((await keys.write(keyName, JSON.stringify(record))) === 'locked') return 'locked';
     } else {
       const parsed = parseKeyRecord(read.value);
@@ -218,28 +231,48 @@ export class AccountVault {
     return { status: 'open', session };
   }
 
-  private async removeNamespace(environment: string): Promise<'removed' | 'locked'> {
+  private async removeNamespace(environment: EnvironmentName): Promise<'removed' | 'locked'> {
     const { files, keys } = this.ports;
-    const directory = `${files.root}/${environment}`;
-    const installationKey = `tableside.${environment}.installation`;
-    const installations = new Set((await files.list(directory)).filter((name) => name !== 'installation' && ID_PATTERN.test(name)));
-    const recorded = await keys.read(installationKey);
-    if (recorded.status === 'locked') return 'locked';
-    if (recorded.status === 'found' && ID_PATTERN.test(recorded.value)) installations.add(recorded.value);
-    for (const installation of installations) {
-      const accounts = (await files.list(`${directory}/${installation}`)).filter((name) => name.endsWith('.db')).map((name) => name.slice(0, -'.db'.length));
-      for (const account of accounts) {
-        if ((await keys.remove(`tableside.${environment}.${installation}.${account}.key`)) === 'locked') return 'locked';
+    const directory = namespace.directory(files.root, environment);
+    const index = await this.readKeyIndex(environment);
+    if (index === 'locked') return 'locked';
+    // The index names every key; the files are a fallback for keys written before it existed.
+    const names = new Set(index);
+    for (const installation of (await files.list(directory)).filter((name) => name !== 'installation' && ID_PATTERN.test(name))) {
+      for (const file of await files.list(`${directory}/${installation}`)) {
+        if (file.endsWith('.db')) names.add(namespace.accountKey(environment, installation, file.slice(0, -'.db'.length)));
       }
     }
-    if ((await keys.remove(installationKey)) === 'locked') return 'locked';
+    for (const name of [...names, namespace.installationKey(environment), namespace.keyIndex(environment)]) {
+      if ((await keys.remove(name)) === 'locked') return 'locked';
+    }
     await files.remove(directory);
     return 'removed';
   }
 
+  /** Records a key name in this environment's index before the key is written, so removal can always find it. */
+  private async recordKeyName(name: string): Promise<'recorded' | 'locked'> {
+    const index = await this.readKeyIndex(this.ports.environment);
+    if (index === 'locked') return 'locked';
+    if (index.includes(name)) return 'recorded';
+    return (await this.ports.keys.write(namespace.keyIndex(this.ports.environment), JSON.stringify([...index, name]))) === 'locked' ? 'locked' : 'recorded';
+  }
+
+  private async readKeyIndex(environment: EnvironmentName): Promise<string[] | 'locked'> {
+    const read = await this.ports.keys.read(namespace.keyIndex(environment));
+    if (read.status === 'locked') return 'locked';
+    if (read.status === 'missing') return [];
+    try {
+      const names: unknown = JSON.parse(read.value);
+      return Array.isArray(names) ? names.filter((name): name is string => typeof name === 'string' && name.startsWith(`tableside.${environment}.`)) : [];
+    } catch {
+      return [];
+    }
+  }
+
   /** Whether an earlier installation's directory on these files holds a database for the account. */
   private async earlierDatabase(installationId: string, accountId: string): Promise<boolean> {
-    const directory = `${this.ports.files.root}/${this.ports.environment}`;
+    const directory = namespace.directory(this.ports.files.root, this.ports.environment);
     for (const name of await this.ports.files.list(directory)) {
       if (name !== installationId && ID_PATTERN.test(name) && ((await this.ports.files.size(`${directory}/${name}/${accountId}.db`)) ?? 0) > 0) return true;
     }
@@ -250,10 +283,10 @@ export class AccountVault {
   private async installationId(): Promise<string | 'locked'> {
     if (this.cachedInstallationId) return this.cachedInstallationId;
     const { environment, files, keys } = this.ports;
-    const directory = `${files.root}/${environment}`;
+    const directory = namespace.directory(files.root, environment);
     await files.ensureDirectory(directory);
     const path = `${directory}/installation`;
-    const name = `tableside.${environment}.installation`;
+    const name = namespace.installationKey(environment);
     const entry = await keys.read(name);
     if (entry.status === 'locked') return 'locked';
     const file = await files.readText(path);

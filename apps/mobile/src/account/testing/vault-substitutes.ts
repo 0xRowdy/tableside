@@ -8,6 +8,8 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, 
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+import type { EnvironmentName } from '@tableside/account/environment';
+
 import { AccountVault, type KeyRead, type VaultFiles, type VaultKeyStore } from '../vault';
 import type { SqlDriver } from '../sql';
 import { nodeSqlCipherDriver } from './node-sqlcipher';
@@ -102,7 +104,7 @@ export class TestDevice {
   files: NodeVaultFiles = nodeVaultFiles(this.root);
   private unlockWaiters: (() => void)[] = [];
 
-  vault(environment = 'production', driver: SqlDriver = nodeSqlCipherDriver()): AccountVault {
+  vault(environment: EnvironmentName = 'production', driver: SqlDriver = nodeSqlCipherDriver()): AccountVault {
     return new AccountVault({
       environment,
       keys: this.keychain,

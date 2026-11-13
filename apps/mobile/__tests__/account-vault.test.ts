@@ -199,7 +199,7 @@ describe('the account vault', () => {
       await kept.store.createActivity(practiceIn(kept, 'production-c'));
       await production.close();
       expect(betaFiles(device).some((path) => path.endsWith('.db'))).toBe(true);
-      expect(betaKeys(device).length).toBe(3);
+      expect(betaKeys(device).length).toBe(4);
       const productionKeys = device.keychain.entries().filter(([name]) => name.startsWith('tableside.production.'));
 
       await device.vault('production').removeEnvironment('beta');
@@ -255,6 +255,25 @@ describe('the account vault', () => {
       device.unlock();
       await removing;
       expect(betaFiles(device)).toEqual([]);
+      expect(betaKeys(device)).toEqual([]);
+    });
+
+    it('removes keys whose files are gone: a database never created, and an earlier installation’s', async () => {
+      const { device, installationId } = await betaDevice();
+      // The app died after saving account C's key, before its database existed.
+      const killed = device.vault('beta', { open: () => Promise.reject(new Error('killed')) });
+      await expect(killed.open('account-c')).rejects.toThrow('killed');
+      expect(device.keychain.get(`tableside.beta.${installationId}.account-c.key`)).toBeDefined();
+      // An earlier beta installation whose files went with an uninstall; the keychain outlived it.
+      const earlier = new Device();
+      earlier.keychain = device.keychain;
+      const old = opened(await earlier.vault('beta').open('account-d'));
+      await old.store.close();
+      earlier.remove();
+      expect(betaKeys(device).length).toBe(6);
+
+      await device.vault('production').removeEnvironment('beta');
+
       expect(betaKeys(device)).toEqual([]);
     });
 

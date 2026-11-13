@@ -3,6 +3,7 @@
 // directory excluded from backup, and the app returning to the foreground as
 // the signal to try a locked keychain again.
 
+import type { EnvironmentName } from '@tableside/account/environment';
 import * as Crypto from 'expo-crypto';
 import { Directory, File, Paths } from 'expo-file-system';
 import * as SecureStore from 'expo-secure-store';
@@ -19,7 +20,7 @@ export const VAULT_DIRECTORY = 'tableside-vault';
 /** How long a locked keychain waits for the app to come to the foreground before trying again anyway. */
 export const LOCKED_RETRY_MS = 30_000;
 
-export function createNativeVault(environment: string): AccountVault {
+export function createNativeVault(environment: EnvironmentName): AccountVault {
   return new AccountVault({
     environment,
     keys: secureStoreKeys,

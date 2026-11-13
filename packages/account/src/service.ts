@@ -86,13 +86,11 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
   // Nothing restores credentials, opens an account database or sends anything
   // until every retired environment's namespace is gone: the client is made
   // only after that, since making it reads the stored credentials.
+  // Every server call in this service goes through `connect`.
   let client: Promise<SupabaseClient> | null = null;
   const connect = (): Promise<SupabaseClient> =>
     (client ??= (async () => {
-      for (const retired of retiredEnvironments(backend.name)) {
-        await removeCredentials(options.credentials, retired);
-        await options.vault.removeEnvironment(retired);
-      }
+      await removeRetiredEnvironments(options);
       return createClient(backend.url, backend.publishableKey, {
         global: { fetch: options.fetch, headers: { [ENVIRONMENT_HEADER]: backend.name } },
         auth: {
@@ -188,6 +186,14 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
 
 function isEligible(band: string | null): band is EligibilityBand {
   return band !== null && ELIGIBLE_BANDS.includes(band);
+}
+
+/** Erases what each environment this build retires left on the device: its credentials, then its vault namespace. */
+async function removeRetiredEnvironments({ backend, credentials, vault }: AccountServiceOptions): Promise<void> {
+  for (const retired of retiredEnvironments(backend.name)) {
+    await removeCredentials(credentials, retired);
+    await vault.removeEnvironment(retired);
+  }
 }
 
 /** Where Auth keeps an environment's credentials in secure storage: every entry's name starts with it. */
