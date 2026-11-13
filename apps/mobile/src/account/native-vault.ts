@@ -113,6 +113,15 @@ export const secureStoreKeys: VaultKeyStore = {
       throw error;
     }
   },
+  async remove(name) {
+    try {
+      await SecureStore.deleteItemAsync(name, KEYCHAIN_OPTIONS);
+      return 'removed';
+    } catch (error) {
+      if (isKeychainLocked(error)) return 'locked';
+      throw error;
+    }
+  },
 };
 
 function appFiles(): VaultFiles {
@@ -138,6 +147,14 @@ function appFiles(): VaultFiles {
     },
     async writeText(path, text) {
       new File(path).write(text);
+    },
+    async remove(path) {
+      const directory = new Directory(path);
+      if (directory.exists) directory.delete();
+      else {
+        const file = new File(path);
+        if (file.exists) file.delete();
+      }
     },
   };
 }

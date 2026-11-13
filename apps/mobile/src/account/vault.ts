@@ -20,6 +20,10 @@
 // by an earlier installation on these files is never opened or replaced: that
 // account is Recovery needed here.
 //
+// Another environment's namespace (a beta build's, under a production build
+// installed over it) is never opened; `removeEnvironment` erases it: its keys,
+// installation identity, databases and sidecars.
+//
 // Key states: a locked device means wait for the unlock. A lost or unreadable
 // key or database means Recovery needed: the original bytes stay exactly as
 // they are and no empty replacement is ever created.
@@ -37,6 +41,8 @@ export type KeyRead = { readonly status: 'found'; readonly value: string } | { r
 export interface VaultKeyStore {
   read(name: string): Promise<KeyRead>;
   write(name: string, value: string): Promise<'written' | 'locked'>;
+  /** Removes the entry, if there is one. */
+  remove(name: string): Promise<'removed' | 'locked'>;
 }
 
 /** The vault's files. Paths are `root` joined with "/" segments. */
@@ -50,6 +56,8 @@ export interface VaultFiles {
   size(path: string): Promise<number | null>;
   readText(path: string): Promise<string | null>;
   writeText(path: string, text: string): Promise<void>;
+  /** Removes the file or directory (with everything in it), if there is one. */
+  remove(path: string): Promise<void>;
 }
 
 export interface VaultPorts {
@@ -141,6 +149,19 @@ export class AccountVault {
   }
 
   /**
+   * Erases everything another environment left on this device: every account
+   * key, the installation identity, then the databases and their sidecars.
+   * Keys go first, because the files are how their names are found; an
+   * interrupted removal finishes the next time. Waits while the device is
+   * locked.
+   */
+  async removeEnvironment(environment: string): Promise<void> {
+    if (!ENVIRONMENT_PATTERN.test(environment)) throw new Error(`invalid environment ${environment}`);
+    if (environment === this.ports.environment) throw new Error('a vault never removes its own environment');
+    while ((await this.serial(() => this.removeNamespace(environment))) === 'locked') await this.ports.unlocked();
+  }
+
+  /**
    * For an asynchronous completion (a response, callback, job or timer): runs
    * `apply` only if the generation it started under is still current, and
    * otherwise drops it.
@@ -195,6 +216,25 @@ export class AccountVault {
     const session: AccountSession = { ...identity, generation, store };
     this.openSession = session;
     return { status: 'open', session };
+  }
+
+  private async removeNamespace(environment: string): Promise<'removed' | 'locked'> {
+    const { files, keys } = this.ports;
+    const directory = `${files.root}/${environment}`;
+    const installationKey = `tableside.${environment}.installation`;
+    const installations = new Set((await files.list(directory)).filter((name) => name !== 'installation' && ID_PATTERN.test(name)));
+    const recorded = await keys.read(installationKey);
+    if (recorded.status === 'locked') return 'locked';
+    if (recorded.status === 'found' && ID_PATTERN.test(recorded.value)) installations.add(recorded.value);
+    for (const installation of installations) {
+      const accounts = (await files.list(`${directory}/${installation}`)).filter((name) => name.endsWith('.db')).map((name) => name.slice(0, -'.db'.length));
+      for (const account of accounts) {
+        if ((await keys.remove(`tableside.${environment}.${installation}.${account}.key`)) === 'locked') return 'locked';
+      }
+    }
+    if ((await keys.remove(installationKey)) === 'locked') return 'locked';
+    await files.remove(directory);
+    return 'removed';
   }
 
   /** Whether an earlier installation's directory on these files holds a database for the account. */

@@ -29,6 +29,12 @@ export class FakeKeychain implements VaultKeyStore {
     return 'written';
   }
 
+  async remove(name: string): Promise<'removed' | 'locked'> {
+    if (this.locked) return 'locked';
+    this.values.delete(name);
+    return 'removed';
+  }
+
   entries(): [string, string][] {
     return [...this.values.entries()];
   }
@@ -41,7 +47,8 @@ export class FakeKeychain implements VaultKeyStore {
     this.values.set(name, value);
   }
 
-  remove(name: string): void {
+  /** Removes an entry behind the vault's back (a lost key). */
+  forget(name: string): void {
     this.values.delete(name);
   }
 }
@@ -79,6 +86,9 @@ export function nodeVaultFiles(root: string): NodeVaultFiles {
     },
     async writeText(path, text) {
       writeFileSync(path, text, { flush: true });
+    },
+    async remove(path) {
+      rmSync(path, { recursive: true, force: true });
     },
     written: () => walk(root),
     excluded: () => [...excluded],
