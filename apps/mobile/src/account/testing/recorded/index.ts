@@ -11,21 +11,17 @@
 // recording build's store wrote them: the test restores them into a fresh
 // encrypted database and opens it as an update would. The values are plain
 // data, typed loosely on purpose: they are what an older build wrote.
+import type { DatabaseDump } from '../database-dump';
 import { RECORDED_STORE_SCHEMA_1 } from './store-schema-1';
 
-export type RecordedValue = string | number | null;
-
-export interface RecordedDatabase {
+/** One account database, as its schema and rows. */
+export interface RecordedDatabase extends DatabaseDump {
   readonly name: string;
   readonly environment: string;
   readonly accountId: string;
   readonly installationId: string;
-  /** The unfinished session the database holds, and the final cash-out the engine recording reaches when it is resumed and ended. */
-  readonly unfinished: { readonly activityId: string; readonly game: string; readonly phase: string; readonly finalBalance: string } | null;
-  /** The schema's statements, in the order the build created them. */
-  readonly schema: readonly string[];
-  /** Every table's rows, in rowid order. */
-  readonly rows: Readonly<Record<string, readonly Readonly<Record<string, RecordedValue>>[]>>;
+  /** The unfinished practice session the database holds, and its final cash-out when resumed and ended (from the engine recording). */
+  readonly unfinished: { readonly activityId: string; readonly game: string; readonly phase: string; readonly finalCashOut: string } | null;
 }
 
 export interface RecordedStoreSchema {

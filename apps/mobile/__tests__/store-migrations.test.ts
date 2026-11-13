@@ -68,7 +68,7 @@ async function contents(session: AccountSession, activityIds: readonly string[])
   };
 }
 
-/** An account database as the schema-1 build leaves it: a finished session with its outgoing record, and one unfinished. */
+/** An account database as the schema-1 build leaves it: a finished practice session with its outgoing record, and an unfinished one. */
 async function leftBySchema1(phone: TestDevice, accountId = 'account-a') {
   const vault = phone.vault();
   const session = opened(await vault.open(accountId));
@@ -92,7 +92,7 @@ describe('an update', () => {
     const session = opened(await phone.vault('production', undefined, LATER_BUILD).open('account-a'));
 
     expect(await contents(session, ['done', 'unfinished'])).toEqual(before);
-    // It carries on: the unfinished session commits its next transition.
+    // Play carries on: the unfinished practice session commits its next transition.
     expect(await session.store.commitTransition(transition('unfinished', 2))).toEqual({ status: 'committed' });
   });
 });
@@ -229,5 +229,49 @@ describe('a rollback', () => {
     expect(snapshot(phone)).toEqual(files);
     // Updating again finds everything the later build kept.
     expect(await contents(opened(await phone.vault('production', undefined, LATER_BUILD).open('account-a')), ['done', 'unfinished'])).toEqual(before);
+  });
+
+  it("is blocked from a later build's interrupted migration, damaged database or not, and leaves its backup and manifest alone", async () => {
+    for (const damaged of [false, true]) {
+      const phone = device();
+      const before = await leftBySchema1(phone);
+      // Kill the later build at each point until its migration is under way: its manifest is on disk.
+      for (let at = 0; !phone.files.written().some((path) => path.endsWith('.db.migration')); at++) {
+        phone.killAt(at);
+        await phone
+          .vault('production', undefined, LATER_BUILD)
+          .open('account-a')
+          .catch(() => undefined);
+        phone.revive();
+      }
+      if (damaged) damage(phone);
+      const files = snapshot(phone);
+
+      expect(await phone.vault().open('account-a')).toMatchObject({ status: 'needs-update', accountId: 'account-a' });
+      expect(snapshot(phone)).toEqual(files);
+      // The later build finishes its own migration.
+      expect(await contents(opened(await phone.vault('production', undefined, LATER_BUILD).open('account-a')), IDS)).toEqual(before);
+    }
+  });
+});
+
+describe('the backup', () => {
+  it("holds what a killed app's write-ahead log had committed: nothing is lost by migrating a database left mid-play", async () => {
+    const phone = device();
+    await leftBySchema1(phone);
+    const earlier = phone.vault();
+    const session = opened(await earlier.open('account-a'));
+    await session.store.commitTransition(transition('unfinished', 2));
+    const before = await contents(session, IDS);
+    // The app is killed now: the last commit is only in the write-ahead log, not yet in the database file.
+    const database = phone.files.written().find((file) => file.endsWith('/account-a.db'))!;
+    const killed = { database: readFileSync(database), log: readFileSync(`${database}-wal`) };
+    await earlier.close();
+    writeFileSync(database, killed.database);
+    writeFileSync(`${database}-wal`, killed.log);
+
+    const session2 = opened(await phone.vault('production', undefined, LATER_BUILD).open('account-a'));
+
+    expect(await contents(session2, IDS)).toEqual(before);
   });
 });

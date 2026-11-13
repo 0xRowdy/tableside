@@ -24,9 +24,9 @@
 // key or database means Recovery needed: the original bytes stay exactly as
 // they are and no empty replacement is ever created.
 
-import { openMigrated } from './migration-runner';
+import { openMigrated, type MigrationFiles } from './migration-runner';
 import { SqliteActivityStore, StoreMismatchError, type StoreIdentity } from './sqlite-store';
-import { isDatabaseKey, SqlError, type SqlDriver } from './sql';
+import { isDatabaseKey, SqlError, type SqlDriver, type SqlErrorKind } from './sql';
 import { STORE_MIGRATIONS, type StoreMigration } from './store-schema';
 
 export type KeyRead = { readonly status: 'found'; readonly value: string } | { readonly status: 'missing' } | { readonly status: 'locked' };
@@ -42,22 +42,12 @@ export interface VaultKeyStore {
 }
 
 /** The vault's files. Paths are `root` joined with "/" segments. */
-export interface VaultFiles {
+export interface VaultFiles extends MigrationFiles {
   readonly root: string;
   /** Creates the directory (and its parents) when absent, excluded from backup and device transfer. */
   ensureDirectory(path: string): Promise<void>;
   /** The names of the entries in a directory; none when it doesn't exist. */
   list(path: string): Promise<string[]>;
-  /** The file's size in bytes, or null when there is no file. */
-  size(path: string): Promise<number | null>;
-  readText(path: string): Promise<string | null>;
-  writeText(path: string, text: string): Promise<void>;
-  /** Copies a file, replacing `to`, and flushes the copy to disk. */
-  copy(from: string, to: string): Promise<void>;
-  /** Renames a file to `to`, which must not exist: atomically, so `to` is absent or the whole file, never part of it. */
-  move(from: string, to: string): Promise<void>;
-  /** Deletes a file; nothing happens when there is none. */
-  remove(path: string): Promise<void>;
 }
 
 export interface VaultPorts {
@@ -105,7 +95,7 @@ export type VaultOpening =
    * Bringing the database to this build's schema failed (for example a full
    * disk): it is exactly as the earlier build left it, and the next open tries again.
    */
-  | { readonly status: 'migration-failed'; readonly accountId: string; readonly generation: number; readonly reason: string }
+  | { readonly status: 'migration-failed'; readonly accountId: string; readonly generation: number; readonly reason: SqlErrorKind }
   /** A later sign-in or sign-out replaced this one while it waited. */
   | { readonly status: 'superseded' };
 

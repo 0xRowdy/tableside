@@ -7,10 +7,11 @@
 // writes it, in a fresh encrypted file, then read back as data:
 //
 // - one database per unfinished phase the engine's recording of this build
-//   covers (every game), holding that session with its committed transitions;
-// - one holding finished practice: a completed session with its outgoing
-//   synchronization record and an allowance effect, and a session marked
-//   incomplete.
+//   covers (every game), holding that practice session with its committed
+//   transitions;
+// - one holding finished practice: a completed practice session with its
+//   outgoing synchronization record and an allowance effect, and a practice
+//   session marked incomplete.
 //
 // While the schema is unreleased, --replace re-records it. When a build with
 // it is released, the recording's SHA-256 goes in recorded/released.json; from
@@ -35,7 +36,8 @@ import {
 } from '@tableside/engine';
 import { RECORDED_BUILDS, type RecordedCheckpoint } from '@tableside/engine/recorded-checkpoints';
 
-import { SqliteActivityStore, STORE_SCHEMA_VERSION, type StoreIdentity } from '../src/account/sqlite-store';
+import { SqliteActivityStore, type StoreIdentity } from '../src/account/sqlite-store';
+import { STORE_SCHEMA_VERSION } from '../src/account/store-schema';
 import { dumpDatabase } from '../src/account/testing/database-dump';
 import { nodeSqlCipherDriver } from '../src/account/testing/node-sqlcipher';
 import type { RecordedDatabase, RecordedStoreSchema } from '../src/account/testing/recorded';
@@ -48,13 +50,13 @@ const directory = mkdtempSync(join(tmpdir(), 'tableside-record-'));
 const build = RECORDED_BUILDS.find((recorded) => recorded.engine === ENGINE_VERSION && recorded.schema === STATE_SCHEMA_VERSION);
 if (!build) throw new Error(`the engine has no recording of this build (engine ${ENGINE_VERSION}, schema ${STATE_SCHEMA_VERSION}): record its checkpoints first`);
 
-/** The recorded session's specification, owned by the recording account on its installation, under another id when given. */
+/** The recorded practice session's specification, owned by the recording account on its installation, under another id when given. */
 function specificationOf(recorded: RecordedCheckpoint, activityId?: string): ActivitySpecification {
   const specification = recorded.specification as ActivitySpecification;
   return { ...specification, activityId: activityId ?? specification.activityId, owner: IDENTITY.accountId, device: IDENTITY.installationId };
 }
 
-/** The commands that brought the recorded session to its checkpoint, from its receipts. */
+/** The commands that brought the recorded practice session to its checkpoint, from its receipts. */
 function commandsOf(recorded: RecordedCheckpoint): { commandId: string; command: Command }[] {
   const { receipts } = JSON.parse(recorded.checkpoint) as { receipts: { commandId: string; command: string }[] };
   return receipts.map((receipt) => ({ commandId: receipt.commandId, command: JSON.parse(receipt.command) as Command }));
@@ -111,15 +113,16 @@ async function unfinishedDatabase(recorded: RecordedCheckpoint): Promise<Recorde
   if (encodeCheckpoint(replayed) !== recorded.checkpoint) throw new Error(`${recorded.name}: the replay doesn't reach the recorded checkpoint`);
 
   const specification = specificationOf(recorded);
-  return record(recorded.name, { activityId: specification.activityId, game: recorded.game, phase: recorded.phase, finalBalance: recorded.finalBalance }, async (store) => {
+  return record(recorded.name, { activityId: specification.activityId, game: recorded.game, phase: recorded.phase, finalCashOut: recorded.finalBalance }, async (store) => {
     await play(store, specification, recorded.random as RandomStreamIdentity, commandsOf(recorded));
   });
 }
 
 /**
- * Finished practice: the recorded session with the shortest continuation played
- * to completion (its result, outgoing synchronization record and an allowance
- * effect), and one marked incomplete. Other games' results are stored the same way.
+ * Finished practice: the recorded practice session with the shortest
+ * continuation played to completion (its result, outgoing synchronization
+ * record and an allowance effect), and one marked incomplete. Other games'
+ * results are stored the same way.
  */
 function historyDatabase(): Promise<RecordedDatabase> {
   return record('finished practice', null, async (store) => {

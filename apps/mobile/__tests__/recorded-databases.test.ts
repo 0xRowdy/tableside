@@ -3,8 +3,8 @@
 // game, and one of finished practice) is put on a device as its build left it,
 // then opened by this build and by a build two releases later (both skipped).
 // Each time every stored value reads back exactly as recorded, and the
-// unfinished session resumes and ends with the engine recording's final
-// cash-out.
+// unfinished practice session resumes and ends with the engine recording's
+// final cash-out.
 
 import { createHash } from 'node:crypto';
 import { readdirSync, readFileSync } from 'node:fs';
@@ -68,7 +68,7 @@ describe('a recorded database', () => {
     expect((await store.findUnfinished())?.activityId ?? null).toBe(database.unfinished?.activityId ?? null);
   });
 
-  it.each(cases.filter(([, , database]) => database.unfinished))('resumes its unfinished session after the upgrade (%s) and ends with the recorded result', async (_, recording, database, migrations) => {
+  it.each(cases.filter(([, , database]) => database.unfinished))('resumes its unfinished practice session after the upgrade (%s) and ends with the recorded result', async (_, recording, database, migrations) => {
     const session = await onDevice(database, migrations);
     const controller = new PracticeController(forAccountSession({ ...substituteAdapters({ clock: new FakeClock(undefined, true) }), store: session.store }, session));
 
@@ -82,7 +82,7 @@ describe('a recorded database', () => {
 
     const snapshot = controller.snapshot();
     if (snapshot.status !== 'completed') throw new Error('not completed');
-    expect(snapshot.result.finalCashOut).toBe(database.unfinished?.finalBalance);
+    expect(snapshot.result.finalCashOut).toBe(database.unfinished?.finalCashOut);
     expect(snapshot.result.identities.engine).toBe(recording.engine);
   });
 });

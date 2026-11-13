@@ -2,12 +2,13 @@
 // statements in creation order and every table's rows in rowid order, read
 // and written through the store's own verified connection.
 
-import type { SqlConnection } from '../sql';
-import type { RecordedValue } from './recorded';
+import type { SqlConnection, SqlValue } from '../sql';
 
 export interface DatabaseDump {
+  /** The schema's statements, in the order the database created them. */
   readonly schema: readonly string[];
-  readonly rows: Readonly<Record<string, readonly Readonly<Record<string, RecordedValue>>[]>>;
+  /** Every table's rows, in rowid order. */
+  readonly rows: Readonly<Record<string, readonly Readonly<Record<string, SqlValue>>[]>>;
 }
 
 const quoted = (name: string) => `"${name.replaceAll('"', '""')}"`;
@@ -17,9 +18,9 @@ export function dumpDatabase(connection: SqlConnection): Promise<DatabaseDump> {
     const entries = await tx.all<{ type: string; name: string; sql: string }>(
       "SELECT type, name, sql FROM sqlite_master WHERE sql IS NOT NULL AND name NOT LIKE 'sqlite_%' ORDER BY rowid",
     );
-    const rows: Record<string, Record<string, RecordedValue>[]> = {};
+    const rows: Record<string, Record<string, SqlValue>[]> = {};
     for (const { name } of entries.filter((entry) => entry.type === 'table')) {
-      rows[name] = await tx.all<Record<string, RecordedValue>>(`SELECT * FROM ${quoted(name)} ORDER BY rowid`);
+      rows[name] = await tx.all<Record<string, SqlValue>>(`SELECT * FROM ${quoted(name)} ORDER BY rowid`);
     }
     return { schema: entries.map((entry) => entry.sql), rows };
   });

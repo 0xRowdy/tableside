@@ -15,7 +15,7 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
         "activityId": "activity-1",
         "game": "roulette",
         "phase": "open-decision",
-        "finalBalance": "1000"
+        "finalCashOut": "1000"
       },
       "schema": [
         "CREATE TABLE meta (name TEXT PRIMARY KEY, value TEXT NOT NULL) STRICT",
@@ -89,7 +89,7 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
         "activityId": "activity-1",
         "game": "roulette",
         "phase": "revealing-outcome",
-        "finalBalance": "1010"
+        "finalCashOut": "1010"
       },
       "schema": [
         "CREATE TABLE meta (name TEXT PRIMARY KEY, value TEXT NOT NULL) STRICT",
@@ -163,7 +163,7 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
         "activityId": "activity-1",
         "game": "roulette",
         "phase": "open-decision",
-        "finalBalance": "1010"
+        "finalCashOut": "1010"
       },
       "schema": [
         "CREATE TABLE meta (name TEXT PRIMARY KEY, value TEXT NOT NULL) STRICT",
@@ -255,7 +255,7 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
         "activityId": "activity-1",
         "game": "roulette",
         "phase": "final-settlement",
-        "finalBalance": "1010"
+        "finalCashOut": "1010"
       },
       "schema": [
         "CREATE TABLE meta (name TEXT PRIMARY KEY, value TEXT NOT NULL) STRICT",
@@ -356,7 +356,7 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
         "activityId": "activity-1",
         "game": "roulette",
         "phase": "correction",
-        "finalBalance": "1000"
+        "finalCashOut": "1000"
       },
       "schema": [
         "CREATE TABLE meta (name TEXT PRIMARY KEY, value TEXT NOT NULL) STRICT",
@@ -430,7 +430,7 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
         "activityId": "activity-1",
         "game": "roulette",
         "phase": "cycle-completion",
-        "finalBalance": "1050"
+        "finalCashOut": "1050"
       },
       "schema": [
         "CREATE TABLE meta (name TEXT PRIMARY KEY, value TEXT NOT NULL) STRICT",
@@ -522,7 +522,7 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
         "activityId": "craps-1",
         "game": "craps",
         "phase": "settled-outcome",
-        "finalBalance": "1010"
+        "finalCashOut": "1010"
       },
       "schema": [
         "CREATE TABLE meta (name TEXT PRIMARY KEY, value TEXT NOT NULL) STRICT",
@@ -614,7 +614,7 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
         "activityId": "craps-1",
         "game": "craps",
         "phase": "strategy-settlement",
-        "finalBalance": "1010"
+        "finalCashOut": "1010"
       },
       "schema": [
         "CREATE TABLE meta (name TEXT PRIMARY KEY, value TEXT NOT NULL) STRICT",
@@ -706,7 +706,7 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
         "activityId": "blackjack-1",
         "game": "blackjack",
         "phase": "open-decision",
-        "finalBalance": "1010"
+        "finalCashOut": "1010"
       },
       "schema": [
         "CREATE TABLE meta (name TEXT PRIMARY KEY, value TEXT NOT NULL) STRICT",
@@ -780,7 +780,7 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
         "activityId": "blackjack-1",
         "game": "blackjack",
         "phase": "correction",
-        "finalBalance": "1000"
+        "finalCashOut": "1000"
       },
       "schema": [
         "CREATE TABLE meta (name TEXT PRIMARY KEY, value TEXT NOT NULL) STRICT",

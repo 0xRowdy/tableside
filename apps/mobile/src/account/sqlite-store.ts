@@ -34,9 +34,7 @@ import type {
   TransitionCommit,
 } from '../practice/store';
 import type { SqlConnection, SqlExecutor } from './sql';
-import { createSchema, schemaVersionOf, STORE_MIGRATIONS, STORE_SCHEMA_VERSION, type StoreMigration } from './store-schema';
-
-export { STORE_SCHEMA_VERSION };
+import { createSchema, readSchemaVersion, schemaVersionOf, STORE_MIGRATIONS, STORE_SCHEMA_VERSION, type StoreMigration } from './store-schema';
 
 /** Whose database this is. */
 export interface StoreIdentity {
@@ -88,9 +86,9 @@ export class StoreMismatchError extends StoreError {
 }
 
 /**
- * The database has a schema version this build doesn't open: an older one
- * awaits the migration runner, a newer one is a rollback. Either way the
- * data is left as it is; it is not Recovery needed.
+ * The database has a schema version this build doesn't open: an older one the
+ * migration runner hasn't brought up to date, or a newer one (a rollback).
+ * Either way the data is left as it is; it is not Recovery needed.
  */
 export class UnsupportedSchemaError extends StoreError {
   constructor(
@@ -126,7 +124,7 @@ export class SqliteActivityStore implements ActivityStore {
    */
   static async open(connection: SqlConnection, identity: StoreIdentity, options: StoreOptions = {}): Promise<SqliteActivityStore> {
     const migrations = options.migrations ?? STORE_MIGRATIONS;
-    const version = String(schemaVersionOf(migrations));
+    const version = schemaVersionOf(migrations);
     const owner: Record<string, string> = {
       environment: identity.environment,
       account_id: identity.accountId,
@@ -134,14 +132,13 @@ export class SqliteActivityStore implements ActivityStore {
     };
     try {
       await connection.transaction(async (tx) => {
-        const tables = await tx.get<{ count: number }>("SELECT count(*) AS count FROM sqlite_master WHERE type = 'table'");
-        if (tables?.count === 0) return createSchema(tx, owner, migrations);
-        const hasMeta = await tx.get("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'meta'");
-        const rows = hasMeta ? await tx.all<{ name: string; value: string }>('SELECT name, value FROM meta') : [];
-        const stored = Object.fromEntries(rows.map((row) => [row.name, row.value]));
-        if (stored.schema_version !== version) throw new UnsupportedSchemaError(stored.schema_version ?? 'missing', Number(version));
+        const stored = await readSchemaVersion(tx);
+        if (stored === null) return createSchema(tx, owner, migrations);
+        if (stored !== version) throw new UnsupportedSchemaError(Number.isNaN(stored) ? 'missing' : String(stored), version);
+        const rows = await tx.all<{ name: string; value: string }>('SELECT name, value FROM meta');
+        const meta = Object.fromEntries(rows.map((row) => [row.name, row.value]));
         for (const [name, value] of Object.entries(owner)) {
-          if (stored[name] !== value) throw new StoreMismatchError(`the database's ${name} is ${stored[name] ?? 'missing'}, not ${value}`);
+          if (meta[name] !== value) throw new StoreMismatchError(`the database's ${name} is ${meta[name] ?? 'missing'}, not ${value}`);
         }
       });
     } catch (error) {
