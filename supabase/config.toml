@@ -340,6 +340,15 @@ skip_nonce_check = false
 # If enabled, it will allow the user to successfully authenticate when the provider does not return an email address.
 email_optional = false
 
+# Local development only: seam 2's test identity provider
+# (packages/account/src/testing/identity-provider.ts), standing in for Apple and
+# Google. It runs inside the test process; nothing answers at this URL otherwise.
+[auth.external.keycloak]
+enabled = true
+client_id = "tableside-test-idp"
+secret = "unused-test-idp-secret"
+url = "http://host.docker.internal:54330"
+
 # Allow Solana wallet holders to sign in to your project via the Sign in with Solana (SIWS, EIP-4361) standard.
 # You can configure "web3" rate limit in the [auth.rate_limit] section and set up [auth.captcha] if self-hosting.
 [auth.web3.solana]

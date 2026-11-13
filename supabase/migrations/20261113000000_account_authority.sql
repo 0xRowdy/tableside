@@ -157,7 +157,8 @@ language sql stable security definer set search_path = '' as $$
   where a.account_id = private.active_account()
 $$;
 
-revoke execute on function public.current_account() from public;
+-- Supabase's default privileges also grant new public functions to anon directly.
+revoke execute on function public.current_account() from public, anon;
 grant execute on function public.current_account() to authenticated;
 
 -- ---------------------------------------------------------------------------
