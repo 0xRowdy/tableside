@@ -4,6 +4,8 @@
 
 import { type SupabaseClient, createClient } from '@supabase/supabase-js';
 
+import { type BackendEnvironment, ENVIRONMENT_HEADER, type EnvironmentName, retiredEnvironments } from './environment';
+
 /** The account's access state on this installation (spec 2, *Account gate*). Later tickets add the other states. */
 export type AccountGate =
   | { readonly state: 'no-account' }
@@ -36,10 +38,13 @@ export interface CredentialStorage {
 export interface AccountVault {
   open(accountId: string): Promise<void>;
   close(): Promise<void>;
+  /** Removes every database, key and installation identity another environment left on this device. */
+  removeEnvironment(environment: EnvironmentName): Promise<void>;
 }
 
 export interface AccountServiceOptions {
-  readonly backend: { readonly url: string; readonly publishableKey: string };
+  /** The one backend this build talks to, fixed when it was built. */
+  readonly backend: BackendEnvironment;
   /** The device's network. */
   readonly fetch: typeof fetch;
   readonly credentials: CredentialStorage;
@@ -77,10 +82,31 @@ interface Assertion {
 }
 
 export function createAccountService(options: AccountServiceOptions): AccountService {
-  const supabase: SupabaseClient = createClient(options.backend.url, options.backend.publishableKey, {
-    global: { fetch: options.fetch },
-    auth: { storage: options.credentials, persistSession: true, autoRefreshToken: false, detectSessionInUrl: false },
-  });
+  const { backend } = options;
+  // Nothing restores credentials, opens an account database or sends anything
+  // until every retired environment's namespace is gone: the client is made
+  // only after that, since making it reads the stored credentials.
+  let client: Promise<SupabaseClient> | null = null;
+  const connect = (): Promise<SupabaseClient> =>
+    (client ??= (async () => {
+      for (const retired of retiredEnvironments(backend.name)) {
+        await removeCredentials(options.credentials, retired);
+        await options.vault.removeEnvironment(retired);
+      }
+      return createClient(backend.url, backend.publishableKey, {
+        global: { fetch: options.fetch, headers: { [ENVIRONMENT_HEADER]: backend.name } },
+        auth: {
+          storage: namespacedCredentials(options.credentials, backend.name),
+          storageKey: credentialsKey(backend.name),
+          persistSession: true,
+          autoRefreshToken: false,
+          detectSessionInUrl: false,
+        },
+      });
+    })().catch((error: unknown) => {
+      client = null;
+      throw error;
+    }));
   const listeners = new Set<(gate: AccountGate) => void>();
   let gate: AccountGate = { state: 'no-account' };
   let assertion: Assertion | null = null;
@@ -106,6 +132,7 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
       assertion = null;
       if (range === 'under-13') return { status: 'ineligible' };
       try {
+        const supabase = await connect();
         const { data, error } = await supabase.rpc('issue_eligibility_assertion', { age_range: range });
         if (error) return { status: 'failed' };
         const issued = data as { assertion: string; expires_at: string };
@@ -120,11 +147,12 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
       const held = currentAssertion();
       if (intent === 'create' && !held) return { status: 'age-required' };
       try {
+        const supabase = await connect();
         const { error } = await supabase.auth.signInWithOtp({
           email,
           options:
             intent === 'create' && held
-              ? { shouldCreateUser: true, data: { eligibility_assertion: held.token } }
+              ? { shouldCreateUser: true, data: { eligibility_assertion: held.token, environment: backend.name } }
               : { shouldCreateUser: false },
         });
         // Sign-in to an address with no account is refused by Auth; it reads as
@@ -138,6 +166,7 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
 
     async verifyEmailCode({ email, code }) {
       try {
+        const supabase = await connect();
         const { error } = await supabase.auth.verifyOtp({ email, token: code, type: 'email' });
         if (error) return { status: error.code === 'otp_expired' ? 'invalid-code' : 'failed' };
         const { data, error: accountError } = await supabase.rpc('current_account');
@@ -159,4 +188,42 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
 
 function isEligible(band: string | null): band is EligibilityBand {
   return band !== null && ELIGIBLE_BANDS.includes(band);
+}
+
+/** Where Auth keeps an environment's credentials in secure storage: every entry's name starts with it. */
+const credentialsKey = (environment: EnvironmentName) => `tableside.${environment}.auth`;
+/** The list of credential entries an environment has written, so they can all be removed. */
+const credentialsIndex = (environment: EnvironmentName) => `tableside.${environment}.credentials`;
+
+/**
+ * An environment's credentials. Secure storage can't list its entries, so each
+ * entry's name is recorded before the entry is written, and removing the
+ * environment's credentials removes every recorded entry.
+ */
+function namespacedCredentials(storage: CredentialStorage, environment: EnvironmentName): CredentialStorage {
+  const index = credentialsIndex(environment);
+  return {
+    getItem: (key) => storage.getItem(key),
+    async setItem(key, value) {
+      const names = await readIndex(storage, index);
+      if (!names.includes(key)) await storage.setItem(index, JSON.stringify([...names, key]));
+      await storage.setItem(key, value);
+    },
+    removeItem: (key) => storage.removeItem(key),
+  };
+}
+
+async function removeCredentials(storage: CredentialStorage, environment: EnvironmentName): Promise<void> {
+  const index = credentialsIndex(environment);
+  for (const key of new Set([credentialsKey(environment), ...(await readIndex(storage, index))])) await storage.removeItem(key);
+  await storage.removeItem(index);
+}
+
+async function readIndex(storage: CredentialStorage, index: string): Promise<string[]> {
+  try {
+    const names: unknown = JSON.parse((await storage.getItem(index)) ?? '[]');
+    return Array.isArray(names) ? names.filter((name): name is string => typeof name === 'string') : [];
+  } catch {
+    return [];
+  }
 }

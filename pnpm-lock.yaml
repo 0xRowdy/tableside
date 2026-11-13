@@ -193,6 +193,9 @@ importers:
       '@expo-google-fonts/inter':
         specifier: ^0.4.2
         version: 0.4.2
+      '@tableside/account':
+        specifier: workspace:*
+        version: link:../../packages/account
       '@tableside/definitions':
         specifier: workspace:*
         version: link:../../packages/definitions

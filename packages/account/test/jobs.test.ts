@@ -12,7 +12,7 @@ describe('the eligibility-assertion cleanup job', () => {
     const issue = async () =>
       ((await client.rpc('issue_eligibility_assertion', { age_range: '18+' })).data as { assertion: string }).assertion;
     const [consumed, expired, fresh] = [await issue(), await issue(), await issue()];
-    await client.auth.signInWithOtp({ email: uniqueEmail('job'), options: { data: { eligibility_assertion: consumed } } });
+    await client.auth.signInWithOtp({ email: uniqueEmail('job'), options: { data: { eligibility_assertion: consumed, environment: 'local' } } });
     await stack.expireAssertion(expired);
 
     const [job] = await stack.sql<{ command: string }[]>`select command from cron.job where jobname = 'expire-eligibility-assertions'`;
@@ -24,7 +24,7 @@ describe('the eligibility-assertion cleanup job', () => {
       where token_hash in (extensions.digest(${consumed}, 'sha256'), extensions.digest(${expired}, 'sha256'), extensions.digest(${fresh}, 'sha256'))`;
     expect(remaining[0]?.count).toBe(1);
     const email = uniqueEmail('job-fresh');
-    expect((await client.auth.signInWithOtp({ email, options: { data: { eligibility_assertion: fresh } } })).error).toBeNull();
+    expect((await client.auth.signInWithOtp({ email, options: { data: { eligibility_assertion: fresh, environment: 'local' } } })).error).toBeNull();
     expect(await stack.authUserId(email)).not.toBeNull();
   });
 });
