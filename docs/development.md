@@ -10,7 +10,7 @@
 | `packages/runner` | The headless runner: standardized sessions of any built-in strategy on a benchmark profile, on Node (`pnpm --filter @tableside/runner start --strategy <id> --profile <id> --key <16 hex>`). Spec 6 adds the coordinator and analysis. |
 | `packages/harness` | The cross-runtime test harness. See [cross-runtime-harness.md](cross-runtime-harness.md). |
 | `packages/account` | The Account service (spec 2): the app's one interface for anything account-shaped, with its observable account gate. `src/testing` is seam 2's multi-device scenario harness. |
-| `supabase` | The backend: local stack configuration, migrations (the account authority schema, RLS, storage policies, jobs) and email templates. |
+| `supabase` | The backend: local stack configuration, migrations (the account authority schema, RLS, storage policies, jobs) and edge functions (`request-code`, the only way to get an email code). |
 
 ## Toolchain
 
@@ -53,7 +53,7 @@ pnpm stack db reset   # reapply the migrations after changing one
 pnpm stack stop
 ```
 
-New migrations go in `supabase/migrations` (`supabase migration new <name>`); never edit one that has merged. Email sent locally lands in the stack's mail catcher (`supabase status` prints its URL). `pnpm stack <command>` runs a Supabase CLI command against this checkout's stack. To run stacks in several worktrees at once, give each worktree its own `TABLESIDE_STACK_SLOT` (1–9) for both `pnpm stack` and `pnpm test:accounts`: slot N gets its own project id and every port moved up by N × 100, generated under `.stacks/<N>` from this checkout's config with symlinked migrations. Slot 0 (the default) is the plain `supabase/` project on the default ports, which is what CI and `supabase` itself use.
+New migrations go in `supabase/migrations` (`supabase migration new <name>`); never edit one that has merged. Email sent locally lands in the stack's mail catcher (`supabase status` prints its URL): Auth itself sends nothing, and the `request-code` function delivers codes and "No account for this address" emails there. Each scenario starts with fresh code-request limits (`packages/account/test/setup.ts`), since every scenario comes from the same address. `pnpm stack <command>` runs a Supabase CLI command against this checkout's stack. To run stacks in several worktrees at once, give each worktree its own `TABLESIDE_STACK_SLOT` (1–9) for both `pnpm stack` and `pnpm test:accounts`: slot N gets its own project id and every port moved up by N × 100, generated under `.stacks/<N>` from this checkout's config with symlinked migrations. Slot 0 (the default) is the plain `supabase/` project on the default ports, which is what CI and `supabase` itself use.
 
 The app:
 

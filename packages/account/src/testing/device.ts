@@ -70,6 +70,11 @@ export interface SimulatedDevice {
   readonly credentials: MemoryCredentials;
   readonly vault: NodeSqliteVault;
   readonly mailbox: Mailbox;
+  /**
+   * The app quit and opened again: a new Account service (and vault) over the
+   * same credentials, files, clock and network, restored from this device.
+   */
+  relaunch(): Promise<SimulatedDevice>;
   /** Closes the store and removes the device's files. */
   dispose(): void;
 }
@@ -80,30 +85,51 @@ export function createDevice(stack: LocalStack, options: { readonly name: string
   const entropy = new FakeEntropy(seed++);
   const installationId = Buffer.from(entropy.bytes(16)).toString('hex');
   const directory = mkdtempSync(path.join(tmpdir(), `tableside-${options.name}-`));
-  const proxy = new FaultProxy();
-  const clock = new FakeClock();
-  const credentials = new MemoryCredentials();
-  const vault = new NodeSqliteVault(directory, installationId);
-  const account = createAccountService({
-    backend: { url: stack.url, publishableKey: stack.publishableKey },
-    fetch: proxy.fetch,
-    credentials,
-    vault,
-    clock: clock.now,
-  });
-  return {
+  return launch(stack, {
     name: options.name,
     installationId,
-    account,
-    proxy,
-    clock,
+    directory,
     entropy,
-    credentials,
-    vault,
+    proxy: new FaultProxy(),
+    clock: new FakeClock(),
+    credentials: new MemoryCredentials(),
     mailbox: new Mailbox(stack.mailUrl),
+  });
+}
+
+interface DeviceParts {
+  readonly name: string;
+  readonly installationId: string;
+  readonly directory: string;
+  readonly entropy: FakeEntropy;
+  readonly proxy: FaultProxy;
+  readonly clock: FakeClock;
+  readonly credentials: MemoryCredentials;
+  readonly mailbox: Mailbox;
+}
+
+function launch(stack: LocalStack, parts: DeviceParts): SimulatedDevice {
+  const vault = new NodeSqliteVault(parts.directory, parts.installationId);
+  const account = createAccountService({
+    backend: { url: stack.url, publishableKey: stack.publishableKey },
+    fetch: parts.proxy.fetch,
+    credentials: parts.credentials,
+    vault,
+    clock: parts.clock.now,
+  });
+  return {
+    ...parts,
+    account,
+    vault,
+    async relaunch() {
+      await vault.close();
+      const next = launch(stack, parts);
+      await next.account.restore();
+      return next;
+    },
     dispose() {
       void vault.close();
-      rmSync(directory, { recursive: true, force: true });
+      rmSync(parts.directory, { recursive: true, force: true });
     },
   };
 }

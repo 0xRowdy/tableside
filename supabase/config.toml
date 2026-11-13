@@ -239,16 +239,6 @@ otp_expiry = 3600
 # admin_email = "admin@email.com"
 # sender_name = "Admin"
 
-# Sign-in is by emailed code only: both the sign-up confirmation and the
-# sign-in email carry the code, never a link.
-[auth.email.template.confirmation]
-subject = "Your Tableside code"
-content_path = "./supabase/templates/code.html"
-
-[auth.email.template.magic_link]
-subject = "Your Tableside code"
-content_path = "./supabase/templates/code.html"
-
 # Uncomment to customize email template
 # [auth.email.template.invite]
 # subject = "You have been invited"
@@ -285,6 +275,12 @@ max_frequency = "5s"
 [auth.hook.before_user_created]
 enabled = true
 uri = "pg-functions://postgres/private/before_user_created"
+
+# Auth sends no email: codes come only from the request-code function, which
+# applies the code-request limits (supabase/migrations/*_email_codes.sql).
+[auth.hook.send_email]
+enabled = true
+uri = "pg-functions://postgres/private/refuse_auth_email"
 
 # This hook runs before a token is issued and allows you to add additional claims based on the authentication method used.
 # [auth.hook.custom_access_token]
@@ -397,8 +393,13 @@ inspector_port = 8083
 # The Deno major version to use.
 deno_version = 2
 
-# [edge_runtime.secrets]
-# secret_key = "env(SECRET_VALUE)"
+# Local development only: request-code delivers to the stack's mail catcher.
+[edge_runtime.secrets]
+TABLESIDE_MAILPIT_URL = "http://host.docker.internal:54324"
+
+# Called before any account exists, with the publishable key only.
+[functions.request-code]
+verify_jwt = false
 
 [analytics]
 enabled = false

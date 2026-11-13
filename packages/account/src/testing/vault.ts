@@ -6,7 +6,7 @@ import { mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 
-import type { AccountVault } from '../service';
+import type { AccountVault, VaultOpening } from '../service';
 
 export class NodeSqliteVault implements AccountVault {
   private database: DatabaseSync | null = null;
@@ -18,12 +18,13 @@ export class NodeSqliteVault implements AccountVault {
     private readonly installationId: string,
   ) {}
 
-  async open(accountId: string): Promise<void> {
+  async open(accountId: string): Promise<VaultOpening> {
     await this.close();
     const directory = path.join(this.directory, this.installationId);
     mkdirSync(directory, { recursive: true });
     this.database = new DatabaseSync(path.join(directory, `${accountId}.sqlite`));
     this.openAccount = accountId;
+    return { status: 'open' };
   }
 
   async close(): Promise<void> {

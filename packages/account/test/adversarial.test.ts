@@ -39,7 +39,7 @@ async function signedInAccount(label: string) {
 
   const client = rawClient();
   const previous = await mailbox.latestCode(email);
-  await client.auth.signInWithOtp({ email, options: { shouldCreateUser: false } });
+  await stack.requestCode({ email, intent: 'sign-in' });
   const { data, error } = await client.auth.verifyOtp({ email, token: await mailbox.latestCode(email, { after: previous }), type: 'email' });
   if (error || !data.session) throw error ?? new Error('no session');
   return { accountId: gate.accountId, client, accessToken: data.session.access_token };
@@ -68,33 +68,40 @@ describe('creating an Auth user', () => {
   });
 
   it('accepts an assertion once', async () => {
-    const client = rawClient();
-    const assertion = await issueAssertion(client);
+    const assertion = await issueAssertion(rawClient());
     const first = uniqueEmail('first');
     const second = uniqueEmail('second');
-    expect((await client.auth.signInWithOtp({ email: first, options: { data: { eligibility_assertion: assertion } } })).error).toBeNull();
-    expect((await client.auth.signInWithOtp({ email: second, options: { data: { eligibility_assertion: assertion } } })).error).not.toBeNull();
+    expect(await stack.requestCode({ email: first, intent: 'create', assertion })).toEqual({ status: 200, body: { status: 'sent' } });
+    expect(await stack.requestCode({ email: second, intent: 'create', assertion })).toEqual({ status: 403, body: { status: 'age-required' } });
     expect(await stack.authUserId(first)).not.toBeNull();
     expect(await stack.authUserId(second)).toBeNull();
   });
 
   it('lets only one of two racing sign-ups use an assertion', async () => {
-    const client = rawClient();
-    const assertion = await issueAssertion(client);
+    const assertion = await issueAssertion(rawClient());
     const emails = [uniqueEmail('race-a'), uniqueEmail('race-b')];
-    await Promise.all(emails.map((email) => client.auth.signInWithOtp({ email, options: { data: { eligibility_assertion: assertion } } })));
+    await Promise.all(emails.map((email) => stack.requestCode({ email, intent: 'create', assertion })));
     const created = await Promise.all(emails.map((email) => stack.authUserId(email)));
     expect(created.filter((id) => id !== null)).toHaveLength(1);
   });
 
   it('is refused once the assertion has expired on the server', async () => {
-    const client = rawClient();
-    const assertion = await issueAssertion(client);
+    const assertion = await issueAssertion(rawClient());
     await stack.expireAssertion(assertion);
     const email = uniqueEmail('expired');
-    const { error } = await client.auth.signInWithOtp({ email, options: { data: { eligibility_assertion: assertion } } });
-    expect(error).not.toBeNull();
+    expect(await stack.requestCode({ email, intent: 'create', assertion })).toEqual({ status: 403, body: { status: 'age-required' } });
     expect(await stack.authUserId(email)).toBeNull();
+  });
+
+  it('is refused for Create without an assertion, whether or not the address has an account', async () => {
+    const known = uniqueEmail('create-known');
+    const device = createDevice(stack, { name: 'setup' });
+    devices.push(device);
+    await createAccountByEmail(device, known);
+    for (const email of [known, uniqueEmail('create-unknown')]) {
+      expect(await stack.requestCode({ email, intent: 'create' })).toEqual({ status: 403, body: { status: 'age-required' } });
+      expect(await stack.requestCode({ email, intent: 'create', assertion: 'a'.repeat(64) })).toEqual({ status: 403, body: { status: 'age-required' } });
+    }
   });
 
   it('gets no assertion for under 13 or an unknown range', async () => {
@@ -103,6 +110,24 @@ describe('creating an Auth user', () => {
       expect(error).not.toBeNull();
     }
   });
+
+  it('Auth’s own code endpoint emails nothing, even for an address with an account', async () => {
+    const email = uniqueEmail('raw-otp');
+    const device = createDevice(stack, { name: 'setup' });
+    devices.push(device);
+    await createAccountByEmail(device, email);
+    const before = (await mailbox.messages(email)).length;
+    await new Promise((resolve) => setTimeout(resolve, 1100));
+
+    expect((await rawClient().auth.signInWithOtp({ email, options: { shouldCreateUser: false } })).error).not.toBeNull();
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    expect(await mailbox.messages(email)).toHaveLength(before);
+  });
+
+  // GoTrue v2.188 answers `otp_disabled` for an unknown address before any hook
+  // runs, and a refused send for a known one, so a raw caller can still tell
+  // them apart (no email is sent either way). Handed to launch gate 3 (#109).
+  it.todo('Auth’s own code endpoint answers the same for an address with an account and one without');
 
   it('is refused for a password sign-up without an assertion', async () => {
     const email = uniqueEmail('password');
