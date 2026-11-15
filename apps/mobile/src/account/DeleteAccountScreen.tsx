@@ -3,13 +3,17 @@
 // offer, the store's subscription and refund paths (canceling isn't needed),
 // and what scheduling does (access locks, public content is hidden, data is
 // kept, billing continues), before the choice: schedule deletion with a
-// 30-day undo, or Delete permanently now. Online only: nothing is queued.
-// Once scheduled, the gate locks and the deletion-scheduled screen (S2-23)
-// replaces this one.
-// TODO(frames): unverified against S2-22 — the frame couldn't be read (Pencil unreachable). The steps, copy and layout come from spec 2 *Deletion*, Amendments 1 C2–C3, 3 §3–4 and 9 §3, and #103.
+// 30-day undo, or Delete permanently now. Delete permanently now shows its
+// own warnings first (#104: unsynced records lost, "Deleted author", paid
+// time forfeited, no undo) and asks once more. Online only: nothing is
+// queued. Once scheduled, the gate locks and the deletion-scheduled screen
+// (S2-23) replaces this one; once deleted, the device is wiped and the
+// Deleted screen replaces it.
+// TODO(frames): unverified against S2-22 — the frame couldn't be read (Pencil unreachable). The steps, copy and layout come from spec 2 *Deletion*, Amendments 1 C2–C3, 3 §3–4 and 9 §3, and #103/#104.
+// TODO(spec 7 D9): "Paid time is forfeited" is provisional (Amendment 9 §3): under Outcome B its copy follows the owner's choice recorded there.
 
 import type { SignInMethodEntry } from '@tableside/account';
-import { Archive, CreditCard, Download, EyeOff, Lock } from 'lucide-react-native';
+import { Archive, CloudOff, CreditCard, Download, EyeOff, Lock, Trash2, UserX } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
 
 import { Button } from '@/components/Button';
@@ -18,20 +22,28 @@ import { Group, GroupLabel, ListRow, Note, SettingsScreen } from '@/settings/Set
 import { useAccount } from './AccountProvider';
 import { BillingHelpRows, STORES, deviceStore } from './BillingHelp';
 import { ConfirmItsYouSheet } from './ConfirmItsYouSheet';
-import { InlineMessage, Status } from './FirstRunParts';
+import { InlineMessage } from './FirstRunParts';
 import { confirmReason } from './method-text';
 
 export const DELETION_NEEDS_CONNECTION = 'Deleting your account needs a connection, and nothing is saved to send later. Connect, then try again.';
 const UNKNOWN_OUTCOME = "Couldn't tell whether deletion was scheduled. Check your connection and try again; it won't be scheduled twice.";
+const UNKNOWN_DELETION = "Couldn't tell whether your account was deleted. Check your connection and try again; it won't be deleted twice.";
+
+/** What Delete permanently now says is lost with the records this device hasn't synced. */
+export function unsyncedDetail(waiting: number | null): string {
+  if (waiting === null || waiting === 0) return "Anything on this device that hasn't reached your account is erased with it, and can't be recovered.";
+  return `${waiting === 1 ? '1 record' : `${waiting} records`} on this device ${waiting === 1 ? "hasn't" : "haven't"} reached your account. ${waiting === 1 ? "It's" : "They're"} erased with it, and can't be recovered.`;
+}
 
 export function DeleteAccountScreen({ back, onExport }: { back: { label: string; onPress: () => void }; onExport: () => void }) {
   const { service } = useAccount();
   const [methods, setMethods] = useState<readonly SignInMethodEntry[] | null | undefined>();
-  const [confirming, setConfirming] = useState<'begin' | 'schedule' | null>(null);
+  const [confirming, setConfirming] = useState<'begin' | 'schedule' | 'delete' | null>(null);
+  const [permanent, setPermanent] = useState(false);
+  const [waiting, setWaiting] = useState<number | null>(null);
   const [confirmed, setConfirmed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
-  const [status, setStatus] = useState<string | null>(null);
   const store = STORES[deviceStore()];
 
   /** Loads the methods Confirm it's you offers, and asks: none means no connection. */
@@ -54,7 +66,6 @@ export function DeleteAccountScreen({ back, onExport }: { back: { label: string;
   const schedule = async () => {
     setBusy(true);
     setProblem(null);
-    setStatus(null);
     try {
       const result = await service.deletion.schedule();
       // 'scheduled': the gate is Deletion scheduled now, and its screen replaces this one.
@@ -66,10 +77,26 @@ export function DeleteAccountScreen({ back, onExport }: { back: { label: string;
     }
   };
 
-  // #104 builds the irreversible boundary (its own warnings: unsynced records
-  // lost, "Deleted author", paid time forfeited). Until then the choice is shown
-  // and says so.
-  const deletePermanently = () => setStatus("Deleting permanently now isn't available yet. Schedule deletion, and it completes on the deadline.");
+  /** Shows Delete permanently now's own warnings, with how many records haven't synced. */
+  const choosePermanent = async () => {
+    setPermanent(true);
+    setProblem(null);
+    setWaiting(await service.sync.countWaiting().catch(() => null));
+  };
+
+  const deletePermanently = async () => {
+    setBusy(true);
+    setProblem(null);
+    try {
+      const result = await service.deletion.deletePermanently();
+      // 'deleted': the gate is Deleted now, and its screen replaces this one.
+      if (result.status === 'fresh-authentication-required') setConfirming('delete');
+      else if (result.status === 'offline') setProblem(DELETION_NEEDS_CONNECTION);
+      else if (result.status === 'failed') setProblem(UNKNOWN_DELETION);
+    } finally {
+      setBusy(false);
+    }
+  };
 
   return (
     <SettingsScreen title="Delete account" back={back}>
@@ -100,11 +127,32 @@ export function DeleteAccountScreen({ back, onExport }: { back: { label: string;
           </Group>
           <Button label="Schedule deletion" stretch disabled={busy} onPress={() => void schedule()} />
           <Note>You have 30 days to change your mind.</Note>
-          <Button label="Delete permanently now" variant="ghost" stretch disabled={busy} onPress={deletePermanently} />
+          {!permanent ? (
+            <Button label="Delete permanently now" variant="ghost" stretch disabled={busy} onPress={() => void choosePermanent()} />
+          ) : (
+            <>
+              <GroupLabel>IF YOU DELETE PERMANENTLY NOW</GroupLabel>
+              <Group>
+                <ListRow icon={CloudOff} title="Records that haven't synced are lost" detail={unsyncedDetail(waiting)} />
+                <ListRow
+                  icon={UserX}
+                  title={'Shown as "Deleted author"'}
+                  detail={'Your profile and strategy descriptions are removed. Strategies others saved or remixed keep working, credited to "Deleted author".'}
+                />
+                <ListRow
+                  icon={CreditCard}
+                  title="Paid time is forfeited"
+                  detail={`Any subscription time left is lost. Deleting doesn't cancel the subscription: cancel it in the ${store.name} so you aren't charged again.`}
+                />
+                <ListRow icon={Trash2} title="There's no undo" detail="Your account and its data are erased within seven days, and the account can't come back." />
+              </Group>
+              <Button label="Delete permanently now" stretch disabled={busy} onPress={() => void deletePermanently()} />
+              <Button label="Keep my account" variant="ghost" stretch disabled={busy} onPress={() => setPermanent(false)} />
+            </>
+          )}
         </>
       )}
       {problem !== null && <InlineMessage>{problem}</InlineMessage>}
-      {status !== null && <Status>{status}</Status>}
       {confirming && methods && (
         <ConfirmItsYouSheet
           reason={confirmReason({ kind: 'delete-account' })}
@@ -115,6 +163,7 @@ export function DeleteAccountScreen({ back, onExport }: { back: { label: string;
             setConfirming(null);
             setConfirmed(true);
             if (then === 'schedule') void schedule();
+            else if (then === 'delete') void deletePermanently();
           }}
         />
       )}

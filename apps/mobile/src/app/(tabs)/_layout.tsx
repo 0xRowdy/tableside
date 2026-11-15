@@ -25,6 +25,7 @@ export default function TabsLayout() {
   if (gate.state === 'recovery-needed' || gate.state === 'database-unavailable') return <Redirect href="/account-recovery" />;
   if (gate.state === 'signed-out') return <Redirect href="/signed-out" />;
   if (gate.state === 'revoked') return <Redirect href="/revoked" />;
+  if (gate.state === 'deleted') return <Redirect href="/deleted" />;
   const restricted = isRestricted(gate);
   if (!restricted) {
     if (!isSignedIn(gate)) return <Redirect href="/welcome" />;

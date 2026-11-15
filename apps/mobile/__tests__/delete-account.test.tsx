@@ -5,7 +5,10 @@
 // warnings, before the choice of a 30-day undo or Delete permanently now. A
 // scheduled account locks with no tab bar, showing the deadline, Cancel
 // deletion (Confirm it's you again), deletion status, export, billing help,
-// Contact support and Make a privacy request.
+// Contact support and Make a privacy request. Delete permanently now (#104)
+// shows its own warnings (unsynced records lost, "Deleted author", paid time
+// forfeited, no undo) and asks once more; once deleted, the device is wiped
+// and the Deleted screen shows the deletion's status, with no tab bar.
 
 import type { AccountGate } from '@tableside/account';
 import { act, cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react-native';
@@ -160,6 +163,93 @@ describe('Delete account', () => {
     expect(await header('Delete account')).toBeOnTheScreen();
     await fireEvent.press(button('Schedule deletion'));
     expect(await header('Your account is scheduled for deletion')).toBeOnTheScreen();
+  });
+});
+
+describe('Delete permanently now', () => {
+  const PERMANENT_WARNINGS = [
+    'Records that haven\'t synced are lost. 2 records on this device haven\'t reached your account. They\'re erased with it, and can\'t be recovered.',
+    'Shown as "Deleted author". Your profile and strategy descriptions are removed. Strategies others saved or remixed keep working, credited to "Deleted author".',
+    `Paid time is forfeited. Any subscription time left is lost. Deleting doesn't cancel the subscription: cancel it in the ${STORE.name} so you aren't charged again.`,
+    "There's no undo. Your account and its data are erased within seven days, and the account can't come back.",
+  ];
+  const PROGRESS = {
+    status: 'processing' as const,
+    deletedAt: DEADLINE - 30 * DAY,
+    cleanupBy: DEADLINE - 23 * DAY,
+    completedAt: null,
+    delayed: false,
+    analytics: { requestedAt: DEADLINE - 30 * DAY, completedAt: null },
+    providers: null,
+  };
+
+  /** Opens Delete permanently now's warnings, with two records waiting to sync. */
+  async function openPermanent(prepare?: () => void) {
+    await openDelete(() => {
+      service().waitingCount = 2;
+      prepare?.();
+    });
+    await fireEvent.press(await screen.findByRole('button', { name: 'Delete permanently now' }));
+    expect(await screen.findByText('IF YOU DELETE PERMANENTLY NOW')).toBeOnTheScreen();
+  }
+
+  it('shows its own warnings and asks once more before anything is deleted', async () => {
+    await openPermanent();
+    for (const warning of PERMANENT_WARNINGS) expect(await screen.findByLabelText(warning)).toBeOnTheScreen();
+    expect(service().deletionCalls).not.toContain('delete-permanently');
+    await fireEvent.press(button('Keep my account'));
+    expect(screen.queryByText('IF YOU DELETE PERMANENTLY NOW')).toBeNull();
+    expect(service().deletionCalls).not.toContain('delete-permanently');
+    expect(screen.queryByText(/was canceled|refunded/)).toBeNull();
+  });
+
+  it('deletes, then shows Deleted with its status and no tab bar; Done leaves for the welcome screen', async () => {
+    await openPermanent(() => (service().deletionProgress = PROGRESS));
+    await fireEvent.press(button('Delete permanently now'));
+    expect(await header('Your account was deleted')).toBeOnTheScreen();
+    noTabBar();
+    expect(service().deletionCalls).toContain('delete-permanently');
+    expect(
+      await screen.findByText(`Its data is being erased from Tableside, by ${dayText(PROGRESS.cleanupBy)}. Nothing of it is left on this device.`),
+    ).toBeOnTheScreen();
+    expect(screen.getByLabelText(`Deletion. Processing · finished by ${dayText(PROGRESS.cleanupBy)}`)).toBeOnTheScreen();
+    expect(screen.getByLabelText("Analytics data. Erasure requested · the analytics provider hasn't confirmed it yet")).toBeOnTheScreen();
+    expect(screen.getByLabelText('Backups. Backups age out on their own schedule, set out in the privacy policy.')).toBeOnTheScreen();
+    expect(button(`Manage subscription. In the ${STORE.name}. Deleting your account doesn't cancel it.`)).toBeOnTheScreen();
+    expect(screen.getByRole('link', { name: 'Contact support' })).toBeOnTheScreen();
+    expect(screen.getByRole('link', { name: 'Make a privacy request' })).toBeOnTheScreen();
+
+    await fireEvent.press(button('Done'));
+    expect(service().deletionCalls).toContain('dismiss');
+    await waitFor(() => expect(screen.queryByRole('header', { name: 'Your account was deleted' })).toBeNull());
+  });
+
+  it('confirms it’s you again when the confirmation ran out, then deletes', async () => {
+    await openPermanent(() => service().deletionNext.deletePermanently.push({ status: 'fresh-authentication-required' }));
+    await fireEvent.press(button('Delete permanently now'));
+    await fireEvent.press(within(await screen.findByTestId('confirm-its-you')).getByRole('button', { name: /Apple/ }));
+    expect(await header('Your account was deleted')).toBeOnTheScreen();
+  });
+
+  it('needs a connection, and says so when no answer came, deleting nothing twice', async () => {
+    await openPermanent(() => service().deletionNext.deletePermanently.push({ status: 'offline' }, { status: 'failed' }));
+    await fireEvent.press(button('Delete permanently now'));
+    expect(await screen.findByText("Deleting your account needs a connection, and nothing is saved to send later. Connect, then try again.")).toBeOnTheScreen();
+    await fireEvent.press(button('Delete permanently now'));
+    expect(
+      await screen.findByText("Couldn't tell whether your account was deleted. Check your connection and try again; it won't be deleted twice."),
+    ).toBeOnTheScreen();
+    expect(screen.getByRole('header', { name: 'Delete account' })).toBeOnTheScreen();
+  });
+});
+
+describe('a deleted account', () => {
+  it('reopens on Deleted with no tab bar, and says when its status can’t be checked', async () => {
+    launch.stored = { state: 'deleted' };
+    await renderRouter('./src/app', { initialUrl: '/' });
+    expect(await header('Your account was deleted')).toBeOnTheScreen();
+    noTabBar();
+    expect(await screen.findByLabelText("Deletion. Can't check right now. Connect to see how it's going.")).toBeOnTheScreen();
   });
 });
 
