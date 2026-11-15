@@ -461,6 +461,11 @@ verify_jwt = false
 [functions.provision-reviewer]
 verify_jwt = false
 
+# The export job: the database wakes it (pg_net) with no token; the wake
+# carries no authority, since the function takes its work from the database.
+[functions.export-job]
+verify_jwt = false
+
 [analytics]
 enabled = false
 port = 54327

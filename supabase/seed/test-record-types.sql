@@ -415,3 +415,10 @@ insert into private.retention_rules (subject, endpoint) values
   ('private.test_attempts', 'Challenge attempts: kept while the account exists (spec 3).'),
   ('private.test_experiment_assignments', 'Each experiment''s current group: kept while the account exists (spec 5).'),
   ('private.test_strategy_revisions', 'Strategy revisions: kept while the account exists (spec 4).');
+
+-- ---------------------------------------------------------------------------
+-- Export (#102): the test revisioned item is in the archive through the
+-- platform's revisioned rendering, so seam 2 proves it (conflicts unresolved).
+
+update private.record_types set export = to_regprocedure('private.export_revisioned_items(uuid,text)'), export_file = 'test-revisioned-items'
+  where record_type = 'test-revisioned-item';

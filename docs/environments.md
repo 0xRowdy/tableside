@@ -34,6 +34,14 @@ Real projects don't exist yet; this is the checklist for when they do.
    ```
 
    Until this row exists, the project refuses every request and issues no tokens.
+
+   Then tell the database where its job functions are, so it can wake the export job (#102) after a request, an invalidation and its upkeep cron:
+
+   ```sql
+   insert into private.job_endpoint (functions_url) values ('https://<project>.supabase.co');
+   ```
+
+   Without it exports still end on time (their storage policy denies them), but none is built and no ended archive is removed.
 5. Build the app for it with `EXPO_PUBLIC_TABLESIDE_ENVIRONMENT`, `EXPO_PUBLIC_TABLESIDE_SUPABASE_URL` (HTTPS) and `EXPO_PUBLIC_TABLESIDE_SUPABASE_PUBLISHABLE_KEY` set to that project's values.
 6. Set up Apple and Google sign-in (#89). Provider secrets go only into the project (Auth's provider settings and function secrets), never into the repository or an app build.
    - **Auth:** enable the Apple provider with the bundle ID and the Services ID as client IDs (native iOS tokens carry the bundle ID, Apple's web flow on Android the Services ID), and the Google provider with the web and iOS client IDs. Leave the nonce check on for both.

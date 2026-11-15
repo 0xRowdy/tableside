@@ -18,8 +18,11 @@ export function methodDetail({ method, email }: SignInMethodEntry): string | und
 
 /** Why Confirm it's you is asked, for each change it guards. */
 export function confirmReason(
-  change: { readonly kind: 'add' | 'remove'; readonly method: SignInMethod } | { readonly kind: 'change-email' } | { readonly kind: 'sign-out-devices' },
+  change: { readonly kind: 'add' | 'remove'; readonly method: SignInMethod } | { readonly kind: 'change-email' } | { readonly kind: 'sign-out-devices' } | { readonly kind: 'export' },
 ): string {
+  if (change.kind === 'export') {
+    return "An export is a full copy of your data, so sign in again first. Being signed in already isn't enough for this.";
+  }
   if (change.kind === 'sign-out-devices') {
     return "Signing out a device changes who can open your account, so sign in again first. Being signed in already isn't enough for this.";
   }

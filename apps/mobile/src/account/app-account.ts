@@ -9,12 +9,14 @@ import { Paths } from 'expo-file-system';
 import { getLocales } from 'expo-localization';
 import * as SecureStore from 'expo-secure-store';
 
+import { router } from 'expo-router';
 import { Linking, Platform } from 'react-native';
 
 import { findGame, type GameId } from '@/games';
 import type { PracticeAdapters } from '@/practice/adapters';
 
 import { describeDevice } from './account-text';
+import { deviceExportFiles, type ExportFiles } from './export-files';
 import { buildBackend } from './backend';
 import { appDevicePorts } from './device-ports';
 import { createNativeVault, KEYCHAIN_OPTIONS } from './native-vault';
@@ -41,6 +43,8 @@ export interface AppAccount {
   readonly offlineGame: OfflineGameSelection;
   /** The restricted gate states' paths (support, privacy request, billing help, export, deletion). */
   readonly restrictedPaths: RestrictedPaths;
+  /** Hands an export to the player (the share sheet), and erases the app's copies. */
+  readonly exportFiles: ExportFiles;
 }
 
 /** Refresh credentials: device-only secure storage, never in a backup. */
@@ -111,8 +115,11 @@ export function createAppAccount(): AppAccount {
         // Contact support and Make a privacy request are web pages that work without signing in (Amendment 9 §1).
         if (path === 'contact-support') void Linking.openURL(WEB_PAGES.contactSupport);
         else if (path === 'privacy-request') void Linking.openURL(WEB_PAGES.privacyRequest);
-        // Billing help (spec 5), export and deletion (spec 2's own tickets) open nothing until their screens land.
+        // Export my data works on the restricted paths (S2-21), outside the tab bar.
+        else if (path === 'export') router.navigate('/export');
+        // Billing help (spec 5) and deletion (#103) open nothing until their screens land.
       },
     },
+    exportFiles: deviceExportFiles,
   };
 }

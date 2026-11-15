@@ -2,6 +2,7 @@
 // with no network or storage, and the app account around it.
 
 import type {
+  AccountExport,
   AccountGate,
   AccountPrivacy,
   AccountRecords,
@@ -25,19 +26,24 @@ import type {
   FreshAuthenticationResult,
   IdentityProvider,
   LinkResult,
+  LocalSupplement,
   RemoveMethodResult,
   SignInMethodEntry,
   SignInMethods,
   ProviderCreateResult,
   ProviderSignInResult,
   ReviewerSignInResult,
+  ServerExport,
+  ServerExportDownload,
+  ServerExportRequest,
   SignOutResult,
 } from '@tableside/account';
-import { isAgeRestricted, isSignedIn } from '@tableside/account';
+import { SUPPLEMENT_NOTICE, isAgeRestricted, isSignedIn, opensRestrictedPaths } from '@tableside/account';
 
 import type { GameId } from '@/games';
 
 import type { AppAccount } from '../app-account';
+import type { ExportFile } from '../export-files';
 import type { RestrictedPath } from '../RestrictedPaths';
 
 export const FAKE_ACCOUNT_ID = 'account-1';
@@ -68,6 +74,19 @@ export const FAKE_METHODS: readonly SignInMethodEntry[] = [
 ];
 
 const DAY = 86_400_000;
+
+/** The local supplement the fake builds unless a test changes it: one unsynced practice session, nothing else. */
+export const FAKE_SUPPLEMENT: LocalSupplement = {
+  format: 'tableside-local-supplement',
+  version: 1,
+  createdAt: '2026-11-15T12:00:00.000Z',
+  account: 'account-1',
+  installation: 'installation-1',
+  notice: SUPPLEMENT_NOTICE,
+  unsynced: [{ recordType: 'completed-practice-session', item: 'activity-1', installation: 'installation-1', revision: null, syncStatus: 'waiting', record: {} }],
+  conflicts: [],
+  unfinished: [],
+};
 
 /** The devices the fake's account is signed in on unless a test changes them: this iPhone (active now), an iPad (2 days ago) and a Pixel (3 months ago). */
 export function fakeDevices(now = Date.now()): readonly DeviceEntry[] {
@@ -193,6 +212,7 @@ export class FakeAccountService implements AccountService {
   readonly methodCalls: string[] = [];
 
   readonly freshAuthentication: FreshAuthentication = {
+    methods: async () => (opensRestrictedPaths(this.current) ? this.methods : null),
     withProvider: async (provider) => {
       this.methodCalls.push(`fresh ${provider}`);
       return this.methodsNext.fresh.shift() ?? { status: 'confirmed' };
@@ -265,6 +285,33 @@ export class FakeAccountService implements AccountService {
     signOutOthers: async () => {
       this.deviceCalls.push('sign-out-others');
       return this.signedOutDevices((entry) => entry.thisDevice);
+    },
+  };
+
+  /** The latest server export: what serverExport() answers, and what a request sets. Null: offline. */
+  serverExportState: ServerExport | null = { state: 'none' };
+  /** Answers for the next export requests and downloads, used in order; unscripted ones succeed. */
+  readonly exportNext: { request: ServerExportRequest[]; download: ServerExportDownload[] } = { request: [], download: [] };
+  /** What localSupplement() builds. */
+  supplement: LocalSupplement | null = FAKE_SUPPLEMENT;
+  /** Each export call, in order: "request", "download" or "supplement". */
+  readonly exportCalls: string[] = [];
+
+  readonly export: AccountExport = {
+    serverExport: async () => (opensRestrictedPaths(this.current) ? this.serverExportState : null),
+    requestServerExport: async () => {
+      this.exportCalls.push('request');
+      const result = this.exportNext.request.shift() ?? { status: 'requested' as const, export: { state: 'preparing' as const, requestedAt: Date.now() } };
+      if (result.status === 'requested' || result.status === 'preparing') this.serverExportState = result.export;
+      return result;
+    },
+    downloadServerExport: async () => {
+      this.exportCalls.push('download');
+      return this.exportNext.download.shift() ?? { status: 'downloaded', fileName: 'tableside-export-2026-11-15.zip', bytes: new Uint8Array([0x50, 0x4b, 0x05, 0x06]) };
+    },
+    localSupplement: async () => {
+      this.exportCalls.push('supplement');
+      return opensRestrictedPaths(this.current) ? this.supplement : null;
     },
   };
 
@@ -354,15 +401,26 @@ export function fakeAppAccount(options: { readonly stored?: AccountGate; readonl
   const offlineGames = new Map<string, GameId>();
   const opened: RestrictedPath[] = [];
   if (options.offlineGame && options.stored && 'accountId' in options.stored) offlineGames.set(options.stored.accountId, options.offlineGame);
+  const shared: ExportFile[] = [];
   const account: AppAccount & {
     readonly service: FakeAccountService;
     readonly offlineGames: Map<string, GameId>;
     /** The restricted paths opened, in order. */
     readonly opened: RestrictedPath[];
+    /** The export files handed to the share sheet, in order. */
+    readonly shared: ExportFile[];
   } = {
     service,
     offlineGames,
     opened,
+    shared,
+    exportFiles: {
+      share: async (file) => {
+        shared.push(file);
+        return 'shared';
+      },
+      clear: async () => undefined,
+    },
     restrictedPaths: { open: (path) => void opened.push(path) },
     // Practice keeps the adapters it was given: tests choose the store.
     practice: (base) => base,

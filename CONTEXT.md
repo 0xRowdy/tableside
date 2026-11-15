@@ -300,6 +300,9 @@ The accepted version of a record that remains in force, and is counted once in t
 **Recovery proposal**:
 An edit to a deleted record made on another installation before it learned of the deletion. It is offered for restoration and never restored automatically.
 
+**Server export**:
+A copy of everything the account holds on Tableside's servers at one moment ("account archive" on screen): session summaries as a spreadsheet, the rest as data files, and a manifest of what's in it and what isn't. It needs fresh authentication to ask for and to download, and lasts 24 hours.
+
 **Local supplement**:
 A labelled export of records on one installation that haven't reached the account yet.
 

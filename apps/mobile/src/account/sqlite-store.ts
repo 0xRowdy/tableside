@@ -39,6 +39,16 @@ import { createSchema, readSchemaVersion, schemaVersionOf, STORE_MIGRATIONS, STO
 // The sync engine's store port (packages/account/src/sync/store.ts), matched
 // structurally: the app doesn't depend on the Account service's package for it.
 
+/** An unfinished activity as the local supplement shows it (packages/account/src/export.ts), without hidden state. */
+export interface UnfinishedActivity {
+  readonly activityId: string;
+  readonly kind: 'practice-session';
+  readonly game: string;
+  readonly mode: 'free-play' | 'guided';
+  readonly startedAt: number;
+  readonly steps: number;
+}
+
 /** An operation fixed for sending: the request every retry repeats, and its SHA-256. */
 export interface PreparedOperation {
   readonly operationId: string;
@@ -342,6 +352,26 @@ export class SqliteActivityStore implements ActivityStore {
       );
       return row ? decode<StoredActivity>(row) : null;
     });
+  }
+
+  /**
+   * The local supplement's view of the unfinished activity (spec 2, *Export*):
+   * what it is and how far it got, never its checkpoint or random stream, so
+   * no hidden state (a shuffled shoe; a Check attempt's answers, Amendment 2 §5) leaves.
+   */
+  async readUnfinishedActivities(): Promise<readonly UnfinishedActivity[]> {
+    const activity = await this.findUnfinished();
+    if (!activity) return [];
+    return [
+      {
+        activityId: activity.activityId,
+        kind: 'practice-session',
+        game: activity.specification.game,
+        mode: activity.specification.strategy === null ? 'free-play' : 'guided',
+        startedAt: activity.createdAt,
+        steps: activity.sequence,
+      },
+    ];
   }
 
   commitTransition(commit: TransitionCommit): Promise<CommitOutcome> {

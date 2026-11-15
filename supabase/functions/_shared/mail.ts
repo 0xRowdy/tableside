@@ -89,3 +89,24 @@ export function devicesSignedOutMail(devices: number, method?: string): Mail {
       .join(''),
   };
 }
+
+/**
+ * "Export ready": where to find the account archive and until when. It carries no
+ * link: the archive downloads only in the app, for a session that confirms
+ * it's the player.
+ */
+export function exportReadyMail(expiresAt: string): Mail {
+  const until = new Date(expiresAt).toUTCString().replace(/:\d\d GMT$/, ' UTC');
+  const text =
+    'Your Tableside account archive is ready. To download it, open Tableside and go to More → Settings → Account → Export my data. ' +
+    `It's available until ${until}; after that you can ask for a new one.\n\n` +
+    "If you didn't ask for it, sign out your other devices in Tableside (Account → Devices) and contact support.";
+  return {
+    subject: 'Your Tableside account archive is ready',
+    text,
+    html: text
+      .split('\n\n')
+      .map((paragraph) => `<p>${paragraph}</p>`)
+      .join(''),
+  };
+}
