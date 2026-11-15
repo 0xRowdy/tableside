@@ -34,6 +34,15 @@ export {
   type CodeVerificationResult,
   type CredentialStorage,
   type CurrencyChangeResult,
+  type EmailChangeConfirmation,
+  type EmailChangeResult,
+  type EmailMethodResult,
+  type FreshAuthentication,
+  type FreshAuthenticationResult,
+  type LinkResult,
+  type RemoveMethodResult,
+  type SignInMethodEntry,
+  type SignInMethods,
   type HistoryStatus,
   type IdentityProvider,
   type ProviderCreateResult,
@@ -53,7 +62,25 @@ export {
   isSignedIn,
   opensOrdinaryAccess,
 } from './service';
-export { type MetricPurpose, metricPermitted } from './metrics';
+export {
+  type DeviceMetricName,
+  METRICS,
+  type MetricEvent,
+  type MetricName,
+  type MetricProperties,
+  type MetricPurpose,
+  type MetricsSender,
+  type MetricsSink,
+  type OperationalSnapshot,
+  type ServerMetricName,
+  TEEN_METRICS,
+  createMetricsSender,
+  discardMetrics,
+  metricEvent,
+  metricPermitted,
+  serverMetricEvents,
+} from './metrics';
+export { type CrashReport, crashReport } from './crash-report';
 export {
   BOOTSTRAP_PAGE_SIZE,
   type EngineStatus,

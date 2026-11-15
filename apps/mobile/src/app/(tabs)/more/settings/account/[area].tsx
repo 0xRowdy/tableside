@@ -1,5 +1,4 @@
-// The Account entries later spec 2 tickets build: Sign-in methods (S2-18, #100),
-// Devices (S2-19, #101), Export (S2-21), Delete account (S2-22), Download all
+// The Account entries later spec 2 tickets build: Devices (S2-19, #101), Export (S2-21), Delete account (S2-22), Download all
 // history, and Display name (spec 6). Each holds
 // its place here until its own route replaces it.
 
@@ -9,7 +8,6 @@ import { Note, SettingsScreen } from '@/settings/SettingsParts';
 
 const AREAS: Readonly<Record<string, string>> = {
   'display-name': 'Display name',
-  'sign-in-methods': 'Sign-in methods',
   devices: 'Devices',
   'download-history': 'Download all history',
   export: 'Export my data',

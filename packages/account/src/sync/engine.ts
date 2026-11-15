@@ -57,8 +57,14 @@
 //   expired (24 hours) is replaced with a new one; the upload queue and local
 //   records are never touched. Snapshot pages, like feed pages, are bounded by
 //   row count (#97 bounds them by bytes).
+// - Operational metrics (#108): a run that ends unfinished reports its error
+//   code, a record failing, flagged or refused reports which, and after a run
+//   the oldest pending record's wait (since this account session first saw
+//   it). Only codes and durations: never a record's type, item or payload.
 
 import { canonicalJson } from '@tableside/engine';
+
+import type { MetricsSender } from '../metrics';
 
 import { backoffDelay } from './backoff';
 import {
@@ -153,6 +159,8 @@ export interface SyncEngineOptions {
   readonly clock: () => number;
   /** Uniform in [0, 1): the backoff's jitter. */
   readonly random: () => number;
+  /** Where the engine's operational metrics go, under the account gate. */
+  readonly metrics?: MetricsSender;
 }
 
 /**
@@ -206,6 +214,8 @@ export class SyncEngine {
   private readonly unsubscribe: () => void;
   /** Resolutions sent with no answer yet, by what they resolve: a retry repeats the same operation. */
   private readonly unansweredResolutions = new Map<string, PreparedOperation>();
+  /** When this account session first saw each pending entry: the queue's age. */
+  private readonly firstSeen = new Map<string, number>();
 
   constructor(private readonly options: SyncEngineOptions) {
     this.unsubscribe = options.store.onUploadQueued(() => void this.refresh());
@@ -363,6 +373,9 @@ export class SyncEngine {
     }
     this.retryAfterUntil = retryAfter !== null ? now + retryAfter : null;
     await this.refresh();
+    if (this.stopped) return;
+    if (error !== null) this.options.metrics?.record('sync_run_failed', 1, { error });
+    if (this.firstSeen.size > 0) this.options.metrics?.record('sync_queue_age', this.options.clock() - Math.min(...this.firstSeen.values()), {});
   }
 
   /** A backend call: any rejection that isn't a SyncCallError means no answer arrived. */
@@ -495,6 +508,7 @@ export class SyncEngine {
   /** One record failed by itself: it waits its own backoff, and is flagged on its RECORD_FAILURE_LIMIT-th failure. */
   private async recordFailed(entry: QueuedUpload): Promise<SyncErrorCode> {
     const { failures, flagged } = await this.options.store.recordUploadFailure(entry.id, RECORD_FAILURE_LIMIT);
+    this.options.metrics?.record('sync_upload_failed', 1, { outcome: flagged ? 'flagged' : 'failed' });
     if (flagged) this.recordRetries.delete(entry.id);
     else this.recordRetries.set(entry.id, this.options.clock() + backoffDelay(failures, this.options.random));
     return 'unsendable';
@@ -561,6 +575,7 @@ export class SyncEngine {
               }
             : null;
         await this.options.store.acknowledgeUpload(entry.id, answer, accepted);
+        if (answer.status === 'rejected') this.options.metrics?.record('sync_upload_failed', 1, { outcome: 'refused' });
         return 'acknowledged';
       }
       case 'waiting':
@@ -706,6 +721,10 @@ export class SyncEngine {
         if (this.stopped) return;
         this.history = historyOf(bootstrap);
         if (lastSynced !== null && (this.lastSyncedAt === null || lastSynced > this.lastSyncedAt)) this.lastSyncedAt = lastSynced;
+        const now = this.options.clock();
+        const pending = new Set(queue.map((entry) => entry.id));
+        for (const id of this.firstSeen.keys()) if (!pending.has(id)) this.firstSeen.delete(id);
+        for (const id of pending) if (!this.firstSeen.has(id)) this.firstSeen.set(id, now);
         this.uploads = [...uploadStates(queue), ...rejected.map(({ id, recordType, payload }) => ({ id, recordType, payload, state: 'review' as const }))];
       } catch {
         // The store refused (a stale session, a failed read): the last status stands.
