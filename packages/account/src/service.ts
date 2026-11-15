@@ -116,6 +116,11 @@ export type CodeVerificationResult =
   | { readonly status: 'signed-in' }
   | { readonly status: 'invalid-code' }
   | { readonly status: 'failed' };
+export type ReviewerSignInResult =
+  | { readonly status: 'signed-in' }
+  /** Not this address's reviewer account and current reviewer credential (the same for any address). */
+  | { readonly status: 'refused' }
+  | { readonly status: 'failed' };
 
 /** The identity providers a player can sign in or create an account with. */
 export type IdentityProvider = 'apple' | 'google';
@@ -411,6 +416,13 @@ export interface AccountService {
    * Active for an established 13+ band, otherwise Age unresolved or Age ineligible.
    */
   verifyEmailCode(request: { readonly email: string; readonly code: string }): Promise<CodeVerificationResult>;
+  /**
+   * App review: signs in to a reviewer account with its reviewer credential,
+   * with no email code. The credential works only for that one account, in
+   * this build's environment; the session, gate and eligibility are then
+   * those of any sign-in.
+   */
+  signInAsReviewer(request: { readonly email: string; readonly credential: string }): Promise<ReviewerSignInResult>;
   /**
    * Sign in with Apple or Google. Never creates an account: an identity with
    * no account answers No account, leaving no Auth user, and is held briefly
@@ -1307,6 +1319,22 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
         const supabase = await connect();
         const { error } = await supabase.auth.verifyOtp({ email, token: code, type: 'email' });
         if (error) return { status: error.code === 'otp_expired' ? 'invalid-code' : 'failed' };
+        return (await finishSignIn(supabase)) ? { status: 'signed-in' } : { status: 'failed' };
+      } catch {
+        return { status: 'failed' };
+      }
+    },
+
+    async signInAsReviewer({ email, credential }) {
+      try {
+        const response = await post('/functions/v1/reviewer-sign-in', { email, credential });
+        const body = (await response.json().catch(() => null)) as { status?: string; session?: { access_token?: unknown; refresh_token?: unknown } } | null;
+        if (response.status === 401 && body?.status === 'refused') return { status: 'refused' };
+        const session = body?.session;
+        if (!response.ok || typeof session?.access_token !== 'string' || typeof session.refresh_token !== 'string') return { status: 'failed' };
+        const supabase = await connect();
+        const { error } = await supabase.auth.setSession({ access_token: session.access_token, refresh_token: session.refresh_token });
+        if (error) return { status: 'failed' };
         return (await finishSignIn(supabase)) ? { status: 'signed-in' } : { status: 'failed' };
       } catch {
         return { status: 'failed' };

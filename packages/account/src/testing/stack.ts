@@ -53,6 +53,17 @@ export interface LocalStack {
   emailSends(since: Date): Promise<{ type: string; pacing: string; outcome: string }[]>;
   /** The columns a table holds, to check what it can record. */
   columns(table: string): Promise<string[]>;
+  /**
+   * Calls the provision-reviewer function, as an operator does: with the
+   * stack's secret key unless given another key (an adversary's), naming the
+   * stack's environment unless told to name another, or none (null).
+   */
+  provisionReviewer(
+    email: string,
+    options?: { readonly key?: string; readonly environment?: EnvironmentName | null },
+  ): Promise<{ readonly status: number; readonly body: { readonly status?: string; readonly credential?: string } | null }>;
+  /** Calls the reviewer-sign-in function directly, with no Account service: the adversary's view. */
+  reviewerSignIn(body: Record<string, unknown>, environment?: EnvironmentName | null): Promise<{ readonly status: number; readonly body: unknown }>;
 }
 
 const repositoryRoot = fileURLToPath(new URL('../../../../', import.meta.url));
@@ -98,6 +109,20 @@ export function localStack(): LocalStack {
     where lower(u.email) = lower(${email})`;
   const url = need('API_URL');
   const publishableKey = need('PUBLISHABLE_KEY');
+  const serviceRoleKey = need('SERVICE_ROLE_KEY');
+  const callFunction = async (name: string, body: unknown, key: string, environment: EnvironmentName | null) => {
+    const response = await fetch(`${url}/functions/v1/${name}`, {
+      method: 'POST',
+      headers: {
+        apikey: key,
+        authorization: `Bearer ${key}`,
+        'content-type': 'application/json',
+        ...(environment ? { [ENVIRONMENT_HEADER]: environment } : {}),
+      },
+      body: JSON.stringify(body),
+    });
+    return { status: response.status, body: await response.json().catch(() => null) };
+  };
   stack = {
     url,
     publishableKey,
@@ -161,6 +186,12 @@ export function localStack(): LocalStack {
       const rows = await sql<{ column_name: string }[]>`
         select column_name from information_schema.columns where table_schema = ${schema!} and table_name = ${name!} order by ordinal_position`;
       return rows.map((row) => row.column_name);
+    },
+    provisionReviewer(email, { key = serviceRoleKey, environment = 'local' } = {}) {
+      return callFunction('provision-reviewer', { email }, key, environment);
+    },
+    reviewerSignIn(body, environment = 'local') {
+      return callFunction('reviewer-sign-in', body, publishableKey, environment);
     },
   };
   return stack;
