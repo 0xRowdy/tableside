@@ -15,6 +15,7 @@ export {
   type AccountVault,
   type AgeAnswerResult,
   type AgeRange,
+  type CodeIntent,
   type CodeRequestResult,
   type CodeVerificationResult,
   type CredentialStorage,

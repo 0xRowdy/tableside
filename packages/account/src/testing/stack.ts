@@ -38,11 +38,21 @@ export interface LocalStack {
   accountId(email: string): Promise<string | null>;
   accountCount(email: string): Promise<number>;
   /**
-   * A sign-in code for an existing account, issued by Auth's admin API without
-   * sending mail: a third installation can sign in to an account within Auth's
-   * local limit of two code emails per address per hour.
+   * Calls the request-code function directly, with no Account service: the
+   * adversary's view. It names the stack's environment unless told to name
+   * another, or none (null).
    */
-  issueSignInCode(email: string): Promise<string>;
+  requestCode(body: Record<string, unknown>, environment?: EnvironmentName | null): Promise<{ readonly status: number; readonly body: unknown }>;
+  /** Clears every code-request window, as if an hour had passed for every address and network. */
+  resetCodeRequests(): Promise<void>;
+  /** Moves an address's code requests (or, with null, everyone's) back in time, as if that long had passed on the server. */
+  ageCodeRequests(email: string | null, seconds: number): Promise<void>;
+  /** The database's clock, to mark when a scenario began: the host's can drift from the stack's by more than a send takes. */
+  serverNow(): Promise<Date>;
+  /** The send log since the scenario began (a `serverNow` mark): each entry's type, pacing and outcome, oldest first. */
+  emailSends(since: Date): Promise<{ type: string; pacing: string; outcome: string }[]>;
+  /** The columns a table holds, to check what it can record. */
+  columns(table: string): Promise<string[]>;
 }
 
 const repositoryRoot = fileURLToPath(new URL('../../../../', import.meta.url));
@@ -88,7 +98,6 @@ export function localStack(): LocalStack {
     where lower(u.email) = lower(${email})`;
   const url = need('API_URL');
   const publishableKey = need('PUBLISHABLE_KEY');
-  const admin = createClient(url, need('SERVICE_ROLE_KEY'), { auth: { persistSession: false, autoRefreshToken: false } });
   stack = {
     url,
     publishableKey,
@@ -124,10 +133,34 @@ export function localStack(): LocalStack {
     async accountCount(email) {
       return (await accountIds(email)).length;
     },
-    async issueSignInCode(email) {
-      const { data, error } = await admin.auth.admin.generateLink({ type: 'magiclink', email });
-      if (error) throw new Error(`Auth did not issue a sign-in code: ${error.message}`);
-      return data.properties.email_otp;
+    async requestCode(body, environment = 'local') {
+      const response = await fetch(`${url}/functions/v1/request-code`, {
+        method: 'POST',
+        headers: { apikey: publishableKey, 'content-type': 'application/json', ...(environment ? { [ENVIRONMENT_HEADER]: environment } : {}) },
+        body: JSON.stringify(body),
+      });
+      return { status: response.status, body: await response.json().catch(() => null) };
+    },
+    async resetCodeRequests() {
+      await sql`delete from private.code_requests`;
+    },
+    async ageCodeRequests(email, seconds) {
+      await sql`update private.code_requests set requested_at = requested_at - make_interval(secs => ${seconds})
+        where ${email}::text is null or address_hash = extensions.digest(lower(btrim(${email})), 'sha256')`;
+    },
+    async serverNow() {
+      const [row] = await sql<{ now: Date }[]>`select now()`;
+      return row!.now;
+    },
+    async emailSends(since) {
+      return sql<{ type: string; pacing: string; outcome: string }[]>`
+        select type, pacing, outcome from private.email_sends where sent_at >= ${since} order by id`;
+    },
+    async columns(table) {
+      const [schema, name] = table.split('.');
+      const rows = await sql<{ column_name: string }[]>`
+        select column_name from information_schema.columns where table_schema = ${schema!} and table_name = ${name!} order by ordinal_position`;
+      return rows.map((row) => row.column_name);
     },
   };
   return stack;

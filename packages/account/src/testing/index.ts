@@ -10,7 +10,6 @@ export {
   createAccountByEmail,
   createDevice,
   signInByEmail,
-  signInWithIssuedCode,
   uniqueEmail,
 } from './device';
 export { type TestRevisionedValue, testRecordTypes, testRevisionedItem } from './record-types';

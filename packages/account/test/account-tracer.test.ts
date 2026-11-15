@@ -167,7 +167,7 @@ describe('through the fault-injection proxy', () => {
     const phone = device('phone');
     const email = uniqueEmail('duplicate');
     await phone.account.answerAgeQuestion('18+');
-    phone.proxy.duplicateNextRequest('/auth/v1/otp');
+    phone.proxy.duplicateNextRequest('/functions/v1/request-code');
     expect(await phone.account.requestEmailCode({ email, intent: 'create' })).toEqual({ status: 'sent' });
     expect(await phone.account.verifyEmailCode({ email, code: await phone.mailbox.latestCode(email) })).toEqual({
       status: 'signed-in',

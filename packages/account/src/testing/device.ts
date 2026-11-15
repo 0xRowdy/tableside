@@ -376,11 +376,6 @@ export async function createAccountByEmail(
   return device.account.verifyEmailCode({ email, code: await device.mailbox.latestCode(email) });
 }
 
-/** Signs in to an existing account on a device with a code Auth issued without mail (`LocalStack.issueSignInCode`). */
-export async function signInWithIssuedCode(device: SimulatedDevice, stack: LocalStack, email: string): Promise<CodeVerificationResult> {
-  return device.account.verifyEmailCode({ email, code: await stack.issueSignInCode(email) });
-}
-
 /** Signs in to an existing account by email code on a device. */
 export async function signInByEmail(device: SimulatedDevice, email: string): Promise<CodeVerificationResult> {
   const previous = (await device.mailbox.messages(email)).length > 0 ? await device.mailbox.latestCode(email) : undefined;
