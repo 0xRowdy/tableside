@@ -23,6 +23,10 @@
 --   export-job function (pg_net) to remove them; a cron job wakes it too.
 --
 -- Lock order is #91's: the synchronization head, then the account's exports.
+-- What changes an account's exports together with its records (a request, a
+-- revocation, deletion scheduling, a build's snapshot) takes the head first;
+-- the job's own state changes on one export (finish, fail, expire, removed)
+-- take only that export's row, so they never wait for a head.
 
 -- ---------------------------------------------------------------------------
 -- Registry: each type's export rendering
@@ -242,7 +246,10 @@ insert into storage.buckets (id, name, public, allowed_mime_types)
 -- The account a session may export from: the restricted path, so an account
 -- whose age eligibility isn't established can export too (#42). The one seam
 -- for who may export: #103 opens it to an account whose deletion is
--- scheduled (Amendment 1 B2). A request still needs fresh authentication.
+-- scheduled (Amendment 1 B2). A request still needs fresh authentication,
+-- whose own gate (private.signed_in_account, private.session_account: the
+-- fresh-auth function, issue_proof_nonce_v1, caller_session_v1,
+-- fresh_authentication_methods_v1) #103 opens to the same accounts.
 create function private.export_account(p_session uuid, p_auth_user uuid) returns uuid
 language sql stable security definer set search_path = '' as $$
   select private.session_account(p_session, p_auth_user)
@@ -425,8 +432,10 @@ begin
 end $$;
 
 -- Takes the next queued export and writes its files, in one transaction
--- holding the account's synchronization head, so every file describes the
--- same snapshot: no authoritative change commits while they are read.
+-- holding the account's synchronization head: every synced record and total
+-- it reads describes the head's sequence (`accountSequence`), since every
+-- authoritative change takes the head first. The account's own details
+-- (methods, devices) are read in the same transaction.
 --   {"status":"building","export","path"} | {"status":"none"}
 create function public.begin_export_build() returns jsonb
 language plpgsql volatile security definer set search_path = '' as $$
@@ -530,7 +539,7 @@ end $$;
 
 -- The archive is stored: the export is ready for 24 hours, and its parts go.
 --   {"status":"ready","email","expiresAt"}   send "export ready" to `email`
---   {"status":"ended"}                       it ended while building: its object is removed with the next sweep
+--   {"status":"ended"}                       it ended while building: the job removes what it uploaded, and the sweep checks again
 create function public.finish_export_build(export uuid, bytes bigint) returns jsonb
 language plpgsql volatile security definer set search_path = '' as $$
 declare
@@ -541,16 +550,22 @@ begin
     returning * into v_export;
   delete from private.export_parts p where p.export_id = finish_export_build.export;
   if v_export.export_id is null then
+    -- It ended while building, perhaps after a sweep found nothing yet stored:
+    -- the object just uploaded must be removed too.
+    update private.exports e set object_pending = true
+      where e.export_id = finish_export_build.export and e.state in ('failed', 'expired', 'invalidated');
     return jsonb_build_object('status', 'ended');
   end if;
   return jsonb_build_object('status', 'ready', 'expiresAt', v_export.expires_at,
     'email', (select u.email from public.accounts a join auth.users u on u.id = a.auth_user_id where a.account_id = v_export.account_id));
 end $$;
 
--- The build failed: its parts go now, and its partial object with the next sweep.
+-- The build failed: its parts go now, and anything it may have stored with the next sweep.
 create function public.fail_export_build(export uuid) returns void
 language sql volatile security definer set search_path = '' as $$
   update private.exports e set state = 'failed', ended_at = now() where e.export_id = fail_export_build.export and e.state = 'building';
+  update private.exports e set object_pending = true
+    where e.export_id = fail_export_build.export and e.state in ('failed', 'expired', 'invalidated');
   delete from private.export_parts p where p.export_id = fail_export_build.export;
 $$;
 

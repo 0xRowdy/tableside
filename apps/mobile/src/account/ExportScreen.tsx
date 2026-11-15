@@ -51,22 +51,30 @@ function archiveDetail(latest: ServerExport | null): string {
       return 'Your last archive expired after 24 hours. Prepare a new one.';
     case 'ended':
       return latest.by === 'revocation'
-        ? 'Your last archive was cancelled because a device was signed out of your account. Prepare a new one.'
+        ? 'Your last archive was canceled because a device was signed out of your account. Prepare a new one.'
         : 'Your last archive is no longer available. Prepare a new one.';
   }
 }
 
+/** How much a local supplement holds: records not synced yet (unfinished activities among them), and conflicts awaiting review. */
+type SupplementCounts = { readonly unsynced: number; readonly conflicts: number };
+
 /** What the supplement row says about this device. */
-function supplementDetail(count: number | null): string {
-  if (count === null) return 'Made on this device from what it holds; nothing is uploaded.';
-  if (count === 0) return "Everything on this device has synced, so there's nothing extra to save.";
-  return `${count === 1 ? '1 record' : `${count} records`} not synced yet, each labelled so it isn't mistaken for a finished session. Nothing is uploaded.`;
+function supplementDetail(counts: SupplementCounts | null): string {
+  if (counts === null) return 'Made on this device from what it holds; nothing is uploaded.';
+  const { unsynced, conflicts } = counts;
+  if (unsynced === 0 && conflicts === 0) return "Everything on this device has synced, so there's nothing extra to save.";
+  const parts = [
+    ...(unsynced > 0 ? [`${unsynced === 1 ? '1 record' : `${unsynced} records`} not synced yet`] : []),
+    ...(conflicts > 0 ? [`${conflicts === 1 ? '1 conflict' : `${conflicts} conflicts`} awaiting review`] : []),
+  ];
+  return `${parts.join(' and ')}, each labeled so it isn't mistaken for a finished session. Nothing is uploaded.`;
 }
 
 export function ExportScreen({ back }: { back: { label: string; onPress: () => void } }) {
   const { service, account } = useAccount();
   const [latest, setLatest] = useState<ServerExport | null | undefined>();
-  const [waiting, setWaiting] = useState<number | null>(null);
+  const [waiting, setWaiting] = useState<SupplementCounts | null>(null);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
@@ -80,7 +88,7 @@ export function ExportScreen({ back }: { back: { label: string; onPress: () => v
     useCallback(() => {
       void reload();
       void service.export.localSupplement().then((supplement) => {
-        setWaiting(supplement ? supplement.unsynced.length + supplement.conflicts.length + supplement.unfinished.length : null);
+        setWaiting(supplement ? { unsynced: supplement.unsynced.length + supplement.unfinished.length, conflicts: supplement.conflicts.length } : null);
       });
     }, [reload, service]),
   );

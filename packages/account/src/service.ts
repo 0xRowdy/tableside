@@ -344,7 +344,7 @@ export interface AccountVault {
 export interface VaultSession {
   readonly installationId: string;
   /** The account's store; it refuses to read or write once the account session has ended. The local supplement reads its unfinished activities. */
-  readonly store: SyncStore & Partial<UnfinishedActivities>;
+  readonly store: SyncStore & UnfinishedActivities;
 }
 
 /**
@@ -1281,14 +1281,27 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
     body: unknown,
     path: AccessPath = 'ordinary',
   ): Promise<{ readonly code: number; readonly status: string | undefined; readonly retryAfter?: unknown; readonly body: Record<string, unknown> | null } | null> => {
+    const response = await withSessionToken(path, (token) => post(`/functions/v1/${name}`, body, { authorization: `Bearer ${token}` }));
+    if (!response) return null;
+    const answer = (await response.json().catch(() => null)) as { status?: string; retryAfter?: unknown } | null;
+    return { code: response.status, status: answer?.status, retryAfter: answer?.retryAfter, body: answer };
+  };
+
+  /**
+   * A request made with this session's token, when the gate allows `path`.
+   * Null when it doesn't, there is no token, the request failed, or the
+   * account session moved on before the response came (its body is discarded).
+   */
+  const withSessionToken = async (path: AccessPath, send: (token: string) => Promise<Response>): Promise<Response | null> => {
     if (!allows(path)) return null;
     const at = generation;
     try {
       const token = await bearer();
       if (!token) return null;
-      const response = await post(`/functions/v1/${name}`, body, { authorization: `Bearer ${token}` });
-      const answer = (await response.json().catch(() => null)) as { status?: string; retryAfter?: unknown } | null;
-      return at === generation ? { code: response.status, status: answer?.status, retryAfter: answer?.retryAfter, body: answer } : null;
+      const response = await send(token);
+      if (at === generation) return response;
+      await response.body?.cancel();
+      return null;
     } catch {
       return null;
     }
@@ -1801,23 +1814,13 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
     devices,
     export: accountExport({
       operation: (name) => operation(name, undefined, 'restricted'),
-      async download(path) {
-        if (!opensRestrictedPaths(gate)) return null;
-        const at = generation;
-        try {
-          const token = await bearer();
-          if (!token) return null;
-          // The bucket's storage policy authorizes it against live state; the path is the account's own object.
-          const response = await options.fetch(`${backend.url}/storage/v1/object/authenticated/account-exports/${path.split('/').map(encodeURIComponent).join('/')}`, {
+      // The bucket's storage policy authorizes it against live state; the path is the account's own object.
+      download: (path) =>
+        withSessionToken('restricted', (token) =>
+          options.fetch(`${backend.url}/storage/v1/object/authenticated/account-exports/${path.split('/').map(encodeURIComponent).join('/')}`, {
             headers: { apikey: backend.publishableKey, [ENVIRONMENT_HEADER]: backend.name, authorization: `Bearer ${token}` },
-          });
-          if (at === generation) return response;
-          await response.body?.cancel();
-          return null;
-        } catch {
-          return null;
-        }
-      },
+          }),
+        ),
       openStore: () =>
         opened && opensRestrictedPaths(gate)
           ? { accountId: gate.accountId, installationId: opened.session.installationId, store: opened.session.store }

@@ -219,7 +219,7 @@ describe('the export job', () => {
     const since = await stack.serverNow();
     await exportArchive(phone, email);
     const mail = await vi.waitFor(async () => {
-      const ready = (await phone.mailbox.messages(email)).find((message) => message.includes('export is ready'));
+      const ready = (await phone.mailbox.messages(email)).find((message) => message.includes('account archive is ready'));
       if (!ready) throw new Error('no mail yet');
       return ready;
     });
@@ -253,6 +253,30 @@ describe('the export job', () => {
 
     // Asking again works as usual.
     expect((await exportArchive(phone, email)).files.get('practice-sessions.csv')!.trimEnd().split('\r\n')).toHaveLength(2);
+  });
+
+  it('removes an archive whose upload lands after its export ended and its folder was swept', async () => {
+    const { phone, accountId } = await signedInPhone('late-upload');
+    const path = `${accountId}/late.zip`;
+    const [queued] = await stack.sql<{ export_id: string }[]>`
+      insert into private.exports (account_id, object_path) values (${accountId}, ${path}) returning export_id`;
+    await stack.sql`select public.begin_export_build()`;
+    // A sign-out ends it mid-build; the sweep finds nothing stored yet.
+    await stack.sql`select private.invalidate_exports(${accountId}::uuid, 'revocation')`;
+    await vi.waitFor(async () => {
+      const [row] = await stack.sql<{ object_pending: boolean }[]>`select object_pending from private.exports where export_id = ${queued!.export_id}`;
+      expect(row!.object_pending).toBe(false);
+    }, { timeout: 20_000, interval: 250 });
+    // Then the slow build's upload lands, and it finishes.
+    const { error } = await stack.serviceClient().storage.from('account-exports').upload(path, new Blob(['late'], { type: 'application/zip' }), { contentType: 'application/zip' });
+    expect(error).toBeNull();
+    const [finished] = await stack.sql<{ answer: { status: string } }[]>`select public.finish_export_build(${queued!.export_id}::uuid, 4) as answer`;
+    expect(finished!.answer).toEqual({ status: 'ended' });
+
+    const [upkeep] = await stack.sql<{ command: string }[]>`select command from cron.job where jobname = 'export-upkeep'`;
+    await stack.sql.unsafe(upkeep!.command);
+    await vi.waitFor(async () => expect(await objectStored(path)).toBe(false), { timeout: 20_000, interval: 250 });
+    expect(await phone.account.export.serverExport()).toMatchObject({ state: 'ended', by: 'revocation' });
   });
 });
 
@@ -362,12 +386,12 @@ describe('the local supplement', () => {
     const before = { totals: await tablet.account.records.totals(), waiting: await tablet.account.sync.countWaiting(), sent: tablet.proxy.sent.length };
 
     const supplement = await tablet.account.export.localSupplement();
-    expect(supplement).toMatchObject({ format: 'tableside-local-supplement', version: 1, device: installation });
+    expect(supplement).toMatchObject({ format: 'tableside-local-supplement', version: 1, installation });
     expect(supplement!.notice).toContain("Records on your other devices aren't included");
     expect(supplement!.unsynced).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ recordType: 'completed-practice-session', item: played.activityId, device: installation, revision: null, syncStatus: 'waiting' }),
-        expect.objectContaining({ recordType: TYPE, item: 'item-2', device: installation, revision: 0, syncStatus: 'waiting' }),
+        expect.objectContaining({ recordType: 'completed-practice-session', item: played.activityId, installation, revision: null, syncStatus: 'waiting' }),
+        expect.objectContaining({ recordType: TYPE, item: 'item-2', installation, revision: 0, syncStatus: 'waiting' }),
       ]),
     );
     expect(supplement!.conflicts).toEqual([
@@ -376,13 +400,13 @@ describe('the local supplement', () => {
         item: 'item-1',
         acceptedRevision: 2,
         accepted: value('20'),
-        proposals: [expect.objectContaining({ device: installation, revision: 2, syncStatus: 'conflict', record: expect.objectContaining({ kind: 'edit', value: value('-30') }) })],
+        proposals: [expect.objectContaining({ installation, revision: 2, syncStatus: 'conflict', record: expect.objectContaining({ kind: 'edit', value: value('-30') }) })],
       }),
     ]);
     // The unfinished session, without its hidden state.
     const unfinished = (await tablet.vault.store().findUnfinished())!;
     expect(supplement!.unfinished).toEqual([
-      { activityId: unfinished.activityId, kind: 'practice-session', game: 'roulette', mode: 'free-play', startedAt: unfinished.createdAt, steps: unfinished.sequence, device: installation, syncStatus: 'unfinished' },
+      { activityId: unfinished.activityId, kind: 'practice-session', game: 'roulette', mode: 'free-play', startedAt: unfinished.createdAt, steps: unfinished.sequence, installation, syncStatus: 'unfinished' },
     ]);
     const text = JSON.stringify(supplement);
     expect(text).not.toContain(unfinished.checkpoint);

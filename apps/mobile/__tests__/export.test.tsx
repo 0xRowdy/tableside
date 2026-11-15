@@ -12,7 +12,7 @@ import { renderRouter } from 'expo-router/testing-library';
 import { Dimensions } from 'react-native';
 
 import { OTHER_DEVICES_NOTE } from '@/account/ExportScreen';
-import { FAKE_ACCOUNT_ID, SIGNED_IN, type fakeAppAccount } from '@/account/testing/fake-account';
+import { FAKE_ACCOUNT_ID, FAKE_SUPPLEMENT, SIGNED_IN, type fakeAppAccount } from '@/account/testing/fake-account';
 import type { GameId } from '@/games';
 
 jest.mock('@/practice/app-adapters', () => {
@@ -71,7 +71,7 @@ describe('Export my data', () => {
       'accessibilityLabel',
       "Account archive. A spreadsheet of your sessions and data files of everything your account holds. It's free, and we'll email you when it's ready.",
     );
-    expect(await screen.findByLabelText(/^Local supplement\. 1 record not synced yet, each labelled so it isn't mistaken for a finished session/)).toBeOnTheScreen();
+    expect(await screen.findByLabelText(/^Local supplement\. 1 record not synced yet, each labeled so it isn't mistaken for a finished session/)).toBeOnTheScreen();
     expect(button('Prepare archive')).toBeOnTheScreen();
     expect(button('Save local supplement')).toBeOnTheScreen();
     expect(screen.getByText(OTHER_DEVICES_NOTE)).toBeOnTheScreen();
@@ -116,15 +116,27 @@ describe('Export my data', () => {
     expect(file).toMatchObject({ name: 'tableside-local-supplement-2026-11-15.json', mimeType: 'application/json' });
     expect(JSON.parse(file!.contents as string)).toMatchObject({
       format: 'tableside-local-supplement',
-      unsynced: [{ recordType: 'completed-practice-session', syncStatus: 'waiting', device: 'installation-1' }],
+      unsynced: [{ recordType: 'completed-practice-session', syncStatus: 'waiting', installation: 'installation-1' }],
     });
     // Nothing was asked of the server for it.
     expect(service().exportCalls).toEqual(['supplement', 'supplement']);
   });
 
+  it('counts conflicts apart from records that haven’t synced', async () => {
+    await renderRouter('./src/app', { initialUrl: '/more/settings/account' });
+    service().supplement = {
+      ...FAKE_SUPPLEMENT,
+      conflicts: [{ recordType: 'casino-session', item: 'item-1', acceptedRevision: 2, accepted: {}, proposals: [] }],
+    };
+    await fireEvent.press(await screen.findByRole('button', { name: /^Export my data\./ }));
+    expect(
+      await screen.findByLabelText("Local supplement. 1 record not synced yet and 1 conflict awaiting review, each labeled so it isn't mistaken for a finished session. Nothing is uploaded."),
+    ).toBeOnTheScreen();
+  });
+
   it.each<[string, ServerExport, string]>([
     ['expired', { state: 'expired', requestedAt: 0 }, 'Your last archive expired after 24 hours. Prepare a new one.'],
-    ['cancelled by a sign-out', { state: 'ended', requestedAt: 0, by: 'revocation' }, 'Your last archive was cancelled because a device was signed out of your account. Prepare a new one.'],
+    ['was canceled by a sign-out', { state: 'ended', requestedAt: 0, by: 'revocation' }, 'Your last archive was canceled because a device was signed out of your account. Prepare a new one.'],
     ['failed', { state: 'failed', requestedAt: 0 }, "Your last archive couldn't be prepared. Prepare it again."],
   ])('says when the last archive %s, and offers a new one', async (_, latest, detail) => {
     await openExport(() => {

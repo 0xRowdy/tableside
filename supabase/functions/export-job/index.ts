@@ -77,6 +77,10 @@ async function build(environment: string, claimed: { export: string; path: strin
     });
     if (finished.status === 'ready' && finished.expiresAt) {
       await sendSecurityNotice(environment, finished.email, exportReadyMail(finished.expiresAt), 'export-ready');
+    } else {
+      // It ended while this was building: what was just stored goes now (a sweep may have run before it landed).
+      const removed = await storage('DELETE', BUCKET, JSON.stringify({ prefixes: [claimed.path] }), 'application/json');
+      await removed.body?.cancel();
     }
   } catch {
     console.error('export build failed');

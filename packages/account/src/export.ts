@@ -67,8 +67,12 @@ export interface SupplementEntry {
   readonly recordType: string;
   readonly item: string;
   /** The installation it was made on. */
-  readonly device: string;
-  /** The accepted revision it was made from (0: a new item); null where revisions don't apply or aren't known. */
+  readonly installation: string;
+  /**
+   * An unsynced edit: the accepted revision it was made from (0: a new item).
+   * A conflict proposal: the accepted revision it competes with (the
+   * conflict baseline). Null where revisions don't apply or aren't known.
+   */
   readonly revision: number | null;
   readonly syncStatus: SupplementStatus;
   /** A refusal's code. */
@@ -77,13 +81,14 @@ export interface SupplementEntry {
   readonly record: unknown;
 }
 
-/** The local supplement: a labelled export of what this installation holds that hasn't reached the account. */
+/** The local supplement: a labeled export of what this installation holds that hasn't reached the account. */
 export interface LocalSupplement {
   readonly format: 'tableside-local-supplement';
   readonly version: 1;
   readonly createdAt: string;
   readonly account: string;
-  readonly device: string;
+  /** The installation that made it. */
+  readonly installation: string;
   readonly notice: string;
   /** Records saved here that haven't reached the account. None of them is a finished, synced session. */
   readonly unsynced: readonly SupplementEntry[];
@@ -95,7 +100,7 @@ export interface LocalSupplement {
     readonly accepted: unknown;
     readonly proposals: readonly SupplementEntry[];
   }[];
-  readonly unfinished: readonly (UnfinishedActivity & { readonly device: string; readonly syncStatus: 'unfinished' })[];
+  readonly unfinished: readonly (UnfinishedActivity & { readonly installation: string; readonly syncStatus: 'unfinished' })[];
 }
 
 export const SUPPLEMENT_NOTICE =
@@ -111,7 +116,7 @@ export interface AccountExport {
   downloadServerExport(): Promise<ServerExportDownload>;
   /**
    * The local supplement, built from this installation's database with no
-   * network: what hasn't reached the account, labelled with device, revision
+   * network: what hasn't reached the account, labeled with device, revision
    * and sync status. It changes nothing (no conflict is resolved, no total
    * moves). Null with no open account database.
    */
@@ -125,7 +130,7 @@ export interface ExportPorts {
   /** A GET of a storage object with this session's token; null when no account is signed in or the account session moved on. */
   download(path: string): Promise<Response | null>;
   /** The open account database, when the gate leaves it open for the restricted paths. */
-  openStore(): { readonly accountId: string; readonly installationId: string; readonly store: SyncStore & Partial<UnfinishedActivities> } | null;
+  openStore(): { readonly accountId: string; readonly installationId: string; readonly store: SyncStore & UnfinishedActivities } | null;
   readonly registry: ReadonlyMap<string, RecordType>;
   readonly clock: () => number;
 }
@@ -209,35 +214,25 @@ export function accountExport(ports: ExportPorts): AccountExport {
     async localSupplement() {
       const open = ports.openStore();
       if (!open) return null;
-      const { store, installationId: device } = open;
+      const { store, installationId: installation } = open;
       try {
-        const [queue, refused, unfinished] = await Promise.all([
-          store.readUploadQueue(),
-          store.readRejectedUploads(),
-          store.readUnfinishedActivities?.() ?? Promise.resolve([]),
-        ]);
-        const itemOf = (recordType: string, payload: unknown) => {
-          const type = ports.registry.get(recordType);
-          return type?.isPayload(payload) ? type.identity.of(payload) : '';
+        const [queue, refused, unfinished] = await Promise.all([store.readUploadQueue(), store.readRejectedUploads(), store.readUnfinishedActivities()]);
+        /** An upload made here, as the supplement labels it. */
+        const entry = (upload: { readonly recordType: string; readonly payload: unknown }, syncStatus: SupplementStatus, refusal?: string): SupplementEntry => {
+          const type = ports.registry.get(upload.recordType);
+          return {
+            recordType: upload.recordType,
+            item: type?.isPayload(upload.payload) ? type.identity.of(upload.payload) : '',
+            installation,
+            revision: baseRevision(upload.payload),
+            syncStatus,
+            ...(refusal === undefined ? {} : { refusal }),
+            record: upload.payload,
+          };
         };
         const unsynced: SupplementEntry[] = [
-          ...queue.map((entry) => ({
-            recordType: entry.recordType,
-            item: itemOf(entry.recordType, entry.payload),
-            device,
-            revision: baseRevision(entry.payload),
-            syncStatus: entry.flagged ? ('flagged' as const) : entry.operation ? ('sending' as const) : ('waiting' as const),
-            record: entry.payload,
-          })),
-          ...refused.map((entry) => ({
-            recordType: entry.recordType,
-            item: itemOf(entry.recordType, entry.payload),
-            device,
-            revision: baseRevision(entry.payload),
-            syncStatus: 'refused' as const,
-            refusal: entry.code,
-            record: entry.payload,
-          })),
+          ...queue.map((upload) => entry(upload, upload.flagged ? 'flagged' : upload.operation ? 'sending' : 'waiting')),
+          ...refused.map((upload) => entry(upload, 'refused', upload.code)),
         ];
         const conflicts: LocalSupplement['conflicts'][number][] = [];
         for (const type of ports.registry.values()) {
@@ -254,7 +249,7 @@ export function accountExport(ports: ExportPorts): AccountExport {
               proposals: (conflict.proposals as { id: string; kind: string; installation: string; value: unknown }[]).map((proposal) => ({
                 recordType: type.name,
                 item: local.item,
-                device: proposal.installation,
+                installation: proposal.installation,
                 revision: accepted.revision as number,
                 syncStatus: 'conflict' as const,
                 record: { proposal: proposal.id, kind: proposal.kind, value: proposal.value },
@@ -267,11 +262,11 @@ export function accountExport(ports: ExportPorts): AccountExport {
           version: 1,
           createdAt: new Date(ports.clock()).toISOString(),
           account: open.accountId,
-          device,
+          installation,
           notice: SUPPLEMENT_NOTICE,
           unsynced,
           conflicts,
-          unfinished: unfinished.map((activity) => ({ ...activity, device, syncStatus: 'unfinished' as const })),
+          unfinished: unfinished.map((activity) => ({ ...activity, installation, syncStatus: 'unfinished' as const })),
         };
       } catch {
         // The account session ended while reading: its store refuses.

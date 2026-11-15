@@ -25,6 +25,8 @@ export interface LocalStack {
    * told to name another, or none (null).
    */
   rawClient(accessToken?: string, environment?: EnvironmentName | null): SupabaseClient;
+  /** A client with the stack's service role, as a backend job uses it. Privileged: no player has it. */
+  serviceClient(): SupabaseClient;
   /**
    * Runs `scenario` with the stack serving another environment, as if it were
    * that environment's project, then restores it. Privileged: no client can.
@@ -135,6 +137,12 @@ export function localStack(): LocalStack {
         ...(environment ? { [ENVIRONMENT_HEADER]: environment } : {}),
       };
       return createClient(url, publishableKey, { auth: { persistSession: false, autoRefreshToken: false }, global: { headers } });
+    },
+    serviceClient() {
+      return createClient(url, serviceRoleKey, {
+        auth: { persistSession: false, autoRefreshToken: false },
+        global: { headers: { [ENVIRONMENT_HEADER]: 'local' } },
+      });
     },
     async asEnvironment(environment, scenario) {
       await sql`update private.deployment set environment = ${environment}`;

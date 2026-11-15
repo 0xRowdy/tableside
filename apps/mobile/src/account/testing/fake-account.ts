@@ -81,9 +81,9 @@ export const FAKE_SUPPLEMENT: LocalSupplement = {
   version: 1,
   createdAt: '2026-11-15T12:00:00.000Z',
   account: 'account-1',
-  device: 'installation-1',
+  installation: 'installation-1',
   notice: SUPPLEMENT_NOTICE,
-  unsynced: [{ recordType: 'completed-practice-session', item: 'activity-1', device: 'installation-1', revision: null, syncStatus: 'waiting', record: {} }],
+  unsynced: [{ recordType: 'completed-practice-session', item: 'activity-1', installation: 'installation-1', revision: null, syncStatus: 'waiting', record: {} }],
   conflicts: [],
   unfinished: [],
 };
