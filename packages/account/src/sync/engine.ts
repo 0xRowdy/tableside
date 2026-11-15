@@ -596,7 +596,7 @@ export class SyncEngine {
           redacted.push(entry.sequence);
           continue;
         }
-        const read = this.read(entry);
+        const read = this.acceptedFrom(entry);
         if (!read) {
           unreadable = true;
           break;
@@ -619,7 +619,7 @@ export class SyncEngine {
   }
 
   /** What a feed entry or snapshot row makes accepted, and the result it purges; null when this build can't read it. */
-  private read(entry: FeedEntry): { readonly record: AcceptedRecord; readonly purges: RecordRef | null } | null {
+  private acceptedFrom(entry: FeedEntry): { readonly record: AcceptedRecord; readonly purges: RecordRef | null } | null {
     const type = this.options.registry.get(entry.recordType);
     const payload = type?.fromChange(entry.change) ?? null;
     const origin = type?.ordering === 'per-device' ? originOf(entry.change) : null;
@@ -665,7 +665,7 @@ export class SyncEngine {
       let through = current.after;
       let unreadable = false;
       for (const row of page.rows) {
-        const read = this.read(row);
+        const read = this.acceptedFrom(row);
         if (!read) {
           unreadable = true;
           break;
@@ -673,9 +673,11 @@ export class SyncEngine {
         records.push(read.record);
         through = row.ordinal;
       }
-      const staged = through === current.after || (await store.stageBootstrapPage(current.snapshot, current.after, records, through));
-      const installed = staged && !unreadable && !page.more && (await store.installBootstrap(current.snapshot));
-      if (!staged || (!unreadable && !page.more && !installed)) {
+      const last = !unreadable && !page.more;
+      const applied =
+        (through === current.after || (await store.stageBootstrapPage(current.snapshot, current.after, records, through))) &&
+        (!last || (await store.installBootstrap(current.snapshot)));
+      if (!applied) {
         // Another run moved the staging meanwhile: carry on from where it is.
         const now = await store.readBootstrap();
         if (now.installed) return null;
@@ -685,7 +687,7 @@ export class SyncEngine {
       staging = { ...current, staged: current.staged + records.length, after: through };
       await this.refresh();
       if (unreadable) return 'unreadable-change';
-      if (installed) return null;
+      if (last) return null;
     }
   }
 

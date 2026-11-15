@@ -93,12 +93,15 @@ export interface LocalRevisionedItem {
 /**
  * How far this installation's bootstrap has come (spec 2, *Bootstrap*).
  * installed: the baseline and its cursor are in place; later changes come through the feed.
- * Otherwise `staging` is the snapshot being staged, if one was started: how
- * many of its rows are staged, and the last ordinal staged.
+ * Otherwise `staging` is the snapshot being staged, if one was started.
  */
-export type BootstrapProgress =
-  | { readonly installed: true }
-  | { readonly installed: false; readonly staging: (BootstrapSnapshot & { readonly staged: number; readonly after: number }) | null };
+export type BootstrapProgress = { readonly installed: true } | { readonly installed: false; readonly staging: BootstrapStaging | null };
+
+/** A snapshot being staged: how many of its rows are staged, and the last ordinal staged. */
+export interface BootstrapStaging extends BootstrapSnapshot {
+  readonly staged: number;
+  readonly after: number;
+}
 
 export interface SyncStore {
   /** Unacknowledged entries, in queue order. */

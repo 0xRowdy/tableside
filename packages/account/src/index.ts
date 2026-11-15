@@ -73,7 +73,6 @@ export {
   type FeedEntry,
   type PreparedOperation,
   type ProtocolStatus,
-  type SnapshotTotal,
   type StagedChunk,
   type UploadAnswer,
 } from './sync/protocol';
@@ -97,6 +96,7 @@ export { type DevicePorts, type DeviceSignal, RECONCILE_INTERVAL_MS } from './sy
 export {
   type AcceptedRecord,
   type BootstrapProgress,
+  type BootstrapStaging,
   type FeedPageEffects,
   type LocalRevisionedItem,
   type NewUpload,

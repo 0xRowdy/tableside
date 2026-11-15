@@ -107,7 +107,7 @@ export interface FeedPageEffects {
 }
 
 /** A lifetime total at a snapshot's watermark, in exact money text. */
-export interface SnapshotTotal {
+export interface TotalsRow {
   readonly total: 'practice' | 'casino';
   readonly game: string;
   readonly currency: string;
@@ -120,12 +120,16 @@ export interface BootstrapSnapshot {
   readonly snapshot: string;
   readonly watermark: number;
   readonly rows: number;
-  readonly totals: readonly SnapshotTotal[];
+  readonly totals: readonly TotalsRow[];
 }
 
-export type BootstrapProgress =
-  | { readonly installed: true }
-  | { readonly installed: false; readonly staging: (BootstrapSnapshot & { readonly staged: number; readonly after: number }) | null };
+/** A snapshot being staged: how many of its rows are staged, and the last ordinal staged. */
+export interface BootstrapStaging extends BootstrapSnapshot {
+  readonly staged: number;
+  readonly after: number;
+}
+
+export type BootstrapProgress = { readonly installed: true } | { readonly installed: false; readonly staging: BootstrapStaging | null };
 
 export interface LocalRevisionedItem {
   readonly item: string;

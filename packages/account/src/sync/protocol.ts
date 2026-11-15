@@ -4,6 +4,8 @@
 
 import { canonicalJson, sha256Hex } from '@tableside/engine';
 
+import type { TotalsRow } from './totals';
+
 export const PROTOCOL_VERSION = 1;
 
 /**
@@ -237,15 +239,6 @@ export interface FeedPage {
   readonly more: boolean;
 }
 
-/** A total as the account keeps it: one figure per total, game and currency, in exact money text. */
-export interface SnapshotTotal {
-  readonly total: 'practice' | 'casino';
-  readonly game: string;
-  readonly currency: string;
-  readonly records: number;
-  readonly net: string;
-}
-
 /**
  * A bootstrap snapshot (`sync_bootstrap_v1`): every registered type's
  * summaries and the account's lifetime totals, made in one transaction under
@@ -257,7 +250,8 @@ export interface BootstrapSnapshot {
   readonly watermark: number;
   /** How many rows it was made with (the feed's redactions can remove some later). */
   readonly rows: number;
-  readonly totals: readonly SnapshotTotal[];
+  /** The account's lifetime totals at the watermark. */
+  readonly totals: readonly TotalsRow[];
 }
 
 /** One snapshot row: a type's summary of an item, as a feed change of the type, at the item's latest change. */

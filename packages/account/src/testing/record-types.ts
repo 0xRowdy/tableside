@@ -92,8 +92,6 @@ export interface TestResult {
   /** Its detail, kept apart from its summary on the server. */
   readonly detail: string;
 }
-/** A test result as a bootstrap snapshot holds it: the summary, without the detail. */
-export type TestResultSummary = Omit<TestResult, 'detail'>;
 export interface TestResultPurge {
   readonly version: 1;
   readonly target: string;
@@ -164,7 +162,7 @@ export const testResult = testType<TestResult>({
   barriers: [],
   contribution: (result) => ({ total: 'practice', game: 'test', currency: 'simulated', amount: result.amount }),
   snapshot: 'private.snapshot_test_results',
-  // The whole result from the feed, or its summary from a snapshot.
+  // The whole result from the feed, or its summary (no detail) from a snapshot; the test type keeps one payload type for both.
   fromChange(change) {
     const record = isObject(change) ? change.record : undefined;
     return hasStrings(record, 'resultId') && isMoney(record.amount) && (record.detail === undefined || typeof record.detail === 'string')
