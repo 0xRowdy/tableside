@@ -6,9 +6,9 @@
 // (supabase/migrations): each registration here names the acceptance operation
 // registered there for the same type and payload version.
 
-import { type CompletedPracticeSessionRecord, decodeMoney } from '@tableside/engine';
+import { type CompletedPracticeSessionRecord, canonicalJson, decodeMoney } from '@tableside/engine';
 
-import type { QueuedUpload, RecordRef } from './store';
+import type { QueuedUpload, ReconcileOutcome, RecordRef } from './store';
 
 /**
  * immutable-result: accepted once, never edited (a completed practice session).
@@ -81,6 +81,20 @@ export interface RecordType<Payload = unknown, Accepted = Payload> {
    * queued, and every other one through the feed.
    */
   purges?(accepted: Accepted): RecordRef;
+  /**
+   * What the refreshed account shows became of an upload whose command scope
+   * went stale before its receipt arrived (#98): `held` is the item's accepted
+   * record on this installation, refreshed. accepted: it shows the upload
+   * took effect; unsent: it shows it never did, or the server decides by the
+   * item's identity, so it is sent again as a new operation; unconfirmed:
+   * neither, and the player decides. Absent: an immutable result or a purge
+   * gets the platform's rule, and anything else is unconfirmed.
+   */
+  reconcile?(stale: {
+    readonly payload: Payload;
+    readonly operation: string;
+    readonly held: { readonly sequence: number; readonly accepted: Accepted } | null;
+  }): Exclude<ReconcileOutcome, { readonly kind: 'set-aside' }>;
   /** The server operation that accepts it (`private.record_types.accept`); null for server-authored state. */
   readonly acceptance: string | null;
   /**
@@ -343,6 +357,20 @@ export function revisionedItemType<Value>(definition: RevisionedItemDefinition<V
       }
     },
     barriers: [],
+    // The account holds the edit (as a proposal, or as its value), or its base is still the accepted revision, so it
+    // was never accepted; otherwise others or this installation moved the item on since, and it's unconfirmed.
+    reconcile({ payload, operation, held }) {
+      if (payload.action === 'resolve') return { kind: 'unconfirmed' };
+      const state = held?.accepted ?? null;
+      if (held && state) {
+        if (state.conflict?.proposals.some((proposal) => proposal.id === operation)) return { kind: 'accepted', sequence: held.sequence };
+        if (payload.action === 'delete' ? state.deleted : !state.deleted && canonicalJson(state.value) === canonicalJson(payload.value)) {
+          return { kind: 'accepted', sequence: held.sequence };
+        }
+      }
+      if (typeof payload.base === 'number' && (state ? state.revision === payload.base : payload.base === 0)) return { kind: 'unsent' };
+      return { kind: 'unconfirmed' };
+    },
     acceptance: definition.acceptance,
     // Each item's current accepted revision, with its open proposals; tombstones too.
     snapshot: 'private.snapshot_revisioned_items',

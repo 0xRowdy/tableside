@@ -89,6 +89,7 @@ export {
   type Resolution,
   type ResolutionOutcome,
   type SyncErrorCode,
+  type UnconfirmedDecision,
   type UpdateNotice,
   type UploadState,
   type UploadStatus,

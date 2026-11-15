@@ -76,7 +76,7 @@
 //   as stale in this run) is prepared again as a new
 //   operation, which the server still deduplicates by its identity; any other
 //   is unconfirmed: it is never sent by itself, keeps every barrier it is,
-//   and waits for the player to send it anew or set it aside.
+//   and waits for the player to send it again or set it aside.
 //   Nothing is deleted, and play never waits on any of it.
 // - A feed reset (the entries after the cursor were pruned behind the
 //   account's reset boundary) takes a new snapshot as bootstrap does, keeping
@@ -108,7 +108,7 @@ import {
   chunksOf,
   prepareOperation,
 } from './protocol';
-import { type RecordType, type RevisionedState, type RevisionedUpload, isBarrierFor } from './registry';
+import { type RecordType, type RevisionedUpload, isBarrierFor } from './registry';
 import type { AcceptedRecord, BootstrapProgress, BootstrapStaging, Origin, QueuedUpload, ReconcileOutcome, RecordRef, SyncStore } from './store';
 
 /** The backend's operations. A call with no usable answer throws a SyncCallError; any other rejection counts as unreachable. */
@@ -145,7 +145,7 @@ export type SyncErrorCode = 'offline' | 'sign-in-required' | 'incompatible' | 'u
  * waiting: will upload by itself. paused: waits for a flagged record it depends on.
  * flagged: failed repeatedly; waits for a deliberate retry. review: the server refused it.
  * unconfirmed: its command scope went stale and the account doesn't show what
- *   became of it; never sent by itself, it waits for the player's decision (`decideReview`).
+ *   became of it; never sent by itself, it waits for the player's decision (`decideUnconfirmed`).
  */
 export type UploadState = 'waiting' | 'paused' | 'flagged' | 'review' | 'unconfirmed';
 
@@ -226,11 +226,11 @@ export interface Resolution {
 export type ResolutionOutcome = 'resolved' | 'conflict-changed' | 'no-conflict' | 'offline' | 'incompatible' | 'invalid';
 
 /**
- * The player's decision on a record in review whose command scope went stale:
- * send it anew, as a new operation (the server still deduplicates it by its
- * identity), or set it aside, kept with the refused records and never sent.
+ * The player's decision on an unconfirmed record: send it again, as a new
+ * operation (the server still deduplicates it by its identity), or set it
+ * aside, kept with the refused records and never sent.
  */
-export type ReviewDecision = 'send-as-new' | 'set-aside';
+export type UnconfirmedDecision = 'send-again' | 'set-aside';
 
 export class SyncEngine {
   private running: Promise<void> | null = null;
@@ -388,18 +388,15 @@ export class SyncEngine {
     return answer.code === 'conflict-changed' || answer.code === 'no-conflict' ? answer.code : 'invalid';
   }
 
-  /**
-   * The player's decision on a record in review whose command scope went
-   * stale. Any other record is left as it is.
-   */
-  async decideReview(id: string, decision: ReviewDecision): Promise<void> {
+  /** The player's decision on an unconfirmed record. Any other record is left as it is. */
+  async decideUnconfirmed(id: string, decision: UnconfirmedDecision): Promise<void> {
     if (this.stopped) return;
     const { store } = this.options;
     const entry = (await store.readUploadQueue()).find((candidate) => candidate.id === id);
     if (!entry?.unconfirmed) return;
-    await store.reconcileUpload(id, decision === 'send-as-new' ? { kind: 'unsent' } : { kind: 'set-aside' });
+    await store.reconcileUpload(id, decision === 'send-again' ? { kind: 'unsent' } : { kind: 'set-aside' });
     await this.refresh();
-    if (decision === 'send-as-new') await this.reconcile('deliberate');
+    if (decision === 'send-again') await this.reconcile('deliberate');
   }
 
   /** Ends the account session's sync: later answers are dropped and nothing more runs. */
@@ -879,8 +876,10 @@ export class SyncEngine {
 
   /**
    * After a clean run: tells the server the positions settled here, when more
-   * are than it was last told, so it drops their receipts. A resolution still
-   * unanswered, or being given its position, holds the marker below it.
+   * are than it was last told, so it drops their receipts, and at least once
+   * an account session, so a device that syncs without uploading keeps its
+   * scope authoritative. A resolution still unanswered, or being given its
+   * position, holds the marker below it.
    */
   private async reportSettled(): Promise<void> {
     if (this.allocating > 0) return;
@@ -890,7 +889,6 @@ export class SyncEngine {
     const settled = Math.min(scope.settled, ...unanswered.map((sent) => sent.command.position - 1));
     const reported = this.reportedSettled;
     if (reported && reported.generation === scope.generation && settled <= reported.settled) return;
-    if (settled <= 0) return;
     const answer = await this.call(() => this.options.backend.scope(this.options.installationId, scope.generation, settled));
     if (answer.status === 'scope') this.reportedSettled = { generation: answer.generation, settled: answer.settled };
     else if (answer.status === 'stale-scope') {
@@ -941,7 +939,7 @@ export class SyncEngine {
     return null;
   }
 
-  /** What the refreshed account shows became of a prepared entry. */
+  /** What the refreshed account shows became of a prepared entry: the type's own rule, or the platform's. */
   private async outcomeOf(
     type: RecordType,
     entry: QueuedUpload,
@@ -950,40 +948,17 @@ export class SyncEngine {
   ): Promise<ReconcileOutcome> {
     const { store, registry } = this.options;
     if (!type.isPayload(entry.payload)) return { kind: 'unconfirmed' };
-    switch (type.kind) {
-      case 'immutable-result': {
-        // The server accepts a result once by its identity, refusing other content under it, and only a purge
-        // removes one, leaving its identity behind. So one the account purged was accepted; any other is sent
-        // anew, and the server answers with that one acceptance, a refusal, or a first acceptance.
-        const item = type.identity.of(entry.payload);
-        return (await store.readPurgedItems(type.name)).includes(item) ? { kind: 'accepted', sequence: null } : { kind: 'unsent' };
-      }
-      case 'revisioned-item': {
-        const upload = entry.payload as RevisionedUpload<unknown>;
-        const held = (await acceptedOf(type.name)).get(upload.item);
-        const state = (held?.payload ?? null) as RevisionedState<unknown> | null;
-        if (upload.action === 'resolve') return { kind: 'unconfirmed' };
-        if (state && held) {
-          if (state.conflict?.proposals.some((proposal) => proposal.id === operation.operationId)) return { kind: 'accepted', sequence: held.sequence };
-          if (upload.action === 'delete' ? state.deleted : !state.deleted && canonicalJson(state.value) === canonicalJson(upload.value)) {
-            return { kind: 'accepted', sequence: held.sequence };
-          }
-        }
-        // Its base is still the accepted revision (or a new item still unknown): it was never accepted.
-        if (typeof upload.base === 'number' && (state ? state.revision === upload.base : upload.base === 0)) return { kind: 'unsent' };
-        return { kind: 'unconfirmed' };
-      }
-      case 'account-state-operation': {
-        // A purge is accepted once by its target, whatever the operation.
-        const target = type.purges?.(entry.payload) ?? null;
-        if (target && registry.has(target.recordType)) {
-          return (await store.readPurgedItems(target.recordType)).includes(target.item) ? { kind: 'accepted', sequence: null } : { kind: 'unsent' };
-        }
-        return { kind: 'unconfirmed' };
-      }
-      case 'server-authored-state':
-        return { kind: 'unconfirmed' };
+    if (type.reconcile) {
+      const held = (await acceptedOf(type.name)).get(type.identity.of(entry.payload));
+      return type.reconcile({ payload: entry.payload, operation: operation.operationId, held: held ? { sequence: held.sequence, accepted: held.payload } : null });
     }
+    // The server accepts a result once by its identity, refusing other content under it, and only a purge removes
+    // one, leaving its identity behind: one the account purged was accepted, and any other is sent again for the
+    // server to answer with that one acceptance, a refusal, or a first acceptance. A purge is accepted once by its
+    // target, whatever the operation.
+    const target = type.kind === 'immutable-result' ? { recordType: type.name, item: type.identity.of(entry.payload) } : (type.purges?.(entry.payload) ?? null);
+    if (!target || !registry.has(target.recordType)) return { kind: 'unconfirmed' };
+    return (await store.readPurgedItems(target.recordType)).includes(target.item) ? { kind: 'accepted', sequence: null } : { kind: 'unsent' };
   }
 
   /** Reads the records' states from the store again, then tells listeners. Refreshes run one at a time. */

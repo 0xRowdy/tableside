@@ -193,7 +193,7 @@ export type Disposition =
 /**
  * The upload operation's answer. Besides a receipt's disposition:
  * waiting, an operation it names in `after` has no receipt yet (nothing was recorded; the identical request is sent again later);
- * stale-scope, the server can no longer interpret the command: its generation retired or was replaced, or its position was
+ * stale-scope, the server can no longer interpret the command: its generation retired or was replaced (or never issued), or its position was
  * settled (its receipt gone) or is another command's. Nothing was recorded, and it is never taken for a new command: the device
  * refreshes, reconciles its unsynced work, and takes a new generation;
  * operation-reused, a different request already holds this operation ID (nothing was recorded);
@@ -203,7 +203,7 @@ export type Disposition =
 export type UploadAnswer =
   | Disposition
   | { readonly status: 'waiting' }
-  | { readonly status: 'stale-scope'; readonly reason: 'retired' | 'settled' | 'reused' }
+  | { readonly status: 'stale-scope'; readonly reason: 'retired' | 'replaced' | 'settled' | 'reused' }
   | { readonly status: 'operation-reused' }
   | { readonly status: 'incompatible' }
   | { readonly status: 'malformed' }

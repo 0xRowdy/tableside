@@ -166,10 +166,28 @@ describe('the progress marker', () => {
 
     // A new generation for the installation: every earlier one's commands are refused, receipt or not.
     expect((await directCommands(raw, 'gap')).generation).toBe(generation + 1);
-    expect(await upload(four)).toMatchObject({ status: 'stale-scope', reason: 'retired' });
+    expect(await upload(four)).toMatchObject({ status: 'stale-scope', reason: 'replaced' });
     expect(await settle(9)).toEqual({ status: 'stale-scope' });
     expect(await receiptItems(accountId, 'gap')).toEqual([]);
     expect(await reconciled()).toEqual(['rec-1', 'rec-2', 'rec-3', 'rec-4']);
+
+    // Unheard from for months, the new one retires: its commands are refused too, and its receipts go.
+    const next = { generation: generation + 1, position: 1 };
+    const five = prepareOperation({
+      protocol: PROTOCOL_VERSION,
+      operation: '7'.repeat(32),
+      installation: 'gap',
+      command: next,
+      recordType: testAllowanceReconciliation.name,
+      payloadVersion: 1,
+      item: 'rec-7',
+      payload: { version: 1, reconciliationId: 'rec-7', grant: 'g' },
+    }).request;
+    expect(await upload(five)).toMatchObject({ status: 'accepted' });
+    await away(accountId, MONTHS, ['gap']);
+    expect(await compact(accountId)).toBe(true);
+    expect(await upload(five)).toMatchObject({ status: 'stale-scope', reason: 'retired' });
+    expect(await receiptItems(accountId, 'gap')).toEqual([]);
   });
 
   it('rejects a generation never issued, or another account’s, and a command with no scope at all', async () => {
@@ -192,7 +210,7 @@ describe('the progress marker', () => {
       return command ? text : text.replace('"command":{"generation":1,"position":1},', '');
     };
     // The other account's generation names nothing in this one.
-    expect((await raw.rpc('sync_upload_v1', { request: request(theirs.next()) })).data).toMatchObject({ status: 'stale-scope', reason: 'retired' });
+    expect((await raw.rpc('sync_upload_v1', { request: request(theirs.next()) })).data).toMatchObject({ status: 'stale-scope', reason: 'replaced' });
     expect((await raw.rpc('sync_upload_v1', { request: request({ generation: 7, position: 1 }) })).data).toMatchObject({ status: 'stale-scope' });
     expect((await raw.rpc('sync_upload_v1', { request: request(null) })).data).toEqual({ status: 'malformed' });
   });
@@ -338,7 +356,7 @@ describe('a device away for months (#43)', () => {
 
     // The player sets it aside: kept with the refused records, never sent.
     const [review] = phone.account.sync.status.uploads;
-    await phone.account.sync.decideReview(review!.id, 'set-aside');
+    await phone.account.sync.decideUnconfirmed(review!.id, 'set-aside');
     await synced(phone);
     expect(await phone.vault.store().readRejectedUploads()).toEqual([expect.objectContaining({ id: review!.id, code: 'set-aside' })]);
     await synced(tablet);
@@ -388,7 +406,7 @@ describe('a device away for months (#43)', () => {
 
     // Reconciled against the current choice: set aside, and the contribution follows it.
     const [review] = phone.account.sync.status.uploads;
-    await phone.account.sync.decideReview(review!.id, 'set-aside');
+    await phone.account.sync.decideUnconfirmed(review!.id, 'set-aside');
     await synced(phone);
     expect(await sql`select 1 from private.test_contributions where account_id = ${accountId} and contribution_id = 'c-held'`).toHaveLength(1);
   });
@@ -454,6 +472,19 @@ describe('a device away for months (#43)', () => {
     await synced(phone);
     expect(await phone.vault.store().readUploadQueue()).toEqual([]);
     expect(await serverResults(accountId)).toEqual(['r-1']);
+  });
+
+  it('a device that syncs without uploading keeps its scope authoritative', async () => {
+    const { phone, accountId } = await twoDevices();
+    await queue(phone, testResult.name, result('r-1'));
+    await synced(phone);
+    await away(accountId, MONTHS, [installationOf(phone)]);
+    // A new account session, reading the account: no upload, but the device is heard from.
+    await phone.restart();
+    await phone.account.sync.idle();
+    expect(await compact(accountId)).toBe(true);
+    const [scope] = await sql<{ retired: boolean }[]>`select retired from private.command_scopes where account_id = ${accountId} and installation_id = ${installationOf(phone)}`;
+    expect(scope?.retired).toBe(false);
   });
 
   it('a stale sync position never expires offline play', async () => {

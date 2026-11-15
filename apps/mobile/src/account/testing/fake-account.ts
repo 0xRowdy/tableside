@@ -152,7 +152,7 @@ export class FakeAccountService implements AccountService {
     subscribe: () => () => undefined,
     reconcile: async () => undefined,
     retryRecord: async () => undefined,
-    decideReview: async () => undefined,
+    decideUnconfirmed: async () => undefined,
     idle: async () => undefined,
     countWaiting: async () => this.waitingCount,
     queue: async () => ({ status: 'refused', reason: 'no-account' }),

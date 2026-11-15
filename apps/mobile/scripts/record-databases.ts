@@ -40,7 +40,7 @@ import {
 } from '@tableside/engine';
 import { RECORDED_BUILDS, type RecordedCheckpoint } from '@tableside/engine/recorded-checkpoints';
 
-import { SqliteActivityStore, type StoreIdentity } from '../src/account/sqlite-store';
+import { type Command as SyncCommand, SqliteActivityStore, type StoreIdentity } from '../src/account/sqlite-store';
 import { STORE_SCHEMA_VERSION } from '../src/account/store-schema';
 import { dumpDatabase } from '../src/account/testing/database-dump';
 import { nodeSqlCipherDriver } from '../src/account/testing/node-sqlcipher';
@@ -129,7 +129,7 @@ async function unfinishedDatabase(recorded: RecordedCheckpoint): Promise<Recorde
  * results are stored the same way.
  */
 /** The upload a result is sent as, as a command: protocol 1's canonical envelope (packages/account/src/sync/protocol.ts). */
-const operationFor = (digit: string, record: { readonly activityId: string }) => (command: { readonly generation: number; readonly position: number }) => {
+const operationFor = (digit: string, record: { readonly activityId: string }) => (command: SyncCommand) => {
   const operationId = digit.repeat(32);
   const request = canonicalJson({
     protocol: 1,

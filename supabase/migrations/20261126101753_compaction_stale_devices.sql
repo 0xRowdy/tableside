@@ -239,10 +239,10 @@ grant execute on function public.sync_scope_v1(text, integer, bigint) to authent
 
 -- The envelope gains `command`: {"generation","position"}, the command's
 -- scope and its position there, required on every upload. Under the head:
---   a generation that isn't the installation's current, unretired one;
+--   a generation retired, or not the installation's current one (replaced, or never issued);
 --   a position the installation has settled, whose receipt is gone;
 --   a position another command holds
--- each answer {"status":"stale-scope","reason":"retired"|"settled"|"reused"}
+-- each answer {"status":"stale-scope","reason":"retired"|"replaced"|"settled"|"reused"}
 -- and record nothing: a missing receipt is never taken for a new command.
 -- An identical retry of a command with its receipt still answers from it.
 create or replace function public.sync_upload_v1(request text) returns jsonb
@@ -325,7 +325,8 @@ begin
   -- The command's scope: only the installation's current, unretired generation is served.
   select * into v_scope from private.command_scopes where account_id = v_account and installation_id = v_installation;
   if not found or v_scope.retired or v_scope.generation <> v_generation then
-    return jsonb_build_object('status', 'stale-scope', 'reason', 'retired', 'operation', v_operation);
+    return jsonb_build_object('status', 'stale-scope', 'reason', case when found and v_scope.retired and v_scope.generation = v_generation then 'retired' else 'replaced' end,
+      'operation', v_operation);
   end if;
 
   select * into v_receipt from private.sync_receipts where account_id = v_account and operation_id = v_operation;

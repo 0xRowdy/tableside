@@ -726,18 +726,18 @@ describe('a stale command scope (#98)', () => {
   it('sends an unconfirmed record anew only when the player decides so, and sets it aside otherwise', async () => {
     const { store, backend, sync } = await retired();
     await sync.reconcile();
-    await sync.decideReview('t1', 'send-as-new');
+    await sync.decideUnconfirmed('t1', 'send-again');
     expect(backend.uploadsOf('t1')).toBe(1);
     expect(await store.readUploadQueue()).toEqual([]);
 
     const other = await retired();
     await other.sync.reconcile();
-    await other.sync.decideReview('t1', 'set-aside');
+    await other.sync.decideUnconfirmed('t1', 'set-aside');
     expect(other.backend.uploadsOf('t1')).toBe(0);
     expect(other.sync.status.uploads).toEqual([expect.objectContaining({ id: 't1', state: 'review' })]);
     expect(await other.store.readRejectedUploads()).toEqual([expect.objectContaining({ id: 't1', code: 'set-aside' })]);
     // A record the server refused isn't the player's to resend.
-    await other.sync.decideReview('t1', 'send-as-new');
+    await other.sync.decideUnconfirmed('t1', 'send-again');
     expect(other.backend.uploadsOf('t1')).toBe(0);
   });
 
@@ -760,7 +760,8 @@ describe('a stale command scope (#98)', () => {
     store.last = 1;
     await sync.reconcile();
     await sync.idle();
-    expect(backend.scopeCalls).toEqual(['settled 1', 'new']);
+    // The stale report, the new generation, and the new generation's first report (nothing settled under it yet).
+    expect(backend.scopeCalls).toEqual(['settled 1', 'new', 'settled 0']);
     expect(store.generation).toBe(6);
   });
 });
