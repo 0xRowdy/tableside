@@ -83,7 +83,7 @@ import {
   prepareOperation,
 } from './protocol';
 import { type RecordType, type RevisionedUpload, isBarrierFor } from './registry';
-import type { AcceptedRecord, BootstrapProgress, Origin, QueuedUpload, RecordRef, SyncStore } from './store';
+import type { AcceptedRecord, BootstrapProgress, BootstrapStaging, Origin, QueuedUpload, RecordRef, SyncStore } from './store';
 
 /** The backend's operations. A call with no usable answer throws a SyncCallError; any other rejection counts as unreachable. */
 export interface SyncBackend {
@@ -201,6 +201,8 @@ export class SyncEngine {
   private update: UpdateNotice | null = null;
   private uploads: readonly UploadStatus[] = [];
   private history: HistoryStatus = { state: 'complete' };
+  /** When this account session first tried to bootstrap: its duration's start. */
+  private bootstrapStartedAt: number | null = null;
   /** Consecutive runs that got no usable answer. */
   private failures = 0;
   /** No automatic run before this: the backoff. */
@@ -649,19 +651,42 @@ export class SyncEngine {
    * Installs a baseline when this installation has none: asks for a snapshot
    * (or carries on staging the one it has), stages its pages, then installs
    * it. A row this build can't read stops it there, staged so far, as the feed
-   * stops before a change it can't read. A call with no answer ends the run (it throws).
+   * stops before a change it can't read. A call with no answer ends the run
+   * (it throws). Reports its duration, from the account session's first
+   * attempt, when it installs, and when a run ends without installing.
    */
   private async bootstrap(): Promise<SyncErrorCode | null> {
-    const { store, backend, installationId } = this.options;
-    const progress = await store.readBootstrap();
+    const progress = await this.options.store.readBootstrap();
     if (progress.installed) return null;
-    let staging = progress.staging;
+    const startedAt = (this.bootstrapStartedAt ??= this.options.clock());
+    const report = (outcome: 'complete' | 'failed') => this.options.metrics?.record('bootstrap_duration', this.options.clock() - startedAt, { outcome });
+    let outcome: 'installed' | 'unreadable' | 'none';
+    try {
+      outcome = await this.stageBootstrap(progress.staging);
+    } catch (caught) {
+      if (!this.stopped) report('failed');
+      throw caught;
+    }
+    if (outcome === 'none') return null;
+    report(outcome === 'installed' ? 'complete' : 'failed');
+    return outcome === 'installed' ? null : 'unreadable-change';
+  }
+
+  /**
+   * Stages a snapshot's pages from where `staging` left off (a new snapshot
+   * when there is none, or it expired) and installs it: installed; stopped at
+   * a row this build can't read; or none, when the session ended or another
+   * run installed it.
+   */
+  private async stageBootstrap(from: BootstrapStaging | null): Promise<'installed' | 'unreadable' | 'none'> {
+    const { store, backend, installationId } = this.options;
+    let staging = from;
     // A snapshot that expires as soon as it was made backs the run off instead of asking again at once.
     let fresh = false;
     for (;;) {
       if (!staging) {
         const snapshot = await this.call(() => backend.bootstrap(installationId));
-        if (this.stopped) return null;
+        if (this.stopped) return 'none';
         await store.beginBootstrap(snapshot);
         staging = { ...snapshot, staged: 0, after: 0 };
         fresh = true;
@@ -669,7 +694,7 @@ export class SyncEngine {
       }
       const current = staging;
       const page = await this.call(() => backend.bootstrapPage(current.snapshot, current.after, BOOTSTRAP_PAGE_SIZE));
-      if (this.stopped) return null;
+      if (this.stopped) return 'none';
       if (page.status === 'expired') {
         if (fresh) throw new SyncCallError('busy');
         staging = null;
@@ -695,14 +720,14 @@ export class SyncEngine {
       if (!applied) {
         // Another run moved the staging meanwhile: carry on from where it is.
         const now = await store.readBootstrap();
-        if (now.installed) return null;
+        if (now.installed) return 'none';
         staging = now.staging;
         continue;
       }
       staging = { ...current, staged: current.staged + records.length, after: through };
       await this.refresh();
-      if (unreadable) return 'unreadable-change';
-      if (last) return null;
+      if (unreadable) return 'unreadable';
+      if (last) return 'installed';
     }
   }
 

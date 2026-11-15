@@ -504,6 +504,30 @@ describe('bootstrap', () => {
     expect(sync.retryAt).not.toBeNull();
     expect(sync.status.history).toEqual({ state: 'incomplete', summaries: 0, detail: 0 });
   });
+
+  it('reports its duration from the first attempt: failed for a run that ends without installing, complete once installed', async () => {
+    const { backend, sync, clock, events } = unbootstrapped();
+    backend.bootstrapPages.push({ status: 'page', rows: [], more: true });
+    backend.everything = null;
+    // The first page arrives, then the network goes before the next.
+    const page = backend.bootstrapPage.bind(backend);
+    let pages = 0;
+    backend.bootstrapPage = async (...args) => {
+      if (++pages === 2) {
+        clock.now += 3_000;
+        throw new SyncCallError('unreachable');
+      }
+      return page(...args);
+    };
+    await sync.reconcile();
+    clock.now += 60_000;
+    await sync.reconcile();
+    expect(events.filter((event) => event.name === 'bootstrap_duration')).toEqual([
+      { name: 'bootstrap_duration', value: 3_000, properties: { outcome: 'failed' } },
+      { name: 'bootstrap_duration', value: 63_000, properties: { outcome: 'complete' } },
+    ]);
+    expect(JSON.stringify(events)).not.toContain('snapshot-1');
+  });
 });
 
 describe('operational metrics (#108)', () => {
