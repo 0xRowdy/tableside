@@ -20,8 +20,8 @@
 -- issue_eligibility_assertion stays granted to anon: the age step runs before
 -- any account exists (Amendment 3 §1), and an assertion only establishes a
 -- band for a new account, exactly as the fallback question does. Its source is
--- kept as a label and grants nothing: under the rules above a record's source
--- never lets a later report raise it.
+-- kept as a label and grants nothing: under the rules above no later
+-- report goes past a record because of its source.
 
 -- ---------------------------------------------------------------------------
 -- The required check each installation owes
