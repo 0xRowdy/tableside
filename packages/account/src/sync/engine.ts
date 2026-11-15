@@ -137,11 +137,15 @@ export class SyncEngine {
     return { error: this.lastError, lastSyncedAt: this.lastSyncedAt, uploads: this.uploads, update: this.update };
   }
 
-  /** When an automatic run is next due (the backoff ending, or a failing record's turn), or null. */
+  /**
+   * When an automatic run is next due (the backoff ending, or a failing
+   * record's turn), or null. Never before the backoff or retry-after ends, so
+   * an automatic run at this time always runs.
+   */
   get retryAt(): number | null {
-    const times = [...this.recordRetries.values(), ...(this.backoffUntil !== null ? [this.backoffUntil] : [])];
-    if (this.retryAfterUntil !== null) times.push(this.retryAfterUntil);
-    return times.length > 0 ? Math.max(Math.min(...times), this.retryAfterUntil ?? 0) : null;
+    const floors = [this.backoffUntil, this.retryAfterUntil].filter((time): time is number => time !== null);
+    const times = [...this.recordRetries.values(), ...floors];
+    return times.length > 0 ? Math.max(Math.min(...times), ...floors) : null;
   }
 
   /** Called whenever the status or the retry time changes. Returns an unsubscribe function. */
@@ -160,14 +164,14 @@ export class SyncEngine {
       if (this.rerun !== 'deliberate') this.rerun = trigger;
       return this.running;
     }
-    if (!this.due(trigger)) return Promise.resolve();
+    if (!this.admits(trigger)) return Promise.resolve();
     this.running = (async () => {
       try {
         await this.runOnce();
         while (this.rerun && !this.stopped) {
           const next = this.rerun;
           this.rerun = null;
-          if (this.due(next)) await this.runOnce();
+          if (this.admits(next)) await this.runOnce();
         }
       } finally {
         this.running = null;
@@ -198,7 +202,12 @@ export class SyncEngine {
     this.listeners.clear();
   }
 
-  private due(trigger: ReconcileTrigger): boolean {
+  /**
+   * Whether a trigger starts a run now. Nothing runs before a server's
+   * retry-after. An automatic trigger waits out the backoff; a deliberate one
+   * ends it, and the failing records' own backoffs, and runs.
+   */
+  private admits(trigger: ReconcileTrigger): boolean {
     const now = this.options.clock();
     if (this.retryAfterUntil !== null && now < this.retryAfterUntil) return false;
     if (trigger === 'automatic') return this.backoffUntil === null || now >= this.backoffUntil;
@@ -279,6 +288,8 @@ export class SyncEngine {
     // A barrier holds while any upload of its type is unacknowledged, wherever it sits in the queue.
     const barrierPending = (recordType: string) => queue.some((entry) => entry.recordType === recordType && pending.has(entry.id));
     const now = this.options.clock();
+    // Retry times only for entries still pending.
+    for (const id of this.recordRetries.keys()) if (!pending.has(id)) this.recordRetries.delete(id);
     let error: SyncErrorCode | null = null;
     for (const entry of queue) {
       if (this.stopped) return null;
@@ -320,9 +331,8 @@ export class SyncEngine {
 
   /** One record failed by itself: it waits its own backoff, and is flagged on its RECORD_FAILURE_LIMIT-th failure. */
   private async recordFailed(entry: QueuedUpload): Promise<SyncErrorCode> {
-    const flag = entry.failures + 1 >= RECORD_FAILURE_LIMIT;
-    const failures = await this.options.store.recordUploadFailure(entry.id, flag);
-    if (flag) this.recordRetries.delete(entry.id);
+    const { failures, flagged } = await this.options.store.recordUploadFailure(entry.id, RECORD_FAILURE_LIMIT);
+    if (flagged) this.recordRetries.delete(entry.id);
     else this.recordRetries.set(entry.id, this.options.clock() + backoffDelay(failures, this.options.random));
     return 'unsendable';
   }

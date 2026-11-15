@@ -44,9 +44,15 @@ function failureOf(status: number, code: string): Failure {
   if (status === 401 || status === 403 || code.startsWith('PGRST30') || code === '42501') return 'auth';
   if (CONTENTION.has(code)) return 'contention';
   if (status === 429 || status === 502 || status === 503 || status === 504 || SERVER_UNAVAILABLE.has(code)) return 'busy';
-  // The server answered this request with an error of its own.
+  // The database's own trouble, whatever the request: a connection problem,
+  // insufficient resources, a statement timeout or shutdown, an I/O or internal error.
+  if (SERVER_FAULT_CLASSES.has(code.slice(0, 2)) || (status >= 500 && code === '')) return 'busy';
+  // The server answered this request with an error about the request itself.
   return 'refused';
 }
+
+/** SQLSTATE classes that say nothing about the request: 08, 53, 57, 58 and XX. */
+const SERVER_FAULT_CLASSES = new Set(['08', '53', '57', '58', 'XX']);
 
 /**
  * Remembers the Retry-After a throttled or unavailable response carried, for

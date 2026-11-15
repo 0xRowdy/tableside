@@ -53,8 +53,11 @@ export interface SyncStore {
    * entry's own operation can acknowledge it.
    */
   acknowledgeUpload(id: string, disposition: Disposition, accepted: AcceptedRecord | null): Promise<void>;
-  /** Counts a failed attempt for a pending entry, flagging it when `flag`; resolves to its failure count. */
-  recordUploadFailure(id: string, flag: boolean): Promise<number>;
+  /**
+   * Counts a failed attempt for a pending entry, in one transaction with its
+   * current count: the entry is flagged when the count reaches `flagAt`.
+   */
+  recordUploadFailure(id: string, flagAt: number): Promise<{ readonly failures: number; readonly flagged: boolean }>;
   /** A deliberate retry: the entry's failures are forgotten and it is no longer flagged. */
   clearUploadFailures(id: string): Promise<void>;
   /** Entries whose receipts refused them, in queue order. */

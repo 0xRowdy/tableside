@@ -9,6 +9,7 @@ type UrlFragment = string;
 type Fault =
   | { readonly kind: 'drop'; readonly match: UrlFragment }
   | { readonly kind: 'throttle'; readonly match: UrlFragment; readonly retryAfter: string }
+  | { readonly kind: 'server-fault'; readonly match: UrlFragment; readonly code: string }
   | { readonly kind: 'reject-token'; readonly match: UrlFragment }
   | { readonly kind: 'duplicate'; readonly match: UrlFragment }
   | { readonly kind: 'delay'; readonly match: UrlFragment; readonly arrived: () => void; readonly released: Promise<void> };
@@ -82,6 +83,11 @@ export class FaultProxy {
     this.faults.push({ kind: 'throttle', match, retryAfter });
   }
 
+  /** The next matching request never reaches the stack: the device gets 500 with this SQLSTATE, as from a database fault (a statement timeout, say). */
+  serverFaultNext(match: UrlFragment, code: string): void {
+    this.faults.push({ kind: 'server-fault', match, code });
+  }
+
   /** The next matching request reaches the stack with its access token replaced by one the stack refuses (an expired token). */
   rejectTokenNext(match: UrlFragment): void {
     this.faults.push({ kind: 'reject-token', match });
@@ -115,6 +121,12 @@ export class FaultProxy {
       return new Response(JSON.stringify({ message: 'rate limited' }), {
         status: 429,
         headers: { 'content-type': 'application/json', 'retry-after': fault.retryAfter },
+      });
+    }
+    if (fault?.kind === 'server-fault') {
+      return new Response(JSON.stringify({ code: fault.code, message: 'server fault', details: null, hint: null }), {
+        status: 500,
+        headers: { 'content-type': 'application/json' },
       });
     }
     if (fault?.kind === 'reject-token') {

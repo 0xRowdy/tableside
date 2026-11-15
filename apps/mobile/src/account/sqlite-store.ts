@@ -334,13 +334,15 @@ export class SqliteActivityStore implements ActivityStore {
     });
   }
 
-  /** Counts a failed attempt for a pending entry, flagging it when `flag`; resolves to its failure count. */
-  recordUploadFailure(id: string, flag: boolean): Promise<number> {
+  /** Counts a failed attempt for a pending entry with its current count, flagging it when the count reaches `flagAt`. */
+  recordUploadFailure(id: string, flagAt: number): Promise<{ readonly failures: number; readonly flagged: boolean }> {
     return this.transaction(async (tx) => {
-      const row = await tx.get<{ failures: number }>(`SELECT failures FROM outgoing WHERE id = ? AND status = 'pending'`, [id]);
+      const row = await tx.get<{ failures: number; flagged: number }>(`SELECT failures, flagged FROM outgoing WHERE id = ? AND status = 'pending'`, [id]);
       if (!row) throw new StoreError(`no pending upload ${id}`);
-      await tx.run('UPDATE outgoing SET failures = ?, flagged = max(flagged, ?) WHERE id = ?', [row.failures + 1, flag ? 1 : 0, id]);
-      return row.failures + 1;
+      const failures = row.failures + 1;
+      const flagged = row.flagged === 1 || failures >= flagAt;
+      await tx.run('UPDATE outgoing SET failures = ?, flagged = ? WHERE id = ?', [failures, flagged ? 1 : 0, id]);
+      return { failures, flagged };
     });
   }
 

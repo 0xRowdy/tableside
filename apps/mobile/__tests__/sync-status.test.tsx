@@ -142,6 +142,18 @@ describe('S2-20 Sync status', () => {
     expect(banner.getByText(`Your records are safe on this ${DEVICE} and sync once you sign in to this account again.`)).toBeOnTheScreen();
   });
 
+  it('says when it couldn’t save what it synced, and asks to update for changes this version can’t show', async () => {
+    const sync = fakeSync({ error: 'storage' });
+    await show(sync);
+    expect(screen.getByText('Can\'t sync right now')).toBeOnTheScreen();
+    expect(within(screen.getByTestId('error-banner')).getByText(`Tableside couldn't save what it synced on this ${DEVICE}. Nothing was lost. Free up some space, then retry.`)).toBeOnTheScreen();
+    expect(screen.queryByText('All synced')).toBeNull();
+
+    await act(() => sync.set({ error: 'unreadable-change' }));
+    expect(screen.getByRole('header', { name: 'Update to get everything' })).toBeOnTheScreen();
+    expect(screen.getByRole('button', { name: STORE })).toBeOnTheScreen();
+  });
+
   it('shows the first download’s progress while it isn’t finished', async () => {
     await show(fakeSync({ history: { state: 'incomplete', summaries: 1, detail: 0.62 } }));
     expect(screen.getByText('Getting your history')).toBeOnTheScreen();

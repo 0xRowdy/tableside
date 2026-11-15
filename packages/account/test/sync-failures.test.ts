@@ -7,7 +7,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { laterBuild } from '../../../apps/mobile/src/account/testing/later-build';
-import { BACKOFF_MAX_MS, PROTOCOL_VERSION, RECONCILE_INTERVAL_MS, RECORD_FAILURE_LIMIT, completedPracticeSession } from '../src';
+import { PROTOCOL_VERSION, RECONCILE_INTERVAL_MS, completedPracticeSession } from '../src';
 import { prepareOperation } from '../src/sync/protocol';
 import { type SimulatedDevice, createAccountByEmail, createDevice, localStack, signInByEmail, uniqueEmail } from '../src/testing';
 
@@ -93,13 +93,14 @@ describe('when the server can’t be reached', () => {
 
     await timePasses(phone, 20 * 60_000);
     const waits = gaps(attempts);
-    // Each wait is half to all of its doubling step (to within the clock's 250 ms steps), never more than 5 min.
+    // Spec 2: about 1 s, doubling, up to 5 min. Each wait is half to all of its
+    // step (to within the clock's 250 ms steps).
+    const steps = [1, 2, 4, 8, 16, 32, 64, 128, 256, 300, 300, 300, 300, 300].map((seconds) => seconds * 1_000);
     for (const [index, wait] of waits.entries()) {
-      const step = Math.min(BACKOFF_MAX_MS, 1_000 * 2 ** index);
-      expect(wait).toBeGreaterThanOrEqual(step / 2);
-      expect(wait).toBeLessThanOrEqual(step + 250);
+      expect(wait).toBeGreaterThanOrEqual(steps[index]! / 2);
+      expect(wait).toBeLessThanOrEqual(steps[index]! + 250);
     }
-    expect(Math.max(...waits)).toBeGreaterThan(BACKOFF_MAX_MS / 2);
+    expect(Math.max(...waits)).toBeGreaterThan(150_000);
     // 20 minutes of the 60 s cadence and saves would be 20 runs or more; the backoff makes far fewer.
     expect(attempts.length).toBeLessThan(16);
     expect(await phone.vault.store().readUploadQueue()).toHaveLength(1);
@@ -152,8 +153,9 @@ describe('a malformed record among independent saves', () => {
     const bad = await phone.playPracticeSession({ activityId: MALFORMED });
     await settle(phone);
 
+    // Flagged on its fifth failure.
     await timePasses(phone, 2 * 60_000);
-    expect(uploads).toHaveLength(RECORD_FAILURE_LIMIT);
+    expect(uploads).toHaveLength(5);
     const id = `completed/${bad.activityId}`;
     expect(phone.account.sync.status.uploads).toEqual([expect.objectContaining({ id, state: 'flagged' })]);
 
@@ -161,14 +163,28 @@ describe('a malformed record among independent saves', () => {
     await timePasses(phone, 30 * 60_000, 5_000);
     const later = await phone.playPracticeSession();
     await settle(phone);
-    expect(uploads).toHaveLength(RECORD_FAILURE_LIMIT + 1);
+    expect(uploads).toHaveLength(6);
     expect(await sessionsOn(phone)).toEqual([later.activityId]);
     expect((await phone.vault.store().readUploadQueue()).map((entry) => entry.id)).toEqual([id]);
     expect((await phone.vault.store().load(bad.activityId))?.completion).toEqual(bad);
 
     await phone.account.sync.retryRecord(id);
-    expect(uploads).toHaveLength(RECORD_FAILURE_LIMIT + 2);
+    expect(uploads).toHaveLength(7);
     expect(phone.account.sync.status.uploads).toEqual([expect.objectContaining({ id, state: 'waiting' })]);
+  });
+});
+
+describe('a database fault', () => {
+  it('counts against no record: the run backs off, and the record uploads on the retry', async () => {
+    const { phone } = await signedIn();
+    phone.proxy.serverFaultNext('sync_upload_v1', '57014');
+    const result = await phone.playPracticeSession();
+    await settle(phone);
+    expect(phone.account.sync.status.error).toBe('offline');
+    expect(await phone.vault.store().readUploadQueue()).toMatchObject([{ failures: 0, flagged: false }]);
+
+    await timePasses(phone, 2_000);
+    expect(await sessionsOn(phone)).toEqual([result.activityId]);
   });
 });
 
@@ -327,9 +343,9 @@ describe('protocol versions', () => {
     // phone. It speaks a protocol the server serves (here protocol 1 is served
     // again, standing in for its successor).
     await sql`update private.sync_protocols set retires_at = null where protocol = 1`;
+    // Its vault opens the database only at the later build's schema, after
+    // migrating it, and sync starts only once the database is open.
     const updated = device('phone', { installedOver: phone, migrations: laterBuild() });
-    const order: string[] = [];
-    updated.proxy.onRequest = (url) => url.includes('/rpc/sync_') && order.push(url);
     expect(await updated.account.resume()).toEqual({ status: 'resumed' });
     await settle(updated);
 

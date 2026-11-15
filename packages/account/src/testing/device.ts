@@ -62,7 +62,7 @@ export class FakeClock {
     return () => this.timers.delete(timer);
   }
 
-  /** Runs `run` once, `milliseconds` from now on this clock, unless cancelled. */
+  /** Runs `run` once, `milliseconds` from now on this clock, unless canceled. */
   after(milliseconds: number, run: () => void): () => void {
     const cancel = this.every(Math.max(1, milliseconds), () => {
       cancel();

@@ -29,7 +29,7 @@ export interface DevicePorts {
   readonly online: DeviceSignal<boolean>;
   /** Runs `run` every `milliseconds` until cancelled. */
   every(milliseconds: number, run: () => void): () => void;
-  /** Runs `run` once after `milliseconds`, unless cancelled. */
+  /** Runs `run` once after `milliseconds`, unless canceled. */
   after(milliseconds: number, run: () => void): () => void;
 }
 

@@ -170,12 +170,12 @@ describe('the upload queue', () => {
 });
 
 describe('failing and refused uploads (#92)', () => {
-  it('counts an entry\'s failures and flags it, durably, keeping it pending', async () => {
+  it('counts an entry\'s failures and flags it when the count reaches the limit, durably, keeping it pending', async () => {
     const { open } = newDisk();
     const store = await open();
     await completed(store, 'a1');
-    expect(await store.recordUploadFailure('completed/a1', false)).toBe(1);
-    expect(await store.recordUploadFailure('completed/a1', true)).toBe(2);
+    expect(await store.recordUploadFailure('completed/a1', 2)).toEqual({ failures: 1, flagged: false });
+    expect(await store.recordUploadFailure('completed/a1', 2)).toEqual({ failures: 2, flagged: true });
     await store.close();
 
     const restarted = await open();
@@ -185,7 +185,7 @@ describe('failing and refused uploads (#92)', () => {
   it('forgets the failures and the flag on a deliberate retry', async () => {
     const store = await newDisk().open();
     await completed(store, 'a1');
-    await store.recordUploadFailure('completed/a1', true);
+    await store.recordUploadFailure('completed/a1', 1);
     await store.clearUploadFailures('completed/a1');
     expect(await store.readUploadQueue()).toMatchObject([{ id: 'completed/a1', failures: 0, flagged: false }]);
   });
@@ -195,7 +195,7 @@ describe('failing and refused uploads (#92)', () => {
     const store = await open();
     await completed(store, 'a1');
     disk.failing = true;
-    await expect(store.recordUploadFailure('completed/a1', true)).rejects.toThrow();
+    await expect(store.recordUploadFailure('completed/a1', 1)).rejects.toThrow();
     disk.failing = false;
     expect(await store.readUploadQueue()).toMatchObject([{ failures: 0, flagged: false }]);
   });

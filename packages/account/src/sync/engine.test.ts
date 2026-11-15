@@ -55,11 +55,11 @@ class MemoryStore implements SyncStore {
     entry.disposition = disposition;
     if (accepted) this.accepted.push(accepted);
   }
-  async recordUploadFailure(id: string, flag: boolean): Promise<number> {
+  async recordUploadFailure(id: string, flagAt: number): Promise<{ failures: number; flagged: boolean }> {
     const entry = this.find(id);
     entry.failures += 1;
-    if (flag) entry.flagged = true;
-    return entry.failures;
+    if (entry.failures >= flagAt) entry.flagged = true;
+    return { failures: entry.failures, flagged: entry.flagged };
   }
   async clearUploadFailures(id: string): Promise<void> {
     const entry = this.find(id);
@@ -285,6 +285,24 @@ describe('a record that fails by itself', () => {
     expect(store.accepted.map((record) => record.item)).toEqual(['a', 'b']);
     // Never deleted.
     expect((await store.readUploadQueue()).map((entry) => entry.id)).toEqual(['bad']);
+  });
+
+  it('a record’s turn inside a backoff waits for the backoff, and the retry then runs', async () => {
+    const { store, backend, sync, clock, retryWhenDue } = engine();
+    backend.answer('bad', new SyncCallError('refused'));
+    store.queue('bad', { id: 'bad' });
+    await sync.reconcile();
+    // The server goes down before the record's turn, so the account backs off past it.
+    backend.everything = new SyncCallError('unreachable');
+    clock.now += 100;
+    store.queue('a', { id: 'a' });
+    await sync.reconcile('automatic');
+    backend.everything = null;
+
+    const calls = backend.calls.length;
+    await retryWhenDue();
+    expect(backend.calls.length).toBeGreaterThan(calls);
+    expect(store.accepted.map((record) => record.item)).toEqual(['a']);
   });
 
   it('pauses the records that depend on it while it is flagged, and a deliberate retry of it tries again', async () => {

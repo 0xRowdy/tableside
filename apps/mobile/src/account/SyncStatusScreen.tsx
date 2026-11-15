@@ -4,8 +4,10 @@
 // The frames are S2-20 "records waiting, one flagged", "can't reach
 // Tableside", "first download not finished" and "update required (30 days'
 // notice)". Not drawn there, so built from the spec's words in the frames'
-// parts: the sign-in-again error, paused and needs-review rows, several
-// flagged records, and an urgent restriction's reason.
+// parts: the sign-in-again, local storage and unreadable-change errors,
+// paused and needs-review rows, several flagged records, an urgent
+// restriction's reason, and the status card under a required update (the
+// frames draw that banner only as the notice's preview).
 //
 // #99 routes here from the Account area with the Account service's sync; the
 // store link behind Update arrives with the store listings (spec 7).
@@ -23,12 +25,12 @@ import {
   RefreshCw,
   type LucideIcon,
 } from 'lucide-react-native';
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { findGame } from '@/games';
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
-import { SettingsScreen } from '@/settings/SettingsParts';
+import { Group, Note, SettingsScreen } from '@/settings/SettingsParts';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale, type ColorToken } from '@/theme/tokens';
 
 export interface SyncStatusScreenProps {
@@ -46,7 +48,7 @@ export function SyncStatusScreen({ sync, onBack, onUpdate, now = Date.now }: Syn
   const required = status.update?.state === 'required';
   const waiting = status.uploads.filter((upload) => upload.state !== 'review');
   const flagged = status.uploads.filter((upload) => upload.state === 'flagged');
-  const accountError = status.error === 'offline' || status.error === 'sign-in-required';
+  const accountError = ACCOUNT_ERRORS.has(status.error);
   return (
     <SettingsScreen title="Sync status" back={{ label: 'Account', onPress: onBack }}>
       {status.update?.state === 'retiring' && <RetiringNotice update={status.update} onUpdate={onUpdate} />}
@@ -72,6 +74,26 @@ export function SyncStatusScreen({ sync, onBack, onUpdate, now = Date.now }: Syn
           action={{ label: 'Retry now', onPress: () => void sync.reconcile() }}
         />
       )}
+      {status.error === 'storage' && (
+        <Banner
+          testID="error-banner"
+          icon={CircleAlert}
+          tone="destructive"
+          title="Sync error"
+          body={`Tableside couldn't save what it synced on this ${DEVICE}. Nothing was lost. Free up some space, then retry.`}
+          action={{ label: 'Retry now', onPress: () => void sync.reconcile() }}
+        />
+      )}
+      {status.error === 'unreadable-change' && !required && (
+        <Banner
+          testID="error-banner"
+          icon={Download}
+          tone="warning"
+          title="Update to get everything"
+          body={`Your account has changes this version of Tableside can't show yet. Records on this ${DEVICE} keep syncing.`}
+          action={{ label: STORE_ACTION, onPress: onUpdate }}
+        />
+      )}
       {flagged.length > 0 && <FlaggedBanner flagged={flagged} sync={sync} now={at} />}
       {status.history.state === 'incomplete' && (
         <>
@@ -88,11 +110,11 @@ export function SyncStatusScreen({ sync, onBack, onUpdate, now = Date.now }: Syn
       {status.uploads.length > 0 && (
         <>
           <SectionLabel>Waiting</SectionLabel>
-          <View style={styles.list}>
+          <Group>
             {status.uploads.map((upload, index) => (
               <UploadRow key={upload.id} upload={upload} now={at} first={index === 0} />
             ))}
-          </View>
+          </Group>
         </>
       )}
       {waiting.length > 0 && !accountError && !required && <SecondaryButton icon={RefreshCw} label="Sync now" onPress={() => void sync.reconcile()} />}
@@ -113,9 +135,12 @@ function useSyncStatus(sync: AccountSync): SyncStatus {
 const DEVICE = Platform.OS === 'ios' ? (Platform.isPad ? 'iPad' : 'iPhone') : 'device';
 const STORE_ACTION = Platform.OS === 'ios' ? 'Update in the App Store' : 'Update in Google Play';
 
+/** Errors that stop the whole run: the status card says sync can't happen now. */
+const ACCOUNT_ERRORS: ReadonlySet<SyncStatus['error']> = new Set(['offline', 'sign-in-required', 'storage']);
+
 function StatusCard({ status, waiting, now }: { status: SyncStatus; waiting: number; now: number }) {
   const synced = status.lastSyncedAt !== null ? ` Last sync ${ago(status.lastSyncedAt, now)}.` : '';
-  if (status.error === 'offline' || status.error === 'sign-in-required') {
+  if (ACCOUNT_ERRORS.has(status.error)) {
     const body = status.error === 'offline' ? `We couldn't reach Tableside. Your records are safe on this ${DEVICE}.` : `Your records are safe on this ${DEVICE}.`;
     return <Card icon={CloudOff} tone="destructive" title="Can't sync right now" body={body} />;
   }
@@ -226,18 +251,16 @@ function titleOf(upload: UploadStatus): string {
   return upload.recordType === 'completed-practice-session' && game ? `${game.title} session` : 'Record';
 }
 
+const ROW_DETAIL: Record<UploadStatus['state'], string> = {
+  waiting: `this ${DEVICE}`,
+  paused: 'waits for a failing record',
+  flagged: 'flagged',
+  review: 'not accepted by your account',
+};
+
 function detailOf(upload: UploadStatus, now: number): string {
   const day = dayOf(upload, now, true);
-  switch (upload.state) {
-    case 'waiting':
-      return day ? `${day} · this ${DEVICE}` : `this ${DEVICE}`;
-    case 'paused':
-      return day ? `${day} · waits for a failing record` : 'waits for a failing record';
-    case 'flagged':
-      return day ? `${day} · flagged` : 'flagged';
-    case 'review':
-      return day ? `${day} · not accepted by your account` : 'not accepted by your account';
-  }
+  return day ? `${day} · ${ROW_DETAIL[upload.state]}` : ROW_DETAIL[upload.state];
 }
 
 /** When the record was made: "Today 9:41", "Yesterday" or "14 Oct" (a time only for today, and only when asked). */
@@ -395,14 +418,6 @@ function SectionLabel({ children }: { children: string }) {
   );
 }
 
-function Note({ children }: { children: ReactNode }) {
-  return (
-    <Text maxFontSizeMultiplier={textScale.body} style={styles.muted}>
-      {children}
-    </Text>
-  );
-}
-
 const styles = StyleSheet.create({
   card: {
     flexDirection: 'row',
@@ -425,7 +440,6 @@ const styles = StyleSheet.create({
   actionLabel: { fontFamily: fonts.uiBold, fontSize: 14, color: palette.primary },
   previewAction: { fontFamily: fonts.uiBold, fontSize: 14, lineHeight: 44, color: palette.mutedForeground },
   section: { fontFamily: fonts.uiBold, fontSize: 12, letterSpacing: 0.6, textTransform: 'uppercase', color: palette.mutedForeground },
-  list: { borderRadius: radius.lg, borderWidth: 1, borderColor: palette.border, backgroundColor: palette.card, overflow: 'hidden' },
   row: { flexDirection: 'row', alignItems: 'center', gap: space[3], minHeight: 64, paddingVertical: space[3], paddingHorizontal: space[4] },
   rowDivider: { borderTopWidth: 1, borderTopColor: palette.border },
   rowLead: { width: 36, height: 36, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', backgroundColor: palette.secondary },
