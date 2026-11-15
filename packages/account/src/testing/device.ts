@@ -8,7 +8,7 @@
 // the app process, so a scenario can kill the app at any point and start it again.
 
 import { randomUUID } from 'node:crypto';
-import { existsSync } from 'node:fs';
+import { existsSync, readdirSync } from 'node:fs';
 
 import { canonicalJson } from '@tableside/engine';
 
@@ -155,6 +155,10 @@ export interface DeviceVault {
   close(): Promise<void>;
   /** Whether any of an environment's data is still on the device. */
   holds(environment: EnvironmentName): boolean;
+  /** Whether any file of the account's database (or its sidecars and backups) is still on the device, in this build's environment. */
+  holdsAccount(accountId: string): boolean;
+  /** The accounts whose app data (export copies, offline game) the app erased, in order. */
+  readonly erasedAppData: readonly string[];
   /** The environments whose namespaces this app process removed, in order. */
   readonly removed: readonly EnvironmentName[];
   /** The open account session's store. Throws when none is open. */
@@ -286,17 +290,30 @@ export function createDevice(stack: LocalStack, options: DeviceOptions): Simulat
         opening = null;
         await appVault.close();
       },
+      async erase(accountId) {
+        if (opening?.status === 'open' && opening.session.accountId === accountId) opening = null;
+        await appVault.erase(accountId);
+      },
       async removeEnvironment(other) {
         await appVault.removeEnvironment(other);
         removed.push(other);
       },
     };
+    const erasedAppData: string[] = [];
     const deviceVault: DeviceVault = {
       get openAccount() {
         return opening?.status === 'open' ? opening.session.accountId : null;
       },
       close: () => vault.close(),
       holds: (other) => existsSync(`${storage.root}/${other}`),
+      holdsAccount: (accountId) => {
+        const directory = `${storage.root}/${environment}`;
+        if (!existsSync(directory)) return false;
+        return readdirSync(directory, { withFileTypes: true })
+          .filter((entry) => entry.isDirectory())
+          .some((entry) => readdirSync(`${directory}/${entry.name}`).some((file) => file.startsWith(`${accountId}.db`)));
+      },
+      erasedAppData,
       removed,
       store() {
         if (opening?.status !== 'open') throw new Error('no account database is open');
@@ -358,6 +375,9 @@ export function createDevice(stack: LocalStack, options: DeviceOptions): Simulat
       recordTypes: options.recordTypes ?? testRecordTypes,
       ...(options.metrics ? { metrics: options.metrics } : {}),
       freeStorage: () => free.bytes,
+      eraseAppData: async (accountId) => {
+        erasedAppData.push(accountId);
+      },
       deviceDescription: () => ({
         platform: options.platform ?? 'ios',
         label: options.label ?? `${options.name} · ${options.platform === 'android' ? 'Android 15' : 'iOS 18'}`,

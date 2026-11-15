@@ -6,7 +6,7 @@
 // other devices that haven't synced aren't included.
 // TODO(frames): unverified against S2-21 — the frame couldn't be read (Pencil unreachable). Every state here (none, preparing, ready, failed, expired, ended, offline), its copy and layout come from spec 2 *Export*, Amendment 1 B2 and #102.
 
-import type { ServerExport, SignInMethodEntry } from '@tableside/account';
+import type { AccountGate, ServerExport, SignInMethodEntry } from '@tableside/account';
 import { useFocusEffect } from 'expo-router';
 import { Archive, Smartphone } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
@@ -71,6 +71,9 @@ function supplementDetail(counts: SupplementCounts | null): string {
   return `${parts.join(' and ')}, each labeled so it isn't mistaken for a finished session. Nothing is uploaded.`;
 }
 
+/** The account an export copy belongs to: the open one's. */
+const gateAccount = (gate: AccountGate): string | null => ('accountId' in gate ? gate.accountId : null);
+
 export function ExportScreen({ back }: { back: { label: string; onPress: () => void } }) {
   const { service, account } = useAccount();
   const [latest, setLatest] = useState<ServerExport | null | undefined>();
@@ -130,7 +133,8 @@ export function ExportScreen({ back }: { back: { label: string; onPress: () => v
     run(async () => {
       const result = await service.export.downloadServerExport();
       if (result.status === 'downloaded') {
-        const shared = await account.exportFiles.share({ name: result.fileName, mimeType: 'application/zip', contents: result.bytes });
+        const accountId = gateAccount(service.gate);
+        const shared = accountId ? await account.exportFiles.share(accountId, { name: result.fileName, mimeType: 'application/zip', contents: result.bytes }) : 'failed';
         if (shared === 'failed') setProblem("Couldn't save the archive on this device. Try again.");
       } else if (result.status === 'fresh-authentication-required') {
         await confirmFirst('download');
@@ -149,7 +153,10 @@ export function ExportScreen({ back }: { back: { label: string; onPress: () => v
         return;
       }
       const name = `tableside-local-supplement-${supplement.createdAt.slice(0, 10)}.json`;
-      const shared = await account.exportFiles.share({ name, mimeType: 'application/json', contents: `${JSON.stringify(supplement, null, 2)}\n` });
+      const accountId = gateAccount(service.gate);
+      const shared = accountId
+        ? await account.exportFiles.share(accountId, { name, mimeType: 'application/json', contents: `${JSON.stringify(supplement, null, 2)}\n` })
+        : 'failed';
       if (shared === 'failed') setProblem("Couldn't save the local supplement on this device. Try again.");
       else setStatus('Local supplement made.');
     });

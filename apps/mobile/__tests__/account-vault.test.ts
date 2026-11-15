@@ -165,6 +165,49 @@ describe('the account vault', () => {
     expect(await back.store.readOutgoing()).toHaveLength(1);
   });
 
+  describe('erasing a deleted account (#104)', () => {
+    it('removes its database, sidecars and key, closing it first, and keeps every other account and the installation', async () => {
+      const device = new Device();
+      const vault = device.vault();
+      const b = opened(await vault.open('account-b'));
+      await b.store.createActivity(practiceIn(b, 'b-open'));
+      const a = opened(await vault.open('account-a'));
+      await a.store.createActivity(practiceIn(a, 'a-open'));
+      // A migration's backup and manifest are the account's too.
+      const aFile = device.files.written().find((path) => path.endsWith('account-a.db'))!;
+      writeFileSync(`${aFile}.migration-backup`, 'backup');
+      writeFileSync(`${aFile}.migration`, '{}');
+
+      await vault.erase('account-a');
+
+      // The open session ends: its store refuses to write.
+      await expect(a.store.createActivity(practiceIn(a, 'a-late'))).rejects.toThrow();
+      for (const suffix of ['', '-wal', '-shm', '.migration-backup', '.migration']) expect(existsSync(`${aFile}${suffix}`)).toBe(false);
+      const names = device.keychain.entries().map(([name]) => name);
+      expect(names.filter((name) => name.includes('account-a'))).toEqual([]);
+      expect(names).toContain(`tableside.production.${a.installationId}.account-b.key`);
+      expect(names).toContain('tableside.production.installation');
+
+      // Account B is untouched; the same installation opens it.
+      const again = opened(await device.vault().open('account-b'));
+      expect(again.installationId).toBe(a.installationId);
+      expect((await again.store.findUnfinished())?.activityId).toBe('b-open');
+      // A later sign-in to A's ID would find nothing to recover: a fresh, empty database.
+      const fresh = opened(await device.vault().open('account-a'));
+      expect(await fresh.store.findUnfinished()).toBeNull();
+    });
+
+    it('never erases another environment’s copy of the account', async () => {
+      const device = new Device();
+      opened(await device.vault('beta').open('account-a'));
+      await device.vault('beta').close();
+      const production = device.vault('production');
+      opened(await production.open('account-a'));
+      await production.erase('account-a');
+      expect(device.keychain.entries().some(([name]) => name.startsWith('tableside.beta.') && name.endsWith('.account-a.key'))).toBe(true);
+    });
+  });
+
   it('keeps environments apart: the same account has a separate database and key per environment', async () => {
     const device = new Device();
     const beta = opened(await device.vault('beta').open('account-a'));

@@ -320,10 +320,11 @@ describe('canceling deletion', () => {
     expect(await phone.account.deletion.cancel()).toEqual({ status: 'too-late' });
     expect(await accountState(accountId)).toBe('deletion_scheduled');
 
-    // Finalized (#104's job, stood in for here): a stale cancel is refused.
-    await stack.sql`update public.accounts set state = 'deleted', deletion_deadline = null, deletion_scheduled_at = null where account_id = ${accountId}`;
+    // Finalized (#104's deadline finalization): a stale cancel is refused, and the device learns the account is deleted.
+    await stack.sql`select private.finalize_deletion(${accountId})`;
     expect(await phone.account.deletion.cancel()).toEqual({ status: 'failed' });
     expect(await accountState(accountId)).toBe('deleted');
+    expect(phone.account.gate).toEqual({ state: 'deleted' });
   });
 });
 
