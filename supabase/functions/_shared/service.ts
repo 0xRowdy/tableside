@@ -17,6 +17,17 @@ export function serviceRpc(environment: string, name: string, args: Record<strin
   });
 }
 
+/** An Auth endpoint called with the service role (admin calls, and verifying a code this function issued). */
+export async function serviceAuth(path: string, body: unknown): Promise<{ readonly ok: boolean; readonly code?: string; readonly body: unknown }> {
+  const response = await fetch(`${SUPABASE_URL}/auth/v1${path}`, {
+    method: 'POST',
+    headers: { apikey: SERVICE_KEY, authorization: `Bearer ${SERVICE_KEY}`, 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const parsed = (await response.json().catch(() => null)) as { error_code?: string } | null;
+  return { ok: response.ok, code: parsed?.error_code, body: parsed };
+}
+
 export function reply(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
 }

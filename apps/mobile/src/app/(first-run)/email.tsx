@@ -4,7 +4,7 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
 
-import { Actions, Field, FirstRunScreen, InlineMessage } from '@/account/FirstRunParts';
+import { Actions, Field, FirstRunScreen, InlineMessage, LinkButton } from '@/account/FirstRunParts';
 import { useCodeRequest, useSignInFlow } from '@/account/sign-in-flow';
 import { Button } from '@/components/Button';
 
@@ -53,6 +53,8 @@ export default function Email() {
       <Actions>
         <Button label="Send code" stretch disabled={busy} onPress={() => void send()} />
       </Actions>
+      {/* App reviewers sign in to a reviewer account without an email code (#107). */}
+      {!create && <LinkButton label="Signing in for app review?" onPress={() => router.push('/review-sign-in')} />}
     </FirstRunScreen>
   );
 }

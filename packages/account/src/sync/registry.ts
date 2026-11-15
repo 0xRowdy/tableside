@@ -8,6 +8,8 @@
 
 import { type CompletedPracticeSessionRecord, decodeMoney } from '@tableside/engine';
 
+import { privacyChoice } from '../privacy-record';
+
 import type { QueuedUpload, RecordRef } from './store';
 
 /**
@@ -69,6 +71,11 @@ export interface RecordType<Payload = unknown, Accepted = Payload> {
    */
   affectedBy?(barrier: { readonly recordType: string; readonly payload: unknown }, payload: Payload): boolean;
   /**
+   * Whether a payload is online only: sent at once (SyncEngine.submit) and
+   * never queued, such as granting analytics consent. Absent: every payload may be queued.
+   */
+  onlineOnly?(payload: Payload): boolean;
+  /**
    * per-device: each record carries a durable position on its originating
    * installation, allocated when it is queued (challenge attempts, spec 3).
    * Order comes from it, never from clocks (see ordering.ts). Absent: none.
@@ -83,6 +90,13 @@ export interface RecordType<Payload = unknown, Accepted = Payload> {
   purges?(accepted: Accepted): RecordRef;
   /** The server operation that accepts it (`private.record_types.accept`); null for server-authored state. */
   readonly acceptance: string | null;
+  /**
+   * The server function that puts its summaries in a new device's bootstrap
+   * snapshot (`private.record_types.snapshot`), each as a change `fromChange`
+   * reads; null when it isn't in snapshots (its changes after the watermark
+   * still arrive through the feed). A summary leaves out the detail (Amendment 1 A6).
+   */
+  readonly snapshot: string | null;
   /** What a feed entry's change makes accepted, or null when the change isn't one of this type's. */
   fromChange(change: unknown): Accepted | null;
   /**
@@ -105,9 +119,8 @@ export interface RecordType<Payload = unknown, Accepted = Payload> {
 /**
  * The platform's own per-account tables, whatever types are registered: the
  * synchronization head, the live claim, receipts, the feed, staged chunks,
- * synchronization head, the live claim, receipts, the feed, staged chunks,
- * every revisioned item and its open proposals, totals, per-device positions
- * and purged results' receipts. Account deletion clears these too.
+ * every revisioned item and its open proposals, totals, per-device positions,
+ * purged results' receipts and bootstrap snapshots. Account deletion clears these too.
  */
 export const PLATFORM_TABLES: readonly string[] = [
   'private.sync_heads',
@@ -120,6 +133,8 @@ export const PLATFORM_TABLES: readonly string[] = [
   'private.account_totals',
   'private.device_positions',
   'private.purged_results',
+  'private.bootstrap_snapshots',
+  'private.bootstrap_rows',
 ];
 
 /** Canonical money text (spec 1's encoding). */
@@ -134,8 +149,15 @@ export function isMoney(value: unknown): value is string {
 
 const isObject = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
 
-/** Spec 1's completion record and its outgoing synchronization record. */
-export const completedPracticeSession: RecordType<CompletedPracticeSessionRecord> = {
+/**
+ * A completed practice session without its detail (every wager outcome, and
+ * guided practice's adherence and departure log): what a bootstrap snapshot
+ * holds until the detail arrives (#97).
+ */
+export type PracticeSessionSummary = Omit<CompletedPracticeSessionRecord, 'outcomes' | 'guidance'>;
+
+/** Spec 1's completion record and its outgoing synchronization record; accepted whole, or as a snapshot's summary. */
+export const completedPracticeSession: RecordType<CompletedPracticeSessionRecord, CompletedPracticeSessionRecord | PracticeSessionSummary> = {
   name: 'completed-practice-session',
   kind: 'immutable-result',
   payloadVersion: 1,
@@ -156,8 +178,10 @@ export const completedPracticeSession: RecordType<CompletedPracticeSessionRecord
   },
   barriers: [],
   acceptance: 'private.accept_completed_practice_session_v1',
+  snapshot: 'private.snapshot_completed_practice_sessions',
   fromChange(change) {
     const record = isObject(change) ? change.record : undefined;
+    // The schema's checks don't cover the detail, so a summary passes them too.
     return completedPracticeSession.isPayload(record) ? record : null;
   },
   contribution: (record) => ({ total: 'practice', game: record.game, currency: 'simulated', amount: record.netResult }),
@@ -215,7 +239,7 @@ export function prerequisitesOf(
 
 /** Every registered type, by name. Specs 3–7 add theirs here. */
 export const recordTypes: ReadonlyMap<string, RecordType> = new Map<string, RecordType>(
-  [completedPracticeSession as RecordType].map((type) => [type.name, type]),
+  [completedPracticeSession as unknown as RecordType, privacyChoice as unknown as RecordType].map((type) => [type.name, type]),
 );
 
 // ---------------------------------------------------------------------------
@@ -327,6 +351,8 @@ export function revisionedItemType<Value>(definition: RevisionedItemDefinition<V
     },
     barriers: [],
     acceptance: definition.acceptance,
+    // Each item's current accepted revision, with its open proposals; tombstones too.
+    snapshot: 'private.snapshot_revisioned_items',
     fromChange(change) {
       const state = isObject(change) ? change.state : undefined;
       return isState(state) ? state : null;

@@ -8,6 +8,9 @@
 //   a tombstone. A pending edit of an accepted record is in no total.
 // - Records saved here that the account hasn't accepted yet are labeled local,
 //   and summed apart.
+// - While a new device's first download is staging, the account's totals are
+//   the snapshot's (every summary at its watermark), with whatever this
+//   installation had accepted after the watermark.
 
 import type { Resolution, ResolutionOutcome, SyncEngine } from './engine';
 import type { Contribution, RecordType, RevisionedState } from './registry';
@@ -116,6 +119,8 @@ export function accountRecords(open: OpenSession, registry: ReadonlyMap<string, 
       const local: Contribution[] = [];
       const add = (into: Contribution[], contribution: Contribution | null) => contribution && into.push(contribution);
       const queue = await store.readUploadQueue();
+      const bootstrap = await store.readBootstrap();
+      const baseline = !bootstrap.installed ? bootstrap.staging : null;
       // A result whose purge is queued no longer counts, even while its own upload is pending.
       const purging = new Set(
         queue.flatMap((entry) => {
@@ -136,7 +141,7 @@ export function accountRecords(open: OpenSession, registry: ReadonlyMap<string, 
         } else {
           const accepted = await store.readAcceptedRecords(type.name);
           const items = new Set(accepted.map((record) => record.item));
-          for (const record of accepted) add(account, contribute(record.payload));
+          for (const record of accepted) if (!baseline || record.sequence > baseline.watermark) add(account, contribute(record.payload));
           for (const entry of queue) {
             if (entry.recordType !== type.name || !type.isPayload(entry.payload)) continue;
             const item = type.identity.of(entry.payload);
@@ -145,7 +150,7 @@ export function accountRecords(open: OpenSession, registry: ReadonlyMap<string, 
           }
         }
       }
-      return { account: sumContributions(account), local: sumContributions(local) };
+      return { account: sumContributions(account, baseline?.totals), local: sumContributions(local) };
     },
   };
 }

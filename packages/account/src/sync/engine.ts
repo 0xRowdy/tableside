@@ -30,7 +30,8 @@
 // - A revisioned item's acknowledgement records nothing as accepted: whether
 //   its upload became a revision or a proposal, the item's state arrives with
 //   the feed entry its receipt names, in the same run.
-// - Resolving a conflict needs the network: it is sent at once, never queued.
+// - Resolving a conflict needs the network: it is sent at once, never queued,
+//   as is any other online-only change (`submit`), which waits for its barriers.
 // - The reconnect order (spec 2 Amendment 1 C5): authenticate, then reconcile
 //   compatibility, access, allowance ownership and pending privacy (sharing)
 //   withdrawals, and only then send grants or contributions. A run checks the
@@ -48,6 +49,15 @@
 // - Per-device records carry their originating-device position; a purge
 //   removes its result when its feed entry applies; a purged result's own
 //   entries carry nothing and the cursor steps over them.
+// - Bootstrap (spec 2, *Bootstrap*): an installation with no baseline gets
+//   one before it reads the feed. It asks for a snapshot (every summary and
+//   lifetime total at one watermark), pages its rows into local staging, then
+//   installs the baseline and moves the cursor to the watermark together, so
+//   the feed continues after it. Progress is durable: a restart, or a run that
+//   lost the network, carries on from the last staged page. A snapshot that
+//   expired (24 hours) is replaced with a new one; the upload queue and local
+//   records are never touched. Snapshot pages, like feed pages, are bounded by
+//   row count (#97 bounds them by bytes).
 // - Operational metrics (#108): a run that ends unfinished reports its error
 //   code, a record failing, flagged or refused reports which, and after a run
 //   the oldest pending record's wait (since this account session first saw
@@ -59,7 +69,10 @@ import type { MetricsSender } from '../metrics';
 
 import { backoffDelay } from './backoff';
 import {
+  type BootstrapPage,
+  type BootstrapSnapshot,
   type ChunkAnswer,
+  type FeedEntry,
   type FeedPage,
   PROTOCOL_VERSION,
   type PreparedOperation,
@@ -71,7 +84,7 @@ import {
   prepareOperation,
 } from './protocol';
 import { type RecordType, type RevisionedUpload, isBarrierFor } from './registry';
-import type { AcceptedRecord, Origin, QueuedUpload, RecordRef, SyncStore } from './store';
+import type { AcceptedRecord, BootstrapProgress, BootstrapStaging, Origin, QueuedUpload, RecordRef, SyncStore } from './store';
 
 /** The backend's operations. A call with no usable answer throws a SyncCallError; any other rejection counts as unreachable. */
 export interface SyncBackend {
@@ -81,6 +94,10 @@ export interface SyncBackend {
   /** Stages one chunk of a result, privately, for the operation whose manifest names it. */
   stageChunk(chunk: StagedChunk): Promise<ChunkAnswer>;
   feed(after: number, pageSize: number): Promise<FeedPage>;
+  /** Makes a bootstrap snapshot of the account for this installation, replacing its earlier one. */
+  bootstrap(installation: string): Promise<BootstrapSnapshot>;
+  /** A page of a snapshot's rows after ordinal `after`. */
+  bootstrapPage(snapshot: string, after: number, pageSize: number): Promise<BootstrapPage>;
 }
 
 /**
@@ -113,6 +130,15 @@ export type UpdateNotice =
   | { readonly state: 'retiring'; readonly retiresAt: number; readonly reason: string | null }
   | { readonly state: 'required'; readonly reason: string | null };
 
+/**
+ * The first download on a new device: complete, or how far summaries and
+ * totals and the last 90 days of detail have come, as fractions from 0 to 1.
+ * The detail is #97's; until then a device is complete once its summaries are installed.
+ */
+export type HistoryStatus =
+  | { readonly state: 'complete' }
+  | { readonly state: 'incomplete'; readonly summaries: number; readonly detail: number };
+
 export interface EngineStatus {
   readonly error: SyncErrorCode | null;
   /** When a run last finished with every call answered and nothing failing. */
@@ -120,6 +146,7 @@ export interface EngineStatus {
   /** Records not in the account: pending ones in queue order, then refused ones. */
   readonly uploads: readonly UploadStatus[];
   readonly update: UpdateNotice | null;
+  readonly history: HistoryStatus;
 }
 
 export interface SyncEngineOptions {
@@ -144,6 +171,7 @@ export interface SyncEngineOptions {
 export type ReconcileTrigger = 'automatic' | 'deliberate';
 
 export const FEED_PAGE_SIZE = 50;
+export const BOOTSTRAP_PAGE_SIZE = 100;
 /** How many times one record may fail by itself before it is flagged. */
 export const RECORD_FAILURE_LIMIT = 5;
 
@@ -165,6 +193,17 @@ export interface Resolution {
  */
 export type ResolutionOutcome = 'resolved' | 'conflict-changed' | 'no-conflict' | 'offline' | 'incompatible' | 'invalid';
 
+/**
+ * How a change sent at once ended. accepted / rejected: the server's receipt (with its refusal code).
+ * waiting: held, unsent, behind a pending upload of this installation. offline: no answer arrived (a retry
+ * in this account session repeats the identical request). incompatible: an update is required.
+ * invalid: not one of the type's payloads that are sent at once.
+ */
+export type SubmitOutcome =
+  | { readonly status: 'accepted' }
+  | { readonly status: 'rejected'; readonly code: string }
+  | { readonly status: 'waiting' | 'offline' | 'incompatible' | 'invalid' };
+
 export class SyncEngine {
   private running: Promise<void> | null = null;
   private rerun: ReconcileTrigger | null = null;
@@ -173,6 +212,9 @@ export class SyncEngine {
   private lastSyncedAt: number | null = null;
   private update: UpdateNotice | null = null;
   private uploads: readonly UploadStatus[] = [];
+  private history: HistoryStatus = { state: 'complete' };
+  /** When this account session first tried to bootstrap: its duration's start. */
+  private bootstrapStartedAt: number | null = null;
   /** Consecutive runs that got no usable answer. */
   private failures = 0;
   /** No automatic run before this: the backoff. */
@@ -184,8 +226,8 @@ export class SyncEngine {
   private refreshing: Promise<void> = Promise.resolve();
   private readonly listeners = new Set<() => void>();
   private readonly unsubscribe: () => void;
-  /** Resolutions sent with no answer yet, by what they resolve: a retry repeats the same operation. */
-  private readonly unansweredResolutions = new Map<string, PreparedOperation>();
+  /** Changes sent at once with no answer yet, by what they send: a retry repeats the same operation. */
+  private readonly unanswered = new Map<string, PreparedOperation>();
   /** When this account session first saw each pending entry: the queue's age. */
   private readonly firstSeen = new Map<string, number>();
 
@@ -195,7 +237,7 @@ export class SyncEngine {
   }
 
   get status(): EngineStatus {
-    return { error: this.lastError, lastSyncedAt: this.lastSyncedAt, uploads: this.uploads, update: this.update };
+    return { error: this.lastError, lastSyncedAt: this.lastSyncedAt, uploads: this.uploads, update: this.update, history: this.history };
   }
 
   /**
@@ -271,21 +313,49 @@ export class SyncEngine {
       value: resolution.value,
     };
     if (this.stopped || type?.kind !== 'revisioned-item' || !type.isPayload(payload)) return 'invalid';
-    const key = canonicalJson({ recordType, payload });
-    const operation = this.unansweredResolutions.get(key) ?? this.envelope(type, payload);
-    this.unansweredResolutions.set(key, operation);
+    const outcome = await this.sendAtOnce(type, payload);
+    if (outcome.status === 'accepted') return 'resolved';
+    if (outcome.status === 'rejected') return outcome.code === 'conflict-changed' || outcome.code === 'no-conflict' ? outcome.code : 'invalid';
+    // Nothing holds a resolution back.
+    return outcome.status === 'waiting' ? 'invalid' : outcome.status;
+  }
+
+  /**
+   * Sends one of a type's online-only payloads (`RecordType.onlineOnly`) at
+   * once, never queuing it, then reads the feed, which brings what it changed.
+   * It waits, unsent, while any pending upload it is held by (its barriers) is
+   * unacknowledged: such a change never overtakes one made before it here.
+   */
+  async submit(recordType: string, payload: unknown): Promise<SubmitOutcome> {
+    const type = this.options.registry.get(recordType);
+    if (this.stopped || !type || type.kind === 'server-authored-state' || !type.isPayload(payload) || !type.onlineOnly?.(payload)) {
+      return { status: 'invalid' };
+    }
+    const queue = await this.options.store.readUploadQueue();
+    if (queue.some((entry) => isBarrierFor(type, entry, payload))) return { status: 'waiting' };
+    return this.sendAtOnce(type, payload);
+  }
+
+  /**
+   * Sends a payload now, outside the queue. A retry of one that got no answer,
+   * in this account session, repeats the identical operation, so the server
+   * never applies it twice. After a receipt, the feed is read.
+   */
+  private async sendAtOnce(type: RecordType, payload: unknown): Promise<SubmitOutcome> {
+    const key = canonicalJson({ recordType: type.name, payload });
+    const operation = this.unanswered.get(key) ?? this.envelope(type, payload);
+    this.unanswered.set(key, operation);
     let answer: UploadAnswer;
     try {
       answer = await this.options.backend.upload(operation.request);
     } catch (caught) {
-      return caught instanceof SyncCallError && caught.kind === 'incompatible' ? 'incompatible' : 'offline';
+      return { status: caught instanceof SyncCallError && caught.kind === 'incompatible' ? 'incompatible' : 'offline' };
     }
-    this.unansweredResolutions.delete(key);
-    if (answer.status !== 'accepted' && answer.status !== 'rejected') return answer.status === 'incompatible' ? 'incompatible' : 'invalid';
-    if (answer.operation !== operation.operationId || answer.requestHash !== operation.requestHash) return 'offline';
+    this.unanswered.delete(key);
+    if (answer.status !== 'accepted' && answer.status !== 'rejected') return { status: answer.status === 'incompatible' ? 'incompatible' : 'invalid' };
+    if (answer.operation !== operation.operationId || answer.requestHash !== operation.requestHash) return { status: 'offline' };
     await this.reconcile();
-    if (answer.status === 'accepted') return 'resolved';
-    return answer.code === 'conflict-changed' || answer.code === 'no-conflict' ? answer.code : 'invalid';
+    return answer.status === 'accepted' ? { status: 'accepted' } : { status: 'rejected', code: answer.code };
   }
 
   /** Ends the account session's sync: later answers are dropped and nothing more runs. */
@@ -562,7 +632,9 @@ export class SyncEngine {
   }
 
   private async pull(): Promise<SyncErrorCode | null> {
-    const { store, backend, registry } = this.options;
+    const bootstrapError = await this.bootstrap();
+    if (bootstrapError || this.stopped) return bootstrapError;
+    const { store, backend } = this.options;
     let cursor = await store.readFeedCursor();
     for (;;) {
       const page = await this.call(() => backend.feed(cursor, FEED_PAGE_SIZE));
@@ -581,15 +653,13 @@ export class SyncEngine {
           redacted.push(entry.sequence);
           continue;
         }
-        const type = registry.get(entry.recordType);
-        const payload = type?.fromChange(entry.change) ?? null;
-        const origin = type?.ordering === 'per-device' ? originOf(entry.change) : null;
-        if (!type || payload === null || (type.ordering === 'per-device' && !origin)) {
+        const read = this.acceptedFrom(entry);
+        if (!read) {
           unreadable = true;
           break;
         }
-        records.push({ recordType: entry.recordType, item: entry.item, sequence: entry.sequence, payload, ...(origin ? { origin } : {}) });
-        if (type.purges) purged.push(type.purges(payload));
+        records.push(read.record);
+        if (read.purges) purged.push(read.purges);
       }
       const applied = records.length + redacted.length;
       if (applied > 0) {
@@ -605,14 +675,116 @@ export class SyncEngine {
     }
   }
 
+  /** What a feed entry or snapshot row makes accepted, and the result it purges; null when this build can't read it. */
+  private acceptedFrom(entry: FeedEntry): { readonly record: AcceptedRecord; readonly purges: RecordRef | null } | null {
+    const type = this.options.registry.get(entry.recordType);
+    const payload = type?.fromChange(entry.change) ?? null;
+    const origin = type?.ordering === 'per-device' ? originOf(entry.change) : null;
+    if (!type || payload === null || (type.ordering === 'per-device' && !origin)) return null;
+    return {
+      record: { recordType: entry.recordType, item: entry.item, sequence: entry.sequence, payload, ...(origin ? { origin } : {}) },
+      purges: type.purges?.(payload) ?? null,
+    };
+  }
+
+  /**
+   * Installs a baseline when this installation has none: asks for a snapshot
+   * (or carries on staging the one it has), stages its pages, then installs
+   * it. A row this build can't read stops it there, staged so far, as the feed
+   * stops before a change it can't read. A call with no answer ends the run
+   * (it throws). Reports its duration, from the account session's first
+   * attempt, when it installs, and when a run ends without installing.
+   */
+  private async bootstrap(): Promise<SyncErrorCode | null> {
+    const progress = await this.options.store.readBootstrap();
+    if (progress.installed) return null;
+    const startedAt = (this.bootstrapStartedAt ??= this.options.clock());
+    const report = (outcome: 'complete' | 'failed') => this.options.metrics?.record('bootstrap_duration', this.options.clock() - startedAt, { outcome });
+    let outcome: 'installed' | 'unreadable' | 'none';
+    try {
+      outcome = await this.stageBootstrap(progress.staging);
+    } catch (caught) {
+      if (!this.stopped) report('failed');
+      throw caught;
+    }
+    if (outcome === 'none') return null;
+    report(outcome === 'installed' ? 'complete' : 'failed');
+    return outcome === 'installed' ? null : 'unreadable-change';
+  }
+
+  /**
+   * Stages a snapshot's pages from where `staging` left off (a new snapshot
+   * when there is none, or it expired) and installs it: installed; stopped at
+   * a row this build can't read; or none, when the session ended or another
+   * run installed it.
+   */
+  private async stageBootstrap(from: BootstrapStaging | null): Promise<'installed' | 'unreadable' | 'none'> {
+    const { store, backend, installationId } = this.options;
+    let staging = from;
+    // A snapshot that expires as soon as it was made backs the run off instead of asking again at once.
+    let fresh = false;
+    for (;;) {
+      if (!staging) {
+        const snapshot = await this.call(() => backend.bootstrap(installationId));
+        if (this.stopped) return 'none';
+        await store.beginBootstrap(snapshot);
+        staging = { ...snapshot, staged: 0, after: 0 };
+        fresh = true;
+        await this.refresh();
+      }
+      const current = staging;
+      const page = await this.call(() => backend.bootstrapPage(current.snapshot, current.after, BOOTSTRAP_PAGE_SIZE));
+      if (this.stopped) return 'none';
+      if (page.status === 'expired') {
+        if (fresh) throw new SyncCallError('busy');
+        staging = null;
+        continue;
+      }
+      fresh = false;
+      const records: AcceptedRecord[] = [];
+      let through = current.after;
+      let unreadable = false;
+      for (const row of page.rows) {
+        const read = this.acceptedFrom(row);
+        if (!read) {
+          unreadable = true;
+          break;
+        }
+        records.push(read.record);
+        through = row.ordinal;
+      }
+      const last = !unreadable && !page.more;
+      const applied =
+        (through === current.after || (await store.stageBootstrapPage(current.snapshot, current.after, records, through))) &&
+        (!last || (await store.installBootstrap(current.snapshot)));
+      if (!applied) {
+        // Another run moved the staging meanwhile: carry on from where it is.
+        const now = await store.readBootstrap();
+        if (now.installed) return 'none';
+        staging = now.staging;
+        continue;
+      }
+      staging = { ...current, staged: current.staged + records.length, after: through };
+      await this.refresh();
+      if (unreadable) return 'unreadable';
+      if (last) return 'installed';
+    }
+  }
+
   /** Reads the records' states from the store again, then tells listeners. Refreshes run one at a time. */
   private refresh(): Promise<void> {
     this.refreshing = this.refreshing.then(async () => {
       if (this.stopped) return;
       try {
         const { store } = this.options;
-        const [queue, rejected, lastSynced] = await Promise.all([store.readUploadQueue(), store.readRejectedUploads(), store.readLastSynced()]);
+        const [queue, rejected, lastSynced, bootstrap] = await Promise.all([
+          store.readUploadQueue(),
+          store.readRejectedUploads(),
+          store.readLastSynced(),
+          store.readBootstrap(),
+        ]);
         if (this.stopped) return;
+        this.history = historyOf(bootstrap);
         if (lastSynced !== null && (this.lastSyncedAt === null || lastSynced > this.lastSyncedAt)) this.lastSyncedAt = lastSynced;
         const now = this.options.clock();
         const pending = new Set(queue.map((entry) => entry.id));
@@ -650,6 +822,13 @@ function uploadStates(queue: readonly QueuedUpload[]): UploadStatus[] {
     payload: entry.payload,
     state: entry.flagged ? 'flagged' : isPaused(entry, new Set()) ? 'paused' : 'waiting',
   }));
+}
+
+/** The first download's progress, from the bootstrap's. */
+function historyOf(progress: BootstrapProgress): HistoryStatus {
+  if (progress.installed) return { state: 'complete' };
+  const { staging } = progress;
+  return { state: 'incomplete', summaries: staging && staging.rows > 0 ? Math.min(1, staging.staged / staging.rows) : 0, detail: 0 };
 }
 
 /** An entry that can't be sent as it is: its result is too large to name, or no longer matches its manifest. */

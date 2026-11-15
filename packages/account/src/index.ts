@@ -56,6 +56,7 @@ export {
   type ProviderSignInResult,
   type ProviderToken,
   type QueueResult,
+  type ReviewerSignInResult,
   type SignInMethod,
   type SignOutResult,
   type SignedInGate,
@@ -86,11 +87,23 @@ export {
   serverMetricEvents,
 } from './metrics';
 export { type CrashReport, crashReport } from './crash-report';
+export { type AccountPrivacy, type EnablingResult, type PrivacyChoices, type RestrictiveResult, productAnalyticsId } from './privacy';
 export {
+  type AcceptedPrivacyChange,
+  type AdDataOptOutSource,
+  type AnalyticsConsent,
+  type EnablingChange,
+  type PrivacyChange,
+  type RestrictiveChange,
+  privacyChoice,
+} from './privacy-record';
+export {
+  BOOTSTRAP_PAGE_SIZE,
   type EngineStatus,
   RECORD_FAILURE_LIMIT,
   type Resolution,
   type ResolutionOutcome,
+  type SubmitOutcome,
   type SyncErrorCode,
   type UpdateNotice,
   type UploadState,
@@ -109,6 +122,9 @@ export {
   CHUNK_BYTES,
   PROTOCOL_VERSION,
   REQUEST_LIMIT_BYTES,
+  type BootstrapPage,
+  type BootstrapRow,
+  type BootstrapSnapshot,
   type ContentManifest,
   type Disposition,
   type Envelope,
@@ -121,6 +137,7 @@ export {
 export {
   type Contribution,
   PLATFORM_TABLES,
+  type PracticeSessionSummary,
   type Proposal,
   type RecordKind,
   type RecordType,
@@ -136,6 +153,8 @@ export { SYNC_OPERATIONS } from './sync/supabase';
 export { type DevicePorts, type DeviceSignal, RECONCILE_INTERVAL_MS } from './sync/session';
 export {
   type AcceptedRecord,
+  type BootstrapProgress,
+  type BootstrapStaging,
   type FeedPageEffects,
   type LocalRevisionedItem,
   type NewUpload,

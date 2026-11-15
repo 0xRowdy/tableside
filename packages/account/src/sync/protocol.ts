@@ -4,6 +4,8 @@
 
 import { canonicalJson, sha256Hex } from '@tableside/engine';
 
+import type { TotalsRow } from './totals';
+
 export const PROTOCOL_VERSION = 1;
 
 /**
@@ -236,3 +238,29 @@ export interface FeedPage {
   /** More entries follow this page. */
   readonly more: boolean;
 }
+
+/**
+ * A bootstrap snapshot (`sync_bootstrap_v1`): every registered type's
+ * summaries and the account's lifetime totals, made in one transaction under
+ * the synchronization head, so all of them describe the account at `watermark`.
+ */
+export interface BootstrapSnapshot {
+  readonly snapshot: string;
+  /** The account sequence the rows and totals describe: the feed is applied after it. */
+  readonly watermark: number;
+  /** How many rows it was made with (the feed's redactions can remove some later). */
+  readonly rows: number;
+  /** The account's lifetime totals at the watermark. */
+  readonly totals: readonly TotalsRow[];
+}
+
+/** One snapshot row: a type's summary of an item, as a feed change of the type, at the item's latest change. */
+export interface BootstrapRow extends FeedEntry {
+  /** Its place in the snapshot, from 1. Ordinals can skip where the feed redacted a row. */
+  readonly ordinal: number;
+}
+
+/** A page of a snapshot (`sync_bootstrap_page_v1`); expired once it is gone (24 hours, or replaced), and a new one is needed. */
+export type BootstrapPage =
+  | { readonly status: 'page'; readonly rows: readonly BootstrapRow[]; readonly more: boolean }
+  | { readonly status: 'expired' };

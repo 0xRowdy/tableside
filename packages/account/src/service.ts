@@ -23,7 +23,8 @@ import {
 } from './eligibility';
 import { type BackendEnvironment, ENVIRONMENT_HEADER, type EnvironmentName, authCallbackUrl, retiredEnvironments } from './environment';
 import { type MetricsSink, createMetricsSender, discardMetrics } from './metrics';
-import { type EngineStatus, SyncEngine } from './sync/engine';
+import { type AccountPrivacy, accountPrivacy } from './privacy';
+import { type EngineStatus, type HistoryStatus, SyncEngine } from './sync/engine';
 import { type AccountRecords, accountRecords } from './sync/records';
 import { type RecordType, prerequisitesOf, recordTypes } from './sync/registry';
 import { type DevicePorts, SyncSession } from './sync/session';
@@ -168,6 +169,11 @@ export type CodeRequestResult =
 export type CodeVerificationResult =
   | { readonly status: 'signed-in' }
   | { readonly status: 'invalid-code' }
+  | { readonly status: 'failed' };
+export type ReviewerSignInResult =
+  | { readonly status: 'signed-in' }
+  /** Not this address's reviewer account and current reviewer credential (the same for any address). */
+  | { readonly status: 'refused' }
   | { readonly status: 'failed' };
 
 /** The identity providers a player can sign in or create an account with. */
@@ -336,31 +342,24 @@ export type VaultOpening =
   | { readonly status: 'open'; readonly session: VaultSession }
   | { readonly status: 'recovery-needed' | 'needs-update' | 'migration-failed' | 'superseded' };
 
-/**
- * The first download on a new device (#96): complete, or how far summaries
- * and totals and the last 90 days of detail have come, as fractions from 0 to 1.
- * Until #96 bootstraps a device, its history is complete.
- */
-export type HistoryStatus =
-  | { readonly state: 'complete' }
-  | { readonly state: 'incomplete'; readonly summaries: number; readonly detail: number };
+export type { HistoryStatus };
 
 /** What sync status (S2-20) shows: the engine's status, the live connection and the first download. */
 export interface SyncStatus extends EngineStatus {
   /** Whether this installation holds the account's live connection (the newest foregrounded one). */
   readonly live: boolean;
-  readonly history: HistoryStatus;
 }
 
 /**
  * Queueing a record for upload (spec 2, *Record-type registry*): queued, with
  * its originating-device position for a per-device type; or refused, when no
  * account session is open, the type isn't registered or is server-authored
- * (no client writes it), or the payload isn't the type's.
+ * (no client writes it), the payload is online only (sent at once, never
+ * queued), or the payload isn't the type's.
  */
 export type QueueResult =
   | { readonly status: 'queued'; readonly id: string; readonly position?: number }
-  | { readonly status: 'refused'; readonly reason: 'no-account' | 'unknown-type' | 'server-authored' | 'invalid-payload' };
+  | { readonly status: 'refused'; readonly reason: 'no-account' | 'unknown-type' | 'server-authored' | 'online-only' | 'invalid-payload' };
 
 /** Synchronization for the open account session. Triggers run it by themselves; these are for asking. */
 export interface AccountSync {
@@ -467,6 +466,13 @@ export interface AccountService {
    */
   verifyEmailCode(request: { readonly email: string; readonly code: string }): Promise<CodeVerificationResult>;
   /**
+   * App review: signs in to a reviewer account with its reviewer credential,
+   * with no email code. The credential works only for that one account, in
+   * this build's environment; the session, gate and eligibility are then
+   * those of any sign-in.
+   */
+  signInAsReviewer(request: { readonly email: string; readonly credential: string }): Promise<ReviewerSignInResult>;
+  /**
    * Sign in with Apple or Google. Never creates an account: an identity with
    * no account answers No account, leaving no Auth user, and is held briefly
    * so Create can use it without asking the provider again.
@@ -516,6 +522,8 @@ export interface AccountService {
   readonly sync: AccountSync;
   /** Revisioned items, their conflicts, and lifetime totals for the open account. */
   readonly records: AccountRecords;
+  /** The account's privacy choices: analytics consent and the ad-data opt-out (#105). */
+  readonly privacy: AccountPrivacy;
   readonly freshAuthentication: FreshAuthentication;
   readonly signInMethods: SignInMethods;
   readonly devices: Devices;
@@ -699,7 +707,7 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
   /** The eligibility refresh in flight, for the session it belongs to. */
   let refreshing: { readonly session: OpenSession; readonly run: Promise<void> } | null = null;
   const syncListeners = new Set<(status: SyncStatus) => void>();
-  const syncStatus = (): SyncStatus => (sync ? { ...sync.engine.status, live: sync.session.isLive, history: { state: 'complete' } } : NO_SYNC);
+  const syncStatus = (): SyncStatus => (sync ? { ...sync.engine.status, live: sync.session.isLive } : NO_SYNC);
   const syncChanged = () => {
     const status = syncStatus();
     for (const listener of syncListeners) listener(status);
@@ -753,6 +761,10 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
       metrics,
     });
     engine.onChange(syncChanged);
+    // Its status read from the store first (the first download's progress among it), so it never shows a default.
+    await engine.idle();
+    // A sign-out, another sign-in or a closing gate while it read: not this one's to start.
+    if (opened !== current || sync || !opensOrdinaryAccess(gate)) return engine.stop();
     sync = {
       engine,
       store,
@@ -1462,7 +1474,7 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
     signOutOthers: () => revokeDevices({ others: true }),
   };
 
-  return {
+  const service: AccountService = {
     get gate() {
       return gate;
     },
@@ -1533,6 +1545,22 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
         const supabase = await connect();
         const { error } = await supabase.auth.verifyOtp({ email, token: code, type: 'email' });
         if (error) return { status: error.code === 'otp_expired' ? 'invalid-code' : 'failed' };
+        return (await finishSignIn(supabase)) ? { status: 'signed-in' } : { status: 'failed' };
+      } catch {
+        return { status: 'failed' };
+      }
+    },
+
+    async signInAsReviewer({ email, credential }) {
+      try {
+        const response = await post('/functions/v1/reviewer-sign-in', { email, credential });
+        const body = (await response.json().catch(() => null)) as { status?: string; session?: { access_token?: unknown; refresh_token?: unknown } } | null;
+        if (response.status === 401 && body?.status === 'refused') return { status: 'refused' };
+        const session = body?.session;
+        if (!response.ok || typeof session?.access_token !== 'string' || typeof session.refresh_token !== 'string') return { status: 'failed' };
+        const supabase = await connect();
+        const { error } = await supabase.auth.setSession({ access_token: session.access_token, refresh_token: session.refresh_token });
+        if (error) return { status: 'failed' };
         return (await finishSignIn(supabase)) ? { status: 'signed-in' } : { status: 'failed' };
       } catch {
         return { status: 'failed' };
@@ -1690,6 +1718,7 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
         if (!type) return { status: 'refused', reason: 'unknown-type' };
         if (type.kind === 'server-authored-state') return { status: 'refused', reason: 'server-authored' };
         if (!type.isPayload(payload)) return { status: 'refused', reason: 'invalid-payload' };
+        if (type.onlineOnly?.(payload)) return { status: 'refused', reason: 'online-only' };
         const queued = await store.queueUpload({
           id: `${type.name}/${hex(options.randomBytes(16))}`,
           recordType: type.name,
@@ -1712,10 +1741,17 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
     },
 
     records: accountRecords(() => sync, registry),
+    privacy: accountPrivacy({
+      session: () => sync,
+      queue: (recordType, payload) => service.sync.queue(recordType, payload),
+      gate: () => gate,
+      newChoiceId: () => hex(options.randomBytes(16)),
+    }),
     freshAuthentication,
     signInMethods,
     devices,
   };
+  return service;
 }
 
 function isSignInMethod(provider: string | undefined): provider is SignInMethod {
