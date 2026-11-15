@@ -135,7 +135,7 @@ export class SyncEngine {
       let chunks: StagedChunk[] | null;
       try {
         operation = entry.operation ?? (await store.prepareUpload(entry.id, this.envelope(type, entry)));
-        chunks = unsendableUnless(() => chunksOf(operation, entry.payload));
+        chunks = asUnsendable(() => chunksOf(operation, entry.payload));
       } catch (failure) {
         if (failure instanceof UnsendableError) {
           error ??= 'unsendable';
@@ -164,8 +164,9 @@ export class SyncEngine {
 
   /**
    * Sends an operation. A manifest whose chunks the server lacks gets them
-   * staged, then is sent once more; still lacking them (they expired meanwhile),
-   * it waits for the next run.
+   * staged, then is sent once more. When the staging is full, or the chunks are
+   * still lacking (they expired meanwhile), it waits for the next run, as if no
+   * usable answer had arrived.
    */
   private async send(operation: PreparedOperation, chunks: readonly StagedChunk[] | null): Promise<UploadAnswer | 'offline'> {
     const { backend } = this.options;
@@ -176,6 +177,7 @@ export class SyncEngine {
     for (const chunk of missing as StagedChunk[]) {
       if (this.stopped) return 'offline';
       const staged = await backend.stageChunk(chunk);
+      if (staged.status === 'staging-full') return 'offline';
       if (staged.status !== 'staged') return { status: staged.status };
     }
     const resent = await backend.upload(operation.request);
@@ -183,7 +185,7 @@ export class SyncEngine {
   }
 
   private envelope(type: RecordType, entry: QueuedUpload): PreparedOperation {
-    return unsendableUnless(() => prepareOperation({
+    return asUnsendable(() => prepareOperation({
       protocol: PROTOCOL_VERSION,
       operation: this.options.newOperationId(),
       installation: this.options.installationId,
@@ -259,7 +261,8 @@ export class SyncEngine {
 /** An entry that can't be sent as it is: its result is too large to name, or no longer matches its manifest. */
 class UnsendableError extends Error {}
 
-function unsendableUnless<T>(prepare: () => T): T {
+/** Runs `prepare`, reporting any failure as an entry that can't be sent. */
+function asUnsendable<T>(prepare: () => T): T {
   try {
     return prepare();
   } catch (failure) {

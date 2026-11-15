@@ -36,9 +36,6 @@ export {
   type FeedEntry,
   type PreparedOperation,
   type StagedChunk,
-  chunkCallArguments,
-  chunksOf,
-  prepareOperation,
 } from './sync/protocol';
 export { PLATFORM_TABLES, type RecordKind, type RecordType, completedPracticeSession, recordTypes } from './sync/registry';
 export { type DevicePorts, type DeviceSignal, RECONCILE_INTERVAL_MS } from './sync/session';

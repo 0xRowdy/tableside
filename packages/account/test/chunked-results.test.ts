@@ -12,7 +12,8 @@ import { createHash } from 'node:crypto';
 import { canonicalJson } from '@tableside/engine';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { CHUNK_BYTES, PROTOCOL_VERSION, REQUEST_LIMIT_BYTES, chunkCallArguments as chunkCall, chunksOf, completedPracticeSession, prepareOperation } from '../src';
+import { CHUNK_BYTES, PROTOCOL_VERSION, REQUEST_LIMIT_BYTES, completedPracticeSession } from '../src';
+import { chunkCallArguments, chunksOf, prepareOperation } from '../src/sync/protocol';
 import { type SimulatedDevice, accessToken, createAccountByEmail, createDevice, localStack, signInByEmail, uniqueEmail } from '../src/testing';
 
 const devices: SimulatedDevice[] = [];
@@ -41,6 +42,17 @@ async function twoDevices() {
 }
 
 const sessionsOn = async (d: SimulatedDevice) => d.vault.store().readAcceptedRecords(completedPracticeSession.name);
+
+/** A practice session as the account accepted it: whole, at the account's first sequence. */
+const acceptedFirst = (result: { readonly activityId: string }) => [{ recordType: completedPracticeSession.name, item: result.activityId, sequence: 1, payload: result }];
+
+/** The killed app starts again, back online. */
+async function reopen(d: SimulatedDevice) {
+  d.proxy.onRequest = null;
+  d.proxy.online = true;
+  await d.restart();
+  await d.account.sync.idle();
+}
 
 /** Requests a device sent to an operation. */
 const callsTo = (d: SimulatedDevice, operation: string) => d.proxy.sent.filter(({ url }) => url.includes(`/rpc/${operation}`));
@@ -80,10 +92,12 @@ describe('a practice session too large for one request', () => {
 
     expect(await phone.vault.store().readUploadQueue()).toEqual([]);
     expect(callsTo(phone, 'sync_stage_chunk_v1').length).toBeGreaterThan(LONG / CHUNK_BYTES);
-    expect(Math.max(...phone.proxy.sent.map(({ bodyBytes }) => bodyBytes))).toBeLessThanOrEqual(REQUEST_LIMIT_BYTES);
+    const bodies = phone.proxy.sent.filter(({ url }) => url.includes('/rpc/sync_')).map(({ bodyBytes }) => bodyBytes);
+    expect(Math.min(...bodies)).toBeGreaterThan(0);
+    expect(Math.max(...bodies)).toBeLessThanOrEqual(REQUEST_LIMIT_BYTES);
 
     const { sessions, feed } = await seenByTablet(tablet);
-    expect(sessions).toEqual([{ recordType: completedPracticeSession.name, item: result.activityId, sequence: 1, payload: result }]);
+    expect(sessions).toEqual(acceptedFirst(result));
     expect(result.outcomes.length).toBeGreaterThan(1_000);
     expect(feed).toHaveLength(1);
   });
@@ -102,16 +116,13 @@ describe('a practice session too large for one request', () => {
     expect(queued?.payload).toEqual(result);
 
     phone.kill();
-    phone.proxy.onRequest = null;
-    phone.proxy.online = true;
-    await phone.restart();
-    await phone.account.sync.idle();
+    await reopen(phone);
 
     // Only the chunks that never arrived were sent again.
     const chunks = chunksOf(queued!.operation!, queued!.payload)!;
     expect(callsTo(phone, 'sync_stage_chunk_v1')).toHaveLength(4 + chunks.length - 3);
     const seen = await seenByTablet(tablet);
-    expect(seen.sessions).toEqual([{ recordType: completedPracticeSession.name, item: result.activityId, sequence: 1, payload: result }]);
+    expect(seen.sessions).toEqual(acceptedFirst(result));
     expect(seen.feed).toHaveLength(1);
   });
 
@@ -149,13 +160,6 @@ describe('abandoned staging', () => {
     return { ...devices, result, chunks: chunksOf(queued!.operation!, queued!.payload)! };
   }
 
-  async function reopen(phone: SimulatedDevice) {
-    phone.proxy.onRequest = null;
-    phone.proxy.online = true;
-    await phone.restart();
-    await phone.account.sync.idle();
-  }
-
   it('expires 24 hours after its last progress; the device resends the same bytes and they make one result', async () => {
     const { phone, tablet, accountId, result, chunks } = await abandoned();
     await (await ageStaging(accountId, 24))();
@@ -163,7 +167,7 @@ describe('abandoned staging', () => {
     await reopen(phone);
     // Every chunk was staged again.
     expect(callsTo(phone, 'sync_stage_chunk_v1')).toHaveLength(4 + chunks.length);
-    expect((await seenByTablet(tablet)).sessions).toEqual([{ recordType: completedPracticeSession.name, item: result.activityId, sequence: 1, payload: result }]);
+    expect((await seenByTablet(tablet)).sessions).toEqual(acceptedFirst(result));
   });
 
   it('is kept while it progressed within 24 hours', async () => {
@@ -179,7 +183,7 @@ describe('abandoned staging', () => {
     const { phone, accountId, chunks } = await abandoned();
     const expire = await ageStaging(accountId, 24);
     const raw = localStack().rawClient(accessToken(phone));
-    expect((await raw.rpc('sync_stage_chunk_v1', chunkCall(chunks[0]!))).data).toEqual({ status: 'staged' });
+    expect((await raw.rpc('sync_stage_chunk_v1', chunkCallArguments(chunks[0]!))).data).toEqual({ status: 'staged' });
     await expire();
 
     await reopen(phone);
@@ -223,7 +227,7 @@ describe('the chunk operations, called directly', () => {
     const { accountId, raw } = await signedIn();
     const { request, chunks } = longResult(accountId, '1');
     const upload = async (text = request) => (await raw.rpc('sync_upload_v1', { request: text })).data as { status: string; missing?: number[] };
-    const stage = async (index: number) => expect((await raw.rpc('sync_stage_chunk_v1', chunkCall(chunks[index]!))).data).toEqual({ status: 'staged' });
+    const stage = async (index: number) => expect((await raw.rpc('sync_stage_chunk_v1', chunkCallArguments(chunks[index]!))).data).toEqual({ status: 'staged' });
     const feed = async () => ((await raw.rpc('sync_feed_v1', { after: 0 })).data as { entries: { sequence: number }[] }).entries;
 
     expect(await upload()).toEqual({ status: 'chunks-missing', missing: chunks.map((_, index) => index) });
@@ -237,7 +241,7 @@ describe('the chunk operations, called directly', () => {
 
     // The same result's bytes staged and named again, under another operation: the one acceptance.
     const again = longResult(accountId, '2');
-    for (const chunk of again.chunks) await raw.rpc('sync_stage_chunk_v1', chunkCall(chunk));
+    for (const chunk of again.chunks) await raw.rpc('sync_stage_chunk_v1', chunkCallArguments(chunk));
     expect(await upload(again.request)).toMatchObject({ status: 'accepted', sequence: 1 });
     expect((await feed()).map(({ sequence }) => sequence)).toEqual([1]);
   });
@@ -246,19 +250,19 @@ describe('the chunk operations, called directly', () => {
     const { accountId, raw } = await signedIn();
     const { request, chunks } = longResult(accountId, '3');
     const chunk = chunks[0]!;
-    const stage = async (fields: Partial<ReturnType<typeof chunkCall>>) => (await raw.rpc('sync_stage_chunk_v1', { ...chunkCall(chunk), ...fields })).data;
+    const stage = async (fields: Partial<ReturnType<typeof chunkCallArguments>>) => (await raw.rpc('sync_stage_chunk_v1', { ...chunkCallArguments(chunk), ...fields })).data;
 
     expect(await stage({ sha256: '0'.repeat(64) })).toEqual({ status: 'malformed' });
     expect(await stage({ record_type: 'no-such-type' })).toEqual({ status: 'malformed' });
     const oversized = 'x'.repeat(CHUNK_BYTES + 1);
     expect(await stage({ data: oversized, sha256: createHash('sha256').update(oversized).digest('hex') })).toEqual({ status: 'malformed' });
     expect(await stage({ protocol: 2 })).toEqual({ status: 'incompatible', supported: [1] });
-    expect((await localStack().rawClient().rpc('sync_stage_chunk_v1', chunkCall(chunk))).error).not.toBeNull();
+    expect((await localStack().rawClient().rpc('sync_stage_chunk_v1', chunkCallArguments(chunk))).error).not.toBeNull();
 
     // A manifest whose staged chunks rejoin to other text is refused, durably.
     const manifest = JSON.parse(request) as { content: { sha256: string } };
     const wrong = canonicalJson({ ...manifest, operation: '4'.repeat(32), content: { ...manifest.content, sha256: 'f'.repeat(64) } });
-    for (const each of chunks) await raw.rpc('sync_stage_chunk_v1', chunkCall(each));
+    for (const each of chunks) await raw.rpc('sync_stage_chunk_v1', chunkCallArguments(each));
     const refused = (await raw.rpc('sync_upload_v1', { request: wrong })).data;
     expect(refused).toMatchObject({ status: 'rejected', code: 'content-mismatch' });
     expect((await raw.rpc('sync_upload_v1', { request: wrong })).data).toEqual(refused);
@@ -267,13 +271,27 @@ describe('the chunk operations, called directly', () => {
     expect(((await raw.rpc('sync_feed_v1', { after: 0 })).data as { entries: unknown[] }).entries).toEqual([]);
   });
 
+  it('bound how much an account stages at once, and free it as staging expires', async () => {
+    const { accountId, raw } = await signedIn();
+    const { chunks } = longResult(accountId, '6');
+    const { sql } = localStack();
+    // 128 MiB already staged under made-up results.
+    await sql`insert into private.staged_chunks (account_id, record_type, item_id, sha256, data)
+      select ${accountId}, ${completedPracticeSession.name}, 'filler-' || n, md5(n::text) || md5(n::text), repeat('x', 49152)
+      from generate_series(1, 2731) n`;
+
+    expect((await raw.rpc('sync_stage_chunk_v1', chunkCallArguments(chunks[0]!))).data).toEqual({ status: 'staging-full' });
+    await (await ageStaging(accountId, 24))();
+    expect((await raw.rpc('sync_stage_chunk_v1', chunkCallArguments(chunks[0]!))).data).toEqual({ status: 'staged' });
+  });
+
   it('count only the account’s own staged chunks', async () => {
     const { accountId, raw } = await signedIn();
     const other = device('other');
     expect(await createAccountByEmail(other, uniqueEmail('chunks-other'))).toEqual({ status: 'signed-in' });
     const { request, chunks } = longResult(accountId, '5');
     const otherRaw = localStack().rawClient(accessToken(other));
-    for (const chunk of chunks) expect((await otherRaw.rpc('sync_stage_chunk_v1', chunkCall(chunk))).data).toEqual({ status: 'staged' });
+    for (const chunk of chunks) expect((await otherRaw.rpc('sync_stage_chunk_v1', chunkCallArguments(chunk))).data).toEqual({ status: 'staged' });
 
     expect((await raw.rpc('sync_upload_v1', { request })).data).toEqual({ status: 'chunks-missing', missing: chunks.map((_, index) => index) });
   });

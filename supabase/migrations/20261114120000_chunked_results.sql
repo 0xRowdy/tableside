@@ -7,7 +7,9 @@
 --
 -- Limits (packages/account/src/sync/protocol.ts): a chunk holds at most
 -- 49,152 bytes (48 KiB) of text, and an operation's request at most 131,072
--- bytes (128 KiB). The operations refuse anything larger.
+-- bytes (128 KiB). The operations refuse anything larger. An account stages at
+-- most 128 MiB at once, more than the largest result one manifest can name
+-- (about 90 MiB), so the bound never stops a real result.
 
 -- ---------------------------------------------------------------------------
 -- Staging (not exposed through the API)
@@ -38,8 +40,9 @@ alter table private.practice_results add column summary jsonb generated always a
 -- ---------------------------------------------------------------------------
 
 -- Stages one chunk of a result for the caller's account. Answers staged,
--- incompatible or malformed (an unknown record type, a hash that isn't the
--- chunk's, or a chunk over the limit).
+-- incompatible, malformed (an unknown record type, a hash that isn't the
+-- chunk's, or a chunk over the limit) or staging-full (the account's staging
+-- is at its bound: it frees as uploads complete or staging expires).
 create function public.sync_stage_chunk_v1(protocol integer, record_type text, item text, sha256 text, data text) returns jsonb
 language plpgsql volatile security definer set search_path = '' as $$
 declare
@@ -57,6 +60,9 @@ begin
     or coalesce(octet_length(data), 0) not between 1 and 49152
     or encode(extensions.digest(data, 'sha256'), 'hex') <> sha256 then
     return jsonb_build_object('status', 'malformed');
+  end if;
+  if (select coalesce(sum(octet_length(s.data)), 0) from private.staged_chunks s where s.account_id = v_account) + octet_length(data) > 134217728 then
+    return jsonb_build_object('status', 'staging-full');
   end if;
   insert into private.staged_chunks (account_id, record_type, item_id, sha256, data)
     values (v_account, sync_stage_chunk_v1.record_type, item, sha256, data)
@@ -125,7 +131,7 @@ declare
   v_head bigint;
   v_receipt private.sync_receipts;
   v_accept regprocedure;
-  v_content jsonb;
+  v_assembly jsonb;
   v_result jsonb;
   v_disposition jsonb;
 begin
@@ -181,14 +187,14 @@ begin
   -- every one is staged nothing is decided, so the client stages them and sends
   -- the identical request again.
   if v_request ? 'content' then
-    v_content := private.assemble_content(v_account, v_request);
-    if v_content ->> 'status' in ('malformed', 'chunks-missing') then
-      return v_content;
+    v_assembly := private.assemble_content(v_account, v_request);
+    if v_assembly ->> 'status' in ('malformed', 'chunks-missing') then
+      return v_assembly;
     end if;
-    if v_content ->> 'status' = 'assembled' then
-      v_request := (v_request - 'content') || jsonb_build_object('payload', v_content -> 'payload');
+    if v_assembly ->> 'status' = 'assembled' then
+      v_request := v_request || jsonb_build_object('payload', v_assembly -> 'payload');
     else
-      v_result := v_content;
+      v_result := v_assembly;
     end if;
   end if;
 
@@ -219,9 +225,10 @@ begin
   insert into private.sync_receipts (account_id, operation_id, request_hash, installation_id, record_type, item_id, disposition)
     values (v_account, v_operation, v_hash, v_request ->> 'installation', v_request ->> 'recordType', v_request ->> 'item', v_disposition);
   -- The manifest's chunks have served: the receipt answers every retry from now on.
-  if v_content is not null then
+  if v_assembly is not null then
     delete from private.staged_chunks
-      where account_id = v_account and record_type = v_request ->> 'recordType' and item_id = v_request ->> 'item';
+      where account_id = v_account and record_type = v_request ->> 'recordType' and item_id = v_request ->> 'item'
+        and sha256 in (select jsonb_array_elements_text(v_request -> 'content' -> 'chunks'));
   end if;
   return v_disposition;
 end $$;

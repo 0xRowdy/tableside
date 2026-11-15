@@ -48,7 +48,8 @@ describe('an upload too large for one request', () => {
   });
 
   it('splits the payload’s exact text into bounded chunks that rejoin to it, truncating nothing', () => {
-    expect(chunks).toHaveLength(4);
+    // ASCII text: one byte per character, so the chunks are its 48 KiB slices.
+    expect(chunks.map((chunk) => chunk.data)).toEqual([0, 1, 2, 3].map((index) => text.slice(index * CHUNK_BYTES, (index + 1) * CHUNK_BYTES)));
     expect(chunks.map((chunk) => chunk.data).join('')).toBe(text);
     for (const chunk of chunks) {
       expect(bytes(chunk.data)).toBeLessThanOrEqual(CHUNK_BYTES);

@@ -9,9 +9,10 @@ export const PROTOCOL_VERSION = 1;
 /**
  * The most any request body may hold, in UTF-8 bytes (spec 2 Amendment 1 C5:
  * a conservative request limit, tested against the pinned Supabase stack).
- * The pinned gateway and PostgREST impose no smaller bound (seam 2 checks a
- * body four times this size gets through); 128 KiB stays far below any
- * hosted proxy's limit. The operations refuse a request over it.
+ * The stack's gateway (Kong 2.8, `client_max_body_size 0`) and PostgREST 14
+ * impose no bound of their own; seam 2 checks a body four times this size gets
+ * through, so the operations' own refusal is the limit. The hosted project's
+ * proxy is qualified at launch gate 12.
  */
 export const REQUEST_LIMIT_BYTES = 128 * 1024;
 
@@ -165,8 +166,12 @@ export type UploadAnswer =
   /** The manifest names chunks the server hasn't staged (never sent, or expired): stage them and send again. Nothing was recorded. */
   | { readonly status: 'chunks-missing'; readonly missing: readonly number[] };
 
-/** The chunk-staging operation's answer. */
-export type ChunkAnswer = { readonly status: 'staged' } | { readonly status: 'incompatible' } | { readonly status: 'malformed' };
+/** The chunk-staging operation's answer. staging-full: the account's staging is at its bound until uploads complete or expire. */
+export type ChunkAnswer =
+  | { readonly status: 'staged' }
+  | { readonly status: 'incompatible' }
+  | { readonly status: 'malformed' }
+  | { readonly status: 'staging-full' };
 
 /** One accepted change in the account's feed. Sequences are gap-free and in commit order. */
 export interface FeedEntry {
