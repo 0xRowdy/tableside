@@ -160,6 +160,9 @@ describe('a production build installed over a beta build', () => {
     });
     const betaAccount = tester.vault.openAccount;
     await tester.vault.close();
+    // The beta build stops before the production build is installed over it; its last answers land first.
+    tester.kill();
+    await tester.account.sync.idle();
     const betaCredentials = () => [...tester.credentials.items.keys()].filter((key) => key.startsWith('tableside.beta.'));
     expect(tester.vault.holds('beta')).toBe(true);
     expect(betaCredentials()).not.toEqual([]);

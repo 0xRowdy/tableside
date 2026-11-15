@@ -6,6 +6,19 @@ import { canonicalJson, sha256Hex } from '@tableside/engine';
 
 export const PROTOCOL_VERSION = 1;
 
+/**
+ * What the server says about a protocol version (`sync_protocol`). The
+ * operation is unversioned and its answer's shape never changes, so every
+ * build, however old, can ask whether it may still sync.
+ * retiring: still served until `retiresAt`, announced at least 30 days ahead,
+ * unless `reason` explains an urgent restriction. retired: no longer served;
+ * the build must update before it syncs again.
+ */
+export type ProtocolStatus =
+  | { readonly status: 'supported' }
+  | { readonly status: 'retiring'; readonly retiresAt: string; readonly reason: string | null }
+  | { readonly status: 'retired'; readonly reason: string | null };
+
 /** What an upload names. The account is never in it: the server takes it from verified authentication. */
 export interface Envelope {
   readonly protocol: typeof PROTOCOL_VERSION;
@@ -49,6 +62,25 @@ export type UploadAnswer =
   | { readonly status: 'operation-reused' }
   | { readonly status: 'incompatible' }
   | { readonly status: 'malformed' };
+
+/**
+ * Why a backend call got no usable answer.
+ * unreachable: nothing came back (no connection, a lost response, a gateway error).
+ * busy: the server is overloaded or rate-limited the call; `retryAfter` is how long it asked to wait.
+ * auth: the session wasn't accepted, even after renewing it: the player must sign in again.
+ * incompatible: the server no longer serves this protocol version.
+ * refused: the server answered this request with an error: the request itself fails.
+ */
+export class SyncCallError extends Error {
+  constructor(
+    readonly kind: 'unreachable' | 'busy' | 'auth' | 'incompatible' | 'refused',
+    /** Milliseconds the server asked the client to wait before calling again. */
+    readonly retryAfter: number | null = null,
+  ) {
+    super(`sync call failed: ${kind}`);
+    this.name = 'SyncCallError';
+  }
+}
 
 /** One accepted change in the account's feed. Sequences are gap-free and in commit order. */
 export interface FeedEntry {

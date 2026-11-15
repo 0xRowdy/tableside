@@ -1,6 +1,7 @@
-// The sync engine for one account session: uploads the queue in dependency
-// order, then applies the account's feed after its durable cursor. All local
-// writes go through the account store's one writer (SyncStore).
+// The sync engine for one account session: checks the protocol is still
+// served, uploads the queue in dependency order, then applies the account's
+// feed after its durable cursor. All local writes go through the account
+// store's one writer (SyncStore).
 //
 // - An entry's operation is fixed in the store before it is first sent, so a
 //   lost response, a kill or a duplicate always resends the identical request
@@ -11,29 +12,78 @@
 // - Feed pages apply with their cursor atomically, and never past a change
 //   this build can't read.
 // - Runs coalesce: a request while a run is going makes one more run.
+// - Failures (spec 2, *Retries*): nothing is ever deleted and nothing loops.
+//   A run that gets no usable answer backs off, jittered and exponential from
+//   about 1 s to 5 min, and never sooner than the server's retry-after.
+//   Automatic triggers wait for the backoff; a deliberate one doesn't (but
+//   still honors retry-after). A record that fails by itself backs off on its
+//   own while the others go on, and after RECORD_FAILURE_LIMIT failures it is
+//   flagged: left alone, with everything that depends on it, until a
+//   deliberate retry. A refused receipt goes to review. A protocol the server
+//   no longer serves stops sync (never play) until an update.
 //
-// Retry pacing, flagged records and status (#92), chunked results (#93),
-// revisioned items (#94) and barrier-bearing operations (#95) plug in here.
+// Chunked results (#93), revisioned items (#94) and barrier-bearing
+// operations (#95) plug in here.
 
-import { type FeedPage, PROTOCOL_VERSION, type PreparedOperation, type UploadAnswer, prepareOperation } from './protocol';
+import { backoffDelay } from './backoff';
+import {
+  type FeedPage,
+  PROTOCOL_VERSION,
+  type PreparedOperation,
+  type ProtocolStatus,
+  SyncCallError,
+  type UploadAnswer,
+  prepareOperation,
+} from './protocol';
 import type { RecordType } from './registry';
 import type { AcceptedRecord, QueuedUpload, SyncStore } from './store';
 
-/** The backend's operations. A rejection means no answer arrived (offline, lost response, denied): try later. */
+/** The backend's operations. A call with no usable answer throws a SyncCallError; any other rejection counts as unreachable. */
 export interface SyncBackend {
+  /** What the server says about this build's protocol version. */
+  protocol(version: number): Promise<ProtocolStatus>;
   upload(request: string): Promise<UploadAnswer>;
   feed(after: number, pageSize: number): Promise<FeedPage>;
 }
 
 /**
- * offline: the backend couldn't be reached or answered nothing usable.
- * incompatible: the server no longer speaks this protocol (an update is required).
- * unsendable: an entry can't be sent (unknown type, invalid payload, operation reused).
+ * How a run ended, when not cleanly.
+ * offline: the backend couldn't be reached, or was too busy to answer.
+ * sign-in-required: the session wasn't accepted, even renewed. Records are kept until the player signs in again.
+ * incompatible: the server no longer serves this protocol: an update is required.
+ * unsendable: a record failed by itself (it couldn't be sent, or the server refused the request); the others went on.
  * unreadable-change: the feed holds a change this build can't apply; the cursor stays before it.
- * receipt-mismatch: a receipt doesn't match the request sent.
  * storage: a local write failed (a full disk, an I/O error); nothing was half applied.
  */
-export type SyncErrorCode = 'offline' | 'incompatible' | 'unsendable' | 'unreadable-change' | 'receipt-mismatch' | 'storage';
+export type SyncErrorCode = 'offline' | 'sign-in-required' | 'incompatible' | 'unsendable' | 'unreadable-change' | 'storage';
+
+/**
+ * waiting: will upload by itself. paused: waits for a flagged record it depends on.
+ * flagged: failed repeatedly; waits for a deliberate retry. review: the server refused it.
+ */
+export type UploadState = 'waiting' | 'paused' | 'flagged' | 'review';
+
+/** A record not (yet) in the account. */
+export interface UploadStatus {
+  readonly id: string;
+  readonly recordType: string;
+  readonly payload: unknown;
+  readonly state: UploadState;
+}
+
+/** A protocol retirement the player hears about: dated ahead, or in effect now. `reason` explains an urgent one. */
+export type UpdateNotice =
+  | { readonly state: 'retiring'; readonly retiresAt: number; readonly reason: string | null }
+  | { readonly state: 'required'; readonly reason: string | null };
+
+export interface EngineStatus {
+  readonly error: SyncErrorCode | null;
+  /** When a run last finished with every call answered and nothing failing. */
+  readonly lastSyncedAt: number | null;
+  /** Records not in the account: pending ones in queue order, then refused ones. */
+  readonly uploads: readonly UploadStatus[];
+  readonly update: UpdateNotice | null;
+}
 
 export interface SyncEngineOptions {
   readonly store: SyncStore;
@@ -42,36 +92,83 @@ export interface SyncEngineOptions {
   readonly installationId: string;
   /** A fresh random operation ID: 32 lowercase hex digits. */
   newOperationId(): string;
+  /** Milliseconds since the epoch. */
+  readonly clock: () => number;
+  /** Uniform in [0, 1): the backoff's jitter. */
+  readonly random: () => number;
 }
 
+/**
+ * automatic: a save, a live hint, the 60 s cadence or a retry falling due; it waits out a backoff.
+ * deliberate: the session opening, foregrounding, reconnecting, or the player asking; it doesn't.
+ */
+export type ReconcileTrigger = 'automatic' | 'deliberate';
+
 export const FEED_PAGE_SIZE = 50;
+/** How many times one record may fail by itself before it is flagged. */
+export const RECORD_FAILURE_LIMIT = 5;
 
 export class SyncEngine {
   private running: Promise<void> | null = null;
-  private rerunRequested = false;
+  private rerun: ReconcileTrigger | null = null;
   private stopped = false;
   private lastError: SyncErrorCode | null = null;
+  private lastSyncedAt: number | null = null;
+  private update: UpdateNotice | null = null;
+  private uploads: readonly UploadStatus[] = [];
+  /** Consecutive runs that got no usable answer. */
+  private failures = 0;
+  /** No automatic run before this: the backoff. */
+  private backoffUntil: number | null = null;
+  /** No run at all before this: the server's retry-after. */
+  private retryAfterUntil: number | null = null;
+  /** When each record failing by itself may be tried again. */
+  private readonly recordRetries = new Map<string, number>();
+  private refreshing: Promise<void> = Promise.resolve();
+  private readonly listeners = new Set<() => void>();
+  private readonly unsubscribe: () => void;
 
-  constructor(private readonly options: SyncEngineOptions) {}
-
-  /** The last run's error, if it ended on one. */
-  get error(): SyncErrorCode | null {
-    return this.lastError;
+  constructor(private readonly options: SyncEngineOptions) {
+    this.unsubscribe = options.store.onUploadQueued(() => void this.refresh());
+    void this.refresh();
   }
 
-  /** Uploads, then applies the feed. Coalesced: resolves when a run that began after this call has finished. */
-  reconcile(): Promise<void> {
+  get status(): EngineStatus {
+    return { error: this.lastError, lastSyncedAt: this.lastSyncedAt, uploads: this.uploads, update: this.update };
+  }
+
+  /** When an automatic run is next due (the backoff ending, or a failing record's turn), or null. */
+  get retryAt(): number | null {
+    const times = [...this.recordRetries.values(), ...(this.backoffUntil !== null ? [this.backoffUntil] : [])];
+    if (this.retryAfterUntil !== null) times.push(this.retryAfterUntil);
+    return times.length > 0 ? Math.max(Math.min(...times), this.retryAfterUntil ?? 0) : null;
+  }
+
+  /** Called whenever the status or the retry time changes. Returns an unsubscribe function. */
+  onChange(listener: () => void): () => void {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  }
+
+  /**
+   * Uploads, then applies the feed. Coalesced: resolves when a run that began
+   * after this call has finished. An automatic trigger during a backoff runs nothing.
+   */
+  reconcile(trigger: ReconcileTrigger = 'deliberate'): Promise<void> {
     if (this.stopped) return Promise.resolve();
     if (this.running) {
-      this.rerunRequested = true;
+      if (this.rerun !== 'deliberate') this.rerun = trigger;
       return this.running;
     }
+    if (!this.due(trigger)) return Promise.resolve();
     this.running = (async () => {
       try {
-        do {
-          this.rerunRequested = false;
-          this.lastError = await this.run();
-        } while (this.rerunRequested && !this.stopped);
+        await this.runOnce();
+        while (this.rerun && !this.stopped) {
+          const next = this.rerun;
+          this.rerun = null;
+          if (this.due(next)) await this.runOnce();
+        }
       } finally {
         this.running = null;
       }
@@ -79,56 +176,155 @@ export class SyncEngine {
     return this.running;
   }
 
-  /** Resolves once no run is going. */
+  /** The player retries one failing or flagged record: it is tried now, and so is everything waiting for it. */
+  async retryRecord(id: string): Promise<void> {
+    if (this.stopped) return;
+    await this.options.store.clearUploadFailures(id);
+    this.recordRetries.delete(id);
+    await this.refresh();
+    await this.reconcile('deliberate');
+  }
+
+  /** Resolves once no run or status refresh is going. */
   async idle(): Promise<void> {
     while (this.running) await this.running;
+    await this.refreshing;
   }
 
   /** Ends the account session's sync: later answers are dropped and nothing more runs. */
   stop(): void {
     this.stopped = true;
+    this.unsubscribe();
+    this.listeners.clear();
   }
 
-  private async run(): Promise<SyncErrorCode | null> {
+  private due(trigger: ReconcileTrigger): boolean {
+    const now = this.options.clock();
+    if (this.retryAfterUntil !== null && now < this.retryAfterUntil) return false;
+    if (trigger === 'automatic') return this.backoffUntil === null || now >= this.backoffUntil;
+    this.failures = 0;
+    this.backoffUntil = null;
+    this.recordRetries.clear();
+    return true;
+  }
+
+  private async runOnce(): Promise<void> {
+    let error: SyncErrorCode | null;
+    let retryAfter: number | null = null;
     try {
-      return (await this.upload()) ?? (await this.pull());
-    } catch {
-      // A local transaction failed and rolled back: the queue and cursor are as
+      // The queue is read first: a store that refuses (the account session ended) stops the run before anything is sent.
+      const queue = await this.options.store.readUploadQueue();
+      error = (await this.checkProtocol()) ?? (await this.upload(queue)) ?? (await this.pull());
+    } catch (caught) {
+      // A local transaction that failed rolled back: the queue and cursor are as
       // they were, so the next run retries. After the session ended (the store
       // refuses a stale session), the dropped work is not an error.
-      return this.stopped ? null : 'storage';
+      if (this.stopped) return;
+      if (!(caught instanceof SyncCallError)) error = 'storage';
+      else if (caught.kind === 'auth') error = 'sign-in-required';
+      else if (caught.kind === 'incompatible') error = this.required(null);
+      else error = 'offline';
+      if (caught instanceof SyncCallError) retryAfter = caught.retryAfter;
+    }
+    if (this.stopped) return;
+    const now = this.options.clock();
+    this.lastError = error;
+    if (error === null || error === 'unsendable' || error === 'unreadable-change') {
+      // Every call was answered.
+      this.failures = 0;
+      this.backoffUntil = null;
+      if (error === null) {
+        this.lastSyncedAt = now;
+        await this.options.store.recordSynced(now).catch(() => undefined);
+      }
+    } else {
+      this.failures += 1;
+      this.backoffUntil = now + backoffDelay(this.failures, this.options.random);
+    }
+    this.retryAfterUntil = retryAfter !== null ? now + retryAfter : null;
+    await this.refresh();
+  }
+
+  /** A backend call: any rejection that isn't a SyncCallError means no answer arrived. */
+  private async call<T>(request: () => Promise<T>): Promise<T> {
+    try {
+      return await request();
+    } catch (caught) {
+      throw caught instanceof SyncCallError ? caught : new SyncCallError('unreachable');
     }
   }
 
-  private async upload(): Promise<SyncErrorCode | null> {
+  private required(reason: string | null): SyncErrorCode {
+    this.update = { state: 'required', reason };
+    return 'incompatible';
+  }
+
+  private async checkProtocol(): Promise<SyncErrorCode | null> {
+    const answer = await this.call(() => this.options.backend.protocol(PROTOCOL_VERSION));
+    switch (answer.status) {
+      case 'supported':
+        this.update = null;
+        return null;
+      case 'retiring':
+        this.update = { state: 'retiring', retiresAt: Date.parse(answer.retiresAt), reason: answer.reason };
+        return null;
+      case 'retired':
+        return this.required(answer.reason);
+    }
+  }
+
+  private async upload(queue: readonly QueuedUpload[]): Promise<SyncErrorCode | null> {
     const { store, registry } = this.options;
-    const queue = await store.readUploadQueue();
     const pending = new Set(queue.map((entry) => entry.id));
     // A barrier holds while any upload of its type is unacknowledged, wherever it sits in the queue.
     const barrierPending = (recordType: string) => queue.some((entry) => entry.recordType === recordType && pending.has(entry.id));
+    const now = this.options.clock();
     let error: SyncErrorCode | null = null;
     for (const entry of queue) {
+      if (this.stopped) return null;
+      // Flagged, or waiting out its own backoff: it stays pending, and so does everything depending on it.
+      if (entry.flagged) continue;
+      const retry = this.recordRetries.get(entry.id);
+      if (retry !== undefined) {
+        if (retry > now) continue;
+        // Its turn: whatever happens next, no timer waits for it any more.
+        this.recordRetries.delete(entry.id);
+      }
       const type = registry.get(entry.recordType);
       if (!type || !type.isPayload(entry.payload)) {
-        error ??= 'unsendable';
+        error = await this.recordFailed(entry);
         continue;
       }
       // Its prerequisites are still unacknowledged: it waits.
       if (entry.dependencies.some((id) => pending.has(id)) || type.barriers.some(barrierPending)) continue;
       const operation = entry.operation ?? (await store.prepareUpload(entry.id, this.envelope(type, entry)));
-      let answer: UploadAnswer;
+      let answer: UploadAnswer | null;
       try {
-        answer = await this.options.backend.upload(operation.request);
-      } catch {
-        return 'offline';
+        answer = await this.call(() => this.options.backend.upload(operation.request));
+      } catch (caught) {
+        // The server answered this request with an error: the record fails by itself. Anything else ends the run.
+        if (!(caught instanceof SyncCallError) || caught.kind !== 'refused') throw caught;
+        answer = null;
       }
       if (this.stopped) return null;
-      const outcome = await this.settleUpload(entry, type, operation, answer);
-      if (outcome === 'acknowledged') pending.delete(entry.id);
-      else if (outcome === 'incompatible') return 'incompatible';
-      else error ??= outcome;
+      const outcome = answer ? await this.settleUpload(entry, type, operation, answer) : 'failed';
+      if (outcome === 'incompatible') return this.required(null);
+      if (outcome === 'failed') {
+        error = await this.recordFailed(entry);
+        continue;
+      }
+      pending.delete(entry.id);
     }
     return error;
+  }
+
+  /** One record failed by itself: it waits its own backoff, and is flagged on its RECORD_FAILURE_LIMIT-th failure. */
+  private async recordFailed(entry: QueuedUpload): Promise<SyncErrorCode> {
+    const flag = entry.failures + 1 >= RECORD_FAILURE_LIMIT;
+    const failures = await this.options.store.recordUploadFailure(entry.id, flag);
+    if (flag) this.recordRetries.delete(entry.id);
+    else this.recordRetries.set(entry.id, this.options.clock() + backoffDelay(failures, this.options.random));
+    return 'unsendable';
   }
 
   private envelope(type: RecordType, entry: QueuedUpload): PreparedOperation {
@@ -149,11 +345,12 @@ export class SyncEngine {
     type: RecordType,
     operation: PreparedOperation,
     answer: UploadAnswer,
-  ): Promise<'acknowledged' | 'incompatible' | 'unsendable' | 'receipt-mismatch'> {
+  ): Promise<'acknowledged' | 'incompatible' | 'failed'> {
     switch (answer.status) {
       case 'accepted':
       case 'rejected': {
-        if (answer.operation !== operation.operationId || answer.requestHash !== operation.requestHash) return 'receipt-mismatch';
+        // A receipt for another request.
+        if (answer.operation !== operation.operationId || answer.requestHash !== operation.requestHash) return 'failed';
         const accepted: AcceptedRecord | null =
           answer.status === 'accepted'
             ? { recordType: type.name, item: type.identity.of(entry.payload), sequence: answer.sequence, payload: entry.payload }
@@ -165,7 +362,7 @@ export class SyncEngine {
         return 'incompatible';
       case 'operation-reused':
       case 'malformed':
-        return 'unsendable';
+        return 'failed';
     }
   }
 
@@ -173,12 +370,7 @@ export class SyncEngine {
     const { store, backend, registry } = this.options;
     let cursor = await store.readFeedCursor();
     for (;;) {
-      let page: FeedPage;
-      try {
-        page = await backend.feed(cursor, FEED_PAGE_SIZE);
-      } catch {
-        return 'offline';
-      }
+      const page = await this.call(() => backend.feed(cursor, FEED_PAGE_SIZE));
       if (this.stopped) return null;
       const records: AcceptedRecord[] = [];
       let unreadable = false;
@@ -202,4 +394,46 @@ export class SyncEngine {
       if (!page.more) return null;
     }
   }
+
+  /** Reads the records' states from the store again, then tells listeners. Refreshes run one at a time. */
+  private refresh(): Promise<void> {
+    this.refreshing = this.refreshing.then(async () => {
+      if (this.stopped) return;
+      try {
+        const { store } = this.options;
+        const [queue, rejected, lastSynced] = await Promise.all([store.readUploadQueue(), store.readRejectedUploads(), store.readLastSynced()]);
+        if (this.stopped) return;
+        if (lastSynced !== null && (this.lastSyncedAt === null || lastSynced > this.lastSyncedAt)) this.lastSyncedAt = lastSynced;
+        this.uploads = [...uploadStates(queue), ...rejected.map(({ id, recordType, payload }) => ({ id, recordType, payload, state: 'review' as const }))];
+      } catch {
+        // The store refused (a stale session, a failed read): the last status stands.
+      }
+      for (const listener of this.listeners) listener();
+    });
+    return this.refreshing;
+  }
+}
+
+/** Each pending entry's state: flagged; paused behind a flagged entry it depends on, directly or not; or waiting. */
+function uploadStates(queue: readonly QueuedUpload[]): UploadStatus[] {
+  const byId = new Map(queue.map((entry) => [entry.id, entry]));
+  const paused = new Map<string, boolean>();
+  const isPaused = (entry: QueuedUpload, visiting: Set<string>): boolean => {
+    const known = paused.get(entry.id);
+    if (known !== undefined) return known;
+    if (visiting.has(entry.id)) return false;
+    visiting.add(entry.id);
+    const result = entry.dependencies.some((id) => {
+      const dependency = byId.get(id);
+      return dependency !== undefined && (dependency.flagged || isPaused(dependency, visiting));
+    });
+    paused.set(entry.id, result);
+    return result;
+  };
+  return queue.map((entry) => ({
+    id: entry.id,
+    recordType: entry.recordType,
+    payload: entry.payload,
+    state: entry.flagged ? 'flagged' : isPaused(entry, new Set()) ? 'paused' : 'waiting',
+  }));
 }

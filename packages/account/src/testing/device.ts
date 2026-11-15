@@ -14,6 +14,7 @@ import { existsSync } from 'node:fs';
 // harness is test-only, and the app doesn't depend on this package.
 import { forAccountSession } from '../../../../apps/mobile/src/account/practice';
 import type { SqliteActivityStore } from '../../../../apps/mobile/src/account/sqlite-store';
+import type { StoreMigration } from '../../../../apps/mobile/src/account/store-schema';
 import { nodeSqlCipherDriver } from '../../../../apps/mobile/src/account/testing/node-sqlcipher';
 import { TestDevice } from '../../../../apps/mobile/src/account/testing/vault-substitutes';
 import type { AccountVault as AppVault, VaultOpening as AppVaultOpening } from '../../../../apps/mobile/src/account/vault';
@@ -59,6 +60,15 @@ export class FakeClock {
     const timer = { period: milliseconds, next: this.time + milliseconds, run };
     this.timers.add(timer);
     return () => this.timers.delete(timer);
+  }
+
+  /** Runs `run` once, `milliseconds` from now on this clock, unless cancelled. */
+  after(milliseconds: number, run: () => void): () => void {
+    const cancel = this.every(Math.max(1, milliseconds), () => {
+      cancel();
+      run();
+    });
+    return cancel;
   }
 }
 
@@ -148,8 +158,9 @@ export interface SimulatedDevice {
   /**
    * Plays one practice session to its end (roulette: a 10-unit red wager on a
    * 1,000 buy-in, one spin) on the open account and returns its saved result.
+   * `activityId` names it instead of the device's entropy (a malformed one, say).
    */
-  playPracticeSession(): Promise<CompletedPracticeSession>;
+  playPracticeSession(options?: { readonly activityId?: string }): Promise<CompletedPracticeSession>;
   /** The app process dies where it is: nothing it had in flight completes on the device. */
   kill(): void;
   /** Starts the app again after a kill (or kills it first), reopening the remembered account. */
@@ -177,6 +188,8 @@ export interface DeviceOptions {
    * device, keeping its files and secure storage.
    */
   readonly installedOver?: SimulatedDevice;
+  /** The build's store migrations (a later build's, say); this build's by default. */
+  readonly migrations?: readonly StoreMigration[];
 }
 
 export function createDevice(stack: LocalStack, options: DeviceOptions): SimulatedDevice {
@@ -184,7 +197,9 @@ export function createDevice(stack: LocalStack, options: DeviceOptions): Simulat
   const entropy = new FakeEntropy(seed++);
   const proxy = new FaultProxy();
   const clock = new FakeClock();
-  // The files, keychain and secure storage outlive the app process, and a build installed over another keeps them.
+  // The files, keychain and secure storage outlive the app process, and a build
+  // installed over another keeps them. Installing ends the earlier build's process.
+  options.installedOver?.kill();
   const earlier = options.installedOver ? installed.get(options.installedOver) : undefined;
   const credentials = earlier?.credentials ?? new MemoryCredentials();
   const storage = earlier?.storage ?? new TestDevice();
@@ -195,7 +210,7 @@ export function createDevice(stack: LocalStack, options: DeviceOptions): Simulat
   const launch = (): AppProcess => {
     let dead = false;
     const cancels: (() => void)[] = [];
-    const appVault = storage.vault(environment, driver);
+    const appVault = storage.vault(environment, driver, options.migrations);
     let opening: AppVaultOpening | null = null;
     const removed: EnvironmentName[] = [];
 
@@ -259,6 +274,11 @@ export function createDevice(stack: LocalStack, options: DeviceOptions): Simulat
         cancels.push(stop);
         return stop;
       },
+      after(milliseconds, run) {
+        const stop = clock.after(milliseconds, () => !dead && run());
+        cancels.push(stop);
+        return stop;
+      },
     };
     const account = createAccountService({
       backend: { name: environment, url: stack.url, publishableKey: stack.publishableKey },
@@ -311,10 +331,13 @@ export function createDevice(stack: LocalStack, options: DeviceOptions): Simulat
     set diskFailing(value: boolean) {
       disk.failing = value;
     },
-    async playPracticeSession() {
+    async playPracticeSession({ activityId } = {}) {
       const opening = openSession(app);
       // Each practice session gets its own random ID, from the device's entropy.
-      const adapters = { ...substituteAdapters({ clock: new PracticeClock(undefined, true) }), newId: () => `activity-${hex(entropy.bytes(16))}` };
+      const adapters = {
+        ...substituteAdapters({ clock: new PracticeClock(undefined, true) }),
+        newId: () => activityId ?? `activity-${hex(entropy.bytes(16))}`,
+      };
       const controller = new PracticeController(forAccountSession(adapters, opening));
       await controller.load();
       await controller.start({ game: 'roulette', buyIn: '1000' });

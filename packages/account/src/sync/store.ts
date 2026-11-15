@@ -15,6 +15,19 @@ export interface QueuedUpload {
   readonly dependencies: readonly string[];
   /** Fixed the first time the entry was sent; null before that. */
   readonly operation: PreparedOperation | null;
+  /** Attempts that failed for this entry alone (the server refused the request, or it couldn't be sent), since it last succeeded or was retried deliberately. */
+  readonly failures: number;
+  /** Failed repeatedly: left alone, with its dependents, until a deliberate retry. Never deleted. */
+  readonly flagged: boolean;
+}
+
+/** An upload whose receipt refused it: kept for review, never sent again and never deleted. */
+export interface RejectedUpload {
+  readonly id: string;
+  readonly recordType: string;
+  readonly payload: unknown;
+  /** The receipt's refusal code. */
+  readonly code: string;
 }
 
 /** A record the account has accepted, as this installation holds it. */
@@ -40,6 +53,15 @@ export interface SyncStore {
    * entry's own operation can acknowledge it.
    */
   acknowledgeUpload(id: string, disposition: Disposition, accepted: AcceptedRecord | null): Promise<void>;
+  /** Counts a failed attempt for a pending entry, flagging it when `flag`; resolves to its failure count. */
+  recordUploadFailure(id: string, flag: boolean): Promise<number>;
+  /** A deliberate retry: the entry's failures are forgotten and it is no longer flagged. */
+  clearUploadFailures(id: string): Promise<void>;
+  /** Entries whose receipts refused them, in queue order. */
+  readRejectedUploads(): Promise<readonly RejectedUpload[]>;
+  /** When this installation last finished a synchronization run with nothing left unanswered, or null. */
+  readLastSynced(): Promise<number | null>;
+  recordSynced(at: number): Promise<void>;
   /** The account sequence this installation has applied the feed through. */
   readFeedCursor(): Promise<number>;
   /**
