@@ -26,6 +26,7 @@ import type { CompletedPracticeSession } from '../../../../apps/mobile/src/pract
 import { FakeClock as PracticeClock, substituteAdapters } from '../../../../apps/mobile/src/practice/testing/substitutes';
 import type { AgeSignal, EligibilityBand, PlatformAgeSignals } from '../eligibility';
 import type { EnvironmentName } from '../environment';
+import type { MetricsSink } from '../metrics';
 import {
   type AccountService,
   type AccountVault,
@@ -240,6 +241,8 @@ export interface DeviceOptions {
   readonly platform?: 'ios' | 'android';
   /** The registered record types: this build's own and seam 2's test-only types by default. */
   readonly recordTypes?: ReadonlyMap<string, RecordType>;
+  /** Where the device's operational metrics go; discarded by default. */
+  readonly metrics?: MetricsSink;
 }
 
 export function createDevice(stack: LocalStack, options: DeviceOptions): SimulatedDevice {
@@ -347,6 +350,7 @@ export function createDevice(stack: LocalStack, options: DeviceOptions): Simulat
       ageSignals,
       ...(identityProvider && providers ? { providers: identityProvider.settings(providers) } : {}),
       recordTypes: options.recordTypes ?? testRecordTypes,
+      ...(options.metrics ? { metrics: options.metrics } : {}),
     });
     return {
       account,

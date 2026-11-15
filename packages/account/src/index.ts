@@ -53,7 +53,25 @@ export {
   isSignedIn,
   opensOrdinaryAccess,
 } from './service';
-export { type MetricPurpose, metricPermitted } from './metrics';
+export {
+  type DeviceMetricName,
+  METRICS,
+  type MetricEvent,
+  type MetricName,
+  type MetricProperties,
+  type MetricPurpose,
+  type MetricsSender,
+  type MetricsSink,
+  type OperationalSnapshot,
+  type ServerMetricName,
+  TEEN_METRICS,
+  createMetricsSender,
+  discardMetrics,
+  metricEvent,
+  metricPermitted,
+  serverMetricEvents,
+} from './metrics';
+export { type CrashReport, crashReport } from './crash-report';
 export { type AccountPrivacy, type EnablingResult, type PrivacyChoices, type RestrictiveResult, productAnalyticsId } from './privacy';
 export {
   type AcceptedPrivacyChange,

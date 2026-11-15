@@ -5,6 +5,7 @@
 
 import { describe, expect, it } from 'vitest';
 
+import { type MetricEvent, createMetricsSender } from '../metrics';
 import { type SyncBackend, SyncEngine } from './engine';
 import { type ChunkAnswer, type FeedPage, type ProtocolStatus, SyncCallError, type UploadAnswer } from './protocol';
 import type { RecordType } from './registry';
@@ -172,7 +173,10 @@ function engine(options: { random?: number; types?: readonly RecordType[] } = {}
   const backend = new ScriptedBackend();
   const clock = { now: 1_000_000 };
   let next = 0;
+  const events: MetricEvent[] = [];
+  const metrics = createMetricsSender({ gate: () => ({ state: 'active', accountId: 'account-1', eligibility: '18+' }), sink: { send: (event) => void events.push(event) } });
   const sync = new SyncEngine({
+    metrics,
     store,
     backend,
     registry: new Map([note as RecordType, ...(options.types ?? [])].map((type) => [type.name, type])),
@@ -190,7 +194,7 @@ function engine(options: { random?: number; types?: readonly RecordType[] } = {}
     await sync.reconcile('automatic');
     return waited;
   };
-  return { store, backend, clock, sync, retryWhenDue };
+  return { store, backend, clock, sync, retryWhenDue, events };
 }
 
 describe('when the server can’t be reached', () => {
@@ -479,5 +483,55 @@ describe('a change sent at once', () => {
     expect(await sync.submit('switch', { id: 'off-1', on: false })).toEqual({ status: 'invalid' });
     expect(await sync.submit('note', { id: 'n1' })).toEqual({ status: 'invalid' });
     expect(backend.calls).toEqual([]);
+  });
+});
+
+describe('operational metrics (#108)', () => {
+  const named = (events: readonly MetricEvent[], name: string) => events.filter((event) => event.name === name);
+
+  it('a run that ends without finishing reports its error code, and how long the oldest pending record has waited', async () => {
+    const { store, backend, sync, clock, events } = engine();
+    backend.everything = new SyncCallError('unreachable');
+    store.queue('n1', { id: 'n1' });
+    await sync.idle();
+    clock.now += 42_000;
+    await sync.reconcile();
+    expect(named(events, 'sync_run_failed')).toEqual([{ name: 'sync_run_failed', value: 1, properties: { error: 'offline' } }]);
+    expect(named(events, 'sync_queue_age')).toEqual([{ name: 'sync_queue_age', value: 42_000, properties: {} }]);
+
+    backend.everything = null;
+    clock.now += 1_000;
+    await sync.reconcile();
+    // Nothing failed and nothing is left waiting.
+    expect(named(events, 'sync_run_failed')).toHaveLength(1);
+    expect(named(events, 'sync_queue_age')).toHaveLength(1);
+  });
+
+  it('a record failing by itself reports each failure, then its flagging; a refused receipt reports that', async () => {
+    const { store, backend, sync, retryWhenDue, events } = engine();
+    backend.answer('bad', { status: 'malformed' });
+    backend.answer('refused', { status: 'rejected', operation: '', requestHash: '', code: 'invalid-payload' });
+    store.queue('bad', { id: 'bad' });
+    store.queue('refused', { id: 'refused' });
+    await sync.reconcile();
+    for (let attempt = 2; attempt <= 5; attempt++) await retryWhenDue();
+    expect(named(events, 'sync_upload_failed').map((event) => event.properties.outcome)).toEqual(['failed', 'refused', 'failed', 'failed', 'failed', 'flagged']);
+    expect(named(events, 'sync_run_failed').map((event) => event.properties.error)).toEqual(Array(5).fill('unsendable'));
+  });
+
+  it("carries nothing of a record: no payload, record type, item, refusal code or time", async () => {
+    const { store, backend, sync, clock, events } = engine();
+    const secret = { id: 'casino-session-at-bellagio', casino: 'Bellagio', net: '-250.00', email: 'player@example.com' };
+    backend.answer(secret.id, { status: 'rejected', operation: '', requestHash: '', code: 'over-limit-player@example.com' });
+    store.queue(secret.id, secret);
+    await sync.reconcile();
+    backend.everything = new SyncCallError('unreachable');
+    store.queue('other', { id: 'other' });
+    await sync.idle();
+    clock.now += 5_000;
+    await sync.reconcile();
+    expect(events.length).toBeGreaterThan(0);
+    const sent = JSON.stringify(events);
+    for (const text of [secret.id, 'casino', 'Bellagio', '250', 'player@example.com', 'over-limit', 'note', String(clock.now)]) expect(sent).not.toContain(text);
   });
 });
