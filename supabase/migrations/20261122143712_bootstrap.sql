@@ -61,6 +61,11 @@ create index bootstrap_rows_items on private.bootstrap_rows (account_id, record_
 
 revoke all on private.bootstrap_snapshots, private.bootstrap_rows from public, anon, authenticated;
 
+-- An item's feed entries, found without reading the whole feed: a snapshot
+-- function finding an item's latest change, and the redactions (a purge, a
+-- resolution) that rewrite an item's entries.
+create index sync_feed_items on private.sync_feed (account_id, record_type, item_id);
+
 -- ---------------------------------------------------------------------------
 -- The platform's snapshot functions
 -- ---------------------------------------------------------------------------

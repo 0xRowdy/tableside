@@ -439,7 +439,7 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
    * and starts its sync. Nothing changes when a later sign-in overtook this one.
    */
   const openAccount = async ({ accountId, eligibility }: RememberedAccount, state: 'active' | 'renewal-pending' = 'active') => {
-    generation++;
+    const at = ++generation;
     sync?.session.end();
     sync = null;
     syncChanged();
@@ -460,6 +460,10 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
       random: () => uniform(options.randomBytes(4)),
     });
     engine.onChange(syncChanged);
+    // Its status read from the store first (the first download's progress among it), so it never shows a default.
+    await engine.idle();
+    // A sign-out or another sign-in while it read: this account session is over.
+    if (at !== generation) return engine.stop();
     sync = {
       engine,
       store,
