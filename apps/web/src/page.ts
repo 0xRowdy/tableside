@@ -14,6 +14,7 @@
 // before erasure); the export is offered first, from the app.
 // TODO(spec 7 D9): "Paid time is forfeited" is provisional (Amendment 9 §3): under Outcome B its copy follows the owner's choice recorded there.
 // TODO(frames): unverified against S2-24 — the frame couldn't be read (Pencil unreachable). The copy and layout come from spec 2 *Deletion* and Amendments 1 B1, C2, 3 §3–4, 8 §5 and 9 §1–2, and the app's S2-22/S2-23 screens.
+// TODO(frames): S2-24 predates Apple and Google sign-in on the page (#52 review): their "Sign in with" and "Confirm with" buttons follow the app's S2-13 method buttons until a frame draws them.
 
 import {
   BACKUPS_DETAIL,
@@ -29,6 +30,7 @@ import {
   WEB_PAGES,
   type WebAccount,
   type WebAccountView,
+  type WebProvider,
   analyticsDetail,
   codeRequestProblem,
   dayText,
@@ -59,7 +61,21 @@ interface PageState {
 
 const NEEDS_CONNECTION = "Couldn't reach Tableside. Check your connection and try again.";
 
-export function mountAccountPage(main: HTMLElement, account: WebAccount): Promise<void> {
+/** The browser's address bar: a provider's return to the page, and sending the browser to a provider's page. */
+export interface PageNavigation {
+  /** The page URL's query ('' for none). */
+  query(): string;
+  /** Sends the browser to `url` (Apple's or Google's sign-in page). */
+  go(url: string): void;
+  /** Leaves the page at its plain URL, its query gone. */
+  clearQuery(): void;
+}
+
+const NO_NAVIGATION: PageNavigation = { query: () => '', go: () => undefined, clearQuery: () => undefined };
+
+const PROVIDER_NAMES: Readonly<Record<WebProvider, string>> = { apple: 'Apple', google: 'Google' };
+
+export function mountAccountPage(main: HTMLElement, account: WebAccount, navigation: PageNavigation = NO_NAVIGATION): Promise<void> {
   const doc = main.ownerDocument;
   const state: PageState = { busy: false, email: '', codeSentTo: null, confirmed: false, confirming: null, permanent: false, notice: '', problem: '', focus: null };
 
@@ -234,12 +250,15 @@ export function mountAccountPage(main: HTMLElement, account: WebAccount): Promis
       return [
         el('h1', { tabindex: '-1' }, 'Your Tableside account'),
         el('p', { class: 'lead' }, 'Sign in to delete your account, cancel a scheduled deletion or see how a deletion is going. Practice and play are in the app.'),
+        ...providerButtons('Sign in with', 'sign-in', signInWithProvider),
         node,
-        el(
-          'p',
-          { class: 'note' },
-          "Only signed in with Apple or Google? Add an email code to your account in the app first (More → Settings → Account → Sign-in methods), or contact support.",
-        ),
+        account.providers.length === 2
+          ? null
+          : el(
+              'p',
+              { class: 'note' },
+              "Only signed in with Apple or Google? Add an email code to your account in the app first (More → Settings → Account → Sign-in methods), or contact support.",
+            ),
         ...billingHelp(),
       ];
     }
@@ -272,6 +291,41 @@ export function mountAccountPage(main: HTMLElement, account: WebAccount): Promis
       el('p', { class: 'note' }, 'No code? Check your spam folder, or create an account in the Tableside app.'),
       ...billingHelp(),
     ];
+  };
+
+  // ---- Apple and Google ----------------------------------------------------
+
+  /** A button for each provider this page signs in with. */
+  const providerButtons = (verb: string, focusPrefix: string, start: (provider: WebProvider) => void) =>
+    account.providers.length === 0
+      ? []
+      : [el('div', { class: 'actions' }, ...account.providers.map((provider) => button(`${verb} ${PROVIDER_NAMES[provider]}`, 'secondary', `${focusPrefix}-${provider}`, () => start(provider))))];
+
+  /** Sends the browser to the provider's page; the flow comes back to this page (finishProviderReturn). */
+  const goToProvider = (begin: () => Promise<string | null>) =>
+    run(async () => {
+      const url = await begin();
+      if (!url) {
+        state.problem = NEEDS_CONNECTION;
+        return;
+      }
+      navigation.go(url);
+    });
+
+  const signInWithProvider = (provider: WebProvider) => goToProvider(() => account.startProviderSignIn(provider));
+  const confirmWithProvider = (provider: WebProvider) => goToProvider(() => account.confirm.startProvider(provider));
+
+  /** A provider's flow came back to the page: finish it, and say how it went. Signing in never cancels a deletion. */
+  const finishProviderReturn = async (query: string) => {
+    navigation.clearQuery();
+    const result = await account.completeProviderSignIn(query);
+    if (result.status === 'no-account') state.problem = 'No Tableside account signs in with that Apple ID or Google account, and none was made. Create an account in the Tableside app.';
+    else if (result.status === 'failed') state.problem = "Couldn't sign in. Check your connection and try again.";
+    else if (result.status === 'not-a-method') state.problem = "That Apple ID or Google account isn't one of this account's sign-in methods. Confirm with one that is.";
+    else if (result.status === 'confirmed') {
+      state.confirmed = true;
+      state.notice = 'Confirmed. Choose what to do with your account.';
+    }
   };
 
   // ---- Confirm it's you ----------------------------------------------------
@@ -318,8 +372,11 @@ export function mountAccountPage(main: HTMLElement, account: WebAccount): Promis
   const confirmPanel = (then: Action | null) => {
     if (!state.confirming?.codeSent) {
       return [
-        el('p', {}, "First, confirm it's you: we'll email a code to your sign-in address."),
+        el('p', {}, account.providers.length > 0
+          ? "First, confirm it's you: with Apple or Google, or with a code we'll email to your sign-in address."
+          : "First, confirm it's you: we'll email a code to your sign-in address."),
         el('div', { class: 'actions' }, button("Confirm it's you", 'primary', 'confirm', () => sendConfirmCode(then))),
+        ...providerButtons('Confirm with', 'confirm', confirmWithProvider),
       ];
     }
     const { node, input } = form(
@@ -527,7 +584,9 @@ export function mountAccountPage(main: HTMLElement, account: WebAccount): Promis
 
   main.replaceChildren(content, status, alert, supportLinks());
   render();
-  return account.start().then(
+  const returned = navigation.query();
+  const opening = account.isProviderReturn(returned) ? finishProviderReturn(returned).then(() => account.start()) : account.start();
+  return opening.then(
     () => {
       started = true;
       render();

@@ -180,6 +180,36 @@ export class TestIdentityProvider {
     return new TestProviderPorts(this, routes);
   }
 
+  /**
+   * A browser on the provider's web page (Apple's, or Google's for the web
+   * account page): the player signs in as `identity` (null cancels), and the
+   * page posts the result to the redirect URI (form_post). Answers where the
+   * redirect URI then sends the browser, or null when it sends it nowhere.
+   */
+  async playWebAuthorize(
+    url: string,
+    identity: ProviderIdentity | null,
+    tamper: ((form: URLSearchParams) => URLSearchParams) | null = null,
+  ): Promise<string | null> {
+    const authorize = new URL(url);
+    const param = (name: string) => authorize.searchParams.get(name) ?? '';
+    if (`${authorize.origin}${authorize.pathname}` !== this.authorizeUrl) throw new Error(`the browser opened an unexpected page: ${authorize.origin}`);
+    let form = new URLSearchParams({ state: param('state') });
+    if (identity) {
+      form.set('id_token', this.idToken(identity, { nonce: param('nonce'), audience: param('client_id') }));
+      form.set('code', this.authorizationCode(identity));
+    } else form.set('error', 'user_cancelled_authorize');
+    if (tamper) form = tamper(form);
+    const response = await fetch(param('redirect_uri'), {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: form,
+      redirect: 'manual',
+    });
+    await response.body?.cancel();
+    return response.status >= 300 && response.status < 400 ? response.headers.get('location') : null;
+  }
+
   /** The Account service's provider settings for a device using these ports. */
   settings(ports: TestProviderPorts): ProviderSettings {
     return { ports, authName: { apple: this.provider, google: this.provider }, appleWeb: { authorizeUrl: this.authorizeUrl, clientId: CLIENT_ID } };
@@ -224,27 +254,9 @@ export class TestProviderPorts implements ProviderPorts {
    */
   async openAuthSession(url: string, callbackUrl: string): Promise<AuthSessionResult> {
     this.opened.push({ provider: 'browser', url });
-    const authorize = new URL(url);
-    const param = (name: string) => authorize.searchParams.get(name) ?? '';
-    if (`${authorize.origin}${authorize.pathname}` !== this.idp.authorizeUrl) throw new Error(`the browser opened an unexpected page: ${authorize.origin}`);
-    const identity = this.accounts.apple;
-    let form = new URLSearchParams({ state: param('state') });
-    if (identity) {
-      form.set('id_token', this.idp.idToken(identity, { nonce: param('nonce'), audience: param('client_id') }));
-      form.set('code', this.idp.authorizationCode(identity));
-    }
-    else form.set('error', 'user_cancelled_authorize');
-    if (this.tamper) form = this.tamper(form);
-    const response = await fetch(param('redirect_uri'), {
-      method: 'POST',
-      headers: { 'content-type': 'application/x-www-form-urlencoded' },
-      body: form,
-      redirect: 'manual',
-    });
-    await response.body?.cancel();
-    const location = response.headers.get('location');
+    const location = await this.idp.playWebAuthorize(url, this.accounts.apple, this.tamper);
     // The browser hands back only a redirect to the app's own callback URL.
-    if (response.status < 300 || response.status >= 400 || !location?.startsWith(callbackUrl)) return { status: 'canceled' };
+    if (!location?.startsWith(callbackUrl)) return { status: 'canceled' };
     this.returned.push(location);
     return { status: 'returned', url: location };
   }

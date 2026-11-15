@@ -7,10 +7,19 @@
 // a signed-in visitor's browser sends Global Privacy Control, the ad-data
 // opt-out is recorded with source GPC.
 
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { type WebAccount, type WebStorage, createWebAccount } from '../src/web';
-import { type SimulatedDevice, accessToken, createAccountByEmail, createDevice, localStack, uniqueEmail } from '../src/testing';
+import {
+  type ProviderIdentity,
+  type SimulatedDevice,
+  TestIdentityProvider,
+  accessToken,
+  createAccountByEmail,
+  createDevice,
+  localStack,
+  uniqueEmail,
+} from '../src/testing';
 
 vi.setConfig({ testTimeout: 120_000 });
 
@@ -40,6 +49,11 @@ class MemoryStorage implements WebStorage {
  * session storage is its own. A browser with Global Privacy Control on adds
  * Sec-GPC: 1 to every request it sends; no page script can.
  */
+const idp = new TestIdentityProvider();
+
+/** Where provider-callback sends the page's Apple and Google flows back to (TABLESIDE_WEB_ACCOUNT_URL in supabase/config.toml). */
+const PAGE_URL = 'http://localhost:5173/';
+
 function browser(options: { readonly gpc?: boolean } = {}) {
   const lasting = new MemoryStorage();
   const requests: { url: string; headers: Headers }[] = [];
@@ -58,6 +72,11 @@ function browser(options: { readonly gpc?: boolean } = {}) {
       lasting,
       randomBytes: (count: number) => crypto.getRandomValues(new Uint8Array(count)),
       globalPrivacyControl: () => options.gpc === true,
+      // The test identity provider stands in for Apple's and Google's web pages.
+      providers: {
+        apple: { authorizeUrl: idp.authorizeUrl, clientId: idp.clientId, authName: idp.provider },
+        google: { authorizeUrl: idp.authorizeUrl, clientId: idp.clientId, authName: idp.provider },
+      },
     });
   return { tab, lasting, requests };
 }
@@ -261,5 +280,88 @@ describe('the functions the web account page calls', () => {
     await answer.arrayBuffer();
     // Exactly one allowed origin: a repeated header would make the browser refuse the answer.
     expect(answer.headers.get('access-control-allow-origin')).toBe('*');
+  });
+});
+
+describe('Apple and Google sign-in on the web page (user story 46: reachable without the app)', () => {
+  beforeAll(() => idp.start());
+  afterAll(() => idp.stop());
+
+  let counter = 0;
+  const person = (label: string): ProviderIdentity => {
+    counter += 1;
+    const id = `${label}-${Date.now().toString(36)}-${counter}`;
+    return { subject: id, email: `${id}@example.com` };
+  };
+
+  /** An account made in the app with a provider: no email-code method at all. */
+  async function providerAccount(provider: 'apple' | 'google') {
+    const phone = createDevice(stack, { name: 'phone', identityProvider: idp });
+    devices.push(phone);
+    const someone = person(`web-${provider}`);
+    phone.providers!.accounts[provider] = someone;
+    expect(await phone.account.answerAgeQuestion('18+')).toEqual({ status: 'eligible' });
+    expect(await phone.account.createWithProvider(provider)).toEqual({ status: 'created' });
+    const gate = phone.account.gate;
+    if (gate.state !== 'active') throw new Error('account setup failed');
+    return { phone, someone, accountId: gate.accountId };
+  }
+
+  /** The browser goes to the provider's page and back to the page, which finishes the flow. */
+  async function throughProvider(page: WebAccount, url: string | null, identity: ProviderIdentity | null) {
+    expect(url).not.toBeNull();
+    const location = await idp.playWebAuthorize(url!, identity);
+    expect(location?.startsWith(PAGE_URL)).toBe(true);
+    const query = location!.slice(location!.indexOf('?') + 1);
+    // Only the state comes back in the URL: never a token or code.
+    expect(query).not.toMatch(/id_token|code=/);
+    expect(page.isProviderReturn(query)).toBe(true);
+    return page.completeProviderSignIn(query);
+  }
+
+  it.each(['apple', 'google'] as const)('signs in with %s and deletes permanently after confirming with it, all without the app', async (provider) => {
+    const { someone, accountId } = await providerAccount(provider);
+    const page = browser().tab();
+    expect(page.providers).toEqual(['apple', 'google']);
+    await page.start();
+    expect(await throughProvider(page, await page.startProviderSignIn(provider), someone)).toEqual({ status: 'signed-in' });
+    expect(page.view).toEqual({ state: 'signed-in', email: someone.email, deletion: { status: 'none' } });
+
+    expect(await page.deletePermanently()).toEqual({ status: 'fresh-authentication-required' });
+    expect(await throughProvider(page, await page.confirm.startProvider(provider), someone)).toEqual({ status: 'confirmed' });
+    expect(await page.deletePermanently()).toEqual({ status: 'deleted' });
+    expect((await sql<{ state: string }[]>`select state from public.accounts where account_id = ${accountId}`)[0]?.state).toBe('deleted');
+  });
+
+  it('never creates an account: an identity with none is told so, and no Auth user is left', async () => {
+    const page = browser().tab();
+    await page.start();
+    const stranger = person('web-stranger');
+    expect(await throughProvider(page, await page.startProviderSignIn('apple'), stranger)).toEqual({ status: 'no-account' });
+    expect(page.view).toEqual({ state: 'signed-out' });
+    expect(await sql`select 1 from auth.identities where provider_id = ${stranger.subject}`).toHaveLength(0);
+  });
+
+  it('never cancels a scheduled deletion by signing in', async () => {
+    const { phone, someone, accountId } = await providerAccount('google');
+    expect(await phone.account.freshAuthentication.withProvider('google')).toEqual({ status: 'confirmed' });
+    expect(await phone.account.deletion.schedule()).toMatchObject({ status: 'scheduled' });
+    const page = browser().tab();
+    await page.start();
+    expect(await throughProvider(page, await page.startProviderSignIn('google'), someone)).toEqual({ status: 'signed-in' });
+    expect(page.view).toMatchObject({ state: 'signed-in', deletion: { status: 'scheduled' } });
+    expect((await sql<{ state: string }[]>`select state from public.accounts where account_id = ${accountId}`)[0]?.state).toBe('deletion_scheduled');
+  });
+
+  it('a canceled page, or a return this tab didn’t begin, signs nobody in', async () => {
+    const { someone } = await providerAccount('apple');
+    const page = browser().tab();
+    await page.start();
+    expect(await throughProvider(page, await page.startProviderSignIn('apple'), null)).toEqual({ status: 'canceled' });
+    const other = browser().tab();
+    const url = await other.startProviderSignIn('apple');
+    const location = await idp.playWebAuthorize(url!, someone);
+    expect(await page.completeProviderSignIn(location!.slice(location!.indexOf('?') + 1))).toEqual({ status: 'failed' });
+    expect(page.view).toEqual({ state: 'signed-out' });
   });
 });
