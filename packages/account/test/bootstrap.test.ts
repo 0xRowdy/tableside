@@ -345,7 +345,8 @@ describe('a bootstrap overlapping concurrent edits', () => {
 
     tablet.proxy.online = true;
     await tablet.account.sync.idle();
-    const [phoneItems, tabletItems] = await Promise.all([phone, tablet].map((d) => d.account.records.revisionedItems(testRevisionedItem.name)));
+    const phoneItems = await phone.account.records.revisionedItems(testRevisionedItem.name);
+    const tabletItems = await tablet.account.records.revisionedItems(testRevisionedItem.name);
     expect(tabletItems).toEqual(phoneItems);
     expect(tabletItems.find((view) => view.item === 'casino-c')?.accepted).toEqual({ revision: 3, deleted: false, value: casinoValue('32'), conflict: null });
     const results = (await tablet.vault.store().readAcceptedRecords(testResult.name)).map((record) => record.item);
@@ -424,4 +425,36 @@ describe('the snapshot’s lock', () => {
     console.log(`snapshot of 100,001 practice-session summaries: ${Math.round(held)} ms`);
     expect(held).toBeLessThan(LOCK_BUDGET_MS);
   }, 180_000);
+});
+
+describe('a raw client calling the bootstrap operations', () => {
+  it('reaches only its own account’s snapshots, and nothing without an active account and session', async () => {
+    const phone = device('phone');
+    const other = device('other');
+    expect(await createAccountByEmail(phone, uniqueEmail('owner'))).toEqual({ status: 'signed-in' });
+    expect(await createAccountByEmail(other, uniqueEmail('intruder'))).toEqual({ status: 'signed-in' });
+    await Promise.all([phone.account.sync.idle(), other.account.sync.idle()]);
+    await queue(phone, testResult.name, result('r-1', '7'));
+    await phone.account.sync.idle();
+    const owner = stack.rawClient(accessToken(phone));
+    const { data } = await owner.rpc('sync_bootstrap_v1', { installation: 'raw-owner' });
+    const { snapshot } = data as { snapshot: string };
+
+    // Another account's session can't read it, or even tell it exists.
+    expect((await stack.rawClient(accessToken(other)).rpc('sync_bootstrap_page_v1', { snapshot, after: 0 })).data).toEqual({ status: 'expired' });
+    // No session at all.
+    expect((await stack.rawClient().rpc('sync_bootstrap_v1', { installation: 'raw-anon' })).error).not.toBeNull();
+    expect((await stack.rawClient().rpc('sync_bootstrap_page_v1', { snapshot, after: 0 })).error).not.toBeNull();
+    // An account whose deletion is scheduled: ordinary access is closed.
+    await stack.sql`update public.accounts set state = 'deletion_scheduled' where account_id = ${accountOf(phone)}`;
+    expect((await owner.rpc('sync_bootstrap_page_v1', { snapshot, after: 0 })).error).not.toBeNull();
+    expect((await owner.rpc('sync_bootstrap_v1', { installation: 'raw-owner' })).error).not.toBeNull();
+    await stack.sql`update public.accounts set state = 'active' where account_id = ${accountOf(phone)}`;
+    // A revoked session, its access token unexpired.
+    const revoked = stack.rawClient(accessToken(phone));
+    expect((await revoked.rpc('sync_bootstrap_page_v1', { snapshot, after: 0 })).data).toMatchObject({ status: 'page' });
+    await phone.account.signOut();
+    expect((await revoked.rpc('sync_bootstrap_page_v1', { snapshot, after: 0 })).error).not.toBeNull();
+    expect((await revoked.rpc('sync_bootstrap_v1', { installation: 'raw-owner' })).error).not.toBeNull();
+  });
 });

@@ -517,16 +517,17 @@ describe('per-device attempt ordering', () => {
 });
 
 describe('the registry’s test-only types', () => {
-  it('are registered on the server with the same kind, acceptance, ordering and purge hook, and covered by deletion', async () => {
+  it('are registered on the server with the same kind, acceptance, ordering, purge hook and snapshot function, and covered by deletion', async () => {
     for (const type of TEST_RECORD_TYPES) {
-      const [row] = await stack.sql<{ kind: string; accept: string | null; ordering: string; purgeable: boolean }[]>`
-        select kind, accept::regproc::text as accept, ordering, purge is not null as purgeable from private.record_types
-        where record_type = ${type.name} and payload_version = ${type.payloadVersion}`;
+      const [row] = await stack.sql<{ kind: string; accept: string | null; ordering: string; purgeable: boolean; snapshot: string | null }[]>`
+        select kind, accept::regproc::text as accept, ordering, purge is not null as purgeable, snapshot::regproc::text as snapshot
+        from private.record_types where record_type = ${type.name} and payload_version = ${type.payloadVersion}`;
       expect(row, type.name).toEqual({
         kind: type.kind,
         accept: type.acceptance,
         ordering: type.ordering ?? 'account',
         purgeable: type === testResult,
+        snapshot: type.snapshot,
       });
       for (const table of [...type.deletion.serverTables, ...PLATFORM_TABLES]) {
         const [schema, name] = table.split('.');

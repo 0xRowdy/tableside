@@ -29,7 +29,9 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
         "CREATE TABLE accepted_records (\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    installation_id TEXT,\n    device_position INTEGER,\n    PRIMARY KEY (record_type, item_id)\n  ) STRICT",
         "CREATE TABLE device_positions (record_type TEXT PRIMARY KEY, last INTEGER NOT NULL) STRICT",
         "CREATE TABLE purged_records (record_type TEXT NOT NULL, item_id TEXT NOT NULL, PRIMARY KEY (record_type, item_id)) STRICT",
-        "CREATE TABLE feed_cursor (singleton INTEGER PRIMARY KEY CHECK (singleton = 1), sequence INTEGER NOT NULL, synced_at INTEGER) STRICT"
+        "CREATE TABLE feed_cursor (singleton INTEGER PRIMARY KEY CHECK (singleton = 1), sequence INTEGER NOT NULL, synced_at INTEGER) STRICT",
+        "CREATE TABLE bootstrap (\n    singleton INTEGER PRIMARY KEY CHECK (singleton = 1),\n    installed INTEGER NOT NULL CHECK (installed IN (0, 1)),\n    body TEXT, body_format INTEGER, body_length INTEGER, body_sha256 TEXT,\n    staged INTEGER NOT NULL DEFAULT 0 CHECK (staged >= 0),\n    after_ordinal INTEGER NOT NULL DEFAULT 0 CHECK (after_ordinal >= 0)\n  ) STRICT",
+        "CREATE TABLE bootstrap_rows (\n    position INTEGER PRIMARY KEY,\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    installation_id TEXT,\n    device_position INTEGER\n  ) STRICT"
       ],
       "rows": {
         "meta": [
@@ -93,7 +95,20 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
             "sequence": 0,
             "synced_at": null
           }
-        ]
+        ],
+        "bootstrap": [
+          {
+            "singleton": 1,
+            "installed": 0,
+            "body": null,
+            "body_format": null,
+            "body_length": null,
+            "body_sha256": null,
+            "staged": 0,
+            "after_ordinal": 0
+          }
+        ],
+        "bootstrap_rows": []
       }
     },
     {
@@ -119,7 +134,9 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
         "CREATE TABLE accepted_records (\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    installation_id TEXT,\n    device_position INTEGER,\n    PRIMARY KEY (record_type, item_id)\n  ) STRICT",
         "CREATE TABLE device_positions (record_type TEXT PRIMARY KEY, last INTEGER NOT NULL) STRICT",
         "CREATE TABLE purged_records (record_type TEXT NOT NULL, item_id TEXT NOT NULL, PRIMARY KEY (record_type, item_id)) STRICT",
-        "CREATE TABLE feed_cursor (singleton INTEGER PRIMARY KEY CHECK (singleton = 1), sequence INTEGER NOT NULL, synced_at INTEGER) STRICT"
+        "CREATE TABLE feed_cursor (singleton INTEGER PRIMARY KEY CHECK (singleton = 1), sequence INTEGER NOT NULL, synced_at INTEGER) STRICT",
+        "CREATE TABLE bootstrap (\n    singleton INTEGER PRIMARY KEY CHECK (singleton = 1),\n    installed INTEGER NOT NULL CHECK (installed IN (0, 1)),\n    body TEXT, body_format INTEGER, body_length INTEGER, body_sha256 TEXT,\n    staged INTEGER NOT NULL DEFAULT 0 CHECK (staged >= 0),\n    after_ordinal INTEGER NOT NULL DEFAULT 0 CHECK (after_ordinal >= 0)\n  ) STRICT",
+        "CREATE TABLE bootstrap_rows (\n    position INTEGER PRIMARY KEY,\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    installation_id TEXT,\n    device_position INTEGER\n  ) STRICT"
       ],
       "rows": {
         "meta": [
@@ -183,7 +200,20 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
             "sequence": 0,
             "synced_at": null
           }
-        ]
+        ],
+        "bootstrap": [
+          {
+            "singleton": 1,
+            "installed": 0,
+            "body": null,
+            "body_format": null,
+            "body_length": null,
+            "body_sha256": null,
+            "staged": 0,
+            "after_ordinal": 0
+          }
+        ],
+        "bootstrap_rows": []
       }
     },
     {
@@ -209,7 +239,9 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
         "CREATE TABLE accepted_records (\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    installation_id TEXT,\n    device_position INTEGER,\n    PRIMARY KEY (record_type, item_id)\n  ) STRICT",
         "CREATE TABLE device_positions (record_type TEXT PRIMARY KEY, last INTEGER NOT NULL) STRICT",
         "CREATE TABLE purged_records (record_type TEXT NOT NULL, item_id TEXT NOT NULL, PRIMARY KEY (record_type, item_id)) STRICT",
-        "CREATE TABLE feed_cursor (singleton INTEGER PRIMARY KEY CHECK (singleton = 1), sequence INTEGER NOT NULL, synced_at INTEGER) STRICT"
+        "CREATE TABLE feed_cursor (singleton INTEGER PRIMARY KEY CHECK (singleton = 1), sequence INTEGER NOT NULL, synced_at INTEGER) STRICT",
+        "CREATE TABLE bootstrap (\n    singleton INTEGER PRIMARY KEY CHECK (singleton = 1),\n    installed INTEGER NOT NULL CHECK (installed IN (0, 1)),\n    body TEXT, body_format INTEGER, body_length INTEGER, body_sha256 TEXT,\n    staged INTEGER NOT NULL DEFAULT 0 CHECK (staged >= 0),\n    after_ordinal INTEGER NOT NULL DEFAULT 0 CHECK (after_ordinal >= 0)\n  ) STRICT",
+        "CREATE TABLE bootstrap_rows (\n    position INTEGER PRIMARY KEY,\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    installation_id TEXT,\n    device_position INTEGER\n  ) STRICT"
       ],
       "rows": {
         "meta": [
@@ -291,7 +323,20 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
             "sequence": 0,
             "synced_at": null
           }
-        ]
+        ],
+        "bootstrap": [
+          {
+            "singleton": 1,
+            "installed": 0,
+            "body": null,
+            "body_format": null,
+            "body_length": null,
+            "body_sha256": null,
+            "staged": 0,
+            "after_ordinal": 0
+          }
+        ],
+        "bootstrap_rows": []
       }
     },
     {
@@ -317,7 +362,9 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
         "CREATE TABLE accepted_records (\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    installation_id TEXT,\n    device_position INTEGER,\n    PRIMARY KEY (record_type, item_id)\n  ) STRICT",
         "CREATE TABLE device_positions (record_type TEXT PRIMARY KEY, last INTEGER NOT NULL) STRICT",
         "CREATE TABLE purged_records (record_type TEXT NOT NULL, item_id TEXT NOT NULL, PRIMARY KEY (record_type, item_id)) STRICT",
-        "CREATE TABLE feed_cursor (singleton INTEGER PRIMARY KEY CHECK (singleton = 1), sequence INTEGER NOT NULL, synced_at INTEGER) STRICT"
+        "CREATE TABLE feed_cursor (singleton INTEGER PRIMARY KEY CHECK (singleton = 1), sequence INTEGER NOT NULL, synced_at INTEGER) STRICT",
+        "CREATE TABLE bootstrap (\n    singleton INTEGER PRIMARY KEY CHECK (singleton = 1),\n    installed INTEGER NOT NULL CHECK (installed IN (0, 1)),\n    body TEXT, body_format INTEGER, body_length INTEGER, body_sha256 TEXT,\n    staged INTEGER NOT NULL DEFAULT 0 CHECK (staged >= 0),\n    after_ordinal INTEGER NOT NULL DEFAULT 0 CHECK (after_ordinal >= 0)\n  ) STRICT",
+        "CREATE TABLE bootstrap_rows (\n    position INTEGER PRIMARY KEY,\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    installation_id TEXT,\n    device_position INTEGER\n  ) STRICT"
       ],
       "rows": {
         "meta": [
@@ -408,7 +455,20 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
             "sequence": 0,
             "synced_at": null
           }
-        ]
+        ],
+        "bootstrap": [
+          {
+            "singleton": 1,
+            "installed": 0,
+            "body": null,
+            "body_format": null,
+            "body_length": null,
+            "body_sha256": null,
+            "staged": 0,
+            "after_ordinal": 0
+          }
+        ],
+        "bootstrap_rows": []
       }
     },
     {
@@ -434,7 +494,9 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
         "CREATE TABLE accepted_records (\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    installation_id TEXT,\n    device_position INTEGER,\n    PRIMARY KEY (record_type, item_id)\n  ) STRICT",
         "CREATE TABLE device_positions (record_type TEXT PRIMARY KEY, last INTEGER NOT NULL) STRICT",
         "CREATE TABLE purged_records (record_type TEXT NOT NULL, item_id TEXT NOT NULL, PRIMARY KEY (record_type, item_id)) STRICT",
-        "CREATE TABLE feed_cursor (singleton INTEGER PRIMARY KEY CHECK (singleton = 1), sequence INTEGER NOT NULL, synced_at INTEGER) STRICT"
+        "CREATE TABLE feed_cursor (singleton INTEGER PRIMARY KEY CHECK (singleton = 1), sequence INTEGER NOT NULL, synced_at INTEGER) STRICT",
+        "CREATE TABLE bootstrap (\n    singleton INTEGER PRIMARY KEY CHECK (singleton = 1),\n    installed INTEGER NOT NULL CHECK (installed IN (0, 1)),\n    body TEXT, body_format INTEGER, body_length INTEGER, body_sha256 TEXT,\n    staged INTEGER NOT NULL DEFAULT 0 CHECK (staged >= 0),\n    after_ordinal INTEGER NOT NULL DEFAULT 0 CHECK (after_ordinal >= 0)\n  ) STRICT",
+        "CREATE TABLE bootstrap_rows (\n    position INTEGER PRIMARY KEY,\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    installation_id TEXT,\n    device_position INTEGER\n  ) STRICT"
       ],
       "rows": {
         "meta": [
@@ -498,7 +560,20 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
             "sequence": 0,
             "synced_at": null
           }
-        ]
+        ],
+        "bootstrap": [
+          {
+            "singleton": 1,
+            "installed": 0,
+            "body": null,
+            "body_format": null,
+            "body_length": null,
+            "body_sha256": null,
+            "staged": 0,
+            "after_ordinal": 0
+          }
+        ],
+        "bootstrap_rows": []
       }
     },
     {
@@ -524,7 +599,9 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
         "CREATE TABLE accepted_records (\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    installation_id TEXT,\n    device_position INTEGER,\n    PRIMARY KEY (record_type, item_id)\n  ) STRICT",
         "CREATE TABLE device_positions (record_type TEXT PRIMARY KEY, last INTEGER NOT NULL) STRICT",
         "CREATE TABLE purged_records (record_type TEXT NOT NULL, item_id TEXT NOT NULL, PRIMARY KEY (record_type, item_id)) STRICT",
-        "CREATE TABLE feed_cursor (singleton INTEGER PRIMARY KEY CHECK (singleton = 1), sequence INTEGER NOT NULL, synced_at INTEGER) STRICT"
+        "CREATE TABLE feed_cursor (singleton INTEGER PRIMARY KEY CHECK (singleton = 1), sequence INTEGER NOT NULL, synced_at INTEGER) STRICT",
+        "CREATE TABLE bootstrap (\n    singleton INTEGER PRIMARY KEY CHECK (singleton = 1),\n    installed INTEGER NOT NULL CHECK (installed IN (0, 1)),\n    body TEXT, body_format INTEGER, body_length INTEGER, body_sha256 TEXT,\n    staged INTEGER NOT NULL DEFAULT 0 CHECK (staged >= 0),\n    after_ordinal INTEGER NOT NULL DEFAULT 0 CHECK (after_ordinal >= 0)\n  ) STRICT",
+        "CREATE TABLE bootstrap_rows (\n    position INTEGER PRIMARY KEY,\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    installation_id TEXT,\n    device_position INTEGER\n  ) STRICT"
       ],
       "rows": {
         "meta": [
@@ -606,7 +683,20 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
             "sequence": 0,
             "synced_at": null
           }
-        ]
+        ],
+        "bootstrap": [
+          {
+            "singleton": 1,
+            "installed": 0,
+            "body": null,
+            "body_format": null,
+            "body_length": null,
+            "body_sha256": null,
+            "staged": 0,
+            "after_ordinal": 0
+          }
+        ],
+        "bootstrap_rows": []
       }
     },
     {
@@ -632,7 +722,9 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
         "CREATE TABLE accepted_records (\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    installation_id TEXT,\n    device_position INTEGER,\n    PRIMARY KEY (record_type, item_id)\n  ) STRICT",
         "CREATE TABLE device_positions (record_type TEXT PRIMARY KEY, last INTEGER NOT NULL) STRICT",
         "CREATE TABLE purged_records (record_type TEXT NOT NULL, item_id TEXT NOT NULL, PRIMARY KEY (record_type, item_id)) STRICT",
-        "CREATE TABLE feed_cursor (singleton INTEGER PRIMARY KEY CHECK (singleton = 1), sequence INTEGER NOT NULL, synced_at INTEGER) STRICT"
+        "CREATE TABLE feed_cursor (singleton INTEGER PRIMARY KEY CHECK (singleton = 1), sequence INTEGER NOT NULL, synced_at INTEGER) STRICT",
+        "CREATE TABLE bootstrap (\n    singleton INTEGER PRIMARY KEY CHECK (singleton = 1),\n    installed INTEGER NOT NULL CHECK (installed IN (0, 1)),\n    body TEXT, body_format INTEGER, body_length INTEGER, body_sha256 TEXT,\n    staged INTEGER NOT NULL DEFAULT 0 CHECK (staged >= 0),\n    after_ordinal INTEGER NOT NULL DEFAULT 0 CHECK (after_ordinal >= 0)\n  ) STRICT",
+        "CREATE TABLE bootstrap_rows (\n    position INTEGER PRIMARY KEY,\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    installation_id TEXT,\n    device_position INTEGER\n  ) STRICT"
       ],
       "rows": {
         "meta": [
@@ -714,7 +806,20 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
             "sequence": 0,
             "synced_at": null
           }
-        ]
+        ],
+        "bootstrap": [
+          {
+            "singleton": 1,
+            "installed": 0,
+            "body": null,
+            "body_format": null,
+            "body_length": null,
+            "body_sha256": null,
+            "staged": 0,
+            "after_ordinal": 0
+          }
+        ],
+        "bootstrap_rows": []
       }
     },
     {
@@ -740,7 +845,9 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
         "CREATE TABLE accepted_records (\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    installation_id TEXT,\n    device_position INTEGER,\n    PRIMARY KEY (record_type, item_id)\n  ) STRICT",
         "CREATE TABLE device_positions (record_type TEXT PRIMARY KEY, last INTEGER NOT NULL) STRICT",
         "CREATE TABLE purged_records (record_type TEXT NOT NULL, item_id TEXT NOT NULL, PRIMARY KEY (record_type, item_id)) STRICT",
-        "CREATE TABLE feed_cursor (singleton INTEGER PRIMARY KEY CHECK (singleton = 1), sequence INTEGER NOT NULL, synced_at INTEGER) STRICT"
+        "CREATE TABLE feed_cursor (singleton INTEGER PRIMARY KEY CHECK (singleton = 1), sequence INTEGER NOT NULL, synced_at INTEGER) STRICT",
+        "CREATE TABLE bootstrap (\n    singleton INTEGER PRIMARY KEY CHECK (singleton = 1),\n    installed INTEGER NOT NULL CHECK (installed IN (0, 1)),\n    body TEXT, body_format INTEGER, body_length INTEGER, body_sha256 TEXT,\n    staged INTEGER NOT NULL DEFAULT 0 CHECK (staged >= 0),\n    after_ordinal INTEGER NOT NULL DEFAULT 0 CHECK (after_ordinal >= 0)\n  ) STRICT",
+        "CREATE TABLE bootstrap_rows (\n    position INTEGER PRIMARY KEY,\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    installation_id TEXT,\n    device_position INTEGER\n  ) STRICT"
       ],
       "rows": {
         "meta": [
@@ -822,7 +929,20 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
             "sequence": 0,
             "synced_at": null
           }
-        ]
+        ],
+        "bootstrap": [
+          {
+            "singleton": 1,
+            "installed": 0,
+            "body": null,
+            "body_format": null,
+            "body_length": null,
+            "body_sha256": null,
+            "staged": 0,
+            "after_ordinal": 0
+          }
+        ],
+        "bootstrap_rows": []
       }
     },
     {
@@ -848,7 +968,9 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
         "CREATE TABLE accepted_records (\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    installation_id TEXT,\n    device_position INTEGER,\n    PRIMARY KEY (record_type, item_id)\n  ) STRICT",
         "CREATE TABLE device_positions (record_type TEXT PRIMARY KEY, last INTEGER NOT NULL) STRICT",
         "CREATE TABLE purged_records (record_type TEXT NOT NULL, item_id TEXT NOT NULL, PRIMARY KEY (record_type, item_id)) STRICT",
-        "CREATE TABLE feed_cursor (singleton INTEGER PRIMARY KEY CHECK (singleton = 1), sequence INTEGER NOT NULL, synced_at INTEGER) STRICT"
+        "CREATE TABLE feed_cursor (singleton INTEGER PRIMARY KEY CHECK (singleton = 1), sequence INTEGER NOT NULL, synced_at INTEGER) STRICT",
+        "CREATE TABLE bootstrap (\n    singleton INTEGER PRIMARY KEY CHECK (singleton = 1),\n    installed INTEGER NOT NULL CHECK (installed IN (0, 1)),\n    body TEXT, body_format INTEGER, body_length INTEGER, body_sha256 TEXT,\n    staged INTEGER NOT NULL DEFAULT 0 CHECK (staged >= 0),\n    after_ordinal INTEGER NOT NULL DEFAULT 0 CHECK (after_ordinal >= 0)\n  ) STRICT",
+        "CREATE TABLE bootstrap_rows (\n    position INTEGER PRIMARY KEY,\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    installation_id TEXT,\n    device_position INTEGER\n  ) STRICT"
       ],
       "rows": {
         "meta": [
@@ -912,7 +1034,20 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
             "sequence": 0,
             "synced_at": null
           }
-        ]
+        ],
+        "bootstrap": [
+          {
+            "singleton": 1,
+            "installed": 0,
+            "body": null,
+            "body_format": null,
+            "body_length": null,
+            "body_sha256": null,
+            "staged": 0,
+            "after_ordinal": 0
+          }
+        ],
+        "bootstrap_rows": []
       }
     },
     {
@@ -938,7 +1073,9 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
         "CREATE TABLE accepted_records (\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    installation_id TEXT,\n    device_position INTEGER,\n    PRIMARY KEY (record_type, item_id)\n  ) STRICT",
         "CREATE TABLE device_positions (record_type TEXT PRIMARY KEY, last INTEGER NOT NULL) STRICT",
         "CREATE TABLE purged_records (record_type TEXT NOT NULL, item_id TEXT NOT NULL, PRIMARY KEY (record_type, item_id)) STRICT",
-        "CREATE TABLE feed_cursor (singleton INTEGER PRIMARY KEY CHECK (singleton = 1), sequence INTEGER NOT NULL, synced_at INTEGER) STRICT"
+        "CREATE TABLE feed_cursor (singleton INTEGER PRIMARY KEY CHECK (singleton = 1), sequence INTEGER NOT NULL, synced_at INTEGER) STRICT",
+        "CREATE TABLE bootstrap (\n    singleton INTEGER PRIMARY KEY CHECK (singleton = 1),\n    installed INTEGER NOT NULL CHECK (installed IN (0, 1)),\n    body TEXT, body_format INTEGER, body_length INTEGER, body_sha256 TEXT,\n    staged INTEGER NOT NULL DEFAULT 0 CHECK (staged >= 0),\n    after_ordinal INTEGER NOT NULL DEFAULT 0 CHECK (after_ordinal >= 0)\n  ) STRICT",
+        "CREATE TABLE bootstrap_rows (\n    position INTEGER PRIMARY KEY,\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    installation_id TEXT,\n    device_position INTEGER\n  ) STRICT"
       ],
       "rows": {
         "meta": [
@@ -1002,7 +1139,20 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
             "sequence": 0,
             "synced_at": null
           }
-        ]
+        ],
+        "bootstrap": [
+          {
+            "singleton": 1,
+            "installed": 0,
+            "body": null,
+            "body_format": null,
+            "body_length": null,
+            "body_sha256": null,
+            "staged": 0,
+            "after_ordinal": 0
+          }
+        ],
+        "bootstrap_rows": []
       }
     },
     {
@@ -1023,7 +1173,9 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
         "CREATE TABLE accepted_records (\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    installation_id TEXT,\n    device_position INTEGER,\n    PRIMARY KEY (record_type, item_id)\n  ) STRICT",
         "CREATE TABLE device_positions (record_type TEXT PRIMARY KEY, last INTEGER NOT NULL) STRICT",
         "CREATE TABLE purged_records (record_type TEXT NOT NULL, item_id TEXT NOT NULL, PRIMARY KEY (record_type, item_id)) STRICT",
-        "CREATE TABLE feed_cursor (singleton INTEGER PRIMARY KEY CHECK (singleton = 1), sequence INTEGER NOT NULL, synced_at INTEGER) STRICT"
+        "CREATE TABLE feed_cursor (singleton INTEGER PRIMARY KEY CHECK (singleton = 1), sequence INTEGER NOT NULL, synced_at INTEGER) STRICT",
+        "CREATE TABLE bootstrap (\n    singleton INTEGER PRIMARY KEY CHECK (singleton = 1),\n    installed INTEGER NOT NULL CHECK (installed IN (0, 1)),\n    body TEXT, body_format INTEGER, body_length INTEGER, body_sha256 TEXT,\n    staged INTEGER NOT NULL DEFAULT 0 CHECK (staged >= 0),\n    after_ordinal INTEGER NOT NULL DEFAULT 0 CHECK (after_ordinal >= 0)\n  ) STRICT",
+        "CREATE TABLE bootstrap_rows (\n    position INTEGER PRIMARY KEY,\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    installation_id TEXT,\n    device_position INTEGER\n  ) STRICT"
       ],
       "rows": {
         "meta": [
@@ -1320,7 +1472,20 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
             "sequence": 2,
             "synced_at": null
           }
-        ]
+        ],
+        "bootstrap": [
+          {
+            "singleton": 1,
+            "installed": 0,
+            "body": null,
+            "body_format": null,
+            "body_length": null,
+            "body_sha256": null,
+            "staged": 0,
+            "after_ordinal": 0
+          }
+        ],
+        "bootstrap_rows": []
       }
     }
   ]
