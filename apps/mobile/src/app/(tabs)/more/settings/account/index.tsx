@@ -63,7 +63,7 @@ export default function Account() {
       </Group>
       <GroupLabel>YOUR DATA</GroupLabel>
       <Group>
-        <ListRow icon={RefreshCw} title="Sync status" detail={overview ? waitingText(overview.waiting) : 'Checking…'} onPress={open('sync')} />
+        <ListRow icon={RefreshCw} title="Sync status" detail={overview ? waitingText(overview.waiting) : 'Checking…'} onPress={() => router.navigate('/more/settings/account/sync')} />
         <ListRow
           icon={HardDriveDownload}
           title="Download all history"

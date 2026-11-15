@@ -40,6 +40,7 @@ function fakeSync(status: Partial<SyncStatus>) {
     reconcile: jest.fn(async () => undefined),
     retryRecord: jest.fn(async () => undefined),
     idle: async () => undefined,
+    countWaiting: async () => current.uploads.length,
     set(next) {
       current = { ...current, ...next };
       listeners.forEach((listener) => listener(current));
