@@ -10,6 +10,9 @@ import type {
   CodeIntent,
   CodeRequestResult,
   CodeVerificationResult,
+  IdentityProvider,
+  ProviderCreateResult,
+  ProviderSignInResult,
 } from '@tableside/account';
 
 import type { GameId } from '@/games';
@@ -22,6 +25,7 @@ type Call =
   | { readonly method: 'answerAgeQuestion'; readonly range: AgeRange }
   | { readonly method: 'requestEmailCode'; readonly email: string; readonly intent: CodeIntent }
   | { readonly method: 'verifyEmailCode'; readonly email: string; readonly code: string }
+  | { readonly method: 'signInWithProvider' | 'createWithProvider'; readonly provider: IdentityProvider }
   | { readonly method: 'resume' | 'renew' };
 
 /** An Account service whose answers a test scripts. Unscripted calls succeed. */
@@ -34,7 +38,9 @@ export class FakeAccountService implements AccountService {
     age: AgeAnswerResult[];
     code: CodeRequestResult[];
     verify: CodeVerificationResult[];
-  } = { age: [], code: [], verify: [] };
+    providerSignIn: ProviderSignInResult[];
+    providerCreate: ProviderCreateResult[];
+  } = { age: [], code: [], verify: [], providerSignIn: [], providerCreate: [] };
 
   constructor(
     /** The gate resume() reopens into: what this installation was signed in to. */
@@ -84,6 +90,20 @@ export class FakeAccountService implements AccountService {
   async requestEmailCode(request: { email: string; intent: CodeIntent }) {
     this.calls.push({ method: 'requestEmailCode', ...request });
     return this.next.code.shift() ?? { status: 'sent' as const };
+  }
+
+  async signInWithProvider(provider: IdentityProvider) {
+    this.calls.push({ method: 'signInWithProvider', provider });
+    const result = this.next.providerSignIn.shift() ?? { status: 'signed-in' as const };
+    if (result.status === 'signed-in') this.setGate({ state: 'active', accountId: FAKE_ACCOUNT_ID, eligibility: '18+' });
+    return result;
+  }
+
+  async createWithProvider(provider: IdentityProvider) {
+    this.calls.push({ method: 'createWithProvider', provider });
+    const result = this.next.providerCreate.shift() ?? { status: 'created' as const };
+    if (result.status === 'created' || result.status === 'signed-in') this.setGate({ state: 'active', accountId: FAKE_ACCOUNT_ID, eligibility: '18+' });
+    return result;
   }
 
   async verifyEmailCode(request: { email: string; code: string }) {

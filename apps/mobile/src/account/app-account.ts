@@ -13,6 +13,7 @@ import { buildBackend } from './backend';
 import { appDevicePorts } from './device-ports';
 import { createNativeVault, KEYCHAIN_OPTIONS } from './native-vault';
 import { forAccountSession } from './practice';
+import { providerSettings } from './provider-ports';
 import type { AccountSession } from './vault';
 
 /**
@@ -66,6 +67,7 @@ export function createAppAccount(): AppAccount {
     clock: () => Date.now(),
     device: appDevicePorts,
     randomBytes: (count) => Crypto.getRandomValues(new Uint8Array(count)),
+    providers: providerSettings(),
   });
   const offlineGameKey = (accountId: string) => `tableside.${backend.name}.${accountId}.offline-game`;
   return {

@@ -90,8 +90,8 @@ async function signingKey(issuer: string, keyId: string): Promise<CryptoKey | nu
     const imported = new Map<string, CryptoKey>();
     for (const jwk of Array.isArray(keys) ? (keys as (JsonWebKey & { kid?: string; use?: string })[]) : []) {
       if (jwk.kty !== 'RSA' || typeof jwk.kid !== 'string' || (jwk.use && jwk.use !== 'sig')) continue;
-      const { kid, use: _use, ...material } = jwk;
-      imported.set(kid, await crypto.subtle.importKey('jwk', { ...material, alg: 'RS256' }, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['verify']));
+      const material: JsonWebKey = { kty: 'RSA', n: jwk.n, e: jwk.e, alg: 'RS256' };
+      imported.set(jwk.kid, await crypto.subtle.importKey('jwk', material, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['verify']));
     }
     keySets.set(issuer, imported);
     return imported.get(keyId) ?? null;

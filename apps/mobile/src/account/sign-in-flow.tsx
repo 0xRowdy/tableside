@@ -1,4 +1,4 @@
-import type { CodeIntent } from '@tableside/account';
+import type { CodeIntent, IdentityProvider } from '@tableside/account';
 import { router } from 'expo-router';
 import { createContext, useContext, useState, type ReactNode } from 'react';
 
@@ -9,10 +9,14 @@ interface SignInFlow {
   readonly intent: CodeIntent;
   /** The address the code goes to. Held in memory only, never in a route or log. */
   readonly email: string;
-  /** Sign in: straight to the email step, never the age step. */
+  /** The provider whose Sign in found no account, when Create continues from there. */
+  readonly provider: IdentityProvider | null;
+  /** Sign in by email code: straight to the email step, never the age step. */
   startSignIn(): void;
-  /** Create: the age step first. */
+  /** Create: the age step first, then a sign-in method. */
   startCreate(): void;
+  /** Create from "No account for this Apple ID / Google account": the age step, then that identity's account. */
+  createWith(provider: IdentityProvider): void;
   setEmail(email: string): void;
 }
 
@@ -20,15 +24,23 @@ const SignInFlowContext = createContext<SignInFlow | null>(null);
 
 /** The first run's choices so far, shared by its screens. */
 export function SignInFlowProvider({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<{ intent: CodeIntent; email: string }>({ intent: 'sign-in', email: '' });
+  const [state, setState] = useState<{ intent: CodeIntent; email: string; provider: IdentityProvider | null }>({
+    intent: 'sign-in',
+    email: '',
+    provider: null,
+  });
   const value: SignInFlow = {
     ...state,
     startSignIn: () => {
-      setState((current) => ({ ...current, intent: 'sign-in' }));
+      setState((current) => ({ ...current, intent: 'sign-in', provider: null }));
       router.push('/email');
     },
     startCreate: () => {
-      setState((current) => ({ ...current, intent: 'create' }));
+      setState((current) => ({ ...current, intent: 'create', provider: null }));
+      router.push('/age');
+    },
+    createWith: (provider) => {
+      setState((current) => ({ ...current, intent: 'create', provider }));
       router.push('/age');
     },
     setEmail: (email) => setState((current) => ({ ...current, email })),
@@ -56,5 +68,41 @@ export function useCodeRequest(onProblem: (problem: string) => void): (email: st
     if (result.status === 'age-required') router.replace('/age');
     else onProblem(codeRequestProblem(result));
     return false;
+  };
+}
+
+/** How a provider is named on screen. */
+export const PROVIDER_NAME: Record<IdentityProvider, string> = { apple: 'Apple', google: 'Google' };
+
+const providerProblem = (provider: IdentityProvider) =>
+  `Couldn't continue with ${PROVIDER_NAME[provider]}. Check your connection and try again, or use another way to sign in.`;
+
+/**
+ * Sign in with Apple or Google. Signed in: the layout moves on as the account
+ * gate changes. No account: "No account for this Apple ID / Google account".
+ * A closed sheet changes nothing; anything else goes to `onProblem`.
+ */
+export function useProviderSignIn(onProblem: (problem: string | null) => void): (provider: IdentityProvider) => Promise<void> {
+  const { service } = useAccount();
+  return async (provider) => {
+    onProblem(null);
+    const result = await service.signInWithProvider(provider);
+    if (result.status === 'no-account') router.push({ pathname: '/no-account', params: { provider } });
+    else if (result.status === 'failed') onProblem(providerProblem(provider));
+  };
+}
+
+/**
+ * Create with Apple or Google, once the age step has passed. Created, or the
+ * identity's existing account: the layout moves on. An expired age answer
+ * goes back to the age step.
+ */
+export function useProviderCreate(onProblem: (problem: string | null) => void): (provider: IdentityProvider) => Promise<void> {
+  const { service } = useAccount();
+  return async (provider) => {
+    onProblem(null);
+    const result = await service.createWithProvider(provider);
+    if (result.status === 'age-required') router.replace('/age');
+    else if (result.status === 'failed') onProblem(providerProblem(provider));
   };
 }
