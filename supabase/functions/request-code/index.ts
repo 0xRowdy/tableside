@@ -28,6 +28,8 @@ const MAILPIT_URL = Deno.env.get('TABLESIDE_MAILPIT_URL');
 const SENDER = { Email: 'codes@tableside.local', Name: 'Tableside' };
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+/** How long every admitted request takes at least; above the code path's own time with the local mail catcher. #122 tunes it against Resend. */
+const RESPONSE_FLOOR_MS = 300;
 
 Deno.serve(async (request) => {
   if (request.method !== 'POST') return reply(400, { status: 'invalid' });
@@ -53,6 +55,9 @@ Deno.serve(async (request) => {
     const admission = await rpc<{ admitted: boolean; retry_after?: number }>('admit_code_request', { address: email, ip: clientIp(request) });
     if (!admission.admitted) return reply(429, { status: 'rate-limited', retryAfter: admission.retry_after ?? 60 });
 
+    // Every admitted answer waits out the same floor, so the extra work of
+    // issuing a code doesn't show in how long the answer takes.
+    const floor = sleep(RESPONSE_FLOOR_MS);
     const recipient = await rpc<Recipient>('email_code_recipient', { address: email });
     // Sign-in only reaches an existing account; Create finishes one under way, or starts one.
     const type: MailType = intent === 'sign-in' && recipient !== 'account' ? 'no-account' : 'code';
@@ -60,26 +65,39 @@ Deno.serve(async (request) => {
     try {
       delivered = await deliver(email, type === 'code' ? codeMail(await issueCode(email, recipient, assertion)) : NO_ACCOUNT_MAIL);
     } catch (error) {
-      console.error('request-code failed', error instanceof StepError ? error.step : 'unexpected');
+      logFailure(error);
     }
     // Every failure to send, whatever the step, is a failed send of its type.
     await rpc('log_email_send', { type, pacing: 'immediate', outcome: delivered ? 'sent' : 'failed' });
+    await floor;
     return delivered ? reply(200, { status: 'sent' }) : reply(502, { status: 'failed' });
   } catch (error) {
-    console.error('request-code failed', error instanceof StepError ? error.step : 'unexpected');
+    logFailure(error);
     return reply(502, { status: 'failed' });
   }
 });
 
+/** Only the step that failed: never an address, code or token. */
+function logFailure(error: unknown): void {
+  console.error('request-code failed', error instanceof StepError ? error.step : 'unexpected');
+}
+
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
 /**
  * A fresh code for the address. Create makes the Auth user with the assertion
  * (the database consumes it), or finishes one already under way.
+ * `recipient` is 'pending' or 'none' only for Create.
  */
 async function issueCode(email: string, recipient: Recipient, assertion: string): Promise<string> {
   if (recipient === 'none') {
     const created = await auth('/admin/users', { email, user_metadata: { eligibility_assertion: assertion } });
     // A racing Create for the same address made the user first: send it a code too.
     if (!created.ok && created.code !== 'email_exists') throw new StepError('create-user');
+  }
+  // A Create still under way takes this Create's age answer, using up its assertion.
+  if (recipient === 'pending' && !(await rpc<boolean>('renew_pending_eligibility', { address: email, assertion }))) {
+    throw new StepError('renew-eligibility');
   }
   const link = await auth('/admin/generate_link', { type: 'magiclink', email });
   const code = (link.body as { email_otp?: unknown } | null)?.email_otp;
