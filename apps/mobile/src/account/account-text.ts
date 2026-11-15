@@ -123,10 +123,5 @@ export function lastActiveText(then: number | null, now: number): string {
   return unit(Math.floor(days / 365), 'year');
 }
 
-const SHORT_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-
-/** "17 Oct 2026", in the device's time zone. */
-export function dayText(at: number): string {
-  const day = new Date(at);
-  return `${day.getDate()} ${SHORT_MONTHS[day.getMonth()]} ${day.getFullYear()}`;
-}
+/** "17 Oct 2026", in the device's time zone (shared with the web account page). */
+export { dayText } from '@tableside/account';

@@ -1,0 +1,244 @@
+/*
+ * The web account page (S2-24), in the app's dark theme: colors from the
+ * Tableside design tokens (apps/mobile/src/theme/tokens.ts). Type is the
+ * visitor's own system font, so no font is fetched from anywhere. Sizes are
+ * in rem and the column is fluid, so the page reflows at 320 CSS pixels and
+ * at 400% zoom with no horizontal scrolling.
+ */
+
+:root {
+  color-scheme: dark;
+  --background: #0e1311;
+  --foreground: #f3efe6;
+  --card: #161d1a;
+  --muted-foreground: #a9b2ac;
+  --border: #2c3832;
+  --control-border: #6e7b74;
+  --primary: #d4ae62;
+  --primary-foreground: #1a1406;
+  --secondary: #26312c;
+  --ring: #d4ae62;
+  --destructive: #e07a5f;
+  --correct: #3fa877;
+  --radius: 0.75rem;
+  --font-ui: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-ui);
+  font-size: 100%;
+  line-height: 1.5;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.masthead,
+main {
+  width: 100%;
+  max-width: 40rem;
+  margin: 0 auto;
+  padding: 1rem 1.25rem;
+}
+
+.wordmark {
+  margin: 0;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--primary);
+}
+
+h1 {
+  font-size: 1.75rem;
+  line-height: 1.25;
+  margin: 0.5rem 0 1rem;
+}
+
+h2 {
+  font-size: 0.8125rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+  margin: 2rem 0 0.5rem;
+}
+
+p {
+  margin: 0 0 1rem;
+}
+
+.lead {
+  color: var(--foreground);
+}
+
+.note {
+  color: var(--muted-foreground);
+}
+
+a {
+  color: var(--primary);
+  text-underline-offset: 0.15em;
+}
+
+/* Visible focus on every control, link and the focused heading. */
+:focus-visible {
+  outline: 3px solid var(--ring);
+  outline-offset: 2px;
+  border-radius: 0.25rem;
+}
+
+h1:focus {
+  outline: none;
+}
+
+h1:focus-visible {
+  outline: 3px solid var(--ring);
+}
+
+.rows {
+  list-style: none;
+  margin: 0 0 1rem;
+  padding: 0;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.rows > li {
+  padding: 0.875rem 1rem;
+}
+
+.rows > li + li {
+  border-top: 1px solid var(--border);
+}
+
+.row-title {
+  display: block;
+  font-weight: 600;
+}
+
+.row-detail {
+  display: block;
+  color: var(--muted-foreground);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  margin-bottom: 1rem;
+}
+
+label {
+  font-weight: 600;
+}
+
+input {
+  font: inherit;
+  color: var(--foreground);
+  background: var(--card);
+  border: 1px solid var(--control-border);
+  border-radius: 0.5rem;
+  padding: 0.75rem;
+  min-height: 3rem;
+  width: 100%;
+}
+
+input[aria-invalid='true'] {
+  border-color: var(--destructive);
+}
+
+.actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin: 1rem 0;
+}
+
+button {
+  font: inherit;
+  font-weight: 600;
+  min-height: 3rem;
+  padding: 0.75rem 1rem;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  width: 100%;
+}
+
+button:disabled {
+  cursor: progress;
+  opacity: 0.6;
+}
+
+.primary {
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+
+.secondary {
+  background: var(--secondary);
+  color: var(--foreground);
+}
+
+.ghost {
+  background: transparent;
+  color: var(--foreground);
+  border-color: var(--control-border);
+}
+
+.problem {
+  color: var(--destructive);
+  font-weight: 600;
+}
+
+.support {
+  border-top: 1px solid var(--border);
+  margin-top: 2rem;
+  padding-top: 1rem;
+}
+
+.support ul {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 0.5rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.5rem;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    scroll-behavior: auto !important;
+  }
+}
+
+@media (forced-colors: active) {
+  button,
+  input,
+  .rows {
+    border: 1px solid CanvasText;
+  }
+}

@@ -452,6 +452,10 @@ verify_jwt = false
 [functions.schedule-deletion]
 verify_jwt = false
 
+# Global Privacy Control from the web account page (#106): checks the caller's own token the same way.
+[functions.record-gpc]
+verify_jwt = false
+
 # Apple's and Google's security events (#101): no Supabase key at all; each event is a JWT the provider signed.
 [functions.provider-notifications]
 verify_jwt = false

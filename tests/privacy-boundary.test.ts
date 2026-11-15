@@ -99,9 +99,10 @@ describe('the log checks', () => {
 });
 
 describe('routine logs in shipped code', () => {
-  it('log only fixed text, step names and statuses: in the app, the shared packages and the edge functions', async () => {
+  it('log only fixed text, step names and statuses: in the app, the web account page, the shared packages and the edge functions', async () => {
     const files = [
       ...(await filesUnder('apps/mobile/src', shipped)),
+      ...(await filesUnder('apps/web/src', shipped)),
       // The packages the app and backend ship. The harness and the runner are developer tools that print their own reports.
       ...(await filesUnder('packages', (path) => /^packages\/(account|engine|definitions)\/src\//.test(path) && shipped(path))),
       ...(await filesUnder('supabase/functions', shipped)),

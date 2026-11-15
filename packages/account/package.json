@@ -5,7 +5,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./environment": "./src/environment.ts",
-    "./testing": "./src/testing/index.ts"
+    "./testing": "./src/testing/index.ts",
+    "./web": "./src/web.ts"
   },
   "scripts": {
     "typecheck": "tsc -p .",

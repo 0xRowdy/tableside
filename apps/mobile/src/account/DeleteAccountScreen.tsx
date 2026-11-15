@@ -12,7 +12,7 @@
 // TODO(frames): unverified against S2-22 — the frame couldn't be read (Pencil unreachable). The steps, copy and layout come from spec 2 *Deletion*, Amendments 1 C2–C3, 3 §3–4 and 9 §3, and #103/#104.
 // TODO(spec 7 D9): "Paid time is forfeited" is provisional (Amendment 9 §3): under Outcome B its copy follows the owner's choice recorded there.
 
-import type { SignInMethodEntry } from '@tableside/account';
+import { DELETION_UNKNOWN, SCHEDULE_UNKNOWN, type SignInMethodEntry } from '@tableside/account';
 import { Archive, CloudOff, CreditCard, Download, EyeOff, Lock, Trash2, UserX } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
 
@@ -26,8 +26,6 @@ import { InlineMessage } from './FirstRunParts';
 import { confirmReason } from './method-text';
 
 export const DELETION_NEEDS_CONNECTION = 'Deleting your account needs a connection, and nothing is saved to send later. Connect, then try again.';
-const UNKNOWN_OUTCOME = "Couldn't tell whether deletion was scheduled. Check your connection and try again; it won't be scheduled twice.";
-const UNKNOWN_DELETION = "Couldn't tell whether your account was deleted. Check your connection and try again; it won't be deleted twice.";
 
 /** What Delete permanently now says is lost with the records this device hasn't synced. */
 export function unsyncedDetail(waiting: number | null): string {
@@ -71,7 +69,7 @@ export function DeleteAccountScreen({ back, onExport }: { back: { label: string;
       // 'scheduled': the gate is Deletion scheduled now, and its screen replaces this one.
       if (result.status === 'fresh-authentication-required') setConfirming('schedule');
       else if (result.status === 'offline') setProblem(DELETION_NEEDS_CONNECTION);
-      else if (result.status === 'failed') setProblem(UNKNOWN_OUTCOME);
+      else if (result.status === 'failed') setProblem(SCHEDULE_UNKNOWN);
     } finally {
       setBusy(false);
     }
@@ -92,7 +90,7 @@ export function DeleteAccountScreen({ back, onExport }: { back: { label: string;
       // 'deleted': the gate is Deleted now, and its screen replaces this one.
       if (result.status === 'fresh-authentication-required') setConfirming('delete');
       else if (result.status === 'offline') setProblem(DELETION_NEEDS_CONNECTION);
-      else if (result.status === 'failed') setProblem(UNKNOWN_DELETION);
+      else if (result.status === 'failed') setProblem(DELETION_UNKNOWN);
     } finally {
       setBusy(false);
     }

@@ -109,6 +109,7 @@ export {
   serverMetricEvents,
 } from './metrics';
 export { type CrashReport, crashReport } from './crash-report';
+export * from './lifecycle-text';
 export { type AccountPrivacy, type EnablingResult, type PrivacyChoices, type RestrictiveResult, productAnalyticsId } from './privacy';
 export {
   type AcceptedPrivacyChange,

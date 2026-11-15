@@ -18,11 +18,12 @@
 // Nothing here logs a token, nonce, code or claim.
 
 import { callerOf, emailCodeValid, provenIdentity } from '../_shared/caller.ts';
+import { withCors } from '../_shared/cors.ts';
 import { ENVIRONMENT_HEADER, reply, serviceRpc } from '../_shared/service.ts';
 
 declare const Deno: { serve(handler: (request: Request) => Promise<Response>): void };
 
-Deno.serve(async (request) => {
+Deno.serve(withCors(async (request) => {
   if (request.method !== 'POST') return reply(400, { status: 'invalid' });
   let body: { method?: unknown; code?: unknown; provider?: unknown; idToken?: unknown; nonce?: unknown };
   try {
@@ -66,4 +67,4 @@ Deno.serve(async (request) => {
     console.error('fresh-auth failed', 'unexpected');
     return reply(502, { status: 'failed' });
   }
-});
+}));
