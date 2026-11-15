@@ -91,6 +91,41 @@ export class TestIdentityProvider {
   }
 
   /**
+   * A security event this provider signed, as its server-to-server
+   * notifications carry them: `events` is Apple's JSON string or Google's
+   * object keyed by event type. It may be issued long ago, for another
+   * audience, or signed by a key that isn't the provider's (a forgery).
+   */
+  securityEvent(
+    events: unknown,
+    options: { readonly issuedAt?: number; readonly audience?: string; readonly id?: string; readonly forged?: boolean } = {},
+  ): string {
+    const header = base64url(JSON.stringify({ alg: 'RS256', typ: 'JWT', kid: this.keyId }));
+    const claims = base64url(
+      JSON.stringify({
+        iss: ISSUER,
+        aud: options.audience ?? CLIENT_ID,
+        iat: options.issuedAt ?? Math.floor(Date.now() / 1000),
+        jti: options.id ?? randomUUID(),
+        events,
+      }),
+    );
+    const key = options.forged ? generateKeyPairSync('rsa', { modulusLength: 2048 }).privateKey : this.keys.privateKey;
+    const signature = createSign('RSA-SHA256').update(`${header}.${claims}`).sign(key);
+    return `${header}.${claims}.${base64url(signature)}`;
+  }
+
+  /** Apple's server-to-server notification body: `{ payload }`, its event a JSON string. */
+  appleNotification(event: { readonly type: string; readonly sub: string; readonly email?: string }, options: Parameters<TestIdentityProvider['securityEvent']>[1] = {}): string {
+    return JSON.stringify({ payload: this.securityEvent(JSON.stringify({ ...event, event_time: Date.now() }), options) });
+  }
+
+  /** Google's security event (Cross-Account Protection): the JWT itself, its events keyed by type URI. */
+  googleSecurityEvent(type: string, subject: string, options: Parameters<TestIdentityProvider['securityEvent']>[1] = {}): string {
+    return this.securityEvent({ [`https://schemas.openid.net/secevent/risc/event-type/${type}`]: { subject: { subject_type: 'iss-sub', iss: ISSUER, sub: subject } } }, options);
+  }
+
+  /**
    * A device's Apple and Google sign-in, with this provider standing in for
    * both: native sheets that return ID tokens, and a system browser for
    * Apple's web flow. The scenario sets who is signed in at each provider, or

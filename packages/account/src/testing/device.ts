@@ -243,6 +243,8 @@ export interface DeviceOptions {
   readonly recordTypes?: ReadonlyMap<string, RecordType>;
   /** Where the device's operational metrics go; discarded by default. */
   readonly metrics?: MetricsSink;
+  /** How the device describes itself on Devices: its platform and "<name> · iOS 18" by default. */
+  readonly label?: string;
 }
 
 export function createDevice(stack: LocalStack, options: DeviceOptions): SimulatedDevice {
@@ -351,6 +353,10 @@ export function createDevice(stack: LocalStack, options: DeviceOptions): Simulat
       ...(identityProvider && providers ? { providers: identityProvider.settings(providers) } : {}),
       recordTypes: options.recordTypes ?? testRecordTypes,
       ...(options.metrics ? { metrics: options.metrics } : {}),
+      deviceDescription: () => ({
+        platform: options.platform ?? 'ios',
+        label: options.label ?? `${options.name} · ${options.platform === 'android' ? 'Android 15' : 'iOS 18'}`,
+      }),
     });
     return {
       account,
