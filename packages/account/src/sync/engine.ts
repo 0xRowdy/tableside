@@ -8,20 +8,36 @@
 // - A disposition and the queue acknowledgement commit together; until then
 //   the entry stays pending. Upload never touches payouts, charges or any
 //   other local effect: it only acknowledges.
+// - A result too large for one request is sent as a manifest of chunks
+//   (protocol.ts). The manifest goes first; when the server reports chunks it
+//   hasn't staged (never sent, or expired), those are staged and the identical
+//   manifest is sent again. So a retry after a lost answer gets its receipt
+//   without resending a chunk, and the payload stays in the queue until then.
 // - Feed pages apply with their cursor atomically, and never past a change
 //   this build can't read.
 // - Runs coalesce: a request while a run is going makes one more run.
 //
-// Retry pacing, flagged records and status (#92), chunked results (#93),
-// revisioned items (#94) and barrier-bearing operations (#95) plug in here.
+// Retry pacing, flagged records and status (#92), revisioned items (#94) and
+// barrier-bearing operations (#95) plug in here.
 
-import { type FeedPage, PROTOCOL_VERSION, type PreparedOperation, type UploadAnswer, prepareOperation } from './protocol';
+import {
+  type ChunkAnswer,
+  type FeedPage,
+  PROTOCOL_VERSION,
+  type PreparedOperation,
+  type StagedChunk,
+  type UploadAnswer,
+  chunksOf,
+  prepareOperation,
+} from './protocol';
 import type { RecordType } from './registry';
 import type { AcceptedRecord, QueuedUpload, SyncStore } from './store';
 
 /** The backend's operations. A rejection means no answer arrived (offline, lost response, denied): try later. */
 export interface SyncBackend {
   upload(request: string): Promise<UploadAnswer>;
+  /** Stages one chunk of a result, privately, for the operation whose manifest names it. */
+  stageChunk(chunk: StagedChunk): Promise<ChunkAnswer>;
   feed(after: number, pageSize: number): Promise<FeedPage>;
 }
 
@@ -115,14 +131,29 @@ export class SyncEngine {
       }
       // Its prerequisites are still unacknowledged: it waits.
       if (entry.dependencies.some((id) => pending.has(id)) || type.barriers.some(barrierPending)) continue;
-      const operation = entry.operation ?? (await store.prepareUpload(entry.id, this.envelope(type, entry)));
-      let answer: UploadAnswer;
+      let operation: PreparedOperation;
+      let chunks: StagedChunk[] | null;
       try {
-        answer = await this.options.backend.upload(operation.request);
+        operation = entry.operation ?? (await store.prepareUpload(entry.id, this.envelope(type, entry)));
+        chunks = unsendableUnless(() => chunksOf(operation, entry.payload));
+      } catch (failure) {
+        if (failure instanceof UnsendableError) {
+          error ??= 'unsendable';
+          continue;
+        }
+        throw failure;
+      }
+      let answer: UploadAnswer | 'offline';
+      try {
+        answer = await this.send(operation, chunks);
       } catch {
         return 'offline';
       }
       if (this.stopped) return null;
+      if (answer === 'offline') {
+        error ??= 'offline';
+        continue;
+      }
       const outcome = await this.settleUpload(entry, type, operation, answer);
       if (outcome === 'acknowledged') pending.delete(entry.id);
       else if (outcome === 'incompatible') return 'incompatible';
@@ -131,8 +162,28 @@ export class SyncEngine {
     return error;
   }
 
+  /**
+   * Sends an operation. A manifest whose chunks the server lacks gets them
+   * staged, then is sent once more; still lacking them (they expired meanwhile),
+   * it waits for the next run.
+   */
+  private async send(operation: PreparedOperation, chunks: readonly StagedChunk[] | null): Promise<UploadAnswer | 'offline'> {
+    const { backend } = this.options;
+    const answer = await backend.upload(operation.request);
+    if (answer.status !== 'chunks-missing') return answer;
+    const missing = answer.missing.map((index) => chunks?.[index]);
+    if (missing.some((chunk) => chunk === undefined)) return { status: 'malformed' };
+    for (const chunk of missing as StagedChunk[]) {
+      if (this.stopped) return 'offline';
+      const staged = await backend.stageChunk(chunk);
+      if (staged.status !== 'staged') return { status: staged.status };
+    }
+    const resent = await backend.upload(operation.request);
+    return resent.status === 'chunks-missing' ? 'offline' : resent;
+  }
+
   private envelope(type: RecordType, entry: QueuedUpload): PreparedOperation {
-    return prepareOperation({
+    return unsendableUnless(() => prepareOperation({
       protocol: PROTOCOL_VERSION,
       operation: this.options.newOperationId(),
       installation: this.options.installationId,
@@ -140,7 +191,7 @@ export class SyncEngine {
       payloadVersion: type.payloadVersion,
       item: type.identity.of(entry.payload),
       payload: entry.payload,
-    });
+    }));
   }
 
   /** Applies the server's answer to an upload: a receipt is acknowledged; anything else leaves it pending. */
@@ -165,6 +216,7 @@ export class SyncEngine {
         return 'incompatible';
       case 'operation-reused':
       case 'malformed':
+      case 'chunks-missing':
         return 'unsendable';
     }
   }
@@ -201,5 +253,16 @@ export class SyncEngine {
       if (unreadable) return 'unreadable-change';
       if (!page.more) return null;
     }
+  }
+}
+
+/** An entry that can't be sent as it is: its result is too large to name, or no longer matches its manifest. */
+class UnsendableError extends Error {}
+
+function unsendableUnless<T>(prepare: () => T): T {
+  try {
+    return prepare();
+  } catch (failure) {
+    throw new UnsendableError(failure instanceof Error ? failure.message : String(failure));
   }
 }

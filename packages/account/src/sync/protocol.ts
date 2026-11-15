@@ -6,6 +6,22 @@ import { canonicalJson, sha256Hex } from '@tableside/engine';
 
 export const PROTOCOL_VERSION = 1;
 
+/**
+ * The most any request body may hold, in UTF-8 bytes (spec 2 Amendment 1 C5:
+ * a conservative request limit, tested against the pinned Supabase stack).
+ * The pinned gateway and PostgREST impose no smaller bound (seam 2 checks a
+ * body four times this size gets through); 128 KiB stays far below any
+ * hosted proxy's limit. The operations refuse a request over it.
+ */
+export const REQUEST_LIMIT_BYTES = 128 * 1024;
+
+/**
+ * The most text one chunk holds, in UTF-8 bytes. Escaped inside its request a
+ * chunk at most doubles (every quote or backslash becomes two bytes), which
+ * leaves 32 KiB of the request limit for the rest of the call.
+ */
+export const CHUNK_BYTES = 48 * 1024;
+
 /** What an upload names. The account is never in it: the server takes it from verified authentication. */
 export interface Envelope {
   readonly protocol: typeof PROTOCOL_VERSION;
@@ -20,6 +36,28 @@ export interface Envelope {
   readonly payload: unknown;
 }
 
+/**
+ * What a request too large to send whole names instead of its payload: the
+ * payload's canonical text split into chunks of at most `chunkBytes`, each by
+ * its SHA-256 in order, and the SHA-256 of the whole text. The server accepts
+ * the operation only once every chunk is staged and they rejoin to that text.
+ */
+export interface ContentManifest {
+  readonly chunkBytes: number;
+  readonly chunks: readonly string[];
+  readonly sha256: string;
+}
+
+/** One chunk of a result, staged privately until the operation naming it is accepted. */
+export interface StagedChunk {
+  readonly recordType: string;
+  /** The result's identity: chunks are staged per (account, record type, item). */
+  readonly item: string;
+  /** SHA-256 of the chunk's text: its identity within the result. */
+  readonly sha256: string;
+  readonly data: string;
+}
+
 /** An operation fixed for sending: the exact request text every retry repeats, and its hash. */
 export interface PreparedOperation {
   readonly operationId: string;
@@ -29,9 +67,83 @@ export interface PreparedOperation {
   readonly requestHash: string;
 }
 
+/** The body of an upload call: the request text as its one argument. */
+export const uploadCallBody = (request: string): string => JSON.stringify({ request });
+
+/** The arguments of a chunk-staging call, as the operation names them. */
+export const chunkCallArguments = (chunk: StagedChunk) => ({
+  protocol: PROTOCOL_VERSION,
+  record_type: chunk.recordType,
+  item: chunk.item,
+  sha256: chunk.sha256,
+  data: chunk.data,
+});
+
+/** The body of a chunk-staging call. */
+export const chunkCallBody = (chunk: StagedChunk): string => JSON.stringify(chunkCallArguments(chunk));
+
+/**
+ * Fixes the request for an envelope: the payload whole when the call fits the
+ * request limit, otherwise a manifest of its chunks. Throws when even the
+ * manifest wouldn't fit (a payload of roughly 90 MiB).
+ */
 export function prepareOperation(envelope: Envelope): PreparedOperation {
-  const request = canonicalJson(envelope);
+  let request = canonicalJson(envelope);
+  if (utf8Length(uploadCallBody(request)) > REQUEST_LIMIT_BYTES) {
+    const { payload, ...rest } = envelope;
+    const text = canonicalJson(payload);
+    const content: ContentManifest = { chunkBytes: CHUNK_BYTES, chunks: splitText(text, CHUNK_BYTES).map(sha256Hex), sha256: sha256Hex(text) };
+    request = canonicalJson({ ...rest, content });
+    if (utf8Length(uploadCallBody(request)) > REQUEST_LIMIT_BYTES) throw new Error('the result is too large to name in one request');
+  }
   return { operationId: envelope.operation, request, requestHash: sha256Hex(request) };
+}
+
+/**
+ * The chunks a prepared operation names, rebuilt from the payload it was
+ * prepared from; null when it carries its payload whole. Throws when the
+ * payload no longer matches the stored manifest, so nothing else is ever sent under it.
+ */
+export function chunksOf(operation: PreparedOperation, payload: unknown): StagedChunk[] | null {
+  const request = JSON.parse(operation.request) as { recordType: string; item: string; content?: ContentManifest };
+  const { content } = request;
+  if (!content) return null;
+  const text = canonicalJson(payload);
+  const parts = splitText(text, content.chunkBytes);
+  const hashes = parts.map(sha256Hex);
+  if (sha256Hex(text) !== content.sha256 || hashes.length !== content.chunks.length || hashes.some((hash, index) => hash !== content.chunks[index])) {
+    throw new Error(`the payload of operation ${operation.operationId} no longer matches its manifest`);
+  }
+  return parts.map((data, index) => ({ recordType: request.recordType, item: request.item, sha256: hashes[index]!, data }));
+}
+
+/** UTF-8 length of one code point. */
+const codePointBytes = (code: number): number => (code < 0x80 ? 1 : code < 0x800 ? 2 : code < 0x10000 ? 3 : 4);
+
+function utf8Length(text: string): number {
+  let length = 0;
+  for (const char of text) length += codePointBytes(char.codePointAt(0)!);
+  return length;
+}
+
+/** Splits text into pieces of at most `limit` UTF-8 bytes, never inside a character. */
+function splitText(text: string, limit: number): string[] {
+  const parts: string[] = [];
+  let start = 0;
+  let size = 0;
+  let at = 0;
+  for (const char of text) {
+    const charBytes = codePointBytes(char.codePointAt(0)!);
+    if (size + charBytes > limit) {
+      parts.push(text.slice(start, at));
+      start = at;
+      size = 0;
+    }
+    size += charBytes;
+    at += char.length;
+  }
+  parts.push(text.slice(start));
+  return parts;
 }
 
 /** A durable receipt's disposition: what the server decided, once, for an operation. */
@@ -42,13 +154,19 @@ export type Disposition =
 /**
  * The upload operation's answer. Besides a receipt's disposition:
  * operation-reused, a different request already holds this operation ID (nothing was recorded);
- * incompatible, the server no longer speaks this protocol; malformed, the envelope couldn't be read.
+ * incompatible, the server no longer speaks this protocol; malformed, the envelope couldn't be read
+ * (or is over the request limit).
  */
 export type UploadAnswer =
   | Disposition
   | { readonly status: 'operation-reused' }
   | { readonly status: 'incompatible' }
-  | { readonly status: 'malformed' };
+  | { readonly status: 'malformed' }
+  /** The manifest names chunks the server hasn't staged (never sent, or expired): stage them and send again. Nothing was recorded. */
+  | { readonly status: 'chunks-missing'; readonly missing: readonly number[] };
+
+/** The chunk-staging operation's answer. */
+export type ChunkAnswer = { readonly status: 'staged' } | { readonly status: 'incompatible' } | { readonly status: 'malformed' };
 
 /** One accepted change in the account's feed. Sequences are gap-free and in commit order. */
 export interface FeedEntry {
