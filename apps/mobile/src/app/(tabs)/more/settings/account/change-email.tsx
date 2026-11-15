@@ -2,7 +2,7 @@
 // (V2l31Q). Secure Email Change sends a code to both addresses, and the
 // current one keeps working until both are confirmed. Changing an address
 // the player can no longer reach is support's (spec 2, *Sign-in, linking and recovery*).
-// TODO(frames): the step entering both codes, and the changed confirmation, are unverified against S2-18, which draws neither.
+// TODO(frames): the step entering both codes, the changed confirmation, the problem messages and the loading and no-connection notes are unverified against S2-18, which draws none of them.
 
 import type { SignInMethodEntry } from '@tableside/account';
 import { router, useFocusEffect } from 'expo-router';
@@ -11,7 +11,7 @@ import { useCallback, useState } from 'react';
 
 import { useAccount } from '@/account/AccountProvider';
 import { ConfirmItsYouSheet } from '@/account/ConfirmItsYouSheet';
-import { Field, InlineMessage, MethodButton, Status } from '@/account/FirstRunParts';
+import { CodeField, enteredCode, Field, InlineMessage, MethodButton, Status } from '@/account/FirstRunParts';
 import { confirmReason } from '@/account/method-text';
 import { Button } from '@/components/Button';
 import { Note, SettingsScreen } from '@/settings/SettingsParts';
@@ -22,7 +22,7 @@ export default function ChangeEmail() {
   const { service } = useAccount();
   const [methods, setMethods] = useState<readonly SignInMethodEntry[] | null>();
   const [step, setStep] = useState<Step>('confirm');
-  const [next, setNext] = useState('');
+  const [newEmail, setNewEmail] = useState('');
   const [currentCode, setCurrentCode] = useState('');
   const [newCode, setNewCode] = useState('');
   const [busy, setBusy] = useState(false);
@@ -52,7 +52,7 @@ export default function ChangeEmail() {
   const sendCodes = async () => {
     setBusy(true);
     setProblem(null);
-    const result = await service.signInMethods.changeEmail(next);
+    const result = await service.signInMethods.changeEmail(newEmail);
     setBusy(false);
     if (result.status === 'codes-sent') setStep('codes');
     else if (result.status === 'fresh-authentication-required') setStep('confirm');
@@ -63,17 +63,17 @@ export default function ChangeEmail() {
   };
 
   const confirmCodes = async () => {
-    const codes = { currentCode: currentCode.replace(/\s/g, ''), newCode: newCode.replace(/\s/g, '') };
-    if (!/^\d{6}$/.test(codes.currentCode) || !/^\d{6}$/.test(codes.newCode)) {
+    const codes = { currentCode: enteredCode(currentCode), newCode: enteredCode(newCode) };
+    if (!codes.currentCode || !codes.newCode) {
       setProblem('Enter the 6-digit code from each email.');
       return;
     }
     setBusy(true);
     setProblem(null);
-    const result = await service.signInMethods.confirmEmailChange(codes);
+    const result = await service.signInMethods.confirmEmailChange({ currentCode: codes.currentCode, newCode: codes.newCode });
     setBusy(false);
     if (result.status === 'changed') setStep('changed');
-    else if (result.status === 'invalid-code') setProblem(`The code sent to ${result.address === 'current' ? current : next} didn't work. Check it and try again.`);
+    else if (result.status === 'invalid-code') setProblem(`The code sent to ${result.address === 'current' ? current : newEmail} didn't work. Check it and try again.`);
     else setProblem("Couldn't confirm the change. Check your connection and try again.");
   };
 
@@ -81,14 +81,14 @@ export default function ChangeEmail() {
     <SettingsScreen title="Change email" back={back}>
       {step === 'changed' ? (
         <>
-          <Status>{`Your sign-in email is now ${next.trim()}.`}</Status>
+          <Status>{`Your sign-in email is now ${newEmail.trim()}.`}</Status>
           <Button label="Back to sign-in methods" variant="secondary" stretch onPress={back.onPress} />
         </>
       ) : step === 'codes' ? (
         <>
           <Note>{"We've sent a code to each address. Enter both to finish. Until then, your current address keeps working."}</Note>
-          <Field label={`Code sent to ${current}`} value={currentCode} onChangeText={setCurrentCode} keyboardType="number-pad" autoComplete="one-time-code" maxLength={6} />
-          <Field label={`Code sent to ${next.trim()}`} value={newCode} onChangeText={setNewCode} keyboardType="number-pad" autoComplete="one-time-code" maxLength={6} />
+          <CodeField label={`Code sent to ${current}`} value={currentCode} onChangeText={setCurrentCode} />
+          <CodeField label={`Code sent to ${newEmail.trim()}`} value={newCode} onChangeText={setNewCode} onSubmit={() => void confirmCodes()} />
           {problem !== null && <InlineMessage>{problem}</InlineMessage>}
           <MethodButton label="Confirm email change" variant="primary" disabled={busy} onPress={() => void confirmCodes()} />
         </>
@@ -97,8 +97,8 @@ export default function ChangeEmail() {
           <Field label="Current email" value={current} editable={false} />
           <Field
             label="New email"
-            value={next}
-            onChangeText={setNext}
+            value={newEmail}
+            onChangeText={setNewEmail}
             problem={problem !== null}
             keyboardType="email-address"
             autoCapitalize="none"

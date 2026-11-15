@@ -3,7 +3,7 @@
 // deletion), the player signs in again with one of the account's own methods.
 // Being signed in already isn't enough. The Account service confirms it for
 // this session only, for a few minutes.
-// TODO(frames): the code-entry step after "Send a code" is unverified against S2-18, which draws only the choice of method.
+// TODO(frames): the code-entry step after "Send a code", the problem messages, and the removal's reason (method-text.ts) are unverified against S2-18, which draws only the choice of method for adding one.
 
 import type { SignInMethodEntry } from '@tableside/account';
 import { Mail } from 'lucide-react-native';
@@ -13,7 +13,7 @@ import { Sheet, SheetText } from '@/components/Sheet';
 
 import { useAccount } from './AccountProvider';
 import { codeRequestProblem } from './code-request-text';
-import { Field, InlineMessage, MethodButton, Status } from './FirstRunParts';
+import { CodeField, enteredCode, InlineMessage, MethodButton, Status } from './FirstRunParts';
 import { PROVIDERS } from './providers';
 
 export function ConfirmItsYouSheet({
@@ -67,8 +67,8 @@ export function ConfirmItsYouSheet({
 
   const confirmCode = () =>
     run(async () => {
-      const entered = code.replace(/\s/g, '');
-      if (!/^\d{6}$/.test(entered)) {
+      const entered = enteredCode(code);
+      if (!entered) {
         setProblem('Enter the 6-digit code from the email.');
         return;
       }
@@ -97,18 +97,7 @@ export function ConfirmItsYouSheet({
       ) : (
         <>
           <SheetText>{`Enter the code we sent to ${codeTo}.`}</SheetText>
-          <Field
-            label="Code"
-            value={code}
-            onChangeText={setCode}
-            problem={problem !== null}
-            keyboardType="number-pad"
-            autoComplete="one-time-code"
-            textContentType="oneTimeCode"
-            maxLength={6}
-            returnKeyType="done"
-            onSubmitEditing={() => void confirmCode()}
-          />
+          <CodeField value={code} onChangeText={setCode} problem={problem !== null} onSubmit={() => void confirmCode()} />
           {resent && <Status>{"We've sent a new code. Only the newest one works."}</Status>}
           <MethodButton label="Confirm" variant="primary" disabled={busy} onPress={() => void confirmCode()} />
           <MethodButton label="Send a new code" disabled={busy} onPress={() => void sendCode(true)} />

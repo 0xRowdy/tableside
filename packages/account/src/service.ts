@@ -894,12 +894,11 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
    * fresh nonce: from the native sheet, or from Apple's web page in the
    * system browser.
    */
-  const obtainCredential = async (provider: IdentityProvider): Promise<ProviderCredential | 'cancelled' | 'failed'> => {
+  const obtainCredential = async (provider: IdentityProvider, nonce = hex(options.randomBytes(32))): Promise<ProviderCredential | 'cancelled' | 'failed'> => {
     const settings = options.providers;
     const route = settings?.ports.route[provider] ?? 'unavailable';
     if (!settings || route === 'unavailable') return 'failed';
     const { ports } = settings;
-    const nonce = hex(options.randomBytes(32));
     const hashedNonce = await ports.sha256Hex(nonce);
     if (route === 'native') {
       const answer = await ports.nativeIdToken(provider, { hashedNonce });
@@ -1083,7 +1082,7 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
   };
 
   /** An email change under way: its two addresses, and which of them has confirmed. Memory only. */
-  let emailChange: { readonly current: string; readonly next: string; currentConfirmed: boolean; nextConfirmed: boolean } | null = null;
+  let emailChange: { readonly current: string; readonly new: string; currentConfirmed: boolean; newConfirmed: boolean } | null = null;
 
   const sendCode = async ({ email, intent }: { readonly email: string; readonly intent: CodeIntent }): Promise<CodeRequestResult> => {
     const held = currentAssertion();
@@ -1103,9 +1102,15 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
     }
   };
 
-  /** An ID token for one of the provider's identities, for a function acting for the player. */
+  /**
+   * An ID token for one of the provider's identities, for a function acting
+   * for the player: minted for a nonce the server issued to this session for
+   * this proof alone, so no earlier sign-in's token can stand in for it.
+   */
   const providerProof = async (provider: IdentityProvider) => {
-    const credential = await obtainCredential(provider);
+    const nonce = await operation('issue_proof_nonce_v1');
+    if (typeof nonce !== 'string') return 'failed' as const;
+    const credential = await obtainCredential(provider, nonce);
     return typeof credential === 'string' ? credential : { provider: authName(provider), idToken: credential.idToken, nonce: credential.nonce };
   };
 
@@ -1196,7 +1201,7 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
         if (!ok) return { status: body?.error_code === 'email_exists' ? 'in-use' : 'failed' };
         const current = typeof body?.email === 'string' ? body.email : null;
         if (!current) return { status: 'failed' };
-        emailChange = { current, next: address, currentConfirmed: false, nextConfirmed: false };
+        emailChange = { current, new: address, currentConfirmed: false, newConfirmed: false };
         return { status: 'codes-sent' };
       } catch {
         return { status: 'failed' };
@@ -1208,9 +1213,9 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
       try {
         for (const [address, email, code] of [
           ['current', change.current, currentCode],
-          ['new', change.next, newCode],
+          ['new', change.new, newCode],
         ] as const) {
-          const confirmed = address === 'current' ? 'currentConfirmed' : 'nextConfirmed';
+          const confirmed = address === 'current' ? 'currentConfirmed' : 'newConfirmed';
           if (change[confirmed]) continue;
           const { ok, body } = await authRequest('POST', '/verify', { type: 'email_change', email, token: code.trim() });
           if (!ok) return body?.error_code === 'otp_expired' ? { status: 'invalid-code', address } : { status: 'failed' };
@@ -1290,7 +1295,7 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
 
     refreshEligibility,
 
-    requestEmailCode: (request) => sendCode(request),
+    requestEmailCode: sendCode,
 
     async verifyEmailCode({ email, code }) {
       try {

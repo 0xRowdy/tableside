@@ -7,6 +7,8 @@
 // identity provider stands in for Apple and Google, so a linked Google
 // identity lists as Apple here.
 
+import { createHash } from 'node:crypto';
+
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 
 import type { SignInMethodEntry } from '../src';
@@ -374,6 +376,41 @@ describe('Auth’s own endpoints, called directly', () => {
   });
 });
 
+describe('an Apple or Google proof, called directly', () => {
+  const freshAuth = (token: string, body: Record<string, unknown>) =>
+    fetch(`${stack.url}/functions/v1/fresh-auth`, {
+      method: 'POST',
+      headers: { apikey: stack.publishableKey, authorization: `Bearer ${token}`, 'content-type': 'application/json', 'x-tableside-environment': 'local' },
+      body: JSON.stringify(body),
+    }).then(async (response) => ({ status: response.status, body: await response.json() }));
+  const sha256 = (text: string) => createHash('sha256').update(text).digest('hex');
+
+  it('counts only for a nonce the server issued to this session, once: an earlier sign-in’s token proves nothing', async () => {
+    const { phone, someone } = await providerAccount('replay');
+    const token = accessToken(phone);
+    // A token minted for a nonce the player chose (as at sign-in) isn't a confirmation.
+    const own = 'f'.repeat(64);
+    expect(await freshAuth(token, { method: 'provider', provider: idp.provider, idToken: idp.idToken(someone, { nonce: sha256(own) }), nonce: own })).toEqual({
+      status: 401,
+      body: { status: 'invalid-token' },
+    });
+
+    const { data: nonce } = await stack.rawClient(token).rpc('issue_proof_nonce_v1');
+    const proof = { method: 'provider', provider: idp.provider, idToken: idp.idToken(someone, { nonce: sha256(nonce as string) }), nonce };
+    expect(await freshAuth(token, proof)).toEqual({ status: 200, body: { status: 'confirmed' } });
+    expect(await freshAuth(token, proof)).toEqual({ status: 401, body: { status: 'invalid-token' } });
+
+    // Another session of the account can't use this session's nonce.
+    const tablet = device('replay-tablet');
+    tablet.providers!.accounts.apple = someone;
+    expect(await tablet.account.signInWithProvider('apple')).toEqual({ status: 'signed-in' });
+    const { data: phoneNonce } = await stack.rawClient(token).rpc('issue_proof_nonce_v1');
+    expect(
+      await freshAuth(accessToken(tablet), { method: 'provider', provider: idp.provider, idToken: idp.idToken(someone, { nonce: sha256(phoneNonce as string) }), nonce: phoneNonce }),
+    ).toEqual({ status: 401, body: { status: 'invalid-token' } });
+  });
+});
+
 describe('the method operations, called directly', () => {
   it('refuse a caller who isn’t the service, or a token whose session ended', async () => {
     const { phone, email } = await emailAccount('raw-rpc');
@@ -385,6 +422,7 @@ describe('the method operations, called directly', () => {
       ['link_provider_identity', { session: '00000000-0000-0000-0000-000000000000', auth_user: userId, provider: 'keycloak', subject: 'x', claims: {} }],
       ['link_email_identity', { session: '00000000-0000-0000-0000-000000000000', auth_user: userId }],
       ['email_change_authorized', { auth_user: userId, address: 'someone@example.com' }],
+      ['consume_proof_nonce', { session: '00000000-0000-0000-0000-000000000000', nonce: 'x' }],
     ] as const) {
       expect((await raw.rpc(name, args)).error).not.toBeNull();
     }

@@ -3,16 +3,16 @@
 // player to confirm it's them first; a method another account uses is a
 // conflict, never a merge; the last method can't be removed. A second method
 // is explained, never required.
-// TODO(frames): the "added" and "removed" status lines and the add-email-code code step are unverified against S2-18, which draws neither.
+// TODO(frames): the "added" and "removed" status lines, the problem messages, the loading and no-connection notes, and the add-email-code code step are unverified against S2-18, which draws none of them.
 
 import type { IdentityProvider, SignInMethod, SignInMethodEntry } from '@tableside/account';
 import { router, useFocusEffect } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { Fragment, useCallback, useState } from 'react';
 
 import { useAccount } from '@/account/AccountProvider';
 import { codeRequestProblem } from '@/account/code-request-text';
 import { ConfirmItsYouSheet } from '@/account/ConfirmItsYouSheet';
-import { Field, InlineMessage, MethodButton, Status } from '@/account/FirstRunParts';
+import { CodeField, enteredCode, InlineMessage, MethodButton, Status } from '@/account/FirstRunParts';
 import { confirmReason, methodName } from '@/account/method-text';
 import { PROVIDERS } from '@/account/providers';
 import { AddMethodRow, Banner, MethodCard } from '@/account/SignInMethodParts';
@@ -133,7 +133,7 @@ export default function SignInMethodsScreen() {
   }
 
   const have = new Set(methods.map((entry) => entry.method));
-  const missing = ADDABLE.filter((method) => method === 'email' ? !have.has('email') : !have.has(method));
+  const missing = ADDABLE.filter((method) => !have.has(method));
   const first = methods[0];
   const backupDetail = first ? `A backup way in if you lose access to ${methodName(first.method)}` : 'Another way to sign in';
   const confirmWith = confirming?.kind === 'remove' ? methods.filter((entry) => entry.id !== confirming.entry.id) : methods;
@@ -144,13 +144,13 @@ export default function SignInMethodsScreen() {
       {status !== null && <Status>{status}</Status>}
       {problem !== null && <InlineMessage>{problem}</InlineMessage>}
       {methods.map((entry) => (
-        <MethodCard
-          key={entry.id}
-          entry={entry}
-          disabled={busy}
-          onRemove={() => remove(entry)}
-          onChangeEmail={entry.method === 'email' ? () => router.navigate('/more/settings/account/change-email') : undefined}
-        >
+        <Fragment key={entry.id}>
+          <MethodCard
+            entry={entry}
+            disabled={busy}
+            onRemove={() => remove(entry)}
+            onChangeEmail={entry.method === 'email' ? () => router.navigate('/more/settings/account/change-email') : undefined}
+          />
           {lastMethod === entry.id && (
             <Banner
               tone="last-method"
@@ -160,7 +160,7 @@ export default function SignInMethodsScreen() {
               Removing it would lock you out. Add another method first, then you can remove this one.
             </Banner>
           )}
-        </MethodCard>
+        </Fragment>
       ))}
       {missing.length > 0 && (
         <>
@@ -211,8 +211,8 @@ function EmailMethodCodeSheet({ email, onClose, onLinked, onExpired }: { email: 
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const confirm = async () => {
-    const entered = code.replace(/\s/g, '');
-    if (!/^\d{6}$/.test(entered)) {
+    const entered = enteredCode(code);
+    if (!entered) {
       setProblem('Enter the 6-digit code from the email.');
       return;
     }
@@ -228,18 +228,7 @@ function EmailMethodCodeSheet({ email, onClose, onLinked, onExpired }: { email: 
   return (
     <Sheet title="Add email code" onClose={onClose} testID="add-email-code">
       <SheetText>{`Enter the code we sent to ${email}. Then you can sign in with a code sent there.`}</SheetText>
-      <Field
-        label="Code"
-        value={code}
-        onChangeText={setCode}
-        problem={problem !== null}
-        keyboardType="number-pad"
-        autoComplete="one-time-code"
-        textContentType="oneTimeCode"
-        maxLength={6}
-        returnKeyType="done"
-        onSubmitEditing={() => void confirm()}
-      />
+      <CodeField value={code} onChangeText={setCode} problem={problem !== null} onSubmit={() => void confirm()} />
       {problem !== null && <InlineMessage>{problem}</InlineMessage>}
       <MethodButton label="Add email code" variant="primary" disabled={busy} onPress={() => void confirm()} />
       <MethodButton label="Cancel" variant="ghost" disabled={busy} onPress={onClose} />

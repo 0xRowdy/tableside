@@ -4,7 +4,6 @@
 
 import type { SignInMethod, SignInMethodEntry } from '@tableside/account';
 import { ChevronRight, Lock, Mail, Pencil, Users, X } from 'lucide-react-native';
-import type { ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Button } from '@/components/Button';
@@ -28,14 +27,11 @@ export function MethodCard({
   onRemove,
   onChangeEmail,
   disabled,
-  children,
 }: {
   entry: SignInMethodEntry;
   onRemove: () => void;
   onChangeEmail?: () => void;
   disabled: boolean;
-  /** Shown under the card: the last-method banner. */
-  children?: ReactNode;
 }) {
   const name = methodName(entry.method);
   const detail = methodDetail(entry);
@@ -66,7 +62,6 @@ export function MethodCard({
           <Button label="Remove" icon={X} accessibilityLabel={`Remove ${name}`} variant="secondary" stretch disabled={disabled} onPress={onRemove} />
         </View>
       </View>
-      {children}
     </View>
   );
 }

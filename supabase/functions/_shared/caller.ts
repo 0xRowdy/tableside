@@ -2,7 +2,8 @@
 // calling, from their own token, and checking an emailed code without
 // touching their session. Nothing here logs a token or code.
 
-import { ENVIRONMENT_HEADER } from './service.ts';
+import { type IdTokenClaims, sha256Hex, verifyIdToken } from './id-token.ts';
+import { ENVIRONMENT_HEADER, serviceRpc } from './service.ts';
 
 declare const Deno: { env: { get(name: string): string | undefined } };
 
@@ -14,8 +15,6 @@ export interface Caller {
   readonly authUserId: string;
   /** The email method's address, if the account has that method. */
   readonly email: string | null;
-  /** Whether the account has ordinary access (established 13+ eligibility), not only the restricted paths. */
-  readonly active: boolean;
 }
 
 /**
@@ -41,14 +40,33 @@ export async function callerOf(request: Request): Promise<Caller | null> {
     await response.body?.cancel();
     return null;
   }
-  const answer = (await response.json().catch(() => null)) as { session_id?: unknown; auth_user_id?: unknown; email?: unknown; active?: unknown } | null;
+  const answer = (await response.json().catch(() => null)) as { session_id?: unknown; auth_user_id?: unknown; email?: unknown } | null;
   if (!answer || typeof answer.session_id !== 'string' || typeof answer.auth_user_id !== 'string') return null;
   return {
     sessionId: answer.session_id,
     authUserId: answer.auth_user_id,
     email: typeof answer.email === 'string' ? answer.email : null,
-    active: answer.active === true,
   };
+}
+
+/**
+ * Who an Apple or Google proof says the player is: `{ provider, idToken, nonce }`,
+ * where the nonce is one the server issued to the caller's session for this
+ * proof (issue_proof_nonce_v1), used up here, and the ID token was minted for
+ * it. So a token from an earlier sign-in, or a proof already used, never
+ * counts. 'invalid' when the request isn't a proof at all.
+ */
+export async function provenIdentity(
+  request: Request,
+  caller: Caller,
+  body: { readonly provider?: unknown; readonly idToken?: unknown; readonly nonce?: unknown },
+): Promise<{ readonly provider: string; readonly claims: IdTokenClaims } | 'invalid' | 'invalid-token'> {
+  const { provider, idToken, nonce } = body;
+  if (typeof provider !== 'string' || typeof idToken !== 'string' || typeof nonce !== 'string' || !nonce) return 'invalid';
+  const consumed = await serviceRpc(request.headers.get(ENVIRONMENT_HEADER) ?? '', 'consume_proof_nonce', { session: caller.sessionId, nonce });
+  if (!consumed.ok || (await consumed.json()) !== true) return 'invalid-token';
+  const claims = await verifyIdToken(provider, idToken, await sha256Hex(nonce));
+  return claims ? { provider, claims } : 'invalid-token';
 }
 
 /**

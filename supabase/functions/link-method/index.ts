@@ -5,7 +5,8 @@
 //
 // POST, with the caller's own access token as the bearer and naming its
 // backend environment in x-tableside-environment like every request:
-//   { method: 'provider', provider, idToken, nonce }  an ID token for the Apple or Google identity to add
+//   { method: 'provider', provider, idToken, nonce }  an ID token for the Apple or Google identity to add,
+//                                                     minted for a nonce from issue_proof_nonce_v1
 //   { method: 'email', step: 'send' }                 emails a code to the account's sign-in email
 //   { method: 'email', code }                         adds the email-code method with that code
 // Answers:
@@ -20,8 +21,7 @@
 //
 // Nothing here logs a token, nonce, code, claim or address.
 
-import { callerOf, emailCodeValid } from '../_shared/caller.ts';
-import { sha256Hex, verifyIdToken } from '../_shared/id-token.ts';
+import { callerOf, emailCodeValid, provenIdentity } from '../_shared/caller.ts';
 import { type Mail, codeMail, deliver } from '../_shared/mail.ts';
 import { ENVIRONMENT_HEADER, clientIp, reply, serviceRpc } from '../_shared/service.ts';
 
@@ -68,29 +68,32 @@ Deno.serve(async (request) => {
     if (!caller) return reply(401, { status: 'not-signed-in' });
     const who = { session: caller.sessionId, auth_user: caller.authUserId };
 
-    if (body.method === 'provider' && typeof body.provider === 'string' && typeof body.idToken === 'string' && typeof body.nonce === 'string' && body.nonce) {
-      const claims = await verifyIdToken(body.provider, body.idToken, await sha256Hex(body.nonce));
-      if (!claims) return reply(401, { status: 'invalid-token' });
+    if (body.method === 'provider') {
+      const proven = await provenIdentity(request, caller, body);
+      if (proven === 'invalid') return reply(400, { status: 'invalid' });
+      if (proven === 'invalid-token') return reply(401, { status: 'invalid-token' });
+      const { provider, claims } = proven;
       const { email, email_verified } = claims as { email?: unknown; email_verified?: unknown };
       const outcome = await rpc<Outcome>('link_provider_identity', {
         ...who,
-        provider: body.provider,
+        provider,
         subject: claims.sub,
         claims: { iss: claims.iss, sub: claims.sub, ...(typeof email === 'string' ? { email, email_verified: email_verified === true } : {}) },
       });
-      return finish(outcome, providerLabel(body.provider), rpc);
+      return finish(outcome, providerLabel(provider), rpc);
     }
 
     if (body.method === 'email' && body.step === 'send') {
-      const ready = await rpc<Outcome>('email_method_address', who);
-      if (ready.status !== 'ready' || !ready.email) return reply(STATUS_CODES[ready.status] ?? 502, { status: ready.status });
-      return sendCode(ready.email, clientIp(request), rpc);
+      const address = await rpc<Outcome>('email_method_address', who);
+      if (address.status !== 'ready' || !address.email) return reply(STATUS_CODES[address.status] ?? 502, { status: address.status });
+      return sendCode(address.email, clientIp(request), rpc);
     }
 
     if (body.method === 'email' && typeof body.code === 'string' && /^\d{6}$/.test(body.code)) {
-      const ready = await rpc<Outcome>('email_method_address', who);
-      if (ready.status !== 'ready' || !ready.email) return reply(STATUS_CODES[ready.status] ?? 502, { status: ready.status });
-      if (!(await emailCodeValid(ready.email, body.code, caller.authUserId))) return reply(401, { status: 'invalid-code' });
+      // Checked again, not remembered: the account may have changed since the code was sent.
+      const address = await rpc<Outcome>('email_method_address', who);
+      if (address.status !== 'ready' || !address.email) return reply(STATUS_CODES[address.status] ?? 502, { status: address.status });
+      if (!(await emailCodeValid(address.email, body.code, caller.authUserId))) return reply(401, { status: 'invalid-code' });
       return finish(await rpc<Outcome>('link_email_identity', who), 'Email code', rpc);
     }
 

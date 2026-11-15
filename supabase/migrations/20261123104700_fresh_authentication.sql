@@ -117,15 +117,13 @@ $$;
 -- For the account functions (fresh-auth, link-method): who is calling, from
 -- their own token, on #90's restricted-path gate (private.signed_in_account):
 -- a live session, from this environment, of an active account. `email` is
--- the email method's address, if the account has that method; `active` is
--- whether it has ordinary access.
+-- the email method's address, if the account has that method.
 create function public.caller_session_v1() returns jsonb
 language sql stable security definer set search_path = '' as $$
   select jsonb_build_object(
     'session_id', private.caller_session(),
     'auth_user_id', u.id,
-    'email', (select i.email from auth.identities i where i.user_id = u.id and i.provider = 'email' limit 1),
-    'active', private.active_account() is not null
+    'email', (select i.email from auth.identities i where i.user_id = u.id and i.provider = 'email' limit 1)
   )
   from auth.users u
   where u.id = auth.uid()
@@ -159,6 +157,47 @@ begin
     on conflict (session_id) do update set identity_id = excluded.identity_id, authenticated_at = excluded.authenticated_at;
   return jsonb_build_object('status', 'confirmed', 'expires_at', v_at + private.fresh_authentication_window());
 end $$;
+
+-- ---------------------------------------------------------------------------
+-- Proof nonces: an Apple or Google proof answers this request, once
+-- ---------------------------------------------------------------------------
+
+-- An ID token proves a fresh sign-in only when it was minted for a nonce the
+-- server issued to this session for it, and only once: a token from an
+-- earlier sign-in, or one already used, proves nothing. Only the hash is kept.
+create table private.proof_nonces (
+  nonce_hash bytea primary key,
+  session_id uuid not null references auth.sessions (id) on delete cascade,
+  expires_at timestamptz not null
+);
+
+-- A nonce for the caller's session, for the provider's sheet or page to mint
+-- its ID token with. Long enough for Apple's web flow; one use.
+create function public.issue_proof_nonce_v1() returns text
+language plpgsql volatile security definer set search_path = '' as $$
+declare
+  v_session uuid := private.caller_session();
+  v_nonce text := encode(extensions.gen_random_bytes(32), 'hex');
+begin
+  if v_session is null or private.signed_in_account() is null then
+    raise exception 'not authorized' using errcode = '42501';
+  end if;
+  insert into private.proof_nonces (nonce_hash, session_id, expires_at)
+    values (extensions.digest(v_nonce, 'sha256'), v_session, now() + interval '10 minutes');
+  return v_nonce;
+end $$;
+
+-- For fresh-auth and link-method: uses up a nonce this session was issued.
+-- False when it wasn't issued to this session, has expired or was used.
+create function public.consume_proof_nonce(session uuid, nonce text) returns boolean
+language sql volatile security definer set search_path = '' as $$
+  with used as (
+    delete from private.proof_nonces
+    where nonce_hash = extensions.digest(coalesce(nonce, ''), 'sha256') and session_id = session and expires_at > now()
+    returning 1
+  )
+  select exists (select 1 from used)
+$$;
 
 -- ---------------------------------------------------------------------------
 -- Sign-in methods
@@ -206,8 +245,13 @@ begin
   elsif v_owner is not null then
     return jsonb_build_object('status', 'conflict');
   end if;
-  insert into auth.identities (provider_id, user_id, identity_data, provider, last_sign_in_at, created_at, updated_at)
-    values (subject, auth_user, coalesce(claims, '{}'::jsonb) || jsonb_build_object('sub', subject), provider, null, now(), now());
+  begin
+    insert into auth.identities (provider_id, user_id, identity_data, provider, last_sign_in_at, created_at, updated_at)
+      values (subject, auth_user, coalesce(claims, '{}'::jsonb) || jsonb_build_object('sub', subject), provider, null, now(), now());
+  exception when unique_violation then
+    -- Another account took the identity between the check and the insert: still a conflict, never a merge.
+    return jsonb_build_object('status', 'conflict');
+  end;
   return jsonb_build_object('status', 'linked', 'email', v_email);
 end $$;
 
@@ -316,7 +360,10 @@ create trigger keep_a_sign_in_method after delete on auth.identities
 -- ---------------------------------------------------------------------------
 
 -- One pending authorization per Auth user: the address a freshly
--- authenticated session may change the email method to, briefly.
+-- authenticated session may change the email method to, briefly. Auth's
+-- PUT /user reaches the database without its session, so the authorization
+-- is the account's: only a fresh session can create one, and another session
+-- can at most finish the change the fresh one asked for.
 create table private.email_change_authorizations (
   auth_user_id uuid primary key references auth.users (id) on delete cascade,
   address text not null,
@@ -482,15 +529,17 @@ revoke execute on function private.guard_session_revocation() from public;
 grant execute on function private.require_fresh_authentication() to authenticated;
 
 revoke execute on function public.caller_session_v1(), public.sign_in_methods_v1(), public.remove_sign_in_method_v1(uuid),
-  public.authorize_email_change_v1(text) from public, anon;
+  public.authorize_email_change_v1(text), public.issue_proof_nonce_v1() from public, anon;
 grant execute on function public.caller_session_v1(), public.sign_in_methods_v1(), public.remove_sign_in_method_v1(uuid),
-  public.authorize_email_change_v1(text) to authenticated;
+  public.authorize_email_change_v1(text), public.issue_proof_nonce_v1() to authenticated;
 
 revoke execute on function public.record_fresh_authentication(uuid, uuid, text, text), public.link_provider_identity(uuid, uuid, text, text, jsonb),
-  public.email_method_address(uuid, uuid), public.link_email_identity(uuid, uuid), public.email_change_authorized(uuid, text)
+  public.email_method_address(uuid, uuid), public.link_email_identity(uuid, uuid), public.email_change_authorized(uuid, text),
+  public.consume_proof_nonce(uuid, text)
   from public, anon, authenticated;
 grant execute on function public.record_fresh_authentication(uuid, uuid, text, text), public.link_provider_identity(uuid, uuid, text, text, jsonb),
-  public.email_method_address(uuid, uuid), public.link_email_identity(uuid, uuid), public.email_change_authorized(uuid, text)
+  public.email_method_address(uuid, uuid), public.link_email_identity(uuid, uuid), public.email_change_authorized(uuid, text),
+  public.consume_proof_nonce(uuid, text)
   to service_role;
 
 -- ---------------------------------------------------------------------------
@@ -502,6 +551,7 @@ create function private.expire_fresh_authentications() returns void
 language sql security definer set search_path = '' as $$
   delete from private.fresh_authentications where authenticated_at <= now() - private.fresh_authentication_window();
   delete from private.email_change_authorizations where expires_at <= now();
+  delete from private.proof_nonces where expires_at <= now();
 $$;
 
 select cron.schedule('expire-fresh-authentications', '*/15 * * * *', 'select private.expire_fresh_authentications()');

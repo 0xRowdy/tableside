@@ -6,7 +6,8 @@
 // POST, with the caller's own access token as the bearer and naming its
 // backend environment in x-tableside-environment like every request:
 //   { method: 'email', code }                      the code request-code sent to the email method's address
-//   { method: 'provider', provider, idToken, nonce } an ID token for one of the account's Apple or Google identities
+//   { method: 'provider', provider, idToken, nonce } an ID token for one of the account's Apple or Google
+//                                                   identities, minted for a nonce from issue_proof_nonce_v1
 // Answers:
 //   200 { status: 'confirmed' }
 //   401 { status: 'invalid-code' | 'invalid-token' }   the proof didn't check out
@@ -16,8 +17,7 @@
 //
 // Nothing here logs a token, nonce, code or claim.
 
-import { callerOf, emailCodeValid } from '../_shared/caller.ts';
-import { sha256Hex, verifyIdToken } from '../_shared/id-token.ts';
+import { callerOf, emailCodeValid, provenIdentity } from '../_shared/caller.ts';
 import { ENVIRONMENT_HEADER, reply, serviceRpc } from '../_shared/service.ts';
 
 declare const Deno: { serve(handler: (request: Request) => Promise<Response>): void };
@@ -38,10 +38,11 @@ Deno.serve(async (request) => {
     if (body.method === 'email' && typeof body.code === 'string' && /^\d{6}$/.test(body.code)) {
       if (!caller.email || !(await emailCodeValid(caller.email, body.code, caller.authUserId))) return reply(401, { status: 'invalid-code' });
       proof = { provider: 'email', subject: null };
-    } else if (body.method === 'provider' && typeof body.provider === 'string' && typeof body.idToken === 'string' && typeof body.nonce === 'string' && body.nonce) {
-      const claims = await verifyIdToken(body.provider, body.idToken, await sha256Hex(body.nonce));
-      if (!claims) return reply(401, { status: 'invalid-token' });
-      proof = { provider: body.provider, subject: claims.sub };
+    } else if (body.method === 'provider') {
+      const proven = await provenIdentity(request, caller, body);
+      if (proven === 'invalid') return reply(400, { status: 'invalid' });
+      if (proven === 'invalid-token') return reply(401, { status: 'invalid-token' });
+      proof = { provider: proven.provider, subject: proven.claims.sub };
     } else {
       return reply(400, { status: 'invalid' });
     }
