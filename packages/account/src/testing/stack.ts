@@ -47,7 +47,9 @@ export interface LocalStack {
   resetCodeRequests(): Promise<void>;
   /** Moves an address's code requests (or, with null, everyone's) back in time, as if that long had passed on the server. */
   ageCodeRequests(email: string | null, seconds: number): Promise<void>;
-  /** The send log since the scenario began: each entry's type, pacing and outcome, oldest first. */
+  /** The database's clock, to mark when a scenario began: the host's can drift from the stack's by more than a send takes. */
+  serverNow(): Promise<Date>;
+  /** The send log since the scenario began (a `serverNow` mark): each entry's type, pacing and outcome, oldest first. */
   emailSends(since: Date): Promise<{ type: string; pacing: string; outcome: string }[]>;
   /** The columns a table holds, to check what it can record. */
   columns(table: string): Promise<string[]>;
@@ -145,6 +147,10 @@ export function localStack(): LocalStack {
     async ageCodeRequests(email, seconds) {
       await sql`update private.code_requests set requested_at = requested_at - make_interval(secs => ${seconds})
         where ${email}::text is null or address_hash = extensions.digest(lower(btrim(${email})), 'sha256')`;
+    },
+    async serverNow() {
+      const [row] = await sql<{ now: Date }[]>`select now()`;
+      return row!.now;
     },
     async emailSends(since) {
       return sql<{ type: string; pacing: string; outcome: string }[]>`

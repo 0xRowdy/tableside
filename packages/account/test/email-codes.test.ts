@@ -45,7 +45,7 @@ describe('a sign-in code request', () => {
   it('emails "No account for this address" otherwise, creating nothing and logging only the type', async () => {
     const phone = device('phone');
     const email = uniqueEmail('unknown');
-    const since = new Date();
+    const since = await stack.serverNow();
 
     expect(await phone.account.requestEmailCode({ email, intent: 'sign-in' })).toEqual({ status: 'sent' });
     const message = await newestMessage(phone, email);
@@ -74,7 +74,7 @@ describe('a sign-in code request', () => {
     await stack.sql`update auth.users set email = ${undeliverableKnown} where lower(email) = lower(${known})`;
     const undeliverableUnknown = `"x"${uniqueEmail('nobody')}`;
     const phone = device('phone');
-    const since = new Date();
+    const since = await stack.serverNow();
 
     const forKnown = await phone.account.requestEmailCode({ email: undeliverableKnown, intent: 'sign-in' });
     const forUnknown = await phone.account.requestEmailCode({ email: undeliverableUnknown, intent: 'sign-in' });
