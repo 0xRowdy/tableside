@@ -326,6 +326,44 @@ describe('privacy choices (#105)', () => {
     expect(await analyticsIds(teen.accountId)).toHaveLength(0);
   });
 
+  it.each(['13-15', '16-17'] as const)('a teen (%s) calling the backend directly with an adult platform range stays a teen, and is still refused consent', async (band) => {
+    const teen = await rawAccount('teen-promote', band);
+    for (const source of ['platform-signal', 'declaration']) {
+      expect((await teen.raw.rpc('record_eligibility_v1', { band: '18+', source })).data).toMatchObject({ accepted: false, eligibility: band });
+    }
+    expect((await send(teen, { change: 'grant-analytics', basis: 0 })).data).toMatchObject({ status: 'rejected', code: 'not-eligible' });
+    expect(await analyticsIds(teen.accountId)).toHaveLength(0);
+  });
+
+  it('no direct report gets past a required check another installation owes', async () => {
+    const owing = await rawAccount('owes-check');
+    expect((await owing.raw.rpc('record_age_check_v1', { age_check: 'pending' })).data).toEqual({ status: 'recorded' });
+    await stack.sql`update public.eligibility set band = 'unresolved', source = 'declaration' where account_id = ${owing.accountId}`;
+    // Another session on the account: a raw client signed in by email code.
+    const email = (await stack.sql<{ email: string }[]>`select u.email from auth.users u join public.accounts a on a.auth_user_id = u.id where a.account_id = ${owing.accountId}`)[0]!.email;
+    const previous = await mailbox.latestCode(email);
+    await stack.requestCode({ email, intent: 'sign-in' });
+    const signedIn = await rawClient().auth.verifyOtp({ email, token: await mailbox.latestCode(email, { after: previous }), type: 'email' });
+    const second = rawClient(signedIn.data.session!.access_token);
+    for (const source of ['declaration', 'platform-signal']) {
+      expect((await second.rpc('record_eligibility_v1', { band: '18+', source })).data).toMatchObject({ accepted: false, eligibility: 'unresolved' });
+    }
+    // Its own record_age_check_v1 clears nothing but its own (it has none: it never registered).
+    expect((await second.rpc('record_age_check_v1', { age_check: null })).data).toEqual({ status: 'not-registered' });
+    expect((await second.rpc('record_eligibility_v1', { band: '18+', source: 'declaration' })).data).toMatchObject({ accepted: false });
+    // The installation that owes the check resolves it with its own platform's range.
+    expect((await owing.raw.rpc('record_eligibility_v1', { band: '16-17', source: 'platform-signal' })).data).toMatchObject({ accepted: true, eligibility: '16-17' });
+    expect(await stack.sql`select age_check from private.installations where account_id = ${owing.accountId} and age_check is not null`).toHaveLength(0);
+  });
+
+  it('a declaration is refused while the caller’s own installation owes a required check', async () => {
+    const owing = await rawAccount('owes-own-check');
+    await stack.sql`delete from public.eligibility where account_id = ${owing.accountId}`;
+    await owing.raw.rpc('record_age_check_v1', { age_check: 'unmet' });
+    expect((await owing.raw.rpc('record_eligibility_v1', { band: '18+', source: 'declaration' })).data).toMatchObject({ accepted: false, eligibility: 'unresolved' });
+    expect((await owing.raw.rpc('record_age_check_v1', { age_check: 'later' })).error).not.toBeNull();
+  });
+
   it('denies a grant of consent from an unresolved account, or one whose eligibility was never established', async () => {
     const unresolved = await rawAccount('unresolved-grant');
     await stack.sql`update public.eligibility set band = 'unresolved' where account_id = ${unresolved.accountId}`;

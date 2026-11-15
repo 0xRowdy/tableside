@@ -107,4 +107,15 @@ export function parseEligibilityRecord(value: unknown): EligibilityRecord | null
   return { status: status as EligibilityStatus, source };
 }
 
+const RANK: Readonly<Record<AgeRange, number>> = { 'under-13': 0, '13-15': 1, '16-17': 2, '18+': 3 };
+
+/**
+ * Whether a range would raise the account's established band (or move it from
+ * under 13). No report does: the server can't verify a platform's answer, so
+ * raising a band is support review's (#42). A range may establish a band where
+ * none is, or lower one.
+ */
+export const raisesBand = (current: EligibilityStatus, range: AgeRange): boolean =>
+  current === 'under-13' || (current !== 'unresolved' && RANK[range] > RANK[current]);
+
 export const isRequiredCheck = (value: unknown): value is RequiredCheck => value === 'pending' || value === 'unmet';

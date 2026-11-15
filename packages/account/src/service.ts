@@ -20,6 +20,7 @@ import {
   isRequiredCheck,
   noPlatformAgeSignals,
   parseEligibilityRecord,
+  raisesBand,
   requiredCheck,
 } from './eligibility';
 import { type BackendEnvironment, ENVIRONMENT_HEADER, type EnvironmentName, authCallbackUrl, retiredEnvironments } from './environment';
@@ -735,8 +736,8 @@ function afterSignal(base: RememberedEligibility, signal: AgeSignal): Remembered
     ...(base.reported ? { reported: base.reported } : {}),
   };
   if (signal.kind !== 'range' || signal.range === base.signal) return next;
-  // Under 13 goes to support review: no platform answer raises it here (#42).
-  if (base.eligibility.status === 'under-13') return next;
+  // No platform answer raises a band here, nor under 13: that is support review's (#42), as on the server.
+  if (raisesBand(base.eligibility.status, signal.range)) return next;
   return { ...next, eligibility: { status: signal.range, source: 'platform-signal' }, signal: signal.range };
 }
 
@@ -867,6 +868,8 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
     renewing: boolean;
     /** Whether this session is registered to this installation (and so may sync, and learn of its revocation). */
     registered: boolean;
+    /** The required check the server last recorded for this installation in this session; undefined until it has. */
+    serverCheck?: RequiredCheck | null;
     readonly stopWatch: () => void;
   };
   let opened: OpenSession | null = null;
@@ -1282,8 +1285,29 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
     }
   };
 
-  /** Sends the range this device's platform established, once (not while deletion is scheduled: that is no restricted path). */
+  /**
+   * Tells the server the required check this installation owes (or that it
+   * owes none), when that changed: while one is owed, the server refuses a
+   * declaration for the account, from any caller.
+   */
+  const reportCheck = async (current: OpenSession): Promise<void> => {
+    const check = current.remembered.check ?? null;
+    if (!current.registered || current.serverCheck === check) return;
+    try {
+      const { data, error } = await (await connect()).rpc('record_age_check_v1', { age_check: check });
+      if (!error && (data as { status?: unknown } | null)?.status === 'recorded' && opened === current) current.serverCheck = check;
+    } catch {
+      // Offline: the next refresh tells it.
+    }
+  };
+
+  /**
+   * Sends what this device's platform says: the check it owes, then the range
+   * it established, once (not while deletion is scheduled: that is no restricted path).
+   */
   const reportSignal = async (current: OpenSession): Promise<void> => {
+    await reportCheck(current);
+    if (opened !== current) return;
     const { signal, reported, deletionDeadline } = current.remembered;
     if (signal && signal !== reported && deletionDeadline === undefined) await report(current, { status: signal, source: 'platform-signal' });
   };
