@@ -1,7 +1,7 @@
 // Native Sign in with Google that ends in an ID token carrying the app's nonce
 // (spec 2 #89: nonce validated). The free Google Sign-In package for React
 // Native takes no nonce, so this local module calls the platform APIs that do:
-// Credential Manager's Sign in with Google on Android, and GoogleSignIn 8 on iOS.
+// Credential Manager's Sign in with Google on Android, and GoogleSignIn 9 on iOS (the first with a nonce parameter).
 import { requireNativeModule } from 'expo';
 
 export type GoogleIdTokenResult = { readonly status: 'token'; readonly idToken: string } | { readonly status: 'cancelled' } | { readonly status: 'failed' };
