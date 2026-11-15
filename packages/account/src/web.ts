@@ -3,21 +3,8 @@
 // the Supabase client or the app's sync, so the page's bundle stays small.
 
 export { type BackendEnvironment, backendEnvironment } from './environment';
-export {
-  BACKUPS_DETAIL,
-  CANCEL_FAILED,
-  CANCEL_TOO_LATE,
-  DELETION_UNKNOWN,
-  PROVIDER_GRANT_DETAIL,
-  SCHEDULE_UNKNOWN,
-  STORES,
-  type Store,
-  WEB_PAGES,
-  analyticsDetail,
-  dayText,
-  deletionDetail,
-  scheduledDetail,
-} from './lifecycle-text';
+export * from './lifecycle-text';
+export type { PendingDeletion } from './deletion-progress';
 export type {
   CancelDeletionResult,
   CodeRequestResult,

@@ -4,7 +4,7 @@
 
 import { type SupabaseClient, createClient } from '@supabase/supabase-js';
 
-import { instant, parseProgress } from './deletion-progress';
+import { instant, parseDeletionStatus, parseProgress } from './deletion-progress';
 import {
   type AgeRange,
   type AgeSignal,
@@ -1890,17 +1890,10 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
     async status() {
       if (gate.state === 'deleted') return deletionProgress();
       const current = opened;
-      const answer = (await operation('deletion_status_v1', undefined, 'restricted')) as { status?: unknown; deadline?: unknown; scheduledAt?: unknown } | null;
-      if (!current || opened !== current) return null;
-      if (answer?.status === 'none') {
-        await rememberDeletion(current, undefined);
-        return { status: 'none' };
-      }
-      const deadline = instant(answer?.deadline);
-      const scheduledAt = instant(answer?.scheduledAt);
-      if (answer?.status !== 'scheduled' || deadline === null || scheduledAt === null) return null;
-      await rememberDeletion(current, deadline);
-      return { status: 'scheduled', deadline, scheduledAt };
+      const answer = parseDeletionStatus(await operation('deletion_status_v1', undefined, 'restricted'));
+      if (!current || opened !== current || !answer) return null;
+      await rememberDeletion(current, answer.status === 'scheduled' ? answer.deadline : undefined);
+      return answer;
     },
   };
 

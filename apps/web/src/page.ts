@@ -10,6 +10,9 @@
 // A new view moves focus to its heading; within a view, focus stays on the
 // control that had it (or moves to the field a step asks for). Messages go
 // to live regions that stay in place, so screen readers announce them.
+// Billing help is on every view, signed in or not (Amendment 1 C2: kept visible
+// before erasure); the export is offered first, from the app.
+// TODO(spec 7 D9): "Paid time is forfeited" is provisional (Amendment 9 §3): under Outcome B its copy follows the owner's choice recorded there.
 // TODO(frames): unverified against S2-24 — the frame couldn't be read (Pencil unreachable). The copy and layout come from spec 2 *Deletion* and Amendments 1 B1, C2, 3 §3–4, 8 §5 and 9 §1–2, and the app's S2-22/S2-23 screens.
 
 import {
@@ -114,6 +117,13 @@ export function mountAccountPage(main: HTMLElement, account: WebAccount): Promis
         row(`Request a refund · ${store.name}`, el('span', {}, `The ${store.name} decides refunds. `, external(`Request one from the ${store.name}`, store.refundUrl))),
       ]),
     ),
+  ];
+
+  /** Before deleting: the export (from the app) and the stores' billing help. */
+  const beforeYouGo = () => [
+    el('h2', {}, 'Before you go'),
+    el('ul', { class: 'rows' }, row('Export my data first', "In the app: More → Settings → Account → Export my data. Deletion doesn't wait for it.")),
+    ...billingHelp(),
   ];
 
   /** A form with one field and its submit button; Enter submits it. */
@@ -234,6 +244,7 @@ export function mountAccountPage(main: HTMLElement, account: WebAccount): Promis
           { class: 'note' },
           "Only signed in with Apple or Google? Add an email code to your account in the app first (More → Settings → Account → Sign-in methods), or contact support.",
         ),
+        ...billingHelp(),
       ];
     }
     const { node, input } = form(
@@ -263,6 +274,7 @@ export function mountAccountPage(main: HTMLElement, account: WebAccount): Promis
         }),
       ),
       el('p', { class: 'note' }, 'No code? Check your spam folder, or create an account in the Tableside app.'),
+      ...billingHelp(),
     ];
   };
 
@@ -395,13 +407,7 @@ export function mountAccountPage(main: HTMLElement, account: WebAccount): Promis
   const activeView = (email: string) => {
     const choices = state.confirmed
       ? [
-          el('h2', {}, 'Before you go'),
-          el(
-            'ul',
-            { class: 'rows' },
-            row('Export my data first', "In the app: More → Settings → Account → Export my data. Deletion doesn't wait for it."),
-          ),
-          ...billingHelp(),
+          ...beforeYouGo(),
           el('h2', {}, 'If you schedule deletion'),
           el(
             'ul',
@@ -417,7 +423,7 @@ export function mountAccountPage(main: HTMLElement, account: WebAccount): Promis
             ? permanentWarnings()
             : [el('div', { class: 'actions' }, button('Delete permanently now', 'ghost', 'delete', showPermanent))]),
         ]
-      : confirmPanel(state.confirming?.then ?? null);
+      : [...confirmPanel(state.confirming?.then ?? null), ...billingHelp()];
     return [el('h1', { tabindex: '-1' }, 'Delete your account'), el('p', { class: 'lead' }, `Signed in as ${email}.`), ...choices, signOutButton()];
   };
 
@@ -431,6 +437,7 @@ export function mountAccountPage(main: HTMLElement, account: WebAccount): Promis
     el('p', { class: 'note' }, `Signed in as ${email}.`),
     el('h2', {}, 'Deletion status'),
     el('ul', { class: 'rows' }, row('Deletion', scheduledDetail(deadline))),
+    ...beforeYouGo(),
     ...(state.confirming
       ? confirmPanel(state.confirming.then)
       : [
@@ -442,7 +449,6 @@ export function mountAccountPage(main: HTMLElement, account: WebAccount): Promis
           ),
           ...(state.permanent ? permanentWarnings() : []),
         ]),
-    ...billingHelp(),
     signOutButton(),
   ];
 
@@ -451,6 +457,7 @@ export function mountAccountPage(main: HTMLElement, account: WebAccount): Promis
     el('p', { class: 'lead' }, `Signed in as ${email}.`),
     el('p', {}, "Couldn't check your account's deletion status. Check your connection and try again."),
     el('div', { class: 'actions' }, button('Try again', 'primary', 'retry', () => run(async () => void (await account.refresh())))),
+    ...billingHelp(),
     signOutButton(),
   ];
 

@@ -16,7 +16,7 @@
 // Plain fetch and Web Storage, with no Supabase client, so the page's bundle
 // carries nothing it doesn't use.
 
-import { instant, parseProgress } from './deletion-progress';
+import { type PendingDeletion, instant, parseDeletionStatus, parseProgress } from './deletion-progress';
 import { type BackendEnvironment, ENVIRONMENT_HEADER } from './environment';
 import type {
   CancelDeletionResult,
@@ -37,7 +37,7 @@ export type WebAccountView =
   | {
       readonly state: 'signed-in';
       readonly email: string;
-      readonly deletion: { readonly status: 'none' } | { readonly status: 'scheduled'; readonly deadline: number; readonly scheduledAt: number } | null;
+      readonly deletion: PendingDeletion | null;
     }
   /** Deleted permanently: its progress, or null when it can't be asked. */
   | { readonly state: 'deleted'; readonly progress: DeletionProgress | null };
@@ -103,8 +103,9 @@ interface StoredSession {
   readonly accountId: string;
 }
 
+/** An answer from the backend: its HTTP status and parsed JSON body. */
 interface Answer {
-  readonly code: number;
+  readonly httpStatus: number;
   readonly body: unknown;
 }
 
@@ -149,7 +150,7 @@ export function createWebAccount(options: WebAccountOptions): WebAccount {
         },
         body: JSON.stringify(body),
       });
-      return { code: response.status, body: await response.json().catch(() => null) };
+      return { httpStatus: response.status, body: await response.json().catch(() => null) };
     } catch {
       return null;
     }
@@ -181,7 +182,7 @@ export function createWebAccount(options: WebAccountOptions): WebAccount {
     if (stored.expiresAt - RENEW_EARLY_MS > Date.now()) return stored.accessToken;
     const answer = await send('/auth/v1/token?grant_type=refresh_token', { refresh_token: stored.refreshToken });
     if (!answer) return null;
-    if (answer.code !== 200) {
+    if (answer.httpStatus !== 200) {
       // Refused: the session ended (signed out elsewhere, revoked or deleted).
       session.removeItem(SESSION);
       return null;
@@ -227,7 +228,7 @@ export function createWebAccount(options: WebAccountOptions): WebAccount {
   const recordGpc = async (token: string): Promise<void> => {
     if (gpcRecorded || !options.globalPrivacyControl()) return;
     const answer = await send('/functions/v1/record-gpc', {}, token);
-    if (answer?.code === 200) gpcRecorded = true;
+    if (answer?.httpStatus === 200) gpcRecorded = true;
   };
 
   /** Deleted: keeps the status credential for the deletion's progress, and nothing else of the account. */
@@ -245,7 +246,7 @@ export function createWebAccount(options: WebAccountOptions): WebAccount {
   const progressOf = async (token: string | null): Promise<DeletionProgress | null> => {
     if (!token) return null;
     const answer = await rpc('deletion_progress_v1', { token });
-    return answer?.code === 200 ? parseProgress(answer.body) : null;
+    return answer?.httpStatus === 200 ? parseProgress(answer.body) : null;
   };
 
   /** With no usable session: whether the account behind this browser's status credential was deleted. */
@@ -253,21 +254,12 @@ export function createWebAccount(options: WebAccountOptions): WebAccount {
     const token = statusToken();
     if (!token) return false;
     const answer = await rpc('lifecycle_status_v1', { token });
-    return answer?.code === 200 && statusOf(answer) === 'deleted';
+    return answer?.httpStatus === 200 && statusOf(answer) === 'deleted';
   };
 
   const signedOut = (): WebAccountView => {
     session.removeItem(SESSION);
     return (view = { state: 'signed-out' });
-  };
-
-  /** The deletion status for the signed-in session, from deletion_status_v1. */
-  const deletionStatus = (body: unknown): Extract<WebAccountView, { state: 'signed-in' }>['deletion'] => {
-    const value = body as { status?: unknown; deadline?: unknown; scheduledAt?: unknown } | null;
-    if (value?.status === 'none') return { status: 'none' };
-    const deadline = instant(value?.deadline);
-    const scheduledAt = instant(value?.scheduledAt);
-    return value?.status === 'scheduled' && deadline !== null && scheduledAt !== null ? { status: 'scheduled', deadline, scheduledAt } : null;
   };
 
   const refresh = async (): Promise<WebAccountView> => {
@@ -285,12 +277,12 @@ export function createWebAccount(options: WebAccountOptions): WebAccount {
     }
     const answer = await rpc('deletion_status_v1', {}, token);
     if (!answer) return (view = { state: 'signed-in', email: stored.email, deletion: null });
-    if (answer.code !== 200 || answer.body === null) {
+    if (answer.httpStatus !== 200 || answer.body === null) {
       // The session is no longer signed in: revoked, signed out elsewhere, or the account deleted.
       if (await lifecycleDeleted()) return becomeDeleted(await progressOf(statusToken()), stored.accountId);
       return signedOut();
     }
-    view = { state: 'signed-in', email: stored.email, deletion: deletionStatus(answer.body) };
+    view = { state: 'signed-in', email: stored.email, deletion: parseDeletionStatus(answer.body) };
     await recordGpc(token);
     return view;
   };
@@ -304,8 +296,8 @@ export function createWebAccount(options: WebAccountOptions): WebAccount {
   const requestCode = async (email: string): Promise<CodeRequestResult> => {
     const answer = await send('/functions/v1/request-code', { email: email.trim(), intent: 'sign-in' });
     const body = answer?.body as { status?: unknown; retryAfter?: unknown } | null;
-    if (answer?.code === 200 && body?.status === 'sent') return { status: 'sent' };
-    if (answer?.code === 429 && typeof body?.retryAfter === 'number') return { status: 'rate-limited', retryAfterSeconds: body.retryAfter };
+    if (answer?.httpStatus === 200 && body?.status === 'sent') return { status: 'sent' };
+    if (answer?.httpStatus === 429 && typeof body?.retryAfter === 'number') return { status: 'rate-limited', retryAfterSeconds: body.retryAfter };
     return { status: 'failed' };
   };
 
@@ -322,7 +314,7 @@ export function createWebAccount(options: WebAccountOptions): WebAccount {
       const address = email.trim();
       const verified = await send('/auth/v1/verify', { type: 'email', email: address, token: code.trim() });
       if (!verified) return { status: 'failed' };
-      if (verified.code !== 200) {
+      if (verified.httpStatus !== 200) {
         const error = (verified.body as { error_code?: unknown; code?: unknown } | null)?.error_code;
         return { status: error === 'otp_expired' ? 'invalid-code' : 'failed' };
       }
@@ -330,7 +322,7 @@ export function createWebAccount(options: WebAccountOptions): WebAccount {
       if (typeof token !== 'string') return { status: 'failed' };
       const account = await rpc('current_account', {}, token);
       const accountId = (account?.body as { account_id?: unknown } | null)?.account_id;
-      if (account?.code !== 200 || typeof accountId !== 'string' || !keepSession(verified.body, address, accountId)) {
+      if (account?.httpStatus !== 200 || typeof accountId !== 'string' || !keepSession(verified.body, address, accountId)) {
         await send('/auth/v1/logout?scope=local', {}, token);
         return { status: 'failed' };
       }
@@ -355,8 +347,8 @@ export function createWebAccount(options: WebAccountOptions): WebAccount {
         const token = await accessToken();
         if (!token) return { status: 'failed' };
         const answer = await send('/functions/v1/fresh-auth', { method: 'email', code: code.trim() }, token);
-        if (answer?.code === 200 && statusOf(answer) === 'confirmed') return { status: 'confirmed' };
-        if (answer?.code === 401 && statusOf(answer) === 'invalid-code') return { status: 'invalid-code' };
+        if (answer?.httpStatus === 200 && statusOf(answer) === 'confirmed') return { status: 'confirmed' };
+        if (answer?.httpStatus === 401 && statusOf(answer) === 'invalid-code') return { status: 'invalid-code' };
         return { status: 'failed' };
       },
     },
@@ -366,10 +358,10 @@ export function createWebAccount(options: WebAccountOptions): WebAccount {
       const token = await accessToken();
       if (!token) return { status: 'failed' };
       const answer = await send('/functions/v1/schedule-deletion', { operationId: operationId('schedule') }, token);
-      if (answer && answer.code < 500) pending = null;
-      if (answer?.code === 403 && statusOf(answer) === 'fresh-authentication-required') return { status: 'fresh-authentication-required' };
+      if (answer && answer.httpStatus < 500) pending = null;
+      if (answer?.httpStatus === 403 && statusOf(answer) === 'fresh-authentication-required') return { status: 'fresh-authentication-required' };
       const body = answer?.body as { deadline?: unknown; scheduledAt?: unknown } | null;
-      const deadline = answer?.code === 200 && statusOf(answer) === 'scheduled' ? instant(body?.deadline) : null;
+      const deadline = answer?.httpStatus === 200 && statusOf(answer) === 'scheduled' ? instant(body?.deadline) : null;
       const scheduledAt = instant(body?.scheduledAt);
       if (deadline === null || scheduledAt === null || view.state !== 'signed-in') {
         // No answer, or a retry whose scheduling was canceled since: the server's status decides what shows.
@@ -384,7 +376,7 @@ export function createWebAccount(options: WebAccountOptions): WebAccount {
       const token = await accessToken();
       if (!token) return { status: 'failed' };
       const answer = await rpc('cancel_deletion_v1', { operation_id: operationId('cancel') }, token);
-      const status = answer?.code === 200 ? statusOf(answer) : undefined;
+      const status = answer?.httpStatus === 200 ? statusOf(answer) : undefined;
       if (typeof status === 'string') pending = null;
       if (status === 'fresh-authentication-required') return { status };
       if ((status === 'canceled' || status === 'not-scheduled') && view.state === 'signed-in') {
@@ -401,7 +393,7 @@ export function createWebAccount(options: WebAccountOptions): WebAccount {
       const token = await accessToken();
       if (!stored || !token) return { status: 'failed' };
       const answer = await rpc('delete_permanently_v1', {}, token);
-      const status = answer?.code === 200 ? statusOf(answer) : undefined;
+      const status = answer?.httpStatus === 200 ? statusOf(answer) : undefined;
       if (status === 'fresh-authentication-required') return { status };
       if (status === 'deleted') {
         becomeDeleted(parseProgress((answer?.body as { progress?: unknown } | null)?.progress), stored.accountId);

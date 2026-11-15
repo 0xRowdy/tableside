@@ -1,7 +1,7 @@
 // Reading the server's deletion status answers: shared by the Account
 // service and the web account page, with no platform imports.
 
-import type { DeletionProgress } from './service';
+import type { DeletionProgress, DeletionStatus } from './service';
 
 /** A server timestamp in milliseconds since the epoch, or null when it isn't one. */
 export const instant = (value: unknown): number | null => {
@@ -28,4 +28,16 @@ export function parseProgress(data: unknown): DeletionProgress | null {
     analytics: { requestedAt: instant(value.analytics?.requestedAt), completedAt: instant(value.analytics?.completedAt) },
     providers: providers === 'revoked' || providers === 'not-held' || providers === 'none' ? providers : null,
   };
+}
+
+/** A deletion that hasn't crossed the boundary: none, or scheduled with its deadline. */
+export type PendingDeletion = Exclude<DeletionStatus, DeletionProgress>;
+
+/** The signed-in session's deletion status (deletion_status_v1), or null when it isn't one. */
+export function parseDeletionStatus(data: unknown): PendingDeletion | null {
+  const value = data as { status?: unknown; deadline?: unknown; scheduledAt?: unknown } | null;
+  if (value?.status === 'none') return { status: 'none' };
+  const deadline = instant(value?.deadline);
+  const scheduledAt = instant(value?.scheduledAt);
+  return value?.status === 'scheduled' && deadline !== null && scheduledAt !== null ? { status: 'scheduled', deadline, scheduledAt } : null;
 }

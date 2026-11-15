@@ -230,7 +230,7 @@ describe('keyboard and screen-reader use', () => {
     ['scheduled', { state: 'signed-in', email: 'player@example.com', deletion: { status: 'scheduled', deadline: DEADLINE, scheduledAt: DEADLINE } }],
     ['status unknown', { state: 'signed-in', email: 'player@example.com', deletion: null }],
     ['deleted', { state: 'deleted', progress: null }],
-  ])('%s: one heading, native controls in document order, every field labelled, support links', async (_, view) => {
+  ])('%s: one heading, native controls in document order, every field labelled, billing help and support links', async (_, view) => {
     account.view = view;
     await mountAccountPage(main, account);
     expect(main.querySelectorAll('h1')).toHaveLength(1);
@@ -239,6 +239,8 @@ describe('keyboard and screen-reader use', () => {
     for (const node of main.querySelectorAll('button')) expect(node.getAttribute('type')).toMatch(/^(button|submit)$/);
     for (const input of main.querySelectorAll('input')) expect(main.querySelector(`label[for="${input.id}"]`)).not.toBeNull();
     for (const link of main.querySelectorAll('a[target="_blank"]')) expect(link.textContent).toContain('(opens in a new tab)');
+    // Billing help stays visible whether or not anyone is signed in (Amendment 1 C2).
+    for (const store of ['App Store', 'Google Play']) expect(main.textContent).toContain(`Request a refund · ${store}`);
     const help = main.querySelector('nav[aria-label="Help"]');
     expect(help?.textContent).toContain('Contact support');
     expect(help?.textContent).toContain('Make a privacy request');
