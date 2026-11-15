@@ -7,11 +7,13 @@ export {
   FakeClock,
   FakeEntropy,
   MemoryCredentials,
+  accessToken,
   createAccountByEmail,
   createDevice,
   signInByEmail,
   uniqueEmail,
 } from './device';
+export { type TestRevisionedValue, testRecordTypes, testRevisionedItem } from './record-types';
 export { FaultProxy, type HeldResponse } from './fault-proxy';
 export { type ProviderIdentity, TestIdentityProvider, TestProviderPorts } from './identity-provider';
 export { Mailbox } from './mailbox';

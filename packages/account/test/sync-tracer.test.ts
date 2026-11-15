@@ -8,7 +8,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { PLATFORM_TABLES, RECONCILE_INTERVAL_MS, completedPracticeSession, recordTypes } from '../src';
-import { type SimulatedDevice, createAccountByEmail, createDevice, localStack, signInByEmail, uniqueEmail } from '../src/testing';
+import { type SimulatedDevice, accessToken, createAccountByEmail, createDevice, localStack, signInByEmail, uniqueEmail } from '../src/testing';
 
 const devices: SimulatedDevice[] = [];
 function device(name: string): SimulatedDevice {
@@ -463,16 +463,3 @@ describe('the record-type registry', () => {
     }
   });
 });
-
-/** The access token a device's Auth session holds, from its credential storage. */
-function accessToken(d: SimulatedDevice): string {
-  for (const value of d.credentials.items.values()) {
-    try {
-      const token = (JSON.parse(value) as { access_token?: unknown }).access_token;
-      if (typeof token === 'string') return token;
-    } catch {
-      // Not the session.
-    }
-  }
-  throw new Error(`${d.name} holds no session`);
-}
