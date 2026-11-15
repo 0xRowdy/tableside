@@ -149,6 +149,8 @@ describe("the backend's operational metrics", () => {
       email_queue_age_ms: null,
     });
     expect(measured.storage_bytes.database).toBeGreaterThan(0);
+    // Cumulative across the database since its statistics were reset; aborted transactions are counted in it.
+    expect(measured.transactions_rolled_back).toBeGreaterThanOrEqual(0);
     expect(serverMetricEvents(measured)).toContainEqual({ name: 'sync_receipts_refused', value: 1, properties: {} });
 
     const held = JSON.stringify(measured);

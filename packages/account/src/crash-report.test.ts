@@ -38,6 +38,14 @@ describe('a crash report', () => {
     for (const text of PRIVATE) expect(JSON.stringify(report)).not.toContain(text);
   });
 
+  it('never keeps a line of a many-line message, even one shaped like a frame', () => {
+    for (const message of ['could not save\n  at the Bellagio, code 482913, player@example.com', 'x\nat home (band 16-17 for player@example.com)', 'x\n    at player (Bellagio:1:2)']) {
+      const report = crashReport(new Error(message));
+      for (const text of PRIVATE) expect(JSON.stringify(report)).not.toContain(text);
+      expect(report.frames[0]).toContain('crash-report.test.ts');
+    }
+  });
+
   it("keeps a sync failure's structured kind, which is a code, not text", () => {
     expect(crashReport(new SyncCallError('refused'))).toMatchObject({ type: 'SyncCallError', code: 'refused' });
   });

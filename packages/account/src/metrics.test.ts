@@ -116,12 +116,16 @@ describe('the operational metrics sender', () => {
     const { sink, metrics } = sender(adult);
     expect(metrics.record('sync_queue_age', 123_456, {})).toBe(true);
     expect(sink.events.at(-1)?.value).toBe(120_000);
-    // A time of day in milliseconds since the epoch is no duration.
-    expect(metrics.record('sync_queue_age', 1_763_164_800_000, {})).toBe(false);
+    // An age past the unit's cap reports the cap, so a time of day in milliseconds since the epoch (a clock anchor) never leaves.
+    expect(metrics.record('sync_queue_age', 1_763_164_800_000, {})).toBe(true);
+    expect(sink.events.at(-1)?.value).toBe(2_678_400_000);
+    // At the cap itself, rounding never takes it past.
+    expect(metrics.record('sync_queue_age', 2_678_399_999, {})).toBe(true);
+    expect(sink.events.at(-1)?.value).toBeLessThanOrEqual(2_678_400_000);
     expect(metrics.record('sync_queue_age', -1, {})).toBe(false);
     expect(metrics.record('sync_queue_age', Number.NaN, {})).toBe(false);
     expect(metrics.record('sync_run_failed', 1.5, { error: 'offline' })).toBe(false);
-    expect(sink.events).toHaveLength(1);
+    expect(sink.events).toHaveLength(3);
   });
 
   it('keeps going when the sink throws: a metric never breaks what it measures', () => {
@@ -183,6 +187,7 @@ describe('the catalog', () => {
 describe("the backend's snapshot", () => {
   const snapshot = {
     sync_receipts_refused: 2,
+    transactions_rolled_back: 17,
     staged_chunks_age_ms: 61_234,
     storage_bytes: { database: 12_345_678, 'staged-chunks': 0, objects: 4_096 },
     email_sends_failed: { code: 1, 'no-account': 0 },
@@ -193,6 +198,7 @@ describe("the backend's snapshot", () => {
   it('becomes catalog events: a count, age or size each, with nothing for a queue that is empty or absent', () => {
     expect(serverMetricEvents(snapshot)).toEqual([
       { name: 'sync_receipts_refused', value: 2, properties: {} },
+      { name: 'transactions_rolled_back', value: 17, properties: {} },
       { name: 'staged_chunks_age', value: 61_000, properties: {} },
       { name: 'storage_bytes', value: 12_000_000, properties: { area: 'database' } },
       { name: 'storage_bytes', value: 0, properties: { area: 'staged-chunks' } },

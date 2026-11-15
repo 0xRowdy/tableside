@@ -25,7 +25,7 @@ export function crashReport(thrown: unknown): CrashReport {
   const type = TYPE.test(thrown.name) ? thrown.name : 'Error';
   const coded = thrown as { kind?: unknown; code?: unknown };
   const code = [coded.kind, coded.code].find((value): value is string => typeof value === 'string' && CODE.test(value));
-  const frames = (thrown.stack ?? '')
+  const frames = withoutMessage(thrown)
     .split('\n')
     .map(frame)
     .filter((line): line is string => line !== null)
@@ -33,11 +33,27 @@ export function crashReport(thrown: unknown): CrashReport {
   return { type, ...(code ? { code } : {}), frames };
 }
 
+/**
+ * The stack without its message: V8 and Hermes start it with the error's
+ * `name: message`, and a message can run over several lines, any of them
+ * shaped like a frame.
+ */
+function withoutMessage(error: Error): string {
+  const stack = error.stack ?? '';
+  const header = error.message === '' ? error.name : `${error.name}: ${error.message}`;
+  for (const start of [header, error.message]) if (start !== '' && stack.startsWith(start)) return stack.slice(start.length);
+  return stack;
+}
+
+/** A code location: a file (or address) with its line and column, or a native frame. */
+const LOCATION = /(?::\d+:\d+|^native|<anonymous>)$/;
+
 /** One stack line as a frame (V8 and Hermes: `at name (location)` or `at location`; JavaScriptCore: `name@location`), or null when it isn't one. */
 function frame(line: string): string | null {
   const v8 = /^\s*at (?:(.+?) \((.+)\)|(.+))$/.exec(line);
   if (v8) {
     const [, name, location, bare] = v8;
+    if (!LOCATION.test(location ?? bare!)) return null;
     return name !== undefined && location !== undefined ? `at ${functionName(name)} (${cleanLocation(location)})` : `at ${cleanLocation(bare!)}`;
   }
   const jsc = /^([^@\s]*)@(\S+:\d+:\d+)$/.exec(line.trim());

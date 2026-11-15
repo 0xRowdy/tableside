@@ -43,6 +43,7 @@ $$;
 
 -- What the backend measures since `since` (counts) and now (ages, sizes):
 --   sync_receipts_refused        receipts that refused their upload
+--   transactions_rolled_back     transactions that failed and rolled back: a running total since the statistics were reset
 --   staged_chunks_age_ms         the oldest staged chunk's wait, or null when none is staged
 --   storage_bytes                {database, staged-chunks, objects}
 --   email_sends_failed           {code, no-account}: emails that couldn't be delivered
@@ -53,6 +54,8 @@ language sql stable security definer set search_path = '' as $$
   select jsonb_build_object(
     'sync_receipts_refused',
       (select count(*) from private.sync_receipts where received_at >= since and disposition ->> 'status' = 'rejected'),
+    'transactions_rolled_back',
+      (select xact_rollback from pg_stat_database where datname = current_database()),
     'staged_chunks_age_ms',
       (select floor(extract(epoch from now() - min(received_at)) * 1000)::bigint from private.staged_chunks),
     'storage_bytes', jsonb_build_object(

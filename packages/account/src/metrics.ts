@@ -30,12 +30,16 @@ export function metricPermitted(gate: AccountGate, purpose: MetricPurpose): bool
   return purpose !== 'product-analytics' || gate.eligibility === '18+';
 }
 
-/** What a value measures, and the largest it can be: anything larger (a clock anchor, an identifier) is refused. */
+/**
+ * What a value measures, and the largest it can be. A larger count, size or
+ * ratio is refused; a longer age reports the cap, so a stuck queue still shows
+ * and a clock anchor (milliseconds since the epoch) never leaves.
+ */
 const UNITS = {
-  count: { max: 1e9, integer: true },
-  milliseconds: { max: 31 * 24 * 3_600_000, integer: false },
-  bytes: { max: 1e14, integer: true },
-  ratio: { max: 1, integer: false },
+  count: { max: 1e9, integer: true, capped: false },
+  milliseconds: { max: 31 * 24 * 3_600_000, integer: false, capped: true },
+  bytes: { max: 1e14, integer: true, capped: false },
+  ratio: { max: 1, integer: false, capped: false },
 } as const;
 
 interface MetricDefinition {
@@ -73,6 +77,8 @@ export const METRICS = {
   // The backend's aggregates (supabase/migrations, *operational_metrics*).
   /** Receipts that refused their upload, in the window. */
   sync_receipts_refused: { purpose: 'operational', source: 'server', unit: 'count', properties: {} },
+  /** Database transactions that failed and rolled back, since the database's statistics were last reset (a running total). */
+  transactions_rolled_back: { purpose: 'operational', source: 'server', unit: 'count', properties: {} },
   /** How long the oldest staged chunk has waited for its manifest: the upload staging queue's age. */
   staged_chunks_age: { purpose: 'operational', source: 'server', unit: 'milliseconds', properties: {} },
   /** What the backend holds: the database, the chunks staged in it, and storage objects. */
@@ -128,10 +134,11 @@ export const discardMetrics: MetricsSink = { send: () => undefined };
  * its list, or a number outside its unit. Values keep two significant figures.
  */
 export function metricEvent<N extends MetricName>(name: N, value: number, properties: MetricProperties<N>): MetricEvent | null {
-  const definition: MetricDefinition | undefined = Object.hasOwn(METRICS, name) ? METRICS[name] : undefined;
+  const definition = definitionOf(name);
   if (!definition) return null;
   const unit = UNITS[definition.unit];
-  if (!Number.isFinite(value) || value < 0 || value > unit.max || (unit.integer && !Number.isInteger(value))) return null;
+  if (!Number.isFinite(value) || value < 0 || (unit.integer && !Number.isInteger(value))) return null;
+  if (value > unit.max && !unit.capped) return null;
   const given = Object.entries(properties as Record<string, unknown>);
   const expected = Object.keys(definition.properties);
   if (given.length !== expected.length) return null;
@@ -139,7 +146,11 @@ export function metricEvent<N extends MetricName>(name: N, value: number, proper
     const values = Object.hasOwn(definition.properties, key) ? definition.properties[key] : undefined;
     if (!values || typeof property !== 'string' || !values.includes(property)) return null;
   }
-  return { name, value: Number(value.toPrecision(2)), properties: Object.fromEntries(given) as Record<string, string> };
+  return { name, value: Math.min(Number(value.toPrecision(2)), unit.max), properties: Object.fromEntries(given) as Record<string, string> };
+}
+
+function definitionOf(name: string): MetricDefinition | undefined {
+  return Object.hasOwn(METRICS, name) ? (METRICS as Record<string, MetricDefinition>)[name] : undefined;
 }
 
 export interface MetricsSender {
@@ -151,7 +162,7 @@ export interface MetricsSender {
 export function createMetricsSender({ gate, sink }: { readonly gate: () => AccountGate; readonly sink: MetricsSink }): MetricsSender {
   return {
     record(name, value, properties) {
-      const definition: MetricDefinition | undefined = Object.hasOwn(METRICS, name) ? METRICS[name] : undefined;
+      const definition = definitionOf(name);
       if (definition?.source !== 'device') return false;
       const current = gate();
       if (!metricPermitted(current, definition.purpose)) return false;
@@ -172,6 +183,7 @@ export function createMetricsSender({ gate, sink }: { readonly gate: () => Accou
 /** The backend's snapshot (`public.operational_metrics`): aggregates over every account. */
 export interface OperationalSnapshot {
   readonly sync_receipts_refused: number;
+  readonly transactions_rolled_back: number;
   readonly staged_chunks_age_ms: number | null;
   readonly storage_bytes: Readonly<Record<'database' | 'staged-chunks' | 'objects', number>>;
   readonly email_sends_failed: Readonly<Record<(typeof EMAIL_TYPES)[number], number>>;
@@ -181,7 +193,10 @@ export interface OperationalSnapshot {
 
 /** The snapshot as catalog events, for the provider. Only what the catalog holds survives: anything else is dropped. */
 export function serverMetricEvents(snapshot: OperationalSnapshot): MetricEvent[] {
-  const events: (MetricEvent | null)[] = [metricEvent('sync_receipts_refused', snapshot.sync_receipts_refused, {})];
+  const events: (MetricEvent | null)[] = [
+    metricEvent('sync_receipts_refused', snapshot.sync_receipts_refused, {}),
+    metricEvent('transactions_rolled_back', snapshot.transactions_rolled_back, {}),
+  ];
   if (snapshot.staged_chunks_age_ms !== null) events.push(metricEvent('staged_chunks_age', snapshot.staged_chunks_age_ms, {}));
   for (const [area, bytes] of Object.entries(snapshot.storage_bytes)) events.push(metricEvent('storage_bytes', bytes, { area } as never));
   for (const [type, count] of Object.entries(snapshot.email_sends_failed)) events.push(metricEvent('email_sends_failed', count, { type } as never));

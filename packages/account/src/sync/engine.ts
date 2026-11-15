@@ -347,7 +347,7 @@ export class SyncEngine {
     await this.refresh();
     if (this.stopped) return;
     if (error !== null) this.options.metrics?.record('sync_run_failed', 1, { error });
-    if (this.firstSeen.size > 0) this.options.metrics?.record('sync_queue_age', now - Math.min(...this.firstSeen.values()), {});
+    if (this.firstSeen.size > 0) this.options.metrics?.record('sync_queue_age', this.options.clock() - Math.min(...this.firstSeen.values()), {});
   }
 
   /** A backend call: any rejection that isn't a SyncCallError means no answer arrived. */
