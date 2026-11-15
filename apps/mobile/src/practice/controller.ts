@@ -242,6 +242,8 @@ export class PracticeController {
   private state: ActivityState | null = null;
   private facts: readonly DomainFact[] = [];
   private busy = false;
+  /** The work `busy` stands for, while it runs. */
+  private working: Promise<void> | null = null;
   private pending: Pending | null = null;
   private suspension: Suspension | null = null;
   /** Set once the stop path must run, with its cause: the player's stop, reset or switch, or access ending. */
@@ -588,6 +590,14 @@ export class PracticeController {
     if (!this.busy) await this.exclusive(() => this.drive());
   }
 
+  /**
+   * Resolves once no work is in flight: a save already under way has finished.
+   * Sign-out waits for this after suspending, before it closes the database.
+   */
+  async settled(): Promise<void> {
+    while (this.working) await this.working;
+  }
+
   /** Retries the save that failed, then carries on with any automatic steps. */
   async retrySave(): Promise<void> {
     await this.exclusive(async () => {
@@ -654,9 +664,15 @@ export class PracticeController {
     if (this.busy) return;
     this.busy = true;
     this.publish();
+    const working = run();
+    this.working = working.then(
+      () => undefined,
+      () => undefined,
+    );
     try {
-      await run();
+      await working;
     } finally {
+      this.working = null;
       this.busy = false;
       this.publish();
       if (this.pending || this.unsavedTime) this.scheduleRetry();

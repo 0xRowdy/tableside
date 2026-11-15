@@ -24,7 +24,36 @@ export type AccountGate =
    * a later build's schema (needs-update), or bringing it to this build's
    * schema failed and the next launch tries again (migration-failed).
    */
-  | { readonly state: 'database-unavailable'; readonly accountId: string; readonly reason: 'needs-update' | 'migration-failed' };
+  | { readonly state: 'database-unavailable'; readonly accountId: string; readonly reason: 'needs-update' | 'migration-failed' }
+  /**
+   * The player signed out of this installation. The account's database is
+   * closed and kept with its key; only an online sign-in to the same account
+   * opens it again.
+   */
+  | { readonly state: 'signed-out'; readonly accountId: string };
+
+/** Signed out locally. `serverSessionEnded` is true only when the server confirmed this session ended. */
+export interface SignOutResult {
+  readonly status: 'signed-out';
+  readonly serverSessionEnded: boolean;
+}
+
+export type SignInMethod = 'apple' | 'google' | 'email';
+
+/** What Settings → Account shows. Parts only the server knows are null while it can't be reached. */
+export interface AccountSummary {
+  /** The sign-in email: private to the player, never shown to anyone else. */
+  readonly email: string | null;
+  readonly methods: readonly SignInMethod[];
+  /** The account's real-money currency for casino records (ISO 4217). */
+  readonly currency: string;
+  /** False while any casino session exists, since amounts are never converted. */
+  readonly currencyChangeable: boolean | null;
+  /** How many sessions are signed in to the account, this one included. */
+  readonly devices: number | null;
+}
+
+export type CurrencyChangeResult = { readonly status: 'changed' } | { readonly status: 'locked' } | { readonly status: 'failed' };
 
 
 /** The fallback age-range question's answers. */
@@ -97,6 +126,8 @@ export interface AccountSync {
   reconcile(): Promise<void>;
   /** Resolves once no synchronization is running. */
   idle(): Promise<void>;
+  /** How many saved records haven't reached the account yet; 0 with no open account session. */
+  waiting(): Promise<number>;
 }
 
 export interface AccountServiceOptions {
@@ -112,6 +143,8 @@ export interface AccountServiceOptions {
   readonly device: DevicePorts;
   /** Secure random bytes. */
   readonly randomBytes: (count: number) => Uint8Array;
+  /** The device locale's currency (ISO 4217), if it has one: a new account's default currency. */
+  readonly localeCurrency: () => string | null;
   /** The device's WebSocket, for the live connection. */
   readonly webSocket?: typeof WebSocket;
 }
@@ -143,21 +176,48 @@ export interface AccountService {
    * The app starting again: reopens the account this installation was signed
    * in to from its stored credentials, without the network. The gate becomes
    * Active, or Renewal pending when its token has expired (access and records
-   * stay), or the state its database is in. Stays at No account when there is none.
+   * stay), or the state its database is in. After a sign-out it is Signed
+   * out, opening nothing. Stays at No account when there is none.
    */
-  resume(): Promise<{ readonly status: 'resumed' | 'no-account' }>;
+  resume(): Promise<{ readonly status: 'resumed' | 'signed-out' | 'no-account' }>;
   /** Renews an expired token (Renewal pending → Active). A failure keeps Renewal pending, with access and records. */
   renew(): Promise<void>;
+  /**
+   * Signs out of this installation only (the current session, never every
+   * session). It first runs the session-ending handlers (an open practice
+   * session saves and pauses), then closes the database, keeping it and its
+   * key, clears the credentials and moves the gate to Signed out, all without
+   * the network. Only then does it tell the server; offline it never claims
+   * the server session ended.
+   */
+  signOut(): Promise<SignOutResult>;
+  /**
+   * Runs `handler` before the account session ends, while its database is
+   * still open: the practice controller suspends and lets a save in flight
+   * finish. Returns an unsubscribe function.
+   */
+  onSessionEnding(handler: () => Promise<void>): () => void;
+  /** Settings → Account. Null when no account is signed in, or the account changed while asking. */
+  accountSummary(): Promise<AccountSummary | null>;
+  /** Changes the account currency (online only). Locked while any casino session exists. */
+  setAccountCurrency(currency: string): Promise<CurrencyChangeResult>;
   readonly sync: AccountSync;
 }
+
 
 /** Where the signed-in account is remembered, in the environment's credentials (so it goes with them). */
 const rememberedAccountKey = (environment: EnvironmentName) => `tableside.${environment}.account`;
 
-/** The account this installation is signed in to, with its established band. */
+/**
+ * The account this installation is signed in to, with its established band
+ * and the currency it last heard of. After a sign-out only this stays: the
+ * account whose database is kept here, locked.
+ */
 interface RememberedAccount {
   readonly accountId: string;
   readonly eligibility: EligibilityBand;
+  readonly currency: string | null;
+  readonly signedOut: boolean;
 }
 
 interface Assertion {
@@ -165,14 +225,23 @@ interface Assertion {
   readonly expiresAt: number;
 }
 
-/** Supabase's stored session: what resuming and renewal read and write. */
+/** Supabase's stored session: what resuming, renewal and sign-out read and write. */
 interface StoredSession {
   readonly access_token: string;
   readonly refresh_token: string;
   /** Seconds since the epoch. */
   readonly expires_at: number;
   readonly expires_in: number;
+  readonly user?: { readonly email?: string; readonly identities?: readonly { readonly provider?: string }[] };
 }
+
+const SIGN_IN_METHODS: readonly string[] = ['apple', 'google', 'email'] satisfies SignInMethod[];
+const CURRENCY_PATTERN = /^[A-Z]{3}$/;
+/** The currency an account without one on record shows: the server's own default. */
+const DEFAULT_CURRENCY = 'USD';
+
+type OpenGate = Extract<AccountGate, { state: 'active' | 'renewal-pending' }>;
+const isOpen = (gate: AccountGate): gate is OpenGate => gate.state === 'active' || gate.state === 'renewal-pending';
 
 export function createAccountService(options: AccountServiceOptions): AccountService {
   const { backend } = options;
@@ -206,31 +275,50 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
       client = null;
       throw error;
     }));
-  /** A JSON request to the backend outside the Supabase client, naming this environment like every other. */
-  const post = async (path: string, body: unknown): Promise<Response> => {
+  /** A request to the backend outside the Supabase client, naming this environment like every other. */
+  const post = async (path: string, body: unknown, headers: Record<string, string> = {}): Promise<Response> => {
     await connect();
     return options.fetch(`${backend.url}${path}`, {
       method: 'POST',
-      headers: { apikey: backend.publishableKey, [ENVIRONMENT_HEADER]: backend.name, 'content-type': 'application/json' },
+      headers: { apikey: backend.publishableKey, [ENVIRONMENT_HEADER]: backend.name, 'content-type': 'application/json', ...headers },
       body: JSON.stringify(body),
     });
   };
   const listeners = new Set<(gate: AccountGate) => void>();
+  const sessionEnding = new Set<() => Promise<void>>();
   let gate: AccountGate = { state: 'no-account' };
   let assertion: Assertion | null = null;
+  /**
+   * The account-session generation: it moves on at every sign-in, sign-out and
+   * account switch, and an answer that arrives after it moved touches nothing.
+   */
+  let generation = 0;
+  let signingOut = false;
 
-  let sync: { readonly engine: SyncEngine; readonly session: SyncSession } | null = null;
+  let sync: { readonly engine: SyncEngine; readonly session: SyncSession; readonly store: SyncStore } | null = null;
 
   const setGate = (next: AccountGate) => {
     gate = next;
     for (const listener of listeners) listener(next);
   };
 
+  // Writes to the credentials go one at a time, so a late renewal can't write
+  // its token back after a sign-out cleared it.
+  let credentialWrites: Promise<unknown> = Promise.resolve();
+  const writeCredentials = (write: () => Promise<void>): Promise<void> => {
+    const next = credentialWrites.then(write);
+    credentialWrites = next.catch(() => undefined);
+    return next;
+  };
+  const remember = (account: RememberedAccount) => credentials.setItem(rememberedAccountKey(backend.name), JSON.stringify(account));
+  const readRemembered = async () => parseRemembered(await credentials.getItem(rememberedAccountKey(backend.name)));
+
   /**
    * Opens the account's database for a new account session, moves the gate,
    * and starts its sync. Nothing changes when a later sign-in overtook this one.
    */
   const openAccount = async ({ accountId, eligibility }: RememberedAccount, state: 'active' | 'renewal-pending' = 'active') => {
+    generation++;
     sync?.session.end();
     sync = null;
     const opening = await options.vault.open(accountId);
@@ -247,7 +335,7 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
       installationId,
       newOperationId: () => hex(options.randomBytes(16)),
     });
-    sync = { engine, session: new SyncSession(engine, store, options.device, supabaseLiveChannels(supabase, accountId)) };
+    sync = { engine, store, session: new SyncSession(engine, store, options.device, supabaseLiveChannels(supabase, accountId)) };
   };
 
   const currentAssertion = () => (assertion && assertion.expiresAt > options.clock() ? assertion : null);
@@ -256,6 +344,37 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
     const parsed = parseJson(await credentials.getItem(credentialsKey(backend.name))) as Partial<StoredSession> | null;
     return parsed && typeof parsed.refresh_token === 'string' && typeof parsed.expires_at === 'number' ? (parsed as StoredSession) : null;
   };
+
+  /** Asks the server to end this session only (current-session scope). True only when it confirmed. */
+  const endServerSession = async (accessToken: string): Promise<boolean> => {
+    try {
+      const response = await post('/auth/v1/logout?scope=local', {}, { authorization: `Bearer ${accessToken}` });
+      await response.arrayBuffer().catch(() => undefined);
+      return response.ok;
+    } catch {
+      return false;
+    }
+  };
+
+  /** What this installation knows without the network: the stored session's user and the remembered currency. */
+  const localSummary = async (): Promise<AccountSummary> => {
+    const user = (await storedSession())?.user;
+    const methods = (user?.identities ?? []).map((identity) => identity.provider).filter(isSignInMethod);
+    return {
+      email: user?.email ?? null,
+      methods: [...new Set(methods)],
+      currency: (await readRemembered())?.currency ?? DEFAULT_CURRENCY,
+      currencyChangeable: null,
+      devices: null,
+    };
+  };
+
+  /** Records the currency the server answered with, unless the account session moved on meanwhile. */
+  const rememberCurrency = (at: number, currency: string) =>
+    writeCredentials(async () => {
+      const remembered = await readRemembered();
+      if (at === generation && remembered && !remembered.signedOut) await remember({ ...remembered, currency });
+    });
 
   return {
     get gate() {
@@ -267,12 +386,18 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
       return () => listeners.delete(listener);
     },
 
+    onSessionEnding(handler) {
+      sessionEnding.add(handler);
+      return () => sessionEnding.delete(handler);
+    },
+
     async answerAgeQuestion(range) {
       assertion = null;
       if (range === 'under-13') return { status: 'ineligible' };
       try {
         const supabase = await connect();
-        const { data, error } = await supabase.rpc('issue_eligibility_assertion', { age_range: range });
+        // The device locale's currency rides with the age answer, so whichever way the account is created, it starts with it.
+        const { data, error } = await supabase.rpc('issue_eligibility_assertion', { age_range: range, currency: options.localeCurrency() });
         if (error) return { status: 'failed' };
         const issued = data as { assertion: string; expires_at: string };
         assertion = { token: issued.assertion, expiresAt: Date.parse(issued.expires_at) };
@@ -306,14 +431,19 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
         const { error } = await supabase.auth.verifyOtp({ email, token: code, type: 'email' });
         if (error) return { status: error.code === 'otp_expired' ? 'invalid-code' : 'failed' };
         const { data, error: accountError } = await supabase.rpc('current_account');
-        const account = data as { account_id: string; eligibility: string | null } | null;
+        const account = data as { account_id: string; eligibility: string | null; currency?: unknown } | null;
         if (accountError || !account || !isEligible(account.eligibility)) {
           await supabase.auth.signOut({ scope: 'local' });
           return { status: 'failed' };
         }
         assertion = null;
-        const remembered: RememberedAccount = { accountId: account.account_id, eligibility: account.eligibility };
-        await credentials.setItem(rememberedAccountKey(backend.name), JSON.stringify(remembered));
+        const remembered: RememberedAccount = {
+          accountId: account.account_id,
+          eligibility: account.eligibility,
+          currency: isCurrency(account.currency) ? account.currency : null,
+          signedOut: false,
+        };
+        await writeCredentials(() => remember(remembered));
         await openAccount(remembered);
         return { status: 'signed-in' };
       } catch {
@@ -322,10 +452,15 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
     },
 
     async resume() {
+      if (gate.state === 'signed-out') return { status: 'signed-out' };
       if (gate.state !== 'no-account') return { status: 'resumed' };
       // Removes a retired environment's namespace before reading any credentials.
       await connect();
-      const remembered = parseRemembered(await credentials.getItem(rememberedAccountKey(backend.name)));
+      const remembered = await readRemembered();
+      if (remembered?.signedOut) {
+        setGate({ state: 'signed-out', accountId: remembered.accountId });
+        return { status: 'signed-out' };
+      }
       // Read straight from storage: Supabase's own read would try to renew an
       // expired token over the network, retrying for half a minute offline.
       const session = await storedSession();
@@ -347,16 +482,78 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
           return;
         }
         const renewed = (await response.json()) as StoredSession;
-        // A sign-out or another account while this was in flight: touch nothing.
-        if (gate !== pending) return;
         const expiresAt = Math.floor(options.clock() / 1000) + renewed.expires_in;
-        await credentials.setItem(credentialsKey(backend.name), JSON.stringify({ ...renewed, expires_at: expiresAt }));
-        if (gate !== pending) return;
+        // A sign-out or another account while this was in flight: touch nothing.
+        let applied = false;
+        await writeCredentials(async () => {
+          if (gate !== pending) return;
+          await credentials.setItem(credentialsKey(backend.name), JSON.stringify({ ...renewed, expires_at: expiresAt }));
+          applied = true;
+        });
+        if (!applied || gate !== pending) return;
         setGate({ ...pending, state: 'active' });
         // The live connection re-subscribes with the renewed token, as on Supabase's own refresh.
         sync?.session.credentialsChanged();
       } catch {
         // Offline or the response was lost: still Renewal pending.
+      }
+    },
+
+    async signOut() {
+      if (!isOpen(gate) || signingOut) return { status: 'signed-out', serverSessionEnded: false };
+      const { accountId, eligibility } = gate;
+      signingOut = true;
+      try {
+        // Practice saves and pauses while the database is still open.
+        for (const handler of [...sessionEnding]) await handler().catch(() => undefined);
+        generation++;
+        sync?.session.end();
+        sync = null;
+        await options.vault.close();
+        const session = await storedSession();
+        await writeCredentials(async () => {
+          const remembered = await readRemembered();
+          await credentials.removeItem(credentialsKey(backend.name));
+          await remember({ accountId, eligibility, currency: remembered?.currency ?? null, signedOut: true });
+        });
+        setGate({ state: 'signed-out', accountId });
+        // Locally signed out already; the server learns only if it can be reached.
+        return { status: 'signed-out', serverSessionEnded: session ? await endServerSession(session.access_token) : false };
+      } finally {
+        signingOut = false;
+      }
+    },
+
+    async accountSummary() {
+      if (!isOpen(gate)) return null;
+      const at = generation;
+      let summary = await localSummary();
+      try {
+        const supabase = await connect();
+        const { data, error } = await supabase.rpc('account_summary_v1');
+        const answer = parseSummary(error ? null : data);
+        if (answer && at === generation) {
+          summary = answer;
+          await rememberCurrency(at, answer.currency);
+        }
+      } catch {
+        // Offline: what this installation already knows.
+      }
+      return at === generation && isOpen(gate) ? summary : null;
+    },
+
+    async setAccountCurrency(currency) {
+      if (!isOpen(gate) || !isCurrency(currency)) return { status: 'failed' };
+      const at = generation;
+      try {
+        const supabase = await connect();
+        const { data, error } = await supabase.rpc('set_account_currency_v1', { new_currency: currency });
+        const status = (data as { status?: unknown } | null)?.status;
+        if (error || (status !== 'changed' && status !== 'locked')) return { status: 'failed' };
+        if (status === 'changed') await rememberCurrency(at, currency);
+        return { status };
+      } catch {
+        return { status: 'failed' };
       }
     },
 
@@ -366,7 +563,38 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
       },
       reconcile: () => sync?.engine.reconcile() ?? Promise.resolve(),
       idle: () => sync?.engine.idle() ?? Promise.resolve(),
+      async waiting() {
+        try {
+          return (await sync?.store.readUploadQueue())?.length ?? 0;
+        } catch {
+          // The account session ended while counting.
+          return 0;
+        }
+      },
     },
+  };
+}
+
+function isSignInMethod(provider: string | undefined): provider is SignInMethod {
+  return typeof provider === 'string' && SIGN_IN_METHODS.includes(provider);
+}
+
+function isCurrency(value: unknown): value is string {
+  return typeof value === 'string' && CURRENCY_PATTERN.test(value);
+}
+
+/** The server's account summary, or null when it isn't one. */
+function parseSummary(data: unknown): AccountSummary | null {
+  const value = data as { email?: unknown; methods?: unknown; currency?: unknown; currency_changeable?: unknown; devices?: unknown } | null;
+  if (!value || !isCurrency(value.currency) || !Array.isArray(value.methods) || typeof value.currency_changeable !== 'boolean' || typeof value.devices !== 'number') {
+    return null;
+  }
+  return {
+    email: typeof value.email === 'string' ? value.email : null,
+    methods: (value.methods as unknown[]).filter((method): method is SignInMethod => typeof method === 'string' && isSignInMethod(method)),
+    currency: value.currency,
+    currencyChangeable: value.currency_changeable,
+    devices: value.devices,
   };
 }
 
@@ -380,13 +608,14 @@ function parseJson(text: string | null): unknown {
 }
 
 function parseRemembered(text: string | null): RememberedAccount | null {
-  try {
-    const value = JSON.parse(text ?? 'null') as { accountId?: unknown; eligibility?: unknown } | null;
-    if (value && typeof value.accountId === 'string' && typeof value.eligibility === 'string' && isEligible(value.eligibility)) {
-      return { accountId: value.accountId, eligibility: value.eligibility };
-    }
-  } catch {
-    // Nothing usable remembered.
+  const value = parseJson(text) as { accountId?: unknown; eligibility?: unknown; currency?: unknown; signedOut?: unknown } | null;
+  if (value && typeof value.accountId === 'string' && typeof value.eligibility === 'string' && isEligible(value.eligibility)) {
+    return {
+      accountId: value.accountId,
+      eligibility: value.eligibility,
+      currency: isCurrency(value.currency) ? value.currency : null,
+      signedOut: value.signedOut === true,
+    };
   }
   return null;
 }
