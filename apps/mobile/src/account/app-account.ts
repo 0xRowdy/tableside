@@ -4,14 +4,16 @@
 
 import { createAccountService, noPlatformAgeSignals, type AccountService, type AccountVault, type CredentialStorage } from '@tableside/account';
 import * as Crypto from 'expo-crypto';
+import * as Device from 'expo-device';
 import { getLocales } from 'expo-localization';
 import * as SecureStore from 'expo-secure-store';
 
-import { Linking } from 'react-native';
+import { Linking, Platform } from 'react-native';
 
 import { findGame, type GameId } from '@/games';
 import type { PracticeAdapters } from '@/practice/adapters';
 
+import { describeDevice } from './account-text';
 import { buildBackend } from './backend';
 import { appDevicePorts } from './device-ports';
 import { createNativeVault, KEYCHAIN_OPTIONS } from './native-vault';
@@ -79,6 +81,8 @@ export function createAppAccount(): AppAccount {
     // Apple's Declared Age Range and Google Play's Age Signals need native
     // modules, which aren't built yet: every device uses the fallback question.
     ageSignals: noPlatformAgeSignals,
+    // What Devices shows for this one: its own model and OS, never proof of which device it is.
+    deviceDescription: () => describeDevice(Platform.OS === 'ios' ? 'ios' : 'android', Device),
   });
   const offlineGameKey = (accountId: string) => `tableside.${backend.name}.${accountId}.offline-game`;
   return {

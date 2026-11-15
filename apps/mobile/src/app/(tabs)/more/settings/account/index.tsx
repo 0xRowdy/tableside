@@ -58,7 +58,7 @@ export default function Account() {
           title="Devices"
           detail={summary?.devices ? devicesText(summary.devices) : 'Where this account is signed in'}
           value={summary?.devices ? String(summary.devices) : undefined}
-          onPress={open('devices')}
+          onPress={() => router.navigate('/more/settings/account/devices')}
         />
       </Group>
       <GroupLabel>YOUR DATA</GroupLabel>
