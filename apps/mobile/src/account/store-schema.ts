@@ -55,13 +55,15 @@ const BASE_SCHEMA = [
     body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,
     PRIMARY KEY (activity_id, effect_key)
   ) STRICT`,
-  // One outgoing synchronization record per completion: the activity id is unique.
-  // It is also the upload queue entry, written in the completion's transaction:
-  // its dependencies, its receipt status, the operation it is sent as (fixed
-  // before it is first sent) and the receipt's disposition.
+  // The upload queue. One outgoing synchronization record per completion (the
+  // activity id is unique), written in the completion's transaction; other
+  // entries (account-state operations, spec 3's attempts) name no activity.
+  // Each holds its dependencies, its receipt status, the operation it is sent
+  // as (fixed before it is first sent), the receipt's disposition and, for a
+  // per-device type, its originating-device position.
   `CREATE TABLE outgoing (
     id TEXT PRIMARY KEY,
-    activity_id TEXT NOT NULL UNIQUE REFERENCES activities (activity_id),
+    activity_id TEXT UNIQUE REFERENCES activities (activity_id),
     position INTEGER NOT NULL UNIQUE,
     body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,
     dependencies TEXT NOT NULL,
@@ -69,17 +71,25 @@ const BASE_SCHEMA = [
     operation_id TEXT UNIQUE,
     request TEXT,
     request_sha256 TEXT,
-    receipt TEXT
+    receipt TEXT,
+    device_position INTEGER
   ) STRICT`,
   'CREATE INDEX outgoing_pending ON outgoing (status, position)',
-  // Records the account has accepted: this installation's acknowledged uploads and the feed's changes.
+  // Records the account has accepted: this installation's acknowledged uploads
+  // and the feed's changes, with a per-device record's origin.
   `CREATE TABLE accepted_records (
     record_type TEXT NOT NULL,
     item_id TEXT NOT NULL,
     sequence INTEGER NOT NULL,
     body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,
+    installation_id TEXT,
+    device_position INTEGER,
     PRIMARY KEY (record_type, item_id)
   ) STRICT`,
+  // The last originating-device position this installation gave each per-device type. Never reused.
+  'CREATE TABLE device_positions (record_type TEXT PRIMARY KEY, last INTEGER NOT NULL) STRICT',
+  // Results purged from the account: never accepted on this installation again.
+  'CREATE TABLE purged_records (record_type TEXT NOT NULL, item_id TEXT NOT NULL, PRIMARY KEY (record_type, item_id)) STRICT',
   // The account sequence the feed has been applied through.
   'CREATE TABLE feed_cursor (singleton INTEGER PRIMARY KEY CHECK (singleton = 1), sequence INTEGER NOT NULL) STRICT',
   'INSERT INTO feed_cursor (singleton, sequence) VALUES (1, 0)',

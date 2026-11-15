@@ -210,3 +210,105 @@ describe('the feed cursor', () => {
     expect(await restarted.readAcceptedRecords('completed-practice-session')).toHaveLength(2);
   });
 });
+
+describe('entries other than completions (#95)', () => {
+  const OTHER = { operationId: '1'.repeat(32), request: 'abc', requestHash: ABC_SHA256 };
+  const operation = (id: string, fields: Partial<{ dependencies: string[]; positioned: boolean; purges: { recordType: string; item: string } | null }> = {}) => ({
+    id,
+    recordType: fields.positioned ? 'challenge-attempt' : 'sharing-withdrawal',
+    payload: { id },
+    dependencies: fields.dependencies ?? [],
+    positioned: fields.positioned ?? false,
+    purges: fields.purges ?? null,
+  });
+
+  it('queues an account-state operation with no activity, announced after the commit, outside spec 1\'s outgoing records', async () => {
+    const store = await newDisk().open();
+    let announced = 0;
+    store.onUploadQueued(() => announced++);
+
+    expect(await store.queueUpload(operation('op-1'))).toEqual({
+      id: 'op-1',
+      recordType: 'sharing-withdrawal',
+      payload: { id: 'op-1' },
+      dependencies: [],
+      operation: null,
+    });
+    expect(announced).toBe(1);
+    expect(await store.readUploadQueue()).toEqual([{ id: 'op-1', recordType: 'sharing-withdrawal', payload: { id: 'op-1' }, dependencies: [], operation: null }]);
+    expect(await store.readOutgoing()).toEqual([]);
+  });
+
+  it('gives a per-device type\'s entries consecutive positions, per type, that survive a restart and are never reused', async () => {
+    const { open } = newDisk();
+    const store = await open();
+    expect((await store.queueUpload(operation('a-1', { positioned: true }))).position).toBe(1);
+    expect((await store.queueUpload(operation('w-1'))).position).toBeUndefined();
+    expect((await store.queueUpload(operation('a-2', { positioned: true }))).position).toBe(2);
+
+    // Acknowledged entries leave the queue; their positions stay taken.
+    await store.prepareUpload('a-2', OPERATION);
+    await store.acknowledgeUpload('a-2', { status: 'accepted', operation: OPERATION.operationId, requestHash: ABC_SHA256, sequence: 1 }, null);
+    await store.close();
+    const restarted = await open();
+    expect((await restarted.queueUpload(operation('a-3', { positioned: true }))).position).toBe(3);
+    expect((await restarted.readUploadQueue()).map(({ id, position }) => [id, position])).toEqual([
+      ['a-1', 1],
+      ['w-1', undefined],
+      ['a-3', 3],
+    ]);
+  });
+
+  it('names the operations its dependencies were sent as, once they have one', async () => {
+    const store = await newDisk().open();
+    await store.queueUpload(operation('w-1'));
+    await store.queueUpload(operation('c-1', { dependencies: ['w-1'] }));
+    expect((await store.readUploadQueue())[1]?.after).toBeUndefined();
+
+    await store.prepareUpload('w-1', OTHER);
+    expect((await store.readUploadQueue())[1]?.after).toEqual([OTHER.operationId]);
+    await store.acknowledgeUpload('w-1', { status: 'accepted', operation: OTHER.operationId, requestHash: ABC_SHA256, sequence: 1 }, null);
+    expect(await store.readUploadQueue()).toEqual([
+      { id: 'c-1', recordType: 'sharing-withdrawal', payload: { id: 'c-1' }, dependencies: ['w-1'], operation: null, after: [OTHER.operationId] },
+    ]);
+  });
+
+  it('stores and returns a per-device record\'s origin', async () => {
+    const store = await newDisk().open();
+    const record = { recordType: 'challenge-attempt', item: 'a1', sequence: 1, payload: {}, origin: { installation: 'phone', position: 4 } };
+    await store.applyFeedPage(0, [record]);
+    expect(await store.readAcceptedRecords('challenge-attempt')).toEqual([record]);
+  });
+
+  it('removes a result when its purge is queued, and never accepts it again from an acknowledgement or the feed', async () => {
+    const store = await newDisk().open();
+    await store.applyFeedPage(0, [accepted('a1', 1), accepted('a2', 2)]);
+    await store.queueUpload(operation('p-1', { purges: { recordType: 'completed-practice-session', item: 'a1' } }));
+    expect((await store.readAcceptedRecords('completed-practice-session')).map((record) => record.item)).toEqual(['a2']);
+
+    await store.applyFeedPage(2, [accepted('a1', 3)]);
+    const record = await completed(store, 'a1');
+    await store.prepareUpload('completed/a1', OPERATION);
+    await store.acknowledgeUpload(
+      'completed/a1',
+      { status: 'accepted', operation: OPERATION.operationId, requestHash: ABC_SHA256, sequence: 1 },
+      { recordType: 'completed-practice-session', item: 'a1', sequence: 1, payload: record },
+    );
+    expect((await store.readAcceptedRecords('completed-practice-session')).map((record) => record.item)).toEqual(['a2']);
+  });
+
+  it('applies a page\'s purges and steps the cursor over redacted entries, never over a gap', async () => {
+    const store = await newDisk().open();
+    await store.applyFeedPage(0, [accepted('a1', 1)]);
+    const purge = { recordType: 'result-purge', item: 'a1', sequence: 4, payload: {} };
+
+    await expect(store.applyFeedPage(1, [purge], { redacted: [2], purged: [{ recordType: 'completed-practice-session', item: 'a1' }] })).rejects.toThrow(StoreError);
+    expect(await store.readFeedCursor()).toBe(1);
+    expect(await store.readAcceptedRecords('completed-practice-session')).toHaveLength(1);
+
+    expect(await store.applyFeedPage(1, [purge], { redacted: [2, 3], purged: [{ recordType: 'completed-practice-session', item: 'a1' }] })).toBe(true);
+    expect(await store.readFeedCursor()).toBe(4);
+    expect(await store.readAcceptedRecords('completed-practice-session')).toEqual([]);
+    expect(await store.readAcceptedRecords('result-purge')).toEqual([purge]);
+  });
+});
