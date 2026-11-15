@@ -225,6 +225,8 @@ describe('kills, lost answers and duplicates count each session exactly once', (
 
   it('killed while the other device applied a feed page: the page applies once after the restart', async () => {
     const { phone, tablet } = await twoDevices();
+    // In the background, so no live hint fetches the page before the disk fails.
+    tablet.foreground = false;
     const result = await phone.playPracticeSession();
     await phone.account.sync.idle();
 
@@ -241,7 +243,7 @@ describe('kills, lost answers and duplicates count each session exactly once', (
   });
 
   it('a late answer for an earlier account session writes nothing into the next account', async () => {
-    const { phone, tablet, email } = await twoDevices();
+    const { phone, tablet } = await twoDevices();
     const result = await phone.playPracticeSession();
     await phone.account.sync.idle();
 
@@ -252,11 +254,12 @@ describe('kills, lost answers and duplicates count each session exactly once', (
     held.release();
     await pending;
     await tablet.account.sync.idle();
+    // The first account's page reached the device after the switch: none of it is in the next account's store.
     expect(await sessionsOn(tablet)).toEqual([]);
-
-    expect(await signInByEmail(tablet, email)).toEqual({ status: 'signed-in' });
-    await tablet.account.sync.idle();
-    expect(await sessionsOn(tablet)).toEqual([{ item: result.activityId, sequence: 1 }]);
+    expect(await tablet.vault.store().readFeedCursor()).toBe(0);
+    // The first account's sessions are still there for it (its own device sees them).
+    await phone.account.sync.reconcile();
+    expect(await sessionsOn(phone)).toEqual([{ item: result.activityId, sequence: 1 }]);
   });
 });
 

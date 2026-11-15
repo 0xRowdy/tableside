@@ -69,9 +69,14 @@ export function supabaseLiveChannels(supabase: SupabaseClient, accountId: string
       claim: async () => (await callOperation<{ claim: number }>(supabase, 'realtime_claim_v1', {})).claim,
       leave() {
         left = true;
-        // Removing the last channel also closes the socket, so an installation
-        // without the live connection holds no Realtime connection at all.
-        if (channel) leaving = supabase.removeChannel(channel).catch(() => undefined);
+        // An installation without the live connection holds no Realtime
+        // connection at all: the client keeps its socket open after the last
+        // channel is removed, so it is disconnected here.
+        if (!channel) return;
+        leaving = supabase
+          .removeChannel(channel)
+          .then(() => (supabase.getChannels().length === 0 ? supabase.realtime.disconnect() : undefined))
+          .catch(() => undefined);
       },
     };
   };
