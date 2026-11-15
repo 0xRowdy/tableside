@@ -470,6 +470,11 @@ verify_jwt = false
 [functions.export-job]
 verify_jwt = false
 
+# The deletion job (#104): the database wakes it (pg_net, after the boundary and
+# from the deletion-upkeep cron) with no token; the wake carries no authority.
+[functions.deletion-job]
+verify_jwt = false
+
 [analytics]
 enabled = false
 port = 54327

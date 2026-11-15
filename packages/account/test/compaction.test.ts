@@ -522,7 +522,15 @@ describe('retention (Amendment 1 C6) and protected controls (Amendment 1 A5)', (
     expect(missing).toEqual([]);
     const exceptions = await sql<{ subject: string; dependency: string | null; owner: string | null }[]>`
       select subject, dependency, owner from private.retention_rules where dependency is not null or owner is not null order by subject`;
-    expect(exceptions.map(({ subject }) => subject)).toEqual(['private.account_sessions', 'private.control_journal', 'private.exports', 'private.purged_results', 'public.accounts']);
+    expect(exceptions.map(({ subject }) => subject)).toEqual([
+      'private.account_sessions',
+      'private.control_journal',
+      'private.deleted_sessions',
+      'private.deletions',
+      'private.exports',
+      'private.purged_results',
+      'public.accounts',
+    ]);
     for (const { dependency, owner } of exceptions) {
       expect(dependency).toMatch(/\S/);
       expect(owner).toMatch(/\S/);
