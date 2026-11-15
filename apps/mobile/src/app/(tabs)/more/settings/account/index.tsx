@@ -1,7 +1,9 @@
 // S2-17 Account (More → Settings → Account): identity with the sign-in email
 // kept private, sign-in methods and devices, the account's data, Delete
 // account, and Sign out of this device. The entries open their own screens
-// (S2-18 to S2-22), which later spec 2 tickets build.
+// (S2-18 to S2-22), which later spec 2 tickets build. Download all history
+// starts the download and opens Sync status (S2-20), where its progress is.
+// TODO(frames): what the Download all history row does is unverified: S2-17 draws only the row.
 // TODO(frames): the Currency row is unverified against S2-17, which has none (spec 2 Amendment 4 §4 adds it).
 
 import { router } from 'expo-router';
@@ -10,6 +12,7 @@ import { useState } from 'react';
 
 import { currencyText, devicesText, methodsList, waitingText } from '@/account/account-text';
 import { SignOutSheet } from '@/account/SignOutSheet';
+import { useAccount } from '@/account/AccountProvider';
 import { useAccountOverview } from '@/account/use-account-overview';
 import { Button } from '@/components/Button';
 import { Group, GroupLabel, ListRow, Note, SettingsScreen } from '@/settings/SettingsParts';
@@ -18,6 +21,7 @@ const open = (area: string) => () => router.navigate({ pathname: '/more/settings
 
 export default function Account() {
   const overview = useAccountOverview();
+  const { service } = useAccount();
   const [confirming, setConfirming] = useState(false);
   const summary = overview?.summary;
   return (
@@ -58,7 +62,7 @@ export default function Account() {
           title="Devices"
           detail={summary?.devices ? devicesText(summary.devices) : 'Where this account is signed in'}
           value={summary?.devices ? String(summary.devices) : undefined}
-          onPress={open('devices')}
+          onPress={() => router.navigate('/more/settings/account/devices')}
         />
       </Group>
       <GroupLabel>YOUR DATA</GroupLabel>
@@ -68,7 +72,10 @@ export default function Account() {
           icon={HardDriveDownload}
           title="Download all history"
           detail="Keep everything on this device, for offline trips"
-          onPress={open('download-history')}
+          onPress={() => {
+            void service.sync.downloadAllHistory();
+            router.navigate('/more/settings/account/sync');
+          }}
         />
         <ListRow icon={Download} title="Export my data" detail="Spreadsheet and data files, plus anything not yet synced" onPress={open('export')} />
       </Group>

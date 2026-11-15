@@ -376,14 +376,16 @@ describe('conflicts apply only to revisioned items', () => {
     const raw = localStack().rawClient(accessToken(phone));
     const gate = phone.account.gate;
     if (gate.state !== 'active') throw new Error('unreachable');
-    const commands = await directCommands(raw, 'installation-1');
+    // The phone's own installation: the server takes uploads only from the caller's registered installation.
+    const installation = phone.vault.store().identity.installationId;
+    const commands = await directCommands(raw, installation);
     const request = (operation: string, netResult: string) =>
       JSON.stringify({
         command: commands.next(),
-        installation: 'installation-1',
+        installation,
         item: 'activity-1',
         operation,
-        payload: { activityId: 'activity-1', device: 'installation-1', endedAt: 2, finalCashOut: '1010', game: 'roulette', netResult, owner: gate.accountId, recordVersion: 1, startedAt: 1 },
+        payload: { activityId: 'activity-1', device: installation, endedAt: 2, finalCashOut: '1010', game: 'roulette', netResult, owner: gate.accountId, recordVersion: 1, startedAt: 1 },
         payloadVersion: 1,
         protocol: 1,
         recordType: 'completed-practice-session',

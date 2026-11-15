@@ -8,11 +8,13 @@
 //   a tombstone. A pending edit of an accepted record is in no total.
 // - Records saved here that the account hasn't accepted yet are labeled local,
 //   and summed apart.
+// - A record held as a snapshot's summary gets its detail when it is opened
+//   (`detail`), if the first download or Download all history hasn't brought it.
 // - While a new device's first download is staging, the account's totals are
 //   the snapshot's (every summary at its watermark), with whatever this
 //   installation had accepted after the watermark.
 
-import type { Resolution, ResolutionOutcome, SyncEngine } from './engine';
+import type { DetailResult, Resolution, ResolutionOutcome, SyncEngine } from './engine';
 import type { Contribution, RecordType, RevisionedState } from './registry';
 import type { SyncStore } from './store';
 import { type TotalsRow, sumContributions } from './totals';
@@ -54,6 +56,13 @@ export interface AccountRecords {
   /** Resolves an open conflict. Needs the network: nothing is queued. */
   resolve(recordType: string, item: string, resolution: Resolution): Promise<ResolutionResult>;
   totals(): Promise<AccountTotals>;
+  /**
+   * A record's detail (spec 2, *History*): kept here already, or fetched now
+   * by the accepted revision this installation holds and kept from then on;
+   * a changed revision is reconciled first. Needs the network only when the
+   * detail isn't here yet. Offline with no open account session.
+   */
+  detail(recordType: string, item: string): Promise<DetailResult>;
 }
 
 /** The open account session's store and sync engine, or null when no account is open. */
@@ -111,6 +120,11 @@ export function accountRecords(open: OpenSession, registry: ReadonlyMap<string, 
       const status = await session().engine.resolve(recordType, item, resolution);
       if (status !== 'conflict-changed') return { status };
       return { status, item: (await views(recordType)).find((view) => view.item === item) ?? null };
+    },
+
+    async detail(recordType, item) {
+      const current = open();
+      return current ? current.engine.detail(recordType, item) : { status: 'offline' };
     },
 
     async totals() {

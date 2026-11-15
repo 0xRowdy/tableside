@@ -7,7 +7,7 @@
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { type AcceptedRecord, PLATFORM_TABLES, PROTOCOL_VERSION, byOriginatingDevice } from '../src';
+import { type AcceptedRecord, PLATFORM_TABLES, PROTOCOL_VERSION, type RecordType, byOriginatingDevice, completedPracticeSession } from '../src';
 import { type Envelope, prepareOperation } from '../src/sync/protocol';
 import {
   type DirectCommands,
@@ -239,8 +239,8 @@ describe('server-authored state', () => {
     const { request } = prepareOperation({
       protocol: PROTOCOL_VERSION,
       operation: '5'.repeat(32),
-      installation: 'direct',
-      command: (await directCommands(raw, 'direct')).next(),
+      installation: phone.vault.store().identity.installationId,
+      command: (await directCommands(raw, phone.vault.store().identity.installationId)).next(),
       recordType: testExperimentAssignment.name,
       payloadVersion: 1,
       item: 'pricing',
@@ -342,7 +342,7 @@ describe('purging an accepted immutable result', () => {
 
     const raw = stack.rawClient(accessToken(phone));
     const again = JSON.parse(stale!.operation!.request) as Envelope;
-    const { request } = prepareOperation({ ...again, operation: '6'.repeat(32), installation: 'direct', command: (await directCommands(raw, 'direct')).next() });
+    const { request } = prepareOperation({ ...again, operation: '6'.repeat(32), command: (await directCommands(raw, again.installation)).next() });
     expect((await raw.rpc('sync_upload_v1', { request })).data).toMatchObject({ status: 'rejected', code: 'purged' });
     await tablet.account.sync.reconcile();
     expect(await itemsOn(tablet, testResult.name)).toEqual([]);
@@ -386,11 +386,11 @@ describe('the operation API enforces ordering, called directly', () => {
   }
   /** The commands of the installation the direct calls upload as. */
   let commands: DirectCommands;
-  /** A canonical request, as the next command of an installation of the device's account. */
-  function upload(_d: SimulatedDevice, fields: UploadFields) {
+  /** A canonical request from the device, as the next command of its installation. */
+  function upload(d: SimulatedDevice, fields: UploadFields) {
     return prepareOperation({
       protocol: PROTOCOL_VERSION,
-      installation: 'direct',
+      installation: d.vault.store().identity.installationId,
       command: commands.next(),
       payloadVersion: 1,
       ...fields,
@@ -400,7 +400,7 @@ describe('the operation API enforces ordering, called directly', () => {
   async function direct() {
     const devices = await twoDevices();
     const raw = stack.rawClient(accessToken(devices.phone));
-    commands = await directCommands(raw, 'direct');
+    commands = await directCommands(raw, devices.phone.vault.store().identity.installationId);
     return { ...devices, raw };
   }
 
@@ -530,10 +530,11 @@ describe('per-device attempt ordering', () => {
 });
 
 describe('the registry’s test-only types', () => {
-  it('are registered on the server with the same kind, acceptance, ordering, purge hook and snapshot function, and covered by deletion', async () => {
-    for (const type of TEST_RECORD_TYPES) {
-      const [row] = await stack.sql<{ kind: string; accept: string | null; ordering: string; purgeable: boolean; snapshot: string | null }[]>`
-        select kind, accept::regproc::text as accept, ordering, purge is not null as purgeable, snapshot::regproc::text as snapshot
+  it('are registered on the server with the same kind, acceptance, ordering, purge hook, snapshot and detail function, and covered by deletion', async () => {
+    for (const type of [...TEST_RECORD_TYPES, completedPracticeSession as unknown as RecordType]) {
+      const [row] = await stack.sql<{ kind: string; accept: string | null; ordering: string; purgeable: boolean; snapshot: string | null; detail: string | null }[]>`
+        select kind, accept::regproc::text as accept, ordering, purge is not null as purgeable, snapshot::regproc::text as snapshot,
+               detail::regproc::text as detail
         from private.record_types where record_type = ${type.name} and payload_version = ${type.payloadVersion}`;
       expect(row, type.name).toEqual({
         kind: type.kind,
@@ -541,6 +542,7 @@ describe('the registry’s test-only types', () => {
         ordering: type.ordering ?? 'account',
         purgeable: type === testResult,
         snapshot: type.snapshot,
+        detail: type.detail?.server ?? null,
       });
       for (const table of [...type.deletion.serverTables, ...PLATFORM_TABLES]) {
         const [schema, name] = table.split('.');

@@ -30,7 +30,8 @@
 // - A revisioned item's acknowledgement records nothing as accepted: whether
 //   its upload became a revision or a proposal, the item's state arrives with
 //   the feed entry its receipt names, in the same run.
-// - Resolving a conflict needs the network: it is sent at once, never queued.
+// - Resolving a conflict needs the network: it is sent at once, never queued,
+//   as is any other online-only change (`submit`), which waits for its barriers.
 // - The reconnect order (spec 2 Amendment 1 C5): authenticate, then reconcile
 //   compatibility, access, allowance ownership and pending privacy (sharing)
 //   withdrawals, and only then send grants or contributions. A run checks the
@@ -56,7 +57,13 @@
 //   lost the network, carries on from the last staged page. A snapshot that
 //   expired (24 hours) is replaced with a new one; the upload queue and local
 //   records are never touched. Snapshot pages, like feed pages, are bounded by
-//   row count (#97 bounds them by bytes).
+//   row count and by bytes (PAGE_BYTES).
+// - History (spec 2, *History*): a snapshot holds summaries; once they are
+//   installed, the newest 90 days' detail follows, then (when asked for)
+//   Download all history's, and a record opened by itself (`detail`) fetches
+//   its own, each by the accepted revision held here. A detail replaces its
+//   summary only. Downloads stop, evicting nothing, when the device is short
+//   of storage; a budget alert throttles Download all history only.
 // - Command scopes and stale devices (#98; spec 2, *Compaction and stale
 //   devices*). Every operation is a command in this installation's scope: a
 //   generation the server issued it and a position there, fixed when the
@@ -96,8 +103,13 @@ import {
   type BootstrapSnapshot,
   type ChunkAnswer,
   type Command,
+  DETAIL_REQUESTS,
+  type DetailAnswer,
+  type DetailPage,
+  type DetailRequest,
   type FeedEntry,
   type FeedPage,
+  PAGE_BYTES,
   PROTOCOL_VERSION,
   type PreparedOperation,
   type ProtocolStatus,
@@ -107,9 +119,21 @@ import {
   type UploadAnswer,
   chunksOf,
   prepareOperation,
+  utf8Length,
 } from './protocol';
 import { type RecordType, type RevisionedUpload, isBarrierFor } from './registry';
-import type { AcceptedRecord, BootstrapProgress, BootstrapStaging, Origin, QueuedUpload, ReconcileOutcome, RecordRef, SyncStore } from './store';
+import type {
+  AcceptedRecord,
+  BootstrapProgress,
+  BootstrapStaging,
+  HistoryProgress,
+  Origin,
+  QueuedUpload,
+  ReconcileOutcome,
+  RecordRef,
+  SummaryOnly,
+  SyncStore,
+} from './store';
 
 /** The backend's operations. A call with no usable answer throws a SyncCallError; any other rejection counts as unreachable. */
 export interface SyncBackend {
@@ -123,6 +147,8 @@ export interface SyncBackend {
   bootstrap(installation: string): Promise<BootstrapSnapshot>;
   /** A page of a snapshot's rows after ordinal `after`. */
   bootstrapPage(snapshot: string, after: number, pageSize: number): Promise<BootstrapPage>;
+  /** Records' detail, by the accepted revision held here; `bulk` for Download all history, which a budget alert throttles. */
+  details(requests: readonly DetailRequest[], bulk: boolean): Promise<DetailPage>;
   /**
    * The installation's command scope: with no generation, a new one (replacing
    * any earlier); with its generation, the positions settled through.
@@ -164,12 +190,26 @@ export type UpdateNotice =
 
 /**
  * The first download on a new device: complete, or how far summaries and
- * totals and the last 90 days of detail have come, as fractions from 0 to 1.
- * The detail is #97's; until then a device is complete once its summaries are installed.
+ * totals and the newest 90 days of detail have come, as fractions from 0 to 1.
+ * `stopped` says it stopped because the device is short of storage: it
+ * resumes on a deliberate retry.
  */
 export type HistoryStatus =
   | { readonly state: 'complete' }
-  | { readonly state: 'incomplete'; readonly summaries: number; readonly detail: number };
+  | { readonly state: 'incomplete'; readonly summaries: number; readonly detail: number; readonly stopped: 'storage' | null };
+
+/**
+ * Download all history (spec 2, *History*): not asked for; downloading, with
+ * how far it has come (0 to 1); stopped there, because the device is short of
+ * storage (it resumes when asked again) or a budget alert holds bulk
+ * downloads back (it resumes by itself); or complete, with every record's
+ * detail on this installation.
+ */
+export type HistoryDownload =
+  | { readonly state: 'not-requested' }
+  | { readonly state: 'downloading'; readonly progress: number }
+  | { readonly state: 'stopped'; readonly progress: number; readonly reason: 'storage' | 'throttled' }
+  | { readonly state: 'complete' };
 
 export interface EngineStatus {
   readonly error: SyncErrorCode | null;
@@ -179,7 +219,20 @@ export interface EngineStatus {
   readonly uploads: readonly UploadStatus[];
   readonly update: UpdateNotice | null;
   readonly history: HistoryStatus;
+  readonly download: HistoryDownload;
 }
+
+/**
+ * Opening a record's detail.
+ * detail: the record whole, kept on this installation from now on.
+ * gone: the account doesn't hold it (purged), and now neither does this installation.
+ * offline: no answer arrived; the summary stays.
+ * storage: the device is too short of storage to keep it; the summary stays.
+ * unavailable: its type keeps no detail apart, or this build can't read the detail.
+ */
+export type DetailResult =
+  | { readonly status: 'detail'; readonly record: AcceptedRecord }
+  | { readonly status: 'gone' | 'offline' | 'storage' | 'unavailable' };
 
 export interface SyncEngineOptions {
   readonly store: SyncStore;
@@ -194,6 +247,8 @@ export interface SyncEngineOptions {
   readonly random: () => number;
   /** Where the engine's operational metrics go, under the account gate. */
   readonly metrics?: MetricsSender;
+  /** The device's free storage in bytes, or null when it can't tell. Downloads stop before they would leave less than STORAGE_RESERVE_BYTES. */
+  readonly storage?: () => number | null;
 }
 
 /**
@@ -206,6 +261,12 @@ export const FEED_PAGE_SIZE = 50;
 export const BOOTSTRAP_PAGE_SIZE = 100;
 /** How many times one record may fail by itself before it is flagged. */
 export const RECORD_FAILURE_LIMIT = 5;
+/** The detail a new device fetches after its summaries: records from the newest 90 days. */
+export const RECENT_DETAIL_MS = 90 * 86_400_000;
+/** Free storage a download never uses, so saving play, sync and the database's own growth keep room. */
+export const STORAGE_RESERVE_BYTES = 64 * 1024 * 1024;
+/** Detail pages one run fetches before it hands over to another run, so uploads and the feed never wait long behind a download. */
+export const DETAIL_PAGES_PER_RUN = 8;
 
 /** A conflict's resolution: the generation and every proposal reviewed, and the value it resolves to (null: deleted). */
 export interface Resolution {
@@ -232,6 +293,17 @@ export type ResolutionOutcome = 'resolved' | 'conflict-changed' | 'no-conflict' 
  */
 export type UnconfirmedDecision = 'send-again' | 'set-aside';
 
+/**
+ * How a change sent at once ended. accepted / rejected: the server's receipt (with its refusal code).
+ * waiting: held, unsent, behind a pending upload of this installation. offline: no answer arrived (a retry
+ * in this account session repeats the identical request). incompatible: an update is required.
+ * invalid: not one of the type's payloads that are sent at once.
+ */
+export type SubmitOutcome =
+  | { readonly status: 'accepted' }
+  | { readonly status: 'rejected'; readonly code: string }
+  | { readonly status: 'waiting' | 'offline' | 'incompatible' | 'invalid' };
+
 export class SyncEngine {
   private running: Promise<void> | null = null;
   private rerun: ReconcileTrigger | null = null;
@@ -241,8 +313,16 @@ export class SyncEngine {
   private update: UpdateNotice | null = null;
   private uploads: readonly UploadStatus[] = [];
   private history: HistoryStatus = { state: 'complete' };
+  private download: HistoryDownload = { state: 'not-requested' };
+  /** Downloads stopped because the device is short of storage, until a deliberate trigger. */
+  private storageStopped = false;
+  /** No bulk download before this: a budget alert throttles it. */
+  private throttledUntil: number | null = null;
   /** When this account session first tried to bootstrap: its duration's start. */
   private bootstrapStartedAt: number | null = null;
+  /** Runs started in this account session, and who waits for which to finish. */
+  private runs = 0;
+  private readonly runWaiters: { readonly run: number; readonly resolve: () => void }[] = [];
   /** Consecutive runs that got no usable answer. */
   private failures = 0;
   /** No automatic run before this: the backoff. */
@@ -254,9 +334,9 @@ export class SyncEngine {
   private refreshing: Promise<void> = Promise.resolve();
   private readonly listeners = new Set<() => void>();
   private readonly unsubscribe: () => void;
-  /** Resolutions sent with no answer yet, by what they resolve: a retry repeats the same operation, at the same command position. */
-  private readonly unansweredResolutions = new Map<string, { readonly operation: PreparedOperation; readonly command: Command }>();
-  /** Resolutions being given a command position: until each is in unansweredResolutions, nothing is reported settled. */
+  /** Changes sent at once with no answer yet, by what they send: a retry repeats the same operation, at the same command position. */
+  private readonly unanswered = new Map<string, { readonly operation: PreparedOperation; readonly command: Command }>();
+  /** Changes sent at once being given a command position: until each is in `unanswered`, nothing is reported settled. */
   private allocating = 0;
   /** The settled position last reported in this account session's generation. */
   private reportedSettled: { readonly generation: number; readonly settled: number } | null = null;
@@ -275,7 +355,14 @@ export class SyncEngine {
   }
 
   get status(): EngineStatus {
-    return { error: this.lastError, lastSyncedAt: this.lastSyncedAt, uploads: this.uploads, update: this.update, history: this.history };
+    return {
+      error: this.lastError,
+      lastSyncedAt: this.lastSyncedAt,
+      uploads: this.uploads,
+      update: this.update,
+      history: this.history,
+      download: this.download,
+    };
   }
 
   /**
@@ -297,28 +384,53 @@ export class SyncEngine {
 
   /**
    * Uploads, then applies the feed. Coalesced: resolves when a run that began
-   * after this call has finished. An automatic trigger during a backoff runs nothing.
+   * after this call has finished (not the runs a download hands over to
+   * afterwards; `idle` waits for those). An automatic trigger during a backoff runs nothing.
    */
   reconcile(trigger: ReconcileTrigger = 'deliberate'): Promise<void> {
     if (this.stopped) return Promise.resolve();
     if (this.running) {
       if (this.rerun !== 'deliberate') this.rerun = trigger;
-      return this.running;
+      return this.afterRun(this.runs + 1);
     }
     if (!this.admits(trigger)) return Promise.resolve();
+    const finished = this.afterRun(this.runs + 1);
     this.running = (async () => {
       try {
-        await this.runOnce();
+        await this.countedRun();
         while (this.rerun && !this.stopped) {
           const next = this.rerun;
           this.rerun = null;
-          if (this.admits(next)) await this.runOnce();
+          if (this.admits(next)) await this.countedRun();
         }
       } finally {
         this.running = null;
+        // Every run asked for has finished, or won't happen (a backoff, the session ending).
+        this.settleRuns(Number.POSITIVE_INFINITY);
       }
     })();
-    return this.running;
+    return finished;
+  }
+
+  /** Resolves once run number `run` (from 1) has finished, or no more runs follow. */
+  private afterRun(run: number): Promise<void> {
+    return new Promise((resolve) => this.runWaiters.push({ run, resolve }));
+  }
+
+  private settleRuns(through: number): void {
+    for (const waiter of this.runWaiters.splice(0)) {
+      if (waiter.run <= through) waiter.resolve();
+      else this.runWaiters.push(waiter);
+    }
+  }
+
+  private async countedRun(): Promise<void> {
+    const run = ++this.runs;
+    try {
+      await this.runOnce();
+    } finally {
+      this.settleRuns(run);
+    }
   }
 
   /** The player retries one failing or flagged record: it is tried now, and so is everything waiting for it. */
@@ -351,18 +463,47 @@ export class SyncEngine {
       value: resolution.value,
     };
     if (this.stopped || type?.kind !== 'revisioned-item' || !type.isPayload(payload)) return 'invalid';
-    const key = canonicalJson({ recordType, payload });
-    let sent = this.unansweredResolutions.get(key);
+    const outcome = await this.sendAtOnce(type, payload);
+    if (outcome.status === 'accepted') return 'resolved';
+    if (outcome.status === 'rejected') return outcome.code === 'conflict-changed' || outcome.code === 'no-conflict' ? outcome.code : 'invalid';
+    // Nothing holds a resolution back.
+    return outcome.status === 'waiting' ? 'invalid' : outcome.status;
+  }
+
+  /**
+   * Sends one of a type's online-only payloads (`RecordType.onlineOnly`) at
+   * once, never queuing it, then reads the feed, which brings what it changed.
+   * It waits, unsent, while any pending upload it is held by (its barriers) is
+   * unacknowledged: such a change never overtakes one made before it here.
+   */
+  async submit(recordType: string, payload: unknown): Promise<SubmitOutcome> {
+    const type = this.options.registry.get(recordType);
+    if (this.stopped || !type || type.kind === 'server-authored-state' || !type.isPayload(payload) || !type.onlineOnly?.(payload)) {
+      return { status: 'invalid' };
+    }
+    const queue = await this.options.store.readUploadQueue();
+    if (queue.some((entry) => isBarrierFor(type, entry, payload))) return { status: 'waiting' };
+    return this.sendAtOnce(type, payload);
+  }
+
+  /**
+   * Sends a payload now, outside the queue. A retry of one that got no answer,
+   * in this account session, repeats the identical operation, so the server
+   * never applies it twice. After a receipt, the feed is read.
+   */
+  private async sendAtOnce(type: RecordType, payload: unknown): Promise<SubmitOutcome> {
+    const key = canonicalJson({ recordType: type.name, payload });
+    let sent = this.unanswered.get(key);
     if (!sent) {
       this.allocating += 1;
       try {
         const generation = await this.generation();
         const command = await this.options.store.allocateCommand();
-        if (command.generation !== generation) return 'offline';
+        if (command.generation !== generation) return { status: 'offline' };
         sent = { operation: this.envelope(type, payload, undefined, command), command };
-        this.unansweredResolutions.set(key, sent);
+        this.unanswered.set(key, sent);
       } catch (caught) {
-        return caught instanceof SyncCallError && caught.kind === 'incompatible' ? 'incompatible' : 'offline';
+        return { status: caught instanceof SyncCallError && caught.kind === 'incompatible' ? 'incompatible' : 'offline' };
       } finally {
         this.allocating -= 1;
       }
@@ -372,20 +513,72 @@ export class SyncEngine {
     try {
       answer = await this.options.backend.upload(operation.request);
     } catch (caught) {
-      return caught instanceof SyncCallError && caught.kind === 'incompatible' ? 'incompatible' : 'offline';
+      return { status: caught instanceof SyncCallError && caught.kind === 'incompatible' ? 'incompatible' : 'offline' };
     }
-    this.unansweredResolutions.delete(key);
+    this.unanswered.delete(key);
     if (answer.status === 'stale-scope') {
-      // Nothing was recorded: the next run refreshes and takes a new generation, and resolving again sends it anew.
+      // Nothing was recorded: the next run refreshes and takes a new generation, and sending again sends it anew.
       this.scopeStale = true;
       void this.reconcile();
-      return 'offline';
+      return { status: 'offline' };
     }
-    if (answer.status !== 'accepted' && answer.status !== 'rejected') return answer.status === 'incompatible' ? 'incompatible' : 'invalid';
-    if (answer.operation !== operation.operationId || answer.requestHash !== operation.requestHash) return 'offline';
+    if (answer.status !== 'accepted' && answer.status !== 'rejected') return { status: answer.status === 'incompatible' ? 'incompatible' : 'invalid' };
+    if (answer.operation !== operation.operationId || answer.requestHash !== operation.requestHash) return { status: 'offline' };
     await this.reconcile();
-    if (answer.status === 'accepted') return 'resolved';
-    return answer.code === 'conflict-changed' || answer.code === 'no-conflict' ? answer.code : 'invalid';
+    return answer.status === 'accepted' ? { status: 'accepted' } : { status: 'rejected', code: answer.code };
+  }
+
+  /**
+   * Download all history: asked for durably, so it carries on after a restart
+   * until every record's detail is here, a few pages per run. Asking again
+   * resumes a download stopped for storage. Resolves when this run has finished.
+   */
+  async downloadAllHistory(): Promise<void> {
+    if (this.stopped) return;
+    await this.options.store.recordHistoryProgress({ downloadRequested: true });
+    await this.refresh();
+    await this.reconcile('deliberate');
+  }
+
+  /**
+   * Opens a record's detail (spec 2, *History*): what this installation holds
+   * when it is whole; otherwise it is fetched by the accepted revision held
+   * here and kept. When the account holds another revision (or none), the
+   * feed is applied first and the revision it brings is asked for.
+   */
+  async detail(recordType: string, item: string): Promise<DetailResult> {
+    const { store, backend, registry } = this.options;
+    if (this.stopped || !registry.get(recordType)?.detail) return { status: 'unavailable' };
+    try {
+      let gone: number | null = null;
+      for (let attempt = 1; ; attempt++) {
+        const held = await store.readAcceptedRecord(recordType, item);
+        if (!held) return { status: 'gone' };
+        if (held.summaryAt === undefined) return { status: 'detail', record: held };
+        // The account has no detail for the revision still held here, even after its feed.
+        if (gone === held.sequence) return { status: 'unavailable' };
+        // Its revision changed under it again and again: try again later.
+        if (attempt > 3) return { status: 'offline' };
+        if (!this.hasRoom(PAGE_BYTES)) return { status: 'storage' };
+        const page = await this.call(() => backend.details([{ recordType, item, sequence: held.sequence }], false));
+        if (this.stopped) return { status: 'offline' };
+        const answer = page.status === 'details' ? page.answers.find((one) => one.recordType === recordType && one.item === item) : undefined;
+        if (answer?.status === 'detail' && answer.sequence === held.sequence) {
+          const outcome = await this.applyDetails([held], [answer]);
+          if (outcome.storage) return { status: 'storage' };
+          // Applied, or not (a download, the feed or a purge got there first): read what is held now.
+          if (outcome.applied === 0 && outcome.skipped.length > 0) return { status: 'unavailable' };
+          continue;
+        }
+        if (!answer) return { status: 'offline' };
+        // The account holds another revision, or none: its state first.
+        if (answer.status === 'gone') gone = held.sequence;
+        await this.reconcile('deliberate');
+      }
+    } catch {
+      // No answer, or the account session ended meanwhile.
+      return { status: 'offline' };
+    }
   }
 
   /** The player's decision on an unconfirmed record. Any other record is left as it is. */
@@ -418,6 +611,8 @@ export class SyncEngine {
     this.failures = 0;
     this.backoffUntil = null;
     this.recordRetries.clear();
+    // A new chance for downloads stopped short of storage: they check the room again.
+    this.storageStopped = false;
     return true;
   }
 
@@ -508,7 +703,127 @@ export class SyncEngine {
     if (grants.error === 'stale-scope') return this.recoverScope();
     if (grants.error === 'incompatible' || this.stopped) return grants.error;
     const lastFeedError = grants.acknowledged > 0 ? await this.pull() : null;
+    if (!this.stopped) {
+      try {
+        await this.fetchDetails();
+      } catch (caught) {
+        // Detail is optional work: a call with no answer leaves it for a later run, never failing the run or backing off uploads.
+        if (!(caught instanceof SyncCallError)) throw caught;
+      }
+    }
     return accountState.error ?? grants.error ?? lastFeedError;
+  }
+
+  /** Whether downloading `bytes` more leaves the storage reserve free. A device that can't tell is taken at its word. */
+  private hasRoom(bytes: number): boolean {
+    const free = this.options.storage?.() ?? null;
+    return free === null || free >= bytes + STORAGE_RESERVE_BYTES;
+  }
+
+  /**
+   * History detail, after the summaries are installed (spec 2, *History*):
+   * first the newest 90 days', which a budget alert never holds back; then,
+   * when Download all history was asked for, everything else, newest first
+   * (a bulk download, which a budget alert throttles first). A few pages per
+   * run: when more remain, another run follows. A detail whose revision
+   * changed (or went) has the feed applied first, and is asked for again on
+   * a later run by the revision it brings. Short of storage, it stops there,
+   * evicting nothing, until a deliberate trigger. A call with no answer stops
+   * it there (it throws a SyncCallError).
+   */
+  private async fetchDetails(): Promise<void> {
+    const { store, backend, clock, registry } = this.options;
+    if (this.storageStopped || ![...registry.values()].some((type) => type.detail)) return;
+    if (!(await store.readBootstrap()).installed) return;
+    const since = clock() - RECENT_DETAIL_MS;
+    const progress = await store.readHistoryProgress();
+    if (progress.recent === null) await store.recordHistoryProgress({ recent: await store.countSummaries(since) });
+    if (progress.download && progress.download.total === null) await store.recordHistoryProgress({ downloadTotal: await store.countSummaries() });
+    // Asked for this run already, and changed or unreadable: not again until a later run.
+    const skip = new Set<string>();
+    let pages = 0;
+    for (const bulk of [false, true]) {
+      if (bulk && (!progress.download || (this.throttledUntil !== null && clock() < this.throttledUntil))) break;
+      for (;;) {
+        const wanted = (await store.readSummaries({ ...(bulk ? {} : { since }), limit: DETAIL_REQUESTS + skip.size }))
+          .filter((summary) => !skip.has(refKey(summary)))
+          .slice(0, DETAIL_REQUESTS);
+        if (wanted.length === 0 || this.stopped) break;
+        if (pages === DETAIL_PAGES_PER_RUN) {
+          this.rerun ??= 'automatic';
+          return;
+        }
+        if (!this.hasRoom(PAGE_BYTES)) {
+          this.storageStopped = true;
+          return;
+        }
+        const requests = wanted.map(({ recordType, item, sequence }) => ({ recordType, item, sequence }));
+        const page = await this.call(() => backend.details(requests, bulk));
+        pages += 1;
+        if (this.stopped) return;
+        if (page.status === 'throttled') {
+          this.throttledUntil = clock() + page.retryAfter * 1000;
+          break;
+        }
+        if (bulk) this.throttledUntil = null;
+        // Nothing answered (never so from this server): nothing asked again this run.
+        if (page.answers.length === 0) for (const summary of wanted) skip.add(refKey(summary));
+        const outcome = await this.applyDetails(wanted, page.answers);
+        if (this.stopped) return;
+        if (outcome.storage) {
+          this.storageStopped = true;
+          return;
+        }
+        for (const answer of outcome.skipped) skip.add(refKey(answer));
+        if (outcome.reconcile) {
+          // The account holds another revision of some: its state first.
+          const feedError = await this.pull();
+          if (feedError || this.stopped) return;
+        }
+        await this.refresh();
+      }
+    }
+  }
+
+  /**
+   * Applies the answers to detail requests for `asked` summaries: each whole
+   * record at the sequence asked for replaces its summary, in one transaction.
+   * Answers that changed or went need the feed first (`reconcile`); those and
+   * unreadable ones are `skipped`. A full disk, or too little room for the
+   * page, applies nothing: `storage`. Any other failed write throws, as any
+   * failed local write does (the run's `storage` error).
+   */
+  private async applyDetails(
+    asked: readonly (SummaryOnly | AcceptedRecord)[],
+    answers: readonly DetailAnswer[],
+  ): Promise<{ readonly applied: number; readonly skipped: readonly RecordRef[]; readonly reconcile: boolean; readonly storage: boolean }> {
+    const records: AcceptedRecord[] = [];
+    const skipped: RecordRef[] = [];
+    let reconcile = false;
+    let bytes = 0;
+    for (const answer of answers) {
+      const summary = asked.find((one) => one.recordType === answer.recordType && one.item === answer.item);
+      if (!summary) continue;
+      if (answer.status === 'detail' && answer.sequence === summary.sequence) {
+        const read = this.acceptedFrom(answer);
+        if (read && read.record.summaryAt === undefined) {
+          records.push(read.record);
+          bytes += utf8Length(JSON.stringify(answer.change));
+          continue;
+        }
+      } else {
+        reconcile = true;
+      }
+      skipped.push(summary);
+    }
+    if (records.length === 0) return { applied: 0, skipped, reconcile, storage: false };
+    if (!this.hasRoom(bytes)) return { applied: 0, skipped, reconcile, storage: true };
+    try {
+      return { applied: await this.options.store.applyDetails(records), skipped, reconcile, storage: false };
+    } catch (failure) {
+      if (this.stopped || !isDiskFull(failure)) throw failure;
+      return { applied: 0, skipped, reconcile, storage: true };
+    }
   }
 
   /**
@@ -748,8 +1063,18 @@ export class SyncEngine {
     const payload = type?.fromChange(entry.change) ?? null;
     const origin = type?.ordering === 'per-device' ? originOf(entry.change) : null;
     if (!type || payload === null || (type.ordering === 'per-device' && !origin)) return null;
+    // A snapshot's summary, whose detail comes later.
+    const summaryAt = type.detail && !type.detail.complete(payload) ? type.detail.at(payload) : null;
+    if (summaryAt !== null && !Number.isSafeInteger(summaryAt)) return null;
     return {
-      record: { recordType: entry.recordType, item: entry.item, sequence: entry.sequence, payload, ...(origin ? { origin } : {}) },
+      record: {
+        recordType: entry.recordType,
+        item: entry.item,
+        sequence: entry.sequence,
+        payload,
+        ...(origin ? { origin } : {}),
+        ...(summaryAt !== null ? { summaryAt } : {}),
+      },
       purges: type.purges?.(payload) ?? null,
     };
   }
@@ -885,7 +1210,7 @@ export class SyncEngine {
     if (this.allocating > 0) return;
     const scope = await this.options.store.readCommandScope();
     if (scope.generation === null) return;
-    const unanswered = [...this.unansweredResolutions.values()].filter((sent) => sent.command.generation === scope.generation);
+    const unanswered = [...this.unanswered.values()].filter((sent) => sent.command.generation === scope.generation);
     const settled = Math.min(scope.settled, ...unanswered.map((sent) => sent.command.position - 1));
     const reported = this.reportedSettled;
     if (reported && reported.generation === scope.generation && settled <= reported.settled) return;
@@ -966,17 +1291,22 @@ export class SyncEngine {
     this.refreshing = this.refreshing.then(async () => {
       if (this.stopped) return;
       try {
-        const { store } = this.options;
-        const [queue, rejected, lastSynced, bootstrap] = await Promise.all([
+        const { store, clock } = this.options;
+        const now = clock();
+        const [queue, rejected, lastSynced, bootstrap, progress, recent, all] = await Promise.all([
           store.readUploadQueue(),
           store.readRejectedUploads(),
           store.readLastSynced(),
           store.readBootstrap(),
+          store.readHistoryProgress(),
+          store.countSummaries(now - RECENT_DETAIL_MS),
+          store.countSummaries(),
         ]);
         if (this.stopped) return;
-        this.history = historyOf(bootstrap);
+        const throttled = this.throttledUntil !== null && now < this.throttledUntil;
+        this.history = historyOf(bootstrap, progress, recent, this.storageStopped ? 'storage' : null);
+        this.download = downloadOf(bootstrap.installed, progress, all, this.storageStopped ? 'storage' : throttled ? 'throttled' : null);
         if (lastSynced !== null && (this.lastSyncedAt === null || lastSynced > this.lastSyncedAt)) this.lastSyncedAt = lastSynced;
-        const now = this.options.clock();
         const pending = new Set(queue.map((entry) => entry.id));
         for (const id of this.firstSeen.keys()) if (!pending.has(id)) this.firstSeen.delete(id);
         for (const id of pending) if (!this.firstSeen.has(id)) this.firstSeen.set(id, now);
@@ -1014,12 +1344,35 @@ function uploadStates(queue: readonly QueuedUpload[]): UploadStatus[] {
   }));
 }
 
-/** The first download's progress, from the bootstrap's. */
-function historyOf(progress: BootstrapProgress): HistoryStatus {
-  if (progress.installed) return { state: 'complete' };
-  const { staging } = progress;
-  return { state: 'incomplete', summaries: staging && staging.rows > 0 ? Math.min(1, staging.staged / staging.rows) : 0, detail: 0 };
+/** (of − left) / of, from 0 to 1: how much of `of` is done with `left` still to do. */
+const fractionDone = (left: number, of: number): number => (of > 0 ? Math.min(1, Math.max(0, (of - left) / of)) : left > 0 ? 0 : 1);
+
+/**
+ * The first download's progress: the bootstrap's summaries, then the newest
+ * 90 days' detail (`recent` summaries of them still waiting). Complete once
+ * both are here.
+ */
+function historyOf(bootstrap: BootstrapProgress, progress: HistoryProgress, recent: number, stopped: 'storage' | null): HistoryStatus {
+  if (!bootstrap.installed) {
+    const { staging } = bootstrap;
+    return { state: 'incomplete', summaries: staging && staging.rows > 0 ? Math.min(1, staging.staged / staging.rows) : 0, detail: 0, stopped };
+  }
+  if (recent === 0) return { state: 'complete' };
+  return { state: 'incomplete', summaries: 1, detail: fractionDone(recent, Math.max(progress.recent ?? recent, recent)), stopped };
 }
+
+/** Download all history's progress: summaries still waiting for detail (`left`), of those waiting when it began. */
+function downloadOf(installed: boolean, progress: HistoryProgress, left: number, stopped: 'storage' | 'throttled' | null): HistoryDownload {
+  if (!progress.download) return { state: 'not-requested' };
+  if (installed && left === 0) return { state: 'complete' };
+  const reached = installed ? fractionDone(left, Math.max(progress.download.total ?? left, left)) : 0;
+  return stopped ? { state: 'stopped', progress: reached, reason: stopped } : { state: 'downloading', progress: reached };
+}
+
+const refKey = (ref: RecordRef): string => `${ref.recordType}\n${ref.item}`;
+
+/** The account store's failure for a full disk (the app's SqlError of kind `full`), matched by shape. */
+const isDiskFull = (failure: unknown): boolean => typeof failure === 'object' && failure !== null && (failure as { kind?: unknown }).kind === 'full';
 
 /** An entry that can't be sent as it is: its result is too large to name, or no longer matches its manifest. */
 class UnsendableError extends Error {}

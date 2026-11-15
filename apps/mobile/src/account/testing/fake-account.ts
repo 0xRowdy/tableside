@@ -3,6 +3,7 @@
 
 import type {
   AccountGate,
+  AccountPrivacy,
   AccountRecords,
   AccountService,
   AccountSync,
@@ -14,6 +15,9 @@ import type {
   CodeRequestResult,
   CodeVerificationResult,
   CurrencyChangeResult,
+  DeviceEntry,
+  DeviceSignOutResult,
+  Devices,
   EmailChangeConfirmation,
   EmailChangeResult,
   EmailMethodResult,
@@ -46,7 +50,7 @@ type Call =
   | { readonly method: 'setAccountCurrency'; readonly currency: string }
   | { readonly method: 'signInWithProvider'; readonly provider: IdentityProvider }
   | { readonly method: 'createWithProvider'; readonly provider: IdentityProvider; readonly sameIdentity: boolean }
-  | { readonly method: 'resume' | 'renew' | 'signOut' | 'checkAge' | 'refreshEligibility' };
+  | { readonly method: 'resume' | 'renew' | 'signOut' | 'checkAge' | 'refreshEligibility' | 'downloadAllHistory' };
 
 /** What the fake's Settings → Account shows unless a test changes it. */
 export const FAKE_SUMMARY: AccountSummary = {
@@ -62,6 +66,17 @@ export const FAKE_METHODS: readonly SignInMethodEntry[] = [
   { id: 'method-apple', method: 'apple', email: 'x7k2@privaterelay.appleid.com' },
   { id: 'method-email', method: 'email', email: 'player@example.com' },
 ];
+
+const DAY = 86_400_000;
+
+/** The devices the fake's account is signed in on unless a test changes them: this iPhone (active now), an iPad (2 days ago) and a Pixel (3 months ago). */
+export function fakeDevices(now = Date.now()): readonly DeviceEntry[] {
+  return [
+    { id: 'device-iphone', platform: 'ios', label: 'iPhone 15 · iOS 18', lastActiveAt: now, thisDevice: true },
+    { id: 'device-ipad', platform: 'ios', label: 'iPad Air · iPadOS 18', lastActiveAt: now - 2 * DAY - 3_600_000, thisDevice: false },
+    { id: 'device-pixel', platform: 'android', label: 'Pixel 8 · Android 15', lastActiveAt: now - 95 * DAY, thisDevice: false },
+  ];
+}
 
 /** An Account service whose answers a test scripts. Unscripted calls succeed. */
 export class FakeAccountService implements AccountService {
@@ -115,7 +130,7 @@ export class FakeAccountService implements AccountService {
     this.calls.push({ method: 'resume' });
     if (this.stored.state === 'no-account') return { status: 'no-account' as const };
     this.setGate(this.stored);
-    return { status: this.stored.state === 'signed-out' ? ('signed-out' as const) : ('resumed' as const) };
+    return { status: this.stored.state === 'signed-out' || this.stored.state === 'revoked' ? ('signed-out' as const) : ('resumed' as const) };
   }
 
   /** Like the real service: the session-ending handlers run first, then the gate is Signed out. */
@@ -148,11 +163,14 @@ export class FakeAccountService implements AccountService {
 
   /** No synchronization runs in screen tests. */
   readonly sync: AccountSync = {
-    status: { live: false, error: null, lastSyncedAt: null, uploads: [], update: null, history: { state: 'complete' } },
+    status: { live: false, error: null, lastSyncedAt: null, uploads: [], update: null, history: { state: 'complete' }, download: { state: 'not-requested' } },
     subscribe: () => () => undefined,
     reconcile: async () => undefined,
     retryRecord: async () => undefined,
     decideUnconfirmed: async () => undefined,
+    downloadAllHistory: async () => {
+      this.calls.push({ method: 'downloadAllHistory' });
+    },
     idle: async () => undefined,
     countWaiting: async () => this.waitingCount,
     queue: async () => ({ status: 'refused', reason: 'no-account' }),
@@ -223,6 +241,33 @@ export class FakeAccountService implements AccountService {
     },
   };
 
+  /** The account's devices: list() answers them, and an unscripted sign-out removes them. Null: offline. */
+  deviceEntries: readonly DeviceEntry[] | null = fakeDevices();
+  /** Answers for the next device sign-outs, used in order; unscripted ones succeed. */
+  readonly devicesNext: { signOut: DeviceSignOutResult[] } = { signOut: [] };
+  /** Each device sign-out, in order, as "sign-out <id>" or "sign-out-others". */
+  readonly deviceCalls: string[] = [];
+
+  private signedOutDevices(keep: (entry: DeviceEntry) => boolean): DeviceSignOutResult {
+    const result = this.devicesNext.signOut.shift();
+    if (result) return result;
+    const gone = (this.deviceEntries ?? []).filter((entry) => !keep(entry));
+    this.deviceEntries = (this.deviceEntries ?? []).filter(keep);
+    return { status: 'signed-out', devices: gone.length, email: this.summary?.email ?? null };
+  }
+
+  readonly devices: Devices = {
+    list: async () => (isSignedIn(this.current) ? this.deviceEntries : null),
+    signOut: async (id) => {
+      this.deviceCalls.push(`sign-out ${id}`);
+      return this.signedOutDevices((entry) => entry.id !== id);
+    },
+    signOutOthers: async () => {
+      this.deviceCalls.push('sign-out-others');
+      return this.signedOutDevices((entry) => entry.thisDevice);
+    },
+  };
+
   /** No account records in screen tests (spec 4's screens script their own). */
   readonly records: AccountRecords = {
     save: async () => undefined,
@@ -230,6 +275,16 @@ export class FakeAccountService implements AccountService {
     revisionedItems: async () => [],
     resolve: async () => ({ status: 'offline' }),
     totals: async () => ({ account: [], local: [] }),
+    detail: async () => ({ status: 'offline' }),
+  };
+
+  /** No privacy choices in screen tests (spec 7's controls script their own). */
+  readonly privacy: AccountPrivacy = {
+    read: async () => null,
+    withdrawAnalytics: async () => ({ status: 'unavailable' }),
+    limitAdData: async () => ({ status: 'unavailable' }),
+    grantAnalytics: async () => ({ status: 'unavailable' }),
+    allowAdData: async () => ({ status: 'unavailable' }),
   };
 
   async renew() {

@@ -23,7 +23,8 @@ import {
 } from './eligibility';
 import { type BackendEnvironment, ENVIRONMENT_HEADER, type EnvironmentName, authCallbackUrl, retiredEnvironments } from './environment';
 import { type MetricsSink, createMetricsSender, discardMetrics } from './metrics';
-import { type EngineStatus, type HistoryStatus, type UnconfirmedDecision, SyncEngine } from './sync/engine';
+import { type AccountPrivacy, accountPrivacy } from './privacy';
+import { type DetailResult, type EngineStatus, type HistoryDownload, type HistoryStatus, type UnconfirmedDecision, SyncEngine } from './sync/engine';
 import { type AccountRecords, accountRecords } from './sync/records';
 import { type RecordType, prerequisitesOf, recordTypes } from './sync/registry';
 import { type DevicePorts, SyncSession } from './sync/session';
@@ -51,6 +52,13 @@ export type AccountGate =
    */
   | { readonly state: 'signed-out'; readonly accountId: string }
   /**
+   * The server confirmed this installation's session was revoked (signed out
+   * from another device, or by Apple or Google withdrawing a sign-in method):
+   * closed and kept with its key like Signed out, until a fresh sign-in to the
+   * same account. `revokedAt` is when, in milliseconds since the epoch.
+   */
+  | { readonly state: 'revoked'; readonly accountId: string; readonly revokedAt: number; readonly by: RevokedBy }
+  /**
    * The account's age eligibility isn't established on this installation:
    * ordinary access is closed and only the restricted paths stay (deletion,
    * Contact support, Make a privacy request, billing help, authenticated
@@ -59,6 +67,9 @@ export type AccountGate =
   | { readonly state: 'age-unresolved'; readonly accountId: string; readonly reason: UnresolvedReason }
   /** The account is established as under 13: ordinary access is closed, with only the restricted paths. */
   | { readonly state: 'age-ineligible'; readonly accountId: string };
+
+/** Who revoked a session: another of the account's devices, or the provider of a sign-in method. */
+export type RevokedBy = 'device' | 'provider';
 
 /** Gate states that leave ordinary access open: Renewal pending keeps it, under cached rights, while the token renews. */
 export const opensOrdinaryAccess = (gate: AccountGate): gate is Extract<AccountGate, { state: 'active' | 'renewal-pending' }> =>
@@ -85,8 +96,51 @@ export interface AccountSummary {
   readonly currency: string;
   /** False while any casino session exists, since amounts are never converted. */
   readonly currencyChangeable: boolean | null;
-  /** Signed-in devices: the account's server sessions, this one included (each maps to an installation). */
+  /** Signed-in devices, this one included, as Devices lists them. */
   readonly devices: number | null;
+}
+
+/**
+ * A device signed in to the account (S2-19): a registered installation with a
+ * live session, or a session that never registered (platform and label
+ * null). Platform and label are what the device said about itself: they
+ * describe a sign-in, never which physical device it is.
+ */
+export interface DeviceEntry {
+  readonly id: string;
+  readonly platform: 'ios' | 'android' | null;
+  readonly label: string | null;
+  /** Its latest sign-in, token renewal or status check, in milliseconds since the epoch. */
+  readonly lastActiveAt: number | null;
+  readonly thisDevice: boolean;
+}
+
+export type DeviceSignOutResult =
+  /** `devices` other devices were signed out; the security email went to `email`. */
+  | { readonly status: 'signed-out'; readonly devices: number; readonly email: string | null }
+  | { readonly status: 'fresh-authentication-required' }
+  /** It isn't signed in any more (signed out meanwhile, say). */
+  | { readonly status: 'not-found' }
+  | { readonly status: 'failed' };
+
+/**
+ * Devices (S2-19). Signing a device out revokes every session it has, and
+ * signing out all others keeps only this session; both need Confirm it's you
+ * first, and send the account a security email. A signed-out device locks
+ * the next time it reaches the server, keeping its records.
+ */
+export interface Devices {
+  /** This device first. Null when no account is signed in, or the server can't be reached. */
+  list(): Promise<readonly DeviceEntry[] | null>;
+  /** Another device; this one signs out with Sign out instead. */
+  signOut(id: string): Promise<DeviceSignOutResult>;
+  signOutOthers(): Promise<DeviceSignOutResult>;
+}
+
+/** What this device says about itself on Devices: its platform, and a label such as "iPhone 15 · iOS 18". */
+export interface DeviceDescription {
+  readonly platform: 'ios' | 'android';
+  readonly label: string;
 }
 
 export type CurrencyChangeResult = { readonly status: 'changed' } | { readonly status: 'locked' } | { readonly status: 'failed' };
@@ -288,7 +342,7 @@ export type VaultOpening =
   | { readonly status: 'open'; readonly session: VaultSession }
   | { readonly status: 'recovery-needed' | 'needs-update' | 'migration-failed' | 'superseded' };
 
-export type { HistoryStatus };
+export type { DetailResult, HistoryDownload, HistoryStatus };
 
 /** What sync status (S2-20) shows: the engine's status, the live connection and the first download. */
 export interface SyncStatus extends EngineStatus {
@@ -300,11 +354,12 @@ export interface SyncStatus extends EngineStatus {
  * Queueing a record for upload (spec 2, *Record-type registry*): queued, with
  * its originating-device position for a per-device type; or refused, when no
  * account session is open, the type isn't registered or is server-authored
- * (no client writes it), or the payload isn't the type's.
+ * (no client writes it), the payload is online only (sent at once, never
+ * queued), or the payload isn't the type's.
  */
 export type QueueResult =
   | { readonly status: 'queued'; readonly id: string; readonly position?: number }
-  | { readonly status: 'refused'; readonly reason: 'no-account' | 'unknown-type' | 'server-authored' | 'invalid-payload' };
+  | { readonly status: 'refused'; readonly reason: 'no-account' | 'unknown-type' | 'server-authored' | 'online-only' | 'invalid-payload' };
 
 /** Synchronization for the open account session. Triggers run it by themselves; these are for asking. */
 export interface AccountSync {
@@ -332,13 +387,28 @@ export interface AccountSync {
    * stale devices*): send it again, or set it aside. Any other record is left as it is.
    */
   decideUnconfirmed(id: string, decision: UnconfirmedDecision): Promise<void>;
+  /**
+   * Download all history (spec 2, *History*): keeps every record's detail on
+   * this installation, for offline trips. It carries on by itself, across
+   * restarts, until done; asking again resumes one stopped for storage. Its
+   * progress is the status's `download`. Resolves when this run has finished.
+   */
+  downloadAllHistory(): Promise<void>;
   /** Resolves once no synchronization is running. */
   idle(): Promise<void>;
   /** How many saved records haven't reached the account yet; 0 with no open account session. */
   countWaiting(): Promise<number>;
 }
 
-const NO_SYNC: SyncStatus = { live: false, error: null, lastSyncedAt: null, uploads: [], update: null, history: { state: 'complete' } };
+const NO_SYNC: SyncStatus = {
+  live: false,
+  error: null,
+  lastSyncedAt: null,
+  uploads: [],
+  update: null,
+  history: { state: 'complete' },
+  download: { state: 'not-requested' },
+};
 
 export interface AccountServiceOptions {
   /** The one backend this build talks to, fixed when it was built. */
@@ -365,6 +435,10 @@ export interface AccountServiceOptions {
   readonly ageSignals?: PlatformAgeSignals;
   /** The operational metrics provider (spec 7); discarded by default. Only what the gate and the catalog allow reaches it (metrics.ts). */
   readonly metrics?: MetricsSink;
+  /** The device's free storage in bytes, or null when it can't tell: downloads stop before they would run it short. */
+  readonly freeStorage?: () => number | null;
+  /** How this device describes itself on Devices. */
+  readonly deviceDescription: () => DeviceDescription;
 }
 
 export interface AccountService {
@@ -470,8 +544,11 @@ export interface AccountService {
   readonly sync: AccountSync;
   /** Revisioned items, their conflicts, and lifetime totals for the open account. */
   readonly records: AccountRecords;
+  /** The account's privacy choices: analytics consent and the ad-data opt-out (#105). */
+  readonly privacy: AccountPrivacy;
   readonly freshAuthentication: FreshAuthentication;
   readonly signInMethods: SignInMethods;
+  readonly devices: Devices;
 }
 
 
@@ -496,6 +573,8 @@ interface RememberedAccount {
   readonly reported?: AgeRange;
   readonly currency: string | null;
   readonly signedOut: boolean;
+  /** When and by whom the server confirmed this installation's session was revoked; the account is locked (signedOut) since. */
+  readonly revoked?: { readonly at: number; readonly by: RevokedBy } | undefined;
 }
 
 /** The eligibility part of what is remembered. */
@@ -524,6 +603,7 @@ const withEligibility = (base: RememberedAccount, next: RememberedEligibility): 
   accountId: base.accountId,
   currency: base.currency,
   signedOut: base.signedOut,
+  ...(base.revoked ? { revoked: base.revoked } : {}),
   eligibility: next.eligibility,
   ...(next.check ? { check: next.check } : {}),
   ...(next.signal ? { signal: next.signal } : {}),
@@ -637,7 +717,14 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
    * account, and whether its token awaits renewal. A new object for each
    * session, so an answer for an earlier one (`opened !== current`) changes nothing.
    */
-  type OpenSession = { readonly session: VaultSession; remembered: RememberedAccount; renewing: boolean; readonly stopWatch: () => void };
+  type OpenSession = {
+    readonly session: VaultSession;
+    remembered: RememberedAccount;
+    renewing: boolean;
+    /** Whether this session is registered to this installation (and so may sync, and learn of its revocation). */
+    registered: boolean;
+    readonly stopWatch: () => void;
+  };
   let opened: OpenSession | null = null;
   /** The eligibility refresh in flight, for the session it belongs to. */
   let refreshing: { readonly session: OpenSession; readonly run: Promise<void> } | null = null;
@@ -665,7 +752,12 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
   const remember = (account: RememberedAccount) => credentials.setItem(rememberedAccountKey(backend.name), JSON.stringify(account));
   const readRemembered = async () => parseRemembered(await credentials.getItem(rememberedAccountKey(backend.name)));
 
-  /** Sync runs only while ordinary access is open: a restricted account's database stays open for its restricted paths only. */
+  /**
+   * Sync runs only while ordinary access is open, and once the session is
+   * registered to this installation (the server takes uploads from the
+   * caller's own installation only): a restricted account's database stays
+   * open for its restricted paths only.
+   */
   const updateSync = async () => {
     if (!opensOrdinaryAccess(gate)) {
       if (!sync) return;
@@ -674,7 +766,7 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
       syncChanged();
       return;
     }
-    if (sync || !opened) return;
+    if (sync || !opened?.registered) return;
     const current = opened;
     const supabase = await connect();
     // The gate may have closed, or another session opened, meanwhile.
@@ -689,6 +781,7 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
       clock: options.clock,
       random: () => uniform(options.randomBytes(4)),
       metrics,
+      ...(options.freeStorage ? { storage: options.freeStorage } : {}),
     });
     engine.onChange(syncChanged);
     // Its status read from the store first (the first download's progress among it), so it never shows a default.
@@ -737,9 +830,114 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
     const { accountId } = remembered;
     if (opening.status === 'recovery-needed') return setGate({ state: 'recovery-needed', accountId });
     if (opening.status !== 'open') return setGate({ state: 'database-unavailable', accountId, reason: opening.status });
-    opened = { session: opening.session, remembered, renewing, stopWatch: watchEligibility() };
+    const current: OpenSession = { session: opening.session, remembered, renewing, registered: false, stopWatch: watchEligibility() };
+    opened = current;
     setGate(gateFor(remembered, renewing));
+    await registerDevice(current);
     await updateSync();
+  };
+
+  /** This session's status credential, kept with the credentials while the session lasts. */
+  const storedStatus = async (accountId: string): Promise<string | null> => {
+    const stored = parseJson(await credentials.getItem(statusKey(backend.name))) as { accountId?: unknown; token?: unknown } | null;
+    return stored?.accountId === accountId && typeof stored.token === 'string' ? stored.token : null;
+  };
+
+  /**
+   * Registers this session to this installation, once per session: online,
+   * with an unexpired token. The installation's secret (kept across sign-outs)
+   * proves it is the installation that first registered for the account. A
+   * failure leaves it unregistered, and the next refresh tries again.
+   */
+  const registerDevice = async (current: OpenSession): Promise<void> => {
+    if (current.registered) return;
+    const { accountId } = current.remembered;
+    if (await storedStatus(accountId)) {
+      if (opened === current) current.registered = true;
+      return;
+    }
+    if (!(await canAskServer(current, { renew: false }))) return;
+    const { installationId } = current.session;
+    const secretKey = installationSecretKey(backend.name, installationId, accountId);
+    try {
+      // The secret is this device's before the server hears it, so a lost answer or a kill never strands the installation.
+      let secret = await credentials.getItem(secretKey);
+      if (!secret) {
+        const created = hex(options.randomBytes(32));
+        await writeCredentials(() => credentials.setItem(secretKey, created));
+        secret = created;
+      }
+      const { platform, label } = options.deviceDescription();
+      const supabase = await connect();
+      const { data, error } = await supabase.rpc('register_device_v1', { installation: installationId, secret, platform, label });
+      const answer = data as { status?: unknown; status_token?: unknown } | null;
+      if (error || answer?.status !== 'registered' || typeof answer.status_token !== 'string') return;
+      const token = answer.status_token;
+      await writeCredentials(async () => {
+        if (opened !== current) return;
+        await credentials.setItem(statusKey(backend.name), JSON.stringify({ accountId, token }));
+        current.registered = true;
+      });
+    } catch {
+      // Offline, or the answer was lost: the next refresh registers.
+    }
+  };
+
+  /**
+   * Asks the server, with this session's status credential, what became of the
+   * account and session. Only its answer that the session was revoked moves the
+   * gate to Revoked: a timeout, a lost answer, an expired token or a refused
+   * renewal never does. (Deletion scheduled and Deleted are #103's and #104's.)
+   */
+  const checkLifecycle = async (current: OpenSession): Promise<void> => {
+    if (!options.device.online.current()) return;
+    const token = await storedStatus(current.remembered.accountId);
+    if (!token || opened !== current) return;
+    try {
+      const response = await post('/rest/v1/rpc/lifecycle_status_v1', { token });
+      const answer = (await response.json().catch(() => null)) as { status?: unknown; at?: unknown; by?: unknown } | null;
+      if (!response.ok || opened !== current || answer?.status !== 'revoked') return;
+      const at = typeof answer.at === 'string' ? Date.parse(answer.at) : Number.NaN;
+      await lockRevoked(current, { at: Number.isFinite(at) ? at : options.clock(), by: answer.by === 'provider' ? 'provider' : 'device' });
+    } catch {
+      // Offline or the answer was lost: nothing is known.
+    }
+  };
+
+  /**
+   * The server confirmed this session was revoked: an open practice session
+   * suspends at once (as on sign-out), then the database closes, kept with its
+   * key, and the credentials go. A fresh sign-in to the same account reopens it.
+   */
+  const lockRevoked = async (current: OpenSession, revoked: { readonly at: number; readonly by: RevokedBy }): Promise<void> => {
+    if (signingOut) return;
+    const { accountId } = current.remembered;
+    for (const handler of [...accountSessionEnding]) await handler().catch(() => undefined);
+    if (opened !== current || signingOut) return;
+    await closeAccountSession(accountId, revoked);
+    setGate({ state: 'revoked', accountId, revokedAt: revoked.at, by: revoked.by });
+  };
+
+  /**
+   * Locks the account on this installation, once the session-ending handlers
+   * have run (sign-out or revocation): the account session ends, its database
+   * closes, kept with its key, and its credentials go, all without the network.
+   */
+  const closeAccountSession = async (accountId: string, revoked?: RememberedAccount['revoked']): Promise<void> => {
+    generation++;
+    opened?.stopWatch();
+    opened = null;
+    sync?.session.end();
+    sync = null;
+    syncChanged();
+    await options.vault.close();
+    await writeCredentials(async () => {
+      const remembered = await readRemembered();
+      // The lock first: a kill between the writes still reopens locked (an earlier revocation is no longer why).
+      if (remembered) await remember({ ...remembered, accountId, signedOut: true, revoked });
+      await credentials.removeItem(credentialsKey(backend.name));
+      await credentials.removeItem(statusKey(backend.name));
+    });
   };
 
   /** Refreshes eligibility on entering the foreground, on reconnection and every minute while foregrounded and connected. */
@@ -765,6 +963,8 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
       const response = await post('/auth/v1/token?grant_type=refresh_token', { refresh_token: session.refresh_token });
       if (!response.ok) {
         await response.arrayBuffer();
+        // A refused renewal proves nothing by itself; the server's status may (a revoked session).
+        await checkLifecycle(current);
         return;
       }
       const renewed = (await response.json()) as StoredSession;
@@ -781,6 +981,8 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
       setGate(gateFor(current.remembered, false));
       // The live connection re-subscribes with the renewed token, as on Supabase's own refresh.
       sync?.session.credentialsChanged();
+      await registerDevice(current);
+      await updateSync();
     } catch {
       // Offline or the response was lost: still awaiting renewal.
     }
@@ -832,11 +1034,16 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
   };
 
   const refreshOnce = async (current: OpenSession) => {
+    // What became of the session first: a revoked one locks, and nothing else runs for it.
+    await checkLifecycle(current);
+    if (opened !== current) return;
     const signal = await ageSignals.check({ interactive: false }).catch(() => UNAVAILABLE);
     if (opened !== current) return;
     // What the platform says applies at once, offline too: restrictions never wait for the server.
     await rememberEligibility(current, afterSignal(current.remembered, signal));
     if (!(await canAskServer(current, { renew: false }))) return;
+    await registerDevice(current);
+    await updateSync();
     await reportSignal(current);
     const record = await serverRecord();
     if (!record || opened !== current || sameRecord(record, current.remembered.eligibility)) return;
@@ -898,7 +1105,11 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
       { accountId: account.account_id, eligibility: record, currency: isCurrency(account.currency) ? account.currency : null, signedOut: false },
       afterSignal({ eligibility: record }, signal),
     );
-    await writeCredentials(() => remember(remembered));
+    await writeCredentials(async () => {
+      // An earlier session's status credential: this session registers afresh.
+      await credentials.removeItem(statusKey(backend.name));
+      await remember(remembered);
+    });
     await openAccount(remembered);
     if (opened) await reportSignal(opened);
     return true;
@@ -1050,7 +1261,10 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
    * link-method) with this session's token. Null when no account is signed
    * in, or the account session moved on before it answered.
    */
-  const actAsPlayer = async (name: string, body: unknown): Promise<{ readonly code: number; readonly status: string | undefined; readonly retryAfter?: unknown } | null> => {
+  const actAsPlayer = async (
+    name: string,
+    body: unknown,
+  ): Promise<{ readonly code: number; readonly status: string | undefined; readonly retryAfter?: unknown; readonly body: Record<string, unknown> | null } | null> => {
     if (!isSignedIn(gate)) return null;
     const at = generation;
     try {
@@ -1058,7 +1272,7 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
       if (!token) return null;
       const response = await post(`/functions/v1/${name}`, body, { authorization: `Bearer ${token}` });
       const answer = (await response.json().catch(() => null)) as { status?: string; retryAfter?: unknown } | null;
-      return at === generation ? { code: response.status, status: answer?.status, retryAfter: answer?.retryAfter } : null;
+      return at === generation ? { code: response.status, status: answer?.status, retryAfter: answer?.retryAfter, body: answer } : null;
     } catch {
       return null;
     }
@@ -1249,7 +1463,41 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
     },
   };
 
-  return {
+  /** Signs another device, or every other device, out (revoke-devices). */
+  const revokeDevices = async (body: { readonly device: string } | { readonly others: true }): Promise<DeviceSignOutResult> => {
+    const answer = await actAsPlayer('revoke-devices', body);
+    if (answer?.code === 200 && answer.status === 'signed-out') {
+      const { devices: count, email } = answer.body ?? {};
+      return { status: 'signed-out', devices: typeof count === 'number' ? count : 0, email: typeof email === 'string' ? email : null };
+    }
+    if (answer?.code === 403 && answer.status === 'fresh-authentication-required') return { status: answer.status };
+    if (answer?.code === 404 && answer.status === 'not-found') return { status: answer.status };
+    return { status: 'failed' };
+  };
+
+  const devices: Devices = {
+    async list() {
+      const data = await operation('devices_v1');
+      if (!Array.isArray(data)) return null;
+      return (data as { id?: unknown; platform?: unknown; label?: unknown; last_active_at?: unknown; this_device?: unknown }[]).flatMap((entry) => {
+        if (typeof entry.id !== 'string') return [];
+        const lastActiveAt = typeof entry.last_active_at === 'string' ? Date.parse(entry.last_active_at) : Number.NaN;
+        return [
+          {
+            id: entry.id,
+            platform: entry.platform === 'ios' || entry.platform === 'android' ? entry.platform : null,
+            label: typeof entry.label === 'string' ? entry.label : null,
+            lastActiveAt: Number.isFinite(lastActiveAt) ? lastActiveAt : null,
+            thisDevice: entry.this_device === true,
+          },
+        ];
+      });
+    },
+    signOut: (id) => revokeDevices({ device: id }),
+    signOutOthers: () => revokeDevices({ others: true }),
+  };
+
+  const service: AccountService = {
     get gate() {
       return gate;
     },
@@ -1399,13 +1647,14 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
     },
 
     async resume() {
-      if (gate.state === 'signed-out') return { status: 'signed-out' };
+      if (gate.state === 'signed-out' || gate.state === 'revoked') return { status: 'signed-out' };
       if (gate.state !== 'no-account') return { status: 'resumed' };
       // Removes a retired environment's namespace before reading any credentials.
       await connect();
       const remembered = await readRemembered();
       if (remembered?.signedOut) {
-        setGate({ state: 'signed-out', accountId: remembered.accountId });
+        const { accountId, revoked } = remembered;
+        setGate(revoked ? { state: 'revoked', accountId, revokedAt: revoked.at, by: revoked.by } : { state: 'signed-out', accountId });
         return { status: 'signed-out' };
       }
       // Read straight from storage: Supabase's own read would try to renew an
@@ -1430,20 +1679,8 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
       signingOut = (async (): Promise<SignOutResult> => {
         // An open practice session suspends while the database is still open.
         for (const handler of [...accountSessionEnding]) await handler().catch(() => undefined);
-        generation++;
-        opened?.stopWatch();
-        opened = null;
-        sync?.session.end();
-        sync = null;
-        syncChanged();
-        await options.vault.close();
         const session = await storedSession();
-        await writeCredentials(async () => {
-          const remembered = await readRemembered();
-          // The lock first: a kill between the two writes still reopens Signed out.
-          if (remembered) await remember({ ...remembered, accountId, signedOut: true });
-          await credentials.removeItem(credentialsKey(backend.name));
-        });
+        await closeAccountSession(accountId);
         setGate({ state: 'signed-out', accountId });
         // Locally signed out already; the server learns only if it can be reached.
         return { status: 'signed-out', serverSessionEnded: session ? await endServerSession(session) : false };
@@ -1497,6 +1734,7 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
       reconcile: () => sync?.engine.reconcile('deliberate') ?? Promise.resolve(),
       retryRecord: (id) => sync?.engine.retryRecord(id) ?? Promise.resolve(),
       decideUnconfirmed: (id, decision) => sync?.engine.decideUnconfirmed(id, decision) ?? Promise.resolve(),
+      downloadAllHistory: () => sync?.engine.downloadAllHistory() ?? Promise.resolve(),
       idle: () => sync?.engine.idle() ?? Promise.resolve(),
       async queue(recordType, payload) {
         const store = sync?.store;
@@ -1505,6 +1743,7 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
         if (!type) return { status: 'refused', reason: 'unknown-type' };
         if (type.kind === 'server-authored-state') return { status: 'refused', reason: 'server-authored' };
         if (!type.isPayload(payload)) return { status: 'refused', reason: 'invalid-payload' };
+        if (type.onlineOnly?.(payload)) return { status: 'refused', reason: 'online-only' };
         const queued = await store.queueUpload({
           id: `${type.name}/${hex(options.randomBytes(16))}`,
           recordType: type.name,
@@ -1527,9 +1766,17 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
     },
 
     records: accountRecords(() => sync, registry),
+    privacy: accountPrivacy({
+      session: () => sync,
+      queue: (recordType, payload) => service.sync.queue(recordType, payload),
+      gate: () => gate,
+      newChoiceId: () => hex(options.randomBytes(16)),
+    }),
     freshAuthentication,
     signInMethods,
+    devices,
   };
+  return service;
 }
 
 function isSignInMethod(provider: string | undefined): provider is SignInMethod {
@@ -1587,7 +1834,16 @@ function parseQuery(query: string): Record<string, string> {
 
 function parseRemembered(text: string | null): RememberedAccount | null {
   const value = parseJson(text) as
-    | { accountId?: unknown; eligibility?: unknown; check?: unknown; signal?: unknown; reported?: unknown; currency?: unknown; signedOut?: unknown }
+    | {
+        accountId?: unknown;
+        eligibility?: unknown;
+        check?: unknown;
+        signal?: unknown;
+        reported?: unknown;
+        currency?: unknown;
+        signedOut?: unknown;
+        revoked?: { at?: unknown; by?: unknown };
+      }
     | null;
   if (!value || typeof value.accountId !== 'string') return null;
   // Remembered before #90 as the bare band, which was always declared.
@@ -1601,6 +1857,9 @@ function parseRemembered(text: string | null): RememberedAccount | null {
     ...(isAgeRange(value.reported) ? { reported: value.reported } : {}),
     currency: isCurrency(value.currency) ? value.currency : null,
     signedOut: value.signedOut === true,
+    ...(value.signedOut === true && typeof value.revoked?.at === 'number'
+      ? { revoked: { at: value.revoked.at, by: value.revoked.by === 'provider' ? ('provider' as const) : ('device' as const) } }
+      : {}),
   };
 }
 
@@ -1621,6 +1880,11 @@ async function removeRetiredEnvironments({ backend, credentials, vault }: Accoun
 
 /** Where Auth keeps an environment's credentials in secure storage: every entry's name starts with it. */
 const credentialsKey = (environment: EnvironmentName) => `tableside.${environment}.auth`;
+/** The current session's status credential (lifecycle_status_v1), with the account it is for. */
+const statusKey = (environment: EnvironmentName) => `tableside.${environment}.status`;
+/** An installation's secret for an account, kept across sign-outs: it proves the installation when a later session registers. */
+const installationSecretKey = (environment: EnvironmentName, installationId: string, accountId: string) =>
+  `tableside.${environment}.${installationId}.${accountId}.device`;
 /** The list of credential entries an environment has written, so they can all be removed. */
 const credentialsIndex = (environment: EnvironmentName) => `tableside.${environment}.credentials`;
 

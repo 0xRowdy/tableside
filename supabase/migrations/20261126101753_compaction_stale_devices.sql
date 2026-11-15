@@ -156,14 +156,35 @@ end $$;
 create trigger journal_session_revocation after delete on auth.sessions
   for each row execute function private.journal_session_revocation();
 
+-- Privacy choices (#105) are account controls: a consent withdrawal or an
+-- ad-data opt-out must survive any restore, so every change to the current
+-- choices is journaled with the account sequence that made it.
+create function private.journal_privacy_choices() returns trigger
+language plpgsql security definer set search_path = '' as $$
+begin
+  if tg_op = 'UPDATE' and old.analytics_consent is not distinct from new.analytics_consent
+    and old.analytics_generation is not distinct from new.analytics_generation
+    and old.ad_data_opt_out_source is not distinct from new.ad_data_opt_out_source then
+    return null;
+  end if;
+  perform private.record_control(new.account_id, 'record-control', 'privacy-choice/current',
+    jsonb_build_object('consent', new.analytics_consent, 'generation', new.analytics_generation,
+      'adDataOptOut', new.ad_data_opt_out_source, 'sequence', new.last_sequence));
+  return null;
+end $$;
+
+create trigger journal_privacy_choices after update on private.privacy_choices
+  for each row execute function private.journal_privacy_choices();
+
 revoke execute on function private.record_control(uuid, text, text, jsonb), private.journal_account_state(),
-  private.journal_session_revocation() from public;
+  private.journal_session_revocation(), private.journal_privacy_choices() from public;
 
 -- ---------------------------------------------------------------------------
 -- Command scopes, protocol version 1
 -- ---------------------------------------------------------------------------
 
--- An installation's command scope in the caller's account.
+-- The command scope of the caller's own installation (the one its session
+-- registered) in the caller's account.
 --   generation null: the installation holds none (a new database). A new
 --     generation is issued, replacing any earlier one: its positions start
 --     from 1, and every earlier generation's command is refused.
@@ -192,6 +213,13 @@ begin
   insert into private.sync_heads (account_id) values (v_account) on conflict do nothing;
   perform 1 from private.sync_heads where account_id = v_account for update;
   if private.active_account() is distinct from v_account then
+    raise exception 'not authorized' using errcode = '42501';
+  end if;
+  -- Only the caller's own registered installation's scope (#101): a session can't renew another device's.
+  if not exists (
+    select 1 from private.account_sessions r
+    where r.session_id = private.caller_session() and r.account_id = v_account
+      and r.installation_id = sync_scope_v1.installation and r.revoked_at is null) then
     raise exception 'not authorized' using errcode = '42501';
   end if;
 
@@ -233,8 +261,8 @@ revoke execute on function public.sync_scope_v1(text, integer, bigint) from publ
 grant execute on function public.sync_scope_v1(text, integer, bigint) to authenticated;
 
 -- ---------------------------------------------------------------------------
--- Operation API, protocol version 1 (replaces #95's sync_upload_v1, keeping
--- its barriers, positions, purges and chunk manifests)
+-- Operation API, protocol version 1 (replaces #101's sync_upload_v1, keeping
+-- its own-installation check and #95's barriers, positions, purges and chunk manifests)
 -- ---------------------------------------------------------------------------
 
 -- The envelope gains `command`: {"generation","position"}, the command's
@@ -319,6 +347,13 @@ begin
   -- authoritative change: a deletion scheduled or a session revoked while this
   -- upload waited is seen here, and the upload is denied.
   if private.active_account() is distinct from v_account then
+    raise exception 'not authorized' using errcode = '42501';
+  end if;
+  -- Only the caller's own registered installation: a session can't upload as another device (#101).
+  if not exists (
+    select 1 from private.account_sessions r
+    where r.session_id = private.caller_session() and r.account_id = v_account
+      and r.installation_id = v_installation and r.revoked_at is null) then
     raise exception 'not authorized' using errcode = '42501';
   end if;
 
@@ -427,9 +462,8 @@ begin
   return v_disposition;
 end $$;
 
--- One bounded page of the account's feed after `after`, in sequence order:
---   {"entries":[...],"more"}
--- or, when `after` is behind the reset boundary (those entries are pruned),
+-- #97's feed page (bounded by rows and by bytes), or, when `after` is behind
+-- the reset boundary (those entries are pruned),
 --   {"status":"reset","through":n}: the device takes a new snapshot, keeping its queue.
 -- Stable, so the boundary and the page come from one snapshot of the database.
 create or replace function public.sync_feed_v1(after bigint, page_size integer default 50) returns jsonb
@@ -444,18 +478,25 @@ begin
   if v_account is null then
     raise exception 'not authorized' using errcode = '42501';
   end if;
-  select pruned_through into v_pruned from private.sync_heads where account_id = v_account;
-  if coalesce(after, 0) < coalesce(v_pruned, 0) then
+  select h.pruned_through into v_pruned from private.sync_heads h where h.account_id = v_account;
+  if coalesce(sync_feed_v1.after, 0) < coalesce(v_pruned, 0) then
     return jsonb_build_object('status', 'reset', 'through', v_pruned);
   end if;
-  select coalesce(jsonb_agg(jsonb_build_object('sequence', f.sequence, 'recordType', f.record_type, 'item', f.item_id, 'change', f.change) order by f.sequence), '[]'::jsonb),
-         max(f.sequence)
+  select coalesce(jsonb_agg(p.entry order by p.sequence), '[]'::jsonb), max(p.sequence)
     into v_entries, v_last
-    from (select * from private.sync_feed where account_id = v_account and sequence > coalesce(after, 0)
-          order by sequence limit v_limit) f;
+    from (select e.sequence, e.entry,
+                 row_number() over (order by e.sequence) as n,
+                 sum(octet_length(e.entry::text)) over (order by e.sequence) as running
+          from (select f.sequence,
+                       jsonb_build_object('sequence', f.sequence, 'recordType', f.record_type, 'item', f.item_id, 'change', f.change) as entry
+                from private.sync_feed f
+                where f.account_id = v_account and f.sequence > coalesce(sync_feed_v1.after, 0)
+                order by f.sequence limit v_limit) e) p
+    where p.n = 1 or p.running <= private.page_bytes();
   return jsonb_build_object(
     'entries', v_entries,
-    'more', exists (select 1 from private.sync_feed where account_id = v_account and sequence > coalesce(v_last, coalesce(after, 0))));
+    'more', exists (select 1 from private.sync_feed f
+                    where f.account_id = v_account and f.sequence > coalesce(v_last, coalesce(sync_feed_v1.after, 0))));
 end $$;
 
 -- ---------------------------------------------------------------------------
@@ -665,4 +706,11 @@ insert into private.retention_rules (subject, endpoint, dependency, owner) value
    'Removing residual deletion controls once no credential or usable recovery source can resurrect the account.',
    'Permanent deletion (#104), with spec 7''s backup retention (#57)'),
   ('public.eligibility', 'One current eligibility record per account, replaced rather than kept as history; removed by deletion.', null, null),
-  ('private.reviewer_accounts', 'A designated reviewer account''s credential: kept while the account is designated (#107).', null, null);
+  ('private.reviewer_accounts', 'A designated reviewer account''s credential: kept while the account is designated (#107).', null, null),
+  ('private.installations', 'Each installation the account signed in on, which its command scope and Devices name: kept while the account exists; removed by deletion (#104).', null, null),
+  ('private.account_sessions',
+   'A registered session: goes with its session when that simply ends. A revoked one keeps its row (revoked_at), so its device''s lifecycle status still answers revoked.',
+   'How long a revoked device may still ask its lifecycle status before the row can go.',
+   'Devices and revocation (#101), with spec 7''s retention schedule (#57)'),
+  ('private.privacy_choices', 'The account''s current privacy choices, an account control: kept while the account exists (Amendment 1 C6). A pending withdrawal or opt-out is never compacted: it waits in its device''s queue.', null, null),
+  ('private.analytics_ids', 'Every analytics ID the account has had: kept until the deletion job has asked the analytics provider to erase each one (Amendment 8 §3).', null, null);

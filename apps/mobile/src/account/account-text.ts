@@ -1,5 +1,5 @@
-// Player wording for Settings → Account (S2-17) and the signed-out locked
-// state (S2-23): the device, sign-in methods, devices, sync and currency.
+// Player wording for Settings → Account (S2-17), Devices (S2-19) and the
+// locked states (S2-23): the device, sign-in methods, devices, sync and currency.
 
 import type { SignInMethod } from '@tableside/account';
 import { Platform } from 'react-native';
@@ -83,4 +83,50 @@ export const CURRENCIES: readonly { readonly code: string; readonly name: string
 export function currencyText(code: string): string {
   const name = CURRENCIES.find((currency) => currency.code === code)?.name;
   return name ? `${name} (${code})` : code;
+}
+
+/**
+ * How this device describes itself on Devices (S2-19): "iPhone 15 · iOS 18",
+ * "iPad Air · iPadOS 18", "Pixel 8 · Android 15". It's what the device says
+ * about itself, shown to the account owner only.
+ */
+export function describeDevice(os: 'ios' | 'android', device: { readonly modelName: string | null; readonly osName: string | null; readonly osVersion: string | null }) {
+  const model = device.modelName?.trim() || (os === 'ios' ? 'iPhone' : 'Android device');
+  // Android's OS name can be a build fingerprint; the platform names it plainly.
+  const system = os === 'ios' ? (device.osName === 'iPadOS' ? 'iPadOS' : 'iOS') : 'Android';
+  const major = device.osVersion?.split('.')[0]?.trim();
+  return { platform: os, label: `${model} · ${major ? `${system} ${major}` : system}` } as const;
+}
+
+/** A device's name in sentences: the model its label begins with ("Pixel 8"), or "Unknown device" for a sign-in that never said. */
+export function deviceShortName(label: string | null): string {
+  return label?.split(' · ')[0]?.trim() || 'Unknown device';
+}
+
+/** "iPad Air", "iPad Air and Pixel 8", "iPad Air, Pixel 8 and Unknown device". */
+export function namesList(names: readonly string[]): string {
+  if (names.length <= 1) return names[0] ?? '';
+  return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+}
+
+/** "Last active now", "… 5 minutes ago", "… 2 days ago", "… 3 months ago". */
+export function lastActiveText(then: number | null, now: number): string {
+  if (then === null) return 'Last active: not known';
+  const minutes = Math.floor(Math.max(0, now - then) / 60_000);
+  const unit = (count: number, name: string) => `Last active ${count} ${name}${count === 1 ? '' : 's'} ago`;
+  if (minutes < 2) return 'Last active now';
+  if (minutes < 60) return unit(minutes, 'minute');
+  if (minutes < 48 * 60) return unit(Math.floor(minutes / 60), 'hour');
+  const days = Math.floor(minutes / (24 * 60));
+  if (days < 60) return unit(days, 'day');
+  if (days < 730) return unit(Math.floor(days / 30), 'month');
+  return unit(Math.floor(days / 365), 'year');
+}
+
+const SHORT_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/** "17 Oct 2026", in the device's time zone. */
+export function dayText(at: number): string {
+  const day = new Date(at);
+  return `${day.getDate()} ${SHORT_MONTHS[day.getMonth()]} ${day.getFullYear()}`;
 }

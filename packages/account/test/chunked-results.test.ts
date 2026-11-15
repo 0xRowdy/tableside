@@ -192,13 +192,15 @@ describe('abandoned staging', () => {
 });
 
 describe('the chunk operations, called directly', () => {
+  /** The phone's own installation: the server takes uploads only from the caller's registered installation. */
+  let installation = '';
   /** A practice result of the account's, `size` bytes long, prepared as `operation` would send it. */
   function longResult(accountId: string, operation: string, size = 3 * REQUEST_LIMIT_BYTES, commands = direct) {
     const payload = {
       recordVersion: 1,
       activityId: 'activity-1',
       owner: accountId,
-      device: 'installation-1',
+      device: installation,
       game: 'roulette',
       startedAt: 1,
       endedAt: 2,
@@ -209,7 +211,7 @@ describe('the chunk operations, called directly', () => {
     const prepared = prepareOperation({
       protocol: PROTOCOL_VERSION,
       operation: operation.repeat(32),
-      installation: 'installation-1',
+      installation,
       command: commands!.next(),
       recordType: completedPracticeSession.name,
       payloadVersion: 1,
@@ -223,8 +225,9 @@ describe('the chunk operations, called directly', () => {
   let direct: DirectCommands | undefined;
   async function signedIn() {
     const { phone, accountId } = await twoDevices();
+    installation = phone.vault.store().identity.installationId;
     const raw = localStack().rawClient(accessToken(phone));
-    direct = await directCommands(raw, 'installation-1');
+    direct = await directCommands(raw, installation);
     return { accountId, raw };
   }
 

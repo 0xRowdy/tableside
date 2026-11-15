@@ -128,7 +128,7 @@ const feedRequests = (d: SimulatedDevice) =>
   d.proxy.sent.filter(({ url }) => url.includes('sync_feed_v1')).map(({ body }) => (JSON.parse(body ?? '{}') as { after: number }).after);
 
 describe('a new device', () => {
-  it('gets every summary and lifetime total from one snapshot at one watermark, and no detail', async () => {
+  it('gets every summary and lifetime total from one snapshot at one watermark, then only the newest 90 days’ detail', async () => {
     const { email, phone, practice } = await accountWithHistory();
     const { sequence: head, totals } = await serverTotals(phone);
 
@@ -137,14 +137,14 @@ describe('a new device', () => {
     await tablet.account.sync.idle();
 
     const store = tablet.vault.store();
-    // Summaries only: the results without their detail, the practice session without its outcomes.
+    // Summaries, then the newest 90 days' detail (#97): the results (undated, so long ago) stay
+    // summaries without their detail; the practice session, played just now, arrives whole.
     expect((await store.readAcceptedRecords(testResult.name)).map((record) => record.payload)).toEqual([
       { version: 1, resultId: 'r-1', amount: '7' },
       { version: 1, resultId: 'r-2', amount: '-5/2' },
     ]);
     const [session] = await store.readAcceptedRecords('completed-practice-session');
-    expect(session?.payload).toMatchObject({ activityId: practice.activityId, netResult: practice.netResult });
-    expect(session?.payload).not.toHaveProperty('outcomes');
+    expect(session?.payload).toEqual(practice);
     // Each revisioned item's current accepted revision, the tombstone included.
     expect((await tablet.account.records.revisionedItems(testRevisionedItem.name)).map(({ item, accepted }) => ({ item, accepted }))).toEqual([
       { item: 'casino-1', accepted: { revision: 1, deleted: false, value: casinoValue('40'), conflict: null } },
@@ -234,14 +234,14 @@ describe('paging a snapshot', () => {
     tablet.proxy.onRequest = null;
 
     // One page of 100 staged: nothing installed yet, and nothing of the feed fetched.
-    expect(tablet.account.sync.status.history).toEqual({ state: 'incomplete', summaries: 0.4, detail: 0 });
+    expect(tablet.account.sync.status.history).toEqual({ state: 'incomplete', summaries: 0.4, detail: 0, stopped: null });
     expect(await tablet.vault.store().readAcceptedRecords(testResult.name)).toEqual([]);
     expect(await tablet.vault.store().readFeedCursor()).toBe(0);
     expect((await tablet.account.records.totals()).account).toEqual(totals);
 
     // The app dies and starts again: it carries on from the staged page, with the same snapshot.
     await tablet.restart();
-    expect(tablet.account.sync.status.history).toEqual({ state: 'incomplete', summaries: 0.4, detail: 0 });
+    expect(tablet.account.sync.status.history).toEqual({ state: 'incomplete', summaries: 0.4, detail: 0, stopped: null });
     const before = tablet.proxy.sent.length;
     tablet.proxy.online = true;
     await tablet.account.sync.idle();

@@ -13,6 +13,9 @@ import {
   type BootstrapSnapshot,
   type ChunkAnswer,
   type Command,
+  type DetailPage,
+  type DetailRequest,
+  type FeedEntry,
   type FeedPage,
   type ProtocolStatus,
   type ScopeAnswer,
@@ -20,7 +23,19 @@ import {
   type UploadAnswer,
 } from './protocol';
 import { type RecordType, revisionedItemType } from './registry';
-import type { AcceptedRecord, BootstrapProgress, CommandScope, LocalRevisionedItem, NewUpload, QueuedUpload, ReconcileOutcome, RejectedUpload, SyncStore } from './store';
+import type {
+  AcceptedRecord,
+  BootstrapProgress,
+  CommandScope,
+  HistoryProgress,
+  LocalRevisionedItem,
+  NewUpload,
+  QueuedUpload,
+  ReconcileOutcome,
+  RejectedUpload,
+  SummaryOnly,
+  SyncStore,
+} from './store';
 import type { Disposition, PreparedOperation } from './protocol';
 
 interface Entry {
@@ -189,6 +204,50 @@ class MemoryStore implements SyncStore {
     this.bootstrap = { installed: true };
     return true;
   }
+  history: HistoryProgress = { recent: null, download: null };
+  /** Fails every detail write, as a full disk does. */
+  failWrites = false;
+  /** The latest record held for each item. */
+  private held(): AcceptedRecord[] {
+    const latest = new Map<string, AcceptedRecord>();
+    for (const record of this.accepted) latest.set(`${record.recordType}/${record.item}`, record);
+    return [...latest.values()];
+  }
+  async readAcceptedRecord(recordType: string, item: string): Promise<AcceptedRecord | null> {
+    return this.held().find((record) => record.recordType === recordType && record.item === item) ?? null;
+  }
+  async readSummaries({ since, limit }: { since?: number; limit: number }): Promise<readonly SummaryOnly[]> {
+    return this.held()
+      .filter((record) => record.summaryAt !== undefined && record.summaryAt >= (since ?? -Infinity))
+      .sort((a, b) => b.summaryAt! - a.summaryAt! || a.item.localeCompare(b.item))
+      .slice(0, limit)
+      .map(({ recordType, item, sequence, summaryAt }) => ({ recordType, item, sequence, at: summaryAt! }));
+  }
+  async countSummaries(since?: number): Promise<number> {
+    return (await this.readSummaries({ ...(since !== undefined ? { since } : {}), limit: Infinity })).length;
+  }
+  async applyDetails(records: readonly AcceptedRecord[]): Promise<number> {
+    // The account store's failure for a full disk.
+    if (this.failWrites) throw Object.assign(new Error('database or disk is full'), { kind: 'full' });
+    let applied = 0;
+    for (const record of records) {
+      const held = await this.readAcceptedRecord(record.recordType, record.item);
+      if (held?.summaryAt === undefined || held.sequence !== record.sequence) continue;
+      this.accepted.push(record);
+      applied += 1;
+    }
+    return applied;
+  }
+  async readHistoryProgress(): Promise<HistoryProgress> {
+    return this.history;
+  }
+  async recordHistoryProgress(progress: { recent?: number; downloadRequested?: true; downloadTotal?: number }): Promise<void> {
+    const { recent, download } = this.history;
+    this.history = {
+      recent: recent ?? progress.recent ?? null,
+      download: download ? { total: download.total ?? progress.downloadTotal ?? null } : progress.downloadRequested ? { total: null } : null,
+    };
+  }
   async writeRevisionedItem(): Promise<void> {
     throw new Error('no revisioned items in these tests');
   }
@@ -259,12 +318,14 @@ class ScriptedBackend implements SyncBackend {
     this.calls.push('stage');
     return { status: 'staged' };
   }
-  /** What each feed page answers, in turn; an empty, complete page when none is scripted. */
+  /** What each feed call answers first, in turn (a reset, say); then the account's feed entries after its cursor. */
   readonly feedPages: FeedPage[] = [];
-  async feed(): Promise<FeedPage> {
+  /** The account's feed entries, which a feed call answers after its cursor. */
+  readonly feedEntries: FeedEntry[] = [];
+  async feed(after: number): Promise<FeedPage> {
     this.calls.push('feed');
     if (this.everything) throw this.everything;
-    return this.feedPages.shift() ?? { entries: [], more: false };
+    return this.feedPages.shift() ?? { entries: this.feedEntries.filter((entry) => entry.sequence > after), more: false };
   }
   /** What each snapshot page answers, in turn; an empty, complete page when none is scripted. */
   readonly bootstrapPages: BootstrapPage[] = [];
@@ -278,6 +339,27 @@ class ScriptedBackend implements SyncBackend {
     this.calls.push('bootstrap page');
     if (this.everything) throw this.everything;
     return this.bootstrapPages.shift() ?? { status: 'page', rows: [], more: false };
+  }
+  /** The account's records with detail, by item: what a details call answers from. */
+  readonly withDetail = new Map<string, { sequence: number; change: unknown }>();
+  /** A budget alert holds bulk downloads back for this many seconds; null: none. */
+  throttle: number | null = null;
+  /** Every request each details call named, with whether it was bulk. */
+  readonly detailCalls: { bulk: boolean; items: string[] }[] = [];
+  async details(requests: readonly DetailRequest[], bulk: boolean): Promise<DetailPage> {
+    this.calls.push(bulk ? 'details bulk' : 'details');
+    if (this.everything) throw this.everything;
+    if (bulk && this.throttle !== null) return { status: 'throttled', retryAfter: this.throttle };
+    this.detailCalls.push({ bulk, items: requests.map((request) => request.item) });
+    return {
+      status: 'details',
+      answers: requests.map(({ recordType, item, sequence }) => {
+        const held = this.withDetail.get(item);
+        if (!held) return { recordType, item, status: 'gone' };
+        if (held.sequence !== sequence) return { recordType, item, status: 'changed', sequence: held.sequence };
+        return { recordType, item, status: 'detail', sequence, change: held.change };
+      }),
+    };
   }
   uploadsOf(item: string): number {
     return this.calls.filter((call) => call === `upload ${item}`).length;
@@ -311,7 +393,21 @@ const memo = revisionedItemType<string>({
 /** A test-only account-state operation: what a stale scope leaves unconfirmed. */
 const toggle: RecordType<{ id: string }> = { ...note, name: 'toggle', kind: 'account-state-operation', acceptance: 'private.accept_toggle_v1' };
 
-function engine(options: { random?: number } = {}) {
+/** A test-only result with a detail: `{ id, at, detail }`, held as a summary (no detail) after a snapshot. */
+interface Session {
+  id: string;
+  at: number;
+  detail?: string;
+}
+const session: RecordType<Session> = {
+  ...(note as unknown as RecordType<Session>),
+  name: 'session',
+  isPayload: (value): value is Session => typeof value === 'object' && value !== null && typeof (value as Session).id === 'string',
+  fromChange: (change) => (change as { record?: Session } | null)?.record ?? null,
+  detail: { server: 'private.detail_sessions', complete: (record) => record.detail !== undefined, at: (record) => record.at },
+};
+
+function engine(options: { random?: number; storage?: () => number | null; types?: readonly RecordType[] } = {}) {
   const store = new MemoryStore();
   const backend = new ScriptedBackend();
   const clock = { now: 1_000_000 };
@@ -322,11 +418,8 @@ function engine(options: { random?: number } = {}) {
     metrics,
     store,
     backend,
-    registry: new Map([
-      [note.name, note as RecordType],
-      [toggle.name, toggle as RecordType],
-      [memo.name, memo as unknown as RecordType],
-    ]),
+    registry: new Map([note as RecordType, session as RecordType, toggle as RecordType, memo as unknown as RecordType, ...(options.types ?? [])].map((type) => [type.name, type])),
+    ...(options.storage ? { storage: options.storage } : {}),
     installationId: 'installation-1',
     newOperationId: () => (next++).toString(16).padStart(32, '0'),
     clock: () => clock.now,
@@ -584,6 +677,55 @@ describe('status', () => {
   });
 });
 
+/** A test-only switch: turning it off is queued; turning it on is online only and waits for any pending "off". */
+type Switch = { id: string; on: boolean };
+const switchType: RecordType<Switch> = {
+  ...(note as unknown as RecordType<Switch>),
+  name: 'switch',
+  kind: 'account-state-operation',
+  isPayload: (value): value is Switch => typeof value === 'object' && value !== null && typeof (value as { on?: unknown }).on === 'boolean',
+  barriers: ['switch'],
+  affectedBy: (_barrier, payload) => payload.on,
+  onlineOnly: (payload) => payload.on,
+};
+
+describe('a change sent at once', () => {
+  it('is sent without being queued, and the feed is read after it', async () => {
+    const { store, backend, sync } = engine({ types: [switchType as RecordType] });
+    expect(await sync.submit('switch', { id: 'on-1', on: true })).toEqual({ status: 'accepted' });
+    expect(store.entries).toEqual([]);
+    expect(backend.calls).toEqual(['upload on-1', 'protocol', 'feed']);
+  });
+
+  it('reports the server’s refusal with its code', async () => {
+    const { backend, sync } = engine({ types: [switchType as RecordType] });
+    backend.answer('on-1', { status: 'rejected', operation: '', requestHash: '', code: 'stale' });
+    expect(await sync.submit('switch', { id: 'on-1', on: true })).toEqual({ status: 'rejected', code: 'stale' });
+  });
+
+  it('waits, unsent, while a barrier it is held by is still pending', async () => {
+    const { store, backend, sync } = engine({ types: [switchType as RecordType] });
+    await store.queueUpload({ id: 'switch/off', recordType: 'switch', item: 'off-1', payload: { id: 'off-1', on: false }, dependencies: [], positioned: false, purges: null });
+    backend.answer('off-1', new SyncCallError('unreachable'));
+    await sync.idle();
+    expect(await sync.submit('switch', { id: 'on-1', on: true })).toEqual({ status: 'waiting' });
+    expect(backend.uploadsOf('on-1')).toBe(0);
+  });
+
+  it('is offline when no answer arrives', async () => {
+    const { backend, sync } = engine({ types: [switchType as RecordType] });
+    backend.answer('on-1', new SyncCallError('unreachable'));
+    expect(await sync.submit('switch', { id: 'on-1', on: true })).toEqual({ status: 'offline' });
+  });
+
+  it('refuses a payload that isn’t one of its type’s online-only changes', async () => {
+    const { backend, sync } = engine({ types: [switchType as RecordType] });
+    expect(await sync.submit('switch', { id: 'off-1', on: false })).toEqual({ status: 'invalid' });
+    expect(await sync.submit('note', { id: 'n1' })).toEqual({ status: 'invalid' });
+    expect(backend.calls).toEqual([]);
+  });
+});
+
 describe('bootstrap', () => {
   const unbootstrapped = () => {
     const made = engine();
@@ -613,7 +755,7 @@ describe('bootstrap', () => {
     expect(backend.calls.filter((call) => call.startsWith('bootstrap'))).toEqual(['bootstrap', 'bootstrap page']);
     expect(sync.status.error).toBe('offline');
     expect(sync.retryAt).not.toBeNull();
-    expect(sync.status.history).toEqual({ state: 'incomplete', summaries: 0, detail: 0 });
+    expect(sync.status.history).toEqual({ state: 'incomplete', summaries: 0, detail: 0, stopped: null });
   });
 
   it('reports its duration from the first attempt: failed for a run that ends without installing, complete once installed', async () => {
@@ -638,6 +780,169 @@ describe('bootstrap', () => {
       { name: 'bootstrap_duration', value: 63_000, properties: { outcome: 'complete' } },
     ]);
     expect(JSON.stringify(events)).not.toContain('snapshot-1');
+  });
+});
+
+describe('history detail', () => {
+  const DAY = 86_400_000;
+  /**
+   * An installed baseline of session summaries, `ages` days old each (by the
+   * engine's clock), whose detail the account holds at the same sequence.
+   */
+  const withSummaries = (made: ReturnType<typeof engine>, ages: readonly number[]) => {
+    ages.forEach((age, index) => {
+      const id = `s-${index + 1}`;
+      const at = made.clock.now - age * DAY;
+      made.store.accepted.push({ recordType: 'session', item: id, sequence: index + 1, payload: { id, at }, summaryAt: at });
+      made.backend.withDetail.set(id, { sequence: index + 1, change: { record: { id, at, detail: `detail of ${id}` } } });
+    });
+    return made;
+  };
+  const summariesOn = async (store: MemoryStore) => (await store.readSummaries({ limit: Infinity })).map((summary) => summary.item);
+
+  it('fetches the newest 90 days’ detail after the summaries, never in bulk, and leaves older detail for when it is opened', async () => {
+    const { store, backend, sync } = withSummaries(engine(), [1, 30, 89, 91, 400]);
+    await sync.reconcile();
+    expect(backend.detailCalls).toEqual([{ bulk: false, items: ['s-1', 's-2', 's-3'] }]);
+    expect(await summariesOn(store)).toEqual(['s-4', 's-5']);
+    expect((await store.readAcceptedRecord('session', 's-1'))?.payload).toEqual({ id: 's-1', at: expect.any(Number), detail: 'detail of s-1' });
+    expect(sync.status.history).toEqual({ state: 'complete' });
+    expect(sync.status.download).toEqual({ state: 'not-requested' });
+  });
+
+  it('shows the first download incomplete, with how far the 90 days’ detail came, until it is all here', async () => {
+    const { backend, sync } = withSummaries(engine(), [1, 2, 3, 4]);
+    let pages = 0;
+    const details = backend.details.bind(backend);
+    backend.details = async (requests, bulk) => {
+      if (++pages === 1) return details(requests.slice(0, 1), bulk);
+      throw new SyncCallError('unreachable');
+    };
+    await sync.reconcile();
+    expect(sync.status.history).toEqual({ state: 'incomplete', summaries: 1, detail: 0.25, stopped: null });
+    backend.details = details;
+    await sync.reconcile();
+    expect(sync.status.history).toEqual({ state: 'complete' });
+  });
+
+  it('stops short of storage with the reason, removing nothing, and carries on when asked again with room', async () => {
+    let free = 10 * 1024 * 1024;
+    const { store, backend, sync } = withSummaries(engine({ storage: () => free }), [1, 2]);
+    store.queue('n1', { id: 'n1' });
+    backend.everything = new SyncCallError('unreachable');
+    await sync.reconcile();
+    backend.everything = null;
+    await sync.reconcile();
+    expect(backend.detailCalls).toEqual([]);
+    expect(await summariesOn(store)).toEqual(['s-1', 's-2']);
+    expect(sync.status.history).toEqual({ state: 'incomplete', summaries: 1, detail: 0, stopped: 'storage' });
+    // The upload still went: only downloads stop.
+    expect(store.entries.map((entry) => entry.status)).toEqual(['accepted']);
+    // Automatic runs leave it stopped; a deliberate one checks the room again.
+    await sync.reconcile('automatic');
+    expect(backend.detailCalls).toEqual([]);
+    free = 1024 * 1024 * 1024;
+    await sync.reconcile();
+    expect(sync.status.history).toEqual({ state: 'complete' });
+  });
+
+  it('stops for storage when writing the detail fails, keeping the summary and the queue', async () => {
+    const { store, sync } = withSummaries(engine(), [1]);
+    store.failWrites = true;
+    await sync.reconcile();
+    expect(sync.status.error).toBeNull();
+    expect(sync.status.history).toEqual({ state: 'incomplete', summaries: 1, detail: 0, stopped: 'storage' });
+    expect(await summariesOn(store)).toEqual(['s-1']);
+  });
+
+  it('downloads all history when asked: durably, a few pages per run, newest first, resuming after a lost answer', async () => {
+    const ages = Array.from({ length: 1_500 }, (_, index) => 100 + index);
+    const { store, backend, sync } = withSummaries(engine(), ages);
+    await sync.reconcile();
+    expect(await store.countSummaries()).toBe(1_500);
+
+    // The answer to the third page is lost: the run ends there, and backs off.
+    let pages = 0;
+    const details = backend.details.bind(backend);
+    backend.details = async (requests, bulk) => {
+      if (++pages === 3) throw new SyncCallError('unreachable');
+      return details(requests, bulk);
+    };
+    await sync.downloadAllHistory();
+    expect(store.history.download).toEqual({ total: 1_500 });
+    expect(sync.status.download).toEqual({ state: 'downloading', progress: 200 / 1_500 });
+    // Optional work: the run itself didn't fail, and nothing backs off.
+    expect(sync.status.error).toBeNull();
+    expect(sync.retryAt).toBeNull();
+    expect(backend.detailCalls[0]?.items.slice(0, 2)).toEqual(['s-1', 's-2']);
+
+    // The next run (the app reopened, say) carries on from where it stopped,
+    // eight pages at a time, handing over to another run in between: the
+    // caller waits for its own run only.
+    await sync.reconcile();
+    expect(sync.status.download).toEqual({ state: 'downloading', progress: 1_000 / 1_500 });
+    await sync.idle();
+    expect(sync.status.download).toEqual({ state: 'complete' });
+    expect(await store.countSummaries()).toBe(0);
+    const asked = backend.detailCalls.flatMap((call) => call.items);
+    expect(new Set(asked).size).toBe(asked.length);
+    expect(backend.calls.filter((call) => call === 'protocol').length).toBeGreaterThanOrEqual(4);
+    expect(backend.detailCalls.every((call) => call.bulk && call.items.length <= 100)).toBe(true);
+  });
+
+  it('a budget alert throttles Download all history only: recent detail still arrives, nothing is removed, and it resumes after the wait', async () => {
+    const { store, backend, sync, clock } = withSummaries(engine(), [1, 200, 300]);
+    backend.throttle = 600;
+    await sync.downloadAllHistory();
+    expect(backend.detailCalls).toEqual([{ bulk: false, items: ['s-1'] }]);
+    // The recent one counts: its detail is here.
+    expect(sync.status.download).toEqual({ state: 'stopped', progress: 1 / 3, reason: 'throttled' });
+    expect(await summariesOn(store)).toEqual(['s-2', 's-3']);
+    // Not asked again during the wait.
+    await sync.reconcile();
+    expect(backend.calls.filter((call) => call === 'details bulk')).toHaveLength(1);
+    backend.throttle = null;
+    clock.now += 600_000;
+    await sync.reconcile();
+    expect(sync.status.download).toEqual({ state: 'complete' });
+  });
+
+  it('opens an older record’s detail by the revision held here, keeping it; offline, the summary stays', async () => {
+    const { store, backend, sync } = withSummaries(engine(), [400]);
+    await sync.reconcile();
+    backend.everything = new SyncCallError('unreachable');
+    expect(await sync.detail('session', 's-1')).toEqual({ status: 'offline' });
+    expect(await summariesOn(store)).toEqual(['s-1']);
+    backend.everything = null;
+    const opened = await sync.detail('session', 's-1');
+    expect(opened).toMatchObject({ status: 'detail', record: { item: 's-1', sequence: 1, payload: { detail: 'detail of s-1' } } });
+    expect(opened.status === 'detail' && opened.record.summaryAt).toBeFalsy();
+    // Kept: opening again asks nothing.
+    const calls = backend.detailCalls.length;
+    expect((await sync.detail('session', 's-1')).status).toBe('detail');
+    expect(backend.detailCalls).toHaveLength(calls);
+    expect(await sync.detail('note', 'n1')).toEqual({ status: 'unavailable' });
+  });
+
+  it('opening a record whose revision changed applies the feed first, then shows the revision it brought', async () => {
+    const { store, backend, sync } = withSummaries(engine(), [400]);
+    store.cursor = 1;
+    const at = (await store.readAcceptedRecord('session', 's-1'))!.summaryAt!;
+    const revised = { record: { id: 's-1', at, detail: 'revised' } };
+    backend.withDetail.set('s-1', { sequence: 2, change: revised });
+    backend.feedEntries.push({ sequence: 2, recordType: 'session', item: 's-1', change: revised });
+    const opened = await sync.detail('session', 's-1');
+    expect(opened).toMatchObject({ status: 'detail', record: { sequence: 2, payload: { detail: 'revised' } } });
+    // Asked by the revision held, told it changed, and the feed brought the new one: not asked again.
+    expect(backend.detailCalls).toEqual([{ bulk: false, items: ['s-1'] }]);
+    expect(backend.calls.indexOf('feed')).toBeGreaterThan(backend.calls.indexOf('details'));
+  });
+
+  it('a record the account no longer holds detail for is left as it is, never deleted by the engine', async () => {
+    const { store, backend, sync } = withSummaries(engine(), [400]);
+    backend.withDetail.clear();
+    expect(await sync.detail('session', 's-1')).toEqual({ status: 'unavailable' });
+    expect(await summariesOn(store)).toEqual(['s-1']);
   });
 });
 

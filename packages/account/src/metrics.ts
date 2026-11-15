@@ -26,7 +26,7 @@ const BEFORE_ELIGIBILITY: ReadonlySet<MetricPurpose> = new Set(['eligibility', '
 export function metricPermitted(gate: AccountGate, purpose: MetricPurpose): boolean {
   if (BEFORE_ELIGIBILITY.has(purpose)) return true;
   if (!opensOrdinaryAccess(gate)) return false;
-  // No optional product analytics for teens (spec 7); adults still need their opt-in (#105).
+  // No optional product analytics for teens (spec 7); adults also need their granted consent: productAnalyticsId (privacy.ts, #105).
   return purpose !== 'product-analytics' || gate.eligibility === '18+';
 }
 

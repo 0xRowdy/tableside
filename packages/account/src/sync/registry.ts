@@ -8,6 +8,8 @@
 
 import { type CompletedPracticeSessionRecord, canonicalJson, decodeMoney } from '@tableside/engine';
 
+import { privacyChoice } from '../privacy-record';
+
 import type { QueuedUpload, ReconcileOutcome, RecordRef } from './store';
 
 /**
@@ -69,6 +71,11 @@ export interface RecordType<Payload = unknown, Accepted = Payload> {
    */
   affectedBy?(barrier: { readonly recordType: string; readonly payload: unknown }, payload: Payload): boolean;
   /**
+   * Whether a payload is online only: sent at once (SyncEngine.submit) and
+   * never queued, such as granting analytics consent. Absent: every payload may be queued.
+   */
+  onlineOnly?(payload: Payload): boolean;
+  /**
    * per-device: each record carries a durable position on its originating
    * installation, allocated when it is queued (challenge attempts, spec 3).
    * Order comes from it, never from clocks (see ordering.ts). Absent: none.
@@ -104,6 +111,20 @@ export interface RecordType<Payload = unknown, Accepted = Payload> {
    * still arrive through the feed). A summary leaves out the detail (Amendment 1 A6).
    */
   readonly snapshot: string | null;
+  /**
+   * A type whose snapshot summaries leave out a detail (Amendment 1 A6): how
+   * the detail arrives later (spec 2, *History*). The newest 90 days' detail
+   * comes after the summaries, older detail when it is opened, and all of it
+   * with Download all history. Absent: what a snapshot holds is whole.
+   */
+  readonly detail?: {
+    /** The server function that returns an item's whole change at its accepted sequence (`private.record_types.detail`). */
+    readonly server: string;
+    /** Whether an accepted record holds its detail; false for a snapshot's summary. */
+    complete(accepted: Accepted): boolean;
+    /** When the record happened, in milliseconds since the epoch: what "the newest 90 days" counts by. */
+    at(accepted: Accepted): number;
+  };
   /** What a feed entry's change makes accepted, or null when the change isn't one of this type's. */
   fromChange(change: unknown): Accepted | null;
   /**
@@ -127,7 +148,8 @@ export interface RecordType<Payload = unknown, Accepted = Payload> {
  * The platform's own per-account tables, whatever types are registered: the
  * synchronization head, the live claim, receipts, the feed, staged chunks,
  * every revisioned item and its open proposals, totals, per-device positions,
- * purged results' receipts and bootstrap snapshots. Account deletion clears these too.
+ * purged results' receipts and bootstrap snapshots. Account deletion clears
+ * these too. (`private.budget_alert` is the environment's, not an account's.)
  */
 export const PLATFORM_TABLES: readonly string[] = [
   'private.sync_heads',
@@ -159,7 +181,7 @@ const isObject = (value: unknown): value is Record<string, unknown> => typeof va
 /**
  * A completed practice session without its detail (every wager outcome, and
  * guided practice's adherence and departure log): what a bootstrap snapshot
- * holds until the detail arrives (#97).
+ * holds until the detail arrives.
  */
 export type PracticeSessionSummary = Omit<CompletedPracticeSessionRecord, 'outcomes' | 'guidance'>;
 
@@ -186,6 +208,11 @@ export const completedPracticeSession: RecordType<CompletedPracticeSessionRecord
   barriers: [],
   acceptance: 'private.accept_completed_practice_session_v1',
   snapshot: 'private.snapshot_completed_practice_sessions',
+  detail: {
+    server: 'private.detail_completed_practice_sessions',
+    complete: (record) => Array.isArray((record as Partial<CompletedPracticeSessionRecord>).outcomes),
+    at: (record) => record.endedAt,
+  },
   fromChange(change) {
     const record = isObject(change) ? change.record : undefined;
     // The schema's checks don't cover the detail, so a summary passes them too.
@@ -246,7 +273,7 @@ export function prerequisitesOf(
 
 /** Every registered type, by name. Specs 3–7 add theirs here. */
 export const recordTypes: ReadonlyMap<string, RecordType> = new Map<string, RecordType>(
-  [completedPracticeSession as unknown as RecordType].map((type) => [type.name, type]),
+  [completedPracticeSession as unknown as RecordType, privacyChoice as unknown as RecordType].map((type) => [type.name, type]),
 );
 
 // ---------------------------------------------------------------------------

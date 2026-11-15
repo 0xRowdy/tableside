@@ -46,7 +46,7 @@ function testType<P>(
   fields: Pick<RecordType<P>, 'name' | 'kind' | 'isPayload' | 'barriers'> & {
     readonly id: keyof P & string;
     readonly tables: readonly string[];
-  } & Partial<Pick<RecordType<P>, 'affectedBy' | 'afterReconciliation' | 'ordering' | 'purges' | 'fromChange' | 'contribution' | 'snapshot'>>,
+  } & Partial<Pick<RecordType<P>, 'affectedBy' | 'afterReconciliation' | 'ordering' | 'purges' | 'fromChange' | 'contribution' | 'snapshot' | 'detail'>>,
 ): RecordType<P> {
   const { id, tables, ...rest } = fields;
   const type: RecordType<P> = {
@@ -95,8 +95,10 @@ export interface TestResult {
   readonly resultId: string;
   /** What it adds to the account's practice total: exact money text. */
   readonly amount: string;
-  /** Its detail, kept apart from its summary on the server. */
+  /** Its detail, kept apart from its summary on the server; absent from a snapshot's summary. */
   readonly detail: string;
+  /** When it happened (ms since the epoch), by which the newest 90 days' detail is chosen; absent: long ago. */
+  readonly at?: number;
 }
 export interface TestResultPurge {
   readonly version: 1;
@@ -178,10 +180,14 @@ export const testResult = testType<TestResult>({
   barriers: [],
   contribution: (result) => ({ total: 'practice', game: 'test', currency: 'simulated', amount: result.amount }),
   snapshot: 'private.snapshot_test_results',
+  detail: { server: 'private.detail_test_results', complete: (result) => typeof result.detail === 'string', at: (result) => result.at ?? 0 },
   // The whole result from the feed, or its summary (no detail) from a snapshot; the test type keeps one payload type for both.
   fromChange(change) {
     const record = isObject(change) ? change.record : undefined;
-    return hasStrings(record, 'resultId') && isMoney(record.amount) && (record.detail === undefined || typeof record.detail === 'string')
+    return hasStrings(record, 'resultId') &&
+      isMoney(record.amount) &&
+      (record.detail === undefined || typeof record.detail === 'string') &&
+      (record.at === undefined || Number.isSafeInteger(record.at))
       ? (record as unknown as TestResult)
       : null;
   },

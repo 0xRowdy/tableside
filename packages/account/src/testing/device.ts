@@ -181,6 +181,8 @@ export interface SimulatedDevice {
   foreground: boolean;
   /** While true, every database write fails (an I/O error), so its transaction rolls back. */
   diskFailing: boolean;
+  /** The device's free storage in bytes, as the app reads it; null (can't tell) by default. A restart keeps it. */
+  freeStorage: number | null;
   /**
    * Plays one practice session to its end (roulette: a 10-unit red wager on a
    * 1,000 buy-in, one spin) on the open account and returns its saved result.
@@ -244,6 +246,8 @@ export interface DeviceOptions {
   readonly recordTypes?: ReadonlyMap<string, RecordType>;
   /** Where the device's operational metrics go; discarded by default. */
   readonly metrics?: MetricsSink;
+  /** How the device describes itself on Devices: its platform and "<name> · iOS 18" by default. */
+  readonly label?: string;
 }
 
 export function createDevice(stack: LocalStack, options: DeviceOptions): SimulatedDevice {
@@ -258,6 +262,7 @@ export function createDevice(stack: LocalStack, options: DeviceOptions): Simulat
   const credentials = earlier?.credentials ?? new MemoryCredentials();
   const storage = earlier?.storage ?? new TestDevice();
   const foreground = new Signal(true);
+  const free: { bytes: number | null } = { bytes: null };
   const disk = { failing: false };
   const driver = nodeSqlCipherDriver({ fault: () => (disk.failing ? 'io' : undefined) });
   const ageSignals = new FakeAgeSignals(options.platformAgeSignals ?? false);
@@ -352,6 +357,11 @@ export function createDevice(stack: LocalStack, options: DeviceOptions): Simulat
       ...(identityProvider && providers ? { providers: identityProvider.settings(providers) } : {}),
       recordTypes: options.recordTypes ?? testRecordTypes,
       ...(options.metrics ? { metrics: options.metrics } : {}),
+      freeStorage: () => free.bytes,
+      deviceDescription: () => ({
+        platform: options.platform ?? 'ios',
+        label: options.label ?? `${options.name} · ${options.platform === 'android' ? 'Android 15' : 'iOS 18'}`,
+      }),
     });
     return {
       account,
@@ -421,6 +431,12 @@ export function createDevice(stack: LocalStack, options: DeviceOptions): Simulat
     },
     set diskFailing(value: boolean) {
       disk.failing = value;
+    },
+    get freeStorage() {
+      return free.bytes;
+    },
+    set freeStorage(value: number | null) {
+      free.bytes = value;
     },
     async playPracticeSession(options = {}) {
       const controller = await startPractice(options);

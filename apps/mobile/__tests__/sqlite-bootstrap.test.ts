@@ -212,3 +212,75 @@ describe('a snapshot reset (#98: the feed after the cursor was pruned)', () => {
     expect(await store.readFeedCursor()).toBe(13);
   });
 });
+
+describe('history detail (#97)', () => {
+  const DAY = 86_400_000;
+  const summary = (item: string, sequence: number, at: number): AcceptedRecord => ({ ...record(item, sequence), summaryAt: at });
+  const whole = (item: string, sequence: number): AcceptedRecord => ({
+    recordType: TYPE,
+    item,
+    sequence,
+    payload: { version: 1, resultId: item, amount: '2', detail: `detail of ${item}` },
+  });
+  /** A baseline of summaries `r-1` (newest) to `r-3`, installed. */
+  async function withSummaries() {
+    const made = await newStore();
+    await made.store.beginBootstrap(SNAPSHOT);
+    await made.store.stageBootstrapPage('snapshot-1', 0, [summary('r-3', 3, 1 * DAY), summary('r-1', 5, 30 * DAY), summary('r-2', 4, 10 * DAY)], 3);
+    await made.store.installBootstrap('snapshot-1');
+    return made;
+  }
+
+  it('keeps a snapshot’s summaries as summaries, newest first, with their count from a time on', async () => {
+    const { store } = await withSummaries();
+    expect(await store.readSummaries({ limit: 10 })).toEqual([
+      { recordType: TYPE, item: 'r-1', sequence: 5, at: 30 * DAY },
+      { recordType: TYPE, item: 'r-2', sequence: 4, at: 10 * DAY },
+      { recordType: TYPE, item: 'r-3', sequence: 3, at: 1 * DAY },
+    ]);
+    expect((await store.readSummaries({ since: 10 * DAY, limit: 1 })).map((one) => one.item)).toEqual(['r-1']);
+    expect(await store.countSummaries()).toBe(3);
+    expect(await store.countSummaries(10 * DAY)).toBe(2);
+    expect(await store.readAcceptedRecord(TYPE, 'r-2')).toEqual(summary('r-2', 4, 10 * DAY));
+    expect(await store.readAcceptedRecord(TYPE, 'r-9')).toBeNull();
+  });
+
+  it('replaces a summary with its detail only at the same sequence, in one transaction, and keeps it across reopening', async () => {
+    const { store, path } = await withSummaries();
+    // r-2 at another sequence is not its detail; r-9 isn't held at all.
+    expect(await store.applyDetails([whole('r-1', 5), whole('r-2', 99), whole('r-9', 1)])).toBe(1);
+    expect(await store.readAcceptedRecord(TYPE, 'r-1')).toEqual(whole('r-1', 5));
+    expect(await store.countSummaries()).toBe(2);
+    // A record held whole is never replaced again.
+    expect(await store.applyDetails([whole('r-1', 5)])).toBe(0);
+    // A summary as a detail is refused, and nothing in its transaction applies.
+    await expect(store.applyDetails([whole('r-2', 4), summary('r-3', 3, DAY)])).rejects.toThrow();
+    expect(await store.countSummaries()).toBe(2);
+
+    await store.close();
+    const reopened = await openStore(path);
+    expect(await reopened.readAcceptedRecord(TYPE, 'r-1')).toEqual(whole('r-1', 5));
+    expect(await reopened.countSummaries()).toBe(2);
+  });
+
+  it('a purge or a later revision through the feed wins over a summary', async () => {
+    const { store } = await withSummaries();
+    expect(await store.applyFeedPage(12, [whole('r-2', 13)], { purged: [{ recordType: TYPE, item: 'r-1' }], redacted: [14] })).toBe(true);
+    expect(await store.readSummaries({ limit: 10 })).toEqual([{ recordType: TYPE, item: 'r-3', sequence: 3, at: 1 * DAY }]);
+    expect(await store.applyDetails([whole('r-1', 5)])).toBe(0);
+    expect(await store.readAcceptedRecord(TYPE, 'r-1')).toBeNull();
+  });
+
+  it('records history progress once, durably: the first 90 days’ count, and Download all history’s request and count', async () => {
+    const { store, path } = await newStore();
+    expect(await store.readHistoryProgress()).toEqual({ recent: null, download: null });
+    // A count before the request isn't Download all history's.
+    await store.recordHistoryProgress({ recent: 4, downloadTotal: 9 });
+    expect(await store.readHistoryProgress()).toEqual({ recent: 4, download: null });
+    await store.recordHistoryProgress({ downloadRequested: true });
+    await store.recordHistoryProgress({ recent: 7, downloadTotal: 250 });
+    await store.recordHistoryProgress({ downloadRequested: true, downloadTotal: 3 });
+    await store.close();
+    expect(await (await openStore(path)).readHistoryProgress()).toEqual({ recent: 4, download: { total: 250 } });
+  });
+});

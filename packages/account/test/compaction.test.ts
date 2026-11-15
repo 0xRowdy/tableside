@@ -126,12 +126,14 @@ describe('the progress marker', () => {
   it('covers only a contiguous range: receipts above it stay, gaps and all, and a settled or taken position is never a new command', async () => {
     const { phone, accountId } = await twoDevices();
     const raw = stack.rawClient(accessToken(phone));
-    const { generation } = await directCommands(raw, 'gap');
+    // The phone's own installation: the only one its session may upload as.
+    const gap = installationOf(phone);
+    const { generation } = await directCommands(raw, gap);
     const request = (operation: string, position: number, id = operation) =>
       prepareOperation({
         protocol: PROTOCOL_VERSION,
         operation: operation.repeat(32),
-        installation: 'gap',
+        installation: gap,
         command: { generation, position },
         recordType: testAllowanceReconciliation.name,
         payloadVersion: 1,
@@ -139,7 +141,7 @@ describe('the progress marker', () => {
         payload: { version: 1, reconciliationId: `rec-${id}`, grant: 'g' },
       }).request;
     const upload = async (text: string) => (await raw.rpc('sync_upload_v1', { request: text })).data as Record<string, unknown>;
-    const settle = async (settled: number, at = generation) => (await raw.rpc('sync_scope_v1', { installation: 'gap', generation: at, settled })).data;
+    const settle = async (settled: number, at = generation) => (await raw.rpc('sync_scope_v1', { installation: gap, generation: at, settled })).data;
     const reconciled = async () =>
       (await sql<{ reconciliation_id: string }[]>`select reconciliation_id from private.test_reconciliations where account_id = ${accountId} order by 1`).map(
         (row) => row.reconciliation_id,
@@ -150,7 +152,7 @@ describe('the progress marker', () => {
     // Position 3 is still on its way: the installation has settled through 2 only.
     expect(await settle(2)).toEqual({ status: 'scope', generation, settled: 2 });
     expect(await compact(accountId)).toBe(true);
-    expect(await receiptItems(accountId, 'gap')).toEqual(['rec-4']);
+    expect(await receiptItems(accountId, gap)).toEqual(['rec-4']);
 
     // The receipt above the marker still answers its retry.
     expect(await upload(four)).toMatchObject({ status: 'accepted', operation: '4'.repeat(32) });
@@ -165,10 +167,10 @@ describe('the progress marker', () => {
     expect(await reconciled()).toEqual(['rec-1', 'rec-2', 'rec-3', 'rec-4']);
 
     // A new generation for the installation: every earlier one's commands are refused, receipt or not.
-    expect((await directCommands(raw, 'gap')).generation).toBe(generation + 1);
+    expect((await directCommands(raw, gap)).generation).toBe(generation + 1);
     expect(await upload(four)).toMatchObject({ status: 'stale-scope', reason: 'replaced' });
     expect(await settle(9)).toEqual({ status: 'stale-scope' });
-    expect(await receiptItems(accountId, 'gap')).toEqual([]);
+    expect(await receiptItems(accountId, gap)).toEqual([]);
     expect(await reconciled()).toEqual(['rec-1', 'rec-2', 'rec-3', 'rec-4']);
 
     // Unheard from for months, the new one retires: its commands are refused too, and its receipts go.
@@ -176,7 +178,7 @@ describe('the progress marker', () => {
     const five = prepareOperation({
       protocol: PROTOCOL_VERSION,
       operation: '7'.repeat(32),
-      installation: 'gap',
+      installation: gap,
       command: next,
       recordType: testAllowanceReconciliation.name,
       payloadVersion: 1,
@@ -184,23 +186,23 @@ describe('the progress marker', () => {
       payload: { version: 1, reconciliationId: 'rec-7', grant: 'g' },
     }).request;
     expect(await upload(five)).toMatchObject({ status: 'accepted' });
-    await away(accountId, MONTHS, ['gap']);
+    await away(accountId, MONTHS, [gap]);
     expect(await compact(accountId)).toBe(true);
     expect(await upload(five)).toMatchObject({ status: 'stale-scope', reason: 'retired' });
-    expect(await receiptItems(accountId, 'gap')).toEqual([]);
+    expect(await receiptItems(accountId, gap)).toEqual([]);
   });
 
-  it('rejects a generation never issued, or another account’s, and a command with no scope at all', async () => {
+  it('rejects a generation never issued, or another account’s, a command with no scope at all, and another installation’s scope', async () => {
     const { phone } = await twoDevices();
     const raw = stack.rawClient(accessToken(phone));
     const other = device('other');
     expect(await createAccountByEmail(other, uniqueEmail('other'))).toEqual({ status: 'signed-in' });
-    const theirs = await directCommands(stack.rawClient(accessToken(other)), 'shared-installation');
+    const theirs = await directCommands(stack.rawClient(accessToken(other)), installationOf(other));
     const request = (command: Command | null) => {
       const text = prepareOperation({
         protocol: PROTOCOL_VERSION,
         operation: 'a'.repeat(32),
-        installation: 'shared-installation',
+        installation: installationOf(phone),
         command: command ?? { generation: 1, position: 1 },
         recordType: testAllowanceReconciliation.name,
         payloadVersion: 1,
@@ -209,10 +211,14 @@ describe('the progress marker', () => {
       }).request;
       return command ? text : text.replace('"command":{"generation":1,"position":1},', '');
     };
-    // The other account's generation names nothing in this one.
+    // The other account's generation names nothing in this one, where the phone has none yet.
     expect((await raw.rpc('sync_upload_v1', { request: request(theirs.next()) })).data).toMatchObject({ status: 'stale-scope', reason: 'replaced' });
     expect((await raw.rpc('sync_upload_v1', { request: request({ generation: 7, position: 1 }) })).data).toMatchObject({ status: 'stale-scope' });
     expect((await raw.rpc('sync_upload_v1', { request: request(null) })).data).toEqual({ status: 'malformed' });
+    // A session asks only for its own installation's scope: never to renew another device's.
+    const tablet = (await sql<{ installation_id: string }[]>`
+      select installation_id from private.account_sessions where account_id = ${accountOf(phone)} and installation_id <> ${installationOf(phone)} limit 1`)[0]!;
+    expect((await raw.rpc('sync_scope_v1', { installation: tablet.installation_id })).error).not.toBeNull();
   });
 
   it('is reported by a device after a clean run, and only those receipts go: one whose answer was lost stays and answers the retry', async () => {
@@ -516,7 +522,7 @@ describe('retention (Amendment 1 C6) and protected controls (Amendment 1 A5)', (
     expect(missing).toEqual([]);
     const exceptions = await sql<{ subject: string; dependency: string | null; owner: string | null }[]>`
       select subject, dependency, owner from private.retention_rules where dependency is not null or owner is not null order by subject`;
-    expect(exceptions.map(({ subject }) => subject)).toEqual(['private.control_journal', 'private.purged_results', 'public.accounts']);
+    expect(exceptions.map(({ subject }) => subject)).toEqual(['private.account_sessions', 'private.control_journal', 'private.purged_results', 'public.accounts']);
     for (const { dependency, owner } of exceptions) {
       expect(dependency).toMatch(/\S/);
       expect(owner).toMatch(/\S/);
@@ -530,6 +536,9 @@ describe('retention (Amendment 1 C6) and protected controls (Amendment 1 A5)', (
     await queue(phone, testResult.name, result('r-1'));
     await queue(phone, testSharingWithdrawal.name, withdrawal('w-1'));
     await synced(phone);
+    expect(await phone.account.privacy.grantAnalytics()).toEqual({ status: 'changed' });
+    await phone.account.privacy.withdrawAnalytics();
+    await synced(phone);
     await synced(tablet);
     await queue(tablet, testResultPurge.name, { version: 1, target: 'r-1' });
     await synced(tablet);
@@ -539,11 +548,17 @@ describe('retention (Amendment 1 C6) and protected controls (Amendment 1 A5)', (
 
     const journal = await sql<{ kind: string; subject: string; control: Record<string, unknown> }[]>`
       select kind, subject, control from private.control_journal where account_id = ${accountId} order by position`;
-    const kinds = journal.map(({ kind, subject }) => `${kind} ${subject.startsWith('test') ? subject : kind === 'command-scope' ? 'installation' : kind === 'account-state' ? 'account' : 'session'}`);
+    const kinds = journal.map(
+      ({ kind, subject }) =>
+        `${kind} ${kind === 'record-control' || kind === 'purge' ? subject : kind === 'command-scope' ? 'installation' : kind === 'account-state' ? 'account' : 'session'}`,
+    );
+    // The withdrawal of consent, last of the privacy changes: what a restore must reapply.
+    expect(journal.filter(({ subject }) => subject === 'privacy-choice/current').at(-1)?.control).toMatchObject({ consent: 'withdrawn', adDataOptOut: null });
     expect(kinds).toEqual(
       expect.arrayContaining([
         'command-scope installation',
         'record-control test-sharing-withdrawal/w-1',
+        'record-control privacy-choice/current',
         'purge test-result/r-1',
         'session-revoked session',
         'account-state account',

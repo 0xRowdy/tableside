@@ -111,6 +111,29 @@ export interface AcceptedRecord {
   readonly payload: unknown;
   /** A per-device type's origin; absent for other types. */
   readonly origin?: Origin;
+  /**
+   * Present for a snapshot's summary whose detail hasn't arrived (the
+   * registry's `detail`): when the record happened, in milliseconds since the
+   * epoch. A record held whole has none.
+   */
+  readonly summaryAt?: number;
+}
+
+/** An accepted record held as a summary: the revision its detail is asked for by, and when the record happened. */
+export interface SummaryOnly extends RecordRef {
+  readonly sequence: number;
+  readonly at: number;
+}
+
+/**
+ * How far this installation's history detail has come (spec 2, *History*):
+ * how many summaries the first download's newest 90 days held when it began
+ * (null before then), and whether Download all history was asked for, with
+ * how many summaries were waiting for detail when it began (null before then).
+ */
+export interface HistoryProgress {
+  readonly recent: number | null;
+  readonly download: { readonly total: number | null } | null;
 }
 
 /** A revisioned item as this installation holds it. */
@@ -224,6 +247,29 @@ export interface SyncStore {
    * never accepted here again. Returns false when `snapshot` is no longer the one staging.
    */
   installBootstrap(snapshot: string): Promise<boolean>;
+  /** One accepted record, or null when this installation holds none for the item. */
+  readAcceptedRecord(recordType: string, item: string): Promise<AcceptedRecord | null>;
+  /**
+   * Records held as summaries, newest first (by `at`, then type and item):
+   * those that happened at `since` or later when it is given, at most `limit`.
+   */
+  readSummaries(query: { readonly since?: number; readonly limit: number }): Promise<readonly SummaryOnly[]>;
+  /** How many records are held as summaries: those that happened at `since` or later when it is given. */
+  countSummaries(since?: number): Promise<number>;
+  /**
+   * Replaces summaries with the whole records, in one transaction: only a
+   * record still held as a summary at the same sequence is replaced (a purge or
+   * a later revision applied meanwhile wins). Nothing else changes. Returns
+   * how many it replaced.
+   */
+  applyDetails(records: readonly AcceptedRecord[]): Promise<number>;
+  readHistoryProgress(): Promise<HistoryProgress>;
+  /**
+   * Records history progress: the first download's 90-day count, that Download
+   * all history was asked for, and its starting count. A count already
+   * recorded stays; asking again changes nothing.
+   */
+  recordHistoryProgress(progress: { readonly recent?: number; readonly downloadRequested?: true; readonly downloadTotal?: number }): Promise<void>;
   /** Called after a commit adds an entry to the upload queue. Returns an unsubscribe function. */
   onUploadQueued(listener: () => void): () => void;
 }

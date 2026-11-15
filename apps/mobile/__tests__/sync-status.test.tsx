@@ -23,7 +23,15 @@ const session = (id: string, game: string, endedAt: number, state: UploadStatus[
   state,
 });
 
-const SYNCED: SyncStatus = { live: true, error: null, lastSyncedAt: NOW - 2 * 60_000, uploads: [], update: null, history: { state: 'complete' } };
+const SYNCED: SyncStatus = {
+  live: true,
+  error: null,
+  lastSyncedAt: NOW - 2 * 60_000,
+  uploads: [],
+  update: null,
+  history: { state: 'complete' },
+  download: { state: 'not-requested' },
+};
 
 /** An Account service's sync, with a status the test sets and the actions it records. */
 function fakeSync(status: Partial<SyncStatus>) {
@@ -40,6 +48,7 @@ function fakeSync(status: Partial<SyncStatus>) {
     reconcile: jest.fn(async () => undefined),
     retryRecord: jest.fn(async () => undefined),
     decideUnconfirmed: jest.fn(async () => undefined),
+    downloadAllHistory: jest.fn(async () => undefined),
     idle: async () => undefined,
     countWaiting: async () => current.uploads.length,
     queue: async () => ({ status: 'refused', reason: 'no-account' }),
@@ -166,13 +175,65 @@ describe('S2-20 Sync status', () => {
     expect(screen.getByRole('button', { name: STORE })).toBeOnTheScreen();
   });
 
-  it('shows the first download’s progress while it isn’t finished', async () => {
-    await show(fakeSync({ history: { state: 'incomplete', summaries: 1, detail: 0.62 } }));
+  it('shows the first download’s progress while it isn’t finished, offering Download all history', async () => {
+    const sync = fakeSync({ history: { state: 'incomplete', summaries: 1, detail: 0.62, stopped: null } });
+    await show(sync);
     expect(screen.getByText('Getting your history')).toBeOnTheScreen();
     expect(screen.getByText('Summaries and lifetime totals are here. Recent detail is still downloading.')).toBeOnTheScreen();
     expect(screen.getByRole('progressbar', { name: 'Summaries and totals' })).toHaveAccessibilityValue({ min: 0, max: 100, now: 100 });
     expect(screen.getByRole('progressbar', { name: 'Last 90 days of detail' })).toHaveAccessibilityValue({ min: 0, max: 100, now: 62 });
     expect(screen.getByRole('header', { name: 'First download isn\'t finished' })).toBeOnTheScreen();
+    expect(screen.getByText('Download all history keeps everything on this device, for trips without a connection. It can pause and resume.')).toBeOnTheScreen();
+
+    await fireEvent.press(screen.getByRole('button', { name: 'Download all history' }));
+    expect(sync.downloadAllHistory).toHaveBeenCalled();
+    await act(() => sync.set({ download: { state: 'downloading', progress: 0.1 } }));
+    expect(screen.queryByRole('button', { name: 'Download all history' })).toBeNull();
+    expect(screen.getByRole('progressbar', { name: 'Download all history' })).toHaveAccessibilityValue({ min: 0, max: 100, now: 10 });
+  });
+
+  it('warns honestly that records waiting here are lost if the app is deleted, and synced ones come back', async () => {
+    const sync = fakeSync({ uploads: [session('b1', 'blackjack', at(10, 14, 9, 41))] });
+    await show(sync);
+    const warning = `Records waiting here are only on this ${DEVICE}. If you delete the app before they sync, they're lost. Everything synced comes back when you sign in again.`;
+    expect(screen.getByText(warning)).toBeOnTheScreen();
+    await act(() => sync.set({ uploads: [] }));
+    expect(screen.queryByText(warning)).toBeNull();
+  });
+
+  it('says when the device is full and the download stopped, that nothing was removed, and resumes it', async () => {
+    const sync = fakeSync({ download: { state: 'stopped', progress: 0.41, reason: 'storage' } });
+    await show(sync);
+    const banner = within(screen.getByTestId('storage-banner'));
+    expect(banner.getByRole('header', { name: `Your ${DEVICE} is full` })).toBeOnTheScreen();
+    expect(
+      banner.getByText('Download all history stopped at 41%. To make room, nothing unsynced or unfinished was removed. Free up space, then resume.'),
+    ).toBeOnTheScreen();
+    expect(screen.getByRole('progressbar', { name: 'Download all history' })).toHaveAccessibilityValue({ min: 0, max: 100, now: 41 });
+    expect(screen.getByText('If saving a session fails for the same reason, play pauses with a saving error rather than continuing unsaved.')).toBeOnTheScreen();
+    expect(screen.queryByText('All synced')).toBeNull();
+    await fireEvent.press(banner.getByRole('button', { name: 'Resume download' }));
+    expect(sync.downloadAllHistory).toHaveBeenCalled();
+  });
+
+  it('says the first download stopped when the device is full, and resumes it with a retry', async () => {
+    const sync = fakeSync({ history: { state: 'incomplete', summaries: 1, detail: 0.5, stopped: 'storage' } });
+    await show(sync);
+    const banner = within(screen.getByTestId('storage-banner'));
+    expect(banner.getByText('The first download stopped at 50%. To make room, nothing unsynced or unfinished was removed. Free up space, then resume.')).toBeOnTheScreen();
+    await fireEvent.press(banner.getByRole('button', { name: 'Resume download' }));
+    expect(sync.reconcile).toHaveBeenCalled();
+  });
+
+  it('says Download all history waits under a budget alert, deleting nothing, and when it is all here', async () => {
+    const sync = fakeSync({ download: { state: 'stopped', progress: 0.3, reason: 'throttled' } });
+    await show(sync);
+    expect(within(screen.getByTestId('throttled-banner')).getByRole('header', { name: 'Download all history is paused' })).toBeOnTheScreen();
+    expect(screen.getByText(`It carries on by itself later. Recent detail, and anything you open, still downloads, and nothing on this ${DEVICE} was removed.`)).toBeOnTheScreen();
+    expect(screen.getByText('All synced')).toBeOnTheScreen();
+    await act(() => sync.set({ download: { state: 'complete' } }));
+    expect(screen.queryByRole('progressbar', { name: 'Download all history' })).toBeNull();
+    expect(screen.getByText(`All your history is on this ${DEVICE}, for trips without a connection.`)).toBeOnTheScreen();
   });
 
   it('gives a dated notice before a protocol retires, and what happens without the update', async () => {

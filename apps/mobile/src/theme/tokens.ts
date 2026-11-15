@@ -130,6 +130,7 @@ export const essentialPairs: readonly {
   { use: 'volume fill and switch on', kind: 'graphic', foreground: 'primary', background: 'card' },
   { use: 'volume thumb', kind: 'graphic', foreground: 'foreground', background: 'card' },
   { use: 'switch knob when off', kind: 'graphic', foreground: 'mutedForeground', background: 'muted' },
+  { use: 'this device badge on Devices', kind: 'text', foreground: 'mutedForeground', background: 'muted' },
   { use: 'switch knob when on', kind: 'graphic', foreground: 'primaryForeground', background: 'primary' },
   { use: 'check mark on the switch knob', kind: 'graphic', foreground: 'primary', background: 'primaryForeground' },
   { use: 'volume button icon', kind: 'graphic', foreground: 'foreground', background: 'secondary' },
