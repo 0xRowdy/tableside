@@ -12,21 +12,24 @@
 // Every admitted request sends an email: the code when the address has an
 // account (or a Create is under way), otherwise "No account for this address".
 // The answer, and a delivery failure, read the same either way. Sign-in never
-// creates an Auth user. Nothing here logs an address, code or token.
+// creates an Auth user. An address reaches an account's codes only while the
+// account has the email-code method for it (#100). Nothing here logs an
+// address, code or token.
+
+import { type Mail, codeMail, deliver } from '../_shared/mail.ts';
+import { clientIp } from '../_shared/service.ts';
 
 declare const Deno: {
   env: { get(name: string): string | undefined };
   serve(handler: (request: Request) => Promise<Response>): void;
 };
 
-type Recipient = 'account' | 'pending' | 'none';
+/** 'other': an account holds the address but signs in only with Apple or Google. */
+type Recipient = 'account' | 'other' | 'pending' | 'none';
 type MailType = 'code' | 'no-account';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
-/** The local stack's mail catcher (config.toml [edge_runtime.secrets]). Production sending is #122's. */
-const MAILPIT_URL = Deno.env.get('TABLESIDE_MAILPIT_URL');
-const SENDER = { Email: 'codes@tableside.local', Name: 'Tableside' };
 
 const ENVIRONMENT_HEADER = 'x-tableside-environment';
 
@@ -66,8 +69,10 @@ Deno.serve(async (request) => {
     // issuing a code doesn't show in how long the answer takes.
     const floor = sleep(RESPONSE_FLOOR_MS);
     const recipient = await rpc<Recipient>('email_code_recipient', { address: email });
-    // Sign-in only reaches an existing account; Create finishes one under way, or starts one.
-    const type: MailType = intent === 'sign-in' && recipient !== 'account' ? 'no-account' : 'code';
+    // Sign-in only reaches an existing account's email method; Create finishes
+    // one under way, or starts one. An account without the email method gets
+    // the "No account" email either way, which says to use Apple or Google.
+    const type: MailType = recipient === 'other' || (intent === 'sign-in' && recipient !== 'account') ? 'no-account' : 'code';
     let delivered = false;
     try {
       delivered = await deliver(email, type === 'code' ? codeMail(await issueCode({ email, recipient, assertion, environment, rpc })) : NO_ACCOUNT_MAIL);
@@ -124,20 +129,6 @@ async function issueCode({
   return code;
 }
 
-interface Mail {
-  readonly subject: string;
-  readonly text: string;
-  readonly html: string;
-}
-
-function codeMail(code: string): Mail {
-  return {
-    subject: 'Your Tableside code',
-    text: `Your Tableside code is ${code}.\n\nIt works once and expires soon. If you didn't ask for it, you can ignore this email.`,
-    html: `<p>Your Tableside code is <strong>${code}</strong>.</p><p>It works once and expires soon. If you didn't ask for it, you can ignore this email.</p>`,
-  };
-}
-
 const NO_ACCOUNT_MAIL: Mail = {
   subject: 'No account for this address',
   text:
@@ -149,31 +140,6 @@ const NO_ACCOUNT_MAIL: Mail = {
     '<p>To start one, open Tableside and choose <strong>Create account</strong>. If you joined with Apple or Google, sign in with that instead.</p>' +
     "<p>If you didn't ask, you can ignore this email.</p>",
 };
-
-/** Sends one email synchronously; false when it wasn't accepted. There is no retry queue. */
-async function deliver(to: string, mail: Mail): Promise<boolean> {
-  if (!MAILPIT_URL) return false;
-  try {
-    const response = await fetch(`${MAILPIT_URL}/api/v1/send`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ From: SENDER, To: [{ Email: to }], Subject: mail.subject, Text: mail.text, HTML: mail.html }),
-    });
-    await response.body?.cancel();
-    return response.ok;
-  } catch {
-    return false;
-  }
-}
-
-/**
- * The caller's address: the X-Forwarded-For hop the gateway added last. Earlier
- * hops come from the caller and could be anything. (Which hop is the client's on
- * the hosted platform is checked at launch gate 9.)
- */
-function clientIp(request: Request): string {
-  return request.headers.get('x-forwarded-for')?.split(',').at(-1)?.trim() || 'unknown';
-}
 
 class StepError extends Error {
   constructor(readonly step: string) {

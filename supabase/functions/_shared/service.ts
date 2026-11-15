@@ -20,3 +20,12 @@ export function serviceRpc(environment: string, name: string, args: Record<strin
 export function reply(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
 }
+
+/**
+ * The caller's address: the X-Forwarded-For hop the gateway added last. Earlier
+ * hops come from the caller and could be anything. (Which hop is the client's on
+ * the hosted platform is checked at launch gate 9.)
+ */
+export function clientIp(request: Request): string {
+  return request.headers.get('x-forwarded-for')?.split(',').at(-1)?.trim() || 'unknown';
+}
