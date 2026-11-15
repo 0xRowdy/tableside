@@ -55,10 +55,25 @@ export {
 } from './service';
 export { type MetricPurpose, metricPermitted } from './metrics';
 export {
+  type AccountPrivacy,
+  type AcceptedPrivacyChange,
+  type AdDataOptOutSource,
+  type AnalyticsConsent,
+  type EnablingChange,
+  type EnablingResult,
+  type PrivacyChange,
+  type PrivacyChoices,
+  type RestrictiveChange,
+  type RestrictiveResult,
+  privacyChoice,
+  productAnalyticsId,
+} from './privacy';
+export {
   type EngineStatus,
   RECORD_FAILURE_LIMIT,
   type Resolution,
   type ResolutionOutcome,
+  type SubmitOutcome,
   type SyncErrorCode,
   type UpdateNotice,
   type UploadState,

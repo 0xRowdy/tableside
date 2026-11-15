@@ -167,7 +167,7 @@ class ScriptedBackend implements SyncBackend {
   }
 }
 
-function engine(options: { random?: number } = {}) {
+function engine(options: { random?: number; types?: readonly RecordType[] } = {}) {
   const store = new MemoryStore();
   const backend = new ScriptedBackend();
   const clock = { now: 1_000_000 };
@@ -175,7 +175,7 @@ function engine(options: { random?: number } = {}) {
   const sync = new SyncEngine({
     store,
     backend,
-    registry: new Map([[note.name, note as RecordType]]),
+    registry: new Map([note as RecordType, ...(options.types ?? [])].map((type) => [type.name, type])),
     installationId: 'installation-1',
     newOperationId: () => (next++).toString(16).padStart(32, '0'),
     clock: () => clock.now,
@@ -430,5 +430,54 @@ describe('status', () => {
     await sync.idle();
     expect(sync.status.uploads).toEqual([{ id: 'n1', recordType: 'note', payload: { id: 'n1' }, state: 'waiting' }]);
     expect(told).toBeGreaterThan(0);
+  });
+});
+
+/** A test-only switch: turning it off is queued; turning it on is online only and waits for any pending "off". */
+type Switch = { id: string; on: boolean };
+const toggle: RecordType<Switch> = {
+  ...(note as unknown as RecordType<Switch>),
+  name: 'switch',
+  kind: 'account-state-operation',
+  isPayload: (value): value is Switch => typeof value === 'object' && value !== null && typeof (value as { on?: unknown }).on === 'boolean',
+  barriers: ['switch'],
+  affectedBy: (_barrier, payload) => payload.on,
+  onlineOnly: (payload) => payload.on,
+};
+
+describe('a change sent at once', () => {
+  it('is sent without being queued, and the feed is read after it', async () => {
+    const { store, backend, sync } = engine({ types: [toggle as RecordType] });
+    expect(await sync.submit('switch', { id: 'on-1', on: true })).toEqual({ status: 'accepted' });
+    expect(store.entries).toEqual([]);
+    expect(backend.calls).toEqual(['upload on-1', 'protocol', 'feed']);
+  });
+
+  it('reports the server’s refusal with its code', async () => {
+    const { backend, sync } = engine({ types: [toggle as RecordType] });
+    backend.answer('on-1', { status: 'rejected', operation: '', requestHash: '', code: 'stale' });
+    expect(await sync.submit('switch', { id: 'on-1', on: true })).toEqual({ status: 'rejected', code: 'stale' });
+  });
+
+  it('waits, unsent, while a barrier it is held by is still pending', async () => {
+    const { store, backend, sync } = engine({ types: [toggle as RecordType] });
+    await store.queueUpload({ id: 'switch/off', recordType: 'switch', item: 'off-1', payload: { id: 'off-1', on: false }, dependencies: [], positioned: false, purges: null });
+    backend.answer('off-1', new SyncCallError('unreachable'));
+    await sync.idle();
+    expect(await sync.submit('switch', { id: 'on-1', on: true })).toEqual({ status: 'waiting' });
+    expect(backend.uploadsOf('on-1')).toBe(0);
+  });
+
+  it('is offline when no answer arrives', async () => {
+    const { backend, sync } = engine({ types: [toggle as RecordType] });
+    backend.answer('on-1', new SyncCallError('unreachable'));
+    expect(await sync.submit('switch', { id: 'on-1', on: true })).toEqual({ status: 'offline' });
+  });
+
+  it('refuses a payload that isn’t one of its type’s online-only changes', async () => {
+    const { backend, sync } = engine({ types: [toggle as RecordType] });
+    expect(await sync.submit('switch', { id: 'off-1', on: false })).toEqual({ status: 'invalid' });
+    expect(await sync.submit('note', { id: 'n1' })).toEqual({ status: 'invalid' });
+    expect(backend.calls).toEqual([]);
   });
 });

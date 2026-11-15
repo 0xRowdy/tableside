@@ -3,6 +3,7 @@
 
 import type {
   AccountGate,
+  AccountPrivacy,
   AccountRecords,
   AccountService,
   AccountSync,
@@ -146,6 +147,15 @@ export class FakeAccountService implements AccountService {
     revisionedItems: async () => [],
     resolve: async () => ({ status: 'offline' }),
     totals: async () => ({ account: [], local: [] }),
+  };
+
+  /** No privacy choices in screen tests (spec 7's controls script their own). */
+  readonly privacy: AccountPrivacy = {
+    read: async () => null,
+    withdrawAnalytics: async () => ({ status: 'unavailable' }),
+    limitAdData: async () => ({ status: 'unavailable' }),
+    grantAnalytics: async () => ({ status: 'unavailable' }),
+    allowAdData: async () => ({ status: 'unavailable' }),
   };
 
   async renew() {
