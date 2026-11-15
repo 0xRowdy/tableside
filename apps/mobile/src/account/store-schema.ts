@@ -58,7 +58,8 @@ const BASE_SCHEMA = [
   // One outgoing synchronization record per completion: the activity id is unique.
   // It is also the upload queue entry, written in the completion's transaction:
   // its dependencies, its receipt status, the operation it is sent as (fixed
-  // before it is first sent) and the receipt's disposition.
+  // before it is first sent), the receipt's disposition, and how often it has
+  // failed by itself and whether that flagged it (#92).
   `CREATE TABLE outgoing (
     id TEXT PRIMARY KEY,
     activity_id TEXT NOT NULL UNIQUE REFERENCES activities (activity_id),
@@ -69,7 +70,9 @@ const BASE_SCHEMA = [
     operation_id TEXT UNIQUE,
     request TEXT,
     request_sha256 TEXT,
-    receipt TEXT
+    receipt TEXT,
+    failures INTEGER NOT NULL DEFAULT 0 CHECK (failures >= 0),
+    flagged INTEGER NOT NULL DEFAULT 0 CHECK (flagged IN (0, 1))
   ) STRICT`,
   'CREATE INDEX outgoing_pending ON outgoing (status, position)',
   // Records the account has accepted: this installation's acknowledged uploads and the feed's changes.
@@ -80,8 +83,8 @@ const BASE_SCHEMA = [
     body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,
     PRIMARY KEY (record_type, item_id)
   ) STRICT`,
-  // The account sequence the feed has been applied through.
-  'CREATE TABLE feed_cursor (singleton INTEGER PRIMARY KEY CHECK (singleton = 1), sequence INTEGER NOT NULL) STRICT',
+  // The account sequence the feed has been applied through, and when a synchronization run last finished cleanly (ms since the epoch).
+  'CREATE TABLE feed_cursor (singleton INTEGER PRIMARY KEY CHECK (singleton = 1), sequence INTEGER NOT NULL, synced_at INTEGER) STRICT',
   'INSERT INTO feed_cursor (singleton, sequence) VALUES (1, 0)',
 ];
 

@@ -66,7 +66,7 @@ describe('the upload queue', () => {
 
     expect(announced).toBe(1);
     expect(await store.readUploadQueue()).toEqual([
-      { id: 'completed/a1', recordType: 'completed-practice-session', payload: record, dependencies: [], operation: null },
+      { id: 'completed/a1', recordType: 'completed-practice-session', payload: record, dependencies: [], operation: null, failures: 0, flagged: false },
     ]);
   });
 
@@ -166,6 +166,59 @@ describe('the upload queue', () => {
     await store.prepareUpload('completed/a1', OPERATION);
     await expect(store.acknowledgeUpload('completed/a1', { ...disposition, operation: 'e'.repeat(32) }, null)).rejects.toThrow(StoreError);
     expect(await store.readUploadQueue()).toHaveLength(1);
+  });
+});
+
+describe('failing and refused uploads (#92)', () => {
+  it('counts an entry\'s failures and flags it, durably, keeping it pending', async () => {
+    const { open } = newDisk();
+    const store = await open();
+    await completed(store, 'a1');
+    expect(await store.recordUploadFailure('completed/a1', false)).toBe(1);
+    expect(await store.recordUploadFailure('completed/a1', true)).toBe(2);
+    await store.close();
+
+    const restarted = await open();
+    expect(await restarted.readUploadQueue()).toMatchObject([{ id: 'completed/a1', failures: 2, flagged: true }]);
+  });
+
+  it('forgets the failures and the flag on a deliberate retry', async () => {
+    const store = await newDisk().open();
+    await completed(store, 'a1');
+    await store.recordUploadFailure('completed/a1', true);
+    await store.clearUploadFailures('completed/a1');
+    expect(await store.readUploadQueue()).toMatchObject([{ id: 'completed/a1', failures: 0, flagged: false }]);
+  });
+
+  it('counts nothing when the write fails', async () => {
+    const { disk, open } = newDisk();
+    const store = await open();
+    await completed(store, 'a1');
+    disk.failing = true;
+    await expect(store.recordUploadFailure('completed/a1', true)).rejects.toThrow();
+    disk.failing = false;
+    expect(await store.readUploadQueue()).toMatchObject([{ failures: 0, flagged: false }]);
+  });
+
+  it('lists refused entries for review, with their code', async () => {
+    const store = await newDisk().open();
+    const record = await completed(store, 'a1');
+    await completed(store, 'a2');
+    await store.prepareUpload('completed/a1', OPERATION);
+    await store.acknowledgeUpload('completed/a1', { status: 'rejected', operation: OPERATION.operationId, requestHash: ABC_SHA256, code: 'identity-reused' }, null);
+
+    expect(await store.readRejectedUploads()).toEqual([
+      { id: 'completed/a1', recordType: 'completed-practice-session', payload: record, code: 'identity-reused' },
+    ]);
+  });
+
+  it('remembers when it last synced', async () => {
+    const { open } = newDisk();
+    const store = await open();
+    expect(await store.readLastSynced()).toBeNull();
+    await store.recordSynced(1_763_000_000_000);
+    await store.close();
+    expect(await (await open()).readLastSynced()).toBe(1_763_000_000_000);
   });
 });
 
