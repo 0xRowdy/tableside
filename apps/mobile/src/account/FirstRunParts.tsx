@@ -11,8 +11,24 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/theme/tokens';
 
-/** A pre-account screen: a title, optional Back, and content that reflows and scrolls at any text size. */
-export function FirstRunScreen({ title, intro, back, children }: { title: string; intro?: ReactNode; back?: () => void; children?: ReactNode }) {
+/**
+ * A pre-account (or locked) screen: an optional header line with a step, a
+ * title, optional Back, and content that reflows and scrolls at any text size.
+ */
+export function FirstRunScreen({
+  title,
+  intro,
+  back,
+  context,
+  children,
+}: {
+  title: string;
+  intro?: ReactNode;
+  back?: () => void;
+  /** The screen's header line, as the frames draw it above the title ("Before you start · Step 1 of 2 · age"). */
+  context?: { readonly title: string; readonly detail?: string };
+  children?: ReactNode;
+}) {
   const insets = useSafeAreaInsets();
   return (
     <ScrollView
@@ -24,7 +40,23 @@ export function FirstRunScreen({ title, intro, back, children }: { title: string
         { paddingTop: insets.top + space[4], paddingBottom: insets.bottom + space[8], paddingLeft: insets.left + space[6], paddingRight: insets.right + space[6] },
       ]}
     >
-      {back && <BackButton onPress={back} />}
+      {(back || context) && (
+        <View style={styles.headerLine}>
+          {back && <BackButton onPress={back} />}
+          {context && (
+            <View style={styles.context}>
+              <Text maxFontSizeMultiplier={textScale.body} style={styles.contextTitle}>
+                {context.title}
+              </Text>
+              {context.detail && (
+                <Text maxFontSizeMultiplier={textScale.body} style={styles.contextDetail}>
+                  {context.detail}
+                </Text>
+              )}
+            </View>
+          )}
+        </View>
+      )}
       <Text accessibilityRole="header" maxFontSizeMultiplier={textScale.display} style={styles.title}>
         {title}
       </Text>
@@ -144,6 +176,15 @@ export function ChoiceGroup({ label, testID, children }: { label: string; testID
   );
 }
 
+/** A small capitalized label above a group ("YOU CAN STILL"). */
+export function SectionLabel({ children }: { children: string }) {
+  return (
+    <Text maxFontSizeMultiplier={textScale.body} style={styles.sectionLabel}>
+      {children.toUpperCase()}
+    </Text>
+  );
+}
+
 /** Actions, stacked at the bottom of the content. */
 export function Actions({ children }: { children: ReactNode }) {
   return <View style={styles.actions}>{children}</View>;
@@ -164,6 +205,11 @@ export function LinkButton({ label, onPress }: { label: string; onPress: () => v
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: palette.background },
   content: { flexGrow: 1, gap: space[4] },
+  headerLine: { flexDirection: 'row', alignItems: 'center', gap: space[1] },
+  context: { flex: 1, gap: 1 },
+  contextTitle: { fontFamily: fonts.uiMedium, fontSize: 17, color: palette.foreground },
+  contextDetail: { fontFamily: fonts.ui, fontSize: 12, color: palette.mutedForeground },
+  sectionLabel: { fontFamily: fonts.uiBold, fontSize: 12, letterSpacing: 0.5, color: palette.mutedForeground, marginTop: space[2] },
   back: { width: MIN_TOUCH_TARGET, height: MIN_TOUCH_TARGET, marginLeft: -space[3], alignItems: 'center', justifyContent: 'center', borderRadius: radius.pill, borderWidth: 2, borderColor: palette.transparent },
   title: { fontFamily: fonts.display, fontSize: 30, color: palette.foreground },
   body: { fontFamily: fonts.ui, fontSize: 16, lineHeight: 24, color: palette.mutedForeground },

@@ -11,6 +11,11 @@ export type SignedInGate = Extract<AccountGate, { state: 'active' | 'renewal-pen
 
 export const isSignedIn = (gate: AccountGate): gate is SignedInGate => gate.state === 'active' || gate.state === 'renewal-pending';
 
+/** Gate states whose age eligibility isn't established: the account is open for its restricted paths only. */
+export type AgeRestrictedGate = Extract<AccountGate, { state: 'age-unresolved' | 'age-ineligible' }>;
+
+export const isAgeRestricted = (gate: AccountGate): gate is AgeRestrictedGate => gate.state === 'age-unresolved' || gate.state === 'age-ineligible';
+
 interface AccountContextValue {
   readonly account: AppAccount;
   readonly service: AccountService;

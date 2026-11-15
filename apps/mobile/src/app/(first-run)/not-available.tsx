@@ -1,8 +1,19 @@
-// The age step's under-13 end state: no account, and nothing further asked.
-// TODO(frames): unverified against S2-15 (Pencil couldn't open Tableside.pen for #88).
+// S2-15 Age — under 13 (end, nothing kept): no account, and nothing further asked.
 
-import { FirstRunScreen } from '@/account/FirstRunParts';
+import { router } from 'expo-router';
+
+import { Actions, FirstRunScreen } from '@/account/FirstRunParts';
+import { Button } from '@/components/Button';
 
 export default function NotAvailable() {
-  return <FirstRunScreen title="Tableside isn't available" intro="Tableside is for people 13 and older. No account was created and nothing you entered was kept." />;
+  return (
+    <FirstRunScreen
+      title="Tableside is for people 13 and older"
+      intro="We haven't created an account or kept your answer, and we won't ask for anything else."
+    >
+      <Actions>
+        <Button label="Done" variant="secondary" stretch onPress={() => router.dismissTo('/welcome')} />
+      </Actions>
+    </FirstRunScreen>
+  );
 }

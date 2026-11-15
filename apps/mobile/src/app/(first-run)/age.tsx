@@ -1,51 +1,54 @@
-// S2-15 Age step, on Create only: a neutral age-range question, never a birth
-// date or ID. Under 13 ends the flow with nothing sent or kept.
-// TODO(frames): unverified against S2-15 (Pencil couldn't open Tableside.pen for #88).
+// S2-15 Age step, on Create only. Where the device offers a platform age check
+// (Apple's age range on iOS 26+, Google Play's age signals), it comes first
+// (S2-15 "platform age check"); otherwise, or when the platform can't or won't
+// share a range, the fallback question (S2-15 "fallback question"). Under 13
+// ends the flow with nothing sent or kept; a required check that stands in the
+// way ends at "unresolved before any account exists".
 
-import type { AgeRange } from '@tableside/account';
+import type { AgeCheckResult } from '@tableside/account';
 import { router } from 'expo-router';
 import { useState } from 'react';
 
 import { useAccount } from '@/account/AccountProvider';
-import { Actions, ChoiceGroup, ChoiceRow, FirstRunScreen, InlineMessage } from '@/account/FirstRunParts';
+import { AGE_STEP, AgeQuestionScreen, CONNECTION_PROBLEM } from '@/account/AgeQuestion';
+import { Actions, Body, FirstRunScreen, InlineMessage } from '@/account/FirstRunParts';
 import { Button } from '@/components/Button';
-
-const RANGES: readonly { range: AgeRange; label: string }[] = [
-  { range: 'under-13', label: 'Under 13' },
-  { range: '13-15', label: '13 to 15' },
-  { range: '16-17', label: '16 to 17' },
-  { range: '18+', label: '18 or older' },
-];
-
-const QUESTION = 'How old are you?';
 
 export default function Age() {
   const { service } = useAccount();
-  const [range, setRange] = useState<AgeRange | null>(null);
+  const [asking, setAsking] = useState(!service.platformAgeCheck);
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
 
-  const answer = async () => {
-    if (!range) return;
+  const onResult = (result: Exclude<AgeCheckResult, { status: 'failed' }>) => {
+    if (result.status === 'eligible') router.push('/email');
+    else if (result.status === 'ineligible') router.replace('/not-available');
+    else if (result.status === 'unresolved') router.replace('/age-unresolved');
+    else setAsking(true);
+  };
+
+  if (asking) return <AgeQuestionScreen back={() => router.back()} onAnswered={onResult} />;
+
+  const check = async () => {
     setBusy(true);
     setFailed(false);
-    const result = await service.answerAgeQuestion(range);
+    const result = await service.checkAge();
     setBusy(false);
-    if (result.status === 'ineligible') router.replace('/not-available');
-    else if (result.status === 'eligible') router.push('/email');
-    else setFailed(true);
+    if (result.status === 'failed') setFailed(true);
+    else onResult(result);
   };
 
   return (
-    <FirstRunScreen title={QUESTION} intro="Tableside is set up differently for some ages. We only ask for a range, never your birth date." back={() => router.back()}>
-      <ChoiceGroup label={QUESTION} testID="age-question">
-        {RANGES.map((option) => (
-          <ChoiceRow key={option.range} label={option.label} selected={range === option.range} onPress={() => setRange(option.range)} />
-        ))}
-      </ChoiceGroup>
-      {failed && <InlineMessage>{"Couldn't continue. Check your connection and try again."}</InlineMessage>}
+    <FirstRunScreen
+      title="First, your age range"
+      context={AGE_STEP}
+      intro="Tableside is for people 13 and older. Your device can tell us your age range, so we never need a birth date or ID. We keep only the range."
+      back={() => router.back()}
+    >
+      <Body>{"If your device can't share a range, or you'd rather not, we'll ask one question instead."}</Body>
+      {failed && <InlineMessage>{CONNECTION_PROBLEM}</InlineMessage>}
       <Actions>
-        <Button label="Continue" stretch disabled={!range || busy} onPress={() => void answer()} />
+        <Button label="Continue" stretch disabled={busy} onPress={() => void check()} />
       </Actions>
     </FirstRunScreen>
   );

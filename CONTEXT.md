@@ -268,7 +268,7 @@ One of Tableside's fully separate backends: beta, production, or a local develop
 _Avoid_: stage, tier
 
 **Account gate**:
-The account's current access state on an installation (no account, active, renewal pending, signed out, revoked, deletion scheduled, recovery needed, or age unresolved), which decides whether ordinary access is open. Renewal pending is active access under cached rights while an expired token renews.
+The account's current access state on an installation (no account, active, renewal pending, signed out, revoked, deletion scheduled, recovery needed, age unresolved, or age ineligible), which decides whether ordinary access is open. Renewal pending is active access under cached rights while an expired token renews. Age unresolved and age ineligible keep only the restricted paths: deletion, Contact support, Make a privacy request, billing help and authenticated export.
 
 **Account session**:
 One signed-in period of an account on an installation, from signing in (or switching to the account) until the next sign-in, sign-out or account switch. Work begun in an earlier account session never reads or writes the account's data.

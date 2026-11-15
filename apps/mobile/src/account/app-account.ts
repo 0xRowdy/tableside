@@ -2,7 +2,7 @@
 // network, SecureStore and account vault, plus what the first run records for
 // the account. App tests replace this module with fakes (jest.setup.ts).
 
-import { createAccountService, type AccountService, type AccountVault, type CredentialStorage } from '@tableside/account';
+import { createAccountService, noPlatformAgeSignals, type AccountService, type AccountVault, type CredentialStorage } from '@tableside/account';
 import * as Crypto from 'expo-crypto';
 import * as SecureStore from 'expo-secure-store';
 
@@ -13,6 +13,7 @@ import { buildBackend } from './backend';
 import { appDevicePorts } from './device-ports';
 import { createNativeVault, KEYCHAIN_OPTIONS } from './native-vault';
 import { forAccountSession } from './practice';
+import type { RestrictedPaths } from './RestrictedPaths';
 import type { AccountSession } from './vault';
 
 /**
@@ -30,6 +31,8 @@ export interface AppAccount {
   /** The practice adapters for the open account session: its store, account and installation. */
   practice(base: PracticeAdapters): PracticeAdapters;
   readonly offlineGame: OfflineGameSelection;
+  /** The restricted gate states' paths (support, privacy request, billing help, export, deletion). */
+  readonly restrictedPaths: RestrictedPaths;
 }
 
 /** Refresh credentials: device-only secure storage, never in a backup. */
@@ -66,6 +69,9 @@ export function createAppAccount(): AppAccount {
     clock: () => Date.now(),
     device: appDevicePorts,
     randomBytes: (count) => Crypto.getRandomValues(new Uint8Array(count)),
+    // Apple's Declared Age Range and Google Play's Age Signals need native
+    // modules, which aren't built yet: every device uses the fallback question.
+    ageSignals: noPlatformAgeSignals,
   });
   const offlineGameKey = (accountId: string) => `tableside.${backend.name}.${accountId}.offline-game`;
   return {
@@ -80,5 +86,7 @@ export function createAppAccount(): AppAccount {
       },
       set: (accountId, game) => SecureStore.setItemAsync(offlineGameKey(accountId), game, KEYCHAIN_OPTIONS),
     },
+    // A stub until those screens land (spec 2's export and deletion tickets, spec 5's billing help, spec 7's support and privacy requests).
+    restrictedPaths: { open: () => undefined },
   };
 }

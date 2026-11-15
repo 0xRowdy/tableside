@@ -58,12 +58,12 @@ export function Group({ children }: { children: ReactNode }) {
   return <View style={styles.group}>{children}</View>;
 }
 
-export function ListRow({ icon: Icon, title, detail, onPress }: { icon: LucideIcon; title: string; detail: string; onPress: () => void }) {
+export function ListRow({ icon: Icon, title, detail, onPress }: { icon: LucideIcon; title: string; detail?: string; onPress: () => void }) {
   const { focused, focusProps } = useKeyboardFocus();
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`${title}. ${detail}`}
+      accessibilityLabel={detail ? `${title}. ${detail}` : title}
       onPress={onPress}
       {...focusProps}
       style={({ pressed }) => [styles.row, pressed && styles.pressed, focused && styles.focused]}
@@ -73,7 +73,7 @@ export function ListRow({ icon: Icon, title, detail, onPress }: { icon: LucideIc
       </View>
       <View style={styles.rowText}>
         <Text maxFontSizeMultiplier={textScale.body} style={styles.rowTitle}>{title}</Text>
-        <Text maxFontSizeMultiplier={textScale.body} style={styles.rowDetail}>{detail}</Text>
+        {detail && <Text maxFontSizeMultiplier={textScale.body} style={styles.rowDetail}>{detail}</Text>}
       </View>
       <ChevronRight color={palette.mutedForeground} size={18} />
     </Pressable>
