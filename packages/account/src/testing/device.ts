@@ -29,6 +29,7 @@ import {
   type EligibilityBand,
   createAccountService,
 } from '../service';
+import type { RecordType } from '../sync/registry';
 import type { DevicePorts, DeviceSignal } from '../sync/session';
 import { FaultProxy } from './fault-proxy';
 import { Mailbox } from './mailbox';
@@ -177,6 +178,8 @@ export interface DeviceOptions {
    * device, keeping its files and secure storage.
    */
   readonly installedOver?: SimulatedDevice;
+  /** The record types the device's build syncs (testRegistry adds seam 2's test-only ones); the app's by default. */
+  readonly registry?: ReadonlyMap<string, RecordType>;
 }
 
 export function createDevice(stack: LocalStack, options: DeviceOptions): SimulatedDevice {
@@ -269,6 +272,7 @@ export function createDevice(stack: LocalStack, options: DeviceOptions): Simulat
       device: ports,
       randomBytes: (count) => entropy.bytes(count),
       webSocket: ProcessWebSocket,
+      ...(options.registry ? { registry: options.registry } : {}),
     });
     return {
       account,
@@ -353,6 +357,19 @@ function openSession(app: AppProcess) {
   const store = app.vault.store();
   const { identity } = store;
   return { ...identity, generation: app.appVault.generation, store };
+}
+
+/** The access token a device's Auth session holds, from its credential storage: for calling the stack directly as that device. */
+export function accessTokenOf(device: SimulatedDevice): string {
+  for (const value of device.credentials.items.values()) {
+    try {
+      const token = (JSON.parse(value) as { access_token?: unknown }).access_token;
+      if (typeof token === 'string') return token;
+    } catch {
+      // Not the session.
+    }
+  }
+  throw new Error(`${device.name} holds no session`);
 }
 
 /** An address no earlier run has used. */

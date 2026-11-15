@@ -8,11 +8,17 @@
 
 import { type CompletedPracticeSessionRecord, decodeMoney } from '@tableside/engine';
 
+import type { RecordRef } from './store';
+
 /**
  * immutable-result: accepted once, never edited (a completed practice session).
  * revisioned-item: one accepted revision with conflicts and tombstones (#94).
- * account-state-operation: ordered account changes, possibly behind barriers (#95).
- * server-authored-state: written only by the backend, delivered through the feed (#95).
+ * account-state-operation: ordered account changes, possibly behind barriers:
+ *   sharing withdrawals and contributions, allowance reconciliation and
+ *   transfers, privacy choices, purging an accepted result.
+ * server-authored-state: written only by the backend and delivered through the
+ *   feed (experiment assignments, entitlement snapshots, contribution status);
+ *   no client writes it, and the server refuses any that tries.
  */
 export type RecordKind = 'immutable-result' | 'revisioned-item' | 'account-state-operation' | 'server-authored-state';
 
@@ -27,10 +33,34 @@ export interface RecordType<Payload = unknown> {
   };
   /** The payload schema: whether a value is a payload of this type and version. */
   isPayload(value: unknown): value is Payload;
-  /** Record types whose pending uploads must be acknowledged before this type's are sent. */
+  /**
+   * Record types whose pending uploads must be acknowledged before this type's
+   * are sent. A type with barriers is also sent only after the reconnect
+   * order's earlier steps (see SyncEngine): it is what grants and
+   * contributions register.
+   */
   readonly barriers: readonly string[];
-  /** The server operation that accepts it (`private.record_types.accept`). */
-  readonly acceptance: string;
+  /**
+   * Whether a pending barrier upload holds this payload; every one of the
+   * barrier types does when omitted. A sharing withdrawal holds only the
+   * contributions it covers.
+   */
+  affectedBy?(barrier: { readonly recordType: string; readonly payload: unknown }, payload: Payload): boolean;
+  /**
+   * per-device: each record carries a durable position on its originating
+   * installation, allocated when it is queued (challenge attempts, spec 3).
+   * Order comes from it, never from clocks (see ordering.ts). Absent: none.
+   */
+  readonly ordering?: 'per-device';
+  /**
+   * An account-state operation that purges an accepted immutable result
+   * (Amendment 4 §1): the result it names. Its barrier is the target's
+   * acceptance. The result leaves this installation when the operation is
+   * queued, and every other one through the feed.
+   */
+  purges?(payload: Payload): RecordRef;
+  /** The server operation that accepts it (`private.record_types.accept`); null for server-authored state. */
+  readonly acceptance: string | null;
   /** The payload a feed entry's change carries, or null when the change isn't one of this type's. */
   fromChange(change: unknown): Payload | null;
   /**
@@ -51,9 +81,17 @@ export interface RecordType<Payload = unknown> {
 
 /**
  * The platform's own per-account tables, whatever types are registered: the
- * synchronization head and the live claim. Account deletion clears these too.
+ * synchronization head, the live claim, receipts, the feed, per-device
+ * positions and purged results' receipts. Account deletion clears these too.
  */
-export const PLATFORM_TABLES: readonly string[] = ['private.sync_heads', 'private.realtime_claims', 'private.sync_receipts', 'private.sync_feed'];
+export const PLATFORM_TABLES: readonly string[] = [
+  'private.sync_heads',
+  'private.realtime_claims',
+  'private.sync_receipts',
+  'private.sync_feed',
+  'private.device_positions',
+  'private.purged_results',
+];
 
 /** Canonical money text (spec 1's encoding). */
 function isMoney(value: unknown): value is string {

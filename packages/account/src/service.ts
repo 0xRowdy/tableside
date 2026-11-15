@@ -6,9 +6,9 @@ import { type SupabaseClient, createClient } from '@supabase/supabase-js';
 
 import { type BackendEnvironment, ENVIRONMENT_HEADER, type EnvironmentName, retiredEnvironments } from './environment';
 import { SyncEngine, type SyncErrorCode } from './sync/engine';
-import { recordTypes } from './sync/registry';
+import { type RecordType, recordTypes } from './sync/registry';
 import { type DevicePorts, SyncSession } from './sync/session';
-import type { SyncStore } from './sync/store';
+import type { QueuedUpload, RecordRef, SyncStore } from './sync/store';
 import { supabaseLiveChannels, supabaseSyncBackend } from './sync/supabase';
 
 /** The account's access state on this installation (spec 2, *Account gate*). Later tickets add the other states. */
@@ -70,9 +70,27 @@ export interface SyncStatus {
   readonly error: SyncErrorCode | null;
 }
 
+/**
+ * Queueing a record for upload (spec 2, *Record-type registry*): queued, with
+ * its originating-device position for a per-device type; or refused, when no
+ * account session is open, the type isn't registered or is server-authored
+ * (no client writes it), or the payload isn't the type's.
+ */
+export type QueueResult =
+  | { readonly status: 'queued'; readonly id: string; readonly position?: number }
+  | { readonly status: 'refused'; readonly reason: 'no-account' | 'unknown-type' | 'server-authored' | 'invalid-payload' };
+
 /** Synchronization for the open account session. Triggers run it by themselves; these are for asking. */
 export interface AccountSync {
   readonly status: SyncStatus;
+  /**
+   * Queues an account-state operation or result for upload, committed locally
+   * before it resolves, then uploaded by itself. It waits for its barriers:
+   * any pending upload of a barrier type that affects it, and, for a purge,
+   * the target's own pending upload. A purge removes the target from this
+   * installation at once.
+   */
+  queue(recordType: string, payload: unknown): Promise<QueueResult>;
   /** Uploads and fetches now; resolves when that has finished. Coalesces with work already going. */
   reconcile(): Promise<void>;
   /** Resolves once no synchronization is running. */
@@ -94,6 +112,8 @@ export interface AccountServiceOptions {
   readonly randomBytes: (count: number) => Uint8Array;
   /** The device's WebSocket, for the live connection. */
   readonly webSocket?: typeof WebSocket;
+  /** The record types this build syncs: the registry's own by default. Seam 2 adds test-only types. */
+  readonly registry?: ReadonlyMap<string, RecordType>;
 }
 
 export interface AccountService {
@@ -174,7 +194,8 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
   let gate: AccountGate = { state: 'no-account' };
   let assertion: Assertion | null = null;
 
-  let sync: { readonly engine: SyncEngine; readonly session: SyncSession } | null = null;
+  const registry = options.registry ?? recordTypes;
+  let sync: { readonly engine: SyncEngine; readonly session: SyncSession; readonly store: SyncStore } | null = null;
 
   const setGate = (next: AccountGate) => {
     gate = next;
@@ -193,11 +214,11 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
     const engine = new SyncEngine({
       store,
       backend: supabaseSyncBackend(supabase),
-      registry: recordTypes,
+      registry,
       installationId,
       newOperationId: () => hex(options.randomBytes(16)),
     });
-    sync = { engine, session: new SyncSession(engine, store, options.device, supabaseLiveChannels(supabase, accountId)) };
+    sync = { engine, store, session: new SyncSession(engine, store, options.device, supabaseLiveChannels(supabase, accountId)) };
   };
 
   const currentAssertion = () => (assertion && assertion.expiresAt > options.clock() ? assertion : null);
@@ -284,8 +305,47 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
       },
       reconcile: () => sync?.engine.reconcile() ?? Promise.resolve(),
       idle: () => sync?.engine.idle() ?? Promise.resolve(),
+      async queue(recordType, payload) {
+        const store = sync?.store;
+        if (!store) return { status: 'refused', reason: 'no-account' };
+        const type = registry.get(recordType);
+        if (!type) return { status: 'refused', reason: 'unknown-type' };
+        if (type.kind === 'server-authored-state') return { status: 'refused', reason: 'server-authored' };
+        if (!type.isPayload(payload)) return { status: 'refused', reason: 'invalid-payload' };
+        const purges = type.purges?.(payload) ?? null;
+        const queued = await store.queueUpload({
+          id: `${type.name}/${hex(options.randomBytes(16))}`,
+          recordType: type.name,
+          payload,
+          dependencies: dependenciesOf(registry, type, payload, purges, await store.readUploadQueue()),
+          positioned: type.ordering === 'per-device',
+          purges,
+        });
+        return { status: 'queued', id: queued.id, ...(queued.position !== undefined ? { position: queued.position } : {}) };
+      },
     },
   };
+}
+
+/**
+ * The pending uploads a new entry waits for, named so the server can check
+ * their receipts: affected uploads of its barrier types, and a purge's target.
+ * A barrier queued later still holds it (the engine checks at sending).
+ */
+function dependenciesOf(
+  registry: ReadonlyMap<string, RecordType>,
+  type: RecordType,
+  payload: unknown,
+  purges: RecordRef | null,
+  queue: readonly QueuedUpload[],
+): string[] {
+  return queue
+    .filter((entry) => {
+      if (type.barriers.includes(entry.recordType)) return type.affectedBy?.({ recordType: entry.recordType, payload: entry.payload }, payload) ?? true;
+      const target = purges && entry.recordType === purges.recordType ? registry.get(entry.recordType) : undefined;
+      return target !== undefined && target.isPayload(entry.payload) && target.identity.of(entry.payload) === purges!.item;
+    })
+    .map((entry) => entry.id);
 }
 
 function parseRemembered(text: string | null): RememberedAccount | null {

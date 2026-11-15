@@ -7,6 +7,7 @@ export {
   FakeClock,
   FakeEntropy,
   MemoryCredentials,
+  accessTokenOf,
   createAccountByEmail,
   createDevice,
   signInByEmail,
@@ -16,3 +17,24 @@ export { FaultProxy, type HeldResponse } from './fault-proxy';
 export { TestIdentityProvider } from './identity-provider';
 export { Mailbox } from './mailbox';
 export { type LocalStack, localStack } from './stack';
+export {
+  TEST_RECORD_TYPES,
+  type TestAttempt,
+  type TestContribution,
+  type TestExperimentAssignment,
+  type TestReconciliation,
+  type TestResult,
+  type TestResultPurge,
+  type TestTransfer,
+  type TestWithdrawal,
+  installTestRecordTypes,
+  testAllowanceReconciliation,
+  testAllowanceTransfer,
+  testAttempt,
+  testContribution,
+  testExperimentAssignment,
+  testRegistry,
+  testResult,
+  testResultPurge,
+  testSharingWithdrawal,
+} from './record-types';
