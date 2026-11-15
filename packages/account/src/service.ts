@@ -22,6 +22,7 @@ import {
   requiredCheck,
 } from './eligibility';
 import { type BackendEnvironment, ENVIRONMENT_HEADER, type EnvironmentName, authCallbackUrl, retiredEnvironments } from './environment';
+import { type MetricsSink, createMetricsSender, discardMetrics } from './metrics';
 import { type EngineStatus, SyncEngine } from './sync/engine';
 import { type AccountRecords, accountRecords } from './sync/records';
 import { type RecordType, prerequisitesOf, recordTypes } from './sync/registry';
@@ -280,6 +281,8 @@ export interface AccountServiceOptions {
   readonly recordTypes?: ReadonlyMap<string, RecordType>;
   /** The platform's age signal; none by default (the fallback question). */
   readonly ageSignals?: PlatformAgeSignals;
+  /** The operational metrics provider (spec 7); discarded by default. Only what the gate and the catalog allow reaches it (metrics.ts). */
+  readonly metrics?: MetricsSink;
 }
 
 export interface AccountService {
@@ -526,6 +529,7 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
   const accountSessionEnding = new Set<() => Promise<void>>();
   const ageSignals = options.ageSignals ?? noPlatformAgeSignals;
   let gate: AccountGate = { state: 'no-account' };
+  const metrics = createMetricsSender({ gate: () => gate, sink: options.metrics ?? discardMetrics });
   let assertion: Assertion | null = null;
   /** The Create path's platform check found a required check in the way: the fallback answer can't decide. */
   let declarationBlocked = false;
@@ -593,6 +597,7 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
       newOperationId: () => hex(options.randomBytes(16)),
       clock: options.clock,
       random: () => uniform(options.randomBytes(4)),
+      metrics,
     });
     engine.onChange(syncChanged);
     sync = {
