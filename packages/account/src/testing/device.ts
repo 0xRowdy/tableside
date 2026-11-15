@@ -193,6 +193,8 @@ export function createDevice(stack: LocalStack, options: DeviceOptions): Simulat
   const proxy = new FaultProxy();
   const clock = new FakeClock();
   // The files, keychain and secure storage outlive the app process, and a build installed over another keeps them.
+  // Installing the update ends the earlier build's process: nothing it had in flight reaches the device afterwards.
+  options.installedOver?.kill();
   const earlier = options.installedOver ? installed.get(options.installedOver) : undefined;
   const credentials = earlier?.credentials ?? new MemoryCredentials();
   const storage = earlier?.storage ?? new TestDevice();
