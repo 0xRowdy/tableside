@@ -45,6 +45,7 @@ export {
   type FreshAuthenticationResult,
   type LinkResult,
   type RemoveMethodResult,
+  type RevokedBy,
   type SignInMethodEntry,
   type SignInMethods,
   type HistoryStatus,

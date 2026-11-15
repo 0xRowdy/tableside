@@ -22,7 +22,7 @@
 // Nothing here logs a token, subject, address or claim.
 
 import { verifyProviderJwt } from '../_shared/id-token.ts';
-import { deliver, devicesSignedOutMail } from '../_shared/mail.ts';
+import { devicesSignedOutMail, sendSecurityNotice } from '../_shared/mail.ts';
 import { reply, serviceRpc } from '../_shared/service.ts';
 
 declare const Deno: { serve(handler: (request: Request) => Promise<Response>): void };
@@ -82,9 +82,7 @@ Deno.serve(async (request) => {
     const outcome = (await response.json()) as { status: string; devices?: number; email?: string | null };
     if (outcome.status === 'applied') {
       const method = revocation.event === 'relay-disabled' ? 'Email code at your private relay address' : providerName(provider);
-      const delivered = outcome.email ? await deliver(outcome.email, devicesSignedOutMail(outcome.devices ?? 0, method), 'security') : false;
-      const logged = await serviceRpc(environment, 'log_email_send', { type: 'device-revoked', pacing: 'immediate', outcome: delivered ? 'sent' : 'failed' });
-      await logged.body?.cancel();
+      await sendSecurityNotice(environment, outcome.email, devicesSignedOutMail(outcome.devices ?? 0, method), 'device-revoked');
     }
     return reply(202, { status: 'accepted' });
   } catch {

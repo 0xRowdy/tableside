@@ -3,7 +3,7 @@
 // provider). The account's records stay on this device, closed and locked;
 // a fresh sign-in to the same account opens them. No tab bar, so the support
 // and privacy links are here (spec 2 Amendment 9 §1).
-// TODO(frames): where "I didn't do this" leads is unverified against S2-23, which doesn't say; it opens Contact support.
+// TODO(frames): where "I didn't do this" leads, and the copy when a sign-in method's provider (Apple, Google) withdrew it, are unverified against S2-23, which draws only the other-device case; it opens Contact support.
 
 import { Redirect } from 'expo-router';
 import { LogIn, Smartphone } from 'lucide-react-native';
@@ -25,7 +25,9 @@ export default function Revoked() {
   return (
     <FirstRunScreen title={`This ${device} was signed out`} lead={<RevokedIcon />}>
       <Body>
-        {`Your account was signed out on this ${device} from another device on ${dayText(gate.revokedAt)}. Your records here are kept. Sign in to the same account to open them.`}
+        {gate.by === 'provider'
+          ? `Your account was signed out on this ${device} on ${dayText(gate.revokedAt)}, when the Apple or Google sign-in it used stopped working with Tableside. Your records here are kept. Sign in to the same account to open them.`
+          : `Your account was signed out on this ${device} from another device on ${dayText(gate.revokedAt)}. Your records here are kept. Sign in to the same account to open them.`}
       </Body>
       <Actions>
         <Button label="Sign in" icon={LogIn} stretch onPress={flow.startSignIn} />

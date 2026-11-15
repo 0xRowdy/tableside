@@ -64,6 +64,9 @@ create table private.account_sessions (
   registered_at timestamptz not null default now(),
   last_seen_at timestamptz not null default now(),
   revoked_at timestamptz,
+  -- 'device' (signed out from another device) or 'provider' (a sign-in method withdrawn).
+  revoked_by text check (revoked_by in ('device', 'provider')),
+  check ((revoked_at is null) = (revoked_by is null)),
   foreign key (account_id, installation_id) references private.installations (account_id, installation_id)
 );
 
@@ -252,12 +255,15 @@ begin
     'email', (select u.email from auth.users u where u.id = auth_user));
 end $$;
 
--- #100's guard (20261123104700_fresh_authentication.sql), now also recording
--- how each registered session ended. Auth's /logout with scope=others, and
--- private.revoke_sessions, are revocations: the account's synchronization
--- head is taken and the sessions are marked revoked. Any other end (this
--- device's own sign-out, scope=global for an account's one session, expiry)
--- forgets them; removing the Auth user keeps them for #104's deletion status.
+-- #100's guard (20261123104700_fresh_authentication.sql), now refusing
+-- Auth's /logout with scope=others outright: signing out other devices goes
+-- through revoke-devices, which also sends the security email, so no path
+-- does it silently. It also records how each registered session ended:
+-- private.revoke_sessions is a revocation (the account's synchronization head
+-- is taken and the sessions are marked revoked, with by whom). Any other end
+-- (this device's own sign-out, scope=global for an account's one session,
+-- expiry) forgets them; removing the Auth user keeps them for #104's
+-- deletion status.
 create or replace function private.guard_session_revocation() returns trigger
 language plpgsql security definer set search_path = '' as $$
 declare
@@ -266,29 +272,19 @@ declare
   v_all boolean := current_query() ~* '\mdelete\s+from\s+\S*sessions\S*\s+where\s+\S*user_id\S*\s*=';
   v_reason text := nullif(current_setting('tableside.revocation', true), '');
 begin
-  if v_others or v_all then
+  if (v_others or v_all) and v_reason is null then
     for v_user in select distinct g.user_id from gone g loop
       continue when not exists (select 1 from auth.users u where u.id = v_user);
-      if v_others then
-        if not exists (
-          select 1 from auth.sessions s
-          where s.user_id = v_user and private.session_fresh_identity(s.id, v_user) is not null
-        ) then
-          raise exception 'fresh_authentication_required' using errcode = '42501';
-        end if;
-      elsif (select count(*) from gone g where g.user_id = v_user) > 1 then
+      if v_others or (select count(*) from gone g where g.user_id = v_user) > 1 then
         raise exception 'fresh_authentication_required' using errcode = '42501';
       end if;
     end loop;
-  end if;
-  if v_others then
-    v_reason := coalesce(v_reason, 'device');
   end if;
   if v_reason is not null then
     perform 1 from private.sync_heads h
       where h.account_id in (select a.account_id from public.accounts a where a.auth_user_id in (select g.user_id from gone g))
       for update;
-    update private.account_sessions r set revoked_at = now()
+    update private.account_sessions r set revoked_at = now(), revoked_by = v_reason
       where r.session_id in (select g.id from gone g) and r.revoked_at is null;
   else
     delete from private.account_sessions r
@@ -302,7 +298,8 @@ end $$;
 -- ---------------------------------------------------------------------------
 
 -- The caller's own account and session, by the status credential its device
--- was given when it registered the session: 'active', 'revoked' (with when),
+-- was given when it registered the session: 'active', 'revoked' (with when,
+-- and whether by another device or a sign-in method's provider),
 -- 'deletion-scheduled' (with the deadline) or 'deleted'. Nothing else, and it
 -- restores no access. The credential is the device's, not a token: it still
 -- answers after the session and its tokens are gone, and after the Auth user
@@ -323,7 +320,7 @@ begin
   if v_state = 'deleted' then
     return jsonb_build_object('status', 'deleted');
   elsif v_record.revoked_at is not null and v_state is not null then
-    return jsonb_build_object('status', 'revoked', 'at', v_record.revoked_at);
+    return jsonb_build_object('status', 'revoked', 'at', v_record.revoked_at, 'by', v_record.revoked_by);
   elsif v_state = 'deletion_scheduled' then
     return jsonb_build_object('status', 'deletion-scheduled', 'deadline', v_deadline);
   elsif v_state = 'active' and exists (select 1 from auth.sessions s where s.id = v_record.session_id) then
@@ -345,9 +342,14 @@ end $$;
 --   'relay-disabled'   Apple stopped forwarding to the private relay address
 --                      `address`, so the email code method at it can't receive codes
 -- It disables that method (removed from the account, unless it's the
--- account's only method, which the account must keep) and revokes the
--- sessions signed in with that kind of method: provider sessions for consent,
--- email-code sessions for the relay. The account is never deleted, and an
+-- account's only method, which the account must keep: the provider itself
+-- stops vouching for it until the player consents again) and revokes the
+-- sessions signed in with that kind of method. Auth records only the kind
+-- ('oauth' for Apple and Google alike, 'otp' for an email code), so consent
+-- withdrawn from one provider also revokes sessions from the other one, and a
+-- session with no record goes too: never fewer than the affected sessions.
+-- A relay address that isn't the account's email method revokes nothing.
+-- The account is never deleted, and an
 -- allowance grant is never revived or moved (spec 5). `event_id` makes a
 -- replay do nothing.
 --   'applied' { devices, email } | 'duplicate' | 'unknown'
@@ -390,6 +392,7 @@ begin
   -- Auth records how each session signed in; a session with no record could be either, so it goes too.
   select array_agg(s.id) into v_sessions from auth.sessions s
     where s.user_id = v_user
+      and (event = 'consent-revoked' or v_method is not null)
       and (exists (select 1 from auth.mfa_amr_claims c where c.session_id = s.id and c.authentication_method = v_amr)
         or not exists (select 1 from auth.mfa_amr_claims c where c.session_id = s.id));
   select count(*) into v_devices from (

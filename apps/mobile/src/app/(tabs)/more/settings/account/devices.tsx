@@ -15,11 +15,14 @@ import { useAccount } from '@/account/AccountProvider';
 import { ConfirmItsYouSheet } from '@/account/ConfirmItsYouSheet';
 import { DeviceCard, DoneBanner, SignOutDevicesSheet } from '@/account/DeviceParts';
 import { InlineMessage } from '@/account/FirstRunParts';
+import { confirmReason } from '@/account/method-text';
 import { Button } from '@/components/Button';
 import { Note, SettingsScreen } from '@/settings/SettingsParts';
 
 /** What is being signed out: one other device, or every other one. */
 type Target = { readonly kind: 'one'; readonly entry: DeviceEntry } | { readonly kind: 'others'; readonly entries: readonly DeviceEntry[] };
+
+const SIGN_OUT_FAILED = "Couldn't sign out. Check your connection and try again.";
 
 const names = (target: Target) => (target.kind === 'one' ? [deviceShortName(target.entry.label)] : target.entries.map((entry) => deviceShortName(entry.label)));
 
@@ -73,12 +76,12 @@ export default function DevicesScreen() {
       } else if (result.status === 'fresh-authentication-required') {
         const methods = await service.signInMethods.list();
         if (methods) setConfirming({ target, methods });
-        else setProblem("Couldn't sign out. Check your connection and try again.");
+        else setProblem(SIGN_OUT_FAILED);
       } else if (result.status === 'not-found') {
         setProblem(`${namesList(names(target))} ${target.kind === 'one' ? 'is' : 'are'} already signed out.`);
         await reload();
       } else {
-        setProblem("Couldn't sign out. Check your connection and try again.");
+        setProblem(SIGN_OUT_FAILED);
       }
     } finally {
       setBusy(false);
@@ -122,7 +125,7 @@ export default function DevicesScreen() {
       )}
       {confirming && (
         <ConfirmItsYouSheet
-          reason="Signing out a device changes who can open your account, so sign in again first. Being signed in already isn't enough for this."
+          reason={confirmReason({ kind: 'sign-out-devices' })}
           methods={confirming.methods}
           onClose={() => setConfirming(null)}
           onConfirmed={() => {

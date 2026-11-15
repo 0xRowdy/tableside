@@ -110,6 +110,20 @@ describe('Devices', () => {
     expect((await raw.rpc('current_account')).data).toBeNull();
   });
 
+  it('registers a device whose registration answer was lost, at its next refresh', async () => {
+    const phone = device('lost-registration-phone', { label: 'iPhone 15 · iOS 18' });
+    const email = uniqueEmail('lost-registration');
+    phone.proxy.dropNextResponse('register_device_v1');
+    expect(await createAccountByEmail(phone, email)).toEqual({ status: 'signed-in' });
+    await phone.account.refreshEligibility();
+    expect((await listed(phone)).map(({ label, thisDevice }) => ({ label, thisDevice }))).toEqual([{ label: 'iPhone 15 · iOS 18', thisDevice: true }]);
+    // And it syncs, as its own installation.
+    await phone.playPracticeSession();
+    await phone.account.sync.idle();
+    expect(await phone.account.sync.countWaiting()).toBe(0);
+    expect(phone.account.sync.status.error).toBeNull();
+  });
+
   it('never lets a session pass itself off as another device of the account', async () => {
     const { phone, tablet } = await phoneAndTablet('claimed');
     const raw = stack.rawClient(accessToken(phone));
@@ -170,7 +184,7 @@ describe('signing out another device', () => {
     tablet.proxy.online = true;
     await tablet.account.refreshEligibility();
 
-    expect(tablet.account.gate).toEqual({ state: 'revoked', accountId, revokedAt: expect.any(Number) });
+    expect(tablet.account.gate).toEqual({ state: 'revoked', accountId, revokedAt: expect.any(Number), by: 'device' });
     expect(playing.snapshot()).toMatchObject({ suspension: { cause: 'sign-out' } });
     expect(tablet.vault.openAccount).toBeNull();
     expect(tablet.credentials.items.has(`tableside.${tablet.environment}.auth`)).toBe(false);
@@ -178,7 +192,7 @@ describe('signing out another device', () => {
     // The next launch stays locked, offline.
     tablet.proxy.online = false;
     await tablet.restart();
-    expect(tablet.account.gate).toEqual({ state: 'revoked', accountId, revokedAt: expect.any(Number) });
+    expect(tablet.account.gate).toEqual({ state: 'revoked', accountId, revokedAt: expect.any(Number), by: 'device' });
 
     // A fresh sign-in to the same account opens the same records, unsynced ones included.
     tablet.proxy.online = true;
@@ -203,7 +217,7 @@ describe('signing out another device', () => {
     // Its renewal is refused: that alone proves nothing, but the server's status does.
     tablet.proxy.online = true;
     await tablet.account.renew();
-    expect(tablet.account.gate).toEqual({ state: 'revoked', accountId, revokedAt: expect.any(Number) });
+    expect(tablet.account.gate).toEqual({ state: 'revoked', accountId, revokedAt: expect.any(Number), by: 'device' });
     expect(playing.snapshot()).toMatchObject({ suspension: { cause: 'sign-out' } });
 
     // A device left in the foreground hears it on the connected cadence.
@@ -293,7 +307,7 @@ describe('the lifecycle status', () => {
 
     await confirmByEmail(phone, email);
     await phone.account.devices.signOutOthers();
-    expect(await status(token)).toEqual({ status: 'revoked', at: expect.any(String) });
+    expect(await status(token)).toEqual({ status: 'revoked', at: expect.any(String), by: 'device' });
     // It restores nothing: the session's token is still refused.
     expect((await stack.rawClient(accessToken(tablet)).rpc('current_account')).data).toBeNull();
 

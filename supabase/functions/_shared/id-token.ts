@@ -76,8 +76,8 @@ export async function verifyProviderJwt(provider: string, token: string): Promis
   const signed = new TextEncoder().encode(`${headerPart}.${claimsPart}`);
   if (!(await crypto.subtle.verify('RSASSA-PKCS1-v1_5', key, signature, signed))) return null;
 
-  // Google writes its issuer with or without the scheme.
-  const issuers = config.issuer === 'https://accounts.google.com' ? [config.issuer, 'accounts.google.com'] : [config.issuer];
+  // Google writes its issuer with or without the scheme, and its security events with a trailing slash.
+  const issuers = config.issuer === 'https://accounts.google.com' ? [config.issuer, 'accounts.google.com', 'https://accounts.google.com/'] : [config.issuer];
   const audiences = Array.isArray(claims.aud) ? claims.aud : [claims.aud];
   if (typeof claims.iss !== 'string' || !issuers.includes(claims.iss)) return null;
   if (!audiences.some((audience) => typeof audience === 'string' && config.audiences.includes(audience))) return null;

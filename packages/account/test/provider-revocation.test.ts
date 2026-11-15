@@ -83,7 +83,7 @@ describe('a provider withdrawing an identity', () => {
     expect(await notify(idp.appleNotification({ type: 'consent-revoked', sub: someone.subject }))).toBe(202);
 
     await tablet.account.refreshEligibility();
-    expect(tablet.account.gate).toEqual({ state: 'revoked', accountId, revokedAt: expect.any(Number) });
+    expect(tablet.account.gate).toEqual({ state: 'revoked', accountId, revokedAt: expect.any(Number), by: 'provider' });
     // The email-code session stays, and the account keeps its other method.
     await phone.account.refreshEligibility();
     expect(phone.account.gate.state).toBe('active');
@@ -158,6 +158,8 @@ describe('a notification that doesn’t check out', () => {
     expect(await notify('not a token')).toBe(400);
     // A genuine event that withdraws nothing is acknowledged and does nothing.
     expect(await notify(idp.appleNotification({ type: 'email-enabled', sub: someone.subject, email: 'x@privaterelay.appleid.com' }))).toBe(202);
+    // A relay address that isn't the account's email method revokes nothing.
+    expect(await notify(idp.appleNotification({ type: 'email-disabled', sub: someone.subject, email: 'other@privaterelay.appleid.com' }))).toBe(202);
     // One for an identity nobody here has is acknowledged the same way.
     expect(await notify(idp.appleNotification({ type: 'consent-revoked', sub: 'nobody-at-all' }))).toBe(202);
 

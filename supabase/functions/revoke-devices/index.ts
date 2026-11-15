@@ -19,7 +19,7 @@
 // Nothing here logs a token, device or address.
 
 import { callerOf } from '../_shared/caller.ts';
-import { deliver, devicesSignedOutMail } from '../_shared/mail.ts';
+import { devicesSignedOutMail, sendSecurityNotice } from '../_shared/mail.ts';
 import { ENVIRONMENT_HEADER, reply, serviceRpc } from '../_shared/service.ts';
 
 declare const Deno: { serve(handler: (request: Request) => Promise<Response>): void };
@@ -54,12 +54,7 @@ Deno.serve(async (request) => {
     const outcome = (await response.json()) as { status: string; devices?: number; email?: string | null };
     if (outcome.status !== 'signed-out') return reply(STATUS_CODES[outcome.status] ?? 502, { status: outcome.status });
     const devices = outcome.devices ?? 0;
-    if (devices > 0) {
-      const delivered = outcome.email ? await deliver(outcome.email, devicesSignedOutMail(devices), 'security') : false;
-      // The devices are signed out either way: a notice that couldn't go is logged as a failed send, never retried.
-      const logged = await serviceRpc(environment, 'log_email_send', { type: 'device-revoked', pacing: 'immediate', outcome: delivered ? 'sent' : 'failed' });
-      await logged.body?.cancel();
-    }
+    if (devices > 0) await sendSecurityNotice(environment, outcome.email, devicesSignedOutMail(devices), 'device-revoked');
     return reply(200, { status: 'signed-out', devices, email: outcome.email ?? null });
   } catch {
     console.error('revoke-devices failed');

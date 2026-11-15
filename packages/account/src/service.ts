@@ -52,11 +52,11 @@ export type AccountGate =
   | { readonly state: 'signed-out'; readonly accountId: string }
   /**
    * The server confirmed this installation's session was revoked (signed out
-   * from another device, or by the provider): closed and kept with its key
-   * like Signed out, until a fresh sign-in to the same account. `revokedAt`
-   * is when, in milliseconds since the epoch.
+   * from another device, or by Apple or Google withdrawing a sign-in method):
+   * closed and kept with its key like Signed out, until a fresh sign-in to the
+   * same account. `revokedAt` is when, in milliseconds since the epoch.
    */
-  | { readonly state: 'revoked'; readonly accountId: string; readonly revokedAt: number }
+  | { readonly state: 'revoked'; readonly accountId: string; readonly revokedAt: number; readonly by: RevokedBy }
   /**
    * The account's age eligibility isn't established on this installation:
    * ordinary access is closed and only the restricted paths stay (deletion,
@@ -66,6 +66,9 @@ export type AccountGate =
   | { readonly state: 'age-unresolved'; readonly accountId: string; readonly reason: UnresolvedReason }
   /** The account is established as under 13: ordinary access is closed, with only the restricted paths. */
   | { readonly state: 'age-ineligible'; readonly accountId: string };
+
+/** Who revoked a session: another of the account's devices, or the provider of a sign-in method. */
+export type RevokedBy = 'device' | 'provider';
 
 /** Gate states that leave ordinary access open: Renewal pending keeps it, under cached rights, while the token renews. */
 export const opensOrdinaryAccess = (gate: AccountGate): gate is Extract<AccountGate, { state: 'active' | 'renewal-pending' }> =>
@@ -540,8 +543,8 @@ interface RememberedAccount {
   readonly reported?: AgeRange;
   readonly currency: string | null;
   readonly signedOut: boolean;
-  /** When the server confirmed this installation's session was revoked; the account is locked (signedOut) since. */
-  readonly revokedAt?: number;
+  /** When and by whom the server confirmed this installation's session was revoked; the account is locked (signedOut) since. */
+  readonly revoked?: { readonly at: number; readonly by: RevokedBy } | undefined;
 }
 
 /** The eligibility part of what is remembered. */
@@ -570,7 +573,7 @@ const withEligibility = (base: RememberedAccount, next: RememberedEligibility): 
   accountId: base.accountId,
   currency: base.currency,
   signedOut: base.signedOut,
-  ...(base.revokedAt !== undefined ? { revokedAt: base.revokedAt } : {}),
+  ...(base.revoked ? { revoked: base.revoked } : {}),
   eligibility: next.eligibility,
   ...(next.check ? { check: next.check } : {}),
   ...(next.signal ? { signal: next.signal } : {}),
@@ -822,20 +825,21 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
     const { installationId } = current.session;
     const secretKey = installationSecretKey(backend.name, installationId, accountId);
     try {
+      // The secret is this device's before the server hears it, so a lost answer or a kill never strands the installation.
+      let secret = await credentials.getItem(secretKey);
+      if (!secret) {
+        const created = hex(options.randomBytes(32));
+        await writeCredentials(() => credentials.setItem(secretKey, created));
+        secret = created;
+      }
       const { platform, label } = options.deviceDescription();
       const supabase = await connect();
-      const { data, error } = await supabase.rpc('register_device_v1', {
-        installation: installationId,
-        secret: await credentials.getItem(secretKey),
-        platform,
-        label,
-      });
-      const answer = data as { status?: unknown; secret?: unknown; status_token?: unknown } | null;
-      if (error || answer?.status !== 'registered' || typeof answer.secret !== 'string' || typeof answer.status_token !== 'string') return;
-      const { secret, status_token: token } = answer as { secret: string; status_token: string };
+      const { data, error } = await supabase.rpc('register_device_v1', { installation: installationId, secret, platform, label });
+      const answer = data as { status?: unknown; status_token?: unknown } | null;
+      if (error || answer?.status !== 'registered' || typeof answer.status_token !== 'string') return;
+      const token = answer.status_token;
       await writeCredentials(async () => {
         if (opened !== current) return;
-        await credentials.setItem(secretKey, secret);
         await credentials.setItem(statusKey(backend.name), JSON.stringify({ accountId, token }));
         current.registered = true;
       });
@@ -856,10 +860,10 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
     if (!token || opened !== current) return;
     try {
       const response = await post('/rest/v1/rpc/lifecycle_status_v1', { token });
-      const answer = (await response.json().catch(() => null)) as { status?: unknown; at?: unknown } | null;
+      const answer = (await response.json().catch(() => null)) as { status?: unknown; at?: unknown; by?: unknown } | null;
       if (!response.ok || opened !== current || answer?.status !== 'revoked') return;
       const at = typeof answer.at === 'string' ? Date.parse(answer.at) : Number.NaN;
-      await lockRevoked(current, Number.isFinite(at) ? at : options.clock());
+      await lockRevoked(current, { at: Number.isFinite(at) ? at : options.clock(), by: answer.by === 'provider' ? 'provider' : 'device' });
     } catch {
       // Offline or the answer was lost: nothing is known.
     }
@@ -870,13 +874,23 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
    * suspends at once (as on sign-out), then the database closes, kept with its
    * key, and the credentials go. A fresh sign-in to the same account reopens it.
    */
-  const lockRevoked = async (current: OpenSession, revokedAt: number): Promise<void> => {
+  const lockRevoked = async (current: OpenSession, revoked: { readonly at: number; readonly by: RevokedBy }): Promise<void> => {
     if (signingOut) return;
     const { accountId } = current.remembered;
     for (const handler of [...accountSessionEnding]) await handler().catch(() => undefined);
     if (opened !== current || signingOut) return;
+    await closeAccountSession(accountId, revoked);
+    setGate({ state: 'revoked', accountId, revokedAt: revoked.at, by: revoked.by });
+  };
+
+  /**
+   * Locks the account on this installation, once the session-ending handlers
+   * have run (sign-out or revocation): the account session ends, its database
+   * closes, kept with its key, and its credentials go, all without the network.
+   */
+  const closeAccountSession = async (accountId: string, revoked?: RememberedAccount['revoked']): Promise<void> => {
     generation++;
-    current.stopWatch();
+    opened?.stopWatch();
     opened = null;
     sync?.session.end();
     sync = null;
@@ -884,12 +898,11 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
     await options.vault.close();
     await writeCredentials(async () => {
       const remembered = await readRemembered();
-      // The lock first: a kill between the writes still reopens Revoked.
-      if (remembered) await remember({ ...remembered, accountId, signedOut: true, revokedAt });
+      // The lock first: a kill between the writes still reopens locked (an earlier revocation is no longer why).
+      if (remembered) await remember({ ...remembered, accountId, signedOut: true, revoked });
       await credentials.removeItem(credentialsKey(backend.name));
       await credentials.removeItem(statusKey(backend.name));
     });
-    setGate({ state: 'revoked', accountId, revokedAt });
   };
 
   /** Refreshes eligibility on entering the foreground, on reconnection and every minute while foregrounded and connected. */
@@ -1216,7 +1229,7 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
   const actAsPlayer = async (
     name: string,
     body: unknown,
-  ): Promise<{ readonly code: number; readonly status: string | undefined; readonly retryAfter?: unknown; readonly answer: Record<string, unknown> | null } | null> => {
+  ): Promise<{ readonly code: number; readonly status: string | undefined; readonly retryAfter?: unknown; readonly body: Record<string, unknown> | null } | null> => {
     if (!isSignedIn(gate)) return null;
     const at = generation;
     try {
@@ -1224,7 +1237,7 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
       if (!token) return null;
       const response = await post(`/functions/v1/${name}`, body, { authorization: `Bearer ${token}` });
       const answer = (await response.json().catch(() => null)) as { status?: string; retryAfter?: unknown } | null;
-      return at === generation ? { code: response.status, status: answer?.status, retryAfter: answer?.retryAfter, answer } : null;
+      return at === generation ? { code: response.status, status: answer?.status, retryAfter: answer?.retryAfter, body: answer } : null;
     } catch {
       return null;
     }
@@ -1419,7 +1432,7 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
   const revokeDevices = async (body: { readonly device: string } | { readonly others: true }): Promise<DeviceSignOutResult> => {
     const answer = await actAsPlayer('revoke-devices', body);
     if (answer?.code === 200 && answer.status === 'signed-out') {
-      const { devices: count, email } = answer.answer ?? {};
+      const { devices: count, email } = answer.body ?? {};
       return { status: 'signed-out', devices: typeof count === 'number' ? count : 0, email: typeof email === 'string' ? email : null };
     }
     if (answer?.code === 403 && answer.status === 'fresh-authentication-required') return { status: answer.status };
@@ -1589,8 +1602,8 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
       await connect();
       const remembered = await readRemembered();
       if (remembered?.signedOut) {
-        const { accountId, revokedAt } = remembered;
-        setGate(revokedAt !== undefined ? { state: 'revoked', accountId, revokedAt } : { state: 'signed-out', accountId });
+        const { accountId, revoked } = remembered;
+        setGate(revoked ? { state: 'revoked', accountId, revokedAt: revoked.at, by: revoked.by } : { state: 'signed-out', accountId });
         return { status: 'signed-out' };
       }
       // Read straight from storage: Supabase's own read would try to renew an
@@ -1615,21 +1628,8 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
       signingOut = (async (): Promise<SignOutResult> => {
         // An open practice session suspends while the database is still open.
         for (const handler of [...accountSessionEnding]) await handler().catch(() => undefined);
-        generation++;
-        opened?.stopWatch();
-        opened = null;
-        sync?.session.end();
-        sync = null;
-        syncChanged();
-        await options.vault.close();
         const session = await storedSession();
-        await writeCredentials(async () => {
-          const remembered = await readRemembered();
-          // The lock first: a kill between the two writes still reopens Signed out.
-          if (remembered) await remember({ ...remembered, accountId, signedOut: true });
-          await credentials.removeItem(credentialsKey(backend.name));
-          await credentials.removeItem(statusKey(backend.name));
-        });
+        await closeAccountSession(accountId);
         setGate({ state: 'signed-out', accountId });
         // Locally signed out already; the server learns only if it can be reached.
         return { status: 'signed-out', serverSessionEnded: session ? await endServerSession(session) : false };
@@ -1781,7 +1781,7 @@ function parseRemembered(text: string | null): RememberedAccount | null {
         reported?: unknown;
         currency?: unknown;
         signedOut?: unknown;
-        revokedAt?: unknown;
+        revoked?: { at?: unknown; by?: unknown };
       }
     | null;
   if (!value || typeof value.accountId !== 'string') return null;
@@ -1796,7 +1796,9 @@ function parseRemembered(text: string | null): RememberedAccount | null {
     ...(isAgeRange(value.reported) ? { reported: value.reported } : {}),
     currency: isCurrency(value.currency) ? value.currency : null,
     signedOut: value.signedOut === true,
-    ...(typeof value.revokedAt === 'number' && value.signedOut === true ? { revokedAt: value.revokedAt } : {}),
+    ...(value.signedOut === true && typeof value.revoked?.at === 'number'
+      ? { revoked: { at: value.revoked.at, by: value.revoked.by === 'provider' ? ('provider' as const) : ('device' as const) } }
+      : {}),
   };
 }
 

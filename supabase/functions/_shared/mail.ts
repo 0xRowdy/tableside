@@ -3,6 +3,8 @@
 // the stack's mail catcher; production sending (Resend) is #122's. Nothing
 // here logs an address, code or body.
 
+import { serviceRpc } from './service.ts';
+
 declare const Deno: { env: { get(name: string): string | undefined } };
 
 /** The local stack's mail catcher (config.toml [edge_runtime.secrets]). */
@@ -43,6 +45,22 @@ export function codeMail(code: string, purpose = 'Your Tableside code'): Mail {
     text: `Your Tableside code is ${code}.\n\nIt works once and expires soon. If you didn't ask for it, you can ignore this email.`,
     html: `<p>Your Tableside code is <strong>${code}</strong>.</p><p>It works once and expires soon. If you didn't ask for it, you can ignore this email.</p>`,
   };
+}
+
+/**
+ * Sends a security notice for a change that already happened, then logs the
+ * send. The change stands either way: a notice that couldn't go is logged as
+ * a failed send and never retried, and a send log that couldn't be written
+ * doesn't turn the change into a failure.
+ */
+export async function sendSecurityNotice(environment: string, to: string | null | undefined, mail: Mail, type: string): Promise<void> {
+  const delivered = to ? await deliver(to, mail, 'security') : false;
+  try {
+    const logged = await serviceRpc(environment, 'log_email_send', { type, pacing: 'immediate', outcome: delivered ? 'sent' : 'failed' });
+    await logged.body?.cancel();
+  } catch {
+    console.error('security notice log failed');
+  }
 }
 
 /**

@@ -146,7 +146,7 @@ describe('Devices', () => {
 });
 
 describe('a device signed out from another', () => {
-  const revoked: AccountGate = { state: 'revoked', accountId: FAKE_ACCOUNT_ID, revokedAt: new Date(2026, 9, 17, 12).getTime() };
+  const revoked: AccountGate = { state: 'revoked', accountId: FAKE_ACCOUNT_ID, revokedAt: new Date(2026, 9, 17, 12).getTime(), by: 'device' };
 
   it('reopens locked, with its records kept, offering a fresh sign-in and the support links', async () => {
     launch.stored = revoked;
@@ -165,6 +165,16 @@ describe('a device signed out from another', () => {
 
     await fireEvent.press(button('Sign in'));
     expect(await header('Sign in')).toBeOnTheScreen();
+  });
+
+  it('says when a sign-in method’s provider withdrew it rather than another device', async () => {
+    launch.stored = { ...revoked, by: 'provider' } as AccountGate;
+    await renderRouter('./src/app', { initialUrl: '/' });
+    expect(
+      await screen.findByText(
+        `Your account was signed out on this ${DEVICE} on 17 Oct 2026, when the Apple or Google sign-in it used stopped working with Tableside. Your records here are kept. Sign in to the same account to open them.`,
+      ),
+    ).toBeOnTheScreen();
   });
 
   it('locks the moment the gate learns it, from anywhere in the app', async () => {
