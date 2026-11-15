@@ -128,6 +128,9 @@ export const essentialPairs: readonly {
   { use: 'switch knob when on', kind: 'graphic', foreground: 'primaryForeground', background: 'primary' },
   { use: 'check mark on the switch knob', kind: 'graphic', foreground: 'primary', background: 'primaryForeground' },
   { use: 'volume button icon', kind: 'graphic', foreground: 'foreground', background: 'secondary' },
+  { use: 'first-run link text', kind: 'text', foreground: 'primary', background: 'background' },
+  { use: 'first-run choice text', kind: 'text', foreground: 'foreground', background: 'card' },
+  { use: 'first-run choice detail', kind: 'text', foreground: 'mutedForeground', background: 'card' },
 ];
 
 export const space = { 1: 4, 2: 8, 3: 12, 4: 16, 6: 24, 8: 32, 12: 48, 16: 64 } as const;

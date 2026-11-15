@@ -5,7 +5,7 @@
 // once. Slot 0 is the plain `supabase/` project on the default ports. Slot N
 // is a generated project in `.stacks/<N>/supabase/` whose config is this
 // checkout's with its own project id and every port moved up by N * 100; its
-// migrations and templates are symlinks, so they always match the checkout.
+// migrations and functions are symlinks, so they always match the checkout.
 //
 //   TABLESIDE_STACK_SLOT=2 pnpm stack start --exclude studio,imgproxy,vector,logflare
 //   TABLESIDE_STACK_SLOT=2 pnpm test:accounts
