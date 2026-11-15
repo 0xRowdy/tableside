@@ -9,7 +9,7 @@
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { type MetricEvent, type OperationalSnapshot, PROTOCOL_VERSION, TEEN_METRICS, completedPracticeSession, serverMetricEvents } from '../src';
+import { EMAIL_TYPES, type MetricEvent, metricEmailType, type OperationalSnapshot, PROTOCOL_VERSION, TEEN_METRICS, completedPracticeSession, serverMetricEvents } from '../src';
 import { prepareOperation } from '../src/sync/protocol';
 import {
   type SimulatedDevice,
@@ -143,14 +143,25 @@ describe("the backend's operational metrics", () => {
     await stack.sql`select public.log_email_send('code', 'immediate', 'failed')`;
     await stack.sql`select public.record_email_delivery_problem('code', 'bounced')`;
     await stack.sql`select public.record_email_delivery_problem('no-account', 'complained')`;
+    // Every other type counts too: the security notices, export ready and both deletion emails.
+    for (const type of EMAIL_TYPES.filter((type) => type !== 'code' && type !== 'no-account')) {
+      await stack.sql`select public.log_email_send(${type}, 'immediate', 'failed')`;
+      await stack.sql`select public.record_email_delivery_problem(${type}, 'bounced')`;
+    }
 
     const measured = await snapshot(since);
     expect(measured).toMatchObject({
       sync_receipts_refused: 1,
-      email_sends_failed: { code: 1, 'no-account': 0 },
-      email_delivery_problems: { code: { bounced: 1, complained: 0 }, 'no-account': { bounced: 0, complained: 1 } },
+      email_sends_failed: Object.fromEntries(EMAIL_TYPES.map((type) => [type, type === 'no-account' ? 0 : 1])),
+      email_delivery_problems: Object.fromEntries(
+        EMAIL_TYPES.map((type) => [type, type === 'no-account' ? { bounced: 0, complained: 1 } : { bounced: 1, complained: 0 }]),
+      ),
       email_queue_age_ms: null,
     });
+    expect(Object.keys(measured.email_sends_failed).sort()).toEqual([...EMAIL_TYPES].sort());
+    for (const type of EMAIL_TYPES) {
+      expect(serverMetricEvents(measured)).toContainEqual(expect.objectContaining({ name: 'email_sends_failed', properties: { type: metricEmailType(type) } }));
+    }
     expect(measured.storage_bytes.database).toBeGreaterThan(0);
     // Cumulative across the database since its statistics were reset; aborted transactions are counted in it.
     expect(measured.transactions_rolled_back).toBeGreaterThanOrEqual(0);

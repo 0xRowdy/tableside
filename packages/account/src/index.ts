@@ -91,6 +91,7 @@ export {
 } from './export';
 export {
   type DeviceMetricName,
+  EMAIL_TYPES,
   METRICS,
   type MetricEvent,
   type MetricName,
@@ -104,6 +105,7 @@ export {
   createMetricsSender,
   discardMetrics,
   metricEvent,
+  metricEmailType,
   metricPermitted,
   serverMetricEvents,
 } from './metrics';
