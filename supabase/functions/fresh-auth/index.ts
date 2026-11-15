@@ -19,18 +19,13 @@
 
 import { callerOf, emailCodeValid, provenIdentity } from '../_shared/caller.ts';
 import { withCors } from '../_shared/cors.ts';
-import { ENVIRONMENT_HEADER, reply, serviceRpc } from '../_shared/service.ts';
+import { environmentOf, readJsonPost, reply, serviceRpc } from '../_shared/service.ts';
 
 declare const Deno: { serve(handler: (request: Request) => Promise<Response>): void };
 
 Deno.serve(withCors(async (request) => {
-  if (request.method !== 'POST') return reply(400, { status: 'invalid' });
-  let body: { method?: unknown; code?: unknown; provider?: unknown; idToken?: unknown; nonce?: unknown };
-  try {
-    body = await request.json();
-  } catch {
-    return reply(400, { status: 'invalid' });
-  }
+  const body = await readJsonPost<{ method: unknown; code: unknown; provider: unknown; idToken: unknown; nonce: unknown }>(request);
+  if (!body) return reply(400, { status: 'invalid' });
   try {
     const caller = await callerOf(request);
     if (!caller) return reply(401, { status: 'not-signed-in' });
@@ -48,7 +43,7 @@ Deno.serve(withCors(async (request) => {
       return reply(400, { status: 'invalid' });
     }
 
-    const response = await serviceRpc(request.headers.get(ENVIRONMENT_HEADER) ?? '', 'record_fresh_authentication', {
+    const response = await serviceRpc(environmentOf(request), 'record_fresh_authentication', {
       session: caller.sessionId,
       auth_user: caller.authUserId,
       provider: proof.provider,

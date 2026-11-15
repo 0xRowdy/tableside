@@ -16,12 +16,9 @@
 
 import { type ProviderIdentity, deletionPorts } from '../_shared/deletion-ports.ts';
 import { deletionAcceptedMail, sendSecurityNotice } from '../_shared/mail.ts';
-import { ENVIRONMENT_HEADER, reply, serviceRpc } from '../_shared/service.ts';
+import { environmentOf, reply, rpcJson, serviceFetch } from '../_shared/service.ts';
 
-declare const Deno: { serve(handler: (request: Request) => Promise<Response>): void; env: { get(name: string): string | undefined } };
-
-const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
-const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+declare const Deno: { serve(handler: (request: Request) => Promise<Response>): void };
 /** The bucket of the account's own objects (its folder is the account ID). */
 const PRIVATE_BUCKET = 'account-private';
 /** External steps per account per wake: every step once, with room for several pages of objects; the rest wait for the next wake. */
@@ -35,15 +32,7 @@ type Step =
   | { step: 'providers'; identities: ProviderIdentity[] }
   | { step: 'waiting' | 'busy' | 'complete' };
 
-async function rpc<T>(environment: string, name: string, args: Record<string, unknown>): Promise<T> {
-  const response = await serviceRpc(environment, name, args);
-  if (!response.ok) {
-    await response.body?.cancel();
-    throw new Error(name);
-  }
-  const text = await response.text();
-  return (text ? JSON.parse(text) : null) as T;
-}
+const rpc = rpcJson;
 
 /** Does the external step; its outcome for deletion_step_done. */
 async function perform(environment: string, next: Step): Promise<Record<string, unknown>> {
@@ -53,11 +42,7 @@ async function perform(environment: string, next: Step): Promise<Record<string, 
       return {};
     case 'objects': {
       // Through the Storage API, which removes the files with their rows (the database can't).
-      const removed = await fetch(`${SUPABASE_URL}/storage/v1/object/${PRIVATE_BUCKET}`, {
-        method: 'DELETE',
-        headers: { apikey: SERVICE_KEY, authorization: `Bearer ${SERVICE_KEY}`, 'content-type': 'application/json' },
-        body: JSON.stringify({ prefixes: next.paths }),
-      });
+      const removed = await serviceFetch(`/storage/v1/object/${PRIVATE_BUCKET}`, { method: 'DELETE', body: JSON.stringify({ prefixes: next.paths }) });
       await removed.body?.cancel();
       if (!removed.ok) throw new Error('objects');
       return {};
@@ -98,7 +83,7 @@ async function advance(environment: string, account: string): Promise<void> {
 Deno.serve(async (request) => {
   if (request.method !== 'POST') return reply(400, { status: 'invalid' });
   await request.body?.cancel();
-  const environment = request.headers.get(ENVIRONMENT_HEADER) ?? '';
+  const environment = environmentOf(request);
   try {
     const due = await rpc<string[]>(environment, 'deletions_due', {});
     for (const account of due) {

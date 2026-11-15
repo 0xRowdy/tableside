@@ -22,16 +22,11 @@
 // Nothing here logs a token, nonce, code, claim or address.
 
 import { callerOf, emailCodeValid, provenIdentity } from '../_shared/caller.ts';
-import { type Mail, codeMail, deliver } from '../_shared/mail.ts';
-import { ENVIRONMENT_HEADER, clientIp, reply, serviceRpc } from '../_shared/service.ts';
+import { admitCodeRequest, logSend, sendCodeEmail } from '../_shared/codes.ts';
+import { type Mail, deliver } from '../_shared/mail.ts';
+import { clientIp, environmentOf, readJsonPost, reply, rpcJson } from '../_shared/service.ts';
 
-declare const Deno: {
-  env: { get(name: string): string | undefined };
-  serve(handler: (request: Request) => Promise<Response>): void;
-};
-
-const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
-const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+declare const Deno: { serve(handler: (request: Request) => Promise<Response>): void };
 
 type Rpc = <T>(name: string, args: Record<string, unknown>) => Promise<T>;
 type Outcome = { status: string; email?: string };
@@ -46,23 +41,10 @@ const STATUS_CODES: Readonly<Record<string, number>> = {
 };
 
 Deno.serve(async (request) => {
-  if (request.method !== 'POST') return reply(400, { status: 'invalid' });
-  let body: { method?: unknown; step?: unknown; code?: unknown; provider?: unknown; idToken?: unknown; nonce?: unknown };
-  try {
-    body = await request.json();
-  } catch {
-    return reply(400, { status: 'invalid' });
-  }
-  const environment = request.headers.get(ENVIRONMENT_HEADER) ?? '';
-  const rpc: Rpc = async <T>(name: string, args: Record<string, unknown>) => {
-    const response = await serviceRpc(environment, name, args);
-    if (!response.ok) {
-      await response.body?.cancel();
-      throw new Error(name);
-    }
-    const text = await response.text();
-    return (text ? JSON.parse(text) : null) as T;
-  };
+  const body = await readJsonPost<{ method: unknown; step: unknown; code: unknown; provider: unknown; idToken: unknown; nonce: unknown }>(request);
+  if (!body) return reply(400, { status: 'invalid' });
+  const environment = environmentOf(request);
+  const rpc: Rpc = <T,>(name: string, args: Record<string, unknown>) => rpcJson<T>(environment, name, args);
   try {
     const caller = await callerOf(request);
     if (!caller) return reply(401, { status: 'not-signed-in' });
@@ -80,13 +62,13 @@ Deno.serve(async (request) => {
         subject: claims.sub,
         claims: { iss: claims.iss, sub: claims.sub, ...(typeof email === 'string' ? { email, email_verified: email_verified === true } : {}) },
       });
-      return finish(outcome, providerLabel(provider), rpc);
+      return finish(environment, outcome, providerLabel(provider));
     }
 
     if (body.method === 'email' && body.step === 'send') {
       const address = await rpc<Outcome>('email_method_address', who);
       if (address.status !== 'ready' || !address.email) return reply(STATUS_CODES[address.status] ?? 502, { status: address.status });
-      return sendCode(address.email, clientIp(request), rpc);
+      return sendCode(environment, address.email, clientIp(request));
     }
 
     if (body.method === 'email' && typeof body.code === 'string' && /^\d{6}$/.test(body.code)) {
@@ -94,7 +76,7 @@ Deno.serve(async (request) => {
       const address = await rpc<Outcome>('email_method_address', who);
       if (address.status !== 'ready' || !address.email) return reply(STATUS_CODES[address.status] ?? 502, { status: address.status });
       if (!(await emailCodeValid(address.email, body.code, caller.authUserId))) return reply(401, { status: 'invalid-code' });
-      return finish(await rpc<Outcome>('link_email_identity', who), 'Email code', rpc);
+      return finish(environment, await rpc<Outcome>('link_email_identity', who), 'Email code');
     }
 
     return reply(400, { status: 'invalid' });
@@ -105,27 +87,19 @@ Deno.serve(async (request) => {
 });
 
 /** Answers a link's outcome, sending the security notice first when a method was added. */
-async function finish(outcome: Outcome, label: string, rpc: Rpc): Promise<Response> {
+async function finish(environment: string, outcome: Outcome, label: string): Promise<Response> {
   if (outcome.status !== 'linked') return reply(STATUS_CODES[outcome.status] ?? 502, { status: outcome.status });
   const delivered = outcome.email ? await deliver(outcome.email, methodLinkedMail(label), 'security') : false;
   // The method is added either way: a notice that couldn't go is logged as a failed send, never retried.
-  await rpc('log_email_send', { type: 'method-linked', pacing: 'immediate', outcome: delivered ? 'sent' : 'failed' });
+  await logSend(environment, 'method-linked', delivered);
   return reply(200, { status: 'linked' });
 }
 
 /** Emails the account's sign-in address a code, under request-code's limits. */
-async function sendCode(email: string, ip: string, rpc: Rpc): Promise<Response> {
-  const admission = await rpc<{ admitted: boolean; retry_after?: number }>('admit_code_request', { address: email, ip });
-  if (!admission.admitted) return reply(429, { status: 'rate-limited', retryAfter: admission.retry_after ?? 60 });
-  const link = await fetch(`${SUPABASE_URL}/auth/v1/admin/generate_link`, {
-    method: 'POST',
-    headers: { apikey: SERVICE_KEY, authorization: `Bearer ${SERVICE_KEY}`, 'content-type': 'application/json' },
-    body: JSON.stringify({ type: 'magiclink', email }),
-  });
-  const code = ((await link.json().catch(() => null)) as { email_otp?: unknown } | null)?.email_otp;
-  const delivered = link.ok && typeof code === 'string' && (await deliver(email, codeMail(code)));
-  await rpc('log_email_send', { type: 'code', pacing: 'immediate', outcome: delivered ? 'sent' : 'failed' });
-  return delivered ? reply(200, { status: 'sent' }) : reply(502, { status: 'failed' });
+async function sendCode(environment: string, email: string, ip: string): Promise<Response> {
+  const refused = await admitCodeRequest(environment, email, ip);
+  if (refused) return refused;
+  return (await sendCodeEmail(environment, email)) ? reply(200, { status: 'sent' }) : reply(502, { status: 'failed' });
 }
 
 function providerLabel(provider: string): string {

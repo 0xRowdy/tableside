@@ -16,7 +16,7 @@
 
 import { callerOf } from '../_shared/caller.ts';
 import { withCors } from '../_shared/cors.ts';
-import { ENVIRONMENT_HEADER, reply, serviceRpc } from '../_shared/service.ts';
+import { environmentOf, reply, serviceRpc } from '../_shared/service.ts';
 
 declare const Deno: { serve(handler: (request: Request) => Promise<Response>): void };
 
@@ -27,7 +27,7 @@ Deno.serve(
     try {
       const caller = await callerOf(request);
       if (!caller) return reply(401, { status: 'not-signed-in' });
-      const response = await serviceRpc(request.headers.get(ENVIRONMENT_HEADER) ?? '', 'record_gpc_opt_out', {
+      const response = await serviceRpc(environmentOf(request), 'record_gpc_opt_out', {
         session: caller.sessionId,
         auth_user: caller.authUserId,
       });

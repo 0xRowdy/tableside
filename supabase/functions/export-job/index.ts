@@ -14,32 +14,18 @@
 // account, path or record.
 
 import { exportReadyMail, sendSecurityNotice } from '../_shared/mail.ts';
-import { ENVIRONMENT_HEADER, reply, serviceRpc } from '../_shared/service.ts';
+import { environmentOf, reply, rpcJson, serviceFetch, serviceRpc } from '../_shared/service.ts';
 import { type ZipEntry, zip } from '../_shared/zip.ts';
 
-declare const Deno: { serve(handler: (request: Request) => Promise<Response>): void; env: { get(name: string): string | undefined } };
-
-const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
-const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+declare const Deno: { serve(handler: (request: Request) => Promise<Response>): void };
 const BUCKET = 'account-exports';
 /** Builds per wake: the rest wait for the next one. */
 const MAX_BUILDS = 5;
 
-async function rpc<T>(environment: string, name: string, args: Record<string, unknown> = {}): Promise<T> {
-  const response = await serviceRpc(environment, name, args);
-  if (!response.ok) {
-    await response.body?.cancel();
-    throw new Error(name);
-  }
-  return (await response.json()) as T;
-}
+const rpc = rpcJson;
 
 function storage(method: 'POST' | 'DELETE', path: string, body: BodyInit, contentType: string): Promise<Response> {
-  return fetch(`${SUPABASE_URL}/storage/v1/object/${path}`, {
-    method,
-    headers: { apikey: SERVICE_KEY, authorization: `Bearer ${SERVICE_KEY}`, 'content-type': contentType, 'x-upsert': 'true' },
-    body,
-  });
+  return serviceFetch(`/storage/v1/object/${path}`, { method, body, headers: { 'content-type': contentType, 'x-upsert': 'true' } });
 }
 
 /** Every part of a building export, each path's text in order; null once it ended. */
@@ -104,7 +90,7 @@ async function sweep(environment: string): Promise<number> {
 Deno.serve(async (request) => {
   if (request.method !== 'POST') return reply(400, { status: 'invalid' });
   await request.body?.cancel();
-  const environment = request.headers.get(ENVIRONMENT_HEADER) ?? '';
+  const environment = environmentOf(request);
   try {
     let built = 0;
     for (; built < MAX_BUILDS; built++) {

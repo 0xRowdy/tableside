@@ -16,36 +16,25 @@
 // account has the email-code method for it (#100). Nothing here logs an
 // address, code or token.
 
+import { admitCodeRequest, generateCode, logSend } from '../_shared/codes.ts';
 import { withCors } from '../_shared/cors.ts';
 import { type Mail, codeMail, deliver } from '../_shared/mail.ts';
-import { clientIp } from '../_shared/service.ts';
+import { StepError, clientIp, environmentOf, readJsonPost, reply, rpcJson, serviceAuth } from '../_shared/service.ts';
 
-declare const Deno: {
-  env: { get(name: string): string | undefined };
-  serve(handler: (request: Request) => Promise<Response>): void;
-};
+declare const Deno: { serve(handler: (request: Request) => Promise<Response>): void };
 
 /** 'other': an account holds the address but signs in only with Apple or Google. */
 type Recipient = 'account' | 'other' | 'pending' | 'none';
 type MailType = 'code' | 'no-account';
-
-const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
-const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
-
-const ENVIRONMENT_HEADER = 'x-tableside-environment';
+type Rpc = <T>(name: string, args: Record<string, unknown>) => Promise<T>;
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 /** How long every admitted request takes at least; above the code path's own time with the local mail catcher. #122 tunes it against Resend. */
 const RESPONSE_FLOOR_MS = 300;
 
 Deno.serve(withCors(async (request) => {
-  if (request.method !== 'POST') return reply(400, { status: 'invalid' });
-  let body: { email?: unknown; intent?: unknown; assertion?: unknown };
-  try {
-    body = await request.json();
-  } catch {
-    return reply(400, { status: 'invalid' });
-  }
+  const body = await readJsonPost<{ email: unknown; intent: unknown; assertion: unknown }>(request);
+  if (!body) return reply(400, { status: 'invalid' });
   const email = typeof body.email === 'string' ? body.email.trim() : '';
   const intent = body.intent;
   if (!EMAIL_PATTERN.test(email) || email.length > 254 || (intent !== 'sign-in' && intent !== 'create')) {
@@ -54,8 +43,8 @@ Deno.serve(withCors(async (request) => {
   const assertion = typeof body.assertion === 'string' ? body.assertion : '';
   // Passed on to every database call, whose pre-request hook refuses another
   // environment (or none) before anything runs; so is a new user's.
-  const environment = request.headers.get(ENVIRONMENT_HEADER) ?? '';
-  const rpc = <T = unknown>(name: string, args: Record<string, unknown>) => callRpc<T>(environment, name, args);
+  const environment = environmentOf(request);
+  const rpc: Rpc = <T,>(name: string, args: Record<string, unknown>) => rpcJson<T>(environment, name, args);
 
   try {
     // Create needs a usable assertion whoever owns the address, so this
@@ -63,8 +52,8 @@ Deno.serve(withCors(async (request) => {
     if (intent === 'create' && !(await rpc<boolean>('eligibility_assertion_usable', { assertion, address: email }))) {
       return reply(403, { status: 'age-required' });
     }
-    const admission = await rpc<{ admitted: boolean; retry_after?: number }>('admit_code_request', { address: email, ip: clientIp(request) });
-    if (!admission.admitted) return reply(429, { status: 'rate-limited', retryAfter: admission.retry_after ?? 60 });
+    const refused = await admitCodeRequest(environment, email, clientIp(request));
+    if (refused) return refused;
 
     // Every admitted answer waits out the same floor, so the extra work of
     // issuing a code doesn't show in how long the answer takes.
@@ -81,7 +70,7 @@ Deno.serve(withCors(async (request) => {
       logFailure(error);
     }
     // Every failure to send, whatever the step, is a failed send of its type.
-    await rpc('log_email_send', { type, pacing: 'immediate', outcome: delivered ? 'sent' : 'failed' });
+    await logSend(environment, type, delivered);
     await floor;
     return delivered ? reply(200, { status: 'sent' }) : reply(502, { status: 'failed' });
   } catch (error) {
@@ -113,10 +102,10 @@ async function issueCode({
   recipient: Recipient;
   assertion: string;
   environment: string;
-  rpc: <T>(name: string, args: Record<string, unknown>) => Promise<T>;
+  rpc: Rpc;
 }): Promise<string> {
   if (recipient === 'none') {
-    const created = await auth('/admin/users', { email, user_metadata: { eligibility_assertion: assertion, environment } });
+    const created = await serviceAuth('/admin/users', { email, user_metadata: { eligibility_assertion: assertion, environment } });
     // A racing Create for the same address made the user first: send it a code too.
     if (!created.ok && created.code !== 'email_exists') throw new StepError('create-user');
   }
@@ -124,10 +113,7 @@ async function issueCode({
   if (recipient === 'pending' && !(await rpc<boolean>('renew_pending_eligibility', { address: email, assertion }))) {
     throw new StepError('renew-eligibility');
   }
-  const link = await auth('/admin/generate_link', { type: 'magiclink', email });
-  const code = (link.body as { email_otp?: unknown } | null)?.email_otp;
-  if (!link.ok || typeof code !== 'string') throw new StepError('generate-code');
-  return code;
+  return generateCode(email);
 }
 
 const NO_ACCOUNT_MAIL: Mail = {
@@ -141,37 +127,3 @@ const NO_ACCOUNT_MAIL: Mail = {
     '<p>To start one, open Tableside and choose <strong>Create account</strong>. If you joined with Apple or Google, sign in with that instead.</p>' +
     "<p>If you didn't ask, you can ignore this email.</p>",
 };
-
-class StepError extends Error {
-  constructor(readonly step: string) {
-    super(step);
-  }
-}
-
-async function callRpc<T>(environment: string, name: string, args: Record<string, unknown>): Promise<T> {
-  const response = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${name}`, {
-    method: 'POST',
-    headers: { ...serviceHeaders(), [ENVIRONMENT_HEADER]: environment },
-    body: JSON.stringify(args),
-  });
-  if (!response.ok) {
-    await response.body?.cancel();
-    throw new StepError(name);
-  }
-  const text = await response.text();
-  return (text ? JSON.parse(text) : null) as T;
-}
-
-async function auth(path: string, body: unknown): Promise<{ ok: boolean; code?: string; body: unknown }> {
-  const response = await fetch(`${SUPABASE_URL}/auth/v1${path}`, { method: 'POST', headers: serviceHeaders(), body: JSON.stringify(body) });
-  const parsed = (await response.json().catch(() => null)) as { error_code?: string } | null;
-  return { ok: response.ok, code: parsed?.error_code, body: parsed };
-}
-
-function serviceHeaders(): Record<string, string> {
-  return { apikey: SERVICE_KEY, authorization: `Bearer ${SERVICE_KEY}`, 'content-type': 'application/json' };
-}
-
-function reply(status: number, body: unknown): Response {
-  return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
-}
