@@ -94,11 +94,15 @@ export const opensOrdinaryAccess = (gate: AccountGate): gate is Extract<AccountG
 export const opensRestrictedPaths = (
   gate: AccountGate,
 ): gate is Extract<AccountGate, { state: 'active' | 'renewal-pending' | 'age-unresolved' | 'age-ineligible' | 'deletion-scheduled' }> =>
-  opensOrdinaryAccess(gate) || isAgeRestricted(gate) || gate.state === 'deletion-scheduled';
+  opensOrdinaryAccess(gate) || isRestricted(gate);
 
-/** Gate states that keep the account's database open with ordinary access closed: the age states and Deletion scheduled. */
-export const isRestricted = (gate: AccountGate): gate is Extract<AccountGate, { state: 'age-unresolved' | 'age-ineligible' | 'deletion-scheduled' }> =>
-  isAgeRestricted(gate) || gate.state === 'deletion-scheduled';
+/**
+ * Restricted gate states: ordinary access is closed, but the account's
+ * database stays open for the restricted paths. The age states and Deletion scheduled.
+ */
+export function isRestricted(gate: AccountGate): gate is Extract<AccountGate, { state: 'age-unresolved' | 'age-ineligible' | 'deletion-scheduled' }> {
+  return isAgeRestricted(gate) || gate.state === 'deletion-scheduled';
+}
 
 /** Which gate states a call needs: ordinary access, or the restricted paths (opensRestrictedPaths). */
 type AccessPath = 'ordinary' | 'restricted';
@@ -184,7 +188,7 @@ export type ScheduleDeletionResult =
 
 export type CancelDeletionResult =
   /** The same account is active again, with its records. */
-  | { readonly status: 'cancelled' }
+  | { readonly status: 'canceled' }
   /** The deadline has passed: permanent deletion can't be undone. */
   | { readonly status: 'too-late' }
   | NeedsFresh
@@ -206,7 +210,7 @@ export interface AccountDeletion {
   status(): Promise<DeletionStatus | null>;
 }
 
-export type CurrencyChangeResult ={ readonly status: 'changed' } | { readonly status: 'locked' } | { readonly status: 'failed' };
+export type CurrencyChangeResult = { readonly status: 'changed' } | { readonly status: 'locked' } | { readonly status: 'failed' };
 
 
 /** Which way a player asks for a code: Sign in (an existing account) or Create (a new one). */
@@ -960,7 +964,7 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
    * Asks the server, with this session's status credential, what became of the
    * account and session. Only its answers move the gate: to Revoked, to
    * Deletion scheduled (with the deadline), or back from it once deletion was
-   * cancelled (an active answer). A timeout, a lost answer, an expired token or
+   * canceled (an active answer). A timeout, a lost answer, an expired token or
    * a refused renewal never does. (Deleted is #104's.)
    */
   const checkLifecycle = async (current: OpenSession): Promise<void> => {
@@ -972,8 +976,7 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
       const answer = (await response.json().catch(() => null)) as { status?: unknown; at?: unknown; by?: unknown; deadline?: unknown } | null;
       if (!response.ok || opened !== current) return;
       if (answer?.status === 'revoked') {
-        const at = typeof answer.at === 'string' ? Date.parse(answer.at) : Number.NaN;
-        await lockRevoked(current, { at: Number.isFinite(at) ? at : options.clock(), by: answer.by === 'provider' ? 'provider' : 'device' });
+        await lockRevoked(current, { at: instant(answer.at) ?? options.clock(), by: answer.by === 'provider' ? 'provider' : 'device' });
       } else if (answer?.status === 'deletion-scheduled') {
         const deadline = instant(answer.deadline);
         if (deadline !== null) await rememberDeletion(current, deadline);
@@ -994,6 +997,8 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
    */
   const rememberDeletion = async (current: OpenSession, deadline: number | undefined): Promise<void> => {
     if (opened !== current || current.remembered.deletionDeadline === deadline) return;
+    // An unanswered request is for the account as it was: a retry from here starts afresh.
+    pendingDeletion = null;
     const apply = (base: RememberedAccount): RememberedAccount => ({ ...base, deletionDeadline: deadline });
     current.remembered = apply(current.remembered);
     await writeCredentials(async () => {
@@ -1640,14 +1645,15 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
   };
 
   /**
-   * The operation ID of a Schedule or Cancel deletion request whose answer
-   * hasn't come, for this account session: asking again sends the same one,
-   * so a lost answer is answered again by its receipt, never accepted twice.
+   * The operation ID of a Schedule or Cancel deletion request that got no
+   * answer, for this account session: asking again sends the same one, so the
+   * server never accepts it twice and answers with where the deletion stands
+   * now. Any answer, or the deletion changing, lets the next request start afresh.
    */
-  let pendingDeletion: { readonly at: number; readonly action: 'schedule' | 'cancel'; readonly id: string } | null = null;
+  let pendingDeletion: { readonly generation: number; readonly action: 'schedule' | 'cancel'; readonly id: string } | null = null;
   const deletionOperation = (action: 'schedule' | 'cancel'): string => {
-    if (pendingDeletion?.at !== generation || pendingDeletion.action !== action) {
-      pendingDeletion = { at: generation, action, id: hex(options.randomBytes(16)) };
+    if (pendingDeletion?.generation !== generation || pendingDeletion.action !== action) {
+      pendingDeletion = { generation, action, id: hex(options.randomBytes(16)) };
     }
     return pendingDeletion.id;
   };
@@ -1661,10 +1667,14 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
       if (!options.device.online.current()) return { status: 'offline' };
       const answer = await actAsPlayer('schedule-deletion', { operationId: deletionOperation('schedule') }, 'restricted');
       if (opened !== current) return { status: 'failed' };
+      if (answer && answer.code < 500) pendingDeletion = null;
       if (answer?.code === 403 && answer.status === 'fresh-authentication-required') return { status: answer.status };
       const deadline = answer?.code === 200 && answer.status === 'scheduled' ? instant(answer.body?.deadline) : null;
-      if (deadline === null) return { status: 'failed' };
-      pendingDeletion = null;
+      if (deadline === null) {
+        // No answer, or a retry whose scheduling was canceled since: what the server says of the account decides.
+        await checkLifecycle(current);
+        return { status: 'failed' };
+      }
       await rememberDeletion(current, deadline);
       return { status: 'scheduled', deadline };
     },
@@ -1676,12 +1686,12 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
       const answer = (await operation('cancel_deletion_v1', { operation_id: deletionOperation('cancel') }, 'restricted')) as { status?: unknown } | null;
       if (opened !== current) return { status: 'failed' };
       const status = answer?.status;
+      if (typeof status === 'string') pendingDeletion = null;
       if (status === 'fresh-authentication-required') return { status };
-      if (status === 'cancelled' || status === 'not-scheduled') {
+      if (status === 'canceled' || status === 'not-scheduled') {
         // Either way the server says the account is active: the same account reopens.
-        pendingDeletion = null;
         await rememberDeletion(current, undefined);
-        return { status: 'cancelled' };
+        return { status: 'canceled' };
       }
       // Refused, or no answer: what the server says of the account decides what this device shows.
       await checkLifecycle(current);

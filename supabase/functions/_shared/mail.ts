@@ -92,7 +92,7 @@ export function devicesSignedOutMail(devices: number, method?: string): Mail {
 
 /**
  * "Deletion scheduled" (#103): the date the account is deleted permanently, and
- * how to undo it until then. It never says a subscription was cancelled: billing
+ * how to undo it until then. It never says a subscription was canceled: billing
  * continues until the player cancels it with the store (Amendment 1 C2).
  */
 export function deletionScheduledMail(deadline: string): Mail {

@@ -55,7 +55,7 @@ export function DeletionScheduled({ gate }: { gate: DeletionScheduledGate }) {
     setProblem(null);
     try {
       const result = await service.deletion.cancel();
-      // 'cancelled': the gate reopens the account, and the tabs replace this screen.
+      // 'canceled': the gate reopens the account, and the tabs replace this screen.
       if (result.status === 'fresh-authentication-required') {
         const found = await service.freshAuthentication.methods();
         if (found) setMethods(found);
@@ -71,7 +71,7 @@ export function DeletionScheduled({ gate }: { gate: DeletionScheduledGate }) {
   return (
     <FirstRunScreen title="Your account is scheduled for deletion" bar={{ title: 'Account locked' }} lead={<ScheduledIcon />}>
       <Body>
-        {`It will be deleted permanently on ${dayText(gate.deadline)}. Until then, practice and your account are locked on every device, your public content is hidden, and your data is kept.`}
+        {`It will be deleted permanently on ${dayText(gate.deadline)}. Until then, practice and your account are locked, your public content is hidden, and your data is kept.`}
       </Body>
       <Actions>
         <Button label="Cancel deletion" stretch disabled={busy} onPress={() => void cancel()} />

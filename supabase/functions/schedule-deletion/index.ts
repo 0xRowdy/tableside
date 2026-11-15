@@ -3,13 +3,15 @@
 // server-set deadline; sessions, methods and data stay until then. The request
 // that schedules it sends the "deletion scheduled" email (deadline and undo);
 // a retry with the same operation ID, or a request while deletion is already
-// scheduled, answers the schedule as it stands and sends nothing.
+// scheduled, answers the schedule as it stands and sends nothing. A retry of
+// a request whose scheduling was canceled since is never accepted again.
 //
 // POST, with the caller's own access token as the bearer and naming its
 // backend environment in x-tableside-environment like every request:
 //   { operationId }   32 hex characters, the same for every retry of one request
 // Answers:
 //   200 { status: 'scheduled', deadline, scheduledAt }
+//   409 { status: 'not-scheduled' }   a retry, after its scheduling was canceled
 //   403 { status: 'fresh-authentication-required' }
 //   401 { status: 'not-signed-in' }
 //   400 { status: 'invalid' } | 502 { status: 'failed' }
@@ -52,6 +54,7 @@ Deno.serve(async (request) => {
       throw new Error('schedule_deletion');
     }
     const outcome = (await response.json()) as { status: string; deadline?: string; scheduledAt?: string; accepted?: boolean; email?: string | null };
+    if (outcome.status === 'none') return reply(409, { status: 'not-scheduled' });
     if (outcome.status !== 'scheduled' || !outcome.deadline) return reply(STATUS_CODES[outcome.status] ?? 502, { status: outcome.status });
     if (outcome.accepted) await sendSecurityNotice(environment, outcome.email, deletionScheduledMail(outcome.deadline), 'deletion-scheduled');
     return reply(200, { status: 'scheduled', deadline: outcome.deadline, scheduledAt: outcome.scheduledAt });

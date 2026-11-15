@@ -1,6 +1,6 @@
 // S2-22 Delete account (More → Settings → Account, and the age-restricted
 // paused screen's "Delete account"): Confirm it's you first, then the export
-// offer, the store's subscription and refund paths (cancelling isn't needed),
+// offer, the store's subscription and refund paths (canceling isn't needed),
 // and what scheduling does (access locks, public content is hidden, data is
 // kept, billing continues), before the choice: schedule deletion with a
 // 30-day undo, or Delete permanently now. Online only: nothing is queued.
@@ -89,7 +89,7 @@ export function DeleteAccountScreen({ back, onExport }: { back: { label: string;
           <BillingHelpRows />
           <GroupLabel>IF YOU SCHEDULE DELETION</GroupLabel>
           <Group>
-            <ListRow icon={Lock} title="Access locks now" detail="Practice and your account lock on every device until you cancel." />
+            <ListRow icon={Lock} title="Access locks now" detail="Practice and your account lock now, and on your other devices once they connect." />
             <ListRow icon={EyeOff} title="Public content is hidden" detail="Your profile, strategies, ratings and contributions are hidden at once." />
             <ListRow icon={Archive} title="Your data is kept" detail="Nothing is deleted for 30 days. Sign in and choose Cancel deletion to keep your account." />
             <ListRow

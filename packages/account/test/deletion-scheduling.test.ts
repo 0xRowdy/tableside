@@ -115,11 +115,22 @@ describe('scheduling deletion', () => {
     expect(await phone.account.export.localSupplement()).not.toBeNull();
   });
 
-  it('answers a request whose answer was lost with what happened, scheduling it once', async () => {
+  it('learns what a request whose answer was lost did, from the server', async () => {
+    const { phone, email, accountId } = await signedInPhone('lost-status');
+    await confirmByEmail(phone, email);
+    phone.proxy.dropNextResponse('schedule-deletion');
+    expect(await phone.account.deletion.schedule()).toEqual({ status: 'failed' });
+    // It asked the server what became of the account: deletion is scheduled.
+    const [row] = await stack.sql<{ deletion_deadline: Date }[]>`select deletion_deadline from public.accounts where account_id = ${accountId}`;
+    expect(phone.account.gate).toEqual({ state: 'deletion-scheduled', accountId, deadline: row!.deletion_deadline.getTime() });
+  });
+
+  it('answers a retry of a request whose answer was lost with what happened, scheduling it once', async () => {
     const { phone, email, accountId } = await signedInPhone('lost');
     await confirmByEmail(phone, email);
     const since = await stack.serverNow();
     phone.proxy.dropNextResponse('schedule-deletion');
+    phone.proxy.dropNextResponse('lifecycle_status_v1');
     expect(await phone.account.deletion.schedule()).toEqual({ status: 'failed' });
     // No proof reached the device, so it doesn't lock on its own.
     expect(phone.account.gate.state).toBe('active');
@@ -132,6 +143,40 @@ describe('scheduling deletion', () => {
     expect((await stack.emailSends(since)).filter((send) => send.type === 'deletion-scheduled')).toEqual([
       { type: 'deletion-scheduled', pacing: 'immediate', outcome: 'sent' },
     ]);
+  });
+
+  it('never accepts a retry again once its scheduling was canceled', async () => {
+    const { phone, email, accountId } = await signedInPhone('replay');
+    const token = accessToken(phone);
+    await confirmByEmail(phone, email);
+    const [user] = await stack.sql<{ auth_user_id: string }[]>`select auth_user_id from public.accounts where account_id = ${accountId}`;
+    const request = { session: sessionOf(token), auth_user: user!.auth_user_id, operation_id: 'b'.repeat(32) };
+    expect((await stack.serviceClient().rpc('schedule_deletion', request)).data).toMatchObject({ status: 'scheduled', accepted: true });
+    await phone.account.refreshEligibility();
+    expect(await phone.account.deletion.cancel()).toEqual({ status: 'canceled' });
+
+    // The same request again (a retry arriving late): not a second scheduling.
+    expect((await stack.serviceClient().rpc('schedule_deletion', request)).data).toEqual({ status: 'none', accepted: false });
+    expect(await accountState(accountId)).toBe('active');
+  });
+
+  it('is serialized with uploads: a device that hasn’t heard yet has its later uploads refused, and keeps them', async () => {
+    const { phone, email, accountId } = await signedInPhone('uploads');
+    const tablet = device('uploads-tablet');
+    await signInAlso(tablet, email);
+    tablet.proxy.online = false;
+    await tablet.playPracticeSession();
+    await confirmByEmail(phone, email);
+    expect(await phone.account.deletion.schedule()).toMatchObject({ status: 'scheduled' });
+
+    tablet.proxy.online = true;
+    await tablet.account.sync.reconcile();
+    await tablet.account.sync.idle();
+    expect(await stack.sql`select 1 from private.practice_results where account_id = ${accountId}`).toHaveLength(0);
+    await tablet.account.refreshEligibility();
+    expect(tablet.account.gate.state).toBe('deletion-scheduled');
+    // Kept on the device, for export or for after a cancel.
+    expect(await tablet.account.export.localSupplement()).toMatchObject({ unsynced: [expect.objectContaining({ recordType: 'completed-practice-session' })] });
   });
 
   it('needs a connection: there is no offline queue', async () => {
@@ -218,7 +263,7 @@ describe('a device learning deletion is scheduled', () => {
   });
 });
 
-describe('cancelling deletion', () => {
+describe('canceling deletion', () => {
   it('needs Confirm it’s you again, then restores the same account with its records', async () => {
     const { phone, email, accountId } = await signedInPhone('cancel');
     const saved = await phone.playPracticeSession();
@@ -233,7 +278,7 @@ describe('cancelling deletion', () => {
     await staleFreshAuthentication(accessToken(phone));
     expect(await phone.account.deletion.cancel()).toEqual({ status: 'fresh-authentication-required' });
     await confirmByEmail(phone, email);
-    expect(await phone.account.deletion.cancel()).toEqual({ status: 'cancelled' });
+    expect(await phone.account.deletion.cancel()).toEqual({ status: 'canceled' });
 
     expect(phone.account.gate).toEqual({ state: 'active', accountId, eligibility: '18+' });
     expect(await accountState(accountId)).toBe('active');
@@ -247,6 +292,22 @@ describe('cancelling deletion', () => {
     // The other device reopens when it hears.
     await tablet.account.refreshEligibility();
     expect(tablet.account.gate).toEqual({ state: 'active', accountId, eligibility: '18+' });
+  });
+
+  it('learns what a cancel whose answer was lost did, and a retry cancels it once', async () => {
+    const { phone, email, accountId } = await signedInPhone('lost-cancel');
+    await confirmByEmail(phone, email);
+    expect(await phone.account.deletion.schedule()).toMatchObject({ status: 'scheduled' });
+
+    phone.proxy.dropNextResponse('cancel_deletion_v1');
+    phone.proxy.dropNextResponse('lifecycle_status_v1');
+    expect(await phone.account.deletion.cancel()).toEqual({ status: 'failed' });
+    expect(phone.account.gate.state).toBe('deletion-scheduled');
+    expect(await accountState(accountId)).toBe('active');
+    // The same request again: the account is active, and nothing more is accepted.
+    expect(await phone.account.deletion.cancel()).toEqual({ status: 'canceled' });
+    expect(phone.account.gate).toEqual({ state: 'active', accountId, eligibility: '18+' });
+    expect(await stack.sql`select 1 from private.deletion_receipts where account_id = ${accountId} and action = 'cancel'`).toHaveLength(1);
   });
 
   it('changes nothing once the deadline has passed, or once the account is deleted', async () => {

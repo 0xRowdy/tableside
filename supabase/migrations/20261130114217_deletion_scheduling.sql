@@ -31,10 +31,12 @@
 -- The schedule
 -- ---------------------------------------------------------------------------
 
--- When the current scheduling was accepted (deletion_deadline is #101's).
+-- When the current scheduling was accepted (deletion_deadline is #101's). A
+-- scheduled account always has both; the irreversible boundary (#104) may
+-- keep them for its status.
 alter table public.accounts add column deletion_scheduled_at timestamptz;
 alter table public.accounts add constraint accounts_deletion_schedule check (
-  (state = 'deletion_scheduled') = (deletion_deadline is not null)
+  (state <> 'deletion_scheduled' or deletion_deadline is not null)
   and (deletion_deadline is null) = (deletion_scheduled_at is null));
 
 -- How long the undo window lasts.
@@ -44,8 +46,9 @@ language sql immutable set search_path = '' as $$
 $$;
 
 -- One receipt per accepted request (schedule or cancel): a retry with the same
--- operation ID gets the same answer, never a second acceptance. A different
--- request under the same ID is refused.
+-- operation ID is never accepted again, and is answered with what the
+-- account's deletion is now (a cancel or a new scheduling may have followed
+-- it). A different request under the same ID is refused.
 create table private.deletion_receipts (
   account_id uuid not null references public.accounts (account_id),
   operation_id text not null check (operation_id ~ '^[0-9a-f]{32}$'),
@@ -228,7 +231,7 @@ end $$;
 
 -- Spec 6's contract: hide the account's owned listings, profile, ratings,
 -- contributions and cached aggregates, and hold its evaluation requests
--- without cancelling them (Amendment 7 §4), in the scheduling transaction.
+-- without canceling them (Amendment 7 §4), in the scheduling transaction.
 -- Hide, don't destroy: the irreversible boundary (#104) removes. Tableside
 -- has no public content yet, so there is nothing to hide.
 create function private.hide_public_content(p_account uuid) returns void
@@ -255,7 +258,7 @@ begin
 end $$;
 
 -- ---------------------------------------------------------------------------
--- Scheduling, cancelling and status
+-- Scheduling, canceling and status
 -- ---------------------------------------------------------------------------
 
 -- The schedule as the player sees it.
@@ -273,6 +276,7 @@ $$;
 --       `accepted` is true only for the request that scheduled it (the
 --       function then sends the email to `email`); a retry of it, or a request
 --       while deletion is already scheduled, answers the schedule as it stands
+--   'none'            a retry of a request whose scheduling was canceled since
 --   'fresh-authentication-required'
 --   'not-signed-in'   no such session, or the account is deleted
 create function public.schedule_deletion(session uuid, auth_user uuid, operation_id text) returns jsonb
@@ -298,13 +302,13 @@ begin
   if private.session_account(session, auth_user) is distinct from v_account then
     return jsonb_build_object('status', 'not-signed-in');
   end if;
-  -- A retry gets the answer its request got: never a second acceptance.
+  -- A retry is never accepted again: it learns where the deletion stands now.
   select * into v_receipt from private.deletion_receipts r where r.account_id = v_account and r.operation_id = schedule_deletion.operation_id;
   if found then
     if v_receipt.action <> 'schedule' then
       raise exception 'operation reused' using errcode = '22023';
     end if;
-    return (v_receipt.disposition - 'email') || jsonb_build_object('accepted', false);
+    return private.deletion_view(v_account) || jsonb_build_object('accepted', false);
   end if;
   if private.session_fresh_identity(session, auth_user) is null then
     return jsonb_build_object('status', 'fresh-authentication-required');
@@ -324,10 +328,13 @@ begin
 end $$;
 
 -- Cancel deletion, for the caller's freshly authenticated session.
---   'cancelled'      the account is active again, the same account with its data
+--   'canceled'       the account is active again, the same account with its data
 --   'too-late'       the deadline has passed: the irreversible boundary is the server's to run
---   'not-scheduled'  deletion isn't scheduled (a retry after a cancel gets 'cancelled')
+--   'not-scheduled'  deletion isn't scheduled
+--   'scheduled' { deadline, scheduledAt }  a retry of a cancel, once deletion was scheduled again
 --   'fresh-authentication-required'
+-- A retry of an accepted cancel is never accepted again: it answers
+-- 'canceled' while the account is still active, or the new schedule.
 -- A deleted account's session is no longer signed in: refused.
 create function public.cancel_deletion_v1(operation_id text) returns jsonb
 language plpgsql volatile security definer set search_path = '' as $$
@@ -336,7 +343,7 @@ declare
   v_account uuid := private.signed_in_account();
   v_receipt private.deletion_receipts;
   v_account_row public.accounts;
-  v_disposition jsonb := jsonb_build_object('status', 'cancelled');
+  v_disposition jsonb := jsonb_build_object('status', 'canceled');
 begin
   if coalesce(operation_id, '') !~ '^[0-9a-f]{32}$' then
     raise exception 'malformed operation' using errcode = '22023';
@@ -354,7 +361,7 @@ begin
     if v_receipt.action <> 'cancel' then
       raise exception 'operation reused' using errcode = '22023';
     end if;
-    return v_receipt.disposition;
+    return case when v_account_row.state = 'active' then v_receipt.disposition else private.deletion_view(v_account) end;
   end if;
   if private.session_fresh_identity(v_session, auth.uid()) is null then
     return jsonb_build_object('status', 'fresh-authentication-required');
@@ -383,6 +390,103 @@ language sql stable security definer set search_path = '' as $$
   from (select private.signed_in_account() as account_id) signed_in
   where account_id is not null
 $$;
+
+-- ---------------------------------------------------------------------------
+-- Ordinary method and device changes, serialized with scheduling
+-- ---------------------------------------------------------------------------
+
+-- #101's device sign-out (20261124163517_devices_revocation.sql), now checking
+-- ordinary access again once it holds the synchronization head: a sign-out
+-- waiting on a scheduling that commits is refused, so scheduling never ends
+-- up revoking sessions.
+create or replace function public.revoke_devices(session uuid, auth_user uuid, target text) returns jsonb
+language plpgsql volatile security definer set search_path = '' as $$
+declare
+  v_account uuid := private.session_account(session, auth_user);
+  v_device uuid;
+  v_this boolean;
+  v_sessions uuid[];
+  v_devices integer;
+begin
+  if v_account is null or not private.session_has_ordinary_access(session, auth_user) then
+    return jsonb_build_object('status', 'not-signed-in');
+  end if;
+  perform private.lock_sync_head(v_account);
+  if not private.session_has_ordinary_access(session, auth_user) then
+    return jsonb_build_object('status', 'not-signed-in');
+  end if;
+  if private.session_fresh_identity(session, auth_user) is null then
+    return jsonb_build_object('status', 'fresh-authentication-required');
+  end if;
+  if target = 'others' then
+    select array_agg(s.id) into v_sessions from auth.sessions s where s.user_id = auth_user and s.id <> session;
+    select count(*) into v_devices from private.account_devices(v_account, auth_user, session) d where not d.this_device;
+  else
+    if coalesce(target, '') !~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' then
+      return jsonb_build_object('status', 'not-found');
+    end if;
+    v_device := target::uuid;
+    select d.this_device into v_this from private.account_devices(v_account, auth_user, session) d where d.id = v_device;
+    if v_this is null then
+      return jsonb_build_object('status', 'not-found');
+    elsif v_this then
+      return jsonb_build_object('status', 'this-device');
+    end if;
+    select array_agg(s.id) into v_sessions
+      from auth.sessions s
+      left join private.account_sessions r on r.session_id = s.id and r.account_id = v_account and r.revoked_at is null
+      left join private.installations i on i.account_id = r.account_id and i.installation_id = r.installation_id
+      where s.user_id = auth_user and coalesce(i.device_id, s.id) = v_device;
+    v_devices := 1;
+  end if;
+  perform private.revoke_sessions(coalesce(v_sessions, '{}'), 'device');
+  return jsonb_build_object('status', 'signed-out', 'devices', v_devices,
+    'email', (select u.email from auth.users u where u.id = auth_user));
+end $$;
+
+-- #100's method removal (20261123104700_fresh_authentication.sql), now
+-- checking ordinary access again once it holds the Auth user's row, which
+-- scheduling takes too: scheduling never ends up removing a method.
+create or replace function public.remove_sign_in_method_v1(identity uuid) returns jsonb
+language plpgsql volatile security definer set search_path = '' as $$
+declare
+  v_user uuid := auth.uid();
+  v_fresh uuid;
+  v_provider text;
+begin
+  if private.active_account() is null then
+    raise exception 'not authorized' using errcode = '42501';
+  end if;
+  -- Serialized with the account's other method changes, so two removals
+  -- racing can't leave it with none, and with deletion scheduling.
+  perform 1 from auth.users u where u.id = v_user for update;
+  if private.active_account() is null then
+    raise exception 'not authorized' using errcode = '42501';
+  end if;
+  select i.provider into v_provider from auth.identities i where i.id = identity and i.user_id = v_user;
+  if v_provider is null then
+    raise exception 'not a method of this account' using errcode = '22023';
+  end if;
+  -- Said before asking anyone to confirm: confirming wouldn't change it.
+  if (select count(*) from auth.identities i where i.user_id = v_user) <= 1 then
+    return jsonb_build_object('status', 'last-method');
+  end if;
+  v_fresh := private.fresh_identity();
+  if v_fresh is null then
+    return jsonb_build_object('status', 'fresh-authentication-required');
+  end if;
+  if v_fresh = identity then
+    return jsonb_build_object('status', 'confirm-with-another-method');
+  end if;
+  delete from auth.identities i where i.id = identity;
+  -- A code already sent for the email method stops working with it.
+  if v_provider = 'email' then
+    delete from auth.one_time_tokens t
+      where t.user_id = v_user and t.token_type in ('confirmation_token', 'recovery_token', 'reauthentication_token');
+    update auth.users set recovery_token = '', confirmation_token = '', reauthentication_token = '' where id = v_user;
+  end if;
+  return jsonb_build_object('status', 'removed');
+end $$;
 
 -- ---------------------------------------------------------------------------
 -- Email: "deletion scheduled"

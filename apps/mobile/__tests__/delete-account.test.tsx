@@ -82,7 +82,7 @@ describe('Delete account', () => {
     expect(button(`Manage subscription. In the ${STORE.name}. Deleting your account doesn't cancel it.`)).toBeOnTheScreen();
     expect(button(`Request a refund. Through the ${STORE.name}, which decides refunds.`)).toBeOnTheScreen();
     for (const warning of [
-      'Access locks now. Practice and your account lock on every device until you cancel.',
+      'Access locks now. Practice and your account lock now, and on your other devices once they connect.',
       'Public content is hidden. Your profile, strategies, ratings and contributions are hidden at once.',
       'Your data is kept. Nothing is deleted for 30 days. Sign in and choose Cancel deletion to keep your account.',
       `Billing continues. Your subscription isn't canceled. Cancel it in the ${STORE.name} if you don't want to be charged.`,
@@ -173,7 +173,7 @@ describe('a deletion-scheduled account', () => {
     noTabBar();
     expect(
       screen.getByText(
-        `It will be deleted permanently on ${dayText(DEADLINE)}. Until then, practice and your account are locked on every device, your public content is hidden, and your data is kept.`,
+        `It will be deleted permanently on ${dayText(DEADLINE)}. Until then, practice and your account are locked, your public content is hidden, and your data is kept.`,
       ),
     ).toBeOnTheScreen();
     expect(button('Cancel deletion')).toBeOnTheScreen();

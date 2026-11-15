@@ -341,8 +341,8 @@ export class FakeAccountService implements AccountService {
     cancel: async () => {
       this.deletionCalls.push('cancel');
       const gate = this.current;
-      const result = this.deletionNext.cancel.shift() ?? { status: 'cancelled' as const };
-      if (result.status === 'cancelled' && gate.state === 'deletion-scheduled') {
+      const result = this.deletionNext.cancel.shift() ?? { status: 'canceled' as const };
+      if (result.status === 'canceled' && gate.state === 'deletion-scheduled') {
         this.deletionState = { status: 'none' };
         this.setGate({ state: 'active', accountId: gate.accountId, eligibility: '18+' });
       }
