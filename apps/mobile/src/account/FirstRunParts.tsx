@@ -130,6 +130,42 @@ export const Field = forwardRef<ComponentRef<typeof TextInput>, { label: string;
   },
 );
 
+/** The 6-digit code typed from an email, without spaces; null when it isn't one. */
+export function enteredCode(text: string): string | null {
+  const code = text.replace(/\s/g, '');
+  return /^\d{6}$/.test(code) ? code : null;
+}
+
+/** A field for a 6-digit emailed code, offering the one the system read from the email. */
+export function CodeField({
+  label = 'Code',
+  value,
+  onChangeText,
+  problem = false,
+  onSubmit,
+}: {
+  label?: string;
+  value: string;
+  onChangeText: (text: string) => void;
+  problem?: boolean;
+  onSubmit?: () => void;
+}) {
+  return (
+    <Field
+      label={label}
+      value={value}
+      onChangeText={onChangeText}
+      problem={problem}
+      keyboardType="number-pad"
+      autoComplete="one-time-code"
+      textContentType="oneTimeCode"
+      maxLength={6}
+      returnKeyType="done"
+      onSubmitEditing={onSubmit}
+    />
+  );
+}
+
 /** A problem or notice in words with an icon, so it isn't marked by color alone. Announced when it appears. */
 export function InlineMessage({ children, testID }: { children: ReactNode; testID?: string }) {
   return (

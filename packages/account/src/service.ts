@@ -139,6 +139,86 @@ export type ProviderCreateResult =
   | { readonly status: 'cancelled' }
   | { readonly status: 'failed' };
 
+/** One way to sign in to the account (S2-18), with the address it goes by: a provider's (an Apple relay address, say), or the email code's. */
+export interface SignInMethodEntry {
+  readonly id: string;
+  readonly method: SignInMethod;
+  readonly email: string | null;
+}
+
+export type FreshAuthenticationResult =
+  | { readonly status: 'confirmed' }
+  | { readonly status: 'invalid-code' }
+  /** The player signed in to the provider, but as someone who isn't one of this account's methods. */
+  | { readonly status: 'not-a-method' }
+  | { readonly status: 'cancelled' }
+  | { readonly status: 'failed' };
+
+/**
+ * Confirm it's you: the player signs in again with one of the account's own
+ * methods, and for the next few minutes this session may change the account
+ * (method changes, email change, revoking other devices, server export,
+ * deletion). Being signed in already never counts, nor does a token refresh;
+ * the server checks it for this session on every operation it gates.
+ */
+export interface FreshAuthentication {
+  /** With Apple or Google: one of the account's own identities. */
+  withProvider(provider: IdentityProvider): Promise<FreshAuthenticationResult>;
+  /** Emails a code to the email method's address, under the code-request limits. */
+  requestCode(): Promise<CodeRequestResult>;
+  withCode(code: string): Promise<FreshAuthenticationResult>;
+}
+
+/** Changes that need Confirm it's you first answer this until it's done (or after its few minutes have passed). */
+type NeedsFresh = { readonly status: 'fresh-authentication-required' };
+
+export type LinkResult =
+  | { readonly status: 'linked' | 'already-linked' }
+  /** Another account signs in with this identity: nothing changed, and accounts are never merged. */
+  | { readonly status: 'conflict' }
+  | NeedsFresh
+  | { readonly status: 'cancelled' | 'failed' };
+
+export type EmailMethodResult = { readonly status: 'linked' | 'already-linked' } | { readonly status: 'invalid-code' } | NeedsFresh | { readonly status: 'failed' };
+
+export type RemoveMethodResult =
+  | { readonly status: 'removed' }
+  /** The account's only method: add another first. */
+  | { readonly status: 'last-method' }
+  /** This session confirmed with the method being removed: confirm with one that stays. */
+  | { readonly status: 'confirm-with-another-method' }
+  | NeedsFresh
+  | { readonly status: 'failed' };
+
+export type EmailChangeResult =
+  /** A code went to the current address and one to the new. */
+  | { readonly status: 'codes-sent' }
+  /** Another account uses the new address. */
+  | { readonly status: 'in-use' }
+  | { readonly status: 'same-address' | 'invalid' }
+  | NeedsFresh
+  | { readonly status: 'failed' };
+
+export type EmailChangeConfirmation =
+  | { readonly status: 'changed' }
+  | { readonly status: 'invalid-code'; readonly address: 'current' | 'new' }
+  | { readonly status: 'failed' };
+
+/** Sign-in methods (S2-18): every change needs Confirm it's you first, and the account always keeps a method. */
+export interface SignInMethods {
+  /** Null when no account is signed in, or the server can't be reached. */
+  list(): Promise<readonly SignInMethodEntry[] | null>;
+  /** Adds Apple or Google: the provider's sheet proves the identity. The account gets a security email. */
+  link(provider: IdentityProvider): Promise<LinkResult>;
+  /** Adding the email code, for the account's own sign-in email: emails it a code. */
+  requestEmailMethodCode(): Promise<CodeRequestResult | NeedsFresh>;
+  confirmEmailMethod(code: string): Promise<EmailMethodResult>;
+  remove(id: string): Promise<RemoveMethodResult>;
+  /** Secure Email Change: emails a code to the current and the new address. The current one keeps working until both are confirmed. */
+  changeEmail(email: string): Promise<EmailChangeResult>;
+  confirmEmailChange(codes: { readonly currentCode: string; readonly newCode: string }): Promise<EmailChangeConfirmation>;
+}
+
 /** What a provider's native sheet answered: an ID token whose nonce claim is the hashed nonce it was given. */
 export type ProviderToken = { readonly status: 'token'; readonly idToken: string } | { readonly status: 'cancelled' } | { readonly status: 'failed' };
 
@@ -385,6 +465,8 @@ export interface AccountService {
   readonly records: AccountRecords;
   /** The account's privacy choices: analytics consent and the ad-data opt-out (#105). */
   readonly privacy: AccountPrivacy;
+  readonly freshAuthentication: FreshAuthentication;
+  readonly signInMethods: SignInMethods;
 }
 
 
@@ -821,12 +903,11 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
    * fresh nonce: from the native sheet, or from Apple's web page in the
    * system browser.
    */
-  const obtainCredential = async (provider: IdentityProvider): Promise<ProviderCredential | 'cancelled' | 'failed'> => {
+  const obtainCredential = async (provider: IdentityProvider, nonce = hex(options.randomBytes(32))): Promise<ProviderCredential | 'cancelled' | 'failed'> => {
     const settings = options.providers;
     const route = settings?.ports.route[provider] ?? 'unavailable';
     if (!settings || route === 'unavailable') return 'failed';
     const { ports } = settings;
-    const nonce = hex(options.randomBytes(32));
     const hashedNonce = await ports.sha256Hex(nonce);
     if (route === 'native') {
       const answer = await ports.nativeIdToken(provider, { hashedNonce });
@@ -952,6 +1033,213 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
       if (at === generation && remembered && !remembered.signedOut) await remember({ ...remembered, currency });
     });
 
+  /** The signed-in session's access token, renewed first when it has expired; null when there is none. */
+  const bearer = async (): Promise<string | null> => (await (await connect()).auth.getSession()).data.session?.access_token ?? null;
+
+  /**
+   * Calls one of the functions that act for the signed-in player (fresh-auth,
+   * link-method) with this session's token. Null when no account is signed
+   * in, or the account session moved on before it answered.
+   */
+  const actAsPlayer = async (name: string, body: unknown): Promise<{ readonly code: number; readonly status: string | undefined; readonly retryAfter?: unknown } | null> => {
+    if (!isSignedIn(gate)) return null;
+    const at = generation;
+    try {
+      const token = await bearer();
+      if (!token) return null;
+      const response = await post(`/functions/v1/${name}`, body, { authorization: `Bearer ${token}` });
+      const answer = (await response.json().catch(() => null)) as { status?: string; retryAfter?: unknown } | null;
+      return at === generation ? { code: response.status, status: answer?.status, retryAfter: answer?.retryAfter } : null;
+    } catch {
+      return null;
+    }
+  };
+
+  /** A request straight to Auth with this session's token (outside the Supabase client, so its stored session doesn't change). */
+  const authRequest = async (method: 'PUT' | 'POST', path: string, body: unknown, token?: string) => {
+    await connect();
+    const response = await options.fetch(`${backend.url}/auth/v1${path}`, {
+      method,
+      headers: {
+        apikey: backend.publishableKey,
+        [ENVIRONMENT_HEADER]: backend.name,
+        'content-type': 'application/json',
+        ...(token ? { authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify(body),
+    });
+    return { ok: response.ok, body: (await response.json().catch(() => null)) as Record<string, unknown> | null };
+  };
+
+  /** The answer of a database operation the gate allows, or null. */
+  const operation = async (name: string, args?: Record<string, unknown>): Promise<unknown> => {
+    if (!isSignedIn(gate)) return null;
+    const at = generation;
+    try {
+      const { data, error } = await (await connect()).rpc(name, args);
+      return error || at !== generation ? null : data;
+    } catch {
+      return null;
+    }
+  };
+
+  /** Which of Apple, Google and the email code an Auth provider name is. */
+  const methodOf = (provider: unknown): SignInMethod | null => {
+    if (provider === 'email') return 'email';
+    for (const candidate of ['apple', 'google'] as const) if (authName(candidate) === provider) return candidate;
+    return null;
+  };
+
+  /** An email change under way: its two addresses, and which of them has confirmed. Memory only. */
+  let emailChange: { readonly current: string; readonly new: string; currentConfirmed: boolean; newConfirmed: boolean } | null = null;
+
+  const sendCode = async ({ email, intent }: { readonly email: string; readonly intent: CodeIntent }): Promise<CodeRequestResult> => {
+    const held = currentAssertion();
+    if (intent === 'create' && !held) return { status: 'age-required' };
+    try {
+      const response = await post('/functions/v1/request-code', { email, intent, ...(intent === 'create' && held ? { assertion: held.token } : {}) });
+      const body = (await response.json().catch(() => null)) as { status?: string; retryAfter?: unknown } | null;
+      if (response.ok && body?.status === 'sent') return { status: 'sent' };
+      if (response.status === 429 && typeof body?.retryAfter === 'number') return { status: 'rate-limited', retryAfterSeconds: body.retryAfter };
+      if (response.status === 403 && body?.status === 'age-required') {
+        assertion = null;
+        return { status: 'age-required' };
+      }
+      return { status: 'failed' };
+    } catch {
+      return { status: 'failed' };
+    }
+  };
+
+  /**
+   * An ID token for one of the provider's identities, for a function acting
+   * for the player: minted for a nonce the server issued to this session for
+   * this proof alone, so no earlier sign-in's token can stand in for it.
+   */
+  const providerProof = async (provider: IdentityProvider) => {
+    const nonce = await operation('issue_proof_nonce_v1');
+    if (typeof nonce !== 'string') return 'failed' as const;
+    const credential = await obtainCredential(provider, nonce);
+    return typeof credential === 'string' ? credential : { provider: authName(provider), idToken: credential.idToken, nonce: credential.nonce };
+  };
+
+  const freshAuthentication: FreshAuthentication = {
+    async withProvider(provider) {
+      if (!isSignedIn(gate)) return { status: 'failed' };
+      try {
+        const proof = await providerProof(provider);
+        if (typeof proof === 'string') return { status: proof };
+        const answer = await actAsPlayer('fresh-auth', { method: 'provider', ...proof });
+        if (answer?.code === 200 && answer.status === 'confirmed') return { status: 'confirmed' };
+        if (answer?.code === 403 && answer.status === 'not-a-method') return { status: 'not-a-method' };
+        return { status: 'failed' };
+      } catch {
+        return { status: 'failed' };
+      }
+    },
+    async requestCode() {
+      const caller = (await operation('caller_session_v1')) as { email?: unknown } | null;
+      return typeof caller?.email === 'string' ? sendCode({ email: caller.email, intent: 'sign-in' }) : { status: 'failed' };
+    },
+    async withCode(code) {
+      const answer = await actAsPlayer('fresh-auth', { method: 'email', code: code.trim() });
+      if (answer?.code === 200 && answer.status === 'confirmed') return { status: 'confirmed' };
+      if (answer?.code === 401 && answer.status === 'invalid-code') return { status: 'invalid-code' };
+      return { status: 'failed' };
+    },
+  };
+
+  const linkAnswer = (answer: Awaited<ReturnType<typeof actAsPlayer>>): Extract<LinkResult, { status: 'linked' | 'already-linked' | 'conflict' | 'fresh-authentication-required' }> | null => {
+    const status = answer?.status;
+    if (answer?.code === 200 && (status === 'linked' || status === 'already-linked')) return { status };
+    if (answer?.code === 409 && status === 'conflict') return { status };
+    if (answer?.code === 403 && status === 'fresh-authentication-required') return { status };
+    return null;
+  };
+
+  const signInMethods: SignInMethods = {
+    async list() {
+      const data = await operation('sign_in_methods_v1');
+      if (!Array.isArray(data)) return null;
+      return (data as { id?: unknown; provider?: unknown; email?: unknown }[]).flatMap((identity) => {
+        const method = methodOf(identity.provider);
+        return method && typeof identity.id === 'string' ? [{ id: identity.id, method, email: typeof identity.email === 'string' ? identity.email : null }] : [];
+      });
+    },
+    async link(provider) {
+      if (!isSignedIn(gate)) return { status: 'failed' };
+      try {
+        const proof = await providerProof(provider);
+        if (typeof proof === 'string') return { status: proof };
+        return linkAnswer(await actAsPlayer('link-method', { method: 'provider', ...proof })) ?? { status: 'failed' };
+      } catch {
+        return { status: 'failed' };
+      }
+    },
+    async requestEmailMethodCode() {
+      const answer = await actAsPlayer('link-method', { method: 'email', step: 'send' });
+      if (answer?.code === 200 && answer.status === 'sent') return { status: 'sent' };
+      if (answer?.code === 429 && typeof answer.retryAfter === 'number') return { status: 'rate-limited', retryAfterSeconds: answer.retryAfter };
+      if (answer?.code === 403 && answer.status === 'fresh-authentication-required') return { status: answer.status };
+      return { status: 'failed' };
+    },
+    async confirmEmailMethod(code) {
+      const answer = await actAsPlayer('link-method', { method: 'email', code: code.trim() });
+      if (answer?.code === 401 && answer.status === 'invalid-code') return { status: 'invalid-code' };
+      const linked = linkAnswer(answer);
+      return linked?.status === 'conflict' || !linked ? { status: 'failed' } : linked;
+    },
+    async remove(id) {
+      const status = ((await operation('remove_sign_in_method_v1', { identity: id })) as { status?: unknown } | null)?.status;
+      return status === 'removed' || status === 'last-method' || status === 'confirm-with-another-method' || status === 'fresh-authentication-required'
+        ? { status }
+        : { status: 'failed' };
+    },
+    async changeEmail(email) {
+      const address = email.trim();
+      const at = generation;
+      const status = ((await operation('authorize_email_change_v1', { new_email: address })) as { status?: unknown } | null)?.status;
+      if (status === 'fresh-authentication-required' || status === 'same-address' || status === 'invalid') return { status };
+      if (status !== 'authorized') return { status: 'failed' };
+      try {
+        const token = await bearer();
+        if (!token) return { status: 'failed' };
+        // Auth emails both addresses through the send-email hook.
+        const { ok, body } = await authRequest('PUT', '/user', { email: address }, token);
+        if (at !== generation) return { status: 'failed' };
+        if (!ok) return { status: body?.error_code === 'email_exists' ? 'in-use' : 'failed' };
+        const current = typeof body?.email === 'string' ? body.email : null;
+        if (!current) return { status: 'failed' };
+        emailChange = { current, new: address, currentConfirmed: false, newConfirmed: false };
+        return { status: 'codes-sent' };
+      } catch {
+        return { status: 'failed' };
+      }
+    },
+    async confirmEmailChange({ currentCode, newCode }) {
+      const change = emailChange;
+      if (!change || !isSignedIn(gate)) return { status: 'failed' };
+      try {
+        for (const [address, email, code] of [
+          ['current', change.current, currentCode],
+          ['new', change.new, newCode],
+        ] as const) {
+          const confirmed = address === 'current' ? 'currentConfirmed' : 'newConfirmed';
+          if (change[confirmed]) continue;
+          const { ok, body } = await authRequest('POST', '/verify', { type: 'email_change', email, token: code.trim() });
+          if (!ok) return body?.error_code === 'otp_expired' ? { status: 'invalid-code', address } : { status: 'failed' };
+          change[confirmed] = true;
+          // Confirming the second address signs in as well: that session is ended at once, so only this device's own stays.
+          if (typeof body?.access_token === 'string') await authRequest('POST', '/logout?scope=local', {}, body.access_token);
+        }
+        emailChange = null;
+        return { status: 'changed' };
+      } catch {
+        return { status: 'failed' };
+      }
+    },
+  };
+
   const service: AccountService = {
     get gate() {
       return gate;
@@ -1016,23 +1304,7 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
 
     refreshEligibility,
 
-    async requestEmailCode({ email, intent }) {
-      const held = currentAssertion();
-      if (intent === 'create' && !held) return { status: 'age-required' };
-      try {
-        const response = await post('/functions/v1/request-code', { email, intent, ...(intent === 'create' && held ? { assertion: held.token } : {}) });
-        const body = (await response.json().catch(() => null)) as { status?: string; retryAfter?: unknown } | null;
-        if (response.ok && body?.status === 'sent') return { status: 'sent' };
-        if (response.status === 429 && typeof body?.retryAfter === 'number') return { status: 'rate-limited', retryAfterSeconds: body.retryAfter };
-        if (response.status === 403 && body?.status === 'age-required') {
-          assertion = null;
-          return { status: 'age-required' };
-        }
-        return { status: 'failed' };
-      } catch {
-        return { status: 'failed' };
-      }
-    },
+    requestEmailCode: sendCode,
 
     async verifyEmailCode({ email, code }) {
       try {
@@ -1236,6 +1508,8 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
       gate: () => gate,
       newChoiceId: () => hex(options.randomBytes(16)),
     }),
+    freshAuthentication,
+    signInMethods,
   };
   return service;
 }

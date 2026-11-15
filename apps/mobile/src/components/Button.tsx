@@ -12,6 +12,7 @@ export function Button({
   stretch = false,
   hint,
   icon: Icon,
+  accessibilityLabel,
 }: {
   label: string;
   onPress: () => void;
@@ -23,12 +24,15 @@ export function Button({
   hint?: string;
   /** Drawn before the label. */
   icon?: LucideIcon;
+  /** What a screen reader says, when the label alone is ambiguous (several "Remove" buttons). */
+  accessibilityLabel?: string;
 }) {
   const { focused, focusProps } = useKeyboardFocus();
   const secondary = variant !== 'primary';
   return (
     <Pressable
       accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
       accessibilityHint={hint}
       accessibilityState={{ disabled }}
       disabled={disabled}

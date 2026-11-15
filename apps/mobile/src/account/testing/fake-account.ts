@@ -15,7 +15,16 @@ import type {
   CodeRequestResult,
   CodeVerificationResult,
   CurrencyChangeResult,
+  EmailChangeConfirmation,
+  EmailChangeResult,
+  EmailMethodResult,
+  FreshAuthentication,
+  FreshAuthenticationResult,
   IdentityProvider,
+  LinkResult,
+  RemoveMethodResult,
+  SignInMethodEntry,
+  SignInMethods,
   ProviderCreateResult,
   ProviderSignInResult,
   SignOutResult,
@@ -46,6 +55,12 @@ export const FAKE_SUMMARY: AccountSummary = {
   currencyChangeable: true,
   devices: 3,
 };
+
+/** The sign-in methods the fake's account has unless a test changes them: Apple (Hide My Email) and the email code. */
+export const FAKE_METHODS: readonly SignInMethodEntry[] = [
+  { id: 'method-apple', method: 'apple', email: 'x7k2@privaterelay.appleid.com' },
+  { id: 'method-email', method: 'email', email: 'player@example.com' },
+];
 
 /** An Account service whose answers a test scripts. Unscripted calls succeed. */
 export class FakeAccountService implements AccountService {
@@ -138,6 +153,71 @@ export class FakeAccountService implements AccountService {
     idle: async () => undefined,
     countWaiting: async () => this.waitingCount,
     queue: async () => ({ status: 'refused', reason: 'no-account' }),
+  };
+
+  /** The account's sign-in methods: list() answers them, and an unscripted link or removal changes them. Null: offline. */
+  methods: readonly SignInMethodEntry[] | null = FAKE_METHODS;
+  /** Answers for the next fresh-authentication and sign-in-method calls, used in order; unscripted ones succeed. */
+  readonly methodsNext: {
+    fresh: FreshAuthenticationResult[];
+    freshCode: CodeRequestResult[];
+    link: LinkResult[];
+    emailMethodCode: (CodeRequestResult | { status: 'fresh-authentication-required' })[];
+    emailMethod: EmailMethodResult[];
+    remove: RemoveMethodResult[];
+    changeEmail: EmailChangeResult[];
+    confirmEmailChange: EmailChangeConfirmation[];
+  } = { fresh: [], freshCode: [], link: [], emailMethodCode: [], emailMethod: [], remove: [], changeEmail: [], confirmEmailChange: [] };
+  /** Each fresh-authentication and sign-in-method call, in order, as "name argument". */
+  readonly methodCalls: string[] = [];
+
+  readonly freshAuthentication: FreshAuthentication = {
+    withProvider: async (provider) => {
+      this.methodCalls.push(`fresh ${provider}`);
+      return this.methodsNext.fresh.shift() ?? { status: 'confirmed' };
+    },
+    requestCode: async () => {
+      this.methodCalls.push('fresh code-request');
+      return this.methodsNext.freshCode.shift() ?? { status: 'sent' };
+    },
+    withCode: async (code) => {
+      this.methodCalls.push(`fresh code ${code}`);
+      return this.methodsNext.fresh.shift() ?? { status: 'confirmed' };
+    },
+  };
+
+  readonly signInMethods: SignInMethods = {
+    list: async () => (isSignedIn(this.current) ? this.methods : null),
+    link: async (provider) => {
+      this.methodCalls.push(`link ${provider}`);
+      const result = this.methodsNext.link.shift() ?? { status: 'linked' as const };
+      if (result.status === 'linked' && this.methods) this.methods = [...this.methods, { id: `method-${provider}`, method: provider, email: `${provider}@example.com` }];
+      return result;
+    },
+    requestEmailMethodCode: async () => {
+      this.methodCalls.push('email-method code-request');
+      return this.methodsNext.emailMethodCode.shift() ?? { status: 'sent' };
+    },
+    confirmEmailMethod: async (code) => {
+      this.methodCalls.push(`email-method code ${code}`);
+      const result = this.methodsNext.emailMethod.shift() ?? { status: 'linked' as const };
+      if (result.status === 'linked' && this.methods) this.methods = [...this.methods, { id: 'method-email', method: 'email', email: this.summary?.email ?? null }];
+      return result;
+    },
+    remove: async (id) => {
+      this.methodCalls.push(`remove ${id}`);
+      const result = this.methodsNext.remove.shift() ?? { status: 'removed' as const };
+      if (result.status === 'removed' && this.methods) this.methods = this.methods.filter((entry) => entry.id !== id);
+      return result;
+    },
+    changeEmail: async (email) => {
+      this.methodCalls.push(`change-email ${email}`);
+      return this.methodsNext.changeEmail.shift() ?? { status: 'codes-sent' };
+    },
+    confirmEmailChange: async ({ currentCode, newCode }) => {
+      this.methodCalls.push(`confirm-email-change ${currentCode} ${newCode}`);
+      return this.methodsNext.confirmEmailChange.shift() ?? { status: 'changed' };
+    },
   };
 
   /** No account records in screen tests (spec 4's screens script their own). */
