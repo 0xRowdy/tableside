@@ -45,14 +45,30 @@ export function providerConfig(provider: string): ProviderConfig | null {
  * claim `hashedNonce`, when given); otherwise null.
  */
 export async function verifyIdToken(provider: string, token: string, hashedNonce?: string): Promise<IdTokenClaims | null> {
+  const claims = (await verifyProviderJwt(provider, token)) as Partial<IdTokenClaims> | null;
+  if (!claims) return null;
+  if (typeof claims.sub !== 'string' || !claims.sub) return null;
+  if (typeof claims.exp !== 'number' || claims.exp + LEEWAY_SECONDS < Date.now() / 1000) return null;
+  if (hashedNonce !== undefined && claims.nonce !== hashedNonce) return null;
+  return claims as IdTokenClaims;
+}
+
+/**
+ * The claims of a JWT `provider` signed (an ID token, or a security event
+ * such as Apple's server-to-server notification or Google's), when its
+ * signature is by one of the issuer's published keys, its issuer is the
+ * provider's and an audience is one of the app's. Null otherwise. Lifetime
+ * and the other claims are the caller's to check.
+ */
+export async function verifyProviderJwt(provider: string, token: string): Promise<Record<string, unknown> | null> {
   const config = providerConfig(provider);
   if (!config) return null;
   const parts = token.split('.');
   if (parts.length !== 3) return null;
   const [headerPart, claimsPart, signaturePart] = parts as [string, string, string];
   const header = decodeJson(headerPart) as { alg?: unknown; kid?: unknown } | null;
-  const claims = decodeJson(claimsPart) as Partial<IdTokenClaims> | null;
-  if (!header || header.alg !== 'RS256' || typeof header.kid !== 'string' || !claims) return null;
+  const claims = decodeJson(claimsPart) as Record<string, unknown> | null;
+  if (!header || header.alg !== 'RS256' || typeof header.kid !== 'string' || !claims || typeof claims !== 'object') return null;
 
   const key = await signingKey(config.issuer, header.kid);
   const signature = decodeBase64Url(signaturePart);
@@ -65,10 +81,7 @@ export async function verifyIdToken(provider: string, token: string, hashedNonce
   const audiences = Array.isArray(claims.aud) ? claims.aud : [claims.aud];
   if (typeof claims.iss !== 'string' || !issuers.includes(claims.iss)) return null;
   if (!audiences.some((audience) => typeof audience === 'string' && config.audiences.includes(audience))) return null;
-  if (typeof claims.sub !== 'string' || !claims.sub) return null;
-  if (typeof claims.exp !== 'number' || claims.exp + LEEWAY_SECONDS < Date.now() / 1000) return null;
-  if (hashedNonce !== undefined && claims.nonce !== hashedNonce) return null;
-  return claims as IdTokenClaims;
+  return claims;
 }
 
 /** SHA-256 of `text`, as lowercase hex: how a provider's nonce claim relates to the client's nonce. */

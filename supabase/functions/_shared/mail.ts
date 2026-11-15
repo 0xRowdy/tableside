@@ -44,3 +44,30 @@ export function codeMail(code: string, purpose = 'Your Tableside code'): Mail {
     html: `<p>Your Tableside code is <strong>${code}</strong>.</p><p>It works once and expires soon. If you didn't ask for it, you can ignore this email.</p>`,
   };
 }
+
+/**
+ * The "devices signed out" security notice: after the player signed devices
+ * out, or after a provider withdrew a sign-in method (`method`, its name).
+ * It names no device: labels are what each device called itself, so they
+ * never vouch for which device it was.
+ */
+export function devicesSignedOutMail(devices: number, method?: string): Mail {
+  const what = devices === 1 ? 'A device was' : `${devices} devices were`;
+  const why = method ? `${method} stopped vouching for your Tableside account, so it was removed as a way to sign in. ` : '';
+  const signedOut =
+    devices === 0
+      ? ''
+      : `${what} signed out of your Tableside account. ${devices === 1 ? 'It keeps its' : 'They keep their'} records, locked, until someone signs in to the account again.`;
+  const text =
+    `${why}${signedOut}`.trim() +
+    "\n\nIf this was you, there's nothing to do. If it wasn't, open Tableside, check More → Settings → Account → Devices " +
+    'and Sign-in methods, and contact support.';
+  return {
+    subject: method ? 'A sign-in method was turned off for your account' : devices === 1 ? 'A device was signed out of your account' : 'Devices were signed out of your account',
+    text,
+    html: text
+      .split('\n\n')
+      .map((paragraph) => `<p>${paragraph}</p>`)
+      .join(''),
+  };
+}
