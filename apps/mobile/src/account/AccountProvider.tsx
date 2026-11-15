@@ -1,4 +1,4 @@
-import type { AccountGate, AccountService } from '@tableside/account';
+import { isSignedIn, type AccountGate, type AccountService } from '@tableside/account';
 import { createContext, useCallback, useContext, useEffect, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { AppState } from 'react-native';
 
@@ -6,10 +6,7 @@ import type { GameId } from '@/games';
 
 import { createAppAccount, type AppAccount } from './app-account';
 
-/** Gate states that open ordinary access: Renewal pending keeps it while the token renews. */
-export type SignedInGate = Extract<AccountGate, { state: 'active' | 'renewal-pending' }>;
-
-export const isSignedIn = (gate: AccountGate): gate is SignedInGate => gate.state === 'active' || gate.state === 'renewal-pending';
+export { isSignedIn, type SignedInGate } from '@tableside/account';
 
 interface AccountContextValue {
   readonly account: AppAccount;

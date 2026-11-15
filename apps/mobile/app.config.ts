@@ -50,6 +50,8 @@ const config: ExpoConfig = {
     ['expo-sqlite', { useSQLCipher: true }],
     // Backup rules come from with-backup-exclusion, which also excludes SecureStore.
     ['expo-secure-store', { configureAndroidBackup: false }],
+    // The device locale: a new account's default currency.
+    'expo-localization',
     './plugins/with-backup-exclusion',
     './plugins/with-engine-harness',
   ],

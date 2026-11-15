@@ -4,6 +4,7 @@
 
 import { createAccountService, type AccountService, type AccountVault, type CredentialStorage } from '@tableside/account';
 import * as Crypto from 'expo-crypto';
+import { getLocales } from 'expo-localization';
 import * as SecureStore from 'expo-secure-store';
 
 import { findGame, type GameId } from '@/games';
@@ -66,6 +67,7 @@ export function createAppAccount(): AppAccount {
     clock: () => Date.now(),
     device: appDevicePorts,
     randomBytes: (count) => Crypto.getRandomValues(new Uint8Array(count)),
+    localeCurrency: () => getLocales()[0].currencyCode,
   });
   const offlineGameKey = (accountId: string) => `tableside.${backend.name}.${accountId}.offline-game`;
   return {

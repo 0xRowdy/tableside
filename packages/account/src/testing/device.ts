@@ -168,9 +168,15 @@ export interface SimulatedDevice {
    * thousands of turns long, which would take minutes to play.
    */
   playPracticeSession(options?: { readonly activityId?: string; readonly longerThan?: number }): Promise<CompletedPracticeSession>;
+  /**
+   * Starts a practice session (roulette, 1,000 buy-in) on the open account and
+   * leaves it open, its controller wired to the account as the app wires it:
+   * the controller hears the account session end, so sign-out suspends it.
+   */
+  startPracticeSession(): Promise<PracticeController>;
   /** The app process dies where it is: nothing it had in flight completes on the device. */
   kill(): void;
-  /** Starts the app again after a kill (or kills it first), reopening the remembered account. */
+  /** Starts the app again after a kill (or kills it first), reopening the remembered account (or its signed-out lock). */
   restart(): Promise<void>;
   /** Stops the app and removes the device's files. */
   dispose(): void;
@@ -197,6 +203,8 @@ export interface DeviceOptions {
   readonly installedOver?: SimulatedDevice;
   /** The build's store migrations (a later build's, say); this build's by default. */
   readonly migrations?: readonly StoreMigration[];
+  /** The device locale's currency; US dollars by default. */
+  readonly localeCurrency?: string | null;
   /** The registered record types: this build's own and seam 2's test-only types by default. */
   readonly recordTypes?: ReadonlyMap<string, RecordType>;
 }
@@ -297,6 +305,7 @@ export function createDevice(stack: LocalStack, options: DeviceOptions): Simulat
       clock: clock.now,
       device: ports,
       randomBytes: (count) => entropy.bytes(count),
+      localeCurrency: () => (options.localeCurrency === undefined ? 'USD' : options.localeCurrency),
       webSocket: ProcessWebSocket,
       recordTypes: options.recordTypes ?? testRecordTypes,
     });
@@ -314,6 +323,26 @@ export function createDevice(stack: LocalStack, options: DeviceOptions): Simulat
   };
 
   let app = launch();
+
+  /**
+   * Starts a practice session on the open account; `activityId` names it
+   * instead of the device's entropy, and with `longerThan`, its saved result is
+   * lengthened to at least that many bytes.
+   */
+  const startPractice = async ({ activityId, longerThan }: { readonly activityId?: string; readonly longerThan?: number } = {}) => {
+    const opening = openSession(app);
+    // Each practice session gets its own random ID, from the device's entropy.
+    const adapters = {
+      ...substituteAdapters({ clock: new PracticeClock(undefined, true) }),
+      newId: () => activityId ?? `activity-${hex(entropy.bytes(16))}`,
+    };
+    const controller = new PracticeController(
+      forAccountSession(adapters, longerThan === undefined ? opening : { ...opening, store: lengthened(opening.store, longerThan) }),
+    );
+    await controller.load();
+    await controller.start({ game: 'roulette', buyIn: '1000' });
+    return controller;
+  };
 
   const device: SimulatedDevice = {
     name: options.name,
@@ -341,24 +370,20 @@ export function createDevice(stack: LocalStack, options: DeviceOptions): Simulat
     set diskFailing(value: boolean) {
       disk.failing = value;
     },
-    async playPracticeSession({ activityId, longerThan } = {}) {
-      const opening = openSession(app);
-      // Each practice session gets its own random ID, from the device's entropy.
-      const adapters = {
-        ...substituteAdapters({ clock: new PracticeClock(undefined, true) }),
-        newId: () => activityId ?? `activity-${hex(entropy.bytes(16))}`,
-      };
-      const controller = new PracticeController(
-        forAccountSession(adapters, longerThan === undefined ? opening : { ...opening, store: lengthened(opening.store, longerThan) }),
-      );
-      await controller.load();
-      await controller.start({ game: 'roulette', buyIn: '1000' });
+    async playPracticeSession(options = {}) {
+      const controller = await startPractice(options);
       await controller.placeWager('red', '10');
       await controller.spin();
       await controller.endSession();
       const snapshot = controller.snapshot();
       if (snapshot.status !== 'completed') throw new Error(`the practice session did not complete (${snapshot.status})`);
       return snapshot.result;
+    },
+    async startPracticeSession() {
+      const controller = await startPractice();
+      // As the app's practice provider does.
+      app.account.onAccountSessionEnding(() => controller.accountSessionEnding());
+      return controller;
     },
     kill() {
       app.kill();
@@ -367,7 +392,7 @@ export function createDevice(stack: LocalStack, options: DeviceOptions): Simulat
       app.kill();
       app = launch();
       const { status } = await app.account.resume();
-      if (status !== 'resumed') throw new Error('the app did not reopen its account');
+      if (status === 'no-account') throw new Error('the app did not reopen its account');
     },
     dispose() {
       app.kill();

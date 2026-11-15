@@ -7,11 +7,15 @@ import type {
   AccountService,
   AccountSync,
   AgeAnswerResult,
+  AccountSummary,
   AgeRange,
   CodeIntent,
   CodeRequestResult,
   CodeVerificationResult,
+  CurrencyChangeResult,
+  SignOutResult,
 } from '@tableside/account';
+import { isSignedIn } from '@tableside/account';
 
 import type { GameId } from '@/games';
 
@@ -23,7 +27,17 @@ type Call =
   | { readonly method: 'answerAgeQuestion'; readonly range: AgeRange }
   | { readonly method: 'requestEmailCode'; readonly email: string; readonly intent: CodeIntent }
   | { readonly method: 'verifyEmailCode'; readonly email: string; readonly code: string }
-  | { readonly method: 'resume' | 'renew' };
+  | { readonly method: 'setAccountCurrency'; readonly currency: string }
+  | { readonly method: 'resume' | 'renew' | 'signOut' };
+
+/** What the fake's Settings → Account shows unless a test changes it. */
+export const FAKE_SUMMARY: AccountSummary = {
+  email: 'player@example.com',
+  methods: ['apple', 'email'],
+  currency: 'USD',
+  currencyChangeable: true,
+  devices: 3,
+};
 
 /** An Account service whose answers a test scripts. Unscripted calls succeed. */
 export class FakeAccountService implements AccountService {
@@ -35,7 +49,14 @@ export class FakeAccountService implements AccountService {
     age: AgeAnswerResult[];
     code: CodeRequestResult[];
     verify: CodeVerificationResult[];
-  } = { age: [], code: [], verify: [] };
+    signOut: SignOutResult[];
+    currency: CurrencyChangeResult[];
+  } = { age: [], code: [], verify: [], signOut: [], currency: [] };
+  /** What accountSummary() answers; a changed currency updates it. */
+  summary: AccountSummary | null = FAKE_SUMMARY;
+  /** How many saved records haven't synced. */
+  waitingCount = 0;
+  private readonly ending = new Set<() => Promise<void>>();
 
   constructor(
     /** The gate resume() reopens into: what this installation was signed in to. */
@@ -63,7 +84,35 @@ export class FakeAccountService implements AccountService {
     this.calls.push({ method: 'resume' });
     if (this.stored.state === 'no-account') return { status: 'no-account' as const };
     this.setGate(this.stored);
-    return { status: 'resumed' as const };
+    return { status: this.stored.state === 'signed-out' ? ('signed-out' as const) : ('resumed' as const) };
+  }
+
+  /** Like the real service: the session-ending handlers run first, then the gate is Signed out. */
+  async signOut(): Promise<SignOutResult> {
+    this.calls.push({ method: 'signOut' });
+    const gate = this.current;
+    if (!isSignedIn(gate)) return { status: 'not-signed-in' as const };
+    for (const handler of [...this.ending]) await handler();
+    this.setGate({ state: 'signed-out', accountId: gate.accountId });
+    return this.next.signOut.shift() ?? { status: 'signed-out' as const, serverSessionEnded: true };
+  }
+
+  onAccountSessionEnding(handler: () => Promise<void>) {
+    this.ending.add(handler);
+    return () => {
+      this.ending.delete(handler);
+    };
+  }
+
+  async accountSummary() {
+    return isSignedIn(this.current) ? this.summary : null;
+  }
+
+  async setAccountCurrency(currency: string) {
+    this.calls.push({ method: 'setAccountCurrency', currency });
+    const result = this.next.currency.shift() ?? { status: 'changed' as const };
+    if (result.status === 'changed' && this.summary) this.summary = { ...this.summary, currency };
+    return result;
   }
 
   /** No synchronization runs in screen tests. */
@@ -73,6 +122,7 @@ export class FakeAccountService implements AccountService {
     reconcile: async () => undefined,
     retryRecord: async () => undefined,
     idle: async () => undefined,
+    countWaiting: async () => this.waitingCount,
   };
 
   /** No account records in screen tests (spec 4's screens script their own). */
