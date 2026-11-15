@@ -59,12 +59,13 @@ schema_paths = []
 
 [db.seed]
 # If enabled, seeds the database after migrations during a db reset.
-# Local stacks only: the seed names the stack's backend environment "local".
+# Local stacks only: the seed names the stack's backend environment "local"
+# and registers seam 2's test-only record types.
 # Beta and production never run it (see [remotes] below).
 enabled = true
 # Specifies an ordered list of seed files to load during db reset.
 # Supports glob patterns relative to supabase directory: "./seeds/*.sql"
-sql_paths = ["./seed/local.sql"]
+sql_paths = ["./seed/local.sql", "./seed/test-record-types.sql"]
 
 [db.network_restrictions]
 # Enable management of network restrictions.
