@@ -8,6 +8,8 @@
 
 import { type CompletedPracticeSessionRecord, decodeMoney } from '@tableside/engine';
 
+import { privacyChoice } from '../privacy-record';
+
 import type { QueuedUpload, RecordRef } from './store';
 
 /**
@@ -68,6 +70,11 @@ export interface RecordType<Payload = unknown, Accepted = Payload> {
    * contributions it covers.
    */
   affectedBy?(barrier: { readonly recordType: string; readonly payload: unknown }, payload: Payload): boolean;
+  /**
+   * Whether a payload is online only: sent at once (SyncEngine.submit) and
+   * never queued, such as granting analytics consent. Absent: every payload may be queued.
+   */
+  onlineOnly?(payload: Payload): boolean;
   /**
    * per-device: each record carries a durable position on its originating
    * installation, allocated when it is queued (challenge attempts, spec 3).
@@ -232,7 +239,7 @@ export function prerequisitesOf(
 
 /** Every registered type, by name. Specs 3–7 add theirs here. */
 export const recordTypes: ReadonlyMap<string, RecordType> = new Map<string, RecordType>(
-  [completedPracticeSession as unknown as RecordType].map((type) => [type.name, type]),
+  [completedPracticeSession as unknown as RecordType, privacyChoice as unknown as RecordType].map((type) => [type.name, type]),
 );
 
 // ---------------------------------------------------------------------------
