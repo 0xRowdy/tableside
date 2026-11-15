@@ -120,9 +120,15 @@ describe('production rejects beta accounts and uploads', () => {
     });
   });
 
-  it('a beta account is refused by production even with a session production issued', async () => {
-    const email = uniqueEmail('beta-account');
+  // Each scenario makes its own beta account: Auth sends at most two codes an hour to an address.
+  const betaAccount = async (label: string) => {
+    const email = uniqueEmail(label);
     await stack.asEnvironment('beta', () => createAccount(device('tester', { environment: 'beta' }), email));
+    return email;
+  };
+
+  it('a production build never reaches a beta account', async () => {
+    const email = await betaAccount('beta-account');
 
     await stack.asEnvironment('production', async () => {
       const phone = device('production-phone', { environment: 'production' });
@@ -130,7 +136,13 @@ describe('production rejects beta accounts and uploads', () => {
       expect(await phone.account.verifyEmailCode({ email, code: await phone.mailbox.latestCode(email) })).toEqual({ status: 'failed' });
       expect(phone.account.gate).toEqual({ state: 'no-account' });
       expect(phone.vault.openAccount).toBeNull();
+    });
+  });
 
+  it('a beta account is refused by production even with a session production issued', async () => {
+    const email = await betaAccount('beta-account-token');
+
+    await stack.asEnvironment('production', async () => {
       const { client, accessToken } = await rawSignIn(email, 'production');
       expect(claims(accessToken)).toMatchObject({ environment: 'production' });
       expect((await client.rpc('current_account')).data).toBeNull();
