@@ -108,7 +108,7 @@ describe('email-code sign-in', () => {
     expect(phone.account.gate).toEqual({ state: 'no-account' });
   });
 
-  it('never reaches Active for an account whose eligibility isn’t established 13+', async () => {
+  it('never reaches Active for an account whose eligibility isn’t established 13+: it opens restricted (#90)', async () => {
     const email = uniqueEmail('restricted');
     await createAccount(device('setup'), email);
     const accountId = await localStack().accountId(email);
@@ -116,9 +116,8 @@ describe('email-code sign-in', () => {
 
     const phone = device('phone');
     await phone.account.requestEmailCode({ email, intent: 'sign-in' });
-    expect(await phone.account.verifyEmailCode({ email, code: await phone.mailbox.latestCode(email) })).toEqual({ status: 'failed' });
-    expect(phone.account.gate).toEqual({ state: 'no-account' });
-    expect(phone.vault.openAccount).toBeNull();
+    expect(await phone.account.verifyEmailCode({ email, code: await phone.mailbox.latestCode(email) })).toEqual({ status: 'signed-in' });
+    expect(phone.account.gate).toEqual({ state: 'age-ineligible', accountId });
   });
 
   it('a wrong code leaves the gate at No account', async () => {
