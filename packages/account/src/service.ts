@@ -51,11 +51,14 @@ export interface VaultSession {
   readonly store: SyncStore;
 }
 
-/** Recovery needed and a superseded opening are the vault's; their gate states arrive with later tickets. */
+/**
+ * Every other outcome opens nothing, so no sync runs: Recovery needed, a later
+ * build's schema (needs-update), a failed migration (retried at the next open),
+ * or an opening a later sign-in superseded. Their gate states arrive with later tickets.
+ */
 export type VaultOpening =
   | { readonly status: 'open'; readonly session: VaultSession }
-  | { readonly status: 'recovery-needed' }
-  | { readonly status: 'superseded' };
+  | { readonly status: 'recovery-needed' | 'needs-update' | 'migration-failed' | 'superseded' };
 
 export interface SyncStatus {
   /** Whether this installation holds the account's live connection (the newest foregrounded one). */
