@@ -11,8 +11,8 @@ const PracticeContext = createContext<PracticeController | null>(null);
 /**
  * Owns the signed-in account's practice controller, on the account's own
  * store. On launch it finds any unfinished session, which waits suspended for
- * the player; app lifecycle changes reach the controller (backgrounding
- * suspends, and the supervisor hears each one).
+ * the player; app lifecycle changes reach the controller (backgrounding and
+ * sign-out suspend, and the supervisor hears each one).
  */
 export function PracticeProvider({ children }: { children: ReactNode }) {
   const { account } = useAccount();
@@ -20,6 +20,16 @@ export function PracticeProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     void controller.load();
   }, [controller]);
+  // Before the account session ends (sign-out), an open practice session saves
+  // and pauses through the direct suspend, and a save in flight finishes.
+  useEffect(
+    () =>
+      account.service.onSessionEnding(async () => {
+        await controller.lifecycle('signed-out');
+        await controller.settled();
+      }),
+    [account, controller],
+  );
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (state) => {
       if (state === 'background') void controller.lifecycle('backgrounded');

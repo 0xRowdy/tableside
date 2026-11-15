@@ -3,16 +3,31 @@
 // and inline messages. Built from spec 2's copy and the app's tokens.
 // TODO(frames): unverified against S2-13–S2-16 (Pencil couldn't open Tableside.pen for #88).
 
-import { ChevronLeft, CircleAlert } from 'lucide-react-native';
+import { ChevronLeft, CircleAlert, ExternalLink } from 'lucide-react-native';
 import { forwardRef, type ComponentRef, type ReactNode } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View, type TextInputProps } from 'react-native';
+import { Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, View, type TextInputProps } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/theme/tokens';
 
+import { WEB_PAGES } from './web-pages';
+
 /** A pre-account screen: a title, optional Back, and content that reflows and scrolls at any text size. */
-export function FirstRunScreen({ title, intro, back, children }: { title: string; intro?: ReactNode; back?: () => void; children?: ReactNode }) {
+export function FirstRunScreen({
+  title,
+  intro,
+  back,
+  lead,
+  children,
+}: {
+  title: string;
+  intro?: ReactNode;
+  back?: () => void;
+  /** Drawn above the title, such as a locked state's icon. */
+  lead?: ReactNode;
+  children?: ReactNode;
+}) {
   const insets = useSafeAreaInsets();
   return (
     <ScrollView
@@ -25,6 +40,7 @@ export function FirstRunScreen({ title, intro, back, children }: { title: string
       ]}
     >
       {back && <BackButton onPress={back} />}
+      {lead}
       <Text accessibilityRole="header" maxFontSizeMultiplier={textScale.display} style={styles.title}>
         {title}
       </Text>
@@ -149,6 +165,43 @@ export function Actions({ children }: { children: ReactNode }) {
   return <View style={styles.actions}>{children}</View>;
 }
 
+/**
+ * Contact support and Make a privacy request, on every locked and restricted
+ * screen (spec 2 Amendment 9 §1): the tab bar is hidden there, so More isn't
+ * reachable. Both open web pages that work without signing in.
+ */
+export function SupportLinks() {
+  return (
+    <View style={styles.supportLinks}>
+      <View style={styles.supportRow}>
+        <WebLink label="Contact support" url={WEB_PAGES.contactSupport} />
+        <WebLink label="Make a privacy request" url={WEB_PAGES.privacyRequest} />
+      </View>
+      <Text maxFontSizeMultiplier={textScale.body} style={styles.supportNote}>
+        These open tableside.app and work without signing in.
+      </Text>
+    </View>
+  );
+}
+
+function WebLink({ label, url }: { label: string; url: string }) {
+  const { focused, focusProps } = useKeyboardFocus();
+  return (
+    <Pressable
+      accessibilityRole="link"
+      accessibilityLabel={label}
+      onPress={() => void Linking.openURL(url)}
+      {...focusProps}
+      style={[styles.link, styles.webLink, focused && styles.focused]}
+    >
+      <Text maxFontSizeMultiplier={textScale.body} style={styles.webLinkText}>
+        {label}
+      </Text>
+      <ExternalLink color={palette.primary} size={14} />
+    </Pressable>
+  );
+}
+
 /** A text link-style button (for a secondary path such as "Create an account"). */
 export function LinkButton({ label, onPress }: { label: string; onPress: () => void }) {
   const { focused, focusProps } = useKeyboardFocus();
@@ -208,4 +261,9 @@ const styles = StyleSheet.create({
   actions: { gap: space[3], marginTop: space[2] },
   link: { minHeight: MIN_TOUCH_TARGET, justifyContent: 'center', alignSelf: 'flex-start', borderRadius: radius.sm, borderWidth: 2, borderColor: palette.transparent, paddingHorizontal: space[1] },
   linkText: { fontFamily: fonts.uiBold, fontSize: 16, color: palette.primary },
+  supportLinks: { gap: space[1], paddingTop: space[2] },
+  supportRow: { flexDirection: 'row', flexWrap: 'wrap', columnGap: space[4] + space[1], rowGap: space[1] },
+  webLink: { flexDirection: 'row', alignItems: 'center', gap: space[1] },
+  webLinkText: { flexShrink: 1, fontFamily: fonts.uiBold, fontSize: 14, color: palette.primary },
+  supportNote: { fontFamily: fonts.ui, fontSize: 12, lineHeight: 17, color: palette.mutedForeground },
 });

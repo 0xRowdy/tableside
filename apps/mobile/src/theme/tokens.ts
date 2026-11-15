@@ -78,6 +78,8 @@ export const essentialPairs: readonly {
   { use: 'dialog secondary text', kind: 'text', foreground: 'mutedForeground', background: 'popover' },
   { use: 'error text', kind: 'text', foreground: 'destructive', background: 'background' },
   { use: 'error text in a sheet', kind: 'text', foreground: 'destructive', background: 'popover' },
+  { use: 'Delete account row title', kind: 'text', foreground: 'destructive', background: 'card' },
+  { use: 'Delete account row icon', kind: 'graphic', foreground: 'destructive', background: 'secondary' },
   { use: 'sheet field boundary', kind: 'graphic', foreground: 'controlBorder', background: 'popover' },
   { use: 'sheet error field boundary', kind: 'graphic', foreground: 'destructive', background: 'popover' },
   { use: 'sheet icon', kind: 'graphic', foreground: 'foreground', background: 'popover' },
