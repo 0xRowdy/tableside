@@ -10,7 +10,7 @@ import { useState } from 'react';
 import { CURRENCIES, currencyText } from '@/account/account-text';
 import { useAccount } from '@/account/AccountProvider';
 import { ChoiceGroup, ChoiceRow, InlineMessage } from '@/account/FirstRunParts';
-import { useAccountOverview } from '@/account/use-account-summary';
+import { useAccountOverview } from '@/account/use-account-overview';
 import { Note, SettingsScreen } from '@/settings/SettingsParts';
 
 const PROBLEMS = {

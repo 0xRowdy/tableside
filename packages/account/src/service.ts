@@ -32,11 +32,11 @@ export type AccountGate =
    */
   | { readonly state: 'signed-out'; readonly accountId: string };
 
-/** Signed out locally. `serverSessionEnded` is true only when the server confirmed this session ended. */
-export interface SignOutResult {
-  readonly status: 'signed-out';
-  readonly serverSessionEnded: boolean;
-}
+/** Signed out locally; `serverSessionEnded` is true only when the server confirmed this session ended. */
+export type SignOutResult =
+  | { readonly status: 'signed-out'; readonly serverSessionEnded: boolean }
+  /** No account was signed in on this installation, so nothing changed. */
+  | { readonly status: 'not-signed-in' };
 
 export type SignInMethod = 'apple' | 'google' | 'email';
 
@@ -49,7 +49,7 @@ export interface AccountSummary {
   readonly currency: string;
   /** False while any casino session exists, since amounts are never converted. */
   readonly currencyChangeable: boolean | null;
-  /** How many sessions are signed in to the account, this one included. */
+  /** Signed-in devices: the account's server sessions, this one included (each maps to an installation). */
   readonly devices: number | null;
 }
 
@@ -127,7 +127,7 @@ export interface AccountSync {
   /** Resolves once no synchronization is running. */
   idle(): Promise<void>;
   /** How many saved records haven't reached the account yet; 0 with no open account session. */
-  waiting(): Promise<number>;
+  countWaiting(): Promise<number>;
 }
 
 export interface AccountServiceOptions {
@@ -185,7 +185,7 @@ export interface AccountService {
   /**
    * Signs out of this installation only (the current session, never every
    * session). It first runs the session-ending handlers (an open practice
-   * session saves and pauses), then closes the database, keeping it and its
+   * session suspends), then closes the database, keeping it and its
    * key, clears the credentials and moves the gate to Signed out, all without
    * the network. Only then does it tell the server; offline it never claims
    * the server session ended.
@@ -196,7 +196,7 @@ export interface AccountService {
    * still open: the practice controller suspends and lets a save in flight
    * finish. Returns an unsubscribe function.
    */
-  onSessionEnding(handler: () => Promise<void>): () => void;
+  onAccountSessionEnding(handler: () => Promise<void>): () => void;
   /** Settings → Account. Null when no account is signed in, or the account changed while asking. */
   accountSummary(): Promise<AccountSummary | null>;
   /** Changes the account currency (online only). Locked while any casino session exists. */
@@ -240,8 +240,9 @@ const CURRENCY_PATTERN = /^[A-Z]{3}$/;
 /** The currency an account without one on record shows: the server's own default. */
 const DEFAULT_CURRENCY = 'USD';
 
-type OpenGate = Extract<AccountGate, { state: 'active' | 'renewal-pending' }>;
-const isOpen = (gate: AccountGate): gate is OpenGate => gate.state === 'active' || gate.state === 'renewal-pending';
+/** Gate states that open ordinary access: Renewal pending keeps it while the token renews. */
+export type SignedInGate = Extract<AccountGate, { state: 'active' | 'renewal-pending' }>;
+export const isSignedIn = (gate: AccountGate): gate is SignedInGate => gate.state === 'active' || gate.state === 'renewal-pending';
 
 export function createAccountService(options: AccountServiceOptions): AccountService {
   const { backend } = options;
@@ -285,7 +286,7 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
     });
   };
   const listeners = new Set<(gate: AccountGate) => void>();
-  const sessionEnding = new Set<() => Promise<void>>();
+  const accountSessionEnding = new Set<() => Promise<void>>();
   let gate: AccountGate = { state: 'no-account' };
   let assertion: Assertion | null = null;
   /**
@@ -293,7 +294,7 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
    * account switch, and an answer that arrives after it moved touches nothing.
    */
   let generation = 0;
-  let signingOut = false;
+  let signingOut: Promise<SignOutResult> | null = null;
 
   let sync: { readonly engine: SyncEngine; readonly session: SyncSession; readonly store: SyncStore } | null = null;
 
@@ -345,9 +346,22 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
     return parsed && typeof parsed.refresh_token === 'string' && typeof parsed.expires_at === 'number' ? (parsed as StoredSession) : null;
   };
 
-  /** Asks the server to end this session only (current-session scope). True only when it confirmed. */
-  const endServerSession = async (accessToken: string): Promise<boolean> => {
+  /**
+   * Asks the server to end this session only (current-session scope). True
+   * only when it confirmed. An expired access token (Renewal pending) is
+   * renewed first, since the server refuses to end a session for it.
+   */
+  const endServerSession = async (session: StoredSession): Promise<boolean> => {
     try {
+      let accessToken = session.access_token;
+      if (session.expires_at * 1000 <= options.clock()) {
+        const renewal = await post('/auth/v1/token?grant_type=refresh_token', { refresh_token: session.refresh_token });
+        if (!renewal.ok) {
+          await renewal.arrayBuffer().catch(() => undefined);
+          return false;
+        }
+        accessToken = ((await renewal.json()) as StoredSession).access_token;
+      }
       const response = await post('/auth/v1/logout?scope=local', {}, { authorization: `Bearer ${accessToken}` });
       await response.arrayBuffer().catch(() => undefined);
       return response.ok;
@@ -386,9 +400,9 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
       return () => listeners.delete(listener);
     },
 
-    onSessionEnding(handler) {
-      sessionEnding.add(handler);
-      return () => sessionEnding.delete(handler);
+    onAccountSessionEnding(handler) {
+      accountSessionEnding.add(handler);
+      return () => accountSessionEnding.delete(handler);
     },
 
     async answerAgeQuestion(range) {
@@ -499,13 +513,14 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
       }
     },
 
-    async signOut() {
-      if (!isOpen(gate) || signingOut) return { status: 'signed-out', serverSessionEnded: false };
+    signOut() {
+      // A second tap while signing out joins the first.
+      if (signingOut) return signingOut;
+      if (!isSignedIn(gate)) return Promise.resolve({ status: 'not-signed-in' });
       const { accountId, eligibility } = gate;
-      signingOut = true;
-      try {
-        // Practice saves and pauses while the database is still open.
-        for (const handler of [...sessionEnding]) await handler().catch(() => undefined);
+      signingOut = (async (): Promise<SignOutResult> => {
+        // An open practice session suspends while the database is still open.
+        for (const handler of [...accountSessionEnding]) await handler().catch(() => undefined);
         generation++;
         sync?.session.end();
         sync = null;
@@ -513,19 +528,21 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
         const session = await storedSession();
         await writeCredentials(async () => {
           const remembered = await readRemembered();
-          await credentials.removeItem(credentialsKey(backend.name));
+          // The lock first: a kill between the two writes still reopens Signed out.
           await remember({ accountId, eligibility, currency: remembered?.currency ?? null, signedOut: true });
+          await credentials.removeItem(credentialsKey(backend.name));
         });
         setGate({ state: 'signed-out', accountId });
         // Locally signed out already; the server learns only if it can be reached.
-        return { status: 'signed-out', serverSessionEnded: session ? await endServerSession(session.access_token) : false };
-      } finally {
-        signingOut = false;
-      }
+        return { status: 'signed-out', serverSessionEnded: session ? await endServerSession(session) : false };
+      })().finally(() => {
+        signingOut = null;
+      });
+      return signingOut;
     },
 
     async accountSummary() {
-      if (!isOpen(gate)) return null;
+      if (!isSignedIn(gate)) return null;
       const at = generation;
       let summary = await localSummary();
       try {
@@ -539,11 +556,11 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
       } catch {
         // Offline: what this installation already knows.
       }
-      return at === generation && isOpen(gate) ? summary : null;
+      return at === generation && isSignedIn(gate) ? summary : null;
     },
 
     async setAccountCurrency(currency) {
-      if (!isOpen(gate) || !isCurrency(currency)) return { status: 'failed' };
+      if (!isSignedIn(gate) || !isCurrency(currency)) return { status: 'failed' };
       const at = generation;
       try {
         const supabase = await connect();
@@ -563,7 +580,7 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
       },
       reconcile: () => sync?.engine.reconcile() ?? Promise.resolve(),
       idle: () => sync?.engine.idle() ?? Promise.resolve(),
-      async waiting() {
+      async countWaiting() {
         try {
           return (await sync?.store.readUploadQueue())?.length ?? 0;
         } catch {

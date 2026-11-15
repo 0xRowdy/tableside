@@ -591,10 +591,12 @@ export class PracticeController {
   }
 
   /**
-   * Resolves once no work is in flight: a save already under way has finished.
-   * Sign-out waits for this after suspending, before it closes the database.
+   * The account session is ending (sign-out): the session suspends at once,
+   * the supervisor hears it, and this resolves once a save already under way
+   * has finished, so the database can close with nothing half-saved.
    */
-  async settled(): Promise<void> {
+  async accountSessionEnding(): Promise<void> {
+    await this.lifecycle('signed-out');
     while (this.working) await this.working;
   }
 

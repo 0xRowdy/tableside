@@ -153,7 +153,7 @@ export interface SimulatedDevice {
   /**
    * Starts a practice session (roulette, 1,000 buy-in) on the open account and
    * leaves it open, its controller wired to the account as the app wires it:
-   * the controller hears the account session end, so sign-out saves and pauses it.
+   * the controller hears the account session end, so sign-out suspends it.
    */
   startPracticeSession(): Promise<PracticeController>;
   /** The app process dies where it is: nothing it had in flight completes on the device. */
@@ -341,10 +341,7 @@ export function createDevice(stack: LocalStack, options: DeviceOptions): Simulat
     async startPracticeSession() {
       const controller = await startPractice();
       // As the app's practice provider does.
-      app.account.onSessionEnding(async () => {
-        await controller.lifecycle('signed-out');
-        await controller.settled();
-      });
+      app.account.onAccountSessionEnding(() => controller.accountSessionEnding());
       return controller;
     },
     kill() {

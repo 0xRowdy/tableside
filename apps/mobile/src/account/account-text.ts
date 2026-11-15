@@ -4,8 +4,8 @@
 import type { SignInMethod } from '@tableside/account';
 import { Platform } from 'react-native';
 
-/** What the copy calls this device: "this iPhone", "this iPad", or "this device" on Android. */
-export function thisDevice(): string {
+/** What the copy calls this device, after "this": iPhone, iPad, or device on Android. */
+export function deviceName(): string {
   if (Platform.OS !== 'ios') return 'device';
   return Platform.isPad ? 'iPad' : 'iPhone';
 }
@@ -28,7 +28,7 @@ export function methodsSummary(methods: readonly SignInMethod[]): string {
 }
 
 export function devicesText(devices: number): string {
-  return `${devices} signed in, including this ${thisDevice()}`;
+  return `${devices} signed in, including this ${deviceName()}`;
 }
 
 export function waitingText(waiting: number): string {
@@ -38,7 +38,7 @@ export function waitingText(waiting: number): string {
 
 /** The sign-out confirmation's first paragraph. */
 export function signOutText(waiting: number): string {
-  const device = thisDevice();
+  const device = deviceName();
   if (waiting === 0) return `Your session is saved and paused. Your records stay on this ${device}, locked, until you sign back in to this account.`;
   const records = waiting === 1 ? "1 record hasn't synced yet: it stays" : `${waiting} records haven't synced yet: they stay`;
   return `Your session is saved and paused. ${records} on this ${device}, locked, until you sign back in to this account. If you delete the app first, they're lost.`;

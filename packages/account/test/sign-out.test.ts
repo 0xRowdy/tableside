@@ -29,6 +29,8 @@ async function signedIn(phone: SimulatedDevice, label: string) {
 /** The Auth credentials this device holds for its environment, if any. */
 const authCredentials = (phone: SimulatedDevice) => phone.credentials.items.get(`tableside.${phone.environment}.auth`) ?? null;
 const accessToken = (stored: string) => (JSON.parse(stored) as { access_token: string }).access_token;
+/** The Auth session an access token belongs to. */
+const sessionId = (token: string) => (JSON.parse(Buffer.from(token.split('.')[1]!, 'base64url').toString()) as { session_id: string }).session_id;
 
 /** Whether the server still accepts an access token for its own account. */
 async function serverAccepts(token: string): Promise<boolean> {
@@ -86,6 +88,29 @@ describe('signing out of this device', () => {
 
     expect(await signInByEmail(phone, email)).toEqual({ status: 'signed-in' });
     expect(await phone.vault.store().findUnfinished()).toMatchObject({ sequence: 1 });
+  });
+
+  it('with an expired token (Renewal pending) online, still ends this session on the server', async () => {
+    const phone = device('sign-out-expired');
+    await signedIn(phone, 'sign-out-expired');
+    const session = sessionId(accessToken(authCredentials(phone)!));
+    phone.proxy.online = false;
+    phone.clock.advance(2 * 60 * 60_000);
+    await phone.restart();
+    expect(phone.account.gate.state).toBe('renewal-pending');
+
+    phone.proxy.online = true;
+    expect(await phone.account.signOut()).toEqual({ status: 'signed-out', serverSessionEnded: true });
+    // The session is gone, with its refresh tokens.
+    expect(await stack.sql`select 1 from auth.sessions where id = ${session}`).toHaveLength(0);
+  });
+
+  it('answers Not signed in when there is nothing to sign out of, and a second tap joins the first', async () => {
+    const phone = device('sign-out-twice');
+    await signedIn(phone, 'sign-out-twice');
+    const [first, second] = await Promise.all([phone.account.signOut(), phone.account.signOut()]);
+    expect(second).toEqual(first);
+    expect(await phone.account.signOut()).toEqual({ status: 'not-signed-in' });
   });
 
   it('offline, signs out locally at once and never claims the server session ended', async () => {

@@ -14,6 +14,7 @@ import type {
   CurrencyChangeResult,
   SignOutResult,
 } from '@tableside/account';
+import { isSignedIn } from '@tableside/account';
 
 import type { GameId } from '@/games';
 
@@ -86,16 +87,16 @@ export class FakeAccountService implements AccountService {
   }
 
   /** Like the real service: the session-ending handlers run first, then the gate is Signed out. */
-  async signOut() {
+  async signOut(): Promise<SignOutResult> {
     this.calls.push({ method: 'signOut' });
     const gate = this.current;
-    if (gate.state !== 'active' && gate.state !== 'renewal-pending') return { status: 'signed-out' as const, serverSessionEnded: false };
+    if (!isSignedIn(gate)) return { status: 'not-signed-in' as const };
     for (const handler of [...this.ending]) await handler();
     this.setGate({ state: 'signed-out', accountId: gate.accountId });
     return this.next.signOut.shift() ?? { status: 'signed-out' as const, serverSessionEnded: true };
   }
 
-  onSessionEnding(handler: () => Promise<void>) {
+  onAccountSessionEnding(handler: () => Promise<void>) {
     this.ending.add(handler);
     return () => {
       this.ending.delete(handler);
@@ -103,7 +104,7 @@ export class FakeAccountService implements AccountService {
   }
 
   async accountSummary() {
-    return this.current.state === 'active' || this.current.state === 'renewal-pending' ? this.summary : null;
+    return isSignedIn(this.current) ? this.summary : null;
   }
 
   async setAccountCurrency(currency: string) {
@@ -118,7 +119,7 @@ export class FakeAccountService implements AccountService {
     status: { live: false, error: null },
     reconcile: async () => undefined,
     idle: async () => undefined,
-    waiting: async () => this.waitingCount,
+    countWaiting: async () => this.waitingCount,
   };
 
   async renew() {

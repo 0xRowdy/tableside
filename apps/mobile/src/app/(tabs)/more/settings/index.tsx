@@ -2,7 +2,7 @@ import { router } from 'expo-router';
 import { CircleUser, Volume2 } from 'lucide-react-native';
 
 import { methodsSummary } from '@/account/account-text';
-import { useAccountOverview } from '@/account/use-account-summary';
+import { useAccountOverview } from '@/account/use-account-overview';
 import { useFeedbackSettings } from '@/feedback/FeedbackProvider';
 import { Group, ListRow, SettingsScreen } from '@/settings/SettingsParts';
 import { soundAndHapticsSummary } from '@/settings/summary';

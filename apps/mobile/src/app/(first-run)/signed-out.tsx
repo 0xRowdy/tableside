@@ -7,7 +7,7 @@ import { Redirect, router } from 'expo-router';
 import { LogIn, LogOut } from 'lucide-react-native';
 import { StyleSheet, Text, View } from 'react-native';
 
-import { thisDevice } from '@/account/account-text';
+import { deviceName } from '@/account/account-text';
 import { useAccount } from '@/account/AccountProvider';
 import { Actions, Body, FirstRunScreen, SupportLinks } from '@/account/FirstRunParts';
 import { useSignInFlow } from '@/account/sign-in-flow';
@@ -21,7 +21,7 @@ export default function SignedOut() {
   return (
     <FirstRunScreen title="You're signed out" lead={<SignedOutIcon />}>
       <Body>
-        Your records for this account are kept on this {thisDevice()}, locked. Sign in to the same account to open them. Signing in needs a
+        Your records for this account are kept on this {deviceName()}, locked. Sign in to the same account to open them. Signing in needs a
         connection.
       </Body>
       <Text maxFontSizeMultiplier={textScale.body} style={styles.note}>

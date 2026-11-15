@@ -10,7 +10,7 @@ import { useState } from 'react';
 
 import { currencyText, devicesText, methodsList, waitingText } from '@/account/account-text';
 import { SignOutSheet } from '@/account/SignOutSheet';
-import { useAccountOverview } from '@/account/use-account-summary';
+import { useAccountOverview } from '@/account/use-account-overview';
 import { Button } from '@/components/Button';
 import { Group, GroupLabel, ListRow, Note, SettingsScreen } from '@/settings/SettingsParts';
 

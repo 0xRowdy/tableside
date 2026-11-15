@@ -192,7 +192,7 @@ describe('Settings → Account', () => {
     await renderRouter('./src/app', { initialUrl: '/more/settings/account' });
     await header('Account');
     const ending = jest.fn(async () => undefined);
-    service().onSessionEnding(ending);
+    service().onAccountSessionEnding(ending);
     await fireEvent.press(button('Sign out of this device'));
     await fireEvent.press(await screen.findByRole('button', { name: 'Sign out' }));
     await header("You're signed out");

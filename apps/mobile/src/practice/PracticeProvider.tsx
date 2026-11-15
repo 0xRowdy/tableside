@@ -20,16 +20,9 @@ export function PracticeProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     void controller.load();
   }, [controller]);
-  // Before the account session ends (sign-out), an open practice session saves
-  // and pauses through the direct suspend, and a save in flight finishes.
-  useEffect(
-    () =>
-      account.service.onSessionEnding(async () => {
-        await controller.lifecycle('signed-out');
-        await controller.settled();
-      }),
-    [account, controller],
-  );
+  // Before the account session ends (sign-out), an open practice session
+  // suspends through the direct suspend, and a save in flight finishes.
+  useEffect(() => account.service.onAccountSessionEnding(() => controller.accountSessionEnding()), [account, controller]);
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (state) => {
       if (state === 'background') void controller.lifecycle('backgrounded');

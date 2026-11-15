@@ -24,10 +24,12 @@ export {
   type EligibilityBand,
   type SignInMethod,
   type SignOutResult,
+  type SignedInGate,
   type SyncStatus,
   type VaultOpening,
   type VaultSession,
   createAccountService,
+  isSignedIn,
 } from './service';
 export { type SyncErrorCode } from './sync/engine';
 export { type LiveChannel } from './sync/live';

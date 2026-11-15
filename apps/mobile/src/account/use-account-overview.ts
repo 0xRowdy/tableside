@@ -18,7 +18,7 @@ export function useAccountOverview(): AccountOverview | undefined {
   useFocusEffect(
     useCallback(() => {
       let live = true;
-      void Promise.all([service.accountSummary(), service.sync.waiting()]).then(([summary, waiting]) => live && setOverview({ summary, waiting }));
+      void Promise.all([service.accountSummary(), service.sync.countWaiting()]).then(([summary, waiting]) => live && setOverview({ summary, waiting }));
       return () => {
         live = false;
       };

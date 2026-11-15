@@ -12,7 +12,7 @@ import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/theme/tokens';
 
 import { useAccount } from './AccountProvider';
-import { signOutText, thisDevice } from './account-text';
+import { signOutText, deviceName } from './account-text';
 
 /** Above this text size the sheet takes the whole screen, so nothing is cut off. */
 const FULL_SCREEN_FONT_SCALE = 1.5;
@@ -35,7 +35,7 @@ export function SignOutSheet({ waiting, onClose }: { waiting: number; onClose: (
             <View style={styles.grabber} />
             <View style={styles.header}>
               <Text accessibilityRole="header" maxFontSizeMultiplier={textScale.display} style={styles.title}>
-                Sign out of this {thisDevice()}?
+                Sign out of this {deviceName()}?
               </Text>
               <CloseButton onPress={onClose} />
             </View>
