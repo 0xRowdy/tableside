@@ -37,6 +37,12 @@ export interface LocalStack {
   /** The account signed in by an address, or null. */
   accountId(email: string): Promise<string | null>;
   accountCount(email: string): Promise<number>;
+  /**
+   * A sign-in code for an existing account, issued by Auth's admin API without
+   * sending mail: a third installation can sign in to an account within Auth's
+   * local limit of two code emails per address per hour.
+   */
+  issueSignInCode(email: string): Promise<string>;
 }
 
 const repositoryRoot = fileURLToPath(new URL('../../../../', import.meta.url));
@@ -82,6 +88,7 @@ export function localStack(): LocalStack {
     where lower(u.email) = lower(${email})`;
   const url = need('API_URL');
   const publishableKey = need('PUBLISHABLE_KEY');
+  const admin = createClient(url, need('SERVICE_ROLE_KEY'), { auth: { persistSession: false, autoRefreshToken: false } });
   stack = {
     url,
     publishableKey,
@@ -116,6 +123,11 @@ export function localStack(): LocalStack {
     },
     async accountCount(email) {
       return (await accountIds(email)).length;
+    },
+    async issueSignInCode(email) {
+      const { data, error } = await admin.auth.admin.generateLink({ type: 'magiclink', email });
+      if (error) throw new Error(`Auth did not issue a sign-in code: ${error.message}`);
+      return data.properties.email_otp;
     },
   };
   return stack;

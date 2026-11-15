@@ -24,9 +24,30 @@ export {
   type VaultSession,
   createAccountService,
 } from './service';
-export { type SyncErrorCode } from './sync/engine';
+export { type Resolution, type ResolutionOutcome, type SyncErrorCode } from './sync/engine';
+export {
+  type AccountRecords,
+  type AccountTotals,
+  NoOpenAccountError,
+  type ResolutionResult,
+  type RevisionedItemView,
+} from './sync/records';
 export { type LiveChannel } from './sync/live';
 export { PROTOCOL_VERSION, type Disposition, type Envelope, type FeedEntry, type PreparedOperation } from './sync/protocol';
-export { PLATFORM_TABLES, type RecordKind, type RecordType, completedPracticeSession, recordTypes } from './sync/registry';
+export {
+  type Contribution,
+  PLATFORM_TABLES,
+  type Proposal,
+  type RecordKind,
+  type RecordType,
+  type RevisionBase,
+  type RevisionedItemDefinition,
+  type RevisionedState,
+  type RevisionedUpload,
+  completedPracticeSession,
+  recordTypes,
+  revisionedItemType,
+} from './sync/registry';
 export { type DevicePorts, type DeviceSignal, RECONCILE_INTERVAL_MS } from './sync/session';
-export { type AcceptedRecord, type QueuedUpload, type SyncStore } from './sync/store';
+export { type AcceptedRecord, type LocalRevisionedItem, type QueuedUpload, type SyncStore } from './sync/store';
+export { type TotalsRow, sumContributions } from './sync/totals';

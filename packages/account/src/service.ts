@@ -6,7 +6,8 @@ import { type SupabaseClient, createClient } from '@supabase/supabase-js';
 
 import { type BackendEnvironment, ENVIRONMENT_HEADER, type EnvironmentName, retiredEnvironments } from './environment';
 import { SyncEngine, type SyncErrorCode } from './sync/engine';
-import { recordTypes } from './sync/registry';
+import { type AccountRecords, accountRecords } from './sync/records';
+import { type RecordType, recordTypes } from './sync/registry';
 import { type DevicePorts, SyncSession } from './sync/session';
 import type { SyncStore } from './sync/store';
 import { supabaseLiveChannels, supabaseSyncBackend } from './sync/supabase';
@@ -94,6 +95,8 @@ export interface AccountServiceOptions {
   readonly randomBytes: (count: number) => Uint8Array;
   /** The device's WebSocket, for the live connection. */
   readonly webSocket?: typeof WebSocket;
+  /** The registered record types: this build's own by default; seam 2 adds its test-only types. */
+  readonly recordTypes?: ReadonlyMap<string, RecordType>;
 }
 
 export interface AccountService {
@@ -124,6 +127,8 @@ export interface AccountService {
    */
   resume(): Promise<{ readonly status: 'resumed' | 'no-account' }>;
   readonly sync: AccountSync;
+  /** Revisioned items, their conflicts, and lifetime totals for the open account. */
+  readonly records: AccountRecords;
 }
 
 /** Where the signed-in account is remembered, in the environment's credentials (so it goes with them). */
@@ -142,6 +147,7 @@ interface Assertion {
 
 export function createAccountService(options: AccountServiceOptions): AccountService {
   const { backend } = options;
+  const registry = options.recordTypes ?? recordTypes;
   // Nothing restores credentials, opens an account database or sends anything
   // until every retired environment's namespace is gone: the client is made
   // only after that, since making it reads the stored credentials.
@@ -174,7 +180,7 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
   let gate: AccountGate = { state: 'no-account' };
   let assertion: Assertion | null = null;
 
-  let sync: { readonly engine: SyncEngine; readonly session: SyncSession } | null = null;
+  let sync: { readonly engine: SyncEngine; readonly session: SyncSession; readonly store: SyncStore } | null = null;
 
   const setGate = (next: AccountGate) => {
     gate = next;
@@ -193,11 +199,11 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
     const engine = new SyncEngine({
       store,
       backend: supabaseSyncBackend(supabase),
-      registry: recordTypes,
+      registry,
       installationId,
       newOperationId: () => hex(options.randomBytes(16)),
     });
-    sync = { engine, session: new SyncSession(engine, store, options.device, supabaseLiveChannels(supabase, accountId)) };
+    sync = { engine, store, session: new SyncSession(engine, store, options.device, supabaseLiveChannels(supabase, accountId)) };
   };
 
   const currentAssertion = () => (assertion && assertion.expiresAt > options.clock() ? assertion : null);
@@ -285,6 +291,8 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
       reconcile: () => sync?.engine.reconcile() ?? Promise.resolve(),
       idle: () => sync?.engine.idle() ?? Promise.resolve(),
     },
+
+    records: accountRecords(() => sync, registry),
   };
 }
 

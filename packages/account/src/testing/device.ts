@@ -29,9 +29,11 @@ import {
   type EligibilityBand,
   createAccountService,
 } from '../service';
+import type { RecordType } from '../sync/registry';
 import type { DevicePorts, DeviceSignal } from '../sync/session';
 import { FaultProxy } from './fault-proxy';
 import { Mailbox } from './mailbox';
+import { testRecordTypes } from './record-types';
 import type { LocalStack } from './stack';
 
 /** A clock the scenario moves by hand. Moving it runs the timers that fall due. */
@@ -177,6 +179,8 @@ export interface DeviceOptions {
    * device, keeping its files and secure storage.
    */
   readonly installedOver?: SimulatedDevice;
+  /** The registered record types: this build's own and seam 2's test-only types by default. */
+  readonly recordTypes?: ReadonlyMap<string, RecordType>;
 }
 
 export function createDevice(stack: LocalStack, options: DeviceOptions): SimulatedDevice {
@@ -269,6 +273,7 @@ export function createDevice(stack: LocalStack, options: DeviceOptions): Simulat
       device: ports,
       randomBytes: (count) => entropy.bytes(count),
       webSocket: ProcessWebSocket,
+      recordTypes: options.recordTypes ?? testRecordTypes,
     });
     return {
       account,
@@ -369,6 +374,11 @@ export async function createAccountByEmail(
   if ((await device.account.answerAgeQuestion(band)).status !== 'eligible') return { status: 'failed' };
   if ((await device.account.requestEmailCode({ email, intent: 'create' })).status !== 'sent') return { status: 'failed' };
   return device.account.verifyEmailCode({ email, code: await device.mailbox.latestCode(email) });
+}
+
+/** Signs in to an existing account on a device with a code Auth issued without mail (`LocalStack.issueSignInCode`). */
+export async function signInWithIssuedCode(device: SimulatedDevice, stack: LocalStack, email: string): Promise<CodeVerificationResult> {
+  return device.account.verifyEmailCode({ email, code: await stack.issueSignInCode(email) });
 }
 
 /** Signs in to an existing account by email code on a device. */
