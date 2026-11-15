@@ -4,19 +4,17 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
 
-import { useAccount } from '@/account/AccountProvider';
-import { codeRequestProblem } from '@/account/code-request-text';
 import { Actions, Field, FirstRunScreen, InlineMessage } from '@/account/FirstRunParts';
-import { useSignInFlow } from '@/account/sign-in-flow';
+import { useCodeRequest, useSignInFlow } from '@/account/sign-in-flow';
 import { Button } from '@/components/Button';
 
 export default function Email() {
-  const { account } = useAccount();
   const flow = useSignInFlow();
   const [email, setEmail] = useState(flow.email);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const create = flow.intent === 'create';
+  const requestCode = useCodeRequest(setProblem);
 
   const send = async () => {
     const address = email.trim();
@@ -27,12 +25,9 @@ export default function Email() {
     setBusy(true);
     setProblem(null);
     flow.setEmail(address);
-    const result = await account.service.requestEmailCode({ email: address, intent: flow.intent });
+    const sent = await requestCode(address);
     setBusy(false);
-    if (result.status === 'sent') router.push('/code');
-    // The age answer has expired: ask again.
-    else if (result.status === 'age-required') router.replace('/age');
-    else setProblem(codeRequestProblem(result));
+    if (sent) router.push('/code');
   };
 
   return (

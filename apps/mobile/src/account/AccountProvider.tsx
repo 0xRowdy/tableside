@@ -1,4 +1,4 @@
-import type { AccountGate } from '@tableside/account';
+import type { AccountGate, AccountService } from '@tableside/account';
 import { createContext, useCallback, useContext, useEffect, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { AppState } from 'react-native';
 
@@ -13,10 +13,11 @@ export const isSignedIn = (gate: AccountGate): gate is SignedInGate => gate.stat
 
 interface AccountContextValue {
   readonly account: AppAccount;
+  readonly service: AccountService;
   readonly gate: AccountGate;
-  /** The signed-in account's offline game: undefined while it loads, null before the player picks one. */
+  /** The signed-in account's offline game selection: undefined while it loads, null before the player makes it. */
   readonly offlineGame: GameId | null | undefined;
-  chooseOfflineGame(game: GameId): Promise<void>;
+  selectOfflineGame(game: GameId): Promise<void>;
 }
 
 const AccountContext = createContext<AccountContextValue | null>(null);
@@ -68,7 +69,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
     };
   }, [account, accountId]);
 
-  const chooseOfflineGame = useCallback(
+  const selectOfflineGame = useCallback(
     async (game: GameId) => {
       if (!accountId) return;
       await account.offlineGame.set(accountId, game);
@@ -80,9 +81,10 @@ export function AccountProvider({ children }: { children: ReactNode }) {
   if (!ready) return null;
   const value: AccountContextValue = {
     account,
+    service,
     gate,
     offlineGame: accountId && offlineGame?.accountId === accountId ? offlineGame.game : undefined,
-    chooseOfflineGame,
+    selectOfflineGame,
   };
   return <AccountContext.Provider value={value}>{children}</AccountContext.Provider>;
 }

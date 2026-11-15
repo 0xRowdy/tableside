@@ -59,10 +59,12 @@ schema_paths = []
 
 [db.seed]
 # If enabled, seeds the database after migrations during a db reset.
-enabled = false
+# Local stacks only: the seed names the stack's backend environment "local".
+# Beta and production never run it (see [remotes] below).
+enabled = true
 # Specifies an ordered list of seed files to load during db reset.
 # Supports glob patterns relative to supabase directory: "./seeds/*.sql"
-sql_paths = ["./seed.sql"]
+sql_paths = ["./seed/local.sql"]
 
 [db.network_restrictions]
 # Enable management of network restrictions.
@@ -155,7 +157,8 @@ site_url = "http://127.0.0.1:3000"
 # The public URL that Auth serves on. Defaults to the API external URL with `/auth/v1` appended.
 # external_url = ""
 # A list of *exact* URLs that auth providers are permitted to redirect to post authentication.
-additional_redirect_urls = ["https://127.0.0.1:3000"]
+# Auth callbacks name their backend environment, and each environment allows only its own.
+additional_redirect_urls = ["https://127.0.0.1:3000", "tableside://auth/local"]
 # How long tokens are valid for, in seconds. Defaults to 3600 (1 hour), maximum 604,800 (1 week).
 jwt_expiry = 3600
 # JWT issuer URL. If not set, defaults to auth.external_url.
@@ -283,9 +286,10 @@ enabled = true
 uri = "pg-functions://postgres/private/refuse_auth_email"
 
 # This hook runs before a token is issued and allows you to add additional claims based on the authentication method used.
-# [auth.hook.custom_access_token]
-# enabled = true
-# uri = "pg-functions://<database>/<schema>/<hook_name>"
+# Stamps every access token with the backend environment that issued it.
+[auth.hook.custom_access_token]
+enabled = true
+uri = "pg-functions://postgres/private/custom_access_token"
 
 # Configure one of the supported SMS providers: `twilio`, `twilio_verify`, `messagebird`, `textlocal`, `vonage`.
 [auth.sms.twilio]
@@ -427,3 +431,38 @@ s3_secret_key = "env(S3_SECRET_KEY)"
 # declarative_schema_path = "./database"
 # JSON string passed through to pg-delta SQL formatting.
 # format_options = "{\"keywordCase\":\"upper\",\"indent\":2,\"maxWidth\":80,\"commaStyle\":\"trailing\"}"
+
+# ---------------------------------------------------------------------------
+# Backend environments (#39, spec 2 Amendment 1 A2)
+# ---------------------------------------------------------------------------
+# Beta and production are separate Supabase projects with their own keys,
+# Auth users and data; docs/environments.md has the provisioning steps. Each
+# overrides the local settings above where it differs. The CLI refuses a
+# remote without a real project ref, so these stay commented out until the
+# projects exist; uncomment them with the refs then.
+#
+# [remotes.beta]
+# project_id = "<beta project ref>"
+#
+# [remotes.beta.db.seed]
+# enabled = false
+#
+# [remotes.beta.auth]
+# site_url = "tableside://auth/beta"
+# additional_redirect_urls = ["tableside://auth/beta"]
+#
+# [remotes.beta.auth.external.keycloak]
+# enabled = false
+#
+# [remotes.production]
+# project_id = "<production project ref>"
+#
+# [remotes.production.db.seed]
+# enabled = false
+#
+# [remotes.production.auth]
+# site_url = "tableside://auth/production"
+# additional_redirect_urls = ["tableside://auth/production"]
+#
+# [remotes.production.auth.external.keycloak]
+# enabled = false

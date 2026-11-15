@@ -3,6 +3,7 @@
 // directory excluded from backup, and the app returning to the foreground as
 // the signal to try a locked keychain again.
 
+import type { EnvironmentName } from '@tableside/account/environment';
 import * as Crypto from 'expo-crypto';
 import { Directory, File, Paths } from 'expo-file-system';
 import * as SecureStore from 'expo-secure-store';
@@ -19,7 +20,7 @@ export const VAULT_DIRECTORY = 'tableside-vault';
 /** How long a locked keychain waits for the app to come to the foreground before trying again anyway. */
 export const LOCKED_RETRY_MS = 30_000;
 
-export function createNativeVault(environment: string): AccountVault {
+export function createNativeVault(environment: EnvironmentName): AccountVault {
   return new AccountVault({
     environment,
     keys: secureStoreKeys,
@@ -113,6 +114,15 @@ export const secureStoreKeys: VaultKeyStore = {
       throw error;
     }
   },
+  async remove(name) {
+    try {
+      await SecureStore.deleteItemAsync(name, KEYCHAIN_OPTIONS);
+      return 'removed';
+    } catch (error) {
+      if (isKeychainLocked(error)) return 'locked';
+      throw error;
+    }
+  },
 };
 
 function appFiles(): VaultFiles {
@@ -138,6 +148,24 @@ function appFiles(): VaultFiles {
     },
     async writeText(path, text) {
       new File(path).write(text);
+    },
+    // Expo exposes no fsync: durability of the migration's backup copy, manifest
+    // write and removals is part of launch gate 2's native qualification.
+    async copy(from, to) {
+      const target = new File(to);
+      if (target.exists) target.delete();
+      new File(from).copy(target);
+    },
+    async move(from, to) {
+      new File(from).move(new File(to));
+    },
+    async remove(path) {
+      const directory = new Directory(path);
+      if (directory.exists) directory.delete();
+      else {
+        const file = new File(path);
+        if (file.exists) file.delete();
+      }
     },
   };
 }

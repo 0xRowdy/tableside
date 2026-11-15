@@ -1,5 +1,5 @@
 // Building blocks of the first-run screens (welcome, age, email, code, offline
-// game): a full-screen layout with no tab bar, a labelled field, choice rows
+// game): a full-screen layout with no tab bar, a labeled field, choice rows
 // and inline messages. Built from spec 2's copy and the app's tokens.
 // TODO(frames): unverified against S2-13–S2-16 (Pencil couldn't open Tableside.pen for #88).
 
@@ -60,7 +60,7 @@ export function Status({ children }: { children: ReactNode }) {
   );
 }
 
-/** A labelled text field. Its label is its accessible name. */
+/** A labeled text field. Its label is its accessible name. */
 export const Field = forwardRef<ComponentRef<typeof TextInput>, { label: string; problem?: boolean } & Omit<TextInputProps, 'accessibilityLabel' | 'style'>>(
   function Field({ label, problem = false, ...input }, ref) {
     const { focused, focusProps } = useKeyboardFocus(input);
@@ -83,7 +83,7 @@ export const Field = forwardRef<ComponentRef<typeof TextInput>, { label: string;
   },
 );
 
-/** A problem or notice in words with an icon, so it isn't marked by colour alone. Announced when it appears. */
+/** A problem or notice in words with an icon, so it isn't marked by color alone. Announced when it appears. */
 export function InlineMessage({ children, testID }: { children: ReactNode; testID?: string }) {
   return (
     <View style={styles.message} testID={testID}>
@@ -96,13 +96,26 @@ export function InlineMessage({ children, testID }: { children: ReactNode; testI
 }
 
 /** One choice of a single-choice group (a radio button). */
-export function ChoiceRow({ label, detail, selected, onPress }: { label: string; detail?: string; selected: boolean; onPress: () => void }) {
+export function ChoiceRow({
+  label,
+  detail,
+  spokenDetail = detail,
+  selected,
+  onPress,
+}: {
+  label: string;
+  detail?: string;
+  /** The detail as a screen reader should speak it. */
+  spokenDetail?: string;
+  selected: boolean;
+  onPress: () => void;
+}) {
   const { focused, focusProps } = useKeyboardFocus();
   return (
     <Pressable
       accessibilityRole="radio"
       accessibilityState={{ checked: selected }}
-      accessibilityLabel={detail ? `${label}. ${detail}` : label}
+      accessibilityLabel={spokenDetail ? `${label}. ${spokenDetail}` : label}
       onPress={onPress}
       {...focusProps}
       style={[styles.choice, selected && styles.choiceSelected, focused && styles.focused]}

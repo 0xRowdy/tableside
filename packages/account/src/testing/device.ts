@@ -7,6 +7,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
+import type { EnvironmentName } from '../environment';
 import {
   type AccountService,
   type CodeVerificationResult,
@@ -49,19 +50,28 @@ export class FakeEntropy {
 /** SecureStore's stand-in. */
 export class MemoryCredentials implements CredentialStorage {
   readonly items = new Map<string, string>();
+  /** Every access in order, as "get <key>", "set <key>" or "remove <key>". */
+  readonly log: string[] = [];
   async getItem(key: string) {
+    this.log.push(`get ${key}`);
     return this.items.get(key) ?? null;
   }
   async setItem(key: string, value: string) {
+    this.log.push(`set ${key}`);
     this.items.set(key, value);
   }
   async removeItem(key: string) {
+    this.log.push(`remove ${key}`);
     this.items.delete(key);
   }
 }
 
 export interface SimulatedDevice {
   readonly name: string;
+  /** The backend environment the device's build talks to. */
+  readonly environment: EnvironmentName;
+  /** Where the device keeps its files; a build installed over this one keeps them. */
+  readonly directory: string;
   readonly installationId: string;
   readonly account: AccountService;
   readonly proxy: FaultProxy;
@@ -81,24 +91,37 @@ export interface SimulatedDevice {
 
 let seed = 1;
 
-export function createDevice(stack: LocalStack, options: { readonly name: string }): SimulatedDevice {
+export interface DeviceOptions {
+  readonly name: string;
+  /** The environment the device's build talks to; the stack's own by default. Its endpoint is always the stack. */
+  readonly environment?: EnvironmentName;
+  /**
+   * A store-track update: this build is installed over another on the same
+   * device, keeping its files and secure storage.
+   */
+  readonly installedOver?: SimulatedDevice;
+}
+
+export function createDevice(stack: LocalStack, options: DeviceOptions): SimulatedDevice {
   const entropy = new FakeEntropy(seed++);
   const installationId = Buffer.from(entropy.bytes(16)).toString('hex');
-  const directory = mkdtempSync(path.join(tmpdir(), `tableside-${options.name}-`));
   return launch(stack, {
     name: options.name,
+    environment: options.environment ?? stack.environment,
     installationId,
-    directory,
+    directory: options.installedOver?.directory ?? mkdtempSync(path.join(tmpdir(), `tableside-${options.name}-`)),
     entropy,
     proxy: new FaultProxy(),
     clock: new FakeClock(),
-    credentials: new MemoryCredentials(),
+    credentials: options.installedOver?.credentials ?? new MemoryCredentials(),
     mailbox: new Mailbox(stack.mailUrl),
   });
 }
 
+/** What a device keeps from one launch of the app to the next. */
 interface DeviceParts {
   readonly name: string;
+  readonly environment: EnvironmentName;
   readonly installationId: string;
   readonly directory: string;
   readonly entropy: FakeEntropy;
@@ -109,9 +132,9 @@ interface DeviceParts {
 }
 
 function launch(stack: LocalStack, parts: DeviceParts): SimulatedDevice {
-  const vault = new NodeSqliteVault(parts.directory, parts.installationId);
+  const vault = new NodeSqliteVault(parts.directory, parts.environment, parts.installationId);
   const account = createAccountService({
-    backend: { url: stack.url, publishableKey: stack.publishableKey },
+    backend: { name: parts.environment, url: stack.url, publishableKey: stack.publishableKey },
     fetch: parts.proxy.fetch,
     credentials: parts.credentials,
     vault,

@@ -93,7 +93,7 @@ language sql stable security definer set search_path = '' as $$
   select case
     when exists (
       select 1 from auth.users u join public.accounts a on a.auth_user_id = u.id
-      where lower(u.email) = lower(btrim(address)) and a.state <> 'deleted'
+      where lower(u.email) = lower(btrim(address)) and a.state <> 'deleted' and a.environment = private.environment()
     ) then 'account'
     when exists (select 1 from auth.users u where lower(u.email) = lower(btrim(address))) then 'pending'
     else 'none'

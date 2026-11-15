@@ -4,6 +4,8 @@
 
 import { type SupabaseClient, createClient } from '@supabase/supabase-js';
 
+import { type BackendEnvironment, ENVIRONMENT_HEADER, type EnvironmentName, retiredEnvironments } from './environment';
+
 /** The account's access state on this installation (spec 2, *Account gate*). Later tickets add the other states. */
 export type AccountGate =
   | { readonly state: 'no-account' }
@@ -11,13 +13,22 @@ export type AccountGate =
   /** The token expired and hasn't renewed yet: access and records stay, under cached rights. */
   | { readonly state: 'renewal-pending'; readonly accountId: string; readonly eligibility: EligibilityBand }
   /** The account's key or database is lost or unreadable on this installation; nothing was opened or replaced. */
-  | { readonly state: 'recovery-needed'; readonly accountId: string };
+  | { readonly state: 'recovery-needed'; readonly accountId: string }
+  /**
+   * The account's database is intact but this build can't open it yet: it has
+   * a later build's schema (needs-update), or bringing it to this build's
+   * schema failed and the next launch tries again (migration-failed).
+   */
+  | { readonly state: 'database-unavailable'; readonly accountId: string; readonly reason: 'needs-update' | 'migration-failed' };
 
 /** The fallback age-range question's answers. */
 export type AgeRange = 'under-13' | EligibilityBand;
 /** An established 13+ age band: the only bands that open ordinary access. */
 export type EligibilityBand = '13-15' | '16-17' | '18+';
 const ELIGIBLE_BANDS: readonly string[] = ['13-15', '16-17', '18+'] satisfies EligibilityBand[];
+
+/** Which way a player asks for a code: Sign in (an existing account) or Create (a new one). */
+export type CodeIntent = 'sign-in' | 'create';
 
 export type AgeAnswerResult = { readonly status: 'eligible' } | { readonly status: 'ineligible' } | { readonly status: 'failed' };
 export type CodeRequestResult =
@@ -43,6 +54,10 @@ export type VaultOpening =
   | { readonly status: 'open' }
   /** The key or database is lost or unreadable: the gate's Recovery needed. */
   | { readonly status: 'recovery-needed' }
+  /** The database has a later build's schema: this build can't read it. */
+  | { readonly status: 'needs-update' }
+  /** Bringing the database to this build's schema failed; it is as it was, and the next open tries again. */
+  | { readonly status: 'migration-failed' }
   /** A later sign-in or sign-out replaced this one while it waited. */
   | { readonly status: 'superseded' };
 
@@ -53,10 +68,13 @@ export type VaultOpening =
 export interface AccountVault {
   open(accountId: string): Promise<VaultOpening>;
   close(): Promise<void>;
+  /** Removes every database, key and installation identity another environment left on this device. */
+  removeEnvironment(environment: EnvironmentName): Promise<void>;
 }
 
 export interface AccountServiceOptions {
-  readonly backend: { readonly url: string; readonly publishableKey: string };
+  /** The one backend this build talks to, fixed when it was built. */
+  readonly backend: BackendEnvironment;
   /** The device's network. */
   readonly fetch: typeof fetch;
   readonly credentials: CredentialStorage;
@@ -89,7 +107,7 @@ export interface AccountService {
    * is the same either way. Create needs a current eligibility assertion;
    * sign-in never creates an account.
    */
-  requestEmailCode(request: { readonly email: string; readonly intent: 'create' | 'sign-in' }): Promise<CodeRequestResult>;
+  requestEmailCode(request: { readonly email: string; readonly intent: CodeIntent }): Promise<CodeRequestResult>;
   /**
    * Signs in with the emailed code. The gate becomes Active only for an
    * active account with an established 13+ band; other eligibility states are
@@ -110,9 +128,8 @@ interface AccountRecord {
   readonly eligibility: EligibilityBand;
 }
 
-/** Where Supabase keeps the session in the credential storage. */
-const SESSION_KEY = 'tableside.auth';
-const ACCOUNT_KEY = 'tableside.account';
+/** Where the account this installation last signed in to is kept, beside the environment's credentials. */
+const accountKey = (environment: EnvironmentName) => `tableside.${environment}.account`;
 
 /** Supabase's stored session: what renewal reads and writes. */
 interface StoredSession {
@@ -124,11 +141,40 @@ interface StoredSession {
 }
 
 export function createAccountService(options: AccountServiceOptions): AccountService {
-  const { backend, credentials } = options;
-  const supabase: SupabaseClient = createClient(backend.url, backend.publishableKey, {
-    global: { fetch: options.fetch },
-    auth: { storage: credentials, storageKey: SESSION_KEY, persistSession: true, autoRefreshToken: false, detectSessionInUrl: false },
-  });
+  const { backend } = options;
+  // This environment's credentials: Auth's session, and the account record beside it.
+  const credentials = namespacedCredentials(options.credentials, backend.name);
+  // Nothing restores credentials, opens an account database or sends anything
+  // until every retired environment's namespace is gone: the client is made
+  // only after that, since making it reads the stored credentials.
+  // Every server call in this service goes through `connect`.
+  let client: Promise<SupabaseClient> | null = null;
+  const connect = (): Promise<SupabaseClient> =>
+    (client ??= (async () => {
+      await removeRetiredEnvironments(options);
+      return createClient(backend.url, backend.publishableKey, {
+        global: { fetch: options.fetch, headers: { [ENVIRONMENT_HEADER]: backend.name } },
+        auth: {
+          storage: credentials,
+          storageKey: credentialsKey(backend.name),
+          persistSession: true,
+          autoRefreshToken: false,
+          detectSessionInUrl: false,
+        },
+      });
+    })().catch((error: unknown) => {
+      client = null;
+      throw error;
+    }));
+  /** A JSON request to the backend outside the Supabase client, naming this environment like every other. */
+  const post = async (path: string, body: unknown): Promise<Response> => {
+    await connect();
+    return options.fetch(`${backend.url}${path}`, {
+      method: 'POST',
+      headers: { apikey: backend.publishableKey, [ENVIRONMENT_HEADER]: backend.name, 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  };
   const listeners = new Set<(gate: AccountGate) => void>();
   let gate: AccountGate = { state: 'no-account' };
   let assertion: Assertion | null = null;
@@ -142,14 +188,16 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
 
   /** Opens the account's database and moves the gate; nothing changes when a later sign-in overtook this one. */
   const enter = async (record: AccountRecord, state: 'active' | 'renewal-pending') => {
-    const opening = await options.vault.open(record.accountId);
+    const { accountId } = record;
+    const opening = await options.vault.open(accountId);
     if (opening.status === 'superseded') return;
-    if (opening.status === 'recovery-needed') setGate({ state: 'recovery-needed', accountId: record.accountId });
-    else setGate({ state, accountId: record.accountId, eligibility: record.eligibility });
+    if (opening.status === 'open') setGate({ state, accountId, eligibility: record.eligibility });
+    else if (opening.status === 'recovery-needed') setGate({ state: 'recovery-needed', accountId });
+    else setGate({ state: 'database-unavailable', accountId, reason: opening.status });
   };
 
   const storedSession = async (): Promise<StoredSession | null> => {
-    const parsed = parseJson(await credentials.getItem(SESSION_KEY)) as Partial<StoredSession> | null;
+    const parsed = parseJson(await credentials.getItem(credentialsKey(backend.name))) as Partial<StoredSession> | null;
     return parsed && typeof parsed.refresh_token === 'string' && typeof parsed.expires_at === 'number' ? (parsed as StoredSession) : null;
   };
 
@@ -165,7 +213,9 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
 
     async restore() {
       if (gate.state !== 'no-account') return;
-      const record = parseAccountRecord(await credentials.getItem(ACCOUNT_KEY));
+      // Removes a retired environment's namespace before reading any credentials.
+      await connect();
+      const record = parseAccountRecord(await credentials.getItem(accountKey(backend.name)));
       const session = await storedSession();
       if (!record || !session) return;
       await enter(record, session.expires_at * 1000 > options.clock() ? 'active' : 'renewal-pending');
@@ -179,19 +229,16 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
       try {
         // Supabase's own refresh retries for half a minute offline; one attempt
         // is enough, since a failure leaves Renewal pending to try again later.
-        const response = await options.fetch(`${backend.url}/auth/v1/token?grant_type=refresh_token`, {
-          method: 'POST',
-          headers: { apikey: backend.publishableKey, 'content-type': 'application/json' },
-          body: JSON.stringify({ refresh_token: session.refresh_token }),
-        });
+        const response = await post('/auth/v1/token?grant_type=refresh_token', { refresh_token: session.refresh_token });
         if (!response.ok) {
           await response.arrayBuffer();
           return;
         }
         const renewed = (await response.json()) as StoredSession;
+        // A sign-out or another account while this was in flight: touch nothing.
+        if (gate !== pending) return;
         const expiresAt = Math.floor(options.clock() / 1000) + renewed.expires_in;
-        await credentials.setItem(SESSION_KEY, JSON.stringify({ ...renewed, expires_at: expiresAt }));
-        // A sign-out or another account while this was in flight: leave the gate alone.
+        await credentials.setItem(credentialsKey(backend.name), JSON.stringify({ ...renewed, expires_at: expiresAt }));
         if (gate === pending) setGate({ ...pending, state: 'active' });
       } catch {
         // Offline or the response was lost: still Renewal pending.
@@ -202,6 +249,7 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
       assertion = null;
       if (range === 'under-13') return { status: 'ineligible' };
       try {
+        const supabase = await connect();
         const { data, error } = await supabase.rpc('issue_eligibility_assertion', { age_range: range });
         if (error) return { status: 'failed' };
         const issued = data as { assertion: string; expires_at: string };
@@ -216,11 +264,7 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
       const held = currentAssertion();
       if (intent === 'create' && !held) return { status: 'age-required' };
       try {
-        const response = await options.fetch(`${backend.url}/functions/v1/request-code`, {
-          method: 'POST',
-          headers: { apikey: backend.publishableKey, 'content-type': 'application/json' },
-          body: JSON.stringify({ email, intent, ...(intent === 'create' && held ? { assertion: held.token } : {}) }),
-        });
+        const response = await post('/functions/v1/request-code', { email, intent, ...(intent === 'create' && held ? { assertion: held.token } : {}) });
         const body = (await response.json().catch(() => null)) as { status?: string; retryAfter?: unknown } | null;
         if (response.ok && body?.status === 'sent') return { status: 'sent' };
         if (response.status === 429 && typeof body?.retryAfter === 'number') return { status: 'rate-limited', retryAfterSeconds: body.retryAfter };
@@ -236,6 +280,7 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
 
     async verifyEmailCode({ email, code }) {
       try {
+        const supabase = await connect();
         const { error } = await supabase.auth.verifyOtp({ email, token: code, type: 'email' });
         if (error) return { status: error.code === 'otp_expired' ? 'invalid-code' : 'failed' };
         const { data, error: accountError } = await supabase.rpc('current_account');
@@ -245,7 +290,7 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
           return { status: 'failed' };
         }
         const record: AccountRecord = { v: 1, accountId: account.account_id, eligibility: account.eligibility };
-        await credentials.setItem(ACCOUNT_KEY, JSON.stringify(record));
+        await credentials.setItem(accountKey(backend.name), JSON.stringify(record));
         assertion = null;
         await enter(record, 'active');
         return { status: 'signed-in' };
@@ -274,4 +319,50 @@ function parseAccountRecord(text: string | null): AccountRecord | null {
   return value?.v === 1 && typeof value.accountId === 'string' && isEligible(value.eligibility)
     ? { v: 1, accountId: value.accountId, eligibility: value.eligibility }
     : null;
+}
+
+/** Erases what each environment this build retires left on the device: its credentials, then its vault namespace. */
+async function removeRetiredEnvironments({ backend, credentials, vault }: AccountServiceOptions): Promise<void> {
+  for (const retired of retiredEnvironments(backend.name)) {
+    await removeCredentials(credentials, retired);
+    await vault.removeEnvironment(retired);
+  }
+}
+
+/** Where Auth keeps an environment's credentials in secure storage: every entry's name starts with it. */
+const credentialsKey = (environment: EnvironmentName) => `tableside.${environment}.auth`;
+/** The list of credential entries an environment has written, so they can all be removed. */
+const credentialsIndex = (environment: EnvironmentName) => `tableside.${environment}.credentials`;
+
+/**
+ * An environment's credentials. Secure storage can't list its entries, so each
+ * entry's name is recorded before the entry is written, and removing the
+ * environment's credentials removes every recorded entry.
+ */
+function namespacedCredentials(storage: CredentialStorage, environment: EnvironmentName): CredentialStorage {
+  const index = credentialsIndex(environment);
+  return {
+    getItem: (key) => storage.getItem(key),
+    async setItem(key, value) {
+      const names = await readIndex(storage, index);
+      if (!names.includes(key)) await storage.setItem(index, JSON.stringify([...names, key]));
+      await storage.setItem(key, value);
+    },
+    removeItem: (key) => storage.removeItem(key),
+  };
+}
+
+async function removeCredentials(storage: CredentialStorage, environment: EnvironmentName): Promise<void> {
+  const index = credentialsIndex(environment);
+  for (const key of new Set([credentialsKey(environment), ...(await readIndex(storage, index))])) await storage.removeItem(key);
+  await storage.removeItem(index);
+}
+
+async function readIndex(storage: CredentialStorage, index: string): Promise<string[]> {
+  try {
+    const names: unknown = JSON.parse((await storage.getItem(index)) ?? '[]');
+    return Array.isArray(names) ? names.filter((name): name is string => typeof name === 'string') : [];
+  } catch {
+    return [];
+  }
 }

@@ -1,7 +1,8 @@
 // Requests an email code (spec 2, #88): the only way the app gets one. Auth's
 // own code endpoint sends nothing (private.refuse_auth_email).
 //
-// POST { email, intent: 'sign-in' | 'create', assertion? }
+// POST { email, intent: 'sign-in' | 'create', assertion? }, naming its backend
+// environment in x-tableside-environment like every request (docs/environments.md).
 //   200 { status: 'sent' }                        an email went out
 //   429 { status: 'rate-limited', retryAfter }    seconds to wait
 //   403 { status: 'age-required' }                Create without a usable eligibility assertion
@@ -27,6 +28,8 @@ const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 const MAILPIT_URL = Deno.env.get('TABLESIDE_MAILPIT_URL');
 const SENDER = { Email: 'codes@tableside.local', Name: 'Tableside' };
 
+const ENVIRONMENT_HEADER = 'x-tableside-environment';
+
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 /** How long every admitted request takes at least; above the code path's own time with the local mail catcher. #122 tunes it against Resend. */
 const RESPONSE_FLOOR_MS = 300;
@@ -45,6 +48,10 @@ Deno.serve(async (request) => {
     return reply(400, { status: 'invalid' });
   }
   const assertion = typeof body.assertion === 'string' ? body.assertion : '';
+  // Passed on to every database call, whose pre-request hook refuses another
+  // environment (or none) before anything runs; so is a new user's.
+  const environment = request.headers.get(ENVIRONMENT_HEADER) ?? '';
+  const rpc = <T = unknown>(name: string, args: Record<string, unknown>) => callRpc<T>(environment, name, args);
 
   try {
     // Create needs a usable assertion whoever owns the address, so this
@@ -63,7 +70,7 @@ Deno.serve(async (request) => {
     const type: MailType = intent === 'sign-in' && recipient !== 'account' ? 'no-account' : 'code';
     let delivered = false;
     try {
-      delivered = await deliver(email, type === 'code' ? codeMail(await issueCode(email, recipient, assertion)) : NO_ACCOUNT_MAIL);
+      delivered = await deliver(email, type === 'code' ? codeMail(await issueCode({ email, recipient, assertion, environment, rpc })) : NO_ACCOUNT_MAIL);
     } catch (error) {
       logFailure(error);
     }
@@ -89,9 +96,21 @@ const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve,
  * (the database consumes it), or finishes one already under way.
  * `recipient` is 'pending' or 'none' only for Create.
  */
-async function issueCode(email: string, recipient: Recipient, assertion: string): Promise<string> {
+async function issueCode({
+  email,
+  recipient,
+  assertion,
+  environment,
+  rpc,
+}: {
+  email: string;
+  recipient: Recipient;
+  assertion: string;
+  environment: string;
+  rpc: <T>(name: string, args: Record<string, unknown>) => Promise<T>;
+}): Promise<string> {
   if (recipient === 'none') {
-    const created = await auth('/admin/users', { email, user_metadata: { eligibility_assertion: assertion } });
+    const created = await auth('/admin/users', { email, user_metadata: { eligibility_assertion: assertion, environment } });
     // A racing Create for the same address made the user first: send it a code too.
     if (!created.ok && created.code !== 'email_exists') throw new StepError('create-user');
   }
@@ -162,10 +181,10 @@ class StepError extends Error {
   }
 }
 
-async function rpc<T = unknown>(name: string, args: Record<string, unknown>): Promise<T> {
+async function callRpc<T>(environment: string, name: string, args: Record<string, unknown>): Promise<T> {
   const response = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${name}`, {
     method: 'POST',
-    headers: serviceHeaders(),
+    headers: { ...serviceHeaders(), [ENVIRONMENT_HEADER]: environment },
     body: JSON.stringify(args),
   });
   if (!response.ok) {

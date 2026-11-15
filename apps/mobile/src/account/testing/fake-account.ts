@@ -6,6 +6,7 @@ import type {
   AccountService,
   AgeAnswerResult,
   AgeRange,
+  CodeIntent,
   CodeRequestResult,
   CodeVerificationResult,
 } from '@tableside/account';
@@ -18,7 +19,7 @@ export const FAKE_ACCOUNT_ID = 'account-1';
 
 type Call =
   | { readonly method: 'answerAgeQuestion'; readonly range: AgeRange }
-  | { readonly method: 'requestEmailCode'; readonly email: string; readonly intent: 'create' | 'sign-in' }
+  | { readonly method: 'requestEmailCode'; readonly email: string; readonly intent: CodeIntent }
   | { readonly method: 'verifyEmailCode'; readonly email: string; readonly code: string }
   | { readonly method: 'restore' | 'renew' };
 
@@ -70,7 +71,7 @@ export class FakeAccountService implements AccountService {
     return this.next.age.shift() ?? (range === 'under-13' ? { status: 'ineligible' as const } : { status: 'eligible' as const });
   }
 
-  async requestEmailCode(request: { email: string; intent: 'create' | 'sign-in' }) {
+  async requestEmailCode(request: { email: string; intent: CodeIntent }) {
     this.calls.push({ method: 'requestEmailCode', ...request });
     return this.next.code.shift() ?? { status: 'sent' as const };
   }
@@ -103,5 +104,5 @@ export function fakeAppAccount(options: { readonly stored?: AccountGate; readonl
   return account;
 }
 
-/** A signed-in account that has chosen its offline game: what most app tests start from. */
+/** The gate of a signed-in account: what most app tests reopen into (with an offline game selected, in jest.setup.ts). */
 export const SIGNED_IN: AccountGate = { state: 'active', accountId: FAKE_ACCOUNT_ID, eligibility: '18+' };

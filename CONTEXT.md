@@ -263,8 +263,12 @@ A store purchase that is no longer linked to any usable Tableside account. It is
 **Installation**:
 One installation of the app on one device. Reinstalling creates a new installation.
 
+**Backend environment**:
+One of Tableside's fully separate backends: beta, production, or a local development stack. A build talks to exactly one, and its accounts, credentials, keys and device data belong to that environment alone. A production build installed over a beta one erases the beta's device data first.
+_Avoid_: stage, tier
+
 **Account gate**:
-The account's current access state on an installation (no account, active, signed out, revoked, deletion scheduled, recovery needed, or age unresolved), which decides whether ordinary access is open.
+The account's current access state on an installation (no account, active, renewal pending, signed out, revoked, deletion scheduled, recovery needed, or age unresolved), which decides whether ordinary access is open. Renewal pending is active access under cached rights while an expired token renews.
 
 **Account session**:
 One signed-in period of an account on an installation, from signing in (or switching to the account) until the next sign-in, sign-out or account switch. Work begun in an earlier account session never reads or writes the account's data.

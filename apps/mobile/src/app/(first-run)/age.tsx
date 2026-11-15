@@ -20,7 +20,7 @@ const RANGES: readonly { range: AgeRange; label: string }[] = [
 const QUESTION = 'How old are you?';
 
 export default function Age() {
-  const { account } = useAccount();
+  const { service } = useAccount();
   const [range, setRange] = useState<AgeRange | null>(null);
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -29,7 +29,7 @@ export default function Age() {
     if (!range) return;
     setBusy(true);
     setFailed(false);
-    const result = await account.service.answerAgeQuestion(range);
+    const result = await service.answerAgeQuestion(range);
     setBusy(false);
     if (result.status === 'ineligible') router.replace('/not-available');
     else if (result.status === 'eligible') router.push('/email');

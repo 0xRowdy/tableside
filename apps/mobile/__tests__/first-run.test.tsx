@@ -7,9 +7,10 @@ import { act, cleanup, fireEvent, screen, waitFor } from '@testing-library/react
 import { renderRouter } from 'expo-router/testing-library';
 import { AccessibilityInfo, Dimensions } from 'react-native';
 
-import { FAKE_ACCOUNT_ID, type fakeAppAccount } from '@/account/testing/fake-account';
+import { FAKE_ACCOUNT_ID, SIGNED_IN, type fakeAppAccount } from '@/account/testing/fake-account';
+import type { GameId } from '@/games';
 
-type Launch = { stored: AccountGate; offlineGame: 'blackjack' | 'craps' | 'roulette' | null; latest: ReturnType<typeof fakeAppAccount> | null };
+type Launch = { stored: AccountGate; offlineGame: GameId | null; latest: ReturnType<typeof fakeAppAccount> | null };
 const launch = jest.requireMock<Launch>('@/account/app-account');
 const account = () => launch.latest!;
 const service = () => account().service;
@@ -42,7 +43,7 @@ afterEach(async () => {
 });
 
 afterAll(() => {
-  launch.stored = { state: 'active', accountId: FAKE_ACCOUNT_ID, eligibility: '18+' };
+  launch.stored = SIGNED_IN;
   launch.offlineGame = 'blackjack';
 });
 
@@ -114,7 +115,11 @@ describe('Sign in', () => {
     expect(await header('Choose your offline game')).toBeOnTheScreen();
     noTabBar();
     const choices = screen.getAllByRole('radio');
-    expect(choices.map((choice) => choice.props.accessibilityLabel.split('.')[0])).toEqual(['Blackjack', 'Craps', 'Roulette']);
+    expect(choices.map((choice) => choice.props.accessibilityLabel)).toEqual([
+      'Blackjack. 6 decks, blackjack pays 3 to 2, basic strategy and Hi-Lo coaching',
+      'Craps. Standard craps, 5 built-in strategies',
+      'Roulette. Single or double zero, 5 strategies',
+    ]);
     expect(button('Continue')).toBeDisabled();
     await fireEvent.press(screen.getByRole('radio', { name: /^Roulette\b/ }));
     expect(screen.getByRole('radio', { name: /^Roulette\b/ })).toBeChecked();
@@ -270,7 +275,7 @@ describe('Create', () => {
 
 describe('reopening', () => {
   it('reopens into the account, offline, straight to Home', async () => {
-    launch.stored = { state: 'active', accountId: FAKE_ACCOUNT_ID, eligibility: '18+' };
+    launch.stored = SIGNED_IN;
     launch.offlineGame = 'craps';
     await openApp();
 
@@ -318,6 +323,21 @@ describe('accessibility', () => {
     expect(everythingSpoken().filter((text) => band.test(text) || text.includes(CODE))).toEqual([]);
     expect(announcements.filter((text) => band.test(text) || text.includes(CODE))).toEqual([]);
     expect(logged.map((args) => args.map(String).join(' ')).filter((text) => band.test(text) || text.includes(CODE) || text.includes(EMAIL))).toEqual([]);
+  });
+
+  it('works from the keyboard: the return key sends the address and the code', async () => {
+    await openApp();
+    await header('Tableside');
+    await fireEvent.press(button('Sign in'));
+    await header('Sign in');
+
+    await fireEvent.changeText(screen.getByLabelText('Email address'), EMAIL);
+    await fireEvent(screen.getByLabelText('Email address'), 'submitEditing');
+    await header('Enter your code');
+    await fireEvent.changeText(screen.getByLabelText('Code'), CODE);
+    await fireEvent(screen.getByLabelText('Code'), 'submitEditing');
+    expect(await header('Choose your offline game')).toBeOnTheScreen();
+    expect(service().calls[2]).toEqual({ method: 'verifyEmailCode', email: EMAIL, code: CODE });
   });
 
   it('draws a focus ring on the field that has keyboard focus', async () => {

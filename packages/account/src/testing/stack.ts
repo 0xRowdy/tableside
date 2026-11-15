@@ -9,14 +9,27 @@ import { fileURLToPath } from 'node:url';
 import { type SupabaseClient, createClient } from '@supabase/supabase-js';
 import postgres from 'postgres';
 
+import { ENVIRONMENT_HEADER, type EnvironmentName } from '../environment';
+
 export interface LocalStack {
   readonly url: string;
   readonly publishableKey: string;
   readonly mailUrl: string;
   /** Privileged SQL, for faults no client can cause (server clock, lifecycle states later tickets set). */
   readonly sql: postgres.Sql;
-  /** A raw client calling the stack directly, with no Account service: the adversary's view. */
-  rawClient(accessToken?: string): SupabaseClient;
+  /** The backend environment a local stack serves (supabase/seed/local.sql). */
+  readonly environment: EnvironmentName;
+  /**
+   * A raw client calling the stack directly, with no Account service: the
+   * adversary's view. It names the stack's environment on every request unless
+   * told to name another, or none (null).
+   */
+  rawClient(accessToken?: string, environment?: EnvironmentName | null): SupabaseClient;
+  /**
+   * Runs `scenario` with the stack serving another environment, as if it were
+   * that environment's project, then restores it. Privileged: no client can.
+   */
+  asEnvironment<T>(environment: EnvironmentName, scenario: () => Promise<T>): Promise<T>;
   /** Moves an eligibility assertion's expiry into the past, as if its lifetime had run out on the server. */
   expireAssertion(assertion: string): Promise<void>;
   /** The Auth user for an address, or null when none exists. */
@@ -24,8 +37,12 @@ export interface LocalStack {
   /** The account signed in by an address, or null. */
   accountId(email: string): Promise<string | null>;
   accountCount(email: string): Promise<number>;
-  /** Calls the request-code function directly, with no Account service: the adversary's view. */
-  requestCode(body: Record<string, unknown>): Promise<{ readonly status: number; readonly body: unknown }>;
+  /**
+   * Calls the request-code function directly, with no Account service: the
+   * adversary's view. It names the stack's environment unless told to name
+   * another, or none (null).
+   */
+  requestCode(body: Record<string, unknown>, environment?: EnvironmentName | null): Promise<{ readonly status: number; readonly body: unknown }>;
   /** Clears every code-request window, as if an hour had passed for every address and network. */
   resetCodeRequests(): Promise<void>;
   /** Moves an address's code requests back in time, as if that long had passed on the server. */
@@ -84,11 +101,21 @@ export function localStack(): LocalStack {
     publishableKey,
     mailUrl: need('MAILPIT_URL'),
     sql,
-    rawClient(accessToken) {
-      return createClient(url, publishableKey, {
-        auth: { persistSession: false, autoRefreshToken: false },
-        ...(accessToken ? { global: { headers: { Authorization: `Bearer ${accessToken}` } } } : {}),
-      });
+    environment: 'local',
+    rawClient(accessToken, environment = 'local') {
+      const headers: Record<string, string> = {
+        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        ...(environment ? { [ENVIRONMENT_HEADER]: environment } : {}),
+      };
+      return createClient(url, publishableKey, { auth: { persistSession: false, autoRefreshToken: false }, global: { headers } });
+    },
+    async asEnvironment(environment, scenario) {
+      await sql`update private.deployment set environment = ${environment}`;
+      try {
+        return await scenario();
+      } finally {
+        await sql`update private.deployment set environment = 'local'`;
+      }
     },
     async expireAssertion(assertion) {
       await sql`update private.eligibility_assertions set expires_at = now() - interval '1 second'
@@ -104,10 +131,10 @@ export function localStack(): LocalStack {
     async accountCount(email) {
       return (await accountIds(email)).length;
     },
-    async requestCode(body) {
+    async requestCode(body, environment = 'local') {
       const response = await fetch(`${url}/functions/v1/request-code`, {
         method: 'POST',
-        headers: { apikey: publishableKey, 'content-type': 'application/json' },
+        headers: { apikey: publishableKey, 'content-type': 'application/json', ...(environment ? { [ENVIRONMENT_HEADER]: environment } : {}) },
         body: JSON.stringify(body),
       });
       return { status: response.status, body: await response.json().catch(() => null) };

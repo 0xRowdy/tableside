@@ -6,19 +6,19 @@ import { router } from 'expo-router';
 import { useState } from 'react';
 
 import { useAccount } from '@/account/AccountProvider';
-import { codeRequestProblem } from '@/account/code-request-text';
 import { Actions, Body, Field, FirstRunScreen, InlineMessage, LinkButton, Status } from '@/account/FirstRunParts';
-import { useSignInFlow } from '@/account/sign-in-flow';
+import { useCodeRequest, useSignInFlow } from '@/account/sign-in-flow';
 import { Button } from '@/components/Button';
 
 export default function Code() {
-  const { account } = useAccount();
+  const { service } = useAccount();
   const flow = useSignInFlow();
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const [resent, setResent] = useState(false);
   const signIn = flow.intent === 'sign-in';
+  const requestCode = useCodeRequest(setProblem);
 
   const verify = async () => {
     const entered = code.replace(/\s/g, '');
@@ -28,7 +28,7 @@ export default function Code() {
     }
     setBusy(true);
     setProblem(null);
-    const result = await account.service.verifyEmailCode({ email: flow.email, code: entered });
+    const result = await service.verifyEmailCode({ email: flow.email, code: entered });
     setBusy(false);
     // Signed in: the layout moves on as the account gate changes.
     if (result.status === 'invalid-code') setProblem("That code didn't work. Check it, or send a new code.");
@@ -39,11 +39,9 @@ export default function Code() {
     setBusy(true);
     setProblem(null);
     setResent(false);
-    const result = await account.service.requestEmailCode({ email: flow.email, intent: flow.intent });
+    const sent = await requestCode(flow.email);
     setBusy(false);
-    if (result.status === 'sent') setResent(true);
-    else if (result.status === 'age-required') router.replace('/age');
-    else setProblem(codeRequestProblem(result));
+    setResent(sent);
   };
 
   return (
@@ -75,10 +73,7 @@ export default function Code() {
           <Body>No code? Create an account, or use Apple or Google.</Body>
           <LinkButton
             label="Create an account"
-            onPress={() => {
-              flow.start('create');
-              router.push('/age');
-            }}
+            onPress={flow.startCreate}
           />
         </>
       )}

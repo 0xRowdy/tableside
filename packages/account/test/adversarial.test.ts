@@ -61,7 +61,7 @@ describe('creating an Auth user', () => {
     const email = uniqueEmail('forged');
     const { error } = await rawClient().auth.signInWithOtp({
       email,
-      options: { shouldCreateUser: true, data: { eligibility_assertion: 'a'.repeat(64) } },
+      options: { shouldCreateUser: true, data: { eligibility_assertion: 'a'.repeat(64), environment: 'local' } },
     });
     expect(error).not.toBeNull();
     expect(await stack.authUserId(email)).toBeNull();

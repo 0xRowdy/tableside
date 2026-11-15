@@ -2,8 +2,9 @@ import type { CodeRequestResult } from '@tableside/account';
 
 /** "30 seconds", "2 minutes", "1 hour": how long to wait, rounded up. */
 export function waitText(seconds: number): string {
-  if (seconds < 60) return `${Math.max(1, Math.ceil(seconds))} ${Math.ceil(seconds) === 1 ? 'second' : 'seconds'}`;
-  const minutes = Math.ceil(seconds / 60);
+  const whole = Math.max(1, Math.ceil(seconds));
+  if (whole < 60) return `${whole} ${whole === 1 ? 'second' : 'seconds'}`;
+  const minutes = Math.ceil(whole / 60);
   if (minutes < 60) return `${minutes} ${minutes === 1 ? 'minute' : 'minutes'}`;
   const hours = Math.ceil(minutes / 60);
   return `${hours} ${hours === 1 ? 'hour' : 'hours'}`;
