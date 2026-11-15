@@ -11,6 +11,8 @@ import { createHash } from 'node:crypto';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+import { ENVIRONMENT_NAMES } from '@tableside/account/environment';
+
 import { forAccountSession } from '@/account/practice';
 import { STORE_SCHEMA_VERSION } from '@/account/store-schema';
 import { restoreDatabase } from '@/account/testing/database-dump';
@@ -42,7 +44,9 @@ async function onDevice(database: RecordedDatabase, migrations: readonly StoreMi
   const device = new TestDevice();
   devices.push(device);
   await device.leaveDatabase(database, (connection) => restoreDatabase(connection, database));
-  const opening = await device.vault(database.environment, undefined, migrations).open(database.accountId);
+  const environment = ENVIRONMENT_NAMES.find((name) => name === database.environment);
+  if (!environment) throw new Error(`recorded database in unknown environment ${database.environment}`);
+  const opening = await device.vault(environment, undefined, migrations).open(database.accountId);
   if (opening.status !== 'open') throw new Error(`expected an open database, got ${JSON.stringify(opening)}`);
   return opening.session;
 }

@@ -4,6 +4,7 @@
 
 import { type SupabaseClient, createClient } from '@supabase/supabase-js';
 
+import { type BackendEnvironment, ENVIRONMENT_HEADER, type EnvironmentName, retiredEnvironments } from './environment';
 import { SyncEngine, type SyncErrorCode } from './sync/engine';
 import { recordTypes } from './sync/registry';
 import { type DevicePorts, SyncSession } from './sync/session';
@@ -42,6 +43,8 @@ export interface CredentialStorage {
 export interface AccountVault {
   open(accountId: string): Promise<VaultOpening>;
   close(): Promise<void>;
+  /** Removes every database, key and installation identity another environment left on this device. */
+  removeEnvironment(environment: EnvironmentName): Promise<void>;
 }
 
 /** An account's database, open for the current account session. */
@@ -77,7 +80,8 @@ export interface AccountSync {
 }
 
 export interface AccountServiceOptions {
-  readonly backend: { readonly url: string; readonly publishableKey: string };
+  /** The one backend this build talks to, fixed when it was built. */
+  readonly backend: BackendEnvironment;
   /** The device's network. */
   readonly fetch: typeof fetch;
   readonly credentials: CredentialStorage;
@@ -122,8 +126,8 @@ export interface AccountService {
   readonly sync: AccountSync;
 }
 
-/** Where the signed-in account is remembered beside Auth's credentials. */
-const REMEMBERED_ACCOUNT = 'tableside.account';
+/** Where the signed-in account is remembered, in the environment's credentials (so it goes with them). */
+const rememberedAccountKey = (environment: EnvironmentName) => `tableside.${environment}.account`;
 
 /** The account this installation is signed in to, with its established band. */
 interface RememberedAccount {
@@ -137,11 +141,35 @@ interface Assertion {
 }
 
 export function createAccountService(options: AccountServiceOptions): AccountService {
-  const supabase: SupabaseClient = createClient(options.backend.url, options.backend.publishableKey, {
-    global: { fetch: options.fetch },
-    auth: { storage: options.credentials, persistSession: true, autoRefreshToken: false, detectSessionInUrl: false },
-    ...(options.webSocket ? { realtime: { transport: options.webSocket } } : {}),
-  });
+  const { backend } = options;
+  // Nothing restores credentials, opens an account database or sends anything
+  // until every retired environment's namespace is gone: the client is made
+  // only after that, since making it reads the stored credentials.
+  // Every server call in this service goes through `connect`.
+  let client: Promise<SupabaseClient> | null = null;
+  const connect = (): Promise<SupabaseClient> =>
+    (client ??= (async () => {
+      await removeRetiredEnvironments(options);
+      const created = createClient(backend.url, backend.publishableKey, {
+        global: { fetch: options.fetch, headers: { [ENVIRONMENT_HEADER]: backend.name } },
+        auth: {
+          storage: namespacedCredentials(options.credentials, backend.name),
+          storageKey: credentialsKey(backend.name),
+          persistSession: true,
+          autoRefreshToken: false,
+          detectSessionInUrl: false,
+        },
+        ...(options.webSocket ? { realtime: { transport: options.webSocket } } : {}),
+      });
+      // A refreshed token re-subscribes the live connection with it.
+      created.auth.onAuthStateChange((event) => {
+        if (event === 'TOKEN_REFRESHED') sync?.session.credentialsChanged();
+      });
+      return created;
+    })().catch((error: unknown) => {
+      client = null;
+      throw error;
+    }));
   const listeners = new Set<(gate: AccountGate) => void>();
   let gate: AccountGate = { state: 'no-account' };
   let assertion: Assertion | null = null;
@@ -160,6 +188,7 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
     const opening = await options.vault.open(accountId);
     setGate({ state: 'active', accountId, eligibility });
     if (opening.status !== 'open') return;
+    const supabase = await connect();
     const { store, installationId } = opening.session;
     const engine = new SyncEngine({
       store,
@@ -170,10 +199,6 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
     });
     sync = { engine, session: new SyncSession(engine, store, options.device, supabaseLiveChannels(supabase, accountId)) };
   };
-
-  supabase.auth.onAuthStateChange((event) => {
-    if (event === 'TOKEN_REFRESHED') sync?.session.credentialsChanged();
-  });
 
   const currentAssertion = () => (assertion && assertion.expiresAt > options.clock() ? assertion : null);
 
@@ -191,6 +216,7 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
       assertion = null;
       if (range === 'under-13') return { status: 'ineligible' };
       try {
+        const supabase = await connect();
         const { data, error } = await supabase.rpc('issue_eligibility_assertion', { age_range: range });
         if (error) return { status: 'failed' };
         const issued = data as { assertion: string; expires_at: string };
@@ -205,11 +231,12 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
       const held = currentAssertion();
       if (intent === 'create' && !held) return { status: 'age-required' };
       try {
+        const supabase = await connect();
         const { error } = await supabase.auth.signInWithOtp({
           email,
           options:
             intent === 'create' && held
-              ? { shouldCreateUser: true, data: { eligibility_assertion: held.token } }
+              ? { shouldCreateUser: true, data: { eligibility_assertion: held.token, environment: backend.name } }
               : { shouldCreateUser: false },
         });
         // Sign-in to an address with no account is refused by Auth; it reads as
@@ -223,6 +250,7 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
 
     async verifyEmailCode({ email, code }) {
       try {
+        const supabase = await connect();
         const { error } = await supabase.auth.verifyOtp({ email, token: code, type: 'email' });
         if (error) return { status: error.code === 'otp_expired' ? 'invalid-code' : 'failed' };
         const { data, error: accountError } = await supabase.rpc('current_account');
@@ -233,7 +261,7 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
         }
         assertion = null;
         const remembered: RememberedAccount = { accountId: account.account_id, eligibility: account.eligibility };
-        await options.credentials.setItem(REMEMBERED_ACCOUNT, JSON.stringify(remembered));
+        await namespacedCredentials(options.credentials, backend.name).setItem(rememberedAccountKey(backend.name), JSON.stringify(remembered));
         await openAccount(remembered);
         return { status: 'signed-in' };
       } catch {
@@ -242,7 +270,8 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
     },
 
     async resume() {
-      const remembered = parseRemembered(await options.credentials.getItem(REMEMBERED_ACCOUNT));
+      const supabase = await connect();
+      const remembered = parseRemembered(await options.credentials.getItem(rememberedAccountKey(backend.name)));
       const { data } = await supabase.auth.getSession();
       if (!remembered || !data.session) return { status: 'no-account' };
       await openAccount(remembered);
@@ -275,4 +304,50 @@ const hex = (bytes: Uint8Array): string => Array.from(bytes, (byte) => byte.toSt
 
 function isEligible(band: string | null): band is EligibilityBand {
   return band !== null && ELIGIBLE_BANDS.includes(band);
+}
+
+/** Erases what each environment this build retires left on the device: its credentials, then its vault namespace. */
+async function removeRetiredEnvironments({ backend, credentials, vault }: AccountServiceOptions): Promise<void> {
+  for (const retired of retiredEnvironments(backend.name)) {
+    await removeCredentials(credentials, retired);
+    await vault.removeEnvironment(retired);
+  }
+}
+
+/** Where Auth keeps an environment's credentials in secure storage: every entry's name starts with it. */
+const credentialsKey = (environment: EnvironmentName) => `tableside.${environment}.auth`;
+/** The list of credential entries an environment has written, so they can all be removed. */
+const credentialsIndex = (environment: EnvironmentName) => `tableside.${environment}.credentials`;
+
+/**
+ * An environment's credentials. Secure storage can't list its entries, so each
+ * entry's name is recorded before the entry is written, and removing the
+ * environment's credentials removes every recorded entry.
+ */
+function namespacedCredentials(storage: CredentialStorage, environment: EnvironmentName): CredentialStorage {
+  const index = credentialsIndex(environment);
+  return {
+    getItem: (key) => storage.getItem(key),
+    async setItem(key, value) {
+      const names = await readIndex(storage, index);
+      if (!names.includes(key)) await storage.setItem(index, JSON.stringify([...names, key]));
+      await storage.setItem(key, value);
+    },
+    removeItem: (key) => storage.removeItem(key),
+  };
+}
+
+async function removeCredentials(storage: CredentialStorage, environment: EnvironmentName): Promise<void> {
+  const index = credentialsIndex(environment);
+  for (const key of new Set([credentialsKey(environment), ...(await readIndex(storage, index))])) await storage.removeItem(key);
+  await storage.removeItem(index);
+}
+
+async function readIndex(storage: CredentialStorage, index: string): Promise<string[]> {
+  try {
+    const names: unknown = JSON.parse((await storage.getItem(index)) ?? '[]');
+    return Array.isArray(names) ? names.filter((name): name is string => typeof name === 'string') : [];
+  } catch {
+    return [];
+  }
 }

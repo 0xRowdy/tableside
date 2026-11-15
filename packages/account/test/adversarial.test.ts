@@ -61,7 +61,7 @@ describe('creating an Auth user', () => {
     const email = uniqueEmail('forged');
     const { error } = await rawClient().auth.signInWithOtp({
       email,
-      options: { shouldCreateUser: true, data: { eligibility_assertion: 'a'.repeat(64) } },
+      options: { shouldCreateUser: true, data: { eligibility_assertion: 'a'.repeat(64), environment: 'local' } },
     });
     expect(error).not.toBeNull();
     expect(await stack.authUserId(email)).toBeNull();
@@ -72,8 +72,8 @@ describe('creating an Auth user', () => {
     const assertion = await issueAssertion(client);
     const first = uniqueEmail('first');
     const second = uniqueEmail('second');
-    expect((await client.auth.signInWithOtp({ email: first, options: { data: { eligibility_assertion: assertion } } })).error).toBeNull();
-    expect((await client.auth.signInWithOtp({ email: second, options: { data: { eligibility_assertion: assertion } } })).error).not.toBeNull();
+    expect((await client.auth.signInWithOtp({ email: first, options: { data: { eligibility_assertion: assertion, environment: 'local' } } })).error).toBeNull();
+    expect((await client.auth.signInWithOtp({ email: second, options: { data: { eligibility_assertion: assertion, environment: 'local' } } })).error).not.toBeNull();
     expect(await stack.authUserId(first)).not.toBeNull();
     expect(await stack.authUserId(second)).toBeNull();
   });
@@ -82,7 +82,7 @@ describe('creating an Auth user', () => {
     const client = rawClient();
     const assertion = await issueAssertion(client);
     const emails = [uniqueEmail('race-a'), uniqueEmail('race-b')];
-    await Promise.all(emails.map((email) => client.auth.signInWithOtp({ email, options: { data: { eligibility_assertion: assertion } } })));
+    await Promise.all(emails.map((email) => client.auth.signInWithOtp({ email, options: { data: { eligibility_assertion: assertion, environment: 'local' } } })));
     const created = await Promise.all(emails.map((email) => stack.authUserId(email)));
     expect(created.filter((id) => id !== null)).toHaveLength(1);
   });
@@ -92,7 +92,7 @@ describe('creating an Auth user', () => {
     const assertion = await issueAssertion(client);
     await stack.expireAssertion(assertion);
     const email = uniqueEmail('expired');
-    const { error } = await client.auth.signInWithOtp({ email, options: { data: { eligibility_assertion: assertion } } });
+    const { error } = await client.auth.signInWithOtp({ email, options: { data: { eligibility_assertion: assertion, environment: 'local' } } });
     expect(error).not.toBeNull();
     expect(await stack.authUserId(email)).toBeNull();
   });

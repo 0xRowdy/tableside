@@ -8,6 +8,7 @@
 // the app process, so a scenario can kill the app at any point and start it again.
 
 import { randomUUID } from 'node:crypto';
+import { existsSync } from 'node:fs';
 
 // The app's account store and practice controller, imported by path: the
 // harness is test-only, and the app doesn't depend on this package.
@@ -19,6 +20,7 @@ import type { AccountVault as AppVault, VaultOpening as AppVaultOpening } from '
 import { PracticeController } from '../../../../apps/mobile/src/practice/controller';
 import type { CompletedPracticeSession } from '../../../../apps/mobile/src/practice/store';
 import { FakeClock as PracticeClock, substituteAdapters } from '../../../../apps/mobile/src/practice/testing/substitutes';
+import type { EnvironmentName } from '../environment';
 import {
   type AccountService,
   type AccountVault,
@@ -81,13 +83,18 @@ export class FakeEntropy {
 /** SecureStore's stand-in. */
 export class MemoryCredentials implements CredentialStorage {
   readonly items = new Map<string, string>();
+  /** Every access in order, as "get <key>", "set <key>" or "remove <key>". */
+  readonly log: string[] = [];
   async getItem(key: string) {
+    this.log.push(`get ${key}`);
     return this.items.get(key) ?? null;
   }
   async setItem(key: string, value: string) {
+    this.log.push(`set ${key}`);
     this.items.set(key, value);
   }
   async removeItem(key: string) {
+    this.log.push(`remove ${key}`);
     this.items.delete(key);
   }
 }
@@ -112,12 +119,20 @@ class Signal<T> implements DeviceSignal<T> {
 export interface DeviceVault {
   /** The account whose database is open, if any. */
   readonly openAccount: string | null;
+  /** Ends the account session: closes its database, keeping it. */
+  close(): Promise<void>;
+  /** Whether any of an environment's data is still on the device. */
+  holds(environment: EnvironmentName): boolean;
+  /** The environments whose namespaces this app process removed, in order. */
+  readonly removed: readonly EnvironmentName[];
   /** The open account session's store. Throws when none is open. */
   store(): SqliteActivityStore;
 }
 
 export interface SimulatedDevice {
   readonly name: string;
+  /** The backend environment the device's build talks to. */
+  readonly environment: EnvironmentName;
   /** The running app's Account service; a restart replaces it. */
   readonly account: AccountService;
   readonly vault: DeviceVault;
@@ -153,12 +168,26 @@ interface AppProcess {
 
 let seed = 1;
 
-export function createDevice(stack: LocalStack, options: { readonly name: string }): SimulatedDevice {
+export interface DeviceOptions {
+  readonly name: string;
+  /** The environment the device's build talks to; the stack's own by default. Its endpoint is always the stack. */
+  readonly environment?: EnvironmentName;
+  /**
+   * A store-track update: this build is installed over another on the same
+   * device, keeping its files and secure storage.
+   */
+  readonly installedOver?: SimulatedDevice;
+}
+
+export function createDevice(stack: LocalStack, options: DeviceOptions): SimulatedDevice {
+  const environment = options.environment ?? stack.environment;
   const entropy = new FakeEntropy(seed++);
   const proxy = new FaultProxy();
   const clock = new FakeClock();
-  const credentials = new MemoryCredentials();
-  const storage = new TestDevice(); // the files and keychain, which outlive the app process
+  // The files, keychain and secure storage outlive the app process, and a build installed over another keeps them.
+  const earlier = options.installedOver ? installed.get(options.installedOver) : undefined;
+  const credentials = earlier?.credentials ?? new MemoryCredentials();
+  const storage = earlier?.storage ?? new TestDevice();
   const foreground = new Signal(true);
   const disk = { failing: false };
   const driver = nodeSqlCipherDriver({ fault: () => (disk.failing ? 'io' : undefined) });
@@ -166,8 +195,9 @@ export function createDevice(stack: LocalStack, options: { readonly name: string
   const launch = (): AppProcess => {
     let dead = false;
     const cancels: (() => void)[] = [];
-    const appVault = storage.vault('local', driver);
+    const appVault = storage.vault(environment, driver);
     let opening: AppVaultOpening | null = null;
+    const removed: EnvironmentName[] = [];
 
     const vault: AccountVault = {
       async open(accountId) {
@@ -178,11 +208,18 @@ export function createDevice(stack: LocalStack, options: { readonly name: string
         opening = null;
         await appVault.close();
       },
+      async removeEnvironment(other) {
+        await appVault.removeEnvironment(other);
+        removed.push(other);
+      },
     };
     const deviceVault: DeviceVault = {
       get openAccount() {
         return opening?.status === 'open' ? opening.session.accountId : null;
       },
+      close: () => vault.close(),
+      holds: (other) => existsSync(`${storage.root}/${other}`),
+      removed,
       store() {
         if (opening?.status !== 'open') throw new Error('no account database is open');
         return opening.session.store;
@@ -224,7 +261,7 @@ export function createDevice(stack: LocalStack, options: { readonly name: string
       },
     };
     const account = createAccountService({
-      backend: { url: stack.url, publishableKey: stack.publishableKey },
+      backend: { name: environment, url: stack.url, publishableKey: stack.publishableKey },
       fetch: processFetch,
       credentials,
       vault,
@@ -248,8 +285,9 @@ export function createDevice(stack: LocalStack, options: { readonly name: string
 
   let app = launch();
 
-  return {
+  const device: SimulatedDevice = {
     name: options.name,
+    environment,
     get account() {
       return app.account;
     },
@@ -275,7 +313,9 @@ export function createDevice(stack: LocalStack, options: { readonly name: string
     },
     async playPracticeSession() {
       const opening = openSession(app);
-      const controller = new PracticeController(forAccountSession(substituteAdapters({ clock: new PracticeClock(undefined, true) }), opening));
+      // Each practice session gets its own random ID, from the device's entropy.
+      const adapters = { ...substituteAdapters({ clock: new PracticeClock(undefined, true) }), newId: () => `activity-${hex(entropy.bytes(16))}` };
+      const controller = new PracticeController(forAccountSession(adapters, opening));
       await controller.load();
       await controller.start({ game: 'roulette', buyIn: '1000' });
       await controller.placeWager('red', '10');
@@ -299,7 +339,14 @@ export function createDevice(stack: LocalStack, options: { readonly name: string
       storage.remove();
     },
   };
+  installed.set(device, { storage, credentials });
+  return device;
 }
+
+/** What a build installed over a device keeps: its files, keychain and secure storage. */
+const installed = new WeakMap<SimulatedDevice, { readonly storage: TestDevice; readonly credentials: MemoryCredentials }>();
+
+const hex = (bytes: Uint8Array) => Buffer.from(bytes).toString('hex');
 
 /** The open account session, as spec 1's practice adapters take it. */
 function openSession(app: AppProcess) {

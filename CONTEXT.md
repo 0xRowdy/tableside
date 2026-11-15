@@ -263,6 +263,10 @@ A store purchase that is no longer linked to any usable Tableside account. It is
 **Installation**:
 One installation of the app on one device. Reinstalling creates a new installation.
 
+**Backend environment**:
+One of Tableside's fully separate backends: beta, production, or a local development stack. A build talks to exactly one, and its accounts, credentials, keys and device data belong to that environment alone. A production build installed over a beta one erases the beta's device data first.
+_Avoid_: stage, tier
+
 **Account gate**:
 The account's current access state on an installation (no account, active, signed out, revoked, deletion scheduled, recovery needed, or age unresolved), which decides whether ordinary access is open.
 
