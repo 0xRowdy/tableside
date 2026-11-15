@@ -5,7 +5,7 @@
 // per-device attempt ordering. Faults are injected at the network, the app
 // process and the server's state, never inside the Account service.
 
-import { afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 
 import { type AcceptedRecord, PLATFORM_TABLES, PROTOCOL_VERSION, byOriginatingDevice } from '../src';
 import { type Envelope, prepareOperation } from '../src/sync/protocol';
@@ -16,7 +16,6 @@ import {
   accessToken,
   createAccountByEmail,
   createDevice,
-  installTestRecordTypes,
   localStack,
   signInByEmail,
   testAllowanceReconciliation,
@@ -24,7 +23,6 @@ import {
   testAttempt,
   testContribution,
   testExperimentAssignment,
-  testRegistry,
   testResult,
   testResultPurge,
   testSharingWithdrawal,
@@ -32,11 +30,10 @@ import {
 } from '../src/testing';
 
 const stack = localStack();
-beforeAll(() => installTestRecordTypes(stack));
 
 const devices: SimulatedDevice[] = [];
 function device(name: string): SimulatedDevice {
-  const created = createDevice(stack, { name, registry: testRegistry });
+  const created = createDevice(stack, { name });
   devices.push(created);
   return created;
 }
@@ -256,7 +253,14 @@ describe('server-authored state', () => {
 });
 
 describe('purging an accepted immutable result', () => {
-  const result = (id: string, amount: number) => ({ version: 1, resultId: id, amount, detail: `detail of ${id}: private-${id}-marker` });
+  const result = (id: string, amount: string) => ({ version: 1, resultId: id, amount, detail: `detail of ${id}: private-${id}-marker` });
+  /** The account's practice total for the test results, on the server and as a device holds it. */
+  const serverTotal = async (accountId: string) =>
+    stack.sql<{ records: number; net: string }[]>`select records::int, net from private.account_totals where account_id = ${accountId} and total = 'practice' and game = 'test'`;
+  const deviceTotal = async (d: SimulatedDevice) => {
+    const { account, local } = await d.account.records.totals();
+    return { account: account.filter((row) => row.game === 'test').map(({ records, net }) => ({ records, net })), local: local.filter((row) => row.game === 'test').length };
+  };
 
   /** Every account-owned server row that mentions `text`, by table: every table in the stack keyed by account, whatever the registry declares. */
   async function rowsMentioning(accountId: string, text: string) {
@@ -280,12 +284,13 @@ describe('purging an accepted immutable result', () => {
 
   it('removes it from every device through the feed, with its contribution, keeping only its identity and receipt', async () => {
     const { phone, tablet, accountId } = await twoDevices();
-    await queue(phone, testResult.name, result('r-1', 7));
-    await queue(phone, testResult.name, result('r-2', 5));
+    await queue(phone, testResult.name, result('r-1', '7'));
+    await queue(phone, testResult.name, result('r-2', '5'));
     await phone.account.sync.idle();
     await tablet.account.sync.reconcile();
     expect(await itemsOn(tablet, testResult.name)).toEqual(['r-1', 'r-2']);
-    expect(await stack.sql`select total::int from private.test_totals where account_id = ${accountId}`).toEqual([{ total: 12 }]);
+    expect(await serverTotal(accountId)).toEqual([{ records: 2, net: '12' }]);
+    expect(await deviceTotal(tablet)).toEqual({ account: [{ records: 2, net: '12' }], local: 0 });
 
     await queue(tablet, testResultPurge.name, { version: 1, target: 'r-1' });
     // Gone from the purging device at once.
@@ -295,7 +300,8 @@ describe('purging an accepted immutable result', () => {
     expect(await itemsOn(phone, testResult.name)).toEqual(['r-2']);
 
     // Its contribution is gone, and nothing of it but its identity remains on the server.
-    expect(await stack.sql`select total::int from private.test_totals where account_id = ${accountId}`).toEqual([{ total: 5 }]);
+    expect(await serverTotal(accountId)).toEqual([{ records: 1, net: '5' }]);
+    for (const d of [phone, tablet]) expect(await deviceTotal(d)).toEqual({ account: [{ records: 1, net: '5' }], local: 0 });
     expect(await rowsMentioning(accountId, 'private-r-1-marker')).toEqual([]);
     expect(await rowsMentioning(accountId, 'private-r-2-marker')).not.toEqual([]);
     expect(await stack.sql`select record_type, item_id from private.purged_results where account_id = ${accountId}`).toEqual([
@@ -318,7 +324,7 @@ describe('purging an accepted immutable result', () => {
     // phone is in the background, so no live hint retries it meanwhile.
     phone.foreground = false;
     phone.proxy.dropNextResponse('sync_upload_v1');
-    await queue(phone, testResult.name, result('r-1', 7));
+    await queue(phone, testResult.name, result('r-1', '7'));
     await phone.account.sync.idle();
     const [stale] = await phone.vault.store().readUploadQueue();
     await tablet.account.sync.reconcile();
@@ -343,9 +349,11 @@ describe('purging an accepted immutable result', () => {
   it('waits for its target’s acceptance', async () => {
     const { phone, accountId } = await twoDevices();
     phone.proxy.online = false;
-    await queue(phone, testResult.name, result('r-1', 7));
+    await queue(phone, testResult.name, result('r-1', '7'));
     await queue(phone, testResultPurge.name, { version: 1, target: 'r-1' });
     expect(await itemsOn(phone, testResult.name)).toEqual([]);
+    // Its own upload is still queued, but it no longer counts, not even as local.
+    expect(await deviceTotal(phone)).toEqual({ account: [], local: 0 });
 
     const held = phone.proxy.delayNextResponse('sync_upload_v1');
     phone.proxy.online = true;
@@ -359,7 +367,8 @@ describe('purging an accepted immutable result', () => {
     ]);
     // Accepted, then purged: not on the device, and not counted.
     expect(await itemsOn(phone, testResult.name)).toEqual([]);
-    expect(await stack.sql`select total::int from private.test_totals where account_id = ${accountId}`).toEqual([{ total: 0 }]);
+    expect(await serverTotal(accountId)).toEqual([]);
+    expect(await deviceTotal(phone)).toEqual({ account: [], local: 0 });
   });
 });
 
@@ -431,7 +440,7 @@ describe('the operation API enforces ordering, called directly', () => {
     expect(await send('f', attempt('a-1', 1))).toMatchObject({ status: 'accepted', sequence: 1 });
   });
 
-  const result = (id: string) => ({ version: 1, resultId: id, amount: 1, detail: 'd' });
+  const result = (id: string) => ({ version: 1, resultId: id, amount: '1', detail: 'd' });
 });
 
 describe('per-device attempt ordering', () => {

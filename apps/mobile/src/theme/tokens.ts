@@ -20,6 +20,8 @@ export const palette = {
   muted: '#1E2723',
   correct: '#3FA877',
   destructive: '#E07A5F',
+  warning: '#E8A23A',
+  info: '#7FA8F5',
   felt: '#1B5A43',
   feltDeep: '#123F2F',
   rail: '#3A2A1E',
@@ -131,6 +133,14 @@ export const essentialPairs: readonly {
   { use: 'first-run link text', kind: 'text', foreground: 'primary', background: 'background' },
   { use: 'first-run choice text', kind: 'text', foreground: 'foreground', background: 'card' },
   { use: 'first-run choice detail', kind: 'text', foreground: 'mutedForeground', background: 'card' },
+  { use: 'sync waiting icon and warning banner border', kind: 'graphic', foreground: 'warning', background: 'card' },
+  { use: 'sync waiting icon on its circle', kind: 'graphic', foreground: 'warning', background: 'secondary' },
+  { use: 'sync download icon on its circle', kind: 'graphic', foreground: 'info', background: 'secondary' },
+  { use: 'sync error icon on its circle', kind: 'graphic', foreground: 'destructive', background: 'secondary' },
+  { use: 'all synced icon on its circle', kind: 'graphic', foreground: 'correct', background: 'secondary' },
+  { use: 'failing record label', kind: 'text', foreground: 'destructive', background: 'card' },
+  { use: 'banner action', kind: 'text', foreground: 'primary', background: 'card' },
+  { use: 'progress fill on its track', kind: 'graphic', foreground: 'primary', background: 'muted' },
 ];
 
 export const space = { 1: 4, 2: 8, 3: 12, 4: 16, 6: 24, 8: 32, 12: 48, 16: 64 } as const;

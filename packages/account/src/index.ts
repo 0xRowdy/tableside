@@ -20,13 +20,30 @@ export {
   type CodeVerificationResult,
   type CredentialStorage,
   type EligibilityBand,
+  type HistoryStatus,
   type QueueResult,
   type SyncStatus,
   type VaultOpening,
   type VaultSession,
   createAccountService,
 } from './service';
-export { type SyncErrorCode } from './sync/engine';
+export {
+  type EngineStatus,
+  RECORD_FAILURE_LIMIT,
+  type Resolution,
+  type ResolutionOutcome,
+  type SyncErrorCode,
+  type UpdateNotice,
+  type UploadState,
+  type UploadStatus,
+} from './sync/engine';
+export {
+  type AccountRecords,
+  type AccountTotals,
+  NoOpenAccountError,
+  type ResolutionResult,
+  type RevisionedItemView,
+} from './sync/records';
 export { type DeviceSequence, byOriginatingDevice } from './sync/ordering';
 export { type LiveChannel } from './sync/live';
 export {
@@ -38,17 +55,35 @@ export {
   type Envelope,
   type FeedEntry,
   type PreparedOperation,
+  type ProtocolStatus,
   type StagedChunk,
   type UploadAnswer,
 } from './sync/protocol';
-export { PLATFORM_TABLES, type RecordKind, type RecordType, completedPracticeSession, recordTypes } from './sync/registry';
+export {
+  type Contribution,
+  PLATFORM_TABLES,
+  type Proposal,
+  type RecordKind,
+  type RecordType,
+  type RevisionBase,
+  type RevisionedItemDefinition,
+  type RevisionedState,
+  type RevisionedUpload,
+  completedPracticeSession,
+  recordTypes,
+  revisionedItemType,
+} from './sync/registry';
+export { SYNC_OPERATIONS } from './sync/supabase';
 export { type DevicePorts, type DeviceSignal, RECONCILE_INTERVAL_MS } from './sync/session';
 export {
   type AcceptedRecord,
   type FeedPageEffects,
+  type LocalRevisionedItem,
   type NewUpload,
   type Origin,
   type QueuedUpload,
   type RecordRef,
+  type RejectedUpload,
   type SyncStore,
 } from './sync/store';
+export { type TotalsRow, sumContributions } from './sync/totals';

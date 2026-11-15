@@ -15,6 +15,10 @@ export interface QueuedUpload {
   readonly dependencies: readonly string[];
   /** Fixed the first time the entry was sent; null before that. */
   readonly operation: PreparedOperation | null;
+  /** Attempts that failed for this entry alone (the server refused the request, or it couldn't be sent), since it last succeeded or was retried deliberately. */
+  readonly failures: number;
+  /** Failed repeatedly: left alone, with its dependents, until a deliberate retry. Never deleted. */
+  readonly flagged: boolean;
   /** The operations its acknowledged dependencies were sent as, which the server checks have receipts. Absent when none. */
   readonly after?: readonly string[];
   /** A per-device type's originating-device position, fixed when it was queued. Absent for other types. */
@@ -33,21 +37,12 @@ export interface Origin {
   readonly position: number;
 }
 
-/** A record the account has accepted, as this installation holds it. */
-export interface AcceptedRecord {
-  readonly recordType: string;
-  readonly item: string;
-  /** The account sequence that accepted it. */
-  readonly sequence: number;
-  readonly payload: unknown;
-  /** A per-device type's origin; absent for other types. */
-  readonly origin?: Origin;
-}
-
 /** An entry to add to the upload queue. */
 export interface NewUpload {
   readonly id: string;
   readonly recordType: string;
+  /** The item's identity under its record type's scheme. */
+  readonly item: string;
   readonly payload: unknown;
   readonly dependencies: readonly string[];
   /** Allocates the type's next originating-device position on this installation, durably, in the same transaction. */
@@ -62,6 +57,37 @@ export interface FeedPageEffects {
   readonly redacted?: readonly number[];
   /** Results the page purges: removed, and never accepted here again. */
   readonly purged?: readonly RecordRef[];
+}
+
+/** An upload whose receipt refused it: kept for review, never sent again and never deleted. */
+export interface RejectedUpload {
+  readonly id: string;
+  readonly recordType: string;
+  readonly payload: unknown;
+  /** The receipt's refusal code. */
+  readonly code: string;
+}
+
+/** A record the account has accepted, as this installation holds it. */
+export interface AcceptedRecord {
+  readonly recordType: string;
+  readonly item: string;
+  /** The account sequence that accepted it. */
+  readonly sequence: number;
+  readonly payload: unknown;
+  /** A per-device type's origin; absent for other types. */
+  readonly origin?: Origin;
+}
+
+/** A revisioned item as this installation holds it. */
+export interface LocalRevisionedItem {
+  readonly item: string;
+  /** The account's accepted state as last applied (the record type's `fromChange`), or null before any. */
+  readonly accepted: unknown;
+  /** This installation's latest change not yet reflected in the accepted state: a value, or null for a deletion. */
+  readonly change: { readonly value: unknown } | null;
+  /** Whether any of the item reached the account: an accepted state, or an acknowledged upload. */
+  readonly onAccount: boolean;
 }
 
 export interface SyncStore {
@@ -84,6 +110,18 @@ export interface SyncStore {
    * entry's own operation can acknowledge it.
    */
   acknowledgeUpload(id: string, disposition: Disposition, accepted: AcceptedRecord | null): Promise<void>;
+  /**
+   * Counts a failed attempt for a pending entry, in one transaction with its
+   * current count: the entry is flagged when the count reaches `flagAt`.
+   */
+  recordUploadFailure(id: string, flagAt: number): Promise<{ readonly failures: number; readonly flagged: boolean }>;
+  /** A deliberate retry: the entry's failures are forgotten and it is no longer flagged. */
+  clearUploadFailures(id: string): Promise<void>;
+  /** Entries whose receipts refused them, in queue order. */
+  readRejectedUploads(): Promise<readonly RejectedUpload[]>;
+  /** When this installation last finished a synchronization run with nothing left unanswered, or null. */
+  readLastSynced(): Promise<number | null>;
+  recordSynced(at: number): Promise<void>;
   /** The account sequence this installation has applied the feed through. */
   readFeedCursor(): Promise<number>;
   /**
@@ -93,6 +131,16 @@ export interface SyncStore {
    */
   applyFeedPage(from: number, records: readonly AcceptedRecord[], effects?: FeedPageEffects): Promise<boolean>;
   readAcceptedRecords(recordType: string): Promise<readonly AcceptedRecord[]>;
+  /**
+   * Saves (a value) or deletes (null) a revisioned item on this installation,
+   * queuing its upload in the same transaction. The upload names its base:
+   * the accepted revision, or the item's own earlier upload when that one was
+   * sent but isn't reflected yet. A change to an upload not yet sent replaces
+   * it, and deleting an item that never left the installation removes it.
+   */
+  writeRevisionedItem(recordType: string, item: string, value: unknown): Promise<void>;
+  /** Every revisioned item of a type this installation holds, accepted or not. */
+  readRevisionedItems(recordType: string): Promise<readonly LocalRevisionedItem[]>;
   /** Called after a commit adds an entry to the upload queue. Returns an unsubscribe function. */
   onUploadQueued(listener: () => void): () => void;
 }

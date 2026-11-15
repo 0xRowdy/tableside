@@ -66,7 +66,7 @@ describe('the upload queue', () => {
 
     expect(announced).toBe(1);
     expect(await store.readUploadQueue()).toEqual([
-      { id: 'completed/a1', recordType: 'completed-practice-session', payload: record, dependencies: [], operation: null },
+      { id: 'completed/a1', recordType: 'completed-practice-session', payload: record, dependencies: [], operation: null, failures: 0, flagged: false },
     ]);
   });
 
@@ -169,6 +169,59 @@ describe('the upload queue', () => {
   });
 });
 
+describe('failing and refused uploads (#92)', () => {
+  it('counts an entry\'s failures and flags it when the count reaches the limit, durably, keeping it pending', async () => {
+    const { open } = newDisk();
+    const store = await open();
+    await completed(store, 'a1');
+    expect(await store.recordUploadFailure('completed/a1', 2)).toEqual({ failures: 1, flagged: false });
+    expect(await store.recordUploadFailure('completed/a1', 2)).toEqual({ failures: 2, flagged: true });
+    await store.close();
+
+    const restarted = await open();
+    expect(await restarted.readUploadQueue()).toMatchObject([{ id: 'completed/a1', failures: 2, flagged: true }]);
+  });
+
+  it('forgets the failures and the flag on a deliberate retry', async () => {
+    const store = await newDisk().open();
+    await completed(store, 'a1');
+    await store.recordUploadFailure('completed/a1', 1);
+    await store.clearUploadFailures('completed/a1');
+    expect(await store.readUploadQueue()).toMatchObject([{ id: 'completed/a1', failures: 0, flagged: false }]);
+  });
+
+  it('counts nothing when the write fails', async () => {
+    const { disk, open } = newDisk();
+    const store = await open();
+    await completed(store, 'a1');
+    disk.failing = true;
+    await expect(store.recordUploadFailure('completed/a1', 1)).rejects.toThrow();
+    disk.failing = false;
+    expect(await store.readUploadQueue()).toMatchObject([{ failures: 0, flagged: false }]);
+  });
+
+  it('lists refused entries for review, with their code', async () => {
+    const store = await newDisk().open();
+    const record = await completed(store, 'a1');
+    await completed(store, 'a2');
+    await store.prepareUpload('completed/a1', OPERATION);
+    await store.acknowledgeUpload('completed/a1', { status: 'rejected', operation: OPERATION.operationId, requestHash: ABC_SHA256, code: 'identity-reused' }, null);
+
+    expect(await store.readRejectedUploads()).toEqual([
+      { id: 'completed/a1', recordType: 'completed-practice-session', payload: record, code: 'identity-reused' },
+    ]);
+  });
+
+  it('remembers when it last synced', async () => {
+    const { open } = newDisk();
+    const store = await open();
+    expect(await store.readLastSynced()).toBeNull();
+    await store.recordSynced(1_763_000_000_000);
+    await store.close();
+    expect(await (await open()).readLastSynced()).toBe(1_763_000_000_000);
+  });
+});
+
 describe('the feed cursor', () => {
   it('starts before the first entry and applies a page with its cursor', async () => {
     const store = await newDisk().open();
@@ -216,6 +269,7 @@ describe('entries other than completions (#95)', () => {
   const operation = (id: string, fields: Partial<{ dependencies: string[]; positioned: boolean; purges: { recordType: string; item: string } | null }> = {}) => ({
     id,
     recordType: fields.positioned ? 'challenge-attempt' : 'sharing-withdrawal',
+    item: id,
     payload: { id },
     dependencies: fields.dependencies ?? [],
     positioned: fields.positioned ?? false,
@@ -233,9 +287,11 @@ describe('entries other than completions (#95)', () => {
       payload: { id: 'op-1' },
       dependencies: [],
       operation: null,
+      failures: 0,
+      flagged: false,
     });
     expect(announced).toBe(1);
-    expect(await store.readUploadQueue()).toEqual([{ id: 'op-1', recordType: 'sharing-withdrawal', payload: { id: 'op-1' }, dependencies: [], operation: null }]);
+    expect(await store.readUploadQueue()).toEqual([{ id: 'op-1', recordType: 'sharing-withdrawal', payload: { id: 'op-1' }, dependencies: [], operation: null, failures: 0, flagged: false }]);
     expect(await store.readOutgoing()).toEqual([]);
   });
 
@@ -269,7 +325,7 @@ describe('entries other than completions (#95)', () => {
     expect((await store.readUploadQueue())[1]?.after).toEqual([OTHER.operationId]);
     await store.acknowledgeUpload('w-1', { status: 'accepted', operation: OTHER.operationId, requestHash: ABC_SHA256, sequence: 1 }, null);
     expect(await store.readUploadQueue()).toEqual([
-      { id: 'c-1', recordType: 'sharing-withdrawal', payload: { id: 'c-1' }, dependencies: ['w-1'], operation: null, after: [OTHER.operationId] },
+      { id: 'c-1', recordType: 'sharing-withdrawal', payload: { id: 'c-1' }, dependencies: ['w-1'], operation: null, failures: 0, flagged: false, after: [OTHER.operationId] },
     ]);
   });
 

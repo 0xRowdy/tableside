@@ -1,13 +1,33 @@
-// Test-only record types (seam 2, spec 2 *Testing Decisions › Registry*): one
-// of each registry kind and rule, standing in for later specs' types, so specs
-// 3–6 inherit proven platform behavior and test only their own rules. The
-// server half is record-types.sql, which the harness installs on the local
-// stack only; no build of the app registers these.
+// Test-only record types: the client half of supabase/seed/test-record-types.sql
+// (local stacks only). Seam 2 proves the platform's behavior for each kind
+// with these, standing in for later specs' types, so the specs that register
+// real types inherit it and test only their own rules. Never registered in a build.
 
-import { readFileSync } from 'node:fs';
+import { type RecordType, isMoney, recordTypes, revisionedItemType } from '../sync/registry';
 
-import { type RecordType, recordTypes } from '../sync/registry';
-import type { LocalStack } from './stack';
+/** A revisioned item shaped like a small casino session: a game, a real currency and an exact net result. */
+export interface TestRevisionedValue {
+  readonly game: string;
+  readonly currency: string;
+  readonly net: string;
+}
+
+
+export const testRevisionedItem = revisionedItemType<TestRevisionedValue>({
+  name: 'test-revisioned-item',
+  payloadVersion: 1,
+  identityScheme: 'random-id',
+  acceptance: 'private.accept_test_revisioned_item_v1',
+  isValue(value): value is TestRevisionedValue {
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
+    const { game, currency, net, ...rest } = value as Record<string, unknown>;
+    return Object.keys(rest).length === 0 && typeof game === 'string' && typeof currency === 'string' && /^[A-Z]{3}$/.test(currency) && isMoney(net);
+  },
+  contribution: (value) => ({ total: 'casino', game: value.game, currency: value.currency, amount: value.net }),
+  export: { csv: null, json: (state) => state },
+  // Its rows are in the platform's revisioned item tables (PLATFORM_TABLES).
+  deletion: { serverTables: [] },
+});
 
 const isObject = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
 const hasStrings = (value: unknown, ...keys: string[]): value is Record<string, string> =>
@@ -26,7 +46,7 @@ function testType<P>(
   fields: Pick<RecordType<P>, 'name' | 'kind' | 'isPayload' | 'barriers'> & {
     readonly id: keyof P & string;
     readonly tables: readonly string[];
-  } & Partial<Pick<RecordType<P>, 'affectedBy' | 'afterReconciliation' | 'ordering' | 'purges' | 'fromChange'>>,
+  } & Partial<Pick<RecordType<P>, 'affectedBy' | 'afterReconciliation' | 'ordering' | 'purges' | 'fromChange' | 'contribution'>>,
 ): RecordType<P> {
   const { id, tables, ...rest } = fields;
   const type: RecordType<P> = {
@@ -66,8 +86,8 @@ export interface TestTransfer {
 export interface TestResult {
   readonly version: 1;
   readonly resultId: string;
-  /** What it adds to the account total. */
-  readonly amount: number;
+  /** What it adds to the account's practice total: exact money text. */
+  readonly amount: string;
   /** Its detail, kept apart from its summary on the server. */
   readonly detail: string;
 }
@@ -137,10 +157,10 @@ export const testResult = testType<TestResult>({
   name: 'test-result',
   kind: 'immutable-result',
   id: 'resultId',
-  isPayload: (value): value is TestResult =>
-    hasStrings(value, 'resultId', 'detail') && typeof value.amount === 'number' && Number.isSafeInteger(value.amount),
+  isPayload: (value): value is TestResult => hasStrings(value, 'resultId', 'detail') && isMoney(value.amount),
   barriers: [],
-  tables: ['private.test_results', 'private.test_result_details', 'private.test_totals'],
+  contribution: (result) => ({ total: 'practice', game: 'test', currency: 'simulated', amount: result.amount }),
+  tables: ['private.test_results', 'private.test_result_details'],
 });
 
 /** Spec 4's practice-session deletion: purges an accepted result. Its barrier is the target's acceptance. */
@@ -191,18 +211,9 @@ export const TEST_RECORD_TYPES: readonly RecordType[] = [
   testExperimentAssignment,
 ] as RecordType[];
 
-/** The app's registry with the test-only types added. */
-export const testRegistry: ReadonlyMap<string, RecordType> = new Map([...recordTypes, ...TEST_RECORD_TYPES.map((type) => [type.name, type] as const)]);
-
-const installed = new WeakMap<LocalStack, Promise<void>>();
-
-/** Registers the test-only types' server half on the local stack, once per stack (idempotent across runs). */
-export function installTestRecordTypes(stack: LocalStack): Promise<void> {
-  let installing = installed.get(stack);
-  if (!installing) {
-    const script = readFileSync(new URL('./record-types.sql', import.meta.url), 'utf8');
-    installing = stack.sql.unsafe(script).simple().then(() => undefined);
-    installed.set(stack, installing);
-  }
-  return installing;
-}
+/** This build's record types and the test-only ones. */
+export const testRecordTypes: ReadonlyMap<string, RecordType> = new Map<string, RecordType>([
+  ...recordTypes,
+  [testRevisionedItem.name, testRevisionedItem as unknown as RecordType],
+  ...TEST_RECORD_TYPES.map((type) => [type.name, type] as const),
+]);
