@@ -13,6 +13,6 @@ export {
   uniqueEmail,
 } from './device';
 export { FaultProxy, type HeldResponse } from './fault-proxy';
-export { TestIdentityProvider } from './identity-provider';
+export { type ProviderIdentity, TestIdentityProvider, TestProviderPorts } from './identity-provider';
 export { Mailbox } from './mailbox';
 export { type LocalStack, localStack } from './stack';

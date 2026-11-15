@@ -31,6 +31,7 @@ import {
 } from '../service';
 import type { DevicePorts, DeviceSignal } from '../sync/session';
 import { FaultProxy } from './fault-proxy';
+import type { TestIdentityProvider, TestProviderPorts } from './identity-provider';
 import { Mailbox } from './mailbox';
 import type { LocalStack } from './stack';
 
@@ -141,6 +142,8 @@ export interface SimulatedDevice {
   readonly entropy: FakeEntropy;
   readonly credentials: MemoryCredentials;
   readonly mailbox: Mailbox;
+  /** Who is signed in at Apple and Google on the device, and what their sheets and browser did. Null without an identity provider. */
+  readonly providers: TestProviderPorts | null;
   /** Whether the app is in the foreground. */
   foreground: boolean;
   /** While true, every database write fails (an I/O error), so its transaction rolls back. */
@@ -177,6 +180,14 @@ export interface DeviceOptions {
    * device, keeping its files and secure storage.
    */
   readonly installedOver?: SimulatedDevice;
+  /** The test identity provider standing in for Apple and Google on this device. */
+  readonly identityProvider?: TestIdentityProvider;
+  /**
+   * Which platform's sign-in routes the device takes: on iOS Apple and Google
+   * are native; on Android Google is native and Apple goes through the system
+   * browser. iOS by default.
+   */
+  readonly platform?: 'ios' | 'android';
 }
 
 export function createDevice(stack: LocalStack, options: DeviceOptions): SimulatedDevice {
@@ -191,6 +202,9 @@ export function createDevice(stack: LocalStack, options: DeviceOptions): Simulat
   const foreground = new Signal(true);
   const disk = { failing: false };
   const driver = nodeSqlCipherDriver({ fault: () => (disk.failing ? 'io' : undefined) });
+  const { identityProvider } = options;
+  const providers =
+    identityProvider?.devicePorts(options.platform === 'android' ? { apple: 'browser', google: 'native' } : { apple: 'native', google: 'native' }) ?? null;
 
   const launch = (): AppProcess => {
     let dead = false;
@@ -269,6 +283,7 @@ export function createDevice(stack: LocalStack, options: DeviceOptions): Simulat
       device: ports,
       randomBytes: (count) => entropy.bytes(count),
       webSocket: ProcessWebSocket,
+      ...(identityProvider && providers ? { providers: identityProvider.settings(providers) } : {}),
     });
     return {
       account,
@@ -299,6 +314,7 @@ export function createDevice(stack: LocalStack, options: DeviceOptions): Simulat
     entropy,
     credentials,
     mailbox: new Mailbox(stack.mailUrl),
+    providers,
     get foreground() {
       return foreground.current();
     },
