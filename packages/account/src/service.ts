@@ -234,7 +234,7 @@ export interface DeletionProgress {
  * Delete permanently now's answer. 'deleted': the boundary is crossed and this
  * installation erased the account (the gate is Deleted). 'failed' is an
  * unknown outcome: the server's lifecycle status decides, so asking again
- * never deletes twice and a lost answer still wipes once the server says so.
+ * never deletes twice and a lost answer still erases once the server says so.
  */
 export type DeletePermanentlyResult =
   | { readonly status: 'deleted' }
@@ -647,7 +647,7 @@ export interface AccountService {
    * Active, or Renewal pending when its token has expired (access and records
    * stay), the remembered age state, or the state its database is in. After a
    * sign-out it is Signed out, opening nothing. After the account was deleted
-   * it is Deleted (finishing the wipe, if a kill interrupted it). Stays at No
+   * it is Deleted (finishing the erase, if a kill interrupted it). Stays at No
    * account when there is none.
    */
   resume(): Promise<{ readonly status: 'resumed' | 'signed-out' | 'deleted' | 'no-account' }>;
@@ -1037,9 +1037,8 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
     const token = await storedStatus(current.remembered.accountId);
     if (!token || opened !== current) return;
     try {
-      const response = await post('/rest/v1/rpc/lifecycle_status_v1', { token });
-      const answer = (await response.json().catch(() => null)) as { status?: unknown; at?: unknown; by?: unknown; deadline?: unknown } | null;
-      if (!response.ok || opened !== current) return;
+      const answer = await askLifecycle(token);
+      if (!answer || opened !== current) return;
       if (answer?.status === 'deleted') {
         await eraseDeleted(current, token);
       } else if (answer?.status === 'revoked') {
@@ -1092,48 +1091,61 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
   };
 
   /**
-   * The server confirmed the account's permanent deletion: stop and wipe
+   * The server confirmed the account's permanent deletion: stop and erase
    * (spec 2, *Reconciliation*). The session-ending handlers run first (an
    * open practice session stops), then the account session ends, without
    * waiting for anything else. A marker written first finishes an interrupted
-   * wipe at the next launch. Only this account's data goes: another account's
+   * erase at the next launch. Only this account's data goes: another account's
    * database on this installation is never touched.
    */
   const eraseDeleted = async (current: OpenSession, token: string | null): Promise<void> => {
     if (signingOut || opened !== current) return;
-    const marker = { accountId: current.remembered.accountId, installationId: current.session.installationId, token };
+    const marker = { accountId: current.remembered.accountId, token };
     await writeCredentials(() => credentials.setItem(deletedKey(backend.name), JSON.stringify(marker)));
     for (const handler of [...accountSessionEnding]) await handler().catch(() => undefined);
     if (opened !== current) return;
-    generation++;
     pendingDeletion = null;
-    opened.stopWatch();
+    endAccountSession();
+    await finishErase(marker);
+    setGate({ state: 'deleted' });
+  };
+
+  /** Ends the open account session on this installation: answers for it touch nothing, and sync stops. */
+  const endAccountSession = () => {
+    generation++;
+    opened?.stopWatch();
     opened = null;
     sync?.session.end();
     sync = null;
     syncChanged();
-    await finishErase(marker);
-    setGate({ state: 'deleted' });
   };
 
   /**
    * Erases a deleted account's data on this installation: its database (with
    * pending uploads and staged files) and key, the app's own copies, then its
-   * credentials (Auth's session, the remembered account, the installation's
-   * secret for it). Only the status credential stays, in the marker.
+   * credentials (Auth's session, the remembered account, every entry named
+   * for it, such as the installation's secret). Only the status credential
+   * stays, in the marker. If the app's copies couldn't be erased, the marker
+   * keeps the account, so the next launch tries again.
    */
   const finishErase = async (marker: DeletedMarker & { readonly accountId: string }): Promise<void> => {
-    await options.vault.erase(marker.accountId);
-    await options.eraseAppData?.(marker.accountId).catch(() => undefined);
+    const { accountId } = marker;
+    await options.vault.erase(accountId);
+    const appDataErased = options.eraseAppData ? await options.eraseAppData(accountId).then(() => true, () => false) : true;
     await writeCredentials(async () => {
-      if ((await readRemembered())?.accountId === marker.accountId) await credentials.removeItem(rememberedAccountKey(backend.name));
+      if ((await readRemembered())?.accountId === accountId) await credentials.removeItem(rememberedAccountKey(backend.name));
       await credentials.removeItem(credentialsKey(backend.name));
       await credentials.removeItem(statusKey(backend.name));
-      if (marker.installationId) await credentials.removeItem(installationSecretKey(backend.name, marker.installationId, marker.accountId));
-      await credentials.setItem(deletedKey(backend.name), JSON.stringify({ token: marker.token } satisfies DeletedMarker));
-      // The environment's index of key names names it too.
-      await forgetCredentialNames(options.credentials, backend.name, (name) => name.includes(marker.accountId));
+      await forgetCredentials(options.credentials, backend.name, (name) => name.includes(accountId));
+      await credentials.setItem(deletedKey(backend.name), JSON.stringify(appDataErased ? { token: marker.token } : marker));
     });
+  };
+
+  /** The lifecycle status for a status credential, or null when no answer came. */
+  const askLifecycle = async (token: string): Promise<{ status?: unknown; at?: unknown; by?: unknown; deadline?: unknown } | null> => {
+    const response = await post('/rest/v1/rpc/lifecycle_status_v1', { token });
+    const answer = (await response.json().catch(() => null)) as { status?: unknown; at?: unknown; by?: unknown; deadline?: unknown } | null;
+    return response.ok ? answer : null;
   };
 
   /** What this installation keeps of a deleted account: the marker, or null. */
@@ -1143,22 +1155,37 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
    * Locks the account on this installation, once the session-ending handlers
    * have run (sign-out or revocation): the account session ends, its database
    * closes, kept with its key, and its credentials go, all without the network.
+   * A revoked session's status credential stays: the server keeps answering
+   * it, so the next launch can still learn the account was deleted (#104).
    */
   const closeAccountSession = async (accountId: string, revoked?: RememberedAccount['revoked']): Promise<void> => {
-    generation++;
-    opened?.stopWatch();
-    opened = null;
-    sync?.session.end();
-    sync = null;
-    syncChanged();
+    endAccountSession();
     await options.vault.close();
     await writeCredentials(async () => {
       const remembered = await readRemembered();
       // The lock first: a kill between the writes still reopens locked (an earlier revocation is no longer why).
       if (remembered) await remember({ ...remembered, accountId, signedOut: true, revoked });
       await credentials.removeItem(credentialsKey(backend.name));
-      await credentials.removeItem(statusKey(backend.name));
+      if (!revoked) await credentials.removeItem(statusKey(backend.name));
     });
+  };
+
+  /**
+   * A revoked installation, launching online: asks with the status credential
+   * it kept whether the account was deleted meanwhile, and erases it if so.
+   * True when it did.
+   */
+  const eraseIfDeletedWhileLocked = async (accountId: string): Promise<boolean> => {
+    if (!options.device.online.current()) return false;
+    const token = await storedStatus(accountId);
+    if (!token) return false;
+    const answer = await askLifecycle(token).catch(() => null);
+    if (answer?.status !== 'deleted') return false;
+    const marker = { accountId, token };
+    await writeCredentials(() => credentials.setItem(deletedKey(backend.name), JSON.stringify(marker)));
+    await finishErase(marker);
+    setGate({ state: 'deleted' });
+    return true;
   };
 
   /** Refreshes eligibility on entering the foreground, on reconnection and every minute while foregrounded and connected. */
@@ -1777,7 +1804,7 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
   /** Whether the gate is Deleted now (read afresh after an await). */
   const isDeleted = () => gate.state === 'deleted';
 
-  /** The permanent deletion's progress, by the status credential the wipe kept; null when it can't be asked. */
+  /** The permanent deletion's progress, by the status credential the erase kept; null when it can't be asked. */
   const deletionProgress = async (): Promise<DeletionProgress | null> => {
     const token = (await readDeleted())?.token;
     if (!token || !options.device.online.current()) return null;
@@ -2030,7 +2057,7 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
       if (gate.state !== 'no-account') return { status: 'resumed' };
       // Removes a retired environment's namespace before reading any credentials.
       await connect();
-      // A deleted account's wipe finishes first, if a kill interrupted it.
+      // A deleted account's erase finishes first, if a kill interrupted it.
       const deleted = await readDeleted();
       if (deleted) {
         if (deleted.accountId) await finishErase({ ...deleted, accountId: deleted.accountId });
@@ -2040,6 +2067,7 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
       const remembered = await readRemembered();
       if (remembered?.signedOut) {
         const { accountId, revoked } = remembered;
+        if (revoked && (await eraseIfDeletedWhileLocked(accountId))) return { status: 'deleted' };
         setGate(revoked ? { state: 'revoked', accountId, revokedAt: revoked.at, by: revoked.by } : { state: 'signed-out', accountId });
         return { status: 'signed-out' };
       }
@@ -2293,21 +2321,19 @@ async function removeRetiredEnvironments({ backend, credentials, vault }: Accoun
 const credentialsKey = (environment: EnvironmentName) => `tableside.${environment}.auth`;
 /** The current session's status credential (lifecycle_status_v1), with the account it is for. */
 const statusKey = (environment: EnvironmentName) => `tableside.${environment}.status`;
-/** A deleted account's marker: its account and installation until the wipe finished, then only its status credential. */
+/** A deleted account's marker: its account until the erase finished, then only its status credential. */
 const deletedKey = (environment: EnvironmentName) => `tableside.${environment}.deleted`;
 
 interface DeletedMarker {
   readonly accountId?: string;
-  readonly installationId?: string;
   readonly token: string | null;
 }
 
 function parseDeleted(text: string | null): DeletedMarker | null {
-  const value = parseJson(text) as { accountId?: unknown; installationId?: unknown; token?: unknown } | null;
+  const value = parseJson(text) as { accountId?: unknown; token?: unknown } | null;
   if (!value || typeof value !== 'object') return null;
   return {
     ...(typeof value.accountId === 'string' ? { accountId: value.accountId } : {}),
-    ...(typeof value.installationId === 'string' ? { installationId: value.installationId } : {}),
     token: typeof value.token === 'string' ? value.token : null,
   };
 }
@@ -2356,12 +2382,13 @@ function namespacedCredentials(storage: CredentialStorage, environment: Environm
   };
 }
 
-/** Removes from the environment's index of key names those `matches` picks (their entries are gone already). */
-async function forgetCredentialNames(storage: CredentialStorage, environment: EnvironmentName, matches: (name: string) => boolean): Promise<void> {
+/** Removes the environment's entries `matches` picks, by its index of key names, and their names from the index. */
+async function forgetCredentials(storage: CredentialStorage, environment: EnvironmentName, matches: (name: string) => boolean): Promise<void> {
   const index = credentialsIndex(environment);
   const names = await readIndex(storage, index);
-  const kept = names.filter((name) => !matches(name));
-  if (kept.length !== names.length) await storage.setItem(index, JSON.stringify(kept));
+  const gone = names.filter(matches);
+  for (const name of gone) await storage.removeItem(name);
+  if (gone.length > 0) await storage.setItem(index, JSON.stringify(names.filter((name) => !matches(name))));
 }
 
 async function removeCredentials(storage: CredentialStorage, environment: EnvironmentName): Promise<void> {

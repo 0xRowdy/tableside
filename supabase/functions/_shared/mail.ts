@@ -122,8 +122,8 @@ export function deletionScheduledMail(deadline: string): Mail {
 export function deletionAcceptedMail(cleanupBy: string): Mail {
   const by = new Date(cleanupBy).toUTCString().replace(/ \d\d:\d\d:\d\d GMT$/, '');
   const text =
-    'Your Tableside account is being deleted permanently, as asked. This can’t be undone: the account can’t be restored, ' +
-    `and its data is erased from Tableside by ${by}. Signing up again with this address later makes a new, empty account.\n\n` +
+    "Your Tableside account is being deleted permanently, as asked. This can't be undone: the account can't be restored, " +
+    `and its data is erased from Tableside by ${by}. Once that's done, signing up again with this address makes a new, empty account.\n\n` +
     "Deleting your account doesn't cancel a subscription: cancel it in the App Store or Google Play, where you can also ask for a refund.\n\n" +
     "If you didn't ask for this, contact support.";
   return {

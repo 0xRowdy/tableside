@@ -9,25 +9,30 @@
 //
 // advance_deletion runs the database's own steps and hands back the first
 // that needs a service outside it (the "permanent deletion accepted" email,
-// the analytics provider, RevenueCat, Apple and Google); this does it and
+// the Storage API, the analytics provider, RevenueCat, Apple and Google); this does it and
 // reports back. A failure is reported and retried later with backoff: the
 // account stays deleted, and the status shows the delay. Nothing here logs
 // an address, account, identifier or token.
 
-import { deletionPorts } from '../_shared/deletion-ports.ts';
+import { type ProviderIdentity, deletionPorts } from '../_shared/deletion-ports.ts';
 import { deletionAcceptedMail, sendSecurityNotice } from '../_shared/mail.ts';
 import { ENVIRONMENT_HEADER, reply, serviceRpc } from '../_shared/service.ts';
 
-declare const Deno: { serve(handler: (request: Request) => Promise<Response>): void };
+declare const Deno: { serve(handler: (request: Request) => Promise<Response>): void; env: { get(name: string): string | undefined } };
 
-/** Steps per account per wake: one more than there are, so a full run fits. */
-const MAX_STEPS = 10;
+const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
+const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+/** The bucket of the account's own objects (its folder is the account ID). */
+const PRIVATE_BUCKET = 'account-private';
+/** External steps per account per wake: every step once, with room for several pages of objects; the rest wait for the next wake. */
+const MAX_STEPS = 20;
 
 type Step =
   | { step: 'mail'; email: string | null; cleanupBy: string }
+  | { step: 'objects'; paths: string[] }
   | { step: 'analytics'; ids: string[] }
   | { step: 'purchases'; customer: string }
-  | { step: 'providers'; identities: { provider: string; subject: string }[] }
+  | { step: 'providers'; identities: ProviderIdentity[] }
   | { step: 'waiting' | 'busy' | 'complete' };
 
 async function rpc<T>(environment: string, name: string, args: Record<string, unknown>): Promise<T> {
@@ -46,6 +51,17 @@ async function perform(environment: string, next: Step): Promise<Record<string, 
     case 'mail':
       await sendSecurityNotice(environment, next.email, deletionAcceptedMail(next.cleanupBy), 'deletion-accepted');
       return {};
+    case 'objects': {
+      // Through the Storage API, which removes the files with their rows (the database can't).
+      const removed = await fetch(`${SUPABASE_URL}/storage/v1/object/${PRIVATE_BUCKET}`, {
+        method: 'DELETE',
+        headers: { apikey: SERVICE_KEY, authorization: `Bearer ${SERVICE_KEY}`, 'content-type': 'application/json' },
+        body: JSON.stringify({ prefixes: next.paths }),
+      });
+      await removed.body?.cancel();
+      if (!removed.ok) throw new Error('objects');
+      return {};
+    }
     case 'analytics':
       return { completed: (await deletionPorts.requestAnalyticsErasure(next.ids)).completed };
     case 'purchases':

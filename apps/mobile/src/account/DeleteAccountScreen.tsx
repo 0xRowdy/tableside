@@ -7,7 +7,7 @@
 // own warnings first (#104: unsynced records lost, "Deleted author", paid
 // time forfeited, no undo) and asks once more. Online only: nothing is
 // queued. Once scheduled, the gate locks and the deletion-scheduled screen
-// (S2-23) replaces this one; once deleted, the device is wiped and the
+// (S2-23) replaces this one; once deleted, the device erases the account and the
 // Deleted screen replaces it.
 // TODO(frames): unverified against S2-22 — the frame couldn't be read (Pencil unreachable). The steps, copy and layout come from spec 2 *Deletion*, Amendments 1 C2–C3, 3 §3–4 and 9 §3, and #103/#104.
 // TODO(spec 7 D9): "Paid time is forfeited" is provisional (Amendment 9 §3): under Outcome B its copy follows the owner's choice recorded there.

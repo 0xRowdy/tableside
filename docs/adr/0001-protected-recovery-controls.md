@@ -27,4 +27,5 @@ Restore (spec 7) then works like this: ship the journal continuously to storage 
 - One small insert per sensitive outcome, inside a transaction that already holds the account's synchronization head (or the account row).
 - The journal's retention depends on backup retention and its independent copy, so it is a retention exception owned by spec 7 (`private.retention_rules`).
 - A new record type with a sensitive outcome must call `private.record_control` in its acceptance transaction (docs/development.md, *Compaction and stale devices*).
+- A permanently deleted account keeps only its deletion's `account-state` entry (#104): that entry supersedes the account's earlier ones for any restore (a restore from before it deletes the account again), so `private.remove_account_identity` removes the rest.
 - Not decided here: the independent store, the shipping mechanism, writer and restorer fencing. Those are spec 7's.

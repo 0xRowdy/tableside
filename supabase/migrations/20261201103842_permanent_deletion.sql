@@ -17,7 +17,7 @@
 --     active account) and cancels owned simulation publication;
 --   * the deletion-control record (private.deletions) is written, and the
 --     account-state control is journaled by its trigger (ADR 0001).
--- Devices learn it from the lifecycle status ('deleted') and wipe the
+-- Devices learn it from the lifecycle status ('deleted') and erase the
 -- account's local data.
 --
 -- The deletion-job function then cleans up, one step at a time, in this
@@ -27,6 +27,8 @@
 --   mail        the "permanent deletion accepted" email, while the address still exists
 --   exports     waits until the export job removed every archive object (only
 --               the Storage API can), then removes the export rows
+--   objects     removes the account's own objects in the account-private
+--               bucket, through the Storage API, page by page
 --   analytics   asks the analytics provider (spec 7) to erase every analytics
 --               ID the account had, then forgets them; the provider's
 --               completion is recorded separately (Amendment 8 §3)
@@ -96,6 +98,7 @@ create table private.deletions (
   cleanup_by timestamptz not null,
   mail_sent_at timestamptz,
   exports_removed_at timestamptz,
+  objects_removed_at timestamptz,
   -- Requested of the analytics provider, and the provider's completion: apart (Amendment 8 §3).
   analytics_requested_at timestamptz,
   analytics_ids integer,
@@ -113,7 +116,8 @@ create table private.deletions (
   -- A worker holding the current external step, until then.
   leased_until timestamptz,
   check ((providers_revoked_at is null) = (providers_outcome is null)),
-  check (completed_at is null or (mail_sent_at is not null and exports_removed_at is not null and analytics_requested_at is not null
+  check (completed_at is null or (mail_sent_at is not null and exports_removed_at is not null and objects_removed_at is not null
+    and analytics_requested_at is not null
     and purchases_cleaned_at is not null and public_content_removed_at is not null and records_purged_at is not null
     and providers_revoked_at is not null))
 );
@@ -139,6 +143,18 @@ alter table private.account_sessions add constraint account_sessions_revoked_by_
 create function private.deletion_cleanup_window() returns interval
 language sql immutable set search_path = '' as $$
   select interval '7 days'
+$$;
+
+-- How long the job function holds an external step before another may take it.
+create function private.deletion_step_lease() returns interval
+language sql immutable set search_path = '' as $$
+  select interval '2 minutes'
+$$;
+
+-- How long waiting on the export job may take before the status calls it a delay.
+create function private.deletion_export_wait() returns interval
+language sql immutable set search_path = '' as $$
+  select interval '1 hour'
 $$;
 
 -- Each record type's deletion coverage (spec 2, *Record-type registry*): a
@@ -255,7 +271,8 @@ end $$;
 -- The deletion as its status reports it (spec 2, *Status and email*): a
 -- restricted view that grants no record access.
 --   'processing' while active cleanup runs, 'completed' once it finished;
---   `delayed` when it is past its seven days, or a step is waiting to be retried;
+--   `delayed` when it is past its seven days, a step is waiting to be retried,
+--     or the export job hasn't removed the archives within the hour;
 --   `analytics`: when erasure was requested of the provider and when the
 --     provider completed it (null until it says so: never assumed);
 --   `providers`: null until the Apple and Google grants were dealt with;
@@ -267,7 +284,8 @@ language sql stable security definer set search_path = '' as $$
     'deletedAt', d.boundary_at,
     'cleanupBy', d.cleanup_by,
     'completedAt', d.completed_at,
-    'delayed', d.completed_at is null and (now() > d.cleanup_by or d.failures > 0),
+    'delayed', d.completed_at is null and (now() > d.cleanup_by or d.failures > 0
+      or (d.exports_removed_at is null and now() > d.boundary_at + private.deletion_export_wait())),
     'analytics', jsonb_build_object('requestedAt', d.analytics_requested_at, 'completedAt', d.analytics_completed_at),
     'providers', d.providers_outcome,
     'backups', 'separate')
@@ -281,7 +299,7 @@ $$;
 -- Delete permanently now (S2-22), for the caller's freshly authenticated
 -- session, of an account that is active (any age state: deletion is a
 -- restricted path) or whose deletion is scheduled. Online only.
---   'deleted' {deletion progress}   the boundary is crossed: this device wipes the account
+--   'deleted' {deletion progress}   the boundary is crossed: this device erases the account
 --   'fresh-authentication-required'
 -- Refused (not authorized) for a session that is gone: a retry after the
 -- boundary learns it from the lifecycle status, which answers 'deleted'.
@@ -499,6 +517,7 @@ $$;
 -- For the deletion-job function: runs the account's next cleanup steps that
 -- need only the database, and answers the first that needs the function:
 --   'mail' { email, cleanupBy } send "permanent deletion accepted" (email null: nowhere to send it)
+--   'objects' { paths }        remove these account-private objects (a page; more may follow)
 --   'analytics' { ids }        ask the analytics provider to erase these IDs
 --   'purchases' { customer }   remove the RevenueCat customer (spec 5)
 --   'providers' { identities } revoke each Apple and Google grant
@@ -526,7 +545,7 @@ begin
   end if;
   v_user := (select auth_user_id from public.accounts where account_id = v.account_id);
   if v.mail_sent_at is null then
-    update private.deletions set leased_until = now() + interval '2 minutes' where account_id = v.account_id;
+    update private.deletions set leased_until = now() + private.deletion_step_lease() where account_id = v.account_id;
     return jsonb_build_object('step', 'mail', 'email', (select u.email from auth.users u where u.id = v_user), 'cleanupBy', v.cleanup_by);
   end if;
   if v.exports_removed_at is null then
@@ -537,6 +556,17 @@ begin
     delete from private.exports where account_id = v.account_id;
     update private.deletions set exports_removed_at = now(), failures = 0 where account_id = v.account_id;
   end if;
+  if v.objects_removed_at is null then
+    select coalesce(jsonb_agg(o.name), '[]'::jsonb) into v_ids
+      from (select name from storage.objects
+            where bucket_id = 'account-private' and (storage.foldername(name))[1] = v.account_id::text
+            order by name limit 100) o;
+    if jsonb_array_length(v_ids) > 0 then
+      update private.deletions set leased_until = now() + private.deletion_step_lease() where account_id = v.account_id;
+      return jsonb_build_object('step', 'objects', 'paths', v_ids);
+    end if;
+    update private.deletions set objects_removed_at = now(), failures = 0 where account_id = v.account_id;
+  end if;
   if v.analytics_requested_at is null then
     select coalesce(jsonb_agg(i.analytics_id order by i.generation), '[]'::jsonb) into v_ids
       from private.analytics_ids i where i.account_id = v.account_id;
@@ -544,13 +574,13 @@ begin
       update private.deletions set analytics_requested_at = now(), analytics_ids = 0, analytics_completed_at = now(), failures = 0
         where account_id = v.account_id;
     else
-      update private.deletions set leased_until = now() + interval '2 minutes' where account_id = v.account_id;
+      update private.deletions set leased_until = now() + private.deletion_step_lease() where account_id = v.account_id;
       return jsonb_build_object('step', 'analytics', 'ids', v_ids);
     end if;
   end if;
   if v.purchases_cleaned_at is null then
     perform private.purchase_cleanup(v.account_id);
-    update private.deletions set leased_until = now() + interval '2 minutes' where account_id = v.account_id;
+    update private.deletions set leased_until = now() + private.deletion_step_lease() where account_id = v.account_id;
     return jsonb_build_object('step', 'purchases', 'customer', v.account_id);
   end if;
   if v.public_content_removed_at is null then
@@ -567,7 +597,7 @@ begin
     if jsonb_array_length(v_ids) = 0 then
       update private.deletions set providers_revoked_at = now(), providers_outcome = 'none', failures = 0 where account_id = v.account_id;
     else
-      update private.deletions set leased_until = now() + interval '2 minutes' where account_id = v.account_id;
+      update private.deletions set leased_until = now() + private.deletion_step_lease() where account_id = v.account_id;
       return jsonb_build_object('step', 'providers', 'identities', v_ids);
     end if;
   end if;
@@ -578,6 +608,7 @@ end $$;
 
 -- For the deletion-job function: the external step `step` is done.
 --   'mail'       { sent }        (a notice that couldn't go is logged, never retried)
+--   'objects'    {}              that page of objects is removed
 --   'analytics'  { completed }   requested of the provider; completed only if the provider said so
 --   'purchases'  {}
 --   'providers'  { outcome }     'revoked' or 'not-held'
@@ -593,7 +624,10 @@ begin
   end if;
   if step = 'mail' and v.mail_sent_at is null then
     update private.deletions set mail_sent_at = now() where account_id = v.account_id;
-  elsif step = 'analytics' and v.mail_sent_at is not null and v.exports_removed_at is not null and v.analytics_requested_at is null then
+  elsif step = 'objects' and v.exports_removed_at is not null and v.objects_removed_at is null then
+    -- A page is gone; the next advance looks again, and marks the step once none is left.
+    null;
+  elsif step = 'analytics' and v.objects_removed_at is not null and v.analytics_requested_at is null then
     update private.deletions
       set analytics_requested_at = now(),
           analytics_ids = (select count(*) from private.analytics_ids i where i.account_id = v.account_id),
@@ -630,6 +664,21 @@ language sql volatile security definer set search_path = '' as $$
   update private.deletions set analytics_completed_at = coalesce(analytics_completed_at, now())
     where account_id = analytics_erasure_completed.account and analytics_requested_at is not null
 $$;
+
+-- #102's report from the export job (20261129141537_export.sql), now waking
+-- the deletion job when a deleted account was waiting on those archives, so
+-- its cleanup goes on at once rather than at the next upkeep.
+create or replace function public.exports_removed(exports uuid[]) returns void
+language plpgsql volatile security definer set search_path = '' as $$
+begin
+  update private.exports e set object_pending = false
+  where e.export_id = any (exports_removed.exports) and e.state in ('failed', 'expired', 'invalidated');
+  if exists (
+    select 1 from private.exports e join private.deletions d on d.account_id = e.account_id
+    where e.export_id = any (exports_removed.exports) and d.exports_removed_at is null) then
+    perform private.wake_deletion_job();
+  end if;
+end $$;
 
 -- ---------------------------------------------------------------------------
 -- Status for the account's devices
@@ -670,7 +719,7 @@ begin
 end $$;
 
 -- The deletion's progress, by a status credential of one of the deleted
--- account's sessions: the restricted status view for a device that wiped the
+-- account's sessions: the restricted status view for a device that erased the
 -- account (and #106's web page). It grants no record access, and answers
 -- nothing for an account that isn't deleted.
 create function public.deletion_progress_v1(token text) returns jsonb
@@ -704,7 +753,7 @@ insert into private.retention_rules (subject, endpoint, dependency, owner) value
    'Backups older than the deletion, and devices still holding its status credentials (#43).',
    'Spec 7 (#57), final retention schedule and backup aging'),
   ('private.deleted_sessions',
-   'A deleted account''s status credentials, as hashes only, so a device that was away still learns its account is deleted and wipes it.',
+   'A deleted account''s status credentials, as hashes only, so a device that was away still learns its account is deleted and erases it.',
    'Devices that may still hold a credential and haven''t asked since the deletion.',
    'Spec 7 (#57), final retention schedule');
 
@@ -743,7 +792,7 @@ alter table private.email_sends add constraint email_sends_type_check
 revoke execute on function private.forget_deletion_origin(), private.deletion_cleanup_window(),
   private.cancel_owned_publications(uuid), private.remove_public_content(uuid), private.purchase_cleanup(uuid),
   private.wake_deletion_job(), private.cross_deletion_boundary(uuid, text, timestamptz), private.lock_account_lifecycle(uuid),
-  private.deletion_progress(uuid), private.purge_account_records(uuid), private.remove_account_identity(uuid),
+  private.deletion_progress(uuid), private.deletion_step_lease(), private.deletion_export_wait(), private.purge_account_records(uuid), private.remove_account_identity(uuid),
   private.finalize_deletion(uuid), private.wake_due_deletions() from public;
 revoke execute on procedure private.deletion_upkeep() from public;
 

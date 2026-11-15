@@ -77,7 +77,7 @@ const cleanedUp = (accountId: string) =>
       const [row] = await sql<{ completed_at: Date | null }[]>`select completed_at from private.deletions where account_id = ${accountId}`;
       if (!row?.completed_at) throw new Error('still processing');
     },
-    { timeout: 30_000, interval: 250 },
+    { timeout: 60_000, interval: 250 },
   );
 
 const accountRow = async (accountId: string) =>
@@ -206,7 +206,7 @@ describe('Delete permanently now', () => {
     expect(await phone.account.deletion.deletePermanently()).toEqual({ status: 'deleted' });
     await cleanedUp(accountId);
     const notice = (await phone.mailbox.messages(email)).find((message) => message.includes('being deleted permanently'));
-    expect(notice).toContain("can’t be undone");
+    expect(notice).toContain("can't be undone");
     expect(notice).toContain("doesn't cancel a subscription");
     expect(notice).toContain('ask for a refund');
     expect(await stack.emailSends(since)).toContainEqual({ type: 'deletion-accepted', pacing: 'immediate', outcome: 'sent' });
@@ -238,6 +238,27 @@ describe('other installations', () => {
     expect(tablet.vault.holdsAccount(accountId)).toBe(false);
     expect(tablet.vault.holdsAccount(other)).toBe(true);
     expect(await tablet.account.deletion.status()).toMatchObject({ status: 'completed' });
+  });
+});
+
+describe('a revoked installation', () => {
+  it('learns at its next launch that the account was deleted, and erases it', async () => {
+    const { phone, email, accountId } = await signedInPhone('revoked');
+    const tablet = device('revoked-tablet');
+    await signInAlso(tablet, email);
+    await tablet.playPracticeSession();
+    await confirmByEmail(phone, email);
+    expect(await phone.account.devices.signOutOthers()).toMatchObject({ status: 'signed-out', devices: 1 });
+    await tablet.account.refreshEligibility();
+    expect(tablet.account.gate).toMatchObject({ state: 'revoked', accountId });
+    expect(tablet.vault.holdsAccount(accountId)).toBe(true);
+
+    expect(await phone.account.deletion.deletePermanently()).toEqual({ status: 'deleted' });
+    await cleanedUp(accountId);
+    await tablet.restart();
+    expect(tablet.account.gate).toEqual({ state: 'deleted' });
+    expect(tablet.vault.holdsAccount(accountId)).toBe(false);
+    expect([...tablet.credentials.items.keys()].filter((key) => key.includes(accountId))).toEqual([]);
   });
 });
 
@@ -293,6 +314,9 @@ describe('cleanup', () => {
     const [exported] = await sql<{ object_path: string }[]>`select object_path from private.exports where account_id = ${accountId}`;
     const archive = exported!.object_path;
     const authUser = (await accountRow(accountId)).auth_user_id!;
+    // The account's own objects, in its folder of the private bucket.
+    const bucket = stack.rawClient(accessToken(phone)).storage.from('account-private');
+    for (const name of ['notes.txt', 'nested/more.txt']) expect((await bucket.upload(`${accountId}/${name}`, 'mine')).error).toBeNull();
     expect(Object.keys(await rowsLeft(accountId)).length).toBeGreaterThan(10);
 
     await confirmByEmail(phone, email);
@@ -313,6 +337,7 @@ describe('cleanup', () => {
     expect(await authRowsLeft(authUser)).toEqual({});
     expect(await sql`select 1 from storage.objects where bucket_id = 'account-exports' and name = ${archive}`).toHaveLength(0);
     expect(await sql`select 1 from storage.objects where name like ${`${accountId}%`}`).toHaveLength(0);
+    expect(await sql`select 1 from storage.objects where bucket_id = 'account-private' and name like ${`${accountId}/%`}`).toHaveLength(0);
     // The analytics provider was asked; its completion is its own, and never assumed.
     expect(await sql`select analytics_ids, analytics_requested_at is not null as requested, analytics_completed_at is null as pending
       from private.deletions where account_id = ${accountId}`).toEqual([{ analytics_ids: 1, requested: true, pending: true }]);
