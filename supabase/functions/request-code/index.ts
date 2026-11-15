@@ -16,6 +16,7 @@
 // account has the email-code method for it (#100). Nothing here logs an
 // address, code or token.
 
+import { withCors } from '../_shared/cors.ts';
 import { type Mail, codeMail, deliver } from '../_shared/mail.ts';
 import { clientIp } from '../_shared/service.ts';
 
@@ -37,7 +38,7 @@ const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 /** How long every admitted request takes at least; above the code path's own time with the local mail catcher. #122 tunes it against Resend. */
 const RESPONSE_FLOOR_MS = 300;
 
-Deno.serve(async (request) => {
+Deno.serve(withCors(async (request) => {
   if (request.method !== 'POST') return reply(400, { status: 'invalid' });
   let body: { email?: unknown; intent?: unknown; assertion?: unknown };
   try {
@@ -87,7 +88,7 @@ Deno.serve(async (request) => {
     logFailure(error);
     return reply(502, { status: 'failed' });
   }
-});
+}));
 
 /** Only the step that failed: never an address, code or token. */
 function logFailure(error: unknown): void {

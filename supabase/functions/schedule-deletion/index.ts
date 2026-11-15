@@ -19,6 +19,7 @@
 // Nothing here logs a token or address.
 
 import { callerOf } from '../_shared/caller.ts';
+import { withCors } from '../_shared/cors.ts';
 import { deletionScheduledMail, sendSecurityNotice } from '../_shared/mail.ts';
 import { ENVIRONMENT_HEADER, reply, serviceRpc } from '../_shared/service.ts';
 
@@ -30,7 +31,7 @@ const STATUS_CODES: Readonly<Record<string, number>> = {
   'not-signed-in': 401,
 };
 
-Deno.serve(async (request) => {
+Deno.serve(withCors(async (request) => {
   if (request.method !== 'POST') return reply(400, { status: 'invalid' });
   let body: { operationId?: unknown };
   try {
@@ -62,4 +63,4 @@ Deno.serve(async (request) => {
     console.error('schedule-deletion failed');
     return reply(502, { status: 'failed' });
   }
-});
+}));
