@@ -23,6 +23,7 @@ import {
 } from './eligibility';
 import { type BackendEnvironment, ENVIRONMENT_HEADER, type EnvironmentName, authCallbackUrl, retiredEnvironments } from './environment';
 import { type MetricsSink, createMetricsSender, discardMetrics } from './metrics';
+import { type AccountPrivacy, accountPrivacy } from './privacy';
 import { type DetailResult, type EngineStatus, type HistoryDownload, type HistoryStatus, SyncEngine } from './sync/engine';
 import { type AccountRecords, accountRecords } from './sync/records';
 import { type RecordType, prerequisitesOf, recordTypes } from './sync/registry';
@@ -300,11 +301,12 @@ export interface SyncStatus extends EngineStatus {
  * Queueing a record for upload (spec 2, *Record-type registry*): queued, with
  * its originating-device position for a per-device type; or refused, when no
  * account session is open, the type isn't registered or is server-authored
- * (no client writes it), or the payload isn't the type's.
+ * (no client writes it), the payload is online only (sent at once, never
+ * queued), or the payload isn't the type's.
  */
 export type QueueResult =
   | { readonly status: 'queued'; readonly id: string; readonly position?: number }
-  | { readonly status: 'refused'; readonly reason: 'no-account' | 'unknown-type' | 'server-authored' | 'invalid-payload' };
+  | { readonly status: 'refused'; readonly reason: 'no-account' | 'unknown-type' | 'server-authored' | 'online-only' | 'invalid-payload' };
 
 /** Synchronization for the open account session. Triggers run it by themselves; these are for asking. */
 export interface AccountSync {
@@ -482,6 +484,8 @@ export interface AccountService {
   readonly sync: AccountSync;
   /** Revisioned items, their conflicts, and lifetime totals for the open account. */
   readonly records: AccountRecords;
+  /** The account's privacy choices: analytics consent and the ad-data opt-out (#105). */
+  readonly privacy: AccountPrivacy;
   readonly freshAuthentication: FreshAuthentication;
   readonly signInMethods: SignInMethods;
 }
@@ -1262,7 +1266,7 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
     },
   };
 
-  return {
+  const service: AccountService = {
     get gate() {
       return gate;
     },
@@ -1518,6 +1522,7 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
         if (!type) return { status: 'refused', reason: 'unknown-type' };
         if (type.kind === 'server-authored-state') return { status: 'refused', reason: 'server-authored' };
         if (!type.isPayload(payload)) return { status: 'refused', reason: 'invalid-payload' };
+        if (type.onlineOnly?.(payload)) return { status: 'refused', reason: 'online-only' };
         const queued = await store.queueUpload({
           id: `${type.name}/${hex(options.randomBytes(16))}`,
           recordType: type.name,
@@ -1540,9 +1545,16 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
     },
 
     records: accountRecords(() => sync, registry),
+    privacy: accountPrivacy({
+      session: () => sync,
+      queue: (recordType, payload) => service.sync.queue(recordType, payload),
+      gate: () => gate,
+      newChoiceId: () => hex(options.randomBytes(16)),
+    }),
     freshAuthentication,
     signInMethods,
   };
+  return service;
 }
 
 function isSignInMethod(provider: string | undefined): provider is SignInMethod {

@@ -84,6 +84,16 @@ export {
   serverMetricEvents,
 } from './metrics';
 export { type CrashReport, crashReport } from './crash-report';
+export { type AccountPrivacy, type EnablingResult, type PrivacyChoices, type RestrictiveResult, productAnalyticsId } from './privacy';
+export {
+  type AcceptedPrivacyChange,
+  type AdDataOptOutSource,
+  type AnalyticsConsent,
+  type EnablingChange,
+  type PrivacyChange,
+  type RestrictiveChange,
+  privacyChoice,
+} from './privacy-record';
 export {
   BOOTSTRAP_PAGE_SIZE,
   DETAIL_PAGES_PER_RUN,
@@ -93,6 +103,7 @@ export {
   STORAGE_RESERVE_BYTES,
   type Resolution,
   type ResolutionOutcome,
+  type SubmitOutcome,
   type SyncErrorCode,
   type UpdateNotice,
   type UploadState,

@@ -30,7 +30,8 @@
 // - A revisioned item's acknowledgement records nothing as accepted: whether
 //   its upload became a revision or a proposal, the item's state arrives with
 //   the feed entry its receipt names, in the same run.
-// - Resolving a conflict needs the network: it is sent at once, never queued.
+// - Resolving a conflict needs the network: it is sent at once, never queued,
+//   as is any other online-only change (`submit`), which waits for its barriers.
 // - The reconnect order (spec 2 Amendment 1 C5): authenticate, then reconcile
 //   compatibility, access, allowance ownership and pending privacy (sharing)
 //   withdrawals, and only then send grants or contributions. A run checks the
@@ -241,6 +242,17 @@ export interface Resolution {
  */
 export type ResolutionOutcome = 'resolved' | 'conflict-changed' | 'no-conflict' | 'offline' | 'incompatible' | 'invalid';
 
+/**
+ * How a change sent at once ended. accepted / rejected: the server's receipt (with its refusal code).
+ * waiting: held, unsent, behind a pending upload of this installation. offline: no answer arrived (a retry
+ * in this account session repeats the identical request). incompatible: an update is required.
+ * invalid: not one of the type's payloads that are sent at once.
+ */
+export type SubmitOutcome =
+  | { readonly status: 'accepted' }
+  | { readonly status: 'rejected'; readonly code: string }
+  | { readonly status: 'waiting' | 'offline' | 'incompatible' | 'invalid' };
+
 export class SyncEngine {
   private running: Promise<void> | null = null;
   private rerun: ReconcileTrigger | null = null;
@@ -271,8 +283,8 @@ export class SyncEngine {
   private refreshing: Promise<void> = Promise.resolve();
   private readonly listeners = new Set<() => void>();
   private readonly unsubscribe: () => void;
-  /** Resolutions sent with no answer yet, by what they resolve: a retry repeats the same operation. */
-  private readonly unansweredResolutions = new Map<string, PreparedOperation>();
+  /** Changes sent at once with no answer yet, by what they send: a retry repeats the same operation. */
+  private readonly unanswered = new Map<string, PreparedOperation>();
   /** When this account session first saw each pending entry: the queue's age. */
   private readonly firstSeen = new Map<string, number>();
 
@@ -390,21 +402,49 @@ export class SyncEngine {
       value: resolution.value,
     };
     if (this.stopped || type?.kind !== 'revisioned-item' || !type.isPayload(payload)) return 'invalid';
-    const key = canonicalJson({ recordType, payload });
-    const operation = this.unansweredResolutions.get(key) ?? this.envelope(type, payload);
-    this.unansweredResolutions.set(key, operation);
+    const outcome = await this.sendAtOnce(type, payload);
+    if (outcome.status === 'accepted') return 'resolved';
+    if (outcome.status === 'rejected') return outcome.code === 'conflict-changed' || outcome.code === 'no-conflict' ? outcome.code : 'invalid';
+    // Nothing holds a resolution back.
+    return outcome.status === 'waiting' ? 'invalid' : outcome.status;
+  }
+
+  /**
+   * Sends one of a type's online-only payloads (`RecordType.onlineOnly`) at
+   * once, never queuing it, then reads the feed, which brings what it changed.
+   * It waits, unsent, while any pending upload it is held by (its barriers) is
+   * unacknowledged: such a change never overtakes one made before it here.
+   */
+  async submit(recordType: string, payload: unknown): Promise<SubmitOutcome> {
+    const type = this.options.registry.get(recordType);
+    if (this.stopped || !type || type.kind === 'server-authored-state' || !type.isPayload(payload) || !type.onlineOnly?.(payload)) {
+      return { status: 'invalid' };
+    }
+    const queue = await this.options.store.readUploadQueue();
+    if (queue.some((entry) => isBarrierFor(type, entry, payload))) return { status: 'waiting' };
+    return this.sendAtOnce(type, payload);
+  }
+
+  /**
+   * Sends a payload now, outside the queue. A retry of one that got no answer,
+   * in this account session, repeats the identical operation, so the server
+   * never applies it twice. After a receipt, the feed is read.
+   */
+  private async sendAtOnce(type: RecordType, payload: unknown): Promise<SubmitOutcome> {
+    const key = canonicalJson({ recordType: type.name, payload });
+    const operation = this.unanswered.get(key) ?? this.envelope(type, payload);
+    this.unanswered.set(key, operation);
     let answer: UploadAnswer;
     try {
       answer = await this.options.backend.upload(operation.request);
     } catch (caught) {
-      return caught instanceof SyncCallError && caught.kind === 'incompatible' ? 'incompatible' : 'offline';
+      return { status: caught instanceof SyncCallError && caught.kind === 'incompatible' ? 'incompatible' : 'offline' };
     }
-    this.unansweredResolutions.delete(key);
-    if (answer.status !== 'accepted' && answer.status !== 'rejected') return answer.status === 'incompatible' ? 'incompatible' : 'invalid';
-    if (answer.operation !== operation.operationId || answer.requestHash !== operation.requestHash) return 'offline';
+    this.unanswered.delete(key);
+    if (answer.status !== 'accepted' && answer.status !== 'rejected') return { status: answer.status === 'incompatible' ? 'incompatible' : 'invalid' };
+    if (answer.operation !== operation.operationId || answer.requestHash !== operation.requestHash) return { status: 'offline' };
     await this.reconcile();
-    if (answer.status === 'accepted') return 'resolved';
-    return answer.code === 'conflict-changed' || answer.code === 'no-conflict' ? answer.code : 'invalid';
+    return answer.status === 'accepted' ? { status: 'accepted' } : { status: 'rejected', code: answer.code };
   }
 
   /**
