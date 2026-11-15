@@ -86,6 +86,17 @@ describe('a sign-in code request', () => {
     ]);
   });
 
+  it('takes as long for an address with an account as for one without', async () => {
+    const known = await existingAccount('timing-known');
+    const timed = async (email: string) => {
+      const started = performance.now();
+      expect(await stack.requestCode({ email, intent: 'sign-in' })).toEqual({ status: 200, body: { status: 'sent' } });
+      return performance.now() - started;
+    };
+    // Every admitted request waits out the same floor (300 ms), above either path's own time.
+    for (const elapsed of [await timed(known), await timed(uniqueEmail('timing-unknown'))]) expect(elapsed).toBeGreaterThanOrEqual(290);
+  });
+
   it('keeps no address, IP, code or body: only hashes for limits, and the type for sends', async () => {
     expect(await stack.columns('private.code_requests')).toEqual(['id', 'address_hash', 'ip_hash', 'requested_at']);
     expect(await stack.columns('private.email_sends')).toEqual(['id', 'type', 'pacing', 'outcome', 'sent_at']);
@@ -99,6 +110,8 @@ describe('code-request limits', () => {
     const phone = device('phone');
 
     for (const email of [known, unknown]) {
+      // A fresh hour for this network, so only the address limit applies.
+      await stack.resetCodeRequests();
       const request = () => phone.account.requestEmailCode({ email, intent: 'sign-in' });
       expect(await request()).toEqual({ status: 'sent' });
       expect(await request()).toEqual({ status: 'sent' });
@@ -134,13 +147,41 @@ describe('code-request limits', () => {
     expect(await phone.mailbox.messages(email)).toHaveLength(2);
   });
 
-  it('limits one network to 30 requests an hour across addresses', async () => {
+  it('limits one network to five at once, then backs off, and at most ten an hour, across addresses', async () => {
     const phone = device('phone');
-    for (let i = 0; i < 30; i++) {
-      expect(await phone.account.requestEmailCode({ email: uniqueEmail(`ip-${i}`), intent: 'sign-in' })).toEqual({ status: 'sent' });
+    const request = (i: number) => phone.account.requestEmailCode({ email: uniqueEmail(`ip-${i}`), intent: 'sign-in' });
+    for (let i = 0; i < 5; i++) expect(await request(i)).toEqual({ status: 'sent' });
+    expect(await request(5)).toEqual({ status: 'rate-limited', retryAfterSeconds: 30 });
+
+    for (const [i, wait] of [[5, 30], [6, 60], [7, 120], [8, 240]] as const) {
+      await stack.ageCodeRequests(null, wait);
+      expect(await request(i)).toEqual({ status: 'sent' });
     }
-    const refused = await phone.account.requestEmailCode({ email: uniqueEmail('ip-31'), intent: 'sign-in' });
-    expect(refused.status).toBe('rate-limited');
+    await stack.ageCodeRequests(null, 480);
+    expect(await request(9)).toEqual({ status: 'sent' });
+    // Ten in the hour: the next waits for the oldest to leave the window.
+    await stack.ageCodeRequests(null, 960);
+    const capped = await request(10);
+    expect(capped.status).toBe('rate-limited');
+    if (capped.status !== 'rate-limited') throw new Error('unreachable');
+    expect(capped.retryAfterSeconds).toBeGreaterThan(5 * 60);
+  });
+
+  it('a second Create for an address still pending takes its own age answer, not the first one', async () => {
+    const email = uniqueEmail('pending-band');
+    const first = device('first');
+    await first.account.answerAgeQuestion('18+');
+    expect(await first.account.requestEmailCode({ email, intent: 'create' })).toEqual({ status: 'sent' });
+    const firstCode = await first.mailbox.latestCode(email);
+
+    const second = device('second');
+    await second.account.answerAgeQuestion('13-15');
+    expect(await second.account.requestEmailCode({ email, intent: 'create' })).toEqual({ status: 'sent' });
+    expect(await second.account.verifyEmailCode({ email, code: await second.mailbox.latestCode(email, { after: firstCode }) })).toEqual({
+      status: 'signed-in',
+    });
+    expect(second.account.gate).toMatchObject({ state: 'active', eligibility: '13-15' });
+    expect(await stack.accountCount(email)).toBe(1);
   });
 
   it('applies to Create too, and a resend on Create reaches the same single account', async () => {

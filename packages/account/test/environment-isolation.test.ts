@@ -102,8 +102,11 @@ describe('every request names its environment', () => {
     expect(await beta.account.requestEmailCode({ email, intent: 'create' })).toEqual({ status: 'age-required' });
     expect(await stack.authUserId(email)).toBeNull();
 
-    await beta.account.requestEmailCode({ email: known, intent: 'sign-in' });
-    expect(await beta.account.verifyEmailCode({ email: known, code: await beta.mailbox.latestCode(known) })).toEqual({ status: 'failed' });
+    // request-code refuses it: no code goes out, and the last code the address had doesn't sign it in.
+    const before = (await beta.mailbox.messages(known)).length;
+    expect(await beta.account.requestEmailCode({ email: known, intent: 'sign-in' })).toEqual({ status: 'failed' });
+    expect(await beta.mailbox.messages(known)).toHaveLength(before);
+    expect((await beta.account.verifyEmailCode({ email: known, code: await beta.mailbox.latestCode(known) })).status).not.toBe('signed-in');
     expect(beta.account.gate).toEqual({ state: 'no-account' });
     expect(beta.vault.openAccount).toBeNull();
   });
@@ -147,8 +150,9 @@ describe('production rejects beta accounts and uploads', () => {
 
     await stack.asEnvironment('production', async () => {
       const phone = device('production-phone', { environment: 'production' });
-      await phone.account.requestEmailCode({ email, intent: 'sign-in' });
-      expect(await phone.account.verifyEmailCode({ email, code: await phone.mailbox.latestCode(email) })).toEqual({ status: 'failed' });
+      // To production the address has no account: it gets the "No account" email, never a code.
+      expect(await phone.account.requestEmailCode({ email, intent: 'sign-in' })).toEqual({ status: 'sent' });
+      expect((await phone.mailbox.messages(email))[0]).toMatch(/no Tableside account for it/);
       expect(phone.account.gate).toEqual({ state: 'no-account' });
       expect(phone.vault.openAccount).toBeNull();
     });
