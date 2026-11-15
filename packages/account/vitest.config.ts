@@ -6,6 +6,8 @@ export default defineConfig({
   test: {
     include: ['test/**/*.test.ts'],
     setupFiles: ['test/setup.ts'],
+    // Waits for Realtime's broadcasts and the edge functions after a fresh stack start.
+    globalSetup: ['test/stack-ready.ts'],
     testTimeout: 30_000,
     // Scenarios share one stack; Auth's per-IP rate limits make parallel files flaky.
     fileParallelism: false,
