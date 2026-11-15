@@ -36,6 +36,36 @@ import type {
 import type { SqlConnection, SqlExecutor } from './sql';
 import { createSchema, readSchemaVersion, schemaVersionOf, STORE_MIGRATIONS, STORE_SCHEMA_VERSION, type StoreMigration } from './store-schema';
 
+// The sync engine's store port (packages/account/src/sync/store.ts), matched
+// structurally: the app doesn't depend on the Account service's package for it.
+
+/** An operation fixed for sending: the request every retry repeats, and its SHA-256. */
+export interface PreparedOperation {
+  readonly operationId: string;
+  readonly request: string;
+  readonly requestHash: string;
+}
+
+/** A receipt's disposition. */
+export type Disposition =
+  | { readonly status: 'accepted'; readonly operation: string; readonly requestHash: string; readonly sequence: number }
+  | { readonly status: 'rejected'; readonly operation: string; readonly requestHash: string; readonly code: string };
+
+export interface QueuedUpload {
+  readonly id: string;
+  readonly recordType: string;
+  readonly payload: unknown;
+  readonly dependencies: readonly string[];
+  readonly operation: PreparedOperation | null;
+}
+
+export interface AcceptedRecord {
+  readonly recordType: string;
+  readonly item: string;
+  readonly sequence: number;
+  readonly payload: unknown;
+}
+
 /** Whose database this is. */
 export interface StoreIdentity {
   readonly environment: string;
@@ -111,6 +141,8 @@ interface BodyRow {
 }
 
 export class SqliteActivityStore implements ActivityStore {
+  private readonly queuedListeners = new Set<() => void>();
+
   private constructor(
     private readonly connection: SqlConnection,
     readonly identity: StoreIdentity,
@@ -229,6 +261,7 @@ export class SqliteActivityStore implements ActivityStore {
   }
 
   complete(record: CompletedPracticeSession): Promise<CompletedPracticeSession> {
+    let queued = false;
     return this.transaction(async (tx) => {
       if (record.owner !== this.identity.accountId || record.device !== this.identity.installationId) {
         throw new StoreMismatchError(`the result of ${record.activityId} belongs to another account or installation`);
@@ -238,11 +271,16 @@ export class SqliteActivityStore implements ActivityStore {
       await writeActivity(tx, { ...activity, completion: record });
       const sync: OutgoingSyncRecord = { id: `completed/${record.activityId}`, kind: 'completed-practice-session', record };
       await tx.run(
-        `INSERT INTO outgoing (id, activity_id, position, ${BODY})
-         VALUES (?, ?, (SELECT coalesce(max(position), 0) + 1 FROM outgoing), ?, ?, ?, ?)`,
+        `INSERT INTO outgoing (id, activity_id, position, ${BODY}, dependencies, status)
+         VALUES (?, ?, (SELECT coalesce(max(position), 0) + 1 FROM outgoing), ?, ?, ?, ?, '[]', 'pending')`,
         [sync.id, record.activityId, ...encode(sync)],
       );
+      queued = true;
       return decodeText<CompletedPracticeSession>(encode(record)[0]);
+    }).then((result) => {
+      // After the commit: the upload queue gained an entry.
+      if (queued) this.notifyQueued();
+      return result;
     });
   }
 
@@ -262,6 +300,99 @@ export class SqliteActivityStore implements ActivityStore {
     );
   }
 
+  // -------------------------------------------------------------------------
+  // The sync engine's store port
+  // -------------------------------------------------------------------------
+
+  /** Unacknowledged upload queue entries, in queue order. */
+  readUploadQueue(): Promise<readonly QueuedUpload[]> {
+    return this.transaction(async (tx) => {
+      const rows = await tx.all<BodyRow & QueueRow>(
+        `SELECT ${BODY}, id, dependencies, operation_id, request, request_sha256 FROM outgoing WHERE status = 'pending' ORDER BY position`,
+      );
+      return rows.map((row) => {
+        const outgoing = decode<OutgoingSyncRecord>(row);
+        return {
+          id: row.id,
+          recordType: outgoing.kind,
+          payload: outgoing.record,
+          dependencies: JSON.parse(row.dependencies) as string[],
+          operation: preparedOf(row),
+        };
+      });
+    });
+  }
+
+  /** Fixes the operation an entry is sent as; once stored it never changes, and the stored one is returned. */
+  prepareUpload(id: string, operation: PreparedOperation): Promise<PreparedOperation> {
+    return this.transaction(async (tx) => {
+      const row = await tx.get<QueueRow>('SELECT id, dependencies, operation_id, request, request_sha256 FROM outgoing WHERE id = ?', [id]);
+      if (!row) throw new StoreError(`no upload ${id}`);
+      const stored = preparedOf(row);
+      if (stored) return stored;
+      if (sha256Hex(operation.request) !== operation.requestHash) throw new StoreError('the operation\'s request hash does not match its request');
+      await tx.run('UPDATE outgoing SET operation_id = ?, request = ?, request_sha256 = ? WHERE id = ?', [
+        operation.operationId,
+        operation.request,
+        operation.requestHash,
+        id,
+      ]);
+      return operation;
+    });
+  }
+
+  /** Records the receipt's disposition and acknowledges the entry, with the record an acceptance makes, in one transaction. */
+  acknowledgeUpload(id: string, disposition: Disposition, accepted: AcceptedRecord | null): Promise<void> {
+    return this.transaction(async (tx) => {
+      const row = await tx.get<{ status: string; operation_id: string | null }>('SELECT status, operation_id FROM outgoing WHERE id = ?', [id]);
+      if (!row) throw new StoreError(`no upload ${id}`);
+      if (row.operation_id === null || row.operation_id !== disposition.operation) {
+        throw new StoreError(`upload ${id} was not sent as operation ${disposition.operation}`);
+      }
+      if (row.status !== 'pending') return;
+      await tx.run('UPDATE outgoing SET status = ?, receipt = ? WHERE id = ?', [disposition.status, canonicalJson(disposition), id]);
+      if (accepted) await putAccepted(tx, accepted);
+    });
+  }
+
+  readFeedCursor(): Promise<number> {
+    return this.transaction(readCursor);
+  }
+
+  /** Applies records that follow `from` without a gap and moves the cursor to the last, in one transaction; false when the cursor moved. */
+  applyFeedPage(from: number, records: readonly AcceptedRecord[]): Promise<boolean> {
+    return this.transaction(async (tx) => {
+      if ((await readCursor(tx)) !== from) return false;
+      for (const [index, record] of records.entries()) {
+        if (record.sequence !== from + index + 1) throw new StoreError(`feed entry ${record.sequence} does not follow ${from + index}`);
+        await putAccepted(tx, record);
+      }
+      if (records.length > 0) await tx.run('UPDATE feed_cursor SET sequence = ? WHERE singleton = 1', [from + records.length]);
+      return true;
+    });
+  }
+
+  readAcceptedRecords(recordType: string): Promise<readonly AcceptedRecord[]> {
+    return this.transaction(async (tx) =>
+      (
+        await tx.all<BodyRow & { item_id: string; sequence: number }>(
+          `SELECT ${BODY}, item_id, sequence FROM accepted_records WHERE record_type = ? ORDER BY sequence`,
+          [recordType],
+        )
+      ).map((row) => ({ recordType, item: row.item_id, sequence: row.sequence, payload: decode<unknown>(row) })),
+    );
+  }
+
+  /** Called after a commit adds an entry to the upload queue. */
+  onUploadQueued(listener: () => void): () => void {
+    this.queuedListeners.add(listener);
+    return () => this.queuedListeners.delete(listener);
+  }
+
+  private notifyQueued(): void {
+    for (const listener of this.queuedListeners) listener();
+  }
+
   private transaction<T>(work: (tx: SqlExecutor) => Promise<T>): Promise<T> {
     // Checked before queuing (the session's connection may be closed already), when the transaction starts, and before it commits.
     if (!this.isCurrent()) return Promise.reject(new StaleSessionError());
@@ -273,6 +404,36 @@ export class SqliteActivityStore implements ActivityStore {
       return result;
     });
   }
+}
+
+interface QueueRow {
+  readonly id: string;
+  readonly dependencies: string;
+  readonly operation_id: string | null;
+  readonly request: string | null;
+  readonly request_sha256: string | null;
+}
+
+/** The stored operation, checked against its hash like every stored value. */
+function preparedOf(row: QueueRow): PreparedOperation | null {
+  if (row.operation_id === null || row.request === null || row.request_sha256 === null) return null;
+  if (sha256Hex(row.request) !== row.request_sha256) throw new StoreIntegrityError('a stored upload request fails its hash');
+  return { operationId: row.operation_id, request: row.request, requestHash: row.request_sha256 };
+}
+
+async function readCursor(tx: SqlExecutor): Promise<number> {
+  const row = await tx.get<{ sequence: number }>('SELECT sequence FROM feed_cursor WHERE singleton = 1');
+  if (!row) throw new StoreIntegrityError('the feed cursor is missing');
+  return row.sequence;
+}
+
+async function putAccepted(tx: SqlExecutor, record: AcceptedRecord): Promise<void> {
+  await tx.run(
+    `INSERT INTO accepted_records (record_type, item_id, sequence, ${BODY}) VALUES (?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT (record_type, item_id) DO UPDATE SET sequence = excluded.sequence, body = excluded.body,
+       body_format = excluded.body_format, body_length = excluded.body_length, body_sha256 = excluded.body_sha256`,
+    [record.recordType, record.item, record.sequence, ...encode(record.payload)],
+  );
 }
 
 const statusOf = (activity: StoredActivity) => (activity.completion ? 'completed' : activity.incomplete ? 'incomplete' : 'unfinished');

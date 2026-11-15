@@ -4,7 +4,8 @@
 // then opened by this build and by a build two releases later (both skipped).
 // Each time every stored value reads back exactly as recorded, and the
 // unfinished practice session resumes and ends with the engine recording's
-// final cash-out.
+// final cash-out, and the sync state (upload queue, receipts, accepted
+// records, feed cursor) is as it was.
 
 import { createHash } from 'node:crypto';
 import { readdirSync, readFileSync } from 'node:fs';
@@ -70,6 +71,22 @@ describe('a recorded database', () => {
     }
     expect(await store.readOutgoing()).toEqual(stored(database, 'outgoing'));
     expect((await store.findUnfinished())?.activityId ?? null).toBe(database.unfinished?.activityId ?? null);
+
+    // Sync state (#91): uploads still awaiting a receipt keep the exact operation they were sent as, and the
+    // accepted records and feed cursor are as they were, so nothing is resent differently or fetched twice.
+    const rows = (table: string) => database.rows[table] ?? [];
+    expect((await store.readUploadQueue()).map(({ id, operation }) => ({ id, operation }))).toEqual(
+      rows('outgoing')
+        .filter((row) => row.status === 'pending')
+        .map((row) => ({
+          id: row.id,
+          operation: row.operation_id === null ? null : { operationId: row.operation_id, request: row.request, requestHash: row.request_sha256 },
+        })),
+    );
+    expect(await store.readAcceptedRecords('completed-practice-session')).toEqual(
+      rows('accepted_records').map((row) => ({ recordType: row.record_type, item: row.item_id, sequence: row.sequence, payload: JSON.parse(row.body as string) })),
+    );
+    expect(await store.readFeedCursor()).toBe(rows('feed_cursor')[0]?.sequence);
   });
 
   it.each(cases.filter(([, , database]) => database.unfinished))('resumes its unfinished practice session after the upgrade (%s) and ends with the recorded result', async (_, recording, database, migrations) => {

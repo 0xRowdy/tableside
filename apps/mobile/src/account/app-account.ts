@@ -3,12 +3,14 @@
 // the account. App tests replace this module with fakes (jest.setup.ts).
 
 import { createAccountService, type AccountService, type AccountVault, type CredentialStorage } from '@tableside/account';
+import * as Crypto from 'expo-crypto';
 import * as SecureStore from 'expo-secure-store';
 
 import { findGame, type GameId } from '@/games';
 import type { PracticeAdapters } from '@/practice/adapters';
 
 import { buildBackend } from './backend';
+import { appDevicePorts } from './device-ports';
 import { createNativeVault, KEYCHAIN_OPTIONS } from './native-vault';
 import { forAccountSession } from './practice';
 import type { AccountSession } from './vault';
@@ -48,7 +50,7 @@ export function createAppAccount(): AppAccount {
       // A superseded open leaves the newer one's session alone.
       if (opening.status === 'open') session = opening.session;
       else if (opening.status !== 'superseded') session = null;
-      return { status: opening.status };
+      return opening;
     },
     async close() {
       session = null;
@@ -62,6 +64,8 @@ export function createAppAccount(): AppAccount {
     credentials: secureCredentials,
     vault: port,
     clock: () => Date.now(),
+    device: appDevicePorts,
+    randomBytes: (count) => Crypto.getRandomValues(new Uint8Array(count)),
   });
   const offlineGameKey = (accountId: string) => `tableside.${backend.name}.${accountId}.offline-game`;
   return {

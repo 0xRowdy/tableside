@@ -127,7 +127,7 @@ describe('Sign in', () => {
 
     expect(await screen.findByTestId('tab-bar')).toBeOnTheScreen();
     expect(account().offlineGames.get(FAKE_ACCOUNT_ID)).toBe('roulette');
-    expect(service().calls.map((call) => call.method)).toEqual(['restore', 'requestEmailCode', 'verifyEmailCode']);
+    expect(service().calls.map((call) => call.method)).toEqual(['resume', 'requestEmailCode', 'verifyEmailCode']);
     expect(service().calls[1]).toEqual({ method: 'requestEmailCode', email: EMAIL, intent: 'sign-in' });
   });
 
@@ -253,7 +253,7 @@ describe('Create', () => {
     expect(screen.queryAllByRole('button')).toEqual([]);
     expect(screen.queryByLabelText('Email address')).toBeNull();
     noTabBar();
-    expect(service().calls.map((call) => call.method)).toEqual(['restore', 'answerAgeQuestion']);
+    expect(service().calls.map((call) => call.method)).toEqual(['resume', 'answerAgeQuestion']);
     expect(service().gate).toEqual({ state: 'no-account' });
   });
 
@@ -280,7 +280,7 @@ describe('reopening', () => {
     await openApp();
 
     expect(await screen.findByTestId('tab-bar')).toBeOnTheScreen();
-    expect(service().calls.map((call) => call.method)).toEqual(['restore']);
+    expect(service().calls.map((call) => call.method)).toEqual(['resume']);
   });
 
   it('keeps access while the token renews (Renewal pending), and tries to renew', async () => {

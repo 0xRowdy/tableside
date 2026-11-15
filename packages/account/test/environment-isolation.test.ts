@@ -219,7 +219,7 @@ describe('a production build installed over a beta build', () => {
     const logBefore = tester.credentials.log.length;
 
     const production = device('tester', { environment: 'production', installedOver: tester });
-    await production.account.restore();
+    expect(await production.account.resume()).toEqual({ status: 'no-account' });
 
     expect(production.account.gate).toEqual({ state: 'no-account' });
     expect(production.vault.removed).toEqual(['beta']);

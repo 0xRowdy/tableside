@@ -4,6 +4,7 @@
 import type {
   AccountGate,
   AccountService,
+  AccountSync,
   AgeAnswerResult,
   AgeRange,
   CodeIntent,
@@ -21,7 +22,7 @@ type Call =
   | { readonly method: 'answerAgeQuestion'; readonly range: AgeRange }
   | { readonly method: 'requestEmailCode'; readonly email: string; readonly intent: CodeIntent }
   | { readonly method: 'verifyEmailCode'; readonly email: string; readonly code: string }
-  | { readonly method: 'restore' | 'renew' };
+  | { readonly method: 'resume' | 'renew' };
 
 /** An Account service whose answers a test scripts. Unscripted calls succeed. */
 export class FakeAccountService implements AccountService {
@@ -36,7 +37,7 @@ export class FakeAccountService implements AccountService {
   } = { age: [], code: [], verify: [] };
 
   constructor(
-    /** The gate restore() reopens into: what this installation was signed in to. */
+    /** The gate resume() reopens into: what this installation was signed in to. */
     private readonly stored: AccountGate = { state: 'no-account' },
   ) {}
 
@@ -57,10 +58,19 @@ export class FakeAccountService implements AccountService {
     for (const listener of this.listeners) listener(gate);
   }
 
-  async restore() {
-    this.calls.push({ method: 'restore' });
-    if (this.stored.state !== 'no-account') this.setGate(this.stored);
+  async resume() {
+    this.calls.push({ method: 'resume' });
+    if (this.stored.state === 'no-account') return { status: 'no-account' as const };
+    this.setGate(this.stored);
+    return { status: 'resumed' as const };
   }
+
+  /** No synchronization runs in screen tests. */
+  readonly sync: AccountSync = {
+    status: { live: false, error: null },
+    reconcile: async () => undefined,
+    idle: async () => undefined,
+  };
 
   async renew() {
     this.calls.push({ method: 'renew' });

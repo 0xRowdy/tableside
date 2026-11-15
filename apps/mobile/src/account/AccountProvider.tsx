@@ -38,7 +38,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let live = true;
     const restore = () =>
-      service.restore().then(
+      service.resume().then(
         () => live && setReady(true),
         // A locked keychain: the next foreground tries again.
         () => undefined,

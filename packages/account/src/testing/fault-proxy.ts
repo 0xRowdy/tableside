@@ -1,6 +1,7 @@
 // The fault-injection proxy between a simulated device and the stack. It is
 // the device's whole network: connectivity, dropped, delayed and duplicated
-// exchanges are injected here, never by stubbing the Account service.
+// exchanges, and refused live connections are injected here, never by
+// stubbing the Account service.
 
 /** Text a request's URL contains, such as a path. */
 type UrlFragment = string;
@@ -18,17 +19,50 @@ export interface HeldResponse {
 }
 
 export class FaultProxy {
-  /** While false, every request fails before reaching the stack. */
-  online = true;
   /** Requests that reached the stack (a duplicated request counts twice). */
   requests = 0;
   /** Every request the device sent, in order, with its headers. */
   readonly sent: { readonly url: string; readonly headers: Headers }[] = [];
   /** Called as each request leaves the device, before it reaches the stack. */
   onRequest: ((url: string) => void) | null = null;
+  /** While true, live (WebSocket) connections are refused, as at a capacity limit. */
+  refuseLive = false;
+  private connected = true;
   private readonly faults: Fault[] = [];
+  private readonly onlineListeners = new Set<(online: boolean) => void>();
+  private readonly sockets = new Set<WebSocket>();
 
   constructor(private readonly upstream: typeof fetch = globalThis.fetch) {}
+
+  /** While false, every request fails before reaching the stack and live connections drop. */
+  get online(): boolean {
+    return this.connected;
+  }
+
+  set online(online: boolean) {
+    if (online === this.connected) return;
+    this.connected = online;
+    if (!online) for (const socket of this.sockets) socket.close();
+    for (const listener of this.onlineListeners) listener(online);
+  }
+
+  /** The device's connectivity, as the operating system reports it. Returns an unsubscribe function. */
+  onOnlineChange(listener: (online: boolean) => void): () => void {
+    this.onlineListeners.add(listener);
+    return () => this.onlineListeners.delete(listener);
+  }
+
+  /** Live connections open now. */
+  get openSockets(): number {
+    return [...this.sockets].filter((socket) => socket.readyState === WebSocket.OPEN).length;
+  }
+
+  /** The device's WebSocket: offline or refused, it connects nowhere. */
+  readonly WebSocket: typeof WebSocket = proxiedWebSocket(
+    () => this.connected && !this.refuseLive,
+    (socket) => this.sockets.add(socket),
+    (socket) => this.sockets.delete(socket),
+  );
 
   /** The next matching request reaches the stack, but its response is lost. */
   dropNextResponse(match: UrlFragment = ''): void {
@@ -54,7 +88,7 @@ export class FaultProxy {
     const url = input instanceof Request ? input.url : String(input);
     this.sent.push({ url, headers: new Headers(input instanceof Request ? input.headers : init?.headers) });
     this.onRequest?.(url);
-    if (!this.online) throw new TypeError('Network request failed (offline)');
+    if (!this.connected) throw new TypeError('Network request failed (offline)');
     const at = this.faults.findIndex((fault) => url.includes(fault.match));
     const fault = at < 0 ? undefined : this.faults.splice(at, 1)[0];
     // A body can be read once; keep it so a duplicate can resend it.
@@ -75,6 +109,17 @@ export class FaultProxy {
         return response;
       default:
         return response;
+    }
+  };
+}
+
+function proxiedWebSocket(reachable: () => boolean, opened: (socket: WebSocket) => void, closed: (socket: WebSocket) => void): typeof WebSocket {
+  return class ProxiedWebSocket extends WebSocket {
+    constructor(url: string | URL, protocols?: string | string[]) {
+      // Port 9 (discard) refuses the connection at once.
+      super(reachable() ? url : 'ws://127.0.0.1:9', protocols);
+      opened(this);
+      this.addEventListener('close', () => closed(this));
     }
   };
 }
