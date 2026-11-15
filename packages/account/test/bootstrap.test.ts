@@ -213,7 +213,8 @@ describe('a snapshot holds', () => {
     expect(await payloads(tablet, testExperimentAssignment.name)).toEqual([{ version: 1, experiment: 'pricing', group: 'b' }]);
     expect(await payloads(tablet, testResult.name)).toEqual([]);
     expect((await tablet.account.records.totals()).account).toEqual((await serverTotals(phone)).totals);
-  });
+    // Three devices and a dozen runs: headroom for a stack that has just started.
+  }, 60_000);
 });
 
 describe('paging a snapshot', () => {
