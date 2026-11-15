@@ -1,8 +1,8 @@
 // The record-type registry (spec 2, *Record-type registry*): how a kind of
 // record syncs. Each type registers its identity scheme, kind, payload schema
 // and version, barriers, server acceptance operation, contribution, export
-// rendering and deletion coverage; the platform supplies receipts, ordering and
-// the feed for every registered type. The server half is `private.record_types`
+// rendering and deletion coverage; the platform supplies receipts, ordering,
+// chunking and the feed for every registered type. The server half is `private.record_types`
 // (supabase/migrations): each registration here names the acceptance operation
 // registered there for the same type and payload version.
 
@@ -51,9 +51,16 @@ export interface RecordType<Payload = unknown> {
 
 /**
  * The platform's own per-account tables, whatever types are registered: the
- * synchronization head and the live claim. Account deletion clears these too.
+ * synchronization head, the live claim, receipts, the feed and staged chunks.
+ * Account deletion clears these too.
  */
-export const PLATFORM_TABLES: readonly string[] = ['private.sync_heads', 'private.realtime_claims', 'private.sync_receipts', 'private.sync_feed'];
+export const PLATFORM_TABLES: readonly string[] = [
+  'private.sync_heads',
+  'private.realtime_claims',
+  'private.sync_receipts',
+  'private.sync_feed',
+  'private.staged_chunks',
+];
 
 /** Canonical money text (spec 1's encoding). */
 function isMoney(value: unknown): value is string {
