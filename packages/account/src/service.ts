@@ -4,7 +4,7 @@
 
 import { type SupabaseClient, createClient } from '@supabase/supabase-js';
 
-import { type BackendEnvironment, ENVIRONMENT_HEADER, type EnvironmentName, retiredEnvironments } from './environment';
+import { type BackendEnvironment, ENVIRONMENT_HEADER, type EnvironmentName, authCallbackUrl, retiredEnvironments } from './environment';
 import { type EngineStatus, SyncEngine } from './sync/engine';
 import { type AccountRecords, accountRecords } from './sync/records';
 import { type RecordType, recordTypes } from './sync/registry';
@@ -77,6 +77,57 @@ export type CodeVerificationResult =
   | { readonly status: 'signed-in' }
   | { readonly status: 'invalid-code' }
   | { readonly status: 'failed' };
+
+/** The identity providers a player can sign in or create an account with. */
+export type IdentityProvider = 'apple' | 'google';
+
+export type ProviderSignInResult =
+  | { readonly status: 'signed-in' }
+  /** The identity has no account, and none was created: offer Create, which asks for age first. */
+  | { readonly status: 'no-account' }
+  /** The player closed the provider's sheet or page. */
+  | { readonly status: 'cancelled' }
+  | { readonly status: 'failed' };
+
+export type ProviderCreateResult =
+  /** A new, empty account for this identity. */
+  | { readonly status: 'created' }
+  /** The identity already had an account (Auth returned it), so this signed in to it; nothing was created. */
+  | { readonly status: 'signed-in' }
+  /** No current age answer: run the age step first. */
+  | { readonly status: 'age-required' }
+  | { readonly status: 'cancelled' }
+  | { readonly status: 'failed' };
+
+/** What a provider's native sheet answered: an ID token whose nonce claim is the hashed nonce it was given. */
+export type ProviderToken = { readonly status: 'token'; readonly idToken: string } | { readonly status: 'cancelled' } | { readonly status: 'failed' };
+
+/** What the system browser's sign-in session ended with: the app's callback URL, or the player closing it. */
+export type AuthSessionResult = { readonly status: 'returned'; readonly url: string } | { readonly status: 'cancelled' };
+
+/**
+ * The device's Apple and Google sign-in (native modules in the app). Apple is
+ * native on iOS and goes through the secure system browser on Android; Google
+ * is native on both. Every route ends in a provider ID token.
+ */
+export interface ProviderPorts {
+  /** How this platform signs in with each provider. */
+  readonly route: Readonly<Record<IdentityProvider, 'native' | 'browser' | 'unavailable'>>;
+  /** Opens the provider's native sheet, asking for an ID token carrying `hashedNonce`. */
+  nativeIdToken(provider: IdentityProvider, request: { readonly hashedNonce: string }): Promise<ProviderToken>;
+  /** Opens `url` in the secure system browser (ASWebAuthenticationSession, Custom Tabs) until it redirects to `callbackUrl`. */
+  openAuthSession(url: string, callbackUrl: string): Promise<AuthSessionResult>;
+  /** SHA-256 of `text`, as lowercase hex. */
+  sha256Hex(text: string): Promise<string>;
+}
+
+export interface ProviderSettings {
+  readonly ports: ProviderPorts;
+  /** How Auth names each provider, when not its own name (a local stack's test identity provider stands in for both). */
+  readonly authName?: Partial<Record<IdentityProvider, string>>;
+  /** Apple's web authorization, for the browser route: its endpoint and the app's Services ID. */
+  readonly appleWeb?: { readonly authorizeUrl: string; readonly clientId: string };
+}
 
 /** Where refresh credentials live: SecureStore on a device. */
 export interface CredentialStorage {
@@ -167,6 +218,8 @@ export interface AccountServiceOptions {
   readonly localeCurrency: () => string | null;
   /** The device's WebSocket, for the live connection. */
   readonly webSocket?: typeof WebSocket;
+  /** Apple and Google sign-in. Without it, only email codes work. */
+  readonly providers?: ProviderSettings;
   /** The registered record types: this build's own by default; seam 2 adds its test-only types. */
   readonly recordTypes?: ReadonlyMap<string, RecordType>;
 }
@@ -194,6 +247,21 @@ export interface AccountService {
    * #90's restricted gate states, so until then the sign-in fails.
    */
   verifyEmailCode(request: { readonly email: string; readonly code: string }): Promise<CodeVerificationResult>;
+  /**
+   * Sign in with Apple or Google. Never creates an account: an identity with
+   * no account answers No account, leaving no Auth user, and is held briefly
+   * so Create can use it without asking the provider again.
+   */
+  signInWithProvider(provider: IdentityProvider): Promise<ProviderSignInResult>;
+  /**
+   * Create with Apple or Google, after the age step: binds the eligibility
+   * assertion to the provider identity, so Auth creates that identity's user
+   * with it. It asks the provider who the player is, unless `sameIdentity`:
+   * Create from "No account for this Apple ID / Google account" uses the
+   * identity that Sign in just found. An identity that already has an account
+   * signs in to it.
+   */
+  createWithProvider(provider: IdentityProvider, options?: { readonly sameIdentity?: boolean }): Promise<ProviderCreateResult>;
   /**
    * The app starting again: reopens the account this installation was signed
    * in to from its stored credentials, without the network. The gate becomes
@@ -243,6 +311,16 @@ interface RememberedAccount {
   readonly currency: string | null;
   readonly signedOut: boolean;
 }
+
+/** Who the provider says the player is: an ID token minted for `nonce` (whose hash is its nonce claim). Memory only. */
+interface ProviderCredential {
+  readonly provider: IdentityProvider;
+  readonly idToken: string;
+  readonly nonce: string;
+}
+
+/** How long a Sign in that found no account is held for Create: well inside an Apple ID token's ten minutes. */
+const HELD_CREDENTIAL_MS = 5 * 60_000;
 
 interface Assertion {
   readonly token: string;
@@ -381,6 +459,121 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
 
   const currentAssertion = () => (assertion && assertion.expiresAt > options.clock() ? assertion : null);
 
+  /**
+   * After Auth signed in: opens the account when it is active with an
+   * established 13+ band. Other eligibility states are #90's restricted gate
+   * states, so until then the sign-in is undone and fails.
+   */
+  const finishSignIn = async (supabase: SupabaseClient): Promise<boolean> => {
+    const { data, error } = await supabase.rpc('current_account');
+    const account = data as { account_id: string; eligibility: string | null; currency?: unknown } | null;
+    if (error || !account || !isEligible(account.eligibility)) {
+      await supabase.auth.signOut({ scope: 'local' });
+      return false;
+    }
+    assertion = null;
+    heldCredential = null;
+    const remembered: RememberedAccount = {
+      accountId: account.account_id,
+      eligibility: account.eligibility,
+      currency: isCurrency(account.currency) ? account.currency : null,
+      signedOut: false,
+    };
+    await writeCredentials(() => remember(remembered));
+    await openAccount(remembered);
+    return true;
+  };
+
+  /** A Sign in that found no account, kept in memory only so Create can use it without asking the provider again. */
+  let heldCredential: (ProviderCredential & { readonly until: number }) | null = null;
+
+  /**
+   * Asks the provider who the player is, ending in an ID token minted for a
+   * fresh nonce: from the native sheet, or from Apple's web page in the
+   * system browser.
+   */
+  const obtainCredential = async (provider: IdentityProvider): Promise<ProviderCredential | 'cancelled' | 'failed'> => {
+    const settings = options.providers;
+    const route = settings?.ports.route[provider] ?? 'unavailable';
+    if (!settings || route === 'unavailable') return 'failed';
+    const { ports } = settings;
+    const nonce = hex(options.randomBytes(32));
+    const hashedNonce = await ports.sha256Hex(nonce);
+    if (route === 'native') {
+      const answer = await ports.nativeIdToken(provider, { hashedNonce });
+      return answer.status === 'token' ? { provider, idToken: answer.idToken, nonce } : answer.status;
+    }
+    return browserCredential(provider, settings, nonce, hashedNonce);
+  };
+
+  /**
+   * Apple's web flow, for Android. Apple posts its answer to the
+   * provider-callback function, which keeps the ID token under the flow's
+   * challenge and sends the browser back to this environment's callback URL
+   * with only the state. The token is redeemed with the verifier, which never
+   * leaves this device until then, so only the request that started the flow
+   * can collect it, and no token appears in any URL.
+   */
+  const browserCredential = async (
+    provider: IdentityProvider,
+    { ports, appleWeb }: ProviderSettings,
+    nonce: string,
+    hashedNonce: string,
+  ): Promise<ProviderCredential | 'cancelled' | 'failed'> => {
+    if (!appleWeb) return 'failed';
+    const verifier = hex(options.randomBytes(32));
+    const state = `${backend.name}~${await ports.sha256Hex(verifier)}`;
+    const callbackUrl = authCallbackUrl(backend.name);
+    const authorize = `${appleWeb.authorizeUrl}?${queryString({
+      client_id: appleWeb.clientId,
+      redirect_uri: `${backend.url}/functions/v1/provider-callback?provider=${encodeURIComponent(authName(provider))}`,
+      response_type: 'code id_token',
+      response_mode: 'form_post',
+      scope: 'email',
+      state,
+      nonce: hashedNonce,
+    })}`;
+    await connect();
+    const session = await ports.openAuthSession(authorize, callbackUrl);
+    if (session.status === 'cancelled') return 'cancelled';
+    // Only this environment's callback, answering this flow.
+    const [returnedTo, returnedQuery = ''] = session.url.split('?', 2);
+    const returned = parseQuery(returnedQuery);
+    if (returnedTo !== callbackUrl || returned.state !== state) return 'failed';
+    if (returned.error) return returned.error === 'cancelled' ? 'cancelled' : 'failed';
+    const supabase = await connect();
+    const { data, error } = await supabase.rpc('redeem_provider_flow', { verifier });
+    return !error && typeof data === 'string' && data ? { provider, idToken: data, nonce } : 'failed';
+  };
+
+  /** Binds the age step's assertion to the credential's identity (bind-provider-assertion). */
+  const bindAssertion = async (
+    credential: ProviderCredential,
+    ageAssertion: Assertion,
+  ): Promise<'bound' | 'existing' | 'age-required' | 'invalid-token' | 'failed'> => {
+    const response = await post('/functions/v1/bind-provider-assertion', {
+      provider: authName(credential.provider),
+      idToken: credential.idToken,
+      nonce: credential.nonce,
+      assertion: ageAssertion.token,
+    });
+    const status = ((await response.json().catch(() => null)) as { status?: string } | null)?.status;
+    if (response.ok && (status === 'bound' || status === 'existing')) return status;
+    if (response.status === 403 && status === 'age-required') return status;
+    if (response.status === 401 && status === 'invalid-token') return status;
+    return 'failed';
+  };
+
+  const authName = (provider: IdentityProvider): string => options.providers?.authName?.[provider] ?? provider;
+
+  /** Signs in to Auth with a provider credential; Auth checks its issuer, audience, signature, expiry and nonce. */
+  const signInWithIdToken = async (supabase: SupabaseClient, credential: ProviderCredential) => {
+    const { error } = await supabase.auth.signInWithIdToken({ provider: authName(credential.provider), token: credential.idToken, nonce: credential.nonce });
+    if (!error) return 'signed-in' as const;
+    // The before-user-created hook refused a new Auth user: nobody has this identity.
+    return /eligibility_assertion_required/.test(error.message) ? ('no-account' as const) : ('failed' as const);
+  };
+
   const storedSession = async (): Promise<StoredSession | null> => {
     const parsed = parseJson(await credentials.getItem(credentialsKey(backend.name))) as Partial<StoredSession> | null;
     return parsed && typeof parsed.refresh_token === 'string' && typeof parsed.expires_at === 'number' ? (parsed as StoredSession) : null;
@@ -447,7 +640,11 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
 
     async answerAgeQuestion(range) {
       assertion = null;
-      if (range === 'under-13') return { status: 'ineligible' };
+      if (range === 'under-13') {
+        // Nothing about an under-13 player is kept, not even who a provider said they were.
+        heldCredential = null;
+        return { status: 'ineligible' };
+      }
       try {
         const supabase = await connect();
         // The device locale's currency rides with the age answer, so whichever way the account is created, it starts with it.
@@ -484,22 +681,63 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
         const supabase = await connect();
         const { error } = await supabase.auth.verifyOtp({ email, token: code, type: 'email' });
         if (error) return { status: error.code === 'otp_expired' ? 'invalid-code' : 'failed' };
-        const { data, error: accountError } = await supabase.rpc('current_account');
-        const account = data as { account_id: string; eligibility: string | null; currency?: unknown } | null;
-        if (accountError || !account || !isEligible(account.eligibility)) {
-          await supabase.auth.signOut({ scope: 'local' });
-          return { status: 'failed' };
+        return (await finishSignIn(supabase)) ? { status: 'signed-in' } : { status: 'failed' };
+      } catch {
+        return { status: 'failed' };
+      }
+    },
+
+    async signInWithProvider(provider) {
+      heldCredential = null;
+      try {
+        const credential = await obtainCredential(provider);
+        if (typeof credential === 'string') return { status: credential };
+        const supabase = await connect();
+        const outcome = await signInWithIdToken(supabase, credential);
+        if (outcome === 'no-account') {
+          heldCredential = { ...credential, until: options.clock() + HELD_CREDENTIAL_MS };
+          return { status: 'no-account' };
         }
-        assertion = null;
-        const remembered: RememberedAccount = {
-          accountId: account.account_id,
-          eligibility: account.eligibility,
-          currency: isCurrency(account.currency) ? account.currency : null,
-          signedOut: false,
-        };
-        await writeCredentials(() => remember(remembered));
-        await openAccount(remembered);
-        return { status: 'signed-in' };
+        if (outcome === 'failed') return { status: 'failed' };
+        return (await finishSignIn(supabase)) ? { status: 'signed-in' } : { status: 'failed' };
+      } catch {
+        return { status: 'failed' };
+      }
+    },
+
+    async createWithProvider(provider, { sameIdentity = false } = {}) {
+      const kept = sameIdentity && heldCredential?.provider === provider && heldCredential.until > options.clock() ? heldCredential : null;
+      heldCredential = null;
+      const ageAssertion = currentAssertion();
+      if (!ageAssertion) return { status: 'age-required' };
+      try {
+        let credential = kept ?? (await obtainCredential(provider));
+        if (typeof credential === 'string') return { status: credential };
+        let bound = await bindAssertion(credential, ageAssertion);
+        // The token Sign in found has expired since: ask the provider again, once.
+        if (bound === 'invalid-token' && kept) {
+          credential = await obtainCredential(provider);
+          if (typeof credential === 'string') return { status: credential };
+          bound = await bindAssertion(credential, ageAssertion);
+        }
+        if (bound === 'age-required') {
+          assertion = null;
+          return { status: 'age-required' };
+        }
+        if (bound !== 'bound' && bound !== 'existing') return { status: 'failed' };
+        const supabase = await connect();
+        const signedIn = await signInWithIdToken(supabase, credential);
+        if (signedIn === 'no-account') {
+          // The assertion ran out between binding and Auth creating the user.
+          assertion = null;
+          return { status: 'age-required' };
+        }
+        if (signedIn === 'failed') return { status: 'failed' };
+        // Whether Auth made a user with this assertion, or returned one that already
+        // existed (verified same-email linking): the server knows, never an email comparison.
+        const created = (await supabase.rpc('account_created_by', { assertion: ageAssertion.token })).data === true;
+        if (!(await finishSignIn(supabase))) return { status: 'failed' };
+        return { status: created ? 'created' : 'signed-in' };
       } catch {
         return { status: 'failed' };
       }
@@ -669,6 +907,27 @@ function parseJson(text: string | null): unknown {
   } catch {
     return null;
   }
+}
+
+/** A query string, without the leading "?". (Hermes has no full URL implementation, so URLs are built by hand.) */
+function queryString(params: Record<string, string>): string {
+  return Object.entries(params)
+    .map(([name, value]) => `${encodeURIComponent(name)}=${encodeURIComponent(value)}`)
+    .join('&');
+}
+
+function parseQuery(query: string): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const pair of query.split('&')) {
+    if (!pair) continue;
+    const [name = '', value = ''] = pair.split('=', 2);
+    try {
+      out[decodeURIComponent(name.replace(/\+/g, ' '))] = decodeURIComponent(value.replace(/\+/g, ' '));
+    } catch {
+      // A malformed pair says nothing.
+    }
+  }
+  return out;
 }
 
 function parseRemembered(text: string | null): RememberedAccount | null {
