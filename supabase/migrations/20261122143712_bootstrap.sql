@@ -227,9 +227,16 @@ create trigger sync_feed_redacts_bootstrap_rows after update of change on privat
 -- Job: snapshots expire 24 hours after they were made
 -- ---------------------------------------------------------------------------
 
+-- It follows the lock order: each account's head first, so it never meets a
+-- redaction (which holds the head) on the same rows in another order. An
+-- account whose head is busy is skipped, and its snapshots go on the next run.
 create function private.expire_bootstrap_snapshots() returns void
 language sql security definer set search_path = '' as $$
-  delete from private.bootstrap_snapshots where expires_at <= now()
+  delete from private.bootstrap_snapshots s
+    using (select h.account_id from private.sync_heads h
+           where exists (select 1 from private.bootstrap_snapshots e where e.account_id = h.account_id and e.expires_at <= now())
+           for update of h skip locked) held
+    where s.account_id = held.account_id and s.expires_at <= now()
 $$;
 
 revoke execute on function private.expire_bootstrap_snapshots(), private.redact_bootstrap_rows() from public;

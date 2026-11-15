@@ -33,8 +33,8 @@ const stack = localStack();
  * Under the 5 s an upload waits for the head (`lock_timeout` in
  * sync_upload_v1), so a snapshot never times out another device's upload, and
  * under the API's 8 s statement timeout. 100,001 practice-session summaries
- * took about 2.2 s on the local stack (2026-11-14); the hosted project is
- * qualified at launch gate 12.
+ * took about 2.2 s on the local stack (2026-11-14), and with 10,000 casino
+ * sessions besides, about 2.5 s; the hosted project is qualified at launch gate 12.
  */
 const LOCK_BUDGET_MS = 4_000;
 
@@ -395,7 +395,7 @@ describe('a bootstrap overlapping concurrent edits', () => {
 });
 
 describe('the snapshot’s lock', () => {
-  it('is held briefly even for a heavy account (100,000 practice-session summaries)', async () => {
+  it('is held briefly even for a heavy account (100,000 practice-session summaries and 10,000 casino sessions)', async () => {
     const phone = device('phone');
     expect(await createAccountByEmail(phone, uniqueEmail('heavy'))).toEqual({ status: 'signed-in' });
     const played = await phone.playPracticeSession();
@@ -410,7 +410,13 @@ describe('the snapshot’s lock', () => {
         from private.practice_results, generate_series(1, 100000) n where account_id = ${accountId}`;
       await tx`insert into private.sync_feed (account_id, sequence, record_type, item_id, change)
         select ${accountId}, 1 + n, 'completed-practice-session', 'heavy-' || n, '{}'::jsonb from generate_series(1, 100000) n`;
-      await tx`update private.sync_heads set sequence = 100001 where account_id = ${accountId}`;
+      await tx`insert into private.revisioned_items (account_id, record_type, item_id, payload_version, revision, payload, revision_operation, revision_sequence)
+        select ${accountId}, 'test-revisioned-item', 'casino-' || n, 1, 1, jsonb_build_object('game', 'blackjack', 'currency', 'USD', 'net', '1'),
+               lpad(to_hex(200000 + n), 32, '0'), 100001 + n
+        from generate_series(1, 10000) n`;
+      await tx`insert into private.sync_feed (account_id, sequence, record_type, item_id, change)
+        select ${accountId}, 100001 + n, 'test-revisioned-item', 'casino-' || n, '{}'::jsonb from generate_series(1, 10000) n`;
+      await tx`update private.sync_heads set sequence = 110001 where account_id = ${accountId}`;
       await tx`update private.account_totals set records = 100001, net = private.money_add('0', (${played.netResult}::numeric * 100001)::text)
         where account_id = ${accountId} and total = 'practice'`;
     });
@@ -421,8 +427,8 @@ describe('the snapshot’s lock', () => {
     const { data, error } = await raw.rpc('sync_bootstrap_v1', { installation: 'heavy-test' });
     const held = performance.now() - started;
     expect(error).toBeNull();
-    expect(data).toMatchObject({ watermark: 100_001, rows: 100_001 });
-    console.log(`snapshot of 100,001 practice-session summaries: ${Math.round(held)} ms`);
+    expect(data).toMatchObject({ watermark: 110_001, rows: 110_001 });
+    console.log(`snapshot of 100,001 practice sessions and 10,000 casino sessions: ${Math.round(held)} ms`);
     expect(held).toBeLessThan(LOCK_BUDGET_MS);
   }, 180_000);
 });
