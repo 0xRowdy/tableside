@@ -13,8 +13,11 @@
 //   it refuses activities and results for anyone else.
 // - Pinned definitions (rule content, strategy revision) travel inside the
 //   activity's specification, so they live exactly as long as the activity row.
-// - Schema changes are the migration runner's (#86): this store opens only the
-//   schema it creates and refuses any other (UnsupportedSchemaError).
+// - The schema is store-schema.ts's. This store creates it in an empty
+//   database and opens only the version its migrations reach: an existing
+//   database is brought there by the migration runner (migration-runner.ts)
+//   before the store opens it, and any other version is refused
+//   (UnsupportedSchemaError).
 
 import { canonicalJson, sha256Hex } from '@tableside/engine';
 
@@ -31,6 +34,7 @@ import type {
   TransitionCommit,
 } from '../practice/store';
 import type { SqlConnection, SqlExecutor } from './sql';
+import { createSchema, readSchemaVersion, schemaVersionOf, STORE_MIGRATIONS, STORE_SCHEMA_VERSION, type StoreMigration } from './store-schema';
 
 // The sync engine's store port (packages/account/src/sync/store.ts), matched
 // structurally: the app doesn't depend on the Account service's package for it.
@@ -75,9 +79,9 @@ export interface StoreOptions {
    * one. Checked inside every transaction: a stale session reads and writes nothing.
    */
   readonly isCurrent?: () => boolean;
+  /** This build's migrations (store-schema.ts); tests stand in later builds' with their own. */
+  readonly migrations?: readonly StoreMigration[];
 }
-
-export const STORE_SCHEMA_VERSION = 1;
 const BODY_FORMAT = 1;
 
 export class StoreError extends Error {
@@ -112,71 +116,19 @@ export class StoreMismatchError extends StoreError {
 }
 
 /**
- * The database has a schema version this build doesn't open: an older one
- * awaits the migration runner (#86), a newer one is a rollback. Either way the
- * data is left as it is; it is not Recovery needed.
+ * The database has a schema version this build doesn't open: an older one the
+ * migration runner hasn't brought up to date, or a newer one (a rollback).
+ * Either way the data is left as it is; it is not Recovery needed.
  */
 export class UnsupportedSchemaError extends StoreError {
-  constructor(readonly version: string) {
-    super(`the database has schema version ${version}; this build opens version ${STORE_SCHEMA_VERSION}`);
+  constructor(
+    readonly version: string,
+    readonly supported: number = STORE_SCHEMA_VERSION,
+  ) {
+    super(`the database has schema version ${version}; this build opens version ${supported}`);
     this.name = 'UnsupportedSchemaError';
   }
 }
-
-const SCHEMA = [
-  'CREATE TABLE meta (name TEXT PRIMARY KEY, value TEXT NOT NULL) STRICT',
-  `CREATE TABLE activities (
-    activity_id TEXT PRIMARY KEY,
-    position INTEGER NOT NULL UNIQUE,
-    status TEXT NOT NULL CHECK (status IN ('unfinished', 'completed', 'incomplete')),
-    sequence INTEGER NOT NULL,
-    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL
-  ) STRICT`,
-  'CREATE INDEX activities_unfinished ON activities (status, position)',
-  `CREATE TABLE transitions (
-    activity_id TEXT NOT NULL REFERENCES activities (activity_id),
-    command_id TEXT NOT NULL,
-    sequence INTEGER NOT NULL,
-    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,
-    PRIMARY KEY (activity_id, command_id),
-    UNIQUE (activity_id, sequence)
-  ) STRICT`,
-  `CREATE TABLE effects (
-    activity_id TEXT NOT NULL REFERENCES activities (activity_id),
-    effect_key TEXT NOT NULL,
-    position INTEGER NOT NULL,
-    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,
-    PRIMARY KEY (activity_id, effect_key)
-  ) STRICT`,
-  // One outgoing synchronization record per completion: the activity id is unique.
-  // It is also the upload queue entry, written in the completion's transaction:
-  // its dependencies, its receipt status, the operation it is sent as (fixed
-  // before it is first sent) and the receipt's disposition.
-  `CREATE TABLE outgoing (
-    id TEXT PRIMARY KEY,
-    activity_id TEXT NOT NULL UNIQUE REFERENCES activities (activity_id),
-    position INTEGER NOT NULL UNIQUE,
-    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,
-    dependencies TEXT NOT NULL,
-    status TEXT NOT NULL CHECK (status IN ('pending', 'accepted', 'rejected')),
-    operation_id TEXT UNIQUE,
-    request TEXT,
-    request_sha256 TEXT,
-    receipt TEXT
-  ) STRICT`,
-  'CREATE INDEX outgoing_pending ON outgoing (status, position)',
-  // Records the account has accepted: this installation's acknowledged uploads and the feed's changes.
-  `CREATE TABLE accepted_records (
-    record_type TEXT NOT NULL,
-    item_id TEXT NOT NULL,
-    sequence INTEGER NOT NULL,
-    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,
-    PRIMARY KEY (record_type, item_id)
-  ) STRICT`,
-  // The account sequence the feed has been applied through.
-  'CREATE TABLE feed_cursor (singleton INTEGER PRIMARY KEY CHECK (singleton = 1), sequence INTEGER NOT NULL) STRICT',
-  'INSERT INTO feed_cursor (singleton, sequence) VALUES (1, 0)',
-];
 
 /** The columns every stored value carries: its text, and the format, length and hash its reads check. */
 const BODY = 'body, body_format, body_length, body_sha256';
@@ -203,25 +155,22 @@ export class SqliteActivityStore implements ActivityStore {
    * build's schema. Closes the connection when it refuses.
    */
   static async open(connection: SqlConnection, identity: StoreIdentity, options: StoreOptions = {}): Promise<SqliteActivityStore> {
-    const meta: Record<string, string> = {
-      schema_version: String(STORE_SCHEMA_VERSION),
+    const migrations = options.migrations ?? STORE_MIGRATIONS;
+    const version = schemaVersionOf(migrations);
+    const owner: Record<string, string> = {
       environment: identity.environment,
       account_id: identity.accountId,
       installation_id: identity.installationId,
     };
     try {
       await connection.transaction(async (tx) => {
-        const tables = await tx.get<{ count: number }>("SELECT count(*) AS count FROM sqlite_master WHERE type = 'table'");
-        if (tables?.count === 0) {
-          for (const statement of SCHEMA) await tx.run(statement);
-          for (const [name, value] of Object.entries(meta)) await tx.run('INSERT INTO meta (name, value) VALUES (?, ?)', [name, value]);
-          return;
-        }
-        const rows = await tx.all<{ name: string; value: string }>('SELECT name, value FROM meta').catch(() => []);
-        const stored = Object.fromEntries(rows.map((row) => [row.name, row.value]));
-        if (stored.schema_version !== meta.schema_version) throw new UnsupportedSchemaError(stored.schema_version ?? 'missing');
-        for (const [name, value] of Object.entries(meta)) {
-          if (stored[name] !== value) throw new StoreMismatchError(`the database's ${name} is ${stored[name] ?? 'missing'}, not ${value}`);
+        const stored = await readSchemaVersion(tx);
+        if (stored === null) return createSchema(tx, owner, migrations);
+        if (stored !== version) throw new UnsupportedSchemaError(Number.isNaN(stored) ? 'missing' : String(stored), version);
+        const rows = await tx.all<{ name: string; value: string }>('SELECT name, value FROM meta');
+        const meta = Object.fromEntries(rows.map((row) => [row.name, row.value]));
+        for (const [name, value] of Object.entries(owner)) {
+          if (meta[name] !== value) throw new StoreMismatchError(`the database's ${name} is ${meta[name] ?? 'missing'}, not ${value}`);
         }
       });
     } catch (error) {

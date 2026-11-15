@@ -29,6 +29,13 @@ export interface SqlConnection {
    * rolls back when it rejects. Every statement must go through `tx`.
    */
   transaction<T>(work: (tx: SqlExecutor) => Promise<T>): Promise<T>;
+  /**
+   * Moves every committed transaction from the write-ahead log into the
+   * database file and empties the log (a TRUNCATE checkpoint), after the
+   * transactions already queued: the file alone then holds the committed state.
+   * Rejects with a "busy" SqlError when another connection keeps it from completing.
+   */
+  checkpoint(): Promise<void>;
   /** Closes after the transactions already queued. */
   close(): Promise<void>;
 }
@@ -149,6 +156,19 @@ class SerializedConnection implements SqlConnection {
         throw classifySqlError(error);
       }
       return result;
+    });
+  }
+
+  checkpoint(): Promise<void> {
+    return this.enqueue(async () => {
+      if (this.closed) throw new SqlError('other', 'the connection is closed');
+      let result: { busy: number; log: number; checkpointed: number } | null;
+      try {
+        result = await this.raw.get('PRAGMA wal_checkpoint(TRUNCATE)');
+      } catch (error) {
+        throw classifySqlError(error);
+      }
+      if (result?.busy !== 0) throw new SqlError('busy', 'the write-ahead log could not be checkpointed');
     });
   }
 
