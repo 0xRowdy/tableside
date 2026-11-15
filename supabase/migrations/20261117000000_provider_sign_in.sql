@@ -92,7 +92,8 @@ language sql stable security definer set search_path = '' as $$
   end
 $$;
 
--- Replaces #87's trigger, in the same transaction as the Auth user insert.
+-- Replaces #87's trigger (as #99 left it, holding the assertion's currency
+-- beside its band), in the same transaction as the Auth user insert.
 -- An email sign-up consumes the unbound assertion in its metadata and must
 -- name this environment. A provider sign-up consumes the newest assertion
 -- bound to its identity; its environment was checked when the assertion was
@@ -101,6 +102,7 @@ create or replace function private.consume_eligibility_assertion() returns trigg
 language plpgsql security definer set search_path = '' as $$
 declare
   v_band text;
+  v_currency text;
   v_provider text := coalesce(new.raw_app_meta_data ->> 'provider', 'email');
 begin
   if v_provider = 'email' then
@@ -113,7 +115,7 @@ begin
         and provider is null
         and consumed_at is null
         and expires_at > now()
-      returning band into v_band;
+      returning band, currency into v_band, v_currency;
   else
     update private.eligibility_assertions
       set consumed_at = now(), consumed_by = new.id
@@ -127,12 +129,12 @@ begin
         limit 1
         for update
       )
-      returning band into v_band;
+      returning band, currency into v_band, v_currency;
   end if;
   if v_band is null then
     raise exception 'eligibility assertion required' using errcode = '42501';
   end if;
-  insert into private.pending_eligibility (auth_user_id, band) values (new.id, v_band);
+  insert into private.pending_eligibility (auth_user_id, band, currency) values (new.id, v_band, v_currency);
   return new;
 end $$;
 
@@ -155,13 +157,15 @@ language sql stable security definer set search_path = '' as $$
   )
 $$;
 
--- Replaces #88's renewal the same way: only an unbound assertion renews a pending email Create.
+-- Replaces #88's renewal (as #99 left it, bringing the newest Create's
+-- currency) the same way: only an unbound assertion renews a pending email Create.
 create or replace function public.renew_pending_eligibility(address text, assertion text) returns boolean
 language plpgsql volatile security definer set search_path = '' as $$
 declare
   v_user uuid;
   v_made_by text;
   v_band text;
+  v_currency text;
 begin
   select u.id, u.raw_user_meta_data ->> 'eligibility_assertion' into v_user, v_made_by
     from auth.users u join private.pending_eligibility p on p.auth_user_id = u.id
@@ -176,11 +180,11 @@ begin
   update private.eligibility_assertions
     set consumed_at = now(), consumed_by = v_user
     where token_hash = extensions.digest(coalesce(assertion, ''), 'sha256') and provider is null and consumed_at is null and expires_at > now()
-    returning band into v_band;
+    returning band, currency into v_band, v_currency;
   if v_band is null then
     return false;
   end if;
-  update private.pending_eligibility set band = v_band where auth_user_id = v_user;
+  update private.pending_eligibility set band = v_band, currency = v_currency where auth_user_id = v_user;
   update auth.users set raw_user_meta_data = raw_user_meta_data || jsonb_build_object('eligibility_assertion', assertion) where id = v_user;
   return true;
 end $$;
