@@ -7,9 +7,8 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
-import { FeedbackProvider } from '@/feedback/FeedbackProvider';
+import { AccountProvider } from '@/account/AccountProvider';
 import { SetupPreferencesProvider } from '@/play/setup/SetupPreferencesProvider';
-import { PracticeProvider } from '@/practice/PracticeProvider';
 import { palette } from '@/theme/tokens';
 
 SplashScreen.preventAutoHideAsync();
@@ -31,23 +30,26 @@ export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({ Fraunces_400Regular, Inter_400Regular, Inter_500Medium, Inter_700Bold });
   const ready = fontsLoaded || fontError !== null;
 
-  useEffect(() => {
-    if (ready) SplashScreen.hideAsync();
-  }, [ready]);
-
   if (!ready) return null;
   return (
     <SafeAreaProvider>
       <ThemeProvider value={theme}>
         <StatusBar style="light" />
-        <PracticeProvider>
-          <FeedbackProvider>
-            <SetupPreferencesProvider>
-              <Slot />
-            </SetupPreferencesProvider>
-          </FeedbackProvider>
-        </PracticeProvider>
+        <AccountProvider>
+          <HideSplash />
+          <SetupPreferencesProvider>
+            <Slot />
+          </SetupPreferencesProvider>
+        </AccountProvider>
       </ThemeProvider>
     </SafeAreaProvider>
   );
+}
+
+/** The splash stays until the fonts load and the account has reopened (or there is none). */
+function HideSplash() {
+  useEffect(() => {
+    void SplashScreen.hideAsync();
+  }, []);
+  return null;
 }

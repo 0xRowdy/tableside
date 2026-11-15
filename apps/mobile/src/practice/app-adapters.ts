@@ -1,9 +1,9 @@
-// The adapters the app runs the practice controller on. Until the app signs in
-// (spec 2's first-run sign-in), the store is in memory with placeholder owner
-// and device; for an open account session, forAccountSession
+// The adapters the app runs the practice controller on. The store, owner and
+// device here are placeholders: for the open account session, forAccountSession
 // (src/account/practice.ts) swaps in the account's encrypted store, account ID
-// and installation ID. Until spec 5 every activity and turn is allowed, and
-// until spec 6 syncs required removals none applies.
+// and installation ID. App tests keep these, over their own store. Until spec
+// 5 every activity and turn is allowed, and until spec 6 syncs required
+// removals none applies.
 
 import { QUARANTINE_LIST } from '@tableside/definitions';
 import * as Crypto from 'expo-crypto';
@@ -21,7 +21,7 @@ export function createAppAdapters(): PracticeAdapters {
     },
     entropy: { randomBytes: (length) => Crypto.getRandomValues(new Uint8Array(length)) },
     newId: () => Crypto.randomUUID(),
-    // Placeholders until the app signs in (spec 2).
+    // Placeholders: the account session replaces them.
     device: 'this-device',
     owner: 'local',
     quarantine: QUARANTINE_LIST,
