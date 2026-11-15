@@ -6,9 +6,9 @@ import { type SupabaseClient, createClient } from '@supabase/supabase-js';
 
 import { type BackendEnvironment, ENVIRONMENT_HEADER, type EnvironmentName, retiredEnvironments } from './environment';
 import { SyncEngine, type SyncErrorCode } from './sync/engine';
-import { type RecordType, recordTypes } from './sync/registry';
+import { type RecordType, prerequisitesOf, recordTypes } from './sync/registry';
 import { type DevicePorts, SyncSession } from './sync/session';
-import type { QueuedUpload, RecordRef, SyncStore } from './sync/store';
+import type { SyncStore } from './sync/store';
 import { supabaseLiveChannels, supabaseSyncBackend } from './sync/supabase';
 
 /** The account's access state on this installation (spec 2, *Account gate*). Later tickets add the other states. */
@@ -312,40 +312,18 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
         if (!type) return { status: 'refused', reason: 'unknown-type' };
         if (type.kind === 'server-authored-state') return { status: 'refused', reason: 'server-authored' };
         if (!type.isPayload(payload)) return { status: 'refused', reason: 'invalid-payload' };
-        const purges = type.purges?.(payload) ?? null;
         const queued = await store.queueUpload({
           id: `${type.name}/${hex(options.randomBytes(16))}`,
           recordType: type.name,
           payload,
-          dependencies: dependenciesOf(registry, type, payload, purges, await store.readUploadQueue()),
+          dependencies: prerequisitesOf(registry, type, payload, await store.readUploadQueue()),
           positioned: type.ordering === 'per-device',
-          purges,
+          purges: type.purges?.(payload) ?? null,
         });
         return { status: 'queued', id: queued.id, ...(queued.position !== undefined ? { position: queued.position } : {}) };
       },
     },
   };
-}
-
-/**
- * The pending uploads a new entry waits for, named so the server can check
- * their receipts: affected uploads of its barrier types, and a purge's target.
- * A barrier queued later still holds it (the engine checks at sending).
- */
-function dependenciesOf(
-  registry: ReadonlyMap<string, RecordType>,
-  type: RecordType,
-  payload: unknown,
-  purges: RecordRef | null,
-  queue: readonly QueuedUpload[],
-): string[] {
-  return queue
-    .filter((entry) => {
-      if (type.barriers.includes(entry.recordType)) return type.affectedBy?.({ recordType: entry.recordType, payload: entry.payload }, payload) ?? true;
-      const target = purges && entry.recordType === purges.recordType ? registry.get(entry.recordType) : undefined;
-      return target !== undefined && target.isPayload(entry.payload) && target.identity.of(entry.payload) === purges!.item;
-    })
-    .map((entry) => entry.id);
 }
 
 function parseRemembered(text: string | null): RememberedAccount | null {

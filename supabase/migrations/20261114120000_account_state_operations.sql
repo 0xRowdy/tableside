@@ -15,7 +15,9 @@
 --   the envelope (challenge attempts, spec 3); 'account' types don't.
 -- purge: an immutable result's purge hook, `purge(account uuid, item text) returns boolean`:
 --   removes the result's rows (summary, detail, chunks) and its contribution,
---   answering whether the result had been accepted.
+--   answering whether the result had been accepted. Chunked results (#93)
+--   remove their accepted chunks here; bootstrap (#96) and export read the
+--   types' own rows, so a purged result is in neither.
 -- accept: none for a server-authored type, which no client writes.
 alter table private.record_types
   add column ordering text not null default 'account' check (ordering in ('account', 'per-device')),
@@ -100,8 +102,10 @@ revoke execute on function private.purge_result(uuid, text, text, bigint) from p
 -- Written only by the backend (jobs, provider webhooks, operators) and
 -- delivered through the feed: experiment assignments, entitlement snapshots,
 -- contribution status, removal notices. No client can call it. Call it first
--- in the writing transaction (it takes the account's head), then write the
--- state's own rows. Returns the account sequence the change was given.
+-- in the writing transaction, then write the state's own rows: it takes the
+-- account's head before anything else, as the lock order requires, and the
+-- feed row it adds is new, so writing the state's rows after it can't wait on
+-- another transaction's feed. Returns the account sequence the change was given.
 create function private.author_server_state(p_account uuid, p_record_type text, p_item text, p_change jsonb) returns bigint
 language plpgsql volatile security definer set search_path = '' as $$
 declare
@@ -138,7 +142,9 @@ revoke execute on function private.author_server_state(uuid, text, text, jsonb) 
 --   "after":    operation IDs that must already have receipts (barriers and
 --               dependencies). Until they all do, the answer is
 --               {"status":"waiting"} and nothing is recorded: the identical
---               request is accepted once they have.
+--               request is accepted once they have. Receipt compaction (#43)
+--               must keep a compact disposition for every operation a device
+--               could still name here, or a dependent would wait forever.
 --   "position": the originating-device position of a per-device type's record.
 -- And the platform refuses, with a durable receipt: a server-authored type
 -- (no client writes it), a purged result's identity (no resurrection), and a

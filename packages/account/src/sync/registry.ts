@@ -8,7 +8,7 @@
 
 import { type CompletedPracticeSessionRecord, decodeMoney } from '@tableside/engine';
 
-import type { RecordRef } from './store';
+import type { QueuedUpload, RecordRef } from './store';
 
 /**
  * immutable-result: accepted once, never edited (a completed practice session).
@@ -33,13 +33,16 @@ export interface RecordType<Payload = unknown> {
   };
   /** The payload schema: whether a value is a payload of this type and version. */
   isPayload(value: unknown): value is Payload;
-  /**
-   * Record types whose pending uploads must be acknowledged before this type's
-   * are sent. A type with barriers is also sent only after the reconnect
-   * order's earlier steps (see SyncEngine): it is what grants and
-   * contributions register.
-   */
+  /** Record types whose pending uploads must be acknowledged before this type's are sent. */
   readonly barriers: readonly string[];
+  /**
+   * A grant or contribution: the reconnect order's last step (Amendment 1 C5).
+   * Sent only once a run has uploaded every other kind and applied the feed
+   * through to the account's head (see SyncEngine). Absent: sent in the
+   * earlier step, with account state such as sharing withdrawals and
+   * allowance reconciliations.
+   */
+  readonly afterReconciliation?: true;
   /**
    * Whether a pending barrier upload holds this payload; every one of the
    * barrier types does when omitted. A sharing withdrawal holds only the
@@ -152,6 +155,37 @@ export const completedPracticeSession: RecordType<CompletedPracticeSessionRecord
   },
   deletion: { serverTables: ['private.practice_results', 'private.sync_receipts', 'private.sync_feed'] },
 };
+
+/** Whether a pending upload is one of a type's barriers that holds back this payload. */
+export function isBarrierFor(type: RecordType, pending: { readonly recordType: string; readonly payload: unknown }, payload: unknown): boolean {
+  return type.barriers.includes(pending.recordType) && (type.affectedBy?.(pending, payload) ?? true);
+}
+
+/**
+ * The pending uploads a new entry of `type` waits for, so the server can
+ * check their receipts too: its barriers that affect it, and a purge's target.
+ * A barrier queued later still holds it (the engine checks when sending).
+ */
+export function prerequisitesOf(
+  registry: ReadonlyMap<string, RecordType>,
+  type: RecordType,
+  payload: unknown,
+  queue: readonly QueuedUpload[],
+): string[] {
+  const target = type.purges?.(payload) ?? null;
+  const targetType = target ? registry.get(target.recordType) : undefined;
+  return queue
+    .filter(
+      (entry) =>
+        isBarrierFor(type, entry, payload) ||
+        (target !== null &&
+          targetType !== undefined &&
+          entry.recordType === target.recordType &&
+          targetType.isPayload(entry.payload) &&
+          targetType.identity.of(entry.payload) === target.item),
+    )
+    .map((entry) => entry.id);
+}
 
 /** Every registered type, by name. Specs 3–7 add theirs here. */
 export const recordTypes: ReadonlyMap<string, RecordType> = new Map<string, RecordType>(

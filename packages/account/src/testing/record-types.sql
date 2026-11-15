@@ -10,9 +10,9 @@
 
 create table if not exists private.test_sharing_withdrawals (
   account_id uuid not null references public.accounts (account_id),
-  withdrawal_id text not null,
+  sharing_withdrawal_id text not null,
   scope text not null,
-  primary key (account_id, withdrawal_id)
+  primary key (account_id, sharing_withdrawal_id)
 );
 create table if not exists private.test_contributions (
   account_id uuid not null references public.accounts (account_id),
@@ -77,7 +77,7 @@ $$;
 create or replace function private.accept_test_sharing_withdrawal_v1(p_account uuid, p_request jsonb, p_sequence bigint) returns jsonb
 language plpgsql volatile security definer set search_path = '' as $$
 begin
-  if not private.test_payload_names_item(p_request, 'withdrawalId') or jsonb_typeof(p_request #> '{payload,scope}') is distinct from 'string' then
+  if not private.test_payload_names_item(p_request, 'sharingWithdrawalId') or jsonb_typeof(p_request #> '{payload,scope}') is distinct from 'string' then
     return jsonb_build_object('status', 'rejected', 'code', 'invalid-payload');
   end if;
   insert into private.test_sharing_withdrawals values (p_account, p_request ->> 'item', p_request #>> '{payload,scope}');
@@ -85,7 +85,7 @@ begin
 end $$;
 
 -- Public contribution (spec 6 stand-in): refused once its scope is withdrawn.
--- Serialized with withdrawals under the head, so it sees every accepted one.
+-- Serialized with sharing withdrawals under the head, so it sees every accepted one.
 create or replace function private.accept_test_contribution_v1(p_account uuid, p_request jsonb, p_sequence bigint) returns jsonb
 language plpgsql volatile security definer set search_path = '' as $$
 begin

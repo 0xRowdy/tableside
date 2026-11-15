@@ -75,45 +75,39 @@ async function receipts(accountId: string) {
 
 const itemsOn = async (d: SimulatedDevice, recordType: string) => (await d.vault.store().readAcceptedRecords(recordType)).map((record) => record.item);
 
-/** The record types of the uploads a device sent, in order, from the request bodies. */
-function uploadsSent(d: SimulatedDevice): string[] {
-  return d.proxy.sent
-    .filter((request) => request.url.includes('sync_upload_v1') && request.body)
-    .map((request) => (JSON.parse(JSON.parse(request.body!).request as string) as { recordType: string }).recordType);
-}
-
-/** Every request a device sent from the `since`th on, as "upload <record type>" or "feed". */
+/** Every sync request a device sent from the `since`th on, as "upload <record type>" or "feed", from the request bodies. */
 function requestsSent(d: SimulatedDevice, since = 0): string[] {
-  return d.proxy.sent
-    .slice(since)
-    .filter((request) => request.url.includes('sync_upload_v1') || request.url.includes('sync_feed_v1'))
-    .map((request) =>
-      request.url.includes('sync_feed_v1')
-        ? 'feed'
-        : `upload ${(JSON.parse(JSON.parse(request.body!).request as string) as { recordType: string }).recordType}`,
-    );
+  return d.proxy.sent.slice(since).flatMap(({ url, body }) => {
+    if (url.includes('sync_feed_v1')) return ['feed'];
+    if (!url.includes('sync_upload_v1') || !body) return [];
+    const { request } = JSON.parse(body) as { request: string };
+    return [`upload ${(JSON.parse(request) as Envelope).recordType}`];
+  });
 }
 
-const withdrawal = (scope: string, id = `w-${scope}`) => ({ version: 1, withdrawalId: id, scope });
+/** The record types of the uploads a device sent, in order. */
+const uploadsSent = (d: SimulatedDevice) => requestsSent(d).flatMap((request) => (request.startsWith('upload ') ? [request.slice('upload '.length)] : []));
+
+const sharingWithdrawal = (scope: string, id = `w-${scope}`) => ({ version: 1, sharingWithdrawalId: id, scope });
 const contribution = (scope: string, id = `c-${scope}`) => ({ version: 1, contributionId: id, scope });
 
 describe('account-state operations behind barriers', () => {
-  it('holds a contribution while a withdrawal of its scope is unacknowledged, then sends it after, serialized under the head', async () => {
+  it('holds a contribution while a sharing withdrawal of its scope is unacknowledged, then sends it after, serialized under the head', async () => {
     const { phone, accountId } = await twoDevices();
     phone.proxy.online = false;
-    await queue(phone, testSharingWithdrawal.name, withdrawal('practice'));
+    await queue(phone, testSharingWithdrawal.name, sharingWithdrawal('practice'));
     await queue(phone, testContribution.name, contribution('practice'));
     await phone.account.sync.idle();
 
     const held = phone.proxy.delayNextResponse('sync_upload_v1');
     phone.proxy.online = true;
     await held.arrived;
-    // The withdrawal is accepted on the server, its answer is still on the way: the contribution hasn't been sent.
+    // The sharing withdrawal is accepted on the server, its answer is still on the way: the contribution hasn't been sent.
     expect((await receipts(accountId)).map(({ item, status }) => [item, status])).toEqual([['w-practice', 'accepted']]);
     held.release();
     await phone.account.sync.idle();
 
-    // The contribution reached the server after the withdrawal, which its acceptance (spec 6's stand-in rule) saw.
+    // The contribution reached the server after the sharing withdrawal, which its acceptance (spec 6's stand-in rule) saw.
     expect((await receipts(accountId)).map(({ item, status, code }) => [item, status, code])).toEqual([
       ['w-practice', 'accepted', undefined],
       ['c-practice', 'rejected', 'sharing-withdrawn'],
@@ -121,11 +115,11 @@ describe('account-state operations behind barriers', () => {
     expect(await phone.vault.store().readUploadQueue()).toEqual([]);
   });
 
-  it('holds only the contributions a withdrawal covers', async () => {
+  it('holds only the contributions a sharing withdrawal covers', async () => {
     const { phone, accountId } = await twoDevices();
     phone.proxy.online = false;
     await queue(phone, testContribution.name, contribution('practice'));
-    await queue(phone, testSharingWithdrawal.name, withdrawal('strategies'));
+    await queue(phone, testSharingWithdrawal.name, sharingWithdrawal('strategies'));
     await queue(phone, testContribution.name, contribution('strategies'));
     phone.proxy.online = true;
     await phone.account.sync.idle();
@@ -133,7 +127,7 @@ describe('account-state operations behind barriers', () => {
     const decided = Object.fromEntries((await receipts(accountId)).map(({ item, status, code, sequence }) => [item, { status, code, sequence }]));
     expect(decided['c-practice']).toMatchObject({ status: 'accepted' });
     expect(decided['c-strategies']).toMatchObject({ status: 'rejected', code: 'sharing-withdrawn' });
-    // Withdrawals go first in the reconnect order, whatever their place in the queue.
+    // Sharing withdrawals go first in the reconnect order, whatever their place in the queue.
     expect(uploadsSent(phone)).toEqual([testSharingWithdrawal.name, testContribution.name, testContribution.name]);
   });
 
@@ -156,13 +150,13 @@ describe('account-state operations behind barriers', () => {
     expect(transferred!.sequence).toBeGreaterThan(reconciled!.sequence!);
   });
 
-  it('keeps an uncertain withdrawal pending, and what it holds restricted, across a restart until its receipt arrives', async () => {
+  it('keeps an uncertain sharing withdrawal pending, and what it holds restricted, across a restart until its receipt arrives', async () => {
     const { phone, accountId } = await twoDevices();
     phone.proxy.online = false;
-    await queue(phone, testSharingWithdrawal.name, withdrawal('practice'));
+    await queue(phone, testSharingWithdrawal.name, sharingWithdrawal('practice'));
     await queue(phone, testContribution.name, contribution('practice'));
 
-    // The server accepts the withdrawal, and its answer is lost.
+    // The server accepts the sharing withdrawal, and its answer is lost.
     phone.proxy.dropNextResponse('sync_upload_v1');
     phone.proxy.online = true;
     await phone.account.sync.idle();
@@ -185,13 +179,13 @@ describe('account-state operations behind barriers', () => {
 });
 
 describe('the reconnect order', () => {
-  it('uploads and reads the account’s state before sending contributions: a withdrawal from another device is seen first', async () => {
+  it('uploads and reads the account’s state before sending contributions: a sharing withdrawal from another device is seen first', async () => {
     const { phone, tablet, accountId } = await twoDevices();
     phone.proxy.online = false;
     await phone.playPracticeSession();
     await queue(phone, testContribution.name, contribution('practice'));
 
-    await queue(tablet, testSharingWithdrawal.name, withdrawal('practice', 'w-tablet'));
+    await queue(tablet, testSharingWithdrawal.name, sharingWithdrawal('practice', 'w-tablet'));
     await tablet.account.sync.idle();
 
     const before = phone.proxy.sent.length;
@@ -200,7 +194,7 @@ describe('the reconnect order', () => {
     const order = requestsSent(phone, before);
     expect(order.indexOf('upload completed-practice-session')).toBeLessThan(order.indexOf('feed'));
     expect(order.indexOf('feed')).toBeLessThan(order.indexOf(`upload ${testContribution.name}`));
-    // The phone read the tablet's withdrawal before contributing; the server refused the contribution against it.
+    // The phone read the tablet's sharing withdrawal before contributing; the server refused the contribution against it.
     expect(await itemsOn(phone, testSharingWithdrawal.name)).toEqual(['w-tablet']);
     expect((await receipts(accountId)).find(({ item }) => item === 'c-practice')).toMatchObject({ status: 'rejected', code: 'sharing-withdrawn' });
   });
@@ -262,9 +256,15 @@ describe('server-authored state', () => {
 describe('purging an accepted immutable result', () => {
   const result = (id: string, amount: number) => ({ version: 1, resultId: id, amount, detail: `detail of ${id}: private-${id}-marker` });
 
-  /** Every account-owned server row that mentions `text`, by table. */
+  /** Every account-owned server row that mentions `text`, by table: every table in the stack keyed by account, whatever the registry declares. */
   async function rowsMentioning(accountId: string, text: string) {
-    const tables = [...new Set([...PLATFORM_TABLES, ...TEST_RECORD_TYPES.flatMap((type) => type.deletion.serverTables)])];
+    const tables = (
+      await stack.sql<{ name: string }[]>`
+        select format('%I.%I', table_schema, table_name) as name from information_schema.columns
+        where column_name = 'account_id' and table_schema in ('public', 'private')
+          and table_name in (select table_name from information_schema.tables where table_type = 'BASE TABLE')`
+    ).map((row) => row.name);
+    expect(tables).toEqual(expect.arrayContaining([...PLATFORM_TABLES, 'private.test_results', 'private.test_result_details']));
     const found: string[] = [];
     for (const table of tables) {
       const [rows] = await stack.sql.unsafe<{ count: number }[]>(`select count(*)::int as count from ${table} t where t.account_id = $1 and t::text like $2`, [
@@ -391,7 +391,7 @@ describe('the operation API enforces ordering, called directly', () => {
     expect((await raw.rpc('sync_upload_v1', { request: dependent })).data).toEqual({ status: 'waiting', operation: '7'.repeat(32) });
     expect(((await raw.rpc('sync_feed_v1', { after: 0 })).data as { entries: unknown[] }).entries).toEqual([]);
 
-    const barrier = upload(phone, { operation: '8'.repeat(32), recordType: testSharingWithdrawal.name, item: 'w-other', payload: withdrawal('other', 'w-other') });
+    const barrier = upload(phone, { operation: '8'.repeat(32), recordType: testSharingWithdrawal.name, item: 'w-other', payload: sharingWithdrawal('other', 'w-other') });
     expect((await raw.rpc('sync_upload_v1', { request: barrier })).data).toMatchObject({ status: 'accepted', sequence: 1 });
     expect((await raw.rpc('sync_upload_v1', { request: dependent })).data).toMatchObject({ status: 'accepted', sequence: 2 });
   });

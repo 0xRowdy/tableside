@@ -1,6 +1,6 @@
 // Test-only record types (seam 2, spec 2 *Testing Decisions › Registry*): one
 // of each registry kind and rule, standing in for later specs' types, so specs
-// 3–6 inherit proven platform behaviour and test only their own rules. The
+// 3–6 inherit proven platform behavior and test only their own rules. The
 // server half is record-types.sql, which the harness installs on the local
 // stack only; no build of the app registers these.
 
@@ -26,7 +26,7 @@ function testType<P>(
   fields: Pick<RecordType<P>, 'name' | 'kind' | 'isPayload' | 'barriers'> & {
     readonly id: keyof P & string;
     readonly tables: readonly string[];
-  } & Partial<Pick<RecordType<P>, 'affectedBy' | 'ordering' | 'purges' | 'fromChange'>>,
+  } & Partial<Pick<RecordType<P>, 'affectedBy' | 'afterReconciliation' | 'ordering' | 'purges' | 'fromChange'>>,
 ): RecordType<P> {
   const { id, tables, ...rest } = fields;
   const type: RecordType<P> = {
@@ -42,9 +42,9 @@ function testType<P>(
   return type;
 }
 
-export interface TestWithdrawal {
+export interface TestSharingWithdrawal {
   readonly version: 1;
-  readonly withdrawalId: string;
+  readonly sharingWithdrawalId: string;
   /** Which contributions it covers. */
   readonly scope: string;
 }
@@ -89,23 +89,24 @@ export interface TestExperimentAssignment {
 }
 
 /** Spec 6's sharing withdrawal: works offline, and holds the contributions it covers until acknowledged. */
-export const testSharingWithdrawal = testType<TestWithdrawal>({
+export const testSharingWithdrawal = testType<TestSharingWithdrawal>({
   name: 'test-sharing-withdrawal',
   kind: 'account-state-operation',
-  id: 'withdrawalId',
-  isPayload: (value): value is TestWithdrawal => hasStrings(value, 'withdrawalId', 'scope'),
+  id: 'sharingWithdrawalId',
+  isPayload: (value): value is TestSharingWithdrawal => hasStrings(value, 'sharingWithdrawalId', 'scope'),
   barriers: [],
   tables: ['private.test_sharing_withdrawals'],
 });
 
-/** Spec 6's public contribution: behind any pending withdrawal of its scope. */
+/** Spec 6's public contribution: behind any pending sharing withdrawal of its scope. */
 export const testContribution = testType<TestContribution>({
   name: 'test-contribution',
   kind: 'account-state-operation',
   id: 'contributionId',
   isPayload: (value): value is TestContribution => hasStrings(value, 'contributionId', 'scope'),
   barriers: [testSharingWithdrawal.name],
-  affectedBy: (barrier, payload) => (barrier.payload as TestWithdrawal).scope === payload.scope,
+  afterReconciliation: true,
+  affectedBy: (barrier, payload) => (barrier.payload as TestSharingWithdrawal).scope === payload.scope,
   tables: ['private.test_contributions'],
 });
 
@@ -126,6 +127,7 @@ export const testAllowanceTransfer = testType<TestTransfer>({
   id: 'transferId',
   isPayload: (value): value is TestTransfer => hasStrings(value, 'transferId', 'grant'),
   barriers: [testAllowanceReconciliation.name],
+  afterReconciliation: true,
   affectedBy: (barrier, payload) => (barrier.payload as TestReconciliation).grant === payload.grant,
   tables: ['private.test_transfers'],
 });

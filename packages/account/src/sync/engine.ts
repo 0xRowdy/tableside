@@ -12,13 +12,13 @@
 //   this build can't read.
 // - Runs coalesce: a request while a run is going makes one more run.
 // - The reconnect order (spec 2 Amendment 1 C5): authenticate, then reconcile
-//   compatibility, access, allowance ownership and pending privacy
+//   compatibility, access, allowance ownership and pending privacy (sharing)
 //   withdrawals, and only then send grants or contributions. A run uploads
-//   the entries whose types have no barriers (withdrawals, reconciliations,
-//   everything else), then applies the feed through to the account's head,
-//   and only then sends the types that have barriers. Any step the server
-//   denies (authentication, access), refuses as incompatible or can't be
-//   reached ends the run first.
+//   every entry except grants and contributions (sharing withdrawals,
+//   allowance reconciliations, results), then applies the feed through to the
+//   account's head, and only then sends the types registered
+//   `afterReconciliation`. Any step the server denies (authentication,
+//   access), refuses as incompatible or can't be reached ends the run first.
 // - A barrier holds while any affected upload of its type is unacknowledged,
 //   wherever it sits in the queue, and the server checks each named
 //   dependency has its receipt under the synchronization head (`after`).
@@ -29,7 +29,7 @@
 // revisioned items (#94) plug in here.
 
 import { type FeedPage, PROTOCOL_VERSION, type PreparedOperation, type UploadAnswer, prepareOperation } from './protocol';
-import type { RecordType } from './registry';
+import { type RecordType, isBarrierFor } from './registry';
 import type { AcceptedRecord, Origin, QueuedUpload, RecordRef, SyncStore } from './store';
 
 /** The backend's operations. A rejection means no answer arrived (offline, lost response, denied): try later. */
@@ -104,17 +104,17 @@ export class SyncEngine {
 
   private async run(): Promise<SyncErrorCode | null> {
     try {
-      // Everything without barriers first, and the account's state from the feed.
-      const sent = new Set<string>();
-      const settling = await this.upload({ gated: false, sent });
-      if (settling.fatal || this.stopped) return settling.fatal;
-      const reconciled = await this.pull();
-      if (reconciled || this.stopped) return settling.error ?? reconciled;
-      // Only then the types with barriers (grants, contributions).
-      const gated = await this.upload({ gated: true, sent });
-      if (gated.fatal || this.stopped) return gated.fatal;
-      const after = gated.acknowledged > 0 ? await this.pull() : null;
-      return settling.error ?? gated.error ?? after;
+      // Account state first: every other upload, then the feed through to the head.
+      const attempted = new Set<string>();
+      const accountState = await this.upload({ afterReconciliation: false, attempted });
+      if (accountState.fatal || this.stopped) return accountState.fatal;
+      const feedError = await this.pull();
+      if (feedError || this.stopped) return accountState.error ?? feedError;
+      // Only then grants and contributions.
+      const grants = await this.upload({ afterReconciliation: true, attempted });
+      if (grants.fatal || this.stopped) return grants.fatal;
+      const lastFeedError = grants.acknowledged > 0 ? await this.pull() : null;
+      return accountState.error ?? grants.error ?? lastFeedError;
     } catch {
       // A local transaction failed and rolled back: the queue and cursor are as
       // they were, so the next run retries. After the session ended (the store
@@ -124,38 +124,31 @@ export class SyncEngine {
   }
 
   /**
-   * One pass over the queue. `gated` passes send the types with barriers, and
-   * anything an earlier pass of the run didn't send; other passes send only
-   * types without barriers. A fatal error (offline, incompatible) ends the run.
+   * One pass over the queue, skipping entries `attempted` already this run.
+   * The `afterReconciliation` pass sends grants and contributions, and
+   * anything still waiting from the earlier pass; the earlier pass sends
+   * everything else. A fatal error (offline, incompatible) ends the run.
    */
-  private async upload({ gated, sent }: { readonly gated: boolean; readonly sent: Set<string> }): Promise<UploadPass> {
+  private async upload({ afterReconciliation, attempted }: { readonly afterReconciliation: boolean; readonly attempted: Set<string> }): Promise<UploadPass> {
     const { store, registry } = this.options;
     const queue = await store.readUploadQueue();
     const pending = new Set(queue.map((entry) => entry.id));
     // A barrier holds while any upload of its type that affects the entry is unacknowledged, wherever it sits in the queue.
-    const held = (type: RecordType, entry: QueuedUpload) =>
-      type.barriers.some((barrier) =>
-        queue.some(
-          (other) =>
-            other.recordType === barrier &&
-            pending.has(other.id) &&
-            (type.affectedBy?.({ recordType: other.recordType, payload: other.payload }, entry.payload) ?? true),
-        ),
-      );
+    const held = (type: RecordType, entry: QueuedUpload) => queue.some((other) => pending.has(other.id) && isBarrierFor(type, other, entry.payload));
     const pass: UploadPass = { fatal: null, error: null, acknowledged: 0 };
     for (const entry of queue) {
-      if (sent.has(entry.id)) continue;
+      if (attempted.has(entry.id)) continue;
       const type = registry.get(entry.recordType);
-      if (!gated && type && type.barriers.length > 0) continue;
-      sent.add(entry.id);
+      if (!afterReconciliation && type?.afterReconciliation) continue;
+      attempted.add(entry.id);
       // No client writes server-authored state.
       if (!type || type.kind === 'server-authored-state' || !type.isPayload(entry.payload)) {
         pass.error ??= 'unsendable';
         continue;
       }
-      // Its prerequisites are still unacknowledged: it waits.
+      // Its prerequisites are still unacknowledged: it waits, and a later pass may send it.
       if (entry.dependencies.some((id) => pending.has(id)) || held(type, entry)) {
-        sent.delete(entry.id);
+        attempted.delete(entry.id);
         continue;
       }
       const operation = entry.operation ?? (await store.prepareUpload(entry.id, this.envelope(type, entry)));

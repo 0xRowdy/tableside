@@ -369,7 +369,7 @@ export function accessTokenOf(device: SimulatedDevice): string {
       // Not the session.
     }
   }
-  throw new Error(`${device.name} holds no session`);
+  throw new Error(`${device.name} holds no Auth session`);
 }
 
 /** An address no earlier run has used. */

@@ -26,7 +26,7 @@ export {
   type TestResult,
   type TestResultPurge,
   type TestTransfer,
-  type TestWithdrawal,
+  type TestSharingWithdrawal,
   installTestRecordTypes,
   testAllowanceReconciliation,
   testAllowanceTransfer,
