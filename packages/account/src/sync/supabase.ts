@@ -1,14 +1,24 @@
 // The sync engine's backend and live channel over Supabase: the versioned
 // operations (supabase/migrations, `sync_upload_v1`, `sync_stage_chunk_v1`,
 // `sync_feed_v1`, `sync_bootstrap_v1`, `sync_bootstrap_page_v1`,
-// `realtime_claim_v1`), the unversioned `sync_protocol`, and the account's
+// `sync_details_v1`, `realtime_claim_v1`), the unversioned `sync_protocol`, and the account's
 // private Realtime topic.
 
 import type { RealtimeChannel, SupabaseClient } from '@supabase/supabase-js';
 
 import type { SyncBackend } from './engine';
 import type { LiveChannel } from './live';
-import { type BootstrapPage, type BootstrapSnapshot, type ChunkAnswer, type FeedPage, type ProtocolStatus, SyncCallError, type UploadAnswer, chunkCallArguments } from './protocol';
+import {
+  type BootstrapPage,
+  type BootstrapSnapshot,
+  type ChunkAnswer,
+  type DetailPage,
+  type FeedPage,
+  type ProtocolStatus,
+  SyncCallError,
+  type UploadAnswer,
+  chunkCallArguments,
+} from './protocol';
 
 /**
  * Transaction contention the server reports instead of waiting without bound:
@@ -34,6 +44,7 @@ export const SYNC_OPERATIONS = {
   claim: 'realtime_claim_v1',
   bootstrap: 'sync_bootstrap_v1',
   bootstrapPage: 'sync_bootstrap_page_v1',
+  details: 'sync_details_v1',
 } as const;
 
 type Failure = SyncCallError['kind'] | 'contention';
@@ -141,6 +152,11 @@ export function supabaseSyncBackend(supabase: SupabaseClient, watch: RetryAfterW
     },
     bootstrapPage: (snapshot, after, pageSize) =>
       callOperation<BootstrapPage>(supabase, watch, SYNC_OPERATIONS.bootstrapPage, { snapshot, after, page_size: pageSize }),
+    async details(requests, bulk) {
+      const answer = await callOperation<DetailPage | { status: 'malformed' }>(supabase, watch, SYNC_OPERATIONS.details, { requests, bulk });
+      if (answer.status === 'malformed') throw new SyncCallError('refused');
+      return answer;
+    },
   };
 }
 

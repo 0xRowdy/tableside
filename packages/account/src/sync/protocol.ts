@@ -147,7 +147,8 @@ export function chunksOf(operation: PreparedOperation, payload: unknown): Staged
 /** UTF-8 length of one code point. */
 const codePointBytes = (code: number): number => (code < 0x80 ? 1 : code < 0x800 ? 2 : code < 0x10000 ? 3 : 4);
 
-function utf8Length(text: string): number {
+/** The UTF-8 length of text, in bytes. */
+export function utf8Length(text: string): number {
   let length = 0;
   for (const char of text) length += codePointBytes(char.codePointAt(0)!);
   return length;
@@ -264,3 +265,43 @@ export interface BootstrapRow extends FeedEntry {
 export type BootstrapPage =
   | { readonly status: 'page'; readonly rows: readonly BootstrapRow[]; readonly more: boolean }
   | { readonly status: 'expired' };
+
+/**
+ * The most one page of the feed, of a snapshot or of details carries: the
+ * UTF-8 bytes of its entries' JSON, as the server counts them. A page always
+ * holds at least one entry, so an entry larger than this comes by itself; a
+ * page never splits one. The row-count bounds still apply.
+ */
+export const PAGE_BYTES = 256 * 1024;
+
+/** The most requests one details call names. */
+export const DETAIL_REQUESTS = 100;
+
+/** A record's detail, asked for by the accepted revision this installation holds (its account sequence). */
+export interface DetailRequest {
+  readonly recordType: string;
+  readonly item: string;
+  readonly sequence: number;
+}
+
+/**
+ * The server's answer for one detail request.
+ * detail: the record whole (a feed change of its type), at the sequence asked for.
+ * changed: the account holds another revision now: the feed brings it, then the detail is asked for again.
+ * gone: the account doesn't hold it (purged), or its type keeps no detail.
+ */
+export type DetailAnswer =
+  | { readonly recordType: string; readonly item: string; readonly status: 'detail'; readonly sequence: number; readonly change: unknown }
+  | { readonly recordType: string; readonly item: string; readonly status: 'changed'; readonly sequence: number }
+  | { readonly recordType: string; readonly item: string; readonly status: 'gone' };
+
+/**
+ * A details call's answer (`sync_details_v1`): answers for the requests in
+ * order, as many as fit PAGE_BYTES (at least one); the rest are asked again.
+ * throttled: a bulk download (Download all history) is held back under a
+ * budget alert (spec 2 Amendment 1 C5) for `retryAfter` seconds; recent and
+ * opened detail never is.
+ */
+export type DetailPage =
+  | { readonly status: 'details'; readonly answers: readonly DetailAnswer[] }
+  | { readonly status: 'throttled'; readonly retryAfter: number };

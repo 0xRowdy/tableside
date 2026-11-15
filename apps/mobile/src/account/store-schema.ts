@@ -87,7 +87,9 @@ const BASE_SCHEMA = [
   'CREATE INDEX outgoing_pending ON outgoing (status, position)',
   'CREATE INDEX outgoing_items ON outgoing (record_type, item_id, position)',
   // Records the account has accepted: this installation's acknowledged uploads
-  // and the feed's changes, with a per-device record's origin.
+  // and the feed's changes, with a per-device record's origin. A snapshot's
+  // summary whose detail hasn't arrived (#97) has `summary_at`: when the record
+  // happened (ms since the epoch); a record held whole has none.
   `CREATE TABLE accepted_records (
     record_type TEXT NOT NULL,
     item_id TEXT NOT NULL,
@@ -95,8 +97,10 @@ const BASE_SCHEMA = [
     body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,
     installation_id TEXT,
     device_position INTEGER,
+    summary_at INTEGER,
     PRIMARY KEY (record_type, item_id)
   ) STRICT`,
+  'CREATE INDEX accepted_summaries ON accepted_records (summary_at) WHERE summary_at IS NOT NULL',
   // The last originating-device position this installation gave each per-device type. Never reused.
   'CREATE TABLE device_positions (record_type TEXT PRIMARY KEY, last INTEGER NOT NULL) STRICT',
   // Results purged from the account: never accepted on this installation again.
@@ -123,8 +127,19 @@ const BASE_SCHEMA = [
     sequence INTEGER NOT NULL,
     body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,
     installation_id TEXT,
-    device_position INTEGER
+    device_position INTEGER,
+    summary_at INTEGER
   ) STRICT`,
+  // History detail (#97): how many summaries the first download's newest 90
+  // days held when it began, and whether Download all history was asked for,
+  // with how many summaries waited for detail when it began.
+  `CREATE TABLE history (
+    singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
+    recent INTEGER CHECK (recent >= 0),
+    download_requested INTEGER NOT NULL CHECK (download_requested IN (0, 1)),
+    download_total INTEGER CHECK (download_total >= 0)
+  ) STRICT`,
+  'INSERT INTO history (singleton, download_requested) VALUES (1, 0)',
 ];
 
 /** Creates the schema in an empty database: the base schema, then every migration, with `meta` naming the result. */

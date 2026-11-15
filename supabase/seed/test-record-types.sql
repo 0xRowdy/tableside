@@ -360,3 +360,22 @@ update private.record_types set snapshot = to_regprocedure('private.snapshot_tes
 update private.record_types set snapshot = to_regprocedure('private.snapshot_test_attempts(uuid,text)') where record_type = 'test-attempt';
 update private.record_types set snapshot = to_regprocedure('private.snapshot_test_experiment_assignments(uuid,text)') where record_type = 'test-experiment-assignment';
 update private.record_types set snapshot = to_regprocedure('private.snapshot_test_strategy_revisions(uuid,text)') where record_type = 'test-strategy-revision';
+
+-- ---------------------------------------------------------------------------
+-- History detail (#97): a test result's summary leaves out its detail; this
+-- serves the result whole at the sequence its snapshot row carries.
+-- ---------------------------------------------------------------------------
+
+create function private.detail_test_results(p_account uuid, p_record_type text, p_item text)
+returns table (sequence bigint, change jsonb)
+language sql stable security definer set search_path = '' as $$
+  select (select min(f.sequence) from private.sync_feed f where f.account_id = r.account_id and f.record_type = p_record_type and f.item_id = r.result_id),
+         jsonb_build_object('record', r.payload || jsonb_build_object('detail', d.detail))
+  from private.test_results r
+  join private.test_result_details d on d.account_id = r.account_id and d.result_id = r.result_id
+  where r.account_id = p_account and r.result_id = p_item
+$$;
+
+revoke execute on function private.detail_test_results(uuid, text, text) from public;
+
+update private.record_types set detail = to_regprocedure('private.detail_test_results(uuid,text,text)') where record_type = 'test-result';

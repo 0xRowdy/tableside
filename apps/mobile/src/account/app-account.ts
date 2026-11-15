@@ -4,6 +4,7 @@
 
 import { createAccountService, noPlatformAgeSignals, type AccountService, type AccountVault, type CredentialStorage } from '@tableside/account';
 import * as Crypto from 'expo-crypto';
+import { Paths } from 'expo-file-system';
 import { getLocales } from 'expo-localization';
 import * as SecureStore from 'expo-secure-store';
 
@@ -79,6 +80,14 @@ export function createAppAccount(): AppAccount {
     // Apple's Declared Age Range and Google Play's Age Signals need native
     // modules, which aren't built yet: every device uses the fallback question.
     ageSignals: noPlatformAgeSignals,
+    // History downloads stop before they would run the device short.
+    freeStorage: () => {
+      try {
+        return Paths.availableDiskSpace;
+      } catch {
+        return null;
+      }
+    },
   });
   const offlineGameKey = (accountId: string) => `tableside.${backend.name}.${accountId}.offline-game`;
   return {

@@ -47,7 +47,7 @@ type Call =
   | { readonly method: 'setAccountCurrency'; readonly currency: string }
   | { readonly method: 'signInWithProvider'; readonly provider: IdentityProvider }
   | { readonly method: 'createWithProvider'; readonly provider: IdentityProvider; readonly sameIdentity: boolean }
-  | { readonly method: 'resume' | 'renew' | 'signOut' | 'checkAge' | 'refreshEligibility' };
+  | { readonly method: 'resume' | 'renew' | 'signOut' | 'checkAge' | 'refreshEligibility' | 'downloadAllHistory' };
 
 /** What the fake's Settings → Account shows unless a test changes it. */
 export const FAKE_SUMMARY: AccountSummary = {
@@ -149,10 +149,13 @@ export class FakeAccountService implements AccountService {
 
   /** No synchronization runs in screen tests. */
   readonly sync: AccountSync = {
-    status: { live: false, error: null, lastSyncedAt: null, uploads: [], update: null, history: { state: 'complete' } },
+    status: { live: false, error: null, lastSyncedAt: null, uploads: [], update: null, history: { state: 'complete' }, download: { state: 'not-requested' } },
     subscribe: () => () => undefined,
     reconcile: async () => undefined,
     retryRecord: async () => undefined,
+    downloadAllHistory: async () => {
+      this.calls.push({ method: 'downloadAllHistory' });
+    },
     idle: async () => undefined,
     countWaiting: async () => this.waitingCount,
     queue: async () => ({ status: 'refused', reason: 'no-account' }),
@@ -230,6 +233,7 @@ export class FakeAccountService implements AccountService {
     revisionedItems: async () => [],
     resolve: async () => ({ status: 'offline' }),
     totals: async () => ({ account: [], local: [] }),
+    detail: async () => ({ status: 'offline' }),
   };
 
   /** No privacy choices in screen tests (spec 7's controls script their own). */

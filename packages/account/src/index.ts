@@ -43,6 +43,8 @@ export {
   type RemoveMethodResult,
   type SignInMethodEntry,
   type SignInMethods,
+  type DetailResult,
+  type HistoryDownload,
   type HistoryStatus,
   type IdentityProvider,
   type ProviderCreateResult,
@@ -94,8 +96,11 @@ export {
 } from './privacy-record';
 export {
   BOOTSTRAP_PAGE_SIZE,
+  DETAIL_PAGES_PER_RUN,
   type EngineStatus,
+  RECENT_DETAIL_MS,
   RECORD_FAILURE_LIMIT,
+  STORAGE_RESERVE_BYTES,
   type Resolution,
   type ResolutionOutcome,
   type SubmitOutcome,
@@ -115,12 +120,16 @@ export { type DeviceSequence, byOriginatingDevice } from './sync/ordering';
 export { type LiveChannel } from './sync/live';
 export {
   CHUNK_BYTES,
+  PAGE_BYTES,
   PROTOCOL_VERSION,
   REQUEST_LIMIT_BYTES,
   type BootstrapPage,
   type BootstrapRow,
   type BootstrapSnapshot,
   type ContentManifest,
+  type DetailAnswer,
+  type DetailPage,
+  type DetailRequest,
   type Disposition,
   type Envelope,
   type FeedEntry,
@@ -151,12 +160,14 @@ export {
   type BootstrapProgress,
   type BootstrapStaging,
   type FeedPageEffects,
+  type HistoryProgress,
   type LocalRevisionedItem,
   type NewUpload,
   type Origin,
   type QueuedUpload,
   type RecordRef,
   type RejectedUpload,
+  type SummaryOnly,
   type SyncStore,
 } from './sync/store';
 export { type TotalsRow, sumContributions } from './sync/totals';
