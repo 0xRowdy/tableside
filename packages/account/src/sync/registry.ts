@@ -8,7 +8,7 @@
 
 import { type CompletedPracticeSessionRecord, decodeMoney } from '@tableside/engine';
 
-import { privacyChoice } from '../privacy';
+import { privacyChoice } from '../privacy-record';
 
 import type { QueuedUpload, RecordRef } from './store';
 
