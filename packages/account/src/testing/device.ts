@@ -211,7 +211,8 @@ interface AppProcess {
   readonly account: AccountService;
   readonly vault: DeviceVault;
   readonly appVault: AppVault;
-  kill(): void;
+  /** Kills the process. Resolves once its database connection is closed: what it had queued ended, as a dead process's locks do. */
+  kill(): Promise<void>;
 }
 
 let seed = 1;
@@ -360,7 +361,7 @@ export function createDevice(stack: LocalStack, options: DeviceOptions): Simulat
         dead = true;
         cancels.splice(0).forEach((cancel) => cancel());
         sockets.forEach((socket) => socket.close());
-        void appVault.close();
+        return appVault.close().catch(() => undefined);
       },
     };
   };
@@ -437,16 +438,17 @@ export function createDevice(stack: LocalStack, options: DeviceOptions): Simulat
       return controller;
     },
     kill() {
-      app.kill();
+      void app.kill();
     },
     async restart() {
-      app.kill();
+      // A killed process holds no lock: the relaunch opens the database once the dead one's connection is gone.
+      await app.kill();
       app = launch();
       const { status } = await app.account.resume();
       if (status === 'no-account') throw new Error('the app did not reopen its account');
     },
     dispose() {
-      app.kill();
+      void app.kill();
       storage.remove();
     },
   };

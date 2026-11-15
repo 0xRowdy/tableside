@@ -23,7 +23,7 @@ import {
 } from './eligibility';
 import { type BackendEnvironment, ENVIRONMENT_HEADER, type EnvironmentName, authCallbackUrl, retiredEnvironments } from './environment';
 import { type MetricsSink, createMetricsSender, discardMetrics } from './metrics';
-import { type EngineStatus, SyncEngine } from './sync/engine';
+import { type EngineStatus, type HistoryStatus, SyncEngine } from './sync/engine';
 import { type AccountRecords, accountRecords } from './sync/records';
 import { type RecordType, prerequisitesOf, recordTypes } from './sync/registry';
 import { type DevicePorts, SyncSession } from './sync/session';
@@ -288,20 +288,12 @@ export type VaultOpening =
   | { readonly status: 'open'; readonly session: VaultSession }
   | { readonly status: 'recovery-needed' | 'needs-update' | 'migration-failed' | 'superseded' };
 
-/**
- * The first download on a new device (#96): complete, or how far summaries
- * and totals and the last 90 days of detail have come, as fractions from 0 to 1.
- * Until #96 bootstraps a device, its history is complete.
- */
-export type HistoryStatus =
-  | { readonly state: 'complete' }
-  | { readonly state: 'incomplete'; readonly summaries: number; readonly detail: number };
+export type { HistoryStatus };
 
 /** What sync status (S2-20) shows: the engine's status, the live connection and the first download. */
 export interface SyncStatus extends EngineStatus {
   /** Whether this installation holds the account's live connection (the newest foregrounded one). */
   readonly live: boolean;
-  readonly history: HistoryStatus;
 }
 
 /**
@@ -645,7 +637,7 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
   /** The eligibility refresh in flight, for the session it belongs to. */
   let refreshing: { readonly session: OpenSession; readonly run: Promise<void> } | null = null;
   const syncListeners = new Set<(status: SyncStatus) => void>();
-  const syncStatus = (): SyncStatus => (sync ? { ...sync.engine.status, live: sync.session.isLive, history: { state: 'complete' } } : NO_SYNC);
+  const syncStatus = (): SyncStatus => (sync ? { ...sync.engine.status, live: sync.session.isLive } : NO_SYNC);
   const syncChanged = () => {
     const status = syncStatus();
     for (const listener of syncListeners) listener(status);
@@ -694,6 +686,10 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
       metrics,
     });
     engine.onChange(syncChanged);
+    // Its status read from the store first (the first download's progress among it), so it never shows a default.
+    await engine.idle();
+    // A sign-out, another sign-in or a closing gate while it read: not this one's to start.
+    if (opened !== current || sync || !opensOrdinaryAccess(gate)) return engine.stop();
     sync = {
       engine,
       store,
