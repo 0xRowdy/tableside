@@ -94,6 +94,21 @@ describe('Create with Apple or Google', () => {
   });
 });
 
+describe('the account currency on Create', () => {
+  it.each(['apple', 'google'] as const)('with %s starts in the creating device’s locale currency, as an email Create does', async (provider) => {
+    const phone = createDevice(stack, { name: 'phone', identityProvider: idp, localeCurrency: 'EUR' });
+    devices.push(phone);
+    const someone = person(`${provider}-currency`);
+    phone.providers!.accounts[provider] = someone;
+    expect(await phone.account.answerAgeQuestion('18+')).toEqual({ status: 'eligible' });
+    expect(await phone.account.createWithProvider(provider)).toEqual({ status: 'created' });
+
+    expect(await phone.account.accountSummary()).toMatchObject({ currency: 'EUR' });
+    const [account] = await stack.sql<{ currency: string }[]>`select currency from public.accounts where account_id = ${await stack.accountId(someone.email)}`;
+    expect(account?.currency).toBe('EUR');
+  });
+});
+
 describe('the age step on Create', () => {
   it('under 13, after Sign in found no account, ends with no Auth user', async () => {
     const phone = device('phone');
