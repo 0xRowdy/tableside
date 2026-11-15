@@ -42,5 +42,6 @@ Real projects don't exist yet; this is the checklist for when they do.
    - **App build:** `EXPO_PUBLIC_TABLESIDE_APPLE_SERVICES_ID`, `EXPO_PUBLIC_TABLESIDE_GOOGLE_WEB_CLIENT_ID` and `EXPO_PUBLIC_TABLESIDE_GOOGLE_IOS_CLIENT_ID` (`apps/mobile/src/account/provider-ports.ts`). None is a secret. A build without one has no sign-in with that provider on that platform.
 
    Apple native on iOS, Apple through the browser on Android and Google native on both are qualified on devices at launch gate 3.
+7. Point Auth's send-email hook at the project's `send-email` function (#100): in `[remotes.<environment>.auth.hook.send_email]`, `uri = "https://<project>.supabase.co/functions/v1/send-email?environment=<environment>"` and a new `secrets = "v1,whsec_<base64>"`, and set the same value as the function secret `TABLESIDE_SEND_EMAIL_HOOK_SECRET`. The URI names the environment, as every request does, so a hook pointed at another project's function is refused. Keep `double_confirm_changes` (Secure Email Change) on and `enable_manual_linking` off: fresh authentication depends on both (launch gate 4).
 
 Gate 13 (environment isolation) is checked against both real projects before external beta invitations and again for production (#109).

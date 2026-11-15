@@ -136,7 +136,7 @@ export const essentialPairs: readonly {
   { use: 'first-run link text', kind: 'text', foreground: 'primary', background: 'background' },
   { use: 'first-run choice text', kind: 'text', foreground: 'foreground', background: 'card' },
   { use: 'first-run choice detail', kind: 'text', foreground: 'mutedForeground', background: 'card' },
-  { use: 'sync waiting icon and warning banner border', kind: 'graphic', foreground: 'warning', background: 'card' },
+  { use: 'sync waiting icon, warning banner border and last sign-in method lock', kind: 'graphic', foreground: 'warning', background: 'card' },
   { use: 'sync waiting icon on its circle', kind: 'graphic', foreground: 'warning', background: 'secondary' },
   { use: 'sync download icon on its circle', kind: 'graphic', foreground: 'info', background: 'secondary' },
   { use: 'sync error icon on its circle', kind: 'graphic', foreground: 'destructive', background: 'secondary' },

@@ -18,13 +18,13 @@ export class Mailbox {
   }
 
   /**
-   * The code in the newest message to an address, waiting briefly for it to
-   * arrive. With `after`, waits for a code other than that one.
+   * The code in the newest message to an address that carries one (a security
+   * notice carries none), waiting briefly for it to arrive. With `after`,
+   * waits for a code other than that one.
    */
   async latestCode(email: string, options: { readonly after?: string } = {}): Promise<string> {
     for (let attempt = 0; attempt < 50; attempt++) {
-      const [newest] = await this.messages(email);
-      const code = newest && /\b(\d{6})\b/.exec(newest)?.[1];
+      const code = (await this.messages(email)).map((message) => /\b(\d{6})\b/.exec(message)?.[1]).find(Boolean);
       if (code && code !== options.after) return code;
       await new Promise((resolve) => setTimeout(resolve, 100));
     }

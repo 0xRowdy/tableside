@@ -176,6 +176,9 @@ enable_signup = true
 # Allow/disallow anonymous sign-ins to your project.
 enable_anonymous_sign_ins = false
 # Allow/disallow testing manual linking of accounts
+# Off: Auth's own link and unlink endpoints would skip fresh authentication.
+# Methods are added and removed only through link-method and
+# remove_sign_in_method_v1 (#100).
 enable_manual_linking = false
 # Passwords shorter than this value will be rejected as weak. Minimum 6, recommended 8 or more.
 minimum_password_length = 6
@@ -280,11 +283,18 @@ max_frequency = "5s"
 enabled = true
 uri = "pg-functions://postgres/private/before_user_created"
 
-# Auth sends no email: codes come only from the request-code function, which
-# applies the code-request limits (supabase/migrations/*_email_codes.sql).
+# Auth sends no email of its own: sign-in codes come only from the
+# request-code function, which applies the code-request limits
+# (supabase/migrations/*_email_codes.sql). The send-email function refuses
+# every other type except Secure Email Change's codes, which it sends only for
+# a change a freshly authenticated session authorized
+# (supabase/migrations/*_fresh_authentication.sql). The URI names the
+# environment, as every request does; beta and production set their own URI
+# and secret (docs/environments.md). The local secret signs only local hooks.
 [auth.hook.send_email]
 enabled = true
-uri = "pg-functions://postgres/private/refuse_auth_email"
+uri = "http://host.docker.internal:54321/functions/v1/send-email?environment=local"
+secrets = "v1,whsec_6KWm8Y0iXUQ5qMiAGbgTNyGqd4spJO6WIhE5qIxW/g4="
 
 # This hook runs before a token is issued and allows you to add additional claims based on the authentication method used.
 # Stamps every access token with the backend environment that issued it.
@@ -407,6 +417,8 @@ deno_version = 2
 TABLESIDE_MAILPIT_URL = "http://host.docker.internal:54324"
 TABLESIDE_ID_TOKEN_KEYCLOAK_ISSUER = "http://host.docker.internal:54330"
 TABLESIDE_ID_TOKEN_KEYCLOAK_AUDIENCES = "tableside-test-idp"
+# Must match [auth.hook.send_email] secrets: how send-email knows Auth called it.
+TABLESIDE_SEND_EMAIL_HOOK_SECRET = "v1,whsec_6KWm8Y0iXUQ5qMiAGbgTNyGqd4spJO6WIhE5qIxW/g4="
 
 # Called before any account exists, with the publishable key only.
 [functions.request-code]
@@ -418,6 +430,18 @@ verify_jwt = false
 
 # Apple's page posts here (Sign in with Apple on Android): no Supabase key at all.
 [functions.provider-callback]
+verify_jwt = false
+
+# Auth's send-email hook: Auth signs each call with the hook secret.
+[functions.send-email]
+verify_jwt = false
+
+# Confirm it's you, and adding a sign-in method (#100): each checks the
+# caller's own token against its session (caller_session_v1).
+[functions.fresh-auth]
+verify_jwt = false
+
+[functions.link-method]
 verify_jwt = false
 
 [analytics]
