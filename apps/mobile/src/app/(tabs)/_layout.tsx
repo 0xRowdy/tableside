@@ -2,12 +2,12 @@ import { Redirect } from 'expo-router';
 import { TabList, Tabs, TabSlot, TabTrigger } from 'expo-router/ui';
 import { StyleSheet } from 'react-native';
 
-import { isAgeRestricted, isSignedIn, useAccount } from '@/account/AccountProvider';
+import { isAgeRestricted, isSignedIn, useAccount, type AgeRestrictedGate } from '@/account/AccountProvider';
 import { AgeRestricted } from '@/account/AgeRestricted';
 import { FeedbackProvider } from '@/feedback/FeedbackProvider';
 import { TabBar, TabButton } from '@/navigation/TabBar';
 import { TABS } from '@/navigation/tabs';
-import { PracticeProvider } from '@/practice/PracticeProvider';
+import { PracticeProvider, usePractice } from '@/practice/PracticeProvider';
 import { palette } from '@/theme/tokens';
 
 /**
@@ -15,7 +15,8 @@ import { palette } from '@/theme/tokens';
  * First run comes before it: welcome, age (Create only), sign-in, then the
  * offline game choice. While the account's age eligibility isn't established,
  * the restricted screen replaces the tabs (no tab bar), under the same
- * practice controller, so a turn in progress can finish before it suspends.
+ * practice controller: a turn in progress finishes, and is seen, before the
+ * session suspends and the screen changes.
  */
 export default function TabsLayout() {
   const { gate, offlineGame } = useAccount();
@@ -29,25 +30,31 @@ export default function TabsLayout() {
   return (
     // A new account session gets its own practice controller; the gate's age states keep it.
     <PracticeProvider key={gate.accountId}>
-      {restricted ? (
-        <AgeRestricted gate={gate} />
-      ) : (
-        <FeedbackProvider>
-          <Tabs style={styles.root}>
-            <TabSlot />
-            <TabList asChild>
-              <TabBar>
-                {TABS.map((tab) => (
-                  <TabTrigger key={tab.name} name={tab.name} href={tab.href} asChild>
-                    <TabButton tab={tab} />
-                  </TabTrigger>
-                ))}
-              </TabBar>
-            </TabList>
-          </Tabs>
-        </FeedbackProvider>
-      )}
+      <TabsOrRestricted restricted={restricted ? gate : null} />
     </PracticeProvider>
+  );
+}
+
+/** The tabs, or the restricted screen once an unfinished practice session has reached its suspension. */
+function TabsOrRestricted({ restricted }: { restricted: AgeRestrictedGate | null }) {
+  const { snapshot } = usePractice();
+  const turnFinishing = snapshot.status === 'active' && snapshot.suspension?.reached !== true;
+  if (restricted && !turnFinishing) return <AgeRestricted gate={restricted} />;
+  return (
+    <FeedbackProvider>
+      <Tabs style={styles.root}>
+        <TabSlot />
+        <TabList asChild>
+          <TabBar>
+            {TABS.map((tab) => (
+              <TabTrigger key={tab.name} name={tab.name} href={tab.href} asChild>
+                <TabButton tab={tab} />
+              </TabTrigger>
+            ))}
+          </TabBar>
+        </TabList>
+      </Tabs>
+    </FeedbackProvider>
   );
 }
 

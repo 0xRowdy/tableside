@@ -10,22 +10,19 @@
 // A move between eligible bands is no pause. Gate states never stop play, so
 // they never trigger final settlement by themselves.
 
-import type { AccountGate, AccountService } from '@tableside/account';
+import { opensOrdinaryAccess, type AccountGate, type AccountService } from '@tableside/account';
 
 import type { AccessDecision, AccessDenial, AccessSupervisor } from '../practice/adapters';
 import type { PracticeController } from '../practice/controller';
 
-/** Gate states that leave ordinary access open: Renewal pending keeps it while the token renews. */
-const opensAccess = (gate: AccountGate): boolean => gate.state === 'active' || gate.state === 'renewal-pending';
-
-const PAUSED_FOR_AGE = 'Practice is paused until your age range can be confirmed.';
-const PAUSED = 'Practice is paused for this account.';
+const SUSPENDED_FOR_AGE = "Practice can't continue until your age range is confirmed.";
+const SUSPENDED = "Practice can't continue on this account.";
 
 /** What the gate asks of play, or null when it leaves ordinary access open. */
 function gateDenial(gate: AccountGate): AccessDenial | null {
-  if (opensAccess(gate)) return null;
-  if (gate.state === 'age-unresolved') return { status: 'denied', provenance: 'account-gate', disposition: 'suspend-at-turn-boundary', reason: PAUSED_FOR_AGE };
-  return { status: 'denied', provenance: 'account-gate', disposition: 'suspend', reason: PAUSED };
+  if (opensOrdinaryAccess(gate)) return null;
+  if (gate.state === 'age-unresolved') return { status: 'denied', provenance: 'account-gate', disposition: 'suspend-at-turn-boundary', reason: SUSPENDED_FOR_AGE };
+  return { status: 'denied', provenance: 'account-gate', disposition: 'suspend', reason: SUSPENDED };
 }
 
 /** The supervisor `access` behind the account gate `gate` reads. */
@@ -42,7 +39,7 @@ export function withAccountGate(access: AccessSupervisor, gate: () => AccountGat
     onLifecycle: (context) => ask(() => access.onLifecycle(context)),
     beforeEndWhileSuspended: async (context) => {
       const denial = gateDenial(gate());
-      return denial ? { status: 'blocked', reason: denial.reason ?? PAUSED } : access.beforeEndWhileSuspended(context);
+      return denial ? { status: 'blocked', reason: denial.reason ?? SUSPENDED } : access.beforeEndWhileSuspended(context);
     },
   };
 }
@@ -56,10 +53,10 @@ export function followAccountGate(
   service: Pick<AccountService, 'gate' | 'subscribe'>,
   controller: Pick<PracticeController, 'lifecycle'>,
 ): () => void {
-  let open = opensAccess(service.gate);
+  let open = opensOrdinaryAccess(service.gate);
   return service.subscribe((gate) => {
     const wasOpen = open;
-    open = opensAccess(gate);
+    open = opensOrdinaryAccess(gate);
     if (wasOpen && !open) void controller.lifecycle('access-changed');
   });
 }

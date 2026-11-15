@@ -7,22 +7,24 @@ import { type SupabaseClient, createClient } from '@supabase/supabase-js';
 import {
   type AgeRange,
   type AgeSignal,
+  ELIGIBILITY_REFRESH_MS,
   type EligibilityBand,
   type EligibilityRecord,
   type EligibilitySource,
   type PlatformAgeSignals,
+  type RequiredCheck,
   type UnresolvedReason,
   declarationPermitted,
-  isEligibilityStatus,
   isEligibleBand,
+  isRequiredCheck,
   noPlatformAgeSignals,
-  recordFromSignal,
-  unresolvedReason,
+  parseEligibilityRecord,
+  requiredCheck,
 } from './eligibility';
 import { type BackendEnvironment, ENVIRONMENT_HEADER, type EnvironmentName, retiredEnvironments } from './environment';
 import { SyncEngine, type SyncErrorCode } from './sync/engine';
 import { recordTypes } from './sync/registry';
-import { type DevicePorts, RECONCILE_INTERVAL_MS, SyncSession } from './sync/session';
+import { type DevicePorts, SyncSession } from './sync/session';
 import type { SyncStore } from './sync/store';
 import { supabaseLiveChannels, supabaseSyncBackend } from './sync/supabase';
 
@@ -41,14 +43,18 @@ export type AccountGate =
    */
   | { readonly state: 'database-unavailable'; readonly accountId: string; readonly reason: 'needs-update' | 'migration-failed' }
   /**
-   * The account's age eligibility isn't established: ordinary access is paused
+   * The account's age eligibility isn't established: ordinary access is closed
    * and only the restricted paths stay (deletion, Contact support, Make a
    * privacy request, billing help, authenticated export). The database stays
    * open for them. Retrying may resolve it.
    */
   | { readonly state: 'age-unresolved'; readonly accountId: string; readonly reason: UnresolvedReason }
-  /** The account is established as under 13: ordinary access is paused, with only the restricted paths. */
+  /** The account is established as under 13: ordinary access is closed, with only the restricted paths. */
   | { readonly state: 'age-ineligible'; readonly accountId: string };
+
+/** Gate states that leave ordinary access open: Renewal pending keeps it, under cached rights, while the token renews. */
+export const opensOrdinaryAccess = (gate: AccountGate): gate is Extract<AccountGate, { state: 'active' | 'renewal-pending' }> =>
+  gate.state === 'active' || gate.state === 'renewal-pending';
 
 /** Which way a player asks for a code: Sign in (an existing account) or Create (a new one). */
 export type CodeIntent = 'sign-in' | 'create';
@@ -210,18 +216,49 @@ export interface AccountService {
 /** Where the signed-in account is remembered, in the environment's credentials (so it goes with them). */
 const rememberedAccountKey = (environment: EnvironmentName) => `tableside.${environment}.account`;
 
-/** The account this installation is signed in to, with its current eligibility record as this device last knew it. */
+/**
+ * The account this installation is signed in to, as this device last knew
+ * it: the account's eligibility record (the server's, or a range this
+ * device's platform established), and this device's own platform state.
+ */
 interface RememberedAccount {
   readonly accountId: string;
   readonly eligibility: EligibilityRecord;
-  /** Why it is unresolved, when it is. */
-  readonly reason?: UnresolvedReason;
-  /** The last platform-signal status the server accepted from this device, so a signal is reported once. */
-  readonly reported?: string;
+  /** A required platform check this device still owes: it restricts this device only. */
+  readonly check?: RequiredCheck;
+  /** The last range this device's platform established, applied once; a later change elsewhere isn't overridden by repeating it. */
+  readonly signal?: AgeRange;
+  /** The last range the server accepted from this device, so each is reported once. */
+  readonly reported?: AgeRange;
 }
 
 const UNAVAILABLE: AgeSignal = { kind: 'unavailable' };
 const sameRecord = (a: EligibilityRecord, b: EligibilityRecord) => a.status === b.status && a.source === b.source;
+
+/** The remembered account after a platform answer: a required check is owed (or cleared), or a newly established range applies. */
+function afterSignal(base: RememberedAccount, signal: AgeSignal): RememberedAccount {
+  const owed = requiredCheck(signal);
+  const next: RememberedAccount = {
+    accountId: base.accountId,
+    eligibility: base.eligibility,
+    ...(owed ? { check: owed } : {}),
+    ...(base.signal ? { signal: base.signal } : {}),
+    ...(base.reported ? { reported: base.reported } : {}),
+  };
+  if (signal.kind !== 'range' || signal.range === base.signal) return next;
+  // Under 13 goes to support review: no platform answer raises it here (#42).
+  if (base.eligibility.status === 'under-13') return next;
+  return { ...next, eligibility: { status: signal.range, source: 'platform-signal' }, signal: signal.range };
+}
+
+/** The gate an open account is in. */
+function gateFor(remembered: RememberedAccount, renewing: boolean): AccountGate {
+  const { accountId, eligibility, check } = remembered;
+  if (eligibility.status === 'under-13') return { state: 'age-ineligible', accountId };
+  if (check) return { state: 'age-unresolved', accountId, reason: check === 'unmet' ? 'check-unmet' : 'check-pending' };
+  if (isEligibleBand(eligibility.status)) return { state: renewing ? 'renewal-pending' : 'active', accountId, eligibility: eligibility.status };
+  return { state: 'age-unresolved', accountId, reason: eligibility.source === 'platform-signal' ? 'check-pending' : 'not-established' };
+}
 
 interface Assertion {
   readonly token: string;
@@ -286,11 +323,15 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
   let declarationBlocked = false;
 
   let sync: { readonly engine: SyncEngine; readonly session: SyncSession } | null = null;
-  /** The open account session: its database, what this device knows of the account, and whether its token awaits renewal. */
-  let opened: { readonly session: VaultSession; remembered: RememberedAccount; renewing: boolean; readonly stopWatch: () => void } | null = null;
-  /** Counts account sessions: an answer for an earlier one changes nothing. */
-  let generation = 0;
-  let refreshing: Promise<void> | null = null;
+  /**
+   * The open account session: its database, what this device knows of the
+   * account, and whether its token awaits renewal. A new object for each
+   * session, so an answer for an earlier one (`opened !== current`) changes nothing.
+   */
+  type OpenSession = { readonly session: VaultSession; remembered: RememberedAccount; renewing: boolean; readonly stopWatch: () => void };
+  let opened: OpenSession | null = null;
+  /** The eligibility refresh in flight, for the session it belongs to. */
+  let refreshing: { readonly session: OpenSession; readonly run: Promise<void> } | null = null;
 
   const setGate = (next: AccountGate) => {
     if (JSON.stringify(next) === JSON.stringify(gate)) return;
@@ -298,18 +339,9 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
     for (const listener of listeners) listener(next);
   };
 
-  /** The gate an open account is in, from its eligibility record. */
-  const gateFor = (remembered: RememberedAccount, renewing: boolean): AccountGate => {
-    const { accountId, eligibility } = remembered;
-    if (isEligibleBand(eligibility.status)) return { state: renewing ? 'renewal-pending' : 'active', accountId, eligibility: eligibility.status };
-    if (eligibility.status === 'under-13') return { state: 'age-ineligible', accountId };
-    return { state: 'age-unresolved', accountId, reason: remembered.reason ?? unresolvedReason(eligibility, null) };
-  };
-
   /** Sync runs only while ordinary access is open: a restricted account's database stays open for its restricted paths only. */
   const updateSync = async () => {
-    const open = gate.state === 'active' || gate.state === 'renewal-pending';
-    if (!open) {
+    if (!opensOrdinaryAccess(gate)) {
       sync?.session.end();
       sync = null;
       return;
@@ -317,7 +349,8 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
     if (sync || !opened) return;
     const current = opened;
     const supabase = await connect();
-    if (opened !== current || sync) return;
+    // The gate may have closed, or another session opened, meanwhile.
+    if (opened !== current || sync || !opensOrdinaryAccess(gate)) return;
     const { store, installationId } = current.session;
     const engine = new SyncEngine({
       store,
@@ -329,25 +362,14 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
     sync = { engine, session: new SyncSession(engine, store, options.device, supabaseLiveChannels(supabase, current.remembered.accountId)) };
   };
 
-  /** Keeps what this device knows of the account (with its credentials, so it goes with them) and moves the gate. */
-  const remember = async (next: RememberedAccount) => {
-    if (!opened || opened.remembered.accountId !== next.accountId) return;
-    opened.remembered = next;
+  /** Keeps what this device knows of the open account (with its credentials, so it goes with them) and moves the gate. */
+  const remember = async (current: OpenSession, next: RememberedAccount) => {
+    if (opened !== current) return;
+    current.remembered = next;
     await credentials.setItem(rememberedAccountKey(backend.name), JSON.stringify(next));
-    setGate(gateFor(next, opened.renewing));
+    if (opened !== current) return;
+    setGate(gateFor(next, current.renewing));
     await updateSync();
-  };
-
-  /** A record learned for the open account: from this device's platform, or the server's current one. */
-  const learned = (base: RememberedAccount, record: EligibilityRecord, signal: AgeSignal | null): RememberedAccount => {
-    const next: RememberedAccount = { accountId: base.accountId, eligibility: record, ...(base.reported ? { reported: base.reported } : {}) };
-    return record.status === 'unresolved' ? { ...next, reason: unresolvedReason(record, signal) } : next;
-  };
-
-  /** What a platform signal makes the remembered account: unchanged when it proves nothing. */
-  const withSignal = (base: RememberedAccount, signal: AgeSignal): RememberedAccount => {
-    const record = recordFromSignal(signal);
-    return record ? learned(base, record, signal) : base;
   };
 
   /**
@@ -356,7 +378,6 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
    * sign-in overtook this one.
    */
   const openAccount = async (remembered: RememberedAccount, renewing = false) => {
-    generation++;
     opened?.stopWatch();
     opened = null;
     sync?.session.end();
@@ -374,67 +395,115 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
   /** Refreshes eligibility on entering the foreground, on reconnection and every minute while foregrounded and connected. */
   const watchEligibility = (): (() => void) => {
     const { device } = options;
-    const active = () => device.foreground.current() && device.online.current();
     const refresh = () => {
-      if (active()) void refreshEligibility().catch(() => undefined);
+      if (device.foreground.current() && device.online.current()) void refreshEligibility().catch(() => undefined);
     };
     const stops = [
       device.foreground.subscribe((foreground) => foreground && refresh()),
       device.online.subscribe((online) => online && refresh()),
-      device.every(RECONCILE_INTERVAL_MS, refresh),
+      device.every(ELIGIBILITY_REFRESH_MS, refresh),
     ];
     return () => stops.forEach((stop) => stop());
   };
 
-  /** Whether the server can be asked now: online, with a token that hasn't expired (Supabase would otherwise try to renew it itself). */
-  const canAskServer = () => opened !== null && !opened.renewing && options.device.online.current();
-
-  /** The server's current record for the signed-in account, or null when it can't say (offline, or the gate denies). */
-  const serverRecord = async (): Promise<EligibilityRecord | null> => {
-    const supabase = await connect();
-    const { data, error } = await supabase.rpc('current_account');
-    return error ? null : parseRecord(data);
+  const storedSession = async (): Promise<StoredSession | null> => {
+    const parsed = parseJson(await credentials.getItem(credentialsKey(backend.name))) as Partial<StoredSession> | null;
+    return parsed && typeof parsed.refresh_token === 'string' && typeof parsed.expires_at === 'number' ? (parsed as StoredSession) : null;
   };
 
-  /** Reports a decision; the server's answer becomes the remembered record. False when it couldn't be sent. */
-  const report = async (record: EligibilityRecord, signal: AgeSignal | null): Promise<boolean> => {
-    const current = opened;
-    if (!current) return false;
+  /** Renews an expired token, once; a failure leaves it awaiting renewal, with access and records. */
+  const renewSession = async (current: OpenSession): Promise<void> => {
+    if (!current.renewing) return;
+    const session = await storedSession();
+    if (!session) return;
+    try {
+      const response = await post('/auth/v1/token?grant_type=refresh_token', { refresh_token: session.refresh_token });
+      if (!response.ok) {
+        await response.arrayBuffer();
+        return;
+      }
+      const renewed = (await response.json()) as StoredSession;
+      // A sign-out or another account while this was in flight: touch nothing.
+      if (opened !== current) return;
+      const expiresAt = Math.floor(options.clock() / 1000) + renewed.expires_in;
+      await credentials.setItem(credentialsKey(backend.name), JSON.stringify({ ...renewed, expires_at: expiresAt }));
+      if (opened !== current) return;
+      current.renewing = false;
+      setGate(gateFor(current.remembered, false));
+      // The live connection re-subscribes with the renewed token, as on Supabase's own refresh.
+      sync?.session.credentialsChanged();
+    } catch {
+      // Offline or the response was lost: still awaiting renewal.
+    }
+  };
+
+  /**
+   * Whether the server can be asked now: online, with a token that hasn't
+   * expired (Supabase would otherwise try to renew it itself). The player's own
+   * retry or answer renews an expired token first; background refreshes leave
+   * renewal to its own trigger.
+   */
+  const canAskServer = async (current: OpenSession, { renew }: { readonly renew: boolean }): Promise<boolean> => {
+    if (!options.device.online.current()) return false;
+    if (renew) await renewSession(current);
+    return opened === current && !current.renewing;
+  };
+
+  /** The server's current record for the signed-in account, or null when it can't say (the gate denies, or the answer was lost). */
+  const serverRecord = async (): Promise<EligibilityRecord | null> => {
+    try {
+      const supabase = await connect();
+      const { data, error } = await supabase.rpc('current_account');
+      return error ? null : parseEligibilityRecord(data);
+    } catch {
+      return null;
+    }
+  };
+
+  /** Reports a decision; the server's answer becomes the account's record. False when it couldn't be sent. */
+  const report = async (current: OpenSession, record: EligibilityRecord): Promise<boolean> => {
     try {
       const supabase = await connect();
       const { data, error } = await supabase.rpc('record_eligibility_v1', { band: record.status, source: record.source });
-      const answer = error ? null : parseRecord(data);
+      const answer = error ? null : parseEligibilityRecord(data);
       if (!answer || opened !== current) return false;
       const accepted = (data as { accepted?: unknown }).accepted === true;
-      const next = learned(current.remembered, answer, signal);
-      await remember(accepted && record.source === 'platform-signal' ? { ...next, reported: record.status } : next);
+      const reported = accepted && record.source === 'platform-signal' && isAgeRange(record.status) ? record.status : current.remembered.reported;
+      await remember(current, { ...current.remembered, eligibility: answer, ...(reported ? { reported } : {}) });
       return true;
     } catch {
       return false;
     }
   };
 
-  const refreshOnce = async () => {
-    const current = opened;
-    if (!current) return;
-    const session = generation;
-    const signal = await ageSignals.check({ interactive: false }).catch(() => UNAVAILABLE);
-    if (opened !== current || generation !== session) return;
-    // What the platform established applies at once, offline too; restrictions never wait for the server.
-    await remember(withSignal(current.remembered, signal));
-    if (!canAskServer()) return;
-    const local = recordFromSignal(signal);
-    if (local && current.remembered.reported !== local.status) await report(local, signal);
-    if (opened !== current) return;
-    const record = await serverRecord().catch(() => null);
-    if (!record || opened !== current || sameRecord(record, current.remembered.eligibility)) return;
-    await remember(learned(current.remembered, record, signal));
+  /** Sends the range this device's platform established, once. */
+  const reportSignal = async (current: OpenSession): Promise<void> => {
+    const { signal, reported } = current.remembered;
+    if (signal && signal !== reported) await report(current, { status: signal, source: 'platform-signal' });
   };
 
-  const refreshEligibility = (): Promise<void> =>
-    (refreshing ??= refreshOnce().finally(() => {
-      refreshing = null;
-    }));
+  const refreshOnce = async (current: OpenSession) => {
+    const signal = await ageSignals.check({ interactive: false }).catch(() => UNAVAILABLE);
+    if (opened !== current) return;
+    // What the platform says applies at once, offline too: restrictions never wait for the server.
+    await remember(current, afterSignal(current.remembered, signal));
+    if (!(await canAskServer(current, { renew: false }))) return;
+    await reportSignal(current);
+    const record = await serverRecord();
+    if (!record || opened !== current || sameRecord(record, current.remembered.eligibility)) return;
+    await remember(current, { ...current.remembered, eligibility: record });
+  };
+
+  const refreshEligibility = (): Promise<void> => {
+    const current = opened;
+    if (!current) return Promise.resolve();
+    if (refreshing?.session === current) return refreshing.run;
+    const run = refreshOnce(current).finally(() => {
+      if (refreshing?.run === run) refreshing = null;
+    });
+    refreshing = { session: current, run };
+    return run;
+  };
 
   const currentAssertion = () => (assertion && assertion.expiresAt > options.clock() ? assertion : null);
 
@@ -459,11 +528,6 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
     return { status: 'eligible' };
   };
 
-  const storedSession = async (): Promise<StoredSession | null> => {
-    const parsed = parseJson(await credentials.getItem(credentialsKey(backend.name))) as Partial<StoredSession> | null;
-    return parsed && typeof parsed.refresh_token === 'string' && typeof parsed.expires_at === 'number' ? (parsed as StoredSession) : null;
-  };
-
   return {
     get gate() {
       return gate;
@@ -481,35 +545,31 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
         assertion = null;
         declarationBlocked = false;
         const signal = await ageSignals.check({ interactive: true }).catch(() => UNAVAILABLE);
-        const record = recordFromSignal(signal);
-        if (!record) return { status: 'question' };
-        if (record.status === 'unresolved') {
+        if (requiredCheck(signal)) {
           declarationBlocked = true;
           return { status: 'unresolved' };
         }
+        if (signal.kind !== 'range') return { status: 'question' };
         // Under 13 ends here: nothing is sent, so nothing is kept.
-        if (record.status === 'under-13') return { status: 'ineligible' };
-        return obtainAssertion(record.status, 'platform-signal');
+        if (signal.range === 'under-13') return { status: 'ineligible' };
+        return obtainAssertion(signal.range, 'platform-signal');
       }
       const current = opened;
       if (gate.state !== 'age-unresolved' || !current) return { status: 'failed' };
       const signal = await ageSignals.check({ interactive: true }).catch(() => UNAVAILABLE);
       if (opened !== current) return { status: 'failed' };
-      const record = recordFromSignal(signal);
-      if (!record) {
-        // The platform proved nothing: the record stands, and the question may decide only if nothing sufficient is on it.
-        return declarationPermitted(current.remembered.eligibility) ? { status: 'question' } : { status: 'unresolved' };
-      }
-      await remember(learned(current.remembered, record, signal));
-      if (canAskServer()) await report(record, signal);
+      await remember(current, afterSignal(current.remembered, signal));
+      if (await canAskServer(current, { renew: true })) await reportSignal(current);
+      // The platform proved nothing: the record stands, and the question may decide only if nothing sufficient is on it.
+      if (gate.state === 'age-unresolved' && declarationPermitted(current.remembered.eligibility, current.remembered.check ?? null)) return { status: 'question' };
       return retryOutcome();
     },
 
     async answerAgeQuestion(range) {
       const current = opened;
       if (gate.state === 'age-unresolved' && current) {
-        if (!declarationPermitted(current.remembered.eligibility)) return { status: 'unresolved' };
-        if (!canAskServer() || !(await report({ status: range, source: 'declaration' }, null))) return { status: 'failed' };
+        if (!declarationPermitted(current.remembered.eligibility, current.remembered.check ?? null)) return { status: 'unresolved' };
+        if (!(await canAskServer(current, { renew: true })) || !(await report(current, { status: range, source: 'declaration' }))) return { status: 'failed' };
         return retryOutcome();
       }
       assertion = null;
@@ -545,7 +605,7 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
         if (error) return { status: error.code === 'otp_expired' ? 'invalid-code' : 'failed' };
         const { data, error: accountError } = await supabase.rpc('current_account');
         const accountId = (data as { account_id?: unknown } | null)?.account_id;
-        const record = accountError ? null : parseRecord(data);
+        const record = accountError ? null : parseEligibilityRecord(data);
         if (typeof accountId !== 'string' || !record) {
           await supabase.auth.signOut({ scope: 'local' });
           return { status: 'failed' };
@@ -554,11 +614,11 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
         declarationBlocked = false;
         // The account's server record governs; required platform checks still run on this device.
         const signal = await ageSignals.check({ interactive: false }).catch(() => UNAVAILABLE);
-        const remembered = withSignal(learned({ accountId, eligibility: record }, record, null), signal);
+        const remembered = afterSignal({ accountId, eligibility: record }, signal);
         await credentials.setItem(rememberedAccountKey(backend.name), JSON.stringify(remembered));
         await openAccount(remembered);
-        const local = recordFromSignal(signal);
-        if (local) await report(local, signal);
+        const current = opened;
+        if (current) await reportSignal(current);
         return { status: 'signed-in' };
       } catch {
         return { status: 'failed' };
@@ -581,31 +641,9 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
     },
 
     async renew() {
-      const current = opened;
-      if (!current?.renewing) return;
-      const session = await storedSession();
-      if (!session) return;
-      try {
-        // One attempt: a failure leaves Renewal pending to try again later.
-        const response = await post('/auth/v1/token?grant_type=refresh_token', { refresh_token: session.refresh_token });
-        if (!response.ok) {
-          await response.arrayBuffer();
-          return;
-        }
-        const renewed = (await response.json()) as StoredSession;
-        // A sign-out or another account while this was in flight: touch nothing.
-        if (opened !== current) return;
-        const expiresAt = Math.floor(options.clock() / 1000) + renewed.expires_in;
-        await credentials.setItem(credentialsKey(backend.name), JSON.stringify({ ...renewed, expires_at: expiresAt }));
-        if (opened !== current) return;
-        current.renewing = false;
-        setGate(gateFor(current.remembered, false));
-        // The live connection re-subscribes with the renewed token, as on Supabase's own refresh.
-        sync?.session.credentialsChanged();
-      } catch {
-        // Offline or the response was lost: still Renewal pending.
-      }
+      if (opened) await renewSession(opened);
     },
+
     sync: {
       get status(): SyncStatus {
         return { live: sync?.session.isLive ?? false, error: sync?.engine.error ?? null };
@@ -626,29 +664,21 @@ function parseJson(text: string | null): unknown {
 }
 
 function parseRemembered(text: string | null): RememberedAccount | null {
-  const value = parseJson(text) as { accountId?: unknown; eligibility?: unknown; reason?: unknown; reported?: unknown } | null;
+  const value = parseJson(text) as { accountId?: unknown; eligibility?: unknown; check?: unknown; signal?: unknown; reported?: unknown } | null;
   if (!value || typeof value.accountId !== 'string') return null;
   // Remembered before #90 as the bare band, which was always declared.
-  const eligibility = typeof value.eligibility === 'string' ? parseRecord({ eligibility: value.eligibility }) : parseRecord(value.eligibility);
+  const eligibility = parseEligibilityRecord(typeof value.eligibility === 'string' ? { eligibility: value.eligibility } : value.eligibility);
   if (!eligibility) return null;
   return {
     accountId: value.accountId,
     eligibility,
-    ...(isReason(value.reason) ? { reason: value.reason } : {}),
-    ...(typeof value.reported === 'string' ? { reported: value.reported } : {}),
+    ...(isRequiredCheck(value.check) ? { check: value.check } : {}),
+    ...(isAgeRange(value.signal) ? { signal: value.signal } : {}),
+    ...(isAgeRange(value.reported) ? { reported: value.reported } : {}),
   };
 }
 
-/** An eligibility record as the server (or the remembered account) gives it: { eligibility, source } or { status, source }. */
-function parseRecord(value: unknown): EligibilityRecord | null {
-  if (typeof value !== 'object' || value === null) return null;
-  const { eligibility, status = eligibility, source = 'declaration' } = value as { eligibility?: unknown; status?: unknown; source?: unknown };
-  if (!isEligibilityStatus(status) || (source !== 'declaration' && source !== 'platform-signal')) return null;
-  return { status, source };
-}
-
-const REASONS: readonly string[] = ['check-pending', 'check-unmet', 'not-established'] satisfies UnresolvedReason[];
-const isReason = (value: unknown): value is UnresolvedReason => typeof value === 'string' && REASONS.includes(value);
+const isAgeRange = (value: unknown): value is AgeRange => value === 'under-13' || (typeof value === 'string' && isEligibleBand(value));
 
 const hex = (bytes: Uint8Array): string => Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
 

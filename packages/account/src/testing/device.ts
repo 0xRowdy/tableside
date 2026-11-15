@@ -170,9 +170,10 @@ export interface SimulatedDevice {
   /**
    * Starts a practice session (roulette, a 1,000 buy-in, a 10-unit red wager
    * placed) on the open account and leaves it unfinished, with the account
-   * gate composed into its access supervisor as the app has it.
+   * gate composed into its access supervisor as the app has it. Its clock
+   * advances by itself unless the scenario passes one it moves by hand.
    */
-  startPracticeSession(): Promise<PracticeController>;
+  startPracticeSession(options?: { readonly clock?: PracticeClock }): Promise<PracticeController>;
   /** The app process dies where it is: nothing it had in flight completes on the device. */
   kill(): void;
   /** Starts the app again after a kill (or kills it first), reopening the remembered account. */
@@ -355,9 +356,9 @@ export function createDevice(stack: LocalStack, options: DeviceOptions): Simulat
       if (snapshot.status !== 'completed') throw new Error(`the practice session did not complete (${snapshot.status})`);
       return snapshot.result;
     },
-    async startPracticeSession() {
+    async startPracticeSession({ clock = new PracticeClock(undefined, true) } = {}) {
       const opening = openSession(app);
-      const base = { ...substituteAdapters({ clock: new PracticeClock(undefined, true) }), newId: () => `activity-${hex(entropy.bytes(16))}` };
+      const base = { ...substituteAdapters({ clock }), newId: () => `activity-${hex(entropy.bytes(16))}` };
       const account = app.account;
       const controller = new PracticeController(forAccountSession({ ...base, access: withAccountGate(base.access, () => account.gate) }, opening));
       followAccountGate(account, controller);

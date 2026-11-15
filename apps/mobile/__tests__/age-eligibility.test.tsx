@@ -172,7 +172,9 @@ describe('an account whose age is unresolved', () => {
     await fireEvent.press(button('Continue'));
 
     await waitFor(() => expect(screen.getByTestId('tab-bar')).toBeOnTheScreen());
-    expect(service().calls.map((call) => call.method)).toEqual(['resume', 'checkAge', 'answerAgeQuestion']);
+    // A restricted account renews its token first, for its restricted paths.
+    expect(service().calls.map((call) => call.method).filter((method) => method !== 'renew')).toEqual(['resume', 'checkAge', 'answerAgeQuestion']);
+    expect(service().calls[1]).toEqual({ method: 'renew' });
   });
 
   it('says so when a retry still can’t confirm it, and stays paused', async () => {
@@ -191,6 +193,17 @@ describe('an account whose age is unresolved', () => {
     await openApp();
     await header("We couldn't confirm your age");
     expect(screen.getByText(/requires an age check that can't be completed here/)).toBeOnTheScreen();
+  });
+
+  it('works in landscape', async () => {
+    launch.stored = UNRESOLVED;
+    const window = Dimensions.get('window');
+    await act(() => Dimensions.set({ window: { ...window, width: 844, height: 390 }, screen: { ...window, width: 844, height: 390 } }));
+    await openApp();
+    await header("We couldn't confirm your age");
+    expect(button('Try the age check again')).toBeOnTheScreen();
+    expect(button('Make a privacy request. See, correct, delete or get a copy of your data')).toBeOnTheScreen();
+    await act(() => Dimensions.set({ window, screen: window }));
   });
 
   it('reflows at the largest text size', async () => {

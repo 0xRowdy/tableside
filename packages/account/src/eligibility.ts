@@ -60,44 +60,51 @@ export const noPlatformAgeSignals: PlatformAgeSignals = {
   check: async () => ({ kind: 'unavailable' }),
 };
 
-/** Why an account's eligibility is unresolved, as the restricted screen explains it. */
+/** Why an account's eligibility is unresolved on this device, as the restricted screen explains it. */
 export type UnresolvedReason =
-  /** A required platform check is pending or has expired: retrying the check may resolve it. */
+  /** This device's platform requires a check that is pending or has expired: retrying the check may resolve it. */
   | 'check-pending'
-  /** A required platform check can't be met on this device: the conflict is surfaced, support can help. */
+  /** This device's platform requires a check that can't be met here: the conflict is surfaced, support can help. */
   | 'check-unmet'
-  /** No sufficient evidence was given: a new signal or the fallback question may resolve it. */
+  /** No sufficient evidence is on record: a new signal or the fallback question may resolve it. */
   | 'not-established';
+
+/**
+ * A required platform check this device still owes. It restricts this device
+ * only: it isn't age information, so it never changes the account's record,
+ * and it clears once the platform answers without a requirement.
+ */
+export type RequiredCheck = 'pending' | 'unmet';
+
+/** How often eligibility refreshes while foregrounded and connected: the same minute as reconciliation. */
+export const ELIGIBILITY_REFRESH_MS = 60_000;
 
 const ELIGIBLE: readonly string[] = ['13-15', '16-17', '18+'] satisfies EligibilityBand[];
 const STATUSES: readonly string[] = ['under-13', '13-15', '16-17', '18+', 'unresolved'] satisfies EligibilityStatus[];
 
 export const isEligibleBand = (status: string | null | undefined): status is EligibilityBand => typeof status === 'string' && ELIGIBLE.includes(status);
-export const isEligibilityStatus = (status: unknown): status is EligibilityStatus => typeof status === 'string' && STATUSES.includes(status);
 
-/** What a platform signal makes the record, or null when it proves nothing (the record stands). */
-export function recordFromSignal(signal: AgeSignal): EligibilityRecord | null {
-  switch (signal.kind) {
-    case 'range':
-      return { status: signal.range, source: 'platform-signal' };
-    case 'required-pending':
-    case 'required-unmet':
-      return { status: 'unresolved', source: 'platform-signal' };
-    default:
-      return null;
-  }
+/** The required check a platform answer leaves owing, or null when it requires none. */
+export function requiredCheck(signal: AgeSignal): RequiredCheck | null {
+  if (signal.kind === 'required-pending') return 'pending';
+  if (signal.kind === 'required-unmet') return 'unmet';
+  return null;
 }
 
 /**
  * Whether the fallback answer may decide: only while nothing sufficient is on
- * record, so a declaration never overrides a required check or a platform's
- * answer, and an established band is never asked again.
+ * record and no required check is owed, so a declaration never overrides a
+ * required check or a platform's answer, and an established band is never asked again.
  */
-export const declarationPermitted = (current: EligibilityRecord | null): boolean =>
-  current === null || (current.status === 'unresolved' && current.source === 'declaration');
+export const declarationPermitted = (current: EligibilityRecord | null, check: RequiredCheck | null = null): boolean =>
+  check === null && (current === null || (current.status === 'unresolved' && current.source === 'declaration'));
 
-/** Why an unresolved record is unresolved, given what this device's platform last said. */
-export function unresolvedReason(record: EligibilityRecord, signal: AgeSignal | null): UnresolvedReason {
-  if (signal?.kind === 'required-unmet') return 'check-unmet';
-  return record.source === 'platform-signal' ? 'check-pending' : 'not-established';
+/** An eligibility record as the server gives it ({ eligibility, source }) or as it is remembered ({ status, source }); null when malformed. */
+export function parseEligibilityRecord(value: unknown): EligibilityRecord | null {
+  if (typeof value !== 'object' || value === null) return null;
+  const { eligibility, status = eligibility, source = 'declaration' } = value as { eligibility?: unknown; status?: unknown; source?: unknown };
+  if (typeof status !== 'string' || !STATUSES.includes(status) || (source !== 'declaration' && source !== 'platform-signal')) return null;
+  return { status: status as EligibilityStatus, source };
 }
+
+export const isRequiredCheck = (value: unknown): value is RequiredCheck => value === 'pending' || value === 'unmet';

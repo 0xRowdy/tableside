@@ -1,23 +1,23 @@
 // The account gate's age states (S2-15 "unresolved, existing account paused"):
-// ordinary access is paused and the tab bar hidden, the records are kept, and
+// ordinary access is closed and the tab bar hidden, the records are kept, and
 // the restricted paths stay. Unresolved may retry the age check; when the
 // platform proves nothing and a declaration may decide, the fallback question follows.
-// TODO(frames): the under-13 variant (an existing account found under 13) and the
-// "can't be met" conflict line have no frame; they reuse S2-15's unresolved layout.
+// TODO(frames): the under-13 variant (an existing account found under 13), the
+// "can't be met" conflict line and the "still couldn't be confirmed" retry
+// status have no frame; they reuse S2-15's unresolved layout and type.
 
-import type { AccountGate } from '@tableside/account';
 import { useState } from 'react';
 
 import { Button } from '@/components/Button';
 
-import { useAccount } from './AccountProvider';
+import { useAccount, type AgeRestrictedGate } from './AccountProvider';
 import { AgeQuestionScreen, CONNECTION_PROBLEM } from './AgeQuestion';
 import { Actions, Body, FirstRunScreen, InlineMessage, SectionLabel, Status } from './FirstRunParts';
 import { RestrictedPathRows } from './RestrictedPaths';
 
 const PAUSED = { title: 'Account paused' } as const;
 
-export function AgeRestricted({ gate }: { gate: Extract<AccountGate, { state: 'age-unresolved' | 'age-ineligible' }> }) {
+export function AgeRestricted({ gate }: { gate: AgeRestrictedGate }) {
   const { service } = useAccount();
   const [asking, setAsking] = useState(false);
   const [busy, setBusy] = useState(false);

@@ -4,6 +4,8 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { REVEAL_MS } from '../../../apps/mobile/src/practice/controller';
+import { FakeClock as ManualClock } from '../../../apps/mobile/src/practice/testing/substitutes';
 import type { EligibilityBand } from '../src';
 import { type SimulatedDevice, accessToken, createAccountByEmail, createDevice, localStack, signInByEmail, uniqueEmail } from '../src/testing';
 
@@ -15,13 +17,16 @@ function device(name: string): SimulatedDevice {
 }
 afterEach(() => devices.splice(0).forEach((d) => d.dispose()));
 
-async function createAccount(email: string, band: EligibilityBand = '18+') {
+/** Creates an account on a setup device, which stays signed in to it. */
+async function createAccountOn(email: string, band: EligibilityBand = '18+') {
   const setup = device('setup');
   expect(await createAccountByEmail(setup, email, band)).toEqual({ status: 'signed-in' });
   const accountId = await localStack().accountId(email);
   if (!accountId) throw new Error('no account');
-  return accountId;
+  return { accountId, setup };
 }
+
+const createAccount = async (email: string, band: EligibilityBand = '18+') => (await createAccountOn(email, band)).accountId;
 
 /** What support review (or a platform signal reported from another device) leaves as the account's record. */
 async function setServerRecord(accountId: string, band: string, source = 'platform-signal') {
@@ -126,16 +131,24 @@ describe('an existing account on a new device', () => {
     expect(tablet.ageSignals.checks).toEqual(['silent']);
   });
 
-  it('required platform checks still run there: a pending one makes it unresolved, recorded for the account', async () => {
+  it('required platform checks still run there: a pending one restricts that device only', async () => {
     const email = uniqueEmail('required-on-new-device');
-    const accountId = await createAccount(email);
+    const { accountId, setup: phone } = await createAccountOn(email);
     const tablet = createDevice(localStack(), { name: 'tablet', platformAgeSignals: true });
     devices.push(tablet);
     tablet.ageSignals.signal = { kind: 'required-pending' };
 
     expect(await signInByEmail(tablet, email)).toEqual({ status: 'signed-in' });
     expect(tablet.account.gate).toEqual({ state: 'age-unresolved', accountId, reason: 'check-pending' });
-    expect(await serverRecords(accountId)).toEqual([{ band: 'unresolved', source: 'platform-signal', policy_version: 1 }]);
+    // It isn't age information: the account's record and its other devices are untouched.
+    expect(await serverRecords(accountId)).toEqual([{ band: '18+', source: 'declaration', policy_version: 1 }]);
+    await phone.account.refreshEligibility();
+    expect(phone.account.gate).toEqual({ state: 'active', accountId, eligibility: '18+' });
+
+    // Once the platform no longer requires the check, the record governs again.
+    tablet.ageSignals.signal = { kind: 'unavailable' };
+    await tablet.account.refreshEligibility();
+    expect(tablet.account.gate).toEqual({ state: 'active', accountId, eligibility: '18+' });
   });
 
   it('a check that can’t be met surfaces the conflict', async () => {
@@ -164,15 +177,14 @@ describe('retrying while unresolved', () => {
     expect(await serverRecords(accountId)).toEqual([{ band: '16-17', source: 'declaration', policy_version: 1 }]);
   });
 
-  it('after a required check, only a new platform signal resolves it, never an answer', async () => {
+  it('while a required check is owed, only the platform resolves it, never an answer', async () => {
     const email = uniqueEmail('retry-signal');
-    const accountId = await createAccount(email);
+    const accountId = await createAccount(email, '16-17');
     const phone = createDevice(localStack(), { name: 'phone', platformAgeSignals: true });
     devices.push(phone);
     phone.ageSignals.signal = { kind: 'required-pending' };
     await signInByEmail(phone, email);
 
-    phone.ageSignals.signal = { kind: 'declined' };
     expect(await phone.account.checkAge()).toEqual({ status: 'unresolved' });
     expect(await phone.account.answerAgeQuestion('18+')).toEqual({ status: 'unresolved' });
     expect(phone.account.gate).toMatchObject({ state: 'age-unresolved' });
@@ -208,6 +220,54 @@ describe('the record', () => {
 
     expect(await serverRecords(accountId)).toEqual([{ band: '16-17', source: 'platform-signal', policy_version: 1 }]);
     expect((await localStack().columns('public.eligibility')).sort()).toEqual(['account_id', 'band', 'checked_at', 'policy_version', 'source']);
+  });
+
+  it('no direct report raises an under-13 record, or records an unresolved check', async () => {
+    const email = uniqueEmail('direct-under13');
+    const accountId = await createAccount(email);
+    const phone = device('phone');
+    await signInByEmail(phone, email);
+    await setServerRecord(accountId, 'under-13');
+
+    const client = localStack().rawClient(accessToken(phone));
+    expect((await client.rpc('record_eligibility_v1', { band: '18+', source: 'platform-signal' })).data).toEqual({
+      accepted: false,
+      eligibility: 'under-13',
+      source: 'platform-signal',
+    });
+    expect((await client.rpc('record_eligibility_v1', { band: 'unresolved', source: 'platform-signal' })).error).not.toBeNull();
+    expect(await serverRecords(accountId)).toEqual([{ band: 'under-13', source: 'platform-signal', policy_version: 1 }]);
+  });
+
+  it('a device that learned under 13 doesn’t raise it from its own platform’s later answer', async () => {
+    const email = uniqueEmail('no-raise');
+    const accountId = await createAccount(email);
+    await setServerRecord(accountId, 'under-13');
+    const phone = createDevice(localStack(), { name: 'phone', platformAgeSignals: true });
+    devices.push(phone);
+    await signInByEmail(phone, email);
+
+    phone.ageSignals.signal = { kind: 'range', range: '18+' };
+    await phone.account.refreshEligibility();
+    expect(phone.account.gate).toEqual({ state: 'age-ineligible', accountId });
+  });
+
+  it('a device doesn’t keep reasserting its platform’s range over a later change made elsewhere', async () => {
+    const email = uniqueEmail('no-flip');
+    const accountId = await createAccount(email, '16-17');
+    const phone = createDevice(localStack(), { name: 'phone', platformAgeSignals: true });
+    devices.push(phone);
+    phone.ageSignals.signal = { kind: 'range', range: '18+' };
+    await signInByEmail(phone, email);
+    expect(await serverRecords(accountId)).toEqual([{ band: '18+', source: 'platform-signal', policy_version: 1 }]);
+
+    await setServerRecord(accountId, '13-15');
+    const seen: string[] = [];
+    phone.account.subscribe((gate) => seen.push(gate.state === 'active' ? gate.eligibility : gate.state));
+    await phone.account.refreshEligibility();
+    await phone.account.refreshEligibility();
+    expect(phone.account.gate).toEqual({ state: 'active', accountId, eligibility: '13-15' });
+    expect(seen).toEqual(['13-15']);
   });
 
   it('a declaration never replaces an established record, even called directly', async () => {
@@ -273,7 +333,7 @@ describe('offline', () => {
     expect(phone.account.gate).toEqual({ state: 'age-ineligible', accountId });
   });
 
-  it('a required check expiring offline applies at once, and reaches the server on reconnection', async () => {
+  it('a required check expiring offline applies at once, on this device only', async () => {
     const email = uniqueEmail('offline-expiry');
     const accountId = await createAccount(email);
     const phone = createDevice(localStack(), { name: 'phone', platformAgeSignals: true });
@@ -288,7 +348,23 @@ describe('offline', () => {
 
     phone.proxy.online = true;
     await phone.account.refreshEligibility();
-    expect(await serverRecords(accountId)).toEqual([{ band: 'unresolved', source: 'platform-signal', policy_version: 1 }]);
+    expect(phone.account.gate).toMatchObject({ state: 'age-unresolved' });
+    expect(await serverRecords(accountId)).toEqual([{ band: '18+', source: 'declaration', policy_version: 1 }]);
+  });
+
+  it('a restricted account whose token expired offline renews before it asks the server', async () => {
+    const email = uniqueEmail('restricted-expired');
+    const accountId = await createAccount(email);
+    await localStack().sql`delete from public.eligibility where account_id = ${accountId}`;
+    const phone = device('phone');
+    await signInByEmail(phone, email);
+    phone.proxy.online = false;
+    phone.clock.advance(2 * 60 * 60_000);
+    await phone.restart();
+    phone.proxy.online = true;
+
+    expect(await phone.account.answerAgeQuestion('18+')).toEqual({ status: 'eligible' });
+    expect(phone.account.gate).toEqual({ state: 'active', accountId, eligibility: '18+' });
   });
 });
 
@@ -350,6 +426,30 @@ describe('an active practice session', () => {
     expect(await phone.vault.store().readOutgoing()).toEqual([]);
     // The session is saved in its committed phase, waiting.
     expect((await phone.vault.store().findUnfinished())?.activityId).toBe(unfinished?.activityId);
+  });
+
+  it('lets a turn in progress finish, then suspends at the boundary, when a required check expires', async () => {
+    const email = uniqueEmail('turn-boundary');
+    await createAccount(email);
+    const phone = createDevice(localStack(), { name: 'phone', platformAgeSignals: true });
+    devices.push(phone);
+    await signInByEmail(phone, email);
+    const clock = new ManualClock();
+    const practice = await phone.startPracticeSession({ clock });
+    const spinning = practice.spin();
+    await vi.waitFor(() => expect(clock.pending).toBe(1));
+
+    phone.ageSignals.signal = { kind: 'required-pending' };
+    await phone.account.refreshEligibility();
+    clock.advance(REVEAL_MS);
+    await spinning;
+
+    expect(practice.snapshot()).toMatchObject({
+      status: 'active',
+      view: { phase: 'settled-outcome' },
+      suspension: { cause: 'access', kind: 'turn-boundary', reached: true },
+    });
+    expect(await phone.vault.store().readOutgoing()).toEqual([]);
   });
 
   it('carries on when the band moves between eligible bands', async () => {

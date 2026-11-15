@@ -35,6 +35,7 @@ export {
   type VaultOpening,
   type VaultSession,
   createAccountService,
+  opensOrdinaryAccess,
 } from './service';
 export { type MetricPurpose, metricPermitted } from './metrics';
 export { type SyncErrorCode } from './sync/engine';

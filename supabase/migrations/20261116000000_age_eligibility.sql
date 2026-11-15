@@ -9,8 +9,10 @@
 -- The record
 -- ---------------------------------------------------------------------------
 
--- Unresolved: a required platform check is pending or can't be met, or no
--- sufficient evidence was given. A missing record reads as unresolved too.
+-- Unresolved: no sufficient evidence is on record (support may also set it).
+-- A missing record reads as unresolved too. A required platform check that is
+-- pending or can't be met restricts only the device that owes it, so it is
+-- never recorded here.
 alter table public.eligibility drop constraint eligibility_band_check;
 alter table public.eligibility add constraint eligibility_band_check
   check (band in ('under-13', '13-15', '16-17', '18+', 'unresolved'));
@@ -192,14 +194,19 @@ $$;
 -- Recording a new decision
 -- ---------------------------------------------------------------------------
 
--- A device reports what a platform age signal established ('platform-signal':
--- a band, under 13, or unresolved when a required check is pending or can't be
--- met), or the fallback answer ('declaration'). It replaces the one current
--- record. A declaration is accepted only while nothing sufficient is on
--- record (no record, or unresolved without a platform check), so it never
--- overrides a required check or a platform's younger answer, and nothing ever
--- promotes a band by itself. Returns the current record and whether this
--- report changed it. Raw platform responses never reach the server.
+-- A device reports the range a platform age signal established
+-- ('platform-signal': a band or under 13), or the fallback answer
+-- ('declaration'). It replaces the one current record. A declaration is
+-- accepted only while nothing sufficient is on record (no record, or
+-- unresolved without a platform signal), so it never overrides a platform's
+-- answer, and nothing ever promotes a band by itself. No report raises an
+-- under-13 record: that goes to manual support review (#42). Returns the
+-- current record and whether this report replaced it. Raw platform responses
+-- never reach the server.
+--
+-- A platform signal can't be verified here (the platforms answer on the
+-- device only), so a modified client could report a false range, as with any
+-- device-authoritative input (#16); only the under-13 rule is enforced on it.
 create function public.record_eligibility_v1(band text, source text) returns jsonb
 language plpgsql volatile security definer set search_path = '' as $$
 declare
@@ -211,15 +218,14 @@ begin
     raise exception 'not signed in' using errcode = '42501';
   end if;
   if source is null or source not in ('declaration', 'platform-signal')
-    or band is null or band not in ('under-13', '13-15', '16-17', '18+', 'unresolved')
-    or (source = 'declaration' and band = 'unresolved') then
+    or band is null or band not in ('under-13', '13-15', '16-17', '18+') then
     raise exception 'malformed eligibility report' using errcode = '22023';
   end if;
   -- One decision at a time per account.
   perform 1 from public.accounts where account_id = v_account for update;
   select * into v_current from public.eligibility e where e.account_id = v_account;
-  v_accepted := source = 'platform-signal'
-    or v_current.account_id is null
+  v_accepted := v_current.account_id is null
+    or (v_current.band is distinct from 'under-13' and source = 'platform-signal')
     or (v_current.band = 'unresolved' and v_current.source = 'declaration');
   if v_accepted then
     insert into public.eligibility as e (account_id, band, source, checked_at, policy_version)
