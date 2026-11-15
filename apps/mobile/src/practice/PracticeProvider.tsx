@@ -13,8 +13,9 @@ const PracticeContext = createContext<PracticeController | null>(null);
  * Owns the signed-in account's practice controller, on the account's own
  * store, behind the account gate. On launch it finds any unfinished session,
  * which waits suspended for the player; app lifecycle changes reach the
- * controller (backgrounding suspends, and the supervisor hears each one), and
- * so does the gate closing ordinary access (spec 2 Amendment 1 B3).
+ * controller (backgrounding and sign-out suspend, and the supervisor hears
+ * each one), and so do the gate's age states closing ordinary access (spec 2
+ * Amendment 1 B3).
  */
 export function PracticeProvider({ children }: { children: ReactNode }) {
   const { account } = useAccount();
@@ -26,6 +27,9 @@ export function PracticeProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     void controller.load();
   }, [controller]);
+  // Before the account session ends (sign-out), an open practice session
+  // suspends through the direct suspend, and a save in flight finishes.
+  useEffect(() => account.service.onAccountSessionEnding(() => controller.accountSessionEnding()), [account, controller]);
   useEffect(() => followAccountGate(service, controller), [service, controller]);
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (state) => {

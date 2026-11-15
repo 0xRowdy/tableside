@@ -4,7 +4,10 @@
 
 import { createAccountService, noPlatformAgeSignals, type AccountService, type AccountVault, type CredentialStorage } from '@tableside/account';
 import * as Crypto from 'expo-crypto';
+import { getLocales } from 'expo-localization';
 import * as SecureStore from 'expo-secure-store';
+
+import { Linking } from 'react-native';
 
 import { findGame, type GameId } from '@/games';
 import type { PracticeAdapters } from '@/practice/adapters';
@@ -14,7 +17,9 @@ import { appDevicePorts } from './device-ports';
 import { createNativeVault, KEYCHAIN_OPTIONS } from './native-vault';
 import { forAccountSession } from './practice';
 import type { RestrictedPaths } from './RestrictedPaths';
+import { providerSettings } from './provider-ports';
 import type { AccountSession } from './vault';
+import { WEB_PAGES } from './web-pages';
 
 /**
  * The account's offline game selection. Every account, even one that has
@@ -69,6 +74,8 @@ export function createAppAccount(): AppAccount {
     clock: () => Date.now(),
     device: appDevicePorts,
     randomBytes: (count) => Crypto.getRandomValues(new Uint8Array(count)),
+    localeCurrency: () => getLocales()[0].currencyCode,
+    providers: providerSettings(),
     // Apple's Declared Age Range and Google Play's Age Signals need native
     // modules, which aren't built yet: every device uses the fallback question.
     ageSignals: noPlatformAgeSignals,
@@ -86,7 +93,13 @@ export function createAppAccount(): AppAccount {
       },
       set: (accountId, game) => SecureStore.setItemAsync(offlineGameKey(accountId), game, KEYCHAIN_OPTIONS),
     },
-    // A stub until those screens land (spec 2's export and deletion tickets, spec 5's billing help, spec 7's support and privacy requests).
-    restrictedPaths: { open: () => undefined },
+    restrictedPaths: {
+      open(path) {
+        // Contact support and Make a privacy request are web pages that work without signing in (Amendment 9 §1).
+        if (path === 'contact-support') void Linking.openURL(WEB_PAGES.contactSupport);
+        else if (path === 'privacy-request') void Linking.openURL(WEB_PAGES.privacyRequest);
+        // Billing help (spec 5), export and deletion (spec 2's own tickets) open nothing until their screens land.
+      },
+    },
   };
 }

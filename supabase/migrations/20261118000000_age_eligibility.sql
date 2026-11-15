@@ -46,10 +46,12 @@ alter table private.eligibility_assertions add column source text not null defau
 alter table private.pending_eligibility add column source text not null default 'declaration'
   check (source in ('declaration', 'platform-signal'));
 
--- #84's age step, now naming where the range came from: the fallback question
--- or the platform's age signal. Under 13 still gets no assertion.
-drop function public.issue_eligibility_assertion(text);
-create function public.issue_eligibility_assertion(age_range text, source text default 'declaration') returns jsonb
+-- The age step (#99's version, 20261116120000_account_settings.sql, which
+-- holds the device locale's currency), now also naming where the range came
+-- from: the fallback question or the platform's age signal. Under 13 still
+-- gets no assertion.
+drop function public.issue_eligibility_assertion(text, text);
+create function public.issue_eligibility_assertion(age_range text, currency text default null, source text default 'declaration') returns jsonb
 language plpgsql volatile security definer set search_path = '' as $$
 declare
   v_token text := encode(extensions.gen_random_bytes(32), 'hex');
@@ -61,45 +63,65 @@ begin
   if source is null or source not in ('declaration', 'platform-signal') then
     raise exception 'unknown eligibility source' using errcode = '22023';
   end if;
-  insert into private.eligibility_assertions (token_hash, band, source, expires_at)
-    values (extensions.digest(v_token, 'sha256'), age_range, source, v_expires);
+  insert into private.eligibility_assertions (token_hash, band, expires_at, currency, source)
+    values (extensions.digest(v_token, 'sha256'), age_range, v_expires, case when currency ~ '^[A-Z]{3}$' then currency end, source);
   return jsonb_build_object('assertion', v_token, 'expires_at', v_expires);
 end $$;
 
-revoke execute on function public.issue_eligibility_assertion(text, text) from public;
-grant execute on function public.issue_eligibility_assertion(text, text) to anon, authenticated;
+revoke execute on function public.issue_eligibility_assertion(text, text, text) from public;
+grant execute on function public.issue_eligibility_assertion(text, text, text) to anon, authenticated;
 
--- #87's version (20261114000000_environment_isolation.sql), also holding the source.
+-- #89's version (20261117000000_provider_sign_in.sql), also holding the source.
 create or replace function private.consume_eligibility_assertion() returns trigger
 language plpgsql security definer set search_path = '' as $$
 declare
   v_band text;
+  v_currency text;
   v_source text;
+  v_provider text := coalesce(new.raw_app_meta_data ->> 'provider', 'email');
 begin
-  if (new.raw_user_meta_data ->> 'environment') is distinct from private.environment() then
-    raise exception 'environment_mismatch' using errcode = '42501';
+  if v_provider = 'email' then
+    if (new.raw_user_meta_data ->> 'environment') is distinct from private.environment() then
+      raise exception 'environment_mismatch' using errcode = '42501';
+    end if;
+    update private.eligibility_assertions
+      set consumed_at = now(), consumed_by = new.id
+      where token_hash = extensions.digest(coalesce(new.raw_user_meta_data ->> 'eligibility_assertion', ''), 'sha256')
+        and provider is null
+        and consumed_at is null
+        and expires_at > now()
+      returning band, currency, source into v_band, v_currency, v_source;
+  else
+    update private.eligibility_assertions
+      set consumed_at = now(), consumed_by = new.id
+      where token_hash = (
+        select token_hash from private.eligibility_assertions
+        where provider = v_provider
+          and provider_subject = coalesce(new.raw_user_meta_data ->> 'sub', new.raw_user_meta_data ->> 'provider_id')
+          and consumed_at is null
+          and expires_at > now()
+        order by expires_at desc
+        limit 1
+        for update
+      )
+      returning band, currency, source into v_band, v_currency, v_source;
   end if;
-  update private.eligibility_assertions
-    set consumed_at = now()
-    where token_hash = extensions.digest(coalesce(new.raw_user_meta_data ->> 'eligibility_assertion', ''), 'sha256')
-      and consumed_at is null
-      and expires_at > now()
-    returning band, source into v_band, v_source;
   if v_band is null then
     raise exception 'eligibility assertion required' using errcode = '42501';
   end if;
-  insert into private.pending_eligibility (auth_user_id, band, source) values (new.id, v_band, v_source);
+  insert into private.pending_eligibility (auth_user_id, band, currency, source) values (new.id, v_band, v_currency, v_source);
   return new;
 end $$;
 
--- #88's version (20261115000000_email_codes.sql): the newest age answer decides
--- a pending Create's band, and now its source too.
+-- #89's version (20261117000000_provider_sign_in.sql): the newest age answer
+-- decides a pending email Create's band, currency and now its source too.
 create or replace function public.renew_pending_eligibility(address text, assertion text) returns boolean
 language plpgsql volatile security definer set search_path = '' as $$
 declare
   v_user uuid;
   v_made_by text;
   v_band text;
+  v_currency text;
   v_source text;
 begin
   select u.id, u.raw_user_meta_data ->> 'eligibility_assertion' into v_user, v_made_by
@@ -113,33 +135,34 @@ begin
     return true;
   end if;
   update private.eligibility_assertions
-    set consumed_at = now()
-    where token_hash = extensions.digest(coalesce(assertion, ''), 'sha256') and consumed_at is null and expires_at > now()
-    returning band, source into v_band, v_source;
+    set consumed_at = now(), consumed_by = v_user
+    where token_hash = extensions.digest(coalesce(assertion, ''), 'sha256') and provider is null and consumed_at is null and expires_at > now()
+    returning band, currency, source into v_band, v_currency, v_source;
   if v_band is null then
     return false;
   end if;
-  update private.pending_eligibility set band = v_band, source = v_source where auth_user_id = v_user;
+  update private.pending_eligibility set band = v_band, currency = v_currency, source = v_source where auth_user_id = v_user;
   update auth.users set raw_user_meta_data = raw_user_meta_data || jsonb_build_object('eligibility_assertion', assertion) where id = v_user;
   return true;
 end $$;
 
--- #84's version (20261113000000_account_authority.sql), recording the held source.
+-- #99's version (20261116120000_account_settings.sql), recording the held source.
 create or replace function private.open_account_when_confirmed() returns trigger
 language plpgsql security definer set search_path = '' as $$
 declare
   v_band text;
+  v_currency text;
   v_source text;
   v_account uuid;
 begin
   if new.email_confirmed_at is null or (tg_op = 'UPDATE' and old.email_confirmed_at is not null) then
     return null;
   end if;
-  delete from private.pending_eligibility where auth_user_id = new.id returning band, source into v_band, v_source;
+  delete from private.pending_eligibility where auth_user_id = new.id returning band, currency, source into v_band, v_currency, v_source;
   if v_band is null then
     return null;
   end if;
-  insert into public.accounts (auth_user_id) values (new.id) returning account_id into v_account;
+  insert into public.accounts (auth_user_id, currency) values (new.id, coalesce(v_currency, 'USD')) returning account_id into v_account;
   insert into public.eligibility (account_id, band, source, checked_at, policy_version)
     values (v_account, v_band, v_source, now(), private.eligibility_policy_version());
   return null;
@@ -176,15 +199,16 @@ language sql stable security definer set search_path = '' as $$
   where account_id is not null and private.account_eligibility(account_id) in ('adult', 'teen')
 $$;
 
--- #84's version: the signed-in account and its current record, whatever its
--- eligibility, so a restricted account learns its state. 'unresolved' when no
--- record exists.
+-- #99's version (20261116120000_account_settings.sql): the signed-in account,
+-- its currency and its current record, whatever its eligibility, so a
+-- restricted account learns its state. 'unresolved' when no record exists.
 create or replace function public.current_account() returns jsonb
 language sql stable security definer set search_path = '' as $$
   select jsonb_build_object(
     'account_id', a.account_id,
     'eligibility', coalesce(e.band, 'unresolved'),
-    'source', coalesce(e.source, 'declaration'))
+    'source', coalesce(e.source, 'declaration'),
+    'currency', a.currency)
   from public.accounts a
   left join public.eligibility e on e.account_id = a.account_id
   where a.account_id = private.signed_in_account()

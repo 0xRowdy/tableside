@@ -9,10 +9,11 @@
 import { useState } from 'react';
 
 import { Button } from '@/components/Button';
+import { GroupLabel } from '@/settings/SettingsParts';
 
 import { useAccount, type AgeRestrictedGate } from './AccountProvider';
 import { AgeQuestionScreen, CONNECTION_PROBLEM } from './AgeQuestion';
-import { Actions, Body, FirstRunScreen, InlineMessage, SectionLabel, Status } from './FirstRunParts';
+import { Actions, Body, FirstRunScreen, InlineMessage, Status } from './FirstRunParts';
 import { RestrictedPathRows } from './RestrictedPaths';
 
 const PAUSED = { title: 'Account paused' } as const;
@@ -27,10 +28,10 @@ export function AgeRestricted({ gate }: { gate: AgeRestrictedGate }) {
     return (
       <FirstRunScreen
         title="Tableside is for people 13 and older"
-        context={PAUSED}
+        bar={PAUSED}
         intro="Practice and your account are paused. Your records are kept and nothing has been deleted. If this isn't right, contact support."
       >
-        <SectionLabel>You can still</SectionLabel>
+        <GroupLabel>YOU CAN STILL</GroupLabel>
         <RestrictedPathRows />
       </FirstRunScreen>
     );
@@ -38,7 +39,7 @@ export function AgeRestricted({ gate }: { gate: AgeRestrictedGate }) {
 
   // An answer that leaves it unresolved (or ineligible) shows the gate's own screen again.
   const answered = () => setAsking(false);
-  if (asking) return <AgeQuestionScreen context={PAUSED} back={() => setAsking(false)} onAnswered={answered} />;
+  if (asking) return <AgeQuestionScreen bar={PAUSED} back={() => setAsking(false)} onAnswered={answered} />;
 
   const retry = async () => {
     setBusy(true);
@@ -53,11 +54,11 @@ export function AgeRestricted({ gate }: { gate: AgeRestrictedGate }) {
   return (
     <FirstRunScreen
       title="We couldn't confirm your age"
-      context={PAUSED}
+      bar={PAUSED}
       intro="Practice and your account are paused until your age range can be confirmed. Your records are kept and nothing has been deleted."
     >
       {gate.reason === 'check-unmet' && <Body>{"Your device requires an age check that can't be completed here. Contact support if you need help."}</Body>}
-      <SectionLabel>You can still</SectionLabel>
+      <GroupLabel>YOU CAN STILL</GroupLabel>
       <RestrictedPathRows />
       {problem === CONNECTION_PROBLEM ? <InlineMessage>{problem}</InlineMessage> : problem && <Status>{problem}</Status>}
       <Actions>

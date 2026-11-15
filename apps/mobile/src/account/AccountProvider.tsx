@@ -1,4 +1,4 @@
-import { opensOrdinaryAccess, type AccountGate, type AccountService } from '@tableside/account';
+import { isAgeRestricted, isSignedIn, type AccountGate, type AccountService } from '@tableside/account';
 import { createContext, useCallback, useContext, useEffect, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { AppState } from 'react-native';
 
@@ -6,15 +6,10 @@ import type { GameId } from '@/games';
 
 import { createAppAccount, type AppAccount } from './app-account';
 
-/** Gate states that open ordinary access: Renewal pending keeps it while the token renews. */
-export type SignedInGate = Extract<AccountGate, { state: 'active' | 'renewal-pending' }>;
-
-export const isSignedIn: (gate: AccountGate) => gate is SignedInGate = opensOrdinaryAccess;
+export { isAgeRestricted, isSignedIn, type SignedInGate } from '@tableside/account';
 
 /** Gate states whose age eligibility isn't established: the account is open for its restricted paths only. */
 export type AgeRestrictedGate = Extract<AccountGate, { state: 'age-unresolved' | 'age-ineligible' }>;
-
-export const isAgeRestricted = (gate: AccountGate): gate is AgeRestrictedGate => gate.state === 'age-unresolved' || gate.state === 'age-ineligible';
 
 interface AccountContextValue {
   readonly account: AppAccount;

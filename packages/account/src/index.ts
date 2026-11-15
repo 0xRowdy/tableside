@@ -23,22 +23,53 @@ export {
   type AccountGate,
   type AccountService,
   type AccountServiceOptions,
+  type AccountSummary,
   type AccountSync,
   type AccountVault,
   type AgeAnswerResult,
   type AgeCheckResult,
+  type AuthSessionResult,
   type CodeIntent,
   type CodeRequestResult,
   type CodeVerificationResult,
   type CredentialStorage,
+  type CurrencyChangeResult,
+  type HistoryStatus,
+  type IdentityProvider,
+  type ProviderCreateResult,
+  type ProviderPorts,
+  type ProviderSettings,
+  type ProviderSignInResult,
+  type ProviderToken,
+  type SignInMethod,
+  type SignOutResult,
+  type SignedInGate,
   type SyncStatus,
   type VaultOpening,
   type VaultSession,
   createAccountService,
+  isAgeRestricted,
+  isSignedIn,
   opensOrdinaryAccess,
 } from './service';
 export { type MetricPurpose, metricPermitted } from './metrics';
-export { type SyncErrorCode } from './sync/engine';
+export {
+  type EngineStatus,
+  RECORD_FAILURE_LIMIT,
+  type Resolution,
+  type ResolutionOutcome,
+  type SyncErrorCode,
+  type UpdateNotice,
+  type UploadState,
+  type UploadStatus,
+} from './sync/engine';
+export {
+  type AccountRecords,
+  type AccountTotals,
+  NoOpenAccountError,
+  type ResolutionResult,
+  type RevisionedItemView,
+} from './sync/records';
 export { type LiveChannel } from './sync/live';
 export {
   CHUNK_BYTES,
@@ -49,8 +80,24 @@ export {
   type Envelope,
   type FeedEntry,
   type PreparedOperation,
+  type ProtocolStatus,
   type StagedChunk,
 } from './sync/protocol';
-export { PLATFORM_TABLES, type RecordKind, type RecordType, completedPracticeSession, recordTypes } from './sync/registry';
+export {
+  type Contribution,
+  PLATFORM_TABLES,
+  type Proposal,
+  type RecordKind,
+  type RecordType,
+  type RevisionBase,
+  type RevisionedItemDefinition,
+  type RevisionedState,
+  type RevisionedUpload,
+  completedPracticeSession,
+  recordTypes,
+  revisionedItemType,
+} from './sync/registry';
+export { SYNC_OPERATIONS } from './sync/supabase';
 export { type DevicePorts, type DeviceSignal, RECONCILE_INTERVAL_MS } from './sync/session';
-export { type AcceptedRecord, type QueuedUpload, type SyncStore } from './sync/store';
+export { type AcceptedRecord, type LocalRevisionedItem, type QueuedUpload, type RejectedUpload, type SyncStore } from './sync/store';
+export { type TotalsRow, sumContributions } from './sync/totals';

@@ -22,14 +22,20 @@ export const AGE_STEP = { title: 'Before you start', detail: 'Step 1 of 2 · age
 export const CONNECTION_PROBLEM = "Couldn't continue. Check your connection and try again.";
 
 export function AgeQuestionScreen({
-  context = AGE_STEP,
+  bar = AGE_STEP,
   back,
   onAnswered,
+  problem = null,
+  working = false,
 }: {
-  context?: { readonly title: string; readonly detail?: string };
+  bar?: { readonly title: string; readonly detail?: string };
   back?: () => void;
   /** The answer's outcome; a failure is shown here. */
-  onAnswered: (result: Exclude<AgeAnswerResult, { status: 'failed' }>) => void;
+  onAnswered: (result: Exclude<AgeAnswerResult, { status: 'failed' }>) => void | Promise<void>;
+  /** A problem with what the answer led to (creating the account with Apple or Google), shown under the question. */
+  problem?: string | null;
+  /** What the answer led to is still under way. */
+  working?: boolean;
 }) {
   const { service } = useAccount();
   const [range, setRange] = useState<AgeRange | null>(null);
@@ -41,15 +47,15 @@ export function AgeQuestionScreen({
     setBusy(true);
     setFailed(false);
     const result = await service.answerAgeQuestion(range);
-    setBusy(false);
     if (result.status === 'failed') setFailed(true);
-    else onAnswered(result);
+    else await onAnswered(result);
+    setBusy(false);
   };
 
   return (
     <FirstRunScreen
       title={AGE_QUESTION}
-      context={context}
+      bar={bar}
       intro="Choose a range. We keep only the range, never a birth date, and don't use it for ads or show it to anyone."
       back={back}
     >
@@ -59,8 +65,9 @@ export function AgeQuestionScreen({
         ))}
       </ChoiceGroup>
       {failed && <InlineMessage>{CONNECTION_PROBLEM}</InlineMessage>}
+      {problem !== null && <InlineMessage>{problem}</InlineMessage>}
       <Actions>
-        <Button label="Continue" stretch disabled={!range || busy} onPress={() => void answer()} />
+        <Button label="Continue" stretch disabled={!range || busy || working} onPress={() => void answer()} />
         {!range && <Body>Continue is available once you choose a range.</Body>}
       </Actions>
     </FirstRunScreen>

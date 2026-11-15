@@ -8,6 +8,9 @@ type UrlFragment = string;
 
 type Fault =
   | { readonly kind: 'drop'; readonly match: UrlFragment }
+  | { readonly kind: 'throttle'; readonly match: UrlFragment; readonly retryAfter: string }
+  | { readonly kind: 'server-fault'; readonly match: UrlFragment; readonly code: string }
+  | { readonly kind: 'reject-token'; readonly match: UrlFragment }
   | { readonly kind: 'duplicate'; readonly match: UrlFragment }
   | { readonly kind: 'delay'; readonly match: UrlFragment; readonly arrived: () => void; readonly released: Promise<void> };
 
@@ -27,6 +30,12 @@ export class FaultProxy {
   onRequest: ((url: string) => void) | null = null;
   /** While true, live (WebSocket) connections are refused, as at a capacity limit. */
   refuseLive = false;
+  /**
+   * While true, the backend can't be reached although the device is online (an
+   * outage, a captive portal): every request fails before reaching the stack
+   * and live connections are refused, but the device's connectivity doesn't change.
+   */
+  serverDown = false;
   private connected = true;
   private readonly faults: Fault[] = [];
   private readonly onlineListeners = new Set<(online: boolean) => void>();
@@ -59,7 +68,7 @@ export class FaultProxy {
 
   /** The device's WebSocket: offline or refused, it connects nowhere. */
   readonly WebSocket: typeof WebSocket = proxiedWebSocket(
-    () => this.connected && !this.refuseLive,
+    () => this.connected && !this.refuseLive && !this.serverDown,
     (socket) => this.sockets.add(socket),
     (socket) => this.sockets.delete(socket),
   );
@@ -67,6 +76,21 @@ export class FaultProxy {
   /** The next matching request reaches the stack, but its response is lost. */
   dropNextResponse(match: UrlFragment = ''): void {
     this.faults.push({ kind: 'drop', match });
+  }
+
+  /** The next matching request never reaches the stack: the device gets 429 Too Many Requests with this Retry-After. */
+  throttleNext(match: UrlFragment, retryAfter: string): void {
+    this.faults.push({ kind: 'throttle', match, retryAfter });
+  }
+
+  /** The next matching request never reaches the stack: the device gets 500 with this SQLSTATE, as from a database fault (a statement timeout, say). */
+  serverFaultNext(match: UrlFragment, code: string): void {
+    this.faults.push({ kind: 'server-fault', match, code });
+  }
+
+  /** The next matching request reaches the stack with its access token replaced by one the stack refuses (an expired token). */
+  rejectTokenNext(match: UrlFragment): void {
+    this.faults.push({ kind: 'reject-token', match });
   }
 
   /** The next matching request reaches the stack twice; the device gets the first response. */
@@ -84,14 +108,33 @@ export class FaultProxy {
     return { arrived: arrival, release };
   }
 
-  readonly fetch: typeof fetch = async (input, init) => {
+  readonly fetch: typeof fetch = async (input, givenInit) => {
+    let init = givenInit;
     const url = input instanceof Request ? input.url : String(input);
     const bodyBytes = typeof init?.body === 'string' ? Buffer.byteLength(init.body, 'utf8') : 0;
     this.sent.push({ url, headers: new Headers(input instanceof Request ? input.headers : init?.headers), bodyBytes });
     this.onRequest?.(url);
     if (!this.connected) throw new TypeError('Network request failed (offline)');
+    if (this.serverDown) throw new TypeError('Network request failed (no response from the server)');
     const at = this.faults.findIndex((fault) => url.includes(fault.match));
     const fault = at < 0 ? undefined : this.faults.splice(at, 1)[0];
+    if (fault?.kind === 'throttle') {
+      return new Response(JSON.stringify({ message: 'rate limited' }), {
+        status: 429,
+        headers: { 'content-type': 'application/json', 'retry-after': fault.retryAfter },
+      });
+    }
+    if (fault?.kind === 'server-fault') {
+      return new Response(JSON.stringify({ code: fault.code, message: 'server fault', details: null, hint: null }), {
+        status: 500,
+        headers: { 'content-type': 'application/json' },
+      });
+    }
+    if (fault?.kind === 'reject-token') {
+      const headers = new Headers(input instanceof Request ? input.headers : init?.headers);
+      headers.set('authorization', 'Bearer expired');
+      init = { ...init, headers };
+    }
     // A body can be read once; keep it so a duplicate can resend it.
     const body = init?.body;
     this.requests += 1;

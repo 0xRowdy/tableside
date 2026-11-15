@@ -74,11 +74,13 @@ async function startCreate(platformAgeCheck: boolean) {
   await openApp();
   await header('Tableside');
   service().platformAgeCheck = platformAgeCheck;
-  await fireEvent.press(button('Create account'));
+  // Welcome → I'm new here → Continue: the age step.
+  await fireEvent.press(screen.getByRole('radio', { name: "I'm new here" }));
+  await fireEvent.press(button('Continue'));
 }
 
 describe('the Create path’s age step', () => {
-  it('with a platform age check, explains it first, then continues to the email when the platform shares a range', async () => {
+  it('with a platform age check, explains it first, then continues to the sign-in method when the platform shares a range', async () => {
     await startCreate(true);
     expect(await header('First, your age range')).toBeOnTheScreen();
     expect(screen.getByText('Before you start')).toBeOnTheScreen();
@@ -87,7 +89,7 @@ describe('the Create path’s age step', () => {
     service().next.check.push({ status: 'eligible' });
 
     await fireEvent.press(button('Continue'));
-    expect(await header('Create your account')).toBeOnTheScreen();
+    expect(await header('How do you want to sign in?')).toBeOnTheScreen();
     expect(service().calls.map((call) => call.method)).toEqual(['resume', 'checkAge']);
   });
 

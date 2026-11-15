@@ -57,6 +57,15 @@ export interface QueuedUpload {
   readonly payload: unknown;
   readonly dependencies: readonly string[];
   readonly operation: PreparedOperation | null;
+  readonly failures: number;
+  readonly flagged: boolean;
+}
+
+export interface RejectedUpload {
+  readonly id: string;
+  readonly recordType: string;
+  readonly payload: unknown;
+  readonly code: string;
 }
 
 export interface AcceptedRecord {
@@ -64,6 +73,31 @@ export interface AcceptedRecord {
   readonly item: string;
   readonly sequence: number;
   readonly payload: unknown;
+}
+
+export interface LocalRevisionedItem {
+  readonly item: string;
+  readonly accepted: unknown;
+  readonly change: { readonly value: unknown } | null;
+  readonly onAccount: boolean;
+}
+
+/** The base a revisioned upload names: an accepted revision (0: new), or the installation's own earlier operation on the item. */
+type RevisionBase = number | { readonly operation: string };
+
+/** A queued save or deletion of a revisioned item (the sync engine's registry checks the value). */
+interface RevisionedChange {
+  readonly item: string;
+  readonly action: 'save' | 'delete';
+  readonly base: RevisionBase;
+  readonly value: unknown;
+}
+
+/** An upload queue entry's stored body: the record type and what is sent. */
+interface QueuedBody {
+  readonly id: string;
+  readonly kind: string;
+  readonly record: unknown;
 }
 
 /** Whose database this is. */
@@ -271,9 +305,9 @@ export class SqliteActivityStore implements ActivityStore {
       await writeActivity(tx, { ...activity, completion: record });
       const sync: OutgoingSyncRecord = { id: `completed/${record.activityId}`, kind: 'completed-practice-session', record };
       await tx.run(
-        `INSERT INTO outgoing (id, activity_id, position, ${BODY}, dependencies, status)
-         VALUES (?, ?, (SELECT coalesce(max(position), 0) + 1 FROM outgoing), ?, ?, ?, ?, '[]', 'pending')`,
-        [sync.id, record.activityId, ...encode(sync)],
+        `INSERT INTO outgoing (id, activity_id, record_type, item_id, revisioned, position, ${BODY}, dependencies, status)
+         VALUES (?, ?, ?, ?, 0, (SELECT coalesce(max(position), 0) + 1 FROM outgoing), ?, ?, ?, ?, '[]', 'pending')`,
+        [sync.id, record.activityId, sync.kind, record.activityId, ...encode(sync)],
       );
       queued = true;
       return decodeText<CompletedPracticeSession>(encode(record)[0]);
@@ -296,7 +330,9 @@ export class SqliteActivityStore implements ActivityStore {
 
   readOutgoing(): Promise<readonly OutgoingSyncRecord[]> {
     return this.transaction(async (tx) =>
-      (await tx.all<BodyRow>(`SELECT ${BODY} FROM outgoing ORDER BY position`)).map((row) => decode<OutgoingSyncRecord>(row)),
+      (await tx.all<BodyRow>(`SELECT ${BODY} FROM outgoing WHERE activity_id IS NOT NULL ORDER BY position`)).map((row) =>
+        decode<OutgoingSyncRecord>(row),
+      ),
     );
   }
 
@@ -307,19 +343,64 @@ export class SqliteActivityStore implements ActivityStore {
   /** Unacknowledged upload queue entries, in queue order. */
   readUploadQueue(): Promise<readonly QueuedUpload[]> {
     return this.transaction(async (tx) => {
-      const rows = await tx.all<BodyRow & QueueRow>(
-        `SELECT ${BODY}, id, dependencies, operation_id, request, request_sha256 FROM outgoing WHERE status = 'pending' ORDER BY position`,
+      const rows = await tx.all<BodyRow & QueueRow & { record_type: string; failures: number; flagged: number }>(
+        `SELECT ${BODY}, id, record_type, dependencies, operation_id, request, request_sha256, failures, flagged FROM outgoing WHERE status = 'pending' ORDER BY position`,
       );
       return rows.map((row) => {
-        const outgoing = decode<OutgoingSyncRecord>(row);
+        const outgoing = decode<QueuedBody>(row);
         return {
           id: row.id,
-          recordType: outgoing.kind,
+          recordType: row.record_type,
           payload: outgoing.record,
           dependencies: JSON.parse(row.dependencies) as string[],
           operation: preparedOf(row),
+          failures: row.failures,
+          flagged: row.flagged === 1,
         };
       });
+    });
+  }
+
+  /** Counts a failed attempt for a pending entry with its current count, flagging it when the count reaches `flagAt`. */
+  recordUploadFailure(id: string, flagAt: number): Promise<{ readonly failures: number; readonly flagged: boolean }> {
+    return this.transaction(async (tx) => {
+      const row = await tx.get<{ failures: number; flagged: number }>(`SELECT failures, flagged FROM outgoing WHERE id = ? AND status = 'pending'`, [id]);
+      if (!row) throw new StoreError(`no pending upload ${id}`);
+      const failures = row.failures + 1;
+      const flagged = row.flagged === 1 || failures >= flagAt;
+      await tx.run('UPDATE outgoing SET failures = ?, flagged = ? WHERE id = ?', [failures, flagged ? 1 : 0, id]);
+      return { failures, flagged };
+    });
+  }
+
+  /** A deliberate retry: the entry's failures are forgotten and it is no longer flagged. */
+  clearUploadFailures(id: string): Promise<void> {
+    return this.transaction(async (tx) => {
+      await tx.run(`UPDATE outgoing SET failures = 0, flagged = 0 WHERE id = ? AND status = 'pending'`, [id]);
+    });
+  }
+
+  /** Entries whose receipts refused them, in queue order: kept for review. */
+  readRejectedUploads(): Promise<readonly RejectedUpload[]> {
+    return this.transaction(async (tx) =>
+      (
+        await tx.all<BodyRow & { id: string; record_type: string; receipt: string }>(
+          `SELECT ${BODY}, id, record_type, receipt FROM outgoing WHERE status = 'rejected' ORDER BY position`,
+        )
+      ).map((row) => {
+        const receipt = JSON.parse(row.receipt) as { code?: unknown };
+        return { id: row.id, recordType: row.record_type, payload: decode<QueuedBody>(row).record, code: typeof receipt.code === 'string' ? receipt.code : '' };
+      }),
+    );
+  }
+
+  readLastSynced(): Promise<number | null> {
+    return this.transaction(async (tx) => (await tx.get<{ synced_at: number | null }>('SELECT synced_at FROM feed_cursor WHERE singleton = 1'))?.synced_at ?? null);
+  }
+
+  recordSynced(at: number): Promise<void> {
+    return this.transaction(async (tx) => {
+      await tx.run('UPDATE feed_cursor SET synced_at = ? WHERE singleton = 1', [at]);
     });
   }
 
@@ -350,8 +431,19 @@ export class SqliteActivityStore implements ActivityStore {
         throw new StoreError(`upload ${id} was not sent as operation ${disposition.operation}`);
       }
       if (row.status !== 'pending') return;
-      await tx.run('UPDATE outgoing SET status = ?, receipt = ? WHERE id = ?', [disposition.status, canonicalJson(disposition), id]);
+      await tx.run('UPDATE outgoing SET status = ?, receipt = ?, receipt_sequence = ? WHERE id = ?', [
+        disposition.status,
+        canonicalJson(disposition),
+        disposition.status === 'accepted' ? disposition.sequence : null,
+        id,
+      ]);
       if (accepted) await putAccepted(tx, accepted);
+      // A revisioned upload the accepted state already reflects ("already accepted" at an applied sequence) goes now.
+      await tx.run(
+        `DELETE FROM outgoing WHERE id = ? AND revisioned = 1 AND status = 'accepted' AND receipt_sequence <=
+           (SELECT sequence FROM accepted_records WHERE record_type = outgoing.record_type AND item_id = outgoing.item_id)`,
+        [id],
+      );
     });
   }
 
@@ -366,6 +458,11 @@ export class SqliteActivityStore implements ActivityStore {
       for (const [index, record] of records.entries()) {
         if (record.sequence !== from + index + 1) throw new StoreError(`feed entry ${record.sequence} does not follow ${from + index}`);
         await putAccepted(tx, record);
+        // The item's accepted state now reflects these of its acknowledged uploads: they, and their payloads, go.
+        await tx.run(
+          `DELETE FROM outgoing WHERE revisioned = 1 AND record_type = ? AND item_id = ? AND status = 'accepted' AND receipt_sequence <= ?`,
+          [record.recordType, record.item, record.sequence],
+        );
       }
       if (records.length > 0) await tx.run('UPDATE feed_cursor SET sequence = ? WHERE singleton = 1', [from + records.length]);
       return true;
@@ -381,6 +478,79 @@ export class SqliteActivityStore implements ActivityStore {
         )
       ).map((row) => ({ recordType, item: row.item_id, sequence: row.sequence, payload: decode<unknown>(row) })),
     );
+  }
+
+  /**
+   * Saves (a value) or deletes (null) a revisioned item, queuing its upload in
+   * the same transaction. The upload's base is the accepted revision, or the
+   * item's own latest upload when that one was sent and isn't reflected in the
+   * accepted state yet (it then waits for that one's receipt). A change to an
+   * upload not yet sent replaces it; deleting an item that never left the
+   * installation removes it.
+   */
+  writeRevisionedItem(recordType: string, item: string, value: unknown): Promise<void> {
+    let queued = false;
+    return this.transaction(async (tx) => {
+      const accepted = await readAcceptedRow(tx, recordType, item);
+      const latest = await latestChange(tx, recordType, item, accepted?.sequence ?? 0);
+      const action = value === null ? 'delete' : 'save';
+      if (latest?.status === 'pending' && latest.operation_id === null) {
+        const change = decode<QueuedBody>(latest).record as RevisionedChange;
+        if (action === 'delete' && change.base === 0) {
+          await tx.run('DELETE FROM outgoing WHERE id = ?', [latest.id]);
+          return;
+        }
+        const body: QueuedBody = { id: latest.id, kind: recordType, record: { ...change, action, value } };
+        await tx.run('UPDATE outgoing SET body = ?, body_format = ?, body_length = ?, body_sha256 = ? WHERE id = ?', [...encode(body), latest.id]);
+        queued = true;
+        return;
+      }
+      const state = accepted ? decode<{ revision: number; deleted: boolean }>(accepted) : null;
+      if (action === 'delete' && !latest && (!state || state.deleted)) return;
+      const base: RevisionBase = latest?.operation_id ? { operation: latest.operation_id } : (state?.revision ?? 0);
+      const position = ((await tx.get<{ next: number }>('SELECT coalesce(max(position), 0) + 1 AS next FROM outgoing'))?.next ?? 1);
+      const id = `revisioned/${recordType}/${item}/${position}`;
+      const body: QueuedBody = { id, kind: recordType, record: { item, action, base, value } satisfies RevisionedChange };
+      await tx.run(
+        `INSERT INTO outgoing (id, activity_id, record_type, item_id, revisioned, position, ${BODY}, dependencies, status)
+         VALUES (?, NULL, ?, ?, 1, ?, ?, ?, ?, ?, ?, 'pending')`,
+        [id, recordType, item, position, ...encode(body), JSON.stringify(latest?.status === 'pending' ? [latest.id] : [])],
+      );
+      queued = true;
+    }).then(() => {
+      if (queued) this.notifyQueued();
+    });
+  }
+
+  /** Every revisioned item of a type this installation holds: the accepted state, and the latest change not reflected in it. */
+  readRevisionedItems(recordType: string): Promise<readonly LocalRevisionedItem[]> {
+    return this.transaction(async (tx) => {
+      const accepted = new Map(
+        (
+          await tx.all<BodyRow & { item_id: string; sequence: number }>(
+            `SELECT ${BODY}, item_id, sequence FROM accepted_records WHERE record_type = ?`,
+            [recordType],
+          )
+        ).map((row) => [row.item_id, { sequence: row.sequence, state: decode<unknown>(row) }]),
+      );
+      const changes = new Map<string, { value: unknown } | null>();
+      const acknowledged = new Set<string>();
+      for (const row of await tx.all<ChangeRow>(
+        `SELECT ${BODY}, id, item_id, status, operation_id, receipt_sequence FROM outgoing
+         WHERE revisioned = 1 AND record_type = ? AND status IN ('pending', 'accepted') ORDER BY position`,
+        [recordType],
+      )) {
+        if (row.status === 'accepted') acknowledged.add(row.item_id);
+        const reflected = row.status === 'accepted' && (row.receipt_sequence ?? 0) <= (accepted.get(row.item_id)?.sequence ?? 0);
+        if (!reflected) changes.set(row.item_id, { value: (decode<QueuedBody>(row).record as RevisionedChange).value });
+      }
+      return [...new Set([...accepted.keys(), ...changes.keys()])].sort().map((item) => ({
+        item,
+        accepted: accepted.get(item)?.state ?? null,
+        change: changes.get(item) ?? null,
+        onAccount: accepted.has(item) || acknowledged.has(item),
+      }));
+    });
   }
 
   /** Called after a commit adds an entry to the upload queue. */
@@ -421,17 +591,47 @@ function preparedOf(row: QueueRow): PreparedOperation | null {
   return { operationId: row.operation_id, request: row.request, requestHash: row.request_sha256 };
 }
 
+interface ChangeRow extends BodyRow {
+  readonly id: string;
+  readonly item_id: string;
+  readonly status: 'pending' | 'accepted';
+  readonly operation_id: string | null;
+  readonly receipt_sequence: number | null;
+}
+
+async function readAcceptedRow(tx: SqlExecutor, recordType: string, item: string) {
+  return tx.get<BodyRow & { sequence: number }>(`SELECT ${BODY}, sequence FROM accepted_records WHERE record_type = ? AND item_id = ?`, [
+    recordType,
+    item,
+  ]);
+}
+
+/** The item's latest upload not reflected in its accepted state (at `acceptedSequence`): pending, or acknowledged after it. */
+async function latestChange(tx: SqlExecutor, recordType: string, item: string, acceptedSequence: number): Promise<ChangeRow | null> {
+  return (
+    (await tx.get<ChangeRow>(
+      `SELECT ${BODY}, id, item_id, status, operation_id, receipt_sequence FROM outgoing
+       WHERE revisioned = 1 AND record_type = ? AND item_id = ?
+         AND (status = 'pending' OR (status = 'accepted' AND receipt_sequence > ?))
+       ORDER BY position DESC LIMIT 1`,
+      [recordType, item, acceptedSequence],
+    )) ?? null
+  );
+}
+
 async function readCursor(tx: SqlExecutor): Promise<number> {
   const row = await tx.get<{ sequence: number }>('SELECT sequence FROM feed_cursor WHERE singleton = 1');
   if (!row) throw new StoreIntegrityError('the feed cursor is missing');
   return row.sequence;
 }
 
+/** Records what the account accepted for an item, unless a later sequence is already held for it. */
 async function putAccepted(tx: SqlExecutor, record: AcceptedRecord): Promise<void> {
   await tx.run(
     `INSERT INTO accepted_records (record_type, item_id, sequence, ${BODY}) VALUES (?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT (record_type, item_id) DO UPDATE SET sequence = excluded.sequence, body = excluded.body,
-       body_format = excluded.body_format, body_length = excluded.body_length, body_sha256 = excluded.body_sha256`,
+       body_format = excluded.body_format, body_length = excluded.body_length, body_sha256 = excluded.body_sha256
+     WHERE excluded.sequence > accepted_records.sequence`,
     [record.recordType, record.item, record.sequence, ...encode(record.payload)],
   );
 }

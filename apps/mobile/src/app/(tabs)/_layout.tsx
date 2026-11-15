@@ -21,6 +21,7 @@ import { palette } from '@/theme/tokens';
 export default function TabsLayout() {
   const { gate, offlineGame } = useAccount();
   if (gate.state === 'recovery-needed' || gate.state === 'database-unavailable') return <Redirect href="/account-recovery" />;
+  if (gate.state === 'signed-out') return <Redirect href="/signed-out" />;
   const restricted = isAgeRestricted(gate);
   if (!restricted) {
     if (!isSignedIn(gate)) return <Redirect href="/welcome" />;

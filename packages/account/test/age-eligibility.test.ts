@@ -298,7 +298,7 @@ describe('restricted accounts on the server', () => {
     expect((await client.from('accounts').select('account_id')).data).toEqual([]);
     expect((await client.storage.from('account-private').upload(`${accountId}/notes.txt`, 'notes')).error).not.toBeNull();
     const { data } = await client.rpc('current_account');
-    expect(data).toEqual({ account_id: accountId, eligibility: 'unresolved', source: 'platform-signal' });
+    expect(data).toEqual({ account_id: accountId, eligibility: 'unresolved', source: 'platform-signal', currency: 'USD' });
   });
 });
 
@@ -412,6 +412,7 @@ describe('an active practice session', () => {
     const phone = device('phone');
     await signInByEmail(phone, email);
     const practice = await phone.startPracticeSession();
+    await practice.placeWager('red', '10');
     const unfinished = await phone.vault.store().findUnfinished();
     expect(unfinished).not.toBeNull();
 
@@ -436,6 +437,7 @@ describe('an active practice session', () => {
     await signInByEmail(phone, email);
     const clock = new ManualClock();
     const practice = await phone.startPracticeSession({ clock });
+    await practice.placeWager('red', '10');
     const spinning = practice.spin();
     await vi.waitFor(() => expect(clock.pending).toBe(1));
 
@@ -459,6 +461,7 @@ describe('an active practice session', () => {
     devices.push(phone);
     await signInByEmail(phone, email);
     const practice = await phone.startPracticeSession();
+    await practice.placeWager('red', '10');
 
     phone.ageSignals.signal = { kind: 'range', range: '18+' };
     await phone.account.refreshEligibility();

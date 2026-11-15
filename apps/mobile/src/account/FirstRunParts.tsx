@@ -1,32 +1,45 @@
-// Building blocks of the first-run screens (welcome, age, email, code, offline
-// game): a full-screen layout with no tab bar, a labeled field, choice rows
-// and inline messages. Built from spec 2's copy and the app's tokens.
-// TODO(frames): unverified against S2-13–S2-16 (Pencil couldn't open Tableside.pen for #88).
+// Building blocks of the first-run screens (welcome, age, sign-in method,
+// email, code, offline game): a full-screen layout with no tab bar, a labeled
+// field, choice rows, sign-in method buttons, the welcome's intent switch and
+// inline messages. The method buttons, intent switch, header bar and
+// footnote follow S2-13's frames (#89); the rest is #88's.
+// TODO(frames): FirstRunScreen, Field, ChoiceRow and InlineMessage unverified against S2-14–S2-16 (#88).
 
-import { ChevronLeft, CircleAlert } from 'lucide-react-native';
+import { Check, ChevronLeft, CircleAlert, ExternalLink, type LucideProps } from 'lucide-react-native';
 import { forwardRef, type ComponentRef, type ReactNode } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View, type TextInputProps } from 'react-native';
+import { Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions, type TextInputProps } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/theme/tokens';
 
+import { WEB_PAGES } from './web-pages';
+
+/** An icon: a lucide icon, or a glyph drawn with the same props. */
+type Glyph = (props: LucideProps) => ReactNode;
+
 /**
- * A pre-account (or locked) screen: an optional header line with a step, a
- * title, optional Back, and content that reflows and scrolls at any text size.
+ * A pre-account screen: a title, optional Back (with the header bar's title
+ * and step beside it), and content that reflows and scrolls at any text size.
  */
 export function FirstRunScreen({
   title,
   intro,
   back,
-  context,
+  bar,
+  above,
+  lead,
   children,
 }: {
   title: string;
+  /** Shown above the title, such as the welcome's hero image. */
+  above?: ReactNode;
   intro?: ReactNode;
   back?: () => void;
-  /** The screen's header line, as the frames draw it above the title ("Before you start · Step 1 of 2 · age"). */
-  context?: { readonly title: string; readonly detail?: string };
+  /** The header bar beside Back: where the player is, such as "Create your account" and "Step 2 of 2". */
+  bar?: { readonly title: string; readonly detail?: string };
+  /** Drawn above the title, such as a locked state's icon. */
+  lead?: ReactNode;
   children?: ReactNode;
 }) {
   const insets = useSafeAreaInsets();
@@ -40,23 +53,25 @@ export function FirstRunScreen({
         { paddingTop: insets.top + space[4], paddingBottom: insets.bottom + space[8], paddingLeft: insets.left + space[6], paddingRight: insets.right + space[6] },
       ]}
     >
-      {(back || context) && (
-        <View style={styles.headerLine}>
+      {(back || bar) && (
+        <View style={styles.bar}>
           {back && <BackButton onPress={back} />}
-          {context && (
-            <View style={styles.context}>
-              <Text maxFontSizeMultiplier={textScale.body} style={styles.contextTitle}>
-                {context.title}
+          {bar && (
+            <View style={styles.barTitles}>
+              <Text maxFontSizeMultiplier={textScale.body} style={styles.barTitle}>
+                {bar.title}
               </Text>
-              {context.detail && (
-                <Text maxFontSizeMultiplier={textScale.body} style={styles.contextDetail}>
-                  {context.detail}
+              {bar.detail && (
+                <Text maxFontSizeMultiplier={textScale.body} style={styles.barDetail}>
+                  {bar.detail}
                 </Text>
               )}
             </View>
           )}
         </View>
       )}
+      {lead}
+      {above}
       <Text accessibilityRole="header" maxFontSizeMultiplier={textScale.display} style={styles.title}>
         {title}
       </Text>
@@ -176,18 +191,148 @@ export function ChoiceGroup({ label, testID, children }: { label: string; testID
   );
 }
 
-/** A small capitalized label above a group ("YOU CAN STILL"). */
-export function SectionLabel({ children }: { children: string }) {
-  return (
-    <Text maxFontSizeMultiplier={textScale.body} style={styles.sectionLabel}>
-      {children.toUpperCase()}
-    </Text>
-  );
-}
-
 /** Actions, stacked at the bottom of the content. */
 export function Actions({ children }: { children: ReactNode }) {
   return <View style={styles.actions}>{children}</View>;
+}
+
+/**
+ * Contact support and Make a privacy request, on every locked and restricted
+ * screen (spec 2 Amendment 9 §1): the tab bar is hidden there, so More isn't
+ * reachable. Both open web pages that work without signing in.
+ */
+export function SupportLinks() {
+  return (
+    <View style={styles.supportLinks}>
+      <View style={styles.supportRow}>
+        <WebLink label="Contact support" url={WEB_PAGES.contactSupport} />
+        <WebLink label="Make a privacy request" url={WEB_PAGES.privacyRequest} />
+      </View>
+      <Text maxFontSizeMultiplier={textScale.body} style={styles.supportNote}>
+        These open tableside.app and work without signing in.
+      </Text>
+    </View>
+  );
+}
+
+/**
+ * A sign-in method or path (S2-13): an icon and label on a full-width
+ * button. Secondary for each method, primary for Continue, ghost (no fill)
+ * for a way back.
+ */
+export function MethodButton({
+  label,
+  icon: Icon,
+  onPress,
+  variant = 'secondary',
+  disabled = false,
+}: {
+  label: string;
+  icon?: Glyph;
+  onPress: () => void;
+  variant?: 'primary' | 'secondary' | 'ghost';
+  disabled?: boolean;
+}) {
+  const { focused, focusProps } = useKeyboardFocus();
+  const color = variant === 'primary' ? palette.primaryForeground : palette.foreground;
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ disabled }}
+      disabled={disabled}
+      onPress={onPress}
+      {...focusProps}
+      style={({ pressed }) => [
+        styles.method,
+        variant === 'primary' && styles.methodPrimary,
+        variant === 'ghost' && styles.methodGhost,
+        pressed && styles.pressed,
+        disabled && styles.disabled,
+        focused && styles.focused,
+      ]}
+    >
+      {Icon && <Icon color={color} size={20} />}
+      <Text maxFontSizeMultiplier={textScale.body} style={[styles.methodLabel, { color }]}>
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
+/** Small print under a screen's actions. */
+export function Footnote({ icon: Icon, children }: { icon?: Glyph; children: ReactNode }) {
+  return (
+    <View style={styles.footnote}>
+      {Icon && <Icon color={palette.mutedForeground} size={16} />}
+      <Text maxFontSizeMultiplier={textScale.body} style={styles.footnoteText}>
+        {children}
+      </Text>
+    </View>
+  );
+}
+
+function WebLink({ label, url }: { label: string; url: string }) {
+  const { focused, focusProps } = useKeyboardFocus();
+  return (
+    <Pressable
+      accessibilityRole="link"
+      accessibilityLabel={label}
+      onPress={() => void Linking.openURL(url)}
+      {...focusProps}
+      style={[styles.link, styles.webLink, focused && styles.focused]}
+    >
+      <Text maxFontSizeMultiplier={textScale.body} style={styles.webLinkText}>
+        {label}
+      </Text>
+      <ExternalLink color={palette.primary} size={14} />
+    </Pressable>
+  );
+}
+
+/**
+ * The welcome's two-part switch (S2-13): one choice of two, as a radio group.
+ * At large text sizes it becomes a list of choices, one per row.
+ */
+export function IntentSwitch<T extends string>({
+  label,
+  options,
+  value,
+  onChange,
+}: {
+  label: string;
+  options: readonly { readonly value: T; readonly label: string }[];
+  value: T;
+  onChange: (value: T) => void;
+}) {
+  const { fontScale } = useWindowDimensions();
+  const stacked = fontScale >= 1.3;
+  return (
+    <View accessibilityRole="radiogroup" accessibilityLabel={label} testID="intent-switch" style={[styles.switch, stacked && styles.switchStacked]}>
+      {options.map((option) => (
+        <IntentSegment key={option.value} label={option.label} selected={option.value === value} onPress={() => onChange(option.value)} />
+      ))}
+    </View>
+  );
+}
+
+function IntentSegment({ label, selected, onPress }: { label: string; selected: boolean; onPress: () => void }) {
+  const { focused, focusProps } = useKeyboardFocus();
+  return (
+    <Pressable
+      accessibilityRole="radio"
+      accessibilityLabel={label}
+      accessibilityState={{ checked: selected }}
+      onPress={onPress}
+      {...focusProps}
+      style={[styles.segment, selected && styles.segmentSelected, focused && styles.focused]}
+    >
+      {selected && <Check color={palette.primaryForeground} size={16} />}
+      <Text maxFontSizeMultiplier={textScale.body} style={[styles.segmentLabel, selected && styles.segmentLabelSelected]}>
+        {label}
+      </Text>
+    </Pressable>
+  );
 }
 
 /** A text link-style button (for a secondary path such as "Create an account"). */
@@ -205,11 +350,6 @@ export function LinkButton({ label, onPress }: { label: string; onPress: () => v
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: palette.background },
   content: { flexGrow: 1, gap: space[4] },
-  headerLine: { flexDirection: 'row', alignItems: 'center', gap: space[1] },
-  context: { flex: 1, gap: 1 },
-  contextTitle: { fontFamily: fonts.uiMedium, fontSize: 17, color: palette.foreground },
-  contextDetail: { fontFamily: fonts.ui, fontSize: 12, color: palette.mutedForeground },
-  sectionLabel: { fontFamily: fonts.uiBold, fontSize: 12, letterSpacing: 0.5, color: palette.mutedForeground, marginTop: space[2] },
   back: { width: MIN_TOUCH_TARGET, height: MIN_TOUCH_TARGET, marginLeft: -space[3], alignItems: 'center', justifyContent: 'center', borderRadius: radius.pill, borderWidth: 2, borderColor: palette.transparent },
   title: { fontFamily: fonts.display, fontSize: 30, color: palette.foreground },
   body: { fontFamily: fonts.ui, fontSize: 16, lineHeight: 24, color: palette.mutedForeground },
@@ -254,4 +394,50 @@ const styles = StyleSheet.create({
   actions: { gap: space[3], marginTop: space[2] },
   link: { minHeight: MIN_TOUCH_TARGET, justifyContent: 'center', alignSelf: 'flex-start', borderRadius: radius.sm, borderWidth: 2, borderColor: palette.transparent, paddingHorizontal: space[1] },
   linkText: { fontFamily: fonts.uiBold, fontSize: 16, color: palette.primary },
+  supportLinks: { gap: space[1], paddingTop: space[2] },
+  supportRow: { flexDirection: 'row', flexWrap: 'wrap', columnGap: space[4] + space[1], rowGap: space[1] },
+  webLink: { flexDirection: 'row', alignItems: 'center', gap: space[1] },
+  webLinkText: { flexShrink: 1, fontFamily: fonts.uiBold, fontSize: 14, color: palette.primary },
+  supportNote: { fontFamily: fonts.ui, fontSize: 12, lineHeight: 17, color: palette.mutedForeground },
+  bar: { flexDirection: 'row', alignItems: 'center', gap: space[1] },
+  barTitles: { flex: 1, gap: 1 },
+  barTitle: { fontFamily: fonts.uiBold, fontSize: 17, color: palette.foreground },
+  barDetail: { fontFamily: fonts.ui, fontSize: 12, color: palette.mutedForeground },
+  method: {
+    minHeight: MIN_TOUCH_TARGET,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: space[2],
+    paddingHorizontal: 20,
+    paddingVertical: space[3],
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: palette.controlBorder,
+    backgroundColor: palette.secondary,
+  },
+  methodPrimary: { backgroundColor: palette.primary, borderColor: palette.primary },
+  methodGhost: { backgroundColor: palette.transparent, borderColor: palette.transparent },
+  methodLabel: { flexShrink: 1, fontFamily: fonts.uiBold, fontSize: 15, textAlign: 'center' },
+  pressed: { opacity: 0.8 },
+  disabled: { opacity: 0.4 },
+  footnote: { flexDirection: 'row', alignItems: 'flex-start', gap: space[2] },
+  footnoteText: { flex: 1, fontFamily: fonts.ui, fontSize: 12.5, lineHeight: 18, color: palette.mutedForeground },
+  switch: { flexDirection: 'row', gap: space[1], padding: space[1], borderRadius: 12, borderWidth: 1, borderColor: palette.controlBorder, backgroundColor: palette.muted },
+  switchStacked: { flexDirection: 'column' },
+  segment: {
+    flex: 1,
+    minHeight: 44,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingHorizontal: space[2],
+    borderRadius: 9,
+    borderWidth: 2,
+    borderColor: palette.transparent,
+  },
+  segmentSelected: { backgroundColor: palette.primary },
+  segmentLabel: { flexShrink: 1, fontFamily: fonts.uiBold, fontSize: 14, color: palette.foreground, textAlign: 'center' },
+  segmentLabelSelected: { color: palette.primaryForeground },
 });

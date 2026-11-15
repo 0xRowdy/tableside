@@ -59,12 +59,13 @@ schema_paths = []
 
 [db.seed]
 # If enabled, seeds the database after migrations during a db reset.
-# Local stacks only: the seed names the stack's backend environment "local".
+# Local stacks only: the seed names the stack's backend environment "local"
+# and registers seam 2's test-only record types.
 # Beta and production never run it (see [remotes] below).
 enabled = true
 # Specifies an ordered list of seed files to load during db reset.
 # Supports glob patterns relative to supabase directory: "./seeds/*.sql"
-sql_paths = ["./seed/local.sql"]
+sql_paths = ["./seed/local.sql", "./seed/test-record-types.sql"]
 
 [db.network_restrictions]
 # Enable management of network restrictions.
@@ -397,12 +398,26 @@ inspector_port = 8083
 # The Deno major version to use.
 deno_version = 2
 
-# Local development only: request-code delivers to the stack's mail catcher.
+# Local development only: request-code delivers to the stack's mail catcher,
+# and the functions that verify ID tokens themselves (bind-provider-assertion,
+# provider-callback) know only seam 2's test identity provider, as Auth knows
+# it ([auth.external.keycloak]). Beta and production set Apple and Google
+# instead (docs/environments.md).
 [edge_runtime.secrets]
 TABLESIDE_MAILPIT_URL = "http://host.docker.internal:54324"
+TABLESIDE_ID_TOKEN_KEYCLOAK_ISSUER = "http://host.docker.internal:54330"
+TABLESIDE_ID_TOKEN_KEYCLOAK_AUDIENCES = "tableside-test-idp"
 
 # Called before any account exists, with the publishable key only.
 [functions.request-code]
+verify_jwt = false
+
+# Create with Apple or Google, before any account exists.
+[functions.bind-provider-assertion]
+verify_jwt = false
+
+# Apple's page posts here (Sign in with Apple on Android): no Supabase key at all.
+[functions.provider-callback]
 verify_jwt = false
 
 [analytics]

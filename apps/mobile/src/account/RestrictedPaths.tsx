@@ -2,8 +2,8 @@
 // §4, Amendment 9 §1): Contact support, Make a privacy request, billing help
 // (Manage subscription and refund requests, never a purchase), authenticated
 // export and deletion. Their screens belong to other work (support and privacy
-// requests: spec 7; billing help: spec 5; export and deletion: spec 2's own
-// tickets); until they land, each opens through the app account's port.
+// requests: web pages for now, spec 7 later; billing help: spec 5; export and
+// deletion: spec 2's own tickets). Each opens through the app account's port.
 
 import { CreditCard, Download, LifeBuoy, ShieldCheck, Trash2 } from 'lucide-react-native';
 
