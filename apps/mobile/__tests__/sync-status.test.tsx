@@ -40,6 +40,7 @@ function fakeSync(status: Partial<SyncStatus>) {
     reconcile: jest.fn(async () => undefined),
     retryRecord: jest.fn(async () => undefined),
     idle: async () => undefined,
+    countWaiting: async () => current.uploads.length,
     queue: async () => ({ status: 'refused', reason: 'no-account' }),
     set(next) {
       current = { ...current, ...next };

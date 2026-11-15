@@ -1,3 +1,4 @@
+import type { LucideIcon } from 'lucide-react-native';
 import { Pressable, StyleSheet, Text } from 'react-native';
 
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
@@ -10,17 +11,21 @@ export function Button({
   disabled = false,
   stretch = false,
   hint,
+  icon: Icon,
 }: {
   label: string;
   onPress: () => void;
-  variant?: 'primary' | 'secondary';
+  /** Ghost: no fill, for the lesser choice beside a primary one. */
+  variant?: 'primary' | 'secondary' | 'ghost';
   disabled?: boolean;
   /** Fill the container's width instead of hugging the label. */
   stretch?: boolean;
   hint?: string;
+  /** Drawn before the label. */
+  icon?: LucideIcon;
 }) {
   const { focused, focusProps } = useKeyboardFocus();
-  const secondary = variant === 'secondary';
+  const secondary = variant !== 'primary';
   return (
     <Pressable
       accessibilityRole="button"
@@ -32,12 +37,14 @@ export function Button({
       style={({ pressed }) => [
         styles.button,
         secondary && styles.secondary,
+        variant === 'ghost' && styles.ghost,
         stretch && styles.stretch,
         pressed && styles.pressed,
         disabled && styles.disabled,
         focused && styles.focused,
       ]}
     >
+      {Icon && <Icon color={secondary ? palette.foreground : palette.primaryForeground} size={18} />}
       <Text maxFontSizeMultiplier={textScale.body} style={[styles.label, secondary && styles.secondaryLabel]}>
         {label}
       </Text>
@@ -49,6 +56,8 @@ const styles = StyleSheet.create({
   button: {
     minHeight: MIN_TOUCH_TARGET,
     alignSelf: 'flex-start',
+    flexDirection: 'row',
+    gap: space[2],
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: space[6],
@@ -59,10 +68,11 @@ const styles = StyleSheet.create({
     borderColor: palette.primary,
   },
   secondary: { backgroundColor: palette.secondary, borderColor: palette.secondary },
+  ghost: { backgroundColor: palette.transparent, borderColor: palette.transparent },
   stretch: { alignSelf: 'stretch' },
   pressed: { opacity: 0.8 },
   disabled: { opacity: 0.4 },
   focused: { borderColor: palette.foreground },
-  label: { fontFamily: fonts.uiBold, fontSize: 16, color: palette.primaryForeground, textAlign: 'center' },
+  label: { flexShrink: 1, fontFamily: fonts.uiBold, fontSize: 16, color: palette.primaryForeground, textAlign: 'center' },
   secondaryLabel: { color: palette.foreground },
 });

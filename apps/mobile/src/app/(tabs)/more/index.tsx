@@ -8,7 +8,7 @@ export default function More() {
   return (
     <SettingsScreen title="More">
       <Group>
-        <ListRow icon={Settings} title="Settings" detail="Sound & haptics" onPress={() => router.navigate('/more/settings')} />
+        <ListRow icon={Settings} title="Settings" detail="Account, sound & haptics" onPress={() => router.navigate('/more/settings')} />
       </Group>
     </SettingsScreen>
   );
