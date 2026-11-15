@@ -70,7 +70,7 @@ const portabilityRules = (allowedImports) => ({
 });
 
 export default defineConfig(
-  { ignores: ['**/node_modules/**', 'apps/mobile/**', 'harness-reports/**', '.claude/**'] },
+  { ignores: ['**/node_modules/**', '**/dist/**', 'apps/mobile/**', 'harness-reports/**', '.claude/**'] },
   ...tseslint.configs.recommended,
   { files: ['packages/engine/**/*.ts', 'packages/definitions/**/*.ts'], plugins: { portability } },
   {

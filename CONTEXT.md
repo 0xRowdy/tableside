@@ -261,7 +261,7 @@ A store purchase that is no longer linked to any usable Tableside account. It is
 ### Accounts and data
 
 **Installation**:
-One installation of the app on one device. Reinstalling creates a new installation.
+One installation of the app on one device. Reinstalling creates a new installation. A browser signed in to the web account page registers as one too, so it can read the account's lifecycle status; it never holds records.
 
 **Revocation**:
 Signing another device out of the account (on Devices, "Sign out this device" or "Sign out all other devices"): every session of that installation ends on the server at once, and the device locks, keeping its records, when the server's lifecycle status tells it. Only that answer moves a device to Revoked; a failed request never does. A device's label is what it calls itself, never proof of which device it is.
@@ -298,6 +298,10 @@ _Avoid_: hard delete, finalization (for the player-facing idea)
 **Deletion-control record**:
 What a deleted account leaves behind so it stays deleted: its ID and state, when and by whom deletion was asked for, and how far the cleanup got. It holds no history, prose, purchase evidence or forfeiture ledger.
 _Avoid_: tombstone (that is a deleted record's)
+
+**Web account page**:
+The page, reachable without the app, where a player signs in with an email code to schedule or cancel deletion, delete permanently now and see deletion status, under the same fresh-authentication rules as the app. Lifecycle only: no play and no records. It records Global Privacy Control as the ad-data opt-out, and loads nothing from anyone else.
+_Avoid_: web app, website (that is the marketing site)
 
 **Conflict proposal**:
 A competing edit to a private record made on another installation, preserved for the player to review instead of being silently lost.

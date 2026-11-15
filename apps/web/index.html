@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en-US">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!--
+      Only this page's own files and its one backend: no analytics, ads,
+      trackers or third-party fonts can load (spec 2 Amendment 8 §5).
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; font-src 'none'; connect-src 'self' %TABLESIDE_WEB_SUPABASE_URL%; base-uri 'none'; form-action 'none'"
+    />
+    <meta name="referrer" content="no-referrer" />
+    <meta name="robots" content="noindex" />
+    <title>Tableside account</title>
+    <link rel="stylesheet" href="/style.css" />
+    <script type="module" src="/src/main.ts"></script>
+  </head>
+  <body>
+    <header class="masthead">
+      <p class="wordmark">Tableside</p>
+    </header>
+    <main id="page">
+      <noscript><p>This page needs JavaScript to sign in and manage your account.</p></noscript>
+    </main>
+  </body>
+</html>

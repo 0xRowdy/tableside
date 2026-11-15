@@ -1,9 +1,9 @@
 import { defineConfig } from 'vitest/config';
 
-// Node-side unit tests. The engine suite runs through the cross-runtime harness
+// Node-side unit tests, and the web account page's in jsdom. The engine suite runs through the cross-runtime harness
 // and the app through jest-expo; neither is collected here.
 export default defineConfig({
   test: {
-    include: ['tests/**/*.test.ts', 'packages/*/src/**/*.test.ts', 'packages/definitions/test/**/*.test.ts'],
+    include: ['tests/**/*.test.ts', 'packages/*/src/**/*.test.ts', 'packages/definitions/test/**/*.test.ts', 'apps/web/src/**/*.test.ts'],
   },
 });
