@@ -21,9 +21,12 @@
 //
 // Every change is its own item, so this installation keeps each one the
 // account accepted, and the choices are those changes in account order. A
-// new device therefore needs every accepted privacy change: bootstrap (#96)
-// and feed compaction (#43) must carry them all, or its choices and basis
-// would be wrong (and every enabling change it sent, stale).
+// new device starts instead from its bootstrap snapshot (#96): one record of
+// the current choices at the account's last privacy change, which the later
+// changes follow. Only the current analytics ID reaches a device; every
+// earlier one stays on the server (private.analytics_ids) for export and
+// deletion. Feed compaction (#98) must keep what this depends on: see the
+// record type's `snapshot`.
 
 import { metricPermitted } from './metrics';
 import {
@@ -49,8 +52,6 @@ export interface PrivacyChoices {
     /** The current generation's analytics ID while consent is granted; otherwise null. */
     readonly analyticsId: string | null;
   };
-  /** Every analytics ID the account has had, oldest first: what export lists and deletion erases. */
-  readonly analyticsIds: readonly { readonly generation: number; readonly analyticsId: string }[];
   /** The ad-data opt-out, or null when ad data isn't limited. */
   readonly adDataOptOut: { readonly source: AdDataOptOutSource } | null;
   /** A consent withdrawal or ad-data opt-out made on this installation hasn't reached the account yet. */
@@ -69,16 +70,20 @@ export function choicesFrom(accepted: readonly AcceptedRecord[], unsent: readonl
   let consent: AnalyticsConsent = 'never-granted';
   let generation = 0;
   let analyticsId: string | null = null;
-  const analyticsIds: { generation: number; analyticsId: string }[] = [];
   let adDataOptOut: { source: AdDataOptOutSource } | null = null;
   let basis = 0;
   const apply = (change: AcceptedPrivacyChange) => {
     switch (change.change) {
+      case 'snapshot':
+        consent = change.consent;
+        generation = change.generation;
+        analyticsId = change.analyticsId;
+        adDataOptOut = change.adDataOptOut === null ? null : { source: change.adDataOptOut };
+        break;
       case 'grant-analytics':
         consent = 'granted';
         generation = change.generation;
         analyticsId = change.analyticsId;
-        analyticsIds.push({ generation: change.generation, analyticsId: change.analyticsId });
         break;
       case 'withdraw-analytics':
         if (consent === 'granted') consent = 'withdrawn';
@@ -99,7 +104,7 @@ export function choicesFrom(accepted: readonly AcceptedRecord[], unsent: readonl
   }
   const restrictive = unsent.filter(isRestrictiveChange);
   restrictive.forEach(apply);
-  return { analytics: { consent, generation, analyticsId }, analyticsIds, adDataOptOut, pending: restrictive.length > 0, basis };
+  return { analytics: { consent, generation, analyticsId }, adDataOptOut, pending: restrictive.length > 0, basis };
 }
 
 /**

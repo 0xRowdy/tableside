@@ -3,7 +3,7 @@
 // and serialized writer as spec 1's store port (apps/mobile/src/account/sqlite-store.ts),
 // so a queue entry is written in the transaction that makes its local change.
 
-import type { Disposition, PreparedOperation } from './protocol';
+import type { BootstrapSnapshot, Disposition, PreparedOperation } from './protocol';
 
 /** An upload waiting for its receipt. */
 export interface QueuedUpload {
@@ -90,6 +90,19 @@ export interface LocalRevisionedItem {
   readonly onAccount: boolean;
 }
 
+/**
+ * How far this installation's bootstrap has come (spec 2, *Bootstrap*).
+ * installed: the baseline and its cursor are in place; later changes come through the feed.
+ * Otherwise `staging` is the snapshot being staged, if one was started.
+ */
+export type BootstrapProgress = { readonly installed: true } | { readonly installed: false; readonly staging: BootstrapStaging | null };
+
+/** A snapshot being staged: how many of its rows are staged, and the last ordinal staged. */
+export interface BootstrapStaging extends BootstrapSnapshot {
+  readonly staged: number;
+  readonly after: number;
+}
+
 export interface SyncStore {
   /** Unacknowledged entries, in queue order. */
   readUploadQueue(): Promise<readonly QueuedUpload[]>;
@@ -141,6 +154,25 @@ export interface SyncStore {
   writeRevisionedItem(recordType: string, item: string, value: unknown): Promise<void>;
   /** Every revisioned item of a type this installation holds, accepted or not. */
   readRevisionedItems(recordType: string): Promise<readonly LocalRevisionedItem[]>;
+  readBootstrap(): Promise<BootstrapProgress>;
+  /**
+   * Starts staging a snapshot, discarding any staged before (an expired or
+   * replaced one). Nothing else changes: the upload queue and every local record stay.
+   */
+  beginBootstrap(snapshot: BootstrapSnapshot): Promise<void>;
+  /**
+   * Stages a page of the snapshot's rows, and moves its progress to ordinal
+   * `through`, in one transaction. Stages nothing and returns false when
+   * `snapshot` is no longer the one staging, or its progress is no longer at `after`.
+   */
+  stageBootstrapPage(snapshot: string, after: number, records: readonly AcceptedRecord[], through: number): Promise<boolean>;
+  /**
+   * Installs the staged snapshot as the baseline and moves the feed cursor to
+   * its watermark, in one transaction, before any later feed entry applies.
+   * Records accepted here since (a later sequence) and purged results are
+   * kept as they are. Returns false when `snapshot` is no longer the one staging.
+   */
+  installBootstrap(snapshot: string): Promise<boolean>;
   /** Called after a commit adds an entry to the upload queue. Returns an unsubscribe function. */
   onUploadQueued(listener: () => void): () => void;
 }

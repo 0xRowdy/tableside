@@ -237,6 +237,82 @@ describe('code requests', () => {
   });
 });
 
+describe('app review', () => {
+  const CREDENTIAL = 'K7Q2M-9XWBR-4HTZ8-PN3CD';
+
+  async function openReviewSignIn() {
+    await openApp();
+    await header('Tableside');
+    await fireEvent.press(button('Sign in with an email code'));
+    await header('Sign in');
+    await fireEvent.press(button('Signing in for app review?'));
+    await header('App review sign-in');
+  }
+
+  it('signs a reviewer in with a reviewer credential and no email code, then asks for the offline game', async () => {
+    await openReviewSignIn();
+    noTabBar();
+    expect(screen.getByLabelText('Reviewer credential')).toHaveProp('secureTextEntry', true);
+
+    await fireEvent.changeText(screen.getByLabelText('Email address'), ` ${EMAIL} `);
+    await fireEvent.changeText(screen.getByLabelText('Reviewer credential'), CREDENTIAL);
+    await fireEvent.press(button('Sign in'));
+
+    expect(await header('Choose your offline game')).toBeOnTheScreen();
+    expect(service().calls.map((call) => call.method)).toEqual(['resume', 'signInAsReviewer']);
+    expect(service().calls[1]).toEqual({ method: 'signInAsReviewer', email: EMAIL, credential: CREDENTIAL });
+  });
+
+  it('says a refused credential didn’t work, whatever the address, and keeps what was typed', async () => {
+    await openReviewSignIn();
+    service().next.reviewer.push({ status: 'refused' });
+    await fireEvent.changeText(screen.getByLabelText('Email address'), EMAIL);
+    await fireEvent.changeText(screen.getByLabelText('Reviewer credential'), CREDENTIAL);
+    await fireEvent.press(button('Sign in'));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent("That address and reviewer credential don't match. Check both and try again.");
+    expect(screen.getByLabelText('Email address')).toHaveProp('value', EMAIL);
+    noTabBar();
+  });
+
+  it('asks for both before sending anything, and reports a failure to connect', async () => {
+    await openReviewSignIn();
+    await fireEvent.press(button('Sign in'));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Enter the email address and reviewer credential from the review notes.');
+    expect(service().calls.some((call) => call.method === 'signInAsReviewer')).toBe(false);
+
+    service().next.reviewer.push({ status: 'failed' });
+    await fireEvent.changeText(screen.getByLabelText('Email address'), EMAIL);
+    await fireEvent.changeText(screen.getByLabelText('Reviewer credential'), CREDENTIAL);
+    await fireEvent.press(button('Sign in'));
+    expect(await screen.findByRole('alert')).toHaveTextContent("Couldn't sign in. Check your connection and try again.");
+  });
+
+  it('is offered on Sign in only, never on Create', async () => {
+    await openApp();
+    await header('Tableside');
+    await startCreate();
+    await fireEvent.press(screen.getByRole('radio', { name: '18 or older' }));
+    await fireEvent.press(button('Continue'));
+    await chooseEmailMethod();
+    await header('Create your account');
+
+    expect(screen.queryByRole('button', { name: 'Signing in for app review?' })).toBeNull();
+  });
+
+  it('never puts the credential in a label, announcement or log', async () => {
+    await openReviewSignIn();
+    await fireEvent.changeText(screen.getByLabelText('Email address'), EMAIL);
+    await fireEvent.changeText(screen.getByLabelText('Reviewer credential'), CREDENTIAL);
+    await fireEvent.press(button('Sign in'));
+    await header('Choose your offline game');
+
+    expect(everythingSpoken().join(' ')).not.toContain(CREDENTIAL);
+    expect(announcements.join(' ')).not.toContain(CREDENTIAL);
+    expect(JSON.stringify(logged)).not.toContain(CREDENTIAL);
+  });
+});
+
 describe('Create', () => {
   it('asks a neutral age-range question, then the email and code, then the offline game', async () => {
     await openApp();

@@ -7,9 +7,9 @@ import { describe, expect, it } from 'vitest';
 
 import { type MetricEvent, createMetricsSender } from '../metrics';
 import { type SyncBackend, SyncEngine } from './engine';
-import { type ChunkAnswer, type FeedPage, type ProtocolStatus, SyncCallError, type UploadAnswer } from './protocol';
+import { type BootstrapPage, type BootstrapSnapshot, type ChunkAnswer, type FeedPage, type ProtocolStatus, SyncCallError, type UploadAnswer } from './protocol';
 import type { RecordType } from './registry';
-import type { AcceptedRecord, LocalRevisionedItem, NewUpload, QueuedUpload, RejectedUpload, SyncStore } from './store';
+import type { AcceptedRecord, BootstrapProgress, LocalRevisionedItem, NewUpload, QueuedUpload, RejectedUpload, SyncStore } from './store';
 import type { Disposition, PreparedOperation } from './protocol';
 
 interface Entry {
@@ -30,6 +30,8 @@ class MemoryStore implements SyncStore {
   readonly accepted: AcceptedRecord[] = [];
   cursor = 0;
   syncedAt: number | null = null;
+  /** Established by default: these tests are about an installation that has its baseline. */
+  bootstrap: BootstrapProgress = { installed: true };
   private readonly listeners = new Set<() => void>();
 
   queue(id: string, payload: unknown, dependencies: string[] = []): void {
@@ -90,6 +92,26 @@ class MemoryStore implements SyncStore {
   async recordSynced(at: number): Promise<void> {
     this.syncedAt = at;
   }
+  async readBootstrap(): Promise<BootstrapProgress> {
+    return this.bootstrap;
+  }
+  async beginBootstrap(snapshot: BootstrapSnapshot): Promise<void> {
+    this.bootstrap = { installed: false, staging: { ...snapshot, staged: 0, after: 0 } };
+  }
+  async stageBootstrapPage(snapshot: string, after: number, records: readonly AcceptedRecord[], through: number): Promise<boolean> {
+    const { bootstrap } = this;
+    if (bootstrap.installed || bootstrap.staging?.snapshot !== snapshot || bootstrap.staging.after !== after) return false;
+    this.accepted.push(...records);
+    this.bootstrap = { installed: false, staging: { ...bootstrap.staging, staged: bootstrap.staging.staged + records.length, after: through } };
+    return true;
+  }
+  async installBootstrap(snapshot: string): Promise<boolean> {
+    const { bootstrap } = this;
+    if (bootstrap.installed || bootstrap.staging?.snapshot !== snapshot) return false;
+    this.cursor = bootstrap.staging.watermark;
+    this.bootstrap = { installed: true };
+    return true;
+  }
   async writeRevisionedItem(): Promise<void> {
     throw new Error('no revisioned items in these tests');
   }
@@ -116,6 +138,7 @@ const note: RecordType<{ id: string }> = {
   isPayload: (value): value is { id: string } => typeof value === 'object' && value !== null && typeof (value as { id?: unknown }).id === 'string',
   barriers: [],
   acceptance: 'private.accept_note_v1',
+  snapshot: null,
   fromChange: () => null,
   contribution: null,
   export: { csv: null, json: (payload) => payload },
@@ -162,6 +185,19 @@ class ScriptedBackend implements SyncBackend {
     this.calls.push('feed');
     if (this.everything) throw this.everything;
     return { entries: [], more: false };
+  }
+  /** What each snapshot page answers, in turn; an empty, complete page when none is scripted. */
+  readonly bootstrapPages: BootstrapPage[] = [];
+  private snapshots = 0;
+  async bootstrap(): Promise<BootstrapSnapshot> {
+    this.calls.push('bootstrap');
+    if (this.everything) throw this.everything;
+    return { snapshot: `snapshot-${++this.snapshots}`, watermark: 0, rows: 0, totals: [] };
+  }
+  async bootstrapPage(): Promise<BootstrapPage> {
+    this.calls.push('bootstrap page');
+    if (this.everything) throw this.everything;
+    return this.bootstrapPages.shift() ?? { status: 'page', rows: [], more: false };
   }
   uploadsOf(item: string): number {
     return this.calls.filter((call) => call === `upload ${item}`).length;
@@ -483,6 +519,63 @@ describe('a change sent at once', () => {
     expect(await sync.submit('switch', { id: 'off-1', on: false })).toEqual({ status: 'invalid' });
     expect(await sync.submit('note', { id: 'n1' })).toEqual({ status: 'invalid' });
     expect(backend.calls).toEqual([]);
+  });
+});
+
+describe('bootstrap', () => {
+  const unbootstrapped = () => {
+    const made = engine();
+    made.store.bootstrap = { installed: false, staging: null };
+    return made;
+  };
+
+  it('replaces a staged snapshot that expired with a new one, keeping the queue', async () => {
+    const { store, backend, sync } = unbootstrapped();
+    store.bootstrap = { installed: false, staging: { snapshot: 'old', watermark: 0, rows: 3, totals: [], staged: 1, after: 1 } };
+    backend.bootstrapPages.push({ status: 'expired' });
+    backend.everything = new SyncCallError('unreachable');
+    store.queue('n1', { id: 'n1' });
+    await sync.reconcile();
+    backend.everything = null;
+    await sync.reconcile();
+    expect(backend.calls.filter((call) => call.startsWith('bootstrap'))).toEqual(['bootstrap page', 'bootstrap', 'bootstrap page']);
+    expect(store.bootstrap).toEqual({ installed: true });
+    expect(sync.status.history).toEqual({ state: 'complete' });
+    expect(store.entries.map((entry) => entry.status)).toEqual(['accepted']);
+  });
+
+  it('backs off, without asking again at once, when a new snapshot is already gone', async () => {
+    const { backend, sync } = unbootstrapped();
+    backend.bootstrapPages.push({ status: 'expired' });
+    await sync.reconcile();
+    expect(backend.calls.filter((call) => call.startsWith('bootstrap'))).toEqual(['bootstrap', 'bootstrap page']);
+    expect(sync.status.error).toBe('offline');
+    expect(sync.retryAt).not.toBeNull();
+    expect(sync.status.history).toEqual({ state: 'incomplete', summaries: 0, detail: 0 });
+  });
+
+  it('reports its duration from the first attempt: failed for a run that ends without installing, complete once installed', async () => {
+    const { backend, sync, clock, events } = unbootstrapped();
+    backend.bootstrapPages.push({ status: 'page', rows: [], more: true });
+    backend.everything = null;
+    // The first page arrives, then the network goes before the next.
+    const page = backend.bootstrapPage.bind(backend);
+    let pages = 0;
+    backend.bootstrapPage = async (...args) => {
+      if (++pages === 2) {
+        clock.now += 3_000;
+        throw new SyncCallError('unreachable');
+      }
+      return page(...args);
+    };
+    await sync.reconcile();
+    clock.now += 60_000;
+    await sync.reconcile();
+    expect(events.filter((event) => event.name === 'bootstrap_duration')).toEqual([
+      { name: 'bootstrap_duration', value: 3_000, properties: { outcome: 'failed' } },
+      { name: 'bootstrap_duration', value: 63_000, properties: { outcome: 'complete' } },
+    ]);
+    expect(JSON.stringify(events)).not.toContain('snapshot-1');
   });
 });
 

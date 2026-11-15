@@ -21,14 +21,13 @@ describe('privacy choices', () => {
   it('start with analytics never granted and ad data not limited', () => {
     expect(choicesFrom([], [])).toEqual<PrivacyChoices>({
       analytics: { consent: 'never-granted', generation: 0, analyticsId: null },
-      analyticsIds: [],
       adDataOptOut: null,
       pending: false,
       basis: 0,
     });
   });
 
-  it('give each grant its own generation and analytics ID, and keep every ID the account has had', () => {
+  it('give each grant its own generation and analytics ID', () => {
     const choices = choicesFrom(
       [
         accepted(3, { change: 'grant-analytics', generation: 1, analyticsId: ID_1 }),
@@ -38,10 +37,6 @@ describe('privacy choices', () => {
       [],
     );
     expect(choices.analytics).toEqual({ consent: 'granted', generation: 2, analyticsId: ID_2 });
-    expect(choices.analyticsIds).toEqual([
-      { generation: 1, analyticsId: ID_1 },
-      { generation: 2, analyticsId: ID_2 },
-    ]);
     expect(choices.basis).toBe(9);
   });
 
@@ -81,6 +76,36 @@ describe('privacy choices', () => {
       // The account's last accepted change: what an enabling change is made from.
       basis: 3,
     });
+  });
+
+  it('start from a bootstrap snapshot’s current choices, at its sequence, then apply later changes', () => {
+    const snapshot: AcceptedRecord = {
+      recordType: 'privacy-choice',
+      item: 'current',
+      sequence: 12,
+      payload: { version: 1, change: 'snapshot', consent: 'granted', generation: 2, analyticsId: ID_2, adDataOptOut: 'gpc' },
+    };
+    expect(choicesFrom([snapshot], [])).toEqual<PrivacyChoices>({
+      analytics: { consent: 'granted', generation: 2, analyticsId: ID_2 },
+      adDataOptOut: { source: 'gpc' },
+      pending: false,
+      basis: 12,
+    });
+    const later = choicesFrom([snapshot, accepted(14, { change: 'withdraw-analytics' }), accepted(15, { change: 'allow-ad-data' })], []);
+    expect(later).toMatchObject({ analytics: { consent: 'withdrawn', generation: 2, analyticsId: null }, adDataOptOut: null, basis: 15 });
+    const withdrawn = { ...snapshot, payload: { version: 1, change: 'snapshot', consent: 'withdrawn', generation: 2, analyticsId: null, adDataOptOut: null } };
+    expect(choicesFrom([withdrawn], []).analytics).toEqual({ consent: 'withdrawn', generation: 2, analyticsId: null });
+  });
+
+  it('read no snapshot whose analytics ID doesn’t match its consent', () => {
+    const snapshot = (consent: string, analyticsId: string | null): AcceptedRecord => ({
+      recordType: 'privacy-choice',
+      item: 'current',
+      sequence: 3,
+      payload: { version: 1, change: 'snapshot', consent, generation: 1, analyticsId, adDataOptOut: null },
+    });
+    expect(choicesFrom([snapshot('granted', null)], []).basis).toBe(0);
+    expect(choicesFrom([snapshot('withdrawn', ID_1)], []).basis).toBe(0);
   });
 
   it('ignore records that aren’t privacy changes', () => {

@@ -106,6 +106,31 @@ export interface FeedPageEffects {
   readonly purged?: readonly RecordRef[];
 }
 
+/** A lifetime total at a snapshot's watermark, in exact money text. */
+export interface TotalsRow {
+  readonly total: 'practice' | 'casino';
+  readonly game: string;
+  readonly currency: string;
+  readonly records: number;
+  readonly net: string;
+}
+
+/** A bootstrap snapshot: its ID, the account sequence it describes, its row count and the account's totals there. */
+export interface BootstrapSnapshot {
+  readonly snapshot: string;
+  readonly watermark: number;
+  readonly rows: number;
+  readonly totals: readonly TotalsRow[];
+}
+
+/** A snapshot being staged: how many of its rows are staged, and the last ordinal staged. */
+export interface BootstrapStaging extends BootstrapSnapshot {
+  readonly staged: number;
+  readonly after: number;
+}
+
+export type BootstrapProgress = { readonly installed: true } | { readonly installed: false; readonly staging: BootstrapStaging | null };
+
 export interface LocalRevisionedItem {
   readonly item: string;
   readonly accepted: unknown;
@@ -654,6 +679,75 @@ export class SqliteActivityStore implements ActivityStore {
     });
   }
 
+  readBootstrap(): Promise<BootstrapProgress> {
+    return this.transaction(readBootstrapProgress);
+  }
+
+  /** Starts staging a snapshot, discarding any staged before; the queue and records stay. */
+  beginBootstrap(snapshot: BootstrapSnapshot): Promise<void> {
+    return this.transaction(async (tx) => {
+      const progress = await readBootstrapProgress(tx);
+      if (progress.installed) throw new StoreError('the bootstrap baseline is already installed');
+      await tx.run('DELETE FROM bootstrap_rows');
+      const { snapshot: id, watermark, rows, totals } = snapshot;
+      await tx.run('UPDATE bootstrap SET body = ?, body_format = ?, body_length = ?, body_sha256 = ?, staged = 0, after_ordinal = 0 WHERE singleton = 1', [
+        ...encode({ snapshot: id, watermark, rows, totals }),
+      ]);
+    });
+  }
+
+  /** Stages a page of the snapshot and moves its progress to `through`; false when the staging moved on. */
+  stageBootstrapPage(snapshot: string, after: number, records: readonly AcceptedRecord[], through: number): Promise<boolean> {
+    return this.transaction(async (tx) => {
+      const progress = await readBootstrapProgress(tx);
+      if (progress.installed || progress.staging?.snapshot !== snapshot || progress.staging.after !== after) return false;
+      for (const record of records) {
+        await tx.run(
+          `INSERT INTO bootstrap_rows (record_type, item_id, sequence, ${BODY}, installation_id, device_position) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [record.recordType, record.item, record.sequence, ...encode(record.payload), record.origin?.installation ?? null, record.origin?.position ?? null],
+        );
+      }
+      await tx.run('UPDATE bootstrap SET staged = staged + ?, after_ordinal = ? WHERE singleton = 1', [records.length, through]);
+      return true;
+    });
+  }
+
+  /**
+   * Installs the staged snapshot as the baseline and moves the feed cursor to
+   * its watermark, in one transaction. A record held here at a later sequence
+   * stays, and a purged result is never accepted again.
+   */
+  installBootstrap(snapshot: string): Promise<boolean> {
+    return this.transaction(async (tx) => {
+      const progress = await readBootstrapProgress(tx);
+      if (progress.installed || progress.staging?.snapshot !== snapshot) return false;
+      const cursor = await readCursor(tx);
+      // The feed is only ever applied after a baseline: the cursor can't be past one yet.
+      if (cursor !== 0) throw new StoreIntegrityError(`the feed cursor is at ${cursor} before the baseline is installed`);
+      await tx.run(
+        `INSERT INTO accepted_records (record_type, item_id, sequence, ${BODY}, installation_id, device_position)
+         SELECT record_type, item_id, sequence, ${BODY}, installation_id, device_position FROM bootstrap_rows b
+         WHERE NOT EXISTS (SELECT 1 FROM purged_records p WHERE p.record_type = b.record_type AND p.item_id = b.item_id)
+         ORDER BY position
+         ON CONFLICT (record_type, item_id) DO UPDATE SET sequence = excluded.sequence, body = excluded.body,
+           body_format = excluded.body_format, body_length = excluded.body_length, body_sha256 = excluded.body_sha256,
+           installation_id = excluded.installation_id, device_position = excluded.device_position
+         WHERE excluded.sequence > accepted_records.sequence`,
+      );
+      // Revisioned uploads the baseline already reflects go, as when a feed page reflects them.
+      await tx.run(
+        `DELETE FROM outgoing WHERE revisioned = 1 AND status = 'accepted' AND receipt_sequence <=
+           (SELECT sequence FROM accepted_records WHERE record_type = outgoing.record_type AND item_id = outgoing.item_id)`,
+      );
+      await tx.run('UPDATE feed_cursor SET sequence = ? WHERE singleton = 1', [progress.staging.watermark]);
+      await tx.run('DELETE FROM bootstrap_rows');
+      await tx.run(
+        'UPDATE bootstrap SET installed = 1, body = NULL, body_format = NULL, body_length = NULL, body_sha256 = NULL, staged = 0, after_ordinal = 0 WHERE singleton = 1',
+      );
+      return true;
+    });
+  }
+
   /** Called after a commit adds an entry to the upload queue. */
   onUploadQueued(listener: () => void): () => void {
     this.queuedListeners.add(listener);
@@ -725,6 +819,18 @@ async function latestChange(tx: SqlExecutor, recordType: string, item: string, a
       [recordType, item, acceptedSequence],
     )) ?? null
   );
+}
+
+async function readBootstrapProgress(tx: SqlExecutor): Promise<BootstrapProgress> {
+  const row = await tx.get<{ installed: number; staged: number; after_ordinal: number } & { [K in keyof BodyRow]: BodyRow[K] | null }>(
+    `SELECT installed, staged, after_ordinal, ${BODY} FROM bootstrap WHERE singleton = 1`,
+  );
+  if (!row) throw new StoreIntegrityError('the bootstrap progress is missing');
+  if (row.installed === 1) return { installed: true };
+  const { body, body_format, body_length, body_sha256 } = row;
+  if (body === null || body_format === null || body_length === null || body_sha256 === null) return { installed: false, staging: null };
+  const snapshot = decode<BootstrapSnapshot>({ body, body_format, body_length, body_sha256 });
+  return { installed: false, staging: { ...snapshot, staged: row.staged, after: row.after_ordinal } };
 }
 
 async function readCursor(tx: SqlExecutor): Promise<number> {

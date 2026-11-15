@@ -393,14 +393,14 @@ describe('conflicts apply only to revisioned items', () => {
     expect(await serverTotals(phone)).toEqual([{ total: 'practice', game: 'roulette', currency: 'simulated', records: 1, net: '10' }]);
   });
 
-  it('the registry: each type’s server registration has its kind, acceptance and contribution', async () => {
+  it('the registry: each type’s server registration has its kind, acceptance, contribution and snapshot function', async () => {
     const { sql } = localStack();
     for (const type of [...recordTypes.values(), testRevisionedItem]) {
-      const [row] = await sql<{ kind: string; accept: string; contributes: boolean }[]>`
-        select kind, accept::regproc::text as accept,
+      const [row] = await sql<{ kind: string; accept: string; contributes: boolean; snapshot: string | null }[]>`
+        select kind, accept::regproc::text as accept, snapshot::regproc::text as snapshot,
                exists (select 1 from private.record_contributions c where c.record_type = t.record_type) as contributes
         from private.record_types t where record_type = ${type.name} and payload_version = ${type.payloadVersion}`;
-      expect(row).toEqual({ kind: type.kind, accept: type.acceptance, contributes: type.contribution !== null });
+      expect(row).toEqual({ kind: type.kind, accept: type.acceptance, contributes: type.contribution !== null, snapshot: type.snapshot });
     }
   });
 });

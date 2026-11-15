@@ -51,6 +51,7 @@ export {
   type ProviderSignInResult,
   type ProviderToken,
   type QueueResult,
+  type ReviewerSignInResult,
   type SignInMethod,
   type SignOutResult,
   type SignedInGate,
@@ -92,6 +93,7 @@ export {
   privacyChoice,
 } from './privacy-record';
 export {
+  BOOTSTRAP_PAGE_SIZE,
   type EngineStatus,
   RECORD_FAILURE_LIMIT,
   type Resolution,
@@ -115,6 +117,9 @@ export {
   CHUNK_BYTES,
   PROTOCOL_VERSION,
   REQUEST_LIMIT_BYTES,
+  type BootstrapPage,
+  type BootstrapRow,
+  type BootstrapSnapshot,
   type ContentManifest,
   type Disposition,
   type Envelope,
@@ -127,6 +132,7 @@ export {
 export {
   type Contribution,
   PLATFORM_TABLES,
+  type PracticeSessionSummary,
   type Proposal,
   type RecordKind,
   type RecordType,
@@ -142,6 +148,8 @@ export { SYNC_OPERATIONS } from './sync/supabase';
 export { type DevicePorts, type DeviceSignal, RECONCILE_INTERVAL_MS } from './sync/session';
 export {
   type AcceptedRecord,
+  type BootstrapProgress,
+  type BootstrapStaging,
   type FeedPageEffects,
   type LocalRevisionedItem,
   type NewUpload,

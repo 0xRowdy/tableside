@@ -44,4 +44,15 @@ Real projects don't exist yet; this is the checklist for when they do.
    Apple native on iOS, Apple through the browser on Android and Google native on both are qualified on devices at launch gate 3.
 7. Point Auth's send-email hook at the project's `send-email` function (#100): in `[remotes.<environment>.auth.hook.send_email]`, `uri = "https://<project>.supabase.co/functions/v1/send-email?environment=<environment>"` and a new `secrets = "v1,whsec_<base64>"`, and set the same value as the function secret `TABLESIDE_SEND_EMAIL_HOOK_SECRET`. The URI names the environment, as every request does, so a hook pointed at another project's function is refused. Keep `double_confirm_changes` (Secure Email Change) on and `enable_manual_linking` off: fresh authentication depends on both (launch gate 4).
 
+7. Provision the reviewer accounts spec 7 names (gate 14), one call per account, with the project's secret key:
+
+   ```sh
+   curl -X POST "https://<project>.supabase.co/functions/v1/provision-reviewer" \
+     -H "apikey: $SECRET_KEY" -H "authorization: Bearer $SECRET_KEY" \
+     -H "x-tableside-environment: <environment>" -H "content-type: application/json" \
+     -d '{"email": "<reviewer address>"}'
+   ```
+
+   It creates a reviewer account with an established adult eligibility record and answers its reviewer credential, once: put it in the store's review notes, never in the repository. Calling it again for the same address issues a new credential and the old one stops working. It refuses an address that already belongs to an ordinary account. Reviewers sign in under *Sign in with an email code → Signing in for app review?*. Each environment's credentials work only there.
+
 Gate 13 (environment isolation) is checked against both real projects before external beta invitations and again for production (#109).

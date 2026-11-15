@@ -448,13 +448,13 @@ describe('the operation API, called directly', () => {
 });
 
 describe('the record-type registry', () => {
-  it('registers each type on the server with the same kind and acceptance operation, and covers every table holding it in deletion', async () => {
+  it('registers each type on the server with the same kind, acceptance operation and snapshot function, and covers every table holding it in deletion', async () => {
     const { sql } = localStack();
     for (const type of recordTypes.values()) {
-      const [row] = await sql<{ kind: string; accept: string }[]>`
-        select kind, accept::regproc::text as accept from private.record_types
+      const [row] = await sql<{ kind: string; accept: string; snapshot: string | null }[]>`
+        select kind, accept::regproc::text as accept, snapshot::regproc::text as snapshot from private.record_types
         where record_type = ${type.name} and payload_version = ${type.payloadVersion}`;
-      expect(row).toEqual({ kind: type.kind, accept: type.acceptance });
+      expect(row).toEqual({ kind: type.kind, accept: type.acceptance, snapshot: type.snapshot });
       for (const table of [...type.deletion.serverTables, ...PLATFORM_TABLES]) {
         const [schema, name] = table.split('.');
         const columns = await sql`select 1 from information_schema.columns where table_schema = ${schema!} and table_name = ${name!} and column_name = 'account_id'`;

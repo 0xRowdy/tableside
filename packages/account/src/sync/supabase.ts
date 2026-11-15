@@ -1,13 +1,14 @@
 // The sync engine's backend and live channel over Supabase: the versioned
 // operations (supabase/migrations, `sync_upload_v1`, `sync_stage_chunk_v1`,
-// `sync_feed_v1`, `realtime_claim_v1`), the unversioned `sync_protocol`, and
-// the account's private Realtime topic.
+// `sync_feed_v1`, `sync_bootstrap_v1`, `sync_bootstrap_page_v1`,
+// `realtime_claim_v1`), the unversioned `sync_protocol`, and the account's
+// private Realtime topic.
 
 import type { RealtimeChannel, SupabaseClient } from '@supabase/supabase-js';
 
 import type { SyncBackend } from './engine';
 import type { LiveChannel } from './live';
-import { type ChunkAnswer, type FeedPage, type ProtocolStatus, SyncCallError, type UploadAnswer, chunkCallArguments } from './protocol';
+import { type BootstrapPage, type BootstrapSnapshot, type ChunkAnswer, type FeedPage, type ProtocolStatus, SyncCallError, type UploadAnswer, chunkCallArguments } from './protocol';
 
 /**
  * Transaction contention the server reports instead of waiting without bound:
@@ -31,6 +32,8 @@ export const SYNC_OPERATIONS = {
   stageChunk: 'sync_stage_chunk_v1',
   feed: 'sync_feed_v1',
   claim: 'realtime_claim_v1',
+  bootstrap: 'sync_bootstrap_v1',
+  bootstrapPage: 'sync_bootstrap_page_v1',
 } as const;
 
 type Failure = SyncCallError['kind'] | 'contention';
@@ -130,6 +133,14 @@ export function supabaseSyncBackend(supabase: SupabaseClient, watch: RetryAfterW
     upload: (request) => callOperation<UploadAnswer>(supabase, watch, SYNC_OPERATIONS.upload, { request }),
     stageChunk: (chunk) => callOperation<ChunkAnswer>(supabase, watch, SYNC_OPERATIONS.stageChunk, chunkCallArguments(chunk)),
     feed: (after, pageSize) => callOperation<FeedPage>(supabase, watch, SYNC_OPERATIONS.feed, { after, page_size: pageSize }),
+    async bootstrap(installation) {
+      const answer = await callOperation<(BootstrapSnapshot & { status: 'snapshot' }) | { status: 'malformed' }>(supabase, watch, SYNC_OPERATIONS.bootstrap, { installation });
+      if (answer.status !== 'snapshot') throw new SyncCallError('refused');
+      const { snapshot, watermark, rows, totals } = answer;
+      return { snapshot, watermark, rows, totals };
+    },
+    bootstrapPage: (snapshot, after, pageSize) =>
+      callOperation<BootstrapPage>(supabase, watch, SYNC_OPERATIONS.bootstrapPage, { snapshot, after, page_size: pageSize }),
   };
 }
 

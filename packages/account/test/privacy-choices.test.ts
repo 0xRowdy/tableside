@@ -63,7 +63,43 @@ describe('granting analytics consent', () => {
     expect(id).toMatch(/^[0-9a-f]{32}$/);
     expect(id).not.toBe(accountId.replaceAll('-', ''));
     expect(id).not.toContain(email.split('@')[0]);
-    expect(choices!.analyticsIds).toEqual([{ generation: 1, analyticsId: id }]);
+  });
+});
+
+describe('a new device', () => {
+  it('bootstraps the current choices, generation and basis, without earlier analytics IDs, and its grant isn’t stale', async () => {
+    const { phone, email, accountId } = await adultAccount('bootstrap');
+    await phone.account.privacy.grantAnalytics();
+    const first = (await phone.account.privacy.read())!.analytics.analyticsId!;
+    await phone.account.privacy.withdrawAnalytics();
+    expect(await phone.account.privacy.grantAnalytics()).toEqual({ status: 'changed' });
+    const current = (await phone.account.privacy.read())!.analytics.analyticsId!;
+    await stack.sql`select private.record_ad_data_opt_out(${accountId}, 'gpc')`;
+
+    const tablet = await signedInTablet(email);
+    expect(await tablet.account.privacy.read()).toEqual({
+      analytics: { consent: 'granted', generation: 2, analyticsId: current },
+      adDataOptOut: { source: 'gpc' },
+      pending: false,
+      basis: expect.any(Number),
+    });
+    // Only the current generation's ID reaches the device; earlier ones stay on the server for export and deletion.
+    expect(JSON.stringify(await tablet.vault.store().readAcceptedRecords('privacy-choice'))).not.toContain(first);
+
+    // Made from the bootstrapped basis, the tablet's enabling changes are current.
+    expect(await tablet.account.privacy.allowAdData()).toEqual({ status: 'changed' });
+    expect(await tablet.account.privacy.withdrawAnalytics()).toEqual({ status: 'applied' });
+    expect(await tablet.account.privacy.grantAnalytics()).toEqual({ status: 'changed' });
+    expect(await serverChoices(accountId)).toMatchObject({ analytics_consent: 'granted', analytics_generation: 3, ad_data_opt_out_source: null });
+    await phone.account.sync.reconcile();
+    expect((await phone.account.privacy.read())!).toMatchObject({ analytics: { consent: 'granted', generation: 3 }, adDataOptOut: null });
+  });
+
+  it('of an account that never made a privacy choice starts from nothing, and grants from there', async () => {
+    const { email } = await adultAccount('bootstrap-empty');
+    const tablet = await signedInTablet(email);
+    expect(await tablet.account.privacy.read()).toMatchObject({ analytics: { consent: 'never-granted', generation: 0 }, basis: 0 });
+    expect(await tablet.account.privacy.grantAnalytics()).toEqual({ status: 'changed' });
   });
 });
 
@@ -131,8 +167,8 @@ describe('withdrawing analytics consent', () => {
     expect((await tablet.account.privacy.read())!.analytics).toEqual(withdrawn);
   });
 
-  it('then granting again starts generation 2 with a new analytics ID, keeping both', async () => {
-    const { phone } = await adultAccount('regrant');
+  it('then granting again starts generation 2 with a new analytics ID; the server keeps both', async () => {
+    const { phone, accountId } = await adultAccount('regrant');
     await phone.account.privacy.grantAnalytics();
     const first = (await phone.account.privacy.read())!.analytics.analyticsId!;
     await phone.account.privacy.withdrawAnalytics();
@@ -140,10 +176,11 @@ describe('withdrawing analytics consent', () => {
 
     const choices = (await phone.account.privacy.read())!;
     expect(choices.analytics).toMatchObject({ consent: 'granted', generation: 2 });
+    expect(choices.analytics.analyticsId).toMatch(/^[0-9a-f]{32}$/);
     expect(choices.analytics.analyticsId).not.toBe(first);
-    expect(choices.analyticsIds).toEqual([
-      { generation: 1, analyticsId: first },
-      { generation: 2, analyticsId: choices.analytics.analyticsId },
+    expect(await stack.sql`select generation, analytics_id from private.analytics_ids where account_id = ${accountId} order by generation`).toEqual([
+      { generation: 1, analytics_id: first },
+      { generation: 2, analytics_id: choices.analytics.analyticsId },
     ]);
   });
 
