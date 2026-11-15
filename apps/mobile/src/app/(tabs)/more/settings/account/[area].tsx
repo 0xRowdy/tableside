@@ -1,5 +1,5 @@
-// The Account entries later tickets build: Delete account (S2-22, #103) and
-// Display name (spec 6). Each holds its place here until its own route replaces it.
+// The Account entries later tickets build: Display name (spec 6). Each holds
+// its place here until its own route replaces it.
 
 import { Redirect, router, useLocalSearchParams } from 'expo-router';
 
@@ -7,7 +7,6 @@ import { Note, SettingsScreen } from '@/settings/SettingsParts';
 
 const AREAS: Readonly<Record<string, string>> = {
   'display-name': 'Display name',
-  delete: 'Delete account',
 };
 
 export default function AccountArea() {

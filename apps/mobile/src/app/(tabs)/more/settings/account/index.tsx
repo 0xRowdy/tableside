@@ -85,7 +85,7 @@ export default function Account() {
         />
       </Group>
       <Group>
-        <ListRow icon={Trash2} title="Delete account" detail="Choose a 30-day undo or permanent deletion" destructive onPress={open('delete')} />
+        <ListRow icon={Trash2} title="Delete account" detail="Choose a 30-day undo or permanent deletion" destructive onPress={() => router.navigate('/more/settings/account/delete')} />
       </Group>
       <Button label="Sign out of this device" icon={LogOut} variant="secondary" stretch onPress={() => setConfirming(true)} />
       <Note>Signs out only this device. Unsynced work stays here until you sign back in to this account.</Note>
