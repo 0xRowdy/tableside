@@ -5,6 +5,11 @@
 import { type SupabaseClient, createClient } from '@supabase/supabase-js';
 
 import { type BackendEnvironment, ENVIRONMENT_HEADER, type EnvironmentName, retiredEnvironments } from './environment';
+import { SyncEngine, type SyncErrorCode } from './sync/engine';
+import { recordTypes } from './sync/registry';
+import { type DevicePorts, SyncSession } from './sync/session';
+import type { SyncStore } from './sync/store';
+import { supabaseLiveChannels, supabaseSyncBackend } from './sync/supabase';
 
 /** The account's access state on this installation (spec 2, *Account gate*). Later tickets add the other states. */
 export type AccountGate =
@@ -36,10 +41,42 @@ export interface CredentialStorage {
  * an account. The Account service opens it when the gate becomes Active.
  */
 export interface AccountVault {
-  open(accountId: string): Promise<void>;
+  open(accountId: string): Promise<VaultOpening>;
   close(): Promise<void>;
   /** Removes every database, key and installation identity another environment left on this device. */
   removeEnvironment(environment: EnvironmentName): Promise<void>;
+}
+
+/** An account's database, open for the current account session. */
+export interface VaultSession {
+  readonly installationId: string;
+  /** The account's store; it refuses to read or write once the account session has ended. */
+  readonly store: SyncStore;
+}
+
+/**
+ * Every other outcome opens nothing, so no sync runs: Recovery needed, a later
+ * build's schema (needs-update), a failed migration (retried at the next open),
+ * or an opening a later sign-in superseded. Their gate states arrive with later tickets.
+ */
+export type VaultOpening =
+  | { readonly status: 'open'; readonly session: VaultSession }
+  | { readonly status: 'recovery-needed' | 'needs-update' | 'migration-failed' | 'superseded' };
+
+export interface SyncStatus {
+  /** Whether this installation holds the account's live connection (the newest foregrounded one). */
+  readonly live: boolean;
+  /** How the last synchronization run ended, if on an error. */
+  readonly error: SyncErrorCode | null;
+}
+
+/** Synchronization for the open account session. Triggers run it by themselves; these are for asking. */
+export interface AccountSync {
+  readonly status: SyncStatus;
+  /** Uploads and fetches now; resolves when that has finished. Coalesces with work already going. */
+  reconcile(): Promise<void>;
+  /** Resolves once no synchronization is running. */
+  idle(): Promise<void>;
 }
 
 export interface AccountServiceOptions {
@@ -51,6 +88,12 @@ export interface AccountServiceOptions {
   readonly vault: AccountVault;
   /** Milliseconds since the epoch. */
   readonly clock: () => number;
+  /** Foreground, connectivity and timers. */
+  readonly device: DevicePorts;
+  /** Secure random bytes. */
+  readonly randomBytes: (count: number) => Uint8Array;
+  /** The device's WebSocket, for the live connection. */
+  readonly webSocket?: typeof WebSocket;
 }
 
 export interface AccountService {
@@ -74,6 +117,22 @@ export interface AccountService {
    * #90's restricted gate states, so until then the sign-in fails.
    */
   verifyEmailCode(request: { readonly email: string; readonly code: string }): Promise<CodeVerificationResult>;
+  /**
+   * The app starting again: reopens the account this installation was signed
+   * in to from its stored credentials, without the network. The first-run
+   * flow (#88) builds on it.
+   */
+  resume(): Promise<{ readonly status: 'resumed' | 'no-account' }>;
+  readonly sync: AccountSync;
+}
+
+/** Where the signed-in account is remembered, in the environment's credentials (so it goes with them). */
+const rememberedAccountKey = (environment: EnvironmentName) => `tableside.${environment}.account`;
+
+/** The account this installation is signed in to, with its established band. */
+interface RememberedAccount {
+  readonly accountId: string;
+  readonly eligibility: EligibilityBand;
 }
 
 interface Assertion {
@@ -91,7 +150,7 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
   const connect = (): Promise<SupabaseClient> =>
     (client ??= (async () => {
       await removeRetiredEnvironments(options);
-      return createClient(backend.url, backend.publishableKey, {
+      const created = createClient(backend.url, backend.publishableKey, {
         global: { fetch: options.fetch, headers: { [ENVIRONMENT_HEADER]: backend.name } },
         auth: {
           storage: namespacedCredentials(options.credentials, backend.name),
@@ -100,7 +159,13 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
           autoRefreshToken: false,
           detectSessionInUrl: false,
         },
+        ...(options.webSocket ? { realtime: { transport: options.webSocket } } : {}),
       });
+      // A refreshed token re-subscribes the live connection with it.
+      created.auth.onAuthStateChange((event) => {
+        if (event === 'TOKEN_REFRESHED') sync?.session.credentialsChanged();
+      });
+      return created;
     })().catch((error: unknown) => {
       client = null;
       throw error;
@@ -109,9 +174,30 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
   let gate: AccountGate = { state: 'no-account' };
   let assertion: Assertion | null = null;
 
+  let sync: { readonly engine: SyncEngine; readonly session: SyncSession } | null = null;
+
   const setGate = (next: AccountGate) => {
     gate = next;
     for (const listener of listeners) listener(next);
+  };
+
+  /** Opens the account's database for a new account session, and starts its sync. */
+  const openAccount = async ({ accountId, eligibility }: RememberedAccount) => {
+    sync?.session.end();
+    sync = null;
+    const opening = await options.vault.open(accountId);
+    setGate({ state: 'active', accountId, eligibility });
+    if (opening.status !== 'open') return;
+    const supabase = await connect();
+    const { store, installationId } = opening.session;
+    const engine = new SyncEngine({
+      store,
+      backend: supabaseSyncBackend(supabase),
+      registry: recordTypes,
+      installationId,
+      newOperationId: () => hex(options.randomBytes(16)),
+    });
+    sync = { engine, session: new SyncSession(engine, store, options.device, supabaseLiveChannels(supabase, accountId)) };
   };
 
   const currentAssertion = () => (assertion && assertion.expiresAt > options.clock() ? assertion : null);
@@ -173,16 +259,48 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
           await supabase.auth.signOut({ scope: 'local' });
           return { status: 'failed' };
         }
-        await options.vault.open(account.account_id);
         assertion = null;
-        setGate({ state: 'active', accountId: account.account_id, eligibility: account.eligibility });
+        const remembered: RememberedAccount = { accountId: account.account_id, eligibility: account.eligibility };
+        await namespacedCredentials(options.credentials, backend.name).setItem(rememberedAccountKey(backend.name), JSON.stringify(remembered));
+        await openAccount(remembered);
         return { status: 'signed-in' };
       } catch {
         return { status: 'failed' };
       }
     },
+
+    async resume() {
+      const supabase = await connect();
+      const remembered = parseRemembered(await options.credentials.getItem(rememberedAccountKey(backend.name)));
+      const { data } = await supabase.auth.getSession();
+      if (!remembered || !data.session) return { status: 'no-account' };
+      await openAccount(remembered);
+      return { status: 'resumed' };
+    },
+
+    sync: {
+      get status(): SyncStatus {
+        return { live: sync?.session.isLive ?? false, error: sync?.engine.error ?? null };
+      },
+      reconcile: () => sync?.engine.reconcile() ?? Promise.resolve(),
+      idle: () => sync?.engine.idle() ?? Promise.resolve(),
+    },
   };
 }
+
+function parseRemembered(text: string | null): RememberedAccount | null {
+  try {
+    const value = JSON.parse(text ?? 'null') as { accountId?: unknown; eligibility?: unknown } | null;
+    if (value && typeof value.accountId === 'string' && typeof value.eligibility === 'string' && isEligible(value.eligibility)) {
+      return { accountId: value.accountId, eligibility: value.eligibility };
+    }
+  } catch {
+    // Nothing usable remembered.
+  }
+  return null;
+}
+
+const hex = (bytes: Uint8Array): string => Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
 
 function isEligible(band: string | null): band is EligibilityBand {
   return band !== null && ELIGIBLE_BANDS.includes(band);

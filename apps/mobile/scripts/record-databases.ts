@@ -11,7 +11,9 @@
 //   transitions;
 // - one holding finished practice: a completed practice session with its
 //   outgoing synchronization record and an allowance effect, and a practice
-//   session marked incomplete.
+//   session marked incomplete; with sync state (#91): that result's upload
+//   acknowledged, a second result's upload sent and awaiting its receipt, and
+//   a feed page applied that brought another installation's result.
 //
 // While the schema is unreleased, --replace re-records it. When a build with
 // it is released, the recording's SHA-256 goes in recorded/released.json; from
@@ -23,6 +25,7 @@ import { basename, join } from 'node:path';
 
 import {
   advanceActivity,
+  canonicalJson,
   completedPracticeRecord,
   createActivity,
   encodeCheckpoint,
@@ -33,6 +36,7 @@ import {
   type Command,
   type DomainFact,
   type RandomStreamIdentity,
+  sha256Hex,
 } from '@tableside/engine';
 import { RECORDED_BUILDS, type RecordedCheckpoint } from '@tableside/engine/recorded-checkpoints';
 
@@ -124,6 +128,21 @@ async function unfinishedDatabase(recorded: RecordedCheckpoint): Promise<Recorde
  * record and an allowance effect), and one marked incomplete. Other games'
  * results are stored the same way.
  */
+/** The upload a result is sent as: protocol 1's canonical envelope (packages/account/src/sync/protocol.ts). */
+function operationFor(digit: string, record: { readonly activityId: string }) {
+  const operationId = digit.repeat(32);
+  const request = canonicalJson({
+    protocol: 1,
+    operation: operationId,
+    installation: IDENTITY.installationId,
+    recordType: 'completed-practice-session',
+    payloadVersion: 1,
+    item: record.activityId,
+    payload: record,
+  });
+  return { operationId, request, requestHash: sha256Hex(request) };
+}
+
 function historyDatabase(): Promise<RecordedDatabase> {
   return record('finished practice', null, async (store) => {
     const shortest = [...build!.checkpoints].sort((a, b) => a.continuation.length - b.continuation.length)[0]!;
@@ -133,7 +152,28 @@ function historyDatabase(): Promise<RecordedDatabase> {
     if (state.phase !== 'completed') throw new Error(`${shortest.name} didn't complete`);
     await store.recordEffects(finished.activityId, [{ effectId: { grant: 'recorded-grant', activity: finished.activityId, sequence: 1 }, kind: 'turn-charge', amount: '1' }]);
     const facts = (await store.readTransitions(finished.activityId)).flatMap((transition) => transition.facts);
-    await store.complete(completedPracticeRecord(state, facts, { startedAt: CREATED_AT, endedAt: CREATED_AT + 600_000, meteringBasis: 'free-play', allowancePolicyVersion: null }));
+    const result = await store.complete(completedPracticeRecord(state, facts, { startedAt: CREATED_AT, endedAt: CREATED_AT + 600_000, meteringBasis: 'free-play', allowancePolicyVersion: null }));
+
+    // Sync state: this result uploaded and acknowledged; a second one sent and awaiting its receipt.
+    const accepted = await store.prepareUpload(`completed/${finished.activityId}`, operationFor('1', result));
+    await store.acknowledgeUpload(
+      `completed/${finished.activityId}`,
+      { status: 'accepted', operation: accepted.operationId, requestHash: accepted.requestHash, sequence: 1 },
+      { recordType: 'completed-practice-session', item: finished.activityId, sequence: 1, payload: result },
+    );
+    const sent = specificationOf(shortest, 'completed-2');
+    const second = await play(store, sent, shortest.random as RandomStreamIdentity, [...commandsOf(shortest), ...continuation]);
+    const secondFacts = (await store.readTransitions(sent.activityId)).flatMap((transition) => transition.facts);
+    const secondResult = await store.complete(
+      completedPracticeRecord(second.state, secondFacts, { startedAt: CREATED_AT + 700_000, endedAt: CREATED_AT + 900_000, meteringBasis: 'free-play', allowancePolicyVersion: null }),
+    );
+    await store.prepareUpload(`completed/${sent.activityId}`, operationFor('2', secondResult));
+    // The feed, applied through sequence 2: this installation's own acceptance, then another installation's result.
+    const elsewhere = { ...result, activityId: 'elsewhere-1', device: 'recorded-other-installation' };
+    await store.applyFeedPage(0, [
+      { recordType: 'completed-practice-session', item: finished.activityId, sequence: 1, payload: result },
+      { recordType: 'completed-practice-session', item: elsewhere.activityId, sequence: 2, payload: elsewhere },
+    ]);
 
     const damaged = specificationOf(shortest, 'incomplete-1');
     await play(store, damaged, shortest.random as RandomStreamIdentity, commandsOf(shortest));

@@ -23,7 +23,10 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
         "CREATE INDEX activities_unfinished ON activities (status, position)",
         "CREATE TABLE transitions (\n    activity_id TEXT NOT NULL REFERENCES activities (activity_id),\n    command_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    PRIMARY KEY (activity_id, command_id),\n    UNIQUE (activity_id, sequence)\n  ) STRICT",
         "CREATE TABLE effects (\n    activity_id TEXT NOT NULL REFERENCES activities (activity_id),\n    effect_key TEXT NOT NULL,\n    position INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    PRIMARY KEY (activity_id, effect_key)\n  ) STRICT",
-        "CREATE TABLE outgoing (\n    id TEXT PRIMARY KEY,\n    activity_id TEXT NOT NULL UNIQUE REFERENCES activities (activity_id),\n    position INTEGER NOT NULL UNIQUE,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL\n  ) STRICT"
+        "CREATE TABLE outgoing (\n    id TEXT PRIMARY KEY,\n    activity_id TEXT NOT NULL UNIQUE REFERENCES activities (activity_id),\n    position INTEGER NOT NULL UNIQUE,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    dependencies TEXT NOT NULL,\n    status TEXT NOT NULL CHECK (status IN ('pending', 'accepted', 'rejected')),\n    operation_id TEXT UNIQUE,\n    request TEXT,\n    request_sha256 TEXT,\n    receipt TEXT\n  ) STRICT",
+        "CREATE INDEX outgoing_pending ON outgoing (status, position)",
+        "CREATE TABLE accepted_records (\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    PRIMARY KEY (record_type, item_id)\n  ) STRICT",
+        "CREATE TABLE feed_cursor (singleton INTEGER PRIMARY KEY CHECK (singleton = 1), sequence INTEGER NOT NULL) STRICT"
       ],
       "rows": {
         "meta": [
@@ -77,7 +80,14 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
           }
         ],
         "effects": [],
-        "outgoing": []
+        "outgoing": [],
+        "accepted_records": [],
+        "feed_cursor": [
+          {
+            "singleton": 1,
+            "sequence": 0
+          }
+        ]
       }
     },
     {
@@ -97,7 +107,10 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
         "CREATE INDEX activities_unfinished ON activities (status, position)",
         "CREATE TABLE transitions (\n    activity_id TEXT NOT NULL REFERENCES activities (activity_id),\n    command_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    PRIMARY KEY (activity_id, command_id),\n    UNIQUE (activity_id, sequence)\n  ) STRICT",
         "CREATE TABLE effects (\n    activity_id TEXT NOT NULL REFERENCES activities (activity_id),\n    effect_key TEXT NOT NULL,\n    position INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    PRIMARY KEY (activity_id, effect_key)\n  ) STRICT",
-        "CREATE TABLE outgoing (\n    id TEXT PRIMARY KEY,\n    activity_id TEXT NOT NULL UNIQUE REFERENCES activities (activity_id),\n    position INTEGER NOT NULL UNIQUE,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL\n  ) STRICT"
+        "CREATE TABLE outgoing (\n    id TEXT PRIMARY KEY,\n    activity_id TEXT NOT NULL UNIQUE REFERENCES activities (activity_id),\n    position INTEGER NOT NULL UNIQUE,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    dependencies TEXT NOT NULL,\n    status TEXT NOT NULL CHECK (status IN ('pending', 'accepted', 'rejected')),\n    operation_id TEXT UNIQUE,\n    request TEXT,\n    request_sha256 TEXT,\n    receipt TEXT\n  ) STRICT",
+        "CREATE INDEX outgoing_pending ON outgoing (status, position)",
+        "CREATE TABLE accepted_records (\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    PRIMARY KEY (record_type, item_id)\n  ) STRICT",
+        "CREATE TABLE feed_cursor (singleton INTEGER PRIMARY KEY CHECK (singleton = 1), sequence INTEGER NOT NULL) STRICT"
       ],
       "rows": {
         "meta": [
@@ -151,7 +164,14 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
           }
         ],
         "effects": [],
-        "outgoing": []
+        "outgoing": [],
+        "accepted_records": [],
+        "feed_cursor": [
+          {
+            "singleton": 1,
+            "sequence": 0
+          }
+        ]
       }
     },
     {
@@ -171,7 +191,10 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
         "CREATE INDEX activities_unfinished ON activities (status, position)",
         "CREATE TABLE transitions (\n    activity_id TEXT NOT NULL REFERENCES activities (activity_id),\n    command_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    PRIMARY KEY (activity_id, command_id),\n    UNIQUE (activity_id, sequence)\n  ) STRICT",
         "CREATE TABLE effects (\n    activity_id TEXT NOT NULL REFERENCES activities (activity_id),\n    effect_key TEXT NOT NULL,\n    position INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    PRIMARY KEY (activity_id, effect_key)\n  ) STRICT",
-        "CREATE TABLE outgoing (\n    id TEXT PRIMARY KEY,\n    activity_id TEXT NOT NULL UNIQUE REFERENCES activities (activity_id),\n    position INTEGER NOT NULL UNIQUE,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL\n  ) STRICT"
+        "CREATE TABLE outgoing (\n    id TEXT PRIMARY KEY,\n    activity_id TEXT NOT NULL UNIQUE REFERENCES activities (activity_id),\n    position INTEGER NOT NULL UNIQUE,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    dependencies TEXT NOT NULL,\n    status TEXT NOT NULL CHECK (status IN ('pending', 'accepted', 'rejected')),\n    operation_id TEXT UNIQUE,\n    request TEXT,\n    request_sha256 TEXT,\n    receipt TEXT\n  ) STRICT",
+        "CREATE INDEX outgoing_pending ON outgoing (status, position)",
+        "CREATE TABLE accepted_records (\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    PRIMARY KEY (record_type, item_id)\n  ) STRICT",
+        "CREATE TABLE feed_cursor (singleton INTEGER PRIMARY KEY CHECK (singleton = 1), sequence INTEGER NOT NULL) STRICT"
       ],
       "rows": {
         "meta": [
@@ -243,7 +266,14 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
           }
         ],
         "effects": [],
-        "outgoing": []
+        "outgoing": [],
+        "accepted_records": [],
+        "feed_cursor": [
+          {
+            "singleton": 1,
+            "sequence": 0
+          }
+        ]
       }
     },
     {
@@ -263,7 +293,10 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
         "CREATE INDEX activities_unfinished ON activities (status, position)",
         "CREATE TABLE transitions (\n    activity_id TEXT NOT NULL REFERENCES activities (activity_id),\n    command_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    PRIMARY KEY (activity_id, command_id),\n    UNIQUE (activity_id, sequence)\n  ) STRICT",
         "CREATE TABLE effects (\n    activity_id TEXT NOT NULL REFERENCES activities (activity_id),\n    effect_key TEXT NOT NULL,\n    position INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    PRIMARY KEY (activity_id, effect_key)\n  ) STRICT",
-        "CREATE TABLE outgoing (\n    id TEXT PRIMARY KEY,\n    activity_id TEXT NOT NULL UNIQUE REFERENCES activities (activity_id),\n    position INTEGER NOT NULL UNIQUE,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL\n  ) STRICT"
+        "CREATE TABLE outgoing (\n    id TEXT PRIMARY KEY,\n    activity_id TEXT NOT NULL UNIQUE REFERENCES activities (activity_id),\n    position INTEGER NOT NULL UNIQUE,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    dependencies TEXT NOT NULL,\n    status TEXT NOT NULL CHECK (status IN ('pending', 'accepted', 'rejected')),\n    operation_id TEXT UNIQUE,\n    request TEXT,\n    request_sha256 TEXT,\n    receipt TEXT\n  ) STRICT",
+        "CREATE INDEX outgoing_pending ON outgoing (status, position)",
+        "CREATE TABLE accepted_records (\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    PRIMARY KEY (record_type, item_id)\n  ) STRICT",
+        "CREATE TABLE feed_cursor (singleton INTEGER PRIMARY KEY CHECK (singleton = 1), sequence INTEGER NOT NULL) STRICT"
       ],
       "rows": {
         "meta": [
@@ -344,7 +377,14 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
           }
         ],
         "effects": [],
-        "outgoing": []
+        "outgoing": [],
+        "accepted_records": [],
+        "feed_cursor": [
+          {
+            "singleton": 1,
+            "sequence": 0
+          }
+        ]
       }
     },
     {
@@ -364,7 +404,10 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
         "CREATE INDEX activities_unfinished ON activities (status, position)",
         "CREATE TABLE transitions (\n    activity_id TEXT NOT NULL REFERENCES activities (activity_id),\n    command_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    PRIMARY KEY (activity_id, command_id),\n    UNIQUE (activity_id, sequence)\n  ) STRICT",
         "CREATE TABLE effects (\n    activity_id TEXT NOT NULL REFERENCES activities (activity_id),\n    effect_key TEXT NOT NULL,\n    position INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    PRIMARY KEY (activity_id, effect_key)\n  ) STRICT",
-        "CREATE TABLE outgoing (\n    id TEXT PRIMARY KEY,\n    activity_id TEXT NOT NULL UNIQUE REFERENCES activities (activity_id),\n    position INTEGER NOT NULL UNIQUE,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL\n  ) STRICT"
+        "CREATE TABLE outgoing (\n    id TEXT PRIMARY KEY,\n    activity_id TEXT NOT NULL UNIQUE REFERENCES activities (activity_id),\n    position INTEGER NOT NULL UNIQUE,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    dependencies TEXT NOT NULL,\n    status TEXT NOT NULL CHECK (status IN ('pending', 'accepted', 'rejected')),\n    operation_id TEXT UNIQUE,\n    request TEXT,\n    request_sha256 TEXT,\n    receipt TEXT\n  ) STRICT",
+        "CREATE INDEX outgoing_pending ON outgoing (status, position)",
+        "CREATE TABLE accepted_records (\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    PRIMARY KEY (record_type, item_id)\n  ) STRICT",
+        "CREATE TABLE feed_cursor (singleton INTEGER PRIMARY KEY CHECK (singleton = 1), sequence INTEGER NOT NULL) STRICT"
       ],
       "rows": {
         "meta": [
@@ -418,7 +461,14 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
           }
         ],
         "effects": [],
-        "outgoing": []
+        "outgoing": [],
+        "accepted_records": [],
+        "feed_cursor": [
+          {
+            "singleton": 1,
+            "sequence": 0
+          }
+        ]
       }
     },
     {
@@ -438,7 +488,10 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
         "CREATE INDEX activities_unfinished ON activities (status, position)",
         "CREATE TABLE transitions (\n    activity_id TEXT NOT NULL REFERENCES activities (activity_id),\n    command_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    PRIMARY KEY (activity_id, command_id),\n    UNIQUE (activity_id, sequence)\n  ) STRICT",
         "CREATE TABLE effects (\n    activity_id TEXT NOT NULL REFERENCES activities (activity_id),\n    effect_key TEXT NOT NULL,\n    position INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    PRIMARY KEY (activity_id, effect_key)\n  ) STRICT",
-        "CREATE TABLE outgoing (\n    id TEXT PRIMARY KEY,\n    activity_id TEXT NOT NULL UNIQUE REFERENCES activities (activity_id),\n    position INTEGER NOT NULL UNIQUE,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL\n  ) STRICT"
+        "CREATE TABLE outgoing (\n    id TEXT PRIMARY KEY,\n    activity_id TEXT NOT NULL UNIQUE REFERENCES activities (activity_id),\n    position INTEGER NOT NULL UNIQUE,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    dependencies TEXT NOT NULL,\n    status TEXT NOT NULL CHECK (status IN ('pending', 'accepted', 'rejected')),\n    operation_id TEXT UNIQUE,\n    request TEXT,\n    request_sha256 TEXT,\n    receipt TEXT\n  ) STRICT",
+        "CREATE INDEX outgoing_pending ON outgoing (status, position)",
+        "CREATE TABLE accepted_records (\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    PRIMARY KEY (record_type, item_id)\n  ) STRICT",
+        "CREATE TABLE feed_cursor (singleton INTEGER PRIMARY KEY CHECK (singleton = 1), sequence INTEGER NOT NULL) STRICT"
       ],
       "rows": {
         "meta": [
@@ -510,7 +563,14 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
           }
         ],
         "effects": [],
-        "outgoing": []
+        "outgoing": [],
+        "accepted_records": [],
+        "feed_cursor": [
+          {
+            "singleton": 1,
+            "sequence": 0
+          }
+        ]
       }
     },
     {
@@ -530,7 +590,10 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
         "CREATE INDEX activities_unfinished ON activities (status, position)",
         "CREATE TABLE transitions (\n    activity_id TEXT NOT NULL REFERENCES activities (activity_id),\n    command_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    PRIMARY KEY (activity_id, command_id),\n    UNIQUE (activity_id, sequence)\n  ) STRICT",
         "CREATE TABLE effects (\n    activity_id TEXT NOT NULL REFERENCES activities (activity_id),\n    effect_key TEXT NOT NULL,\n    position INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    PRIMARY KEY (activity_id, effect_key)\n  ) STRICT",
-        "CREATE TABLE outgoing (\n    id TEXT PRIMARY KEY,\n    activity_id TEXT NOT NULL UNIQUE REFERENCES activities (activity_id),\n    position INTEGER NOT NULL UNIQUE,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL\n  ) STRICT"
+        "CREATE TABLE outgoing (\n    id TEXT PRIMARY KEY,\n    activity_id TEXT NOT NULL UNIQUE REFERENCES activities (activity_id),\n    position INTEGER NOT NULL UNIQUE,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    dependencies TEXT NOT NULL,\n    status TEXT NOT NULL CHECK (status IN ('pending', 'accepted', 'rejected')),\n    operation_id TEXT UNIQUE,\n    request TEXT,\n    request_sha256 TEXT,\n    receipt TEXT\n  ) STRICT",
+        "CREATE INDEX outgoing_pending ON outgoing (status, position)",
+        "CREATE TABLE accepted_records (\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    PRIMARY KEY (record_type, item_id)\n  ) STRICT",
+        "CREATE TABLE feed_cursor (singleton INTEGER PRIMARY KEY CHECK (singleton = 1), sequence INTEGER NOT NULL) STRICT"
       ],
       "rows": {
         "meta": [
@@ -602,7 +665,14 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
           }
         ],
         "effects": [],
-        "outgoing": []
+        "outgoing": [],
+        "accepted_records": [],
+        "feed_cursor": [
+          {
+            "singleton": 1,
+            "sequence": 0
+          }
+        ]
       }
     },
     {
@@ -622,7 +692,10 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
         "CREATE INDEX activities_unfinished ON activities (status, position)",
         "CREATE TABLE transitions (\n    activity_id TEXT NOT NULL REFERENCES activities (activity_id),\n    command_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    PRIMARY KEY (activity_id, command_id),\n    UNIQUE (activity_id, sequence)\n  ) STRICT",
         "CREATE TABLE effects (\n    activity_id TEXT NOT NULL REFERENCES activities (activity_id),\n    effect_key TEXT NOT NULL,\n    position INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    PRIMARY KEY (activity_id, effect_key)\n  ) STRICT",
-        "CREATE TABLE outgoing (\n    id TEXT PRIMARY KEY,\n    activity_id TEXT NOT NULL UNIQUE REFERENCES activities (activity_id),\n    position INTEGER NOT NULL UNIQUE,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL\n  ) STRICT"
+        "CREATE TABLE outgoing (\n    id TEXT PRIMARY KEY,\n    activity_id TEXT NOT NULL UNIQUE REFERENCES activities (activity_id),\n    position INTEGER NOT NULL UNIQUE,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    dependencies TEXT NOT NULL,\n    status TEXT NOT NULL CHECK (status IN ('pending', 'accepted', 'rejected')),\n    operation_id TEXT UNIQUE,\n    request TEXT,\n    request_sha256 TEXT,\n    receipt TEXT\n  ) STRICT",
+        "CREATE INDEX outgoing_pending ON outgoing (status, position)",
+        "CREATE TABLE accepted_records (\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    PRIMARY KEY (record_type, item_id)\n  ) STRICT",
+        "CREATE TABLE feed_cursor (singleton INTEGER PRIMARY KEY CHECK (singleton = 1), sequence INTEGER NOT NULL) STRICT"
       ],
       "rows": {
         "meta": [
@@ -694,7 +767,14 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
           }
         ],
         "effects": [],
-        "outgoing": []
+        "outgoing": [],
+        "accepted_records": [],
+        "feed_cursor": [
+          {
+            "singleton": 1,
+            "sequence": 0
+          }
+        ]
       }
     },
     {
@@ -714,7 +794,10 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
         "CREATE INDEX activities_unfinished ON activities (status, position)",
         "CREATE TABLE transitions (\n    activity_id TEXT NOT NULL REFERENCES activities (activity_id),\n    command_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    PRIMARY KEY (activity_id, command_id),\n    UNIQUE (activity_id, sequence)\n  ) STRICT",
         "CREATE TABLE effects (\n    activity_id TEXT NOT NULL REFERENCES activities (activity_id),\n    effect_key TEXT NOT NULL,\n    position INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    PRIMARY KEY (activity_id, effect_key)\n  ) STRICT",
-        "CREATE TABLE outgoing (\n    id TEXT PRIMARY KEY,\n    activity_id TEXT NOT NULL UNIQUE REFERENCES activities (activity_id),\n    position INTEGER NOT NULL UNIQUE,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL\n  ) STRICT"
+        "CREATE TABLE outgoing (\n    id TEXT PRIMARY KEY,\n    activity_id TEXT NOT NULL UNIQUE REFERENCES activities (activity_id),\n    position INTEGER NOT NULL UNIQUE,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    dependencies TEXT NOT NULL,\n    status TEXT NOT NULL CHECK (status IN ('pending', 'accepted', 'rejected')),\n    operation_id TEXT UNIQUE,\n    request TEXT,\n    request_sha256 TEXT,\n    receipt TEXT\n  ) STRICT",
+        "CREATE INDEX outgoing_pending ON outgoing (status, position)",
+        "CREATE TABLE accepted_records (\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    PRIMARY KEY (record_type, item_id)\n  ) STRICT",
+        "CREATE TABLE feed_cursor (singleton INTEGER PRIMARY KEY CHECK (singleton = 1), sequence INTEGER NOT NULL) STRICT"
       ],
       "rows": {
         "meta": [
@@ -768,7 +851,14 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
           }
         ],
         "effects": [],
-        "outgoing": []
+        "outgoing": [],
+        "accepted_records": [],
+        "feed_cursor": [
+          {
+            "singleton": 1,
+            "sequence": 0
+          }
+        ]
       }
     },
     {
@@ -788,7 +878,10 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
         "CREATE INDEX activities_unfinished ON activities (status, position)",
         "CREATE TABLE transitions (\n    activity_id TEXT NOT NULL REFERENCES activities (activity_id),\n    command_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    PRIMARY KEY (activity_id, command_id),\n    UNIQUE (activity_id, sequence)\n  ) STRICT",
         "CREATE TABLE effects (\n    activity_id TEXT NOT NULL REFERENCES activities (activity_id),\n    effect_key TEXT NOT NULL,\n    position INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    PRIMARY KEY (activity_id, effect_key)\n  ) STRICT",
-        "CREATE TABLE outgoing (\n    id TEXT PRIMARY KEY,\n    activity_id TEXT NOT NULL UNIQUE REFERENCES activities (activity_id),\n    position INTEGER NOT NULL UNIQUE,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL\n  ) STRICT"
+        "CREATE TABLE outgoing (\n    id TEXT PRIMARY KEY,\n    activity_id TEXT NOT NULL UNIQUE REFERENCES activities (activity_id),\n    position INTEGER NOT NULL UNIQUE,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    dependencies TEXT NOT NULL,\n    status TEXT NOT NULL CHECK (status IN ('pending', 'accepted', 'rejected')),\n    operation_id TEXT UNIQUE,\n    request TEXT,\n    request_sha256 TEXT,\n    receipt TEXT\n  ) STRICT",
+        "CREATE INDEX outgoing_pending ON outgoing (status, position)",
+        "CREATE TABLE accepted_records (\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    PRIMARY KEY (record_type, item_id)\n  ) STRICT",
+        "CREATE TABLE feed_cursor (singleton INTEGER PRIMARY KEY CHECK (singleton = 1), sequence INTEGER NOT NULL) STRICT"
       ],
       "rows": {
         "meta": [
@@ -842,7 +935,14 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
           }
         ],
         "effects": [],
-        "outgoing": []
+        "outgoing": [],
+        "accepted_records": [],
+        "feed_cursor": [
+          {
+            "singleton": 1,
+            "sequence": 0
+          }
+        ]
       }
     },
     {
@@ -857,7 +957,10 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
         "CREATE INDEX activities_unfinished ON activities (status, position)",
         "CREATE TABLE transitions (\n    activity_id TEXT NOT NULL REFERENCES activities (activity_id),\n    command_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    PRIMARY KEY (activity_id, command_id),\n    UNIQUE (activity_id, sequence)\n  ) STRICT",
         "CREATE TABLE effects (\n    activity_id TEXT NOT NULL REFERENCES activities (activity_id),\n    effect_key TEXT NOT NULL,\n    position INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    PRIMARY KEY (activity_id, effect_key)\n  ) STRICT",
-        "CREATE TABLE outgoing (\n    id TEXT PRIMARY KEY,\n    activity_id TEXT NOT NULL UNIQUE REFERENCES activities (activity_id),\n    position INTEGER NOT NULL UNIQUE,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL\n  ) STRICT"
+        "CREATE TABLE outgoing (\n    id TEXT PRIMARY KEY,\n    activity_id TEXT NOT NULL UNIQUE REFERENCES activities (activity_id),\n    position INTEGER NOT NULL UNIQUE,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    dependencies TEXT NOT NULL,\n    status TEXT NOT NULL CHECK (status IN ('pending', 'accepted', 'rejected')),\n    operation_id TEXT UNIQUE,\n    request TEXT,\n    request_sha256 TEXT,\n    receipt TEXT\n  ) STRICT",
+        "CREATE INDEX outgoing_pending ON outgoing (status, position)",
+        "CREATE TABLE accepted_records (\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    PRIMARY KEY (record_type, item_id)\n  ) STRICT",
+        "CREATE TABLE feed_cursor (singleton INTEGER PRIMARY KEY CHECK (singleton = 1), sequence INTEGER NOT NULL) STRICT"
       ],
       "rows": {
         "meta": [
@@ -890,8 +993,18 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
             "body_sha256": "1c2628d0b3dd03636d5241f562b311f7954eeefa6b1f491537bce328af902f9e"
           },
           {
-            "activity_id": "incomplete-1",
+            "activity_id": "completed-2",
             "position": 2,
+            "status": "completed",
+            "sequence": 6,
+            "body": "{\"activityId\":\"completed-2\",\"admission\":{\"meteringBasis\":\"free-play\",\"provenance\":\"recorded\"},\"checkpoint\":\"{\\\"activity\\\":{\\\"device\\\":\\\"recorded-installation\\\",\\\"id\\\":\\\"completed-2\\\",\\\"owner\\\":\\\"recorded-account\\\"},\\\"balance\\\":\\\"1010\\\",\\\"funding\\\":{\\\"buyIn\\\":\\\"1000\\\",\\\"maxDrawdown\\\":\\\"0\\\",\\\"peak\\\":\\\"10\\\",\\\"rebuys\\\":[],\\\"source\\\":\\\"practice-funding\\\"},\\\"identities\\\":{\\\"engine\\\":\\\"0.0.0\\\",\\\"game\\\":\\\"roulette\\\",\\\"random\\\":{\\\"key\\\":[2752067618,698298832],\\\"protocol\\\":1,\\\"session\\\":[320440878,57701188]},\\\"reference\\\":null,\\\"rules\\\":{\\\"id\\\":\\\"roulette-single-zero\\\",\\\"version\\\":1},\\\"strategy\\\":null},\\\"outcome\\\":{\\\"pocket\\\":27,\\\"turn\\\":1},\\\"phase\\\":\\\"completed\\\",\\\"random\\\":{\\\"block\\\":[0,0],\\\"exhausted\\\":false,\\\"key\\\":[2752067618,698298832],\\\"lane\\\":1,\\\"protocol\\\":1,\\\"session\\\":[320440878,57701188]},\\\"receipts\\\":[{\\\"command\\\":\\\"{\\\\\\\"amount\\\\\\\":\\\\\\\"10\\\\\\\",\\\\\\\"kind\\\\\\\":\\\\\\\"place-wager\\\\\\\",\\\\\\\"target\\\\\\\":\\\\\\\"red\\\\\\\"}\\\",\\\"commandId\\\":\\\"record-0\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":0},{\\\"command\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"begin-turn\\\\\\\"}\\\",\\\"commandId\\\":\\\"record-1\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":1},{\\\"command\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"settle-turn\\\\\\\"}\\\",\\\"commandId\\\":\\\"record-2\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":2},{\\\"command\\\":\\\"{\\\\\\\"amount\\\\\\\":\\\\\\\"10\\\\\\\",\\\\\\\"kind\\\\\\\":\\\\\\\"place-wager\\\\\\\",\\\\\\\"target\\\\\\\":\\\\\\\"even\\\\\\\"}\\\",\\\"commandId\\\":\\\"record-3\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":3},{\\\"command\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"request-stop\\\\\\\"}\\\",\\\"commandId\\\":\\\"record-4\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":4},{\\\"command\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"advance-final-settlement\\\\\\\"}\\\",\\\"commandId\\\":\\\"continue-0\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":5}],\\\"rules\\\":{\\\"limits\\\":{\\\"inside\\\":{\\\"max\\\":\\\"100\\\",\\\"min\\\":\\\"1\\\"},\\\"outside\\\":{\\\"max\\\":\\\"1000\\\",\\\"min\\\":\\\"10\\\"}},\\\"wheel\\\":\\\"single-zero\\\"},\\\"schema\\\":7,\\\"sequence\\\":6,\\\"strategy\\\":null,\\\"turn\\\":1,\\\"wagers\\\":[]}\",\"completion\":{\"activityId\":\"completed-2\",\"allowancePolicyVersion\":null,\"betSchedule\":null,\"blackjackMode\":null,\"buyIn\":\"1000\",\"cumulativeFunding\":\"1000\",\"device\":\"recorded-installation\",\"endedAt\":1790000900000,\"endingReason\":\"stop\",\"finalCashOut\":\"1010\",\"fundingSource\":\"practice-funding\",\"game\":\"roulette\",\"guidance\":null,\"identities\":{\"engine\":\"0.0.0\",\"randomProtocol\":1,\"reference\":null,\"rules\":{\"id\":\"roulette-single-zero\",\"version\":1},\"strategy\":null},\"maxDrawdown\":\"0\",\"meteringBasis\":\"free-play\",\"mode\":\"free-play\",\"netResult\":\"10\",\"noBet\":false,\"outcomes\":[{\"net\":\"10\",\"result\":\"win\",\"returned\":\"20\",\"stake\":\"10\",\"target\":\"red\",\"turn\":1},{\"net\":\"0\",\"result\":\"returned\",\"returned\":\"10\",\"stake\":\"10\",\"target\":\"even\",\"turn\":1}],\"overrideAffected\":false,\"owner\":\"recorded-account\",\"rebuys\":[],\"recordVersion\":1,\"rules\":{\"content\":{\"limits\":{\"inside\":{\"max\":\"100\",\"min\":\"1\"},\"outside\":{\"max\":\"1000\",\"min\":\"10\"}},\"wheel\":\"single-zero\"},\"id\":\"roulette-single-zero\",\"version\":1},\"startedAt\":1790000700000,\"strategy\":null,\"turnsPlayed\":1,\"wagers\":{\"losses\":0,\"pushes\":0,\"resolved\":1,\"wins\":1}},\"createdAt\":1790000000000,\"incomplete\":null,\"random\":{\"key\":[2752067618,698298832],\"protocol\":1,\"session\":[320440878,57701188]},\"sequence\":6,\"specification\":{\"activityId\":\"completed-2\",\"device\":\"recorded-installation\",\"funding\":\"1000\",\"fundingSource\":\"practice-funding\",\"game\":\"roulette\",\"owner\":\"recorded-account\",\"reference\":null,\"rules\":{\"id\":\"roulette-single-zero\",\"limits\":{\"inside\":{\"max\":\"100\",\"min\":\"1\"},\"outside\":{\"max\":\"1000\",\"min\":\"10\"}},\"version\":1,\"wheel\":\"single-zero\"},\"strategy\":null}}",
+            "body_format": 1,
+            "body_length": 3484,
+            "body_sha256": "1652361d2fd9ce0c408979288c30ee8ec2cd31aba2326317f8e0f5bf17767e49"
+          },
+          {
+            "activity_id": "incomplete-1",
+            "position": 3,
             "status": "incomplete",
             "sequence": 5,
             "body": "{\"activityId\":\"incomplete-1\",\"admission\":{\"meteringBasis\":\"free-play\",\"provenance\":\"recorded\"},\"checkpoint\":\"{\\\"activity\\\":{\\\"device\\\":\\\"recorded-installation\\\",\\\"id\\\":\\\"incomplete-1\\\",\\\"owner\\\":\\\"recorded-account\\\"},\\\"balance\\\":\\\"1010\\\",\\\"funding\\\":{\\\"buyIn\\\":\\\"1000\\\",\\\"maxDrawdown\\\":\\\"0\\\",\\\"peak\\\":\\\"10\\\",\\\"rebuys\\\":[],\\\"source\\\":\\\"practice-funding\\\"},\\\"identities\\\":{\\\"engine\\\":\\\"0.0.0\\\",\\\"game\\\":\\\"roulette\\\",\\\"random\\\":{\\\"key\\\":[2752067618,698298832],\\\"protocol\\\":1,\\\"session\\\":[320440878,57701188]},\\\"reference\\\":null,\\\"rules\\\":{\\\"id\\\":\\\"roulette-single-zero\\\",\\\"version\\\":1},\\\"strategy\\\":null},\\\"outcome\\\":{\\\"pocket\\\":27,\\\"turn\\\":1},\\\"phase\\\":\\\"final-settlement\\\",\\\"random\\\":{\\\"block\\\":[0,0],\\\"exhausted\\\":false,\\\"key\\\":[2752067618,698298832],\\\"lane\\\":1,\\\"protocol\\\":1,\\\"session\\\":[320440878,57701188]},\\\"receipts\\\":[{\\\"command\\\":\\\"{\\\\\\\"amount\\\\\\\":\\\\\\\"10\\\\\\\",\\\\\\\"kind\\\\\\\":\\\\\\\"place-wager\\\\\\\",\\\\\\\"target\\\\\\\":\\\\\\\"red\\\\\\\"}\\\",\\\"commandId\\\":\\\"record-0\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":0},{\\\"command\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"begin-turn\\\\\\\"}\\\",\\\"commandId\\\":\\\"record-1\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":1},{\\\"command\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"settle-turn\\\\\\\"}\\\",\\\"commandId\\\":\\\"record-2\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":2},{\\\"command\\\":\\\"{\\\\\\\"amount\\\\\\\":\\\\\\\"10\\\\\\\",\\\\\\\"kind\\\\\\\":\\\\\\\"place-wager\\\\\\\",\\\\\\\"target\\\\\\\":\\\\\\\"even\\\\\\\"}\\\",\\\"commandId\\\":\\\"record-3\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":3},{\\\"command\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"request-stop\\\\\\\"}\\\",\\\"commandId\\\":\\\"record-4\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":4}],\\\"rules\\\":{\\\"limits\\\":{\\\"inside\\\":{\\\"max\\\":\\\"100\\\",\\\"min\\\":\\\"1\\\"},\\\"outside\\\":{\\\"max\\\":\\\"1000\\\",\\\"min\\\":\\\"10\\\"}},\\\"wheel\\\":\\\"single-zero\\\"},\\\"schema\\\":7,\\\"sequence\\\":5,\\\"strategy\\\":null,\\\"turn\\\":1,\\\"wagers\\\":[]}\",\"completion\":null,\"createdAt\":1790000000000,\"incomplete\":{\"detail\":\"recorded: an unreadable checkpoint\",\"kind\":\"damaged\"},\"random\":{\"key\":[2752067618,698298832],\"protocol\":1,\"session\":[320440878,57701188]},\"sequence\":5,\"specification\":{\"activityId\":\"incomplete-1\",\"device\":\"recorded-installation\",\"funding\":\"1000\",\"fundingSource\":\"practice-funding\",\"game\":\"roulette\",\"owner\":\"recorded-account\",\"reference\":null,\"rules\":{\"id\":\"roulette-single-zero\",\"limits\":{\"inside\":{\"max\":\"100\",\"min\":\"1\"},\"outside\":{\"max\":\"1000\",\"min\":\"10\"}},\"version\":1,\"wheel\":\"single-zero\"},\"strategy\":null}}",
@@ -954,6 +1067,60 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
             "body_format": 1,
             "body_length": 1980,
             "body_sha256": "ce99b87f61326e32acafb849b28fc74e9a398997f5aefc1a1e51bc57d2f53624"
+          },
+          {
+            "activity_id": "completed-2",
+            "command_id": "record-0",
+            "sequence": 0,
+            "body": "{\"checkpoint\":\"{\\\"activity\\\":{\\\"device\\\":\\\"recorded-installation\\\",\\\"id\\\":\\\"completed-2\\\",\\\"owner\\\":\\\"recorded-account\\\"},\\\"balance\\\":\\\"990\\\",\\\"funding\\\":{\\\"buyIn\\\":\\\"1000\\\",\\\"maxDrawdown\\\":\\\"0\\\",\\\"peak\\\":\\\"0\\\",\\\"rebuys\\\":[],\\\"source\\\":\\\"practice-funding\\\"},\\\"identities\\\":{\\\"engine\\\":\\\"0.0.0\\\",\\\"game\\\":\\\"roulette\\\",\\\"random\\\":{\\\"key\\\":[2752067618,698298832],\\\"protocol\\\":1,\\\"session\\\":[320440878,57701188]},\\\"reference\\\":null,\\\"rules\\\":{\\\"id\\\":\\\"roulette-single-zero\\\",\\\"version\\\":1},\\\"strategy\\\":null},\\\"outcome\\\":null,\\\"phase\\\":\\\"open-decision\\\",\\\"random\\\":{\\\"block\\\":[0,0],\\\"exhausted\\\":false,\\\"key\\\":[2752067618,698298832],\\\"lane\\\":0,\\\"protocol\\\":1,\\\"session\\\":[320440878,57701188]},\\\"receipts\\\":[{\\\"command\\\":\\\"{\\\\\\\"amount\\\\\\\":\\\\\\\"10\\\\\\\",\\\\\\\"kind\\\\\\\":\\\\\\\"place-wager\\\\\\\",\\\\\\\"target\\\\\\\":\\\\\\\"red\\\\\\\"}\\\",\\\"commandId\\\":\\\"record-0\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":0}],\\\"rules\\\":{\\\"limits\\\":{\\\"inside\\\":{\\\"max\\\":\\\"100\\\",\\\"min\\\":\\\"1\\\"},\\\"outside\\\":{\\\"max\\\":\\\"1000\\\",\\\"min\\\":\\\"10\\\"}},\\\"wheel\\\":\\\"single-zero\\\"},\\\"schema\\\":7,\\\"sequence\\\":1,\\\"strategy\\\":null,\\\"turn\\\":0,\\\"wagers\\\":[{\\\"amount\\\":\\\"10\\\",\\\"target\\\":\\\"red\\\"}]}\",\"facts\":[{\"amount\":\"10\",\"kind\":\"wager-changed\",\"previous\":\"0\",\"target\":\"red\"}],\"receipt\":{\"command\":\"{\\\"amount\\\":\\\"10\\\",\\\"kind\\\":\\\"place-wager\\\",\\\"target\\\":\\\"red\\\"}\",\"commandId\":\"record-0\",\"disposition\":\"applied\",\"sequence\":0}}",
+            "body_format": 1,
+            "body_length": 1358,
+            "body_sha256": "7c4aebfed7ed950be78353c792ac10fb2e857bc698bb2a041b9fd8a3ab1ade44"
+          },
+          {
+            "activity_id": "completed-2",
+            "command_id": "record-1",
+            "sequence": 1,
+            "body": "{\"checkpoint\":\"{\\\"activity\\\":{\\\"device\\\":\\\"recorded-installation\\\",\\\"id\\\":\\\"completed-2\\\",\\\"owner\\\":\\\"recorded-account\\\"},\\\"balance\\\":\\\"990\\\",\\\"funding\\\":{\\\"buyIn\\\":\\\"1000\\\",\\\"maxDrawdown\\\":\\\"0\\\",\\\"peak\\\":\\\"0\\\",\\\"rebuys\\\":[],\\\"source\\\":\\\"practice-funding\\\"},\\\"identities\\\":{\\\"engine\\\":\\\"0.0.0\\\",\\\"game\\\":\\\"roulette\\\",\\\"random\\\":{\\\"key\\\":[2752067618,698298832],\\\"protocol\\\":1,\\\"session\\\":[320440878,57701188]},\\\"reference\\\":null,\\\"rules\\\":{\\\"id\\\":\\\"roulette-single-zero\\\",\\\"version\\\":1},\\\"strategy\\\":null},\\\"outcome\\\":{\\\"pocket\\\":27,\\\"turn\\\":1},\\\"phase\\\":\\\"revealing-outcome\\\",\\\"random\\\":{\\\"block\\\":[0,0],\\\"exhausted\\\":false,\\\"key\\\":[2752067618,698298832],\\\"lane\\\":1,\\\"protocol\\\":1,\\\"session\\\":[320440878,57701188]},\\\"receipts\\\":[{\\\"command\\\":\\\"{\\\\\\\"amount\\\\\\\":\\\\\\\"10\\\\\\\",\\\\\\\"kind\\\\\\\":\\\\\\\"place-wager\\\\\\\",\\\\\\\"target\\\\\\\":\\\\\\\"red\\\\\\\"}\\\",\\\"commandId\\\":\\\"record-0\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":0},{\\\"command\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"begin-turn\\\\\\\"}\\\",\\\"commandId\\\":\\\"record-1\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":1}],\\\"rules\\\":{\\\"limits\\\":{\\\"inside\\\":{\\\"max\\\":\\\"100\\\",\\\"min\\\":\\\"1\\\"},\\\"outside\\\":{\\\"max\\\":\\\"1000\\\",\\\"min\\\":\\\"10\\\"}},\\\"wheel\\\":\\\"single-zero\\\"},\\\"schema\\\":7,\\\"sequence\\\":2,\\\"strategy\\\":null,\\\"turn\\\":1,\\\"wagers\\\":[{\\\"amount\\\":\\\"10\\\",\\\"target\\\":\\\"red\\\"}]}\",\"facts\":[{\"kind\":\"turn-began\",\"turn\":1,\"wagers\":[{\"amount\":\"10\",\"target\":\"red\"}]},{\"kind\":\"outcome-generated\",\"pocket\":27,\"turn\":1}],\"receipt\":{\"command\":\"{\\\"kind\\\":\\\"begin-turn\\\"}\",\"commandId\":\"record-1\",\"disposition\":\"applied\",\"sequence\":1}}",
+            "body_format": 1,
+            "body_length": 1522,
+            "body_sha256": "18b047626f3f69a2df39a0bfeec62956b2b998191484319d06b79180907c4f19"
+          },
+          {
+            "activity_id": "completed-2",
+            "command_id": "record-2",
+            "sequence": 2,
+            "body": "{\"checkpoint\":\"{\\\"activity\\\":{\\\"device\\\":\\\"recorded-installation\\\",\\\"id\\\":\\\"completed-2\\\",\\\"owner\\\":\\\"recorded-account\\\"},\\\"balance\\\":\\\"1010\\\",\\\"funding\\\":{\\\"buyIn\\\":\\\"1000\\\",\\\"maxDrawdown\\\":\\\"0\\\",\\\"peak\\\":\\\"10\\\",\\\"rebuys\\\":[],\\\"source\\\":\\\"practice-funding\\\"},\\\"identities\\\":{\\\"engine\\\":\\\"0.0.0\\\",\\\"game\\\":\\\"roulette\\\",\\\"random\\\":{\\\"key\\\":[2752067618,698298832],\\\"protocol\\\":1,\\\"session\\\":[320440878,57701188]},\\\"reference\\\":null,\\\"rules\\\":{\\\"id\\\":\\\"roulette-single-zero\\\",\\\"version\\\":1},\\\"strategy\\\":null},\\\"outcome\\\":{\\\"pocket\\\":27,\\\"turn\\\":1},\\\"phase\\\":\\\"settled-outcome\\\",\\\"random\\\":{\\\"block\\\":[0,0],\\\"exhausted\\\":false,\\\"key\\\":[2752067618,698298832],\\\"lane\\\":1,\\\"protocol\\\":1,\\\"session\\\":[320440878,57701188]},\\\"receipts\\\":[{\\\"command\\\":\\\"{\\\\\\\"amount\\\\\\\":\\\\\\\"10\\\\\\\",\\\\\\\"kind\\\\\\\":\\\\\\\"place-wager\\\\\\\",\\\\\\\"target\\\\\\\":\\\\\\\"red\\\\\\\"}\\\",\\\"commandId\\\":\\\"record-0\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":0},{\\\"command\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"begin-turn\\\\\\\"}\\\",\\\"commandId\\\":\\\"record-1\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":1},{\\\"command\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"settle-turn\\\\\\\"}\\\",\\\"commandId\\\":\\\"record-2\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":2}],\\\"rules\\\":{\\\"limits\\\":{\\\"inside\\\":{\\\"max\\\":\\\"100\\\",\\\"min\\\":\\\"1\\\"},\\\"outside\\\":{\\\"max\\\":\\\"1000\\\",\\\"min\\\":\\\"10\\\"}},\\\"wheel\\\":\\\"single-zero\\\"},\\\"schema\\\":7,\\\"sequence\\\":3,\\\"strategy\\\":null,\\\"turn\\\":1,\\\"wagers\\\":[]}\",\"facts\":[{\"kind\":\"wager-settled\",\"net\":\"10\",\"result\":\"win\",\"returned\":\"20\",\"stake\":\"10\",\"target\":\"red\",\"turn\":1}],\"receipt\":{\"command\":\"{\\\"kind\\\":\\\"settle-turn\\\"}\",\"commandId\":\"record-2\",\"disposition\":\"applied\",\"sequence\":2}}",
+            "body_format": 1,
+            "body_length": 1589,
+            "body_sha256": "7280de810bbf990b539e22e49867838ca031043d13281fe7599a0a59490d82c2"
+          },
+          {
+            "activity_id": "completed-2",
+            "command_id": "record-3",
+            "sequence": 3,
+            "body": "{\"checkpoint\":\"{\\\"activity\\\":{\\\"device\\\":\\\"recorded-installation\\\",\\\"id\\\":\\\"completed-2\\\",\\\"owner\\\":\\\"recorded-account\\\"},\\\"balance\\\":\\\"1000\\\",\\\"funding\\\":{\\\"buyIn\\\":\\\"1000\\\",\\\"maxDrawdown\\\":\\\"0\\\",\\\"peak\\\":\\\"10\\\",\\\"rebuys\\\":[],\\\"source\\\":\\\"practice-funding\\\"},\\\"identities\\\":{\\\"engine\\\":\\\"0.0.0\\\",\\\"game\\\":\\\"roulette\\\",\\\"random\\\":{\\\"key\\\":[2752067618,698298832],\\\"protocol\\\":1,\\\"session\\\":[320440878,57701188]},\\\"reference\\\":null,\\\"rules\\\":{\\\"id\\\":\\\"roulette-single-zero\\\",\\\"version\\\":1},\\\"strategy\\\":null},\\\"outcome\\\":{\\\"pocket\\\":27,\\\"turn\\\":1},\\\"phase\\\":\\\"open-decision\\\",\\\"random\\\":{\\\"block\\\":[0,0],\\\"exhausted\\\":false,\\\"key\\\":[2752067618,698298832],\\\"lane\\\":1,\\\"protocol\\\":1,\\\"session\\\":[320440878,57701188]},\\\"receipts\\\":[{\\\"command\\\":\\\"{\\\\\\\"amount\\\\\\\":\\\\\\\"10\\\\\\\",\\\\\\\"kind\\\\\\\":\\\\\\\"place-wager\\\\\\\",\\\\\\\"target\\\\\\\":\\\\\\\"red\\\\\\\"}\\\",\\\"commandId\\\":\\\"record-0\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":0},{\\\"command\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"begin-turn\\\\\\\"}\\\",\\\"commandId\\\":\\\"record-1\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":1},{\\\"command\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"settle-turn\\\\\\\"}\\\",\\\"commandId\\\":\\\"record-2\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":2},{\\\"command\\\":\\\"{\\\\\\\"amount\\\\\\\":\\\\\\\"10\\\\\\\",\\\\\\\"kind\\\\\\\":\\\\\\\"place-wager\\\\\\\",\\\\\\\"target\\\\\\\":\\\\\\\"even\\\\\\\"}\\\",\\\"commandId\\\":\\\"record-3\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":3}],\\\"rules\\\":{\\\"limits\\\":{\\\"inside\\\":{\\\"max\\\":\\\"100\\\",\\\"min\\\":\\\"1\\\"},\\\"outside\\\":{\\\"max\\\":\\\"1000\\\",\\\"min\\\":\\\"10\\\"}},\\\"wheel\\\":\\\"single-zero\\\"},\\\"schema\\\":7,\\\"sequence\\\":4,\\\"strategy\\\":null,\\\"turn\\\":1,\\\"wagers\\\":[{\\\"amount\\\":\\\"10\\\",\\\"target\\\":\\\"even\\\"}]}\",\"facts\":[{\"amount\":\"10\",\"kind\":\"wager-changed\",\"previous\":\"0\",\"target\":\"even\"}],\"receipt\":{\"command\":\"{\\\"amount\\\":\\\"10\\\",\\\"kind\\\":\\\"place-wager\\\",\\\"target\\\":\\\"even\\\"}\",\"commandId\":\"record-3\",\"disposition\":\"applied\",\"sequence\":3}}",
+            "body_format": 1,
+            "body_length": 1807,
+            "body_sha256": "9034e1ba829c7c47b8c80e6a64e17affa7d027beb4f4efb4082ac4940fdb748e"
+          },
+          {
+            "activity_id": "completed-2",
+            "command_id": "record-4",
+            "sequence": 4,
+            "body": "{\"checkpoint\":\"{\\\"activity\\\":{\\\"device\\\":\\\"recorded-installation\\\",\\\"id\\\":\\\"completed-2\\\",\\\"owner\\\":\\\"recorded-account\\\"},\\\"balance\\\":\\\"1010\\\",\\\"funding\\\":{\\\"buyIn\\\":\\\"1000\\\",\\\"maxDrawdown\\\":\\\"0\\\",\\\"peak\\\":\\\"10\\\",\\\"rebuys\\\":[],\\\"source\\\":\\\"practice-funding\\\"},\\\"identities\\\":{\\\"engine\\\":\\\"0.0.0\\\",\\\"game\\\":\\\"roulette\\\",\\\"random\\\":{\\\"key\\\":[2752067618,698298832],\\\"protocol\\\":1,\\\"session\\\":[320440878,57701188]},\\\"reference\\\":null,\\\"rules\\\":{\\\"id\\\":\\\"roulette-single-zero\\\",\\\"version\\\":1},\\\"strategy\\\":null},\\\"outcome\\\":{\\\"pocket\\\":27,\\\"turn\\\":1},\\\"phase\\\":\\\"final-settlement\\\",\\\"random\\\":{\\\"block\\\":[0,0],\\\"exhausted\\\":false,\\\"key\\\":[2752067618,698298832],\\\"lane\\\":1,\\\"protocol\\\":1,\\\"session\\\":[320440878,57701188]},\\\"receipts\\\":[{\\\"command\\\":\\\"{\\\\\\\"amount\\\\\\\":\\\\\\\"10\\\\\\\",\\\\\\\"kind\\\\\\\":\\\\\\\"place-wager\\\\\\\",\\\\\\\"target\\\\\\\":\\\\\\\"red\\\\\\\"}\\\",\\\"commandId\\\":\\\"record-0\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":0},{\\\"command\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"begin-turn\\\\\\\"}\\\",\\\"commandId\\\":\\\"record-1\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":1},{\\\"command\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"settle-turn\\\\\\\"}\\\",\\\"commandId\\\":\\\"record-2\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":2},{\\\"command\\\":\\\"{\\\\\\\"amount\\\\\\\":\\\\\\\"10\\\\\\\",\\\\\\\"kind\\\\\\\":\\\\\\\"place-wager\\\\\\\",\\\\\\\"target\\\\\\\":\\\\\\\"even\\\\\\\"}\\\",\\\"commandId\\\":\\\"record-3\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":3},{\\\"command\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"request-stop\\\\\\\"}\\\",\\\"commandId\\\":\\\"record-4\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":4}],\\\"rules\\\":{\\\"limits\\\":{\\\"inside\\\":{\\\"max\\\":\\\"100\\\",\\\"min\\\":\\\"1\\\"},\\\"outside\\\":{\\\"max\\\":\\\"1000\\\",\\\"min\\\":\\\"10\\\"}},\\\"wheel\\\":\\\"single-zero\\\"},\\\"schema\\\":7,\\\"sequence\\\":5,\\\"strategy\\\":null,\\\"turn\\\":1,\\\"wagers\\\":[]}\",\"facts\":[{\"kind\":\"stop-requested\",\"phase\":\"open-decision\"},{\"amount\":\"10\",\"kind\":\"wager-returned\",\"target\":\"even\"}],\"receipt\":{\"command\":\"{\\\"kind\\\":\\\"request-stop\\\"}\",\"commandId\":\"record-4\",\"disposition\":\"applied\",\"sequence\":4}}",
+            "body_format": 1,
+            "body_length": 1894,
+            "body_sha256": "4a845084c7cf9640f589a55de79b619e6f06bf1d988a234c06e641ec5254e6b1"
+          },
+          {
+            "activity_id": "completed-2",
+            "command_id": "continue-0",
+            "sequence": 5,
+            "body": "{\"checkpoint\":\"{\\\"activity\\\":{\\\"device\\\":\\\"recorded-installation\\\",\\\"id\\\":\\\"completed-2\\\",\\\"owner\\\":\\\"recorded-account\\\"},\\\"balance\\\":\\\"1010\\\",\\\"funding\\\":{\\\"buyIn\\\":\\\"1000\\\",\\\"maxDrawdown\\\":\\\"0\\\",\\\"peak\\\":\\\"10\\\",\\\"rebuys\\\":[],\\\"source\\\":\\\"practice-funding\\\"},\\\"identities\\\":{\\\"engine\\\":\\\"0.0.0\\\",\\\"game\\\":\\\"roulette\\\",\\\"random\\\":{\\\"key\\\":[2752067618,698298832],\\\"protocol\\\":1,\\\"session\\\":[320440878,57701188]},\\\"reference\\\":null,\\\"rules\\\":{\\\"id\\\":\\\"roulette-single-zero\\\",\\\"version\\\":1},\\\"strategy\\\":null},\\\"outcome\\\":{\\\"pocket\\\":27,\\\"turn\\\":1},\\\"phase\\\":\\\"completed\\\",\\\"random\\\":{\\\"block\\\":[0,0],\\\"exhausted\\\":false,\\\"key\\\":[2752067618,698298832],\\\"lane\\\":1,\\\"protocol\\\":1,\\\"session\\\":[320440878,57701188]},\\\"receipts\\\":[{\\\"command\\\":\\\"{\\\\\\\"amount\\\\\\\":\\\\\\\"10\\\\\\\",\\\\\\\"kind\\\\\\\":\\\\\\\"place-wager\\\\\\\",\\\\\\\"target\\\\\\\":\\\\\\\"red\\\\\\\"}\\\",\\\"commandId\\\":\\\"record-0\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":0},{\\\"command\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"begin-turn\\\\\\\"}\\\",\\\"commandId\\\":\\\"record-1\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":1},{\\\"command\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"settle-turn\\\\\\\"}\\\",\\\"commandId\\\":\\\"record-2\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":2},{\\\"command\\\":\\\"{\\\\\\\"amount\\\\\\\":\\\\\\\"10\\\\\\\",\\\\\\\"kind\\\\\\\":\\\\\\\"place-wager\\\\\\\",\\\\\\\"target\\\\\\\":\\\\\\\"even\\\\\\\"}\\\",\\\"commandId\\\":\\\"record-3\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":3},{\\\"command\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"request-stop\\\\\\\"}\\\",\\\"commandId\\\":\\\"record-4\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":4},{\\\"command\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"advance-final-settlement\\\\\\\"}\\\",\\\"commandId\\\":\\\"continue-0\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":5}],\\\"rules\\\":{\\\"limits\\\":{\\\"inside\\\":{\\\"max\\\":\\\"100\\\",\\\"min\\\":\\\"1\\\"},\\\"outside\\\":{\\\"max\\\":\\\"1000\\\",\\\"min\\\":\\\"10\\\"}},\\\"wheel\\\":\\\"single-zero\\\"},\\\"schema\\\":7,\\\"sequence\\\":6,\\\"strategy\\\":null,\\\"turn\\\":1,\\\"wagers\\\":[]}\",\"facts\":[{\"balance\":\"1010\",\"kind\":\"activity-completed\"}],\"receipt\":{\"command\":\"{\\\"kind\\\":\\\"advance-final-settlement\\\"}\",\"commandId\":\"continue-0\",\"disposition\":\"applied\",\"sequence\":5}}",
+            "body_format": 1,
+            "body_length": 1980,
+            "body_sha256": "07a501f89485ca251a76ca94914082279becfa3be858288c7f2266d857ec8c45"
           },
           {
             "activity_id": "incomplete-1",
@@ -1020,7 +1187,54 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
             "body": "{\"id\":\"completed/completed-1\",\"kind\":\"completed-practice-session\",\"record\":{\"activityId\":\"completed-1\",\"allowancePolicyVersion\":null,\"betSchedule\":null,\"blackjackMode\":null,\"buyIn\":\"1000\",\"cumulativeFunding\":\"1000\",\"device\":\"recorded-installation\",\"endedAt\":1790000600000,\"endingReason\":\"stop\",\"finalCashOut\":\"1010\",\"fundingSource\":\"practice-funding\",\"game\":\"roulette\",\"guidance\":null,\"identities\":{\"engine\":\"0.0.0\",\"randomProtocol\":1,\"reference\":null,\"rules\":{\"id\":\"roulette-single-zero\",\"version\":1},\"strategy\":null},\"maxDrawdown\":\"0\",\"meteringBasis\":\"free-play\",\"mode\":\"free-play\",\"netResult\":\"10\",\"noBet\":false,\"outcomes\":[{\"net\":\"10\",\"result\":\"win\",\"returned\":\"20\",\"stake\":\"10\",\"target\":\"red\",\"turn\":1},{\"net\":\"0\",\"result\":\"returned\",\"returned\":\"10\",\"stake\":\"10\",\"target\":\"even\",\"turn\":1}],\"overrideAffected\":false,\"owner\":\"recorded-account\",\"rebuys\":[],\"recordVersion\":1,\"rules\":{\"content\":{\"limits\":{\"inside\":{\"max\":\"100\",\"min\":\"1\"},\"outside\":{\"max\":\"1000\",\"min\":\"10\"}},\"wheel\":\"single-zero\"},\"id\":\"roulette-single-zero\",\"version\":1},\"startedAt\":1790000000000,\"strategy\":null,\"turnsPlayed\":1,\"wagers\":{\"losses\":0,\"pushes\":0,\"resolved\":1,\"wins\":1}}}",
             "body_format": 1,
             "body_length": 1155,
-            "body_sha256": "aefc2a662eb45d8a327f2855951d53715dc0f616477d3a83d87310c8c5bb6c52"
+            "body_sha256": "aefc2a662eb45d8a327f2855951d53715dc0f616477d3a83d87310c8c5bb6c52",
+            "dependencies": "[]",
+            "status": "accepted",
+            "operation_id": "11111111111111111111111111111111",
+            "request": "{\"installation\":\"recorded-installation\",\"item\":\"completed-1\",\"operation\":\"11111111111111111111111111111111\",\"payload\":{\"activityId\":\"completed-1\",\"allowancePolicyVersion\":null,\"betSchedule\":null,\"blackjackMode\":null,\"buyIn\":\"1000\",\"cumulativeFunding\":\"1000\",\"device\":\"recorded-installation\",\"endedAt\":1790000600000,\"endingReason\":\"stop\",\"finalCashOut\":\"1010\",\"fundingSource\":\"practice-funding\",\"game\":\"roulette\",\"guidance\":null,\"identities\":{\"engine\":\"0.0.0\",\"randomProtocol\":1,\"reference\":null,\"rules\":{\"id\":\"roulette-single-zero\",\"version\":1},\"strategy\":null},\"maxDrawdown\":\"0\",\"meteringBasis\":\"free-play\",\"mode\":\"free-play\",\"netResult\":\"10\",\"noBet\":false,\"outcomes\":[{\"net\":\"10\",\"result\":\"win\",\"returned\":\"20\",\"stake\":\"10\",\"target\":\"red\",\"turn\":1},{\"net\":\"0\",\"result\":\"returned\",\"returned\":\"10\",\"stake\":\"10\",\"target\":\"even\",\"turn\":1}],\"overrideAffected\":false,\"owner\":\"recorded-account\",\"rebuys\":[],\"recordVersion\":1,\"rules\":{\"content\":{\"limits\":{\"inside\":{\"max\":\"100\",\"min\":\"1\"},\"outside\":{\"max\":\"1000\",\"min\":\"10\"}},\"wheel\":\"single-zero\"},\"id\":\"roulette-single-zero\",\"version\":1},\"startedAt\":1790000000000,\"strategy\":null,\"turnsPlayed\":1,\"wagers\":{\"losses\":0,\"pushes\":0,\"resolved\":1,\"wins\":1}},\"payloadVersion\":1,\"protocol\":1,\"recordType\":\"completed-practice-session\"}",
+            "request_sha256": "1ffe3ff5d062ce8843d92e1dedea74b56c26b59da7749b8880de3efdc6e37d47",
+            "receipt": "{\"operation\":\"11111111111111111111111111111111\",\"requestHash\":\"1ffe3ff5d062ce8843d92e1dedea74b56c26b59da7749b8880de3efdc6e37d47\",\"sequence\":1,\"status\":\"accepted\"}"
+          },
+          {
+            "id": "completed/completed-2",
+            "activity_id": "completed-2",
+            "position": 2,
+            "body": "{\"id\":\"completed/completed-2\",\"kind\":\"completed-practice-session\",\"record\":{\"activityId\":\"completed-2\",\"allowancePolicyVersion\":null,\"betSchedule\":null,\"blackjackMode\":null,\"buyIn\":\"1000\",\"cumulativeFunding\":\"1000\",\"device\":\"recorded-installation\",\"endedAt\":1790000900000,\"endingReason\":\"stop\",\"finalCashOut\":\"1010\",\"fundingSource\":\"practice-funding\",\"game\":\"roulette\",\"guidance\":null,\"identities\":{\"engine\":\"0.0.0\",\"randomProtocol\":1,\"reference\":null,\"rules\":{\"id\":\"roulette-single-zero\",\"version\":1},\"strategy\":null},\"maxDrawdown\":\"0\",\"meteringBasis\":\"free-play\",\"mode\":\"free-play\",\"netResult\":\"10\",\"noBet\":false,\"outcomes\":[{\"net\":\"10\",\"result\":\"win\",\"returned\":\"20\",\"stake\":\"10\",\"target\":\"red\",\"turn\":1},{\"net\":\"0\",\"result\":\"returned\",\"returned\":\"10\",\"stake\":\"10\",\"target\":\"even\",\"turn\":1}],\"overrideAffected\":false,\"owner\":\"recorded-account\",\"rebuys\":[],\"recordVersion\":1,\"rules\":{\"content\":{\"limits\":{\"inside\":{\"max\":\"100\",\"min\":\"1\"},\"outside\":{\"max\":\"1000\",\"min\":\"10\"}},\"wheel\":\"single-zero\"},\"id\":\"roulette-single-zero\",\"version\":1},\"startedAt\":1790000700000,\"strategy\":null,\"turnsPlayed\":1,\"wagers\":{\"losses\":0,\"pushes\":0,\"resolved\":1,\"wins\":1}}}",
+            "body_format": 1,
+            "body_length": 1155,
+            "body_sha256": "30a835d7d62e360f23924a88995033a60161cffc066b57cf61f0a2c352efc775",
+            "dependencies": "[]",
+            "status": "pending",
+            "operation_id": "22222222222222222222222222222222",
+            "request": "{\"installation\":\"recorded-installation\",\"item\":\"completed-2\",\"operation\":\"22222222222222222222222222222222\",\"payload\":{\"activityId\":\"completed-2\",\"allowancePolicyVersion\":null,\"betSchedule\":null,\"blackjackMode\":null,\"buyIn\":\"1000\",\"cumulativeFunding\":\"1000\",\"device\":\"recorded-installation\",\"endedAt\":1790000900000,\"endingReason\":\"stop\",\"finalCashOut\":\"1010\",\"fundingSource\":\"practice-funding\",\"game\":\"roulette\",\"guidance\":null,\"identities\":{\"engine\":\"0.0.0\",\"randomProtocol\":1,\"reference\":null,\"rules\":{\"id\":\"roulette-single-zero\",\"version\":1},\"strategy\":null},\"maxDrawdown\":\"0\",\"meteringBasis\":\"free-play\",\"mode\":\"free-play\",\"netResult\":\"10\",\"noBet\":false,\"outcomes\":[{\"net\":\"10\",\"result\":\"win\",\"returned\":\"20\",\"stake\":\"10\",\"target\":\"red\",\"turn\":1},{\"net\":\"0\",\"result\":\"returned\",\"returned\":\"10\",\"stake\":\"10\",\"target\":\"even\",\"turn\":1}],\"overrideAffected\":false,\"owner\":\"recorded-account\",\"rebuys\":[],\"recordVersion\":1,\"rules\":{\"content\":{\"limits\":{\"inside\":{\"max\":\"100\",\"min\":\"1\"},\"outside\":{\"max\":\"1000\",\"min\":\"10\"}},\"wheel\":\"single-zero\"},\"id\":\"roulette-single-zero\",\"version\":1},\"startedAt\":1790000700000,\"strategy\":null,\"turnsPlayed\":1,\"wagers\":{\"losses\":0,\"pushes\":0,\"resolved\":1,\"wins\":1}},\"payloadVersion\":1,\"protocol\":1,\"recordType\":\"completed-practice-session\"}",
+            "request_sha256": "84780d6f6df764fb05d45f8eb9a51914f958155b4a49878e92b49f9a58c5e437",
+            "receipt": null
+          }
+        ],
+        "accepted_records": [
+          {
+            "record_type": "completed-practice-session",
+            "item_id": "completed-1",
+            "sequence": 1,
+            "body": "{\"activityId\":\"completed-1\",\"allowancePolicyVersion\":null,\"betSchedule\":null,\"blackjackMode\":null,\"buyIn\":\"1000\",\"cumulativeFunding\":\"1000\",\"device\":\"recorded-installation\",\"endedAt\":1790000600000,\"endingReason\":\"stop\",\"finalCashOut\":\"1010\",\"fundingSource\":\"practice-funding\",\"game\":\"roulette\",\"guidance\":null,\"identities\":{\"engine\":\"0.0.0\",\"randomProtocol\":1,\"reference\":null,\"rules\":{\"id\":\"roulette-single-zero\",\"version\":1},\"strategy\":null},\"maxDrawdown\":\"0\",\"meteringBasis\":\"free-play\",\"mode\":\"free-play\",\"netResult\":\"10\",\"noBet\":false,\"outcomes\":[{\"net\":\"10\",\"result\":\"win\",\"returned\":\"20\",\"stake\":\"10\",\"target\":\"red\",\"turn\":1},{\"net\":\"0\",\"result\":\"returned\",\"returned\":\"10\",\"stake\":\"10\",\"target\":\"even\",\"turn\":1}],\"overrideAffected\":false,\"owner\":\"recorded-account\",\"rebuys\":[],\"recordVersion\":1,\"rules\":{\"content\":{\"limits\":{\"inside\":{\"max\":\"100\",\"min\":\"1\"},\"outside\":{\"max\":\"1000\",\"min\":\"10\"}},\"wheel\":\"single-zero\"},\"id\":\"roulette-single-zero\",\"version\":1},\"startedAt\":1790000000000,\"strategy\":null,\"turnsPlayed\":1,\"wagers\":{\"losses\":0,\"pushes\":0,\"resolved\":1,\"wins\":1}}",
+            "body_format": 1,
+            "body_length": 1079,
+            "body_sha256": "61f27f26ac647df0ba6e1c58be38450fd00404c58638c0634fd3142481d3482e"
+          },
+          {
+            "record_type": "completed-practice-session",
+            "item_id": "elsewhere-1",
+            "sequence": 2,
+            "body": "{\"activityId\":\"elsewhere-1\",\"allowancePolicyVersion\":null,\"betSchedule\":null,\"blackjackMode\":null,\"buyIn\":\"1000\",\"cumulativeFunding\":\"1000\",\"device\":\"recorded-other-installation\",\"endedAt\":1790000600000,\"endingReason\":\"stop\",\"finalCashOut\":\"1010\",\"fundingSource\":\"practice-funding\",\"game\":\"roulette\",\"guidance\":null,\"identities\":{\"engine\":\"0.0.0\",\"randomProtocol\":1,\"reference\":null,\"rules\":{\"id\":\"roulette-single-zero\",\"version\":1},\"strategy\":null},\"maxDrawdown\":\"0\",\"meteringBasis\":\"free-play\",\"mode\":\"free-play\",\"netResult\":\"10\",\"noBet\":false,\"outcomes\":[{\"net\":\"10\",\"result\":\"win\",\"returned\":\"20\",\"stake\":\"10\",\"target\":\"red\",\"turn\":1},{\"net\":\"0\",\"result\":\"returned\",\"returned\":\"10\",\"stake\":\"10\",\"target\":\"even\",\"turn\":1}],\"overrideAffected\":false,\"owner\":\"recorded-account\",\"rebuys\":[],\"recordVersion\":1,\"rules\":{\"content\":{\"limits\":{\"inside\":{\"max\":\"100\",\"min\":\"1\"},\"outside\":{\"max\":\"1000\",\"min\":\"10\"}},\"wheel\":\"single-zero\"},\"id\":\"roulette-single-zero\",\"version\":1},\"startedAt\":1790000000000,\"strategy\":null,\"turnsPlayed\":1,\"wagers\":{\"losses\":0,\"pushes\":0,\"resolved\":1,\"wins\":1}}",
+            "body_format": 1,
+            "body_length": 1085,
+            "body_sha256": "cf6f92f8d5f50c66d84c4c2f1af1a0fa79b65336dda20315d43c14f4325a97c8"
+          }
+        ],
+        "feed_cursor": [
+          {
+            "singleton": 1,
+            "sequence": 2
           }
         ]
       }
