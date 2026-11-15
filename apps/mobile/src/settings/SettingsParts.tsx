@@ -72,7 +72,7 @@ export function ListRow({
 }: {
   icon: LucideIcon;
   title: string;
-  detail: string;
+  detail?: string;
   /** A short value before the chevron, such as a count. */
   value?: string;
   destructive?: boolean;
@@ -86,7 +86,7 @@ export function ListRow({
       </View>
       <View style={styles.rowText}>
         <Text maxFontSizeMultiplier={textScale.body} style={[styles.rowTitle, destructive && styles.destructive]}>{title}</Text>
-        <Text maxFontSizeMultiplier={textScale.body} style={styles.rowDetail}>{detail}</Text>
+        {detail !== undefined && <Text maxFontSizeMultiplier={textScale.body} style={styles.rowDetail}>{detail}</Text>}
       </View>
       {value !== undefined && (
         <Text maxFontSizeMultiplier={textScale.body} style={styles.rowValue}>

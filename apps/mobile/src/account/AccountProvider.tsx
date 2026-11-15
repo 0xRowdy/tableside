@@ -1,4 +1,4 @@
-import { isSignedIn, type AccountGate, type AccountService } from '@tableside/account';
+import { isAgeRestricted, isSignedIn, type AccountGate, type AccountService } from '@tableside/account';
 import { createContext, useCallback, useContext, useEffect, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { AppState } from 'react-native';
 
@@ -6,7 +6,10 @@ import type { GameId } from '@/games';
 
 import { createAppAccount, type AppAccount } from './app-account';
 
-export { isSignedIn, type SignedInGate } from '@tableside/account';
+export { isAgeRestricted, isSignedIn, type SignedInGate } from '@tableside/account';
+
+/** Gate states whose age eligibility isn't established: the account is open for its restricted paths only. */
+export type AgeRestrictedGate = Extract<AccountGate, { state: 'age-unresolved' | 'age-ineligible' }>;
 
 interface AccountContextValue {
   readonly account: AppAccount;
@@ -52,9 +55,10 @@ export function AccountProvider({ children }: { children: ReactNode }) {
     };
   }, [service]);
 
+  // Renewal pending renews at once; so does a restricted account, whose restricted paths need the server.
   useEffect(() => {
-    if (gate.state === 'renewal-pending') void service.renew();
-  }, [gate.state, service]);
+    if (gate.state === 'renewal-pending' || isAgeRestricted(gate)) void service.renew();
+  }, [gate, service]);
 
   const accountId = isSignedIn(gate) ? gate.accountId : null;
   useEffect(() => {

@@ -7,7 +7,7 @@ import { renderRouter } from 'expo-router/testing-library';
 import { AccessibilityInfo } from 'react-native';
 
 import type { AccessDecision, AccessSupervisor, AdmissionDecision, SetupTerms, TurnDecision } from '@/practice/adapters';
-import { ENDING_STEP_MS } from '@/practice/controller';
+import { ENDING_STEP_MS, REVEAL_MS } from '@/practice/controller';
 import type { FakeClock, substituteAdapters } from '@/practice/testing/substitutes';
 
 type Adapters = ReturnType<typeof substituteAdapters>;
@@ -204,5 +204,28 @@ describe('suspension', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('Strategy removed — settling existing bets');
     expect(screen.getByText(/Removed after a validated legal or privacy request/)).toBeOnTheScreen();
     expect(screen.queryByText(/Training ended/)).toBeNull();
+  });
+});
+
+describe('the account gate closing mid-turn (#90)', () => {
+  type Launch = { latest: ReturnType<typeof import('@/account/testing/fake-account').fakeAppAccount> | null };
+  const account = () => jest.requireMock<Launch>('@/account/app-account').latest!;
+
+  it('shows the spin that was already under way finish before the paused screen replaces the table', async () => {
+    mockApp.manualClock = true;
+    await startSession();
+    await betRed25();
+    await fireEvent.press(screen.getByRole('button', { name: 'Spin' }));
+    const clock = mockApp.latest?.clock as FakeClock;
+    await waitFor(() => expect(clock.pending).toBeGreaterThan(0));
+
+    await act(() => account().service.setGate({ state: 'age-unresolved', accountId: 'account-1', reason: 'check-pending' }));
+    // The turn in progress is still on screen.
+    expect(screen.queryByRole('header', { name: "We couldn't confirm your age" })).toBeNull();
+    expect(screen.getByLabelText(/^Session balance/)).toBeOnTheScreen();
+
+    await act(async () => clock.advance(REVEAL_MS));
+    expect(await screen.findByRole('header', { name: "We couldn't confirm your age" })).toBeOnTheScreen();
+    expect(screen.queryByTestId('tab-bar')).toBeNull();
   });
 });
