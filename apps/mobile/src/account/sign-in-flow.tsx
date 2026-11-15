@@ -4,6 +4,7 @@ import { createContext, useContext, useState, type ReactNode } from 'react';
 
 import { useAccount } from './AccountProvider';
 import { codeRequestProblem } from './code-request-text';
+import { PROVIDERS } from './providers';
 
 interface SignInFlow {
   readonly intent: CodeIntent;
@@ -71,38 +72,58 @@ export function useCodeRequest(onProblem: (problem: string) => void): (email: st
   };
 }
 
-/** How a provider is named on screen. */
-export const PROVIDER_NAME: Record<IdentityProvider, string> = { apple: 'Apple', google: 'Google' };
-
 const providerProblem = (provider: IdentityProvider) =>
-  `Couldn't continue with ${PROVIDER_NAME[provider]}. Check your connection and try again, or use another way to sign in.`;
+  `Couldn't continue with ${PROVIDERS[provider].name}. Check your connection and try again, or use another way to sign in.`;
 
-/**
- * Sign in with Apple or Google. Signed in: the layout moves on as the account
- * gate changes. No account: "No account for this Apple ID / Google account".
- * A closed sheet changes nothing; anything else goes to `onProblem`.
- */
-export function useProviderSignIn(onProblem: (problem: string | null) => void): (provider: IdentityProvider) => Promise<void> {
-  const { service } = useAccount();
-  return async (provider) => {
-    onProblem(null);
-    const result = await service.signInWithProvider(provider);
-    if (result.status === 'no-account') router.push({ pathname: '/no-account', params: { provider } });
-    else if (result.status === 'failed') onProblem(providerProblem(provider));
+/** A provider step a screen runs: busy while it runs, and what to tell the player if it failed. */
+export interface ProviderStep {
+  run(provider: IdentityProvider): Promise<void>;
+  readonly busy: boolean;
+  readonly problem: string | null;
+}
+
+function useProviderStep(step: (provider: IdentityProvider) => Promise<'failed' | 'done'>): ProviderStep {
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+  return {
+    busy,
+    problem,
+    async run(provider) {
+      setBusy(true);
+      setProblem(null);
+      const outcome = await step(provider);
+      setBusy(false);
+      if (outcome === 'failed') setProblem(providerProblem(provider));
+    },
   };
 }
 
 /**
- * Create with Apple or Google, once the age step has passed. Created, or the
- * identity's existing account: the layout moves on. An expired age answer
- * goes back to the age step.
+ * Sign in with Apple or Google. Signed in: the layout moves on as the account
+ * gate changes. No account: "No account for this Apple ID / Google account".
+ * A closed sheet changes nothing.
  */
-export function useProviderCreate(onProblem: (problem: string | null) => void): (provider: IdentityProvider) => Promise<void> {
+export function useProviderSignIn(): ProviderStep {
   const { service } = useAccount();
-  return async (provider) => {
-    onProblem(null);
-    const result = await service.createWithProvider(provider);
+  return useProviderStep(async (provider) => {
+    const result = await service.signInWithProvider(provider);
+    if (result.status === 'no-account') router.push({ pathname: '/no-account', params: { provider } });
+    return result.status === 'failed' ? 'failed' : 'done';
+  });
+}
+
+/**
+ * Create with Apple or Google, once the age step has passed: for the identity
+ * a Sign in just found without an account, when this Create began there.
+ * Created, or the identity's existing account: the layout moves on. An
+ * expired age answer goes back to the age step.
+ */
+export function useProviderCreate(): ProviderStep {
+  const { service } = useAccount();
+  const flow = useSignInFlow();
+  return useProviderStep(async (provider) => {
+    const result = await service.createWithProvider(provider, { sameIdentity: flow.provider === provider });
     if (result.status === 'age-required') router.replace('/age');
-    else if (result.status === 'failed') onProblem(providerProblem(provider));
-  };
+    return result.status === 'failed' ? 'failed' : 'done';
+  });
 }

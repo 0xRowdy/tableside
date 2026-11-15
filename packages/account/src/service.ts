@@ -201,10 +201,12 @@ export interface AccountService {
   /**
    * Create with Apple or Google, after the age step: binds the eligibility
    * assertion to the provider identity, so Auth creates that identity's user
-   * with it. Uses the identity a Sign in just found without an account, or
-   * asks the provider. An identity that already has an account signs in to it.
+   * with it. It asks the provider who the player is, unless `sameIdentity`:
+   * Create from "No account for this Apple ID / Google account" uses the
+   * identity that Sign in just found. An identity that already has an account
+   * signs in to it.
    */
-  createWithProvider(provider: IdentityProvider): Promise<ProviderCreateResult>;
+  createWithProvider(provider: IdentityProvider, options?: { readonly sameIdentity?: boolean }): Promise<ProviderCreateResult>;
   /**
    * The app starting again: reopens the account this installation was signed
    * in to from its stored credentials, without the network. The gate becomes
@@ -410,6 +412,24 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
     return !error && typeof data === 'string' && data ? { provider, idToken: data, nonce } : 'failed';
   };
 
+  /** Binds the age step's assertion to the credential's identity (bind-provider-assertion). */
+  const bindAssertion = async (
+    credential: ProviderCredential,
+    ageAssertion: Assertion,
+  ): Promise<'bound' | 'existing' | 'age-required' | 'invalid-token' | 'failed'> => {
+    const response = await post('/functions/v1/bind-provider-assertion', {
+      provider: authName(credential.provider),
+      idToken: credential.idToken,
+      nonce: credential.nonce,
+      assertion: ageAssertion.token,
+    });
+    const status = ((await response.json().catch(() => null)) as { status?: string } | null)?.status;
+    if (response.ok && (status === 'bound' || status === 'existing')) return status;
+    if (response.status === 403 && status === 'age-required') return status;
+    if (response.status === 401 && status === 'invalid-token') return status;
+    return 'failed';
+  };
+
   const authName = (provider: IdentityProvider): string => options.providers?.authName?.[provider] ?? provider;
 
   /** Signs in to Auth with a provider credential; Auth checks its issuer, audience, signature, expiry and nonce. */
@@ -437,7 +457,11 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
 
     async answerAgeQuestion(range) {
       assertion = null;
-      if (range === 'under-13') return { status: 'ineligible' };
+      if (range === 'under-13') {
+        // Nothing about an under-13 player is kept, not even who a provider said they were.
+        heldCredential = null;
+        return { status: 'ineligible' };
+      }
       try {
         const supabase = await connect();
         const { data, error } = await supabase.rpc('issue_eligibility_assertion', { age_range: range });
@@ -497,31 +521,37 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
       }
     },
 
-    async createWithProvider(provider) {
-      const held = currentAssertion();
-      if (!held) return { status: 'age-required' };
+    async createWithProvider(provider, { sameIdentity = false } = {}) {
+      const kept = sameIdentity && heldCredential?.provider === provider && heldCredential.until > options.clock() ? heldCredential : null;
+      heldCredential = null;
+      const ageAssertion = currentAssertion();
+      if (!ageAssertion) return { status: 'age-required' };
       try {
-        const kept = heldCredential && heldCredential.provider === provider && heldCredential.until > options.clock() ? heldCredential : null;
-        heldCredential = null;
-        const credential = kept ?? (await obtainCredential(provider));
+        let credential = kept ?? (await obtainCredential(provider));
         if (typeof credential === 'string') return { status: credential };
-        const response = await post('/functions/v1/bind-provider-assertion', {
-          provider: authName(provider),
-          idToken: credential.idToken,
-          nonce: credential.nonce,
-          assertion: held.token,
-        });
-        const body = (await response.json().catch(() => null)) as { status?: string } | null;
-        if (response.status === 403 && body?.status === 'age-required') {
+        let bound = await bindAssertion(credential, ageAssertion);
+        // The token Sign in found has expired since: ask the provider again, once.
+        if (bound === 'invalid-token' && kept) {
+          credential = await obtainCredential(provider);
+          if (typeof credential === 'string') return { status: credential };
+          bound = await bindAssertion(credential, ageAssertion);
+        }
+        if (bound === 'age-required') {
           assertion = null;
           return { status: 'age-required' };
         }
-        if (!response.ok || (body?.status !== 'bound' && body?.status !== 'existing')) return { status: 'failed' };
+        if (bound !== 'bound' && bound !== 'existing') return { status: 'failed' };
         const supabase = await connect();
-        if ((await signInWithIdToken(supabase, credential)) !== 'signed-in') return { status: 'failed' };
+        const signedIn = await signInWithIdToken(supabase, credential);
+        if (signedIn === 'no-account') {
+          // The assertion ran out between binding and Auth creating the user.
+          assertion = null;
+          return { status: 'age-required' };
+        }
+        if (signedIn === 'failed') return { status: 'failed' };
         // Whether Auth made a user with this assertion, or returned one that already
         // existed (verified same-email linking): the server knows, never an email comparison.
-        const created = (await supabase.rpc('account_created_by', { assertion: held.token })).data === true;
+        const created = (await supabase.rpc('account_created_by', { assertion: ageAssertion.token })).data === true;
         if (!(await finishSignIn(supabase))) return { status: 'failed' };
         return { status: created ? 'created' : 'signed-in' };
       } catch {

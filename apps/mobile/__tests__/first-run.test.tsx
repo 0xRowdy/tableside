@@ -343,7 +343,8 @@ describe('Apple and Google', () => {
       { method: 'resume' },
       { method: 'signInWithProvider', provider: 'google' },
       { method: 'answerAgeQuestion', range: '13-15' },
-      { method: 'createWithProvider', provider: 'google' },
+      // The identity Sign in found, without asking Google again.
+      { method: 'createWithProvider', provider: 'google', sameIdentity: true },
     ]);
   });
 
@@ -400,7 +401,7 @@ describe('Apple and Google', () => {
     expect(await header('Choose your offline game')).toBeOnTheScreen();
     // Nothing after Create reads as getting another account back.
     expect(everythingSpoken().filter((text) => /welcome back|recover|restor|your history/i.test(text))).toEqual([]);
-    expect(service().calls.at(-1)).toEqual({ method: 'createWithProvider', provider: 'apple' });
+    expect(service().calls.at(-1)).toEqual({ method: 'createWithProvider', provider: 'apple', sameIdentity: false });
   });
 
   it('a closed sheet changes nothing, and a failure says what to do', async () => {
@@ -431,6 +432,24 @@ describe('Apple and Google', () => {
 
     await fireEvent.press(button('Continue with Google'));
     expect(await header('How old are you?')).toBeOnTheScreen();
+  });
+
+  it('a fresh Create after a Sign in found no account asks the provider again', async () => {
+    await openApp();
+    await header('Tableside');
+    service().next.providerSignIn.push({ status: 'no-account' });
+    await fireEvent.press(button('Sign in with Apple'));
+    await header('No account for this Apple ID');
+    await fireEvent.press(button('Back to welcome'));
+    await header('Tableside');
+    await startCreate();
+    await fireEvent.press(screen.getByRole('radio', { name: '18 or older' }));
+    await fireEvent.press(button('Continue'));
+    await header('How do you want to sign in?');
+
+    await fireEvent.press(button('Continue with Apple'));
+    expect(await header('Choose your offline game')).toBeOnTheScreen();
+    expect(service().calls.at(-1)).toEqual({ method: 'createWithProvider', provider: 'apple', sameIdentity: false });
   });
 
   it('turns the two-part switch into a list of choices at large text sizes', async () => {

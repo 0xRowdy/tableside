@@ -28,16 +28,14 @@ export default function Age() {
   const [range, setRange] = useState<AgeRange | null>(null);
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
-  const [problem, setProblem] = useState<string | null>(null);
-  const create = useProviderCreate(setProblem);
+  const create = useProviderCreate();
 
   const answer = async () => {
     if (!range) return;
     setBusy(true);
     setFailed(false);
-    setProblem(null);
     const result = await service.answerAgeQuestion(range);
-    if (result.status === 'eligible' && flow.provider) await create(flow.provider);
+    if (result.status === 'eligible' && flow.provider) await create.run(flow.provider);
     setBusy(false);
     if (result.status === 'ineligible') router.replace('/not-available');
     else if (result.status === 'eligible' && !flow.provider) router.push('/create-method');
@@ -52,9 +50,9 @@ export default function Age() {
         ))}
       </ChoiceGroup>
       {failed && <InlineMessage>{"Couldn't continue. Check your connection and try again."}</InlineMessage>}
-      {problem !== null && <InlineMessage>{problem}</InlineMessage>}
+      {create.problem !== null && <InlineMessage>{create.problem}</InlineMessage>}
       <Actions>
-        <Button label="Continue" stretch disabled={!range || busy} onPress={() => void answer()} />
+        <Button label="Continue" stretch disabled={!range || busy || create.busy} onPress={() => void answer()} />
       </Actions>
     </FirstRunScreen>
   );

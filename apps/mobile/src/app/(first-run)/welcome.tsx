@@ -2,53 +2,59 @@
 // and the screen says why a connection is needed. Sign in offers Apple,
 // Google and an email code, and never asks for age; I'm new continues to the
 // age step, then the sign-in method.
-// TODO(frames): S2-13's hero image (Tableside-assets/generated-5.png) isn't in the app's assets yet, so the brand block has no image.
 
-import { Apple, ArrowRight, Aperture as Google, Mail, Wifi } from 'lucide-react-native';
-// The frames draw Google with lucide's old Chrome glyph, which lucide 1.x removed; Aperture is its nearest shape.
+import type { CodeIntent } from '@tableside/account';
+import { Image } from 'expo-image';
+import { LinearGradient } from 'expo-linear-gradient';
+import { ArrowRight, Mail, Wifi } from 'lucide-react-native';
 import { useState } from 'react';
+import { StyleSheet, View } from 'react-native';
 
 import { Body, Footnote, FirstRunScreen, InlineMessage, IntentSwitch, MethodButton } from '@/account/FirstRunParts';
+import { PROVIDERS } from '@/account/providers';
 import { useProviderSignIn, useSignInFlow } from '@/account/sign-in-flow';
+import { findGame } from '@/games';
+import { palette, radius } from '@/theme/tokens';
 
-type Intent = 'new' | 'existing';
-
-const INTENTS: readonly { value: Intent; label: string }[] = [
-  { value: 'new', label: "I'm new here" },
-  { value: 'existing', label: 'I have an account' },
+const INTENTS: readonly { value: CodeIntent; label: string }[] = [
+  { value: 'create', label: "I'm new here" },
+  { value: 'sign-in', label: 'I have an account' },
 ];
+
+/** S2-13's hero is the blackjack table image Home's card uses (design/Tableside-assets/generated-5.png). */
+const HERO = findGame('blackjack')!.image;
 
 export default function Welcome() {
   const flow = useSignInFlow();
-  const [intent, setIntent] = useState<Intent>('existing');
-  const [busy, setBusy] = useState(false);
-  const [problem, setProblem] = useState<string | null>(null);
-  const signIn = useProviderSignIn(setProblem);
-
-  const withProvider = async (provider: 'apple' | 'google') => {
-    setBusy(true);
-    await signIn(provider);
-    setBusy(false);
-  };
+  const [intent, setIntent] = useState<CodeIntent>('sign-in');
+  const signIn = useProviderSignIn();
 
   return (
-    <FirstRunScreen title="Tableside" intro="Practice blackjack, craps and roulette with a coach that explains every decision.">
-      <IntentSwitch
-        label="Do you have an account?"
-        options={INTENTS}
-        value={intent}
-        onChange={(next) => {
-          setIntent(next);
-          setProblem(null);
-        }}
-      />
-      {intent === 'existing' ? (
+    <FirstRunScreen
+      title="Tableside"
+      above={
+        <View style={styles.hero} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+          <Image source={HERO} style={StyleSheet.absoluteFill} contentFit="cover" />
+          <LinearGradient colors={[palette.transparent, palette.scrim]} style={StyleSheet.absoluteFill} />
+        </View>
+      }
+      intro="Practice blackjack, craps and roulette with a coach that explains every decision."
+    >
+      <IntentSwitch label="Do you have an account?" options={INTENTS} value={intent} onChange={setIntent} />
+      {intent === 'sign-in' ? (
         <>
           <Body>Sign in to get your history, strategies and purchases back.</Body>
-          <MethodButton label="Sign in with Apple" icon={Apple} disabled={busy} onPress={() => void withProvider('apple')} />
-          <MethodButton label="Sign in with Google" icon={Google} disabled={busy} onPress={() => void withProvider('google')} />
-          <MethodButton label="Sign in with an email code" icon={Mail} disabled={busy} onPress={flow.startSignIn} />
-          {problem !== null && <InlineMessage>{problem}</InlineMessage>}
+          {(['apple', 'google'] as const).map((provider) => (
+            <MethodButton
+              key={provider}
+              label={`Sign in with ${PROVIDERS[provider].name}`}
+              icon={PROVIDERS[provider].icon}
+              disabled={signIn.busy}
+              onPress={() => void signIn.run(provider)}
+            />
+          ))}
+          <MethodButton label="Sign in with an email code" icon={Mail} disabled={signIn.busy} onPress={flow.startSignIn} />
+          {signIn.problem !== null && <InlineMessage>{signIn.problem}</InlineMessage>}
           <Footnote icon={Wifi}>Signing in needs a connection the first time and after you sign out. After that, practice works offline.</Footnote>
         </>
       ) : (
@@ -63,3 +69,7 @@ export default function Welcome() {
     </FirstRunScreen>
   );
 }
+
+const styles = StyleSheet.create({
+  hero: { height: 140, borderRadius: radius.card, overflow: 'hidden', backgroundColor: palette.card },
+});

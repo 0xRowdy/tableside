@@ -83,7 +83,7 @@ describe('Create with Apple or Google', () => {
     await phone.account.signInWithProvider('apple');
 
     expect(await phone.account.answerAgeQuestion('16-17')).toEqual({ status: 'eligible' });
-    expect(await phone.account.createWithProvider('apple')).toEqual({ status: 'created' });
+    expect(await phone.account.createWithProvider('apple', { sameIdentity: true })).toEqual({ status: 'created' });
 
     const gate = phone.account.gate;
     expect(gate).toMatchObject({ state: 'active', eligibility: '16-17' });
@@ -102,9 +102,45 @@ describe('the age step on Create', () => {
     expect(await phone.account.signInWithProvider('apple')).toEqual({ status: 'no-account' });
 
     expect(await phone.account.answerAgeQuestion('under-13')).toEqual({ status: 'ineligible' });
-    expect(await phone.account.createWithProvider('apple')).toEqual({ status: 'age-required' });
+    expect(await phone.account.createWithProvider('apple', { sameIdentity: true })).toEqual({ status: 'age-required' });
     expect(await stack.authUserId(child.email)).toBeNull();
     expect(await authUsersFor(child)).toBe(0);
+    expect(phone.account.gate).toEqual({ state: 'no-account' });
+  });
+
+  it('keeps nothing of the identity after an under-13 answer: a later Create asks the provider again', async () => {
+    const phone = device('phone');
+    phone.providers!.accounts.apple = person('apple-under13-later');
+    await phone.account.signInWithProvider('apple');
+    await phone.account.answerAgeQuestion('under-13');
+
+    await phone.account.answerAgeQuestion('18+');
+    expect(await phone.account.createWithProvider('apple', { sameIdentity: true })).toEqual({ status: 'created' });
+    expect(phone.providers!.opened).toHaveLength(2);
+  });
+
+  it('a fresh Create asks the provider, even just after a Sign in found no account', async () => {
+    const phone = device('phone');
+    phone.providers!.accounts.google = person('google-fresh-create');
+    await phone.account.signInWithProvider('google');
+    await phone.account.answerAgeQuestion('18+');
+    expect(await phone.account.createWithProvider('google')).toEqual({ status: 'created' });
+    expect(phone.providers!.opened).toHaveLength(2);
+  });
+
+  it('asks for age again when the assertion runs out between binding it and Auth creating the user', async () => {
+    const phone = device('phone');
+    const someone = person('apple-expires-mid-create');
+    phone.providers!.accounts.apple = someone;
+    await phone.account.answerAgeQuestion('18+');
+    const held = phone.proxy.delayNextResponse('bind-provider-assertion');
+    const creating = phone.account.createWithProvider('apple');
+    await held.arrived;
+    await stack.sql`update private.eligibility_assertions set expires_at = now() - interval '1 second' where provider_subject = ${someone.subject}`;
+    held.release();
+
+    expect(await creating).toEqual({ status: 'age-required' });
+    expect(await authUsersFor(someone)).toBe(0);
     expect(phone.account.gate).toEqual({ state: 'no-account' });
   });
 
@@ -158,8 +194,9 @@ describe('Sign in with Apple on Android, through the system browser', () => {
     expect(returned).toMatch(/^tableside:\/\/auth\/local\?state=local~[0-9a-f]{64}$/);
 
     await phone.account.answerAgeQuestion('18+');
-    expect(await phone.account.createWithProvider('apple')).toEqual({ status: 'created' });
+    expect(await phone.account.createWithProvider('apple', { sameIdentity: true })).toEqual({ status: 'created' });
     expect(phone.account.gate).toMatchObject({ state: 'active', eligibility: '18+' });
+    expect(phone.providers!.opened).toHaveLength(1);
   });
 
   it('signs in to an existing account', async () => {

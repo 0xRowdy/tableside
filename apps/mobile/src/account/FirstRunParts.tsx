@@ -5,13 +5,16 @@
 // footnote follow S2-13's frames (#89); the rest is #88's.
 // TODO(frames): FirstRunScreen, Field, ChoiceRow and InlineMessage unverified against S2-14–S2-16 (#88).
 
-import { Check, ChevronLeft, CircleAlert, type LucideIcon } from 'lucide-react-native';
+import { Check, ChevronLeft, CircleAlert, type LucideProps } from 'lucide-react-native';
 import { forwardRef, type ComponentRef, type ReactNode } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions, type TextInputProps } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/theme/tokens';
+
+/** An icon: a lucide icon, or a glyph drawn with the same props. */
+type Glyph = (props: LucideProps) => ReactNode;
 
 /**
  * A pre-account screen: a title, optional Back (with the header bar's title
@@ -22,9 +25,12 @@ export function FirstRunScreen({
   intro,
   back,
   bar,
+  above,
   children,
 }: {
   title: string;
+  /** Shown above the title, such as the welcome's hero image. */
+  above?: ReactNode;
   intro?: ReactNode;
   back?: () => void;
   /** The header bar beside Back: where the player is, such as "Create your account" and "Step 2 of 2". */
@@ -59,6 +65,7 @@ export function FirstRunScreen({
           )}
         </View>
       )}
+      {above}
       <Text accessibilityRole="header" maxFontSizeMultiplier={textScale.display} style={styles.title}>
         {title}
       </Text>
@@ -196,7 +203,7 @@ export function MethodButton({
   disabled = false,
 }: {
   label: string;
-  icon?: LucideIcon;
+  icon?: Glyph;
   onPress: () => void;
   variant?: 'primary' | 'secondary' | 'ghost';
   disabled?: boolean;
@@ -229,7 +236,7 @@ export function MethodButton({
 }
 
 /** Small print under a screen's actions. */
-export function Footnote({ icon: Icon, children }: { icon?: LucideIcon; children: ReactNode }) {
+export function Footnote({ icon: Icon, children }: { icon?: Glyph; children: ReactNode }) {
   return (
     <View style={styles.footnote}>
       {Icon && <Icon color={palette.mutedForeground} size={16} />}

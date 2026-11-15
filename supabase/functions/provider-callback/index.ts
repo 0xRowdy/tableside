@@ -15,17 +15,17 @@
 // refused by the database. Nothing here logs a token or state.
 
 import { verifyIdToken } from '../_shared/id-token.ts';
+import { serviceRpc } from '../_shared/service.ts';
 
-declare const Deno: {
-  env: { get(name: string): string | undefined };
-  serve(handler: (request: Request) => Promise<Response>): void;
-};
+declare const Deno: { serve(handler: (request: Request) => Promise<Response>): void };
 
-const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
-const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
-const ENVIRONMENT_HEADER = 'x-tableside-environment';
 const STATE_PATTERN = /^(local|beta|production)~([0-9a-f]{64})$/;
-/** The providers that sign in through the browser: Apple, and locally the test identity provider standing in for it. */
+/**
+ * The providers that sign in through the browser: Apple, and the local
+ * stack's test identity provider standing in for it. Only a provider with ID
+ * token settings is ever accepted (_shared/id-token.ts), and beta and
+ * production have none for the test provider.
+ */
 const BROWSER_PROVIDERS = ['apple', 'keycloak'];
 
 Deno.serve(async (request) => {
@@ -53,11 +53,7 @@ Deno.serve(async (request) => {
   // The nonce is checked when the app uses the token (it alone holds the nonce); here only that it is the provider's, for this app.
   if (!(await verifyIdToken(provider, idToken))) return back('failed');
 
-  const response = await fetch(`${SUPABASE_URL}/rest/v1/rpc/store_provider_flow`, {
-    method: 'POST',
-    headers: { apikey: SERVICE_KEY, authorization: `Bearer ${SERVICE_KEY}`, 'content-type': 'application/json', [ENVIRONMENT_HEADER]: environment },
-    body: JSON.stringify({ challenge, id_token: idToken }),
-  });
+  const response = await serviceRpc(environment, 'store_provider_flow', { challenge, id_token: idToken });
   // Another environment's flow: this project never answers for it, not even with a redirect.
   if (response.status === 403) {
     await response.body?.cancel();

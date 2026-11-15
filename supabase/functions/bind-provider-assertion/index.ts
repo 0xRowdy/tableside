@@ -19,15 +19,9 @@
 // nonce, assertion or claim.
 
 import { sha256Hex, verifyIdToken } from '../_shared/id-token.ts';
+import { ENVIRONMENT_HEADER, reply, serviceRpc } from '../_shared/service.ts';
 
-declare const Deno: {
-  env: { get(name: string): string | undefined };
-  serve(handler: (request: Request) => Promise<Response>): void;
-};
-
-const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
-const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
-const ENVIRONMENT_HEADER = 'x-tableside-environment';
+declare const Deno: { serve(handler: (request: Request) => Promise<Response>): void };
 
 Deno.serve(async (request) => {
   if (request.method !== 'POST') return reply(400, { status: 'invalid' });
@@ -45,17 +39,7 @@ Deno.serve(async (request) => {
   const claims = await verifyIdToken(provider, idToken, await sha256Hex(nonce));
   if (!claims) return reply(401, { status: 'invalid-token' });
 
-  // The database refuses a request naming another environment, or none, before anything runs.
-  const response = await fetch(`${SUPABASE_URL}/rest/v1/rpc/bind_provider_assertion`, {
-    method: 'POST',
-    headers: {
-      apikey: SERVICE_KEY,
-      authorization: `Bearer ${SERVICE_KEY}`,
-      'content-type': 'application/json',
-      [ENVIRONMENT_HEADER]: request.headers.get(ENVIRONMENT_HEADER) ?? '',
-    },
-    body: JSON.stringify({ assertion, provider, subject: claims.sub }),
-  });
+  const response = await serviceRpc(request.headers.get(ENVIRONMENT_HEADER) ?? '', 'bind_provider_assertion', { assertion, provider, subject: claims.sub });
   if (!response.ok) {
     await response.body?.cancel();
     console.error('bind-provider-assertion failed', response.status);
@@ -65,7 +49,3 @@ Deno.serve(async (request) => {
   if (outcome === 'bound' || outcome === 'existing') return reply(200, { status: outcome });
   return reply(403, { status: 'age-required' });
 });
-
-function reply(status: number, body: unknown): Response {
-  return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
-}

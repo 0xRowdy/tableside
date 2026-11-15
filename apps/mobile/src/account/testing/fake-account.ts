@@ -25,7 +25,8 @@ type Call =
   | { readonly method: 'answerAgeQuestion'; readonly range: AgeRange }
   | { readonly method: 'requestEmailCode'; readonly email: string; readonly intent: CodeIntent }
   | { readonly method: 'verifyEmailCode'; readonly email: string; readonly code: string }
-  | { readonly method: 'signInWithProvider' | 'createWithProvider'; readonly provider: IdentityProvider }
+  | { readonly method: 'signInWithProvider'; readonly provider: IdentityProvider }
+  | { readonly method: 'createWithProvider'; readonly provider: IdentityProvider; readonly sameIdentity: boolean }
   | { readonly method: 'resume' | 'renew' };
 
 /** An Account service whose answers a test scripts. Unscripted calls succeed. */
@@ -99,8 +100,8 @@ export class FakeAccountService implements AccountService {
     return result;
   }
 
-  async createWithProvider(provider: IdentityProvider) {
-    this.calls.push({ method: 'createWithProvider', provider });
+  async createWithProvider(provider: IdentityProvider, options: { readonly sameIdentity?: boolean } = {}) {
+    this.calls.push({ method: 'createWithProvider', provider, sameIdentity: options.sameIdentity ?? false });
     const result = this.next.providerCreate.shift() ?? { status: 'created' as const };
     if (result.status === 'created' || result.status === 'signed-in') this.setGate({ state: 'active', accountId: FAKE_ACCOUNT_ID, eligibility: '18+' });
     return result;
