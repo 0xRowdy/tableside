@@ -42,6 +42,7 @@ export {
   type ProviderSignInResult,
   type ProviderToken,
   type QueueResult,
+  type ReviewerSignInResult,
   type SignInMethod,
   type SignOutResult,
   type SignedInGate,

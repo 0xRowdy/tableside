@@ -420,6 +420,15 @@ verify_jwt = false
 [functions.provider-callback]
 verify_jwt = false
 
+# App reviewers sign in here, before any session exists, with the publishable key only.
+[functions.reviewer-sign-in]
+verify_jwt = false
+
+# Called with the secret key, which isn't a JWT; the database and Auth refuse
+# any other caller (the function passes the caller's key on).
+[functions.provision-reviewer]
+verify_jwt = false
+
 [analytics]
 enabled = false
 port = 54327

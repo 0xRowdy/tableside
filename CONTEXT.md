@@ -291,6 +291,13 @@ An edit to a deleted record made on another installation before it learned of th
 **Local supplement**:
 A labelled export of records on one installation that haven't reached the account yet.
 
+**Reviewer account**:
+A synthetic account made only for app store review, by a privileged operation in one backend environment, with an established adult age eligibility. It signs in with its reviewer credential instead of an email code, and is otherwise an ordinary account.
+
+**Reviewer credential**:
+The reusable secret that signs in to one reviewer account in one backend environment, and to nothing else. Issuing a new one replaces the last.
+_Avoid_: review code, bypass code
+
 **Rights request**:
 A player's request to know, correct, delete or obtain their data, handled under the publisher's privacy obligations. It is distinct from self-service editing and deletion.
 
