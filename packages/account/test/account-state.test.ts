@@ -156,7 +156,9 @@ describe('account-state operations behind barriers', () => {
     await queue(phone, testSharingWithdrawal.name, sharingWithdrawal('practice'));
     await queue(phone, testContribution.name, contribution('practice'));
 
-    // The server accepts the sharing withdrawal, and its answer is lost.
+    // The server accepts the sharing withdrawal, and its answer is lost. In the
+    // background, so no live hint retries it before the queue is read.
+    phone.foreground = false;
     phone.proxy.dropNextResponse('sync_upload_v1');
     phone.proxy.online = true;
     await phone.account.sync.idle();
@@ -312,7 +314,9 @@ describe('purging an accepted immutable result', () => {
 
   it('never brings it back: not by a retried upload, a new upload of it or a stale device', async () => {
     const { phone, tablet, accountId } = await twoDevices();
-    // The phone's answer for r-1 is lost; meanwhile the tablet purges it.
+    // The phone's answer for r-1 is lost; meanwhile the tablet purges it. The
+    // phone is in the background, so no live hint retries it meanwhile.
+    phone.foreground = false;
     phone.proxy.dropNextResponse('sync_upload_v1');
     await queue(phone, testResult.name, result('r-1', 7));
     await phone.account.sync.idle();
