@@ -10,7 +10,7 @@
 // A move between eligible bands is no pause. Gate states never stop play, so
 // they never trigger final settlement by themselves.
 
-import { isAgeRestricted, opensOrdinaryAccess, type AccountGate, type AccountService } from '@tableside/account';
+import { isRestricted, opensOrdinaryAccess, type AccountGate, type AccountService } from '@tableside/account';
 
 import type { AccessDecision, AccessDenial, AccessSupervisor } from '../practice/adapters';
 import type { PracticeController } from '../practice/controller';
@@ -45,9 +45,12 @@ export function withAccountGate(access: AccessSupervisor, gate: () => AccountGat
 }
 
 /**
- * Tells the controller when the gate's age states close ordinary access, so
- * the supervisor's disposition applies to the unfinished session. (Sign-out
- * suspends through the account session ending.) Returns an unsubscribe function.
+ * Tells the controller when a restricted state (the age states, Deletion
+ * scheduled) closes ordinary access with the account's database still open,
+ * so the supervisor's disposition applies to the unfinished session: at the
+ * turn boundary for an unresolved age, at once otherwise. (Sign-out and
+ * revocation suspend through the account session ending.) Returns an
+ * unsubscribe function.
  */
 export function followAccountGate(
   service: Pick<AccountService, 'gate' | 'subscribe'>,
@@ -57,6 +60,6 @@ export function followAccountGate(
   return service.subscribe((gate) => {
     const wasOpen = open;
     open = opensOrdinaryAccess(gate);
-    if (wasOpen && isAgeRestricted(gate)) void controller.lifecycle('access-changed');
+    if (wasOpen && isRestricted(gate)) void controller.lifecycle('access-changed');
   });
 }

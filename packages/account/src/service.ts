@@ -67,7 +67,15 @@ export type AccountGate =
    */
   | { readonly state: 'age-unresolved'; readonly accountId: string; readonly reason: UnresolvedReason }
   /** The account is established as under 13: ordinary access is closed, with only the restricted paths. */
-  | { readonly state: 'age-ineligible'; readonly accountId: string };
+  | { readonly state: 'age-ineligible'; readonly accountId: string }
+  /**
+   * The server confirmed the account's deletion is scheduled (S2-23): ordinary
+   * access is closed and sync stops, but the session, the records and the
+   * database stay open for the restricted paths (Cancel deletion, deletion
+   * status, export with its local supplement, billing and support help).
+   * `deadline` is when it is deleted permanently, in milliseconds since the epoch.
+   */
+  | { readonly state: 'deletion-scheduled'; readonly accountId: string; readonly deadline: number };
 
 /** Who revoked a session: another of the account's devices, or the provider of a sign-in method. */
 export type RevokedBy = 'device' | 'provider';
@@ -78,12 +86,19 @@ export const opensOrdinaryAccess = (gate: AccountGate): gate is Extract<AccountG
 
 /**
  * Gate states the restricted paths work in (fresh authentication, export;
- * deletion, support and billing help): ordinary access, or an account whose
- * age eligibility isn't established. The one client seam for who reaches
- * them: #103 adds Deletion scheduled (Amendment 1 B2).
+ * deletion, support and billing help): ordinary access, an account whose age
+ * eligibility isn't established, or one whose deletion is scheduled
+ * (Amendment 1 B2: Cancel deletion, status and export stay). The one client
+ * seam for who reaches them.
  */
-export const opensRestrictedPaths = (gate: AccountGate): gate is Extract<AccountGate, { state: 'active' | 'renewal-pending' | 'age-unresolved' | 'age-ineligible' }> =>
-  opensOrdinaryAccess(gate) || isAgeRestricted(gate);
+export const opensRestrictedPaths = (
+  gate: AccountGate,
+): gate is Extract<AccountGate, { state: 'active' | 'renewal-pending' | 'age-unresolved' | 'age-ineligible' | 'deletion-scheduled' }> =>
+  opensOrdinaryAccess(gate) || isAgeRestricted(gate) || gate.state === 'deletion-scheduled';
+
+/** Gate states that keep the account's database open with ordinary access closed: the age states and Deletion scheduled. */
+export const isRestricted = (gate: AccountGate): gate is Extract<AccountGate, { state: 'age-unresolved' | 'age-ineligible' | 'deletion-scheduled' }> =>
+  isAgeRestricted(gate) || gate.state === 'deletion-scheduled';
 
 /** Which gate states a call needs: ordinary access, or the restricted paths (opensRestrictedPaths). */
 type AccessPath = 'ordinary' | 'restricted';
@@ -156,7 +171,42 @@ export interface DeviceDescription {
   readonly label: string;
 }
 
-export type CurrencyChangeResult = { readonly status: 'changed' } | { readonly status: 'locked' } | { readonly status: 'failed' };
+/**
+ * Schedule deletion's answer. 'failed' is an unknown outcome (no answer
+ * came): asking again reports what happened, never a second scheduling.
+ */
+export type ScheduleDeletionResult =
+  | { readonly status: 'scheduled'; readonly deadline: number }
+  | NeedsFresh
+  /** Deletion needs a connection: there is no offline queue. */
+  | { readonly status: 'offline' }
+  | { readonly status: 'failed' };
+
+export type CancelDeletionResult =
+  /** The same account is active again, with its records. */
+  | { readonly status: 'cancelled' }
+  /** The deadline has passed: permanent deletion can't be undone. */
+  | { readonly status: 'too-late' }
+  | NeedsFresh
+  | { readonly status: 'offline' }
+  | { readonly status: 'failed' };
+
+/** Deletion status, as the server reports it. (Processing and completed are #104's.) */
+export type DeletionStatus =
+  | { readonly status: 'none' }
+  | { readonly status: 'scheduled'; readonly deadline: number; readonly scheduledAt: number };
+
+/** Delete account (S2-22) and the deletion-scheduled restricted paths (S2-23). Every action needs Confirm it's you. */
+export interface AccountDeletion {
+  /** Schedules deletion with a 30-day undo; the gate becomes Deletion scheduled. */
+  schedule(): Promise<ScheduleDeletionResult>;
+  /** Cancels a scheduled deletion; the gate reopens the same account. */
+  cancel(): Promise<CancelDeletionResult>;
+  /** Deletion status, or null when it can't be asked. */
+  status(): Promise<DeletionStatus | null>;
+}
+
+export type CurrencyChangeResult ={ readonly status: 'changed' } | { readonly status: 'locked' } | { readonly status: 'failed' };
 
 
 /** Which way a player asks for a code: Sign in (an existing account) or Create (a new one). */
@@ -566,6 +616,8 @@ export interface AccountService {
   readonly devices: Devices;
   /** Export my data: the server export and the local supplement, on the restricted paths too. */
   readonly export: AccountExport;
+  /** Delete account: schedule with a 30-day undo, cancel, and status (#103). */
+  readonly deletion: AccountDeletion;
 }
 
 
@@ -592,6 +644,8 @@ interface RememberedAccount {
   readonly signedOut: boolean;
   /** When and by whom the server confirmed this installation's session was revoked; the account is locked (signedOut) since. */
   readonly revoked?: { readonly at: number; readonly by: RevokedBy } | undefined;
+  /** When the server last said the account's deletion is scheduled, its deadline (milliseconds since the epoch); absent otherwise. */
+  readonly deletionDeadline?: number | undefined;
 }
 
 /** The eligibility part of what is remembered. */
@@ -621,6 +675,7 @@ const withEligibility = (base: RememberedAccount, next: RememberedEligibility): 
   currency: base.currency,
   signedOut: base.signedOut,
   ...(base.revoked ? { revoked: base.revoked } : {}),
+  ...(base.deletionDeadline !== undefined ? { deletionDeadline: base.deletionDeadline } : {}),
   eligibility: next.eligibility,
   ...(next.check ? { check: next.check } : {}),
   ...(next.signal ? { signal: next.signal } : {}),
@@ -629,7 +684,8 @@ const withEligibility = (base: RememberedAccount, next: RememberedEligibility): 
 
 /** The gate an open account is in. */
 function gateFor(remembered: RememberedAccount, renewing: boolean): AccountGate {
-  const { accountId, eligibility, check } = remembered;
+  const { accountId, eligibility, check, deletionDeadline } = remembered;
+  if (deletionDeadline !== undefined) return { state: 'deletion-scheduled', accountId, deadline: deletionDeadline };
   if (eligibility.status === 'under-13') return { state: 'age-ineligible', accountId };
   if (check) return { state: 'age-unresolved', accountId, reason: check === 'unmet' ? 'check-unmet' : 'check-pending' };
   if (isEligibleBand(eligibility.status)) return { state: renewing ? 'renewal-pending' : 'active', accountId, eligibility: eligibility.status };
@@ -902,9 +958,10 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
 
   /**
    * Asks the server, with this session's status credential, what became of the
-   * account and session. Only its answer that the session was revoked moves the
-   * gate to Revoked: a timeout, a lost answer, an expired token or a refused
-   * renewal never does. (Deletion scheduled and Deleted are #103's and #104's.)
+   * account and session. Only its answers move the gate: to Revoked, to
+   * Deletion scheduled (with the deadline), or back from it once deletion was
+   * cancelled (an active answer). A timeout, a lost answer, an expired token or
+   * a refused renewal never does. (Deleted is #104's.)
    */
   const checkLifecycle = async (current: OpenSession): Promise<void> => {
     if (!options.device.online.current()) return;
@@ -912,13 +969,40 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
     if (!token || opened !== current) return;
     try {
       const response = await post('/rest/v1/rpc/lifecycle_status_v1', { token });
-      const answer = (await response.json().catch(() => null)) as { status?: unknown; at?: unknown; by?: unknown } | null;
-      if (!response.ok || opened !== current || answer?.status !== 'revoked') return;
-      const at = typeof answer.at === 'string' ? Date.parse(answer.at) : Number.NaN;
-      await lockRevoked(current, { at: Number.isFinite(at) ? at : options.clock(), by: answer.by === 'provider' ? 'provider' : 'device' });
+      const answer = (await response.json().catch(() => null)) as { status?: unknown; at?: unknown; by?: unknown; deadline?: unknown } | null;
+      if (!response.ok || opened !== current) return;
+      if (answer?.status === 'revoked') {
+        const at = typeof answer.at === 'string' ? Date.parse(answer.at) : Number.NaN;
+        await lockRevoked(current, { at: Number.isFinite(at) ? at : options.clock(), by: answer.by === 'provider' ? 'provider' : 'device' });
+      } else if (answer?.status === 'deletion-scheduled') {
+        const deadline = instant(answer.deadline);
+        if (deadline !== null) await rememberDeletion(current, deadline);
+      } else if (answer?.status === 'active') {
+        await rememberDeletion(current, undefined);
+      }
     } catch {
       // Offline or the answer was lost: nothing is known.
     }
+  };
+
+  /**
+   * Keeps what the server said of the account's deletion (scheduled with
+   * `deadline`, or not scheduled) and moves the gate. Becoming Deletion
+   * scheduled closes ordinary access, so an unfinished practice session
+   * suspends at once (the app follows the gate) and sync stops; the database
+   * stays open for the restricted paths. Not scheduled reopens the account.
+   */
+  const rememberDeletion = async (current: OpenSession, deadline: number | undefined): Promise<void> => {
+    if (opened !== current || current.remembered.deletionDeadline === deadline) return;
+    const apply = (base: RememberedAccount): RememberedAccount => ({ ...base, deletionDeadline: deadline });
+    current.remembered = apply(current.remembered);
+    await writeCredentials(async () => {
+      const stored = await readRemembered();
+      if (opened === current) await remember(apply(stored ?? current.remembered));
+    });
+    if (opened !== current) return;
+    setGate(gateFor(current.remembered, current.renewing));
+    await updateSync();
   };
 
   /**
@@ -1017,12 +1101,17 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
     return opened === current && !current.renewing;
   };
 
-  /** The server's current record for the signed-in account, or null when it can't say (the gate denies, or the answer was lost). */
-  const serverRecord = async (): Promise<EligibilityRecord | null> => {
+  /**
+   * The server's current record for the signed-in account and its deletion
+   * deadline (undefined unless deletion is scheduled), or null when it can't
+   * say (the gate denies, or the answer was lost).
+   */
+  const serverRecord = async (): Promise<{ readonly record: EligibilityRecord; readonly deletionDeadline: number | undefined } | null> => {
     try {
       const supabase = await connect();
       const { data, error } = await supabase.rpc('current_account');
-      return error ? null : parseEligibilityRecord(data);
+      const record = error ? null : parseEligibilityRecord(data);
+      return record ? { record, deletionDeadline: instant((data as { deletion_deadline?: unknown }).deletion_deadline) ?? undefined } : null;
     } catch {
       return null;
     }
@@ -1044,10 +1133,10 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
     }
   };
 
-  /** Sends the range this device's platform established, once. */
+  /** Sends the range this device's platform established, once (not while deletion is scheduled: that is no restricted path). */
   const reportSignal = async (current: OpenSession): Promise<void> => {
-    const { signal, reported } = current.remembered;
-    if (signal && signal !== reported) await report(current, { status: signal, source: 'platform-signal' });
+    const { signal, reported, deletionDeadline } = current.remembered;
+    if (signal && signal !== reported && deletionDeadline === undefined) await report(current, { status: signal, source: 'platform-signal' });
   };
 
   const refreshOnce = async (current: OpenSession) => {
@@ -1062,9 +1151,11 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
     await registerDevice(current);
     await updateSync();
     await reportSignal(current);
-    const record = await serverRecord();
-    if (!record || opened !== current || sameRecord(record, current.remembered.eligibility)) return;
-    await rememberEligibility(current, { ...current.remembered, eligibility: record });
+    const answer = await serverRecord();
+    if (!answer || opened !== current) return;
+    await rememberDeletion(current, answer.deletionDeadline);
+    if (opened !== current || sameRecord(answer.record, current.remembered.eligibility)) return;
+    await rememberEligibility(current, { ...current.remembered, eligibility: answer.record });
   };
 
   const refreshEligibility = (): Promise<void> => {
@@ -1108,7 +1199,7 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
    */
   const finishSignIn = async (supabase: SupabaseClient): Promise<boolean> => {
     const { data, error } = await supabase.rpc('current_account');
-    const account = data as { account_id?: unknown; currency?: unknown } | null;
+    const account = data as { account_id?: unknown; currency?: unknown; deletion_deadline?: unknown } | null;
     const record = error ? null : parseEligibilityRecord(data);
     if (!account || typeof account.account_id !== 'string' || !record) {
       await supabase.auth.signOut({ scope: 'local' });
@@ -1118,8 +1209,16 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
     declarationBlocked = false;
     heldCredential = null;
     const signal = await ageSignals.check({ interactive: false }).catch(() => UNAVAILABLE);
+    // A deletion-scheduled account opens locked: signing in never cancels it.
+    const deletionDeadline = instant(account.deletion_deadline);
     const remembered = withEligibility(
-      { accountId: account.account_id, eligibility: record, currency: isCurrency(account.currency) ? account.currency : null, signedOut: false },
+      {
+        accountId: account.account_id,
+        eligibility: record,
+        currency: isCurrency(account.currency) ? account.currency : null,
+        signedOut: false,
+        ...(deletionDeadline !== null ? { deletionDeadline } : {}),
+      },
       afterSignal({ eligibility: record }, signal),
     );
     await writeCredentials(async () => {
@@ -1540,6 +1639,71 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
     signOutOthers: () => revokeDevices({ others: true }),
   };
 
+  /**
+   * The operation ID of a Schedule or Cancel deletion request whose answer
+   * hasn't come, for this account session: asking again sends the same one,
+   * so a lost answer is answered again by its receipt, never accepted twice.
+   */
+  let pendingDeletion: { readonly at: number; readonly action: 'schedule' | 'cancel'; readonly id: string } | null = null;
+  const deletionOperation = (action: 'schedule' | 'cancel'): string => {
+    if (pendingDeletion?.at !== generation || pendingDeletion.action !== action) {
+      pendingDeletion = { at: generation, action, id: hex(options.randomBytes(16)) };
+    }
+    return pendingDeletion.id;
+  };
+
+  const deletion: AccountDeletion = {
+    async schedule() {
+      if (gate.state === 'deletion-scheduled') return { status: 'scheduled', deadline: gate.deadline };
+      const current = opened;
+      if (!current || !opensRestrictedPaths(gate)) return { status: 'failed' };
+      // Online only: there is no offline queue.
+      if (!options.device.online.current()) return { status: 'offline' };
+      const answer = await actAsPlayer('schedule-deletion', { operationId: deletionOperation('schedule') }, 'restricted');
+      if (opened !== current) return { status: 'failed' };
+      if (answer?.code === 403 && answer.status === 'fresh-authentication-required') return { status: answer.status };
+      const deadline = answer?.code === 200 && answer.status === 'scheduled' ? instant(answer.body?.deadline) : null;
+      if (deadline === null) return { status: 'failed' };
+      pendingDeletion = null;
+      await rememberDeletion(current, deadline);
+      return { status: 'scheduled', deadline };
+    },
+
+    async cancel() {
+      const current = opened;
+      if (gate.state !== 'deletion-scheduled' || !current) return { status: 'failed' };
+      if (!options.device.online.current()) return { status: 'offline' };
+      const answer = (await operation('cancel_deletion_v1', { operation_id: deletionOperation('cancel') }, 'restricted')) as { status?: unknown } | null;
+      if (opened !== current) return { status: 'failed' };
+      const status = answer?.status;
+      if (status === 'fresh-authentication-required') return { status };
+      if (status === 'cancelled' || status === 'not-scheduled') {
+        // Either way the server says the account is active: the same account reopens.
+        pendingDeletion = null;
+        await rememberDeletion(current, undefined);
+        return { status: 'cancelled' };
+      }
+      // Refused, or no answer: what the server says of the account decides what this device shows.
+      await checkLifecycle(current);
+      return status === 'too-late' ? { status } : { status: 'failed' };
+    },
+
+    async status() {
+      const current = opened;
+      const answer = (await operation('deletion_status_v1', undefined, 'restricted')) as { status?: unknown; deadline?: unknown; scheduledAt?: unknown } | null;
+      if (!current || opened !== current) return null;
+      if (answer?.status === 'none') {
+        await rememberDeletion(current, undefined);
+        return { status: 'none' };
+      }
+      const deadline = instant(answer?.deadline);
+      const scheduledAt = instant(answer?.scheduledAt);
+      if (answer?.status !== 'scheduled' || deadline === null || scheduledAt === null) return null;
+      await rememberDeletion(current, deadline);
+      return { status: 'scheduled', deadline, scheduledAt };
+    },
+  };
+
   const service: AccountService = {
     get gate() {
       return gate;
@@ -1717,7 +1881,7 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
     signOut() {
       // A second tap while signing out joins the first.
       if (signingOut) return signingOut;
-      if (!isSignedIn(gate) && !isAgeRestricted(gate)) return Promise.resolve({ status: 'not-signed-in' });
+      if (!isSignedIn(gate) && !isRestricted(gate)) return Promise.resolve({ status: 'not-signed-in' });
       const { accountId } = gate;
       signingOut = (async (): Promise<SignOutResult> => {
         // An open practice session suspends while the database is still open.
@@ -1834,6 +1998,7 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
       registry,
       clock: options.clock,
     }),
+    deletion,
   };
   return service;
 }
@@ -1902,6 +2067,7 @@ function parseRemembered(text: string | null): RememberedAccount | null {
         currency?: unknown;
         signedOut?: unknown;
         revoked?: { at?: unknown; by?: unknown };
+        deletionDeadline?: unknown;
       }
     | null;
   if (!value || typeof value.accountId !== 'string') return null;
@@ -1919,8 +2085,15 @@ function parseRemembered(text: string | null): RememberedAccount | null {
     ...(value.signedOut === true && typeof value.revoked?.at === 'number'
       ? { revoked: { at: value.revoked.at, by: value.revoked.by === 'provider' ? ('provider' as const) : ('device' as const) } }
       : {}),
+    ...(typeof value.deletionDeadline === 'number' && Number.isFinite(value.deletionDeadline) ? { deletionDeadline: value.deletionDeadline } : {}),
   };
 }
+
+/** A server timestamp in milliseconds since the epoch, or null when it isn't one. */
+const instant = (value: unknown): number | null => {
+  const at = typeof value === 'string' ? Date.parse(value) : Number.NaN;
+  return Number.isFinite(at) ? at : null;
+};
 
 const isAgeRange = (value: unknown): value is AgeRange => value === 'under-13' || (typeof value === 'string' && isEligibleBand(value));
 
