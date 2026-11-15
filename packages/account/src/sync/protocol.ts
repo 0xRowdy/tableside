@@ -147,7 +147,8 @@ export function chunksOf(operation: PreparedOperation, payload: unknown): Staged
 /** UTF-8 length of one code point. */
 const codePointBytes = (code: number): number => (code < 0x80 ? 1 : code < 0x800 ? 2 : code < 0x10000 ? 3 : 4);
 
-function utf8Length(text: string): number {
+/** The UTF-8 length of text, in bytes. */
+export function utf8Length(text: string): number {
   let length = 0;
   for (const char of text) length += codePointBytes(char.codePointAt(0)!);
   return length;

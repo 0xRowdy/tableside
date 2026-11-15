@@ -182,6 +182,15 @@ describe('S2-20 Sync status', () => {
     expect(screen.getByRole('progressbar', { name: 'Download all history' })).toHaveAccessibilityValue({ min: 0, max: 100, now: 10 });
   });
 
+  it('warns honestly that records waiting here are lost if the app is deleted, and synced ones come back', async () => {
+    const sync = fakeSync({ uploads: [session('b1', 'blackjack', at(10, 14, 9, 41))] });
+    await show(sync);
+    const warning = `Records waiting here are only on this ${DEVICE}. If you delete the app before they sync, they're lost. Everything synced comes back when you sign in again.`;
+    expect(screen.getByText(warning)).toBeOnTheScreen();
+    await act(() => sync.set({ uploads: [] }));
+    expect(screen.queryByText(warning)).toBeNull();
+  });
+
   it('says when the device is full and the download stopped, that nothing was removed, and resumes it', async () => {
     const sync = fakeSync({ download: { state: 'stopped', progress: 0.41, reason: 'storage' } });
     await show(sync);

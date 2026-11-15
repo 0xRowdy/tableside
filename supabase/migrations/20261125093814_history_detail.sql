@@ -13,6 +13,14 @@
 --   detail are always served.
 -- - Nothing here deletes or prunes any record.
 
+-- The most one page of the feed, of a snapshot or of details carries: the
+-- UTF-8 bytes of its entries' JSON. A page always holds at least one entry, so
+-- a larger entry comes by itself. The client's PAGE_BYTES (packages/account/src/sync/protocol.ts).
+create function private.page_bytes() returns integer
+language sql immutable set search_path = '' as $$ select 262144 $$;
+
+revoke execute on function private.page_bytes() from public;
+
 -- ---------------------------------------------------------------------------
 -- Registry: how each type serves its detail
 -- ---------------------------------------------------------------------------
@@ -65,7 +73,7 @@ revoke all on private.budget_alert from public, anon, authenticated;
 --   {"status":"details","answers":[{"recordType","item","status":"detail","sequence","change"}
 --                                 | {"recordType","item","status":"changed","sequence"}
 --                                 | {"recordType","item","status":"gone"}]}
--- for the requests in order, as many as fit 262,144 bytes (at least one; the
+-- for the requests in order, as many as fit `page_bytes()` (at least one; the
 -- device asks again for the rest), or {"status":"throttled","retryAfter":s}
 -- for a bulk request under a budget alert, or {"status":"malformed"}.
 create function public.sync_details_v1(requests jsonb, bulk boolean default false) returns jsonb
@@ -117,7 +125,7 @@ begin
       else jsonb_build_object('status', 'detail', 'sequence', v_sequence, 'change', v_change)
     end;
     v_size := octet_length(v_answer::text);
-    exit when jsonb_array_length(v_answers) > 0 and v_bytes + v_size > 262144;
+    exit when jsonb_array_length(v_answers) > 0 and v_bytes + v_size > private.page_bytes();
     v_answers := v_answers || jsonb_build_array(v_answer);
     v_bytes := v_bytes + v_size;
   end loop;
@@ -128,8 +136,8 @@ revoke execute on function public.sync_details_v1(jsonb, boolean) from public, a
 grant execute on function public.sync_details_v1(jsonb, boolean) to authenticated;
 
 -- #91's feed page, now also bounded by bytes: entries in sequence order after
--- `after`, at most `page_size` of them (up to 100) and no more than 262,144
--- bytes of entries, except that a page always holds the next entry. Its
+-- `after`, at most `page_size` of them (up to 100) and no more than
+-- `page_bytes()` of entries, except that a page always holds the next entry. Its
 -- arguments and answer are as they were.
 create or replace function public.sync_feed_v1(after bigint, page_size integer default 50) returns jsonb
 language plpgsql stable security definer set search_path = '' as $$
@@ -152,7 +160,7 @@ begin
                 from private.sync_feed f
                 where f.account_id = v_account and f.sequence > coalesce(sync_feed_v1.after, 0)
                 order by f.sequence limit v_limit) e) p
-    where p.n = 1 or p.running <= 262144;
+    where p.n = 1 or p.running <= private.page_bytes();
   return jsonb_build_object(
     'entries', v_entries,
     'more', exists (select 1 from private.sync_feed f
@@ -187,7 +195,7 @@ begin
                 where b.account_id = v_account and b.snapshot_id = sync_bootstrap_page_v1.snapshot
                   and b.ordinal > coalesce(sync_bootstrap_page_v1.after, 0)
                 order by b.ordinal limit v_limit) e) p
-    where p.n = 1 or p.running <= 262144;
+    where p.n = 1 or p.running <= private.page_bytes();
   return jsonb_build_object('status', 'page', 'rows', v_rows,
     'more', exists (select 1 from private.bootstrap_rows b
                     where b.account_id = v_account and b.snapshot_id = sync_bootstrap_page_v1.snapshot

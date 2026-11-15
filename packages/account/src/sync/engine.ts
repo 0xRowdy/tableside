@@ -92,6 +92,7 @@ import {
   type UploadAnswer,
   chunksOf,
   prepareOperation,
+  utf8Length,
 } from './protocol';
 import { type RecordType, type RevisionedUpload, isBarrierFor } from './registry';
 import type { AcceptedRecord, BootstrapProgress, BootstrapStaging, HistoryProgress, Origin, QueuedUpload, RecordRef, SummaryOnly, SyncStore } from './store';
@@ -256,6 +257,9 @@ export class SyncEngine {
   private throttledUntil: number | null = null;
   /** When this account session first tried to bootstrap: its duration's start. */
   private bootstrapStartedAt: number | null = null;
+  /** Runs started in this account session, and who waits for which to finish. */
+  private runs = 0;
+  private readonly runWaiters: { readonly run: number; readonly resolve: () => void }[] = [];
   /** Consecutive runs that got no usable answer. */
   private failures = 0;
   /** No automatic run before this: the backoff. */
@@ -307,28 +311,53 @@ export class SyncEngine {
 
   /**
    * Uploads, then applies the feed. Coalesced: resolves when a run that began
-   * after this call has finished. An automatic trigger during a backoff runs nothing.
+   * after this call has finished (not the runs a download hands over to
+   * afterwards; `idle` waits for those). An automatic trigger during a backoff runs nothing.
    */
   reconcile(trigger: ReconcileTrigger = 'deliberate'): Promise<void> {
     if (this.stopped) return Promise.resolve();
     if (this.running) {
       if (this.rerun !== 'deliberate') this.rerun = trigger;
-      return this.running;
+      return this.afterRun(this.runs + 1);
     }
     if (!this.admits(trigger)) return Promise.resolve();
+    const finished = this.afterRun(this.runs + 1);
     this.running = (async () => {
       try {
-        await this.runOnce();
+        await this.countedRun();
         while (this.rerun && !this.stopped) {
           const next = this.rerun;
           this.rerun = null;
-          if (this.admits(next)) await this.runOnce();
+          if (this.admits(next)) await this.countedRun();
         }
       } finally {
         this.running = null;
+        // Every run asked for has finished, or won't happen (a backoff, the session ending).
+        this.settleRuns(Number.POSITIVE_INFINITY);
       }
     })();
-    return this.running;
+    return finished;
+  }
+
+  /** Resolves once run number `run` (from 1) has finished, or no more runs follow. */
+  private afterRun(run: number): Promise<void> {
+    return new Promise((resolve) => this.runWaiters.push({ run, resolve }));
+  }
+
+  private settleRuns(through: number): void {
+    for (const waiter of this.runWaiters.splice(0)) {
+      if (waiter.run <= through) waiter.resolve();
+      else this.runWaiters.push(waiter);
+    }
+  }
+
+  private async countedRun(): Promise<void> {
+    const run = ++this.runs;
+    try {
+      await this.runOnce();
+    } finally {
+      this.settleRuns(run);
+    }
   }
 
   /** The player retries one failing or flagged record: it is tried now, and so is everything waiting for it. */
@@ -416,7 +445,8 @@ export class SyncEngine {
         if (answer?.status === 'detail' && answer.sequence === held.sequence) {
           const outcome = await this.applyDetails([held], [answer]);
           if (outcome.storage) return { status: 'storage' };
-          if (outcome.applied === 0) return { status: 'unavailable' };
+          // Applied, or not (a download, the feed or a purge got there first): read what is held now.
+          if (outcome.applied === 0 && outcome.skipped.length > 0) return { status: 'unavailable' };
           continue;
         }
         if (!answer) return { status: 'offline' };
@@ -537,7 +567,14 @@ export class SyncEngine {
     const grants = await this.upload(await this.options.store.readUploadQueue(), { afterReconciliation: true, attempted });
     if (grants.error === 'incompatible' || this.stopped) return grants.error;
     const lastFeedError = grants.acknowledged > 0 ? await this.pull() : null;
-    if (!this.stopped) await this.fetchDetails();
+    if (!this.stopped) {
+      try {
+        await this.fetchDetails();
+      } catch (caught) {
+        // Detail is optional work: a call with no answer leaves it for a later run, never failing the run or backing off uploads.
+        if (!(caught instanceof SyncCallError)) throw caught;
+      }
+    }
     return accountState.error ?? grants.error ?? lastFeedError;
   }
 
@@ -555,8 +592,8 @@ export class SyncEngine {
    * run: when more remain, another run follows. A detail whose revision
    * changed (or went) has the feed applied first, and is asked for again on
    * a later run by the revision it brings. Short of storage, it stops there,
-   * evicting nothing, until a deliberate trigger. A call with no answer ends
-   * the run (it throws).
+   * evicting nothing, until a deliberate trigger. A call with no answer stops
+   * it there (it throws a SyncCallError).
    */
   private async fetchDetails(): Promise<void> {
     const { store, backend, clock, registry } = this.options;
@@ -616,8 +653,9 @@ export class SyncEngine {
    * Applies the answers to detail requests for `asked` summaries: each whole
    * record at the sequence asked for replaces its summary, in one transaction.
    * Answers that changed or went need the feed first (`reconcile`); those and
-   * unreadable ones are `skipped`. A write that fails, or too little room for
-   * the page, applies nothing: `storage`.
+   * unreadable ones are `skipped`. A full disk, or too little room for the
+   * page, applies nothing: `storage`. Any other failed write throws, as any
+   * failed local write does (the run's `storage` error).
    */
   private async applyDetails(
     asked: readonly (SummaryOnly | AcceptedRecord)[],
@@ -634,7 +672,7 @@ export class SyncEngine {
         const read = this.acceptedFrom(answer);
         if (read && read.record.summaryAt === undefined) {
           records.push(read.record);
-          bytes += JSON.stringify(answer.change).length;
+          bytes += utf8Length(JSON.stringify(answer.change));
           continue;
         }
       } else {
@@ -647,8 +685,7 @@ export class SyncEngine {
     try {
       return { applied: await this.options.store.applyDetails(records), skipped, reconcile, storage: false };
     } catch (failure) {
-      // The account session ended: nothing to report. Any other failed write is the device's storage.
-      if (this.stopped) throw failure;
+      if (this.stopped || !isDiskFull(failure)) throw failure;
       return { applied: 0, skipped, reconcile, storage: true };
     }
   }
@@ -985,9 +1022,9 @@ export class SyncEngine {
           store.countSummaries(),
         ]);
         if (this.stopped) return;
-        const stopped = this.storageStopped ? 'storage' : this.throttledUntil !== null && now < this.throttledUntil ? 'throttled' : null;
-        this.history = historyOf(bootstrap, progress, recent, stopped === 'storage' ? 'storage' : null);
-        this.download = downloadOf(bootstrap.installed, progress, all, stopped);
+        const throttled = this.throttledUntil !== null && now < this.throttledUntil;
+        this.history = historyOf(bootstrap, progress, recent, this.storageStopped ? 'storage' : null);
+        this.download = downloadOf(bootstrap.installed, progress, all, this.storageStopped ? 'storage' : throttled ? 'throttled' : null);
         if (lastSynced !== null && (this.lastSyncedAt === null || lastSynced > this.lastSyncedAt)) this.lastSyncedAt = lastSynced;
         const pending = new Set(queue.map((entry) => entry.id));
         for (const id of this.firstSeen.keys()) if (!pending.has(id)) this.firstSeen.delete(id);
@@ -1026,8 +1063,8 @@ function uploadStates(queue: readonly QueuedUpload[]): UploadStatus[] {
   }));
 }
 
-/** (of − left) / of, from 0 to 1: how far something has come. */
-const done = (left: number, of: number): number => (of > 0 ? Math.min(1, Math.max(0, (of - left) / of)) : left > 0 ? 0 : 1);
+/** (of − left) / of, from 0 to 1: how much of `of` is done with `left` still to do. */
+const fractionDone = (left: number, of: number): number => (of > 0 ? Math.min(1, Math.max(0, (of - left) / of)) : left > 0 ? 0 : 1);
 
 /**
  * The first download's progress: the bootstrap's summaries, then the newest
@@ -1040,18 +1077,21 @@ function historyOf(bootstrap: BootstrapProgress, progress: HistoryProgress, rece
     return { state: 'incomplete', summaries: staging && staging.rows > 0 ? Math.min(1, staging.staged / staging.rows) : 0, detail: 0, stopped };
   }
   if (recent === 0) return { state: 'complete' };
-  return { state: 'incomplete', summaries: 1, detail: done(recent, Math.max(progress.recent ?? recent, recent)), stopped };
+  return { state: 'incomplete', summaries: 1, detail: fractionDone(recent, Math.max(progress.recent ?? recent, recent)), stopped };
 }
 
 /** Download all history's progress: summaries still waiting for detail (`left`), of those waiting when it began. */
 function downloadOf(installed: boolean, progress: HistoryProgress, left: number, stopped: 'storage' | 'throttled' | null): HistoryDownload {
   if (!progress.download) return { state: 'not-requested' };
   if (installed && left === 0) return { state: 'complete' };
-  const reached = installed ? done(left, Math.max(progress.download.total ?? left, left)) : 0;
+  const reached = installed ? fractionDone(left, Math.max(progress.download.total ?? left, left)) : 0;
   return stopped ? { state: 'stopped', progress: reached, reason: stopped } : { state: 'downloading', progress: reached };
 }
 
 const refKey = (ref: RecordRef): string => `${ref.recordType}\n${ref.item}`;
+
+/** The account store's failure for a full disk (the app's SqlError of kind `full`), matched by shape. */
+const isDiskFull = (failure: unknown): boolean => typeof failure === 'object' && failure !== null && (failure as { kind?: unknown }).kind === 'full';
 
 /** An entry that can't be sent as it is: its result is too large to name, or no longer matches its manifest. */
 class UnsendableError extends Error {}

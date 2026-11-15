@@ -283,6 +283,8 @@ describe('pages', () => {
     // Twelve 60 KB details, then one of 400 KB.
     await seedOldResults(accountId, 12, phone.clock.now(), 60_000, 'mid');
     await seedOldResults(accountId, 1, phone.clock.now(), 400_000, 'big');
+    // The server's bound is the client's.
+    expect((await stack.sql<{ bytes: number }[]>`select private.page_bytes() as bytes`)[0]?.bytes).toBe(PAGE_BYTES);
     const client = stack.rawClient(accessToken(phone));
     const sizes = (entries: readonly unknown[]) => entries.map((entry) => Buffer.byteLength(JSON.stringify(entry)));
     const withinBound = (entries: readonly unknown[]) => entries.length === 1 || sizes(entries).reduce((a, b) => a + b, 0) <= PAGE_BYTES;

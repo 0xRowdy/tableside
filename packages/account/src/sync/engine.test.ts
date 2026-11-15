@@ -13,6 +13,7 @@ import {
   type ChunkAnswer,
   type DetailPage,
   type DetailRequest,
+  type FeedEntry,
   type FeedPage,
   type ProtocolStatus,
   SyncCallError,
@@ -145,7 +146,8 @@ class MemoryStore implements SyncStore {
     return (await this.readSummaries({ ...(since !== undefined ? { since } : {}), limit: Infinity })).length;
   }
   async applyDetails(records: readonly AcceptedRecord[]): Promise<number> {
-    if (this.failWrites) throw new Error('database or disk is full');
+    // The account store's failure for a full disk.
+    if (this.failWrites) throw Object.assign(new Error('database or disk is full'), { kind: 'full' });
     let applied = 0;
     for (const record of records) {
       const held = await this.readAcceptedRecord(record.recordType, record.item);
@@ -234,10 +236,12 @@ class ScriptedBackend implements SyncBackend {
     this.calls.push('stage');
     return { status: 'staged' };
   }
-  async feed(): Promise<FeedPage> {
+  /** The account's feed entries, which a feed call answers after its cursor. */
+  readonly feedEntries: FeedEntry[] = [];
+  async feed(after: number): Promise<FeedPage> {
     this.calls.push('feed');
     if (this.everything) throw this.everything;
-    return { entries: [], more: false };
+    return { entries: this.feedEntries.filter((entry) => entry.sequence > after), more: false };
   }
   /** What each snapshot page answers, in turn; an empty, complete page when none is scripted. */
   readonly bootstrapPages: BootstrapPage[] = [];
@@ -710,12 +714,17 @@ describe('history detail', () => {
     await sync.downloadAllHistory();
     expect(store.history.download).toEqual({ total: 1_500 });
     expect(sync.status.download).toEqual({ state: 'downloading', progress: 200 / 1_500 });
-    expect(sync.status.error).toBe('offline');
+    // Optional work: the run itself didn't fail, and nothing backs off.
+    expect(sync.status.error).toBeNull();
+    expect(sync.retryAt).toBeNull();
     expect(backend.detailCalls[0]?.items.slice(0, 2)).toEqual(['s-1', 's-2']);
 
     // The next run (the app reopened, say) carries on from where it stopped,
-    // eight pages at a time, handing over to another run in between.
+    // eight pages at a time, handing over to another run in between: the
+    // caller waits for its own run only.
     await sync.reconcile();
+    expect(sync.status.download).toEqual({ state: 'downloading', progress: 1_000 / 1_500 });
+    await sync.idle();
     expect(sync.status.download).toEqual({ state: 'complete' });
     expect(await store.countSummaries()).toBe(0);
     const asked = backend.detailCalls.flatMap((call) => call.items);
@@ -756,6 +765,20 @@ describe('history detail', () => {
     expect((await sync.detail('session', 's-1')).status).toBe('detail');
     expect(backend.detailCalls).toHaveLength(calls);
     expect(await sync.detail('note', 'n1')).toEqual({ status: 'unavailable' });
+  });
+
+  it('opening a record whose revision changed applies the feed first, then shows the revision it brought', async () => {
+    const { store, backend, sync } = withSummaries(engine(), [400]);
+    store.cursor = 1;
+    const at = (await store.readAcceptedRecord('session', 's-1'))!.summaryAt!;
+    const revised = { record: { id: 's-1', at, detail: 'revised' } };
+    backend.withDetail.set('s-1', { sequence: 2, change: revised });
+    backend.feedEntries.push({ sequence: 2, recordType: 'session', item: 's-1', change: revised });
+    const opened = await sync.detail('session', 's-1');
+    expect(opened).toMatchObject({ status: 'detail', record: { sequence: 2, payload: { detail: 'revised' } } });
+    // Asked by the revision held, told it changed, and the feed brought the new one: not asked again.
+    expect(backend.detailCalls).toEqual([{ bulk: false, items: ['s-1'] }]);
+    expect(backend.calls.indexOf('feed')).toBeGreaterThan(backend.calls.indexOf('details'));
   });
 
   it('a record the account no longer holds detail for is left as it is, never deleted by the engine', async () => {

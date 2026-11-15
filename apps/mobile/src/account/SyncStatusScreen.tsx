@@ -12,6 +12,8 @@
 // TODO(frames): Download all history running, throttled by a budget alert or
 // complete, and the first download stopped for storage, are unverified: S2-20
 // draws the download only stopped for storage, and its button only during the first download.
+// TODO(frames): the note that waiting records are lost if the app is deleted (the reinstall
+// warning, #97) is unverified: S2-20 doesn't draw it; its words follow S2-17's sign-out sheet.
 //
 // #99 routes here from the Account area with the Account service's sync; the
 // store link behind Update arrives with the store listings (spec 7).
@@ -57,7 +59,7 @@ export function SyncStatusScreen({ sync, onBack, onUpdate, now = Date.now }: Syn
   const accountError = ACCOUNT_ERRORS.has(status.error);
   const { history, download } = status;
   // Short of storage: Download all history, or the first download's 90 days of detail, stopped there.
-  const full =
+  const storageStop =
     download.state === 'stopped' && download.reason === 'storage'
       ? { what: 'Download all history', progress: download.progress, resume: () => void sync.downloadAllHistory() }
       : history.state === 'incomplete' && history.stopped === 'storage'
@@ -67,14 +69,14 @@ export function SyncStatusScreen({ sync, onBack, onUpdate, now = Date.now }: Syn
     <SettingsScreen title="Sync status" back={{ label: 'Account', onPress: onBack }}>
       {status.update?.state === 'retiring' && <RetiringNotice update={status.update} onUpdate={onUpdate} />}
       {required && <UpdateRequired testID="update-required" reason={status.update?.reason ?? null} onUpdate={onUpdate} />}
-      {full ? (
+      {storageStop ? (
         <Banner
           testID="storage-banner"
           icon={HardDrive}
           tone="destructive"
           title={`Your ${DEVICE} is full`}
-          body={`${full.what} stopped at ${percentOf(full.progress)}%. To make room, nothing unsynced or unfinished was removed. Free up space, then resume.`}
-          action={{ label: 'Resume download', onPress: full.resume }}
+          body={`${storageStop.what} stopped at ${percentOf(storageStop.progress)}%. To make room, nothing unsynced or unfinished was removed. Free up space, then resume.`}
+          action={{ label: 'Resume download', onPress: storageStop.resume }}
         />
       ) : (
         <StatusCard status={status} waiting={waiting.length} now={at} />
@@ -139,7 +141,7 @@ export function SyncStatusScreen({ sync, onBack, onUpdate, now = Date.now }: Syn
         </>
       )}
       <DownloadProgress download={download} />
-      {full && <Note>If saving a session fails for the same reason, play pauses with a saving error rather than continuing unsaved.</Note>}
+      {storageStop && <Note>If saving a session fails for the same reason, play pauses with a saving error rather than continuing unsaved.</Note>}
       {status.uploads.length > 0 && (
         <>
           <SectionLabel>Waiting</SectionLabel>
@@ -151,6 +153,9 @@ export function SyncStatusScreen({ sync, onBack, onUpdate, now = Date.now }: Syn
         </>
       )}
       {waiting.length > 0 && !accountError && !required && <SecondaryButton icon={RefreshCw} label="Sync now" onPress={() => void sync.reconcile()} />}
+      {waiting.length > 0 && (
+        <Note>{`Records waiting here are only on this ${DEVICE}. If you delete the app before they sync, they're lost. Everything synced comes back when you sign in again.`}</Note>
+      )}
       {status.error === 'offline' && <Note>Practice works normally offline. Nothing is lost or counted twice when sync resumes.</Note>}
     </SettingsScreen>
   );
