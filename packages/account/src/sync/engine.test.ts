@@ -3,6 +3,7 @@
 // flagged records and their dependents, review, renewal and required updates.
 // Seam 2 covers the same rules against the local stack.
 
+import { canonicalJson, sha256Hex } from '@tableside/engine';
 import { describe, expect, it } from 'vitest';
 
 import { type MetricEvent, createMetricsSender } from '../metrics';
@@ -11,16 +12,30 @@ import {
   type BootstrapPage,
   type BootstrapSnapshot,
   type ChunkAnswer,
+  type Command,
   type DetailPage,
   type DetailRequest,
   type FeedEntry,
   type FeedPage,
   type ProtocolStatus,
+  type ScopeAnswer,
   SyncCallError,
   type UploadAnswer,
 } from './protocol';
-import type { RecordType } from './registry';
-import type { AcceptedRecord, BootstrapProgress, HistoryProgress, LocalRevisionedItem, NewUpload, QueuedUpload, RejectedUpload, SummaryOnly, SyncStore } from './store';
+import { type RecordType, revisionedItemType } from './registry';
+import type {
+  AcceptedRecord,
+  BootstrapProgress,
+  CommandScope,
+  HistoryProgress,
+  LocalRevisionedItem,
+  NewUpload,
+  QueuedUpload,
+  ReconcileOutcome,
+  RejectedUpload,
+  SummaryOnly,
+  SyncStore,
+} from './store';
 import type { Disposition, PreparedOperation } from './protocol';
 
 interface Entry {
@@ -33,6 +48,8 @@ interface Entry {
   disposition: Disposition | null;
   failures: number;
   flagged: boolean;
+  command?: Command;
+  unconfirmed?: true;
 }
 
 /** The sync store port in memory: what the SQLite store does, without durability. */
@@ -43,6 +60,10 @@ class MemoryStore implements SyncStore {
   syncedAt: number | null = null;
   /** Established by default: these tests are about an installation that has its baseline. */
   bootstrap: BootstrapProgress = { installed: true };
+  /** A generation adopted by default, likewise. */
+  generation: number | null = 1;
+  last = 0;
+  readonly purged: { recordType: string; item: string }[] = [];
   private readonly listeners = new Set<() => void>();
 
   queue(id: string, payload: unknown, dependencies: string[] = []): void {
@@ -52,7 +73,17 @@ class MemoryStore implements SyncStore {
   async readUploadQueue(): Promise<readonly QueuedUpload[]> {
     return this.entries
       .filter((entry) => entry.status === 'pending')
-      .map(({ id, recordType, payload, dependencies, operation, failures, flagged }) => ({ id, recordType, payload, dependencies, operation, failures, flagged }));
+      .map(({ id, recordType, payload, dependencies, operation, failures, flagged, command, unconfirmed }) => ({
+        id,
+        recordType,
+        payload,
+        dependencies,
+        operation,
+        failures,
+        flagged,
+        ...(command ? { command } : {}),
+        ...(unconfirmed ? { unconfirmed } : {}),
+      }));
   }
   async queueUpload({ id, recordType, payload, dependencies }: NewUpload): Promise<QueuedUpload> {
     this.entries.push({ id, recordType, payload, dependencies: [...dependencies], operation: null, status: 'pending', disposition: null, failures: 0, flagged: false });
@@ -64,9 +95,52 @@ class MemoryStore implements SyncStore {
       .filter((entry) => entry.status === 'rejected')
       .map(({ id, recordType, payload, disposition }) => ({ id, recordType, payload, code: disposition!.status === 'rejected' ? disposition!.code : '' }));
   }
-  async prepareUpload(id: string, operation: PreparedOperation): Promise<PreparedOperation> {
+  async prepareUpload(id: string, prepare: (command: Command) => PreparedOperation): Promise<PreparedOperation> {
     const entry = this.find(id);
-    return (entry.operation ??= operation);
+    if (entry.operation) return entry.operation;
+    const command = await this.allocateCommand();
+    entry.operation = prepare(command);
+    entry.command = command;
+    return entry.operation;
+  }
+  async readCommandScope(): Promise<CommandScope> {
+    const { generation, last } = this;
+    if (generation === null) return { generation, last, settled: 0 };
+    const pending = this.entries.filter((entry) => entry.status === 'pending' && (!entry.command || entry.command.generation === generation));
+    const named = new Set(pending.flatMap((entry) => entry.dependencies));
+    const live = [
+      ...pending.flatMap((entry) => (entry.command ? [entry.command.position] : [])),
+      ...this.entries.filter((entry) => named.has(entry.id) && entry.command?.generation === generation).map((entry) => entry.command!.position),
+    ];
+    return { generation, last, settled: live.length > 0 ? Math.min(...live) - 1 : last };
+  }
+  async adoptCommandScope(generation: number): Promise<void> {
+    if (generation !== this.generation) this.last = 0;
+    this.generation = generation;
+  }
+  async allocateCommand(): Promise<Command> {
+    if (this.generation === null) throw new Error('no generation');
+    return { generation: this.generation, position: ++this.last };
+  }
+  async reconcileUpload(id: string, outcome: ReconcileOutcome): Promise<void> {
+    const entry = this.find(id);
+    if (entry.status !== 'pending') return;
+    if (outcome.kind === 'accepted') entry.status = 'accepted';
+    else if (outcome.kind === 'set-aside') {
+      entry.status = 'rejected';
+      entry.disposition = { status: 'rejected', operation: entry.operation!.operationId, requestHash: entry.operation!.requestHash, code: 'set-aside' };
+      delete entry.unconfirmed;
+    } else if (outcome.kind === 'unconfirmed') entry.unconfirmed = true;
+    else {
+      entry.operation = null;
+      delete entry.command;
+      delete entry.unconfirmed;
+      entry.failures = 0;
+      entry.flagged = false;
+    }
+  }
+  async readPurgedItems(recordType: string): Promise<readonly string[]> {
+    return this.purged.filter((ref) => ref.recordType === recordType).map((ref) => ref.item);
   }
   async acknowledgeUpload(id: string, disposition: Disposition, accepted: AcceptedRecord | null): Promise<void> {
     const entry = this.find(id);
@@ -109,10 +183,17 @@ class MemoryStore implements SyncStore {
   async beginBootstrap(snapshot: BootstrapSnapshot): Promise<void> {
     this.bootstrap = { installed: false, staging: { ...snapshot, staged: 0, after: 0 } };
   }
-  async stageBootstrapPage(snapshot: string, after: number, records: readonly AcceptedRecord[], through: number): Promise<boolean> {
+  async stageBootstrapPage(
+    snapshot: string,
+    after: number,
+    records: readonly AcceptedRecord[],
+    through: number,
+    purged: readonly { recordType: string; item: string }[] = [],
+  ): Promise<boolean> {
     const { bootstrap } = this;
     if (bootstrap.installed || bootstrap.staging?.snapshot !== snapshot || bootstrap.staging.after !== after) return false;
     this.accepted.push(...records);
+    this.purged.push(...purged);
     this.bootstrap = { installed: false, staging: { ...bootstrap.staging, staged: bootstrap.staging.staged + records.length, after: through } };
     return true;
   }
@@ -221,9 +302,10 @@ class ScriptedBackend implements SyncBackend {
     return this.protocolStatus;
   }
   async upload(request: string): Promise<UploadAnswer> {
-    const { item, operation } = JSON.parse(request) as { item: string; operation: string };
+    const { item, operation, command } = JSON.parse(request) as { item: string; operation: string; command: Command };
     this.calls.push(`upload ${item}`);
     if (this.everything) throw this.everything;
+    if (command.generation !== this.serving) return { status: 'stale-scope', reason: 'retired' };
     const scripted = this.answers.get(item);
     if (scripted instanceof SyncCallError) throw scripted;
     if (scripted && scripted.status !== 'accepted' && scripted.status !== 'rejected') return scripted;
@@ -236,12 +318,14 @@ class ScriptedBackend implements SyncBackend {
     this.calls.push('stage');
     return { status: 'staged' };
   }
+  /** What each feed call answers first, in turn (a reset, say); then the account's feed entries after its cursor. */
+  readonly feedPages: FeedPage[] = [];
   /** The account's feed entries, which a feed call answers after its cursor. */
   readonly feedEntries: FeedEntry[] = [];
   async feed(after: number): Promise<FeedPage> {
     this.calls.push('feed');
     if (this.everything) throw this.everything;
-    return { entries: this.feedEntries.filter((entry) => entry.sequence > after), more: false };
+    return this.feedPages.shift() ?? { entries: this.feedEntries.filter((entry) => entry.sequence > after), more: false };
   }
   /** What each snapshot page answers, in turn; an empty, complete page when none is scripted. */
   readonly bootstrapPages: BootstrapPage[] = [];
@@ -280,7 +364,34 @@ class ScriptedBackend implements SyncBackend {
   uploadsOf(item: string): number {
     return this.calls.filter((call) => call === `upload ${item}`).length;
   }
+  /** The scope calls, apart from `calls`, as "new" or "settled <n>", and the generation the server serves. */
+  readonly scopeCalls: string[] = [];
+  serving = 1;
+  async scope(_installation: string, generation: number | null, settled: number | null): Promise<ScopeAnswer> {
+    if (this.everything) throw this.everything;
+    if (generation === null) {
+      this.scopeCalls.push('new');
+      return { status: 'scope', generation: ++this.serving, settled: 0 };
+    }
+    this.scopeCalls.push(`settled ${settled}`);
+    return generation === this.serving ? { status: 'scope', generation, settled: settled ?? 0 } : { status: 'stale-scope' };
+  }
 }
+
+/** A test-only revisioned item of plain text values. */
+const memo = revisionedItemType<string>({
+  name: 'memo',
+  payloadVersion: 1,
+  identityScheme: 'memo-id',
+  acceptance: 'private.accept_memo_v1',
+  isValue: (value): value is string => typeof value === 'string',
+  contribution: null,
+  export: { csv: null, json: (state) => state },
+  deletion: { serverTables: [] },
+});
+
+/** A test-only account-state operation: what a stale scope leaves unconfirmed. */
+const toggle: RecordType<{ id: string }> = { ...note, name: 'toggle', kind: 'account-state-operation', acceptance: 'private.accept_toggle_v1' };
 
 /** A test-only result with a detail: `{ id, at, detail }`, held as a summary (no detail) after a snapshot. */
 interface Session {
@@ -307,7 +418,7 @@ function engine(options: { random?: number; storage?: () => number | null; types
     metrics,
     store,
     backend,
-    registry: new Map([note as RecordType, session as RecordType, ...(options.types ?? [])].map((type) => [type.name, type])),
+    registry: new Map([note as RecordType, session as RecordType, toggle as RecordType, memo as unknown as RecordType, ...(options.types ?? [])].map((type) => [type.name, type])),
     ...(options.storage ? { storage: options.storage } : {}),
     installationId: 'installation-1',
     newOperationId: () => (next++).toString(16).padStart(32, '0'),
@@ -882,5 +993,140 @@ describe('operational metrics (#108)', () => {
     expect(events.length).toBeGreaterThan(0);
     const sent = JSON.stringify(events);
     for (const text of [secret.id, 'casino', 'Bellagio', '250', 'player@example.com', 'over-limit', 'note', String(clock.now)]) expect(sent).not.toContain(text);
+  });
+});
+
+describe('a stale command scope (#98)', () => {
+  /** Two notes and a toggle sent under generation 1 with no answer, then the server retires it. */
+  async function retired() {
+    const setup = engine();
+    const { store, backend } = setup;
+    for (const [id, recordType] of [['n1', 'note'], ['n2', 'note'], ['t1', 'toggle']] as const) {
+      await store.queueUpload({ id, recordType, item: id, payload: { id }, dependencies: [], positioned: false, purges: null });
+      await store.prepareUpload(id, (command) => {
+        const request = canonicalJson({ protocol: 1, operation: id.padStart(32, '0'), installation: 'installation-1', command, recordType, payloadVersion: 1, item: id, payload: { id } });
+        return { operationId: id.padStart(32, '0'), request, requestHash: sha256Hex(request) };
+      });
+    }
+    backend.serving = 2;
+    return setup;
+  }
+
+  it('refreshes, reconciles each prepared record, and only then takes a new generation and uploads again', async () => {
+    const { store, backend, sync } = await retired();
+    const before = backend.calls.length;
+    await sync.reconcile();
+    await sync.idle();
+    // The refused upload, the refresh, then the resent notes under the new generation (the server deduplicates them by identity).
+    expect(backend.calls.slice(before)).toEqual(['protocol', 'upload n1', 'feed', 'protocol', 'upload n1', 'upload n2', 'feed']);
+    expect(backend.uploadsOf('t1')).toBe(0);
+    expect(backend.scopeCalls).toContain('new');
+    expect(store.generation).toBe(3);
+    expect(store.accepted.map((record) => record.item)).toEqual(['n1', 'n2']);
+    // The toggle's outcome isn't in the account's state: it waits for the player, never sent again by itself.
+    expect(sync.status.uploads).toEqual([expect.objectContaining({ id: 't1', state: 'unconfirmed' })]);
+    await sync.reconcile();
+    expect(backend.uploadsOf('t1')).toBe(0);
+  });
+
+  it('sends an unconfirmed record anew only when the player decides so, and sets it aside otherwise', async () => {
+    const { store, backend, sync } = await retired();
+    await sync.reconcile();
+    await sync.idle();
+    await sync.decideUnconfirmed('t1', 'send-again');
+    await sync.idle();
+    expect(backend.uploadsOf('t1')).toBe(1);
+    expect(await store.readUploadQueue()).toEqual([]);
+
+    const other = await retired();
+    await other.sync.reconcile();
+    await other.sync.idle();
+    await other.sync.decideUnconfirmed('t1', 'set-aside');
+    expect(other.backend.uploadsOf('t1')).toBe(0);
+    expect(other.sync.status.uploads).toEqual([expect.objectContaining({ id: 't1', state: 'review' })]);
+    expect(await other.store.readRejectedUploads()).toEqual([expect.objectContaining({ id: 't1', code: 'set-aside' })]);
+    // A record the server refused isn't the player's to resend.
+    await other.sync.decideUnconfirmed('t1', 'send-again');
+    expect(other.backend.uploadsOf('t1')).toBe(0);
+  });
+
+  it('reports the positions settled after a clean run, once each', async () => {
+    const { store, backend, sync } = engine();
+    store.queue('n1', { id: 'n1' });
+    store.queue('n2', { id: 'n2' });
+    await sync.reconcile();
+    expect(backend.scopeCalls).toEqual(['settled 2']);
+    await sync.reconcile();
+    expect(backend.scopeCalls).toEqual(['settled 2']);
+  });
+
+  it('recovers when the settled report finds the scope stale, though nothing was waiting', async () => {
+    const { store, backend, sync } = engine();
+    store.queue('n1', { id: 'n1' });
+    backend.serving = 5;
+    backend.answer('n1', { status: 'accepted', operation: '', requestHash: '', sequence: 0 });
+    store.entries[0]!.status = 'accepted';
+    store.last = 1;
+    await sync.reconcile();
+    await sync.idle();
+    // The stale report, the new generation, and the new generation's first report (nothing settled under it yet).
+    expect(backend.scopeCalls).toEqual(['settled 1', 'new', 'settled 0']);
+    expect(store.generation).toBe(6);
+  });
+});
+
+describe('a feed reset (#98)', () => {
+  it('takes a new snapshot and installs it, keeping the queue, then reads the feed after it', async () => {
+    const { store, backend, sync } = engine();
+    store.cursor = 4;
+    backend.answer('n1', new SyncCallError('refused'));
+    store.queue('n1', { id: 'n1' });
+    backend.feedPages.push({ status: 'reset', through: 30 });
+    await sync.reconcile();
+    expect(backend.calls).toEqual(['protocol', 'upload n1', 'feed', 'bootstrap', 'bootstrap page', 'feed']);
+    expect(store.bootstrap).toEqual({ installed: true });
+    expect((await store.readUploadQueue()).map((entry) => entry.id)).toEqual(['n1']);
+  });
+});
+
+describe('a stale scope’s revisioned edits (#98)', () => {
+  it('acknowledges an edit the account holds, sends anew one whose base is still current, and leaves any other for review', async () => {
+    const { store, backend, sync } = engine();
+    const state = (revision: number, value: string, proposals: string[] = []) => ({
+      revision,
+      deleted: false,
+      value,
+      conflict: proposals.length > 0 ? { generation: 1, proposals: proposals.map((id) => ({ id, kind: 'edit', installation: 'other', value: 'theirs' })) } : null,
+    });
+    const edits = [
+      // Accepted as a proposal: the account shows its operation among them.
+      { item: 'proposed', base: 1, value: 'mine', held: (operation: string) => state(2, 'theirs', [operation]) },
+      // Accepted as the next revision: the account holds its value.
+      { item: 'accepted', base: 1, value: 'mine', held: () => state(2, 'mine') },
+      // Never received: the account's revision is still its base.
+      { item: 'unreceived', base: 3, value: 'mine', held: () => state(3, 'old') },
+      // Moved on since, by others or by it: no way to tell.
+      { item: 'ambiguous', base: 1, value: 'mine', held: () => state(4, 'theirs') },
+    ];
+    for (const edit of edits) {
+      const payload = { item: edit.item, action: 'save', base: edit.base, value: edit.value };
+      await store.queueUpload({ id: edit.item, recordType: 'memo', item: edit.item, payload, dependencies: [], positioned: false, purges: null });
+      const prepared = await store.prepareUpload(edit.item, (command) => {
+        const request = canonicalJson({ protocol: 1, operation: edit.item.padStart(32, '0'), installation: 'installation-1', command, recordType: 'memo', payloadVersion: 1, item: edit.item, payload });
+        return { operationId: edit.item.padStart(32, '0'), request, requestHash: sha256Hex(request) };
+      });
+      store.accepted.push({ recordType: 'memo', item: edit.item, sequence: 10, payload: edit.held(prepared.operationId) });
+    }
+    backend.serving = 2;
+    await sync.reconcile();
+    await sync.idle();
+    expect(store.entries.map((entry) => [entry.id, entry.status, entry.unconfirmed ?? false])).toEqual([
+      ['proposed', 'accepted', false],
+      ['accepted', 'accepted', false],
+      ['unreceived', 'accepted', false],
+      ['ambiguous', 'pending', true],
+    ]);
+    expect(backend.uploadsOf('unreceived')).toBe(1);
+    expect(backend.uploadsOf('ambiguous')).toBe(0);
   });
 });

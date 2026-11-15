@@ -15,6 +15,7 @@ import {
   type SimulatedDevice,
   accessToken,
   createDevice,
+  directCommands,
   localStack,
   testRevisionedItem,
   uniqueEmail,
@@ -76,16 +77,18 @@ const CASINO_ITEM = 'casino-at-the-bellagio';
 async function refusedUpload(d: SimulatedDevice) {
   d.proxy.online = false;
   const result = await d.playPracticeSession();
+  const raw = stack.rawClient(accessToken(d));
   const competing = prepareOperation({
     protocol: PROTOCOL_VERSION,
     operation: 'b'.repeat(32),
     installation: result.device,
+    command: (await directCommands(raw, result.device)).next(),
     recordType: completedPracticeSession.name,
     payloadVersion: 1,
     item: result.activityId,
     payload: { ...result, netResult: '999', finalCashOut: '1999' },
   });
-  expect((await stack.rawClient(accessToken(d)).rpc('sync_upload_v1', { request: competing.request })).data).toMatchObject({ status: 'accepted' });
+  expect((await raw.rpc('sync_upload_v1', { request: competing.request })).data).toMatchObject({ status: 'accepted' });
   return result;
 }
 

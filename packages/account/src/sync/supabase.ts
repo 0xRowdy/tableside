@@ -1,7 +1,7 @@
 // The sync engine's backend and live channel over Supabase: the versioned
 // operations (supabase/migrations, `sync_upload_v1`, `sync_stage_chunk_v1`,
 // `sync_feed_v1`, `sync_bootstrap_v1`, `sync_bootstrap_page_v1`,
-// `sync_details_v1`, `realtime_claim_v1`), the unversioned `sync_protocol`, and the account's
+// `sync_details_v1`, `sync_scope_v1`, `realtime_claim_v1`), the unversioned `sync_protocol`, and the account's
 // private Realtime topic.
 
 import type { RealtimeChannel, SupabaseClient } from '@supabase/supabase-js';
@@ -15,6 +15,7 @@ import {
   type DetailPage,
   type FeedPage,
   type ProtocolStatus,
+  type ScopeAnswer,
   SyncCallError,
   type UploadAnswer,
   chunkCallArguments,
@@ -44,6 +45,7 @@ export const SYNC_OPERATIONS = {
   claim: 'realtime_claim_v1',
   bootstrap: 'sync_bootstrap_v1',
   bootstrapPage: 'sync_bootstrap_page_v1',
+  scope: 'sync_scope_v1',
   details: 'sync_details_v1',
 } as const;
 
@@ -152,6 +154,8 @@ export function supabaseSyncBackend(supabase: SupabaseClient, watch: RetryAfterW
     },
     bootstrapPage: (snapshot, after, pageSize) =>
       callOperation<BootstrapPage>(supabase, watch, SYNC_OPERATIONS.bootstrapPage, { snapshot, after, page_size: pageSize }),
+    scope: (installation, generation, settled) =>
+      callOperation<ScopeAnswer>(supabase, watch, SYNC_OPERATIONS.scope, { installation, generation, settled }),
     async details(requests, bulk) {
       const answer = await callOperation<DetailPage | { status: 'malformed' }>(supabase, watch, SYNC_OPERATIONS.details, { requests, bulk });
       if (answer.status === 'malformed') throw new SyncCallError('refused');

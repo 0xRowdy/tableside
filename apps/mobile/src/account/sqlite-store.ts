@@ -61,6 +61,12 @@ export type Disposition =
   | { readonly status: 'accepted'; readonly operation: string; readonly requestHash: string; readonly sequence: number }
   | { readonly status: 'rejected'; readonly operation: string; readonly requestHash: string; readonly code: string };
 
+/** A command's scope generation and its position there. */
+export interface Command {
+  readonly generation: number;
+  readonly position: number;
+}
+
 export interface QueuedUpload {
   readonly id: string;
   readonly recordType: string;
@@ -69,11 +75,29 @@ export interface QueuedUpload {
   readonly operation: PreparedOperation | null;
   readonly failures: number;
   readonly flagged: boolean;
-  /** The operations its acknowledged dependencies were sent as; absent when none. */
+  /** The operations its acknowledged dependencies were sent as, under the current generation; absent when none. */
   readonly after?: readonly string[];
   /** Its originating-device position, for a per-device type. */
   readonly position?: number;
+  /** The command it was prepared as. */
+  readonly command?: Command;
+  /** Its scope went stale and the refreshed account doesn't show what became of it: it waits for the player. */
+  readonly unconfirmed?: true;
 }
+
+/** The installation's command scope: its generation (null before one), the last position given, and the positions settled here. */
+export interface CommandScope {
+  readonly generation: number | null;
+  readonly last: number;
+  readonly settled: number;
+}
+
+/** What became of an entry whose command scope went stale, or the player's decision on an unconfirmed one. */
+export type ReconcileOutcome =
+  | { readonly kind: 'accepted'; readonly sequence: number | null }
+  | { readonly kind: 'unsent' }
+  | { readonly kind: 'unconfirmed' }
+  | { readonly kind: 'set-aside' };
 
 export interface RejectedUpload {
   readonly id: string;
@@ -444,20 +468,35 @@ export class SqliteActivityStore implements ActivityStore {
   /** Unacknowledged upload queue entries, in queue order. */
   readUploadQueue(): Promise<readonly QueuedUpload[]> {
     return this.transaction(async (tx) => {
-      const rows = await tx.all<BodyRow & QueueRow & { record_type: string; failures: number; flagged: number; device_position: number | null }>(
-        `SELECT ${BODY}, id, record_type, dependencies, operation_id, request, request_sha256, failures, flagged, device_position FROM outgoing WHERE status = 'pending' ORDER BY position`,
+      const { generation } = await readScopeRow(tx);
+      const rows = await tx.all<
+        BodyRow &
+          QueueRow & {
+            record_type: string;
+            failures: number;
+            flagged: number;
+            device_position: number | null;
+            command_generation: number | null;
+            command_position: number | null;
+            unconfirmed: number;
+          }
+      >(
+        `SELECT ${BODY}, id, record_type, dependencies, operation_id, request, request_sha256, failures, flagged, device_position,
+           command_generation, command_position, unconfirmed
+         FROM outgoing WHERE status = 'pending' ORDER BY position`,
       );
       const entries: QueuedUpload[] = [];
       for (const row of rows) {
         const outgoing = decode<QueuedBody>(row);
         const dependencies = JSON.parse(row.dependencies) as string[];
+        // Only the current generation's: the server refuses every earlier one, and their receipts are gone.
         const after =
           dependencies.length === 0
             ? []
             : (
                 await tx.all<{ operation_id: string }>(
-                  `SELECT operation_id FROM outgoing WHERE operation_id IS NOT NULL AND id IN (${dependencies.map(() => '?').join(', ')}) ORDER BY position`,
-                  dependencies,
+                  `SELECT operation_id FROM outgoing WHERE operation_id IS NOT NULL AND command_generation IS ? AND id IN (${dependencies.map(() => '?').join(', ')}) ORDER BY position`,
+                  [generation, ...dependencies],
                 )
               ).map((dependency) => dependency.operation_id);
         entries.push({
@@ -470,6 +509,10 @@ export class SqliteActivityStore implements ActivityStore {
           flagged: row.flagged === 1,
           ...(after.length > 0 ? { after } : {}),
           ...(row.device_position !== null ? { position: row.device_position } : {}),
+          ...(row.command_generation !== null && row.command_position !== null
+            ? { command: { generation: row.command_generation, position: row.command_position } }
+            : {}),
+          ...(row.unconfirmed === 1 ? { unconfirmed: true as const } : {}),
         });
       }
       return entries;
@@ -558,22 +601,120 @@ export class SqliteActivityStore implements ActivityStore {
     });
   }
 
-  /** Fixes the operation an entry is sent as; once stored it never changes, and the stored one is returned. */
-  prepareUpload(id: string, operation: PreparedOperation): Promise<PreparedOperation> {
+  /**
+   * Fixes the operation an entry is sent as, with the next command position
+   * under the current generation, in one transaction; once stored it never
+   * changes, and the stored one is returned.
+   */
+  prepareUpload(id: string, prepare: (command: Command) => PreparedOperation): Promise<PreparedOperation> {
     return this.transaction(async (tx) => {
       const row = await tx.get<QueueRow>('SELECT id, dependencies, operation_id, request, request_sha256 FROM outgoing WHERE id = ?', [id]);
       if (!row) throw new StoreError(`no upload ${id}`);
       const stored = preparedOf(row);
       if (stored) return stored;
+      const command = await nextCommand(tx);
+      const operation = prepare(command);
       if (sha256Hex(operation.request) !== operation.requestHash) throw new StoreError('the operation\'s request hash does not match its request');
-      await tx.run('UPDATE outgoing SET operation_id = ?, request = ?, request_sha256 = ? WHERE id = ?', [
+      await tx.run('UPDATE outgoing SET operation_id = ?, request = ?, request_sha256 = ?, command_generation = ?, command_position = ? WHERE id = ?', [
         operation.operationId,
         operation.request,
         operation.requestHash,
+        command.generation,
+        command.position,
         id,
       ]);
       return operation;
     });
+  }
+
+  /**
+   * The command scope, with the positions settled here: every position below
+   * the lowest one still live (a pending prepared entry's, or an acknowledged
+   * dependency's that a pending entry names), or the last given when none is.
+   */
+  readCommandScope(): Promise<CommandScope> {
+    return this.transaction(async (tx) => {
+      const { generation, last } = await readScopeRow(tx);
+      if (generation === null) return { generation, last, settled: 0 };
+      const pending = await tx.all<{ dependencies: string; command_position: number | null }>(
+        `SELECT dependencies, command_position FROM outgoing WHERE status = 'pending' AND (command_generation IS NULL OR command_generation = ?)`,
+        [generation],
+      );
+      const live = pending.flatMap((row) => (row.command_position !== null ? [row.command_position] : []));
+      const named = [...new Set(pending.flatMap((row) => JSON.parse(row.dependencies) as string[]))];
+      if (named.length > 0) {
+        const rows = await tx.all<{ command_position: number }>(
+          `SELECT command_position FROM outgoing WHERE command_generation = ? AND command_position IS NOT NULL AND id IN (${named.map(() => '?').join(', ')})`,
+          [generation, ...named],
+        );
+        live.push(...rows.map((row) => row.command_position));
+      }
+      return { generation, last, settled: live.length > 0 ? Math.min(...live) - 1 : last };
+    });
+  }
+
+  /** Adopts a generation the server issued; a new one starts its positions again from 1. */
+  adoptCommandScope(generation: number): Promise<void> {
+    return this.transaction(async (tx) => {
+      if (!Number.isSafeInteger(generation) || generation < 1) throw new StoreError(`invalid command generation ${generation}`);
+      await tx.run('UPDATE command_scope SET generation = ?, last = CASE WHEN generation IS ? THEN last ELSE 0 END WHERE singleton = 1', [generation, generation]);
+    });
+  }
+
+  /** The next command position, durably, for an operation sent at once and never queued. */
+  allocateCommand(): Promise<Command> {
+    return this.transaction(nextCommand);
+  }
+
+  /** Settles a pending entry whose scope went stale, or applies the player's decision on an unconfirmed one. */
+  reconcileUpload(id: string, outcome: ReconcileOutcome): Promise<void> {
+    let requeued = false;
+    return this.transaction(async (tx) => {
+      const row = await tx.get<{ status: string; unconfirmed: number }>('SELECT status, unconfirmed FROM outgoing WHERE id = ?', [id]);
+      if (!row) throw new StoreError(`no upload ${id}`);
+      if (row.status !== 'pending') return;
+      switch (outcome.kind) {
+        case 'accepted':
+          await tx.run(`UPDATE outgoing SET status = 'accepted', receipt = ?, receipt_sequence = ?, unconfirmed = 0 WHERE id = ?`, [
+            canonicalJson({ status: 'accepted', reconciled: true, sequence: outcome.sequence }),
+            outcome.sequence,
+            id,
+          ]);
+          // As a receipt would: a revisioned upload the accepted state reflects goes.
+          await tx.run(
+            `DELETE FROM outgoing WHERE id = ? AND revisioned = 1 AND receipt_sequence <=
+               (SELECT sequence FROM accepted_records WHERE record_type = outgoing.record_type AND item_id = outgoing.item_id)`,
+            [id],
+          );
+          return;
+        case 'unsent':
+          await tx.run(
+            `UPDATE outgoing SET operation_id = NULL, request = NULL, request_sha256 = NULL, command_generation = NULL, command_position = NULL,
+               unconfirmed = 0, failures = 0, flagged = 0 WHERE id = ?`,
+            [id],
+          );
+          requeued = true;
+          return;
+        case 'unconfirmed':
+          await tx.run('UPDATE outgoing SET unconfirmed = 1 WHERE id = ?', [id]);
+          return;
+        case 'set-aside':
+          if (row.unconfirmed !== 1) throw new StoreError(`upload ${id} is not unconfirmed`);
+          await tx.run(`UPDATE outgoing SET status = 'rejected', receipt = ?, unconfirmed = 0 WHERE id = ?`, [
+            canonicalJson({ status: 'rejected', reconciled: true, code: 'set-aside' }),
+            id,
+          ]);
+          return;
+      }
+    }).then(() => {
+      if (requeued) this.notifyQueued();
+    });
+  }
+
+  readPurgedItems(recordType: string): Promise<readonly string[]> {
+    return this.transaction(async (tx) =>
+      (await tx.all<{ item_id: string }>('SELECT item_id FROM purged_records WHERE record_type = ? ORDER BY item_id', [recordType])).map((row) => row.item_id),
+    );
   }
 
   /** Records the receipt's disposition and acknowledges the entry, with the record an acceptance makes, in one transaction. */
@@ -776,21 +917,25 @@ export class SqliteActivityStore implements ActivityStore {
     return this.transaction(readBootstrapProgress);
   }
 
-  /** Starts staging a snapshot, discarding any staged before; the queue and records stay. */
+  /**
+   * Starts staging a snapshot, discarding any staged before; the queue and
+   * records stay. With the baseline installed, a reset: there is none until
+   * the new one installs, and the cursor stays until then.
+   */
   beginBootstrap(snapshot: BootstrapSnapshot): Promise<void> {
     return this.transaction(async (tx) => {
-      const progress = await readBootstrapProgress(tx);
-      if (progress.installed) throw new StoreError('the bootstrap baseline is already installed');
       await tx.run('DELETE FROM bootstrap_rows');
+      await tx.run('DELETE FROM bootstrap_purges');
       const { snapshot: id, watermark, rows, totals } = snapshot;
-      await tx.run('UPDATE bootstrap SET body = ?, body_format = ?, body_length = ?, body_sha256 = ?, staged = 0, after_ordinal = 0 WHERE singleton = 1', [
-        ...encode({ snapshot: id, watermark, rows, totals }),
-      ]);
+      await tx.run(
+        'UPDATE bootstrap SET installed = 0, body = ?, body_format = ?, body_length = ?, body_sha256 = ?, staged = 0, after_ordinal = 0 WHERE singleton = 1',
+        [...encode({ snapshot: id, watermark, rows, totals })],
+      );
     });
   }
 
-  /** Stages a page of the snapshot and moves its progress to `through`; false when the staging moved on. */
-  stageBootstrapPage(snapshot: string, after: number, records: readonly AcceptedRecord[], through: number): Promise<boolean> {
+  /** Stages a page of the snapshot, with the results it names purged, and moves its progress to `through`; false when the staging moved on. */
+  stageBootstrapPage(snapshot: string, after: number, records: readonly AcceptedRecord[], through: number, purged: readonly RecordRef[] = []): Promise<boolean> {
     return this.transaction(async (tx) => {
       const progress = await readBootstrapProgress(tx);
       if (progress.installed || progress.staging?.snapshot !== snapshot || progress.staging.after !== after) return false;
@@ -808,6 +953,7 @@ export class SqliteActivityStore implements ActivityStore {
           ],
         );
       }
+      for (const ref of purged) await tx.run('INSERT OR IGNORE INTO bootstrap_purges (record_type, item_id) VALUES (?, ?)', [ref.recordType, ref.item]);
       await tx.run('UPDATE bootstrap SET staged = staged + ?, after_ordinal = ? WHERE singleton = 1', [records.length, through]);
       return true;
     });
@@ -816,15 +962,21 @@ export class SqliteActivityStore implements ActivityStore {
   /**
    * Installs the staged snapshot as the baseline and moves the feed cursor to
    * its watermark, in one transaction. A record held here at a later sequence
-   * stays, and a purged result is never accepted again.
+   * stays, nothing else local is removed except the results it names purged,
+   * and a purged result is never accepted again.
    */
   installBootstrap(snapshot: string): Promise<boolean> {
     return this.transaction(async (tx) => {
       const progress = await readBootstrapProgress(tx);
       if (progress.installed || progress.staging?.snapshot !== snapshot) return false;
       const cursor = await readCursor(tx);
-      // The feed is only ever applied after a baseline: the cursor can't be past one yet.
-      if (cursor !== 0) throw new StoreIntegrityError(`the feed cursor is at ${cursor} before the baseline is installed`);
+      // A snapshot is made at the account's head, which is never behind what this installation applied.
+      if (cursor > progress.staging.watermark) {
+        throw new StoreIntegrityError(`the feed cursor is at ${cursor}, past the snapshot's watermark ${progress.staging.watermark}`);
+      }
+      for (const ref of await tx.all<{ record_type: string; item_id: string }>('SELECT record_type, item_id FROM bootstrap_purges')) {
+        await purgeRecord(tx, { recordType: ref.record_type, item: ref.item_id });
+      }
       await tx.run(
         `INSERT INTO accepted_records (record_type, item_id, sequence, ${BODY}, installation_id, device_position, summary_at)
          SELECT record_type, item_id, sequence, ${BODY}, installation_id, device_position, summary_at FROM bootstrap_rows b
@@ -842,6 +994,7 @@ export class SqliteActivityStore implements ActivityStore {
       );
       await tx.run('UPDATE feed_cursor SET sequence = ? WHERE singleton = 1', [progress.staging.watermark]);
       await tx.run('DELETE FROM bootstrap_rows');
+      await tx.run('DELETE FROM bootstrap_purges');
       await tx.run(
         'UPDATE bootstrap SET installed = 1, body = NULL, body_format = NULL, body_length = NULL, body_sha256 = NULL, staged = 0, after_ordinal = 0 WHERE singleton = 1',
       );
@@ -963,6 +1116,20 @@ async function readBootstrapProgress(tx: SqlExecutor): Promise<BootstrapProgress
   if (body === null || body_format === null || body_length === null || body_sha256 === null) return { installed: false, staging: null };
   const snapshot = decode<BootstrapSnapshot>({ body, body_format, body_length, body_sha256 });
   return { installed: false, staging: { ...snapshot, staged: row.staged, after: row.after_ordinal } };
+}
+
+async function readScopeRow(tx: SqlExecutor): Promise<{ readonly generation: number | null; readonly last: number }> {
+  const row = await tx.get<{ generation: number | null; last: number }>('SELECT generation, last FROM command_scope WHERE singleton = 1');
+  if (!row) throw new StoreIntegrityError('the command scope is missing');
+  return row;
+}
+
+/** Gives the next command position under the current generation; refuses before one is adopted. */
+async function nextCommand(tx: SqlExecutor): Promise<Command> {
+  const { generation, last } = await readScopeRow(tx);
+  if (generation === null) throw new StoreError('no command generation has been adopted');
+  await tx.run('UPDATE command_scope SET last = ? WHERE singleton = 1', [last + 1]);
+  return { generation, position: last + 1 };
 }
 
 async function readCursor(tx: SqlExecutor): Promise<number> {

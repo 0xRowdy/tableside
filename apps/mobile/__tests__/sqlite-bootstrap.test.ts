@@ -26,6 +26,7 @@ afterAll(async () => {
 async function openStore(path: string) {
   const store = await SqliteActivityStore.open(await nodeSqlCipherDriver().open(path, KEY), IDENTITY);
   opened.push(store);
+  await store.adoptCommandScope(1);
   return store;
 }
 
@@ -125,7 +126,7 @@ describe('bootstrap staging', () => {
     await store.queueUpload(upload('purge', { version: 1, target: 'r-purged' }, { recordType: TYPE, item: 'r-purged' }));
     await store.queueUpload(upload('r-later', { version: 1, resultId: 'r-later', amount: '9' }));
     const operation = { operationId: 'b'.repeat(32), request: 'abc', requestHash: ABC_SHA256 };
-    await store.prepareUpload('r-later', operation);
+    await store.prepareUpload('r-later', () => operation);
     await store.acknowledgeUpload('r-later', { status: 'accepted', operation: operation.operationId, requestHash: ABC_SHA256, sequence: 15 }, record('r-later', 15, '9'));
 
     await store.beginBootstrap(SNAPSHOT);
@@ -137,12 +138,78 @@ describe('bootstrap staging', () => {
     ]);
   });
 
-  it('installs once: a second install, or a new snapshot after it, is refused', async () => {
+  it('installs once: a second install of the same snapshot is refused', async () => {
     const { store } = await newStore();
     await store.beginBootstrap(SNAPSHOT);
     expect(await store.installBootstrap('snapshot-1')).toBe(true);
     expect(await store.installBootstrap('snapshot-1')).toBe(false);
-    await expect(store.beginBootstrap(SNAPSHOT)).rejects.toThrow('already installed');
+  });
+});
+
+describe('a snapshot reset (#98: the feed after the cursor was pruned)', () => {
+  const later: BootstrapSnapshot = { snapshot: 'snapshot-2', watermark: 40, rows: 2, totals: [] };
+
+  async function installed() {
+    const { store, path } = await newStore();
+    await store.beginBootstrap(SNAPSHOT);
+    await store.stageBootstrapPage('snapshot-1', 0, [record('r-1', 3), record('r-2', 7)], 2);
+    await store.installBootstrap('snapshot-1');
+    await store.applyFeedPage(12, [record('r-3', 13)]);
+    await store.queueUpload(upload('mine', { version: 1, resultId: 'mine', amount: '1' }));
+    return { store, path };
+  }
+
+  it('starts on an installed baseline, keeping the records, the queue and the cursor until the new one installs', async () => {
+    const { store } = await installed();
+    await store.beginBootstrap(later);
+    expect(await store.readBootstrap()).toEqual({ installed: false, staging: { ...later, staged: 0, after: 0 } });
+    expect(await items(store)).toEqual([
+      ['r-1', 3],
+      ['r-2', 7],
+      ['r-3', 13],
+    ]);
+    expect(await store.readFeedCursor()).toBe(13);
+    expect((await store.readUploadQueue()).map((entry) => entry.id)).toEqual(['mine']);
+  });
+
+  it('removes only the results the snapshot names purged, never accepting them again, and moves the cursor forward', async () => {
+    const { store } = await installed();
+    await store.beginBootstrap(later);
+    // r-2 was purged while the device was away; r-1 is a summary now; r-4 is new. r-3 isn't in the snapshot at all (its type's summary rule left it out).
+    expect(await store.stageBootstrapPage('snapshot-2', 0, [record('r-1', 3), record('r-4', 30)], 2, [{ recordType: TYPE, item: 'r-2' }])).toBe(true);
+    expect(await store.installBootstrap('snapshot-2')).toBe(true);
+    expect(await items(store)).toEqual([
+      ['r-1', 3],
+      ['r-3', 13],
+      ['r-4', 30],
+    ]);
+    expect(await store.readPurgedItems(TYPE)).toEqual(['r-2']);
+    expect(await store.applyFeedPage(40, [record('r-2', 41)])).toBe(true);
+    expect(await items(store)).not.toContainEqual(['r-2', 41]);
+    expect(await store.readFeedCursor()).toBe(41);
+    expect((await store.readUploadQueue()).map((entry) => entry.id)).toEqual(['mine']);
+  });
+
+  it('carries on across closing and reopening, as a first bootstrap does', async () => {
+    const { store, path } = await installed();
+    await store.beginBootstrap(later);
+    await store.stageBootstrapPage('snapshot-2', 0, [record('r-4', 30)], 1, [{ recordType: TYPE, item: 'r-2' }]);
+    await store.close();
+    const reopened = await openStore(path);
+    expect(await reopened.readBootstrap()).toEqual({ installed: false, staging: { ...later, staged: 1, after: 1 } });
+    expect(await reopened.installBootstrap('snapshot-2')).toBe(true);
+    expect(await items(reopened)).toEqual([
+      ['r-1', 3],
+      ['r-3', 13],
+      ['r-4', 30],
+    ]);
+  });
+
+  it('refuses a snapshot behind what this installation has applied', async () => {
+    const { store } = await installed();
+    await store.beginBootstrap({ ...later, watermark: 5 });
+    await expect(store.installBootstrap('snapshot-2')).rejects.toThrow('past the snapshot');
+    expect(await store.readFeedCursor()).toBe(13);
   });
 });
 

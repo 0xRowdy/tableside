@@ -12,6 +12,7 @@ import {
   type TestRevisionedValue,
   createAccountByEmail,
   createDevice,
+  directCommands,
   localStack,
   signInByEmail,
   testRevisionedItem,
@@ -377,8 +378,10 @@ describe('conflicts apply only to revisioned items', () => {
     if (gate.state !== 'active') throw new Error('unreachable');
     // The phone's own installation: the server takes uploads only from the caller's registered installation.
     const installation = phone.vault.store().identity.installationId;
+    const commands = await directCommands(raw, installation);
     const request = (operation: string, netResult: string) =>
       JSON.stringify({
+        command: commands.next(),
         installation,
         item: 'activity-1',
         operation,

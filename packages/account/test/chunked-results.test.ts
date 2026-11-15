@@ -14,7 +14,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import { CHUNK_BYTES, PROTOCOL_VERSION, REQUEST_LIMIT_BYTES, completedPracticeSession } from '../src';
 import { chunkCallArguments, chunksOf, prepareOperation } from '../src/sync/protocol';
-import { type SimulatedDevice, accessToken, createAccountByEmail, createDevice, localStack, signInByEmail, uniqueEmail } from '../src/testing';
+import { type DirectCommands, type SimulatedDevice, accessToken, createAccountByEmail, createDevice, directCommands, localStack, signInByEmail, uniqueEmail } from '../src/testing';
 
 const devices: SimulatedDevice[] = [];
 function device(name: string): SimulatedDevice {
@@ -195,7 +195,7 @@ describe('the chunk operations, called directly', () => {
   /** The phone's own installation: the server takes uploads only from the caller's registered installation. */
   let installation = '';
   /** A practice result of the account's, `size` bytes long, prepared as `operation` would send it. */
-  function longResult(accountId: string, operation: string, size = 3 * REQUEST_LIMIT_BYTES) {
+  function longResult(accountId: string, operation: string, size = 3 * REQUEST_LIMIT_BYTES, commands = direct) {
     const payload = {
       recordVersion: 1,
       activityId: 'activity-1',
@@ -212,6 +212,7 @@ describe('the chunk operations, called directly', () => {
       protocol: PROTOCOL_VERSION,
       operation: operation.repeat(32),
       installation,
+      command: commands!.next(),
       recordType: completedPracticeSession.name,
       payloadVersion: 1,
       item: 'activity-1',
@@ -220,10 +221,14 @@ describe('the chunk operations, called directly', () => {
     return { request: prepared.request, chunks: chunksOf(prepared, payload)! };
   }
 
+  /** The commands of the installation the direct calls upload as. */
+  let direct: DirectCommands | undefined;
   async function signedIn() {
     const { phone, accountId } = await twoDevices();
     installation = phone.vault.store().identity.installationId;
-    return { accountId, raw: localStack().rawClient(accessToken(phone)) };
+    const raw = localStack().rawClient(accessToken(phone));
+    direct = await directCommands(raw, installation);
+    return { accountId, raw };
   }
 
   it('accept a manifest only once every chunk it names is staged, and the same bytes again make no new result', async () => {

@@ -123,6 +123,7 @@ export {
   type ResolutionOutcome,
   type SubmitOutcome,
   type SyncErrorCode,
+  type UnconfirmedDecision,
   type UpdateNotice,
   type UploadState,
   type UploadStatus,

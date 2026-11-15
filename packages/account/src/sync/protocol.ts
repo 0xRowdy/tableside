@@ -38,6 +38,16 @@ export const REQUEST_LIMIT_BYTES = 128 * 1024;
  */
 export const CHUNK_BYTES = 48 * 1024;
 
+/**
+ * A command's place in its installation's command scope (spec 2, *Compaction
+ * and stale devices*): the generation the server issued the installation in
+ * this account, and the command's position there, from 1, never reused.
+ */
+export interface Command {
+  readonly generation: number;
+  readonly position: number;
+}
+
 /** What an upload names. The account is never in it: the server takes it from verified authentication. */
 export interface Envelope {
   readonly protocol: typeof PROTOCOL_VERSION;
@@ -45,6 +55,8 @@ export interface Envelope {
   readonly operation: string;
   /** The originating installation. */
   readonly installation: string;
+  /** Its scope and position: the server refuses a generation it no longer serves, or a position settled or taken. */
+  readonly command: Command;
   readonly recordType: string;
   readonly payloadVersion: number;
   /** The item's identity under its record type's identity scheme. */
@@ -182,6 +194,9 @@ export type Disposition =
 /**
  * The upload operation's answer. Besides a receipt's disposition:
  * waiting, an operation it names in `after` has no receipt yet (nothing was recorded; the identical request is sent again later);
+ * stale-scope, the server can no longer interpret the command: its generation retired or was replaced (or never issued), or its position was
+ * settled (its receipt gone) or is another command's. Nothing was recorded, and it is never taken for a new command: the device
+ * refreshes, reconciles its unsynced work, and takes a new generation;
  * operation-reused, a different request already holds this operation ID (nothing was recorded);
  * incompatible, the server no longer speaks this protocol; malformed, the envelope couldn't be read
  * (or is over the request limit).
@@ -189,6 +204,7 @@ export type Disposition =
 export type UploadAnswer =
   | Disposition
   | { readonly status: 'waiting' }
+  | { readonly status: 'stale-scope'; readonly reason: 'retired' | 'replaced' | 'settled' | 'reused' }
   | { readonly status: 'operation-reused' }
   | { readonly status: 'incompatible' }
   | { readonly status: 'malformed' }
@@ -234,11 +250,24 @@ export interface FeedEntry {
   readonly change: unknown;
 }
 
-export interface FeedPage {
-  readonly entries: readonly FeedEntry[];
-  /** More entries follow this page. */
-  readonly more: boolean;
-}
+/**
+ * A page of the feed, or reset: the entries after the cursor were pruned
+ * behind the account's reset boundary (`through`), so the device takes a new
+ * snapshot, keeping its upload queue and its records.
+ */
+export type FeedPage =
+  | { readonly status?: undefined; readonly entries: readonly FeedEntry[]; /** More entries follow this page. */ readonly more: boolean }
+  | { readonly status: 'reset'; readonly through: number };
+
+/**
+ * The installation's command scope (`sync_scope_v1`): the generation to send
+ * commands under, and the position the server has recorded it settled
+ * through; or stale-scope, when the generation named is no longer served.
+ */
+export type ScopeAnswer =
+  | { readonly status: 'scope'; readonly generation: number; readonly settled: number }
+  | { readonly status: 'stale-scope' }
+  | { readonly status: 'malformed' };
 
 /**
  * A bootstrap snapshot (`sync_bootstrap_v1`): every registered type's
@@ -255,7 +284,11 @@ export interface BootstrapSnapshot {
   readonly totals: readonly TotalsRow[];
 }
 
-/** One snapshot row: a type's summary of an item, as a feed change of the type, at the item's latest change. */
+/**
+ * One snapshot row: a type's summary of an item, as a feed change of the
+ * type, at the item's latest change; or, with a null change, a result purged
+ * from the account, which the device removes and never accepts again.
+ */
 export interface BootstrapRow extends FeedEntry {
   /** Its place in the snapshot, from 1. Ordinals can skip where the feed redacted a row. */
   readonly ordinal: number;
