@@ -1016,6 +1016,7 @@ describe('a stale command scope (#98)', () => {
     const { store, backend, sync } = await retired();
     const before = backend.calls.length;
     await sync.reconcile();
+    await sync.idle();
     // The refused upload, the refresh, then the resent notes under the new generation (the server deduplicates them by identity).
     expect(backend.calls.slice(before)).toEqual(['protocol', 'upload n1', 'feed', 'protocol', 'upload n1', 'upload n2', 'feed']);
     expect(backend.uploadsOf('t1')).toBe(0);
@@ -1031,12 +1032,15 @@ describe('a stale command scope (#98)', () => {
   it('sends an unconfirmed record anew only when the player decides so, and sets it aside otherwise', async () => {
     const { store, backend, sync } = await retired();
     await sync.reconcile();
+    await sync.idle();
     await sync.decideUnconfirmed('t1', 'send-again');
+    await sync.idle();
     expect(backend.uploadsOf('t1')).toBe(1);
     expect(await store.readUploadQueue()).toEqual([]);
 
     const other = await retired();
     await other.sync.reconcile();
+    await other.sync.idle();
     await other.sync.decideUnconfirmed('t1', 'set-aside');
     expect(other.backend.uploadsOf('t1')).toBe(0);
     expect(other.sync.status.uploads).toEqual([expect.objectContaining({ id: 't1', state: 'review' })]);
@@ -1115,6 +1119,7 @@ describe('a stale scope’s revisioned edits (#98)', () => {
     }
     backend.serving = 2;
     await sync.reconcile();
+    await sync.idle();
     expect(store.entries.map((entry) => [entry.id, entry.status, entry.unconfirmed ?? false])).toEqual([
       ['proposed', 'accepted', false],
       ['accepted', 'accepted', false],
