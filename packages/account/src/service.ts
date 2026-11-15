@@ -23,7 +23,7 @@ import {
 } from './eligibility';
 import { type BackendEnvironment, ENVIRONMENT_HEADER, type EnvironmentName, authCallbackUrl, retiredEnvironments } from './environment';
 import { type MetricsSink, createMetricsSender, discardMetrics } from './metrics';
-import { type EngineStatus, type HistoryStatus, SyncEngine } from './sync/engine';
+import { type DetailResult, type EngineStatus, type HistoryDownload, type HistoryStatus, SyncEngine } from './sync/engine';
 import { type AccountRecords, accountRecords } from './sync/records';
 import { type RecordType, prerequisitesOf, recordTypes } from './sync/registry';
 import { type DevicePorts, SyncSession } from './sync/session';
@@ -288,7 +288,7 @@ export type VaultOpening =
   | { readonly status: 'open'; readonly session: VaultSession }
   | { readonly status: 'recovery-needed' | 'needs-update' | 'migration-failed' | 'superseded' };
 
-export type { HistoryStatus };
+export type { DetailResult, HistoryDownload, HistoryStatus };
 
 /** What sync status (S2-20) shows: the engine's status, the live connection and the first download. */
 export interface SyncStatus extends EngineStatus {
@@ -327,13 +327,28 @@ export interface AccountSync {
   reconcile(): Promise<void>;
   /** "Retry this record": tries a failing or flagged record again now, with the records waiting for it. */
   retryRecord(id: string): Promise<void>;
+  /**
+   * Download all history (spec 2, *History*): keeps every record's detail on
+   * this installation, for offline trips. It carries on by itself, across
+   * restarts, until done; asking again resumes one stopped for storage. Its
+   * progress is the status's `download`. Resolves when this run has finished.
+   */
+  downloadAllHistory(): Promise<void>;
   /** Resolves once no synchronization is running. */
   idle(): Promise<void>;
   /** How many saved records haven't reached the account yet; 0 with no open account session. */
   countWaiting(): Promise<number>;
 }
 
-const NO_SYNC: SyncStatus = { live: false, error: null, lastSyncedAt: null, uploads: [], update: null, history: { state: 'complete' } };
+const NO_SYNC: SyncStatus = {
+  live: false,
+  error: null,
+  lastSyncedAt: null,
+  uploads: [],
+  update: null,
+  history: { state: 'complete' },
+  download: { state: 'not-requested' },
+};
 
 export interface AccountServiceOptions {
   /** The one backend this build talks to, fixed when it was built. */
@@ -360,6 +375,8 @@ export interface AccountServiceOptions {
   readonly ageSignals?: PlatformAgeSignals;
   /** The operational metrics provider (spec 7); discarded by default. Only what the gate and the catalog allow reaches it (metrics.ts). */
   readonly metrics?: MetricsSink;
+  /** The device's free storage in bytes, or null when it can't tell: downloads stop before they would run it short. */
+  readonly freeStorage?: () => number | null;
 }
 
 export interface AccountService {
@@ -684,6 +701,7 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
       clock: options.clock,
       random: () => uniform(options.randomBytes(4)),
       metrics,
+      ...(options.freeStorage ? { storage: options.freeStorage } : {}),
     });
     engine.onChange(syncChanged);
     // Its status read from the store first (the first download's progress among it), so it never shows a default.
@@ -1491,6 +1509,7 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
       },
       reconcile: () => sync?.engine.reconcile('deliberate') ?? Promise.resolve(),
       retryRecord: (id) => sync?.engine.retryRecord(id) ?? Promise.resolve(),
+      downloadAllHistory: () => sync?.engine.downloadAllHistory() ?? Promise.resolve(),
       idle: () => sync?.engine.idle() ?? Promise.resolve(),
       async queue(recordType, payload) {
         const store = sync?.store;
