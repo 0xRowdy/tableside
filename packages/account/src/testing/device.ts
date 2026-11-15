@@ -335,6 +335,13 @@ export function createDevice(stack: LocalStack, options: DeviceOptions): Simulat
         return stop;
       },
     });
+    // Nor does a dead process read or write secure storage: what it had in flight is lost.
+    const notRunning = () => Promise.reject(new Error('the app is not running'));
+    const processCredentials: CredentialStorage = {
+      getItem: (key) => (dead ? notRunning() : credentials.getItem(key)),
+      setItem: (key, value) => (dead ? notRunning() : credentials.setItem(key, value)),
+      removeItem: (key) => (dead ? notRunning() : credentials.removeItem(key)),
+    };
     // The process's live connections close with it.
     const sockets = new Set<WebSocket>();
     const ProcessWebSocket = class extends proxy.WebSocket {
@@ -363,7 +370,7 @@ export function createDevice(stack: LocalStack, options: DeviceOptions): Simulat
     const account = createAccountService({
       backend: { name: environment, url: stack.url, publishableKey: stack.publishableKey },
       fetch: processFetch,
-      credentials,
+      credentials: processCredentials,
       vault,
       clock: clock.now,
       device: ports,
