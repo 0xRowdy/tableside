@@ -37,6 +37,8 @@ export {
   type CancelDeletionResult,
   type CurrencyChangeResult,
   type DeletionStatus,
+  type DeletionProgress,
+  type DeletePermanentlyResult,
   type DeviceDescription,
   type DeviceEntry,
   type DeviceSignOutResult,

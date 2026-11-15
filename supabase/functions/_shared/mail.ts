@@ -114,6 +114,29 @@ export function deletionScheduledMail(deadline: string): Mail {
 }
 
 /**
+ * "Permanent deletion accepted" (#104): the account is being erased and can't
+ * come back. It never says a subscription was canceled or refunded (Amendment
+ * 1 C2): the store's subscription and refund paths are where the player does
+ * that. Sent before the address itself is erased.
+ */
+export function deletionAcceptedMail(cleanupBy: string): Mail {
+  const by = new Date(cleanupBy).toUTCString().replace(/ \d\d:\d\d:\d\d GMT$/, '');
+  const text =
+    "Your Tableside account is being deleted permanently, as asked. This can't be undone: the account can't be restored, " +
+    `and its data is erased from Tableside by ${by}. Once that's done, signing up again with this address makes a new, empty account.\n\n` +
+    "Deleting your account doesn't cancel a subscription: cancel it in the App Store or Google Play, where you can also ask for a refund.\n\n" +
+    "If you didn't ask for this, contact support.";
+  return {
+    subject: 'Your Tableside account is being deleted',
+    text,
+    html: text
+      .split('\n\n')
+      .map((paragraph) => `<p>${paragraph}</p>`)
+      .join(''),
+  };
+}
+
+/**
  * "Export ready": where to find the account archive and until when. It carries no
  * link: the archive downloads only in the app, for a session that confirms
  * it's the player.

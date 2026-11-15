@@ -272,7 +272,7 @@ One of Tableside's fully separate backends: beta, production, or a local develop
 _Avoid_: stage, tier
 
 **Account gate**:
-The account's current access state on an installation (no account, active, renewal pending, signed out, revoked, deletion scheduled, recovery needed, age unresolved, or age ineligible), which decides whether ordinary access is open. Renewal pending is active access under cached rights while an expired token renews. Age unresolved and age ineligible keep only the restricted paths: deletion, Contact support, Make a privacy request, billing help and authenticated export. Deletion scheduled keeps Cancel deletion, deletion status, authenticated export, billing help, Contact support and Make a privacy request; its session and records stay until the deadline.
+The account's current access state on an installation (no account, active, renewal pending, signed out, revoked, deletion scheduled, deleted, recovery needed, age unresolved, or age ineligible), which decides whether ordinary access is open. Renewal pending is active access under cached rights while an expired token renews. Age unresolved and age ineligible keep only the restricted paths: deletion, Contact support, Make a privacy request, billing help and authenticated export. Deletion scheduled keeps Cancel deletion, deletion status, authenticated export, billing help, Contact support and Make a privacy request; its session and records stay until the deadline. Deleted means the server confirmed permanent deletion and the installation erased the account, keeping only what reads the deletion's status.
 
 **Sign-in method**:
 One way an account signs in: an Apple ID, a Google account, or the email code for its sign-in email. The account owns its methods, never the other way around; an account always keeps at least one, and a method another account uses is never merged into this one.
@@ -290,6 +290,14 @@ An account's current established age band, or its unresolved or ineligible statu
 
 **Deletion undo window**:
 The 30 days after scheduling account deletion during which the player can cancel it. Access is locked and public content hidden, but nothing is destroyed.
+
+**Irreversible boundary**:
+The moment an account's deletion can no longer be undone: Delete permanently now, the end of the deletion undo window, or a verified rights request. From then the account is deleted for good, its sessions are revoked, its devices erase it, and its data is erased within seven days.
+_Avoid_: hard delete, finalization (for the player-facing idea)
+
+**Deletion-control record**:
+What a deleted account leaves behind so it stays deleted: its ID and state, when and by whom deletion was asked for, and how far the cleanup got. It holds no history, prose, purchase evidence or forfeiture ledger.
+_Avoid_: tombstone (that is a deleted record's)
 
 **Conflict proposal**:
 A competing edit to a private record made on another installation, preserved for the player to review instead of being silently lost.

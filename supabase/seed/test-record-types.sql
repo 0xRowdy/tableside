@@ -422,3 +422,25 @@ insert into private.retention_rules (subject, endpoint) values
 
 update private.record_types set export = to_regprocedure('private.export_revisioned_items(uuid,text)'), export_file = 'test-revisioned-items'
   where record_type = 'test-revisioned-item';
+
+-- ---------------------------------------------------------------------------
+-- Permanent deletion (#104): the test types' deletion coverage removes their
+-- own tables' rows, as each real type's will.
+
+create function private.erase_test_records(p_account uuid) returns void
+language plpgsql volatile security definer set search_path = '' as $$
+begin
+  delete from private.test_sharing_withdrawals where account_id = p_account;
+  delete from private.test_contributions where account_id = p_account;
+  delete from private.test_reconciliations where account_id = p_account;
+  delete from private.test_transfers where account_id = p_account;
+  delete from private.test_result_details where account_id = p_account;
+  delete from private.test_results where account_id = p_account;
+  delete from private.test_attempts where account_id = p_account;
+  delete from private.test_experiment_assignments where account_id = p_account;
+  delete from private.test_strategy_revisions where account_id = p_account;
+end $$;
+
+revoke execute on function private.erase_test_records(uuid) from public;
+
+update private.record_types set erase = to_regprocedure('private.erase_test_records(uuid)') where record_type like 'test-%';

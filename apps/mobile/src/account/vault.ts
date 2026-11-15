@@ -2,8 +2,9 @@
 // key per (environment, account, installation), the account-session
 // generation, locked-versus-lost key handling and backup exclusion. The
 // account service (packages/account) drives it through its vault port: `open`
-// on sign-in and account switch, `close` on sign-out; nothing
-// else opens an account database.
+// on sign-in and account switch, `close` on sign-out, `erase` once the server
+// confirmed the account's permanent deletion; nothing else opens an account
+// database.
 //
 // Layout, all under `files.root`, in directories excluded from backup and
 // device transfer:
@@ -171,6 +172,21 @@ export class AccountVault {
   }
 
   /**
+   * Erases one account's data in this environment, once the server confirmed
+   * its permanent deletion: closes its database if it is open, removes every
+   * installation's database for it with its sidecars, migration backup and
+   * manifest (pending uploads and staged files live in the database), then its
+   * keys. Every other account's database and key stay, and so does the
+   * installation identity. An interrupted erase finishes the next time. Waits
+   * while the device is locked.
+   */
+  async erase(accountId: string): Promise<void> {
+    if (!ID_PATTERN.test(accountId)) throw new Error('invalid account id');
+    this.currentGeneration++;
+    while ((await this.serial(() => this.eraseAccount(accountId))) === 'locked') await this.ports.unlocked();
+  }
+
+  /**
    * Erases everything another environment left on this device: every account
    * key, the installation identity, then the databases and their sidecars.
    * Keys go first, because the files are how their names are found; an
@@ -261,6 +277,29 @@ export class AccountVault {
     }
     await files.remove(directory);
     return 'removed';
+  }
+
+  private async eraseAccount(accountId: string): Promise<'erased' | 'locked'> {
+    const { environment, files, keys } = this.ports;
+    if (this.openSession?.accountId === accountId) await this.closeOpen();
+    const directory = namespace.directory(files.root, environment);
+    const index = await this.readKeyIndex(environment);
+    if (index === 'locked') return 'locked';
+    const suffix = `.${accountId}.key`;
+    const names = new Set(index.filter((name) => name.endsWith(suffix)));
+    const database = `${accountId}.db`;
+    for (const installation of (await files.list(directory)).filter((name) => name !== 'installation' && ID_PATTERN.test(name))) {
+      names.add(namespace.accountKey(environment, installation, accountId));
+      // The database, -wal, -shm, .migration, .migration-backup (and its logs), .restoring.
+      for (const file of await files.list(`${directory}/${installation}`)) {
+        if (file.startsWith(database)) await files.remove(`${directory}/${installation}/${file}`);
+      }
+    }
+    // The files first: a key outliving its database is harmless, the reverse would be Recovery needed.
+    for (const name of names) if ((await keys.remove(name)) === 'locked') return 'locked';
+    const remaining = index.filter((name) => !names.has(name));
+    if (remaining.length !== index.length && (await keys.write(namespace.keyIndex(environment), JSON.stringify(remaining))) === 'locked') return 'locked';
+    return 'erased';
   }
 
   /** Records a key name in this environment's index before the key is written, so removal can always find it. */

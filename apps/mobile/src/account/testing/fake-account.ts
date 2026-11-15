@@ -18,7 +18,9 @@ import type {
   CodeRequestResult,
   CodeVerificationResult,
   CurrencyChangeResult,
+  DeletionProgress,
   DeletionStatus,
+  DeletePermanentlyResult,
   DeviceEntry,
   DeviceSignOutResult,
   Devices,
@@ -322,8 +324,14 @@ export class FakeAccountService implements AccountService {
   /** What deletion.status() answers while the restricted paths are open. Null: offline. */
   deletionState: DeletionStatus | null = { status: 'none' };
   /** Answers for the next deletion calls, used in order; unscripted ones succeed. */
-  readonly deletionNext: { schedule: ScheduleDeletionResult[]; cancel: CancelDeletionResult[] } = { schedule: [], cancel: [] };
-  /** Each deletion call, in order: "schedule", "cancel" or "status". */
+  readonly deletionNext: { schedule: ScheduleDeletionResult[]; cancel: CancelDeletionResult[]; deletePermanently: DeletePermanentlyResult[] } = {
+    schedule: [],
+    cancel: [],
+    deletePermanently: [],
+  };
+  /** What deletion.status() answers once Deleted. Null: offline. */
+  deletionProgress: DeletionProgress | null = null;
+  /** Each deletion call, in order: "schedule", "cancel", "delete-permanently", "status" or "dismiss". */
   readonly deletionCalls: string[] = [];
 
   /** As the real service: a scheduling locks the gate with its deadline, and a cancel reopens the same account. */
@@ -348,9 +356,20 @@ export class FakeAccountService implements AccountService {
       }
       return result;
     },
+    deletePermanently: async () => {
+      this.deletionCalls.push('delete-permanently');
+      const result = this.deletionNext.deletePermanently.shift() ?? { status: 'deleted' as const };
+      if (result.status === 'deleted') this.setGate({ state: 'deleted' });
+      return result;
+    },
     status: async () => {
       this.deletionCalls.push('status');
+      if (this.current.state === 'deleted') return this.deletionProgress;
       return opensRestrictedPaths(this.current) ? this.deletionState : null;
+    },
+    dismiss: async () => {
+      this.deletionCalls.push('dismiss');
+      if (this.current.state === 'deleted') this.setGate({ state: 'no-account' });
     },
   };
 
@@ -454,7 +473,7 @@ export function fakeAppAccount(options: { readonly stored?: AccountGate; readonl
     opened,
     shared,
     exportFiles: {
-      share: async (file) => {
+      share: async (_accountId, file) => {
         shared.push(file);
         return 'shared';
       },

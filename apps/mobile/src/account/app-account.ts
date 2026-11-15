@@ -71,8 +71,13 @@ export function createAppAccount(): AppAccount {
       session = null;
       await vault.close();
     },
+    async erase(accountId) {
+      if (session?.accountId === accountId) session = null;
+      await vault.erase(accountId);
+    },
     removeEnvironment: (environment) => vault.removeEnvironment(environment),
   };
+  const offlineGameKey = (accountId: string) => `tableside.${backend.name}.${accountId}.offline-game`;
   const service = createAccountService({
     backend,
     fetch: (input, init) => fetch(input, init),
@@ -96,8 +101,12 @@ export function createAppAccount(): AppAccount {
     },
     // What Devices shows for this one: its own model and OS, never proof of which device it is.
     deviceDescription: () => describeDevice(Platform.OS === 'ios' ? 'ios' : 'android', Device),
+    // A deleted account's export copies and offline game choice go with it; another account's stay.
+    async eraseAppData(accountId) {
+      await deviceExportFiles.clear(accountId);
+      await SecureStore.deleteItemAsync(offlineGameKey(accountId), KEYCHAIN_OPTIONS);
+    },
   });
-  const offlineGameKey = (accountId: string) => `tableside.${backend.name}.${accountId}.offline-game`;
   return {
     service,
     practice(base) {
