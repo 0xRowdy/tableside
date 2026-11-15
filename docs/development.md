@@ -97,6 +97,17 @@ Account databases follow the same rule for the store schema (spec 2, *Migrations
 
 The sync protocol is versioned too (spec 2, *Protocol versions*). Protocol N is the envelope's `protocol: N`, its encoding (canonical JSON, SHA-256 over the UTF-8 bytes) and the operations named `*_vN`; `sync_protocol` is unversioned and its answer never changes shape. Changing an operation's arguments or answer, or the encoding, needs a new protocol version with new operations: never edit a released version's. Retire an old version by setting `retires_at` in `private.sync_protocols` at least 30 days ahead (the server refuses less, unless `urgent_reason` explains why); the app shows the date in sync status, and from then the pre-request hook refuses the version's operations with 426. The release check is `packages/account/src/sync/protocol.test.ts` (the encoding, in `pnpm test`) and `packages/account/test/compatibility.test.ts` (seam 2: this build's protocol is served, its operations exist, and the server hashes its requests as it does), run in CI's accounts job against the migrations in source control.
 
+### Compaction and stale devices
+
+Every upload is a command in its installation's command scope (`sync_scope_v1`): a generation the server issues per account and installation, and a position, fixed when the entry is prepared. After a clean run the device reports the positions it has settled, and the daily `compact-sync` job (`private.compact_sync`, one transaction per account) drops their receipts, retires scopes unseen for the policy's scope retention, and prunes feed entries older than its feed retention behind the account's reset boundary (`private.compaction_policy`; spec 7 sets the final values). A device behind the boundary takes a new snapshot; one whose scope retired refreshes, reconciles and takes a new generation (`packages/account/src/sync/engine.ts` explains how each kind reconciles). A record type that plugs into this:
+
+- registers a snapshot function if a reset device needs its current state (privacy choices need theirs, for example), reading the type's own rows, never the feed, which is pruned;
+- stores the account sequence of each accepted row itself, for the same reason, rather than looking it up in the feed;
+- adds a row to `private.retention_rules` for each of its account-keyed tables, naming its endpoint, and for an exception the unresolved dependency and owner (seam 2's `compaction.test.ts` fails without one);
+- appends each acknowledged sensitive outcome (a withdrawal, an opt-out) to the control journal with `private.record_control` in its acceptance transaction ([ADR 0001](adr/0001-protected-recovery-controls.md)).
+
+A pending operation is never compacted: it sits in the device's queue, and its receipt stays above the settled marker until the device acknowledges it. Seam 2 scenarios that call the operation API directly get a command scope from `directCommands` (`packages/account/src/testing`).
+
 A proven engine defect goes in `packages/definitions/src/quarantine.ts`: add an entry naming the affected identities and bump the list's version; never edit or remove an entry. Completed records are judged against it on every read (never stored), and an unfinished session it names is marked incomplete and explained instead of resuming.
 
 ## Accessibility notes for the shell
