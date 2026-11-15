@@ -291,6 +291,10 @@ An edit to a deleted record made on another installation before it learned of th
 **Local supplement**:
 A labelled export of records on one installation that haven't reached the account yet.
 
+**Privacy choices**:
+An account's analytics consent and the ad-data opt-out. Each grant of consent starts a new consent generation with its own random analytics ID; the opt-out records its source (in-app, support or Global Privacy Control). Withdrawing consent or limiting ad data takes effect at once, offline too; granting consent or allowing ad data again needs a connection and the account's current choices.
+_Avoid_: tracking settings, privacy settings
+
 **Rights request**:
 A player's request to know, correct, delete or obtain their data, handled under the publisher's privacy obligations. It is distinct from self-service editing and deletion.
 
