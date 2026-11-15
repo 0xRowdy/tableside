@@ -59,6 +59,10 @@ export interface QueuedUpload {
   readonly operation: PreparedOperation | null;
   readonly failures: number;
   readonly flagged: boolean;
+  /** The operations its acknowledged dependencies were sent as; absent when none. */
+  readonly after?: readonly string[];
+  /** Its originating-device position, for a per-device type. */
+  readonly position?: number;
 }
 
 export interface RejectedUpload {
@@ -68,11 +72,38 @@ export interface RejectedUpload {
   readonly code: string;
 }
 
+export interface RecordRef {
+  readonly recordType: string;
+  readonly item: string;
+}
+
 export interface AcceptedRecord {
   readonly recordType: string;
   readonly item: string;
   readonly sequence: number;
   readonly payload: unknown;
+  /** A per-device record's originating installation and position. */
+  readonly origin?: { readonly installation: string; readonly position: number };
+}
+
+export interface NewUpload {
+  readonly id: string;
+  readonly recordType: string;
+  /** The item's identity under its record type's scheme. */
+  readonly item: string;
+  readonly payload: unknown;
+  readonly dependencies: readonly string[];
+  /** Allocates the type's next originating-device position on this installation. */
+  readonly positioned: boolean;
+  /** An accepted result the operation purges: removed here at once, and never accepted here again. */
+  readonly purges: RecordRef | null;
+}
+
+export interface FeedPageEffects {
+  /** Sequences whose entries carry nothing to apply. */
+  readonly redacted?: readonly number[];
+  /** Results the page purges. */
+  readonly purged?: readonly RecordRef[];
 }
 
 export interface LocalRevisionedItem {
@@ -328,6 +359,7 @@ export class SqliteActivityStore implements ActivityStore {
     });
   }
 
+  /** Spec 1's outgoing synchronization records: one per completion. Other queue entries are the sync engine's. */
   readOutgoing(): Promise<readonly OutgoingSyncRecord[]> {
     return this.transaction(async (tx) =>
       (await tx.all<BodyRow>(`SELECT ${BODY} FROM outgoing WHERE activity_id IS NOT NULL ORDER BY position`)).map((row) =>
@@ -343,21 +375,74 @@ export class SqliteActivityStore implements ActivityStore {
   /** Unacknowledged upload queue entries, in queue order. */
   readUploadQueue(): Promise<readonly QueuedUpload[]> {
     return this.transaction(async (tx) => {
-      const rows = await tx.all<BodyRow & QueueRow & { record_type: string; failures: number; flagged: number }>(
-        `SELECT ${BODY}, id, record_type, dependencies, operation_id, request, request_sha256, failures, flagged FROM outgoing WHERE status = 'pending' ORDER BY position`,
+      const rows = await tx.all<BodyRow & QueueRow & { record_type: string; failures: number; flagged: number; device_position: number | null }>(
+        `SELECT ${BODY}, id, record_type, dependencies, operation_id, request, request_sha256, failures, flagged, device_position FROM outgoing WHERE status = 'pending' ORDER BY position`,
       );
-      return rows.map((row) => {
+      const entries: QueuedUpload[] = [];
+      for (const row of rows) {
         const outgoing = decode<QueuedBody>(row);
-        return {
+        const dependencies = JSON.parse(row.dependencies) as string[];
+        const after =
+          dependencies.length === 0
+            ? []
+            : (
+                await tx.all<{ operation_id: string }>(
+                  `SELECT operation_id FROM outgoing WHERE operation_id IS NOT NULL AND id IN (${dependencies.map(() => '?').join(', ')}) ORDER BY position`,
+                  dependencies,
+                )
+              ).map((dependency) => dependency.operation_id);
+        entries.push({
           id: row.id,
           recordType: row.record_type,
           payload: outgoing.record,
-          dependencies: JSON.parse(row.dependencies) as string[],
+          dependencies,
           operation: preparedOf(row),
           failures: row.failures,
           flagged: row.flagged === 1,
-        };
-      });
+          ...(after.length > 0 ? { after } : {}),
+          ...(row.device_position !== null ? { position: row.device_position } : {}),
+        });
+      }
+      return entries;
+    });
+  }
+
+  /**
+   * Adds an entry to the upload queue, with its originating-device position
+   * (allocated here, never reused) and its purge's local removal, in one
+   * transaction; announces it after the commit.
+   */
+  queueUpload(entry: NewUpload): Promise<QueuedUpload> {
+    return this.transaction(async (tx): Promise<QueuedUpload> => {
+      let position: number | null = null;
+      if (entry.positioned) {
+        const last = await tx.get<{ last: number }>('SELECT last FROM device_positions WHERE record_type = ?', [entry.recordType]);
+        position = (last?.last ?? 0) + 1;
+        await tx.run(
+          'INSERT INTO device_positions (record_type, last) VALUES (?, ?) ON CONFLICT (record_type) DO UPDATE SET last = excluded.last',
+          [entry.recordType, position],
+        );
+      }
+      const body: QueuedBody = { id: entry.id, kind: entry.recordType, record: entry.payload };
+      await tx.run(
+        `INSERT INTO outgoing (id, activity_id, record_type, item_id, revisioned, position, ${BODY}, dependencies, status, device_position)
+         VALUES (?, NULL, ?, ?, 0, (SELECT coalesce(max(position), 0) + 1 FROM outgoing), ?, ?, ?, ?, ?, 'pending', ?)`,
+        [entry.id, entry.recordType, entry.item, ...encode(body), JSON.stringify(entry.dependencies), position],
+      );
+      if (entry.purges) await purgeRecord(tx, entry.purges);
+      return {
+        id: entry.id,
+        recordType: entry.recordType,
+        payload: decodeText<unknown>(encode(entry.payload)[0]),
+        dependencies: [...entry.dependencies],
+        operation: null,
+        failures: 0,
+        flagged: false,
+        ...(position !== null ? { position } : {}),
+      };
+    }).then((queued) => {
+      this.notifyQueued();
+      return queued;
     });
   }
 
@@ -451,12 +536,19 @@ export class SqliteActivityStore implements ActivityStore {
     return this.transaction(readCursor);
   }
 
-  /** Applies records that follow `from` without a gap and moves the cursor to the last, in one transaction; false when the cursor moved. */
-  applyFeedPage(from: number, records: readonly AcceptedRecord[]): Promise<boolean> {
+  /**
+   * Applies entries that follow `from` without a gap (records and redacted
+   * sequences together), with the results they purge, and moves the cursor to
+   * the last, in one transaction; false when the cursor moved.
+   */
+  applyFeedPage(from: number, records: readonly AcceptedRecord[], effects: FeedPageEffects = {}): Promise<boolean> {
     return this.transaction(async (tx) => {
       if ((await readCursor(tx)) !== from) return false;
-      for (const [index, record] of records.entries()) {
-        if (record.sequence !== from + index + 1) throw new StoreError(`feed entry ${record.sequence} does not follow ${from + index}`);
+      const sequences = [...records.map((record) => record.sequence), ...(effects.redacted ?? [])].sort((a, b) => a - b);
+      for (const [index, sequence] of sequences.entries()) {
+        if (sequence !== from + index + 1) throw new StoreError(`feed entry ${sequence} does not follow ${from + index}`);
+      }
+      for (const record of records) {
         await putAccepted(tx, record);
         // The item's accepted state now reflects these of its acknowledged uploads: they, and their payloads, go.
         await tx.run(
@@ -464,7 +556,8 @@ export class SqliteActivityStore implements ActivityStore {
           [record.recordType, record.item, record.sequence],
         );
       }
-      if (records.length > 0) await tx.run('UPDATE feed_cursor SET sequence = ? WHERE singleton = 1', [from + records.length]);
+      for (const purged of effects.purged ?? []) await purgeRecord(tx, purged);
+      if (sequences.length > 0) await tx.run('UPDATE feed_cursor SET sequence = ? WHERE singleton = 1', [from + sequences.length]);
       return true;
     });
   }
@@ -472,11 +565,19 @@ export class SqliteActivityStore implements ActivityStore {
   readAcceptedRecords(recordType: string): Promise<readonly AcceptedRecord[]> {
     return this.transaction(async (tx) =>
       (
-        await tx.all<BodyRow & { item_id: string; sequence: number }>(
-          `SELECT ${BODY}, item_id, sequence FROM accepted_records WHERE record_type = ? ORDER BY sequence`,
+        await tx.all<BodyRow & { item_id: string; sequence: number; installation_id: string | null; device_position: number | null }>(
+          `SELECT ${BODY}, item_id, sequence, installation_id, device_position FROM accepted_records WHERE record_type = ? ORDER BY sequence`,
           [recordType],
         )
-      ).map((row) => ({ recordType, item: row.item_id, sequence: row.sequence, payload: decode<unknown>(row) })),
+      ).map((row) => ({
+        recordType,
+        item: row.item_id,
+        sequence: row.sequence,
+        payload: decode<unknown>(row),
+        ...(row.installation_id !== null && row.device_position !== null
+          ? { origin: { installation: row.installation_id, position: row.device_position } }
+          : {}),
+      })),
     );
   }
 
@@ -576,6 +677,13 @@ export class SqliteActivityStore implements ActivityStore {
   }
 }
 
+/** A queue entry's stored body: spec 1's outgoing synchronization record, or another record type's entry in the same shape. */
+interface QueuedBody {
+  readonly id: string;
+  readonly kind: string;
+  readonly record: unknown;
+}
+
 interface QueueRow {
   readonly id: string;
   readonly dependencies: string;
@@ -625,15 +733,23 @@ async function readCursor(tx: SqlExecutor): Promise<number> {
   return row.sequence;
 }
 
-/** Records what the account accepted for an item, unless a later sequence is already held for it. */
+/** Records what the account accepted for an item, unless a later sequence is already held for it or the item was purged: a purged result never comes back. */
 async function putAccepted(tx: SqlExecutor, record: AcceptedRecord): Promise<void> {
+  if (await tx.get('SELECT 1 FROM purged_records WHERE record_type = ? AND item_id = ?', [record.recordType, record.item])) return;
   await tx.run(
-    `INSERT INTO accepted_records (record_type, item_id, sequence, ${BODY}) VALUES (?, ?, ?, ?, ?, ?, ?)
+    `INSERT INTO accepted_records (record_type, item_id, sequence, ${BODY}, installation_id, device_position) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT (record_type, item_id) DO UPDATE SET sequence = excluded.sequence, body = excluded.body,
-       body_format = excluded.body_format, body_length = excluded.body_length, body_sha256 = excluded.body_sha256
+       body_format = excluded.body_format, body_length = excluded.body_length, body_sha256 = excluded.body_sha256,
+       installation_id = excluded.installation_id, device_position = excluded.device_position
      WHERE excluded.sequence > accepted_records.sequence`,
-    [record.recordType, record.item, record.sequence, ...encode(record.payload)],
+    [record.recordType, record.item, record.sequence, ...encode(record.payload), record.origin?.installation ?? null, record.origin?.position ?? null],
   );
+}
+
+/** Removes a purged result and keeps only its identity, so nothing accepts it here again. */
+async function purgeRecord(tx: SqlExecutor, ref: RecordRef): Promise<void> {
+  await tx.run('DELETE FROM accepted_records WHERE record_type = ? AND item_id = ?', [ref.recordType, ref.item]);
+  await tx.run('INSERT OR IGNORE INTO purged_records (record_type, item_id) VALUES (?, ?)', [ref.recordType, ref.item]);
 }
 
 const statusOf = (activity: StoredActivity) => (activity.completion ? 'completed' : activity.incomplete ? 'incomplete' : 'unfinished');

@@ -16,6 +16,8 @@ apps/mobile/ios/
 apps/mobile/android/
 apps/mobile/expo-env.d.ts
 apps/mobile/web-build/
+# Gradle output of local Expo modules
+apps/mobile/modules/*/android/build/
 
 # Cross-runtime harness reports
 harness-reports/

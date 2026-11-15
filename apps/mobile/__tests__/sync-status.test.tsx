@@ -41,6 +41,7 @@ function fakeSync(status: Partial<SyncStatus>) {
     retryRecord: jest.fn(async () => undefined),
     idle: async () => undefined,
     countWaiting: async () => current.uploads.length,
+    queue: async () => ({ status: 'refused', reason: 'no-account' }),
     set(next) {
       current = { ...current, ...next };
       listeners.forEach((listener) => listener(current));

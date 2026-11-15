@@ -6,7 +6,7 @@
 import { Redirect } from 'expo-router';
 import { useState } from 'react';
 
-import { isSignedIn, useAccount } from '@/account/AccountProvider';
+import { isAgeRestricted, isSignedIn, useAccount } from '@/account/AccountProvider';
 import { Actions, ChoiceGroup, ChoiceRow, FirstRunScreen, InlineMessage } from '@/account/FirstRunParts';
 import { Button } from '@/components/Button';
 import { LAUNCH_GAMES, type GameId } from '@/games';
@@ -18,6 +18,7 @@ export default function OfflineGame() {
   const [game, setGame] = useState<GameId | null>(null);
   const [failed, setFailed] = useState(false);
 
+  if (isAgeRestricted(gate)) return <Redirect href="/" />;
   if (!isSignedIn(gate)) return <Redirect href="/welcome" />;
   if (offlineGame) return <Redirect href="/" />;
 

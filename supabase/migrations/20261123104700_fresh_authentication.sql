@@ -90,20 +90,35 @@ begin
   return v_identity;
 end $$;
 
--- The account behind an Auth user, when it isn't deleted and belongs to this
--- environment. Fresh authentication works in every state but deleted: a
--- scheduled deletion still needs it to cancel or export.
-create function private.undeleted_account(auth_user uuid) returns uuid
+-- #90's signed-in account (private.signed_in_account) for a given session
+-- rather than the caller's token: the session is the Auth user's and live,
+-- and the account is active and this environment's, whatever its
+-- eligibility. Fresh authentication works on the restricted paths too
+-- (deletion, export), so it asks no more than this; the method changes
+-- below are ordinary access and also need established 13+ eligibility.
+create function private.session_account(session uuid, auth_user uuid) returns uuid
 language sql stable security definer set search_path = '' as $$
-  select account_id from public.accounts
-  where auth_user_id = auth_user and state <> 'deleted' and environment = private.environment()
+  select a.account_id
+  from public.accounts a
+  join auth.sessions s on s.user_id = a.auth_user_id
+  where s.id = session
+    and a.auth_user_id = auth_user
+    and a.state = 'active'
+    and a.environment = private.environment()
+$$;
+
+-- Whether a session may change the account's sign-in methods: ordinary
+-- access, as private.active_account() grants it.
+create function private.session_has_ordinary_access(session uuid, auth_user uuid) returns boolean
+language sql stable security definer set search_path = '' as $$
+  select coalesce(private.account_eligibility(private.session_account(session, auth_user)) in ('adult', 'teen'), false)
 $$;
 
 -- For the account functions (fresh-auth, link-method): who is calling, from
--- their own token. The session must exist (so a signed-out or revoked one
--- answers null), its token must be from this environment, and its account
--- must not be deleted. `email` is the email method's address, if the account
--- has that method.
+-- their own token, on #90's restricted-path gate (private.signed_in_account):
+-- a live session, from this environment, of an active account. `email` is
+-- the email method's address, if the account has that method; `active` is
+-- whether it has ordinary access.
 create function public.caller_session_v1() returns jsonb
 language sql stable security definer set search_path = '' as $$
   select jsonb_build_object(
@@ -115,7 +130,7 @@ language sql stable security definer set search_path = '' as $$
   from auth.users u
   where u.id = auth.uid()
     and private.caller_session() is not null
-    and private.undeleted_account(u.id) is not null
+    and private.signed_in_account() is not null
 $$;
 
 -- For the fresh-auth function, once it has checked the proof: records that
@@ -128,8 +143,7 @@ declare
   v_identity uuid;
   v_at timestamptz := now();
 begin
-  if not exists (select 1 from auth.sessions s where s.id = session and s.user_id = auth_user)
-    or private.undeleted_account(auth_user) is null then
+  if private.session_account(session, auth_user) is null then
     return jsonb_build_object('status', 'not-signed-in');
   end if;
   select i.id into v_identity from auth.identities i
@@ -167,7 +181,7 @@ $$;
 --   'already-linked'  it was this account's already
 --   'conflict'        another account signs in with it: nothing changes, never a merge
 --   'fresh-authentication-required'
---   'not-signed-in'   no such session, or the account isn't active
+--   'not-signed-in'   no such session, or the account has no ordinary access
 create function public.link_provider_identity(session uuid, auth_user uuid, provider text, subject text, claims jsonb) returns jsonb
 language plpgsql volatile security definer set search_path = '' as $$
 declare
@@ -177,10 +191,7 @@ begin
   if coalesce(provider, '') in ('', 'email') or coalesce(subject, '') = '' then
     raise exception 'not a provider identity' using errcode = '22023';
   end if;
-  if not exists (
-    select 1 from auth.sessions s join public.accounts a on a.auth_user_id = s.user_id
-    where s.id = session and s.user_id = auth_user and a.state = 'active' and a.environment = private.environment()
-  ) then
+  if not private.session_has_ordinary_access(session, auth_user) then
     return jsonb_build_object('status', 'not-signed-in');
   end if;
   -- Serialized with the account's other method changes.
@@ -208,10 +219,7 @@ language plpgsql stable security definer set search_path = '' as $$
 declare
   v_email text;
 begin
-  if not exists (
-    select 1 from auth.sessions s join public.accounts a on a.auth_user_id = s.user_id
-    where s.id = session and s.user_id = auth_user and a.state = 'active' and a.environment = private.environment()
-  ) then
+  if not private.session_has_ordinary_access(session, auth_user) then
     return jsonb_build_object('status', 'not-signed-in');
   end if;
   if private.session_fresh_identity(session, auth_user) is null then
@@ -466,7 +474,8 @@ revoke execute on function private.session_fresh_identity(uuid, uuid) from publi
 revoke execute on function private.caller_session() from public;
 revoke execute on function private.fresh_identity() from public;
 revoke execute on function private.require_fresh_authentication() from public;
-revoke execute on function private.undeleted_account(uuid) from public;
+revoke execute on function private.session_account(uuid, uuid) from public;
+revoke execute on function private.session_has_ordinary_access(uuid, uuid) from public;
 revoke execute on function private.keep_a_sign_in_method() from public;
 revoke execute on function private.guard_auth_user_changes() from public;
 revoke execute on function private.guard_session_revocation() from public;

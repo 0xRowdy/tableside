@@ -31,8 +31,23 @@
 //   its upload became a revision or a proposal, the item's state arrives with
 //   the feed entry its receipt names, in the same run.
 // - Resolving a conflict needs the network: it is sent at once, never queued.
-//
-// Barrier-bearing operations (#95) plug in here.
+// - The reconnect order (spec 2 Amendment 1 C5): authenticate, then reconcile
+//   compatibility, access, allowance ownership and pending privacy (sharing)
+//   withdrawals, and only then send grants or contributions. A run checks the
+//   protocol, uploads every entry except grants and contributions (sharing
+//   withdrawals, allowance reconciliations, results), applies the feed through
+//   to the account's head, and only then sends the types registered
+//   `afterReconciliation`. A call the server denies (authentication, access),
+//   refuses as incompatible or doesn't answer ends the run first.
+// - A barrier holds while any affected upload of its type is unacknowledged,
+//   wherever it sits in the queue, and the server checks each named
+//   dependency has its receipt under the synchronization head (`after`):
+//   until then it answers "waiting", which is no failure of the record.
+// - An uncertain answer (lost, waiting, unreadable) acknowledges nothing: the
+//   entry stays pending, with every entry it holds back, until a receipt arrives.
+// - Per-device records carry their originating-device position; a purge
+//   removes its result when its feed entry applies; a purged result's own
+//   entries carry nothing and the cursor steps over them.
 
 import { canonicalJson } from '@tableside/engine';
 
@@ -49,8 +64,8 @@ import {
   chunksOf,
   prepareOperation,
 } from './protocol';
-import type { RecordType, RevisionedUpload } from './registry';
-import type { AcceptedRecord, QueuedUpload, SyncStore } from './store';
+import { type RecordType, type RevisionedUpload, isBarrierFor } from './registry';
+import type { AcceptedRecord, Origin, QueuedUpload, RecordRef, SyncStore } from './store';
 
 /** The backend's operations. A call with no usable answer throws a SyncCallError; any other rejection counts as unreachable. */
 export interface SyncBackend {
@@ -291,7 +306,7 @@ export class SyncEngine {
     try {
       // The queue is read first: a store that refuses (the account session ended) stops the run before anything is sent.
       const queue = await this.options.store.readUploadQueue();
-      error = (await this.checkProtocol()) ?? (await this.upload(queue)) ?? (await this.pull());
+      error = (await this.checkProtocol()) ?? (await this.reconcileInOrder(queue));
     } catch (caught) {
       // A local transaction that failed rolled back: the queue and cursor are as
       // they were, so the next run retries. After the session ended (the store
@@ -350,18 +365,48 @@ export class SyncEngine {
     }
   }
 
-  private async upload(queue: readonly QueuedUpload[]): Promise<SyncErrorCode | null> {
+  /**
+   * After the protocol check: account state first (every upload but grants
+   * and contributions, then the feed through to the head), and only then
+   * grants and contributions. A record failing by itself doesn't hold back
+   * the later steps; a call with no answer ends the run (it throws).
+   */
+  private async reconcileInOrder(queue: readonly QueuedUpload[]): Promise<SyncErrorCode | null> {
+    const attempted = new Set<string>();
+    const accountState = await this.upload(queue, { afterReconciliation: false, attempted });
+    if (accountState.error === 'incompatible' || this.stopped) return accountState.error;
+    const feedError = await this.pull();
+    if (feedError || this.stopped) return accountState.error ?? feedError;
+    const grants = await this.upload(await this.options.store.readUploadQueue(), { afterReconciliation: true, attempted });
+    if (grants.error === 'incompatible' || this.stopped) return grants.error;
+    const lastFeedError = grants.acknowledged > 0 ? await this.pull() : null;
+    return accountState.error ?? grants.error ?? lastFeedError;
+  }
+
+  /**
+   * One pass over the queue, skipping entries `attempted` already this run.
+   * The `afterReconciliation` pass sends grants and contributions, and
+   * anything still waiting from the earlier pass; the earlier pass sends
+   * everything else.
+   */
+  private async upload(
+    queue: readonly QueuedUpload[],
+    { afterReconciliation, attempted }: { readonly afterReconciliation: boolean; readonly attempted: Set<string> },
+  ): Promise<{ readonly error: SyncErrorCode | null; readonly acknowledged: number }> {
     const { store, registry } = this.options;
     const pending = new Set(queue.map((entry) => entry.id));
-    // A barrier holds while any upload of its type is unacknowledged, wherever it sits in the queue.
-    const barrierPending = (recordType: string) => queue.some((entry) => entry.recordType === recordType && pending.has(entry.id));
+    // A barrier holds while any upload of its type that affects the entry is unacknowledged, wherever it sits in the queue.
+    const held = (type: RecordType, entry: QueuedUpload) => queue.some((other) => pending.has(other.id) && isBarrierFor(type, other, entry.payload));
     const now = this.options.clock();
     // Retry times only for entries still pending.
-    for (const id of this.recordRetries.keys()) if (!pending.has(id)) this.recordRetries.delete(id);
+    if (!afterReconciliation) for (const id of this.recordRetries.keys()) if (!pending.has(id)) this.recordRetries.delete(id);
     let error: SyncErrorCode | null = null;
     let unanswered = false;
+    let acknowledged = 0;
     for (const entry of queue) {
-      if (this.stopped) return null;
+      if (this.stopped) return { error: null, acknowledged };
+      if (attempted.has(entry.id)) continue;
+      if (!afterReconciliation && registry.get(entry.recordType)?.afterReconciliation) continue;
       // Flagged, or waiting out its own backoff: it stays pending, and so does everything depending on it.
       if (entry.flagged) continue;
       const retry = this.recordRetries.get(entry.id);
@@ -371,16 +416,18 @@ export class SyncEngine {
         this.recordRetries.delete(entry.id);
       }
       const type = registry.get(entry.recordType);
-      if (!type || !type.isPayload(entry.payload)) {
+      // Its prerequisites are still unacknowledged: it waits, and a later pass may send it.
+      if (type && (entry.dependencies.some((id) => pending.has(id)) || held(type, entry))) continue;
+      attempted.add(entry.id);
+      // No client writes server-authored state.
+      if (!type || type.kind === 'server-authored-state' || !type.isPayload(entry.payload)) {
         error = await this.recordFailed(entry);
         continue;
       }
-      // Its prerequisites are still unacknowledged: it waits.
-      if (entry.dependencies.some((id) => pending.has(id)) || type.barriers.some(barrierPending)) continue;
       let operation: PreparedOperation;
       let chunks: StagedChunk[] | null;
       try {
-        operation = entry.operation ?? (await store.prepareUpload(entry.id, this.envelope(type, entry.payload)));
+        operation = entry.operation ?? (await store.prepareUpload(entry.id, this.envelope(type, entry.payload, entry)));
         chunks = asUnsendable(() => chunksOf(operation, entry.payload));
       } catch (failure) {
         // Too large to name, or no longer matching its manifest: the record fails by itself.
@@ -396,22 +443,25 @@ export class SyncEngine {
         if (!(caught instanceof SyncCallError) || caught.kind !== 'refused') throw caught;
         answer = null;
       }
-      if (this.stopped) return null;
+      if (this.stopped) return { error: null, acknowledged };
       // Its chunks couldn't be staged (staging full, or expired meanwhile): not the record's fault; it waits for the next run.
       if (answer === 'unanswered') {
         unanswered = true;
         continue;
       }
       const outcome = answer ? await this.settleUpload(entry, type, operation, answer) : 'failed';
-      if (outcome === 'incompatible') return this.required(null);
+      if (outcome === 'incompatible') return { error: this.required(null), acknowledged };
       if (outcome === 'failed') {
         error = await this.recordFailed(entry);
         continue;
       }
+      // A barrier it names has no receipt on the server yet: sent again on a later run.
+      if (outcome === 'waiting') continue;
       pending.delete(entry.id);
+      acknowledged += 1;
     }
     // A call left without a usable answer backs the run off, like any other.
-    return unanswered ? 'offline' : error;
+    return { error: unanswered ? 'offline' : error, acknowledged };
   }
 
   /** One record failed by itself: it waits its own backoff, and is flagged on its RECORD_FAILURE_LIMIT-th failure. */
@@ -444,7 +494,8 @@ export class SyncEngine {
     return resent.status === 'chunks-missing' ? 'unanswered' : resent;
   }
 
-  private envelope(type: RecordType, payload: unknown): PreparedOperation {
+  /** The operation a payload is sent as; a queue entry's barriers and position go with it. */
+  private envelope(type: RecordType, payload: unknown, entry?: QueuedUpload): PreparedOperation {
     return asUnsendable(() => prepareOperation({
       protocol: PROTOCOL_VERSION,
       operation: this.options.newOperationId(),
@@ -453,6 +504,8 @@ export class SyncEngine {
       payloadVersion: type.payloadVersion,
       item: type.identity.of(payload),
       payload,
+      ...(entry?.after ? { after: entry.after } : {}),
+      ...(entry?.position !== undefined ? { position: entry.position } : {}),
     }));
   }
 
@@ -462,19 +515,28 @@ export class SyncEngine {
     type: RecordType,
     operation: PreparedOperation,
     answer: UploadAnswer,
-  ): Promise<'acknowledged' | 'incompatible' | 'failed'> {
+  ): Promise<'acknowledged' | 'waiting' | 'incompatible' | 'failed'> {
     switch (answer.status) {
       case 'accepted':
       case 'rejected': {
         // A receipt for another request.
         if (answer.operation !== operation.operationId || answer.requestHash !== operation.requestHash) return 'failed';
+        const origin: Origin | null = entry.position !== undefined ? { installation: this.options.installationId, position: entry.position } : null;
         const accepted: AcceptedRecord | null =
           answer.status === 'accepted' && type.kind !== 'revisioned-item'
-            ? { recordType: type.name, item: type.identity.of(entry.payload), sequence: answer.sequence, payload: entry.payload }
+            ? {
+                recordType: type.name,
+                item: type.identity.of(entry.payload),
+                sequence: answer.sequence,
+                payload: entry.payload,
+                ...(origin ? { origin } : {}),
+              }
             : null;
         await this.options.store.acknowledgeUpload(entry.id, answer, accepted);
         return 'acknowledged';
       }
+      case 'waiting':
+        return 'waiting';
       case 'incompatible':
         return 'incompatible';
       case 'operation-reused':
@@ -491,22 +553,37 @@ export class SyncEngine {
       const page = await this.call(() => backend.feed(cursor, FEED_PAGE_SIZE));
       if (this.stopped) return null;
       const records: AcceptedRecord[] = [];
+      const redacted: number[] = [];
+      const purged: RecordRef[] = [];
       let unreadable = false;
       for (const [index, entry] of page.entries.entries()) {
-        const payload = entry.sequence === cursor + index + 1 ? registry.get(entry.recordType)?.fromChange(entry.change) : null;
-        if (payload === null || payload === undefined) {
+        if (entry.sequence !== cursor + index + 1) {
           unreadable = true;
           break;
         }
-        records.push({ recordType: entry.recordType, item: entry.item, sequence: entry.sequence, payload });
+        // A purged result's entry: nothing to apply.
+        if (entry.change === null) {
+          redacted.push(entry.sequence);
+          continue;
+        }
+        const type = registry.get(entry.recordType);
+        const payload = type?.fromChange(entry.change) ?? null;
+        const origin = type?.ordering === 'per-device' ? originOf(entry.change) : null;
+        if (!type || payload === null || (type.ordering === 'per-device' && !origin)) {
+          unreadable = true;
+          break;
+        }
+        records.push({ recordType: entry.recordType, item: entry.item, sequence: entry.sequence, payload, ...(origin ? { origin } : {}) });
+        if (type.purges) purged.push(type.purges(payload));
       }
-      if (records.length > 0) {
+      const applied = records.length + redacted.length;
+      if (applied > 0) {
         // Another run moved the cursor meanwhile: start again from where it is.
-        if (!(await store.applyFeedPage(cursor, records))) {
+        if (!(await store.applyFeedPage(cursor, records, { redacted, purged }))) {
           cursor = await store.readFeedCursor();
           continue;
         }
-        cursor = records[records.length - 1]!.sequence;
+        cursor += applied;
       }
       if (unreadable) return 'unreadable-change';
       if (!page.more) return null;
@@ -566,4 +643,14 @@ function asUnsendable<T>(prepare: () => T): T {
   } catch (failure) {
     throw new UnsendableError(failure instanceof Error ? failure.message : String(failure));
   }
+}
+
+/** The platform's part of a per-device type's change: its originating installation and position. */
+function originOf(change: unknown): Origin | null {
+  const origin = typeof change === 'object' && change !== null ? (change as { origin?: unknown }).origin : undefined;
+  if (typeof origin !== 'object' || origin === null) return null;
+  const { installation, position } = origin as { installation?: unknown; position?: unknown };
+  return typeof installation === 'string' && typeof position === 'number' && Number.isSafeInteger(position) && position >= 1
+    ? { installation, position }
+    : null;
 }

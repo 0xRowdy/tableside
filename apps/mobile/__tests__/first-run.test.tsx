@@ -276,13 +276,16 @@ describe('Create', () => {
     await fireEvent.press(screen.getByRole('radio', { name: 'Under 13' }));
     await fireEvent.press(button('Continue'));
 
-    expect(await header("Tableside isn't available")).toBeOnTheScreen();
-    expect(screen.getByText('Tableside is for people 13 and older. No account was created and nothing you entered was kept.')).toBeOnTheScreen();
-    expect(screen.queryAllByRole('button')).toEqual([]);
+    expect(await header('Tableside is for people 13 and older')).toBeOnTheScreen();
+    expect(screen.getByText("We haven't created an account or kept your answer, and we won't ask for anything else.")).toBeOnTheScreen();
+    expect(screen.getAllByRole('button').map((b) => b.props.accessibilityLabel ?? '')).toHaveLength(1);
     expect(screen.queryByLabelText('Email address')).toBeNull();
     noTabBar();
     expect(service().calls.map((call) => call.method)).toEqual(['resume', 'answerAgeQuestion']);
     expect(service().gate).toEqual({ state: 'no-account' });
+
+    await fireEvent.press(button('Done'));
+    expect(await header('Tableside')).toBeOnTheScreen();
   });
 
   it('asks the age question again when the server says the answer has expired', async () => {
@@ -371,7 +374,7 @@ describe('Apple and Google', () => {
     await fireEvent.press(screen.getByRole('radio', { name: 'Under 13' }));
     await fireEvent.press(button('Continue'));
 
-    expect(await header("Tableside isn't available")).toBeOnTheScreen();
+    expect(await header('Tableside is for people 13 and older')).toBeOnTheScreen();
     expect(service().calls.map((call) => call.method)).not.toContain('createWithProvider');
     expect(service().gate).toEqual({ state: 'no-account' });
   });

@@ -14,14 +14,15 @@ export interface Caller {
   readonly authUserId: string;
   /** The email method's address, if the account has that method. */
   readonly email: string | null;
-  /** Whether the account is active (not deletion scheduled). */
+  /** Whether the account has ordinary access (established 13+ eligibility), not only the restricted paths. */
   readonly active: boolean;
 }
 
 /**
  * The caller, from the bearer token the request carries: the database checks
  * its signature, that its session still exists, that it is from this
- * environment, and that its account isn't deleted. Null otherwise.
+ * environment, and that its account is signed in (#90's restricted-path
+ * gate, private.signed_in_account). Null otherwise.
  */
 export async function callerOf(request: Request): Promise<Caller | null> {
   const authorization = request.headers.get('authorization') ?? '';

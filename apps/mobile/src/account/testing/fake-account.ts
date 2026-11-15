@@ -8,6 +8,7 @@ import type {
   AccountSync,
   AgeAnswerResult,
   AccountSummary,
+  AgeCheckResult,
   AgeRange,
   CodeIntent,
   CodeRequestResult,
@@ -18,11 +19,12 @@ import type {
   ProviderSignInResult,
   SignOutResult,
 } from '@tableside/account';
-import { isSignedIn } from '@tableside/account';
+import { isAgeRestricted, isSignedIn } from '@tableside/account';
 
 import type { GameId } from '@/games';
 
 import type { AppAccount } from '../app-account';
+import type { RestrictedPath } from '../RestrictedPaths';
 
 export const FAKE_ACCOUNT_ID = 'account-1';
 
@@ -33,7 +35,7 @@ type Call =
   | { readonly method: 'setAccountCurrency'; readonly currency: string }
   | { readonly method: 'signInWithProvider'; readonly provider: IdentityProvider }
   | { readonly method: 'createWithProvider'; readonly provider: IdentityProvider; readonly sameIdentity: boolean }
-  | { readonly method: 'resume' | 'renew' | 'signOut' };
+  | { readonly method: 'resume' | 'renew' | 'signOut' | 'checkAge' | 'refreshEligibility' };
 
 /** What the fake's Settings → Account shows unless a test changes it. */
 export const FAKE_SUMMARY: AccountSummary = {
@@ -52,13 +54,17 @@ export class FakeAccountService implements AccountService {
   /** Answers for the next calls, used in order. */
   readonly next: {
     age: AgeAnswerResult[];
+    /** Platform age checks' answers; unscripted, the platform proves nothing ("question"). */
+    check: AgeCheckResult[];
     code: CodeRequestResult[];
     verify: CodeVerificationResult[];
     signOut: SignOutResult[];
     currency: CurrencyChangeResult[];
     providerSignIn: ProviderSignInResult[];
     providerCreate: ProviderCreateResult[];
-  } = { age: [], code: [], verify: [], signOut: [], currency: [], providerSignIn: [], providerCreate: [] };
+  } = { age: [], check: [], code: [], verify: [], signOut: [], currency: [], providerSignIn: [], providerCreate: [] };
+  /** Whether the device offers a platform age check. */
+  platformAgeCheck = false;
   /** What accountSummary() answers; a changed currency updates it. */
   summary: AccountSummary | null = FAKE_SUMMARY;
   /** How many saved records haven't synced. */
@@ -98,7 +104,7 @@ export class FakeAccountService implements AccountService {
   async signOut(): Promise<SignOutResult> {
     this.calls.push({ method: 'signOut' });
     const gate = this.current;
-    if (!isSignedIn(gate)) return { status: 'not-signed-in' as const };
+    if (!isSignedIn(gate) && !isAgeRestricted(gate)) return { status: 'not-signed-in' as const };
     for (const handler of [...this.ending]) await handler();
     this.setGate({ state: 'signed-out', accountId: gate.accountId });
     return this.next.signOut.shift() ?? { status: 'signed-out' as const, serverSessionEnded: true };
@@ -130,6 +136,7 @@ export class FakeAccountService implements AccountService {
     retryRecord: async () => undefined,
     idle: async () => undefined,
     countWaiting: async () => this.waitingCount,
+    queue: async () => ({ status: 'refused', reason: 'no-account' }),
   };
 
   /** No account records in screen tests (spec 4's screens script their own). */
@@ -145,9 +152,27 @@ export class FakeAccountService implements AccountService {
     this.calls.push({ method: 'renew' });
   }
 
+  async checkAge() {
+    this.calls.push({ method: 'checkAge' });
+    return this.resolving(this.next.check.shift() ?? { status: 'question' as const });
+  }
+
   async answerAgeQuestion(range: AgeRange) {
     this.calls.push({ method: 'answerAgeQuestion', range });
-    return this.next.age.shift() ?? (range === 'under-13' ? { status: 'ineligible' as const } : { status: 'eligible' as const });
+    return this.resolving(this.next.age.shift() ?? (range === 'under-13' ? { status: 'ineligible' as const } : { status: 'eligible' as const }));
+  }
+
+  async refreshEligibility() {
+    this.calls.push({ method: 'refreshEligibility' });
+  }
+
+  /** On a restricted account, an answer moves the gate as the real service does. */
+  private resolving<T extends AgeCheckResult>(result: T): T {
+    const gate = this.current;
+    if (gate.state !== 'age-unresolved' && gate.state !== 'age-ineligible') return result;
+    if (result.status === 'eligible') this.setGate({ state: 'active', accountId: gate.accountId, eligibility: '18+' });
+    if (result.status === 'ineligible') this.setGate({ state: 'age-ineligible', accountId: gate.accountId });
+    return result;
   }
 
   async requestEmailCode(request: { email: string; intent: CodeIntent }) {
@@ -181,10 +206,18 @@ export class FakeAccountService implements AccountService {
 export function fakeAppAccount(options: { readonly stored?: AccountGate; readonly offlineGame?: GameId | null } = {}) {
   const service = new FakeAccountService(options.stored);
   const offlineGames = new Map<string, GameId>();
+  const opened: RestrictedPath[] = [];
   if (options.offlineGame && options.stored && 'accountId' in options.stored) offlineGames.set(options.stored.accountId, options.offlineGame);
-  const account: AppAccount & { readonly service: FakeAccountService; readonly offlineGames: Map<string, GameId> } = {
+  const account: AppAccount & {
+    readonly service: FakeAccountService;
+    readonly offlineGames: Map<string, GameId>;
+    /** The restricted paths opened, in order. */
+    readonly opened: RestrictedPath[];
+  } = {
     service,
     offlineGames,
+    opened,
+    restrictedPaths: { open: (path) => void opened.push(path) },
     // Practice keeps the adapters it was given: tests choose the store.
     practice: (base) => base,
     offlineGame: {
