@@ -5,12 +5,12 @@
 import { type SupabaseClient, createClient } from '@supabase/supabase-js';
 
 import { type BackendEnvironment, ENVIRONMENT_HEADER, type EnvironmentName, retiredEnvironments } from './environment';
-import { SyncEngine, type SyncErrorCode } from './sync/engine';
+import { type EngineStatus, SyncEngine } from './sync/engine';
 import { type AccountRecords, accountRecords } from './sync/records';
 import { type RecordType, recordTypes } from './sync/registry';
 import { type DevicePorts, SyncSession } from './sync/session';
 import type { SyncStore } from './sync/store';
-import { supabaseLiveChannels, supabaseSyncBackend } from './sync/supabase';
+import { RetryAfterWatch, supabaseLiveChannels, supabaseSyncBackend } from './sync/supabase';
 
 /** The account's access state on this installation (spec 2, *Account gate*). Later tickets add the other states. */
 export type AccountGate =
@@ -84,21 +84,40 @@ export type VaultOpening =
   | { readonly status: 'open'; readonly session: VaultSession }
   | { readonly status: 'recovery-needed' | 'needs-update' | 'migration-failed' | 'superseded' };
 
-export interface SyncStatus {
+/**
+ * The first download on a new device (#96): complete, or how far summaries
+ * and totals and the last 90 days of detail have come, as fractions from 0 to 1.
+ * Until #96 bootstraps a device, its history is complete.
+ */
+export type HistoryStatus =
+  | { readonly state: 'complete' }
+  | { readonly state: 'incomplete'; readonly summaries: number; readonly detail: number };
+
+/** What sync status (S2-20) shows: the engine's status, the live connection and the first download. */
+export interface SyncStatus extends EngineStatus {
   /** Whether this installation holds the account's live connection (the newest foregrounded one). */
   readonly live: boolean;
-  /** How the last synchronization run ended, if on an error. */
-  readonly error: SyncErrorCode | null;
+  readonly history: HistoryStatus;
 }
 
 /** Synchronization for the open account session. Triggers run it by themselves; these are for asking. */
 export interface AccountSync {
   readonly status: SyncStatus;
-  /** Uploads and fetches now; resolves when that has finished. Coalesces with work already going. */
+  /** Called when the status changes; returns an unsubscribe function. */
+  subscribe(listener: (status: SyncStatus) => void): () => void;
+  /**
+   * A deliberate retry ("Sync now", "Retry now"): uploads and fetches now, past
+   * any backoff (never before a server's retry-after); resolves when that has
+   * finished. Coalesces with work already going.
+   */
   reconcile(): Promise<void>;
+  /** "Retry this record": tries a failing or flagged record again now, with the records waiting for it. */
+  retryRecord(id: string): Promise<void>;
   /** Resolves once no synchronization is running. */
   idle(): Promise<void>;
 }
+
+const NO_SYNC: SyncStatus = { live: false, error: null, lastSyncedAt: null, uploads: [], update: null, history: { state: 'complete' } };
 
 export interface AccountServiceOptions {
   /** The one backend this build talks to, fixed when it was built. */
@@ -189,11 +208,12 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
   // only after that, since making it reads the stored credentials.
   // Every server call in this service goes through `connect`.
   let client: Promise<SupabaseClient> | null = null;
+  const retryAfter = new RetryAfterWatch(options.clock);
   const connect = (): Promise<SupabaseClient> =>
     (client ??= (async () => {
       await removeRetiredEnvironments(options);
       const created = createClient(backend.url, backend.publishableKey, {
-        global: { fetch: options.fetch, headers: { [ENVIRONMENT_HEADER]: backend.name } },
+        global: { fetch: retryAfter.wrap(options.fetch), headers: { [ENVIRONMENT_HEADER]: backend.name } },
         auth: {
           storage: credentials,
           storageKey: credentialsKey(backend.name),
@@ -226,6 +246,12 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
   let assertion: Assertion | null = null;
 
   let sync: { readonly engine: SyncEngine; readonly session: SyncSession; readonly store: SyncStore } | null = null;
+  const syncListeners = new Set<(status: SyncStatus) => void>();
+  const syncStatus = (): SyncStatus => (sync ? { ...sync.engine.status, live: sync.session.isLive, history: { state: 'complete' } } : NO_SYNC);
+  const syncChanged = () => {
+    const status = syncStatus();
+    for (const listener of syncListeners) listener(status);
+  };
 
   const setGate = (next: AccountGate) => {
     gate = next;
@@ -239,6 +265,7 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
   const openAccount = async ({ accountId, eligibility }: RememberedAccount, state: 'active' | 'renewal-pending' = 'active') => {
     sync?.session.end();
     sync = null;
+    syncChanged();
     const opening = await options.vault.open(accountId);
     if (opening.status === 'superseded') return;
     if (opening.status === 'recovery-needed') return setGate({ state: 'recovery-needed', accountId });
@@ -248,12 +275,19 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
     const { store, installationId } = opening.session;
     const engine = new SyncEngine({
       store,
-      backend: supabaseSyncBackend(supabase),
+      backend: supabaseSyncBackend(supabase, retryAfter),
       registry,
       installationId,
       newOperationId: () => hex(options.randomBytes(16)),
+      clock: options.clock,
+      random: () => uniform(options.randomBytes(4)),
     });
-    sync = { engine, store, session: new SyncSession(engine, store, options.device, supabaseLiveChannels(supabase, accountId)) };
+    engine.onChange(syncChanged);
+    sync = {
+      engine,
+      store,
+      session: new SyncSession(engine, store, options.device, supabaseLiveChannels(supabase, accountId, retryAfter), options.clock),
+    };
   };
 
   const currentAssertion = () => (assertion && assertion.expiresAt > options.clock() ? assertion : null);
@@ -367,10 +401,15 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
     },
 
     sync: {
-      get status(): SyncStatus {
-        return { live: sync?.session.isLive ?? false, error: sync?.engine.error ?? null };
+      get status() {
+        return syncStatus();
       },
-      reconcile: () => sync?.engine.reconcile() ?? Promise.resolve(),
+      subscribe(listener) {
+        syncListeners.add(listener);
+        return () => syncListeners.delete(listener);
+      },
+      reconcile: () => sync?.engine.reconcile('deliberate') ?? Promise.resolve(),
+      retryRecord: (id) => sync?.engine.retryRecord(id) ?? Promise.resolve(),
       idle: () => sync?.engine.idle() ?? Promise.resolve(),
     },
 
@@ -398,6 +437,9 @@ function parseRemembered(text: string | null): RememberedAccount | null {
   }
   return null;
 }
+
+/** Four random bytes as a uniform number in [0, 1). */
+const uniform = (bytes: Uint8Array): number => (((bytes[0]! << 24) | (bytes[1]! << 16) | (bytes[2]! << 8) | bytes[3]!) >>> 0) / 2 ** 32;
 
 const hex = (bytes: Uint8Array): string => Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
 

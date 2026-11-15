@@ -68,8 +68,10 @@ export class FakeAccountService implements AccountService {
 
   /** No synchronization runs in screen tests. */
   readonly sync: AccountSync = {
-    status: { live: false, error: null },
+    status: { live: false, error: null, lastSyncedAt: null, uploads: [], update: null, history: { state: 'complete' } },
+    subscribe: () => () => undefined,
     reconcile: async () => undefined,
+    retryRecord: async () => undefined,
     idle: async () => undefined,
   };
 

@@ -61,7 +61,8 @@ const BASE_SCHEMA = [
   // entry is its one outgoing synchronization record (the activity id is
   // unique), written in the completion's transaction; a revisioned item's is
   // written with the local save or deletion, and goes once the item's
-  // accepted state reflects it.
+  // accepted state reflects it. It also counts how often the entry failed by
+  // itself, and whether that flagged it (#92).
   `CREATE TABLE outgoing (
     id TEXT PRIMARY KEY,
     activity_id TEXT UNIQUE REFERENCES activities (activity_id),
@@ -76,7 +77,9 @@ const BASE_SCHEMA = [
     request TEXT,
     request_sha256 TEXT,
     receipt TEXT,
-    receipt_sequence INTEGER
+    receipt_sequence INTEGER,
+    failures INTEGER NOT NULL DEFAULT 0 CHECK (failures >= 0),
+    flagged INTEGER NOT NULL DEFAULT 0 CHECK (flagged IN (0, 1))
   ) STRICT`,
   'CREATE INDEX outgoing_pending ON outgoing (status, position)',
   'CREATE INDEX outgoing_items ON outgoing (record_type, item_id, position)',
@@ -88,8 +91,8 @@ const BASE_SCHEMA = [
     body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,
     PRIMARY KEY (record_type, item_id)
   ) STRICT`,
-  // The account sequence the feed has been applied through.
-  'CREATE TABLE feed_cursor (singleton INTEGER PRIMARY KEY CHECK (singleton = 1), sequence INTEGER NOT NULL) STRICT',
+  // The account sequence the feed has been applied through, and when a synchronization run last finished cleanly (ms since the epoch).
+  'CREATE TABLE feed_cursor (singleton INTEGER PRIMARY KEY CHECK (singleton = 1), sequence INTEGER NOT NULL, synced_at INTEGER) STRICT',
   'INSERT INTO feed_cursor (singleton, sequence) VALUES (1, 0)',
 ];
 

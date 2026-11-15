@@ -1,6 +1,6 @@
 // What the device tells the Account service about itself, for synchronization
 // (packages/account/src/sync/session.ts): whether the app is in the
-// foreground, whether it has a connection, and a timer.
+// foreground, whether it has a connection, and timers.
 
 import type { DevicePorts, DeviceSignal } from '@tableside/account';
 import { AppState } from 'react-native';
@@ -34,5 +34,9 @@ export const appDevicePorts: DevicePorts = {
   every(milliseconds, run) {
     const timer = setInterval(run, milliseconds);
     return () => clearInterval(timer);
+  },
+  after(milliseconds, run) {
+    const timer = setTimeout(run, milliseconds);
+    return () => clearTimeout(timer);
   },
 };

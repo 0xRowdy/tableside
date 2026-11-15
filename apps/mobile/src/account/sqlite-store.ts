@@ -57,6 +57,15 @@ export interface QueuedUpload {
   readonly payload: unknown;
   readonly dependencies: readonly string[];
   readonly operation: PreparedOperation | null;
+  readonly failures: number;
+  readonly flagged: boolean;
+}
+
+export interface RejectedUpload {
+  readonly id: string;
+  readonly recordType: string;
+  readonly payload: unknown;
+  readonly code: string;
 }
 
 export interface AcceptedRecord {
@@ -334,8 +343,8 @@ export class SqliteActivityStore implements ActivityStore {
   /** Unacknowledged upload queue entries, in queue order. */
   readUploadQueue(): Promise<readonly QueuedUpload[]> {
     return this.transaction(async (tx) => {
-      const rows = await tx.all<BodyRow & QueueRow & { record_type: string }>(
-        `SELECT ${BODY}, id, record_type, dependencies, operation_id, request, request_sha256 FROM outgoing WHERE status = 'pending' ORDER BY position`,
+      const rows = await tx.all<BodyRow & QueueRow & { record_type: string; failures: number; flagged: number }>(
+        `SELECT ${BODY}, id, record_type, dependencies, operation_id, request, request_sha256, failures, flagged FROM outgoing WHERE status = 'pending' ORDER BY position`,
       );
       return rows.map((row) => {
         const outgoing = decode<QueuedBody>(row);
@@ -345,8 +354,53 @@ export class SqliteActivityStore implements ActivityStore {
           payload: outgoing.record,
           dependencies: JSON.parse(row.dependencies) as string[],
           operation: preparedOf(row),
+          failures: row.failures,
+          flagged: row.flagged === 1,
         };
       });
+    });
+  }
+
+  /** Counts a failed attempt for a pending entry with its current count, flagging it when the count reaches `flagAt`. */
+  recordUploadFailure(id: string, flagAt: number): Promise<{ readonly failures: number; readonly flagged: boolean }> {
+    return this.transaction(async (tx) => {
+      const row = await tx.get<{ failures: number; flagged: number }>(`SELECT failures, flagged FROM outgoing WHERE id = ? AND status = 'pending'`, [id]);
+      if (!row) throw new StoreError(`no pending upload ${id}`);
+      const failures = row.failures + 1;
+      const flagged = row.flagged === 1 || failures >= flagAt;
+      await tx.run('UPDATE outgoing SET failures = ?, flagged = ? WHERE id = ?', [failures, flagged ? 1 : 0, id]);
+      return { failures, flagged };
+    });
+  }
+
+  /** A deliberate retry: the entry's failures are forgotten and it is no longer flagged. */
+  clearUploadFailures(id: string): Promise<void> {
+    return this.transaction(async (tx) => {
+      await tx.run(`UPDATE outgoing SET failures = 0, flagged = 0 WHERE id = ? AND status = 'pending'`, [id]);
+    });
+  }
+
+  /** Entries whose receipts refused them, in queue order: kept for review. */
+  readRejectedUploads(): Promise<readonly RejectedUpload[]> {
+    return this.transaction(async (tx) =>
+      (
+        await tx.all<BodyRow & { id: string; record_type: string; receipt: string }>(
+          `SELECT ${BODY}, id, record_type, receipt FROM outgoing WHERE status = 'rejected' ORDER BY position`,
+        )
+      ).map((row) => {
+        const receipt = JSON.parse(row.receipt) as { code?: unknown };
+        return { id: row.id, recordType: row.record_type, payload: decode<QueuedBody>(row).record, code: typeof receipt.code === 'string' ? receipt.code : '' };
+      }),
+    );
+  }
+
+  readLastSynced(): Promise<number | null> {
+    return this.transaction(async (tx) => (await tx.get<{ synced_at: number | null }>('SELECT synced_at FROM feed_cursor WHERE singleton = 1'))?.synced_at ?? null);
+  }
+
+  recordSynced(at: number): Promise<void> {
+    return this.transaction(async (tx) => {
+      await tx.run('UPDATE feed_cursor SET synced_at = ? WHERE singleton = 1', [at]);
     });
   }
 

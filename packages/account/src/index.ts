@@ -20,12 +20,22 @@ export {
   type CodeVerificationResult,
   type CredentialStorage,
   type EligibilityBand,
+  type HistoryStatus,
   type SyncStatus,
   type VaultOpening,
   type VaultSession,
   createAccountService,
 } from './service';
-export { type Resolution, type ResolutionOutcome, type SyncErrorCode } from './sync/engine';
+export {
+  type EngineStatus,
+  RECORD_FAILURE_LIMIT,
+  type Resolution,
+  type ResolutionOutcome,
+  type SyncErrorCode,
+  type UpdateNotice,
+  type UploadState,
+  type UploadStatus,
+} from './sync/engine';
 export {
   type AccountRecords,
   type AccountTotals,
@@ -43,6 +53,7 @@ export {
   type Envelope,
   type FeedEntry,
   type PreparedOperation,
+  type ProtocolStatus,
   type StagedChunk,
 } from './sync/protocol';
 export {
@@ -59,6 +70,7 @@ export {
   recordTypes,
   revisionedItemType,
 } from './sync/registry';
+export { SYNC_OPERATIONS } from './sync/supabase';
 export { type DevicePorts, type DeviceSignal, RECONCILE_INTERVAL_MS } from './sync/session';
-export { type AcceptedRecord, type LocalRevisionedItem, type QueuedUpload, type SyncStore } from './sync/store';
+export { type AcceptedRecord, type LocalRevisionedItem, type QueuedUpload, type RejectedUpload, type SyncStore } from './sync/store';
 export { type TotalsRow, sumContributions } from './sync/totals';
