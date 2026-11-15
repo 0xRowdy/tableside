@@ -17,7 +17,7 @@ Reports are written to `harness-reports/<platform>.json`.
 
 **iOS** needs Xcode and a simulator. The harness uses a booted simulator, or boots the first available iPhone.
 
-**Android** needs the Android SDK (`adb`, `emulator` on `PATH`) and either a connected device or an AVD. The harness starts the first AVD if nothing is connected.
+**Android** needs the Android SDK (`adb`, `emulator` on `PATH`) and an AVD. The harness runs on a running emulator, or boots the first AVD. It never picks a phone or network device (a TV box on adb over Wi-Fi, say) by itself; set `ANDROID_SERIAL` to a serial from `adb devices` to run on one.
 
 The first device run builds the native app (several minutes). Later runs reuse the build caches.
 
