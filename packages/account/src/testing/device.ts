@@ -31,9 +31,11 @@ import {
   type EligibilityBand,
   createAccountService,
 } from '../service';
+import type { RecordType } from '../sync/registry';
 import type { DevicePorts, DeviceSignal } from '../sync/session';
 import { FaultProxy } from './fault-proxy';
 import { Mailbox } from './mailbox';
+import { testRecordTypes } from './record-types';
 import type { LocalStack } from './stack';
 
 /** A clock the scenario moves by hand. Moving it runs the timers that fall due. */
@@ -182,6 +184,8 @@ export interface DeviceOptions {
    * device, keeping its files and secure storage.
    */
   readonly installedOver?: SimulatedDevice;
+  /** The registered record types: this build's own and seam 2's test-only types by default. */
+  readonly recordTypes?: ReadonlyMap<string, RecordType>;
 }
 
 export function createDevice(stack: LocalStack, options: DeviceOptions): SimulatedDevice {
@@ -274,6 +278,7 @@ export function createDevice(stack: LocalStack, options: DeviceOptions): Simulat
       device: ports,
       randomBytes: (count) => entropy.bytes(count),
       webSocket: ProcessWebSocket,
+      recordTypes: options.recordTypes ?? testRecordTypes,
     });
     return {
       account,

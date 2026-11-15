@@ -17,8 +17,15 @@
 //   this build can't read.
 // - Runs coalesce: a request while a run is going makes one more run.
 //
-// Retry pacing, flagged records and status (#92), revisioned items (#94) and
-// barrier-bearing operations (#95) plug in here.
+// - A revisioned item's acknowledgement records nothing as accepted: whether
+//   its upload became a revision or a proposal, the item's state arrives with
+//   the feed entry its receipt names, in the same run.
+// - Resolving a conflict needs the network: it is sent at once, never queued.
+//
+// Retry pacing, flagged records and status (#92) and barrier-bearing
+// operations (#95) plug in here.
+
+import { canonicalJson } from '@tableside/engine';
 
 import {
   type ChunkAnswer,
@@ -30,7 +37,7 @@ import {
   chunksOf,
   prepareOperation,
 } from './protocol';
-import type { RecordType } from './registry';
+import type { RecordType, RevisionedUpload } from './registry';
 import type { AcceptedRecord, QueuedUpload, SyncStore } from './store';
 
 /** The backend's operations. A rejection means no answer arrived (offline, lost response, denied): try later. */
@@ -62,11 +69,31 @@ export interface SyncEngineOptions {
 
 export const FEED_PAGE_SIZE = 50;
 
+/** A conflict's resolution: the generation and every proposal reviewed, and the value it resolves to (null: deleted). */
+export interface Resolution {
+  readonly generation: number;
+  readonly reviewed: readonly string[];
+  readonly value: unknown;
+}
+
+/**
+ * resolved: one new revision was accepted.
+ * conflict-changed: a proposal arrived (or the conflict otherwise changed) since the review; the item now shows it.
+ * no-conflict: no conflict is open on the item.
+ * offline: the backend couldn't be reached, or no answer arrived. The account may have accepted it: resolving
+ *   again with the same review in this account session repeats the identical request, so it is never applied twice.
+ * incompatible: the server no longer speaks this protocol (an update is required).
+ * invalid: the resolution isn't one of the type's.
+ */
+export type ResolutionOutcome = 'resolved' | 'conflict-changed' | 'no-conflict' | 'offline' | 'incompatible' | 'invalid';
+
 export class SyncEngine {
   private running: Promise<void> | null = null;
   private rerunRequested = false;
   private stopped = false;
   private lastError: SyncErrorCode | null = null;
+  /** Resolutions sent with no answer yet, by what they resolve: a retry repeats the same operation. */
+  private readonly unansweredResolutions = new Map<string, PreparedOperation>();
 
   constructor(private readonly options: SyncEngineOptions) {}
 
@@ -98,6 +125,38 @@ export class SyncEngine {
   /** Resolves once no run is going. */
   async idle(): Promise<void> {
     while (this.running) await this.running;
+  }
+
+  /**
+   * Resolves an open conflict on a revisioned item. Online only: it is sent at
+   * once under a new operation, then the feed brings the item's state (resolved,
+   * or changed by a proposal that arrived meanwhile).
+   */
+  async resolve(recordType: string, item: string, resolution: Resolution): Promise<ResolutionOutcome> {
+    const type = this.options.registry.get(recordType);
+    const payload: RevisionedUpload<unknown> = {
+      item,
+      action: 'resolve',
+      generation: resolution.generation,
+      reviewed: [...resolution.reviewed].sort(),
+      value: resolution.value,
+    };
+    if (this.stopped || type?.kind !== 'revisioned-item' || !type.isPayload(payload)) return 'invalid';
+    const key = canonicalJson({ recordType, payload });
+    const operation = this.unansweredResolutions.get(key) ?? this.envelope(type, payload);
+    this.unansweredResolutions.set(key, operation);
+    let answer: UploadAnswer;
+    try {
+      answer = await this.options.backend.upload(operation.request);
+    } catch {
+      return 'offline';
+    }
+    this.unansweredResolutions.delete(key);
+    if (answer.status !== 'accepted' && answer.status !== 'rejected') return answer.status === 'incompatible' ? 'incompatible' : 'invalid';
+    if (answer.operation !== operation.operationId || answer.requestHash !== operation.requestHash) return 'offline';
+    await this.reconcile();
+    if (answer.status === 'accepted') return 'resolved';
+    return answer.code === 'conflict-changed' || answer.code === 'no-conflict' ? answer.code : 'invalid';
   }
 
   /** Ends the account session's sync: later answers are dropped and nothing more runs. */
@@ -134,7 +193,7 @@ export class SyncEngine {
       let operation: PreparedOperation;
       let chunks: StagedChunk[] | null;
       try {
-        operation = entry.operation ?? (await store.prepareUpload(entry.id, this.envelope(type, entry)));
+        operation = entry.operation ?? (await store.prepareUpload(entry.id, this.envelope(type, entry.payload)));
         chunks = asUnsendable(() => chunksOf(operation, entry.payload));
       } catch (failure) {
         if (failure instanceof UnsendableError) {
@@ -184,15 +243,15 @@ export class SyncEngine {
     return resent.status === 'chunks-missing' ? 'offline' : resent;
   }
 
-  private envelope(type: RecordType, entry: QueuedUpload): PreparedOperation {
+  private envelope(type: RecordType, payload: unknown): PreparedOperation {
     return asUnsendable(() => prepareOperation({
       protocol: PROTOCOL_VERSION,
       operation: this.options.newOperationId(),
       installation: this.options.installationId,
       recordType: type.name,
       payloadVersion: type.payloadVersion,
-      item: type.identity.of(entry.payload),
-      payload: entry.payload,
+      item: type.identity.of(payload),
+      payload,
     }));
   }
 
@@ -208,7 +267,7 @@ export class SyncEngine {
       case 'rejected': {
         if (answer.operation !== operation.operationId || answer.requestHash !== operation.requestHash) return 'receipt-mismatch';
         const accepted: AcceptedRecord | null =
-          answer.status === 'accepted'
+          answer.status === 'accepted' && type.kind !== 'revisioned-item'
             ? { recordType: type.name, item: type.identity.of(entry.payload), sequence: answer.sequence, payload: entry.payload }
             : null;
         await this.options.store.acknowledgeUpload(entry.id, answer, accepted);

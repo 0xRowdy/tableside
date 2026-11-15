@@ -55,13 +55,19 @@ const BASE_SCHEMA = [
     body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,
     PRIMARY KEY (activity_id, effect_key)
   ) STRICT`,
-  // One outgoing synchronization record per completion: the activity id is unique.
-  // It is also the upload queue entry, written in the completion's transaction:
-  // its dependencies, its receipt status, the operation it is sent as (fixed
-  // before it is first sent) and the receipt's disposition.
+  // The upload queue: each entry with its dependencies, its receipt status,
+  // the operation it is sent as (fixed before it is first sent), the receipt's
+  // disposition and the account sequence an acceptance names. A completion's
+  // entry is its one outgoing synchronization record (the activity id is
+  // unique), written in the completion's transaction; a revisioned item's is
+  // written with the local save or deletion, and goes once the item's
+  // accepted state reflects it.
   `CREATE TABLE outgoing (
     id TEXT PRIMARY KEY,
-    activity_id TEXT NOT NULL UNIQUE REFERENCES activities (activity_id),
+    activity_id TEXT UNIQUE REFERENCES activities (activity_id),
+    record_type TEXT NOT NULL,
+    item_id TEXT NOT NULL,
+    revisioned INTEGER NOT NULL CHECK (revisioned IN (0, 1)),
     position INTEGER NOT NULL UNIQUE,
     body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,
     dependencies TEXT NOT NULL,
@@ -69,9 +75,11 @@ const BASE_SCHEMA = [
     operation_id TEXT UNIQUE,
     request TEXT,
     request_sha256 TEXT,
-    receipt TEXT
+    receipt TEXT,
+    receipt_sequence INTEGER
   ) STRICT`,
   'CREATE INDEX outgoing_pending ON outgoing (status, position)',
+  'CREATE INDEX outgoing_items ON outgoing (record_type, item_id, position)',
   // Records the account has accepted: this installation's acknowledged uploads and the feed's changes.
   `CREATE TABLE accepted_records (
     record_type TEXT NOT NULL,
