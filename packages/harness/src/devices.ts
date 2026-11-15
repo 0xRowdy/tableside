@@ -40,8 +40,9 @@ export async function runDeviceLeg(platform: 'ios' | 'android'): Promise<Report>
       log(`iOS: building Release harness for simulator ${udid}`);
       await run('pnpm', ['exec', 'expo', 'run:ios', '--configuration', 'Release', '--no-bundler', '--device', udid]);
     } else {
-      await ensureAndroidDevice();
-      execFileSync('adb', ['reverse', `tcp:${PORT}`, `tcp:${PORT}`]);
+      const serial = await androidTarget();
+      log(`Android: using ${serial}`);
+      execFileSync('adb', ['-s', serial, 'reverse', `tcp:${PORT}`, `tcp:${PORT}`]);
       log('Android: generating native project with the harness plugin');
       await run('pnpm', ['exec', 'expo', 'prebuild', '--platform', 'android', '--no-install']);
       log('Android: building Release harness');
@@ -49,7 +50,7 @@ export async function runDeviceLeg(platform: 'ios' | 'android'): Promise<Report>
       // app bundle here, and later reuse this harness bundle in an app build.
       discardAndroidJsBundle();
       try {
-        await run('pnpm', ['exec', 'expo', 'run:android', '--variant', 'release', '--no-bundler']);
+        await run('pnpm', ['exec', 'expo', 'run:android', '--variant', 'release', '--no-bundler', '--device', serial]);
       } finally {
         discardAndroidJsBundle();
       }
@@ -100,10 +101,24 @@ function bootedIosSimulator(): string {
   return iphone.udid;
 }
 
-async function ensureAndroidDevice(): Promise<void> {
-  if (androidDevices().length > 0) return;
+/**
+ * The Android device the leg runs on: `ANDROID_SERIAL` when set, otherwise a
+ * running emulator, otherwise the first AVD, booted here. A phone or network
+ * device (a TV box on adb over Wi-Fi, say) is used only when ANDROID_SERIAL
+ * names it, so the harness never installs onto someone's own device.
+ */
+async function androidTarget(): Promise<string> {
+  const attached = androidSerials();
+  const requested = process.env.ANDROID_SERIAL;
+  if (requested) {
+    if (!attached.includes(requested)) throw new Error(`ANDROID_SERIAL ${requested} is not an attached device (attached: ${attached.join(', ') || 'none'})`);
+    return requested;
+  }
+  const running = attached.find(isEmulatorSerial);
+  if (running) return running;
+
   const [avd] = parseAvdList(execFileSync('emulator', ['-list-avds'], { encoding: 'utf8' }));
-  if (!avd) throw new Error('no Android device or emulator; create an AVD in Android Studio');
+  if (!avd) throw new Error('no Android emulator; create an AVD in Android Studio, or set ANDROID_SERIAL to a device');
   const logFile = path.join(REPO_ROOT, 'harness-reports', 'emulator.log');
   mkdirSync(path.dirname(logFile), { recursive: true });
   log(`Android: starting emulator ${avd} (output in ${path.relative(process.cwd(), logFile)})`);
@@ -114,27 +129,37 @@ async function ensureAndroidDevice(): Promise<void> {
   emulator.unref();
 
   const deadline = Date.now() + 5 * 60_000;
-  while (!isBooted()) {
+  for (;;) {
+    const serial = androidSerials().find(isEmulatorSerial);
+    if (serial && isBooted(serial)) return serial;
     if (exited !== null) throw new Error(`Android emulator exited with ${exited}; see ${logFile}`);
     if (Date.now() > deadline) throw new Error('Android emulator did not finish booting');
     await new Promise((resolve) => setTimeout(resolve, 2000));
   }
 }
 
-function isBooted(): boolean {
-  if (androidDevices().length === 0) return false;
+function isBooted(serial: string): boolean {
   try {
-    return execFileSync('adb', ['shell', 'getprop', 'sys.boot_completed'], { encoding: 'utf8', stdio: 'pipe' }).trim() === '1';
+    return execFileSync('adb', ['-s', serial, 'shell', 'getprop', 'sys.boot_completed'], { encoding: 'utf8', stdio: 'pipe' }).trim() === '1';
   } catch {
     return false;
   }
 }
 
-function androidDevices(): string[] {
-  return execFileSync('adb', ['devices'], { encoding: 'utf8' })
+export const isEmulatorSerial = (serial: string): boolean => serial.startsWith('emulator-');
+
+/** Serials of attached devices that are ready (`adb devices` state "device"). */
+export function parseAdbDevices(output: string): string[] {
+  return output
     .split('\n')
     .slice(1)
-    .filter((line) => line.endsWith('\tdevice'));
+    .map((line) => line.trim().split(/\s+/))
+    .filter(([serial, state]) => serial && state === 'device')
+    .map(([serial]) => serial as string);
+}
+
+function androidSerials(): string[] {
+  return parseAdbDevices(execFileSync('adb', ['devices'], { encoding: 'utf8' }));
 }
 
 function run(command: string, args: string[]): Promise<void> {
