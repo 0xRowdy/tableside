@@ -69,12 +69,11 @@ export {
   type SignOutResult,
   type SignedInGate,
   type SyncStatus,
-  type VaultOpening,
+  type AccountVaultOpening,
   type VaultSession,
   createAccountService,
   isAgeRestricted,
   isRestricted,
-  isSignedIn,
   opensOrdinaryAccess,
   opensRestrictedPaths,
 } from './service';
@@ -110,6 +109,7 @@ export {
 } from './metrics';
 export { type CrashReport, crashReport } from './crash-report';
 export * from './lifecycle-text';
+export { hex, instant } from './values';
 export { type AccountPrivacy, type EnablingResult, type PrivacyChoices, type RestrictiveResult, productAnalyticsId } from './privacy';
 export {
   type AcceptedPrivacyChange,

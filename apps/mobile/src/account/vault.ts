@@ -33,6 +33,7 @@
 // they are and no empty replacement is ever created.
 
 import { ENVIRONMENT_NAMES, type EnvironmentName } from '@tableside/account/environment';
+import { hex } from '@tableside/account/values';
 
 import { openMigrated, type MigrationFiles } from './migration-runner';
 import { SqliteActivityStore, StoreMismatchError, type StoreIdentity } from './sqlite-store';
@@ -376,5 +377,3 @@ function parseKeyRecord(text: string): KeyRecord | null {
   }
   return null;
 }
-
-const hex = (bytes: Uint8Array): string => Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');

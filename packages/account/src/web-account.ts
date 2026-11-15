@@ -16,8 +16,6 @@
 // Plain fetch and Web Storage, with no Supabase client, so the page's bundle
 // carries nothing it doesn't use.
 
-import { type PendingDeletion, instant, parseDeletionStatus, parseProgress } from './deletion-progress';
-import { type BackendEnvironment, ENVIRONMENT_HEADER } from './environment';
 import type {
   CancelDeletionResult,
   CodeRequestResult,
@@ -25,7 +23,12 @@ import type {
   DeletionProgress,
   FreshAuthenticationResult,
   ScheduleDeletionResult,
-} from './service';
+} from './account-service/types';
+import { backendPost } from './backend-request';
+import { type PendingDeletion, parseDeletionStatus, parseProgress } from './deletion-progress';
+import type { BackendEnvironment } from './environment';
+import { cancelAnswer, codeRequestAnswer, freshCodeAnswer, retriedOperations, scheduleAnswer } from './lifecycle-answers';
+import { hex } from './values';
 
 /** The page's view of the account: what it shows. */
 export type WebAccountView =
@@ -125,9 +128,9 @@ export function createWebAccount(options: WebAccountOptions): WebAccount {
   /** Global Privacy Control is recorded once per page load. */
   let gpcRecorded = false;
   /** A Schedule or Cancel request with no answer: a retry sends the same operation ID. */
-  let pending: { readonly action: 'schedule' | 'cancel'; readonly id: string } | null = null;
+  const operations = retriedOperations(() => randomHex(16));
 
-  const hex = (count: number) => Array.from(options.randomBytes(count), (byte) => byte.toString(16).padStart(2, '0')).join('');
+  const randomHex = (count: number) => hex(options.randomBytes(count));
   const read = <T>(storage: WebStorage, name: string): T | null => {
     try {
       return JSON.parse(storage.getItem(name) ?? 'null') as T | null;
@@ -140,16 +143,7 @@ export function createWebAccount(options: WebAccountOptions): WebAccount {
   /** A request naming this environment, as every request does. Null when no answer came. */
   const send = async (path: string, body: unknown, token?: string): Promise<Answer | null> => {
     try {
-      const response = await options.fetch(`${backend.url}${path}`, {
-        method: 'POST',
-        headers: {
-          apikey: backend.publishableKey,
-          [ENVIRONMENT_HEADER]: backend.name,
-          'content-type': 'application/json',
-          ...(token ? { authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify(body),
-      });
+      const response = await backendPost(options.fetch, backend, path, body, token ? { authorization: `Bearer ${token}` } : {});
       return { httpStatus: response.status, body: await response.json().catch(() => null) };
     } catch {
       return null;
@@ -206,12 +200,12 @@ export function createWebAccount(options: WebAccountOptions): WebAccount {
     for (let attempt = 0; attempt < 2; attempt++) {
       let installation = lasting.getItem(INSTALLATION);
       if (!installation || attempt > 0) {
-        installation = hex(16);
+        installation = randomHex(16);
         lasting.setItem(INSTALLATION, installation);
       }
       let secret = lasting.getItem(secretKey(accountId));
       if (!secret || attempt > 0) {
-        secret = hex(32);
+        secret = randomHex(32);
         lasting.setItem(secretKey(accountId), secret);
       }
       const answer = await rpc('register_device_v1', { installation, secret, platform: 'web', label: WEB_DEVICE_LABEL }, token);
@@ -237,7 +231,7 @@ export function createWebAccount(options: WebAccountOptions): WebAccount {
     lasting.removeItem(STATUS);
     if (accountId) lasting.removeItem(secretKey(accountId));
     session.removeItem(SESSION);
-    pending = null;
+    operations.settle();
     return (view = { state: 'deleted', progress });
   };
 
@@ -287,18 +281,9 @@ export function createWebAccount(options: WebAccountOptions): WebAccount {
     return view;
   };
 
-  /** A Schedule or Cancel request's operation ID: the same for every retry until an answer comes. */
-  const operationId = (action: 'schedule' | 'cancel'): string => {
-    if (pending?.action !== action) pending = { action, id: hex(16) };
-    return pending.id;
-  };
-
   const requestCode = async (email: string): Promise<CodeRequestResult> => {
     const answer = await send('/functions/v1/request-code', { email: email.trim(), intent: 'sign-in' });
-    const body = answer?.body as { status?: unknown; retryAfter?: unknown } | null;
-    if (answer?.httpStatus === 200 && body?.status === 'sent') return { status: 'sent' };
-    if (answer?.httpStatus === 429 && typeof body?.retryAfter === 'number') return { status: 'rate-limited', retryAfterSeconds: body.retryAfter };
-    return { status: 'failed' };
+    return answer ? codeRequestAnswer(answer.httpStatus, answer.body) : { status: 'failed' };
   };
 
   return {
@@ -329,7 +314,7 @@ export function createWebAccount(options: WebAccountOptions): WebAccount {
       // A new sign-in: an earlier deletion's status in this browser is done with.
       lasting.removeItem(DELETED);
       lasting.removeItem(STATUS);
-      pending = null;
+      operations.settle();
       await register(token, accountId);
       await refresh();
       return { status: 'signed-in' };
@@ -347,9 +332,7 @@ export function createWebAccount(options: WebAccountOptions): WebAccount {
         const token = await accessToken();
         if (!token) return { status: 'failed' };
         const answer = await send('/functions/v1/fresh-auth', { method: 'email', code: code.trim() }, token);
-        if (answer?.httpStatus === 200 && statusOf(answer) === 'confirmed') return { status: 'confirmed' };
-        if (answer?.httpStatus === 401 && statusOf(answer) === 'invalid-code') return { status: 'invalid-code' };
-        return { status: 'failed' };
+        return freshCodeAnswer(answer?.httpStatus, statusOf(answer));
       },
     },
 
@@ -357,17 +340,16 @@ export function createWebAccount(options: WebAccountOptions): WebAccount {
       if (view.state === 'signed-in' && view.deletion?.status === 'scheduled') return { status: 'scheduled', deadline: view.deletion.deadline };
       const token = await accessToken();
       if (!token) return { status: 'failed' };
-      const answer = await send('/functions/v1/schedule-deletion', { operationId: operationId('schedule') }, token);
-      if (answer && answer.httpStatus < 500) pending = null;
-      if (answer?.httpStatus === 403 && statusOf(answer) === 'fresh-authentication-required') return { status: 'fresh-authentication-required' };
-      const body = answer?.body as { deadline?: unknown; scheduledAt?: unknown } | null;
-      const deadline = answer?.httpStatus === 200 && statusOf(answer) === 'scheduled' ? instant(body?.deadline) : null;
-      const scheduledAt = instant(body?.scheduledAt);
-      if (deadline === null || scheduledAt === null || view.state !== 'signed-in') {
+      const answer = await send('/functions/v1/schedule-deletion', { operationId: operations.id('schedule') }, token);
+      if (answer && answer.httpStatus < 500) operations.settle();
+      const scheduled = scheduleAnswer(answer?.httpStatus, answer?.body);
+      if (scheduled?.status === 'fresh-authentication-required') return scheduled;
+      if (!scheduled || scheduled.scheduledAt === null || view.state !== 'signed-in') {
         // No answer, or a retry whose scheduling was canceled since: the server's status decides what shows.
         await refresh();
         return { status: 'failed' };
       }
+      const { deadline, scheduledAt } = scheduled;
       view = { ...view, deletion: { status: 'scheduled', deadline, scheduledAt } };
       return { status: 'scheduled', deadline };
     },
@@ -375,16 +357,17 @@ export function createWebAccount(options: WebAccountOptions): WebAccount {
     async cancel() {
       const token = await accessToken();
       if (!token) return { status: 'failed' };
-      const answer = await rpc('cancel_deletion_v1', { operation_id: operationId('cancel') }, token);
+      const answer = await rpc('cancel_deletion_v1', { operation_id: operations.id('cancel') }, token);
       const status = answer?.httpStatus === 200 ? statusOf(answer) : undefined;
-      if (typeof status === 'string') pending = null;
-      if (status === 'fresh-authentication-required') return { status };
-      if ((status === 'canceled' || status === 'not-scheduled') && view.state === 'signed-in') {
+      if (typeof status === 'string') operations.settle();
+      const result = cancelAnswer(status);
+      if (result?.status === 'fresh-authentication-required') return result;
+      if (result?.status === 'canceled' && view.state === 'signed-in') {
         view = { ...view, deletion: { status: 'none' } };
-        return { status: 'canceled' };
+        return result;
       }
       await refresh();
-      return status === 'too-late' ? { status } : { status: 'failed' };
+      return result?.status === 'too-late' ? result : { status: 'failed' };
     },
 
     async deletePermanently() {
@@ -407,7 +390,7 @@ export function createWebAccount(options: WebAccountOptions): WebAccount {
       const token = storedSession()?.accessToken;
       if (token) await send('/auth/v1/logout?scope=local', {}, token);
       lasting.removeItem(STATUS);
-      pending = null;
+      operations.settle();
       signedOut();
     },
 

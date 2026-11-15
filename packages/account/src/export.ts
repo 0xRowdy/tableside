@@ -6,6 +6,7 @@
 
 import type { RecordType } from './sync/registry';
 import type { SyncStore } from './sync/store';
+import { instant } from './values';
 
 /** The account's latest server export, as the player sees it. Times in milliseconds since the epoch. */
 export type ServerExport =
@@ -136,13 +137,12 @@ export interface ExportPorts {
 }
 
 const isObject = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
-const instant = (value: unknown): number => (typeof value === 'string' ? Date.parse(value) : Number.NaN);
 
 /** The server's export view as the player sees it; null when it isn't one. */
 export function parseServerExport(view: unknown): ServerExport | null {
   if (!isObject(view)) return null;
   const requestedAt = instant(view.requestedAt);
-  if (!Number.isFinite(requestedAt)) return null;
+  if (requestedAt === null) return null;
   switch (view.state) {
     case 'preparing':
     case 'failed':
@@ -151,7 +151,7 @@ export function parseServerExport(view: unknown): ServerExport | null {
     case 'ready': {
       const readyAt = instant(view.readyAt);
       const expiresAt = instant(view.expiresAt);
-      if (!Number.isFinite(readyAt) || !Number.isFinite(expiresAt) || typeof view.bytes !== 'number') return null;
+      if (readyAt === null || expiresAt === null || typeof view.bytes !== 'number') return null;
       return { state: 'ready', requestedAt, readyAt, expiresAt, bytes: view.bytes };
     }
     case 'invalidated':

@@ -32,7 +32,7 @@ class GoogleSignInModule : Module() {
           mapOf("status" to "failed")
         }
       } catch (_: GetCredentialCancellationException) {
-        mapOf("status" to "cancelled")
+        mapOf("status" to "canceled")
       } catch (_: GetCredentialException) {
         mapOf("status" to "failed")
       }

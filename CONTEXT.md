@@ -116,7 +116,7 @@ The setting aside of practice sessions whose pinned engine, rule, strategy or re
 
 **Incomplete practice session**:
 An unfinished practice session found unusable (quarantined, or its saved state damaged) and so marked incomplete instead of being resumed or given an invented result.
-_Avoid_: failed session, cancelled session
+_Avoid_: failed session, canceled session
 
 **Final settlement**:
 The automatic resolution of outstanding wagers when a practice session ends, after legally removable wagers are returned. No new bets are placed during it.

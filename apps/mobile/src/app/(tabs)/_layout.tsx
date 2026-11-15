@@ -2,7 +2,7 @@ import { Redirect } from 'expo-router';
 import { TabList, Tabs, TabSlot, TabTrigger } from 'expo-router/ui';
 import { StyleSheet } from 'react-native';
 
-import { isRestricted, isSignedIn, useAccount, type AgeRestrictedGate } from '@/account/AccountProvider';
+import { isRestricted, opensOrdinaryAccess, useAccount, type AgeRestrictedGate } from '@/account/AccountProvider';
 import { AgeRestricted } from '@/account/AgeRestricted';
 import { DeletionScheduled, type DeletionScheduledGate } from '@/account/DeletionScheduled';
 import { FeedbackProvider } from '@/feedback/FeedbackProvider';
@@ -28,7 +28,7 @@ export default function TabsLayout() {
   if (gate.state === 'deleted') return <Redirect href="/deleted" />;
   const restricted = isRestricted(gate);
   if (!restricted) {
-    if (!isSignedIn(gate)) return <Redirect href="/welcome" />;
+    if (!opensOrdinaryAccess(gate)) return <Redirect href="/welcome" />;
     if (offlineGame === undefined) return null;
     if (offlineGame === null) return <Redirect href="/offline-game" />;
   }

@@ -62,7 +62,7 @@ export class FakeClock {
     this.time = end;
   }
 
-  /** Runs `run` every `milliseconds` of this clock until cancelled. */
+  /** Runs `run` every `milliseconds` of this clock until canceled. */
   every(milliseconds: number, run: () => void): () => void {
     const timer = { period: milliseconds, next: this.time + milliseconds, run };
     this.timers.add(timer);

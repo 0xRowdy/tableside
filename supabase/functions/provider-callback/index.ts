@@ -3,7 +3,7 @@
 // and this sends the system browser back to the app.
 //
 // POST /provider-callback?provider=<Auth's provider name>, form fields
-// `state`, `id_token` and, when the player cancelled, `error`.
+// `state`, `id_token` and, when the player canceled, `error`.
 //
 // The state is "<environment>~<challenge>", the challenge being the SHA-256
 // of a verifier only the initiating app holds. A verified ID token is kept
@@ -41,14 +41,14 @@ Deno.serve(async (request) => {
   const match = STATE_PATTERN.exec(state);
   if (!match || !BROWSER_PROVIDERS.includes(provider)) return refuse();
   const [, environment, challenge] = match as unknown as [string, string, string];
-  const back = (outcome?: 'cancelled' | 'failed') =>
+  const back = (outcome?: 'canceled' | 'failed') =>
     new Response(null, {
       status: 303,
       headers: { location: `tableside://auth/${environment}?state=${encodeURIComponent(state)}${outcome ? `&error=${outcome}` : ''}` },
     });
 
   const error = form.get('error');
-  if (error !== null) return back(error === 'user_cancelled_authorize' ? 'cancelled' : 'failed');
+  if (error !== null) return back(error === 'user_cancelled_authorize' ? 'canceled' : 'failed');
   const idToken = String(form.get('id_token') ?? '');
   // The nonce is checked when the app uses the token (it alone holds the nonce); here only that it is the provider's, for this app.
   if (!(await verifyIdToken(provider, idToken))) return back('failed');

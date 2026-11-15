@@ -69,7 +69,7 @@ describe('Sign in with Apple or Google', () => {
 
   it('changes nothing when the player closes the provider’s sheet', async () => {
     const phone = device('phone');
-    expect(await phone.account.signInWithProvider('apple')).toEqual({ status: 'cancelled' });
+    expect(await phone.account.signInWithProvider('apple')).toEqual({ status: 'canceled' });
     expect(phone.account.gate).toEqual({ state: 'no-account' });
     expect(phone.proxy.sent.filter((request) => request.url.includes('/auth/'))).toEqual([]);
   });
@@ -208,9 +208,9 @@ describe('Sign in with Apple on Android, through the system browser', () => {
     expect(phone.account.gate).toMatchObject({ state: 'active', accountId });
   });
 
-  it('treats a cancelled page as cancelled', async () => {
+  it('treats a canceled page as canceled', async () => {
     const phone = device('android', 'android');
-    expect(await phone.account.signInWithProvider('apple')).toEqual({ status: 'cancelled' });
+    expect(await phone.account.signInWithProvider('apple')).toEqual({ status: 'canceled' });
     expect(phone.account.gate).toEqual({ state: 'no-account' });
   });
 

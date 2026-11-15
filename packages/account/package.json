@@ -6,6 +6,7 @@
     ".": "./src/index.ts",
     "./environment": "./src/environment.ts",
     "./testing": "./src/testing/index.ts",
+    "./values": "./src/values.ts",
     "./web": "./src/web.ts"
   },
   "scripts": {

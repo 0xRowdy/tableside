@@ -4,7 +4,7 @@
 // Credential Manager's Sign in with Google on Android, and GoogleSignIn 9 on iOS (the first with a nonce parameter).
 import { requireNativeModule } from 'expo';
 
-export type GoogleIdTokenResult = { readonly status: 'token'; readonly idToken: string } | { readonly status: 'cancelled' } | { readonly status: 'failed' };
+export type GoogleIdTokenResult = { readonly status: 'token'; readonly idToken: string } | { readonly status: 'canceled' } | { readonly status: 'failed' };
 
 const native = requireNativeModule<{
   signIn(clientId: string, serverClientId: string, nonce: string): Promise<{ status: string; idToken?: string }>;
@@ -19,7 +19,7 @@ export async function googleIdToken(clientId: string, serverClientId: string, no
   try {
     const answer = await native.signIn(clientId, serverClientId, nonce);
     if (answer.status === 'token' && typeof answer.idToken === 'string') return { status: 'token', idToken: answer.idToken };
-    return { status: answer.status === 'cancelled' ? 'cancelled' : 'failed' };
+    return { status: answer.status === 'canceled' ? 'canceled' : 'failed' };
   } catch {
     return { status: 'failed' };
   }

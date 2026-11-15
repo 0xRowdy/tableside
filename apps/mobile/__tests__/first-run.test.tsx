@@ -486,7 +486,7 @@ describe('Apple and Google', () => {
   it('a closed sheet changes nothing, and a failure says what to do', async () => {
     await openApp();
     await header('Tableside');
-    service().next.providerSignIn.push({ status: 'cancelled' }, { status: 'failed' });
+    service().next.providerSignIn.push({ status: 'canceled' }, { status: 'failed' });
 
     await fireEvent.press(button('Sign in with Apple'));
     await waitFor(() => expect(button('Sign in with Apple')).toBeEnabled());

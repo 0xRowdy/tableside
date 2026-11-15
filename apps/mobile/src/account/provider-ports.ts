@@ -42,13 +42,13 @@ export function providerSettings(): ProviderSettings {
         });
         return credential.identityToken ? { status: 'token', idToken: credential.identityToken } : { status: 'failed' };
       } catch (error) {
-        return { status: (error as { code?: unknown }).code === 'ERR_REQUEST_CANCELED' ? 'cancelled' : 'failed' };
+        return { status: (error as { code?: unknown }).code === 'ERR_REQUEST_CANCELED' ? 'canceled' : 'failed' };
       }
     },
 
     async openAuthSession(url, callbackUrl) {
       const result = await WebBrowser.openAuthSessionAsync(url, callbackUrl);
-      return result.type === 'success' ? { status: 'returned', url: result.url } : { status: 'cancelled' };
+      return result.type === 'success' ? { status: 'returned', url: result.url } : { status: 'canceled' };
     },
 
     sha256Hex: (text) => Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, text, { encoding: Crypto.CryptoEncoding.HEX }),

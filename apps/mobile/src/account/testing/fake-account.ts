@@ -44,7 +44,7 @@ import type {
   ServerExportRequest,
   SignOutResult,
 } from '@tableside/account';
-import { SUPPLEMENT_NOTICE, isRestricted, isSignedIn, opensRestrictedPaths } from '@tableside/account';
+import { SUPPLEMENT_NOTICE, isRestricted, opensOrdinaryAccess, opensRestrictedPaths } from '@tableside/account';
 
 import type { GameId } from '@/games';
 
@@ -162,7 +162,7 @@ export class FakeAccountService implements AccountService {
   async signOut(): Promise<SignOutResult> {
     this.calls.push({ method: 'signOut' });
     const gate = this.current;
-    if (!isSignedIn(gate) && !isRestricted(gate)) return { status: 'not-signed-in' as const };
+    if (!opensOrdinaryAccess(gate) && !isRestricted(gate)) return { status: 'not-signed-in' as const };
     for (const handler of [...this.ending]) await handler();
     this.setGate({ state: 'signed-out', accountId: gate.accountId });
     return this.next.signOut.shift() ?? { status: 'signed-out' as const, serverSessionEnded: true };
@@ -176,7 +176,7 @@ export class FakeAccountService implements AccountService {
   }
 
   async accountSummary() {
-    return isSignedIn(this.current) ? this.summary : null;
+    return opensOrdinaryAccess(this.current) ? this.summary : null;
   }
 
   async setAccountCurrency(currency: string) {
@@ -234,7 +234,7 @@ export class FakeAccountService implements AccountService {
   };
 
   readonly signInMethods: SignInMethods = {
-    list: async () => (isSignedIn(this.current) ? this.methods : null),
+    list: async () => (opensOrdinaryAccess(this.current) ? this.methods : null),
     link: async (provider) => {
       this.methodCalls.push(`link ${provider}`);
       const result = this.methodsNext.link.shift() ?? { status: 'linked' as const };
@@ -283,7 +283,7 @@ export class FakeAccountService implements AccountService {
   }
 
   readonly devices: Devices = {
-    list: async () => (isSignedIn(this.current) ? this.deviceEntries : null),
+    list: async () => (opensOrdinaryAccess(this.current) ? this.deviceEntries : null),
     signOut: async (id) => {
       this.deviceCalls.push(`sign-out ${id}`);
       return this.signedOutDevices((entry) => entry.id !== id);

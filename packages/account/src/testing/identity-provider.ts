@@ -164,7 +164,7 @@ export class TestProviderPorts implements ProviderPorts {
   async nativeIdToken(provider: IdentityProvider, request: { readonly hashedNonce: string }): Promise<ProviderToken> {
     this.opened.push({ provider });
     const identity = this.accounts[provider];
-    if (!identity) return { status: 'cancelled' };
+    if (!identity) return { status: 'canceled' };
     return { status: 'token', idToken: this.idp.idToken(identity, { nonce: request.hashedNonce }) };
   }
 
@@ -192,7 +192,7 @@ export class TestProviderPorts implements ProviderPorts {
     await response.body?.cancel();
     const location = response.headers.get('location');
     // The browser hands back only a redirect to the app's own callback URL.
-    if (response.status < 300 || response.status >= 400 || !location?.startsWith(callbackUrl)) return { status: 'cancelled' };
+    if (response.status < 300 || response.status >= 400 || !location?.startsWith(callbackUrl)) return { status: 'canceled' };
     this.returned.push(location);
     return { status: 'returned', url: location };
   }
