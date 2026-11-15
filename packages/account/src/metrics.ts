@@ -54,7 +54,16 @@ interface MetricDefinition {
 }
 
 const SYNC_ERRORS = ['offline', 'sign-in-required', 'incompatible', 'unsendable', 'unreadable-change', 'storage'] as const satisfies readonly SyncErrorCode[];
-const EMAIL_TYPES = ['code', 'no-account'] as const;
+/** Every email type the backend sends (private.email_types() in supabase/migrations, *email_metrics*): each counts in the email metrics. */
+export const EMAIL_TYPES = ['code', 'no-account', 'method-linked', 'email-change', 'device-revoked', 'export-ready', 'deletion-scheduled', 'deletion-accepted'] as const;
+/**
+ * How a metric names an email type, where the server's name reads like
+ * private data (an address, a device): Secure Email Change's codes are
+ * 'login-change' and the devices-signed-out notice 'sessions-revoked'.
+ */
+const METRIC_NAMES: Readonly<Record<string, string>> = { 'email-change': 'login-change', 'device-revoked': 'sessions-revoked' };
+export const metricEmailType = (type: string): string => METRIC_NAMES[type] ?? type;
+const METRIC_EMAIL_TYPES = EMAIL_TYPES.map(metricEmailType);
 const KEEP_HISTORY = "Find a teen's practice history not reaching their account, so none of it is lost.";
 
 export const METRICS = {
@@ -84,9 +93,9 @@ export const METRICS = {
   /** What the backend holds: the database, the chunks staged in it, and storage objects. */
   storage_bytes: { purpose: 'operational', source: 'server', unit: 'bytes', properties: { area: ['database', 'staged-chunks', 'objects'] } },
   /** Emails that couldn't be delivered, in the window. */
-  email_sends_failed: { purpose: 'operational', source: 'server', unit: 'count', properties: { type: EMAIL_TYPES } },
+  email_sends_failed: { purpose: 'operational', source: 'server', unit: 'count', properties: { type: METRIC_EMAIL_TYPES } },
   /** Bounces and complaints the mail provider reported, in the window. */
-  email_delivery_problems: { purpose: 'operational', source: 'server', unit: 'count', properties: { type: EMAIL_TYPES, problem: ['bounced', 'complained'] } },
+  email_delivery_problems: { purpose: 'operational', source: 'server', unit: 'count', properties: { type: METRIC_EMAIL_TYPES, problem: ['bounced', 'complained'] } },
   /** How long the oldest email waiting to be sent has waited. Codes never wait; only bulk mail queues. */
   email_queue_age: { purpose: 'operational', source: 'server', unit: 'milliseconds', properties: { pacing: ['bulk'] } },
 
@@ -186,8 +195,9 @@ export interface OperationalSnapshot {
   readonly transactions_rolled_back: number;
   readonly staged_chunks_age_ms: number | null;
   readonly storage_bytes: Readonly<Record<'database' | 'staged-chunks' | 'objects', number>>;
-  readonly email_sends_failed: Readonly<Record<(typeof EMAIL_TYPES)[number], number>>;
-  readonly email_delivery_problems: Readonly<Record<(typeof EMAIL_TYPES)[number], Readonly<Record<'bounced' | 'complained', number>>>>;
+  /** By email type: the server answers every one of EMAIL_TYPES. */
+  readonly email_sends_failed: Readonly<Partial<Record<(typeof EMAIL_TYPES)[number], number>>>;
+  readonly email_delivery_problems: Readonly<Partial<Record<(typeof EMAIL_TYPES)[number], Readonly<Record<'bounced' | 'complained', number>>>>>;
   readonly email_queue_age_ms: number | null;
 }
 
@@ -199,9 +209,11 @@ export function serverMetricEvents(snapshot: OperationalSnapshot): MetricEvent[]
   ];
   if (snapshot.staged_chunks_age_ms !== null) events.push(metricEvent('staged_chunks_age', snapshot.staged_chunks_age_ms, {}));
   for (const [area, bytes] of Object.entries(snapshot.storage_bytes)) events.push(metricEvent('storage_bytes', bytes, { area } as never));
-  for (const [type, count] of Object.entries(snapshot.email_sends_failed)) events.push(metricEvent('email_sends_failed', count, { type } as never));
+  for (const [type, count] of Object.entries(snapshot.email_sends_failed)) {
+    events.push(metricEvent('email_sends_failed', count, { type: metricEmailType(type) } as never));
+  }
   for (const [type, problems] of Object.entries(snapshot.email_delivery_problems)) {
-    for (const [problem, count] of Object.entries(problems)) events.push(metricEvent('email_delivery_problems', count, { type, problem } as never));
+    for (const [problem, count] of Object.entries(problems)) events.push(metricEvent('email_delivery_problems', count, { type: metricEmailType(type), problem } as never));
   }
   if (snapshot.email_queue_age_ms !== null) events.push(metricEvent('email_queue_age', snapshot.email_queue_age_ms, { pacing: 'bulk' }));
   return events.filter((event): event is MetricEvent => event !== null);

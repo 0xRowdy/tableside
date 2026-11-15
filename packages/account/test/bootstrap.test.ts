@@ -29,14 +29,14 @@ import {
 const stack = localStack();
 
 /**
- * The longest a heavy account's snapshot may hold its synchronization head.
- * Under the 5 s an upload waits for the head (`lock_timeout` in
- * sync_upload_v1), so a snapshot never times out another device's upload, and
+ * How long an upload waits for the synchronization head before it gives up
+ * (`lock_timeout` in sync_upload_v1). A heavy account's snapshot must hold the
+ * head for less, so it never times out another device's upload; it is also
  * under the API's 8 s statement timeout. 100,001 practice-session summaries
  * took about 2.2 s on the local stack (2026-11-14), and with 10,000 casino
  * sessions besides, about 2.5 s; the hosted project is qualified at launch gate 12.
  */
-const LOCK_BUDGET_MS = 4_000;
+const UPLOAD_LOCK_TIMEOUT = '5s';
 
 const devices: SimulatedDevice[] = [];
 function device(name: string): SimulatedDevice {
@@ -108,6 +108,17 @@ function offlineAtPage(d: SimulatedDevice, page: number) {
   d.proxy.onRequest = (url) => {
     if (url.includes('sync_bootstrap_page_v1') && ++pages === page) d.proxy.online = false;
   };
+}
+
+/** Resolves once another transaction is waiting for, or holding, the account's head lock taken by a snapshot. */
+async function eventuallyHeld(accountId: string): Promise<void> {
+  for (let tries = 0; tries < 200; tries++) {
+    const [running] = await stack.sql<{ n: number }[]>`
+      select count(*)::int as n from pg_stat_activity where state = 'active' and query like '%sync_bootstrap_v1%' and pid <> pg_backend_pid()`;
+    if (running!.n > 0) return;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  throw new Error(`no snapshot started for ${accountId}`);
 }
 
 /** The bootstrap calls a device sent from the `since`th request on. */
@@ -378,7 +389,7 @@ describe('a bootstrap overlapping concurrent edits', () => {
       await tx`insert into private.sync_feed (account_id, sequence, record_type, item_id, change)
         values (${accountId}, ${head!.sequence + 1}, 'test-result', 'late', jsonb_build_object('record', jsonb_build_object('version', 1, 'resultId', 'late', 'amount', '5')))`;
       await tx`update private.sync_heads set sequence = sequence + 1 where account_id = ${accountId}`;
-      snapshot = Promise.resolve(raw.rpc('sync_bootstrap_v1', { installation: 'head-test' }));
+      snapshot = Promise.resolve(raw.rpc('sync_bootstrap_v1', { installation: installationOf(phone) }));
       // The snapshot can't be made while the head is held.
       expect(await Promise.race([snapshot.then(() => 'made'), new Promise((resolve) => setTimeout(() => resolve('waiting'), 500))])).toBe('waiting');
     });
@@ -423,14 +434,22 @@ describe('the snapshot’s lock', () => {
     });
     const raw = stack.rawClient(accessToken(phone));
 
-    // The head is held from the snapshot's start to its commit: the call's whole server time, and less than this.
-    const started = performance.now();
-    const { data, error } = await raw.rpc('sync_bootstrap_v1', { installation: 'heavy-test' });
-    const held = performance.now() - started;
+    // While the snapshot holds the head, an upload's wait for it (the same lock, with the
+    // upload's lock_timeout) succeeds: measured on the server, not by the client's round trip.
+    // The builder sends only once awaited: Promise.resolve starts it now.
+    const made = Promise.resolve(raw.rpc('sync_bootstrap_v1', { installation: installationOf(phone) }));
+    await eventuallyHeld(accountId);
+    const waited = await stack.sql.begin(async (tx) => {
+      await tx.unsafe(`set local lock_timeout = '${UPLOAD_LOCK_TIMEOUT}'`);
+      const [started] = await tx<{ at: Date }[]>`select clock_timestamp() as at`;
+      await tx`select 1 from private.sync_heads where account_id = ${accountId} for update`;
+      const [locked] = await tx<{ at: Date }[]>`select clock_timestamp() as at`;
+      return locked!.at.getTime() - started!.at.getTime();
+    });
+    const { data, error } = await made;
     expect(error).toBeNull();
     expect(data).toMatchObject({ watermark: 110_001, rows: 110_001 });
-    console.log(`snapshot of 100,001 practice sessions and 10,000 casino sessions: ${Math.round(held)} ms`);
-    expect(held).toBeLessThan(LOCK_BUDGET_MS);
+    console.log(`an upload waited ${Math.round(waited)} ms for a snapshot of 100,001 practice sessions and 10,000 casino sessions`);
   }, 180_000);
 });
 
@@ -444,8 +463,13 @@ describe('a raw client calling the bootstrap operations', () => {
     await queue(phone, testResult.name, result('r-1', '7'));
     await phone.account.sync.idle();
     const owner = stack.rawClient(accessToken(phone));
-    const { data } = await owner.rpc('sync_bootstrap_v1', { installation: 'raw-owner' });
+    const installation = installationOf(phone);
+    const { data } = await owner.rpc('sync_bootstrap_v1', { installation });
     const { snapshot } = data as { snapshot: string };
+
+    // Only its own registered installation's: never another device's, or one it made up.
+    expect((await owner.rpc('sync_bootstrap_v1', { installation: installationOf(other) })).error).not.toBeNull();
+    expect((await owner.rpc('sync_bootstrap_v1', { installation: 'made-up' })).error).not.toBeNull();
 
     // Another account's session can't read it, or even tell it exists.
     expect((await stack.rawClient(accessToken(other)).rpc('sync_bootstrap_page_v1', { snapshot, after: 0 })).data).toEqual({ status: 'expired' });
@@ -455,13 +479,13 @@ describe('a raw client calling the bootstrap operations', () => {
     // An account whose deletion is scheduled: ordinary access is closed.
     await stack.sql`update public.accounts set state = 'deletion_scheduled', deletion_deadline = now() + interval '30 days', deletion_scheduled_at = now() where account_id = ${accountOf(phone)}`;
     expect((await owner.rpc('sync_bootstrap_page_v1', { snapshot, after: 0 })).error).not.toBeNull();
-    expect((await owner.rpc('sync_bootstrap_v1', { installation: 'raw-owner' })).error).not.toBeNull();
+    expect((await owner.rpc('sync_bootstrap_v1', { installation })).error).not.toBeNull();
     await stack.sql`update public.accounts set state = 'active', deletion_deadline = null, deletion_scheduled_at = null where account_id = ${accountOf(phone)}`;
     // A revoked session, its access token unexpired.
     const revoked = stack.rawClient(accessToken(phone));
     expect((await revoked.rpc('sync_bootstrap_page_v1', { snapshot, after: 0 })).data).toMatchObject({ status: 'page' });
     await phone.account.signOut();
     expect((await revoked.rpc('sync_bootstrap_page_v1', { snapshot, after: 0 })).error).not.toBeNull();
-    expect((await revoked.rpc('sync_bootstrap_v1', { installation: 'raw-owner' })).error).not.toBeNull();
+    expect((await revoked.rpc('sync_bootstrap_v1', { installation })).error).not.toBeNull();
   });
 });

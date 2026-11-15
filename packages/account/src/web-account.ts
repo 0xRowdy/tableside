@@ -1,5 +1,6 @@
 // The web account page's client (spec 2, #106; S2-24): what a browser needs to
-// sign in with an email code, schedule or cancel deletion, delete permanently
+// sign in (an email code, or Apple or Google through the provider's web flow
+// and the provider-callback function), schedule or cancel deletion, delete permanently
 // now, and read deletion status, from a page reachable without the app. It
 // calls the app's own server operations, so the server applies the same
 // rules: every deletion action needs Confirm it's you, a retry never schedules
@@ -16,16 +17,20 @@
 // Plain fetch and Web Storage, with no Supabase client, so the page's bundle
 // carries nothing it doesn't use.
 
-import { type PendingDeletion, instant, parseDeletionStatus, parseProgress } from './deletion-progress';
-import { type BackendEnvironment, ENVIRONMENT_HEADER } from './environment';
 import type {
   CancelDeletionResult,
   CodeRequestResult,
   DeletePermanentlyResult,
   DeletionProgress,
   FreshAuthenticationResult,
+  IdentityProvider,
   ScheduleDeletionResult,
-} from './service';
+} from './account-service/types';
+import { backendPost } from './backend-request';
+import { type PendingDeletion, parseDeletionStatus, parseProgress } from './deletion-progress';
+import type { BackendEnvironment } from './environment';
+import { cancelAnswer, codeRequestAnswer, freshCodeAnswer, freshProviderAnswer, retriedOperations, scheduleAnswer } from './lifecycle-answers';
+import { hex } from './values';
 
 /** The page's view of the account: what it shows. */
 export type WebAccountView =
@@ -64,7 +69,38 @@ export interface WebAccountOptions {
   readonly randomBytes: (count: number) => Uint8Array;
   /** Whether the browser sends Global Privacy Control (navigator.globalPrivacyControl). */
   readonly globalPrivacyControl: () => boolean;
+  /**
+   * Apple and Google sign-in on the page, through the provider's web flow and
+   * the provider-callback function: each provider this build was configured
+   * for (its authorization endpoint and the page's client ID), and the name
+   * Auth knows it by when not its own (a local stack's test identity provider).
+   */
+  readonly providers?: Partial<Record<WebProvider, WebProviderSettings>>;
+  /** SHA-256 of `text`, as lowercase hex; the browser's Web Crypto by default. */
+  readonly sha256Hex?: (text: string) => Promise<string>;
 }
+
+/** The providers the page signs in with: the app's own (IdentityProvider). */
+export type WebProvider = IdentityProvider;
+
+/** Apple's and Google's authorization pages: where the page sends the browser to sign in (navigations, never loads). */
+export const PROVIDER_AUTHORIZE_URLS: Readonly<Record<WebProvider, string>> = {
+  apple: 'https://appleid.apple.com/auth/authorize',
+  google: 'https://accounts.google.com/o/oauth2/v2/auth',
+};
+
+export interface WebProviderSettings {
+  readonly authorizeUrl: string;
+  readonly clientId: string;
+  readonly authName?: string;
+}
+
+export type WebProviderSignInResult =
+  | { readonly status: 'signed-in' }
+  /** No account signs in with this identity: none was created (Create is in the app, after the age step). */
+  | { readonly status: 'no-account' }
+  | { readonly status: 'canceled' }
+  | { readonly status: 'failed' };
 
 export type WebSignInResult = { readonly status: 'signed-in' } | { readonly status: 'invalid-code' } | { readonly status: 'failed' };
 
@@ -77,10 +113,28 @@ export interface WebAccount {
   /** Sign in: emails a code ("If an account exists for this address…"). Never creates an account. */
   requestCode(email: string): Promise<CodeRequestResult>;
   signIn(email: string, code: string): Promise<WebSignInResult>;
-  /** Confirm it's you, with a code emailed to the account's email method. */
+  /** The providers this page can sign in with. */
+  readonly providers: readonly WebProvider[];
+  /**
+   * Sign in with Apple or Google, never creating an account: the provider's
+   * page to send the browser to. The flow comes back to this page, which then
+   * calls completeProviderSignIn with what the page's URL came back with.
+   */
+  startProviderSignIn(provider: WebProvider): Promise<string | null>;
+  /** Whether `query` (the page URL's query) is a provider sign-in coming back to this page. */
+  isProviderReturn(query: string): boolean;
+  /**
+   * Finishes the provider flow `query` came back with: a sign-in (a deletion
+   * stays as it is: signing in never cancels it), or Confirm it's you
+   * ('confirmed', 'not-a-method').
+   */
+  completeProviderSignIn(query: string): Promise<WebProviderSignInResult | FreshAuthenticationResult>;
+  /** Confirm it's you, with a code emailed to the account's email method, or with one of its Apple or Google identities. */
   readonly confirm: {
     requestCode(): Promise<CodeRequestResult>;
     withCode(code: string): Promise<FreshAuthenticationResult>;
+    /** The provider's page to send the browser to; the flow comes back through completeProviderSignIn. */
+    startProvider(provider: WebProvider): Promise<string | null>;
   };
   schedule(): Promise<ScheduleDeletionResult>;
   cancel(): Promise<CancelDeletionResult>;
@@ -120,14 +174,19 @@ export function createWebAccount(options: WebAccountOptions): WebAccount {
   const DELETED = key('deleted');
   const INSTALLATION = key('installation');
   const secretKey = (accountId: string) => key(`secret.${accountId}`);
+  /** A provider sign-in under way in this tab: its verifier, nonce and provider. */
+  const PROVIDER_FLOW = key('provider-flow');
+  const sha256Hex =
+    options.sha256Hex ??
+    (async (text: string) => hex(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text)))));
 
   let view: WebAccountView = { state: 'signed-out' };
   /** Global Privacy Control is recorded once per page load. */
   let gpcRecorded = false;
   /** A Schedule or Cancel request with no answer: a retry sends the same operation ID. */
-  let pending: { readonly action: 'schedule' | 'cancel'; readonly id: string } | null = null;
+  const operations = retriedOperations(() => randomHex(16));
 
-  const hex = (count: number) => Array.from(options.randomBytes(count), (byte) => byte.toString(16).padStart(2, '0')).join('');
+  const randomHex = (count: number) => hex(options.randomBytes(count));
   const read = <T>(storage: WebStorage, name: string): T | null => {
     try {
       return JSON.parse(storage.getItem(name) ?? 'null') as T | null;
@@ -140,16 +199,7 @@ export function createWebAccount(options: WebAccountOptions): WebAccount {
   /** A request naming this environment, as every request does. Null when no answer came. */
   const send = async (path: string, body: unknown, token?: string): Promise<Answer | null> => {
     try {
-      const response = await options.fetch(`${backend.url}${path}`, {
-        method: 'POST',
-        headers: {
-          apikey: backend.publishableKey,
-          [ENVIRONMENT_HEADER]: backend.name,
-          'content-type': 'application/json',
-          ...(token ? { authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify(body),
-      });
+      const response = await backendPost(options.fetch, backend, path, body, token ? { authorization: `Bearer ${token}` } : {});
       return { httpStatus: response.status, body: await response.json().catch(() => null) };
     } catch {
       return null;
@@ -206,12 +256,12 @@ export function createWebAccount(options: WebAccountOptions): WebAccount {
     for (let attempt = 0; attempt < 2; attempt++) {
       let installation = lasting.getItem(INSTALLATION);
       if (!installation || attempt > 0) {
-        installation = hex(16);
+        installation = randomHex(16);
         lasting.setItem(INSTALLATION, installation);
       }
       let secret = lasting.getItem(secretKey(accountId));
       if (!secret || attempt > 0) {
-        secret = hex(32);
+        secret = randomHex(32);
         lasting.setItem(secretKey(accountId), secret);
       }
       const answer = await rpc('register_device_v1', { installation, secret, platform: 'web', label: WEB_DEVICE_LABEL }, token);
@@ -237,7 +287,7 @@ export function createWebAccount(options: WebAccountOptions): WebAccount {
     lasting.removeItem(STATUS);
     if (accountId) lasting.removeItem(secretKey(accountId));
     session.removeItem(SESSION);
-    pending = null;
+    operations.settle();
     return (view = { state: 'deleted', progress });
   };
 
@@ -287,23 +337,119 @@ export function createWebAccount(options: WebAccountOptions): WebAccount {
     return view;
   };
 
-  /** A Schedule or Cancel request's operation ID: the same for every retry until an answer comes. */
-  const operationId = (action: 'schedule' | 'cancel'): string => {
-    if (pending?.action !== action) pending = { action, id: hex(16) };
-    return pending.id;
-  };
-
   const requestCode = async (email: string): Promise<CodeRequestResult> => {
     const answer = await send('/functions/v1/request-code', { email: email.trim(), intent: 'sign-in' });
-    const body = answer?.body as { status?: unknown; retryAfter?: unknown } | null;
-    if (answer?.httpStatus === 200 && body?.status === 'sent') return { status: 'sent' };
-    if (answer?.httpStatus === 429 && typeof body?.retryAfter === 'number') return { status: 'rate-limited', retryAfterSeconds: body.retryAfter };
-    return { status: 'failed' };
+    return answer ? codeRequestAnswer(answer.httpStatus, answer.body) : { status: 'failed' };
+  };
+
+  /** After Auth answered with a session: the account it opened, kept for this tab, registered; null when it opened none. */
+  const openSession = async (answer: unknown, email: string): Promise<boolean> => {
+    const token = (answer as { access_token?: unknown } | null)?.access_token;
+    if (typeof token !== 'string') return false;
+    const account = await rpc('current_account', {}, token);
+    const accountId = (account?.body as { account_id?: unknown } | null)?.account_id;
+    if (account?.httpStatus !== 200 || typeof accountId !== 'string' || !keepSession(answer, email, accountId)) {
+      await send('/auth/v1/logout?scope=local', {}, token);
+      return false;
+    }
+    // A new sign-in: an earlier deletion's status in this browser is done with.
+    lasting.removeItem(DELETED);
+    lasting.removeItem(STATUS);
+    operations.settle();
+    await register(token, accountId);
+    await refresh();
+    return true;
+  };
+
+  const providerNames = (['apple', 'google'] as const).filter((provider) => options.providers?.[provider]);
+  /** provider-callback for a provider: the redirect URI its web flow posts to, which the grant exchange repeats. */
+  const callbackUri = (authName: string) => `${backend.url}/functions/v1/provider-callback?provider=${encodeURIComponent(authName)}`;
+
+  /**
+   * The provider's page for a sign-in or a Confirm it's you, kept for this
+   * tab: its verifier (the state names its hash) and nonce (the ID token
+   * names its hash). A confirmation's nonce is one the server issued to this
+   * session for the proof.
+   */
+  const startProviderFlow = async (provider: WebProvider, kind: 'sign-in' | 'confirm', nonce: string): Promise<string | null> => {
+    const settings = options.providers?.[provider];
+    if (!settings) return null;
+    const verifier = randomHex(32);
+    const state = `${backend.name}~${await sha256Hex(verifier)}~web`;
+    session.setItem(PROVIDER_FLOW, JSON.stringify({ provider, kind, verifier, nonce, state }));
+    const authName = settings.authName ?? provider;
+    return `${settings.authorizeUrl}?${query({
+      client_id: settings.clientId,
+      redirect_uri: callbackUri(authName),
+      response_type: 'code id_token',
+      response_mode: 'form_post',
+      scope: provider === 'google' ? 'openid email' : 'email',
+      state,
+      nonce: await sha256Hex(nonce),
+    })}`;
+  };
+  const query = (params: Record<string, string>) =>
+    Object.entries(params)
+      .map(([name, value]) => `${encodeURIComponent(name)}=${encodeURIComponent(value)}`)
+      .join('&');
+  const parseQuery = (text: string): Record<string, string> => {
+    const out: Record<string, string> = {};
+    for (const pair of text.replace(/^\?/, '').split('&')) {
+      if (!pair) continue;
+      const [name = '', value = ''] = pair.split('=', 2);
+      try {
+        out[decodeURIComponent(name.replace(/\+/g, ' '))] = decodeURIComponent(value.replace(/\+/g, ' '));
+      } catch {
+        // A malformed pair says nothing.
+      }
+    }
+    return out;
   };
 
   return {
     get view() {
       return view;
+    },
+
+    providers: providerNames,
+
+    startProviderSignIn: (provider) => startProviderFlow(provider, 'sign-in', randomHex(32)),
+
+    isProviderReturn(text) {
+      const returned = parseQuery(text);
+      return typeof returned.state === 'string' && returned.state.endsWith('~web');
+    },
+
+    async completeProviderSignIn(text) {
+      const flow = read<{ provider?: unknown; kind?: unknown; verifier?: unknown; nonce?: unknown; state?: unknown }>(session, PROVIDER_FLOW);
+      session.removeItem(PROVIDER_FLOW);
+      const returned = parseQuery(text);
+      // Only the flow this tab began: the state names its verifier's hash.
+      if (!flow || returned.state !== flow.state || typeof flow.verifier !== 'string' || typeof flow.nonce !== 'string') return { status: 'failed' };
+      if (returned.error) return { status: returned.error === 'canceled' ? 'canceled' : 'failed' };
+      const provider = providerNames.find((name) => name === flow.provider) ?? null;
+      const settings = provider ? options.providers?.[provider] : undefined;
+      if (!provider || !settings) return { status: 'failed' };
+      const authName = settings.authName ?? provider;
+      const redeemed = await rpc('redeem_provider_flow_code', { verifier: flow.verifier });
+      const { idToken, code } = (redeemed?.body ?? {}) as { idToken?: unknown; code?: unknown };
+      if (redeemed?.httpStatus !== 200 || typeof idToken !== 'string') return { status: 'failed' };
+      if (flow.kind === 'confirm') {
+        const token = await accessToken();
+        if (!token) return { status: 'failed' };
+        const answer = await send('/functions/v1/fresh-auth', { method: 'provider', provider: authName, idToken, nonce: flow.nonce }, token);
+        return freshProviderAnswer(answer?.httpStatus, statusOf(answer));
+      }
+      const signedIn = await send('/auth/v1/token?grant_type=id_token', { provider: authName, id_token: idToken, nonce: flow.nonce });
+      if (!signedIn) return { status: 'failed' };
+      // The before-user-created hook refused a new Auth user: nobody has this identity, and nothing was created.
+      if (signedIn.httpStatus !== 200) return { status: JSON.stringify(signedIn.body).includes('eligibility_assertion_required') ? 'no-account' : 'failed' };
+      const email = (signedIn.body as { user?: { email?: unknown } } | null)?.user?.email;
+      if (!(await openSession(signedIn.body, typeof email === 'string' ? email : ''))) return { status: 'failed' };
+      // The provider's revocable grant, kept for permanent deletion to revoke (best effort).
+      const token = storedSession()?.accessToken;
+      if (typeof code === 'string' && code && token) await send('/functions/v1/provider-grant', { provider: authName, code, flow: 'web', redirectUri: callbackUri(authName) }, token);
+      return { status: 'signed-in' };
     },
 
     start: refresh,
@@ -318,21 +464,7 @@ export function createWebAccount(options: WebAccountOptions): WebAccount {
         const error = (verified.body as { error_code?: unknown; code?: unknown } | null)?.error_code;
         return { status: error === 'otp_expired' ? 'invalid-code' : 'failed' };
       }
-      const token = (verified.body as { access_token?: unknown } | null)?.access_token;
-      if (typeof token !== 'string') return { status: 'failed' };
-      const account = await rpc('current_account', {}, token);
-      const accountId = (account?.body as { account_id?: unknown } | null)?.account_id;
-      if (account?.httpStatus !== 200 || typeof accountId !== 'string' || !keepSession(verified.body, address, accountId)) {
-        await send('/auth/v1/logout?scope=local', {}, token);
-        return { status: 'failed' };
-      }
-      // A new sign-in: an earlier deletion's status in this browser is done with.
-      lasting.removeItem(DELETED);
-      lasting.removeItem(STATUS);
-      pending = null;
-      await register(token, accountId);
-      await refresh();
-      return { status: 'signed-in' };
+      return (await openSession(verified.body, address)) ? { status: 'signed-in' } : { status: 'failed' };
     },
 
     confirm: {
@@ -347,9 +479,14 @@ export function createWebAccount(options: WebAccountOptions): WebAccount {
         const token = await accessToken();
         if (!token) return { status: 'failed' };
         const answer = await send('/functions/v1/fresh-auth', { method: 'email', code: code.trim() }, token);
-        if (answer?.httpStatus === 200 && statusOf(answer) === 'confirmed') return { status: 'confirmed' };
-        if (answer?.httpStatus === 401 && statusOf(answer) === 'invalid-code') return { status: 'invalid-code' };
-        return { status: 'failed' };
+        return freshCodeAnswer(answer?.httpStatus, statusOf(answer));
+      },
+      async startProvider(provider) {
+        const token = await accessToken();
+        if (!token) return null;
+        // A nonce the server issued to this session for this proof alone.
+        const issued = await rpc('issue_proof_nonce_v1', {}, token);
+        return issued?.httpStatus === 200 && typeof issued.body === 'string' ? startProviderFlow(provider, 'confirm', issued.body) : null;
       },
     },
 
@@ -357,17 +494,16 @@ export function createWebAccount(options: WebAccountOptions): WebAccount {
       if (view.state === 'signed-in' && view.deletion?.status === 'scheduled') return { status: 'scheduled', deadline: view.deletion.deadline };
       const token = await accessToken();
       if (!token) return { status: 'failed' };
-      const answer = await send('/functions/v1/schedule-deletion', { operationId: operationId('schedule') }, token);
-      if (answer && answer.httpStatus < 500) pending = null;
-      if (answer?.httpStatus === 403 && statusOf(answer) === 'fresh-authentication-required') return { status: 'fresh-authentication-required' };
-      const body = answer?.body as { deadline?: unknown; scheduledAt?: unknown } | null;
-      const deadline = answer?.httpStatus === 200 && statusOf(answer) === 'scheduled' ? instant(body?.deadline) : null;
-      const scheduledAt = instant(body?.scheduledAt);
-      if (deadline === null || scheduledAt === null || view.state !== 'signed-in') {
+      const answer = await send('/functions/v1/schedule-deletion', { operationId: operations.id('schedule') }, token);
+      if (answer && answer.httpStatus < 500) operations.settle();
+      const scheduled = scheduleAnswer(answer?.httpStatus, answer?.body);
+      if (scheduled?.status === 'fresh-authentication-required') return scheduled;
+      if (!scheduled || scheduled.scheduledAt === null || view.state !== 'signed-in') {
         // No answer, or a retry whose scheduling was canceled since: the server's status decides what shows.
         await refresh();
         return { status: 'failed' };
       }
+      const { deadline, scheduledAt } = scheduled;
       view = { ...view, deletion: { status: 'scheduled', deadline, scheduledAt } };
       return { status: 'scheduled', deadline };
     },
@@ -375,16 +511,17 @@ export function createWebAccount(options: WebAccountOptions): WebAccount {
     async cancel() {
       const token = await accessToken();
       if (!token) return { status: 'failed' };
-      const answer = await rpc('cancel_deletion_v1', { operation_id: operationId('cancel') }, token);
+      const answer = await rpc('cancel_deletion_v1', { operation_id: operations.id('cancel') }, token);
       const status = answer?.httpStatus === 200 ? statusOf(answer) : undefined;
-      if (typeof status === 'string') pending = null;
-      if (status === 'fresh-authentication-required') return { status };
-      if ((status === 'canceled' || status === 'not-scheduled') && view.state === 'signed-in') {
+      if (typeof status === 'string') operations.settle();
+      const result = cancelAnswer(status);
+      if (result?.status === 'fresh-authentication-required') return result;
+      if (result?.status === 'canceled' && view.state === 'signed-in') {
         view = { ...view, deletion: { status: 'none' } };
-        return { status: 'canceled' };
+        return result;
       }
       await refresh();
-      return status === 'too-late' ? { status } : { status: 'failed' };
+      return result?.status === 'too-late' ? result : { status: 'failed' };
     },
 
     async deletePermanently() {
@@ -407,7 +544,7 @@ export function createWebAccount(options: WebAccountOptions): WebAccount {
       const token = storedSession()?.accessToken;
       if (token) await send('/auth/v1/logout?scope=local', {}, token);
       lasting.removeItem(STATUS);
-      pending = null;
+      operations.settle();
       signedOut();
     },
 

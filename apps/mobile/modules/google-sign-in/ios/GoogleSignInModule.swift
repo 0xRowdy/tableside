@@ -15,8 +15,8 @@ public class GoogleSignInModule: Module {
       GIDSignIn.sharedInstance.configuration = GIDConfiguration(clientID: clientId, serverClientID: serverClientId)
       GIDSignIn.sharedInstance.signIn(withPresenting: presenting, hint: nil, additionalScopes: nil, nonce: nonce) { result, error in
         if let error = error {
-          let cancelled = (error as? GIDSignInError)?.code == .canceled
-          promise.resolve(["status": cancelled ? "cancelled" : "failed"])
+          let canceled = (error as? GIDSignInError)?.code == .canceled
+          promise.resolve(["status": canceled ? "canceled" : "failed"])
           return
         }
         guard let token = result?.user.idToken?.tokenString else {

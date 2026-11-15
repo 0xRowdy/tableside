@@ -126,7 +126,9 @@ describe('the Create path’s age step', () => {
     expect(screen.getByText(/No account was created and nothing was kept/)).toBeOnTheScreen();
     noTabBar();
     await fireEvent.press(button('Contact support. Ask about confirming your age'));
-    expect(account().opened).toEqual(['contact-support']);
+    // Amendment 9 §1: every restricted screen links to both support paths.
+    await fireEvent.press(button('Make a privacy request. See, correct, delete or get a copy of your data'));
+    expect(account().opened).toEqual(['contact-support', 'privacy-request']);
     expect(screen.queryByRole('button', { name: /Delete account|Export my data/ })).toBeNull();
 
     await fireEvent.press(button('Try the age check again'));

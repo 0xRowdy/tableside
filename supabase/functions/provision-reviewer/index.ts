@@ -19,7 +19,7 @@
 // eligibility assertion, which the database consumes before the account opens.
 // Nothing here logs an address, assertion or credential.
 
-import { ENVIRONMENT_HEADER, reply } from '../_shared/service.ts';
+import { ENVIRONMENT_HEADER, StepError, environmentOf, readJsonPost, reply } from '../_shared/service.ts';
 
 declare const Deno: {
   env: { get(name: string): string | undefined };
@@ -31,25 +31,13 @@ const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 class Refused extends Error {}
 
-/** Only the step that failed is logged: never an address, assertion or credential. */
-class StepError extends Error {
-  constructor(readonly step: string) {
-    super(step);
-  }
-}
-
 Deno.serve(async (request) => {
-  if (request.method !== 'POST') return reply(400, { status: 'invalid' });
-  let body: { email?: unknown };
-  try {
-    body = await request.json();
-  } catch {
-    return reply(400, { status: 'invalid' });
-  }
+  const body = await readJsonPost<{ email: unknown }>(request);
+  if (!body) return reply(400, { status: 'invalid' });
   const email = typeof body.email === 'string' ? body.email.trim() : '';
   if (!EMAIL_PATTERN.test(email) || email.length > 254) return reply(400, { status: 'invalid' });
 
-  const environment = request.headers.get(ENVIRONMENT_HEADER) ?? '';
+  const environment = environmentOf(request);
   const authorization = request.headers.get('authorization');
   const caller = { apikey: request.headers.get('apikey') ?? '', ...(authorization ? { authorization } : {}) };
   const asCaller = async (path: string, payload: unknown): Promise<{ ok: boolean; code?: string; body: unknown }> => {

@@ -27,7 +27,7 @@ export interface DevicePorts {
   readonly foreground: DeviceSignal<boolean>;
   /** Whether the device has a network connection. */
   readonly online: DeviceSignal<boolean>;
-  /** Runs `run` every `milliseconds` until cancelled. */
+  /** Runs `run` every `milliseconds` until canceled. */
   every(milliseconds: number, run: () => void): () => void;
   /** Runs `run` once after `milliseconds`, unless canceled. */
   after(milliseconds: number, run: () => void): () => void;

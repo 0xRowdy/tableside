@@ -1,6 +1,6 @@
 // Seam 3: Export my data (#102, S2-21), through the real routes and the
 // accessibility tree, over Account-service fakes: the account archive asked
-// for after Confirm it's you, its preparing, ready, expired and cancelled
+// for after Confirm it's you, its preparing, ready, expired and canceled
 // states, downloading it to the share sheet, the local supplement made on
 // this device, and the note that records on other devices aren't included,
 // which is there in every state. An account whose age isn't established

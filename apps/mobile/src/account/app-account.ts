@@ -76,6 +76,10 @@ export function createAppAccount(): AppAccount {
       await vault.erase(accountId);
     },
     removeEnvironment: (environment) => vault.removeEnvironment(environment),
+    async recover(accountId) {
+      if (session?.accountId === accountId) session = null;
+      await vault.recover(accountId);
+    },
   };
   const offlineGameKey = (accountId: string) => `tableside.${backend.name}.${accountId}.offline-game`;
   const service = createAccountService({

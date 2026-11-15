@@ -114,7 +114,7 @@ describe('Devices', () => {
     expect(screen.queryByRole('button', { name: 'Sign out all other devices' })).toBeNull();
   });
 
-  it('changes nothing when cancelled, and explains a failure', async () => {
+  it('changes nothing when canceled, and explains a failure', async () => {
     await openDevices(() => service().devicesNext.signOut.push({ status: 'failed' }));
     await fireEvent.press(button('Sign out iPad Air'));
     await fireEvent.press(sheet('sign-out-devices').getByRole('button', { name: 'Cancel' }));

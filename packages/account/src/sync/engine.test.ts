@@ -18,7 +18,9 @@ import {
   type FeedEntry,
   type FeedPage,
   type ProtocolStatus,
+  REQUEST_LIMIT_BYTES,
   type ScopeAnswer,
+  type StagedChunk,
   SyncCallError,
   type UploadAnswer,
 } from './protocol';
@@ -308,14 +310,21 @@ class ScriptedBackend implements SyncBackend {
     if (command.generation !== this.serving) return { status: 'stale-scope', reason: 'retired' };
     const scripted = this.answers.get(item);
     if (scripted instanceof SyncCallError) throw scripted;
+    // A manifest (#93): nothing is decided until every chunk it names is staged.
+    const { content } = JSON.parse(request) as { content?: { chunks: string[] } };
+    const missing = (content?.chunks ?? []).flatMap((sha256, index) => (this.staged.has(sha256) ? [] : [index]));
+    if (missing.length > 0) return { status: 'chunks-missing', missing };
     if (scripted && scripted.status !== 'accepted' && scripted.status !== 'rejected') return scripted;
     const { sha256Hex } = await import('@tableside/engine');
     const requestHash = sha256Hex(request);
     if (scripted?.status === 'rejected') return { status: 'rejected', operation, requestHash, code: scripted.code };
     return { status: 'accepted', operation, requestHash, sequence: ++this.sequence };
   }
-  async stageChunk(): Promise<ChunkAnswer> {
+  /** The chunks staged, by SHA-256. */
+  readonly staged = new Set<string>();
+  async stageChunk(chunk: StagedChunk): Promise<ChunkAnswer> {
     this.calls.push('stage');
+    this.staged.add(chunk.sha256);
     return { status: 'staged' };
   }
   /** What each feed call answers first, in turn (a reset, say); then the account's feed entries after its cursor. */
@@ -723,6 +732,17 @@ describe('a change sent at once', () => {
     expect(await sync.submit('switch', { id: 'off-1', on: false })).toEqual({ status: 'invalid' });
     expect(await sync.submit('note', { id: 'n1' })).toEqual({ status: 'invalid' });
     expect(backend.calls).toEqual([]);
+  });
+});
+
+describe('a conflict resolution', () => {
+  it('too large for one request is sent as a manifest and its chunks, like a queued upload (#93)', async () => {
+    const { backend, sync } = engine({ types: [memo as RecordType] });
+    const value = 'x'.repeat(3 * REQUEST_LIMIT_BYTES);
+    expect(await sync.resolve('memo', 'm1', { generation: 1, reviewed: [], value })).toBe('resolved');
+    const stages = backend.calls.filter((call) => call === 'stage').length;
+    expect(stages).toBeGreaterThan(2);
+    expect(backend.calls.slice(0, stages + 2)).toEqual(['upload m1', ...Array<string>(stages).fill('stage'), 'upload m1']);
   });
 });
 

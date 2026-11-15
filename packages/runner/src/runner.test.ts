@@ -41,7 +41,9 @@ describe('headless runner', () => {
     }
     // Every roulette and craps built-in on each profile it fits, and two certified blackjack ones, two sessions each.
     expect(replayed).toBe((5 * 2 + 5 + 2) * 2);
-  });
+    // A fixed amount of engine work (about a second alone): on a loaded machine the 5 s default timed
+    // it out though nothing was wrong, so it gets its sibling's budget. Its speed is no property here.
+  }, 120_000);
 
   it('runs every built-in strategy on every profile it fits, with complete, bounded records', () => {
     const key = parseKey('0123456789abcdef');

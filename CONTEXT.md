@@ -116,7 +116,7 @@ The setting aside of practice sessions whose pinned engine, rule, strategy or re
 
 **Incomplete practice session**:
 An unfinished practice session found unusable (quarantined, or its saved state damaged) and so marked incomplete instead of being resumed or given an invented result.
-_Avoid_: failed session, cancelled session
+_Avoid_: failed session, canceled session
 
 **Final settlement**:
 The automatic resolution of outstanding wagers when a practice session ends, after legally removable wagers are returned. No new bets are placed during it.
@@ -300,7 +300,7 @@ What a deleted account leaves behind so it stays deleted: its ID and state, when
 _Avoid_: tombstone (that is a deleted record's)
 
 **Web account page**:
-The page, reachable without the app, where a player signs in with an email code to schedule or cancel deletion, delete permanently now and see deletion status, under the same fresh-authentication rules as the app. Lifecycle only: no play and no records. It records Global Privacy Control as the ad-data opt-out, and loads nothing from anyone else.
+The page, reachable without the app, where a player signs in with an email code, Apple or Google to schedule or cancel deletion, delete permanently now and see deletion status, under the same fresh-authentication rules as the app. Lifecycle only: no play and no records. It records Global Privacy Control as the ad-data opt-out, and loads nothing from anyone else.
 _Avoid_: web app, website (that is the marketing site)
 
 **Conflict proposal**:

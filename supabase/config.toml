@@ -417,6 +417,18 @@ deno_version = 2
 TABLESIDE_MAILPIT_URL = "http://host.docker.internal:54324"
 TABLESIDE_ID_TOKEN_KEYCLOAK_ISSUER = "http://host.docker.internal:54330"
 TABLESIDE_ID_TOKEN_KEYCLOAK_AUDIENCES = "tableside-test-idp"
+# Provider grants (provider-grant, the deletion job's revocation): the test
+# identity provider's token and revocation endpoints, and a sealing key for
+# local stacks only. Beta and production set Apple's and Google's and their
+# own key (docs/environments.md).
+TABLESIDE_GRANT_KEYCLOAK_TOKEN_URL = "http://host.docker.internal:54330/token"
+TABLESIDE_GRANT_KEYCLOAK_REVOKE_URL = "http://host.docker.internal:54330/revoke"
+TABLESIDE_GRANT_KEYCLOAK_CLIENT_ID = "tableside-test-idp"
+TABLESIDE_GRANT_KEYCLOAK_CLIENT_SECRET = "unused-test-idp-secret"
+TABLESIDE_PROVIDER_GRANT_KEY = "dGFibGVzaWRlLWxvY2FsLW9ubHktZ3JhbnQta2V5ISE="
+# Where provider-callback sends the web account page's Apple and Google
+# sign-ins back to: the page's dev server locally (pnpm --filter @tableside/web dev).
+TABLESIDE_WEB_ACCOUNT_URL = "http://localhost:5173/"
 # Must match [auth.hook.send_email] secrets: how send-email knows Auth called it.
 TABLESIDE_SEND_EMAIL_HOOK_SECRET = "v1,whsec_6KWm8Y0iXUQ5qMiAGbgTNyGqd4spJO6WIhE5qIxW/g4="
 
@@ -442,6 +454,10 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.link-method]
+verify_jwt = false
+
+# Keeping a provider's revocable grant: checks the caller's own token the same way.
+[functions.provider-grant]
 verify_jwt = false
 
 # Signing out other devices (#101): checks the caller's own token the same way.

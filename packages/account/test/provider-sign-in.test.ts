@@ -69,7 +69,7 @@ describe('Sign in with Apple or Google', () => {
 
   it('changes nothing when the player closes the provider’s sheet', async () => {
     const phone = device('phone');
-    expect(await phone.account.signInWithProvider('apple')).toEqual({ status: 'cancelled' });
+    expect(await phone.account.signInWithProvider('apple')).toEqual({ status: 'canceled' });
     expect(phone.account.gate).toEqual({ state: 'no-account' });
     expect(phone.proxy.sent.filter((request) => request.url.includes('/auth/'))).toEqual([]);
   });
@@ -91,6 +91,21 @@ describe('Create with Apple or Google', () => {
     expect(gate.accountId).toBe(await stack.accountId(someone.email));
     expect(phone.vault.openAccount).toBe(gate.accountId);
     expect(phone.providers!.opened).toHaveLength(1);
+  });
+});
+
+describe('the account currency on Create', () => {
+  it.each(['apple', 'google'] as const)('with %s starts in the creating device’s locale currency, as an email Create does', async (provider) => {
+    const phone = createDevice(stack, { name: 'phone', identityProvider: idp, localeCurrency: 'EUR' });
+    devices.push(phone);
+    const someone = person(`${provider}-currency`);
+    phone.providers!.accounts[provider] = someone;
+    expect(await phone.account.answerAgeQuestion('18+')).toEqual({ status: 'eligible' });
+    expect(await phone.account.createWithProvider(provider)).toEqual({ status: 'created' });
+
+    expect(await phone.account.accountSummary()).toMatchObject({ currency: 'EUR' });
+    const [account] = await stack.sql<{ currency: string }[]>`select currency from public.accounts where account_id = ${await stack.accountId(someone.email)}`;
+    expect(account?.currency).toBe('EUR');
   });
 });
 
@@ -208,9 +223,9 @@ describe('Sign in with Apple on Android, through the system browser', () => {
     expect(phone.account.gate).toMatchObject({ state: 'active', accountId });
   });
 
-  it('treats a cancelled page as cancelled', async () => {
+  it('treats a canceled page as canceled', async () => {
     const phone = device('android', 'android');
-    expect(await phone.account.signInWithProvider('apple')).toEqual({ status: 'cancelled' });
+    expect(await phone.account.signInWithProvider('apple')).toEqual({ status: 'canceled' });
     expect(phone.account.gate).toEqual({ state: 'no-account' });
   });
 

@@ -509,12 +509,19 @@ export class SyncEngine {
       }
     }
     const { operation } = sent;
-    let answer: UploadAnswer;
+    let answer: UploadAnswer | 'unanswered';
     try {
-      answer = await this.options.backend.upload(operation.request);
+      // Through the chunked path like any upload (#93): a resolution too large for one request goes as chunks.
+      answer = await this.send(operation, asUnsendable(() => chunksOf(operation, payload)));
     } catch (caught) {
+      if (caught instanceof UnsendableError) {
+        this.unanswered.delete(key);
+        return { status: 'invalid' };
+      }
       return { status: caught instanceof SyncCallError && caught.kind === 'incompatible' ? 'incompatible' : 'offline' };
     }
+    // Its chunks couldn't all be staged: the same operation is sent again next time.
+    if (answer === 'unanswered') return { status: 'offline' };
     this.unanswered.delete(key);
     if (answer.status === 'stale-scope') {
       // Nothing was recorded: the next run refreshes and takes a new generation, and sending again sends it anew.

@@ -5,7 +5,15 @@
 // regions. The account is a fake that answers as the server would (seam 2's
 // web-account-page.test.ts drives the real one against the stack).
 
-import type { CancelDeletionResult, DeletePermanentlyResult, DeletionProgress, ScheduleDeletionResult, WebAccount, WebAccountView } from '@tableside/account/web';
+import type {
+  CancelDeletionResult,
+  DeletePermanentlyResult,
+  DeletionProgress,
+  ScheduleDeletionResult,
+  WebAccount,
+  WebAccountView,
+  WebProvider,
+} from '@tableside/account/web';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { mountAccountPage } from './page';
@@ -33,12 +41,32 @@ class FakeAccount implements WebAccount {
     if (this.signInAnswer === 'signed-in') this.view = { state: 'signed-in', email, deletion: { status: 'none' } };
     return { status: this.signInAnswer };
   }
+  providers: readonly WebProvider[] = [];
+  /** What the provider's flow came back as, when the page asks. */
+  providerReturn: 'signed-in' | 'no-account' | 'confirmed' | 'not-a-method' = 'signed-in';
+  async startProviderSignIn(provider: WebProvider) {
+    this.calls.push(`provider:${provider}`);
+    return `https://provider.example/${provider}`;
+  }
+  isProviderReturn(query: string) {
+    return query.includes('~web');
+  }
+  async completeProviderSignIn(query: string) {
+    this.calls.push(`return:${query}`);
+    if (this.providerReturn === 'signed-in') this.view = { state: 'signed-in', email: 'apple@example.com', deletion: { status: 'none' } };
+    if (this.providerReturn === 'confirmed') this.fresh = true;
+    return { status: this.providerReturn };
+  }
   confirm = {
     requestCode: async () => ({ status: 'sent' }) as const,
     withCode: async (code: string) => {
       if (code !== '123456') return { status: 'invalid-code' } as const;
       this.fresh = true;
       return { status: 'confirmed' } as const;
+    },
+    startProvider: async (provider: WebProvider) => {
+      this.calls.push(`confirm-provider:${provider}`);
+      return `https://provider.example/confirm/${provider}`;
     },
   };
   async schedule(): Promise<ScheduleDeletionResult> {
@@ -146,7 +174,7 @@ describe('signing in', () => {
     await mountAccountPage(main, account);
     await submit('Email', 'player@example.com');
     await submit('Code', '000000');
-    expect(problem()).toMatch(/isn't right/);
+    expect(problem()).toMatch(/That code didn't work/);
     expect(fieldLabelled('Code').getAttribute('aria-invalid')).toBe('true');
     expect(document.activeElement).toBe(fieldLabelled('Code'));
   });
@@ -246,5 +274,65 @@ describe('keyboard and screen-reader use', () => {
     expect(help?.textContent).toContain('Make a privacy request');
     // Lifecycle only: nothing to play.
     expect(main.textContent).not.toMatch(/\b(Play now|Deal|Spin|Roll)\b/);
+  });
+});
+
+describe('Apple and Google sign-in', () => {
+  const navigation = (query = '') => {
+    const went: string[] = [];
+    let cleared = false;
+    return { went, cleared: () => cleared, port: { query: () => query, go: (url: string) => void went.push(url), clearQuery: () => void (cleared = true) } };
+  };
+
+  it('offers each provider the page was built with, and sends the browser to its page', async () => {
+    account.providers = ['apple', 'google'];
+    const nav = navigation();
+    await mountAccountPage(main, account, nav.port);
+    await press('Sign in with Apple');
+    expect(nav.went).toEqual(['https://provider.example/apple']);
+    expect(buttonNamed('Sign in with Google')).toBeTruthy();
+    // With both providers on the page, the note about adding an email code in the app is gone.
+    expect(main.textContent).not.toMatch(/Add an email code to your account in the app first/);
+  });
+
+  it('shows no provider button when none is configured', async () => {
+    await mountAccountPage(main, account, navigation().port);
+    expect([...main.querySelectorAll('button')].map((node) => node.textContent)).not.toContain('Sign in with Apple');
+    expect(main.textContent).toMatch(/Add an email code to your account in the app first/);
+  });
+
+  it('finishes a return from the provider before anything else, and leaves the page at its plain URL', async () => {
+    account.providers = ['apple'];
+    const nav = navigation('?state=local~abc~web');
+    await mountAccountPage(main, account, nav.port);
+    expect(account.calls).toContain('return:?state=local~abc~web');
+    expect(nav.cleared()).toBe(true);
+    expect(heading()).toBe('Delete your account');
+    expect(main.textContent).toContain('Signed in as apple@example.com.');
+  });
+
+  it('says so when no account signs in with that identity: none was made', async () => {
+    account.providers = ['google'];
+    account.providerReturn = 'no-account';
+    await mountAccountPage(main, account, navigation('?state=local~abc~web').port);
+    expect(problem()).toMatch(/No Tableside account signs in with that Apple ID or Google account, and none was made/);
+    expect(heading()).toBe('Your Tableside account');
+  });
+
+  it('confirms it’s you with a provider, then the deletion action can run', async () => {
+    account.providers = ['apple'];
+    const nav = navigation();
+    account.view = { state: 'signed-in', email: 'apple@example.com', deletion: { status: 'none' } };
+    await mountAccountPage(main, account, nav.port);
+    await press('Confirm with Apple');
+    expect(nav.went).toEqual(['https://provider.example/confirm/apple']);
+
+    // The provider's return: confirmed, and the deletion choices open.
+    account.providerReturn = 'confirmed';
+    document.body.innerHTML = '<main id="page"></main>';
+    main = document.getElementById('page')!;
+    await mountAccountPage(main, account, navigation('?state=local~abc~web').port);
+    expect(announced()).toBe('Confirmed. Choose what to do with your account.');
+    expect(buttonNamed('Schedule deletion')).toBeTruthy();
   });
 });

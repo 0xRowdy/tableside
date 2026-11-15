@@ -79,9 +79,11 @@ describe('an upload too large for one request', () => {
 
 describe('the request limit', () => {
   it('bounds every request body, even for text that doubles when escaped', () => {
-    // Quotes and backslashes escape to two bytes inside a JSON string: the worst case.
-    for (const unit of ['x', '"', '\\', 'é', '🂡']) {
-      for (const size of [REQUEST_LIMIT_BYTES / 4, REQUEST_LIMIT_BYTES / 2 - 200, REQUEST_LIMIT_BYTES, 5 * REQUEST_LIMIT_BYTES]) {
+    // Quotes and backslashes escape to two bytes inside a JSON string: the worst case; multi-byte
+    // text is the other. Sizes: one request when escaping doubles it to just under the limit, just
+    // past the limit, and several chunks. (Plain ASCII is the easy case, covered above.)
+    for (const unit of ['"', '\\', 'é', '🂡']) {
+      for (const size of [REQUEST_LIMIT_BYTES / 2 - 200, REQUEST_LIMIT_BYTES, 2 * REQUEST_LIMIT_BYTES + 1]) {
         const payload = payloadOf(size, unit);
         const operation = prepareOperation(envelope(payload));
         expect(bytes(uploadCallBody(operation.request)), `${unit} × ${size}`).toBeLessThanOrEqual(REQUEST_LIMIT_BYTES);

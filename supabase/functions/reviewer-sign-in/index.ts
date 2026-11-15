@@ -16,24 +16,20 @@
 // and authorization as any account, and nothing more. No email is sent.
 // Nothing here logs an address, credential, code or token.
 
-import { ENVIRONMENT_HEADER, reply, serviceAuth, serviceRpc } from '../_shared/service.ts';
+import { generateCode } from '../_shared/codes.ts';
+import { StepError, environmentOf, readJsonPost, reply, serviceAuth, serviceRpc } from '../_shared/service.ts';
 
 declare const Deno: { serve(handler: (request: Request) => Promise<Response>): void };
 
 Deno.serve(async (request) => {
-  if (request.method !== 'POST') return reply(400, { status: 'invalid' });
-  let body: { email?: unknown; credential?: unknown };
-  try {
-    body = await request.json();
-  } catch {
-    return reply(400, { status: 'invalid' });
-  }
+  const body = await readJsonPost<{ email: unknown; credential: unknown }>(request);
+  if (!body) return reply(400, { status: 'invalid' });
   const email = typeof body.email === 'string' ? body.email.trim() : '';
   const { credential } = body;
   if (!email || email.length > 254 || typeof credential !== 'string' || credential.length > 64) return reply(400, { status: 'invalid' });
 
   try {
-    const checked = await serviceRpc(request.headers.get(ENVIRONMENT_HEADER) ?? '', 'reviewer_credential_valid', { address: email, credential });
+    const checked = await serviceRpc(environmentOf(request), 'reviewer_credential_valid', { address: email, credential });
     if (!checked.ok) throw new StepError('check-credential');
     if ((await checked.json()) !== true) return reply(401, { status: 'refused' });
 
@@ -46,13 +42,6 @@ Deno.serve(async (request) => {
 
 const ATTEMPTS = 5;
 
-/** Only the step that failed is logged: never an address, credential, code or token. */
-class StepError extends Error {
-  constructor(readonly step: string) {
-    super(step);
-  }
-}
-
 /**
  * A one-time code for the account, used at once: the session is the one a
  * verified email code makes. (Auth sends nothing for an admin link.) Auth
@@ -61,9 +50,7 @@ class StepError extends Error {
  */
 async function signInWithFreshCode(email: string): Promise<{ access_token: string; refresh_token: string }> {
   for (let attempt = 1; ; attempt++) {
-    const link = await serviceAuth('/admin/generate_link', { type: 'magiclink', email });
-    const code = (link.body as { email_otp?: unknown } | null)?.email_otp;
-    if (!link.ok || typeof code !== 'string') throw new StepError('generate-code');
+    const code = await generateCode(email);
     const verified = await serviceAuth('/verify', { type: 'email', email, token: code });
     const session = verified.body as { access_token?: unknown; refresh_token?: unknown } | null;
     if (verified.ok && typeof session?.access_token === 'string' && typeof session.refresh_token === 'string') {

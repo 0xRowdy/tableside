@@ -189,10 +189,52 @@ describe('retrying while unresolved', () => {
     expect(await phone.account.answerAgeQuestion('18+')).toEqual({ status: 'unresolved' });
     expect(phone.account.gate).toMatchObject({ state: 'age-unresolved' });
 
-    phone.ageSignals.signal = { kind: 'range', range: '18+' };
+    phone.ageSignals.signal = { kind: 'range', range: '16-17' };
     expect(await phone.account.checkAge()).toEqual({ status: 'eligible' });
-    expect(phone.account.gate).toEqual({ state: 'active', accountId, eligibility: '18+' });
-    expect(await serverRecords(accountId)).toEqual([{ band: '18+', source: 'platform-signal', policy_version: 1 }]);
+    expect(phone.account.gate).toEqual({ state: 'active', accountId, eligibility: '16-17' });
+    expect(await serverRecords(accountId)).toEqual([{ band: '16-17', source: 'platform-signal', policy_version: 1 }]);
+  });
+
+  it('the server keeps the owed check, so an answer sent past this device is refused too', async () => {
+    const email = uniqueEmail('owed-on-server');
+    const accountId = await createAccount(email);
+    await localStack().sql`delete from public.eligibility where account_id = ${accountId}`;
+    const phone = createDevice(localStack(), { name: 'phone', platformAgeSignals: true });
+    devices.push(phone);
+    phone.ageSignals.signal = { kind: 'required-pending' };
+    await signInByEmail(phone, email);
+    expect(phone.account.gate).toEqual({ state: 'age-unresolved', accountId, reason: 'check-pending' });
+
+    // A third code request for the address, beyond the two the limit admits at once.
+    await localStack().resetCodeRequests();
+    const tablet = device('tablet');
+    expect(await signInByEmail(tablet, email)).toEqual({ status: 'signed-in' });
+    expect(await tablet.account.checkAge()).toEqual({ status: 'question' });
+    expect(await tablet.account.answerAgeQuestion('18+')).toEqual({ status: 'unresolved' });
+    expect(await serverRecords(accountId)).toEqual([]);
+
+    // Once the phone's platform no longer requires it, the question may decide.
+    phone.ageSignals.signal = { kind: 'unavailable' };
+    await phone.account.refreshEligibility();
+    expect(await tablet.account.answerAgeQuestion('18+')).toEqual({ status: 'eligible' });
+  });
+
+  it('a device that signed out owes nothing any more: it can’t hold the account unresolved for good', async () => {
+    const email = uniqueEmail('owed-signed-out');
+    const accountId = await createAccount(email);
+    await localStack().sql`delete from public.eligibility where account_id = ${accountId}`;
+    const phone = createDevice(localStack(), { name: 'phone', platformAgeSignals: true });
+    devices.push(phone);
+    phone.ageSignals.signal = { kind: 'required-pending' };
+    await signInByEmail(phone, email);
+    expect(await localStack().sql`select 1 from private.installations where account_id = ${accountId} and age_check = 'pending'`).toHaveLength(1);
+    expect(await phone.account.signOut()).toMatchObject({ status: 'signed-out', serverSessionEnded: true });
+
+    await localStack().resetCodeRequests();
+    const tablet = device('tablet');
+    expect(await signInByEmail(tablet, email)).toEqual({ status: 'signed-in' });
+    expect(await tablet.account.answerAgeQuestion('16-17')).toEqual({ status: 'eligible' });
+    expect(await serverRecords(accountId)).toEqual([{ band: '16-17', source: 'declaration', policy_version: 1 }]);
   });
 
   it('an under-13 answer makes it ineligible', async () => {
@@ -254,12 +296,12 @@ describe('the record', () => {
 
   it('a device doesn’t keep reasserting its platform’s range over a later change made elsewhere', async () => {
     const email = uniqueEmail('no-flip');
-    const accountId = await createAccount(email, '16-17');
+    const accountId = await createAccount(email, '18+');
     const phone = createDevice(localStack(), { name: 'phone', platformAgeSignals: true });
     devices.push(phone);
-    phone.ageSignals.signal = { kind: 'range', range: '18+' };
+    phone.ageSignals.signal = { kind: 'range', range: '16-17' };
     await signInByEmail(phone, email);
-    expect(await serverRecords(accountId)).toEqual([{ band: '18+', source: 'platform-signal', policy_version: 1 }]);
+    expect(await serverRecords(accountId)).toEqual([{ band: '16-17', source: 'platform-signal', policy_version: 1 }]);
 
     await setServerRecord(accountId, '13-15');
     const seen: string[] = [];
@@ -394,12 +436,30 @@ describe('learning of a change', () => {
 
   it('a move between eligible bands changes the band only', async () => {
     const email = uniqueEmail('band-move');
+    const accountId = await createAccount(email, '18+');
+    const phone = createDevice(localStack(), { name: 'phone', platformAgeSignals: true });
+    devices.push(phone);
+    await signInByEmail(phone, email);
+
+    phone.ageSignals.signal = { kind: 'range', range: '16-17' };
+    await phone.account.refreshEligibility();
+    expect(phone.account.gate).toEqual({ state: 'active', accountId, eligibility: '16-17' });
+  });
+
+  it('a platform answer never raises an established band, here or on the server: that is support review’s', async () => {
+    const email = uniqueEmail('no-band-raise');
     const accountId = await createAccount(email, '16-17');
     const phone = createDevice(localStack(), { name: 'phone', platformAgeSignals: true });
     devices.push(phone);
     await signInByEmail(phone, email);
 
     phone.ageSignals.signal = { kind: 'range', range: '18+' };
+    await phone.account.refreshEligibility();
+    expect(phone.account.gate).toEqual({ state: 'active', accountId, eligibility: '16-17' });
+    expect(await serverRecords(accountId)).toEqual([{ band: '16-17', source: 'declaration', policy_version: 1 }]);
+
+    // Support review raises it; the device takes the server's record.
+    await setServerRecord(accountId, '18+', 'declaration');
     await phone.account.refreshEligibility();
     expect(phone.account.gate).toEqual({ state: 'active', accountId, eligibility: '18+' });
   });
@@ -456,14 +516,14 @@ describe('an active practice session', () => {
 
   it('carries on when the band moves between eligible bands', async () => {
     const email = uniqueEmail('no-pause');
-    await createAccount(email, '16-17');
+    await createAccount(email, '18+');
     const phone = createDevice(localStack(), { name: 'phone', platformAgeSignals: true });
     devices.push(phone);
     await signInByEmail(phone, email);
     const practice = await phone.startPracticeSession();
     await practice.placeWager('red', '10');
 
-    phone.ageSignals.signal = { kind: 'range', range: '18+' };
+    phone.ageSignals.signal = { kind: 'range', range: '16-17' };
     await phone.account.refreshEligibility();
     await practice.spin();
     expect(practice.snapshot()).toMatchObject({ status: 'active', suspension: null, view: { phase: 'settled-outcome' } });

@@ -2,13 +2,14 @@
 // fonts (spec 2 Amendment 8 §5; spec 7 D13): its document and stylesheet
 // reference only the page's own files, its Content Security Policy lets
 // nothing else load, and its scripts name no other origin than the links a
-// player follows (the stores' billing pages, support).
+// player follows (the stores' billing pages, support, Apple's and Google's
+// sign-in pages).
 
 import { readFile, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { STORES, WEB_PAGES } from '@tableside/account/web';
+import { PROVIDER_AUTHORIZE_URLS, STORES, WEB_PAGES } from '@tableside/account/web';
 import { describe, expect, it } from 'vitest';
 
 const app = fileURLToPath(new URL('..', import.meta.url));
@@ -44,7 +45,11 @@ describe('the web account page', () => {
   it('names no other origin in its scripts than the links it shows', async () => {
     const files = (await readdir(join(app, 'src'))).filter((name) => name.endsWith('.ts') && !name.endsWith('.test.ts'));
     for (const name of files) expect(await read(join('src', name)), name).not.toMatch(/https?:\/\//);
-    const allowed = [...Object.values(STORES).flatMap((store) => [store.manageUrl, store.refundUrl]), ...Object.values(WEB_PAGES)];
+    const allowed = [
+      ...Object.values(STORES).flatMap((store) => [store.manageUrl, store.refundUrl]),
+      ...Object.values(WEB_PAGES),
+      ...Object.values(PROVIDER_AUTHORIZE_URLS),
+    ];
     for (const url of allowed) expect(new URL(url).protocol).toBe('https:');
   });
 });

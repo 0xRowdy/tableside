@@ -20,7 +20,7 @@
 
 import { callerOf } from '../_shared/caller.ts';
 import { devicesSignedOutMail, sendSecurityNotice } from '../_shared/mail.ts';
-import { ENVIRONMENT_HEADER, reply, serviceRpc } from '../_shared/service.ts';
+import { environmentOf, readJsonPost, reply, rpcJson } from '../_shared/service.ts';
 
 declare const Deno: { serve(handler: (request: Request) => Promise<Response>): void };
 
@@ -33,25 +33,19 @@ const STATUS_CODES: Readonly<Record<string, number>> = {
 };
 
 Deno.serve(async (request) => {
-  if (request.method !== 'POST') return reply(400, { status: 'invalid' });
-  let body: { device?: unknown; others?: unknown };
-  try {
-    body = await request.json();
-  } catch {
-    return reply(400, { status: 'invalid' });
-  }
+  const body = await readJsonPost<{ device: unknown; others: unknown }>(request);
+  if (!body) return reply(400, { status: 'invalid' });
   const target = body.others === true ? 'others' : typeof body.device === 'string' && body.device ? body.device : null;
   if (!target) return reply(400, { status: 'invalid' });
-  const environment = request.headers.get(ENVIRONMENT_HEADER) ?? '';
+  const environment = environmentOf(request);
   try {
     const caller = await callerOf(request);
     if (!caller) return reply(401, { status: 'not-signed-in' });
-    const response = await serviceRpc(environment, 'revoke_devices', { session: caller.sessionId, auth_user: caller.authUserId, target });
-    if (!response.ok) {
-      await response.body?.cancel();
-      throw new Error('revoke_devices');
-    }
-    const outcome = (await response.json()) as { status: string; devices?: number; email?: string | null };
+    const outcome = await rpcJson<{ status: string; devices?: number; email?: string | null }>(environment, 'revoke_devices', {
+      session: caller.sessionId,
+      auth_user: caller.authUserId,
+      target,
+    });
     if (outcome.status !== 'signed-out') return reply(STATUS_CODES[outcome.status] ?? 502, { status: outcome.status });
     const devices = outcome.devices ?? 0;
     if (devices > 0) await sendSecurityNotice(environment, outcome.email, devicesSignedOutMail(devices), 'device-revoked');

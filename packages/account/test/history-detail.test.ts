@@ -302,7 +302,7 @@ describe('pages', () => {
     expect(feedPages.every(withinBound)).toBe(true);
     expect(feedPages.length).toBeGreaterThan(2);
 
-    const { data: snapshot } = await client.rpc('sync_bootstrap_v1', { installation: 'pages-check' });
+    const { data: snapshot } = await client.rpc('sync_bootstrap_v1', { installation: phone.vault.store().identity.installationId });
     const id = (snapshot as { snapshot: string }).snapshot;
     const snapshotRows: unknown[] = [];
     for (let after = 0, more = true; more; ) {

@@ -387,6 +387,43 @@ describe('the account vault', () => {
       expect(device.keychain.get(`tableside.production.${session.installationId}.account-a.key`)).toBeUndefined();
     });
 
+    it('recovers into a fresh database under a new installation of its own, keeping the original bytes and other accounts as they were', async () => {
+      const device = new Device();
+      const original = opened(await device.vault().open('account-a'));
+      await original.store.createActivity(practiceIn(original, 'a1'));
+      await device.vault().close();
+      const other = opened(await device.vault().open('account-b'));
+      await other.store.createActivity(practiceIn(other, 'b1'));
+      await device.vault().close();
+      device.keychain.forget(`tableside.production.${original.installationId}.account-a.key`);
+      const before = snapshot(device.files);
+
+      const vault = device.vault();
+      expect(await vault.open('account-a')).toMatchObject({ status: 'recovery-needed', reason: 'key-missing' });
+      const { installationId } = await vault.recover('account-a');
+      const fresh = opened(await vault.open('account-a'));
+
+      expect(fresh.installationId).toBe(installationId);
+      expect(fresh.installationId).not.toBe(original.installationId);
+      expect(await fresh.store.load('a1')).toBeNull();
+      // Nothing the original left was changed, moved or deleted.
+      for (const [path, bytes] of Object.entries(before)) expect(snapshot(device.files)[path]).toBe(bytes);
+      await fresh.store.close();
+
+      // A relaunch opens the fresh one again; another account keeps the device's installation and its data.
+      const relaunched = device.vault();
+      expect(opened(await relaunched.open('account-a')).installationId).toBe(installationId);
+      const b = opened(await relaunched.open('account-b'));
+      expect(b.installationId).toBe(other.installationId);
+      expect(await b.store.load('b1')).not.toBeNull();
+      await relaunched.close();
+
+      // Erasing the account removes the fresh database, the kept original and the recovery's record alike.
+      await relaunched.erase('account-a');
+      expect(device.files.written().filter((path) => path.includes('account-a.db') && existsSync(path))).toEqual([]);
+      expect(device.keychain.entries().filter(([name]) => name.includes('account-a'))).toEqual([]);
+    });
+
     it('treats a lost database as Recovery needed and never creates an empty one in its place', async () => {
       const device = new Device();
       const session = opened(await device.vault().open('account-a'));

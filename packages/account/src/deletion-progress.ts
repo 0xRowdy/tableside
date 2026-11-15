@@ -1,13 +1,8 @@
 // Reading the server's deletion status answers: shared by the Account
 // service and the web account page, with no platform imports.
 
-import type { DeletionProgress, DeletionStatus } from './service';
-
-/** A server timestamp in milliseconds since the epoch, or null when it isn't one. */
-export const instant = (value: unknown): number | null => {
-  const at = typeof value === 'string' ? Date.parse(value) : Number.NaN;
-  return Number.isFinite(at) ? at : null;
-};
+import type { DeletionProgress, DeletionStatus } from './account-service/types';
+import { instant } from './values';
 
 /** The server's deletion progress (deletion_progress_v1), or null when it isn't one. */
 export function parseProgress(data: unknown): DeletionProgress | null {

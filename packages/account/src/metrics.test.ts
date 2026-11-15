@@ -190,8 +190,8 @@ describe("the backend's snapshot", () => {
     transactions_rolled_back: 17,
     staged_chunks_age_ms: 61_234,
     storage_bytes: { database: 12_345_678, 'staged-chunks': 0, objects: 4_096 },
-    email_sends_failed: { code: 1, 'no-account': 0 },
-    email_delivery_problems: { code: { bounced: 3, complained: 0 }, 'no-account': { bounced: 0, complained: 1 } },
+    email_sends_failed: { code: 1, 'no-account': 0, 'deletion-accepted': 2 },
+    email_delivery_problems: { code: { bounced: 3, complained: 0 }, 'no-account': { bounced: 0, complained: 1 }, 'device-revoked': { bounced: 0, complained: 4 } },
     email_queue_age_ms: null,
   };
 
@@ -205,10 +205,13 @@ describe("the backend's snapshot", () => {
       { name: 'storage_bytes', value: 4_100, properties: { area: 'objects' } },
       { name: 'email_sends_failed', value: 1, properties: { type: 'code' } },
       { name: 'email_sends_failed', value: 0, properties: { type: 'no-account' } },
+      { name: 'email_sends_failed', value: 2, properties: { type: 'deletion-accepted' } },
       { name: 'email_delivery_problems', value: 3, properties: { type: 'code', problem: 'bounced' } },
       { name: 'email_delivery_problems', value: 0, properties: { type: 'code', problem: 'complained' } },
       { name: 'email_delivery_problems', value: 0, properties: { type: 'no-account', problem: 'bounced' } },
       { name: 'email_delivery_problems', value: 1, properties: { type: 'no-account', problem: 'complained' } },
+      { name: 'email_delivery_problems', value: 0, properties: { type: 'sessions-revoked', problem: 'bounced' } },
+      { name: 'email_delivery_problems', value: 4, properties: { type: 'sessions-revoked', problem: 'complained' } },
     ]);
   });
 
