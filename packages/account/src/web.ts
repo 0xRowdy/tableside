@@ -12,7 +12,7 @@ export type {
   DeletionProgress,
   FreshAuthenticationResult,
   ScheduleDeletionResult,
-} from './service';
+} from './account-service/types';
 export {
   WEB_DEVICE_LABEL,
   type WebAccount,

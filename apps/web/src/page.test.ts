@@ -146,7 +146,7 @@ describe('signing in', () => {
     await mountAccountPage(main, account);
     await submit('Email', 'player@example.com');
     await submit('Code', '000000');
-    expect(problem()).toMatch(/isn't right/);
+    expect(problem()).toMatch(/That code didn't work/);
     expect(fieldLabelled('Code').getAttribute('aria-invalid')).toBe('true');
     expect(document.activeElement).toBe(fieldLabelled('Code'));
   });

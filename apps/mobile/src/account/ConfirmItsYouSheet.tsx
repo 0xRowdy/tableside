@@ -5,7 +5,7 @@
 // this session only, for a few minutes.
 // TODO(frames): the code-entry step after "Send a code", the problem messages, and the removal's reason (method-text.ts) are unverified against S2-18, which draws only the choice of method for adding one.
 
-import type { SignInMethodEntry } from '@tableside/account';
+import { INVALID_CODE, type SignInMethodEntry } from '@tableside/account';
 import { Mail } from 'lucide-react-native';
 import { useState } from 'react';
 
@@ -74,7 +74,7 @@ export function ConfirmItsYouSheet({
       }
       const result = await service.freshAuthentication.withCode(entered);
       if (result.status === 'confirmed') onConfirmed();
-      else if (result.status === 'invalid-code') setProblem("That code didn't work. Check it, or send a new code.");
+      else if (result.status === 'invalid-code') setProblem(INVALID_CODE);
       else setProblem("Couldn't confirm it's you. Check your connection and try again.");
     });
 

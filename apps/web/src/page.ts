@@ -22,6 +22,7 @@ import {
   type CodeRequestResult,
   DELETION_UNKNOWN,
   type DeletionProgress,
+  INVALID_CODE,
   PROVIDER_GRANT_DETAIL,
   SCHEDULE_UNKNOWN,
   STORES,
@@ -29,6 +30,7 @@ import {
   type WebAccount,
   type WebAccountView,
   analyticsDetail,
+  codeRequestProblem,
   dayText,
   deletionDetail,
   scheduledDetail,
@@ -56,7 +58,6 @@ interface PageState {
 }
 
 const NEEDS_CONNECTION = "Couldn't reach Tableside. Check your connection and try again.";
-const INVALID_CODE = "That code isn't right, or it has expired. Check it, or send a new code.";
 
 export function mountAccountPage(main: HTMLElement, account: WebAccount): Promise<void> {
   const doc = main.ownerDocument;
@@ -172,13 +173,8 @@ export function mountAccountPage(main: HTMLElement, account: WebAccount): Promis
     }
   };
 
-  const codeProblem = (result: CodeRequestResult): string => {
-    if (result.status === 'rate-limited') {
-      const minutes = Math.max(1, Math.ceil(result.retryAfterSeconds / 60));
-      return `Too many codes were asked for. Try again in ${minutes === 1 ? '1 minute' : `${minutes} minutes`}.`;
-    }
-    return "Couldn't send a code. Check your connection and try again.";
-  };
+  const codeProblem = (result: CodeRequestResult): string =>
+    result.status === 'sent' || result.status === 'age-required' ? codeRequestProblem({ status: 'failed' }) : codeRequestProblem(result);
 
   // ---- Signed out: sign in with an email code ------------------------------
 
