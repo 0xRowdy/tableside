@@ -7,8 +7,8 @@
 // practice controller playing on it. The device's files and keychain outlive
 // the app process, so a scenario can kill the app at any point and start it again.
 
-import { randomUUID } from 'node:crypto';
-import { existsSync, readdirSync } from 'node:fs';
+import { createHash, randomUUID } from 'node:crypto';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 
 import { canonicalJson } from '@tableside/engine';
 
@@ -163,6 +163,14 @@ export interface DeviceVault {
   readonly removed: readonly EnvironmentName[];
   /** The open account session's store. Throws when none is open. */
   store(): SqliteActivityStore;
+  /**
+   * The account's database key is lost from the device's keychain (every
+   * installation's): its database stays, unreadable. The next open is
+   * Recovery needed.
+   */
+  loseKey(accountId: string): void;
+  /** Every file of the account's databases in this build's environment, with its SHA-256, by path. */
+  accountFiles(accountId: string): Record<string, string>;
 }
 
 export interface SimulatedDevice {
@@ -298,6 +306,10 @@ export function createDevice(stack: LocalStack, options: DeviceOptions): Simulat
         await appVault.removeEnvironment(other);
         removed.push(other);
       },
+      async recover(accountId) {
+        if (opening?.status === 'open' && opening.session.accountId === accountId) opening = null;
+        await appVault.recover(accountId);
+      },
     };
     const erasedAppData: string[] = [];
     const deviceVault: DeviceVault = {
@@ -315,6 +327,21 @@ export function createDevice(stack: LocalStack, options: DeviceOptions): Simulat
       },
       erasedAppData,
       removed,
+      loseKey: (accountId) => {
+        for (const [name] of storage.keychain.entries()) if (name.endsWith(`.${accountId}.key`)) storage.keychain.forget(name);
+      },
+      accountFiles: (accountId) => {
+        const directory = `${storage.root}/${environment}`;
+        const files: Record<string, string> = {};
+        if (!existsSync(directory)) return files;
+        for (const installation of readdirSync(directory, { withFileTypes: true }).filter((entry) => entry.isDirectory())) {
+          for (const file of readdirSync(`${directory}/${installation.name}`).filter((name) => name.startsWith(`${accountId}.db`))) {
+            const path = `${directory}/${installation.name}/${file}`;
+            files[path] = createHash('sha256').update(readFileSync(path)).digest('hex');
+          }
+        }
+        return files;
+      },
       store() {
         if (opening?.status !== 'open') throw new Error('no account database is open');
         return opening.session.store;

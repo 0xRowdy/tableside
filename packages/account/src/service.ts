@@ -85,6 +85,7 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
     resume: () => session.resume(),
     renew: () => session.renew(),
     signOut: () => session.signOut(),
+    recover: () => session.recover(),
 
     async accountSummary() {
       if (!opensOrdinaryAccess(ctx.gate)) return null;

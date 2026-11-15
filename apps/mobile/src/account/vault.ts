@@ -128,6 +128,8 @@ const namespace = {
   directory: (root: string, environment: EnvironmentName) => `${root}/${environment}`,
   installationKey: (environment: EnvironmentName) => `tableside.${environment}.installation`,
   accountKey: (environment: EnvironmentName, installationId: string, accountId: string) => `tableside.${environment}.${installationId}.${accountId}.key`,
+  /** The installation an account was recovered into, when it was: it ends in the account's key suffix, so erasing the account removes it. */
+  recoveredKey: (environment: EnvironmentName, accountId: string) => `tableside.${environment}.recovered.${accountId}.key`,
   keyIndex: (environment: EnvironmentName) => `tableside.${environment}.keys`,
 };
 const KEY_BYTES = 32;
@@ -201,6 +203,26 @@ export class AccountVault {
   }
 
   /**
+   * Recovery needed's way on (spec 2, *Key states*): the account gets a new,
+   * empty database under a new installation of its own, which its synced
+   * history is restored into. The unreadable original stays exactly as it was,
+   * with its key (or its missing key): nothing is overwritten, moved or
+   * deleted. A new installation, so the restored database's per-device
+   * positions and command scope never collide with the original's (#98).
+   * Other accounts keep this device's installation. Closes any open database;
+   * the next open opens the new one. Waits while the device is locked.
+   */
+  async recover(accountId: string): Promise<{ readonly installationId: string }> {
+    if (!ID_PATTERN.test(accountId)) throw new Error('invalid account id');
+    this.currentGeneration++;
+    for (;;) {
+      const outcome = await this.serial(() => this.recoverAccount(accountId));
+      if (outcome !== 'locked') return outcome;
+      await this.ports.unlocked();
+    }
+  }
+
+  /**
    * For an asynchronous completion (a response, callback, job or timer): runs
    * `apply` only if the generation it started under is still current, and
    * otherwise drops it.
@@ -211,7 +233,7 @@ export class AccountVault {
 
   private async attempt(accountId: string, generation: number): Promise<VaultOpening | 'locked'> {
     const { environment, files, keys } = this.ports;
-    const installationId = await this.installationId();
+    const installationId = await this.installationFor(accountId);
     if (installationId === 'locked') return 'locked';
     const directory = `${namespace.directory(files.root, environment)}/${installationId}`;
     await files.ensureDirectory(directory);
@@ -259,6 +281,31 @@ export class AccountVault {
     const session: AccountSession = { ...identity, generation, store };
     this.openSession = session;
     return { status: 'open', session };
+  }
+
+  /** The installation an account's database lives under: the one it was recovered into, or this device's. */
+  private async installationFor(accountId: string): Promise<string | 'locked'> {
+    const recovered = await this.ports.keys.read(namespace.recoveredKey(this.ports.environment, accountId));
+    if (recovered.status === 'locked') return 'locked';
+    if (recovered.status === 'found' && ID_PATTERN.test(recovered.value)) return recovered.value;
+    return this.installationId();
+  }
+
+  private async recoverAccount(accountId: string): Promise<{ readonly installationId: string } | 'locked'> {
+    const { environment, files, keys } = this.ports;
+    if (this.openSession?.accountId === accountId) await this.closeOpen();
+    const installationId = this.ports.newId();
+    if (!ID_PATTERN.test(installationId)) throw new Error('invalid installation id');
+    await files.ensureDirectory(`${namespace.directory(files.root, environment)}/${installationId}`);
+    // The new database's key first: with it on record, the next open makes the database rather than
+    // calling the kept original (an earlier installation's) a database without its key.
+    const keyName = namespace.accountKey(environment, installationId, accountId);
+    const record: KeyRecord = { v: 1, key: hex(this.ports.randomBytes(KEY_BYTES)), created: false };
+    const recoveredName = namespace.recoveredKey(environment, accountId);
+    for (const name of [keyName, recoveredName]) if ((await this.recordKeyName(name)) === 'locked') return 'locked';
+    if ((await keys.write(keyName, JSON.stringify(record))) === 'locked') return 'locked';
+    if ((await keys.write(recoveredName, installationId)) === 'locked') return 'locked';
+    return { installationId };
   }
 
   private async removeNamespace(environment: EnvironmentName): Promise<'removed' | 'locked'> {

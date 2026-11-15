@@ -529,12 +529,29 @@ export function createAccountSession(ctx: ServiceContext) {
       if (opened) await renewSession(opened);
     },
 
+    /** Restores synced history into a fresh database (AccountService.recover). */
+    async recover(): Promise<{ readonly status: 'sign-in-needed' | 'failed' }> {
+      const { gate } = ctx;
+      if (gate.state !== 'recovery-needed' || signingOut) return { status: 'failed' };
+      try {
+        await options.vault.recover(gate.accountId);
+      } catch {
+        return { status: 'failed' };
+      }
+      if (ctx.gate !== gate) return { status: 'failed' };
+      // The fresh database is a new installation's: a new sign-in registers it (a session is bound to one installation).
+      await this.signOut();
+      return { status: 'sign-in-needed' };
+    },
+
     /** Signs out of this installation only (AccountService.signOut). */
     signOut(): Promise<SignOutResult> {
       // A second tap while signing out joins the first.
       if (signingOut) return signingOut;
       const { gate } = ctx;
-      if (!opensOrdinaryAccess(gate) && !isRestricted(gate)) return Promise.resolve({ status: 'not-signed-in' });
+      // Also from a database that can't be opened here: Sign out, or use another account.
+      const unopened = gate.state === 'recovery-needed' || gate.state === 'database-unavailable';
+      if (!opensOrdinaryAccess(gate) && !isRestricted(gate) && !unopened) return Promise.resolve({ status: 'not-signed-in' });
       const { accountId } = gate;
       signingOut = (async (): Promise<SignOutResult> => {
         // An open practice session suspends while the database is still open.

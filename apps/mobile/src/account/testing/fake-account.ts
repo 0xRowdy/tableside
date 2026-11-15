@@ -62,7 +62,7 @@ type Call =
   | { readonly method: 'setAccountCurrency'; readonly currency: string }
   | { readonly method: 'signInWithProvider'; readonly provider: IdentityProvider }
   | { readonly method: 'createWithProvider'; readonly provider: IdentityProvider; readonly sameIdentity: boolean }
-  | { readonly method: 'resume' | 'renew' | 'signOut' | 'checkAge' | 'refreshEligibility' | 'downloadAllHistory' };
+  | { readonly method: 'resume' | 'renew' | 'signOut' | 'recover' | 'checkAge' | 'refreshEligibility' | 'downloadAllHistory' };
 
 /** What the fake's Settings → Account shows unless a test changes it. */
 export const FAKE_SUMMARY: AccountSummary = {
@@ -162,10 +162,20 @@ export class FakeAccountService implements AccountService {
   async signOut(): Promise<SignOutResult> {
     this.calls.push({ method: 'signOut' });
     const gate = this.current;
-    if (!opensOrdinaryAccess(gate) && !isRestricted(gate)) return { status: 'not-signed-in' as const };
+    const unopened = gate.state === 'recovery-needed' || gate.state === 'database-unavailable';
+    if (!opensOrdinaryAccess(gate) && !isRestricted(gate) && !unopened) return { status: 'not-signed-in' as const };
     for (const handler of [...this.ending]) await handler();
     this.setGate({ state: 'signed-out', accountId: gate.accountId });
     return this.next.signOut.shift() ?? { status: 'signed-out' as const, serverSessionEnded: true };
+  }
+
+  /** Like the real service: a fresh database is made, then this signs out for the new sign-in that restores synced history. */
+  async recover(): Promise<{ readonly status: 'sign-in-needed' | 'failed' }> {
+    this.calls.push({ method: 'recover' });
+    const gate = this.current;
+    if (gate.state !== 'recovery-needed') return { status: 'failed' };
+    this.setGate({ state: 'signed-out', accountId: gate.accountId });
+    return { status: 'sign-in-needed' };
   }
 
   onAccountSessionEnding(handler: () => Promise<void>) {

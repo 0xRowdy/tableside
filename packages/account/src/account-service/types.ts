@@ -435,6 +435,13 @@ export interface AccountVault {
   erase(accountId: string): Promise<void>;
   /** Removes every database, key and installation identity another environment left on this device. */
   removeEnvironment(environment: EnvironmentName): Promise<void>;
+  /**
+   * Recovery needed's way on: gives the account a new, empty database under a
+   * new installation of its own, for its synced history to be restored into,
+   * and keeps the unreadable original exactly as it was (never overwritten,
+   * moved or deleted). The next open opens the new database.
+   */
+  recover(accountId: string): Promise<void>;
 }
 
 /** An account's database, open for the current account session. */
@@ -643,6 +650,16 @@ export interface AccountService {
    * its state, with its token renewed). A failure keeps Renewal pending, with access and records.
    */
   renew(): Promise<void>;
+  /**
+   * Recovery needed: restores the account's synced history into a fresh
+   * database on this device, keeping the unreadable original's bytes as they
+   * are. The fresh database belongs to a new installation, which registers
+   * with a new sign-in: this signs out first ('sign-in-needed'), and signing
+   * in to the same account (online) opens the fresh database and downloads
+   * the synced history into it. Records that hadn't reached the account stay
+   * only in the kept original. 'failed' outside Recovery needed.
+   */
+  recover(): Promise<{ readonly status: 'sign-in-needed' | 'failed' }>;
   /**
    * Signs out of this installation only (the current session, never every
    * session). It first runs the session-ending handlers (an open practice
