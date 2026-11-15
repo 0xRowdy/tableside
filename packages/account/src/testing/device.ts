@@ -10,6 +10,8 @@
 import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
 
+import { canonicalJson } from '@tableside/engine';
+
 // The app's account store and practice controller, imported by path: the
 // harness is test-only, and the app doesn't depend on this package.
 import { forAccountSession } from '../../../../apps/mobile/src/account/practice';
@@ -30,9 +32,11 @@ import {
   type EligibilityBand,
   createAccountService,
 } from '../service';
+import type { RecordType } from '../sync/registry';
 import type { DevicePorts, DeviceSignal } from '../sync/session';
 import { FaultProxy } from './fault-proxy';
 import { Mailbox } from './mailbox';
+import { testRecordTypes } from './record-types';
 import type { LocalStack } from './stack';
 
 /** A clock the scenario moves by hand. Moving it runs the timers that fall due. */
@@ -159,8 +163,11 @@ export interface SimulatedDevice {
    * Plays one practice session to its end (roulette: a 10-unit red wager on a
    * 1,000 buy-in, one spin) on the open account and returns its saved result.
    * `activityId` names it instead of the device's entropy (a malformed one, say).
+   * With `longerThan`, the result saved is at least that many bytes of
+   * canonical JSON, its wager outcomes repeated: a stand-in for a session
+   * thousands of turns long, which would take minutes to play.
    */
-  playPracticeSession(options?: { readonly activityId?: string }): Promise<CompletedPracticeSession>;
+  playPracticeSession(options?: { readonly activityId?: string; readonly longerThan?: number }): Promise<CompletedPracticeSession>;
   /** The app process dies where it is: nothing it had in flight completes on the device. */
   kill(): void;
   /** Starts the app again after a kill (or kills it first), reopening the remembered account. */
@@ -190,6 +197,8 @@ export interface DeviceOptions {
   readonly installedOver?: SimulatedDevice;
   /** The build's store migrations (a later build's, say); this build's by default. */
   readonly migrations?: readonly StoreMigration[];
+  /** The registered record types: this build's own and seam 2's test-only types by default. */
+  readonly recordTypes?: ReadonlyMap<string, RecordType>;
 }
 
 export function createDevice(stack: LocalStack, options: DeviceOptions): SimulatedDevice {
@@ -289,6 +298,7 @@ export function createDevice(stack: LocalStack, options: DeviceOptions): Simulat
       device: ports,
       randomBytes: (count) => entropy.bytes(count),
       webSocket: ProcessWebSocket,
+      recordTypes: options.recordTypes ?? testRecordTypes,
     });
     return {
       account,
@@ -331,14 +341,16 @@ export function createDevice(stack: LocalStack, options: DeviceOptions): Simulat
     set diskFailing(value: boolean) {
       disk.failing = value;
     },
-    async playPracticeSession({ activityId } = {}) {
+    async playPracticeSession({ activityId, longerThan } = {}) {
       const opening = openSession(app);
       // Each practice session gets its own random ID, from the device's entropy.
       const adapters = {
         ...substituteAdapters({ clock: new PracticeClock(undefined, true) }),
         newId: () => activityId ?? `activity-${hex(entropy.bytes(16))}`,
       };
-      const controller = new PracticeController(forAccountSession(adapters, opening));
+      const controller = new PracticeController(
+        forAccountSession(adapters, longerThan === undefined ? opening : { ...opening, store: lengthened(opening.store, longerThan) }),
+      );
       await controller.load();
       await controller.start({ game: 'roulette', buyIn: '1000' });
       await controller.placeWager('red', '10');
@@ -370,6 +382,34 @@ export function createDevice(stack: LocalStack, options: DeviceOptions): Simulat
 const installed = new WeakMap<SimulatedDevice, { readonly storage: TestDevice; readonly credentials: MemoryCredentials }>();
 
 const hex = (bytes: Uint8Array) => Buffer.from(bytes).toString('hex');
+
+/** The store, except that the result it saves has its wager outcomes repeated until it is at least `bytes` long. */
+function lengthened(store: SqliteActivityStore, bytes: number): SqliteActivityStore {
+  const complete = (record: CompletedPracticeSession) => {
+    const repeats = Math.ceil(bytes / Buffer.byteLength(canonicalJson(record.outcomes)));
+    return store.complete({ ...record, outcomes: Array.from({ length: repeats }, () => record.outcomes).flat() });
+  };
+  return new Proxy(store, {
+    get(target, key) {
+      if (key === 'complete') return complete;
+      const value: unknown = Reflect.get(target, key, target);
+      return typeof value === 'function' ? value.bind(target) : value;
+    },
+  });
+}
+
+/** The access token a device's Auth session holds, from its credential storage: for calling the stack directly as it. */
+export function accessToken(device: SimulatedDevice): string {
+  for (const value of device.credentials.items.values()) {
+    try {
+      const token = (JSON.parse(value) as { access_token?: unknown }).access_token;
+      if (typeof token === 'string') return token;
+    } catch {
+      // Not the session.
+    }
+  }
+  throw new Error(`${device.name} holds no session`);
+}
 
 /** The open account session, as spec 1's practice adapters take it. */
 function openSession(app: AppProcess) {

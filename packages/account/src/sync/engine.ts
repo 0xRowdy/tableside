@@ -9,6 +9,11 @@
 // - A disposition and the queue acknowledgement commit together; until then
 //   the entry stays pending. Upload never touches payouts, charges or any
 //   other local effect: it only acknowledges.
+// - A result too large for one request is sent as a manifest of chunks
+//   (protocol.ts). The manifest goes first; when the server reports chunks it
+//   hasn't staged (never sent, or expired), those are staged and the identical
+//   manifest is sent again. So a retry after a lost answer gets its receipt
+//   without resending a chunk, and the payload stays in the queue until then.
 // - Feed pages apply with their cursor atomically, and never past a change
 //   this build can't read.
 // - Runs coalesce: a request while a run is going makes one more run.
@@ -22,20 +27,29 @@
 //   deliberate retry. A refused receipt goes to review. A protocol the server
 //   no longer serves stops sync (never play) until an update.
 //
-// Chunked results (#93), revisioned items (#94) and barrier-bearing
-// operations (#95) plug in here.
+// - A revisioned item's acknowledgement records nothing as accepted: whether
+//   its upload became a revision or a proposal, the item's state arrives with
+//   the feed entry its receipt names, in the same run.
+// - Resolving a conflict needs the network: it is sent at once, never queued.
+//
+// Barrier-bearing operations (#95) plug in here.
+
+import { canonicalJson } from '@tableside/engine';
 
 import { backoffDelay } from './backoff';
 import {
+  type ChunkAnswer,
   type FeedPage,
   PROTOCOL_VERSION,
   type PreparedOperation,
   type ProtocolStatus,
+  type StagedChunk,
   SyncCallError,
   type UploadAnswer,
+  chunksOf,
   prepareOperation,
 } from './protocol';
-import type { RecordType } from './registry';
+import type { RecordType, RevisionedUpload } from './registry';
 import type { AcceptedRecord, QueuedUpload, SyncStore } from './store';
 
 /** The backend's operations. A call with no usable answer throws a SyncCallError; any other rejection counts as unreachable. */
@@ -43,6 +57,8 @@ export interface SyncBackend {
   /** What the server says about this build's protocol version. */
   protocol(version: number): Promise<ProtocolStatus>;
   upload(request: string): Promise<UploadAnswer>;
+  /** Stages one chunk of a result, privately, for the operation whose manifest names it. */
+  stageChunk(chunk: StagedChunk): Promise<ChunkAnswer>;
   feed(after: number, pageSize: number): Promise<FeedPage>;
 }
 
@@ -108,6 +124,24 @@ export const FEED_PAGE_SIZE = 50;
 /** How many times one record may fail by itself before it is flagged. */
 export const RECORD_FAILURE_LIMIT = 5;
 
+/** A conflict's resolution: the generation and every proposal reviewed, and the value it resolves to (null: deleted). */
+export interface Resolution {
+  readonly generation: number;
+  readonly reviewed: readonly string[];
+  readonly value: unknown;
+}
+
+/**
+ * resolved: one new revision was accepted.
+ * conflict-changed: a proposal arrived (or the conflict otherwise changed) since the review; the item now shows it.
+ * no-conflict: no conflict is open on the item.
+ * offline: the backend couldn't be reached, or no answer arrived. The account may have accepted it: resolving
+ *   again with the same review in this account session repeats the identical request, so it is never applied twice.
+ * incompatible: the server no longer speaks this protocol (an update is required).
+ * invalid: the resolution isn't one of the type's.
+ */
+export type ResolutionOutcome = 'resolved' | 'conflict-changed' | 'no-conflict' | 'offline' | 'incompatible' | 'invalid';
+
 export class SyncEngine {
   private running: Promise<void> | null = null;
   private rerun: ReconcileTrigger | null = null;
@@ -127,6 +161,8 @@ export class SyncEngine {
   private refreshing: Promise<void> = Promise.resolve();
   private readonly listeners = new Set<() => void>();
   private readonly unsubscribe: () => void;
+  /** Resolutions sent with no answer yet, by what they resolve: a retry repeats the same operation. */
+  private readonly unansweredResolutions = new Map<string, PreparedOperation>();
 
   constructor(private readonly options: SyncEngineOptions) {
     this.unsubscribe = options.store.onUploadQueued(() => void this.refresh());
@@ -193,6 +229,38 @@ export class SyncEngine {
   async idle(): Promise<void> {
     while (this.running) await this.running;
     await this.refreshing;
+  }
+
+  /**
+   * Resolves an open conflict on a revisioned item. Online only: it is sent at
+   * once under a new operation, then the feed brings the item's state (resolved,
+   * or changed by a proposal that arrived meanwhile).
+   */
+  async resolve(recordType: string, item: string, resolution: Resolution): Promise<ResolutionOutcome> {
+    const type = this.options.registry.get(recordType);
+    const payload: RevisionedUpload<unknown> = {
+      item,
+      action: 'resolve',
+      generation: resolution.generation,
+      reviewed: [...resolution.reviewed].sort(),
+      value: resolution.value,
+    };
+    if (this.stopped || type?.kind !== 'revisioned-item' || !type.isPayload(payload)) return 'invalid';
+    const key = canonicalJson({ recordType, payload });
+    const operation = this.unansweredResolutions.get(key) ?? this.envelope(type, payload);
+    this.unansweredResolutions.set(key, operation);
+    let answer: UploadAnswer;
+    try {
+      answer = await this.options.backend.upload(operation.request);
+    } catch (caught) {
+      return caught instanceof SyncCallError && caught.kind === 'incompatible' ? 'incompatible' : 'offline';
+    }
+    this.unansweredResolutions.delete(key);
+    if (answer.status !== 'accepted' && answer.status !== 'rejected') return answer.status === 'incompatible' ? 'incompatible' : 'invalid';
+    if (answer.operation !== operation.operationId || answer.requestHash !== operation.requestHash) return 'offline';
+    await this.reconcile();
+    if (answer.status === 'accepted') return 'resolved';
+    return answer.code === 'conflict-changed' || answer.code === 'no-conflict' ? answer.code : 'invalid';
   }
 
   /** Ends the account session's sync: later answers are dropped and nothing more runs. */
@@ -291,6 +359,7 @@ export class SyncEngine {
     // Retry times only for entries still pending.
     for (const id of this.recordRetries.keys()) if (!pending.has(id)) this.recordRetries.delete(id);
     let error: SyncErrorCode | null = null;
+    let unanswered = false;
     for (const entry of queue) {
       if (this.stopped) return null;
       // Flagged, or waiting out its own backoff: it stays pending, and so does everything depending on it.
@@ -308,16 +377,31 @@ export class SyncEngine {
       }
       // Its prerequisites are still unacknowledged: it waits.
       if (entry.dependencies.some((id) => pending.has(id)) || type.barriers.some(barrierPending)) continue;
-      const operation = entry.operation ?? (await store.prepareUpload(entry.id, this.envelope(type, entry)));
-      let answer: UploadAnswer | null;
+      let operation: PreparedOperation;
+      let chunks: StagedChunk[] | null;
       try {
-        answer = await this.call(() => this.options.backend.upload(operation.request));
+        operation = entry.operation ?? (await store.prepareUpload(entry.id, this.envelope(type, entry.payload)));
+        chunks = asUnsendable(() => chunksOf(operation, entry.payload));
+      } catch (failure) {
+        // Too large to name, or no longer matching its manifest: the record fails by itself.
+        if (!(failure instanceof UnsendableError)) throw failure;
+        error = await this.recordFailed(entry);
+        continue;
+      }
+      let answer: UploadAnswer | 'unanswered' | null;
+      try {
+        answer = await this.send(operation, chunks);
       } catch (caught) {
         // The server answered this request with an error: the record fails by itself. Anything else ends the run.
         if (!(caught instanceof SyncCallError) || caught.kind !== 'refused') throw caught;
         answer = null;
       }
       if (this.stopped) return null;
+      // Its chunks couldn't be staged (staging full, or expired meanwhile): not the record's fault; it waits for the next run.
+      if (answer === 'unanswered') {
+        unanswered = true;
+        continue;
+      }
       const outcome = answer ? await this.settleUpload(entry, type, operation, answer) : 'failed';
       if (outcome === 'incompatible') return this.required(null);
       if (outcome === 'failed') {
@@ -326,7 +410,8 @@ export class SyncEngine {
       }
       pending.delete(entry.id);
     }
-    return error;
+    // A call left without a usable answer backs the run off, like any other.
+    return unanswered ? 'offline' : error;
   }
 
   /** One record failed by itself: it waits its own backoff, and is flagged on its RECORD_FAILURE_LIMIT-th failure. */
@@ -337,16 +422,38 @@ export class SyncEngine {
     return 'unsendable';
   }
 
-  private envelope(type: RecordType, entry: QueuedUpload): PreparedOperation {
-    return prepareOperation({
+  /**
+   * Sends an operation. A manifest whose chunks the server lacks gets them
+   * staged, then is sent once more. When the staging is full, or the chunks are
+   * still lacking (they expired meanwhile), it waits for the next run, as if no
+   * usable answer had arrived.
+   */
+  private async send(operation: PreparedOperation, chunks: readonly StagedChunk[] | null): Promise<UploadAnswer | 'unanswered'> {
+    const { backend } = this.options;
+    const answer = await this.call(() => backend.upload(operation.request));
+    if (answer.status !== 'chunks-missing') return answer;
+    const missing = answer.missing.map((index) => chunks?.[index]);
+    if (missing.some((chunk) => chunk === undefined)) return { status: 'malformed' };
+    for (const chunk of missing as StagedChunk[]) {
+      if (this.stopped) return 'unanswered';
+      const staged = await this.call(() => backend.stageChunk(chunk));
+      if (staged.status === 'staging-full') return 'unanswered';
+      if (staged.status !== 'staged') return { status: staged.status };
+    }
+    const resent = await this.call(() => backend.upload(operation.request));
+    return resent.status === 'chunks-missing' ? 'unanswered' : resent;
+  }
+
+  private envelope(type: RecordType, payload: unknown): PreparedOperation {
+    return asUnsendable(() => prepareOperation({
       protocol: PROTOCOL_VERSION,
       operation: this.options.newOperationId(),
       installation: this.options.installationId,
       recordType: type.name,
       payloadVersion: type.payloadVersion,
-      item: type.identity.of(entry.payload),
-      payload: entry.payload,
-    });
+      item: type.identity.of(payload),
+      payload,
+    }));
   }
 
   /** Applies the server's answer to an upload: a receipt is acknowledged; anything else leaves it pending. */
@@ -362,7 +469,7 @@ export class SyncEngine {
         // A receipt for another request.
         if (answer.operation !== operation.operationId || answer.requestHash !== operation.requestHash) return 'failed';
         const accepted: AcceptedRecord | null =
-          answer.status === 'accepted'
+          answer.status === 'accepted' && type.kind !== 'revisioned-item'
             ? { recordType: type.name, item: type.identity.of(entry.payload), sequence: answer.sequence, payload: entry.payload }
             : null;
         await this.options.store.acknowledgeUpload(entry.id, answer, accepted);
@@ -372,6 +479,7 @@ export class SyncEngine {
         return 'incompatible';
       case 'operation-reused':
       case 'malformed':
+      case 'chunks-missing':
         return 'failed';
     }
   }
@@ -446,4 +554,16 @@ function uploadStates(queue: readonly QueuedUpload[]): UploadStatus[] {
     payload: entry.payload,
     state: entry.flagged ? 'flagged' : isPaused(entry, new Set()) ? 'paused' : 'waiting',
   }));
+}
+
+/** An entry that can't be sent as it is: its result is too large to name, or no longer matches its manifest. */
+class UnsendableError extends Error {}
+
+/** Runs `prepare`, reporting any failure as an entry that can't be sent. */
+function asUnsendable<T>(prepare: () => T): T {
+  try {
+    return prepare();
+  } catch (failure) {
+    throw new UnsendableError(failure instanceof Error ? failure.message : String(failure));
+  }
 }

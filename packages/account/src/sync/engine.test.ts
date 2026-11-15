@@ -6,9 +6,9 @@
 import { describe, expect, it } from 'vitest';
 
 import { type SyncBackend, SyncEngine } from './engine';
-import { type FeedPage, type ProtocolStatus, SyncCallError, type UploadAnswer } from './protocol';
+import { type ChunkAnswer, type FeedPage, type ProtocolStatus, SyncCallError, type UploadAnswer } from './protocol';
 import type { RecordType } from './registry';
-import type { AcceptedRecord, QueuedUpload, RejectedUpload, SyncStore } from './store';
+import type { AcceptedRecord, LocalRevisionedItem, QueuedUpload, RejectedUpload, SyncStore } from './store';
 import type { Disposition, PreparedOperation } from './protocol';
 
 interface Entry {
@@ -84,6 +84,12 @@ class MemoryStore implements SyncStore {
   async recordSynced(at: number): Promise<void> {
     this.syncedAt = at;
   }
+  async writeRevisionedItem(): Promise<void> {
+    throw new Error('no revisioned items in these tests');
+  }
+  async readRevisionedItems(): Promise<readonly LocalRevisionedItem[]> {
+    return [];
+  }
   onUploadQueued(listener: () => void): () => void {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
@@ -141,6 +147,10 @@ class ScriptedBackend implements SyncBackend {
     const requestHash = sha256Hex(request);
     if (scripted?.status === 'rejected') return { status: 'rejected', operation, requestHash, code: scripted.code };
     return { status: 'accepted', operation, requestHash, sequence: ++this.sequence };
+  }
+  async stageChunk(): Promise<ChunkAnswer> {
+    this.calls.push('stage');
+    return { status: 'staged' };
   }
   async feed(): Promise<FeedPage> {
     this.calls.push('feed');

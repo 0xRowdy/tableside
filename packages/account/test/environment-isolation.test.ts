@@ -32,7 +32,7 @@ async function createAccount(d: SimulatedDevice, email: string) {
 async function rawSignIn(email: string, environment: EnvironmentName): Promise<{ client: SupabaseClient; accessToken: string }> {
   const client = stack.rawClient(undefined, environment);
   const previous = await mailbox.latestCode(email);
-  await client.auth.signInWithOtp({ email, options: { shouldCreateUser: false } });
+  await stack.requestCode({ email, intent: 'sign-in' }, environment);
   const { data, error } = await client.auth.verifyOtp({ email, token: await mailbox.latestCode(email, { after: previous }), type: 'email' });
   if (error || !data.session) throw error ?? new Error('no session');
   return { client, accessToken: data.session.access_token };
@@ -77,6 +77,21 @@ describe('every request names its environment', () => {
     }
   });
 
+  it('request-code refuses a request naming another environment, or none, and sends nothing', async () => {
+    const known = uniqueEmail('code-known');
+    await createAccount(device('setup'), known);
+    const before = (await mailbox.messages(known)).length;
+    const assertion = ((await stack.rawClient().rpc('issue_eligibility_assertion', { age_range: '18+' })).data as { assertion: string }).assertion;
+    const unknown = uniqueEmail('code-unknown');
+
+    for (const environment of ['beta', 'production', null] as const) {
+      expect((await stack.requestCode({ email: known, intent: 'sign-in' }, environment)).body).toEqual({ status: 'failed' });
+      expect((await stack.requestCode({ email: unknown, intent: 'create', assertion }, environment)).body).toEqual({ status: 'failed' });
+    }
+    expect(await stack.authUserId(unknown)).toBeNull();
+    expect(await mailbox.messages(known)).toHaveLength(before);
+  });
+
   it('a build for another environment pointed at this backend creates nothing and never reaches an account', async () => {
     const known = uniqueEmail('known');
     await createAccount(device('setup'), known);
@@ -87,8 +102,11 @@ describe('every request names its environment', () => {
     expect(await beta.account.requestEmailCode({ email, intent: 'create' })).toEqual({ status: 'age-required' });
     expect(await stack.authUserId(email)).toBeNull();
 
-    await beta.account.requestEmailCode({ email: known, intent: 'sign-in' });
-    expect(await beta.account.verifyEmailCode({ email: known, code: await beta.mailbox.latestCode(known) })).toEqual({ status: 'failed' });
+    // request-code refuses it: no code goes out, and the last code the address had doesn't sign it in.
+    const before = (await beta.mailbox.messages(known)).length;
+    expect(await beta.account.requestEmailCode({ email: known, intent: 'sign-in' })).toEqual({ status: 'failed' });
+    expect(await beta.mailbox.messages(known)).toHaveLength(before);
+    expect((await beta.account.verifyEmailCode({ email: known, code: await beta.mailbox.latestCode(known) })).status).not.toBe('signed-in');
     expect(beta.account.gate).toEqual({ state: 'no-account' });
     expect(beta.vault.openAccount).toBeNull();
   });
@@ -132,22 +150,24 @@ describe('production rejects beta accounts and uploads', () => {
 
     await stack.asEnvironment('production', async () => {
       const phone = device('production-phone', { environment: 'production' });
-      await phone.account.requestEmailCode({ email, intent: 'sign-in' });
-      expect(await phone.account.verifyEmailCode({ email, code: await phone.mailbox.latestCode(email) })).toEqual({ status: 'failed' });
+      // To production the address has no account: it gets the "No account" email, never a code.
+      expect(await phone.account.requestEmailCode({ email, intent: 'sign-in' })).toEqual({ status: 'sent' });
+      expect((await phone.mailbox.messages(email))[0]).toMatch(/no Tableside account for it/);
       expect(phone.account.gate).toEqual({ state: 'no-account' });
       expect(phone.vault.openAccount).toBeNull();
     });
   });
 
-  it('a beta account is refused by production even with a session production issued', async () => {
-    const email = await betaAccount('beta-account-token');
+  it('production sends a beta account no code: to production its address has no account', async () => {
+    const email = await betaAccount('beta-account-code');
+    const before = (await mailbox.messages(email)).length;
 
     await stack.asEnvironment('production', async () => {
-      const { client, accessToken } = await rawSignIn(email, 'production');
-      expect(claims(accessToken)).toMatchObject({ environment: 'production' });
-      expect((await client.rpc('current_account')).data).toBeNull();
-      expect((await client.from('accounts').select('account_id')).data).toEqual([]);
+      expect(await stack.requestCode({ email, intent: 'sign-in' }, 'production')).toEqual({ status: 200, body: { status: 'sent' } });
     });
+    const messages = await mailbox.messages(email);
+    expect(messages).toHaveLength(before + 1);
+    expect(messages[0]).toMatch(/no Tableside account for it/);
   });
 });
 
@@ -190,6 +210,27 @@ describe('a production build installed over a beta build', () => {
       expect(accountId).not.toBe(betaAccount);
       expect(production.vault.openAccount).toBe(accountId);
     });
+  });
+
+  it('reopening removes the beta namespace before it reads any credentials, and opens no beta account', async () => {
+    const tester = await stack.asEnvironment('beta', async () => {
+      const tester = device('tester', { environment: 'beta' });
+      await createAccount(tester, uniqueEmail('reopen-tester'));
+      return tester;
+    });
+    await tester.vault.close();
+    const logBefore = tester.credentials.log.length;
+
+    const production = device('tester', { environment: 'production', installedOver: tester });
+    expect(await production.account.resume()).toEqual({ status: 'no-account' });
+
+    expect(production.account.gate).toEqual({ state: 'no-account' });
+    expect(production.vault.removed).toEqual(['beta']);
+    expect(production.vault.openAccount).toBeNull();
+    const log = tester.credentials.log.slice(logBefore);
+    expect(log.filter((entry) => entry.startsWith('get tableside.beta.auth') || entry.startsWith('get tableside.beta.account'))).toEqual([]);
+    expect([...tester.credentials.items.keys()].filter((key) => key.startsWith('tableside.beta.'))).toEqual([]);
+    expect(production.proxy.sent).toEqual([]);
   });
 
   it('a beta build removes nothing', async () => {

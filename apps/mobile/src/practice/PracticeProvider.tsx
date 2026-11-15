@@ -1,18 +1,22 @@
 import { createContext, useContext, useEffect, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { AppState } from 'react-native';
 
+import { useAccount } from '@/account/AccountProvider';
+
 import { createAppAdapters } from './app-adapters';
 import { PracticeController } from './controller';
 
 const PracticeContext = createContext<PracticeController | null>(null);
 
 /**
- * Owns the app's one practice controller. On launch it finds any unfinished
- * session, which waits suspended for the player; app lifecycle changes reach
- * the controller (backgrounding suspends, and the supervisor hears each one).
+ * Owns the signed-in account's practice controller, on the account's own
+ * store. On launch it finds any unfinished session, which waits suspended for
+ * the player; app lifecycle changes reach the controller (backgrounding
+ * suspends, and the supervisor hears each one).
  */
 export function PracticeProvider({ children }: { children: ReactNode }) {
-  const [controller] = useState(() => new PracticeController(createAppAdapters()));
+  const { account } = useAccount();
+  const [controller] = useState(() => new PracticeController(account.practice(createAppAdapters())));
   useEffect(() => {
     void controller.load();
   }, [controller]);

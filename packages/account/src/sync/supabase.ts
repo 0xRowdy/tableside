@@ -1,13 +1,13 @@
 // The sync engine's backend and live channel over Supabase: the versioned
-// operations (supabase/migrations, `sync_upload_v1`, `sync_feed_v1`,
-// `realtime_claim_v1`), the unversioned `sync_protocol`, and the account's
-// private Realtime topic.
+// operations (supabase/migrations, `sync_upload_v1`, `sync_stage_chunk_v1`,
+// `sync_feed_v1`, `realtime_claim_v1`), the unversioned `sync_protocol`, and
+// the account's private Realtime topic.
 
 import type { RealtimeChannel, SupabaseClient } from '@supabase/supabase-js';
 
 import type { SyncBackend } from './engine';
 import type { LiveChannel } from './live';
-import { type FeedPage, type ProtocolStatus, SyncCallError, type UploadAnswer } from './protocol';
+import { type ChunkAnswer, type FeedPage, type ProtocolStatus, SyncCallError, type UploadAnswer, chunkCallArguments } from './protocol';
 
 /**
  * Transaction contention the server reports instead of waiting without bound:
@@ -28,6 +28,7 @@ const SERVER_UNAVAILABLE = new Set(['PGRST000', 'PGRST001', 'PGRST002', 'PGRST00
 export const SYNC_OPERATIONS = {
   protocol: 'sync_protocol',
   upload: 'sync_upload_v1',
+  stageChunk: 'sync_stage_chunk_v1',
   feed: 'sync_feed_v1',
   claim: 'realtime_claim_v1',
 } as const;
@@ -127,6 +128,7 @@ export function supabaseSyncBackend(supabase: SupabaseClient, watch: RetryAfterW
   return {
     protocol: (version) => callOperation<ProtocolStatus>(supabase, watch, SYNC_OPERATIONS.protocol, { protocol: version }),
     upload: (request) => callOperation<UploadAnswer>(supabase, watch, SYNC_OPERATIONS.upload, { request }),
+    stageChunk: (chunk) => callOperation<ChunkAnswer>(supabase, watch, SYNC_OPERATIONS.stageChunk, chunkCallArguments(chunk)),
     feed: (after, pageSize) => callOperation<FeedPage>(supabase, watch, SYNC_OPERATIONS.feed, { after, page_size: pageSize }),
   };
 }

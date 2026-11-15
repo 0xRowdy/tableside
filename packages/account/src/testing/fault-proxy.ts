@@ -24,8 +24,8 @@ export interface HeldResponse {
 export class FaultProxy {
   /** Requests that reached the stack (a duplicated request counts twice). */
   requests = 0;
-  /** Every request the device sent, in order, with its headers. */
-  readonly sent: { readonly url: string; readonly headers: Headers }[] = [];
+  /** Every request the device sent, in order, with its headers and its body's size in bytes. */
+  readonly sent: { readonly url: string; readonly headers: Headers; readonly bodyBytes: number }[] = [];
   /** Called as each request leaves the device, before it reaches the stack. */
   onRequest: ((url: string) => void) | null = null;
   /** While true, live (WebSocket) connections are refused, as at a capacity limit. */
@@ -111,7 +111,8 @@ export class FaultProxy {
   readonly fetch: typeof fetch = async (input, givenInit) => {
     let init = givenInit;
     const url = input instanceof Request ? input.url : String(input);
-    this.sent.push({ url, headers: new Headers(input instanceof Request ? input.headers : init?.headers) });
+    const bodyBytes = typeof init?.body === 'string' ? Buffer.byteLength(init.body, 'utf8') : 0;
+    this.sent.push({ url, headers: new Headers(input instanceof Request ? input.headers : init?.headers), bodyBytes });
     this.onRequest?.(url);
     if (!this.connected) throw new TypeError('Network request failed (offline)');
     if (this.serverDown) throw new TypeError('Network request failed (no response from the server)');
