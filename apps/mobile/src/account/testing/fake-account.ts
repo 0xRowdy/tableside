@@ -43,6 +43,7 @@ import { SUPPLEMENT_NOTICE, isAgeRestricted, isSignedIn, opensRestrictedPaths } 
 import type { GameId } from '@/games';
 
 import type { AppAccount } from '../app-account';
+import type { ExportFile } from '../export-files';
 import type { RestrictedPath } from '../RestrictedPaths';
 
 export const FAKE_ACCOUNT_ID = 'account-1';
@@ -399,15 +400,26 @@ export function fakeAppAccount(options: { readonly stored?: AccountGate; readonl
   const offlineGames = new Map<string, GameId>();
   const opened: RestrictedPath[] = [];
   if (options.offlineGame && options.stored && 'accountId' in options.stored) offlineGames.set(options.stored.accountId, options.offlineGame);
+  const shared: ExportFile[] = [];
   const account: AppAccount & {
     readonly service: FakeAccountService;
     readonly offlineGames: Map<string, GameId>;
     /** The restricted paths opened, in order. */
     readonly opened: RestrictedPath[];
+    /** The export files handed to the share sheet, in order. */
+    readonly shared: ExportFile[];
   } = {
     service,
     offlineGames,
     opened,
+    shared,
+    exportFiles: {
+      share: async (file) => {
+        shared.push(file);
+        return 'shared';
+      },
+      clear: async () => undefined,
+    },
     restrictedPaths: { open: (path) => void opened.push(path) },
     // Practice keeps the adapters it was given: tests choose the store.
     practice: (base) => base,

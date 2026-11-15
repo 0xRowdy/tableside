@@ -77,7 +77,12 @@ export default function Account() {
             router.navigate('/more/settings/account/sync');
           }}
         />
-        <ListRow icon={Download} title="Export my data" detail="Spreadsheet and data files, plus anything not yet synced" onPress={open('export')} />
+        <ListRow
+          icon={Download}
+          title="Export my data"
+          detail="Spreadsheet and data files, plus anything not yet synced"
+          onPress={() => router.navigate('/more/settings/account/export')}
+        />
       </Group>
       <Group>
         <ListRow icon={Trash2} title="Delete account" detail="Choose a 30-day undo or permanent deletion" destructive onPress={open('delete')} />
