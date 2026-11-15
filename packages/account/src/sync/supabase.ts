@@ -20,6 +20,18 @@ const CONTENTION_PAUSE_MS = 100;
 /** PostgREST couldn't reach or use the database. */
 const SERVER_UNAVAILABLE = new Set(['PGRST000', 'PGRST001', 'PGRST002', 'PGRST003']);
 
+/**
+ * Every server operation this build calls: the versioned ones are protocol
+ * PROTOCOL_VERSION's, and `sync_protocol` is unversioned. The release check
+ * (test/compatibility.test.ts) holds the server to this list.
+ */
+export const SYNC_OPERATIONS = {
+  protocol: 'sync_protocol',
+  upload: 'sync_upload_v1',
+  feed: 'sync_feed_v1',
+  claim: 'realtime_claim_v1',
+} as const;
+
 type Failure = SyncCallError['kind'] | 'contention';
 
 /** What a failed call means, from its HTTP status and error code. */
@@ -107,9 +119,9 @@ async function callOperation<T>(supabase: SupabaseClient, watch: RetryAfterWatch
 
 export function supabaseSyncBackend(supabase: SupabaseClient, watch: RetryAfterWatch): SyncBackend {
   return {
-    protocol: (version) => callOperation<ProtocolStatus>(supabase, watch, 'sync_protocol', { protocol: version }),
-    upload: (request) => callOperation<UploadAnswer>(supabase, watch, 'sync_upload_v1', { request }),
-    feed: (after, pageSize) => callOperation<FeedPage>(supabase, watch, 'sync_feed_v1', { after, page_size: pageSize }),
+    protocol: (version) => callOperation<ProtocolStatus>(supabase, watch, SYNC_OPERATIONS.protocol, { protocol: version }),
+    upload: (request) => callOperation<UploadAnswer>(supabase, watch, SYNC_OPERATIONS.upload, { request }),
+    feed: (after, pageSize) => callOperation<FeedPage>(supabase, watch, SYNC_OPERATIONS.feed, { after, page_size: pageSize }),
   };
 }
 
@@ -146,7 +158,7 @@ export function supabaseLiveChannels(supabase: SupabaseClient, accountId: string
           joined.subscribe((status) => handlers.status(status === 'SUBSCRIBED' ? 'joined' : 'closed'));
         })();
       },
-      claim: async () => (await callOperation<{ claim: number }>(supabase, watch, 'realtime_claim_v1', {})).claim,
+      claim: async () => (await callOperation<{ claim: number }>(supabase, watch, SYNC_OPERATIONS.claim, {})).claim,
       leave() {
         left = true;
         // An installation without the live connection holds no Realtime

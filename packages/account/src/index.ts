@@ -37,5 +37,6 @@ export { BACKOFF_FIRST_MS, BACKOFF_MAX_MS } from './sync/backoff';
 export { type LiveChannel } from './sync/live';
 export { PROTOCOL_VERSION, type Disposition, type Envelope, type FeedEntry, type PreparedOperation, type ProtocolStatus } from './sync/protocol';
 export { PLATFORM_TABLES, type RecordKind, type RecordType, completedPracticeSession, recordTypes } from './sync/registry';
+export { SYNC_OPERATIONS } from './sync/supabase';
 export { type DevicePorts, type DeviceSignal, RECONCILE_INTERVAL_MS } from './sync/session';
 export { type AcceptedRecord, type QueuedUpload, type RejectedUpload, type SyncStore } from './sync/store';
