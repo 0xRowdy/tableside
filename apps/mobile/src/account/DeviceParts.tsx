@@ -3,7 +3,7 @@
 // sheet confirming a sign-out, and the banner once devices are signed out.
 
 import type { DeviceEntry } from '@tableside/account';
-import { Check, CircleCheck, LogOut, Smartphone, Tablet } from 'lucide-react-native';
+import { Check, CircleCheck, LogOut, Monitor, Smartphone, Tablet } from 'lucide-react-native';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { Button } from '@/components/Button';
@@ -13,11 +13,11 @@ import { fonts, palette, radius, space, textScale } from '@/theme/tokens';
 import { deviceShortName, lastActiveText, namesList } from './account-text';
 import { MethodButton } from './FirstRunParts';
 
-/** One device: an iPad (by its own account of itself) gets the tablet glyph, anything else the phone's. */
+/** One device: an iPad (by its own account of itself) gets the tablet glyph, a web account page's browser the monitor's, anything else the phone's. */
 export function DeviceCard({ entry, now, disabled, onSignOut }: { entry: DeviceEntry; now: number; disabled: boolean; onSignOut?: () => void }) {
   const label = entry.label ?? 'Unknown device';
   const active = lastActiveText(entry.lastActiveAt, now);
-  const Glyph = entry.label?.startsWith('iPad') ? Tablet : Smartphone;
+  const Glyph = entry.platform === 'web' ? Monitor : entry.label?.startsWith('iPad') ? Tablet : Smartphone;
   return (
     <View style={styles.card} testID={`device-${entry.id}`}>
       <View accessible accessibilityLabel={`${label}. ${active}${entry.thisDevice ? '. This device' : ''}`} style={styles.head}>

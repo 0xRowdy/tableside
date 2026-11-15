@@ -4,6 +4,7 @@
 
 import { type SupabaseClient, createClient } from '@supabase/supabase-js';
 
+import { instant, parseProgress } from './deletion-progress';
 import {
   type AgeRange,
   type AgeSignal,
@@ -149,7 +150,8 @@ export interface AccountSummary {
  */
 export interface DeviceEntry {
   readonly id: string;
-  readonly platform: 'ios' | 'android' | null;
+  /** 'web': a browser signed in to the web account page (#106). */
+  readonly platform: 'ios' | 'android' | 'web' | null;
   readonly label: string | null;
   /** Its latest sign-in, token renewal or status check, in milliseconds since the epoch. */
   readonly lastActiveAt: number | null;
@@ -1775,7 +1777,7 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
         return [
           {
             id: entry.id,
-            platform: entry.platform === 'ios' || entry.platform === 'android' ? entry.platform : null,
+            platform: entry.platform === 'ios' || entry.platform === 'android' || entry.platform === 'web' ? entry.platform : null,
             label: typeof entry.label === 'string' ? entry.label : null,
             lastActiveAt: Number.isFinite(lastActiveAt) ? lastActiveAt : null,
             thisDevice: entry.this_device === true,
@@ -2296,11 +2298,6 @@ function parseRemembered(text: string | null): RememberedAccount | null {
   };
 }
 
-/** A server timestamp in milliseconds since the epoch, or null when it isn't one. */
-const instant = (value: unknown): number | null => {
-  const at = typeof value === 'string' ? Date.parse(value) : Number.NaN;
-  return Number.isFinite(at) ? at : null;
-};
 
 const isAgeRange = (value: unknown): value is AgeRange => value === 'under-13' || (typeof value === 'string' && isEligibleBand(value));
 
@@ -2338,26 +2335,6 @@ function parseDeleted(text: string | null): DeletedMarker | null {
   };
 }
 
-/** The server's deletion progress (deletion_progress_v1), or null when it isn't one. */
-function parseProgress(data: unknown): DeletionProgress | null {
-  const value = data as {
-    status?: unknown; deletedAt?: unknown; cleanupBy?: unknown; completedAt?: unknown; delayed?: unknown;
-    analytics?: { requestedAt?: unknown; completedAt?: unknown } | null; providers?: unknown;
-  } | null;
-  const deletedAt = instant(value?.deletedAt);
-  const cleanupBy = instant(value?.cleanupBy);
-  if ((value?.status !== 'processing' && value?.status !== 'completed') || deletedAt === null || cleanupBy === null) return null;
-  const providers = value.providers;
-  return {
-    status: value.status,
-    deletedAt,
-    cleanupBy,
-    completedAt: instant(value.completedAt),
-    delayed: value.delayed === true,
-    analytics: { requestedAt: instant(value.analytics?.requestedAt), completedAt: instant(value.analytics?.completedAt) },
-    providers: providers === 'revoked' || providers === 'not-held' || providers === 'none' ? providers : null,
-  };
-}
 /** An installation's secret for an account, kept across sign-outs: it proves the installation when a later session registers. */
 const installationSecretKey = (environment: EnvironmentName, installationId: string, accountId: string) =>
   `tableside.${environment}.${installationId}.${accountId}.device`;

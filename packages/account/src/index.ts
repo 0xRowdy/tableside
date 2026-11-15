@@ -109,6 +109,21 @@ export {
   serverMetricEvents,
 } from './metrics';
 export { type CrashReport, crashReport } from './crash-report';
+export {
+  BACKUPS_DETAIL,
+  CANCEL_FAILED,
+  CANCEL_TOO_LATE,
+  DELETION_UNKNOWN,
+  PROVIDER_GRANT_DETAIL,
+  SCHEDULE_UNKNOWN,
+  STORES,
+  type Store,
+  WEB_PAGES,
+  analyticsDetail,
+  dayText,
+  deletionDetail,
+  scheduledDetail,
+} from './lifecycle-text';
 export { type AccountPrivacy, type EnablingResult, type PrivacyChoices, type RestrictiveResult, productAnalyticsId } from './privacy';
 export {
   type AcceptedPrivacyChange,

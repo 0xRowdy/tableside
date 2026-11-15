@@ -8,7 +8,7 @@
 // the support and privacy links are here (Amendment 9 §1).
 // TODO(frames): unverified against S2-23's processing and completed states — the frame couldn't be read (Pencil unreachable). The copy and layout come from spec 2 *Deletion*, Amendments 1 C2–C3, 8 §3 and 9 §1, and #104.
 
-import type { DeletionProgress, DeletionStatus } from '@tableside/account';
+import { BACKUPS_DETAIL, type DeletionProgress, type DeletionStatus, PROVIDER_GRANT_DETAIL, analyticsDetail, deletionDetail } from '@tableside/account';
 import { ChartBar, CalendarClock, Database, KeyRound, Trash2 } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
@@ -33,21 +33,8 @@ export function deletedBody(progress: DeletionProgress | null): string {
   return `Its data is being erased from Tableside, by ${dayText(progress.cleanupBy)}. ${here}`;
 }
 
-/** The deletion's own row: processing (or delayed) or completed, never a deadline. */
-export function deletionDetail(progress: DeletionProgress | null): string {
-  if (!progress) return "Can't check right now. Connect to see how it's going.";
-  if (progress.status === 'completed') return progress.completedAt !== null ? `Completed on ${dayText(progress.completedAt)}` : 'Completed';
-  if (progress.delayed) return "Taking longer than expected · it's still being deleted";
-  return `Processing · finished by ${dayText(progress.cleanupBy)}`;
-}
-
-/** The analytics provider's erasure: requested, and erased only once the provider says so. */
-export function analyticsDetail(progress: DeletionProgress | null): string {
-  const { requestedAt, completedAt } = progress?.analytics ?? { requestedAt: null, completedAt: null };
-  if (completedAt !== null) return `Erased on ${dayText(completedAt)}`;
-  if (requestedAt !== null) return "Erasure requested · the analytics provider hasn't confirmed it yet";
-  return 'Erasure not requested yet';
-}
+// The status rows' wording is shared with the web account page.
+export { analyticsDetail, deletionDetail };
 
 export function AccountDeleted() {
   const { service } = useAccount();
@@ -82,9 +69,9 @@ export function AccountDeleted() {
       <Group>
         <ListRow icon={CalendarClock} title="Deletion" detail={status === undefined ? 'Checking…' : deletionDetail(progress)} />
         <ListRow icon={ChartBar} title="Analytics data" detail={analyticsDetail(progress)} />
-        <ListRow icon={Database} title="Backups" detail="Backups age out on their own schedule, set out in the privacy policy." />
+        <ListRow icon={Database} title="Backups" detail={BACKUPS_DETAIL} />
         {progress?.providers === 'not-held' && (
-          <ListRow icon={KeyRound} title="Apple or Google sign-in" detail="To remove Tableside there too, open your Apple ID or Google Account settings." />
+          <ListRow icon={KeyRound} title="Apple or Google sign-in" detail={PROVIDER_GRANT_DETAIL} />
         )}
       </Group>
       <GroupLabel>YOUR SUBSCRIPTION</GroupLabel>

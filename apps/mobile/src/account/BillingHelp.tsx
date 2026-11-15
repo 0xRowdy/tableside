@@ -1,29 +1,16 @@
 // Billing help on the restricted paths and before deleting (spec 2 Amendments
 // 1 C2, 3 §4 and 5 §4): the store's own subscription management and refund
-// request pages, in the App Store or Google Play variant for this device.
-// Never a purchase, and never a claim that anything was canceled or refunded:
-// only the store can say so. Spec 5 owns billing; until then these open the
-// store's pages.
+// request pages, in the App Store or Google Play variant for this device
+// (STORES, shared with the web account page). Never a purchase, and never a
+// claim that anything was canceled or refunded: only the store can say so.
 
+import { STORES, type Store } from '@tableside/account';
 import { CreditCard, ReceiptText } from 'lucide-react-native';
 import { Linking, Platform } from 'react-native';
 
 import { Group, ListRow } from '@/settings/SettingsParts';
 
-export type Store = 'app-store' | 'google-play';
-
-export const STORES: Readonly<Record<Store, { readonly name: string; readonly manageUrl: string; readonly refundUrl: string }>> = {
-  'app-store': {
-    name: 'App Store',
-    manageUrl: 'https://apps.apple.com/account/subscriptions',
-    refundUrl: 'https://reportaproblem.apple.com',
-  },
-  'google-play': {
-    name: 'Google Play',
-    manageUrl: 'https://play.google.com/store/account/subscriptions',
-    refundUrl: 'https://support.google.com/googleplay/answer/2479637',
-  },
-};
+export { STORES, type Store };
 
 /** The store this device buys through. */
 export const deviceStore = (): Store => (Platform.OS === 'ios' ? 'app-store' : 'google-play');

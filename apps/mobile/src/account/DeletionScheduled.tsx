@@ -7,7 +7,7 @@
 // request (spec 2 Amendments 1 A1, B2, 8 §7 and 9 §1).
 // TODO(frames): unverified against S2-23's deletion-scheduled variant — the frame couldn't be read (Pencil unreachable). The copy and layout come from spec 2 *Deletion*, Amendments 1 A1, B2, 3 §4 and 9 §1, and #103.
 
-import type { AccountGate, DeletionStatus, SignInMethodEntry } from '@tableside/account';
+import { type AccountGate, CANCEL_FAILED, CANCEL_TOO_LATE, type DeletionStatus, type SignInMethodEntry, scheduledDetail } from '@tableside/account';
 import { CalendarClock } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
@@ -26,13 +26,11 @@ import { RestrictedPathRows } from './RestrictedPaths';
 export type DeletionScheduledGate = Extract<AccountGate, { state: 'deletion-scheduled' }>;
 
 const CANCEL_NEEDS_CONNECTION = 'Canceling deletion needs a connection. Connect, then try again.';
-const TOO_LATE = "It's too late to cancel: the deletion date has passed, so your account is being deleted.";
-const FAILED = "Couldn't cancel deletion. Check your connection and try again.";
 
 /** What Deletion status says: the server's answer when it came, else what the gate knows. */
 function statusDetail(gate: DeletionScheduledGate, status: DeletionStatus | null | undefined): string {
   const deadline = status?.status === 'scheduled' ? status.deadline : gate.deadline;
-  return `Scheduled · deleted permanently on ${dayText(deadline)}`;
+  return scheduledDetail(deadline);
 }
 
 export function DeletionScheduled({ gate }: { gate: DeletionScheduledGate }) {
@@ -61,8 +59,8 @@ export function DeletionScheduled({ gate }: { gate: DeletionScheduledGate }) {
         if (found) setMethods(found);
         else setProblem(CANCEL_NEEDS_CONNECTION);
       } else if (result.status === 'offline') setProblem(CANCEL_NEEDS_CONNECTION);
-      else if (result.status === 'too-late') setProblem(TOO_LATE);
-      else if (result.status === 'failed') setProblem(FAILED);
+      else if (result.status === 'too-late') setProblem(CANCEL_TOO_LATE);
+      else if (result.status === 'failed') setProblem(CANCEL_FAILED);
     } finally {
       setBusy(false);
     }
