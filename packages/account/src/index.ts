@@ -20,6 +20,7 @@ export {
   noPlatformAgeSignals,
 } from './eligibility';
 export {
+  type AccountDeletion,
   type AccountGate,
   type AccountService,
   type AccountServiceOptions,
@@ -33,7 +34,9 @@ export {
   type CodeRequestResult,
   type CodeVerificationResult,
   type CredentialStorage,
+  type CancelDeletionResult,
   type CurrencyChangeResult,
+  type DeletionStatus,
   type DeviceDescription,
   type DeviceEntry,
   type DeviceSignOutResult,
@@ -59,6 +62,7 @@ export {
   type ProviderToken,
   type QueueResult,
   type ReviewerSignInResult,
+  type ScheduleDeletionResult,
   type SignInMethod,
   type SignOutResult,
   type SignedInGate,
@@ -67,6 +71,7 @@ export {
   type VaultSession,
   createAccountService,
   isAgeRestricted,
+  isRestricted,
   isSignedIn,
   opensOrdinaryAccess,
   opensRestrictedPaths,

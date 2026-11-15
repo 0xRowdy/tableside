@@ -272,7 +272,7 @@ One of Tableside's fully separate backends: beta, production, or a local develop
 _Avoid_: stage, tier
 
 **Account gate**:
-The account's current access state on an installation (no account, active, renewal pending, signed out, revoked, deletion scheduled, recovery needed, age unresolved, or age ineligible), which decides whether ordinary access is open. Renewal pending is active access under cached rights while an expired token renews. Age unresolved and age ineligible keep only the restricted paths: deletion, Contact support, Make a privacy request, billing help and authenticated export.
+The account's current access state on an installation (no account, active, renewal pending, signed out, revoked, deletion scheduled, recovery needed, age unresolved, or age ineligible), which decides whether ordinary access is open. Renewal pending is active access under cached rights while an expired token renews. Age unresolved and age ineligible keep only the restricted paths: deletion, Contact support, Make a privacy request, billing help and authenticated export. Deletion scheduled keeps Cancel deletion, deletion status, authenticated export, billing help, Contact support and Make a privacy request; its session and records stay until the deadline.
 
 **Sign-in method**:
 One way an account signs in: an Apple ID, a Google account, or the email code for its sign-in email. The account owns its methods, never the other way around; an account always keeps at least one, and a method another account uses is never merged into this one.

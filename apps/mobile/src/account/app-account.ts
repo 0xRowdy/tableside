@@ -117,7 +117,9 @@ export function createAppAccount(): AppAccount {
         else if (path === 'privacy-request') void Linking.openURL(WEB_PAGES.privacyRequest);
         // Export my data works on the restricted paths (S2-21), outside the tab bar.
         else if (path === 'export') router.navigate('/export');
-        // Billing help (spec 5) and deletion (#103) open nothing until their screens land.
+        // Deletion (S2-22) and billing help (the store's pages until spec 5) too.
+        else if (path === 'delete-account') router.navigate('/delete-account');
+        else if (path === 'billing-help') router.navigate('/billing-help');
       },
     },
     exportFiles: deviceExportFiles,

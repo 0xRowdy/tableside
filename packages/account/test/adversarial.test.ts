@@ -202,10 +202,11 @@ describe('the authorization gate', () => {
     const bucket = a.client.storage.from('account-private');
     expect((await bucket.upload(`${a.accountId}/before.txt`, 'kept')).error).toBeNull();
 
-    await stack.sql`update public.accounts set state = 'deletion_scheduled' where account_id = ${a.accountId}`;
+    await stack.sql`update public.accounts set state = 'deletion_scheduled', deletion_deadline = now() + interval '30 days', deletion_scheduled_at = now() where account_id = ${a.accountId}`;
     expect((await a.client.from('accounts').select('account_id')).data).toEqual([]);
     expect((await a.client.from('eligibility').select('account_id')).data).toEqual([]);
-    expect((await a.client.rpc('current_account')).data).toBeNull();
+    // Its restricted paths stay (#103): the current account answers, with the deadline, and grants no records.
+    expect((await a.client.rpc('current_account')).data).toMatchObject({ account_id: a.accountId, deletion_deadline: expect.any(String) });
     expect((await bucket.download(`${a.accountId}/before.txt`)).error).not.toBeNull();
     expect((await bucket.upload(`${a.accountId}/after.txt`, 'denied')).error).not.toBeNull();
   });

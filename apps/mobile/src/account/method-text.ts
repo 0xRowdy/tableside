@@ -18,8 +18,20 @@ export function methodDetail({ method, email }: SignInMethodEntry): string | und
 
 /** Why Confirm it's you is asked, for each change it guards. */
 export function confirmReason(
-  change: { readonly kind: 'add' | 'remove'; readonly method: SignInMethod } | { readonly kind: 'change-email' } | { readonly kind: 'sign-out-devices' } | { readonly kind: 'export' },
+  change:
+    | { readonly kind: 'add' | 'remove'; readonly method: SignInMethod }
+    | { readonly kind: 'change-email' }
+    | { readonly kind: 'sign-out-devices' }
+    | { readonly kind: 'export' }
+    | { readonly kind: 'delete-account' }
+    | { readonly kind: 'cancel-deletion' },
 ): string {
+  if (change.kind === 'delete-account') {
+    return "Deleting your account starts here, so sign in again first. Being signed in already isn't enough for this.";
+  }
+  if (change.kind === 'cancel-deletion') {
+    return "Canceling deletion reopens your account, so sign in again first. Being signed in already isn't enough for this.";
+  }
   if (change.kind === 'export') {
     return "An export is a full copy of your data, so sign in again first. Being signed in already isn't enough for this.";
   }

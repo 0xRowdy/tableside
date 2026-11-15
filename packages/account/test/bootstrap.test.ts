@@ -453,10 +453,10 @@ describe('a raw client calling the bootstrap operations', () => {
     expect((await stack.rawClient().rpc('sync_bootstrap_v1', { installation: 'raw-anon' })).error).not.toBeNull();
     expect((await stack.rawClient().rpc('sync_bootstrap_page_v1', { snapshot, after: 0 })).error).not.toBeNull();
     // An account whose deletion is scheduled: ordinary access is closed.
-    await stack.sql`update public.accounts set state = 'deletion_scheduled' where account_id = ${accountOf(phone)}`;
+    await stack.sql`update public.accounts set state = 'deletion_scheduled', deletion_deadline = now() + interval '30 days', deletion_scheduled_at = now() where account_id = ${accountOf(phone)}`;
     expect((await owner.rpc('sync_bootstrap_page_v1', { snapshot, after: 0 })).error).not.toBeNull();
     expect((await owner.rpc('sync_bootstrap_v1', { installation: 'raw-owner' })).error).not.toBeNull();
-    await stack.sql`update public.accounts set state = 'active' where account_id = ${accountOf(phone)}`;
+    await stack.sql`update public.accounts set state = 'active', deletion_deadline = null, deletion_scheduled_at = null where account_id = ${accountOf(phone)}`;
     // A revoked session, its access token unexpired.
     const revoked = stack.rawClient(accessToken(phone));
     expect((await revoked.rpc('sync_bootstrap_page_v1', { snapshot, after: 0 })).data).toMatchObject({ status: 'page' });

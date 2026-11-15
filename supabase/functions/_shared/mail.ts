@@ -91,6 +91,29 @@ export function devicesSignedOutMail(devices: number, method?: string): Mail {
 }
 
 /**
+ * "Deletion scheduled" (#103): the date the account is deleted permanently, and
+ * how to undo it until then. It never says a subscription was canceled: billing
+ * continues until the player cancels it with the store (Amendment 1 C2).
+ */
+export function deletionScheduledMail(deadline: string): Mail {
+  const on = new Date(deadline).toUTCString().replace(/ \d\d:\d\d:\d\d GMT$/, '');
+  const text =
+    `Your Tableside account is scheduled for permanent deletion on ${on}. Until then you can't use it, your public content is hidden, ` +
+    'and your data is kept.\n\n' +
+    'To keep your account, open Tableside, sign in and choose Cancel deletion before that date.\n\n' +
+    "Deleting your account doesn't cancel a subscription: billing continues until you cancel it in the App Store or Google Play.\n\n" +
+    "If you didn't ask for this, cancel deletion in Tableside and contact support.";
+  return {
+    subject: 'Your Tableside account is scheduled for deletion',
+    text,
+    html: text
+      .split('\n\n')
+      .map((paragraph) => `<p>${paragraph}</p>`)
+      .join(''),
+  };
+}
+
+/**
  * "Export ready": where to find the account archive and until when. It carries no
  * link: the archive downloads only in the app, for a session that confirms
  * it's the player.

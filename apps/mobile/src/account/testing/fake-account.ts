@@ -2,6 +2,7 @@
 // with no network or storage, and the app account around it.
 
 import type {
+  AccountDeletion,
   AccountExport,
   AccountGate,
   AccountPrivacy,
@@ -12,10 +13,12 @@ import type {
   AccountSummary,
   AgeCheckResult,
   AgeRange,
+  CancelDeletionResult,
   CodeIntent,
   CodeRequestResult,
   CodeVerificationResult,
   CurrencyChangeResult,
+  DeletionStatus,
   DeviceEntry,
   DeviceSignOutResult,
   Devices,
@@ -33,12 +36,13 @@ import type {
   ProviderCreateResult,
   ProviderSignInResult,
   ReviewerSignInResult,
+  ScheduleDeletionResult,
   ServerExport,
   ServerExportDownload,
   ServerExportRequest,
   SignOutResult,
 } from '@tableside/account';
-import { SUPPLEMENT_NOTICE, isAgeRestricted, isSignedIn, opensRestrictedPaths } from '@tableside/account';
+import { SUPPLEMENT_NOTICE, isRestricted, isSignedIn, opensRestrictedPaths } from '@tableside/account';
 
 import type { GameId } from '@/games';
 
@@ -156,7 +160,7 @@ export class FakeAccountService implements AccountService {
   async signOut(): Promise<SignOutResult> {
     this.calls.push({ method: 'signOut' });
     const gate = this.current;
-    if (!isSignedIn(gate) && !isAgeRestricted(gate)) return { status: 'not-signed-in' as const };
+    if (!isSignedIn(gate) && !isRestricted(gate)) return { status: 'not-signed-in' as const };
     for (const handler of [...this.ending]) await handler();
     this.setGate({ state: 'signed-out', accountId: gate.accountId });
     return this.next.signOut.shift() ?? { status: 'signed-out' as const, serverSessionEnded: true };
@@ -312,6 +316,41 @@ export class FakeAccountService implements AccountService {
     localSupplement: async () => {
       this.exportCalls.push('supplement');
       return opensRestrictedPaths(this.current) ? this.supplement : null;
+    },
+  };
+
+  /** What deletion.status() answers while the restricted paths are open. Null: offline. */
+  deletionState: DeletionStatus | null = { status: 'none' };
+  /** Answers for the next deletion calls, used in order; unscripted ones succeed. */
+  readonly deletionNext: { schedule: ScheduleDeletionResult[]; cancel: CancelDeletionResult[] } = { schedule: [], cancel: [] };
+  /** Each deletion call, in order: "schedule", "cancel" or "status". */
+  readonly deletionCalls: string[] = [];
+
+  /** As the real service: a scheduling locks the gate with its deadline, and a cancel reopens the same account. */
+  readonly deletion: AccountDeletion = {
+    schedule: async () => {
+      this.deletionCalls.push('schedule');
+      const gate = this.current;
+      const result = this.deletionNext.schedule.shift() ?? { status: 'scheduled' as const, deadline: Date.now() + 30 * DAY };
+      if (result.status === 'scheduled' && 'accountId' in gate) {
+        this.deletionState = { status: 'scheduled', deadline: result.deadline, scheduledAt: Date.now() };
+        this.setGate({ state: 'deletion-scheduled', accountId: gate.accountId, deadline: result.deadline });
+      }
+      return result;
+    },
+    cancel: async () => {
+      this.deletionCalls.push('cancel');
+      const gate = this.current;
+      const result = this.deletionNext.cancel.shift() ?? { status: 'canceled' as const };
+      if (result.status === 'canceled' && gate.state === 'deletion-scheduled') {
+        this.deletionState = { status: 'none' };
+        this.setGate({ state: 'active', accountId: gate.accountId, eligibility: '18+' });
+      }
+      return result;
+    },
+    status: async () => {
+      this.deletionCalls.push('status');
+      return opensRestrictedPaths(this.current) ? this.deletionState : null;
     },
   };
 
