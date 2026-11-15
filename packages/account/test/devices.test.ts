@@ -315,13 +315,13 @@ describe('the lifecycle status', () => {
 
     const phoneToken = statusToken(phone);
     const deadline = new Date(Date.now() + 30 * 86_400_000);
-    await stack.sql`update public.accounts set state = 'deletion_scheduled', deletion_deadline = ${deadline} where account_id = ${accountId}`;
+    await stack.sql`update public.accounts set state = 'deletion_scheduled', deletion_deadline = ${deadline}, deletion_scheduled_at = now() where account_id = ${accountId}`;
     const scheduled = (await status(phoneToken)) as { status: string; deadline: string };
     expect(scheduled.status).toBe('deletion-scheduled');
     expect(Date.parse(scheduled.deadline)).toBe(deadline.getTime());
 
     // After the Auth user is gone it keeps answering, from the account's own records.
-    await stack.sql`update public.accounts set state = 'deleted' where account_id = ${accountId}`;
+    await stack.sql`update public.accounts set state = 'deleted', deletion_deadline = null, deletion_scheduled_at = null where account_id = ${accountId}`;
     await stack.sql`delete from auth.users where id = (select auth_user_id from public.accounts where account_id = ${accountId})`;
     expect(await status(phoneToken)).toEqual({ status: 'deleted' });
     expect(await status(token)).toEqual({ status: 'deleted' });

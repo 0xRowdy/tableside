@@ -202,14 +202,14 @@ describe('the reconnect order', () => {
 
   it('sends nothing with a barrier while the account’s access can’t be reconciled', async () => {
     const { phone, accountId } = await twoDevices();
-    await stack.sql`update public.accounts set state = 'deletion_scheduled' where account_id = ${accountId}`;
+    await stack.sql`update public.accounts set state = 'deletion_scheduled', deletion_deadline = now() + interval '30 days', deletion_scheduled_at = now() where account_id = ${accountId}`;
     try {
       await queue(phone, testContribution.name, contribution('practice'));
       await phone.account.sync.idle();
       expect(await receipts(accountId)).toEqual([]);
       expect(uploadsSent(phone)).toEqual([]);
     } finally {
-      await stack.sql`update public.accounts set state = 'active' where account_id = ${accountId}`;
+      await stack.sql`update public.accounts set state = 'active', deletion_deadline = null, deletion_scheduled_at = null where account_id = ${accountId}`;
     }
     await phone.account.sync.reconcile();
     expect(await receipts(accountId)).toMatchObject([{ item: 'c-practice', status: 'accepted' }]);

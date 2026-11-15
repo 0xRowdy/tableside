@@ -544,7 +544,7 @@ describe('retention (Amendment 1 C6) and protected controls (Amendment 1 A5)', (
     await synced(tablet);
     const authUser = await stack.authUserId(email);
     await sql`delete from auth.sessions where user_id = ${authUser!} and id = ${sessionId(accessToken(tablet))}`;
-    await sql`update public.accounts set state = 'deletion_scheduled' where account_id = ${accountId}`;
+    await sql`update public.accounts set state = 'deletion_scheduled', deletion_deadline = now() + interval '30 days', deletion_scheduled_at = now() where account_id = ${accountId}`;
 
     const journal = await sql<{ kind: string; subject: string; control: Record<string, unknown> }[]>`
       select kind, subject, control from private.control_journal where account_id = ${accountId} order by position`;
@@ -566,9 +566,9 @@ describe('retention (Amendment 1 C6) and protected controls (Amendment 1 A5)', (
     );
     expect(kinds.indexOf('purge test-result/r-1')).toBeLessThan(kinds.indexOf('session-revoked session'));
     expect(kinds.at(-1)).toBe('account-state account');
-    expect(journal.at(-1)?.control).toEqual({ state: 'deletion_scheduled' });
+    expect(journal.at(-1)?.control).toEqual({ state: 'deletion_scheduled', deadline: expect.any(String) });
     expect(JSON.stringify(journal)).not.toContain('detail of');
-    await sql`update public.accounts set state = 'active' where account_id = ${accountId}`;
+    await sql`update public.accounts set state = 'active', deletion_deadline = null, deletion_scheduled_at = null where account_id = ${accountId}`;
   });
 });
 

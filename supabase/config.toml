@@ -448,6 +448,10 @@ verify_jwt = false
 [functions.revoke-devices]
 verify_jwt = false
 
+# Scheduling deletion (#103): checks the caller's own token the same way.
+[functions.schedule-deletion]
+verify_jwt = false
+
 # Apple's and Google's security events (#101): no Supabase key at all; each event is a JWT the provider signed.
 [functions.provider-notifications]
 verify_jwt = false
