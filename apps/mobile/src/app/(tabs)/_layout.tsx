@@ -22,6 +22,7 @@ export default function TabsLayout() {
   const { gate, offlineGame } = useAccount();
   if (gate.state === 'recovery-needed' || gate.state === 'database-unavailable') return <Redirect href="/account-recovery" />;
   if (gate.state === 'signed-out') return <Redirect href="/signed-out" />;
+  if (gate.state === 'revoked') return <Redirect href="/revoked" />;
   const restricted = isAgeRestricted(gate);
   if (!restricted) {
     if (!isSignedIn(gate)) return <Redirect href="/welcome" />;

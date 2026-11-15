@@ -263,6 +263,10 @@ A store purchase that is no longer linked to any usable Tableside account. It is
 **Installation**:
 One installation of the app on one device. Reinstalling creates a new installation.
 
+**Revocation**:
+Signing another device out of the account (on Devices, "Sign out this device" or "Sign out all other devices"): every session of that installation ends on the server at once, and the device locks, keeping its records, when the server's lifecycle status tells it. Only that answer moves a device to Revoked; a failed request never does. A device's label is what it calls itself, never proof of which device it is.
+_Avoid_: remote wipe, kicking a device
+
 **Backend environment**:
 One of Tableside's fully separate backends: beta, production, or a local development stack. A build talks to exactly one, and its accounts, credentials, keys and device data belong to that environment alone. A production build installed over a beta one erases the beta's device data first.
 _Avoid_: stage, tier

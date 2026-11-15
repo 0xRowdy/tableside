@@ -351,17 +351,20 @@ describe('live updates', () => {
 });
 
 describe('the operation API, called directly', () => {
+  /** The phone's own installation: the server takes uploads only from the caller's registered installation. */
+  let installation = '';
   async function signedIn() {
     const { phone, tablet } = await twoDevices();
     const gate = phone.account.gate;
     if (gate.state !== 'active') throw new Error('unreachable');
+    installation = phone.vault.store().identity.installationId;
     return { phone, tablet, accountId: gate.accountId, raw: localStack().rawClient(accessToken(phone)) };
   }
 
   /** A canonical upload request for a practice result. */
   function request(fields: { operation: string; owner: string; activityId?: string; device?: string; protocol?: number; payload?: object }) {
     const activityId = fields.activityId ?? 'activity-1';
-    const device = fields.device ?? 'installation-1';
+    const device = fields.device ?? installation;
     const payload = fields.payload ?? {
       recordVersion: 1,
       activityId,
@@ -405,7 +408,7 @@ describe('the operation API, called directly', () => {
     const altered = request({
       operation: 'd'.repeat(32),
       owner: accountId,
-      payload: { recordVersion: 1, activityId: 'activity-1', owner: accountId, device: 'installation-1', game: 'roulette', startedAt: 1, endedAt: 2, netResult: '999', finalCashOut: '1999' },
+      payload: { recordVersion: 1, activityId: 'activity-1', owner: accountId, device: installation, game: 'roulette', startedAt: 1, endedAt: 2, netResult: '999', finalCashOut: '1999' },
     });
     expect((await raw.rpc('sync_upload_v1', { request: altered })).data).toMatchObject({ status: 'rejected', code: 'identity-reused' });
     expect(((await raw.rpc('sync_feed_v1', { after: 0 })).data as { entries: unknown[] }).entries).toHaveLength(1);

@@ -15,6 +15,9 @@ import type {
   CodeRequestResult,
   CodeVerificationResult,
   CurrencyChangeResult,
+  DeviceEntry,
+  DeviceSignOutResult,
+  Devices,
   EmailChangeConfirmation,
   EmailChangeResult,
   EmailMethodResult,
@@ -63,6 +66,17 @@ export const FAKE_METHODS: readonly SignInMethodEntry[] = [
   { id: 'method-apple', method: 'apple', email: 'x7k2@privaterelay.appleid.com' },
   { id: 'method-email', method: 'email', email: 'player@example.com' },
 ];
+
+const DAY = 86_400_000;
+
+/** The devices the fake's account is signed in on unless a test changes them: this iPhone (active now), an iPad (2 days ago) and a Pixel (3 months ago). */
+export function fakeDevices(now = Date.now()): readonly DeviceEntry[] {
+  return [
+    { id: 'device-iphone', platform: 'ios', label: 'iPhone 15 · iOS 18', lastActiveAt: now, thisDevice: true },
+    { id: 'device-ipad', platform: 'ios', label: 'iPad Air · iPadOS 18', lastActiveAt: now - 2 * DAY - 3_600_000, thisDevice: false },
+    { id: 'device-pixel', platform: 'android', label: 'Pixel 8 · Android 15', lastActiveAt: now - 95 * DAY, thisDevice: false },
+  ];
+}
 
 /** An Account service whose answers a test scripts. Unscripted calls succeed. */
 export class FakeAccountService implements AccountService {
@@ -116,7 +130,7 @@ export class FakeAccountService implements AccountService {
     this.calls.push({ method: 'resume' });
     if (this.stored.state === 'no-account') return { status: 'no-account' as const };
     this.setGate(this.stored);
-    return { status: this.stored.state === 'signed-out' ? ('signed-out' as const) : ('resumed' as const) };
+    return { status: this.stored.state === 'signed-out' || this.stored.state === 'revoked' ? ('signed-out' as const) : ('resumed' as const) };
   }
 
   /** Like the real service: the session-ending handlers run first, then the gate is Signed out. */
@@ -223,6 +237,33 @@ export class FakeAccountService implements AccountService {
     confirmEmailChange: async ({ currentCode, newCode }) => {
       this.methodCalls.push(`confirm-email-change ${currentCode} ${newCode}`);
       return this.methodsNext.confirmEmailChange.shift() ?? { status: 'changed' };
+    },
+  };
+
+  /** The account's devices: list() answers them, and an unscripted sign-out removes them. Null: offline. */
+  deviceEntries: readonly DeviceEntry[] | null = fakeDevices();
+  /** Answers for the next device sign-outs, used in order; unscripted ones succeed. */
+  readonly devicesNext: { signOut: DeviceSignOutResult[] } = { signOut: [] };
+  /** Each device sign-out, in order, as "sign-out <id>" or "sign-out-others". */
+  readonly deviceCalls: string[] = [];
+
+  private signedOutDevices(keep: (entry: DeviceEntry) => boolean): DeviceSignOutResult {
+    const result = this.devicesNext.signOut.shift();
+    if (result) return result;
+    const gone = (this.deviceEntries ?? []).filter((entry) => !keep(entry));
+    this.deviceEntries = (this.deviceEntries ?? []).filter(keep);
+    return { status: 'signed-out', devices: gone.length, email: this.summary?.email ?? null };
+  }
+
+  readonly devices: Devices = {
+    list: async () => (isSignedIn(this.current) ? this.deviceEntries : null),
+    signOut: async (id) => {
+      this.deviceCalls.push(`sign-out ${id}`);
+      return this.signedOutDevices((entry) => entry.id !== id);
+    },
+    signOutOthers: async () => {
+      this.deviceCalls.push('sign-out-others');
+      return this.signedOutDevices((entry) => entry.thisDevice);
     },
   };
 

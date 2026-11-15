@@ -4,7 +4,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 
-import { PROTOCOL_VERSION } from '../src';
+import { ENVIRONMENT_HEADER, PROTOCOL_VERSION } from '../src';
 import { prepareOperation } from '../src/sync/protocol';
 import {
   Mailbox,
@@ -207,6 +207,73 @@ describe('the authorization gate', () => {
     expect((await a.client.rpc('current_account')).data).toBeNull();
     expect((await bucket.download(`${a.accountId}/before.txt`)).error).not.toBeNull();
     expect((await bucket.upload(`${a.accountId}/after.txt`, 'denied')).error).not.toBeNull();
+  });
+
+  // #101: signed out from another device. Export delivery (#102), grant
+  // issuance (spec 5) and publication (spec 6) don't exist yet; they go
+  // through the same gate (private.active_account / signed_in_account).
+  it('denies a device signed out from another device on every path, while its access token is unexpired', async () => {
+    const email = uniqueEmail('revoked-device');
+    const phone = createDevice(stack, { name: 'revoked-phone' });
+    const tablet = createDevice(stack, { name: 'revoked-tablet' });
+    devices.push(phone, tablet);
+    await createAccountByEmail(phone, email);
+    await stack.ageCodeRequests(email, 3600);
+    const previous = await mailbox.latestCode(email);
+    await tablet.account.requestEmailCode({ email, intent: 'sign-in' });
+    await tablet.account.verifyEmailCode({ email, code: await mailbox.latestCode(email, { after: previous }) });
+    const gate = tablet.account.gate;
+    if (gate.state !== 'active') throw new Error('account setup failed');
+    const { accountId } = gate;
+    const token = accessToken(tablet);
+    const stale = rawClient(token);
+    const bucket = stale.storage.from('account-private');
+    expect((await bucket.upload(`${accountId}/before.txt`, 'kept')).error).toBeNull();
+    const installation = tablet.vault.store().identity.installationId;
+
+    await stack.ageCodeRequests(email, 3600);
+    const before = await mailbox.latestCode(email);
+    await phone.account.freshAuthentication.requestCode();
+    await phone.account.freshAuthentication.withCode(await mailbox.latestCode(email, { after: before }));
+    expect(await phone.account.devices.signOutOthers()).toMatchObject({ status: 'signed-out', devices: 1 });
+
+    // RLS tables and storage.
+    expect((await stale.from('accounts').select('account_id')).data).toEqual([]);
+    expect((await stale.from('eligibility').select('account_id')).data).toEqual([]);
+    expect((await bucket.download(`${accountId}/before.txt`)).error).not.toBeNull();
+    expect((await bucket.upload(`${accountId}/after.txt`, 'denied')).error).not.toBeNull();
+    expect((await bucket.list(accountId)).data ?? []).toEqual([]);
+    // Sync: uploads, staged chunks, the feed, the live connection's claim, totals.
+    const payload = { activityId: 'activity-1', device: installation, endedAt: 2, finalCashOut: '1010', game: 'roulette', netResult: '10', owner: accountId, recordVersion: 1, startedAt: 1 };
+    const request = JSON.stringify({ installation, item: 'activity-1', operation: '8'.repeat(32), payload, payloadVersion: 1, protocol: 1, recordType: 'completed-practice-session' });
+    expect((await stale.rpc('sync_upload_v1', { request })).error).not.toBeNull();
+    expect((await stale.rpc('sync_stage_chunk_v1', { protocol: 1, record_type: 'completed-practice-session', item: 'activity-1', sha256: '0'.repeat(64), data: 'AA' })).error).not.toBeNull();
+    expect((await stale.rpc('sync_feed_v1', { after: 0 })).error).not.toBeNull();
+    expect((await stale.rpc('realtime_claim_v1')).error).not.toBeNull();
+    expect((await stale.rpc('account_totals_v1')).data ?? null).toBeNull();
+    // Account operations, the restricted paths among them.
+    expect((await stale.rpc('current_account')).data).toBeNull();
+    expect((await stale.rpc('account_summary_v1')).data).toBeNull();
+    expect((await stale.rpc('devices_v1')).data).toBeNull();
+    expect((await stale.rpc('sign_in_methods_v1')).data).toBeNull();
+    expect((await stale.rpc('caller_session_v1')).data).toBeNull();
+    expect((await stale.rpc('issue_proof_nonce_v1')).error).not.toBeNull();
+    expect((await stale.rpc('record_eligibility_v1', { band: '18+', source: 'declaration' })).error).not.toBeNull();
+    expect((await stale.rpc('set_account_currency_v1', { new_currency: 'EUR' })).error).not.toBeNull();
+    expect((await stale.rpc('register_device_v1', { installation, secret: null, platform: 'ios', label: 'again' })).error).not.toBeNull();
+    // The functions acting for a player.
+    for (const name of ['fresh-auth', 'link-method', 'revoke-devices']) {
+      const response = await fetch(`${stack.url}/functions/v1/${name}`, {
+        method: 'POST',
+        headers: { apikey: stack.publishableKey, authorization: `Bearer ${token}`, 'content-type': 'application/json', [ENVIRONMENT_HEADER]: stack.environment },
+        body: JSON.stringify(name === 'revoke-devices' ? { others: true } : { method: 'email', code: '123456' }),
+      });
+      await response.body?.cancel();
+      expect(response.status).toBe(401);
+    }
+    // Its refresh token was revoked with it.
+    const stored = JSON.parse(tablet.credentials.items.get(`tableside.${tablet.environment}.auth`)!) as { refresh_token: string };
+    expect((await rawClient().auth.refreshSession({ refresh_token: stored.refresh_token })).error).not.toBeNull();
   });
 
   it('denies a revoked session even while its access token is unexpired', async () => {

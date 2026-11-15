@@ -346,7 +346,7 @@ describe('Auth’s own endpoints, called directly', () => {
     expect(await methods(phone)).toEqual(['email']);
   });
 
-  it('refuse signing out other devices without fresh authentication, and allow it with', async () => {
+  it('refuse signing out other devices, even with fresh authentication: that goes through Devices, which emails the account (#101)', async () => {
     const { phone, email } = await emailAccount('raw-others');
     const tablet = device('raw-others-tablet');
     expect(await signInByEmail(tablet, email)).toEqual({ status: 'signed-in' });
@@ -361,10 +361,10 @@ describe('Auth’s own endpoints, called directly', () => {
     expect(await tablet.account.accountSummary()).toMatchObject({ devices: 2 });
 
     await confirmByEmail(phone, email);
-    const allowed = await others(accessToken(phone), 'others');
-    await allowed.body?.cancel();
-    expect(allowed.ok).toBe(true);
-    expect(await phone.account.accountSummary()).toMatchObject({ devices: 1 });
+    const refused = await others(accessToken(phone), 'others');
+    await refused.body?.cancel();
+    expect(refused.ok).toBe(false);
+    expect(await phone.account.accountSummary()).toMatchObject({ devices: 2 });
   });
 
   it('still let a device sign out of itself', async () => {
