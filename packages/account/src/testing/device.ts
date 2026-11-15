@@ -10,6 +10,8 @@
 import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
 
+import { canonicalJson } from '@tableside/engine';
+
 // The app's account store and practice controller, imported by path: the
 // harness is test-only, and the app doesn't depend on this package.
 import { forAccountSession } from '../../../../apps/mobile/src/account/practice';
@@ -29,9 +31,11 @@ import {
   type EligibilityBand,
   createAccountService,
 } from '../service';
+import type { RecordType } from '../sync/registry';
 import type { DevicePorts, DeviceSignal } from '../sync/session';
 import { FaultProxy } from './fault-proxy';
 import { Mailbox } from './mailbox';
+import { testRecordTypes } from './record-types';
 import type { LocalStack } from './stack';
 
 /** A clock the scenario moves by hand. Moving it runs the timers that fall due. */
@@ -148,8 +152,11 @@ export interface SimulatedDevice {
   /**
    * Plays one practice session to its end (roulette: a 10-unit red wager on a
    * 1,000 buy-in, one spin) on the open account and returns its saved result.
+   * With `longerThan`, the result saved is at least that many bytes of
+   * canonical JSON, its wager outcomes repeated: a stand-in for a session
+   * thousands of turns long, which would take minutes to play.
    */
-  playPracticeSession(): Promise<CompletedPracticeSession>;
+  playPracticeSession(options?: { readonly longerThan?: number }): Promise<CompletedPracticeSession>;
   /**
    * Starts a practice session (roulette, 1,000 buy-in) on the open account and
    * leaves it open, its controller wired to the account as the app wires it:
@@ -185,6 +192,8 @@ export interface DeviceOptions {
   readonly installedOver?: SimulatedDevice;
   /** The device locale's currency; US dollars by default. */
   readonly localeCurrency?: string | null;
+  /** The registered record types: this build's own and seam 2's test-only types by default. */
+  readonly recordTypes?: ReadonlyMap<string, RecordType>;
 }
 
 export function createDevice(stack: LocalStack, options: DeviceOptions): SimulatedDevice {
@@ -278,6 +287,7 @@ export function createDevice(stack: LocalStack, options: DeviceOptions): Simulat
       randomBytes: (count) => entropy.bytes(count),
       localeCurrency: () => (options.localeCurrency === undefined ? 'USD' : options.localeCurrency),
       webSocket: ProcessWebSocket,
+      recordTypes: options.recordTypes ?? testRecordTypes,
     });
     return {
       account,
@@ -294,10 +304,14 @@ export function createDevice(stack: LocalStack, options: DeviceOptions): Simulat
 
   let app = launch();
 
-  const startPractice = async () => {
+  /** Starts a practice session on the open account; with `longerThan`, its saved result is lengthened to at least that many bytes. */
+  const startPractice = async (longerThan?: number) => {
+    const opening = openSession(app);
     // Each practice session gets its own random ID, from the device's entropy.
     const adapters = { ...substituteAdapters({ clock: new PracticeClock(undefined, true) }), newId: () => `activity-${hex(entropy.bytes(16))}` };
-    const controller = new PracticeController(forAccountSession(adapters, openSession(app)));
+    const controller = new PracticeController(
+      forAccountSession(adapters, longerThan === undefined ? opening : { ...opening, store: lengthened(opening.store, longerThan) }),
+    );
     await controller.load();
     await controller.start({ game: 'roulette', buyIn: '1000' });
     return controller;
@@ -329,8 +343,8 @@ export function createDevice(stack: LocalStack, options: DeviceOptions): Simulat
     set diskFailing(value: boolean) {
       disk.failing = value;
     },
-    async playPracticeSession() {
-      const controller = await startPractice();
+    async playPracticeSession({ longerThan } = {}) {
+      const controller = await startPractice(longerThan);
       await controller.placeWager('red', '10');
       await controller.spin();
       await controller.endSession();
@@ -366,6 +380,34 @@ export function createDevice(stack: LocalStack, options: DeviceOptions): Simulat
 const installed = new WeakMap<SimulatedDevice, { readonly storage: TestDevice; readonly credentials: MemoryCredentials }>();
 
 const hex = (bytes: Uint8Array) => Buffer.from(bytes).toString('hex');
+
+/** The store, except that the result it saves has its wager outcomes repeated until it is at least `bytes` long. */
+function lengthened(store: SqliteActivityStore, bytes: number): SqliteActivityStore {
+  const complete = (record: CompletedPracticeSession) => {
+    const repeats = Math.ceil(bytes / Buffer.byteLength(canonicalJson(record.outcomes)));
+    return store.complete({ ...record, outcomes: Array.from({ length: repeats }, () => record.outcomes).flat() });
+  };
+  return new Proxy(store, {
+    get(target, key) {
+      if (key === 'complete') return complete;
+      const value: unknown = Reflect.get(target, key, target);
+      return typeof value === 'function' ? value.bind(target) : value;
+    },
+  });
+}
+
+/** The access token a device's Auth session holds, from its credential storage: for calling the stack directly as it. */
+export function accessToken(device: SimulatedDevice): string {
+  for (const value of device.credentials.items.values()) {
+    try {
+      const token = (JSON.parse(value) as { access_token?: unknown }).access_token;
+      if (typeof token === 'string') return token;
+    } catch {
+      // Not the session.
+    }
+  }
+  throw new Error(`${device.name} holds no session`);
+}
 
 /** The open account session, as spec 1's practice adapters take it. */
 function openSession(app: AppProcess) {

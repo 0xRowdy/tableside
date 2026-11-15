@@ -3,6 +3,7 @@
 
 import type {
   AccountGate,
+  AccountRecords,
   AccountService,
   AccountSync,
   AgeAnswerResult,
@@ -120,6 +121,15 @@ export class FakeAccountService implements AccountService {
     reconcile: async () => undefined,
     idle: async () => undefined,
     countWaiting: async () => this.waitingCount,
+  };
+
+  /** No account records in screen tests (spec 4's screens script their own). */
+  readonly records: AccountRecords = {
+    save: async () => undefined,
+    delete: async () => undefined,
+    revisionedItems: async () => [],
+    resolve: async () => ({ status: 'offline' }),
+    totals: async () => ({ account: [], local: [] }),
   };
 
   async renew() {

@@ -26,6 +26,17 @@ export interface AcceptedRecord {
   readonly payload: unknown;
 }
 
+/** A revisioned item as this installation holds it. */
+export interface LocalRevisionedItem {
+  readonly item: string;
+  /** The account's accepted state as last applied (the record type's `fromChange`), or null before any. */
+  readonly accepted: unknown;
+  /** This installation's latest change not yet reflected in the accepted state: a value, or null for a deletion. */
+  readonly change: { readonly value: unknown } | null;
+  /** Whether any of the item reached the account: an accepted state, or an acknowledged upload. */
+  readonly onAccount: boolean;
+}
+
 export interface SyncStore {
   /** Unacknowledged entries, in queue order. */
   readUploadQueue(): Promise<readonly QueuedUpload[]>;
@@ -49,6 +60,16 @@ export interface SyncStore {
    */
   applyFeedPage(from: number, records: readonly AcceptedRecord[]): Promise<boolean>;
   readAcceptedRecords(recordType: string): Promise<readonly AcceptedRecord[]>;
+  /**
+   * Saves (a value) or deletes (null) a revisioned item on this installation,
+   * queuing its upload in the same transaction. The upload names its base:
+   * the accepted revision, or the item's own earlier upload when that one was
+   * sent but isn't reflected yet. A change to an upload not yet sent replaces
+   * it, and deleting an item that never left the installation removes it.
+   */
+  writeRevisionedItem(recordType: string, item: string, value: unknown): Promise<void>;
+  /** Every revisioned item of a type this installation holds, accepted or not. */
+  readRevisionedItems(recordType: string): Promise<readonly LocalRevisionedItem[]>;
   /** Called after a commit adds an entry to the upload queue. Returns an unsubscribe function. */
   onUploadQueued(listener: () => void): () => void;
 }

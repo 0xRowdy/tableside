@@ -1,12 +1,12 @@
 // The sync engine's backend and live channel over Supabase: the versioned
-// operations (supabase/migrations, `sync_upload_v1`, `sync_feed_v1`,
-// `realtime_claim_v1`) and the account's private Realtime topic.
+// operations (supabase/migrations, `sync_upload_v1`, `sync_stage_chunk_v1`,
+// `sync_feed_v1`, `realtime_claim_v1`) and the account's private Realtime topic.
 
 import type { RealtimeChannel, SupabaseClient } from '@supabase/supabase-js';
 
 import type { SyncBackend } from './engine';
 import type { LiveChannel } from './live';
-import type { FeedPage, UploadAnswer } from './protocol';
+import { type ChunkAnswer, type FeedPage, type UploadAnswer, chunkCallArguments } from './protocol';
 
 /**
  * Transaction contention the server reports instead of waiting without bound:
@@ -29,6 +29,7 @@ async function callOperation<T>(supabase: SupabaseClient, operation: string, arg
 export function supabaseSyncBackend(supabase: SupabaseClient): SyncBackend {
   return {
     upload: (request) => callOperation<UploadAnswer>(supabase, 'sync_upload_v1', { request }),
+    stageChunk: (chunk) => callOperation<ChunkAnswer>(supabase, 'sync_stage_chunk_v1', chunkCallArguments(chunk)),
     feed: (after, pageSize) => callOperation<FeedPage>(supabase, 'sync_feed_v1', { after, page_size: pageSize }),
   };
 }

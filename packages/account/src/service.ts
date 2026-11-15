@@ -6,7 +6,8 @@ import { type SupabaseClient, createClient } from '@supabase/supabase-js';
 
 import { type BackendEnvironment, ENVIRONMENT_HEADER, type EnvironmentName, retiredEnvironments } from './environment';
 import { SyncEngine, type SyncErrorCode } from './sync/engine';
-import { recordTypes } from './sync/registry';
+import { type AccountRecords, accountRecords } from './sync/records';
+import { type RecordType, recordTypes } from './sync/registry';
 import { type DevicePorts, SyncSession } from './sync/session';
 import type { SyncStore } from './sync/store';
 import { supabaseLiveChannels, supabaseSyncBackend } from './sync/supabase';
@@ -147,6 +148,8 @@ export interface AccountServiceOptions {
   readonly localeCurrency: () => string | null;
   /** The device's WebSocket, for the live connection. */
   readonly webSocket?: typeof WebSocket;
+  /** The registered record types: this build's own by default; seam 2 adds its test-only types. */
+  readonly recordTypes?: ReadonlyMap<string, RecordType>;
 }
 
 export interface AccountService {
@@ -202,6 +205,8 @@ export interface AccountService {
   /** Changes the account currency (online only). Locked while any casino session exists. */
   setAccountCurrency(currency: string): Promise<CurrencyChangeResult>;
   readonly sync: AccountSync;
+  /** Revisioned items, their conflicts, and lifetime totals for the open account. */
+  readonly records: AccountRecords;
 }
 
 
@@ -246,6 +251,7 @@ export const isSignedIn = (gate: AccountGate): gate is SignedInGate => gate.stat
 
 export function createAccountService(options: AccountServiceOptions): AccountService {
   const { backend } = options;
+  const registry = options.recordTypes ?? recordTypes;
   // This environment's credentials: Auth's session, and the remembered account beside it.
   const credentials = namespacedCredentials(options.credentials, backend.name);
   // Nothing restores credentials, opens an account database or sends anything
@@ -332,7 +338,7 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
     const engine = new SyncEngine({
       store,
       backend: supabaseSyncBackend(supabase),
-      registry: recordTypes,
+      registry,
       installationId,
       newOperationId: () => hex(options.randomBytes(16)),
     });
@@ -589,6 +595,8 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
         }
       },
     },
+
+    records: accountRecords(() => sync, registry),
   };
 }
 
