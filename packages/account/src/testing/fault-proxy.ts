@@ -22,6 +22,10 @@ export class FaultProxy {
   online = true;
   /** Requests that reached the stack (a duplicated request counts twice). */
   requests = 0;
+  /** Every request the device sent, in order, with its headers. */
+  readonly sent: { readonly url: string; readonly headers: Headers }[] = [];
+  /** Called as each request leaves the device, before it reaches the stack. */
+  onRequest: ((url: string) => void) | null = null;
   private readonly faults: Fault[] = [];
 
   constructor(private readonly upstream: typeof fetch = globalThis.fetch) {}
@@ -47,8 +51,10 @@ export class FaultProxy {
   }
 
   readonly fetch: typeof fetch = async (input, init) => {
-    if (!this.online) throw new TypeError('Network request failed (offline)');
     const url = input instanceof Request ? input.url : String(input);
+    this.sent.push({ url, headers: new Headers(input instanceof Request ? input.headers : init?.headers) });
+    this.onRequest?.(url);
+    if (!this.online) throw new TypeError('Network request failed (offline)');
     const at = this.faults.findIndex((fault) => url.includes(fault.match));
     const fault = at < 0 ? undefined : this.faults.splice(at, 1)[0];
     // A body can be read once; keep it so a duplicate can resend it.

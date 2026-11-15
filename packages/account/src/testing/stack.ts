@@ -9,14 +9,27 @@ import { fileURLToPath } from 'node:url';
 import { type SupabaseClient, createClient } from '@supabase/supabase-js';
 import postgres from 'postgres';
 
+import { ENVIRONMENT_HEADER, type EnvironmentName } from '../environment';
+
 export interface LocalStack {
   readonly url: string;
   readonly publishableKey: string;
   readonly mailUrl: string;
   /** Privileged SQL, for faults no client can cause (server clock, lifecycle states later tickets set). */
   readonly sql: postgres.Sql;
-  /** A raw client calling the stack directly, with no Account service: the adversary's view. */
-  rawClient(accessToken?: string): SupabaseClient;
+  /** The backend environment a local stack serves (supabase/seed/local.sql). */
+  readonly environment: EnvironmentName;
+  /**
+   * A raw client calling the stack directly, with no Account service: the
+   * adversary's view. It names the stack's environment on every request unless
+   * told to name another, or none (null).
+   */
+  rawClient(accessToken?: string, environment?: EnvironmentName | null): SupabaseClient;
+  /**
+   * Runs `scenario` with the stack serving another environment, as if it were
+   * that environment's project, then restores it. Privileged: no client can.
+   */
+  asEnvironment<T>(environment: EnvironmentName, scenario: () => Promise<T>): Promise<T>;
   /** Moves an eligibility assertion's expiry into the past, as if its lifetime had run out on the server. */
   expireAssertion(assertion: string): Promise<void>;
   /** The Auth user for an address, or null when none exists. */
@@ -74,11 +87,21 @@ export function localStack(): LocalStack {
     publishableKey,
     mailUrl: need('MAILPIT_URL'),
     sql,
-    rawClient(accessToken) {
-      return createClient(url, publishableKey, {
-        auth: { persistSession: false, autoRefreshToken: false },
-        ...(accessToken ? { global: { headers: { Authorization: `Bearer ${accessToken}` } } } : {}),
-      });
+    environment: 'local',
+    rawClient(accessToken, environment = 'local') {
+      const headers: Record<string, string> = {
+        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        ...(environment ? { [ENVIRONMENT_HEADER]: environment } : {}),
+      };
+      return createClient(url, publishableKey, { auth: { persistSession: false, autoRefreshToken: false }, global: { headers } });
+    },
+    async asEnvironment(environment, scenario) {
+      await sql`update private.deployment set environment = ${environment}`;
+      try {
+        return await scenario();
+      } finally {
+        await sql`update private.deployment set environment = 'local'`;
+      }
     },
     async expireAssertion(assertion) {
       await sql`update private.eligibility_assertions set expires_at = now() - interval '1 second'

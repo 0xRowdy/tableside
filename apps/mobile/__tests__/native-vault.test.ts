@@ -12,6 +12,7 @@ jest.mock('expo-secure-store', () => ({
   WHEN_UNLOCKED_THIS_DEVICE_ONLY: 7,
   getItemAsync: jest.fn(),
   setItemAsync: jest.fn(),
+  deleteItemAsync: jest.fn(),
 }));
 jest.mock('expo-sqlite', () => ({ openDatabaseAsync: jest.fn() }));
 jest.mock('../modules/backup-exclusion', () => ({ excludeFromBackup: jest.fn() }));
@@ -44,6 +45,16 @@ describe('key material in SecureStore', () => {
     expect(await secureStoreKeys.read('k')).toEqual({ status: 'missing' });
     await expect(secureStoreKeys.read('k')).rejects.toThrow('keystore failure');
     expect(await secureStoreKeys.write('k', 'v')).toBe('locked');
+  });
+
+  it('removes a device-only entry, waiting while the device is locked', async () => {
+    const locked = new Error('User interaction is not allowed. (OSStatus error -25308.)');
+    secure.deleteItemAsync.mockRejectedValueOnce(locked).mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error('keystore failure'));
+
+    expect(await secureStoreKeys.remove('tableside.beta.installation')).toBe('locked');
+    expect(await secureStoreKeys.remove('tableside.beta.installation')).toBe('removed');
+    await expect(secureStoreKeys.remove('k')).rejects.toThrow('keystore failure');
+    expect(secure.deleteItemAsync).toHaveBeenCalledWith('tableside.beta.installation', { keychainAccessible: secure.WHEN_UNLOCKED_THIS_DEVICE_ONLY });
   });
 });
 

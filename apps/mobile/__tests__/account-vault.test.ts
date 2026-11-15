@@ -177,6 +177,119 @@ describe('the account vault', () => {
     expect(device.keychain.entries().map(([name]) => name.split('.')[1])).toEqual(expect.arrayContaining(['beta', 'production']));
   });
 
+  describe('removing another environment’s namespace', () => {
+    /** A device that ran a beta build: two beta accounts with practice saved, one database left mid-write. */
+    async function betaDevice() {
+      const device = new Device();
+      const beta = device.vault('beta');
+      const a = opened(await beta.open('account-a'));
+      await a.store.createActivity(practiceIn(a, 'beta-a'));
+      const b = opened(await beta.open('account-b'));
+      await b.store.createActivity(practiceIn(b, 'beta-b'));
+      await beta.close();
+      return { device, installationId: a.installationId };
+    }
+    const betaFiles = (device: TestDevice) => device.files.written().filter((path) => path.startsWith(`${device.root}/beta/`));
+    const betaKeys = (device: TestDevice) => device.keychain.entries().filter(([name]) => name.startsWith('tableside.beta.'));
+
+    it('removes every beta database, sidecar, key and installation identity, and keeps production’s', async () => {
+      const { device } = await betaDevice();
+      const production = device.vault('production');
+      const kept = opened(await production.open('account-c'));
+      await kept.store.createActivity(practiceIn(kept, 'production-c'));
+      await production.close();
+      expect(betaFiles(device).some((path) => path.endsWith('.db'))).toBe(true);
+      expect(betaKeys(device).length).toBe(4);
+      const productionKeys = device.keychain.entries().filter(([name]) => name.startsWith('tableside.production.'));
+
+      await device.vault('production').removeEnvironment('beta');
+
+      expect(betaFiles(device)).toEqual([]);
+      expect(existsSync(`${device.root}/beta`)).toBe(false);
+      expect(betaKeys(device)).toEqual([]);
+      expect(device.keychain.entries().filter(([name]) => name.startsWith('tableside.production.'))).toEqual(productionKeys);
+      expect((await opened(await device.vault('production').open('account-c')).store.findUnfinished())?.activityId).toBe('production-c');
+    });
+
+    it('never lets the beta identity or data back: a beta build on these files starts as a new installation with no data', async () => {
+      const { device, installationId } = await betaDevice();
+      await device.vault('production').removeEnvironment('beta');
+
+      const again = opened(await device.vault('beta').open('account-a'));
+
+      expect(again.installationId).not.toBe(installationId);
+      expect(await again.store.findUnfinished()).toBeNull();
+    });
+
+    it('never removes its own environment', async () => {
+      const device = new Device();
+      const vault = device.vault('production');
+      await vault.open('account-a');
+
+      await expect(vault.removeEnvironment('production')).rejects.toThrow();
+      expect(device.keychain.entries().filter(([name]) => name.endsWith('.key'))).toHaveLength(1);
+    });
+
+    it('does nothing when the device never had the environment', async () => {
+      const device = new Device();
+      await device.vault('production').removeEnvironment('beta');
+      expect(device.files.written()).toEqual([]);
+    });
+
+    it('waits while the device is locked, removing nothing, then finishes once it unlocks', async () => {
+      const { device } = await betaDevice();
+      const before = snapshot(device.files);
+      device.keychain.locked = true;
+
+      let done = false;
+      const removing = device
+        .vault('production')
+        .removeEnvironment('beta')
+        .then(() => (done = true));
+      await settle();
+
+      expect(done).toBe(false);
+      expect(device.waitingForUnlock).toBe(1);
+      expect(snapshot(device.files)).toEqual(before);
+
+      device.unlock();
+      await removing;
+      expect(betaFiles(device)).toEqual([]);
+      expect(betaKeys(device)).toEqual([]);
+    });
+
+    it('removes keys whose files are gone: a database never created, and an earlier installation’s', async () => {
+      const { device, installationId } = await betaDevice();
+      // The app died after saving account C's key, before its database existed.
+      const killed = device.vault('beta', { open: () => Promise.reject(new Error('killed')) });
+      await expect(killed.open('account-c')).rejects.toThrow('killed');
+      expect(device.keychain.get(`tableside.beta.${installationId}.account-c.key`)).toBeDefined();
+      // An earlier beta installation whose files went with an uninstall; the keychain outlived it.
+      const earlier = new Device();
+      earlier.keychain = device.keychain;
+      const old = opened(await earlier.vault('beta').open('account-d'));
+      await old.store.close();
+      earlier.remove();
+      expect(betaKeys(device).length).toBe(6);
+
+      await device.vault('production').removeEnvironment('beta');
+
+      expect(betaKeys(device)).toEqual([]);
+    });
+
+    it('finishes a removal that was interrupted part way', async () => {
+      const { device, installationId } = await betaDevice();
+      // The app died after removing account A's key and its database.
+      device.keychain.forget(`tableside.beta.${installationId}.account-a.key`);
+      for (const path of betaFiles(device).filter((file) => file.includes('account-a.db'))) rmSync(path);
+
+      await device.vault('production').removeEnvironment('beta');
+
+      expect(betaFiles(device)).toEqual([]);
+      expect(betaKeys(device)).toEqual([]);
+    });
+  });
+
   describe('key states', () => {
     it('waits while the device is locked, creating nothing, then opens once it unlocks', async () => {
       const device = new Device();
@@ -218,7 +331,7 @@ describe('the account vault', () => {
       const session = opened(await device.vault().open('account-a'));
       await session.store.createActivity(practiceIn(session, 'a1'));
       await device.vault().close();
-      device.keychain.remove(`tableside.production.${session.installationId}.account-a.key`);
+      device.keychain.forget(`tableside.production.${session.installationId}.account-a.key`);
       const before = snapshot(device.files);
 
       const vault = device.vault();

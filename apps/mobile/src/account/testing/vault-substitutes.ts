@@ -8,6 +8,8 @@ import { closeSync, copyFileSync, existsSync, fsyncSync, mkdirSync, mkdtempSync,
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+import type { EnvironmentName } from '@tableside/account/environment';
+
 import { AccountVault, type KeyRead, type VaultFiles, type VaultKeyStore } from '../vault';
 import type { SqlConnection, SqlDriver, SqlExecutor } from '../sql';
 import type { StoreMigration } from '../store-schema';
@@ -30,6 +32,12 @@ export class FakeKeychain implements VaultKeyStore {
     return 'written';
   }
 
+  async remove(name: string): Promise<'removed' | 'locked'> {
+    if (this.locked) return 'locked';
+    this.values.delete(name);
+    return 'removed';
+  }
+
   entries(): [string, string][] {
     return [...this.values.entries()];
   }
@@ -42,7 +50,8 @@ export class FakeKeychain implements VaultKeyStore {
     this.values.set(name, value);
   }
 
-  remove(name: string): void {
+  /** Removes an entry behind the vault's back (a lost key). */
+  forget(name: string): void {
     this.values.delete(name);
   }
 }
@@ -91,7 +100,7 @@ export function nodeVaultFiles(root: string): NodeVaultFiles {
       renameSync(from, to);
     },
     async remove(path) {
-      rmSync(path, { force: true });
+      rmSync(path, { recursive: true, force: true });
     },
     written: () => walk(root),
     excluded: () => [...excluded],
@@ -201,7 +210,7 @@ export class TestDevice {
   }
 
   /** The device's vault, as a build carrying `migrations` (this build's when absent) opens it. */
-  vault(environment = 'production', driver: SqlDriver = nodeSqlCipherDriver(), migrations?: readonly StoreMigration[]): AccountVault {
+  vault(environment: EnvironmentName = 'production', driver: SqlDriver = nodeSqlCipherDriver(), migrations?: readonly StoreMigration[]): AccountVault {
     return new AccountVault({
       ...(migrations ? { migrations } : {}),
       environment,
