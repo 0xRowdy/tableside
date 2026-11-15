@@ -247,18 +247,18 @@ describe('privacy choices (#105)', () => {
   }
   const analyticsIds = (accountId: string) => stack.sql`select 1 from private.analytics_ids where account_id = ${accountId}`;
 
-  it.each(['13-15', '16-17'] as const)('denies a teen’s (%s) opt-in, drawing no analytics ID', async (band) => {
-    const teen = await rawAccount('teen-opt-in', band);
+  it.each(['13-15', '16-17'] as const)('denies a teen’s (%s) grant of consent, drawing no analytics ID', async (band) => {
+    const teen = await rawAccount('teen-grant', band);
     expect((await send(teen, { change: 'grant-analytics', basis: 0 })).data).toMatchObject({ status: 'rejected', code: 'not-eligible' });
     expect(await analyticsIds(teen.accountId)).toHaveLength(0);
   });
 
-  it('denies an opt-in from an unresolved account, or one whose eligibility was never established', async () => {
-    const unresolved = await rawAccount('unresolved-opt-in');
+  it('denies a grant of consent from an unresolved account, or one whose eligibility was never established', async () => {
+    const unresolved = await rawAccount('unresolved-grant');
     await stack.sql`update public.eligibility set band = 'unresolved' where account_id = ${unresolved.accountId}`;
     expect((await send(unresolved, { change: 'grant-analytics', basis: 0 })).error).not.toBeNull();
 
-    const none = await rawAccount('no-eligibility-opt-in');
+    const none = await rawAccount('no-eligibility-grant');
     await stack.sql`delete from public.eligibility where account_id = ${none.accountId}`;
     expect((await send(none, { change: 'grant-analytics', basis: 0 })).error).not.toBeNull();
     expect([...(await analyticsIds(unresolved.accountId)), ...(await analyticsIds(none.accountId))]).toHaveLength(0);
@@ -280,12 +280,12 @@ describe('privacy choices (#105)', () => {
     expect(await stack.sql`select 1 from private.privacy_choices where account_id = ${adult.accountId} and ad_data_opt_out_source is not null`).toHaveLength(0);
   });
 
-  it('refuses an opt-in or an ad-data allow made from an older state, so a stale request can’t re-enable a withdrawn choice', async () => {
+  it('refuses a grant of consent or an ad-data allow made from an older state, so a stale request can’t re-enable a withdrawn choice', async () => {
     const adult = await rawAccount('stale-request');
     expect((await send(adult, { change: 'grant-analytics', basis: 0 })).data).toMatchObject({ status: 'accepted' });
     expect((await send(adult, { change: 'withdraw-analytics' })).data).toMatchObject({ status: 'accepted' });
     expect((await send(adult, { change: 'limit-ad-data', source: 'in-app' })).data).toMatchObject({ status: 'accepted' });
-    // Replayed from before the withdrawal and the opt-out: the basis is the grant's own starting point.
+    // Replayed from before withdrawing consent and limiting ad data: the basis is the grant's own starting point.
     expect((await send(adult, { change: 'grant-analytics', basis: 0 })).data).toMatchObject({ status: 'rejected', code: 'stale' });
     expect((await send(adult, { change: 'allow-ad-data', basis: 0 })).data).toMatchObject({ status: 'rejected', code: 'stale' });
     expect(await stack.sql`select analytics_consent, ad_data_opt_out_source from private.privacy_choices where account_id = ${adult.accountId}`).toEqual([

@@ -22,9 +22,9 @@ import {
   requiredCheck,
 } from './eligibility';
 import { type BackendEnvironment, ENVIRONMENT_HEADER, type EnvironmentName, authCallbackUrl, retiredEnvironments } from './environment';
+import { type AccountPrivacy, accountPrivacy } from './privacy';
 import { type EngineStatus, SyncEngine } from './sync/engine';
 import { type AccountRecords, accountRecords } from './sync/records';
-import { type AccountPrivacy, accountPrivacy } from './privacy';
 import { type RecordType, prerequisitesOf, recordTypes } from './sync/registry';
 import { type DevicePorts, SyncSession } from './sync/session';
 import type { SyncStore } from './sync/store';

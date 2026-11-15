@@ -4,7 +4,7 @@
 --
 -- - Restrictive changes (withdraw analytics consent, limit ad data) are
 --   queued on devices and always apply to the current state when they arrive,
---   so a late withdrawal from an offline device fails closed.
+--   so a late consent withdrawal from an offline device fails closed.
 -- - Enabling changes (grant consent, allow ad data) are online only and name
 --   the account's last privacy change they were made from (`basis`): refused
 --   as stale when the choices changed since, so a stale device can't re-enable
@@ -29,7 +29,8 @@ create table private.privacy_choices (
 
 -- Every analytics ID the account has had, one per generation: what export
 -- lists (Amendment 8 §2) and what the deletion job asks the analytics
--- provider to erase, every one of them (Amendment 8 §3).
+-- provider to erase, every one of them (Amendment 8 §3), so the job reads
+-- them before it clears the account's rows.
 create table private.analytics_ids (
   account_id uuid not null references public.accounts (account_id),
   generation integer not null check (generation >= 1),
@@ -53,10 +54,12 @@ declare
 begin
   insert into private.privacy_choices (account_id) values (p_account) on conflict do nothing;
   select * into v_current from private.privacy_choices where account_id = p_account for update;
-  if v_kind in ('grant-analytics', 'allow-ad-data') then
-    if (p_change ->> 'basis')::bigint is distinct from v_current.last_sequence then
-      return jsonb_build_object('code', 'stale');
-    end if;
+  -- Only an established adult may grant consent, whatever it was made from.
+  if v_kind = 'grant-analytics' and private.account_eligibility(p_account) is distinct from 'adult' then
+    return jsonb_build_object('code', 'not-eligible');
+  end if;
+  if v_kind in ('grant-analytics', 'allow-ad-data') and (p_change ->> 'basis')::bigint is distinct from v_current.last_sequence then
+    return jsonb_build_object('code', 'stale');
   end if;
   case v_kind
     when 'withdraw-analytics' then
@@ -67,9 +70,6 @@ begin
       update private.privacy_choices set ad_data_opt_out_source = p_change ->> 'source' where account_id = p_account;
       v_record := v_record || jsonb_build_object('source', p_change ->> 'source');
     when 'grant-analytics' then
-      if private.account_eligibility(p_account) is distinct from 'adult' then
-        return jsonb_build_object('code', 'not-eligible');
-      end if;
       if v_current.analytics_consent = 'granted' then
         return jsonb_build_object('code', 'unchanged');
       end if;
@@ -107,13 +107,11 @@ begin
     return jsonb_build_object('status', 'rejected', 'code', 'invalid-payload');
   end if;
   select array_agg(k order by k) into v_keys from jsonb_object_keys(v_payload) k;
-  -- Exactly the change's keys, and a basis that is an account sequence.
-  v_shaped := case v_kind
-    when 'withdraw-analytics' then v_keys = array['change', 'choiceId', 'version']
-    when 'limit-ad-data' then v_keys = array['change', 'choiceId', 'source', 'version'] and (v_payload ->> 'source') = 'in-app'
-    when 'grant-analytics' then v_keys = array['basis', 'change', 'choiceId', 'version']
-      and jsonb_typeof(v_payload -> 'basis') = 'number' and (v_payload ->> 'basis') ~ '^(0|[1-9][0-9]{0,14})$'
-    when 'allow-ad-data' then v_keys = array['basis', 'change', 'choiceId', 'version']
+  -- Exactly the change's keys; an enabling change's basis is an account sequence.
+  v_shaped := case
+    when v_kind = 'withdraw-analytics' then v_keys = array['change', 'choiceId', 'version']
+    when v_kind = 'limit-ad-data' then v_keys = array['change', 'choiceId', 'source', 'version'] and (v_payload ->> 'source') = 'in-app'
+    when v_kind in ('grant-analytics', 'allow-ad-data') then v_keys = array['basis', 'change', 'choiceId', 'version']
       and jsonb_typeof(v_payload -> 'basis') = 'number' and (v_payload ->> 'basis') ~ '^(0|[1-9][0-9]{0,14})$'
     else false
   end;
@@ -135,6 +133,8 @@ end $$;
 -- whose browser sends GPC). Privileged: no client can call it. It takes the
 -- account's synchronization head first, as every authoritative change does,
 -- and reaches every device through the feed. Returns the change's sequence.
+-- (Not private.author_server_state, which writes only server-authored types:
+-- this type is also written by devices.)
 create function private.record_ad_data_opt_out(p_account uuid, p_source text) returns bigint
 language plpgsql volatile security definer set search_path = '' as $$
 declare

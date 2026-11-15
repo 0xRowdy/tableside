@@ -1,6 +1,7 @@
 // Seam 2 (#105): the privacy-choices record (spec 2 Amendment 8 §1) through
-// the Account service, on devices against the local stack. Withdrawals and
-// opt-outs apply at once and work offline; opting in is online only, starts a
+// the Account service, on devices against the local stack. Consent
+// withdrawals and ad-data opt-outs apply at once and work offline; granting
+// consent is online only, starts a
 // new generation and can't be replayed by a stale device. The raw-client
 // cases are in adversarial.test.ts.
 
@@ -63,6 +64,22 @@ describe('granting analytics consent', () => {
     expect(id).not.toBe(accountId.replaceAll('-', ''));
     expect(id).not.toContain(email.split('@')[0]);
     expect(choices!.analyticsIds).toEqual([{ generation: 1, analyticsId: id }]);
+  });
+});
+
+describe('granting analytics consent again after a lost answer', () => {
+  it('repeats the identical request, so the account grants once and the retry gets its receipt', async () => {
+    const { phone, accountId } = await adultAccount('grant-lost');
+    phone.foreground = false;
+    phone.proxy.dropNextResponse('sync_upload_v1');
+    expect(await phone.account.privacy.grantAnalytics()).toEqual({ status: 'offline' });
+    expect(await serverChoices(accountId)).toMatchObject({ analytics_consent: 'granted', analytics_generation: 1 });
+
+    // The retry can't read the account first either, so it is made from the same state.
+    phone.proxy.dropNextResponse('sync_feed_v1');
+    expect(await phone.account.privacy.grantAnalytics()).toEqual({ status: 'changed' });
+    expect(await serverChoices(accountId)).toMatchObject({ analytics_consent: 'granted', analytics_generation: 1 });
+    expect((await phone.account.privacy.read())!.analytics).toMatchObject({ consent: 'granted', generation: 1 });
   });
 });
 
@@ -138,7 +155,7 @@ describe('withdrawing analytics consent', () => {
     await phone.account.privacy.withdrawAnalytics();
     await held.arrived;
 
-    // The withdrawal is on the server and its answer on the way: the grant isn't sent.
+    // The consent withdrawal is on the server and its answer on the way: the grant isn't sent.
     const granting = phone.account.privacy.grantAnalytics();
     await new Promise((resolve) => setTimeout(resolve, 200));
     expect(changesSent(phone)).toEqual(['grant-analytics', 'withdraw-analytics']);
@@ -148,7 +165,7 @@ describe('withdrawing analytics consent', () => {
     expect(await serverChoices(accountId)).toMatchObject({ analytics_consent: 'granted', analytics_generation: 2 });
   });
 
-  it('waits, sending no grant, while a withdrawal made here gets no answer', async () => {
+  it('waits, sending no grant, while a consent withdrawal made here gets no answer', async () => {
     const { phone } = await adultAccount('barrier-unanswered');
     await phone.account.privacy.grantAnalytics();
     phone.foreground = false;
@@ -161,7 +178,7 @@ describe('withdrawing analytics consent', () => {
 });
 
 describe('a stale device', () => {
-  it('can’t re-enable a consent withdrawn elsewhere: its grant, made from the old state, is refused and it learns the withdrawal', async () => {
+  it('can’t re-enable a consent withdrawn elsewhere: its grant, made from the old state, is refused and it learns of the consent withdrawal', async () => {
     const { phone, email, accountId } = await adultAccount('stale-grant');
     await phone.account.privacy.grantAnalytics();
     await phone.account.privacy.withdrawAnalytics();
@@ -179,7 +196,7 @@ describe('a stale device', () => {
     expect((await tablet.account.privacy.read())!.analytics).toEqual({ consent: 'withdrawn', generation: 2, analyticsId: null });
   });
 
-  it('still withdraws, late: an offline withdrawal arriving after a later grant elsewhere withdraws it (it fails closed)', async () => {
+  it('still withdraws, late: consent withdrawn offline, arriving after a later grant elsewhere, withdraws it (it fails closed)', async () => {
     const { phone, email, accountId } = await adultAccount('late-withdraw');
     await phone.account.privacy.grantAnalytics();
     const tablet = await signedInTablet(email);

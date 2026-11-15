@@ -8,7 +8,7 @@
 //   installation at once, offline too: they are queued, and every reader sees
 //   them before they reach the account. Each always applies to the account's
 //   current state when it arrives, so one made offline on another device still
-//   withdraws a consent granted since: a late withdrawal fails closed.
+//   withdraws a consent granted since: a late consent withdrawal fails closed.
 // - Enabling changes (granting consent, allowing ad data again) are online
 //   only and never queued. They wait for this installation's pending
 //   restrictive changes (the barrier), name the account's last privacy change
@@ -20,9 +20,13 @@
 //   teen, an unresolved account or one before eligibility.
 //
 // Every change is its own item, so this installation keeps each one the
-// account accepted, and the choices are those changes in account order.
+// account accepted, and the choices are those changes in account order. A
+// new device therefore needs every accepted privacy change: bootstrap (#96)
+// and feed compaction (#43) must carry them all, or its choices and basis
+// would be wrong (and every enabling change it sent, stale).
 
-import type { AccountGate, QueueResult } from './service';
+import { metricPermitted } from './metrics';
+import { type AccountGate, type QueueResult, opensOrdinaryAccess } from './service';
 import type { SyncEngine } from './sync/engine';
 import type { RecordType } from './sync/registry';
 import type { AcceptedRecord, SyncStore } from './sync/store';
@@ -46,7 +50,7 @@ export interface PrivacyChoices {
   readonly analyticsIds: readonly { readonly generation: number; readonly analyticsId: string }[];
   /** The ad-data opt-out, or null when ad data isn't limited. */
   readonly adDataOptOut: { readonly source: AdDataOptOutSource } | null;
-  /** A withdrawal or opt-out made on this installation hasn't reached the account yet. */
+  /** A consent withdrawal or ad-data opt-out made on this installation hasn't reached the account yet. */
   readonly pending: boolean;
   /** The account sequence of the last privacy change this installation holds: what an enabling change is made from. */
   readonly basis: number;
@@ -137,13 +141,14 @@ export const privacyChoice: RecordType<PrivacyChange, AcceptedPrivacyChange> = {
   },
   contribution: null,
   export: { csv: null, json: (change) => change },
+  // The deletion job asks the analytics provider to erase every ID in private.analytics_ids before clearing it (Amendment 8 §3).
   deletion: { serverTables: ['private.privacy_choices', 'private.analytics_ids'] },
 };
 
 /**
  * The choices from the account's accepted changes (in account order) and this
  * installation's restrictive changes that haven't reached it (queued, or
- * refused and kept for review: a withdrawal never quietly lapses).
+ * refused and kept for review: withdrawn consent never quietly comes back).
  */
 export function choicesFrom(accepted: readonly AcceptedRecord[], unsent: readonly unknown[]): PrivacyChoices {
   let consent: AnalyticsConsent = 'never-granted';
@@ -185,12 +190,12 @@ export function choicesFrom(accepted: readonly AcceptedRecord[], unsent: readonl
 /**
  * The analytics ID optional product analytics may be sent under now, or null
  * when none may be: only for an open, established adult account whose consent
- * is granted on this installation (a withdrawal made here applies at once).
+ * is granted on this installation (withdrawing it here applies at once).
  * Spec 7's analytics port tags events with it; the privacy boundary (#108)
  * decides which events those are.
  */
 export function productAnalyticsId(gate: AccountGate, choices: PrivacyChoices | null): string | null {
-  if ((gate.state !== 'active' && gate.state !== 'renewal-pending') || gate.eligibility !== '18+') return null;
+  if (!metricPermitted(gate, 'product-analytics')) return null;
   return choices?.analytics.consent === 'granted' ? choices.analytics.analyticsId : null;
 }
 
@@ -201,7 +206,7 @@ export type RestrictiveResult = { readonly status: 'applied' } | { readonly stat
  * An enabling change. changed: the account accepted it. unchanged: the
  * account already had it. not-eligible: only an established adult may grant
  * consent. stale: the account's choices changed since this installation last
- * heard; it now holds them, to ask again. waiting: a withdrawal or opt-out
+ * heard; it now holds them, to ask again. waiting: a consent withdrawal or opt-out
  * made here hasn't reached the account yet, and nothing was sent. offline: no
  * answer arrived. incompatible: an update is required. unavailable: no account
  * session is syncing. failed: the server refused it otherwise.
@@ -258,6 +263,13 @@ export function accountPrivacy(ports: PrivacyPorts): AccountPrivacy {
     return { status: queued.status === 'queued' ? 'applied' : 'unavailable' };
   };
 
+  /**
+   * An enabling change sent with no answer yet: asked again in the same
+   * account session from the same state, it is the identical change, so the
+   * engine repeats the identical request and the account applies it once.
+   */
+  let unanswered: { readonly session: object; readonly change: EnablingChange } | null = null;
+
   /** Brings this installation up to date, then sends the enabling change from the account's last privacy change. */
   const enable = async (change: EnablingChange['change'], already: (choices: PrivacyChoices) => boolean): Promise<EnablingResult> => {
     const session = ports.session();
@@ -267,7 +279,10 @@ export function accountPrivacy(ports: PrivacyPorts): AccountPrivacy {
     if (!choices || ports.session() !== session) return { status: 'unavailable' };
     if (choices.pending) return { status: 'waiting' };
     if (already(choices)) return { status: 'unchanged' };
-    const outcome = await session.engine.submit(privacyChoice.name, { version: 1, choiceId: ports.newChoiceId(), change, basis: choices.basis });
+    const earlier = unanswered?.session === session && unanswered.change.change === change && unanswered.change.basis === choices.basis ? unanswered.change : null;
+    const payload: EnablingChange = earlier ?? { version: 1, choiceId: ports.newChoiceId(), change, basis: choices.basis };
+    const outcome = await session.engine.submit(privacyChoice.name, payload);
+    unanswered = outcome.status === 'offline' ? { session, change: payload } : null;
     switch (outcome.status) {
       case 'accepted':
         return { status: 'changed' };
@@ -287,7 +302,7 @@ export function accountPrivacy(ports: PrivacyPorts): AccountPrivacy {
     async grantAnalytics() {
       const gate = ports.gate();
       // Never asked of the server for anyone but an established adult; the server refuses them anyway.
-      if ((gate.state === 'active' || gate.state === 'renewal-pending') && gate.eligibility !== '18+') return { status: 'not-eligible' };
+      if (opensOrdinaryAccess(gate) && gate.eligibility !== '18+') return { status: 'not-eligible' };
       return enable('grant-analytics', (choices) => choices.analytics.consent === 'granted');
     },
     allowAdData: () => enable('allow-ad-data', (choices) => choices.adDataOptOut === null),
