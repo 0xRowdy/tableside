@@ -10,7 +10,7 @@ import { describe, expect, it } from 'vitest';
 
 import { PROTOCOL_VERSION, SYNC_OPERATIONS, completedPracticeSession } from '../src';
 import { prepareOperation } from '../src/sync/protocol';
-import { type SimulatedDevice, createAccountByEmail, createDevice, localStack, uniqueEmail } from '../src/testing';
+import { type SimulatedDevice, createAccountByEmail, createDevice, directCommands, localStack, uniqueEmail } from '../src/testing';
 
 const { sql } = localStack();
 
@@ -52,11 +52,20 @@ describe('the release check: server and client agree', () => {
       if (gate.state !== 'active') throw new Error('unreachable');
       await d.account.sync.idle();
       const installation = d.vault.store().identity.installationId;
+      const token = [...d.credentials.items.values()].map((value) => {
+        try {
+          return (JSON.parse(value) as { access_token?: string }).access_token;
+        } catch {
+          return undefined;
+        }
+      }).find((value) => typeof value === 'string');
+      const raw = localStack().rawClient(token);
       // Non-ASCII text too: the hash is over the UTF-8 bytes on both sides.
       const prepared = prepareOperation({
         protocol: PROTOCOL_VERSION,
         operation: 'c'.repeat(32),
         installation,
+        command: (await directCommands(raw, installation)).next(),
         recordType: completedPracticeSession.name,
         payloadVersion: completedPracticeSession.payloadVersion,
         item: 'release-check-1',
@@ -77,14 +86,7 @@ describe('the release check: server and client agree', () => {
           note: 'Café ♠',
         },
       });
-      const token = [...d.credentials.items.values()].map((value) => {
-        try {
-          return (JSON.parse(value) as { access_token?: string }).access_token;
-        } catch {
-          return undefined;
-        }
-      }).find((value) => typeof value === 'string');
-      const { data } = await localStack().rawClient(token).rpc(SYNC_OPERATIONS.upload, { request: prepared.request });
+      const { data } = await raw.rpc(SYNC_OPERATIONS.upload, { request: prepared.request });
       expect(data).toMatchObject({ status: 'accepted', operation: prepared.operationId, requestHash: prepared.requestHash });
     } finally {
       d.dispose();

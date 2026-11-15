@@ -167,6 +167,7 @@ export class FakeAccountService implements AccountService {
     subscribe: () => () => undefined,
     reconcile: async () => undefined,
     retryRecord: async () => undefined,
+    decideUnconfirmed: async () => undefined,
     downloadAllHistory: async () => {
       this.calls.push({ method: 'downloadAllHistory' });
     },

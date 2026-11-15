@@ -17,6 +17,7 @@ function envelope(payload: unknown) {
     protocol: 1 as const,
     operation: 'a'.repeat(32),
     installation: 'installation-1',
+    command: { generation: 1, position: 1 },
     recordType: 'completed-practice-session',
     payloadVersion: 1,
     item: 'activity-1',

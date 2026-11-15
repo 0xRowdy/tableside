@@ -15,6 +15,7 @@ export {
   signInByEmail,
   uniqueEmail,
 } from './device';
+export { type DirectCommands, directCommands } from './commands';
 export { FaultProxy, type HeldResponse } from './fault-proxy';
 export { type ProviderIdentity, TestIdentityProvider, TestProviderPorts } from './identity-provider';
 export { Mailbox } from './mailbox';
@@ -29,6 +30,7 @@ export {
   type TestResultPurge,
   type TestStrategyRevision,
   type TestRevisionedValue,
+  type TestSharingEnable,
   type TestSharingWithdrawal,
   type TestTransfer,
   testAllowanceReconciliation,
@@ -40,6 +42,7 @@ export {
   testResult,
   testResultPurge,
   testRevisionedItem,
+  testSharingEnable,
   testSharingWithdrawal,
   testStrategyRevision,
 } from './record-types';

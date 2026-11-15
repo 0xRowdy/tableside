@@ -140,8 +140,10 @@ describe('Devices', () => {
     const gate = phone.account.gate;
     if (gate.state !== 'active') throw new Error('unreachable');
     const payload = { activityId: 'activity-1', device: tabletInstallation, endedAt: 2, finalCashOut: '1010', game: 'roulette', netResult: '10', owner: gate.accountId, recordVersion: 1, startedAt: 1 };
-    const request = JSON.stringify({ installation: tabletInstallation, item: 'activity-1', operation: '9'.repeat(32), payload, payloadVersion: 1, protocol: 1, recordType: 'completed-practice-session' });
+    const request = JSON.stringify({ command: { generation: 1, position: 1 }, installation: tabletInstallation, item: 'activity-1', operation: '9'.repeat(32), payload, payloadVersion: 1, protocol: 1, recordType: 'completed-practice-session' });
     expect((await raw.rpc('sync_upload_v1', { request })).error).not.toBeNull();
+    // Nor ask for, or renew, the tablet's command scope.
+    expect((await raw.rpc('sync_scope_v1', { installation: tabletInstallation })).error).not.toBeNull();
   });
 });
 

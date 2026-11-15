@@ -64,7 +64,10 @@ const BASE_SCHEMA = [
   // accepted state reflects it; another record type's (an account-state
   // operation, spec 3's attempts) names no activity and carries, for a
   // per-device type, its originating-device position. It also counts how often
-  // the entry failed by itself, and whether that flagged it (#92).
+  // the entry failed by itself, and whether that flagged it (#92). Once
+  // prepared it holds its command's generation and position (#98), and an
+  // entry whose command scope went stale without its outcome showing in the
+  // refreshed account is unconfirmed: it waits for the player's decision.
   `CREATE TABLE outgoing (
     id TEXT PRIMARY KEY,
     activity_id TEXT UNIQUE REFERENCES activities (activity_id),
@@ -82,7 +85,11 @@ const BASE_SCHEMA = [
     receipt_sequence INTEGER,
     failures INTEGER NOT NULL DEFAULT 0 CHECK (failures >= 0),
     flagged INTEGER NOT NULL DEFAULT 0 CHECK (flagged IN (0, 1)),
-    device_position INTEGER
+    device_position INTEGER,
+    command_generation INTEGER,
+    command_position INTEGER,
+    unconfirmed INTEGER NOT NULL DEFAULT 0 CHECK (unconfirmed IN (0, 1)),
+    UNIQUE (command_generation, command_position)
   ) STRICT`,
   'CREATE INDEX outgoing_pending ON outgoing (status, position)',
   'CREATE INDEX outgoing_items ON outgoing (record_type, item_id, position)',
@@ -100,6 +107,10 @@ const BASE_SCHEMA = [
     summary_at INTEGER,
     PRIMARY KEY (record_type, item_id)
   ) STRICT`,
+  // This installation's command scope in the account (#98): the generation the
+  // server issued (null before one) and the last command position given under it. Never reused.
+  'CREATE TABLE command_scope (singleton INTEGER PRIMARY KEY CHECK (singleton = 1), generation INTEGER, last INTEGER NOT NULL) STRICT',
+  'INSERT INTO command_scope (singleton, generation, last) VALUES (1, NULL, 0)',
   'CREATE INDEX accepted_summaries ON accepted_records (summary_at) WHERE summary_at IS NOT NULL',
   // The last originating-device position this installation gave each per-device type. Never reused.
   'CREATE TABLE device_positions (record_type TEXT PRIMARY KEY, last INTEGER NOT NULL) STRICT',
@@ -130,6 +141,8 @@ const BASE_SCHEMA = [
     device_position INTEGER,
     summary_at INTEGER
   ) STRICT`,
+  // The results the staged snapshot names purged from the account (#98).
+  'CREATE TABLE bootstrap_purges (record_type TEXT NOT NULL, item_id TEXT NOT NULL, PRIMARY KEY (record_type, item_id)) STRICT',
   // History detail (#97): how many summaries the first download's newest 90
   // days held when it began, and whether Download all history was asked for,
   // with how many summaries waited for detail when it began.

@@ -24,7 +24,7 @@ import {
 import { type BackendEnvironment, ENVIRONMENT_HEADER, type EnvironmentName, authCallbackUrl, retiredEnvironments } from './environment';
 import { type MetricsSink, createMetricsSender, discardMetrics } from './metrics';
 import { type AccountPrivacy, accountPrivacy } from './privacy';
-import { type DetailResult, type EngineStatus, type HistoryDownload, type HistoryStatus, SyncEngine } from './sync/engine';
+import { type DetailResult, type EngineStatus, type HistoryDownload, type HistoryStatus, type UnconfirmedDecision, SyncEngine } from './sync/engine';
 import { type AccountRecords, accountRecords } from './sync/records';
 import { type RecordType, prerequisitesOf, recordTypes } from './sync/registry';
 import { type DevicePorts, SyncSession } from './sync/session';
@@ -382,6 +382,11 @@ export interface AccountSync {
   reconcile(): Promise<void>;
   /** "Retry this record": tries a failing or flagged record again now, with the records waiting for it. */
   retryRecord(id: string): Promise<void>;
+  /**
+   * The player's decision on an unconfirmed record (spec 2, *Compaction and
+   * stale devices*): send it again, or set it aside. Any other record is left as it is.
+   */
+  decideUnconfirmed(id: string, decision: UnconfirmedDecision): Promise<void>;
   /**
    * Download all history (spec 2, *History*): keeps every record's detail on
    * this installation, for offline trips. It carries on by itself, across
@@ -1728,6 +1733,7 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
       },
       reconcile: () => sync?.engine.reconcile('deliberate') ?? Promise.resolve(),
       retryRecord: (id) => sync?.engine.retryRecord(id) ?? Promise.resolve(),
+      decideUnconfirmed: (id, decision) => sync?.engine.decideUnconfirmed(id, decision) ?? Promise.resolve(),
       downloadAllHistory: () => sync?.engine.downloadAllHistory() ?? Promise.resolve(),
       idle: () => sync?.engine.idle() ?? Promise.resolve(),
       async queue(recordType, payload) {

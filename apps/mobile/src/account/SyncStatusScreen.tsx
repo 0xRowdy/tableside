@@ -14,6 +14,10 @@
 // draws the download only stopped for storage, and its button only during the first download.
 // TODO(frames): the note that waiting records are lost if the app is deleted (the reinstall
 // warning, #97) is unverified: S2-20 doesn't draw it; its words follow S2-17's sign-out sheet.
+// Nor is a record whose outcome couldn't be confirmed after a long time away
+// (#98): it shows as needing review, and the decision on it (send again, or
+// set aside) is the screens of the spec that owns its record type.
+// TODO(frames): the unconfirmed row, built from the spec's words.
 //
 // #99 routes here from the Account area with the Account service's sync; the
 // store link behind Update arrives with the store listings (spec 7).
@@ -54,7 +58,7 @@ export function SyncStatusScreen({ sync, onBack, onUpdate, now = Date.now }: Syn
   const status = useSyncStatus(sync);
   const at = now();
   const required = status.update?.state === 'required';
-  const waiting = status.uploads.filter((upload) => upload.state !== 'review');
+  const waiting = status.uploads.filter((upload) => ROW_STATE[upload.state].uploads);
   const flagged = status.uploads.filter((upload) => upload.state === 'flagged');
   const accountError = ACCOUNT_ERRORS.has(status.error);
   const { history, download } = status;
@@ -272,18 +276,24 @@ function FlaggedBanner({ flagged, sync, now }: { flagged: readonly UploadStatus[
   );
 }
 
-const ROW_STATE: Record<UploadStatus['state'], { label: string; tone: ColorToken }> = {
-  waiting: { label: 'Local', tone: 'mutedForeground' },
-  paused: { label: 'Paused', tone: 'mutedForeground' },
-  flagged: { label: 'Failing', tone: 'destructive' },
-  review: { label: 'Needs review', tone: 'destructive' },
+/**
+ * Each record state's row: its label and tone, what its detail says, whether
+ * it is failing (a flag), and whether it uploads by itself (refused records,
+ * and those awaiting the player's decision, don't).
+ */
+const ROW_STATE: Record<UploadStatus['state'], { label: string; tone: ColorToken; detail: string; failing: boolean; uploads: boolean }> = {
+  waiting: { label: 'Local', tone: 'mutedForeground', detail: `this ${DEVICE}`, failing: false, uploads: true },
+  paused: { label: 'Paused', tone: 'mutedForeground', detail: 'waits for a failing record', failing: false, uploads: true },
+  flagged: { label: 'Failing', tone: 'destructive', detail: 'flagged', failing: true, uploads: true },
+  review: { label: 'Needs review', tone: 'destructive', detail: 'not accepted by your account', failing: true, uploads: false },
+  unconfirmed: { label: 'Needs review', tone: 'warning', detail: 'not confirmed after time away', failing: true, uploads: false },
 };
 
 function UploadRow({ upload, now, first }: { upload: UploadStatus; now: number; first: boolean }) {
   const title = titleOf(upload);
   const detail = detailOf(upload, now);
   const state = ROW_STATE[upload.state];
-  const failing = upload.state === 'flagged' || upload.state === 'review';
+  const { failing } = state;
   const Icon = failing ? Flag : CloudOff;
   return (
     <View testID="waiting-row" accessible accessibilityLabel={`${title}. ${detail}. ${state.label}`} style={[styles.row, !first && styles.rowDivider]}>
@@ -311,16 +321,10 @@ function titleOf(upload: UploadStatus): string {
   return upload.recordType === 'completed-practice-session' && game ? `${game.title} session` : 'Record';
 }
 
-const ROW_DETAIL: Record<UploadStatus['state'], string> = {
-  waiting: `this ${DEVICE}`,
-  paused: 'waits for a failing record',
-  flagged: 'flagged',
-  review: 'not accepted by your account',
-};
-
 function detailOf(upload: UploadStatus, now: number): string {
   const day = dayOf(upload, now, true);
-  return day ? `${day} · ${ROW_DETAIL[upload.state]}` : ROW_DETAIL[upload.state];
+  const { detail } = ROW_STATE[upload.state];
+  return day ? `${day} · ${detail}` : detail;
 }
 
 /** When the record was made: "Today 9:41", "Yesterday" or "14 Oct" (a time only for today, and only when asked). */

@@ -13,6 +13,7 @@ import {
   accessToken,
   createAccountByEmail,
   createDevice,
+  directCommands,
   localStack,
   uniqueEmail,
 } from '../src/testing';
@@ -294,7 +295,10 @@ describe('privacy choices (#105)', () => {
     expect(await createAccountByEmail(device, uniqueEmail(label), band)).toEqual({ status: 'signed-in' });
     const gate = device.account.gate;
     if (gate.state !== 'active') throw new Error('account setup failed');
-    return { accountId: gate.accountId, raw: rawClient(accessToken(device)), installation: device.vault.store().identity.installationId };
+    const raw = rawClient(accessToken(device));
+    const installation = device.vault.store().identity.installationId;
+    // While the account has ordinary access: a later change to its eligibility denies the scope operation too.
+    return { accountId: gate.accountId, raw, installation, commands: await directCommands(raw, installation) };
   }
 
   let next = 0;
@@ -305,6 +309,7 @@ describe('privacy choices (#105)', () => {
       protocol: PROTOCOL_VERSION,
       operation: (++next).toString(16).padStart(32, 'f'),
       installation: account.installation,
+      command: account.commands.next(),
       recordType: 'privacy-choice',
       payloadVersion: 1,
       item: choiceId,

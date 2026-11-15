@@ -69,6 +69,12 @@ export interface TestSharingWithdrawal {
   /** Which contributions it covers. */
   readonly scope: string;
 }
+export interface TestSharingEnable {
+  readonly version: 1;
+  readonly sharingEnableId: string;
+  /** Which contributions it enables again: a new sharing period. */
+  readonly scope: string;
+}
 export interface TestContribution {
   readonly version: 1;
   readonly contributionId: string;
@@ -119,6 +125,16 @@ export const testSharingWithdrawal = testType<TestSharingWithdrawal>({
   isPayload: (value): value is TestSharingWithdrawal => hasStrings(value, 'sharingWithdrawalId', 'scope'),
   barriers: [],
   tables: ['private.test_sharing_withdrawals'],
+});
+
+/** Spec 6's sharing enable: online in spec 6, it starts a new sharing period for its scope (#98 proves an old withdrawal never withdraws it). */
+export const testSharingEnable = testType<TestSharingEnable>({
+  name: 'test-sharing-enable',
+  kind: 'account-state-operation',
+  id: 'sharingEnableId',
+  isPayload: (value): value is TestSharingEnable => hasStrings(value, 'sharingEnableId', 'scope'),
+  barriers: [],
+  tables: [],
 });
 
 /** Spec 6's public contribution: behind any pending sharing withdrawal of its scope. */
@@ -243,6 +259,7 @@ export const testStrategyRevision = testType<TestStrategyRevision>({
 
 export const TEST_RECORD_TYPES: readonly RecordType[] = [
   testSharingWithdrawal,
+  testSharingEnable,
   testContribution,
   testAllowanceReconciliation,
   testAllowanceTransfer,

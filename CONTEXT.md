@@ -307,6 +307,13 @@ A labelled export of records on one installation that haven't reached the accoun
 An account's analytics consent and the ad-data opt-out. Each grant of consent starts a new consent generation with its own random analytics ID; the opt-out records its source (in-app, support or Global Privacy Control). Withdrawing consent or limiting ad data takes effect at once, offline too; granting consent or allowing ad data again needs a connection and the account's current choices.
 _Avoid_: tracking settings, privacy settings
 
+**Command scope**:
+An installation's numbered run of uploads to one account, under a generation the account issued it. Once the account retires a scope, it refuses that scope's uploads; the installation refreshes the account's current state and reconciles its unsynced records before it sends anything else.
+
+**Unconfirmed record**:
+An unsynced record whose command scope was retired before its outcome was known, and whose outcome the account's current state doesn't show. It is kept, never sent again by itself, and waits for the player to send it again or set it aside.
+_Avoid_: lost record, orphan
+
 **Reviewer account**:
 A synthetic account made only for app store review, by a privileged operation in one backend environment, with an established adult age eligibility. It signs in with its reviewer credential instead of an email code, and is otherwise an ordinary account.
 

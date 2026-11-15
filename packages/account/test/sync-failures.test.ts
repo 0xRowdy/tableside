@@ -9,7 +9,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { laterBuild } from '../../../apps/mobile/src/account/testing/later-build';
 import { PROTOCOL_VERSION, RECONCILE_INTERVAL_MS, completedPracticeSession } from '../src';
 import { prepareOperation } from '../src/sync/protocol';
-import { type SimulatedDevice, createAccountByEmail, createDevice, localStack, signInByEmail, uniqueEmail } from '../src/testing';
+import { type SimulatedDevice, createAccountByEmail, createDevice, directCommands, localStack, signInByEmail, uniqueEmail } from '../src/testing';
 
 const devices: SimulatedDevice[] = [];
 function device(name: string, options: Omit<Parameters<typeof createDevice>[1], 'name'> = {}): SimulatedDevice {
@@ -200,6 +200,7 @@ describe('a record the server refuses', () => {
       protocol: PROTOCOL_VERSION,
       operation: 'a'.repeat(32),
       installation: result.device,
+      command: (await directCommands(raw, result.device)).next(),
       recordType: completedPracticeSession.name,
       payloadVersion: 1,
       item: result.activityId,

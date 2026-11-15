@@ -23,16 +23,18 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
         "CREATE INDEX activities_unfinished ON activities (status, position)",
         "CREATE TABLE transitions (\n    activity_id TEXT NOT NULL REFERENCES activities (activity_id),\n    command_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    PRIMARY KEY (activity_id, command_id),\n    UNIQUE (activity_id, sequence)\n  ) STRICT",
         "CREATE TABLE effects (\n    activity_id TEXT NOT NULL REFERENCES activities (activity_id),\n    effect_key TEXT NOT NULL,\n    position INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    PRIMARY KEY (activity_id, effect_key)\n  ) STRICT",
-        "CREATE TABLE outgoing (\n    id TEXT PRIMARY KEY,\n    activity_id TEXT UNIQUE REFERENCES activities (activity_id),\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    revisioned INTEGER NOT NULL CHECK (revisioned IN (0, 1)),\n    position INTEGER NOT NULL UNIQUE,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    dependencies TEXT NOT NULL,\n    status TEXT NOT NULL CHECK (status IN ('pending', 'accepted', 'rejected')),\n    operation_id TEXT UNIQUE,\n    request TEXT,\n    request_sha256 TEXT,\n    receipt TEXT,\n    receipt_sequence INTEGER,\n    failures INTEGER NOT NULL DEFAULT 0 CHECK (failures >= 0),\n    flagged INTEGER NOT NULL DEFAULT 0 CHECK (flagged IN (0, 1)),\n    device_position INTEGER\n  ) STRICT",
+        "CREATE TABLE outgoing (\n    id TEXT PRIMARY KEY,\n    activity_id TEXT UNIQUE REFERENCES activities (activity_id),\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    revisioned INTEGER NOT NULL CHECK (revisioned IN (0, 1)),\n    position INTEGER NOT NULL UNIQUE,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    dependencies TEXT NOT NULL,\n    status TEXT NOT NULL CHECK (status IN ('pending', 'accepted', 'rejected')),\n    operation_id TEXT UNIQUE,\n    request TEXT,\n    request_sha256 TEXT,\n    receipt TEXT,\n    receipt_sequence INTEGER,\n    failures INTEGER NOT NULL DEFAULT 0 CHECK (failures >= 0),\n    flagged INTEGER NOT NULL DEFAULT 0 CHECK (flagged IN (0, 1)),\n    device_position INTEGER,\n    command_generation INTEGER,\n    command_position INTEGER,\n    unconfirmed INTEGER NOT NULL DEFAULT 0 CHECK (unconfirmed IN (0, 1)),\n    UNIQUE (command_generation, command_position)\n  ) STRICT",
         "CREATE INDEX outgoing_pending ON outgoing (status, position)",
         "CREATE INDEX outgoing_items ON outgoing (record_type, item_id, position)",
         "CREATE TABLE accepted_records (\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    installation_id TEXT,\n    device_position INTEGER,\n    summary_at INTEGER,\n    PRIMARY KEY (record_type, item_id)\n  ) STRICT",
+        "CREATE TABLE command_scope (singleton INTEGER PRIMARY KEY CHECK (singleton = 1), generation INTEGER, last INTEGER NOT NULL) STRICT",
         "CREATE INDEX accepted_summaries ON accepted_records (summary_at) WHERE summary_at IS NOT NULL",
         "CREATE TABLE device_positions (record_type TEXT PRIMARY KEY, last INTEGER NOT NULL) STRICT",
         "CREATE TABLE purged_records (record_type TEXT NOT NULL, item_id TEXT NOT NULL, PRIMARY KEY (record_type, item_id)) STRICT",
         "CREATE TABLE feed_cursor (singleton INTEGER PRIMARY KEY CHECK (singleton = 1), sequence INTEGER NOT NULL, synced_at INTEGER) STRICT",
         "CREATE TABLE bootstrap (\n    singleton INTEGER PRIMARY KEY CHECK (singleton = 1),\n    installed INTEGER NOT NULL CHECK (installed IN (0, 1)),\n    body TEXT, body_format INTEGER, body_length INTEGER, body_sha256 TEXT,\n    staged INTEGER NOT NULL DEFAULT 0 CHECK (staged >= 0),\n    after_ordinal INTEGER NOT NULL DEFAULT 0 CHECK (after_ordinal >= 0)\n  ) STRICT",
         "CREATE TABLE bootstrap_rows (\n    position INTEGER PRIMARY KEY,\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    installation_id TEXT,\n    device_position INTEGER,\n    summary_at INTEGER\n  ) STRICT",
+        "CREATE TABLE bootstrap_purges (record_type TEXT NOT NULL, item_id TEXT NOT NULL, PRIMARY KEY (record_type, item_id)) STRICT",
         "CREATE TABLE history (\n    singleton INTEGER PRIMARY KEY CHECK (singleton = 1),\n    recent INTEGER CHECK (recent >= 0),\n    download_requested INTEGER NOT NULL CHECK (download_requested IN (0, 1)),\n    download_total INTEGER CHECK (download_total >= 0)\n  ) STRICT"
       ],
       "rows": {
@@ -89,6 +91,13 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
         "effects": [],
         "outgoing": [],
         "accepted_records": [],
+        "command_scope": [
+          {
+            "singleton": 1,
+            "generation": null,
+            "last": 0
+          }
+        ],
         "device_positions": [],
         "purged_records": [],
         "feed_cursor": [
@@ -111,6 +120,7 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
           }
         ],
         "bootstrap_rows": [],
+        "bootstrap_purges": [],
         "history": [
           {
             "singleton": 1,
@@ -138,16 +148,18 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
         "CREATE INDEX activities_unfinished ON activities (status, position)",
         "CREATE TABLE transitions (\n    activity_id TEXT NOT NULL REFERENCES activities (activity_id),\n    command_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    PRIMARY KEY (activity_id, command_id),\n    UNIQUE (activity_id, sequence)\n  ) STRICT",
         "CREATE TABLE effects (\n    activity_id TEXT NOT NULL REFERENCES activities (activity_id),\n    effect_key TEXT NOT NULL,\n    position INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    PRIMARY KEY (activity_id, effect_key)\n  ) STRICT",
-        "CREATE TABLE outgoing (\n    id TEXT PRIMARY KEY,\n    activity_id TEXT UNIQUE REFERENCES activities (activity_id),\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    revisioned INTEGER NOT NULL CHECK (revisioned IN (0, 1)),\n    position INTEGER NOT NULL UNIQUE,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    dependencies TEXT NOT NULL,\n    status TEXT NOT NULL CHECK (status IN ('pending', 'accepted', 'rejected')),\n    operation_id TEXT UNIQUE,\n    request TEXT,\n    request_sha256 TEXT,\n    receipt TEXT,\n    receipt_sequence INTEGER,\n    failures INTEGER NOT NULL DEFAULT 0 CHECK (failures >= 0),\n    flagged INTEGER NOT NULL DEFAULT 0 CHECK (flagged IN (0, 1)),\n    device_position INTEGER\n  ) STRICT",
+        "CREATE TABLE outgoing (\n    id TEXT PRIMARY KEY,\n    activity_id TEXT UNIQUE REFERENCES activities (activity_id),\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    revisioned INTEGER NOT NULL CHECK (revisioned IN (0, 1)),\n    position INTEGER NOT NULL UNIQUE,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    dependencies TEXT NOT NULL,\n    status TEXT NOT NULL CHECK (status IN ('pending', 'accepted', 'rejected')),\n    operation_id TEXT UNIQUE,\n    request TEXT,\n    request_sha256 TEXT,\n    receipt TEXT,\n    receipt_sequence INTEGER,\n    failures INTEGER NOT NULL DEFAULT 0 CHECK (failures >= 0),\n    flagged INTEGER NOT NULL DEFAULT 0 CHECK (flagged IN (0, 1)),\n    device_position INTEGER,\n    command_generation INTEGER,\n    command_position INTEGER,\n    unconfirmed INTEGER NOT NULL DEFAULT 0 CHECK (unconfirmed IN (0, 1)),\n    UNIQUE (command_generation, command_position)\n  ) STRICT",
         "CREATE INDEX outgoing_pending ON outgoing (status, position)",
         "CREATE INDEX outgoing_items ON outgoing (record_type, item_id, position)",
         "CREATE TABLE accepted_records (\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    installation_id TEXT,\n    device_position INTEGER,\n    summary_at INTEGER,\n    PRIMARY KEY (record_type, item_id)\n  ) STRICT",
+        "CREATE TABLE command_scope (singleton INTEGER PRIMARY KEY CHECK (singleton = 1), generation INTEGER, last INTEGER NOT NULL) STRICT",
         "CREATE INDEX accepted_summaries ON accepted_records (summary_at) WHERE summary_at IS NOT NULL",
         "CREATE TABLE device_positions (record_type TEXT PRIMARY KEY, last INTEGER NOT NULL) STRICT",
         "CREATE TABLE purged_records (record_type TEXT NOT NULL, item_id TEXT NOT NULL, PRIMARY KEY (record_type, item_id)) STRICT",
         "CREATE TABLE feed_cursor (singleton INTEGER PRIMARY KEY CHECK (singleton = 1), sequence INTEGER NOT NULL, synced_at INTEGER) STRICT",
         "CREATE TABLE bootstrap (\n    singleton INTEGER PRIMARY KEY CHECK (singleton = 1),\n    installed INTEGER NOT NULL CHECK (installed IN (0, 1)),\n    body TEXT, body_format INTEGER, body_length INTEGER, body_sha256 TEXT,\n    staged INTEGER NOT NULL DEFAULT 0 CHECK (staged >= 0),\n    after_ordinal INTEGER NOT NULL DEFAULT 0 CHECK (after_ordinal >= 0)\n  ) STRICT",
         "CREATE TABLE bootstrap_rows (\n    position INTEGER PRIMARY KEY,\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    installation_id TEXT,\n    device_position INTEGER,\n    summary_at INTEGER\n  ) STRICT",
+        "CREATE TABLE bootstrap_purges (record_type TEXT NOT NULL, item_id TEXT NOT NULL, PRIMARY KEY (record_type, item_id)) STRICT",
         "CREATE TABLE history (\n    singleton INTEGER PRIMARY KEY CHECK (singleton = 1),\n    recent INTEGER CHECK (recent >= 0),\n    download_requested INTEGER NOT NULL CHECK (download_requested IN (0, 1)),\n    download_total INTEGER CHECK (download_total >= 0)\n  ) STRICT"
       ],
       "rows": {
@@ -204,6 +216,13 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
         "effects": [],
         "outgoing": [],
         "accepted_records": [],
+        "command_scope": [
+          {
+            "singleton": 1,
+            "generation": null,
+            "last": 0
+          }
+        ],
         "device_positions": [],
         "purged_records": [],
         "feed_cursor": [
@@ -226,6 +245,7 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
           }
         ],
         "bootstrap_rows": [],
+        "bootstrap_purges": [],
         "history": [
           {
             "singleton": 1,
@@ -253,16 +273,18 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
         "CREATE INDEX activities_unfinished ON activities (status, position)",
         "CREATE TABLE transitions (\n    activity_id TEXT NOT NULL REFERENCES activities (activity_id),\n    command_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    PRIMARY KEY (activity_id, command_id),\n    UNIQUE (activity_id, sequence)\n  ) STRICT",
         "CREATE TABLE effects (\n    activity_id TEXT NOT NULL REFERENCES activities (activity_id),\n    effect_key TEXT NOT NULL,\n    position INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    PRIMARY KEY (activity_id, effect_key)\n  ) STRICT",
-        "CREATE TABLE outgoing (\n    id TEXT PRIMARY KEY,\n    activity_id TEXT UNIQUE REFERENCES activities (activity_id),\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    revisioned INTEGER NOT NULL CHECK (revisioned IN (0, 1)),\n    position INTEGER NOT NULL UNIQUE,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    dependencies TEXT NOT NULL,\n    status TEXT NOT NULL CHECK (status IN ('pending', 'accepted', 'rejected')),\n    operation_id TEXT UNIQUE,\n    request TEXT,\n    request_sha256 TEXT,\n    receipt TEXT,\n    receipt_sequence INTEGER,\n    failures INTEGER NOT NULL DEFAULT 0 CHECK (failures >= 0),\n    flagged INTEGER NOT NULL DEFAULT 0 CHECK (flagged IN (0, 1)),\n    device_position INTEGER\n  ) STRICT",
+        "CREATE TABLE outgoing (\n    id TEXT PRIMARY KEY,\n    activity_id TEXT UNIQUE REFERENCES activities (activity_id),\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    revisioned INTEGER NOT NULL CHECK (revisioned IN (0, 1)),\n    position INTEGER NOT NULL UNIQUE,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    dependencies TEXT NOT NULL,\n    status TEXT NOT NULL CHECK (status IN ('pending', 'accepted', 'rejected')),\n    operation_id TEXT UNIQUE,\n    request TEXT,\n    request_sha256 TEXT,\n    receipt TEXT,\n    receipt_sequence INTEGER,\n    failures INTEGER NOT NULL DEFAULT 0 CHECK (failures >= 0),\n    flagged INTEGER NOT NULL DEFAULT 0 CHECK (flagged IN (0, 1)),\n    device_position INTEGER,\n    command_generation INTEGER,\n    command_position INTEGER,\n    unconfirmed INTEGER NOT NULL DEFAULT 0 CHECK (unconfirmed IN (0, 1)),\n    UNIQUE (command_generation, command_position)\n  ) STRICT",
         "CREATE INDEX outgoing_pending ON outgoing (status, position)",
         "CREATE INDEX outgoing_items ON outgoing (record_type, item_id, position)",
         "CREATE TABLE accepted_records (\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    installation_id TEXT,\n    device_position INTEGER,\n    summary_at INTEGER,\n    PRIMARY KEY (record_type, item_id)\n  ) STRICT",
+        "CREATE TABLE command_scope (singleton INTEGER PRIMARY KEY CHECK (singleton = 1), generation INTEGER, last INTEGER NOT NULL) STRICT",
         "CREATE INDEX accepted_summaries ON accepted_records (summary_at) WHERE summary_at IS NOT NULL",
         "CREATE TABLE device_positions (record_type TEXT PRIMARY KEY, last INTEGER NOT NULL) STRICT",
         "CREATE TABLE purged_records (record_type TEXT NOT NULL, item_id TEXT NOT NULL, PRIMARY KEY (record_type, item_id)) STRICT",
         "CREATE TABLE feed_cursor (singleton INTEGER PRIMARY KEY CHECK (singleton = 1), sequence INTEGER NOT NULL, synced_at INTEGER) STRICT",
         "CREATE TABLE bootstrap (\n    singleton INTEGER PRIMARY KEY CHECK (singleton = 1),\n    installed INTEGER NOT NULL CHECK (installed IN (0, 1)),\n    body TEXT, body_format INTEGER, body_length INTEGER, body_sha256 TEXT,\n    staged INTEGER NOT NULL DEFAULT 0 CHECK (staged >= 0),\n    after_ordinal INTEGER NOT NULL DEFAULT 0 CHECK (after_ordinal >= 0)\n  ) STRICT",
         "CREATE TABLE bootstrap_rows (\n    position INTEGER PRIMARY KEY,\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    installation_id TEXT,\n    device_position INTEGER,\n    summary_at INTEGER\n  ) STRICT",
+        "CREATE TABLE bootstrap_purges (record_type TEXT NOT NULL, item_id TEXT NOT NULL, PRIMARY KEY (record_type, item_id)) STRICT",
         "CREATE TABLE history (\n    singleton INTEGER PRIMARY KEY CHECK (singleton = 1),\n    recent INTEGER CHECK (recent >= 0),\n    download_requested INTEGER NOT NULL CHECK (download_requested IN (0, 1)),\n    download_total INTEGER CHECK (download_total >= 0)\n  ) STRICT"
       ],
       "rows": {
@@ -337,6 +359,13 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
         "effects": [],
         "outgoing": [],
         "accepted_records": [],
+        "command_scope": [
+          {
+            "singleton": 1,
+            "generation": null,
+            "last": 0
+          }
+        ],
         "device_positions": [],
         "purged_records": [],
         "feed_cursor": [
@@ -359,6 +388,7 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
           }
         ],
         "bootstrap_rows": [],
+        "bootstrap_purges": [],
         "history": [
           {
             "singleton": 1,
@@ -386,16 +416,18 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
         "CREATE INDEX activities_unfinished ON activities (status, position)",
         "CREATE TABLE transitions (\n    activity_id TEXT NOT NULL REFERENCES activities (activity_id),\n    command_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    PRIMARY KEY (activity_id, command_id),\n    UNIQUE (activity_id, sequence)\n  ) STRICT",
         "CREATE TABLE effects (\n    activity_id TEXT NOT NULL REFERENCES activities (activity_id),\n    effect_key TEXT NOT NULL,\n    position INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    PRIMARY KEY (activity_id, effect_key)\n  ) STRICT",
-        "CREATE TABLE outgoing (\n    id TEXT PRIMARY KEY,\n    activity_id TEXT UNIQUE REFERENCES activities (activity_id),\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    revisioned INTEGER NOT NULL CHECK (revisioned IN (0, 1)),\n    position INTEGER NOT NULL UNIQUE,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    dependencies TEXT NOT NULL,\n    status TEXT NOT NULL CHECK (status IN ('pending', 'accepted', 'rejected')),\n    operation_id TEXT UNIQUE,\n    request TEXT,\n    request_sha256 TEXT,\n    receipt TEXT,\n    receipt_sequence INTEGER,\n    failures INTEGER NOT NULL DEFAULT 0 CHECK (failures >= 0),\n    flagged INTEGER NOT NULL DEFAULT 0 CHECK (flagged IN (0, 1)),\n    device_position INTEGER\n  ) STRICT",
+        "CREATE TABLE outgoing (\n    id TEXT PRIMARY KEY,\n    activity_id TEXT UNIQUE REFERENCES activities (activity_id),\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    revisioned INTEGER NOT NULL CHECK (revisioned IN (0, 1)),\n    position INTEGER NOT NULL UNIQUE,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    dependencies TEXT NOT NULL,\n    status TEXT NOT NULL CHECK (status IN ('pending', 'accepted', 'rejected')),\n    operation_id TEXT UNIQUE,\n    request TEXT,\n    request_sha256 TEXT,\n    receipt TEXT,\n    receipt_sequence INTEGER,\n    failures INTEGER NOT NULL DEFAULT 0 CHECK (failures >= 0),\n    flagged INTEGER NOT NULL DEFAULT 0 CHECK (flagged IN (0, 1)),\n    device_position INTEGER,\n    command_generation INTEGER,\n    command_position INTEGER,\n    unconfirmed INTEGER NOT NULL DEFAULT 0 CHECK (unconfirmed IN (0, 1)),\n    UNIQUE (command_generation, command_position)\n  ) STRICT",
         "CREATE INDEX outgoing_pending ON outgoing (status, position)",
         "CREATE INDEX outgoing_items ON outgoing (record_type, item_id, position)",
         "CREATE TABLE accepted_records (\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    installation_id TEXT,\n    device_position INTEGER,\n    summary_at INTEGER,\n    PRIMARY KEY (record_type, item_id)\n  ) STRICT",
+        "CREATE TABLE command_scope (singleton INTEGER PRIMARY KEY CHECK (singleton = 1), generation INTEGER, last INTEGER NOT NULL) STRICT",
         "CREATE INDEX accepted_summaries ON accepted_records (summary_at) WHERE summary_at IS NOT NULL",
         "CREATE TABLE device_positions (record_type TEXT PRIMARY KEY, last INTEGER NOT NULL) STRICT",
         "CREATE TABLE purged_records (record_type TEXT NOT NULL, item_id TEXT NOT NULL, PRIMARY KEY (record_type, item_id)) STRICT",
         "CREATE TABLE feed_cursor (singleton INTEGER PRIMARY KEY CHECK (singleton = 1), sequence INTEGER NOT NULL, synced_at INTEGER) STRICT",
         "CREATE TABLE bootstrap (\n    singleton INTEGER PRIMARY KEY CHECK (singleton = 1),\n    installed INTEGER NOT NULL CHECK (installed IN (0, 1)),\n    body TEXT, body_format INTEGER, body_length INTEGER, body_sha256 TEXT,\n    staged INTEGER NOT NULL DEFAULT 0 CHECK (staged >= 0),\n    after_ordinal INTEGER NOT NULL DEFAULT 0 CHECK (after_ordinal >= 0)\n  ) STRICT",
         "CREATE TABLE bootstrap_rows (\n    position INTEGER PRIMARY KEY,\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    installation_id TEXT,\n    device_position INTEGER,\n    summary_at INTEGER\n  ) STRICT",
+        "CREATE TABLE bootstrap_purges (record_type TEXT NOT NULL, item_id TEXT NOT NULL, PRIMARY KEY (record_type, item_id)) STRICT",
         "CREATE TABLE history (\n    singleton INTEGER PRIMARY KEY CHECK (singleton = 1),\n    recent INTEGER CHECK (recent >= 0),\n    download_requested INTEGER NOT NULL CHECK (download_requested IN (0, 1)),\n    download_total INTEGER CHECK (download_total >= 0)\n  ) STRICT"
       ],
       "rows": {
@@ -479,6 +511,13 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
         "effects": [],
         "outgoing": [],
         "accepted_records": [],
+        "command_scope": [
+          {
+            "singleton": 1,
+            "generation": null,
+            "last": 0
+          }
+        ],
         "device_positions": [],
         "purged_records": [],
         "feed_cursor": [
@@ -501,6 +540,7 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
           }
         ],
         "bootstrap_rows": [],
+        "bootstrap_purges": [],
         "history": [
           {
             "singleton": 1,
@@ -528,16 +568,18 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
         "CREATE INDEX activities_unfinished ON activities (status, position)",
         "CREATE TABLE transitions (\n    activity_id TEXT NOT NULL REFERENCES activities (activity_id),\n    command_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    PRIMARY KEY (activity_id, command_id),\n    UNIQUE (activity_id, sequence)\n  ) STRICT",
         "CREATE TABLE effects (\n    activity_id TEXT NOT NULL REFERENCES activities (activity_id),\n    effect_key TEXT NOT NULL,\n    position INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    PRIMARY KEY (activity_id, effect_key)\n  ) STRICT",
-        "CREATE TABLE outgoing (\n    id TEXT PRIMARY KEY,\n    activity_id TEXT UNIQUE REFERENCES activities (activity_id),\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    revisioned INTEGER NOT NULL CHECK (revisioned IN (0, 1)),\n    position INTEGER NOT NULL UNIQUE,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    dependencies TEXT NOT NULL,\n    status TEXT NOT NULL CHECK (status IN ('pending', 'accepted', 'rejected')),\n    operation_id TEXT UNIQUE,\n    request TEXT,\n    request_sha256 TEXT,\n    receipt TEXT,\n    receipt_sequence INTEGER,\n    failures INTEGER NOT NULL DEFAULT 0 CHECK (failures >= 0),\n    flagged INTEGER NOT NULL DEFAULT 0 CHECK (flagged IN (0, 1)),\n    device_position INTEGER\n  ) STRICT",
+        "CREATE TABLE outgoing (\n    id TEXT PRIMARY KEY,\n    activity_id TEXT UNIQUE REFERENCES activities (activity_id),\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    revisioned INTEGER NOT NULL CHECK (revisioned IN (0, 1)),\n    position INTEGER NOT NULL UNIQUE,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    dependencies TEXT NOT NULL,\n    status TEXT NOT NULL CHECK (status IN ('pending', 'accepted', 'rejected')),\n    operation_id TEXT UNIQUE,\n    request TEXT,\n    request_sha256 TEXT,\n    receipt TEXT,\n    receipt_sequence INTEGER,\n    failures INTEGER NOT NULL DEFAULT 0 CHECK (failures >= 0),\n    flagged INTEGER NOT NULL DEFAULT 0 CHECK (flagged IN (0, 1)),\n    device_position INTEGER,\n    command_generation INTEGER,\n    command_position INTEGER,\n    unconfirmed INTEGER NOT NULL DEFAULT 0 CHECK (unconfirmed IN (0, 1)),\n    UNIQUE (command_generation, command_position)\n  ) STRICT",
         "CREATE INDEX outgoing_pending ON outgoing (status, position)",
         "CREATE INDEX outgoing_items ON outgoing (record_type, item_id, position)",
         "CREATE TABLE accepted_records (\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    installation_id TEXT,\n    device_position INTEGER,\n    summary_at INTEGER,\n    PRIMARY KEY (record_type, item_id)\n  ) STRICT",
+        "CREATE TABLE command_scope (singleton INTEGER PRIMARY KEY CHECK (singleton = 1), generation INTEGER, last INTEGER NOT NULL) STRICT",
         "CREATE INDEX accepted_summaries ON accepted_records (summary_at) WHERE summary_at IS NOT NULL",
         "CREATE TABLE device_positions (record_type TEXT PRIMARY KEY, last INTEGER NOT NULL) STRICT",
         "CREATE TABLE purged_records (record_type TEXT NOT NULL, item_id TEXT NOT NULL, PRIMARY KEY (record_type, item_id)) STRICT",
         "CREATE TABLE feed_cursor (singleton INTEGER PRIMARY KEY CHECK (singleton = 1), sequence INTEGER NOT NULL, synced_at INTEGER) STRICT",
         "CREATE TABLE bootstrap (\n    singleton INTEGER PRIMARY KEY CHECK (singleton = 1),\n    installed INTEGER NOT NULL CHECK (installed IN (0, 1)),\n    body TEXT, body_format INTEGER, body_length INTEGER, body_sha256 TEXT,\n    staged INTEGER NOT NULL DEFAULT 0 CHECK (staged >= 0),\n    after_ordinal INTEGER NOT NULL DEFAULT 0 CHECK (after_ordinal >= 0)\n  ) STRICT",
         "CREATE TABLE bootstrap_rows (\n    position INTEGER PRIMARY KEY,\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    installation_id TEXT,\n    device_position INTEGER,\n    summary_at INTEGER\n  ) STRICT",
+        "CREATE TABLE bootstrap_purges (record_type TEXT NOT NULL, item_id TEXT NOT NULL, PRIMARY KEY (record_type, item_id)) STRICT",
         "CREATE TABLE history (\n    singleton INTEGER PRIMARY KEY CHECK (singleton = 1),\n    recent INTEGER CHECK (recent >= 0),\n    download_requested INTEGER NOT NULL CHECK (download_requested IN (0, 1)),\n    download_total INTEGER CHECK (download_total >= 0)\n  ) STRICT"
       ],
       "rows": {
@@ -594,6 +636,13 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
         "effects": [],
         "outgoing": [],
         "accepted_records": [],
+        "command_scope": [
+          {
+            "singleton": 1,
+            "generation": null,
+            "last": 0
+          }
+        ],
         "device_positions": [],
         "purged_records": [],
         "feed_cursor": [
@@ -616,6 +665,7 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
           }
         ],
         "bootstrap_rows": [],
+        "bootstrap_purges": [],
         "history": [
           {
             "singleton": 1,
@@ -643,16 +693,18 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
         "CREATE INDEX activities_unfinished ON activities (status, position)",
         "CREATE TABLE transitions (\n    activity_id TEXT NOT NULL REFERENCES activities (activity_id),\n    command_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    PRIMARY KEY (activity_id, command_id),\n    UNIQUE (activity_id, sequence)\n  ) STRICT",
         "CREATE TABLE effects (\n    activity_id TEXT NOT NULL REFERENCES activities (activity_id),\n    effect_key TEXT NOT NULL,\n    position INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    PRIMARY KEY (activity_id, effect_key)\n  ) STRICT",
-        "CREATE TABLE outgoing (\n    id TEXT PRIMARY KEY,\n    activity_id TEXT UNIQUE REFERENCES activities (activity_id),\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    revisioned INTEGER NOT NULL CHECK (revisioned IN (0, 1)),\n    position INTEGER NOT NULL UNIQUE,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    dependencies TEXT NOT NULL,\n    status TEXT NOT NULL CHECK (status IN ('pending', 'accepted', 'rejected')),\n    operation_id TEXT UNIQUE,\n    request TEXT,\n    request_sha256 TEXT,\n    receipt TEXT,\n    receipt_sequence INTEGER,\n    failures INTEGER NOT NULL DEFAULT 0 CHECK (failures >= 0),\n    flagged INTEGER NOT NULL DEFAULT 0 CHECK (flagged IN (0, 1)),\n    device_position INTEGER\n  ) STRICT",
+        "CREATE TABLE outgoing (\n    id TEXT PRIMARY KEY,\n    activity_id TEXT UNIQUE REFERENCES activities (activity_id),\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    revisioned INTEGER NOT NULL CHECK (revisioned IN (0, 1)),\n    position INTEGER NOT NULL UNIQUE,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    dependencies TEXT NOT NULL,\n    status TEXT NOT NULL CHECK (status IN ('pending', 'accepted', 'rejected')),\n    operation_id TEXT UNIQUE,\n    request TEXT,\n    request_sha256 TEXT,\n    receipt TEXT,\n    receipt_sequence INTEGER,\n    failures INTEGER NOT NULL DEFAULT 0 CHECK (failures >= 0),\n    flagged INTEGER NOT NULL DEFAULT 0 CHECK (flagged IN (0, 1)),\n    device_position INTEGER,\n    command_generation INTEGER,\n    command_position INTEGER,\n    unconfirmed INTEGER NOT NULL DEFAULT 0 CHECK (unconfirmed IN (0, 1)),\n    UNIQUE (command_generation, command_position)\n  ) STRICT",
         "CREATE INDEX outgoing_pending ON outgoing (status, position)",
         "CREATE INDEX outgoing_items ON outgoing (record_type, item_id, position)",
         "CREATE TABLE accepted_records (\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    installation_id TEXT,\n    device_position INTEGER,\n    summary_at INTEGER,\n    PRIMARY KEY (record_type, item_id)\n  ) STRICT",
+        "CREATE TABLE command_scope (singleton INTEGER PRIMARY KEY CHECK (singleton = 1), generation INTEGER, last INTEGER NOT NULL) STRICT",
         "CREATE INDEX accepted_summaries ON accepted_records (summary_at) WHERE summary_at IS NOT NULL",
         "CREATE TABLE device_positions (record_type TEXT PRIMARY KEY, last INTEGER NOT NULL) STRICT",
         "CREATE TABLE purged_records (record_type TEXT NOT NULL, item_id TEXT NOT NULL, PRIMARY KEY (record_type, item_id)) STRICT",
         "CREATE TABLE feed_cursor (singleton INTEGER PRIMARY KEY CHECK (singleton = 1), sequence INTEGER NOT NULL, synced_at INTEGER) STRICT",
         "CREATE TABLE bootstrap (\n    singleton INTEGER PRIMARY KEY CHECK (singleton = 1),\n    installed INTEGER NOT NULL CHECK (installed IN (0, 1)),\n    body TEXT, body_format INTEGER, body_length INTEGER, body_sha256 TEXT,\n    staged INTEGER NOT NULL DEFAULT 0 CHECK (staged >= 0),\n    after_ordinal INTEGER NOT NULL DEFAULT 0 CHECK (after_ordinal >= 0)\n  ) STRICT",
         "CREATE TABLE bootstrap_rows (\n    position INTEGER PRIMARY KEY,\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    installation_id TEXT,\n    device_position INTEGER,\n    summary_at INTEGER\n  ) STRICT",
+        "CREATE TABLE bootstrap_purges (record_type TEXT NOT NULL, item_id TEXT NOT NULL, PRIMARY KEY (record_type, item_id)) STRICT",
         "CREATE TABLE history (\n    singleton INTEGER PRIMARY KEY CHECK (singleton = 1),\n    recent INTEGER CHECK (recent >= 0),\n    download_requested INTEGER NOT NULL CHECK (download_requested IN (0, 1)),\n    download_total INTEGER CHECK (download_total >= 0)\n  ) STRICT"
       ],
       "rows": {
@@ -727,6 +779,13 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
         "effects": [],
         "outgoing": [],
         "accepted_records": [],
+        "command_scope": [
+          {
+            "singleton": 1,
+            "generation": null,
+            "last": 0
+          }
+        ],
         "device_positions": [],
         "purged_records": [],
         "feed_cursor": [
@@ -749,6 +808,7 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
           }
         ],
         "bootstrap_rows": [],
+        "bootstrap_purges": [],
         "history": [
           {
             "singleton": 1,
@@ -776,16 +836,18 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
         "CREATE INDEX activities_unfinished ON activities (status, position)",
         "CREATE TABLE transitions (\n    activity_id TEXT NOT NULL REFERENCES activities (activity_id),\n    command_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    PRIMARY KEY (activity_id, command_id),\n    UNIQUE (activity_id, sequence)\n  ) STRICT",
         "CREATE TABLE effects (\n    activity_id TEXT NOT NULL REFERENCES activities (activity_id),\n    effect_key TEXT NOT NULL,\n    position INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    PRIMARY KEY (activity_id, effect_key)\n  ) STRICT",
-        "CREATE TABLE outgoing (\n    id TEXT PRIMARY KEY,\n    activity_id TEXT UNIQUE REFERENCES activities (activity_id),\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    revisioned INTEGER NOT NULL CHECK (revisioned IN (0, 1)),\n    position INTEGER NOT NULL UNIQUE,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    dependencies TEXT NOT NULL,\n    status TEXT NOT NULL CHECK (status IN ('pending', 'accepted', 'rejected')),\n    operation_id TEXT UNIQUE,\n    request TEXT,\n    request_sha256 TEXT,\n    receipt TEXT,\n    receipt_sequence INTEGER,\n    failures INTEGER NOT NULL DEFAULT 0 CHECK (failures >= 0),\n    flagged INTEGER NOT NULL DEFAULT 0 CHECK (flagged IN (0, 1)),\n    device_position INTEGER\n  ) STRICT",
+        "CREATE TABLE outgoing (\n    id TEXT PRIMARY KEY,\n    activity_id TEXT UNIQUE REFERENCES activities (activity_id),\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    revisioned INTEGER NOT NULL CHECK (revisioned IN (0, 1)),\n    position INTEGER NOT NULL UNIQUE,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    dependencies TEXT NOT NULL,\n    status TEXT NOT NULL CHECK (status IN ('pending', 'accepted', 'rejected')),\n    operation_id TEXT UNIQUE,\n    request TEXT,\n    request_sha256 TEXT,\n    receipt TEXT,\n    receipt_sequence INTEGER,\n    failures INTEGER NOT NULL DEFAULT 0 CHECK (failures >= 0),\n    flagged INTEGER NOT NULL DEFAULT 0 CHECK (flagged IN (0, 1)),\n    device_position INTEGER,\n    command_generation INTEGER,\n    command_position INTEGER,\n    unconfirmed INTEGER NOT NULL DEFAULT 0 CHECK (unconfirmed IN (0, 1)),\n    UNIQUE (command_generation, command_position)\n  ) STRICT",
         "CREATE INDEX outgoing_pending ON outgoing (status, position)",
         "CREATE INDEX outgoing_items ON outgoing (record_type, item_id, position)",
         "CREATE TABLE accepted_records (\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    installation_id TEXT,\n    device_position INTEGER,\n    summary_at INTEGER,\n    PRIMARY KEY (record_type, item_id)\n  ) STRICT",
+        "CREATE TABLE command_scope (singleton INTEGER PRIMARY KEY CHECK (singleton = 1), generation INTEGER, last INTEGER NOT NULL) STRICT",
         "CREATE INDEX accepted_summaries ON accepted_records (summary_at) WHERE summary_at IS NOT NULL",
         "CREATE TABLE device_positions (record_type TEXT PRIMARY KEY, last INTEGER NOT NULL) STRICT",
         "CREATE TABLE purged_records (record_type TEXT NOT NULL, item_id TEXT NOT NULL, PRIMARY KEY (record_type, item_id)) STRICT",
         "CREATE TABLE feed_cursor (singleton INTEGER PRIMARY KEY CHECK (singleton = 1), sequence INTEGER NOT NULL, synced_at INTEGER) STRICT",
         "CREATE TABLE bootstrap (\n    singleton INTEGER PRIMARY KEY CHECK (singleton = 1),\n    installed INTEGER NOT NULL CHECK (installed IN (0, 1)),\n    body TEXT, body_format INTEGER, body_length INTEGER, body_sha256 TEXT,\n    staged INTEGER NOT NULL DEFAULT 0 CHECK (staged >= 0),\n    after_ordinal INTEGER NOT NULL DEFAULT 0 CHECK (after_ordinal >= 0)\n  ) STRICT",
         "CREATE TABLE bootstrap_rows (\n    position INTEGER PRIMARY KEY,\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    installation_id TEXT,\n    device_position INTEGER,\n    summary_at INTEGER\n  ) STRICT",
+        "CREATE TABLE bootstrap_purges (record_type TEXT NOT NULL, item_id TEXT NOT NULL, PRIMARY KEY (record_type, item_id)) STRICT",
         "CREATE TABLE history (\n    singleton INTEGER PRIMARY KEY CHECK (singleton = 1),\n    recent INTEGER CHECK (recent >= 0),\n    download_requested INTEGER NOT NULL CHECK (download_requested IN (0, 1)),\n    download_total INTEGER CHECK (download_total >= 0)\n  ) STRICT"
       ],
       "rows": {
@@ -860,6 +922,13 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
         "effects": [],
         "outgoing": [],
         "accepted_records": [],
+        "command_scope": [
+          {
+            "singleton": 1,
+            "generation": null,
+            "last": 0
+          }
+        ],
         "device_positions": [],
         "purged_records": [],
         "feed_cursor": [
@@ -882,6 +951,7 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
           }
         ],
         "bootstrap_rows": [],
+        "bootstrap_purges": [],
         "history": [
           {
             "singleton": 1,
@@ -909,16 +979,18 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
         "CREATE INDEX activities_unfinished ON activities (status, position)",
         "CREATE TABLE transitions (\n    activity_id TEXT NOT NULL REFERENCES activities (activity_id),\n    command_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    PRIMARY KEY (activity_id, command_id),\n    UNIQUE (activity_id, sequence)\n  ) STRICT",
         "CREATE TABLE effects (\n    activity_id TEXT NOT NULL REFERENCES activities (activity_id),\n    effect_key TEXT NOT NULL,\n    position INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    PRIMARY KEY (activity_id, effect_key)\n  ) STRICT",
-        "CREATE TABLE outgoing (\n    id TEXT PRIMARY KEY,\n    activity_id TEXT UNIQUE REFERENCES activities (activity_id),\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    revisioned INTEGER NOT NULL CHECK (revisioned IN (0, 1)),\n    position INTEGER NOT NULL UNIQUE,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    dependencies TEXT NOT NULL,\n    status TEXT NOT NULL CHECK (status IN ('pending', 'accepted', 'rejected')),\n    operation_id TEXT UNIQUE,\n    request TEXT,\n    request_sha256 TEXT,\n    receipt TEXT,\n    receipt_sequence INTEGER,\n    failures INTEGER NOT NULL DEFAULT 0 CHECK (failures >= 0),\n    flagged INTEGER NOT NULL DEFAULT 0 CHECK (flagged IN (0, 1)),\n    device_position INTEGER\n  ) STRICT",
+        "CREATE TABLE outgoing (\n    id TEXT PRIMARY KEY,\n    activity_id TEXT UNIQUE REFERENCES activities (activity_id),\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    revisioned INTEGER NOT NULL CHECK (revisioned IN (0, 1)),\n    position INTEGER NOT NULL UNIQUE,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    dependencies TEXT NOT NULL,\n    status TEXT NOT NULL CHECK (status IN ('pending', 'accepted', 'rejected')),\n    operation_id TEXT UNIQUE,\n    request TEXT,\n    request_sha256 TEXT,\n    receipt TEXT,\n    receipt_sequence INTEGER,\n    failures INTEGER NOT NULL DEFAULT 0 CHECK (failures >= 0),\n    flagged INTEGER NOT NULL DEFAULT 0 CHECK (flagged IN (0, 1)),\n    device_position INTEGER,\n    command_generation INTEGER,\n    command_position INTEGER,\n    unconfirmed INTEGER NOT NULL DEFAULT 0 CHECK (unconfirmed IN (0, 1)),\n    UNIQUE (command_generation, command_position)\n  ) STRICT",
         "CREATE INDEX outgoing_pending ON outgoing (status, position)",
         "CREATE INDEX outgoing_items ON outgoing (record_type, item_id, position)",
         "CREATE TABLE accepted_records (\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    installation_id TEXT,\n    device_position INTEGER,\n    summary_at INTEGER,\n    PRIMARY KEY (record_type, item_id)\n  ) STRICT",
+        "CREATE TABLE command_scope (singleton INTEGER PRIMARY KEY CHECK (singleton = 1), generation INTEGER, last INTEGER NOT NULL) STRICT",
         "CREATE INDEX accepted_summaries ON accepted_records (summary_at) WHERE summary_at IS NOT NULL",
         "CREATE TABLE device_positions (record_type TEXT PRIMARY KEY, last INTEGER NOT NULL) STRICT",
         "CREATE TABLE purged_records (record_type TEXT NOT NULL, item_id TEXT NOT NULL, PRIMARY KEY (record_type, item_id)) STRICT",
         "CREATE TABLE feed_cursor (singleton INTEGER PRIMARY KEY CHECK (singleton = 1), sequence INTEGER NOT NULL, synced_at INTEGER) STRICT",
         "CREATE TABLE bootstrap (\n    singleton INTEGER PRIMARY KEY CHECK (singleton = 1),\n    installed INTEGER NOT NULL CHECK (installed IN (0, 1)),\n    body TEXT, body_format INTEGER, body_length INTEGER, body_sha256 TEXT,\n    staged INTEGER NOT NULL DEFAULT 0 CHECK (staged >= 0),\n    after_ordinal INTEGER NOT NULL DEFAULT 0 CHECK (after_ordinal >= 0)\n  ) STRICT",
         "CREATE TABLE bootstrap_rows (\n    position INTEGER PRIMARY KEY,\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    installation_id TEXT,\n    device_position INTEGER,\n    summary_at INTEGER\n  ) STRICT",
+        "CREATE TABLE bootstrap_purges (record_type TEXT NOT NULL, item_id TEXT NOT NULL, PRIMARY KEY (record_type, item_id)) STRICT",
         "CREATE TABLE history (\n    singleton INTEGER PRIMARY KEY CHECK (singleton = 1),\n    recent INTEGER CHECK (recent >= 0),\n    download_requested INTEGER NOT NULL CHECK (download_requested IN (0, 1)),\n    download_total INTEGER CHECK (download_total >= 0)\n  ) STRICT"
       ],
       "rows": {
@@ -993,6 +1065,13 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
         "effects": [],
         "outgoing": [],
         "accepted_records": [],
+        "command_scope": [
+          {
+            "singleton": 1,
+            "generation": null,
+            "last": 0
+          }
+        ],
         "device_positions": [],
         "purged_records": [],
         "feed_cursor": [
@@ -1015,6 +1094,7 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
           }
         ],
         "bootstrap_rows": [],
+        "bootstrap_purges": [],
         "history": [
           {
             "singleton": 1,
@@ -1042,16 +1122,18 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
         "CREATE INDEX activities_unfinished ON activities (status, position)",
         "CREATE TABLE transitions (\n    activity_id TEXT NOT NULL REFERENCES activities (activity_id),\n    command_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    PRIMARY KEY (activity_id, command_id),\n    UNIQUE (activity_id, sequence)\n  ) STRICT",
         "CREATE TABLE effects (\n    activity_id TEXT NOT NULL REFERENCES activities (activity_id),\n    effect_key TEXT NOT NULL,\n    position INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    PRIMARY KEY (activity_id, effect_key)\n  ) STRICT",
-        "CREATE TABLE outgoing (\n    id TEXT PRIMARY KEY,\n    activity_id TEXT UNIQUE REFERENCES activities (activity_id),\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    revisioned INTEGER NOT NULL CHECK (revisioned IN (0, 1)),\n    position INTEGER NOT NULL UNIQUE,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    dependencies TEXT NOT NULL,\n    status TEXT NOT NULL CHECK (status IN ('pending', 'accepted', 'rejected')),\n    operation_id TEXT UNIQUE,\n    request TEXT,\n    request_sha256 TEXT,\n    receipt TEXT,\n    receipt_sequence INTEGER,\n    failures INTEGER NOT NULL DEFAULT 0 CHECK (failures >= 0),\n    flagged INTEGER NOT NULL DEFAULT 0 CHECK (flagged IN (0, 1)),\n    device_position INTEGER\n  ) STRICT",
+        "CREATE TABLE outgoing (\n    id TEXT PRIMARY KEY,\n    activity_id TEXT UNIQUE REFERENCES activities (activity_id),\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    revisioned INTEGER NOT NULL CHECK (revisioned IN (0, 1)),\n    position INTEGER NOT NULL UNIQUE,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    dependencies TEXT NOT NULL,\n    status TEXT NOT NULL CHECK (status IN ('pending', 'accepted', 'rejected')),\n    operation_id TEXT UNIQUE,\n    request TEXT,\n    request_sha256 TEXT,\n    receipt TEXT,\n    receipt_sequence INTEGER,\n    failures INTEGER NOT NULL DEFAULT 0 CHECK (failures >= 0),\n    flagged INTEGER NOT NULL DEFAULT 0 CHECK (flagged IN (0, 1)),\n    device_position INTEGER,\n    command_generation INTEGER,\n    command_position INTEGER,\n    unconfirmed INTEGER NOT NULL DEFAULT 0 CHECK (unconfirmed IN (0, 1)),\n    UNIQUE (command_generation, command_position)\n  ) STRICT",
         "CREATE INDEX outgoing_pending ON outgoing (status, position)",
         "CREATE INDEX outgoing_items ON outgoing (record_type, item_id, position)",
         "CREATE TABLE accepted_records (\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    installation_id TEXT,\n    device_position INTEGER,\n    summary_at INTEGER,\n    PRIMARY KEY (record_type, item_id)\n  ) STRICT",
+        "CREATE TABLE command_scope (singleton INTEGER PRIMARY KEY CHECK (singleton = 1), generation INTEGER, last INTEGER NOT NULL) STRICT",
         "CREATE INDEX accepted_summaries ON accepted_records (summary_at) WHERE summary_at IS NOT NULL",
         "CREATE TABLE device_positions (record_type TEXT PRIMARY KEY, last INTEGER NOT NULL) STRICT",
         "CREATE TABLE purged_records (record_type TEXT NOT NULL, item_id TEXT NOT NULL, PRIMARY KEY (record_type, item_id)) STRICT",
         "CREATE TABLE feed_cursor (singleton INTEGER PRIMARY KEY CHECK (singleton = 1), sequence INTEGER NOT NULL, synced_at INTEGER) STRICT",
         "CREATE TABLE bootstrap (\n    singleton INTEGER PRIMARY KEY CHECK (singleton = 1),\n    installed INTEGER NOT NULL CHECK (installed IN (0, 1)),\n    body TEXT, body_format INTEGER, body_length INTEGER, body_sha256 TEXT,\n    staged INTEGER NOT NULL DEFAULT 0 CHECK (staged >= 0),\n    after_ordinal INTEGER NOT NULL DEFAULT 0 CHECK (after_ordinal >= 0)\n  ) STRICT",
         "CREATE TABLE bootstrap_rows (\n    position INTEGER PRIMARY KEY,\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    installation_id TEXT,\n    device_position INTEGER,\n    summary_at INTEGER\n  ) STRICT",
+        "CREATE TABLE bootstrap_purges (record_type TEXT NOT NULL, item_id TEXT NOT NULL, PRIMARY KEY (record_type, item_id)) STRICT",
         "CREATE TABLE history (\n    singleton INTEGER PRIMARY KEY CHECK (singleton = 1),\n    recent INTEGER CHECK (recent >= 0),\n    download_requested INTEGER NOT NULL CHECK (download_requested IN (0, 1)),\n    download_total INTEGER CHECK (download_total >= 0)\n  ) STRICT"
       ],
       "rows": {
@@ -1108,6 +1190,13 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
         "effects": [],
         "outgoing": [],
         "accepted_records": [],
+        "command_scope": [
+          {
+            "singleton": 1,
+            "generation": null,
+            "last": 0
+          }
+        ],
         "device_positions": [],
         "purged_records": [],
         "feed_cursor": [
@@ -1130,6 +1219,7 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
           }
         ],
         "bootstrap_rows": [],
+        "bootstrap_purges": [],
         "history": [
           {
             "singleton": 1,
@@ -1157,16 +1247,18 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
         "CREATE INDEX activities_unfinished ON activities (status, position)",
         "CREATE TABLE transitions (\n    activity_id TEXT NOT NULL REFERENCES activities (activity_id),\n    command_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    PRIMARY KEY (activity_id, command_id),\n    UNIQUE (activity_id, sequence)\n  ) STRICT",
         "CREATE TABLE effects (\n    activity_id TEXT NOT NULL REFERENCES activities (activity_id),\n    effect_key TEXT NOT NULL,\n    position INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    PRIMARY KEY (activity_id, effect_key)\n  ) STRICT",
-        "CREATE TABLE outgoing (\n    id TEXT PRIMARY KEY,\n    activity_id TEXT UNIQUE REFERENCES activities (activity_id),\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    revisioned INTEGER NOT NULL CHECK (revisioned IN (0, 1)),\n    position INTEGER NOT NULL UNIQUE,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    dependencies TEXT NOT NULL,\n    status TEXT NOT NULL CHECK (status IN ('pending', 'accepted', 'rejected')),\n    operation_id TEXT UNIQUE,\n    request TEXT,\n    request_sha256 TEXT,\n    receipt TEXT,\n    receipt_sequence INTEGER,\n    failures INTEGER NOT NULL DEFAULT 0 CHECK (failures >= 0),\n    flagged INTEGER NOT NULL DEFAULT 0 CHECK (flagged IN (0, 1)),\n    device_position INTEGER\n  ) STRICT",
+        "CREATE TABLE outgoing (\n    id TEXT PRIMARY KEY,\n    activity_id TEXT UNIQUE REFERENCES activities (activity_id),\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    revisioned INTEGER NOT NULL CHECK (revisioned IN (0, 1)),\n    position INTEGER NOT NULL UNIQUE,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    dependencies TEXT NOT NULL,\n    status TEXT NOT NULL CHECK (status IN ('pending', 'accepted', 'rejected')),\n    operation_id TEXT UNIQUE,\n    request TEXT,\n    request_sha256 TEXT,\n    receipt TEXT,\n    receipt_sequence INTEGER,\n    failures INTEGER NOT NULL DEFAULT 0 CHECK (failures >= 0),\n    flagged INTEGER NOT NULL DEFAULT 0 CHECK (flagged IN (0, 1)),\n    device_position INTEGER,\n    command_generation INTEGER,\n    command_position INTEGER,\n    unconfirmed INTEGER NOT NULL DEFAULT 0 CHECK (unconfirmed IN (0, 1)),\n    UNIQUE (command_generation, command_position)\n  ) STRICT",
         "CREATE INDEX outgoing_pending ON outgoing (status, position)",
         "CREATE INDEX outgoing_items ON outgoing (record_type, item_id, position)",
         "CREATE TABLE accepted_records (\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    installation_id TEXT,\n    device_position INTEGER,\n    summary_at INTEGER,\n    PRIMARY KEY (record_type, item_id)\n  ) STRICT",
+        "CREATE TABLE command_scope (singleton INTEGER PRIMARY KEY CHECK (singleton = 1), generation INTEGER, last INTEGER NOT NULL) STRICT",
         "CREATE INDEX accepted_summaries ON accepted_records (summary_at) WHERE summary_at IS NOT NULL",
         "CREATE TABLE device_positions (record_type TEXT PRIMARY KEY, last INTEGER NOT NULL) STRICT",
         "CREATE TABLE purged_records (record_type TEXT NOT NULL, item_id TEXT NOT NULL, PRIMARY KEY (record_type, item_id)) STRICT",
         "CREATE TABLE feed_cursor (singleton INTEGER PRIMARY KEY CHECK (singleton = 1), sequence INTEGER NOT NULL, synced_at INTEGER) STRICT",
         "CREATE TABLE bootstrap (\n    singleton INTEGER PRIMARY KEY CHECK (singleton = 1),\n    installed INTEGER NOT NULL CHECK (installed IN (0, 1)),\n    body TEXT, body_format INTEGER, body_length INTEGER, body_sha256 TEXT,\n    staged INTEGER NOT NULL DEFAULT 0 CHECK (staged >= 0),\n    after_ordinal INTEGER NOT NULL DEFAULT 0 CHECK (after_ordinal >= 0)\n  ) STRICT",
         "CREATE TABLE bootstrap_rows (\n    position INTEGER PRIMARY KEY,\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    installation_id TEXT,\n    device_position INTEGER,\n    summary_at INTEGER\n  ) STRICT",
+        "CREATE TABLE bootstrap_purges (record_type TEXT NOT NULL, item_id TEXT NOT NULL, PRIMARY KEY (record_type, item_id)) STRICT",
         "CREATE TABLE history (\n    singleton INTEGER PRIMARY KEY CHECK (singleton = 1),\n    recent INTEGER CHECK (recent >= 0),\n    download_requested INTEGER NOT NULL CHECK (download_requested IN (0, 1)),\n    download_total INTEGER CHECK (download_total >= 0)\n  ) STRICT"
       ],
       "rows": {
@@ -1223,6 +1315,13 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
         "effects": [],
         "outgoing": [],
         "accepted_records": [],
+        "command_scope": [
+          {
+            "singleton": 1,
+            "generation": null,
+            "last": 0
+          }
+        ],
         "device_positions": [],
         "purged_records": [],
         "feed_cursor": [
@@ -1245,6 +1344,7 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
           }
         ],
         "bootstrap_rows": [],
+        "bootstrap_purges": [],
         "history": [
           {
             "singleton": 1,
@@ -1267,16 +1367,18 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
         "CREATE INDEX activities_unfinished ON activities (status, position)",
         "CREATE TABLE transitions (\n    activity_id TEXT NOT NULL REFERENCES activities (activity_id),\n    command_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    PRIMARY KEY (activity_id, command_id),\n    UNIQUE (activity_id, sequence)\n  ) STRICT",
         "CREATE TABLE effects (\n    activity_id TEXT NOT NULL REFERENCES activities (activity_id),\n    effect_key TEXT NOT NULL,\n    position INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    PRIMARY KEY (activity_id, effect_key)\n  ) STRICT",
-        "CREATE TABLE outgoing (\n    id TEXT PRIMARY KEY,\n    activity_id TEXT UNIQUE REFERENCES activities (activity_id),\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    revisioned INTEGER NOT NULL CHECK (revisioned IN (0, 1)),\n    position INTEGER NOT NULL UNIQUE,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    dependencies TEXT NOT NULL,\n    status TEXT NOT NULL CHECK (status IN ('pending', 'accepted', 'rejected')),\n    operation_id TEXT UNIQUE,\n    request TEXT,\n    request_sha256 TEXT,\n    receipt TEXT,\n    receipt_sequence INTEGER,\n    failures INTEGER NOT NULL DEFAULT 0 CHECK (failures >= 0),\n    flagged INTEGER NOT NULL DEFAULT 0 CHECK (flagged IN (0, 1)),\n    device_position INTEGER\n  ) STRICT",
+        "CREATE TABLE outgoing (\n    id TEXT PRIMARY KEY,\n    activity_id TEXT UNIQUE REFERENCES activities (activity_id),\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    revisioned INTEGER NOT NULL CHECK (revisioned IN (0, 1)),\n    position INTEGER NOT NULL UNIQUE,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    dependencies TEXT NOT NULL,\n    status TEXT NOT NULL CHECK (status IN ('pending', 'accepted', 'rejected')),\n    operation_id TEXT UNIQUE,\n    request TEXT,\n    request_sha256 TEXT,\n    receipt TEXT,\n    receipt_sequence INTEGER,\n    failures INTEGER NOT NULL DEFAULT 0 CHECK (failures >= 0),\n    flagged INTEGER NOT NULL DEFAULT 0 CHECK (flagged IN (0, 1)),\n    device_position INTEGER,\n    command_generation INTEGER,\n    command_position INTEGER,\n    unconfirmed INTEGER NOT NULL DEFAULT 0 CHECK (unconfirmed IN (0, 1)),\n    UNIQUE (command_generation, command_position)\n  ) STRICT",
         "CREATE INDEX outgoing_pending ON outgoing (status, position)",
         "CREATE INDEX outgoing_items ON outgoing (record_type, item_id, position)",
         "CREATE TABLE accepted_records (\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    installation_id TEXT,\n    device_position INTEGER,\n    summary_at INTEGER,\n    PRIMARY KEY (record_type, item_id)\n  ) STRICT",
+        "CREATE TABLE command_scope (singleton INTEGER PRIMARY KEY CHECK (singleton = 1), generation INTEGER, last INTEGER NOT NULL) STRICT",
         "CREATE INDEX accepted_summaries ON accepted_records (summary_at) WHERE summary_at IS NOT NULL",
         "CREATE TABLE device_positions (record_type TEXT PRIMARY KEY, last INTEGER NOT NULL) STRICT",
         "CREATE TABLE purged_records (record_type TEXT NOT NULL, item_id TEXT NOT NULL, PRIMARY KEY (record_type, item_id)) STRICT",
         "CREATE TABLE feed_cursor (singleton INTEGER PRIMARY KEY CHECK (singleton = 1), sequence INTEGER NOT NULL, synced_at INTEGER) STRICT",
         "CREATE TABLE bootstrap (\n    singleton INTEGER PRIMARY KEY CHECK (singleton = 1),\n    installed INTEGER NOT NULL CHECK (installed IN (0, 1)),\n    body TEXT, body_format INTEGER, body_length INTEGER, body_sha256 TEXT,\n    staged INTEGER NOT NULL DEFAULT 0 CHECK (staged >= 0),\n    after_ordinal INTEGER NOT NULL DEFAULT 0 CHECK (after_ordinal >= 0)\n  ) STRICT",
         "CREATE TABLE bootstrap_rows (\n    position INTEGER PRIMARY KEY,\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    installation_id TEXT,\n    device_position INTEGER,\n    summary_at INTEGER\n  ) STRICT",
+        "CREATE TABLE bootstrap_purges (record_type TEXT NOT NULL, item_id TEXT NOT NULL, PRIMARY KEY (record_type, item_id)) STRICT",
         "CREATE TABLE history (\n    singleton INTEGER PRIMARY KEY CHECK (singleton = 1),\n    recent INTEGER CHECK (recent >= 0),\n    download_requested INTEGER NOT NULL CHECK (download_requested IN (0, 1)),\n    download_total INTEGER CHECK (download_total >= 0)\n  ) STRICT"
       ],
       "rows": {
@@ -1511,13 +1613,16 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
             "dependencies": "[]",
             "status": "accepted",
             "operation_id": "11111111111111111111111111111111",
-            "request": "{\"installation\":\"recorded-installation\",\"item\":\"completed-1\",\"operation\":\"11111111111111111111111111111111\",\"payload\":{\"activityId\":\"completed-1\",\"allowancePolicyVersion\":null,\"betSchedule\":null,\"blackjackMode\":null,\"buyIn\":\"1000\",\"cumulativeFunding\":\"1000\",\"device\":\"recorded-installation\",\"endedAt\":1790000600000,\"endingReason\":\"stop\",\"finalCashOut\":\"1010\",\"fundingSource\":\"practice-funding\",\"game\":\"roulette\",\"guidance\":null,\"identities\":{\"engine\":\"0.0.0\",\"randomProtocol\":1,\"reference\":null,\"rules\":{\"id\":\"roulette-single-zero\",\"version\":1},\"strategy\":null},\"maxDrawdown\":\"0\",\"meteringBasis\":\"free-play\",\"mode\":\"free-play\",\"netResult\":\"10\",\"noBet\":false,\"outcomes\":[{\"net\":\"10\",\"result\":\"win\",\"returned\":\"20\",\"stake\":\"10\",\"target\":\"red\",\"turn\":1},{\"net\":\"0\",\"result\":\"returned\",\"returned\":\"10\",\"stake\":\"10\",\"target\":\"even\",\"turn\":1}],\"overrideAffected\":false,\"owner\":\"recorded-account\",\"rebuys\":[],\"recordVersion\":1,\"rules\":{\"content\":{\"limits\":{\"inside\":{\"max\":\"100\",\"min\":\"1\"},\"outside\":{\"max\":\"1000\",\"min\":\"10\"}},\"wheel\":\"single-zero\"},\"id\":\"roulette-single-zero\",\"version\":1},\"startedAt\":1790000000000,\"strategy\":null,\"turnsPlayed\":1,\"wagers\":{\"losses\":0,\"pushes\":0,\"resolved\":1,\"wins\":1}},\"payloadVersion\":1,\"protocol\":1,\"recordType\":\"completed-practice-session\"}",
-            "request_sha256": "1ffe3ff5d062ce8843d92e1dedea74b56c26b59da7749b8880de3efdc6e37d47",
-            "receipt": "{\"operation\":\"11111111111111111111111111111111\",\"requestHash\":\"1ffe3ff5d062ce8843d92e1dedea74b56c26b59da7749b8880de3efdc6e37d47\",\"sequence\":1,\"status\":\"accepted\"}",
+            "request": "{\"command\":{\"generation\":1,\"position\":1},\"installation\":\"recorded-installation\",\"item\":\"completed-1\",\"operation\":\"11111111111111111111111111111111\",\"payload\":{\"activityId\":\"completed-1\",\"allowancePolicyVersion\":null,\"betSchedule\":null,\"blackjackMode\":null,\"buyIn\":\"1000\",\"cumulativeFunding\":\"1000\",\"device\":\"recorded-installation\",\"endedAt\":1790000600000,\"endingReason\":\"stop\",\"finalCashOut\":\"1010\",\"fundingSource\":\"practice-funding\",\"game\":\"roulette\",\"guidance\":null,\"identities\":{\"engine\":\"0.0.0\",\"randomProtocol\":1,\"reference\":null,\"rules\":{\"id\":\"roulette-single-zero\",\"version\":1},\"strategy\":null},\"maxDrawdown\":\"0\",\"meteringBasis\":\"free-play\",\"mode\":\"free-play\",\"netResult\":\"10\",\"noBet\":false,\"outcomes\":[{\"net\":\"10\",\"result\":\"win\",\"returned\":\"20\",\"stake\":\"10\",\"target\":\"red\",\"turn\":1},{\"net\":\"0\",\"result\":\"returned\",\"returned\":\"10\",\"stake\":\"10\",\"target\":\"even\",\"turn\":1}],\"overrideAffected\":false,\"owner\":\"recorded-account\",\"rebuys\":[],\"recordVersion\":1,\"rules\":{\"content\":{\"limits\":{\"inside\":{\"max\":\"100\",\"min\":\"1\"},\"outside\":{\"max\":\"1000\",\"min\":\"10\"}},\"wheel\":\"single-zero\"},\"id\":\"roulette-single-zero\",\"version\":1},\"startedAt\":1790000000000,\"strategy\":null,\"turnsPlayed\":1,\"wagers\":{\"losses\":0,\"pushes\":0,\"resolved\":1,\"wins\":1}},\"payloadVersion\":1,\"protocol\":1,\"recordType\":\"completed-practice-session\"}",
+            "request_sha256": "cb42ff63e4ca2bb9f39365d4f964f3756f0306026ca39b20cecf69a6b955e673",
+            "receipt": "{\"operation\":\"11111111111111111111111111111111\",\"requestHash\":\"cb42ff63e4ca2bb9f39365d4f964f3756f0306026ca39b20cecf69a6b955e673\",\"sequence\":1,\"status\":\"accepted\"}",
             "receipt_sequence": 1,
             "failures": 0,
             "flagged": 0,
-            "device_position": null
+            "device_position": null,
+            "command_generation": 1,
+            "command_position": 1,
+            "unconfirmed": 0
           },
           {
             "id": "completed/completed-2",
@@ -1533,13 +1638,16 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
             "dependencies": "[]",
             "status": "pending",
             "operation_id": "22222222222222222222222222222222",
-            "request": "{\"installation\":\"recorded-installation\",\"item\":\"completed-2\",\"operation\":\"22222222222222222222222222222222\",\"payload\":{\"activityId\":\"completed-2\",\"allowancePolicyVersion\":null,\"betSchedule\":null,\"blackjackMode\":null,\"buyIn\":\"1000\",\"cumulativeFunding\":\"1000\",\"device\":\"recorded-installation\",\"endedAt\":1790000900000,\"endingReason\":\"stop\",\"finalCashOut\":\"1010\",\"fundingSource\":\"practice-funding\",\"game\":\"roulette\",\"guidance\":null,\"identities\":{\"engine\":\"0.0.0\",\"randomProtocol\":1,\"reference\":null,\"rules\":{\"id\":\"roulette-single-zero\",\"version\":1},\"strategy\":null},\"maxDrawdown\":\"0\",\"meteringBasis\":\"free-play\",\"mode\":\"free-play\",\"netResult\":\"10\",\"noBet\":false,\"outcomes\":[{\"net\":\"10\",\"result\":\"win\",\"returned\":\"20\",\"stake\":\"10\",\"target\":\"red\",\"turn\":1},{\"net\":\"0\",\"result\":\"returned\",\"returned\":\"10\",\"stake\":\"10\",\"target\":\"even\",\"turn\":1}],\"overrideAffected\":false,\"owner\":\"recorded-account\",\"rebuys\":[],\"recordVersion\":1,\"rules\":{\"content\":{\"limits\":{\"inside\":{\"max\":\"100\",\"min\":\"1\"},\"outside\":{\"max\":\"1000\",\"min\":\"10\"}},\"wheel\":\"single-zero\"},\"id\":\"roulette-single-zero\",\"version\":1},\"startedAt\":1790000700000,\"strategy\":null,\"turnsPlayed\":1,\"wagers\":{\"losses\":0,\"pushes\":0,\"resolved\":1,\"wins\":1}},\"payloadVersion\":1,\"protocol\":1,\"recordType\":\"completed-practice-session\"}",
-            "request_sha256": "84780d6f6df764fb05d45f8eb9a51914f958155b4a49878e92b49f9a58c5e437",
+            "request": "{\"command\":{\"generation\":1,\"position\":2},\"installation\":\"recorded-installation\",\"item\":\"completed-2\",\"operation\":\"22222222222222222222222222222222\",\"payload\":{\"activityId\":\"completed-2\",\"allowancePolicyVersion\":null,\"betSchedule\":null,\"blackjackMode\":null,\"buyIn\":\"1000\",\"cumulativeFunding\":\"1000\",\"device\":\"recorded-installation\",\"endedAt\":1790000900000,\"endingReason\":\"stop\",\"finalCashOut\":\"1010\",\"fundingSource\":\"practice-funding\",\"game\":\"roulette\",\"guidance\":null,\"identities\":{\"engine\":\"0.0.0\",\"randomProtocol\":1,\"reference\":null,\"rules\":{\"id\":\"roulette-single-zero\",\"version\":1},\"strategy\":null},\"maxDrawdown\":\"0\",\"meteringBasis\":\"free-play\",\"mode\":\"free-play\",\"netResult\":\"10\",\"noBet\":false,\"outcomes\":[{\"net\":\"10\",\"result\":\"win\",\"returned\":\"20\",\"stake\":\"10\",\"target\":\"red\",\"turn\":1},{\"net\":\"0\",\"result\":\"returned\",\"returned\":\"10\",\"stake\":\"10\",\"target\":\"even\",\"turn\":1}],\"overrideAffected\":false,\"owner\":\"recorded-account\",\"rebuys\":[],\"recordVersion\":1,\"rules\":{\"content\":{\"limits\":{\"inside\":{\"max\":\"100\",\"min\":\"1\"},\"outside\":{\"max\":\"1000\",\"min\":\"10\"}},\"wheel\":\"single-zero\"},\"id\":\"roulette-single-zero\",\"version\":1},\"startedAt\":1790000700000,\"strategy\":null,\"turnsPlayed\":1,\"wagers\":{\"losses\":0,\"pushes\":0,\"resolved\":1,\"wins\":1}},\"payloadVersion\":1,\"protocol\":1,\"recordType\":\"completed-practice-session\"}",
+            "request_sha256": "66bd865e6eff927943a1d061a4c94b35fb01147c59c19064ad80654c9c1188e2",
             "receipt": null,
             "receipt_sequence": null,
             "failures": 0,
             "flagged": 0,
-            "device_position": null
+            "device_position": null,
+            "command_generation": 1,
+            "command_position": 2,
+            "unconfirmed": 0
           }
         ],
         "accepted_records": [
@@ -1568,6 +1676,13 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
             "summary_at": null
           }
         ],
+        "command_scope": [
+          {
+            "singleton": 1,
+            "generation": 1,
+            "last": 2
+          }
+        ],
         "device_positions": [],
         "purged_records": [],
         "feed_cursor": [
@@ -1590,6 +1705,7 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
           }
         ],
         "bootstrap_rows": [],
+        "bootstrap_purges": [],
         "history": [
           {
             "singleton": 1,
