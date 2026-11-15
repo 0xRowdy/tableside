@@ -19,6 +19,7 @@ export { FaultProxy, type HeldResponse } from './fault-proxy';
 export { type ProviderIdentity, TestIdentityProvider, TestProviderPorts } from './identity-provider';
 export { Mailbox } from './mailbox';
 export { type LocalStack, localStack } from './stack';
+export { readZip } from './zip';
 export {
   TEST_RECORD_TYPES,
   type TestAttempt,

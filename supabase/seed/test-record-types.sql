@@ -379,3 +379,10 @@ $$;
 revoke execute on function private.detail_test_results(uuid, text, text) from public;
 
 update private.record_types set detail = to_regprocedure('private.detail_test_results(uuid,text,text)') where record_type = 'test-result';
+
+-- ---------------------------------------------------------------------------
+-- Export (#102): the test revisioned item is in the archive through the
+-- platform's revisioned rendering, so seam 2 proves it (conflicts unresolved).
+
+update private.record_types set export = to_regprocedure('private.export_revisioned_items(uuid,text)'), export_file = 'test-revisioned-items'
+  where record_type = 'test-revisioned-item';

@@ -69,7 +69,20 @@ export {
   isAgeRestricted,
   isSignedIn,
   opensOrdinaryAccess,
+  opensRestrictedPaths,
 } from './service';
+export {
+  type AccountExport,
+  type LocalSupplement,
+  SUPPLEMENT_NOTICE,
+  type ServerExport,
+  type ServerExportDownload,
+  type ServerExportRequest,
+  type SupplementEntry,
+  type SupplementStatus,
+  type UnfinishedActivities,
+  type UnfinishedActivity,
+} from './export';
 export {
   type DeviceMetricName,
   METRICS,

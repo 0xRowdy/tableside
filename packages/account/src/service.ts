@@ -22,6 +22,7 @@ import {
   requiredCheck,
 } from './eligibility';
 import { type BackendEnvironment, ENVIRONMENT_HEADER, type EnvironmentName, authCallbackUrl, retiredEnvironments } from './environment';
+import { type AccountExport, type UnfinishedActivities, accountExport } from './export';
 import { type MetricsSink, createMetricsSender, discardMetrics } from './metrics';
 import { type AccountPrivacy, accountPrivacy } from './privacy';
 import { type DetailResult, type EngineStatus, type HistoryDownload, type HistoryStatus, SyncEngine } from './sync/engine';
@@ -74,6 +75,18 @@ export type RevokedBy = 'device' | 'provider';
 /** Gate states that leave ordinary access open: Renewal pending keeps it, under cached rights, while the token renews. */
 export const opensOrdinaryAccess = (gate: AccountGate): gate is Extract<AccountGate, { state: 'active' | 'renewal-pending' }> =>
   gate.state === 'active' || gate.state === 'renewal-pending';
+
+/**
+ * Gate states the restricted paths work in (fresh authentication, export;
+ * deletion, support and billing help): ordinary access, or an account whose
+ * age eligibility isn't established. The one client seam for who reaches
+ * them: #103 adds Deletion scheduled (Amendment 1 B2).
+ */
+export const opensRestrictedPaths = (gate: AccountGate): gate is Extract<AccountGate, { state: 'active' | 'renewal-pending' | 'age-unresolved' | 'age-ineligible' }> =>
+  opensOrdinaryAccess(gate) || isAgeRestricted(gate);
+
+/** Which gate states a call needs: ordinary access, or the restricted paths (opensRestrictedPaths). */
+type AccessPath = 'ordinary' | 'restricted';
 
 /** Gate states whose age eligibility isn't established: the account is open for its restricted paths only. */
 export const isAgeRestricted = (gate: AccountGate): gate is Extract<AccountGate, { state: 'age-unresolved' | 'age-ineligible' }> =>
@@ -220,6 +233,8 @@ export type FreshAuthenticationResult =
  * the server checks it for this session on every operation it gates.
  */
 export interface FreshAuthentication {
+  /** The methods the player may confirm with, on the restricted paths too. Null when no account is signed in, or offline. */
+  methods(): Promise<readonly SignInMethodEntry[] | null>;
   /** With Apple or Google: one of the account's own identities. */
   withProvider(provider: IdentityProvider): Promise<FreshAuthenticationResult>;
   /** Emails a code to the email method's address, under the code-request limits. */
@@ -328,8 +343,8 @@ export interface AccountVault {
 /** An account's database, open for the current account session. */
 export interface VaultSession {
   readonly installationId: string;
-  /** The account's store; it refuses to read or write once the account session has ended. */
-  readonly store: SyncStore;
+  /** The account's store; it refuses to read or write once the account session has ended. The local supplement reads its unfinished activities. */
+  readonly store: SyncStore & Partial<UnfinishedActivities>;
 }
 
 /**
@@ -544,6 +559,8 @@ export interface AccountService {
   readonly freshAuthentication: FreshAuthentication;
   readonly signInMethods: SignInMethods;
   readonly devices: Devices;
+  /** Export my data: the server export and the local supplement, on the restricted paths too. */
+  readonly export: AccountExport;
 }
 
 
@@ -1248,19 +1265,23 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
       if (at === generation && remembered && !remembered.signedOut) await remember({ ...remembered, currency });
     });
 
+  /** Whether the gate is open for ordinary access, or for the restricted paths (fresh authentication and export among them). */
+  const allows = (path: AccessPath) => (path === 'ordinary' ? isSignedIn(gate) : opensRestrictedPaths(gate));
+
   /** The signed-in session's access token, renewed first when it has expired; null when there is none. */
   const bearer = async (): Promise<string | null> => (await (await connect()).auth.getSession()).data.session?.access_token ?? null;
 
   /**
    * Calls one of the functions that act for the signed-in player (fresh-auth,
-   * link-method) with this session's token. Null when no account is signed
-   * in, or the account session moved on before it answered.
+   * link-method) with this session's token. Null when the gate denies the
+   * path, or the account session moved on before it answered.
    */
   const actAsPlayer = async (
     name: string,
     body: unknown,
+    path: AccessPath = 'ordinary',
   ): Promise<{ readonly code: number; readonly status: string | undefined; readonly retryAfter?: unknown; readonly body: Record<string, unknown> | null } | null> => {
-    if (!isSignedIn(gate)) return null;
+    if (!allows(path)) return null;
     const at = generation;
     try {
       const token = await bearer();
@@ -1289,9 +1310,9 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
     return { ok: response.ok, body: (await response.json().catch(() => null)) as Record<string, unknown> | null };
   };
 
-  /** The answer of a database operation the gate allows, or null. */
-  const operation = async (name: string, args?: Record<string, unknown>): Promise<unknown> => {
-    if (!isSignedIn(gate)) return null;
+  /** The answer of a database operation the gate allows on `path`, or null. */
+  const operation = async (name: string, args?: Record<string, unknown>, path: AccessPath = 'ordinary'): Promise<unknown> => {
+    if (!allows(path)) return null;
     const at = generation;
     try {
       const { data, error } = await (await connect()).rpc(name, args);
@@ -1299,6 +1320,15 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
     } catch {
       return null;
     }
+  };
+
+  /** The account's methods as the server lists them, or null. */
+  const parseMethods = (data: unknown): SignInMethodEntry[] | null => {
+    if (!Array.isArray(data)) return null;
+    return (data as { id?: unknown; provider?: unknown; email?: unknown }[]).flatMap((identity) => {
+      const method = methodOf(identity.provider);
+      return method && typeof identity.id === 'string' ? [{ id: identity.id, method, email: typeof identity.email === 'string' ? identity.email : null }] : [];
+    });
   };
 
   /** Which of Apple, Google and the email code an Auth provider name is. */
@@ -1335,19 +1365,24 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
    * this proof alone, so no earlier sign-in's token can stand in for it.
    */
   const providerProof = async (provider: IdentityProvider) => {
-    const nonce = await operation('issue_proof_nonce_v1');
+    const nonce = await operation('issue_proof_nonce_v1', undefined, 'restricted');
     if (typeof nonce !== 'string') return 'failed' as const;
     const credential = await obtainCredential(provider, nonce);
     return typeof credential === 'string' ? credential : { provider: authName(provider), idToken: credential.idToken, nonce: credential.nonce };
   };
 
+  // On the restricted paths too: an age-restricted account confirms before it exports.
   const freshAuthentication: FreshAuthentication = {
+    async methods() {
+      const data = await operation('fresh_authentication_methods_v1', undefined, 'restricted');
+      return parseMethods(data);
+    },
     async withProvider(provider) {
-      if (!isSignedIn(gate)) return { status: 'failed' };
+      if (!opensRestrictedPaths(gate)) return { status: 'failed' };
       try {
         const proof = await providerProof(provider);
         if (typeof proof === 'string') return { status: proof };
-        const answer = await actAsPlayer('fresh-auth', { method: 'provider', ...proof });
+        const answer = await actAsPlayer('fresh-auth', { method: 'provider', ...proof }, 'restricted');
         if (answer?.code === 200 && answer.status === 'confirmed') return { status: 'confirmed' };
         if (answer?.code === 403 && answer.status === 'not-a-method') return { status: 'not-a-method' };
         return { status: 'failed' };
@@ -1356,11 +1391,11 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
       }
     },
     async requestCode() {
-      const caller = (await operation('caller_session_v1')) as { email?: unknown } | null;
+      const caller = (await operation('caller_session_v1', undefined, 'restricted')) as { email?: unknown } | null;
       return typeof caller?.email === 'string' ? sendCode({ email: caller.email, intent: 'sign-in' }) : { status: 'failed' };
     },
     async withCode(code) {
-      const answer = await actAsPlayer('fresh-auth', { method: 'email', code: code.trim() });
+      const answer = await actAsPlayer('fresh-auth', { method: 'email', code: code.trim() }, 'restricted');
       if (answer?.code === 200 && answer.status === 'confirmed') return { status: 'confirmed' };
       if (answer?.code === 401 && answer.status === 'invalid-code') return { status: 'invalid-code' };
       return { status: 'failed' };
@@ -1377,12 +1412,7 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
 
   const signInMethods: SignInMethods = {
     async list() {
-      const data = await operation('sign_in_methods_v1');
-      if (!Array.isArray(data)) return null;
-      return (data as { id?: unknown; provider?: unknown; email?: unknown }[]).flatMap((identity) => {
-        const method = methodOf(identity.provider);
-        return method && typeof identity.id === 'string' ? [{ id: identity.id, method, email: typeof identity.email === 'string' ? identity.email : null }] : [];
-      });
+      return parseMethods(await operation('sign_in_methods_v1'));
     },
     async link(provider) {
       if (!isSignedIn(gate)) return { status: 'failed' };
@@ -1769,6 +1799,32 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
     freshAuthentication,
     signInMethods,
     devices,
+    export: accountExport({
+      operation: (name) => operation(name, undefined, 'restricted'),
+      async download(path) {
+        if (!opensRestrictedPaths(gate)) return null;
+        const at = generation;
+        try {
+          const token = await bearer();
+          if (!token) return null;
+          // The bucket's storage policy authorizes it against live state; the path is the account's own object.
+          const response = await options.fetch(`${backend.url}/storage/v1/object/authenticated/account-exports/${path.split('/').map(encodeURIComponent).join('/')}`, {
+            headers: { apikey: backend.publishableKey, [ENVIRONMENT_HEADER]: backend.name, authorization: `Bearer ${token}` },
+          });
+          if (at === generation) return response;
+          await response.body?.cancel();
+          return null;
+        } catch {
+          return null;
+        }
+      },
+      openStore: () =>
+        opened && opensRestrictedPaths(gate)
+          ? { accountId: gate.accountId, installationId: opened.session.installationId, store: opened.session.store }
+          : null,
+      registry,
+      clock: options.clock,
+    }),
   };
   return service;
 }

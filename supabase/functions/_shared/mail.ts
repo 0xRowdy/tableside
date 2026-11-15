@@ -17,7 +17,7 @@ export interface Mail {
 }
 
 /** Sends one email synchronously; false when it wasn't accepted. */
-export async function deliver(to: string, mail: Mail, from: 'codes' | 'security' = 'codes'): Promise<boolean> {
+export async function deliver(to: string, mail: Mail, from: 'codes' | 'security' | 'notices' = 'codes'): Promise<boolean> {
   if (!MAILPIT_URL) return false;
   try {
     const response = await fetch(`${MAILPIT_URL}/api/v1/send`, {
@@ -82,6 +82,27 @@ export function devicesSignedOutMail(devices: number, method?: string): Mail {
     'and Sign-in methods, and contact support.';
   return {
     subject: method ? 'A sign-in method was turned off for your account' : devices === 1 ? 'A device was signed out of your account' : 'Devices were signed out of your account',
+    text,
+    html: text
+      .split('\n\n')
+      .map((paragraph) => `<p>${paragraph}</p>`)
+      .join(''),
+  };
+}
+
+/**
+ * "Export ready": where to find the archive and until when. It carries no
+ * link: the archive downloads only in the app, for a session that confirms
+ * it's the player.
+ */
+export function exportReadyMail(expiresAt: string): Mail {
+  const until = new Date(expiresAt).toUTCString().replace(/:\d\d GMT$/, ' UTC');
+  const text =
+    'Your Tableside data export is ready. To download it, open Tableside and go to More → Settings → Account → Export my data. ' +
+    `It's available until ${until}; after that you can ask for a new one.\n\n` +
+    "If you didn't ask for an export, sign out your other devices in Tableside (Account → Devices) and contact support.";
+  return {
+    subject: 'Your Tableside export is ready',
     text,
     html: text
       .split('\n\n')
