@@ -17,6 +17,7 @@ import type {
   IdentityProvider,
   ProviderCreateResult,
   ProviderSignInResult,
+  ReviewerSignInResult,
   SignOutResult,
 } from '@tableside/account';
 import { isAgeRestricted, isSignedIn } from '@tableside/account';
@@ -32,6 +33,7 @@ type Call =
   | { readonly method: 'answerAgeQuestion'; readonly range: AgeRange }
   | { readonly method: 'requestEmailCode'; readonly email: string; readonly intent: CodeIntent }
   | { readonly method: 'verifyEmailCode'; readonly email: string; readonly code: string }
+  | { readonly method: 'signInAsReviewer'; readonly email: string; readonly credential: string }
   | { readonly method: 'setAccountCurrency'; readonly currency: string }
   | { readonly method: 'signInWithProvider'; readonly provider: IdentityProvider }
   | { readonly method: 'createWithProvider'; readonly provider: IdentityProvider; readonly sameIdentity: boolean }
@@ -62,7 +64,8 @@ export class FakeAccountService implements AccountService {
     currency: CurrencyChangeResult[];
     providerSignIn: ProviderSignInResult[];
     providerCreate: ProviderCreateResult[];
-  } = { age: [], check: [], code: [], verify: [], signOut: [], currency: [], providerSignIn: [], providerCreate: [] };
+    reviewer: ReviewerSignInResult[];
+  } = { age: [], check: [], code: [], verify: [], signOut: [], currency: [], providerSignIn: [], providerCreate: [], reviewer: [] };
   /** Whether the device offers a platform age check. */
   platformAgeCheck = false;
   /** What accountSummary() answers; a changed currency updates it. */
@@ -191,6 +194,13 @@ export class FakeAccountService implements AccountService {
     this.calls.push({ method: 'createWithProvider', provider, sameIdentity: options.sameIdentity ?? false });
     const result = this.next.providerCreate.shift() ?? { status: 'created' as const };
     if (result.status === 'created' || result.status === 'signed-in') this.setGate({ state: 'active', accountId: FAKE_ACCOUNT_ID, eligibility: '18+' });
+    return result;
+  }
+
+  async signInAsReviewer(request: { email: string; credential: string }) {
+    this.calls.push({ method: 'signInAsReviewer', ...request });
+    const result = this.next.reviewer.shift() ?? { status: 'signed-in' as const };
+    if (result.status === 'signed-in') this.setGate({ state: 'active', accountId: FAKE_ACCOUNT_ID, eligibility: '18+' });
     return result;
   }
 
