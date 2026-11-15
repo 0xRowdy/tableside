@@ -51,7 +51,7 @@ export default function Account() {
           title="Sign-in methods"
           detail={summary ? methodsList(summary.methods) : 'Apple, Google and email code'}
           value={summary ? String(summary.methods.length) : undefined}
-          onPress={open('sign-in-methods')}
+          onPress={() => router.navigate('/more/settings/account/sign-in-methods')}
         />
         <ListRow
           icon={Smartphone}
