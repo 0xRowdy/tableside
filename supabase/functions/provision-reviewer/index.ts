@@ -31,6 +31,13 @@ const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 class Refused extends Error {}
 
+/** Only the step that failed is logged: never an address, assertion or credential. */
+class StepError extends Error {
+  constructor(readonly step: string) {
+    super(step);
+  }
+}
+
 Deno.serve(async (request) => {
   if (request.method !== 'POST') return reply(400, { status: 'invalid' });
   let body: { email?: unknown };
@@ -57,7 +64,7 @@ Deno.serve(async (request) => {
   };
   const issueCredential = async (): Promise<string | null> => {
     const issued = await asCaller('/rest/v1/rpc/issue_reviewer_credential', { address: email });
-    if (!issued.ok) throw new Error('issue-credential');
+    if (!issued.ok) throw new StepError('issue-credential');
     return typeof issued.body === 'string' ? issued.body : null;
   };
 
@@ -68,7 +75,7 @@ Deno.serve(async (request) => {
 
     const age = await asCaller('/rest/v1/rpc/issue_eligibility_assertion', { age_range: '18+' });
     const assertion = (age.body as { assertion?: unknown } | null)?.assertion;
-    if (!age.ok || typeof assertion !== 'string') throw new Error('assertion');
+    if (!age.ok || typeof assertion !== 'string') throw new StepError('assertion');
     // A confirmed address opens the account at once; the app metadata (which
     // only the secret key can write) designates it as it opens.
     const created = await asCaller('/auth/v1/admin/users', {
@@ -83,10 +90,10 @@ Deno.serve(async (request) => {
     const credential = await issueCredential();
     if (credential) return reply(200, { status: 'provisioned', credential });
     if (created.code === 'email_exists') return reply(409, { status: 'not-designated' });
-    throw new Error(created.ok ? 'designate' : 'create-user');
+    throw new StepError(created.ok ? 'designate' : 'create-user');
   } catch (error) {
     if (error instanceof Refused) return reply(403, { status: 'forbidden' });
-    console.error('provision-reviewer failed', error instanceof Error ? error.message : 'unexpected');
+    console.error('provision-reviewer failed', error instanceof StepError ? error.step : 'unexpected');
     return reply(502, { status: 'failed' });
   }
 });

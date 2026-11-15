@@ -34,17 +34,24 @@ Deno.serve(async (request) => {
 
   try {
     const checked = await serviceRpc(request.headers.get(ENVIRONMENT_HEADER) ?? '', 'reviewer_credential_valid', { address: email, credential });
-    if (!checked.ok) throw new Error(`check ${checked.status}`);
+    if (!checked.ok) throw new StepError('check-credential');
     if ((await checked.json()) !== true) return reply(401, { status: 'refused' });
 
     return reply(200, { status: 'signed-in', session: await signInWithFreshCode(email) });
   } catch (error) {
-    console.error('reviewer-sign-in failed', error instanceof Error ? error.message : 'unexpected');
+    console.error('reviewer-sign-in failed', error instanceof StepError ? error.step : 'unexpected');
     return reply(502, { status: 'failed' });
   }
 });
 
 const ATTEMPTS = 5;
+
+/** Only the step that failed is logged: never an address, credential, code or token. */
+class StepError extends Error {
+  constructor(readonly step: string) {
+    super(step);
+  }
+}
 
 /**
  * A one-time code for the account, used at once: the session is the one a
@@ -56,13 +63,13 @@ async function signInWithFreshCode(email: string): Promise<{ access_token: strin
   for (let attempt = 1; ; attempt++) {
     const link = await serviceAuth('/admin/generate_link', { type: 'magiclink', email });
     const code = (link.body as { email_otp?: unknown } | null)?.email_otp;
-    if (!link.ok || typeof code !== 'string') throw new Error('generate-code');
+    if (!link.ok || typeof code !== 'string') throw new StepError('generate-code');
     const verified = await serviceAuth('/verify', { type: 'email', email, token: code });
     const session = verified.body as { access_token?: unknown; refresh_token?: unknown } | null;
     if (verified.ok && typeof session?.access_token === 'string' && typeof session.refresh_token === 'string') {
       return { access_token: session.access_token, refresh_token: session.refresh_token };
     }
-    if (attempt === ATTEMPTS) throw new Error('verify-code');
+    if (attempt === ATTEMPTS) throw new StepError('verify-code');
     await new Promise((resolve) => setTimeout(resolve, 25 + Math.random() * 100 * attempt));
   }
 }
