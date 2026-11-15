@@ -7,6 +7,7 @@ export {
   FakeClock,
   FakeEntropy,
   MemoryCredentials,
+  accessToken,
   createAccountByEmail,
   createDevice,
   signInByEmail,
