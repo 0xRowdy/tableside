@@ -12,6 +12,7 @@ import {
   type TestRevisionedValue,
   createAccountByEmail,
   createDevice,
+  directCommands,
   localStack,
   signInByEmail,
   testRevisionedItem,
@@ -375,8 +376,10 @@ describe('conflicts apply only to revisioned items', () => {
     const raw = localStack().rawClient(accessToken(phone));
     const gate = phone.account.gate;
     if (gate.state !== 'active') throw new Error('unreachable');
+    const commands = await directCommands(raw, 'installation-1');
     const request = (operation: string, netResult: string) =>
       JSON.stringify({
+        command: commands.next(),
         installation: 'installation-1',
         item: 'activity-1',
         operation,

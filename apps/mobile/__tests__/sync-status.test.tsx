@@ -39,6 +39,7 @@ function fakeSync(status: Partial<SyncStatus>) {
     },
     reconcile: jest.fn(async () => undefined),
     retryRecord: jest.fn(async () => undefined),
+    decideReview: jest.fn(async () => undefined),
     idle: async () => undefined,
     countWaiting: async () => current.uploads.length,
     queue: async () => ({ status: 'refused', reason: 'no-account' }),
@@ -115,6 +116,15 @@ describe('S2-20 Sync status', () => {
       'Blackjack session. Yesterday · waits for a failing record. Paused',
       'Roulette session. 12 Nov · not accepted by your account. Needs review',
     ]);
+  });
+
+  it('marks a record whose outcome couldn’t be confirmed after time away as needing review, not as waiting (#98)', async () => {
+    await show(fakeSync({ uploads: [session('w1', 'roulette', at(10, 12), 'unconfirmed')] }));
+    expect(screen.getAllByTestId('waiting-row').map((row) => row.props.accessibilityLabel)).toEqual([
+      'Roulette session. 12 Nov · not confirmed after time away. Needs review',
+    ]);
+    expect(screen.queryByText(/waiting to sync/)).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Sync now' })).toBeNull();
   });
 
   it('says all synced, with the last sync, when nothing is waiting', async () => {

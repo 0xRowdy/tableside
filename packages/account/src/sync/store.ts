@@ -3,7 +3,7 @@
 // and serialized writer as spec 1's store port (apps/mobile/src/account/sqlite-store.ts),
 // so a queue entry is written in the transaction that makes its local change.
 
-import type { BootstrapSnapshot, Disposition, PreparedOperation } from './protocol';
+import type { BootstrapSnapshot, Command, Disposition, PreparedOperation } from './protocol';
 
 /** An upload waiting for its receipt. */
 export interface QueuedUpload {
@@ -23,7 +23,41 @@ export interface QueuedUpload {
   readonly after?: readonly string[];
   /** A per-device type's originating-device position, fixed when it was queued. Absent for other types. */
   readonly position?: number;
+  /** The command it was prepared as: its scope's generation and its position there. Absent before it is prepared. */
+  readonly command?: Command;
+  /**
+   * Its command scope went stale before a receipt arrived, and the refreshed
+   * account doesn't show what became of it: it waits for the player's
+   * decision, is never sent by itself, and still holds back whatever it is a barrier for.
+   */
+  readonly unconfirmed?: true;
 }
+
+/**
+ * This installation's command scope in the account, as its database holds it.
+ * generation: the one the server issued; null before one.
+ * last: the last position given under it.
+ * settled: every position up to here is settled here: acknowledged, or never
+ *   to be sent, and named by no pending entry's barriers or dependencies.
+ */
+export interface CommandScope {
+  readonly generation: number | null;
+  readonly last: number;
+  readonly settled: number;
+}
+
+/**
+ * What became of an entry whose command scope went stale, from the refreshed account:
+ * accepted: the account shows it (or shows the result it uploaded purged since); acknowledged without a receipt.
+ * unsent: the account shows it was never accepted, or the player chose to send it anew: it is prepared again as a new operation.
+ * unconfirmed: neither: it waits for the player's decision.
+ * set-aside: the player set an unconfirmed entry aside: kept with the refused ones, never sent.
+ */
+export type ReconcileOutcome =
+  | { readonly kind: 'accepted'; readonly sequence: number | null }
+  | { readonly kind: 'unsent' }
+  | { readonly kind: 'unconfirmed' }
+  | { readonly kind: 'set-aside' };
 
 /** A record named by its type and identity. */
 export interface RecordRef {
@@ -113,10 +147,22 @@ export interface SyncStore {
    */
   queueUpload(entry: NewUpload): Promise<QueuedUpload>;
   /**
-   * Fixes the operation an entry is sent as, before it is first sent. Once
-   * stored it never changes: this returns the stored one, so every retry is identical.
+   * Fixes the operation an entry is sent as, before it is first sent: gives
+   * it the next command position under the current generation and stores
+   * what `prepare` makes of it, in one transaction (a failing `prepare` uses
+   * no position). Once stored it never changes: this returns the stored one,
+   * so every retry is identical. Refuses before a generation is adopted.
    */
-  prepareUpload(id: string, operation: PreparedOperation): Promise<PreparedOperation>;
+  prepareUpload(id: string, prepare: (command: Command) => PreparedOperation): Promise<PreparedOperation>;
+  readCommandScope(): Promise<CommandScope>;
+  /** Adopts a generation the server issued: positions start again from 1 under a new one. */
+  adoptCommandScope(generation: number): Promise<void>;
+  /** The next command position under the current generation, durably, for an operation sent at once and never queued (a resolution). */
+  allocateCommand(): Promise<Command>;
+  /** Settles a pending entry whose command scope went stale, or the player's decision on an unconfirmed one, in one transaction. */
+  reconcileUpload(id: string, outcome: ReconcileOutcome): Promise<void>;
+  /** The items of a record type purged from the account, as this installation knows them. */
+  readPurgedItems(recordType: string): Promise<readonly string[]>;
   /**
    * Applies a receipt's disposition and acknowledges the entry, in one
    * transaction: an acceptance also records the accepted record. Only the
@@ -157,20 +203,25 @@ export interface SyncStore {
   readBootstrap(): Promise<BootstrapProgress>;
   /**
    * Starts staging a snapshot, discarding any staged before (an expired or
-   * replaced one). Nothing else changes: the upload queue and every local record stay.
+   * replaced one). Nothing else changes: the upload queue and every local
+   * record stay. On an installation with its baseline installed, this is a
+   * reset (the feed after its cursor was pruned): it has no baseline until the
+   * new one is installed, and its cursor stays where it is until then.
    */
   beginBootstrap(snapshot: BootstrapSnapshot): Promise<void>;
   /**
-   * Stages a page of the snapshot's rows, and moves its progress to ordinal
-   * `through`, in one transaction. Stages nothing and returns false when
-   * `snapshot` is no longer the one staging, or its progress is no longer at `after`.
+   * Stages a page of the snapshot's rows, and the results it names purged,
+   * and moves its progress to ordinal `through`, in one transaction. Stages
+   * nothing and returns false when `snapshot` is no longer the one staging,
+   * or its progress is no longer at `after`.
    */
-  stageBootstrapPage(snapshot: string, after: number, records: readonly AcceptedRecord[], through: number): Promise<boolean>;
+  stageBootstrapPage(snapshot: string, after: number, records: readonly AcceptedRecord[], through: number, purged?: readonly RecordRef[]): Promise<boolean>;
   /**
    * Installs the staged snapshot as the baseline and moves the feed cursor to
    * its watermark, in one transaction, before any later feed entry applies.
-   * Records accepted here since (a later sequence) and purged results are
-   * kept as they are. Returns false when `snapshot` is no longer the one staging.
+   * Records accepted here since (a later sequence) are kept; nothing else
+   * local is removed, except the results the snapshot names purged, which are
+   * never accepted here again. Returns false when `snapshot` is no longer the one staging.
    */
   installBootstrap(snapshot: string): Promise<boolean>;
   /** Called after a commit adds an entry to the upload queue. Returns an unsubscribe function. */

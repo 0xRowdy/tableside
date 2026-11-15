@@ -7,7 +7,11 @@
 // parts: the sign-in-again, local storage and unreadable-change errors,
 // paused and needs-review rows, several flagged records, an urgent
 // restriction's reason, and the status card under a required update (the
-// frames draw that banner only as the notice's preview).
+// frames draw that banner only as the notice's preview). Nor is a record
+// whose outcome couldn't be confirmed after a long time away (#98): it shows
+// as needing review, and the decision on it (send again, or set aside) is
+// the screens of the spec that owns its record type.
+// TODO(frames): the unconfirmed row, built from the spec's words.
 //
 // #99 routes here from the Account area with the Account service's sync; the
 // store link behind Update arrives with the store listings (spec 7).
@@ -46,7 +50,8 @@ export function SyncStatusScreen({ sync, onBack, onUpdate, now = Date.now }: Syn
   const status = useSyncStatus(sync);
   const at = now();
   const required = status.update?.state === 'required';
-  const waiting = status.uploads.filter((upload) => upload.state !== 'review');
+  // Records that upload by themselves: not those refused, or awaiting the player's decision.
+  const waiting = status.uploads.filter((upload) => upload.state !== 'review' && upload.state !== 'unconfirmed');
   const flagged = status.uploads.filter((upload) => upload.state === 'flagged');
   const accountError = ACCOUNT_ERRORS.has(status.error);
   return (
@@ -217,13 +222,14 @@ const ROW_STATE: Record<UploadStatus['state'], { label: string; tone: ColorToken
   paused: { label: 'Paused', tone: 'mutedForeground' },
   flagged: { label: 'Failing', tone: 'destructive' },
   review: { label: 'Needs review', tone: 'destructive' },
+  unconfirmed: { label: 'Needs review', tone: 'warning' },
 };
 
 function UploadRow({ upload, now, first }: { upload: UploadStatus; now: number; first: boolean }) {
   const title = titleOf(upload);
   const detail = detailOf(upload, now);
   const state = ROW_STATE[upload.state];
-  const failing = upload.state === 'flagged' || upload.state === 'review';
+  const failing = upload.state === 'flagged' || upload.state === 'review' || upload.state === 'unconfirmed';
   const Icon = failing ? Flag : CloudOff;
   return (
     <View testID="waiting-row" accessible accessibilityLabel={`${title}. ${detail}. ${state.label}`} style={[styles.row, !first && styles.rowDivider]}>
@@ -256,6 +262,7 @@ const ROW_DETAIL: Record<UploadStatus['state'], string> = {
   paused: 'waits for a failing record',
   flagged: 'flagged',
   review: 'not accepted by your account',
+  unconfirmed: 'not confirmed after time away',
 };
 
 function detailOf(upload: UploadStatus, now: number): string {

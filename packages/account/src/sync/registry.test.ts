@@ -60,13 +60,14 @@ describe('the upload envelope', () => {
       protocol: 1,
       operation: 'ab'.repeat(16),
       installation: 'installation-1',
+      command: { position: 12, generation: 3 },
       recordType: 'completed-practice-session',
       payloadVersion: 1,
       item: 'activity-7',
       payload: { b: '2', a: 1 },
     });
     const text =
-      '{"installation":"installation-1","item":"activity-7","operation":"abababababababababababababababab",' +
+      '{"command":{"generation":3,"position":12},"installation":"installation-1","item":"activity-7","operation":"abababababababababababababababab",' +
       '"payload":{"a":1,"b":"2"},"payloadVersion":1,"protocol":1,"recordType":"completed-practice-session"}';
     expect(prepared).toEqual({ operationId: 'ab'.repeat(16), request: text, requestHash: createHash('sha256').update(text, 'utf8').digest('hex') });
   });

@@ -8,7 +8,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { PLATFORM_TABLES, RECONCILE_INTERVAL_MS, completedPracticeSession, recordTypes } from '../src';
-import { type SimulatedDevice, accessToken, createAccountByEmail, createDevice, localStack, signInByEmail, uniqueEmail } from '../src/testing';
+import { type DirectCommands, type SimulatedDevice, accessToken, createAccountByEmail, createDevice, directCommands, localStack, signInByEmail, uniqueEmail } from '../src/testing';
 
 const devices: SimulatedDevice[] = [];
 function device(name: string): SimulatedDevice {
@@ -355,10 +355,15 @@ describe('the operation API, called directly', () => {
     const { phone, tablet } = await twoDevices();
     const gate = phone.account.gate;
     if (gate.state !== 'active') throw new Error('unreachable');
-    return { phone, tablet, accountId: gate.accountId, raw: localStack().rawClient(accessToken(phone)) };
+    const raw = localStack().rawClient(accessToken(phone));
+    commands = await directCommands(raw, 'installation-1');
+    return { phone, tablet, accountId: gate.accountId, raw };
   }
 
-  /** A canonical upload request for a practice result. */
+  /** The commands of installation-1, which the direct calls upload as. */
+  let commands: DirectCommands;
+
+  /** A canonical upload request for a practice result, as the next command. */
   function request(fields: { operation: string; owner: string; activityId?: string; device?: string; protocol?: number; payload?: object }) {
     const activityId = fields.activityId ?? 'activity-1';
     const device = fields.device ?? 'installation-1';
@@ -376,7 +381,16 @@ describe('the operation API, called directly', () => {
     // Canonical JSON written out by hand: keys sorted, no spaces.
     return JSON.stringify(
       Object.fromEntries(
-        Object.entries({ installation: device, item: activityId, operation: fields.operation, payload, payloadVersion: 1, protocol: fields.protocol ?? 1, recordType: 'completed-practice-session' }).sort(),
+        Object.entries({
+          command: commands.next(),
+          installation: device,
+          item: activityId,
+          operation: fields.operation,
+          payload,
+          payloadVersion: 1,
+          protocol: fields.protocol ?? 1,
+          recordType: 'completed-practice-session',
+        }).sort(),
       ),
     );
   }

@@ -23,7 +23,7 @@ import {
 } from './eligibility';
 import { type BackendEnvironment, ENVIRONMENT_HEADER, type EnvironmentName, authCallbackUrl, retiredEnvironments } from './environment';
 import { type MetricsSink, createMetricsSender, discardMetrics } from './metrics';
-import { type EngineStatus, type HistoryStatus, SyncEngine } from './sync/engine';
+import { type EngineStatus, type HistoryStatus, type ReviewDecision, SyncEngine } from './sync/engine';
 import { type AccountRecords, accountRecords } from './sync/records';
 import { type RecordType, prerequisitesOf, recordTypes } from './sync/registry';
 import { type DevicePorts, SyncSession } from './sync/session';
@@ -327,6 +327,12 @@ export interface AccountSync {
   reconcile(): Promise<void>;
   /** "Retry this record": tries a failing or flagged record again now, with the records waiting for it. */
   retryRecord(id: string): Promise<void>;
+  /**
+   * The player's decision on a record in review because its command scope
+   * went stale (spec 2, *Compaction and stale devices*): send it anew, or set
+   * it aside. Records the server refused are left as they are.
+   */
+  decideReview(id: string, decision: ReviewDecision): Promise<void>;
   /** Resolves once no synchronization is running. */
   idle(): Promise<void>;
   /** How many saved records haven't reached the account yet; 0 with no open account session. */
@@ -1491,6 +1497,7 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
       },
       reconcile: () => sync?.engine.reconcile('deliberate') ?? Promise.resolve(),
       retryRecord: (id) => sync?.engine.retryRecord(id) ?? Promise.resolve(),
+      decideReview: (id, decision) => sync?.engine.decideReview(id, decision) ?? Promise.resolve(),
       idle: () => sync?.engine.idle() ?? Promise.resolve(),
       async queue(recordType, payload) {
         const store = sync?.store;

@@ -89,8 +89,8 @@ async function seedResults(accountId: string, count: number, prefix = 'seeded') 
   await stack.sql.begin(async (tx) => {
     await tx`insert into private.sync_heads (account_id) values (${accountId}) on conflict do nothing`;
     const [head] = await tx<{ sequence: number }[]>`select sequence::int from private.sync_heads where account_id = ${accountId} for update`;
-    await tx`insert into private.test_results (account_id, result_id, payload)
-      select ${accountId}, ${prefix} || '-' || n, jsonb_build_object('version', 1, 'resultId', ${prefix} || '-' || n, 'amount', '1')
+    await tx`insert into private.test_results (account_id, result_id, payload, sequence)
+      select ${accountId}, ${prefix} || '-' || n, jsonb_build_object('version', 1, 'resultId', ${prefix} || '-' || n, 'amount', '1'), ${head!.sequence} + n
       from generate_series(1, ${count}) n`;
     await tx`insert into private.test_result_details (account_id, result_id, detail)
       select ${accountId}, ${prefix} || '-' || n, 'detail' from generate_series(1, ${count}) n`;
@@ -373,8 +373,8 @@ describe('a bootstrap overlapping concurrent edits', () => {
     await stack.sql.begin(async (tx) => {
       // An acceptance in progress: it holds the head, and has written rows not yet committed.
       const [head] = await tx<{ sequence: number }[]>`select sequence::int from private.sync_heads where account_id = ${accountId} for update`;
-      await tx`insert into private.test_results (account_id, result_id, payload)
-        values (${accountId}, 'late', jsonb_build_object('version', 1, 'resultId', 'late', 'amount', '5'))`;
+      await tx`insert into private.test_results (account_id, result_id, payload, sequence)
+        values (${accountId}, 'late', jsonb_build_object('version', 1, 'resultId', 'late', 'amount', '5'), ${head!.sequence + 1})`;
       await tx`insert into private.sync_feed (account_id, sequence, record_type, item_id, change)
         values (${accountId}, ${head!.sequence + 1}, 'test-result', 'late', jsonb_build_object('record', jsonb_build_object('version', 1, 'resultId', 'late', 'amount', '5')))`;
       await tx`update private.sync_heads set sequence = sequence + 1 where account_id = ${accountId}`;

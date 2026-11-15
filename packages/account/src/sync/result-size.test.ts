@@ -34,6 +34,7 @@ const upload = (payload: unknown) =>
     protocol: PROTOCOL_VERSION,
     operation: 'a'.repeat(32),
     installation: 'test-device',
+    command: { generation: 1, position: 1 },
     recordType: completedPracticeSession.name,
     payloadVersion: completedPracticeSession.payloadVersion,
     item: 'activity-1',

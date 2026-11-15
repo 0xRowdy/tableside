@@ -62,7 +62,7 @@ export const METRICS = {
   /** A sync run ended without finishing: a reconciliation failure, by its structured error code. */
   sync_run_failed: { purpose: 'operational', source: 'device', unit: 'count', properties: { error: SYNC_ERRORS }, teen: KEEP_HISTORY },
   /** One upload failed by itself (failed), reached the flag limit (flagged), or its receipt refused it (refused). */
-  sync_upload_failed: { purpose: 'operational', source: 'device', unit: 'count', properties: { outcome: ['failed', 'flagged', 'refused'] }, teen: KEEP_HISTORY },
+  sync_upload_failed: { purpose: 'operational', source: 'device', unit: 'count', properties: { outcome: ['failed', 'flagged', 'refused', 'unconfirmed'] }, teen: KEEP_HISTORY },
   /** After a run, how long the oldest upload still pending has waited, as far as this account session has seen. */
   sync_queue_age: { purpose: 'operational', source: 'device', unit: 'milliseconds', properties: {}, teen: KEEP_HISTORY },
   /** A new device's bootstrap (#96), from its start to its baseline installed, or to its failure. */

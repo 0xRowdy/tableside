@@ -57,6 +57,30 @@
 //   expired (24 hours) is replaced with a new one; the upload queue and local
 //   records are never touched. Snapshot pages, like feed pages, are bounded by
 //   row count (#97 bounds them by bytes).
+// - Command scopes and stale devices (#98; spec 2, *Compaction and stale
+//   devices*). Every operation is a command in this installation's scope: a
+//   generation the server issued it and a position there, fixed when the
+//   entry is prepared. After a clean run the engine reports the positions
+//   settled here (acknowledged or abandoned, and named by nothing pending),
+//   and the server drops their receipts. When the server can no longer
+//   interpret a command (its scope retired while the device was away, or its
+//   position was settled or taken) it answers stale-scope and records
+//   nothing. The engine then refreshes the account (the feed through the head,
+//   resetting from a new snapshot when the feed was pruned behind it),
+//   reconciles every prepared entry against it, and takes a new generation
+//   before uploading anything else: an entry the account shows accepted (a
+//   result it purged since; a revisioned edit it holds) is acknowledged; one
+//   whose outcome the server decides by its identity (any other immutable
+//   result; a purge), or that the account shows was never accepted (a
+//   revisioned edit whose base is still current; one first sent and refused
+//   as stale in this run) is prepared again as a new
+//   operation, which the server still deduplicates by its identity; any other
+//   is unconfirmed: it is never sent by itself, keeps every barrier it is,
+//   and waits for the player to send it anew or set it aside.
+//   Nothing is deleted, and play never waits on any of it.
+// - A feed reset (the entries after the cursor were pruned behind the
+//   account's reset boundary) takes a new snapshot as bootstrap does, keeping
+//   the queue and the local records, except the results it names purged.
 // - Operational metrics (#108): a run that ends unfinished reports its error
 //   code, a record failing, flagged or refused reports which, and after a run
 //   the oldest pending record's wait (since this account session first saw
@@ -71,19 +95,21 @@ import {
   type BootstrapPage,
   type BootstrapSnapshot,
   type ChunkAnswer,
+  type Command,
   type FeedEntry,
   type FeedPage,
   PROTOCOL_VERSION,
   type PreparedOperation,
   type ProtocolStatus,
+  type ScopeAnswer,
   type StagedChunk,
   SyncCallError,
   type UploadAnswer,
   chunksOf,
   prepareOperation,
 } from './protocol';
-import { type RecordType, type RevisionedUpload, isBarrierFor } from './registry';
-import type { AcceptedRecord, BootstrapProgress, BootstrapStaging, Origin, QueuedUpload, RecordRef, SyncStore } from './store';
+import { type RecordType, type RevisionedState, type RevisionedUpload, isBarrierFor } from './registry';
+import type { AcceptedRecord, BootstrapProgress, BootstrapStaging, Origin, QueuedUpload, ReconcileOutcome, RecordRef, SyncStore } from './store';
 
 /** The backend's operations. A call with no usable answer throws a SyncCallError; any other rejection counts as unreachable. */
 export interface SyncBackend {
@@ -97,6 +123,11 @@ export interface SyncBackend {
   bootstrap(installation: string): Promise<BootstrapSnapshot>;
   /** A page of a snapshot's rows after ordinal `after`. */
   bootstrapPage(snapshot: string, after: number, pageSize: number): Promise<BootstrapPage>;
+  /**
+   * The installation's command scope: with no generation, a new one (replacing
+   * any earlier); with its generation, the positions settled through.
+   */
+  scope(installation: string, generation: number | null, settled: number | null): Promise<ScopeAnswer>;
 }
 
 /**
@@ -113,8 +144,10 @@ export type SyncErrorCode = 'offline' | 'sign-in-required' | 'incompatible' | 'u
 /**
  * waiting: will upload by itself. paused: waits for a flagged record it depends on.
  * flagged: failed repeatedly; waits for a deliberate retry. review: the server refused it.
+ * unconfirmed: its command scope went stale and the account doesn't show what
+ *   became of it; never sent by itself, it waits for the player's decision (`decideReview`).
  */
-export type UploadState = 'waiting' | 'paused' | 'flagged' | 'review';
+export type UploadState = 'waiting' | 'paused' | 'flagged' | 'review' | 'unconfirmed';
 
 /** A record not (yet) in the account. */
 export interface UploadStatus {
@@ -192,6 +225,13 @@ export interface Resolution {
  */
 export type ResolutionOutcome = 'resolved' | 'conflict-changed' | 'no-conflict' | 'offline' | 'incompatible' | 'invalid';
 
+/**
+ * The player's decision on a record in review whose command scope went stale:
+ * send it anew, as a new operation (the server still deduplicates it by its
+ * identity), or set it aside, kept with the refused records and never sent.
+ */
+export type ReviewDecision = 'send-as-new' | 'set-aside';
+
 export class SyncEngine {
   private running: Promise<void> | null = null;
   private rerun: ReconcileTrigger | null = null;
@@ -214,8 +254,18 @@ export class SyncEngine {
   private refreshing: Promise<void> = Promise.resolve();
   private readonly listeners = new Set<() => void>();
   private readonly unsubscribe: () => void;
-  /** Resolutions sent with no answer yet, by what they resolve: a retry repeats the same operation. */
-  private readonly unansweredResolutions = new Map<string, PreparedOperation>();
+  /** Resolutions sent with no answer yet, by what they resolve: a retry repeats the same operation, at the same command position. */
+  private readonly unansweredResolutions = new Map<string, { readonly operation: PreparedOperation; readonly command: Command }>();
+  /** Resolutions being given a command position: until each is in unansweredResolutions, nothing is reported settled. */
+  private allocating = 0;
+  /** The settled position last reported in this account session's generation. */
+  private reportedSettled: { readonly generation: number; readonly settled: number } | null = null;
+  /** The server said the scope is stale outside an upload: the next run recovers before it uploads. */
+  private scopeStale = false;
+  /** One generation request at a time. */
+  private scoping: Promise<number> | null = null;
+  /** Entries first sent in this run and answered stale-scope: the server recorded nothing for them, ever. */
+  private readonly neverRecorded = new Set<string>();
   /** When this account session first saw each pending entry: the queue's age. */
   private readonly firstSeen = new Map<string, number>();
 
@@ -302,8 +352,22 @@ export class SyncEngine {
     };
     if (this.stopped || type?.kind !== 'revisioned-item' || !type.isPayload(payload)) return 'invalid';
     const key = canonicalJson({ recordType, payload });
-    const operation = this.unansweredResolutions.get(key) ?? this.envelope(type, payload);
-    this.unansweredResolutions.set(key, operation);
+    let sent = this.unansweredResolutions.get(key);
+    if (!sent) {
+      this.allocating += 1;
+      try {
+        const generation = await this.generation();
+        const command = await this.options.store.allocateCommand();
+        if (command.generation !== generation) return 'offline';
+        sent = { operation: this.envelope(type, payload, undefined, command), command };
+        this.unansweredResolutions.set(key, sent);
+      } catch (caught) {
+        return caught instanceof SyncCallError && caught.kind === 'incompatible' ? 'incompatible' : 'offline';
+      } finally {
+        this.allocating -= 1;
+      }
+    }
+    const { operation } = sent;
     let answer: UploadAnswer;
     try {
       answer = await this.options.backend.upload(operation.request);
@@ -311,11 +375,31 @@ export class SyncEngine {
       return caught instanceof SyncCallError && caught.kind === 'incompatible' ? 'incompatible' : 'offline';
     }
     this.unansweredResolutions.delete(key);
+    if (answer.status === 'stale-scope') {
+      // Nothing was recorded: the next run refreshes and takes a new generation, and resolving again sends it anew.
+      this.scopeStale = true;
+      void this.reconcile();
+      return 'offline';
+    }
     if (answer.status !== 'accepted' && answer.status !== 'rejected') return answer.status === 'incompatible' ? 'incompatible' : 'invalid';
     if (answer.operation !== operation.operationId || answer.requestHash !== operation.requestHash) return 'offline';
     await this.reconcile();
     if (answer.status === 'accepted') return 'resolved';
     return answer.code === 'conflict-changed' || answer.code === 'no-conflict' ? answer.code : 'invalid';
+  }
+
+  /**
+   * The player's decision on a record in review whose command scope went
+   * stale. Any other record is left as it is.
+   */
+  async decideReview(id: string, decision: ReviewDecision): Promise<void> {
+    if (this.stopped) return;
+    const { store } = this.options;
+    const entry = (await store.readUploadQueue()).find((candidate) => candidate.id === id);
+    if (!entry?.unconfirmed) return;
+    await store.reconcileUpload(id, decision === 'send-as-new' ? { kind: 'unsent' } : { kind: 'set-aside' });
+    await this.refresh();
+    if (decision === 'send-as-new') await this.reconcile('deliberate');
   }
 
   /** Ends the account session's sync: later answers are dropped and nothing more runs. */
@@ -368,6 +452,7 @@ export class SyncEngine {
       if (error === null) {
         this.lastSyncedAt = now;
         await this.options.store.recordSynced(now).catch(() => undefined);
+        await this.reportSettled().catch(() => undefined);
       }
     } else {
       this.failures += 1;
@@ -415,12 +500,15 @@ export class SyncEngine {
    * the later steps; a call with no answer ends the run (it throws).
    */
   private async reconcileInOrder(queue: readonly QueuedUpload[]): Promise<SyncErrorCode | null> {
+    if (this.scopeStale || (await this.preparedUnderStaleGeneration(queue))) return this.recoverScope();
     const attempted = new Set<string>();
     const accountState = await this.upload(queue, { afterReconciliation: false, attempted });
+    if (accountState.error === 'stale-scope') return this.recoverScope();
     if (accountState.error === 'incompatible' || this.stopped) return accountState.error;
     const feedError = await this.pull();
     if (feedError || this.stopped) return accountState.error ?? feedError;
     const grants = await this.upload(await this.options.store.readUploadQueue(), { afterReconciliation: true, attempted });
+    if (grants.error === 'stale-scope') return this.recoverScope();
     if (grants.error === 'incompatible' || this.stopped) return grants.error;
     const lastFeedError = grants.acknowledged > 0 ? await this.pull() : null;
     return accountState.error ?? grants.error ?? lastFeedError;
@@ -435,7 +523,7 @@ export class SyncEngine {
   private async upload(
     queue: readonly QueuedUpload[],
     { afterReconciliation, attempted }: { readonly afterReconciliation: boolean; readonly attempted: Set<string> },
-  ): Promise<{ readonly error: SyncErrorCode | null; readonly acknowledged: number }> {
+  ): Promise<{ readonly error: SyncErrorCode | 'stale-scope' | null; readonly acknowledged: number }> {
     const { store, registry } = this.options;
     const pending = new Set(queue.map((entry) => entry.id));
     // A barrier holds while any upload of its type that affects the entry is unacknowledged, wherever it sits in the queue.
@@ -450,8 +538,8 @@ export class SyncEngine {
       if (this.stopped) return { error: null, acknowledged };
       if (attempted.has(entry.id)) continue;
       if (!afterReconciliation && registry.get(entry.recordType)?.afterReconciliation) continue;
-      // Flagged, or waiting out its own backoff: it stays pending, and so does everything depending on it.
-      if (entry.flagged) continue;
+      // Flagged, unconfirmed, or waiting out its own backoff: it stays pending, and so does everything depending on it.
+      if (entry.flagged || entry.unconfirmed) continue;
       const retry = this.recordRetries.get(entry.id);
       if (retry !== undefined) {
         if (retry > now) continue;
@@ -469,8 +557,10 @@ export class SyncEngine {
       }
       let operation: PreparedOperation;
       let chunks: StagedChunk[] | null;
+      const firstSend = !entry.operation;
+      if (firstSend) await this.generation();
       try {
-        operation = entry.operation ?? (await store.prepareUpload(entry.id, this.envelope(type, entry.payload, entry)));
+        operation = entry.operation ?? (await store.prepareUpload(entry.id, (command) => this.envelope(type, entry.payload, entry, command)));
         chunks = asUnsendable(() => chunksOf(operation, entry.payload));
       } catch (failure) {
         // Too large to name, or no longer matching its manifest: the record fails by itself.
@@ -494,6 +584,12 @@ export class SyncEngine {
       }
       const outcome = answer ? await this.settleUpload(entry, type, operation, answer) : 'failed';
       if (outcome === 'incompatible') return { error: this.required(null), acknowledged };
+      // The server can no longer interpret this installation's commands: nothing more is sent until it has reconciled.
+      if (outcome === 'stale-scope') {
+        // Never sent before, and refused unrecorded: it is the same as never sent.
+        if (firstSend) this.neverRecorded.add(entry.id);
+        return { error: 'stale-scope', acknowledged };
+      }
       if (outcome === 'failed') {
         error = await this.recordFailed(entry);
         continue;
@@ -538,12 +634,13 @@ export class SyncEngine {
     return resent.status === 'chunks-missing' ? 'unanswered' : resent;
   }
 
-  /** The operation a payload is sent as; a queue entry's barriers and position go with it. */
-  private envelope(type: RecordType, payload: unknown, entry?: QueuedUpload): PreparedOperation {
+  /** The operation a payload is sent as, as `command`; a queue entry's barriers and position go with it. */
+  private envelope(type: RecordType, payload: unknown, entry: QueuedUpload | undefined, command: Command): PreparedOperation {
     return asUnsendable(() => prepareOperation({
       protocol: PROTOCOL_VERSION,
       operation: this.options.newOperationId(),
       installation: this.options.installationId,
+      command,
       recordType: type.name,
       payloadVersion: type.payloadVersion,
       item: type.identity.of(payload),
@@ -559,7 +656,7 @@ export class SyncEngine {
     type: RecordType,
     operation: PreparedOperation,
     answer: UploadAnswer,
-  ): Promise<'acknowledged' | 'waiting' | 'incompatible' | 'failed'> {
+  ): Promise<'acknowledged' | 'waiting' | 'incompatible' | 'stale-scope' | 'failed'> {
     switch (answer.status) {
       case 'accepted':
       case 'rejected': {
@@ -582,6 +679,8 @@ export class SyncEngine {
       }
       case 'waiting':
         return 'waiting';
+      case 'stale-scope':
+        return 'stale-scope';
       case 'incompatible':
         return 'incompatible';
       case 'operation-reused':
@@ -599,6 +698,17 @@ export class SyncEngine {
     for (;;) {
       const page = await this.call(() => backend.feed(cursor, FEED_PAGE_SIZE));
       if (this.stopped) return null;
+      if (page.status === 'reset') {
+        // The entries after the cursor were pruned: a new snapshot, keeping the queue and the local records.
+        const snapshot = await this.call(() => backend.bootstrap(this.options.installationId));
+        if (this.stopped) return null;
+        await store.beginBootstrap(snapshot);
+        await this.refresh();
+        const resetError = await this.bootstrap();
+        if (resetError || this.stopped) return resetError;
+        cursor = await store.readFeedCursor();
+        continue;
+      }
       const records: AcceptedRecord[] = [];
       const redacted: number[] = [];
       const purged: RecordRef[] = [];
@@ -702,9 +812,16 @@ export class SyncEngine {
       }
       fresh = false;
       const records: AcceptedRecord[] = [];
+      const purged: RecordRef[] = [];
       let through = current.after;
       let unreadable = false;
       for (const row of page.rows) {
+        // A result purged from the account: removed here, and never accepted again.
+        if (row.change === null) {
+          purged.push({ recordType: row.recordType, item: row.item });
+          through = row.ordinal;
+          continue;
+        }
         const read = this.acceptedFrom(row);
         if (!read) {
           unreadable = true;
@@ -715,7 +832,7 @@ export class SyncEngine {
       }
       const last = !unreadable && !page.more;
       const applied =
-        (through === current.after || (await store.stageBootstrapPage(current.snapshot, current.after, records, through))) &&
+        (through === current.after || (await store.stageBootstrapPage(current.snapshot, current.after, records, through, purged))) &&
         (!last || (await store.installBootstrap(current.snapshot)));
       if (!applied) {
         // Another run moved the staging meanwhile: carry on from where it is.
@@ -728,6 +845,144 @@ export class SyncEngine {
       await this.refresh();
       if (unreadable) return 'unreadable';
       if (last) return 'installed';
+    }
+  }
+
+  /** The generation this installation sends commands under: the store's, or a new one from the server when it holds none. */
+  private generation(): Promise<number> {
+    this.scoping ??= (async () => {
+      try {
+        const { generation } = await this.options.store.readCommandScope();
+        return generation ?? (await this.renewScope());
+      } finally {
+        this.scoping = null;
+      }
+    })();
+    return this.scoping;
+  }
+
+  /** Asks the server for a new generation, replacing any earlier one, and adopts it. */
+  private async renewScope(): Promise<number> {
+    const answer = await this.call(() => this.options.backend.scope(this.options.installationId, null, null));
+    if (answer.status !== 'scope') throw new SyncCallError('refused');
+    await this.options.store.adoptCommandScope(answer.generation);
+    this.reportedSettled = null;
+    return answer.generation;
+  }
+
+  /** Whether a pending entry was prepared under a generation the store no longer holds (a recovery cut short). */
+  private async preparedUnderStaleGeneration(queue: readonly QueuedUpload[]): Promise<boolean> {
+    if (!queue.some((entry) => entry.command && !entry.unconfirmed)) return false;
+    const { generation } = await this.options.store.readCommandScope();
+    return queue.some((entry) => entry.command && !entry.unconfirmed && entry.command.generation !== generation);
+  }
+
+  /**
+   * After a clean run: tells the server the positions settled here, when more
+   * are than it was last told, so it drops their receipts. A resolution still
+   * unanswered, or being given its position, holds the marker below it.
+   */
+  private async reportSettled(): Promise<void> {
+    if (this.allocating > 0) return;
+    const scope = await this.options.store.readCommandScope();
+    if (scope.generation === null) return;
+    const unanswered = [...this.unansweredResolutions.values()].filter((sent) => sent.command.generation === scope.generation);
+    const settled = Math.min(scope.settled, ...unanswered.map((sent) => sent.command.position - 1));
+    const reported = this.reportedSettled;
+    if (reported && reported.generation === scope.generation && settled <= reported.settled) return;
+    if (settled <= 0) return;
+    const answer = await this.call(() => this.options.backend.scope(this.options.installationId, scope.generation, settled));
+    if (answer.status === 'scope') this.reportedSettled = { generation: answer.generation, settled: answer.settled };
+    else if (answer.status === 'stale-scope') {
+      this.scopeStale = true;
+      this.rerun ??= 'automatic';
+    }
+  }
+
+  /**
+   * The server can no longer interpret this installation's commands. Refresh
+   * first (the feed through the account's head, resetting when it was
+   * pruned), then reconcile every prepared entry against what the account
+   * shows, and only then take a new generation. A run that can't refresh
+   * leaves everything as it was for the next one.
+   */
+  private async recoverScope(): Promise<SyncErrorCode | null> {
+    const { store, registry } = this.options;
+    const refreshError = await this.pull();
+    if (refreshError || this.stopped) return refreshError;
+    const queue = await store.readUploadQueue();
+    const accepted = new Map<string, Promise<ReadonlyMap<string, AcceptedRecord>>>();
+    const acceptedOf = (recordType: string) => {
+      let read = accepted.get(recordType);
+      if (!read) {
+        read = store.readAcceptedRecords(recordType).then((records) => new Map(records.map((record) => [record.item, record])));
+        accepted.set(recordType, read);
+      }
+      return read;
+    };
+    for (const entry of queue) {
+      if (this.stopped) return null;
+      if (!entry.operation || entry.unconfirmed) continue;
+      const type = registry.get(entry.recordType);
+      const outcome: ReconcileOutcome = this.neverRecorded.has(entry.id)
+        ? { kind: 'unsent' }
+        : type
+          ? await this.outcomeOf(type, entry, entry.operation, acceptedOf)
+          : { kind: 'unconfirmed' };
+      await store.reconcileUpload(entry.id, outcome);
+      if (outcome.kind === 'unconfirmed') this.options.metrics?.record('sync_upload_failed', 1, { outcome: 'unconfirmed' });
+    }
+    if (this.stopped) return null;
+    this.neverRecorded.clear();
+    await this.renewScope();
+    this.scopeStale = false;
+    // Upload what is now sendable under the new generation.
+    this.rerun = 'deliberate';
+    return null;
+  }
+
+  /** What the refreshed account shows became of a prepared entry. */
+  private async outcomeOf(
+    type: RecordType,
+    entry: QueuedUpload,
+    operation: PreparedOperation,
+    acceptedOf: (recordType: string) => Promise<ReadonlyMap<string, AcceptedRecord>>,
+  ): Promise<ReconcileOutcome> {
+    const { store, registry } = this.options;
+    if (!type.isPayload(entry.payload)) return { kind: 'unconfirmed' };
+    switch (type.kind) {
+      case 'immutable-result': {
+        // The server accepts a result once by its identity, refusing other content under it, and only a purge
+        // removes one, leaving its identity behind. So one the account purged was accepted; any other is sent
+        // anew, and the server answers with that one acceptance, a refusal, or a first acceptance.
+        const item = type.identity.of(entry.payload);
+        return (await store.readPurgedItems(type.name)).includes(item) ? { kind: 'accepted', sequence: null } : { kind: 'unsent' };
+      }
+      case 'revisioned-item': {
+        const upload = entry.payload as RevisionedUpload<unknown>;
+        const held = (await acceptedOf(type.name)).get(upload.item);
+        const state = (held?.payload ?? null) as RevisionedState<unknown> | null;
+        if (upload.action === 'resolve') return { kind: 'unconfirmed' };
+        if (state && held) {
+          if (state.conflict?.proposals.some((proposal) => proposal.id === operation.operationId)) return { kind: 'accepted', sequence: held.sequence };
+          if (upload.action === 'delete' ? state.deleted : !state.deleted && canonicalJson(state.value) === canonicalJson(upload.value)) {
+            return { kind: 'accepted', sequence: held.sequence };
+          }
+        }
+        // Its base is still the accepted revision (or a new item still unknown): it was never accepted.
+        if (typeof upload.base === 'number' && (state ? state.revision === upload.base : upload.base === 0)) return { kind: 'unsent' };
+        return { kind: 'unconfirmed' };
+      }
+      case 'account-state-operation': {
+        // A purge is accepted once by its target, whatever the operation.
+        const target = type.purges?.(entry.payload) ?? null;
+        if (target && registry.has(target.recordType)) {
+          return (await store.readPurgedItems(target.recordType)).includes(target.item) ? { kind: 'accepted', sequence: null } : { kind: 'unsent' };
+        }
+        return { kind: 'unconfirmed' };
+      }
+      case 'server-authored-state':
+        return { kind: 'unconfirmed' };
     }
   }
 
@@ -780,7 +1035,7 @@ function uploadStates(queue: readonly QueuedUpload[]): UploadStatus[] {
     id: entry.id,
     recordType: entry.recordType,
     payload: entry.payload,
-    state: entry.flagged ? 'flagged' : isPaused(entry, new Set()) ? 'paused' : 'waiting',
+    state: entry.unconfirmed ? 'unconfirmed' : entry.flagged ? 'flagged' : isPaused(entry, new Set()) ? 'paused' : 'waiting',
   }));
 }
 

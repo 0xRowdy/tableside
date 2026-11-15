@@ -128,20 +128,21 @@ async function unfinishedDatabase(recorded: RecordedCheckpoint): Promise<Recorde
  * record and an allowance effect), and one marked incomplete. Other games'
  * results are stored the same way.
  */
-/** The upload a result is sent as: protocol 1's canonical envelope (packages/account/src/sync/protocol.ts). */
-function operationFor(digit: string, record: { readonly activityId: string }) {
+/** The upload a result is sent as, as a command: protocol 1's canonical envelope (packages/account/src/sync/protocol.ts). */
+const operationFor = (digit: string, record: { readonly activityId: string }) => (command: { readonly generation: number; readonly position: number }) => {
   const operationId = digit.repeat(32);
   const request = canonicalJson({
     protocol: 1,
     operation: operationId,
     installation: IDENTITY.installationId,
+    command,
     recordType: 'completed-practice-session',
     payloadVersion: 1,
     item: record.activityId,
     payload: record,
   });
   return { operationId, request, requestHash: sha256Hex(request) };
-}
+};
 
 function historyDatabase(): Promise<RecordedDatabase> {
   return record('finished practice', null, async (store) => {
@@ -154,7 +155,8 @@ function historyDatabase(): Promise<RecordedDatabase> {
     const facts = (await store.readTransitions(finished.activityId)).flatMap((transition) => transition.facts);
     const result = await store.complete(completedPracticeRecord(state, facts, { startedAt: CREATED_AT, endedAt: CREATED_AT + 600_000, meteringBasis: 'free-play', allowancePolicyVersion: null }));
 
-    // Sync state: this result uploaded and acknowledged; a second one sent and awaiting its receipt.
+    // Sync state: the server's command generation, this result uploaded and acknowledged, a second one sent and awaiting its receipt.
+    await store.adoptCommandScope(1);
     const accepted = await store.prepareUpload(`completed/${finished.activityId}`, operationFor('1', result));
     await store.acknowledgeUpload(
       `completed/${finished.activityId}`,

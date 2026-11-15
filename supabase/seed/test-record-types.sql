@@ -69,6 +69,8 @@ create table private.test_results (
   account_id uuid not null references public.accounts (account_id),
   result_id text not null,
   payload jsonb not null,
+  -- The account sequence that accepted it: snapshots and retries read it here, never from the feed, which compaction prunes.
+  sequence bigint not null,
   primary key (account_id, result_id)
 );
 create table private.test_result_details (
@@ -81,12 +83,14 @@ create table private.test_attempts (
   account_id uuid not null references public.accounts (account_id),
   attempt_id text not null,
   payload jsonb not null,
+  sequence bigint not null,
   primary key (account_id, attempt_id)
 );
 create table private.test_experiment_assignments (
   account_id uuid not null references public.accounts (account_id),
   experiment text not null,
   assignment text not null,
+  sequence bigint not null,
   primary key (account_id, experiment)
 );
 revoke all on private.test_sharing_withdrawals, private.test_contributions, private.test_reconciliations, private.test_transfers,
@@ -109,6 +113,9 @@ begin
     return jsonb_build_object('status', 'rejected', 'code', 'invalid-payload');
   end if;
   insert into private.test_sharing_withdrawals values (p_account, p_request ->> 'item', p_request #>> '{payload,scope}');
+  -- A withdrawal is a protected control (Amendment 1 A5): a restore must reapply it.
+  perform private.record_control(p_account, 'record-control', 'test-sharing-withdrawal/' || (p_request ->> 'item'),
+    jsonb_build_object('scope', p_request #>> '{payload,scope}', 'sequence', p_sequence));
   return jsonb_build_object('status', 'accepted', 'change', jsonb_build_object('record', p_request -> 'payload'));
 end $$;
 
@@ -158,20 +165,20 @@ language plpgsql volatile security definer set search_path = '' as $$
 declare
   v_payload jsonb := p_request -> 'payload';
   v_existing jsonb;
+  v_sequence bigint;
 begin
   if not private.test_payload_names_item(p_request, 'resultId')
     or jsonb_typeof(v_payload -> 'amount') is distinct from 'string' or not private.money_canonical(v_payload ->> 'amount')
     or jsonb_typeof(v_payload -> 'detail') is distinct from 'string' then
     return jsonb_build_object('status', 'rejected', 'code', 'invalid-payload');
   end if;
-  select payload into v_existing from private.test_results where account_id = p_account and result_id = p_request ->> 'item';
+  select payload, sequence into v_existing, v_sequence from private.test_results where account_id = p_account and result_id = p_request ->> 'item';
   if found then
-    return case when v_existing = v_payload
-      then jsonb_build_object('status', 'accepted', 'sequence', (select sequence from private.sync_feed
-             where account_id = p_account and record_type = 'test-result' and item_id = p_request ->> 'item' order by sequence limit 1))
+    return case when v_existing = v_payload - 'detail'
+      then jsonb_build_object('status', 'accepted', 'sequence', v_sequence)
       else jsonb_build_object('status', 'rejected', 'code', 'identity-reused') end;
   end if;
-  insert into private.test_results values (p_account, p_request ->> 'item', v_payload - 'detail');
+  insert into private.test_results values (p_account, p_request ->> 'item', v_payload - 'detail', p_sequence);
   insert into private.test_result_details values (p_account, p_request ->> 'item', v_payload ->> 'detail');
   return jsonb_build_object('status', 'accepted', 'change', jsonb_build_object('record', v_payload));
 end $$;
@@ -227,10 +234,10 @@ begin
     return jsonb_build_object('status', 'rejected', 'code', 'invalid-payload');
   end if;
   if exists (select 1 from private.test_attempts where account_id = p_account and attempt_id = p_request ->> 'item') then
-    return jsonb_build_object('status', 'accepted', 'sequence', (select sequence from private.sync_feed
-      where account_id = p_account and record_type = 'test-attempt' and item_id = p_request ->> 'item' order by sequence limit 1));
+    return jsonb_build_object('status', 'accepted', 'sequence', (select sequence from private.test_attempts
+      where account_id = p_account and attempt_id = p_request ->> 'item'));
   end if;
-  insert into private.test_attempts values (p_account, p_request ->> 'item', p_request -> 'payload');
+  insert into private.test_attempts values (p_account, p_request ->> 'item', p_request -> 'payload', p_sequence);
   return jsonb_build_object('status', 'accepted', 'change', jsonb_build_object('record', p_request -> 'payload'));
 end $$;
 
@@ -243,8 +250,8 @@ declare
 begin
   v_sequence := private.author_server_state(p_account, 'test-experiment-assignment', p_experiment,
     jsonb_build_object('record', jsonb_build_object('version', 1, 'experiment', p_experiment, 'group', p_group)));
-  insert into private.test_experiment_assignments values (p_account, p_experiment, p_group)
-    on conflict (account_id, experiment) do update set assignment = excluded.assignment;
+  insert into private.test_experiment_assignments values (p_account, p_experiment, p_group, v_sequence)
+    on conflict (account_id, experiment) do update set assignment = excluded.assignment, sequence = excluded.sequence;
   return v_sequence;
 end $$;
 
@@ -310,9 +317,7 @@ end $$;
 create function private.snapshot_test_results(p_account uuid, p_record_type text)
 returns table (item_id text, sequence bigint, change jsonb)
 language sql stable security definer set search_path = '' as $$
-  select r.result_id,
-         (select min(f.sequence) from private.sync_feed f where f.account_id = r.account_id and f.record_type = p_record_type and f.item_id = r.result_id),
-         jsonb_build_object('record', r.payload)
+  select r.result_id, r.sequence, jsonb_build_object('record', r.payload)
   from private.test_results r where r.account_id = p_account
 $$;
 
@@ -320,8 +325,7 @@ $$;
 create function private.snapshot_test_attempts(p_account uuid, p_record_type text)
 returns table (item_id text, sequence bigint, change jsonb)
 language sql stable security definer set search_path = '' as $$
-  select a.attempt_id,
-         (select min(f.sequence) from private.sync_feed f where f.account_id = a.account_id and f.record_type = p_record_type and f.item_id = a.attempt_id),
+  select a.attempt_id, a.sequence,
          jsonb_build_object('record', a.payload, 'origin', jsonb_build_object('installation', p.installation_id, 'position', p.position))
   from private.test_attempts a
   join private.device_positions p on p.account_id = a.account_id and p.record_type = p_record_type and p.item_id = a.attempt_id
@@ -332,8 +336,7 @@ $$;
 create function private.snapshot_test_experiment_assignments(p_account uuid, p_record_type text)
 returns table (item_id text, sequence bigint, change jsonb)
 language sql stable security definer set search_path = '' as $$
-  select e.experiment,
-         (select max(f.sequence) from private.sync_feed f where f.account_id = e.account_id and f.record_type = p_record_type and f.item_id = e.experiment),
+  select e.experiment, e.sequence,
          jsonb_build_object('record', jsonb_build_object('version', 1, 'experiment', e.experiment, 'group', e.assignment))
   from private.test_experiment_assignments e where e.account_id = p_account
 $$;
@@ -360,3 +363,37 @@ update private.record_types set snapshot = to_regprocedure('private.snapshot_tes
 update private.record_types set snapshot = to_regprocedure('private.snapshot_test_attempts(uuid,text)') where record_type = 'test-attempt';
 update private.record_types set snapshot = to_regprocedure('private.snapshot_test_experiment_assignments(uuid,text)') where record_type = 'test-experiment-assignment';
 update private.record_types set snapshot = to_regprocedure('private.snapshot_test_strategy_revisions(uuid,text)') where record_type = 'test-strategy-revision';
+
+-- ---------------------------------------------------------------------------
+-- Compaction and stale devices (#98)
+-- ---------------------------------------------------------------------------
+
+-- Sharing enable (spec 6 stand-in): online only, starts a new sharing period
+-- for its scope, so contributions are accepted again. A withdrawal retried
+-- from the old period never withdraws the new one (#43).
+create function private.accept_test_sharing_enable_v1(p_account uuid, p_request jsonb, p_sequence bigint) returns jsonb
+language plpgsql volatile security definer set search_path = '' as $$
+begin
+  if not private.test_payload_names_item(p_request, 'sharingEnableId') or jsonb_typeof(p_request #> '{payload,scope}') is distinct from 'string' then
+    return jsonb_build_object('status', 'rejected', 'code', 'invalid-payload');
+  end if;
+  delete from private.test_sharing_withdrawals where account_id = p_account and scope = p_request #>> '{payload,scope}';
+  return jsonb_build_object('status', 'accepted', 'change', jsonb_build_object('record', p_request -> 'payload'));
+end $$;
+
+revoke execute on function private.accept_test_sharing_enable_v1(uuid, jsonb, bigint) from public;
+
+insert into private.record_types (record_type, payload_version, kind, accept, ordering, purge)
+  values ('test-sharing-enable', 1, 'account-state-operation', to_regprocedure('private.accept_test_sharing_enable_v1(uuid,jsonb,bigint)'), 'account', null);
+
+-- The test types' tables follow the record types they stand in for.
+insert into private.retention_rules (subject, endpoint) values
+  ('private.test_sharing_withdrawals', 'The current withdrawal of each scope: kept until sharing is enabled again (spec 6).'),
+  ('private.test_contributions', 'Accepted contributions: kept while the account exists (spec 6).'),
+  ('private.test_reconciliations', 'Allowance reconciliations: kept while the account exists (spec 5).'),
+  ('private.test_transfers', 'Allowance transfers: kept while the account exists (spec 5).'),
+  ('private.test_results', 'Accepted results: kept while the account exists, until purged (spec 4).'),
+  ('private.test_result_details', 'Result detail: kept with its result (#97''s detail rule).'),
+  ('private.test_attempts', 'Challenge attempts: kept while the account exists (spec 3).'),
+  ('private.test_experiment_assignments', 'Each experiment''s current group: kept while the account exists (spec 5).'),
+  ('private.test_strategy_revisions', 'Strategy revisions: kept while the account exists (spec 4).');

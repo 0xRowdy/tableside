@@ -30,6 +30,7 @@ async function newStore() {
   directories.push(directory);
   const store = await SqliteActivityStore.open(await nodeSqlCipherDriver().open(join(directory, 'account.db'), KEY), IDENTITY);
   opened.push(store);
+  await store.adoptCommandScope(1);
   return store;
 }
 
@@ -101,7 +102,7 @@ describe('a revisioned item saved on this installation', () => {
     const store = await newStore();
     await store.writeRevisionedItem(TYPE, 'item-1', value('25'));
     const [first] = await store.readUploadQueue();
-    await store.prepareUpload(first!.id, OPERATION);
+    await store.prepareUpload(first!.id, () => OPERATION);
 
     // Sent, no receipt yet: the next edit waits for it and follows whatever revision it made.
     await store.writeRevisionedItem(TYPE, 'item-1', value('30'));
@@ -121,7 +122,7 @@ describe('a revisioned item saved on this installation', () => {
     const store = await newStore();
     await store.writeRevisionedItem(TYPE, 'item-1', value('25'));
     const [first] = await store.readUploadQueue();
-    await store.prepareUpload(first!.id, OPERATION);
+    await store.prepareUpload(first!.id, () => OPERATION);
     await store.acknowledgeUpload(first!.id, { status: 'accepted', operation: OPERATION.operationId, requestHash: ABC_SHA256, sequence: 1 }, null);
 
     await acceptedAt(store, 'item-1', 1, state(1, '25'));
@@ -138,7 +139,7 @@ describe('a revisioned item saved on this installation', () => {
     // A stale save of the value the account already holds: the server answers "already accepted" at 3.
     await store.writeRevisionedItem(TYPE, 'item-1', value('10'));
     const [upload] = await store.readUploadQueue();
-    await store.prepareUpload(upload!.id, OPERATION);
+    await store.prepareUpload(upload!.id, () => OPERATION);
     await store.acknowledgeUpload(upload!.id, { status: 'accepted', operation: OPERATION.operationId, requestHash: ABC_SHA256, sequence: 3 }, null);
 
     expect(await item(store, 'item-1')).toEqual({ item: 'item-1', accepted: state(2, '10'), change: null, onAccount: true });

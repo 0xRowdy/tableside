@@ -10,12 +10,14 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { type AcceptedRecord, PLATFORM_TABLES, PROTOCOL_VERSION, byOriginatingDevice } from '../src';
 import { type Envelope, prepareOperation } from '../src/sync/protocol';
 import {
+  type DirectCommands,
   type SimulatedDevice,
   TEST_RECORD_TYPES,
   type TestAttempt,
   accessToken,
   createAccountByEmail,
   createDevice,
+  directCommands,
   localStack,
   signInByEmail,
   testAllowanceReconciliation,
@@ -237,7 +239,8 @@ describe('server-authored state', () => {
     const { request } = prepareOperation({
       protocol: PROTOCOL_VERSION,
       operation: '5'.repeat(32),
-      installation: phone.vault.store().identity.installationId,
+      installation: 'direct',
+      command: (await directCommands(raw, 'direct')).next(),
       recordType: testExperimentAssignment.name,
       payloadVersion: 1,
       item: 'pricing',
@@ -339,7 +342,7 @@ describe('purging an accepted immutable result', () => {
 
     const raw = stack.rawClient(accessToken(phone));
     const again = JSON.parse(stale!.operation!.request) as Envelope;
-    const { request } = prepareOperation({ ...again, operation: '6'.repeat(32) });
+    const { request } = prepareOperation({ ...again, operation: '6'.repeat(32), installation: 'direct', command: (await directCommands(raw, 'direct')).next() });
     expect((await raw.rpc('sync_upload_v1', { request })).data).toMatchObject({ status: 'rejected', code: 'purged' });
     await tablet.account.sync.reconcile();
     expect(await itemsOn(tablet, testResult.name)).toEqual([]);
@@ -381,19 +384,28 @@ describe('the operation API enforces ordering, called directly', () => {
     after?: string[];
     position?: number;
   }
-  /** A canonical request from the device, as its build would send it. */
-  function upload(d: SimulatedDevice, fields: UploadFields) {
+  /** The commands of the installation the direct calls upload as. */
+  let commands: DirectCommands;
+  /** A canonical request, as the next command of an installation of the device's account. */
+  function upload(_d: SimulatedDevice, fields: UploadFields) {
     return prepareOperation({
       protocol: PROTOCOL_VERSION,
-      installation: d.vault.store().identity.installationId,
+      installation: 'direct',
+      command: commands.next(),
       payloadVersion: 1,
       ...fields,
     }).request;
   }
+  /** The phone and tablet, and a client calling the operation API directly as the phone's account. */
+  async function direct() {
+    const devices = await twoDevices();
+    const raw = stack.rawClient(accessToken(devices.phone));
+    commands = await directCommands(raw, 'direct');
+    return { ...devices, raw };
+  }
 
   it('answers "waiting", recording nothing, until every operation it names has a receipt; then accepts the identical request', async () => {
-    const { phone } = await twoDevices();
-    const raw = stack.rawClient(accessToken(phone));
+    const { phone, raw } = await direct();
     const dependent = upload(phone, {
       operation: '7'.repeat(32),
       recordType: testContribution.name,
@@ -410,15 +422,13 @@ describe('the operation API enforces ordering, called directly', () => {
   });
 
   it('refuses a purge whose target was never accepted', async () => {
-    const { phone } = await twoDevices();
-    const raw = stack.rawClient(accessToken(phone));
+    const { phone, raw } = await direct();
     const purge = upload(phone, { operation: '9'.repeat(32), recordType: testResultPurge.name, item: 'r-unknown', payload: { version: 1, target: 'r-unknown' } });
     expect((await raw.rpc('sync_upload_v1', { request: purge })).data).toMatchObject({ status: 'rejected', code: 'target-not-accepted' });
   });
 
   it('holds each per-device position for one record, and positions only per-device types', async () => {
-    const { phone } = await twoDevices();
-    const raw = stack.rawClient(accessToken(phone));
+    const { phone, raw } = await direct();
     const attempt = (id: string, position?: number) => ({
       recordType: testAttempt.name,
       item: id,
@@ -485,12 +495,15 @@ describe('per-device attempt ordering', () => {
     for (const id of ['p-1', 'p-2', 'p-3']) await queue(phone, testAttempt.name, attempt(phone, id));
     // Positions 1 and 3 reach the account first (as another build's or a retried path might send them).
     const raw = stack.rawClient(accessToken(phone));
+    // Another scope of the phone's installation: the phone recovers into a new one when it next uploads.
+    const positions = await directCommands(raw, phone.vault.store().identity.installationId);
     for (const [index, entry] of (await phone.vault.store().readUploadQueue()).entries()) {
       if (index === 1) continue;
       const { request } = prepareOperation({
         protocol: PROTOCOL_VERSION,
         operation: String(index).repeat(32),
         installation: phone.vault.store().identity.installationId,
+        command: positions.next(),
         recordType: testAttempt.name,
         payloadVersion: 1,
         item: (entry.payload as TestAttempt).attemptId,
