@@ -1,4 +1,4 @@
--- Two duplications removed (#52 review). Behaviour is unchanged.
+-- Two duplications removed (#52 review). Behavior is unchanged.
 --
 -- - private.signed_in_account() joined the caller's session to its account
 --   exactly as private.session_account(session, auth_user) does: it is now

@@ -31,11 +31,17 @@
 -- installation, so it has the installation's retention and deletion.
 alter table private.installations add column age_check text check (age_check in ('pending', 'unmet'));
 
--- Whether any installation of the account owes a required check, other than `p_except`.
+-- Whether any installation of the account owes a required check, other than
+-- `p_except`. Only while the installation is signed in (a live, unrevoked
+-- session registered to it): an installation signed out, revoked from
+-- Devices, or left behind by Recovery needed's fresh one owes nothing, so a
+-- device that is gone can't hold the account unresolved for good.
 create function private.age_check_owed(p_account uuid, p_except text default null) returns boolean
 language sql stable security definer set search_path = '' as $$
   select exists (
     select 1 from private.installations i
+    join private.account_sessions r on r.account_id = i.account_id and r.installation_id = i.installation_id and r.revoked_at is null
+    join auth.sessions s on s.id = r.session_id
     where i.account_id = p_account and i.age_check is not null
       and i.installation_id is distinct from p_except)
 $$;

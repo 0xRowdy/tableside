@@ -22,6 +22,13 @@ export function freshCodeAnswer(httpStatus: number | undefined, status: unknown)
   return { status: 'failed' };
 }
 
+/** fresh-auth's answer to an Apple or Google proof: confirmed, or a valid proof of an identity that isn't one of the account's. */
+export function freshProviderAnswer(httpStatus: number | undefined, status: unknown): FreshAuthenticationResult {
+  if (httpStatus === 200 && status === 'confirmed') return { status: 'confirmed' };
+  if (httpStatus === 403 && status === 'not-a-method') return { status: 'not-a-method' };
+  return { status: 'failed' };
+}
+
 /**
  * schedule-deletion's answer: scheduled with its deadline, Confirm it's you
  * first, or null when no usable answer came (the server's status then decides).

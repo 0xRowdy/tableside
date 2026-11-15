@@ -219,6 +219,24 @@ describe('retrying while unresolved', () => {
     expect(await tablet.account.answerAgeQuestion('18+')).toEqual({ status: 'eligible' });
   });
 
+  it('a device that signed out owes nothing any more: it can’t hold the account unresolved for good', async () => {
+    const email = uniqueEmail('owed-signed-out');
+    const accountId = await createAccount(email);
+    await localStack().sql`delete from public.eligibility where account_id = ${accountId}`;
+    const phone = createDevice(localStack(), { name: 'phone', platformAgeSignals: true });
+    devices.push(phone);
+    phone.ageSignals.signal = { kind: 'required-pending' };
+    await signInByEmail(phone, email);
+    expect(await localStack().sql`select 1 from private.installations where account_id = ${accountId} and age_check = 'pending'`).toHaveLength(1);
+    expect(await phone.account.signOut()).toMatchObject({ status: 'signed-out', serverSessionEnded: true });
+
+    await localStack().resetCodeRequests();
+    const tablet = device('tablet');
+    expect(await signInByEmail(tablet, email)).toEqual({ status: 'signed-in' });
+    expect(await tablet.account.answerAgeQuestion('16-17')).toEqual({ status: 'eligible' });
+    expect(await serverRecords(accountId)).toEqual([{ band: '16-17', source: 'declaration', policy_version: 1 }]);
+  });
+
   it('an under-13 answer makes it ineligible', async () => {
     const email = uniqueEmail('retry-under13');
     const accountId = await createAccount(email);

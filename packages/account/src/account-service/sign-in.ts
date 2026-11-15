@@ -26,7 +26,8 @@ export interface ProviderCredential {
   readonly provider: IdentityProvider;
   readonly idToken: string;
   readonly nonce: string;
-  readonly code?: { readonly value: string; readonly flow: 'native' | 'web' };
+  /** The code the provider gave, how, and for a browser flow the redirect URI it was issued for. */
+  readonly code?: { readonly value: string; readonly flow: 'native' | 'web'; readonly redirectUri?: string };
 }
 
 /** How long a Sign in that found no account is held for Create: well inside an Apple ID token's ten minutes. */
@@ -138,9 +139,10 @@ export function createSignIn(ctx: ServiceContext, session: AccountSession, age: 
     const verifier = ctx.randomHex(32);
     const state = `${backend.name}~${await ports.sha256Hex(verifier)}`;
     const callbackUrl = authCallbackUrl(backend.name);
+    const redirectUri = `${backend.url}/functions/v1/provider-callback?provider=${encodeURIComponent(authName(provider))}`;
     const authorize = `${appleWeb.authorizeUrl}?${queryString({
       client_id: appleWeb.clientId,
-      redirect_uri: `${backend.url}/functions/v1/provider-callback?provider=${encodeURIComponent(authName(provider))}`,
+      redirect_uri: redirectUri,
       response_type: 'code id_token',
       response_mode: 'form_post',
       scope: 'email',
@@ -159,7 +161,7 @@ export function createSignIn(ctx: ServiceContext, session: AccountSession, age: 
     const { data, error } = await supabase.rpc('redeem_provider_flow_code', { verifier });
     const redeemed = data as { idToken?: unknown; code?: unknown } | null;
     if (error || typeof redeemed?.idToken !== 'string' || !redeemed.idToken) return 'failed';
-    return { provider, idToken: redeemed.idToken, nonce, ...(typeof redeemed.code === 'string' && redeemed.code ? { code: { value: redeemed.code, flow: 'web' as const } } : {}) };
+    return { provider, idToken: redeemed.idToken, nonce, ...(typeof redeemed.code === 'string' && redeemed.code ? { code: { value: redeemed.code, flow: 'web' as const, redirectUri } } : {}) };
   };
 
   /**
@@ -171,7 +173,11 @@ export function createSignIn(ctx: ServiceContext, session: AccountSession, age: 
   const keepGrant = async (credential: ProviderCredential): Promise<void> => {
     if (!credential.code) return;
     await ctx
-      .actAsPlayer('provider-grant', { provider: authName(credential.provider), code: credential.code.value, flow: credential.code.flow }, 'restricted')
+      .actAsPlayer(
+        'provider-grant',
+        { provider: authName(credential.provider), code: credential.code.value, flow: credential.code.flow, ...(credential.code.redirectUri ? { redirectUri: credential.code.redirectUri } : {}) },
+        'restricted',
+      )
       .catch(() => null);
   };
 

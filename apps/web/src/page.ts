@@ -252,7 +252,7 @@ export function mountAccountPage(main: HTMLElement, account: WebAccount, navigat
         el('p', { class: 'lead' }, 'Sign in to delete your account, cancel a scheduled deletion or see how a deletion is going. Practice and play are in the app.'),
         ...providerButtons('Sign in with', 'sign-in', signInWithProvider),
         node,
-        account.providers.length === 2
+        account.providers.includes('apple') && account.providers.includes('google')
           ? null
           : el(
               'p',

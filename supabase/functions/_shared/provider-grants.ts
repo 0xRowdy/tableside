@@ -69,14 +69,26 @@ export interface Grant {
  * with, verified as any). Null when the provider refused, or answered without
  * a refresh token.
  */
-export async function exchangeCode(provider: string, code: string, flow: Flow): Promise<{ readonly subject: string; readonly grant: Grant } | null> {
+export async function exchangeCode(
+  provider: string,
+  code: string,
+  flow: Flow,
+  redirectUri: string | null,
+): Promise<{ readonly subject: string; readonly grant: Grant } | null> {
   const config = grantConfig(provider);
   if (!config) return null;
   const clientId = config.clientId(flow);
   const response = await fetch(config.tokenUrl, {
     method: 'POST',
     headers: { 'content-type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({ grant_type: 'authorization_code', code, client_id: clientId, client_secret: await config.clientSecret(clientId) }),
+    body: new URLSearchParams({
+      grant_type: 'authorization_code',
+      code,
+      client_id: clientId,
+      client_secret: await config.clientSecret(clientId),
+      // A browser flow's code is bound to the redirect URI it was issued for, which the exchange must repeat.
+      ...(redirectUri ? { redirect_uri: redirectUri } : {}),
+    }),
   });
   const answer = (await response.json().catch(() => null)) as { refresh_token?: unknown; id_token?: unknown } | null;
   if (!response.ok || typeof answer?.refresh_token !== 'string' || typeof answer.id_token !== 'string') return null;

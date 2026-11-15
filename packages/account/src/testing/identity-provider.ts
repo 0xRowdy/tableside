@@ -37,14 +37,14 @@ export class TestIdentityProvider {
   private readonly keyId = randomUUID();
   private server: Server | null = null;
   /** Authorization codes not yet exchanged, by code: who each is for. */
-  private readonly codes = new Map<string, ProviderIdentity>();
+  private readonly codes = new Map<string, { readonly identity: ProviderIdentity; readonly redirectUri: string | null }>();
   /** Refresh tokens issued for a code, by token: whose, and whether the app revoked it. */
   private readonly grants = new Map<string, { readonly subject: string; revoked: boolean }>();
 
   /** An authorization code for `identity`, as the provider hands the app one with its ID token. */
-  authorizationCode(identity: ProviderIdentity): string {
+  authorizationCode(identity: ProviderIdentity, redirectUri: string | null = null): string {
     const code = `code-${randomBytes(12).toString('hex')}`;
-    this.codes.set(code, identity);
+    this.codes.set(code, { identity, redirectUri });
     return code;
   }
 
@@ -95,8 +95,10 @@ export class TestIdentityProvider {
       if (grant) grant.revoked = true;
       return { status: 200, body: {} };
     }
-    const identity = form.get('grant_type') === 'authorization_code' ? this.codes.get(form.get('code') ?? '') : undefined;
-    if (!identity) return { status: 400, body: { error: 'invalid_grant' } };
+    const issued = form.get('grant_type') === 'authorization_code' ? this.codes.get(form.get('code') ?? '') : undefined;
+    // As Apple and Google: a browser flow's code is exchanged only with the redirect URI it was issued for.
+    if (!issued || (issued.redirectUri !== null && form.get('redirect_uri') !== issued.redirectUri)) return { status: 400, body: { error: 'invalid_grant' } };
+    const { identity } = issued;
     this.codes.delete(form.get('code')!);
     const refreshToken = `refresh-${randomBytes(16).toString('hex')}`;
     this.grants.set(refreshToken, { subject: identity.subject, revoked: false });
@@ -197,7 +199,7 @@ export class TestIdentityProvider {
     let form = new URLSearchParams({ state: param('state') });
     if (identity) {
       form.set('id_token', this.idToken(identity, { nonce: param('nonce'), audience: param('client_id') }));
-      form.set('code', this.authorizationCode(identity));
+      form.set('code', this.authorizationCode(identity, param('redirect_uri')));
     } else form.set('error', 'user_cancelled_authorize');
     if (tamper) form = tamper(form);
     const response = await fetch(param('redirect_uri'), {

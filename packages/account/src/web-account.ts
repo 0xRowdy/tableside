@@ -23,12 +23,13 @@ import type {
   DeletePermanentlyResult,
   DeletionProgress,
   FreshAuthenticationResult,
+  IdentityProvider,
   ScheduleDeletionResult,
 } from './account-service/types';
 import { backendPost } from './backend-request';
 import { type PendingDeletion, parseDeletionStatus, parseProgress } from './deletion-progress';
 import type { BackendEnvironment } from './environment';
-import { cancelAnswer, codeRequestAnswer, freshCodeAnswer, retriedOperations, scheduleAnswer } from './lifecycle-answers';
+import { cancelAnswer, codeRequestAnswer, freshCodeAnswer, freshProviderAnswer, retriedOperations, scheduleAnswer } from './lifecycle-answers';
 import { hex } from './values';
 
 /** The page's view of the account: what it shows. */
@@ -79,7 +80,8 @@ export interface WebAccountOptions {
   readonly sha256Hex?: (text: string) => Promise<string>;
 }
 
-export type WebProvider = 'apple' | 'google';
+/** The providers the page signs in with: the app's own (IdentityProvider). */
+export type WebProvider = IdentityProvider;
 
 /** Apple's and Google's authorization pages: where the page sends the browser to sign in (navigations, never loads). */
 export const PROVIDER_AUTHORIZE_URLS: Readonly<Record<WebProvider, string>> = {
@@ -360,6 +362,8 @@ export function createWebAccount(options: WebAccountOptions): WebAccount {
   };
 
   const providerNames = (['apple', 'google'] as const).filter((provider) => options.providers?.[provider]);
+  /** provider-callback for a provider: the redirect URI its web flow posts to, which the grant exchange repeats. */
+  const callbackUri = (authName: string) => `${backend.url}/functions/v1/provider-callback?provider=${encodeURIComponent(authName)}`;
 
   /**
    * The provider's page for a sign-in or a Confirm it's you, kept for this
@@ -376,7 +380,7 @@ export function createWebAccount(options: WebAccountOptions): WebAccount {
     const authName = settings.authName ?? provider;
     return `${settings.authorizeUrl}?${query({
       client_id: settings.clientId,
-      redirect_uri: `${backend.url}/functions/v1/provider-callback?provider=${encodeURIComponent(authName)}`,
+      redirect_uri: callbackUri(authName),
       response_type: 'code id_token',
       response_mode: 'form_post',
       scope: provider === 'google' ? 'openid email' : 'email',
@@ -423,7 +427,7 @@ export function createWebAccount(options: WebAccountOptions): WebAccount {
       // Only the flow this tab began: the state names its verifier's hash.
       if (!flow || returned.state !== flow.state || typeof flow.verifier !== 'string' || typeof flow.nonce !== 'string') return { status: 'failed' };
       if (returned.error) return { status: returned.error === 'canceled' ? 'canceled' : 'failed' };
-      const provider = flow.provider === 'apple' || flow.provider === 'google' ? flow.provider : null;
+      const provider = providerNames.find((name) => name === flow.provider) ?? null;
       const settings = provider ? options.providers?.[provider] : undefined;
       if (!provider || !settings) return { status: 'failed' };
       const authName = settings.authName ?? provider;
@@ -434,9 +438,7 @@ export function createWebAccount(options: WebAccountOptions): WebAccount {
         const token = await accessToken();
         if (!token) return { status: 'failed' };
         const answer = await send('/functions/v1/fresh-auth', { method: 'provider', provider: authName, idToken, nonce: flow.nonce }, token);
-        if (answer?.httpStatus === 200 && statusOf(answer) === 'confirmed') return { status: 'confirmed' };
-        if (answer?.httpStatus === 403 && statusOf(answer) === 'not-a-method') return { status: 'not-a-method' };
-        return { status: 'failed' };
+        return freshProviderAnswer(answer?.httpStatus, statusOf(answer));
       }
       const signedIn = await send('/auth/v1/token?grant_type=id_token', { provider: authName, id_token: idToken, nonce: flow.nonce });
       if (!signedIn) return { status: 'failed' };
@@ -446,7 +448,7 @@ export function createWebAccount(options: WebAccountOptions): WebAccount {
       if (!(await openSession(signedIn.body, typeof email === 'string' ? email : ''))) return { status: 'failed' };
       // The provider's revocable grant, kept for permanent deletion to revoke (best effort).
       const token = storedSession()?.accessToken;
-      if (typeof code === 'string' && code && token) await send('/functions/v1/provider-grant', { provider: authName, code, flow: 'web' }, token);
+      if (typeof code === 'string' && code && token) await send('/functions/v1/provider-grant', { provider: authName, code, flow: 'web', redirectUri: callbackUri(authName) }, token);
       return { status: 'signed-in' };
     },
 

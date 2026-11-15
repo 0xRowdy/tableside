@@ -2,7 +2,7 @@
 // email code, removing one, and Secure Email Change. Every change needs Confirm
 // it's you first, and the account always keeps a method.
 
-import { freshCodeAnswer } from '../lifecycle-answers';
+import { freshCodeAnswer, freshProviderAnswer } from '../lifecycle-answers';
 
 import type { PlayerAnswer, ServiceContext } from './context';
 import type { SignIn } from './sign-in';
@@ -33,9 +33,7 @@ export function createMethods(ctx: ServiceContext, signIn: SignIn): { readonly f
         const proven = await signIn.providerProof(provider);
         if (typeof proven === 'string') return { status: proven };
         const answer = await ctx.actAsPlayer('fresh-auth', { method: 'provider', ...proven.proof }, 'restricted');
-        if (answer?.code === 200 && answer.status === 'confirmed') return { status: 'confirmed' };
-        if (answer?.code === 403 && answer.status === 'not-a-method') return { status: 'not-a-method' };
-        return { status: 'failed' };
+        return freshProviderAnswer(answer?.code, answer?.status);
       } catch {
         return { status: 'failed' };
       }
