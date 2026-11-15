@@ -14,6 +14,7 @@ import { canonicalJson } from '@tableside/engine';
 
 // The app's account store and practice controller, imported by path: the
 // harness is test-only, and the app doesn't depend on this package.
+import { followAccountGate, withAccountGate } from '../../../../apps/mobile/src/account/gate-access';
 import { forAccountSession } from '../../../../apps/mobile/src/account/practice';
 import type { SqliteActivityStore } from '../../../../apps/mobile/src/account/sqlite-store';
 import { nodeSqlCipherDriver } from '../../../../apps/mobile/src/account/testing/node-sqlcipher';
@@ -22,15 +23,9 @@ import type { AccountVault as AppVault, VaultOpening as AppVaultOpening } from '
 import { PracticeController } from '../../../../apps/mobile/src/practice/controller';
 import type { CompletedPracticeSession } from '../../../../apps/mobile/src/practice/store';
 import { FakeClock as PracticeClock, substituteAdapters } from '../../../../apps/mobile/src/practice/testing/substitutes';
+import type { AgeSignal, EligibilityBand, PlatformAgeSignals } from '../eligibility';
 import type { EnvironmentName } from '../environment';
-import {
-  type AccountService,
-  type AccountVault,
-  type CodeVerificationResult,
-  type CredentialStorage,
-  type EligibilityBand,
-  createAccountService,
-} from '../service';
+import { type AccountService, type AccountVault, type CodeVerificationResult, type CredentialStorage, createAccountService } from '../service';
 import type { DevicePorts, DeviceSignal } from '../sync/session';
 import { FaultProxy } from './fault-proxy';
 import { Mailbox } from './mailbox';
@@ -117,6 +112,21 @@ class Signal<T> implements DeviceSignal<T> {
   }
 }
 
+/**
+ * The device's platform age signal, which the scenario sets: unsupported (an
+ * older OS) by default. It records each check, and whether it could prompt.
+ */
+export class FakeAgeSignals implements PlatformAgeSignals {
+  /** What the platform answers next. */
+  signal: AgeSignal = { kind: 'unavailable' };
+  readonly checks: ('interactive' | 'silent')[] = [];
+  constructor(public supported = false) {}
+  async check({ interactive }: { readonly interactive: boolean }): Promise<AgeSignal> {
+    this.checks.push(interactive ? 'interactive' : 'silent');
+    return this.signal;
+  }
+}
+
 /** The vault as the open app process has it. */
 export interface DeviceVault {
   /** The account whose database is open, if any. */
@@ -143,6 +153,8 @@ export interface SimulatedDevice {
   readonly entropy: FakeEntropy;
   readonly credentials: MemoryCredentials;
   readonly mailbox: Mailbox;
+  /** The platform's age signal; a restart keeps it (it is the device's). */
+  readonly ageSignals: FakeAgeSignals;
   /** Whether the app is in the foreground. */
   foreground: boolean;
   /** While true, every database write fails (an I/O error), so its transaction rolls back. */
@@ -155,6 +167,12 @@ export interface SimulatedDevice {
    * thousands of turns long, which would take minutes to play.
    */
   playPracticeSession(options?: { readonly longerThan?: number }): Promise<CompletedPracticeSession>;
+  /**
+   * Starts a practice session (roulette, a 1,000 buy-in, a 10-unit red wager
+   * placed) on the open account and leaves it unfinished, with the account
+   * gate composed into its access supervisor as the app has it.
+   */
+  startPracticeSession(): Promise<PracticeController>;
   /** The app process dies where it is: nothing it had in flight completes on the device. */
   kill(): void;
   /** Starts the app again after a kill (or kills it first), reopening the remembered account. */
@@ -182,6 +200,8 @@ export interface DeviceOptions {
    * device, keeping its files and secure storage.
    */
   readonly installedOver?: SimulatedDevice;
+  /** Whether the device's OS offers a platform age signal; false (an older OS) by default. */
+  readonly platformAgeSignals?: boolean;
 }
 
 export function createDevice(stack: LocalStack, options: DeviceOptions): SimulatedDevice {
@@ -196,6 +216,7 @@ export function createDevice(stack: LocalStack, options: DeviceOptions): Simulat
   const foreground = new Signal(true);
   const disk = { failing: false };
   const driver = nodeSqlCipherDriver({ fault: () => (disk.failing ? 'io' : undefined) });
+  const ageSignals = new FakeAgeSignals(options.platformAgeSignals ?? false);
 
   const launch = (): AppProcess => {
     let dead = false;
@@ -274,6 +295,7 @@ export function createDevice(stack: LocalStack, options: DeviceOptions): Simulat
       device: ports,
       randomBytes: (count) => entropy.bytes(count),
       webSocket: ProcessWebSocket,
+      ageSignals,
     });
     return {
       account,
@@ -304,6 +326,7 @@ export function createDevice(stack: LocalStack, options: DeviceOptions): Simulat
     entropy,
     credentials,
     mailbox: new Mailbox(stack.mailUrl),
+    ageSignals,
     get foreground() {
       return foreground.current();
     },
@@ -331,6 +354,17 @@ export function createDevice(stack: LocalStack, options: DeviceOptions): Simulat
       const snapshot = controller.snapshot();
       if (snapshot.status !== 'completed') throw new Error(`the practice session did not complete (${snapshot.status})`);
       return snapshot.result;
+    },
+    async startPracticeSession() {
+      const opening = openSession(app);
+      const base = { ...substituteAdapters({ clock: new PracticeClock(undefined, true) }), newId: () => `activity-${hex(entropy.bytes(16))}` };
+      const account = app.account;
+      const controller = new PracticeController(forAccountSession({ ...base, access: withAccountGate(base.access, () => account.gate) }, opening));
+      followAccountGate(account, controller);
+      await controller.load();
+      await controller.start({ game: 'roulette', buyIn: '1000' });
+      await controller.placeWager('red', '10');
+      return controller;
     },
     kill() {
       app.kill();

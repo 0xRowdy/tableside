@@ -2,6 +2,7 @@
 // reused by later spec 2 tickets and specs 3–6. Node only.
 
 export {
+  FakeAgeSignals,
   type DeviceVault,
   type SimulatedDevice,
   FakeClock,

@@ -4,10 +4,25 @@
 
 import { type SupabaseClient, createClient } from '@supabase/supabase-js';
 
+import {
+  type AgeRange,
+  type AgeSignal,
+  type EligibilityBand,
+  type EligibilityRecord,
+  type EligibilitySource,
+  type PlatformAgeSignals,
+  type UnresolvedReason,
+  declarationPermitted,
+  isEligibilityStatus,
+  isEligibleBand,
+  noPlatformAgeSignals,
+  recordFromSignal,
+  unresolvedReason,
+} from './eligibility';
 import { type BackendEnvironment, ENVIRONMENT_HEADER, type EnvironmentName, retiredEnvironments } from './environment';
 import { SyncEngine, type SyncErrorCode } from './sync/engine';
 import { recordTypes } from './sync/registry';
-import { type DevicePorts, SyncSession } from './sync/session';
+import { type DevicePorts, RECONCILE_INTERVAL_MS, SyncSession } from './sync/session';
 import type { SyncStore } from './sync/store';
 import { supabaseLiveChannels, supabaseSyncBackend } from './sync/supabase';
 
@@ -24,19 +39,31 @@ export type AccountGate =
    * a later build's schema (needs-update), or bringing it to this build's
    * schema failed and the next launch tries again (migration-failed).
    */
-  | { readonly state: 'database-unavailable'; readonly accountId: string; readonly reason: 'needs-update' | 'migration-failed' };
-
-
-/** The fallback age-range question's answers. */
-export type AgeRange = 'under-13' | EligibilityBand;
-/** An established 13+ age band: the only bands that open ordinary access. */
-export type EligibilityBand = '13-15' | '16-17' | '18+';
-const ELIGIBLE_BANDS: readonly string[] = ['13-15', '16-17', '18+'] satisfies EligibilityBand[];
+  | { readonly state: 'database-unavailable'; readonly accountId: string; readonly reason: 'needs-update' | 'migration-failed' }
+  /**
+   * The account's age eligibility isn't established: ordinary access is paused
+   * and only the restricted paths stay (deletion, Contact support, Make a
+   * privacy request, billing help, authenticated export). The database stays
+   * open for them. Retrying may resolve it.
+   */
+  | { readonly state: 'age-unresolved'; readonly accountId: string; readonly reason: UnresolvedReason }
+  /** The account is established as under 13: ordinary access is paused, with only the restricted paths. */
+  | { readonly state: 'age-ineligible'; readonly accountId: string };
 
 /** Which way a player asks for a code: Sign in (an existing account) or Create (a new one). */
 export type CodeIntent = 'sign-in' | 'create';
 
-export type AgeAnswerResult = { readonly status: 'eligible' } | { readonly status: 'ineligible' } | { readonly status: 'failed' };
+/**
+ * eligible: an established 13+ band (on the Create path, an assertion is held for creating the account).
+ * ineligible: under 13. unresolved: a required platform check stands in the way, so the answer can't decide.
+ */
+export type AgeAnswerResult =
+  | { readonly status: 'eligible' }
+  | { readonly status: 'ineligible' }
+  | { readonly status: 'unresolved' }
+  | { readonly status: 'failed' };
+/** A platform age check's outcome; "question" means the platform proved nothing and the fallback question may decide. */
+export type AgeCheckResult = AgeAnswerResult | { readonly status: 'question' };
 export type CodeRequestResult =
   | { readonly status: 'sent' }
   /** Too many code requests for this address or network: wait this long before asking again. */
@@ -114,18 +141,43 @@ export interface AccountServiceOptions {
   readonly randomBytes: (count: number) => Uint8Array;
   /** The device's WebSocket, for the live connection. */
   readonly webSocket?: typeof WebSocket;
+  /** The platform's age signal; none by default (the fallback question). */
+  readonly ageSignals?: PlatformAgeSignals;
 }
 
 export interface AccountService {
   readonly gate: AccountGate;
   /** Called on every gate change; returns an unsubscribe function. */
   subscribe(listener: (gate: AccountGate) => void): () => void;
+  /** Whether this device can ask the platform for an age range; when false, the age step is the fallback question. */
+  readonly platformAgeCheck: boolean;
   /**
-   * The Create path's age step. Under 13 ends here without contacting the
-   * server; any other range obtains a short-lived, single-use eligibility
-   * assertion for creating the account.
+   * The platform age check, which may show the system's prompt: on the Create
+   * path's age step (with no account), or to retry an unresolved account.
+   * Under 13 on the Create path ends there without contacting the server; an
+   * established range on the Create path obtains an eligibility assertion; on
+   * an unresolved account it replaces the account's record. "question" when the
+   * platform proved nothing and the fallback question may decide; "unresolved"
+   * when a required check stands in the way.
+   */
+  checkAge(): Promise<AgeCheckResult>;
+  /**
+   * The fallback age-range question. On the Create path, under 13 ends here
+   * without contacting the server; any other range obtains a short-lived,
+   * single-use eligibility assertion for creating the account. On an
+   * unresolved account it decides the record only when no required check or
+   * platform answer stands in the way ("unresolved" otherwise); it needs a connection.
    */
   answerAgeQuestion(range: AgeRange): Promise<AgeAnswerResult>;
+  /**
+   * Refreshes eligibility for the open account: asks the platform without a
+   * prompt (applied at once, offline too), reports what it established, then
+   * takes the server's current record. Runs by itself on entering the
+   * foreground, on reconnection and every minute while foregrounded and
+   * connected; resolves when that has finished. Established eligibility never
+   * lapses offline or with time.
+   */
+  refreshEligibility(): Promise<void>;
   /**
    * Sends a code. Every request sends an email: the code when the address has
    * an account, otherwise a "No account for this address" email. The answer
@@ -134,19 +186,23 @@ export interface AccountService {
    */
   requestEmailCode(request: { readonly email: string; readonly intent: CodeIntent }): Promise<CodeRequestResult>;
   /**
-   * Signs in with the emailed code. The gate becomes Active only for an
-   * active account with an established 13+ band; other eligibility states are
-   * #90's restricted gate states, so until then the sign-in fails.
+   * Signs in with the emailed code. The account's server record governs its
+   * eligibility, and required platform checks still run: the gate becomes
+   * Active for an established 13+ band, otherwise Age unresolved or Age ineligible.
    */
   verifyEmailCode(request: { readonly email: string; readonly code: string }): Promise<CodeVerificationResult>;
   /**
    * The app starting again: reopens the account this installation was signed
    * in to from its stored credentials, without the network. The gate becomes
    * Active, or Renewal pending when its token has expired (access and records
-   * stay), or the state its database is in. Stays at No account when there is none.
+   * stay), the remembered age state, or the state its database is in. Stays at
+   * No account when there is none.
    */
   resume(): Promise<{ readonly status: 'resumed' | 'no-account' }>;
-  /** Renews an expired token (Renewal pending → Active). A failure keeps Renewal pending, with access and records. */
+  /**
+   * Renews an expired token (Renewal pending → Active; a restricted state keeps
+   * its state, with its token renewed). A failure keeps Renewal pending, with access and records.
+   */
   renew(): Promise<void>;
   readonly sync: AccountSync;
 }
@@ -154,11 +210,18 @@ export interface AccountService {
 /** Where the signed-in account is remembered, in the environment's credentials (so it goes with them). */
 const rememberedAccountKey = (environment: EnvironmentName) => `tableside.${environment}.account`;
 
-/** The account this installation is signed in to, with its established band. */
+/** The account this installation is signed in to, with its current eligibility record as this device last knew it. */
 interface RememberedAccount {
   readonly accountId: string;
-  readonly eligibility: EligibilityBand;
+  readonly eligibility: EligibilityRecord;
+  /** Why it is unresolved, when it is. */
+  readonly reason?: UnresolvedReason;
+  /** The last platform-signal status the server accepted from this device, so a signal is reported once. */
+  readonly reported?: string;
 }
+
+const UNAVAILABLE: AgeSignal = { kind: 'unavailable' };
+const sameRecord = (a: EligibilityRecord, b: EligibilityRecord) => a.status === b.status && a.source === b.source;
 
 interface Assertion {
   readonly token: string;
@@ -216,30 +279,46 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
     });
   };
   const listeners = new Set<(gate: AccountGate) => void>();
+  const ageSignals = options.ageSignals ?? noPlatformAgeSignals;
   let gate: AccountGate = { state: 'no-account' };
   let assertion: Assertion | null = null;
+  /** The Create path's platform check found a required check in the way: the fallback answer can't decide. */
+  let declarationBlocked = false;
 
   let sync: { readonly engine: SyncEngine; readonly session: SyncSession } | null = null;
+  /** The open account session: its database, what this device knows of the account, and whether its token awaits renewal. */
+  let opened: { readonly session: VaultSession; remembered: RememberedAccount; renewing: boolean; readonly stopWatch: () => void } | null = null;
+  /** Counts account sessions: an answer for an earlier one changes nothing. */
+  let generation = 0;
+  let refreshing: Promise<void> | null = null;
 
   const setGate = (next: AccountGate) => {
+    if (JSON.stringify(next) === JSON.stringify(gate)) return;
     gate = next;
     for (const listener of listeners) listener(next);
   };
 
-  /**
-   * Opens the account's database for a new account session, moves the gate,
-   * and starts its sync. Nothing changes when a later sign-in overtook this one.
-   */
-  const openAccount = async ({ accountId, eligibility }: RememberedAccount, state: 'active' | 'renewal-pending' = 'active') => {
-    sync?.session.end();
-    sync = null;
-    const opening = await options.vault.open(accountId);
-    if (opening.status === 'superseded') return;
-    if (opening.status === 'recovery-needed') return setGate({ state: 'recovery-needed', accountId });
-    if (opening.status !== 'open') return setGate({ state: 'database-unavailable', accountId, reason: opening.status });
-    setGate({ state, accountId, eligibility });
+  /** The gate an open account is in, from its eligibility record. */
+  const gateFor = (remembered: RememberedAccount, renewing: boolean): AccountGate => {
+    const { accountId, eligibility } = remembered;
+    if (isEligibleBand(eligibility.status)) return { state: renewing ? 'renewal-pending' : 'active', accountId, eligibility: eligibility.status };
+    if (eligibility.status === 'under-13') return { state: 'age-ineligible', accountId };
+    return { state: 'age-unresolved', accountId, reason: remembered.reason ?? unresolvedReason(eligibility, null) };
+  };
+
+  /** Sync runs only while ordinary access is open: a restricted account's database stays open for its restricted paths only. */
+  const updateSync = async () => {
+    const open = gate.state === 'active' || gate.state === 'renewal-pending';
+    if (!open) {
+      sync?.session.end();
+      sync = null;
+      return;
+    }
+    if (sync || !opened) return;
+    const current = opened;
     const supabase = await connect();
-    const { store, installationId } = opening.session;
+    if (opened !== current || sync) return;
+    const { store, installationId } = current.session;
     const engine = new SyncEngine({
       store,
       backend: supabaseSyncBackend(supabase),
@@ -247,10 +326,138 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
       installationId,
       newOperationId: () => hex(options.randomBytes(16)),
     });
-    sync = { engine, session: new SyncSession(engine, store, options.device, supabaseLiveChannels(supabase, accountId)) };
+    sync = { engine, session: new SyncSession(engine, store, options.device, supabaseLiveChannels(supabase, current.remembered.accountId)) };
   };
 
+  /** Keeps what this device knows of the account (with its credentials, so it goes with them) and moves the gate. */
+  const remember = async (next: RememberedAccount) => {
+    if (!opened || opened.remembered.accountId !== next.accountId) return;
+    opened.remembered = next;
+    await credentials.setItem(rememberedAccountKey(backend.name), JSON.stringify(next));
+    setGate(gateFor(next, opened.renewing));
+    await updateSync();
+  };
+
+  /** A record learned for the open account: from this device's platform, or the server's current one. */
+  const learned = (base: RememberedAccount, record: EligibilityRecord, signal: AgeSignal | null): RememberedAccount => {
+    const next: RememberedAccount = { accountId: base.accountId, eligibility: record, ...(base.reported ? { reported: base.reported } : {}) };
+    return record.status === 'unresolved' ? { ...next, reason: unresolvedReason(record, signal) } : next;
+  };
+
+  /** What a platform signal makes the remembered account: unchanged when it proves nothing. */
+  const withSignal = (base: RememberedAccount, signal: AgeSignal): RememberedAccount => {
+    const record = recordFromSignal(signal);
+    return record ? learned(base, record, signal) : base;
+  };
+
+  /**
+   * Opens the account's database for a new account session and moves the gate
+   * (starting sync when ordinary access is open). Nothing changes when a later
+   * sign-in overtook this one.
+   */
+  const openAccount = async (remembered: RememberedAccount, renewing = false) => {
+    generation++;
+    opened?.stopWatch();
+    opened = null;
+    sync?.session.end();
+    sync = null;
+    const opening = await options.vault.open(remembered.accountId);
+    if (opening.status === 'superseded') return;
+    const { accountId } = remembered;
+    if (opening.status === 'recovery-needed') return setGate({ state: 'recovery-needed', accountId });
+    if (opening.status !== 'open') return setGate({ state: 'database-unavailable', accountId, reason: opening.status });
+    opened = { session: opening.session, remembered, renewing, stopWatch: watchEligibility() };
+    setGate(gateFor(remembered, renewing));
+    await updateSync();
+  };
+
+  /** Refreshes eligibility on entering the foreground, on reconnection and every minute while foregrounded and connected. */
+  const watchEligibility = (): (() => void) => {
+    const { device } = options;
+    const active = () => device.foreground.current() && device.online.current();
+    const refresh = () => {
+      if (active()) void refreshEligibility().catch(() => undefined);
+    };
+    const stops = [
+      device.foreground.subscribe((foreground) => foreground && refresh()),
+      device.online.subscribe((online) => online && refresh()),
+      device.every(RECONCILE_INTERVAL_MS, refresh),
+    ];
+    return () => stops.forEach((stop) => stop());
+  };
+
+  /** Whether the server can be asked now: online, with a token that hasn't expired (Supabase would otherwise try to renew it itself). */
+  const canAskServer = () => opened !== null && !opened.renewing && options.device.online.current();
+
+  /** The server's current record for the signed-in account, or null when it can't say (offline, or the gate denies). */
+  const serverRecord = async (): Promise<EligibilityRecord | null> => {
+    const supabase = await connect();
+    const { data, error } = await supabase.rpc('current_account');
+    return error ? null : parseRecord(data);
+  };
+
+  /** Reports a decision; the server's answer becomes the remembered record. False when it couldn't be sent. */
+  const report = async (record: EligibilityRecord, signal: AgeSignal | null): Promise<boolean> => {
+    const current = opened;
+    if (!current) return false;
+    try {
+      const supabase = await connect();
+      const { data, error } = await supabase.rpc('record_eligibility_v1', { band: record.status, source: record.source });
+      const answer = error ? null : parseRecord(data);
+      if (!answer || opened !== current) return false;
+      const accepted = (data as { accepted?: unknown }).accepted === true;
+      const next = learned(current.remembered, answer, signal);
+      await remember(accepted && record.source === 'platform-signal' ? { ...next, reported: record.status } : next);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  const refreshOnce = async () => {
+    const current = opened;
+    if (!current) return;
+    const session = generation;
+    const signal = await ageSignals.check({ interactive: false }).catch(() => UNAVAILABLE);
+    if (opened !== current || generation !== session) return;
+    // What the platform established applies at once, offline too; restrictions never wait for the server.
+    await remember(withSignal(current.remembered, signal));
+    if (!canAskServer()) return;
+    const local = recordFromSignal(signal);
+    if (local && current.remembered.reported !== local.status) await report(local, signal);
+    if (opened !== current) return;
+    const record = await serverRecord().catch(() => null);
+    if (!record || opened !== current || sameRecord(record, current.remembered.eligibility)) return;
+    await remember(learned(current.remembered, record, signal));
+  };
+
+  const refreshEligibility = (): Promise<void> =>
+    (refreshing ??= refreshOnce().finally(() => {
+      refreshing = null;
+    }));
+
   const currentAssertion = () => (assertion && assertion.expiresAt > options.clock() ? assertion : null);
+
+  /** The Create path: a short-lived, single-use assertion for an established range, from the declaration or the platform. */
+  const obtainAssertion = async (range: EligibilityBand, source: EligibilitySource): Promise<AgeAnswerResult> => {
+    try {
+      const supabase = await connect();
+      const { data, error } = await supabase.rpc('issue_eligibility_assertion', { age_range: range, source });
+      if (error) return { status: 'failed' };
+      const issued = data as { assertion: string; expires_at: string };
+      assertion = { token: issued.assertion, expiresAt: Date.parse(issued.expires_at) };
+      return { status: 'eligible' };
+    } catch {
+      return { status: 'failed' };
+    }
+  };
+
+  /** What an unresolved account's retry ended in. */
+  const retryOutcome = (): AgeAnswerResult => {
+    if (gate.state === 'age-ineligible') return { status: 'ineligible' };
+    if (gate.state === 'age-unresolved') return { status: 'unresolved' };
+    return { status: 'eligible' };
+  };
 
   const storedSession = async (): Promise<StoredSession | null> => {
     const parsed = parseJson(await credentials.getItem(credentialsKey(backend.name))) as Partial<StoredSession> | null;
@@ -267,20 +474,51 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
       return () => listeners.delete(listener);
     },
 
-    async answerAgeQuestion(range) {
-      assertion = null;
-      if (range === 'under-13') return { status: 'ineligible' };
-      try {
-        const supabase = await connect();
-        const { data, error } = await supabase.rpc('issue_eligibility_assertion', { age_range: range });
-        if (error) return { status: 'failed' };
-        const issued = data as { assertion: string; expires_at: string };
-        assertion = { token: issued.assertion, expiresAt: Date.parse(issued.expires_at) };
-        return { status: 'eligible' };
-      } catch {
-        return { status: 'failed' };
+    platformAgeCheck: ageSignals.supported,
+
+    async checkAge() {
+      if (gate.state === 'no-account') {
+        assertion = null;
+        declarationBlocked = false;
+        const signal = await ageSignals.check({ interactive: true }).catch(() => UNAVAILABLE);
+        const record = recordFromSignal(signal);
+        if (!record) return { status: 'question' };
+        if (record.status === 'unresolved') {
+          declarationBlocked = true;
+          return { status: 'unresolved' };
+        }
+        // Under 13 ends here: nothing is sent, so nothing is kept.
+        if (record.status === 'under-13') return { status: 'ineligible' };
+        return obtainAssertion(record.status, 'platform-signal');
       }
+      const current = opened;
+      if (gate.state !== 'age-unresolved' || !current) return { status: 'failed' };
+      const signal = await ageSignals.check({ interactive: true }).catch(() => UNAVAILABLE);
+      if (opened !== current) return { status: 'failed' };
+      const record = recordFromSignal(signal);
+      if (!record) {
+        // The platform proved nothing: the record stands, and the question may decide only if nothing sufficient is on it.
+        return declarationPermitted(current.remembered.eligibility) ? { status: 'question' } : { status: 'unresolved' };
+      }
+      await remember(learned(current.remembered, record, signal));
+      if (canAskServer()) await report(record, signal);
+      return retryOutcome();
     },
+
+    async answerAgeQuestion(range) {
+      const current = opened;
+      if (gate.state === 'age-unresolved' && current) {
+        if (!declarationPermitted(current.remembered.eligibility)) return { status: 'unresolved' };
+        if (!canAskServer() || !(await report({ status: range, source: 'declaration' }, null))) return { status: 'failed' };
+        return retryOutcome();
+      }
+      assertion = null;
+      if (declarationBlocked) return { status: 'unresolved' };
+      if (range === 'under-13') return { status: 'ineligible' };
+      return obtainAssertion(range, 'declaration');
+    },
+
+    refreshEligibility,
 
     async requestEmailCode({ email, intent }) {
       const held = currentAssertion();
@@ -306,15 +544,21 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
         const { error } = await supabase.auth.verifyOtp({ email, token: code, type: 'email' });
         if (error) return { status: error.code === 'otp_expired' ? 'invalid-code' : 'failed' };
         const { data, error: accountError } = await supabase.rpc('current_account');
-        const account = data as { account_id: string; eligibility: string | null } | null;
-        if (accountError || !account || !isEligible(account.eligibility)) {
+        const accountId = (data as { account_id?: unknown } | null)?.account_id;
+        const record = accountError ? null : parseRecord(data);
+        if (typeof accountId !== 'string' || !record) {
           await supabase.auth.signOut({ scope: 'local' });
           return { status: 'failed' };
         }
         assertion = null;
-        const remembered: RememberedAccount = { accountId: account.account_id, eligibility: account.eligibility };
+        declarationBlocked = false;
+        // The account's server record governs; required platform checks still run on this device.
+        const signal = await ageSignals.check({ interactive: false }).catch(() => UNAVAILABLE);
+        const remembered = withSignal(learned({ accountId, eligibility: record }, record, null), signal);
         await credentials.setItem(rememberedAccountKey(backend.name), JSON.stringify(remembered));
         await openAccount(remembered);
+        const local = recordFromSignal(signal);
+        if (local) await report(local, signal);
         return { status: 'signed-in' };
       } catch {
         return { status: 'failed' };
@@ -330,13 +574,15 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
       // expired token over the network, retrying for half a minute offline.
       const session = await storedSession();
       if (!remembered || !session) return { status: 'no-account' };
-      await openAccount(remembered, session.expires_at * 1000 > options.clock() ? 'active' : 'renewal-pending');
+      await openAccount(remembered, session.expires_at * 1000 <= options.clock());
+      // Signals refresh when online; offline the remembered state stands, with no deadline.
+      if (options.device.foreground.current() && options.device.online.current()) void refreshEligibility().catch(() => undefined);
       return { status: 'resumed' };
     },
 
     async renew() {
-      if (gate.state !== 'renewal-pending') return;
-      const pending = gate;
+      const current = opened;
+      if (!current?.renewing) return;
       const session = await storedSession();
       if (!session) return;
       try {
@@ -348,18 +594,18 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
         }
         const renewed = (await response.json()) as StoredSession;
         // A sign-out or another account while this was in flight: touch nothing.
-        if (gate !== pending) return;
+        if (opened !== current) return;
         const expiresAt = Math.floor(options.clock() / 1000) + renewed.expires_in;
         await credentials.setItem(credentialsKey(backend.name), JSON.stringify({ ...renewed, expires_at: expiresAt }));
-        if (gate !== pending) return;
-        setGate({ ...pending, state: 'active' });
+        if (opened !== current) return;
+        current.renewing = false;
+        setGate(gateFor(current.remembered, false));
         // The live connection re-subscribes with the renewed token, as on Supabase's own refresh.
         sync?.session.credentialsChanged();
       } catch {
         // Offline or the response was lost: still Renewal pending.
       }
     },
-
     sync: {
       get status(): SyncStatus {
         return { live: sync?.session.isLive ?? false, error: sync?.engine.error ?? null };
@@ -380,22 +626,31 @@ function parseJson(text: string | null): unknown {
 }
 
 function parseRemembered(text: string | null): RememberedAccount | null {
-  try {
-    const value = JSON.parse(text ?? 'null') as { accountId?: unknown; eligibility?: unknown } | null;
-    if (value && typeof value.accountId === 'string' && typeof value.eligibility === 'string' && isEligible(value.eligibility)) {
-      return { accountId: value.accountId, eligibility: value.eligibility };
-    }
-  } catch {
-    // Nothing usable remembered.
-  }
-  return null;
+  const value = parseJson(text) as { accountId?: unknown; eligibility?: unknown; reason?: unknown; reported?: unknown } | null;
+  if (!value || typeof value.accountId !== 'string') return null;
+  // Remembered before #90 as the bare band, which was always declared.
+  const eligibility = typeof value.eligibility === 'string' ? parseRecord({ eligibility: value.eligibility }) : parseRecord(value.eligibility);
+  if (!eligibility) return null;
+  return {
+    accountId: value.accountId,
+    eligibility,
+    ...(isReason(value.reason) ? { reason: value.reason } : {}),
+    ...(typeof value.reported === 'string' ? { reported: value.reported } : {}),
+  };
 }
+
+/** An eligibility record as the server (or the remembered account) gives it: { eligibility, source } or { status, source }. */
+function parseRecord(value: unknown): EligibilityRecord | null {
+  if (typeof value !== 'object' || value === null) return null;
+  const { eligibility, status = eligibility, source = 'declaration' } = value as { eligibility?: unknown; status?: unknown; source?: unknown };
+  if (!isEligibilityStatus(status) || (source !== 'declaration' && source !== 'platform-signal')) return null;
+  return { status, source };
+}
+
+const REASONS: readonly string[] = ['check-pending', 'check-unmet', 'not-established'] satisfies UnresolvedReason[];
+const isReason = (value: unknown): value is UnresolvedReason => typeof value === 'string' && REASONS.includes(value);
 
 const hex = (bytes: Uint8Array): string => Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
-
-function isEligible(band: string | null | undefined): band is EligibilityBand {
-  return typeof band === 'string' && ELIGIBLE_BANDS.includes(band);
-}
 
 /** Erases what each environment this build retires left on the device: its credentials, then its vault namespace. */
 async function removeRetiredEnvironments({ backend, credentials, vault }: AccountServiceOptions): Promise<void> {

@@ -158,7 +158,7 @@ describe('reading accounts', () => {
   it('a signed-in client sees only its own account and eligibility rows', async () => {
     expect((await a.client.from('accounts').select('account_id')).data).toEqual([{ account_id: a.accountId }]);
     expect((await a.client.from('eligibility').select('account_id, band')).data).toEqual([{ account_id: a.accountId, band: '18+' }]);
-    expect((await a.client.rpc('current_account')).data).toEqual({ account_id: a.accountId, eligibility: '18+' });
+    expect((await a.client.rpc('current_account')).data).toEqual({ account_id: a.accountId, eligibility: '18+', source: 'declaration' });
   });
 
   it('a client without a session sees nothing', async () => {
@@ -172,7 +172,7 @@ describe('reading accounts', () => {
     await a.client.from('accounts').update({ state: 'deleted' }).eq('account_id', a.accountId);
     await a.client.from('eligibility').update({ band: '13-15' }).eq('account_id', a.accountId);
     expect((await a.client.from('eligibility').insert({ account_id: b.accountId, band: '18+', source: 'declaration', checked_at: new Date().toISOString(), policy_version: 1 })).error).not.toBeNull();
-    expect((await a.client.rpc('current_account')).data).toEqual({ account_id: a.accountId, eligibility: '18+' });
+    expect((await a.client.rpc('current_account')).data).toEqual({ account_id: a.accountId, eligibility: '18+', source: 'declaration' });
   });
 
   it('storage holds each account’s objects in its own folder only', async () => {

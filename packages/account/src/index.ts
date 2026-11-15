@@ -8,23 +8,35 @@ export {
   retiredEnvironments,
 } from './environment';
 export {
+  type AgeRange,
+  type AgeSignal,
+  type EligibilityBand,
+  type EligibilityRecord,
+  type EligibilitySource,
+  type EligibilityStatus,
+  type PlatformAgeSignals,
+  type UnresolvedReason,
+  declarationPermitted,
+  noPlatformAgeSignals,
+} from './eligibility';
+export {
   type AccountGate,
   type AccountService,
   type AccountServiceOptions,
   type AccountSync,
   type AccountVault,
   type AgeAnswerResult,
-  type AgeRange,
+  type AgeCheckResult,
   type CodeIntent,
   type CodeRequestResult,
   type CodeVerificationResult,
   type CredentialStorage,
-  type EligibilityBand,
   type SyncStatus,
   type VaultOpening,
   type VaultSession,
   createAccountService,
 } from './service';
+export { type MetricPurpose, metricPermitted } from './metrics';
 export { type SyncErrorCode } from './sync/engine';
 export { type LiveChannel } from './sync/live';
 export {
