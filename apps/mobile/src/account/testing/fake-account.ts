@@ -130,6 +130,7 @@ export class FakeAccountService implements AccountService {
     retryRecord: async () => undefined,
     idle: async () => undefined,
     countWaiting: async () => this.waitingCount,
+    queue: async () => ({ status: 'refused', reason: 'no-account' }),
   };
 
   /** No account records in screen tests (spec 4's screens script their own). */

@@ -7,7 +7,7 @@ import { type SupabaseClient, createClient } from '@supabase/supabase-js';
 import { type BackendEnvironment, ENVIRONMENT_HEADER, type EnvironmentName, authCallbackUrl, retiredEnvironments } from './environment';
 import { type EngineStatus, SyncEngine } from './sync/engine';
 import { type AccountRecords, accountRecords } from './sync/records';
-import { type RecordType, recordTypes } from './sync/registry';
+import { type RecordType, prerequisitesOf, recordTypes } from './sync/registry';
 import { type DevicePorts, SyncSession } from './sync/session';
 import type { SyncStore } from './sync/store';
 import { RetryAfterWatch, supabaseLiveChannels, supabaseSyncBackend } from './sync/supabase';
@@ -180,9 +180,27 @@ export interface SyncStatus extends EngineStatus {
   readonly history: HistoryStatus;
 }
 
+/**
+ * Queueing a record for upload (spec 2, *Record-type registry*): queued, with
+ * its originating-device position for a per-device type; or refused, when no
+ * account session is open, the type isn't registered or is server-authored
+ * (no client writes it), or the payload isn't the type's.
+ */
+export type QueueResult =
+  | { readonly status: 'queued'; readonly id: string; readonly position?: number }
+  | { readonly status: 'refused'; readonly reason: 'no-account' | 'unknown-type' | 'server-authored' | 'invalid-payload' };
+
 /** Synchronization for the open account session. Triggers run it by themselves; these are for asking. */
 export interface AccountSync {
   readonly status: SyncStatus;
+  /**
+   * Queues an account-state operation or result for upload, committed locally
+   * before it resolves, then uploaded by itself. It waits for its barriers:
+   * any pending upload of a barrier type that affects it, and, for a purge,
+   * the target's own pending upload. A purge removes the target from this
+   * installation at once.
+   */
+  queue(recordType: string, payload: unknown): Promise<QueueResult>;
   /** Called when the status changes; returns an unsubscribe function. */
   subscribe(listener: (status: SyncStatus) => void): () => void;
   /**
@@ -863,6 +881,24 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
       reconcile: () => sync?.engine.reconcile('deliberate') ?? Promise.resolve(),
       retryRecord: (id) => sync?.engine.retryRecord(id) ?? Promise.resolve(),
       idle: () => sync?.engine.idle() ?? Promise.resolve(),
+      async queue(recordType, payload) {
+        const store = sync?.store;
+        if (!store) return { status: 'refused', reason: 'no-account' };
+        const type = registry.get(recordType);
+        if (!type) return { status: 'refused', reason: 'unknown-type' };
+        if (type.kind === 'server-authored-state') return { status: 'refused', reason: 'server-authored' };
+        if (!type.isPayload(payload)) return { status: 'refused', reason: 'invalid-payload' };
+        const queued = await store.queueUpload({
+          id: `${type.name}/${hex(options.randomBytes(16))}`,
+          recordType: type.name,
+          item: type.identity.of(payload),
+          payload,
+          dependencies: prerequisitesOf(registry, type, payload, await store.readUploadQueue()),
+          positioned: type.ordering === 'per-device',
+          purges: type.purges?.(payload) ?? null,
+        });
+        return { status: 'queued', id: queued.id, ...(queued.position !== undefined ? { position: queued.position } : {}) };
+      },
       async countWaiting() {
         try {
           return (await sync?.store.readUploadQueue())?.length ?? 0;

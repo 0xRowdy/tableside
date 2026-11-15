@@ -48,6 +48,14 @@ export interface Envelope {
   /** The item's identity under its record type's identity scheme. */
   readonly item: string;
   readonly payload: unknown;
+  /**
+   * Operations that must already have receipts on the server (its barriers
+   * and dependencies). Absent when there are none, so a request without any
+   * keeps the same text and hash.
+   */
+  readonly after?: readonly string[];
+  /** A per-device type's originating-device position; absent for other types. */
+  readonly position?: number;
 }
 
 /**
@@ -102,9 +110,12 @@ export const chunkCallBody = (chunk: StagedChunk): string => JSON.stringify(chun
  * manifest wouldn't fit (a payload of roughly 90 MiB).
  */
 export function prepareOperation(envelope: Envelope): PreparedOperation {
-  let request = canonicalJson(envelope);
+  // Optional fields are left out, never sent empty.
+  const { after, position, ...required } = envelope;
+  const sent = { ...required, ...(after && after.length > 0 ? { after } : {}), ...(position !== undefined ? { position } : {}) };
+  let request = canonicalJson(sent);
   if (utf8Length(uploadCallBody(request)) > REQUEST_LIMIT_BYTES) {
-    const { payload, ...rest } = envelope;
+    const { payload, ...rest } = sent;
     const text = canonicalJson(payload);
     const content: ContentManifest = { chunkBytes: CHUNK_BYTES, chunks: splitText(text, CHUNK_BYTES).map(sha256Hex), sha256: sha256Hex(text) };
     request = canonicalJson({ ...rest, content });
@@ -167,12 +178,14 @@ export type Disposition =
 
 /**
  * The upload operation's answer. Besides a receipt's disposition:
+ * waiting, an operation it names in `after` has no receipt yet (nothing was recorded; the identical request is sent again later);
  * operation-reused, a different request already holds this operation ID (nothing was recorded);
  * incompatible, the server no longer speaks this protocol; malformed, the envelope couldn't be read
  * (or is over the request limit).
  */
 export type UploadAnswer =
   | Disposition
+  | { readonly status: 'waiting' }
   | { readonly status: 'operation-reused' }
   | { readonly status: 'incompatible' }
   | { readonly status: 'malformed' }
@@ -205,7 +218,12 @@ export class SyncCallError extends Error {
   }
 }
 
-/** One accepted change in the account's feed. Sequences are gap-free and in commit order. */
+/**
+ * One accepted change in the account's feed. Sequences are gap-free and in
+ * commit order. A purged result's entries keep their sequence with a null
+ * change: there is nothing to apply. A per-device type's change also carries
+ * the platform's `origin`: the record's originating installation and position.
+ */
 export interface FeedEntry {
   readonly sequence: number;
   readonly recordType: string;

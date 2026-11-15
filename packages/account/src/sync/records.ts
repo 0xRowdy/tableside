@@ -116,6 +116,13 @@ export function accountRecords(open: OpenSession, registry: ReadonlyMap<string, 
       const local: Contribution[] = [];
       const add = (into: Contribution[], contribution: Contribution | null) => contribution && into.push(contribution);
       const queue = await store.readUploadQueue();
+      // A result whose purge is queued no longer counts, even while its own upload is pending.
+      const purging = new Set(
+        queue.flatMap((entry) => {
+          const target = registry.get(entry.recordType)?.purges?.(entry.payload);
+          return target ? [`${target.recordType}/${target.item}`] : [];
+        }),
+      );
       for (const type of registry.values()) {
         const contribute = type.contribution;
         if (!contribute) continue;
@@ -131,7 +138,9 @@ export function accountRecords(open: OpenSession, registry: ReadonlyMap<string, 
           const items = new Set(accepted.map((record) => record.item));
           for (const record of accepted) add(account, contribute(record.payload));
           for (const entry of queue) {
-            if (entry.recordType !== type.name || !type.isPayload(entry.payload) || items.has(type.identity.of(entry.payload))) continue;
+            if (entry.recordType !== type.name || !type.isPayload(entry.payload)) continue;
+            const item = type.identity.of(entry.payload);
+            if (items.has(item) || purging.has(`${type.name}/${item}`)) continue;
             add(local, contribute(entry.payload));
           }
         }

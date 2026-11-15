@@ -8,7 +8,7 @@ import { describe, expect, it } from 'vitest';
 import { type SyncBackend, SyncEngine } from './engine';
 import { type ChunkAnswer, type FeedPage, type ProtocolStatus, SyncCallError, type UploadAnswer } from './protocol';
 import type { RecordType } from './registry';
-import type { AcceptedRecord, LocalRevisionedItem, QueuedUpload, RejectedUpload, SyncStore } from './store';
+import type { AcceptedRecord, LocalRevisionedItem, NewUpload, QueuedUpload, RejectedUpload, SyncStore } from './store';
 import type { Disposition, PreparedOperation } from './protocol';
 
 interface Entry {
@@ -39,6 +39,11 @@ class MemoryStore implements SyncStore {
     return this.entries
       .filter((entry) => entry.status === 'pending')
       .map(({ id, recordType, payload, dependencies, operation, failures, flagged }) => ({ id, recordType, payload, dependencies, operation, failures, flagged }));
+  }
+  async queueUpload({ id, recordType, payload, dependencies }: NewUpload): Promise<QueuedUpload> {
+    this.entries.push({ id, recordType, payload, dependencies: [...dependencies], operation: null, status: 'pending', disposition: null, failures: 0, flagged: false });
+    for (const listener of this.listeners) listener();
+    return { id, recordType, payload, dependencies, operation: null, failures: 0, flagged: false };
   }
   async readRejectedUploads(): Promise<readonly RejectedUpload[]> {
     return this.entries

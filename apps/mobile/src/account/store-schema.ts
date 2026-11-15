@@ -61,8 +61,10 @@ const BASE_SCHEMA = [
   // entry is its one outgoing synchronization record (the activity id is
   // unique), written in the completion's transaction; a revisioned item's is
   // written with the local save or deletion, and goes once the item's
-  // accepted state reflects it. It also counts how often the entry failed by
-  // itself, and whether that flagged it (#92).
+  // accepted state reflects it; another record type's (an account-state
+  // operation, spec 3's attempts) names no activity and carries, for a
+  // per-device type, its originating-device position. It also counts how often
+  // the entry failed by itself, and whether that flagged it (#92).
   `CREATE TABLE outgoing (
     id TEXT PRIMARY KEY,
     activity_id TEXT UNIQUE REFERENCES activities (activity_id),
@@ -79,18 +81,26 @@ const BASE_SCHEMA = [
     receipt TEXT,
     receipt_sequence INTEGER,
     failures INTEGER NOT NULL DEFAULT 0 CHECK (failures >= 0),
-    flagged INTEGER NOT NULL DEFAULT 0 CHECK (flagged IN (0, 1))
+    flagged INTEGER NOT NULL DEFAULT 0 CHECK (flagged IN (0, 1)),
+    device_position INTEGER
   ) STRICT`,
   'CREATE INDEX outgoing_pending ON outgoing (status, position)',
   'CREATE INDEX outgoing_items ON outgoing (record_type, item_id, position)',
-  // Records the account has accepted: this installation's acknowledged uploads and the feed's changes.
+  // Records the account has accepted: this installation's acknowledged uploads
+  // and the feed's changes, with a per-device record's origin.
   `CREATE TABLE accepted_records (
     record_type TEXT NOT NULL,
     item_id TEXT NOT NULL,
     sequence INTEGER NOT NULL,
     body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,
+    installation_id TEXT,
+    device_position INTEGER,
     PRIMARY KEY (record_type, item_id)
   ) STRICT`,
+  // The last originating-device position this installation gave each per-device type. Never reused.
+  'CREATE TABLE device_positions (record_type TEXT PRIMARY KEY, last INTEGER NOT NULL) STRICT',
+  // Results purged from the account: never accepted on this installation again.
+  'CREATE TABLE purged_records (record_type TEXT NOT NULL, item_id TEXT NOT NULL, PRIMARY KEY (record_type, item_id)) STRICT',
   // The account sequence the feed has been applied through, and when a synchronization run last finished cleanly (ms since the epoch).
   'CREATE TABLE feed_cursor (singleton INTEGER PRIMARY KEY CHECK (singleton = 1), sequence INTEGER NOT NULL, synced_at INTEGER) STRICT',
   'INSERT INTO feed_cursor (singleton, sequence) VALUES (1, 0)',

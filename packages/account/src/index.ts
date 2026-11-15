@@ -30,6 +30,7 @@ export {
   type ProviderSettings,
   type ProviderSignInResult,
   type ProviderToken,
+  type QueueResult,
   type SignInMethod,
   type SignOutResult,
   type SignedInGate,
@@ -56,6 +57,7 @@ export {
   type ResolutionResult,
   type RevisionedItemView,
 } from './sync/records';
+export { type DeviceSequence, byOriginatingDevice } from './sync/ordering';
 export { type LiveChannel } from './sync/live';
 export {
   CHUNK_BYTES,
@@ -68,6 +70,7 @@ export {
   type PreparedOperation,
   type ProtocolStatus,
   type StagedChunk,
+  type UploadAnswer,
 } from './sync/protocol';
 export {
   type Contribution,
@@ -85,5 +88,15 @@ export {
 } from './sync/registry';
 export { SYNC_OPERATIONS } from './sync/supabase';
 export { type DevicePorts, type DeviceSignal, RECONCILE_INTERVAL_MS } from './sync/session';
-export { type AcceptedRecord, type LocalRevisionedItem, type QueuedUpload, type RejectedUpload, type SyncStore } from './sync/store';
+export {
+  type AcceptedRecord,
+  type FeedPageEffects,
+  type LocalRevisionedItem,
+  type NewUpload,
+  type Origin,
+  type QueuedUpload,
+  type RecordRef,
+  type RejectedUpload,
+  type SyncStore,
+} from './sync/store';
 export { type TotalsRow, sumContributions } from './sync/totals';

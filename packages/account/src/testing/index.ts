@@ -14,8 +14,29 @@ export {
   signInByEmail,
   uniqueEmail,
 } from './device';
-export { type TestRevisionedValue, testRecordTypes, testRevisionedItem } from './record-types';
 export { FaultProxy, type HeldResponse } from './fault-proxy';
 export { type ProviderIdentity, TestIdentityProvider, TestProviderPorts } from './identity-provider';
 export { Mailbox } from './mailbox';
 export { type LocalStack, localStack } from './stack';
+export {
+  TEST_RECORD_TYPES,
+  type TestAttempt,
+  type TestContribution,
+  type TestExperimentAssignment,
+  type TestReconciliation,
+  type TestResult,
+  type TestResultPurge,
+  type TestRevisionedValue,
+  type TestSharingWithdrawal,
+  type TestTransfer,
+  testAllowanceReconciliation,
+  testAllowanceTransfer,
+  testAttempt,
+  testContribution,
+  testExperimentAssignment,
+  testRecordTypes,
+  testResult,
+  testResultPurge,
+  testRevisionedItem,
+  testSharingWithdrawal,
+} from './record-types';
