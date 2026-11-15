@@ -30,9 +30,9 @@ export function createMethods(ctx: ServiceContext, signIn: SignIn): { readonly f
     async withProvider(provider) {
       if (!opensRestrictedPaths(ctx.gate)) return { status: 'failed' };
       try {
-        const proof = await signIn.providerProof(provider);
-        if (typeof proof === 'string') return { status: proof };
-        const answer = await ctx.actAsPlayer('fresh-auth', { method: 'provider', ...proof }, 'restricted');
+        const proven = await signIn.providerProof(provider);
+        if (typeof proven === 'string') return { status: proven };
+        const answer = await ctx.actAsPlayer('fresh-auth', { method: 'provider', ...proven.proof }, 'restricted');
         if (answer?.code === 200 && answer.status === 'confirmed') return { status: 'confirmed' };
         if (answer?.code === 403 && answer.status === 'not-a-method') return { status: 'not-a-method' };
         return { status: 'failed' };
@@ -57,9 +57,12 @@ export function createMethods(ctx: ServiceContext, signIn: SignIn): { readonly f
     async link(provider) {
       if (!opensOrdinaryAccess(ctx.gate)) return { status: 'failed' };
       try {
-        const proof = await signIn.providerProof(provider);
-        if (typeof proof === 'string') return { status: proof };
-        return linkAnswer(await ctx.actAsPlayer('link-method', { method: 'provider', ...proof })) ?? { status: 'failed' };
+        const proven = await signIn.providerProof(provider);
+        if (typeof proven === 'string') return { status: proven };
+        const linked = linkAnswer(await ctx.actAsPlayer('link-method', { method: 'provider', ...proven.proof }));
+        // A method added: its grant is kept too, for permanent deletion to revoke.
+        if (linked?.status === 'linked' || linked?.status === 'already-linked') await signIn.keepGrant(proven.credential);
+        return linked ?? { status: 'failed' };
       } catch {
         return { status: 'failed' };
       }

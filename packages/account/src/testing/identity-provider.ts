@@ -5,7 +5,7 @@
 // ID tokens themselves (bind-provider-assertion, provider-callback) know it the
 // same way, from [edge_runtime.secrets].
 
-import { createHash, createSign, generateKeyPairSync, randomUUID } from 'node:crypto';
+import { createHash, createSign, generateKeyPairSync, randomBytes, randomUUID } from 'node:crypto';
 import { type Server, createServer } from 'node:http';
 
 import type { AuthSessionResult, IdentityProvider, ProviderPorts, ProviderSettings, ProviderToken } from '../service';
@@ -15,6 +15,8 @@ import { slotPort } from './stack';
 const PORT = slotPort(54330);
 const ISSUER = `http://host.docker.internal:${PORT}`;
 const CLIENT_ID = 'tableside-test-idp';
+/** Must match TABLESIDE_GRANT_KEYCLOAK_CLIENT_SECRET in supabase/config.toml. */
+const CLIENT_SECRET = 'unused-test-idp-secret';
 
 const base64url = (value: string | Buffer) => Buffer.from(value).toString('base64url');
 
@@ -34,6 +36,22 @@ export class TestIdentityProvider {
   private readonly keys = generateKeyPairSync('rsa', { modulusLength: 2048 });
   private readonly keyId = randomUUID();
   private server: Server | null = null;
+  /** Authorization codes not yet exchanged, by code: who each is for. */
+  private readonly codes = new Map<string, ProviderIdentity>();
+  /** Refresh tokens issued for a code, by token: whose, and whether the app revoked it. */
+  private readonly grants = new Map<string, { readonly subject: string; revoked: boolean }>();
+
+  /** An authorization code for `identity`, as the provider hands the app one with its ID token. */
+  authorizationCode(identity: ProviderIdentity): string {
+    const code = `code-${randomBytes(12).toString('hex')}`;
+    this.codes.set(code, identity);
+    return code;
+  }
+
+  /** The refresh tokens issued for a subject, and whether each was revoked: what the provider holds for the app. */
+  grantsFor(subject: string): { readonly revoked: boolean }[] {
+    return [...this.grants.values()].filter((grant) => grant.subject === subject).map(({ revoked }) => ({ revoked }));
+  }
 
   async start(): Promise<void> {
     const jwk = { ...this.keys.publicKey.export({ format: 'jwk' }), kid: this.keyId, alg: 'RS256', use: 'sig' };
@@ -50,12 +68,39 @@ export class TestIdentityProvider {
       '/jwks': { keys: [jwk] },
     };
     this.server = createServer((request, response) => {
+      if (request.method === 'POST' && (request.url === '/token' || request.url === '/revoke')) {
+        let text = '';
+        request.on('data', (chunk: Buffer) => (text += chunk.toString('utf8')));
+        request.on('end', () => {
+          const form = new URLSearchParams(text);
+          const answer = this.oauth(request.url!, form);
+          response.writeHead(answer.status, { 'content-type': 'application/json' });
+          response.end(JSON.stringify(answer.body));
+        });
+        return;
+      }
       const document = documents[request.url ?? ''];
       response.writeHead(document ? 200 : 404, { 'content-type': 'application/json' });
       response.end(JSON.stringify(document ?? {}));
     });
     // Auth reaches this process from its container through the host gateway.
     await new Promise<void>((resolve) => this.server!.listen(PORT, '0.0.0.0', resolve));
+  }
+
+  /** The token endpoint (an authorization code for a refresh token and ID token) and the revocation endpoint, as Apple's and Google's. */
+  private oauth(path: string, form: URLSearchParams): { readonly status: number; readonly body: unknown } {
+    if (form.get('client_id') !== CLIENT_ID || form.get('client_secret') !== CLIENT_SECRET) return { status: 401, body: { error: 'invalid_client' } };
+    if (path === '/revoke') {
+      const grant = this.grants.get(form.get('token') ?? '');
+      if (grant) grant.revoked = true;
+      return { status: 200, body: {} };
+    }
+    const identity = form.get('grant_type') === 'authorization_code' ? this.codes.get(form.get('code') ?? '') : undefined;
+    if (!identity) return { status: 400, body: { error: 'invalid_grant' } };
+    this.codes.delete(form.get('code')!);
+    const refreshToken = `refresh-${randomBytes(16).toString('hex')}`;
+    this.grants.set(refreshToken, { subject: identity.subject, revoked: false });
+    return { status: 200, body: { access_token: `access-${randomBytes(8).toString('hex')}`, token_type: 'Bearer', refresh_token: refreshToken, id_token: this.idToken(identity) } };
   }
 
   async stop(): Promise<void> {
@@ -151,6 +196,8 @@ export class TestProviderPorts implements ProviderPorts {
   readonly returned: string[] = [];
   /** Rewrites the form the provider's page posts back (a tampered or replayed callback). */
   tamper: ((form: URLSearchParams) => URLSearchParams) | null = null;
+  /** Providers whose native sheet answers with an ID token alone, no authorization code. */
+  readonly withoutCode = new Set<IdentityProvider>();
 
   constructor(
     private readonly idp: TestIdentityProvider,
@@ -165,7 +212,9 @@ export class TestProviderPorts implements ProviderPorts {
     this.opened.push({ provider });
     const identity = this.accounts[provider];
     if (!identity) return { status: 'canceled' };
-    return { status: 'token', idToken: this.idp.idToken(identity, { nonce: request.hashedNonce }) };
+    // A provider that gives the app no authorization code (Google's native ID-token sign-in on Android) gives only the token.
+    const code = this.withoutCode.has(provider) ? {} : { authorizationCode: this.idp.authorizationCode(identity) };
+    return { status: 'token', idToken: this.idp.idToken(identity, { nonce: request.hashedNonce }), ...code };
   }
 
   /**
@@ -180,7 +229,10 @@ export class TestProviderPorts implements ProviderPorts {
     if (`${authorize.origin}${authorize.pathname}` !== this.idp.authorizeUrl) throw new Error(`the browser opened an unexpected page: ${authorize.origin}`);
     const identity = this.accounts.apple;
     let form = new URLSearchParams({ state: param('state') });
-    if (identity) form.set('id_token', this.idp.idToken(identity, { nonce: param('nonce'), audience: param('client_id') }));
+    if (identity) {
+      form.set('id_token', this.idp.idToken(identity, { nonce: param('nonce'), audience: param('client_id') }));
+      form.set('code', this.idp.authorizationCode(identity));
+    }
     else form.set('error', 'user_cancelled_authorize');
     if (this.tamper) form = this.tamper(form);
     const response = await fetch(param('redirect_uri'), {

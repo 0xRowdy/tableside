@@ -53,7 +53,9 @@ Deno.serve(async (request) => {
   // The nonce is checked when the app uses the token (it alone holds the nonce); here only that it is the provider's, for this app.
   if (!(await verifyIdToken(provider, idToken))) return back('failed');
 
-  const response = await serviceRpc(environment, 'store_provider_flow', { challenge, id_token: idToken });
+  // Apple's authorization code too, for the app to exchange for a revocable grant (provider-grant).
+  const code = String(form.get('code') ?? '');
+  const response = await serviceRpc(environment, 'store_provider_flow', { challenge, id_token: idToken, code });
   // Another environment's flow: this project never answers for it, not even with a redirect.
   if (response.status === 403) {
     await response.body?.cancel();

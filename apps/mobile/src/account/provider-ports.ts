@@ -5,6 +5,11 @@
 // on both (modules/google-sign-in). Every route asks for an ID token carrying
 // the hashed nonce; the Account service gives Auth the nonce itself.
 //
+// Sign in with Apple also hands the app an authorization code, which the
+// server exchanges for the grant permanent deletion revokes. Google's native
+// ID-token sign-in gives none, so its grant isn't held (a provider exception
+// at deletion; gate 3 decides whether to add Google's authorization flow).
+//
 // The client IDs are build-time settings (docs/environments.md). A build
 // without one has no sign-in with that provider on that platform. None of them
 // is a secret: provider secrets stay on the server.
@@ -40,7 +45,9 @@ export function providerSettings(): ProviderSettings {
           requestedScopes: [AppleAuthentication.AppleAuthenticationScope.EMAIL],
           nonce: hashedNonce,
         });
-        return credential.identityToken ? { status: 'token', idToken: credential.identityToken } : { status: 'failed' };
+        if (!credential.identityToken) return { status: 'failed' };
+        // Apple's authorization code: the server exchanges it for the grant that permanent deletion revokes.
+        return { status: 'token', idToken: credential.identityToken, ...(credential.authorizationCode ? { authorizationCode: credential.authorizationCode } : {}) };
       } catch (error) {
         return { status: (error as { code?: unknown }).code === 'ERR_REQUEST_CANCELED' ? 'canceled' : 'failed' };
       }

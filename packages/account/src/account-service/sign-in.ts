@@ -17,11 +17,16 @@ import { deletedKey, statusKey } from './credentials';
 import { codeRequestAnswer } from '../lifecycle-answers';
 import type { AccountService, CodeIntent, CodeRequestResult, IdentityProvider, ProviderSettings, SignInMethod, SignInMethodEntry } from './types';
 
-/** Who the provider says the player is: an ID token minted for `nonce` (whose hash is its nonce claim). Memory only. */
+/**
+ * Who the provider says the player is: an ID token minted for `nonce` (whose
+ * hash is its nonce claim), and the authorization code the provider gave with
+ * it, if any, from a native sheet or the browser. Memory only.
+ */
 export interface ProviderCredential {
   readonly provider: IdentityProvider;
   readonly idToken: string;
   readonly nonce: string;
+  readonly code?: { readonly value: string; readonly flow: 'native' | 'web' };
 }
 
 /** How long a Sign in that found no account is held for Create: well inside an Apple ID token's ten minutes. */
@@ -109,7 +114,8 @@ export function createSignIn(ctx: ServiceContext, session: AccountSession, age: 
     const hashedNonce = await ports.sha256Hex(nonce);
     if (route === 'native') {
       const answer = await ports.nativeIdToken(provider, { hashedNonce });
-      return answer.status === 'token' ? { provider, idToken: answer.idToken, nonce } : answer.status;
+      if (answer.status !== 'token') return answer.status;
+      return { provider, idToken: answer.idToken, nonce, ...(answer.authorizationCode ? { code: { value: answer.authorizationCode, flow: 'native' as const } } : {}) };
     }
     return browserCredential(provider, settings, nonce, hashedNonce);
   };
@@ -150,8 +156,23 @@ export function createSignIn(ctx: ServiceContext, session: AccountSession, age: 
     if (returnedTo !== callbackUrl || returned.state !== state) return 'failed';
     if (returned.error) return returned.error === 'canceled' ? 'canceled' : 'failed';
     const supabase = await ctx.connect();
-    const { data, error } = await supabase.rpc('redeem_provider_flow', { verifier });
-    return !error && typeof data === 'string' && data ? { provider, idToken: data, nonce } : 'failed';
+    const { data, error } = await supabase.rpc('redeem_provider_flow_code', { verifier });
+    const redeemed = data as { idToken?: unknown; code?: unknown } | null;
+    if (error || typeof redeemed?.idToken !== 'string' || !redeemed.idToken) return 'failed';
+    return { provider, idToken: redeemed.idToken, nonce, ...(typeof redeemed.code === 'string' && redeemed.code ? { code: { value: redeemed.code, flow: 'web' as const } } : {}) };
+  };
+
+  /**
+   * Hands the provider's authorization code, when it gave one, to the server,
+   * which keeps the revocable grant it is exchanged for so permanent deletion
+   * can revoke it. Best effort: nothing waits on it, and without it deletion
+   * reports a provider exception.
+   */
+  const keepGrant = async (credential: ProviderCredential): Promise<void> => {
+    if (!credential.code) return;
+    await ctx
+      .actAsPlayer('provider-grant', { provider: authName(credential.provider), code: credential.code.value, flow: credential.code.flow }, 'restricted')
+      .catch(() => null);
   };
 
   /** Binds the age step's assertion to the credential's identity (bind-provider-assertion). */
@@ -203,7 +224,8 @@ export function createSignIn(ctx: ServiceContext, session: AccountSession, age: 
     const nonce = await ctx.operation('issue_proof_nonce_v1', undefined, 'restricted');
     if (typeof nonce !== 'string') return 'failed' as const;
     const credential = await obtainCredential(provider, nonce);
-    return typeof credential === 'string' ? credential : { provider: authName(provider), idToken: credential.idToken, nonce: credential.nonce };
+    if (typeof credential === 'string') return credential;
+    return { proof: { provider: authName(provider), idToken: credential.idToken, nonce: credential.nonce }, credential };
   };
 
   const api: Pick<AccountService, 'requestEmailCode' | 'verifyEmailCode' | 'signInAsReviewer' | 'signInWithProvider' | 'createWithProvider'> = {
@@ -248,7 +270,9 @@ export function createSignIn(ctx: ServiceContext, session: AccountSession, age: 
           return { status: 'no-account' };
         }
         if (outcome === 'failed') return { status: 'failed' };
-        return (await finishSignIn(supabase)) ? { status: 'signed-in' } : { status: 'failed' };
+        if (!(await finishSignIn(supabase))) return { status: 'failed' };
+        await keepGrant(credential);
+        return { status: 'signed-in' };
       } catch {
         return { status: 'failed' };
       }
@@ -286,6 +310,7 @@ export function createSignIn(ctx: ServiceContext, session: AccountSession, age: 
         // existed (verified same-email linking): the server knows, never an email comparison.
         const created = (await supabase.rpc('account_created_by', { assertion: ageAssertion.token })).data === true;
         if (!(await finishSignIn(supabase))) return { status: 'failed' };
+        await keepGrant(credential);
         return { status: created ? 'created' : 'signed-in' };
       } catch {
         return { status: 'failed' };
@@ -293,7 +318,7 @@ export function createSignIn(ctx: ServiceContext, session: AccountSession, age: 
     },
   };
 
-  return { api, sendCode, providerProof, parseMethods, methodOf };
+  return { api, sendCode, providerProof, keepGrant, parseMethods, methodOf };
 }
 
 /** A query string, without the leading "?". (Hermes has no full URL implementation, so URLs are built by hand.) */

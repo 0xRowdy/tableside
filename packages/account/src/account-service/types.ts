@@ -382,8 +382,17 @@ export interface SignInMethods {
   confirmEmailChange(codes: { readonly currentCode: string; readonly newCode: string }): Promise<EmailChangeConfirmation>;
 }
 
-/** What a provider's native sheet answered: an ID token whose nonce claim is the hashed nonce it was given. */
-export type ProviderToken = { readonly status: 'token'; readonly idToken: string } | { readonly status: 'canceled' } | { readonly status: 'failed' };
+/**
+ * What a provider's native sheet answered: an ID token whose nonce claim is
+ * the hashed nonce it was given, and the authorization code it gave the app
+ * when it gives one (Sign in with Apple does; Google's native ID-token sign-in
+ * doesn't). The code is exchanged on the server for the grant that permanent
+ * deletion revokes.
+ */
+export type ProviderToken =
+  | { readonly status: 'token'; readonly idToken: string; readonly authorizationCode?: string }
+  | { readonly status: 'canceled' }
+  | { readonly status: 'failed' };
 
 /** What the system browser's sign-in session ended with: the app's callback URL, or the player closing it. */
 export type AuthSessionResult = { readonly status: 'returned'; readonly url: string } | { readonly status: 'canceled' };
