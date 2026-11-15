@@ -1,6 +1,6 @@
 // Seam 2: revisioned items, conflicts, tombstones and totals (#94), proven with
 // seam 2's test-only revisioned type (supabase/seed/test-record-types.sql) so
-// spec 4's casino sessions and private strategies inherit the behaviour. Each
+// spec 4's casino sessions and private strategies inherit the behavior. Each
 // device runs the app's own SQLCipher store; faults are injected at the
 // network (fault proxy), never inside the Account service.
 
@@ -232,6 +232,18 @@ describe('resolving a conflict', () => {
     const feed = JSON.stringify(await rawFeed(phone));
     expect(feed).not.toContain('-778/3');
     expect(feed).not.toContain('-888/5');
+  });
+
+  it('lost its answer: resolving again repeats the same request, and the account makes one revision', async () => {
+    const { phone, tablet } = await conflicted();
+    const { conflict } = (await accepted(phone))!;
+    const resolution = { generation: conflict!.generation, reviewed: conflict!.proposals.map((p) => p.id), value: session('20') };
+
+    phone.proxy.dropNextResponse('sync_upload_v1');
+    expect(await phone.account.records.resolve(TYPE, 'item-1', resolution)).toEqual({ status: 'offline' });
+    expect(await phone.account.records.resolve(TYPE, 'item-1', resolution)).toEqual({ status: 'resolved' });
+    await syncAll([phone, tablet]);
+    for (const d of [phone, tablet]) expect(await accepted(d)).toEqual({ revision: 3, deleted: false, value: session('20'), conflict: null });
   });
 
   it('keeps the rejected proposal’s receipt, so a retry of it never brings it back', async () => {

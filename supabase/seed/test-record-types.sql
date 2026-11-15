@@ -1,5 +1,5 @@
 -- Test-only record types (local stacks only; beta and production never run
--- seeds). Seam 2 proves the platform's behaviour for each kind with these, so
+-- seeds). Seam 2 proves the platform's behavior for each kind with these, so
 -- the specs that register real types (spec 4's casino sessions and private
 -- strategies) inherit it and test only their own rules. The client half is
 -- packages/account/src/testing/record-types.ts.

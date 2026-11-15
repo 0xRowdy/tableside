@@ -85,7 +85,7 @@ export const PLATFORM_TABLES: readonly string[] = [
 ];
 
 /** Canonical money text (spec 1's encoding). */
-function isMoney(value: unknown): value is string {
+export function isMoney(value: unknown): value is string {
   try {
     decodeMoney(value as string);
     return true;

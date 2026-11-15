@@ -132,6 +132,20 @@ describe('a revisioned item saved on this installation', () => {
     expect((await uploads(store)).map((upload) => upload.payload)).toEqual([{ item: 'item-1', action: 'save', base: 1, value: value('5') }]);
   });
 
+  it('leaves the queue at once when its receipt names a sequence the accepted state already reflects', async () => {
+    const store = await newStore();
+    await acceptedAt(store, 'item-1', 3, state(2, '10'));
+    // A stale save of the value the account already holds: the server answers "already accepted" at 3.
+    await store.writeRevisionedItem(TYPE, 'item-1', value('10'));
+    const [upload] = await store.readUploadQueue();
+    await store.prepareUpload(upload!.id, OPERATION);
+    await store.acknowledgeUpload(upload!.id, { status: 'accepted', operation: OPERATION.operationId, requestHash: ABC_SHA256, sequence: 3 }, null);
+
+    expect(await item(store, 'item-1')).toEqual({ item: 'item-1', accepted: state(2, '10'), change: null, onAccount: true });
+    await store.writeRevisionedItem(TYPE, 'item-1', value('12'));
+    expect((await uploads(store)).map((entry) => entry.payload)).toEqual([{ item: 'item-1', action: 'save', base: 2, value: value('12') }]);
+  });
+
   it('never moves an item back to an earlier accepted state', async () => {
     const store = await newStore();
     await acceptedAt(store, 'item-1', 2, state(2, '20'));

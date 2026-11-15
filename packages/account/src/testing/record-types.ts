@@ -1,11 +1,9 @@
 // Test-only record types: the client half of supabase/seed/test-record-types.sql
-// (local stacks only). Seam 2 proves the platform's behaviour for each kind
+// (local stacks only). Seam 2 proves the platform's behavior for each kind
 // with these, so the specs that register real types inherit it and test only
 // their own rules. Never registered in a build.
 
-import { decodeMoney } from '@tableside/engine';
-
-import { type RecordType, recordTypes, revisionedItemType } from '../sync/registry';
+import { type RecordType, isMoney, recordTypes, revisionedItemType } from '../sync/registry';
 
 /** A revisioned item shaped like a small casino session: a game, a real currency and an exact net result. */
 export interface TestRevisionedValue {
@@ -14,14 +12,6 @@ export interface TestRevisionedValue {
   readonly net: string;
 }
 
-function isMoney(value: unknown): boolean {
-  try {
-    decodeMoney(value as string);
-    return true;
-  } catch {
-    return false;
-  }
-}
 
 export const testRevisionedItem = revisionedItemType<TestRevisionedValue>({
   name: 'test-revisioned-item',

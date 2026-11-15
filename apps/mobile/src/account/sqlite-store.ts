@@ -384,6 +384,12 @@ export class SqliteActivityStore implements ActivityStore {
         id,
       ]);
       if (accepted) await putAccepted(tx, accepted);
+      // A revisioned upload the accepted state already reflects ("already accepted" at an applied sequence) goes now.
+      await tx.run(
+        `DELETE FROM outgoing WHERE id = ? AND revisioned = 1 AND status = 'accepted' AND receipt_sequence <=
+           (SELECT sequence FROM accepted_records WHERE record_type = outgoing.record_type AND item_id = outgoing.item_id)`,
+        [id],
+      );
     });
   }
 

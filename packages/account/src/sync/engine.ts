@@ -20,6 +20,8 @@
 // Retry pacing, flagged records and status (#92), chunked results (#93) and
 // barrier-bearing operations (#95) plug in here.
 
+import { canonicalJson } from '@tableside/engine';
+
 import { type FeedPage, PROTOCOL_VERSION, type PreparedOperation, type UploadAnswer, prepareOperation } from './protocol';
 import type { RecordType, RevisionedUpload } from './registry';
 import type { AcceptedRecord, QueuedUpload, SyncStore } from './store';
@@ -62,7 +64,8 @@ export interface Resolution {
  * resolved: one new revision was accepted.
  * conflict-changed: a proposal arrived (or the conflict otherwise changed) since the review; the item now shows it.
  * no-conflict: no conflict is open on the item.
- * offline: the backend couldn't be reached, or no answer arrived; nothing was resolved here.
+ * offline: the backend couldn't be reached, or no answer arrived. The account may have accepted it: resolving
+ *   again with the same review in this account session repeats the identical request, so it is never applied twice.
  * incompatible: the server no longer speaks this protocol (an update is required).
  * invalid: the resolution isn't one of the type's.
  */
@@ -73,6 +76,8 @@ export class SyncEngine {
   private rerunRequested = false;
   private stopped = false;
   private lastError: SyncErrorCode | null = null;
+  /** Resolutions sent with no answer yet, by what they resolve: a retry repeats the same operation. */
+  private readonly unansweredResolutions = new Map<string, PreparedOperation>();
 
   constructor(private readonly options: SyncEngineOptions) {}
 
@@ -121,13 +126,16 @@ export class SyncEngine {
       value: resolution.value,
     };
     if (this.stopped || type?.kind !== 'revisioned-item' || !type.isPayload(payload)) return 'invalid';
-    const operation = this.envelope(type, payload);
+    const key = canonicalJson({ recordType, payload });
+    const operation = this.unansweredResolutions.get(key) ?? this.envelope(type, payload);
+    this.unansweredResolutions.set(key, operation);
     let answer: UploadAnswer;
     try {
       answer = await this.options.backend.upload(operation.request);
     } catch {
       return 'offline';
     }
+    this.unansweredResolutions.delete(key);
     if (answer.status !== 'accepted' && answer.status !== 'rejected') return answer.status === 'incompatible' ? 'incompatible' : 'invalid';
     if (answer.operation !== operation.operationId || answer.requestHash !== operation.requestHash) return 'offline';
     await this.reconcile();

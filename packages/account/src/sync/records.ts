@@ -6,7 +6,7 @@
 // - Account totals count what the account accepted, each record's accepted
 //   version once: a conflict's baseline, never its proposals, and nothing for
 //   a tombstone. A pending edit of an accepted record is in no total.
-// - Records saved here that the account hasn't accepted yet are labelled local,
+// - Records saved here that the account hasn't accepted yet are labeled local,
 //   and summed apart.
 
 import type { Resolution, ResolutionOutcome, SyncEngine } from './engine';
@@ -32,7 +32,7 @@ export interface RevisionedItemView {
 export interface AccountTotals {
   /** What the account accepted. */
   readonly account: readonly TotalsRow[];
-  /** Records saved on this installation that the account hasn't accepted yet, labelled local. */
+  /** Records saved on this installation that the account hasn't accepted yet, labeled local. */
   readonly local: readonly TotalsRow[];
 }
 

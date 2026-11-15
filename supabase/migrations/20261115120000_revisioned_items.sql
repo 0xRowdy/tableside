@@ -5,9 +5,9 @@
 -- receipt and the feed entry.
 --
 -- - A revisioned item has one accepted revision. An edit names its base: the
---   accepted revision it was made from (0 for a new item), or the device's own
---   earlier operation on the item when that one was sent before the edit was
---   made. A matching base with no open conflict becomes the next revision.
+--   accepted revision it was made from (0 for a new item), or the
+--   installation's own earlier operation on the item when that one was sent
+--   before the edit was made. A matching base with no open conflict becomes the next revision.
 -- - Anything else becomes a preserved proposal and the accepted revision is
 --   frozen as the conflict baseline: no edit is accepted until a resolution
 --   names the conflict's current generation and every open proposal. The
@@ -80,7 +80,10 @@ end $$;
 -- ---------------------------------------------------------------------------
 
 -- Each record type's contribution (the client half is the registry's
--- `contribution`). `contribute(payload jsonb) returns jsonb` answers null, or
+-- `contribution`). A type's acceptance must refuse any payload its
+-- contribution can't count (the amount canonical money, the game and currency
+-- present): counting one raises, so the upload fails without a receipt.
+-- `contribute(payload jsonb) returns jsonb` answers null, or
 --   {"total":"practice"|"casino","game":text,"currency":"simulated"|ISO 4217 code,"amount":money text}
 create table private.record_contributions (
   record_type text primary key,
