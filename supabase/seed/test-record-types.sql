@@ -266,3 +266,97 @@ insert into private.record_types (record_type, payload_version, kind, accept, or
   ('test-experiment-assignment', 1, 'server-authored-state', null, 'account', null);
 insert into private.record_contributions (record_type, contribute)
   values ('test-result', to_regprocedure('private.contribution_test_result(jsonb)'));
+
+-- ---------------------------------------------------------------------------
+-- Bootstrap snapshots (#96): what each test type puts in a new device's
+-- snapshot. The account-state stand-ins put nothing: their later changes
+-- arrive through the feed, and their specs decide what a new device needs.
+-- ---------------------------------------------------------------------------
+
+-- A strategy revision (spec 4 stand-in): an immutable result of a strategy,
+-- the revisioned item it belongs to. A test revisioned item stands in for the
+-- private strategy (spec 4) or the saved community strategy (spec 6).
+create table private.test_strategy_revisions (
+  account_id uuid not null references public.accounts (account_id),
+  revision_id text not null,
+  strategy_id text not null,
+  payload jsonb not null,
+  sequence bigint not null,
+  primary key (account_id, revision_id)
+);
+revoke all on private.test_strategy_revisions from public, anon, authenticated;
+
+create function private.accept_test_strategy_revision_v1(p_account uuid, p_request jsonb, p_sequence bigint) returns jsonb
+language plpgsql volatile security definer set search_path = '' as $$
+declare
+  v_existing private.test_strategy_revisions;
+begin
+  if not private.test_payload_names_item(p_request, 'revisionId')
+    or jsonb_typeof(p_request #> '{payload,strategy}') is distinct from 'string'
+    or jsonb_typeof(p_request #> '{payload,executable}') is distinct from 'string' then
+    return jsonb_build_object('status', 'rejected', 'code', 'invalid-payload');
+  end if;
+  select * into v_existing from private.test_strategy_revisions where account_id = p_account and revision_id = p_request ->> 'item';
+  if found then
+    return case when v_existing.payload = p_request -> 'payload'
+      then jsonb_build_object('status', 'accepted', 'sequence', v_existing.sequence)
+      else jsonb_build_object('status', 'rejected', 'code', 'identity-reused') end;
+  end if;
+  insert into private.test_strategy_revisions values (p_account, p_request ->> 'item', p_request #>> '{payload,strategy}', p_request -> 'payload', p_sequence);
+  return jsonb_build_object('status', 'accepted', 'change', jsonb_build_object('record', p_request -> 'payload'));
+end $$;
+
+-- Results: the summary only (the detail stays on the server), at the acceptance.
+create function private.snapshot_test_results(p_account uuid, p_record_type text)
+returns table (item_id text, sequence bigint, change jsonb)
+language sql stable security definer set search_path = '' as $$
+  select r.result_id,
+         (select min(f.sequence) from private.sync_feed f where f.account_id = r.account_id and f.record_type = p_record_type and f.item_id = r.result_id),
+         jsonb_build_object('record', r.payload)
+  from private.test_results r where r.account_id = p_account
+$$;
+
+-- Attempts (spec 3's challenge attempts and lesson progress): every one, with its originating-device position.
+create function private.snapshot_test_attempts(p_account uuid, p_record_type text)
+returns table (item_id text, sequence bigint, change jsonb)
+language sql stable security definer set search_path = '' as $$
+  select a.attempt_id,
+         (select min(f.sequence) from private.sync_feed f where f.account_id = a.account_id and f.record_type = p_record_type and f.item_id = a.attempt_id),
+         jsonb_build_object('record', a.payload, 'origin', jsonb_build_object('installation', p.installation_id, 'position', p.position))
+  from private.test_attempts a
+  join private.device_positions p on p.account_id = a.account_id and p.record_type = p_record_type and p.item_id = a.attempt_id
+  where a.account_id = p_account
+$$;
+
+-- Experiment assignments: each experiment's current group, at its latest change.
+create function private.snapshot_test_experiment_assignments(p_account uuid, p_record_type text)
+returns table (item_id text, sequence bigint, change jsonb)
+language sql stable security definer set search_path = '' as $$
+  select e.experiment,
+         (select max(f.sequence) from private.sync_feed f where f.account_id = e.account_id and f.record_type = p_record_type and f.item_id = e.experiment),
+         jsonb_build_object('record', jsonb_build_object('version', 1, 'experiment', e.experiment, 'group', e.assignment))
+  from private.test_experiment_assignments e where e.account_id = p_account
+$$;
+
+-- Strategy revisions: only each strategy's latest, and only while the strategy isn't deleted (Amendment 4 §3, 7 §3).
+create function private.snapshot_test_strategy_revisions(p_account uuid, p_record_type text)
+returns table (item_id text, sequence bigint, change jsonb)
+language sql stable security definer set search_path = '' as $$
+  select distinct on (r.strategy_id) r.revision_id, r.sequence, jsonb_build_object('record', r.payload)
+  from private.test_strategy_revisions r
+  join private.revisioned_items i on i.account_id = r.account_id and i.record_type = 'test-revisioned-item' and i.item_id = r.strategy_id
+  where r.account_id = p_account and i.payload is not null
+  order by r.strategy_id, r.sequence desc
+$$;
+
+revoke execute on function private.accept_test_strategy_revision_v1(uuid, jsonb, bigint), private.snapshot_test_results(uuid, text),
+  private.snapshot_test_attempts(uuid, text), private.snapshot_test_experiment_assignments(uuid, text),
+  private.snapshot_test_strategy_revisions(uuid, text) from public;
+
+insert into private.record_types (record_type, payload_version, kind, accept, ordering, purge)
+  values ('test-strategy-revision', 1, 'immutable-result', to_regprocedure('private.accept_test_strategy_revision_v1(uuid,jsonb,bigint)'), 'account', null);
+update private.record_types set snapshot = to_regprocedure('private.snapshot_revisioned_items(uuid,text)') where record_type = 'test-revisioned-item';
+update private.record_types set snapshot = to_regprocedure('private.snapshot_test_results(uuid,text)') where record_type = 'test-result';
+update private.record_types set snapshot = to_regprocedure('private.snapshot_test_attempts(uuid,text)') where record_type = 'test-attempt';
+update private.record_types set snapshot = to_regprocedure('private.snapshot_test_experiment_assignments(uuid,text)') where record_type = 'test-experiment-assignment';
+update private.record_types set snapshot = to_regprocedure('private.snapshot_test_strategy_revisions(uuid,text)') where record_type = 'test-strategy-revision';

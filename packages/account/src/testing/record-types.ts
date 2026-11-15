@@ -46,7 +46,7 @@ function testType<P>(
   fields: Pick<RecordType<P>, 'name' | 'kind' | 'isPayload' | 'barriers'> & {
     readonly id: keyof P & string;
     readonly tables: readonly string[];
-  } & Partial<Pick<RecordType<P>, 'affectedBy' | 'afterReconciliation' | 'ordering' | 'purges' | 'fromChange' | 'contribution'>>,
+  } & Partial<Pick<RecordType<P>, 'affectedBy' | 'afterReconciliation' | 'ordering' | 'purges' | 'fromChange' | 'contribution' | 'snapshot'>>,
 ): RecordType<P> {
   const { id, tables, ...rest } = fields;
   const type: RecordType<P> = {
@@ -55,6 +55,7 @@ function testType<P>(
     acceptance: fields.kind === 'server-authored-state' ? null : `private.accept_${fields.name.replaceAll('-', '_')}_v1`,
     fromChange: (change) => recordOf(type)(change),
     contribution: null,
+    snapshot: null,
     export: { csv: null, json: (payload) => payload },
     deletion: { serverTables: tables },
     ...rest,
@@ -91,6 +92,8 @@ export interface TestResult {
   /** Its detail, kept apart from its summary on the server. */
   readonly detail: string;
 }
+/** A test result as a bootstrap snapshot holds it: the summary, without the detail. */
+export type TestResultSummary = Omit<TestResult, 'detail'>;
 export interface TestResultPurge {
   readonly version: 1;
   readonly target: string;
@@ -152,7 +155,7 @@ export const testAllowanceTransfer = testType<TestTransfer>({
   tables: ['private.test_transfers'],
 });
 
-/** An immutable result with a summary, a detail and a contribution: what a purge removes. */
+/** An immutable result with a summary, a detail and a contribution: what a purge removes, and what a snapshot summarizes. */
 export const testResult = testType<TestResult>({
   name: 'test-result',
   kind: 'immutable-result',
@@ -160,6 +163,14 @@ export const testResult = testType<TestResult>({
   isPayload: (value): value is TestResult => hasStrings(value, 'resultId', 'detail') && isMoney(value.amount),
   barriers: [],
   contribution: (result) => ({ total: 'practice', game: 'test', currency: 'simulated', amount: result.amount }),
+  snapshot: 'private.snapshot_test_results',
+  // The whole result from the feed, or its summary from a snapshot.
+  fromChange(change) {
+    const record = isObject(change) ? change.record : undefined;
+    return hasStrings(record, 'resultId') && isMoney(record.amount) && (record.detail === undefined || typeof record.detail === 'string')
+      ? (record as unknown as TestResult)
+      : null;
+  },
   tables: ['private.test_results', 'private.test_result_details'],
 });
 
@@ -187,6 +198,7 @@ export const testAttempt = testType<TestAttempt>({
   isPayload: (value): value is TestAttempt => hasStrings(value, 'attemptId') && typeof value.passed === 'boolean' && typeof value.at === 'number',
   barriers: [],
   ordering: 'per-device',
+  snapshot: 'private.snapshot_test_attempts',
   tables: ['private.test_attempts'],
 });
 
@@ -197,7 +209,32 @@ export const testExperimentAssignment = testType<TestExperimentAssignment>({
   id: 'experiment',
   isPayload: (value): value is TestExperimentAssignment => hasStrings(value, 'experiment', 'group'),
   barriers: [],
+  snapshot: 'private.snapshot_test_experiment_assignments',
   tables: ['private.test_experiment_assignments'],
+});
+
+export interface TestStrategyRevision {
+  readonly version: 1;
+  readonly revisionId: string;
+  /** The strategy it is a revision of: a test revisioned item, standing in for a private or saved community strategy. */
+  readonly strategy: string;
+  readonly executable: string;
+}
+
+/**
+ * Spec 4's strategy revision: an immutable result whose snapshot holds only
+ * each strategy's latest revision, and only while the strategy isn't deleted
+ * (Amendment 4 §3); spec 6's saved community strategy and its adopted
+ * executable register the same way (Amendment 7 §3).
+ */
+export const testStrategyRevision = testType<TestStrategyRevision>({
+  name: 'test-strategy-revision',
+  kind: 'immutable-result',
+  id: 'revisionId',
+  isPayload: (value): value is TestStrategyRevision => hasStrings(value, 'revisionId', 'strategy', 'executable'),
+  barriers: [],
+  snapshot: 'private.snapshot_test_strategy_revisions',
+  tables: ['private.test_strategy_revisions'],
 });
 
 export const TEST_RECORD_TYPES: readonly RecordType[] = [
@@ -209,6 +246,7 @@ export const TEST_RECORD_TYPES: readonly RecordType[] = [
   testResultPurge,
   testAttempt,
   testExperimentAssignment,
+  testStrategyRevision,
 ] as RecordType[];
 
 /** This build's record types and the test-only ones. */

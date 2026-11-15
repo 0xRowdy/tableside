@@ -16,9 +16,13 @@ export interface TotalsRow {
   readonly net: string;
 }
 
-/** Sums contributions, ordered by total, game and currency. Throws on an amount that isn't canonical money. */
-export function sumContributions(contributions: readonly Contribution[]): TotalsRow[] {
+/**
+ * Sums contributions, onto `base` when given (totals already summed),
+ * ordered by total, game and currency. Throws on an amount that isn't canonical money.
+ */
+export function sumContributions(contributions: readonly Contribution[], base: readonly TotalsRow[] = []): TotalsRow[] {
   const rows = new Map<string, { total: Contribution['total']; game: string; currency: string; records: number; net: ReturnType<typeof money> }>();
+  for (const { total, game, currency, records, net } of base) rows.set(JSON.stringify([total, game, currency]), { total, game, currency, records, net: decodeMoney(net) });
   for (const { total, game, currency, amount } of contributions) {
     const key = JSON.stringify([total, game, currency]);
     const row = rows.get(key) ?? { total, game, currency, records: 0, net: money(0n) };

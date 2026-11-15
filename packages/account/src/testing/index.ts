@@ -26,6 +26,8 @@ export {
   type TestReconciliation,
   type TestResult,
   type TestResultPurge,
+  type TestResultSummary,
+  type TestStrategyRevision,
   type TestRevisionedValue,
   type TestSharingWithdrawal,
   type TestTransfer,
@@ -39,4 +41,5 @@ export {
   testResultPurge,
   testRevisionedItem,
   testSharingWithdrawal,
+  testStrategyRevision,
 } from './record-types';

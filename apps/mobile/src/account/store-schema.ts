@@ -104,6 +104,27 @@ const BASE_SCHEMA = [
   // The account sequence the feed has been applied through, and when a synchronization run last finished cleanly (ms since the epoch).
   'CREATE TABLE feed_cursor (singleton INTEGER PRIMARY KEY CHECK (singleton = 1), sequence INTEGER NOT NULL, synced_at INTEGER) STRICT',
   'INSERT INTO feed_cursor (singleton, sequence) VALUES (1, 0)',
+  // The bootstrap (#96): whether the baseline is installed, and until then the
+  // snapshot being staged (its ID, watermark, row count and totals, as the
+  // body), how many of its rows are staged and the last ordinal staged.
+  `CREATE TABLE bootstrap (
+    singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
+    installed INTEGER NOT NULL CHECK (installed IN (0, 1)),
+    body TEXT, body_format INTEGER, body_length INTEGER, body_sha256 TEXT,
+    staged INTEGER NOT NULL DEFAULT 0 CHECK (staged >= 0),
+    after_ordinal INTEGER NOT NULL DEFAULT 0 CHECK (after_ordinal >= 0)
+  ) STRICT`,
+  'INSERT INTO bootstrap (singleton, installed) VALUES (1, 0)',
+  // The staged snapshot's rows, as the accepted records they become.
+  `CREATE TABLE bootstrap_rows (
+    position INTEGER PRIMARY KEY,
+    record_type TEXT NOT NULL,
+    item_id TEXT NOT NULL,
+    sequence INTEGER NOT NULL,
+    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,
+    installation_id TEXT,
+    device_position INTEGER
+  ) STRICT`,
 ];
 
 /** Creates the schema in an empty database: the base schema, then every migration, with `meta` naming the result. */
