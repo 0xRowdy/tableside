@@ -70,6 +70,7 @@ export class FakeAccountService implements AccountService {
     status: { live: false, error: null },
     reconcile: async () => undefined,
     idle: async () => undefined,
+    queue: async () => ({ status: 'refused', reason: 'no-account' }),
   };
 
   async renew() {

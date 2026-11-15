@@ -134,7 +134,8 @@ end $$;
 revoke execute on function private.author_server_state(uuid, text, text, jsonb) from public;
 
 -- ---------------------------------------------------------------------------
--- Operation API, protocol version 1 (replaces #91's sync_upload_v1)
+-- Operation API, protocol version 1 (replaces #93's sync_upload_v1, keeping
+-- its chunk manifests, which in turn replaced #91's)
 -- ---------------------------------------------------------------------------
 
 -- The envelope gains two optional fields, absent unless used, so every
@@ -165,7 +166,11 @@ declare
   v_result jsonb;
   v_change jsonb;
   v_disposition jsonb;
+  v_assembly jsonb;
 begin
+  if octet_length(request) > 131072 then
+    return jsonb_build_object('status', 'malformed');
+  end if;
   if v_account is null then
     raise exception 'not authorized' using errcode = '42501';
   end if;
@@ -227,9 +232,26 @@ begin
     return jsonb_build_object('status', 'waiting', 'operation', v_operation);
   end if;
 
+  -- A manifest (#93): the payload is rebuilt from the staged chunks it names.
+  -- Until every one is staged nothing is decided, so the client stages them
+  -- and sends the identical request again.
+  if v_request ? 'content' then
+    v_assembly := private.assemble_content(v_account, v_request);
+    if v_assembly ->> 'status' in ('malformed', 'chunks-missing') then
+      return v_assembly;
+    end if;
+    if v_assembly ->> 'status' = 'assembled' then
+      v_request := v_request || jsonb_build_object('payload', v_assembly -> 'payload');
+    else
+      v_result := v_assembly;
+    end if;
+  end if;
+
   select * into v_type from private.record_types
     where record_type = v_request ->> 'recordType' and payload_version = (v_request ->> 'payloadVersion')::integer;
-  if not found then
+  if v_result is not null then
+    null;
+  elsif not found then
     v_result := jsonb_build_object('status', 'rejected', 'code', 'unknown-record-type');
   elsif v_type.kind = 'server-authored-state' then
     v_result := jsonb_build_object('status', 'rejected', 'code', 'server-authored');
@@ -270,5 +292,11 @@ begin
 
   insert into private.sync_receipts (account_id, operation_id, request_hash, installation_id, record_type, item_id, disposition)
     values (v_account, v_operation, v_hash, v_installation, v_request ->> 'recordType', v_item, v_disposition);
+  -- The manifest's chunks have served: the receipt answers every retry from now on.
+  if v_assembly is not null then
+    delete from private.staged_chunks
+      where account_id = v_account and record_type = v_request ->> 'recordType' and item_id = v_request ->> 'item'
+        and sha256 in (select jsonb_array_elements_text(v_request -> 'content' -> 'chunks'));
+  end if;
   return v_disposition;
 end $$;
