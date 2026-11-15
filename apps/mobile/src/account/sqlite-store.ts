@@ -84,6 +84,20 @@ export interface AcceptedRecord {
   readonly payload: unknown;
   /** A per-device record's originating installation and position. */
   readonly origin?: { readonly installation: string; readonly position: number };
+  /** A snapshot's summary whose detail hasn't arrived: when the record happened. */
+  readonly summaryAt?: number;
+}
+
+/** An accepted record held as a summary. */
+export interface SummaryOnly extends RecordRef {
+  readonly sequence: number;
+  readonly at: number;
+}
+
+/** How far the history detail has come (#97). */
+export interface HistoryProgress {
+  readonly recent: number | null;
+  readonly download: { readonly total: number | null } | null;
 }
 
 export interface NewUpload {
@@ -589,21 +603,70 @@ export class SqliteActivityStore implements ActivityStore {
 
   readAcceptedRecords(recordType: string): Promise<readonly AcceptedRecord[]> {
     return this.transaction(async (tx) =>
-      (
-        await tx.all<BodyRow & { item_id: string; sequence: number; installation_id: string | null; device_position: number | null }>(
-          `SELECT ${BODY}, item_id, sequence, installation_id, device_position FROM accepted_records WHERE record_type = ? ORDER BY sequence`,
-          [recordType],
-        )
-      ).map((row) => ({
-        recordType,
-        item: row.item_id,
-        sequence: row.sequence,
-        payload: decode<unknown>(row),
-        ...(row.installation_id !== null && row.device_position !== null
-          ? { origin: { installation: row.installation_id, position: row.device_position } }
-          : {}),
-      })),
+      (await tx.all<AcceptedRow>(`SELECT ${ACCEPTED} FROM accepted_records WHERE record_type = ? ORDER BY sequence`, [recordType])).map(acceptedOf),
     );
+  }
+
+  readAcceptedRecord(recordType: string, item: string): Promise<AcceptedRecord | null> {
+    return this.transaction(async (tx) => {
+      const row = await tx.get<AcceptedRow>(`SELECT ${ACCEPTED} FROM accepted_records WHERE record_type = ? AND item_id = ?`, [recordType, item]);
+      return row ? acceptedOf(row) : null;
+    });
+  }
+
+  /** Records held as summaries, newest first: those from `since` on when given, at most `limit`. */
+  readSummaries({ since, limit }: { readonly since?: number; readonly limit: number }): Promise<readonly SummaryOnly[]> {
+    return this.transaction(async (tx) =>
+      (
+        await tx.all<{ record_type: string; item_id: string; sequence: number; summary_at: number }>(
+          `SELECT record_type, item_id, sequence, summary_at FROM accepted_records
+           WHERE summary_at IS NOT NULL AND summary_at >= ? ORDER BY summary_at DESC, record_type, item_id LIMIT ?`,
+          [since ?? Number.MIN_SAFE_INTEGER, limit],
+        )
+      ).map((row) => ({ recordType: row.record_type, item: row.item_id, sequence: row.sequence, at: row.summary_at })),
+    );
+  }
+
+  countSummaries(since?: number): Promise<number> {
+    return this.transaction(
+      async (tx) =>
+        (
+          await tx.get<{ count: number }>('SELECT count(*) AS count FROM accepted_records WHERE summary_at IS NOT NULL AND summary_at >= ?', [
+            since ?? Number.MIN_SAFE_INTEGER,
+          ])
+        )?.count ?? 0,
+    );
+  }
+
+  /** Replaces summaries with the whole records, only where each is still a summary at the same sequence; returns how many. */
+  applyDetails(records: readonly AcceptedRecord[]): Promise<number> {
+    return this.transaction(async (tx) => {
+      let applied = 0;
+      for (const record of records) {
+        if (record.summaryAt !== undefined) throw new StoreError(`the detail of ${record.recordType} ${record.item} is a summary`);
+        applied += await tx.run(
+          `UPDATE accepted_records SET body = ?, body_format = ?, body_length = ?, body_sha256 = ?, summary_at = NULL
+           WHERE record_type = ? AND item_id = ? AND sequence = ? AND summary_at IS NOT NULL`,
+          [...encode(record.payload), record.recordType, record.item, record.sequence],
+        );
+      }
+      return applied;
+    });
+  }
+
+  readHistoryProgress(): Promise<HistoryProgress> {
+    return this.transaction(readHistory);
+  }
+
+  /** Records the first download's 90-day count and Download all history's request and starting count; recorded ones stay. */
+  recordHistoryProgress(progress: { readonly recent?: number; readonly downloadRequested?: true; readonly downloadTotal?: number }): Promise<void> {
+    return this.transaction(async (tx) => {
+      if (progress.recent !== undefined) await tx.run('UPDATE history SET recent = coalesce(recent, ?) WHERE singleton = 1', [progress.recent]);
+      if (progress.downloadRequested) await tx.run('UPDATE history SET download_requested = 1 WHERE singleton = 1');
+      if (progress.downloadTotal !== undefined) {
+        await tx.run('UPDATE history SET download_total = coalesce(download_total, ?) WHERE singleton = 1 AND download_requested = 1', [progress.downloadTotal]);
+      }
+    });
   }
 
   /**
@@ -703,8 +766,16 @@ export class SqliteActivityStore implements ActivityStore {
       if (progress.installed || progress.staging?.snapshot !== snapshot || progress.staging.after !== after) return false;
       for (const record of records) {
         await tx.run(
-          `INSERT INTO bootstrap_rows (record_type, item_id, sequence, ${BODY}, installation_id, device_position) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [record.recordType, record.item, record.sequence, ...encode(record.payload), record.origin?.installation ?? null, record.origin?.position ?? null],
+          `INSERT INTO bootstrap_rows (record_type, item_id, sequence, ${BODY}, installation_id, device_position, summary_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            record.recordType,
+            record.item,
+            record.sequence,
+            ...encode(record.payload),
+            record.origin?.installation ?? null,
+            record.origin?.position ?? null,
+            record.summaryAt ?? null,
+          ],
         );
       }
       await tx.run('UPDATE bootstrap SET staged = staged + ?, after_ordinal = ? WHERE singleton = 1', [records.length, through]);
@@ -725,13 +796,13 @@ export class SqliteActivityStore implements ActivityStore {
       // The feed is only ever applied after a baseline: the cursor can't be past one yet.
       if (cursor !== 0) throw new StoreIntegrityError(`the feed cursor is at ${cursor} before the baseline is installed`);
       await tx.run(
-        `INSERT INTO accepted_records (record_type, item_id, sequence, ${BODY}, installation_id, device_position)
-         SELECT record_type, item_id, sequence, ${BODY}, installation_id, device_position FROM bootstrap_rows b
+        `INSERT INTO accepted_records (record_type, item_id, sequence, ${BODY}, installation_id, device_position, summary_at)
+         SELECT record_type, item_id, sequence, ${BODY}, installation_id, device_position, summary_at FROM bootstrap_rows b
          WHERE NOT EXISTS (SELECT 1 FROM purged_records p WHERE p.record_type = b.record_type AND p.item_id = b.item_id)
          ORDER BY position
          ON CONFLICT (record_type, item_id) DO UPDATE SET sequence = excluded.sequence, body = excluded.body,
            body_format = excluded.body_format, body_length = excluded.body_length, body_sha256 = excluded.body_sha256,
-           installation_id = excluded.installation_id, device_position = excluded.device_position
+           installation_id = excluded.installation_id, device_position = excluded.device_position, summary_at = excluded.summary_at
          WHERE excluded.sequence > accepted_records.sequence`,
       );
       // Revisioned uploads the baseline already reflects go, as when a feed page reflects them.
@@ -821,6 +892,37 @@ async function latestChange(tx: SqlExecutor, recordType: string, item: string, a
   );
 }
 
+/** An accepted record's columns: its value, its origin and whether it is a summary. */
+const ACCEPTED = `${BODY}, record_type, item_id, sequence, installation_id, device_position, summary_at`;
+
+interface AcceptedRow extends BodyRow {
+  readonly record_type: string;
+  readonly item_id: string;
+  readonly sequence: number;
+  readonly installation_id: string | null;
+  readonly device_position: number | null;
+  readonly summary_at: number | null;
+}
+
+function acceptedOf(row: AcceptedRow): AcceptedRecord {
+  return {
+    recordType: row.record_type,
+    item: row.item_id,
+    sequence: row.sequence,
+    payload: decode<unknown>(row),
+    ...(row.installation_id !== null && row.device_position !== null ? { origin: { installation: row.installation_id, position: row.device_position } } : {}),
+    ...(row.summary_at !== null ? { summaryAt: row.summary_at } : {}),
+  };
+}
+
+async function readHistory(tx: SqlExecutor): Promise<HistoryProgress> {
+  const row = await tx.get<{ recent: number | null; download_requested: number; download_total: number | null }>(
+    'SELECT recent, download_requested, download_total FROM history WHERE singleton = 1',
+  );
+  if (!row) throw new StoreIntegrityError('the history progress is missing');
+  return { recent: row.recent, download: row.download_requested === 1 ? { total: row.download_total } : null };
+}
+
 async function readBootstrapProgress(tx: SqlExecutor): Promise<BootstrapProgress> {
   const row = await tx.get<{ installed: number; staged: number; after_ordinal: number } & { [K in keyof BodyRow]: BodyRow[K] | null }>(
     `SELECT installed, staged, after_ordinal, ${BODY} FROM bootstrap WHERE singleton = 1`,
@@ -843,12 +945,20 @@ async function readCursor(tx: SqlExecutor): Promise<number> {
 async function putAccepted(tx: SqlExecutor, record: AcceptedRecord): Promise<void> {
   if (await tx.get('SELECT 1 FROM purged_records WHERE record_type = ? AND item_id = ?', [record.recordType, record.item])) return;
   await tx.run(
-    `INSERT INTO accepted_records (record_type, item_id, sequence, ${BODY}, installation_id, device_position) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `INSERT INTO accepted_records (record_type, item_id, sequence, ${BODY}, installation_id, device_position, summary_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT (record_type, item_id) DO UPDATE SET sequence = excluded.sequence, body = excluded.body,
        body_format = excluded.body_format, body_length = excluded.body_length, body_sha256 = excluded.body_sha256,
-       installation_id = excluded.installation_id, device_position = excluded.device_position
+       installation_id = excluded.installation_id, device_position = excluded.device_position, summary_at = excluded.summary_at
      WHERE excluded.sequence > accepted_records.sequence`,
-    [record.recordType, record.item, record.sequence, ...encode(record.payload), record.origin?.installation ?? null, record.origin?.position ?? null],
+    [
+      record.recordType,
+      record.item,
+      record.sequence,
+      ...encode(record.payload),
+      record.origin?.installation ?? null,
+      record.origin?.position ?? null,
+      record.summaryAt ?? null,
+    ],
   );
 }
 

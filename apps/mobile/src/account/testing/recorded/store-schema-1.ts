@@ -26,12 +26,14 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
         "CREATE TABLE outgoing (\n    id TEXT PRIMARY KEY,\n    activity_id TEXT UNIQUE REFERENCES activities (activity_id),\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    revisioned INTEGER NOT NULL CHECK (revisioned IN (0, 1)),\n    position INTEGER NOT NULL UNIQUE,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    dependencies TEXT NOT NULL,\n    status TEXT NOT NULL CHECK (status IN ('pending', 'accepted', 'rejected')),\n    operation_id TEXT UNIQUE,\n    request TEXT,\n    request_sha256 TEXT,\n    receipt TEXT,\n    receipt_sequence INTEGER,\n    failures INTEGER NOT NULL DEFAULT 0 CHECK (failures >= 0),\n    flagged INTEGER NOT NULL DEFAULT 0 CHECK (flagged IN (0, 1)),\n    device_position INTEGER\n  ) STRICT",
         "CREATE INDEX outgoing_pending ON outgoing (status, position)",
         "CREATE INDEX outgoing_items ON outgoing (record_type, item_id, position)",
-        "CREATE TABLE accepted_records (\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    installation_id TEXT,\n    device_position INTEGER,\n    PRIMARY KEY (record_type, item_id)\n  ) STRICT",
+        "CREATE TABLE accepted_records (\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    installation_id TEXT,\n    device_position INTEGER,\n    summary_at INTEGER,\n    PRIMARY KEY (record_type, item_id)\n  ) STRICT",
+        "CREATE INDEX accepted_summaries ON accepted_records (summary_at) WHERE summary_at IS NOT NULL",
         "CREATE TABLE device_positions (record_type TEXT PRIMARY KEY, last INTEGER NOT NULL) STRICT",
         "CREATE TABLE purged_records (record_type TEXT NOT NULL, item_id TEXT NOT NULL, PRIMARY KEY (record_type, item_id)) STRICT",
         "CREATE TABLE feed_cursor (singleton INTEGER PRIMARY KEY CHECK (singleton = 1), sequence INTEGER NOT NULL, synced_at INTEGER) STRICT",
         "CREATE TABLE bootstrap (\n    singleton INTEGER PRIMARY KEY CHECK (singleton = 1),\n    installed INTEGER NOT NULL CHECK (installed IN (0, 1)),\n    body TEXT, body_format INTEGER, body_length INTEGER, body_sha256 TEXT,\n    staged INTEGER NOT NULL DEFAULT 0 CHECK (staged >= 0),\n    after_ordinal INTEGER NOT NULL DEFAULT 0 CHECK (after_ordinal >= 0)\n  ) STRICT",
-        "CREATE TABLE bootstrap_rows (\n    position INTEGER PRIMARY KEY,\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    installation_id TEXT,\n    device_position INTEGER\n  ) STRICT"
+        "CREATE TABLE bootstrap_rows (\n    position INTEGER PRIMARY KEY,\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    installation_id TEXT,\n    device_position INTEGER,\n    summary_at INTEGER\n  ) STRICT",
+        "CREATE TABLE history (\n    singleton INTEGER PRIMARY KEY CHECK (singleton = 1),\n    recent INTEGER CHECK (recent >= 0),\n    download_requested INTEGER NOT NULL CHECK (download_requested IN (0, 1)),\n    download_total INTEGER CHECK (download_total >= 0)\n  ) STRICT"
       ],
       "rows": {
         "meta": [
@@ -108,7 +110,15 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
             "after_ordinal": 0
           }
         ],
-        "bootstrap_rows": []
+        "bootstrap_rows": [],
+        "history": [
+          {
+            "singleton": 1,
+            "recent": null,
+            "download_requested": 0,
+            "download_total": null
+          }
+        ]
       }
     },
     {
@@ -131,12 +141,14 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
         "CREATE TABLE outgoing (\n    id TEXT PRIMARY KEY,\n    activity_id TEXT UNIQUE REFERENCES activities (activity_id),\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    revisioned INTEGER NOT NULL CHECK (revisioned IN (0, 1)),\n    position INTEGER NOT NULL UNIQUE,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    dependencies TEXT NOT NULL,\n    status TEXT NOT NULL CHECK (status IN ('pending', 'accepted', 'rejected')),\n    operation_id TEXT UNIQUE,\n    request TEXT,\n    request_sha256 TEXT,\n    receipt TEXT,\n    receipt_sequence INTEGER,\n    failures INTEGER NOT NULL DEFAULT 0 CHECK (failures >= 0),\n    flagged INTEGER NOT NULL DEFAULT 0 CHECK (flagged IN (0, 1)),\n    device_position INTEGER\n  ) STRICT",
         "CREATE INDEX outgoing_pending ON outgoing (status, position)",
         "CREATE INDEX outgoing_items ON outgoing (record_type, item_id, position)",
-        "CREATE TABLE accepted_records (\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    installation_id TEXT,\n    device_position INTEGER,\n    PRIMARY KEY (record_type, item_id)\n  ) STRICT",
+        "CREATE TABLE accepted_records (\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    installation_id TEXT,\n    device_position INTEGER,\n    summary_at INTEGER,\n    PRIMARY KEY (record_type, item_id)\n  ) STRICT",
+        "CREATE INDEX accepted_summaries ON accepted_records (summary_at) WHERE summary_at IS NOT NULL",
         "CREATE TABLE device_positions (record_type TEXT PRIMARY KEY, last INTEGER NOT NULL) STRICT",
         "CREATE TABLE purged_records (record_type TEXT NOT NULL, item_id TEXT NOT NULL, PRIMARY KEY (record_type, item_id)) STRICT",
         "CREATE TABLE feed_cursor (singleton INTEGER PRIMARY KEY CHECK (singleton = 1), sequence INTEGER NOT NULL, synced_at INTEGER) STRICT",
         "CREATE TABLE bootstrap (\n    singleton INTEGER PRIMARY KEY CHECK (singleton = 1),\n    installed INTEGER NOT NULL CHECK (installed IN (0, 1)),\n    body TEXT, body_format INTEGER, body_length INTEGER, body_sha256 TEXT,\n    staged INTEGER NOT NULL DEFAULT 0 CHECK (staged >= 0),\n    after_ordinal INTEGER NOT NULL DEFAULT 0 CHECK (after_ordinal >= 0)\n  ) STRICT",
-        "CREATE TABLE bootstrap_rows (\n    position INTEGER PRIMARY KEY,\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    installation_id TEXT,\n    device_position INTEGER\n  ) STRICT"
+        "CREATE TABLE bootstrap_rows (\n    position INTEGER PRIMARY KEY,\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    installation_id TEXT,\n    device_position INTEGER,\n    summary_at INTEGER\n  ) STRICT",
+        "CREATE TABLE history (\n    singleton INTEGER PRIMARY KEY CHECK (singleton = 1),\n    recent INTEGER CHECK (recent >= 0),\n    download_requested INTEGER NOT NULL CHECK (download_requested IN (0, 1)),\n    download_total INTEGER CHECK (download_total >= 0)\n  ) STRICT"
       ],
       "rows": {
         "meta": [
@@ -213,7 +225,15 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
             "after_ordinal": 0
           }
         ],
-        "bootstrap_rows": []
+        "bootstrap_rows": [],
+        "history": [
+          {
+            "singleton": 1,
+            "recent": null,
+            "download_requested": 0,
+            "download_total": null
+          }
+        ]
       }
     },
     {
@@ -236,12 +256,14 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
         "CREATE TABLE outgoing (\n    id TEXT PRIMARY KEY,\n    activity_id TEXT UNIQUE REFERENCES activities (activity_id),\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    revisioned INTEGER NOT NULL CHECK (revisioned IN (0, 1)),\n    position INTEGER NOT NULL UNIQUE,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    dependencies TEXT NOT NULL,\n    status TEXT NOT NULL CHECK (status IN ('pending', 'accepted', 'rejected')),\n    operation_id TEXT UNIQUE,\n    request TEXT,\n    request_sha256 TEXT,\n    receipt TEXT,\n    receipt_sequence INTEGER,\n    failures INTEGER NOT NULL DEFAULT 0 CHECK (failures >= 0),\n    flagged INTEGER NOT NULL DEFAULT 0 CHECK (flagged IN (0, 1)),\n    device_position INTEGER\n  ) STRICT",
         "CREATE INDEX outgoing_pending ON outgoing (status, position)",
         "CREATE INDEX outgoing_items ON outgoing (record_type, item_id, position)",
-        "CREATE TABLE accepted_records (\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    installation_id TEXT,\n    device_position INTEGER,\n    PRIMARY KEY (record_type, item_id)\n  ) STRICT",
+        "CREATE TABLE accepted_records (\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    installation_id TEXT,\n    device_position INTEGER,\n    summary_at INTEGER,\n    PRIMARY KEY (record_type, item_id)\n  ) STRICT",
+        "CREATE INDEX accepted_summaries ON accepted_records (summary_at) WHERE summary_at IS NOT NULL",
         "CREATE TABLE device_positions (record_type TEXT PRIMARY KEY, last INTEGER NOT NULL) STRICT",
         "CREATE TABLE purged_records (record_type TEXT NOT NULL, item_id TEXT NOT NULL, PRIMARY KEY (record_type, item_id)) STRICT",
         "CREATE TABLE feed_cursor (singleton INTEGER PRIMARY KEY CHECK (singleton = 1), sequence INTEGER NOT NULL, synced_at INTEGER) STRICT",
         "CREATE TABLE bootstrap (\n    singleton INTEGER PRIMARY KEY CHECK (singleton = 1),\n    installed INTEGER NOT NULL CHECK (installed IN (0, 1)),\n    body TEXT, body_format INTEGER, body_length INTEGER, body_sha256 TEXT,\n    staged INTEGER NOT NULL DEFAULT 0 CHECK (staged >= 0),\n    after_ordinal INTEGER NOT NULL DEFAULT 0 CHECK (after_ordinal >= 0)\n  ) STRICT",
-        "CREATE TABLE bootstrap_rows (\n    position INTEGER PRIMARY KEY,\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    installation_id TEXT,\n    device_position INTEGER\n  ) STRICT"
+        "CREATE TABLE bootstrap_rows (\n    position INTEGER PRIMARY KEY,\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    installation_id TEXT,\n    device_position INTEGER,\n    summary_at INTEGER\n  ) STRICT",
+        "CREATE TABLE history (\n    singleton INTEGER PRIMARY KEY CHECK (singleton = 1),\n    recent INTEGER CHECK (recent >= 0),\n    download_requested INTEGER NOT NULL CHECK (download_requested IN (0, 1)),\n    download_total INTEGER CHECK (download_total >= 0)\n  ) STRICT"
       ],
       "rows": {
         "meta": [
@@ -336,7 +358,15 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
             "after_ordinal": 0
           }
         ],
-        "bootstrap_rows": []
+        "bootstrap_rows": [],
+        "history": [
+          {
+            "singleton": 1,
+            "recent": null,
+            "download_requested": 0,
+            "download_total": null
+          }
+        ]
       }
     },
     {
@@ -359,12 +389,14 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
         "CREATE TABLE outgoing (\n    id TEXT PRIMARY KEY,\n    activity_id TEXT UNIQUE REFERENCES activities (activity_id),\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    revisioned INTEGER NOT NULL CHECK (revisioned IN (0, 1)),\n    position INTEGER NOT NULL UNIQUE,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    dependencies TEXT NOT NULL,\n    status TEXT NOT NULL CHECK (status IN ('pending', 'accepted', 'rejected')),\n    operation_id TEXT UNIQUE,\n    request TEXT,\n    request_sha256 TEXT,\n    receipt TEXT,\n    receipt_sequence INTEGER,\n    failures INTEGER NOT NULL DEFAULT 0 CHECK (failures >= 0),\n    flagged INTEGER NOT NULL DEFAULT 0 CHECK (flagged IN (0, 1)),\n    device_position INTEGER\n  ) STRICT",
         "CREATE INDEX outgoing_pending ON outgoing (status, position)",
         "CREATE INDEX outgoing_items ON outgoing (record_type, item_id, position)",
-        "CREATE TABLE accepted_records (\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    installation_id TEXT,\n    device_position INTEGER,\n    PRIMARY KEY (record_type, item_id)\n  ) STRICT",
+        "CREATE TABLE accepted_records (\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    installation_id TEXT,\n    device_position INTEGER,\n    summary_at INTEGER,\n    PRIMARY KEY (record_type, item_id)\n  ) STRICT",
+        "CREATE INDEX accepted_summaries ON accepted_records (summary_at) WHERE summary_at IS NOT NULL",
         "CREATE TABLE device_positions (record_type TEXT PRIMARY KEY, last INTEGER NOT NULL) STRICT",
         "CREATE TABLE purged_records (record_type TEXT NOT NULL, item_id TEXT NOT NULL, PRIMARY KEY (record_type, item_id)) STRICT",
         "CREATE TABLE feed_cursor (singleton INTEGER PRIMARY KEY CHECK (singleton = 1), sequence INTEGER NOT NULL, synced_at INTEGER) STRICT",
         "CREATE TABLE bootstrap (\n    singleton INTEGER PRIMARY KEY CHECK (singleton = 1),\n    installed INTEGER NOT NULL CHECK (installed IN (0, 1)),\n    body TEXT, body_format INTEGER, body_length INTEGER, body_sha256 TEXT,\n    staged INTEGER NOT NULL DEFAULT 0 CHECK (staged >= 0),\n    after_ordinal INTEGER NOT NULL DEFAULT 0 CHECK (after_ordinal >= 0)\n  ) STRICT",
-        "CREATE TABLE bootstrap_rows (\n    position INTEGER PRIMARY KEY,\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    installation_id TEXT,\n    device_position INTEGER\n  ) STRICT"
+        "CREATE TABLE bootstrap_rows (\n    position INTEGER PRIMARY KEY,\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    installation_id TEXT,\n    device_position INTEGER,\n    summary_at INTEGER\n  ) STRICT",
+        "CREATE TABLE history (\n    singleton INTEGER PRIMARY KEY CHECK (singleton = 1),\n    recent INTEGER CHECK (recent >= 0),\n    download_requested INTEGER NOT NULL CHECK (download_requested IN (0, 1)),\n    download_total INTEGER CHECK (download_total >= 0)\n  ) STRICT"
       ],
       "rows": {
         "meta": [
@@ -468,7 +500,15 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
             "after_ordinal": 0
           }
         ],
-        "bootstrap_rows": []
+        "bootstrap_rows": [],
+        "history": [
+          {
+            "singleton": 1,
+            "recent": null,
+            "download_requested": 0,
+            "download_total": null
+          }
+        ]
       }
     },
     {
@@ -491,12 +531,14 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
         "CREATE TABLE outgoing (\n    id TEXT PRIMARY KEY,\n    activity_id TEXT UNIQUE REFERENCES activities (activity_id),\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    revisioned INTEGER NOT NULL CHECK (revisioned IN (0, 1)),\n    position INTEGER NOT NULL UNIQUE,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    dependencies TEXT NOT NULL,\n    status TEXT NOT NULL CHECK (status IN ('pending', 'accepted', 'rejected')),\n    operation_id TEXT UNIQUE,\n    request TEXT,\n    request_sha256 TEXT,\n    receipt TEXT,\n    receipt_sequence INTEGER,\n    failures INTEGER NOT NULL DEFAULT 0 CHECK (failures >= 0),\n    flagged INTEGER NOT NULL DEFAULT 0 CHECK (flagged IN (0, 1)),\n    device_position INTEGER\n  ) STRICT",
         "CREATE INDEX outgoing_pending ON outgoing (status, position)",
         "CREATE INDEX outgoing_items ON outgoing (record_type, item_id, position)",
-        "CREATE TABLE accepted_records (\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    installation_id TEXT,\n    device_position INTEGER,\n    PRIMARY KEY (record_type, item_id)\n  ) STRICT",
+        "CREATE TABLE accepted_records (\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    installation_id TEXT,\n    device_position INTEGER,\n    summary_at INTEGER,\n    PRIMARY KEY (record_type, item_id)\n  ) STRICT",
+        "CREATE INDEX accepted_summaries ON accepted_records (summary_at) WHERE summary_at IS NOT NULL",
         "CREATE TABLE device_positions (record_type TEXT PRIMARY KEY, last INTEGER NOT NULL) STRICT",
         "CREATE TABLE purged_records (record_type TEXT NOT NULL, item_id TEXT NOT NULL, PRIMARY KEY (record_type, item_id)) STRICT",
         "CREATE TABLE feed_cursor (singleton INTEGER PRIMARY KEY CHECK (singleton = 1), sequence INTEGER NOT NULL, synced_at INTEGER) STRICT",
         "CREATE TABLE bootstrap (\n    singleton INTEGER PRIMARY KEY CHECK (singleton = 1),\n    installed INTEGER NOT NULL CHECK (installed IN (0, 1)),\n    body TEXT, body_format INTEGER, body_length INTEGER, body_sha256 TEXT,\n    staged INTEGER NOT NULL DEFAULT 0 CHECK (staged >= 0),\n    after_ordinal INTEGER NOT NULL DEFAULT 0 CHECK (after_ordinal >= 0)\n  ) STRICT",
-        "CREATE TABLE bootstrap_rows (\n    position INTEGER PRIMARY KEY,\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    installation_id TEXT,\n    device_position INTEGER\n  ) STRICT"
+        "CREATE TABLE bootstrap_rows (\n    position INTEGER PRIMARY KEY,\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    installation_id TEXT,\n    device_position INTEGER,\n    summary_at INTEGER\n  ) STRICT",
+        "CREATE TABLE history (\n    singleton INTEGER PRIMARY KEY CHECK (singleton = 1),\n    recent INTEGER CHECK (recent >= 0),\n    download_requested INTEGER NOT NULL CHECK (download_requested IN (0, 1)),\n    download_total INTEGER CHECK (download_total >= 0)\n  ) STRICT"
       ],
       "rows": {
         "meta": [
@@ -573,7 +615,15 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
             "after_ordinal": 0
           }
         ],
-        "bootstrap_rows": []
+        "bootstrap_rows": [],
+        "history": [
+          {
+            "singleton": 1,
+            "recent": null,
+            "download_requested": 0,
+            "download_total": null
+          }
+        ]
       }
     },
     {
@@ -596,12 +646,14 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
         "CREATE TABLE outgoing (\n    id TEXT PRIMARY KEY,\n    activity_id TEXT UNIQUE REFERENCES activities (activity_id),\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    revisioned INTEGER NOT NULL CHECK (revisioned IN (0, 1)),\n    position INTEGER NOT NULL UNIQUE,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    dependencies TEXT NOT NULL,\n    status TEXT NOT NULL CHECK (status IN ('pending', 'accepted', 'rejected')),\n    operation_id TEXT UNIQUE,\n    request TEXT,\n    request_sha256 TEXT,\n    receipt TEXT,\n    receipt_sequence INTEGER,\n    failures INTEGER NOT NULL DEFAULT 0 CHECK (failures >= 0),\n    flagged INTEGER NOT NULL DEFAULT 0 CHECK (flagged IN (0, 1)),\n    device_position INTEGER\n  ) STRICT",
         "CREATE INDEX outgoing_pending ON outgoing (status, position)",
         "CREATE INDEX outgoing_items ON outgoing (record_type, item_id, position)",
-        "CREATE TABLE accepted_records (\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    installation_id TEXT,\n    device_position INTEGER,\n    PRIMARY KEY (record_type, item_id)\n  ) STRICT",
+        "CREATE TABLE accepted_records (\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    installation_id TEXT,\n    device_position INTEGER,\n    summary_at INTEGER,\n    PRIMARY KEY (record_type, item_id)\n  ) STRICT",
+        "CREATE INDEX accepted_summaries ON accepted_records (summary_at) WHERE summary_at IS NOT NULL",
         "CREATE TABLE device_positions (record_type TEXT PRIMARY KEY, last INTEGER NOT NULL) STRICT",
         "CREATE TABLE purged_records (record_type TEXT NOT NULL, item_id TEXT NOT NULL, PRIMARY KEY (record_type, item_id)) STRICT",
         "CREATE TABLE feed_cursor (singleton INTEGER PRIMARY KEY CHECK (singleton = 1), sequence INTEGER NOT NULL, synced_at INTEGER) STRICT",
         "CREATE TABLE bootstrap (\n    singleton INTEGER PRIMARY KEY CHECK (singleton = 1),\n    installed INTEGER NOT NULL CHECK (installed IN (0, 1)),\n    body TEXT, body_format INTEGER, body_length INTEGER, body_sha256 TEXT,\n    staged INTEGER NOT NULL DEFAULT 0 CHECK (staged >= 0),\n    after_ordinal INTEGER NOT NULL DEFAULT 0 CHECK (after_ordinal >= 0)\n  ) STRICT",
-        "CREATE TABLE bootstrap_rows (\n    position INTEGER PRIMARY KEY,\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    installation_id TEXT,\n    device_position INTEGER\n  ) STRICT"
+        "CREATE TABLE bootstrap_rows (\n    position INTEGER PRIMARY KEY,\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    installation_id TEXT,\n    device_position INTEGER,\n    summary_at INTEGER\n  ) STRICT",
+        "CREATE TABLE history (\n    singleton INTEGER PRIMARY KEY CHECK (singleton = 1),\n    recent INTEGER CHECK (recent >= 0),\n    download_requested INTEGER NOT NULL CHECK (download_requested IN (0, 1)),\n    download_total INTEGER CHECK (download_total >= 0)\n  ) STRICT"
       ],
       "rows": {
         "meta": [
@@ -696,7 +748,15 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
             "after_ordinal": 0
           }
         ],
-        "bootstrap_rows": []
+        "bootstrap_rows": [],
+        "history": [
+          {
+            "singleton": 1,
+            "recent": null,
+            "download_requested": 0,
+            "download_total": null
+          }
+        ]
       }
     },
     {
@@ -719,12 +779,14 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
         "CREATE TABLE outgoing (\n    id TEXT PRIMARY KEY,\n    activity_id TEXT UNIQUE REFERENCES activities (activity_id),\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    revisioned INTEGER NOT NULL CHECK (revisioned IN (0, 1)),\n    position INTEGER NOT NULL UNIQUE,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    dependencies TEXT NOT NULL,\n    status TEXT NOT NULL CHECK (status IN ('pending', 'accepted', 'rejected')),\n    operation_id TEXT UNIQUE,\n    request TEXT,\n    request_sha256 TEXT,\n    receipt TEXT,\n    receipt_sequence INTEGER,\n    failures INTEGER NOT NULL DEFAULT 0 CHECK (failures >= 0),\n    flagged INTEGER NOT NULL DEFAULT 0 CHECK (flagged IN (0, 1)),\n    device_position INTEGER\n  ) STRICT",
         "CREATE INDEX outgoing_pending ON outgoing (status, position)",
         "CREATE INDEX outgoing_items ON outgoing (record_type, item_id, position)",
-        "CREATE TABLE accepted_records (\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    installation_id TEXT,\n    device_position INTEGER,\n    PRIMARY KEY (record_type, item_id)\n  ) STRICT",
+        "CREATE TABLE accepted_records (\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    installation_id TEXT,\n    device_position INTEGER,\n    summary_at INTEGER,\n    PRIMARY KEY (record_type, item_id)\n  ) STRICT",
+        "CREATE INDEX accepted_summaries ON accepted_records (summary_at) WHERE summary_at IS NOT NULL",
         "CREATE TABLE device_positions (record_type TEXT PRIMARY KEY, last INTEGER NOT NULL) STRICT",
         "CREATE TABLE purged_records (record_type TEXT NOT NULL, item_id TEXT NOT NULL, PRIMARY KEY (record_type, item_id)) STRICT",
         "CREATE TABLE feed_cursor (singleton INTEGER PRIMARY KEY CHECK (singleton = 1), sequence INTEGER NOT NULL, synced_at INTEGER) STRICT",
         "CREATE TABLE bootstrap (\n    singleton INTEGER PRIMARY KEY CHECK (singleton = 1),\n    installed INTEGER NOT NULL CHECK (installed IN (0, 1)),\n    body TEXT, body_format INTEGER, body_length INTEGER, body_sha256 TEXT,\n    staged INTEGER NOT NULL DEFAULT 0 CHECK (staged >= 0),\n    after_ordinal INTEGER NOT NULL DEFAULT 0 CHECK (after_ordinal >= 0)\n  ) STRICT",
-        "CREATE TABLE bootstrap_rows (\n    position INTEGER PRIMARY KEY,\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    installation_id TEXT,\n    device_position INTEGER\n  ) STRICT"
+        "CREATE TABLE bootstrap_rows (\n    position INTEGER PRIMARY KEY,\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    installation_id TEXT,\n    device_position INTEGER,\n    summary_at INTEGER\n  ) STRICT",
+        "CREATE TABLE history (\n    singleton INTEGER PRIMARY KEY CHECK (singleton = 1),\n    recent INTEGER CHECK (recent >= 0),\n    download_requested INTEGER NOT NULL CHECK (download_requested IN (0, 1)),\n    download_total INTEGER CHECK (download_total >= 0)\n  ) STRICT"
       ],
       "rows": {
         "meta": [
@@ -819,7 +881,15 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
             "after_ordinal": 0
           }
         ],
-        "bootstrap_rows": []
+        "bootstrap_rows": [],
+        "history": [
+          {
+            "singleton": 1,
+            "recent": null,
+            "download_requested": 0,
+            "download_total": null
+          }
+        ]
       }
     },
     {
@@ -842,12 +912,14 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
         "CREATE TABLE outgoing (\n    id TEXT PRIMARY KEY,\n    activity_id TEXT UNIQUE REFERENCES activities (activity_id),\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    revisioned INTEGER NOT NULL CHECK (revisioned IN (0, 1)),\n    position INTEGER NOT NULL UNIQUE,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    dependencies TEXT NOT NULL,\n    status TEXT NOT NULL CHECK (status IN ('pending', 'accepted', 'rejected')),\n    operation_id TEXT UNIQUE,\n    request TEXT,\n    request_sha256 TEXT,\n    receipt TEXT,\n    receipt_sequence INTEGER,\n    failures INTEGER NOT NULL DEFAULT 0 CHECK (failures >= 0),\n    flagged INTEGER NOT NULL DEFAULT 0 CHECK (flagged IN (0, 1)),\n    device_position INTEGER\n  ) STRICT",
         "CREATE INDEX outgoing_pending ON outgoing (status, position)",
         "CREATE INDEX outgoing_items ON outgoing (record_type, item_id, position)",
-        "CREATE TABLE accepted_records (\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    installation_id TEXT,\n    device_position INTEGER,\n    PRIMARY KEY (record_type, item_id)\n  ) STRICT",
+        "CREATE TABLE accepted_records (\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    installation_id TEXT,\n    device_position INTEGER,\n    summary_at INTEGER,\n    PRIMARY KEY (record_type, item_id)\n  ) STRICT",
+        "CREATE INDEX accepted_summaries ON accepted_records (summary_at) WHERE summary_at IS NOT NULL",
         "CREATE TABLE device_positions (record_type TEXT PRIMARY KEY, last INTEGER NOT NULL) STRICT",
         "CREATE TABLE purged_records (record_type TEXT NOT NULL, item_id TEXT NOT NULL, PRIMARY KEY (record_type, item_id)) STRICT",
         "CREATE TABLE feed_cursor (singleton INTEGER PRIMARY KEY CHECK (singleton = 1), sequence INTEGER NOT NULL, synced_at INTEGER) STRICT",
         "CREATE TABLE bootstrap (\n    singleton INTEGER PRIMARY KEY CHECK (singleton = 1),\n    installed INTEGER NOT NULL CHECK (installed IN (0, 1)),\n    body TEXT, body_format INTEGER, body_length INTEGER, body_sha256 TEXT,\n    staged INTEGER NOT NULL DEFAULT 0 CHECK (staged >= 0),\n    after_ordinal INTEGER NOT NULL DEFAULT 0 CHECK (after_ordinal >= 0)\n  ) STRICT",
-        "CREATE TABLE bootstrap_rows (\n    position INTEGER PRIMARY KEY,\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    installation_id TEXT,\n    device_position INTEGER\n  ) STRICT"
+        "CREATE TABLE bootstrap_rows (\n    position INTEGER PRIMARY KEY,\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    installation_id TEXT,\n    device_position INTEGER,\n    summary_at INTEGER\n  ) STRICT",
+        "CREATE TABLE history (\n    singleton INTEGER PRIMARY KEY CHECK (singleton = 1),\n    recent INTEGER CHECK (recent >= 0),\n    download_requested INTEGER NOT NULL CHECK (download_requested IN (0, 1)),\n    download_total INTEGER CHECK (download_total >= 0)\n  ) STRICT"
       ],
       "rows": {
         "meta": [
@@ -942,7 +1014,15 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
             "after_ordinal": 0
           }
         ],
-        "bootstrap_rows": []
+        "bootstrap_rows": [],
+        "history": [
+          {
+            "singleton": 1,
+            "recent": null,
+            "download_requested": 0,
+            "download_total": null
+          }
+        ]
       }
     },
     {
@@ -965,12 +1045,14 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
         "CREATE TABLE outgoing (\n    id TEXT PRIMARY KEY,\n    activity_id TEXT UNIQUE REFERENCES activities (activity_id),\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    revisioned INTEGER NOT NULL CHECK (revisioned IN (0, 1)),\n    position INTEGER NOT NULL UNIQUE,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    dependencies TEXT NOT NULL,\n    status TEXT NOT NULL CHECK (status IN ('pending', 'accepted', 'rejected')),\n    operation_id TEXT UNIQUE,\n    request TEXT,\n    request_sha256 TEXT,\n    receipt TEXT,\n    receipt_sequence INTEGER,\n    failures INTEGER NOT NULL DEFAULT 0 CHECK (failures >= 0),\n    flagged INTEGER NOT NULL DEFAULT 0 CHECK (flagged IN (0, 1)),\n    device_position INTEGER\n  ) STRICT",
         "CREATE INDEX outgoing_pending ON outgoing (status, position)",
         "CREATE INDEX outgoing_items ON outgoing (record_type, item_id, position)",
-        "CREATE TABLE accepted_records (\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    installation_id TEXT,\n    device_position INTEGER,\n    PRIMARY KEY (record_type, item_id)\n  ) STRICT",
+        "CREATE TABLE accepted_records (\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    installation_id TEXT,\n    device_position INTEGER,\n    summary_at INTEGER,\n    PRIMARY KEY (record_type, item_id)\n  ) STRICT",
+        "CREATE INDEX accepted_summaries ON accepted_records (summary_at) WHERE summary_at IS NOT NULL",
         "CREATE TABLE device_positions (record_type TEXT PRIMARY KEY, last INTEGER NOT NULL) STRICT",
         "CREATE TABLE purged_records (record_type TEXT NOT NULL, item_id TEXT NOT NULL, PRIMARY KEY (record_type, item_id)) STRICT",
         "CREATE TABLE feed_cursor (singleton INTEGER PRIMARY KEY CHECK (singleton = 1), sequence INTEGER NOT NULL, synced_at INTEGER) STRICT",
         "CREATE TABLE bootstrap (\n    singleton INTEGER PRIMARY KEY CHECK (singleton = 1),\n    installed INTEGER NOT NULL CHECK (installed IN (0, 1)),\n    body TEXT, body_format INTEGER, body_length INTEGER, body_sha256 TEXT,\n    staged INTEGER NOT NULL DEFAULT 0 CHECK (staged >= 0),\n    after_ordinal INTEGER NOT NULL DEFAULT 0 CHECK (after_ordinal >= 0)\n  ) STRICT",
-        "CREATE TABLE bootstrap_rows (\n    position INTEGER PRIMARY KEY,\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    installation_id TEXT,\n    device_position INTEGER\n  ) STRICT"
+        "CREATE TABLE bootstrap_rows (\n    position INTEGER PRIMARY KEY,\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    installation_id TEXT,\n    device_position INTEGER,\n    summary_at INTEGER\n  ) STRICT",
+        "CREATE TABLE history (\n    singleton INTEGER PRIMARY KEY CHECK (singleton = 1),\n    recent INTEGER CHECK (recent >= 0),\n    download_requested INTEGER NOT NULL CHECK (download_requested IN (0, 1)),\n    download_total INTEGER CHECK (download_total >= 0)\n  ) STRICT"
       ],
       "rows": {
         "meta": [
@@ -1047,7 +1129,15 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
             "after_ordinal": 0
           }
         ],
-        "bootstrap_rows": []
+        "bootstrap_rows": [],
+        "history": [
+          {
+            "singleton": 1,
+            "recent": null,
+            "download_requested": 0,
+            "download_total": null
+          }
+        ]
       }
     },
     {
@@ -1070,12 +1160,14 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
         "CREATE TABLE outgoing (\n    id TEXT PRIMARY KEY,\n    activity_id TEXT UNIQUE REFERENCES activities (activity_id),\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    revisioned INTEGER NOT NULL CHECK (revisioned IN (0, 1)),\n    position INTEGER NOT NULL UNIQUE,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    dependencies TEXT NOT NULL,\n    status TEXT NOT NULL CHECK (status IN ('pending', 'accepted', 'rejected')),\n    operation_id TEXT UNIQUE,\n    request TEXT,\n    request_sha256 TEXT,\n    receipt TEXT,\n    receipt_sequence INTEGER,\n    failures INTEGER NOT NULL DEFAULT 0 CHECK (failures >= 0),\n    flagged INTEGER NOT NULL DEFAULT 0 CHECK (flagged IN (0, 1)),\n    device_position INTEGER\n  ) STRICT",
         "CREATE INDEX outgoing_pending ON outgoing (status, position)",
         "CREATE INDEX outgoing_items ON outgoing (record_type, item_id, position)",
-        "CREATE TABLE accepted_records (\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    installation_id TEXT,\n    device_position INTEGER,\n    PRIMARY KEY (record_type, item_id)\n  ) STRICT",
+        "CREATE TABLE accepted_records (\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    installation_id TEXT,\n    device_position INTEGER,\n    summary_at INTEGER,\n    PRIMARY KEY (record_type, item_id)\n  ) STRICT",
+        "CREATE INDEX accepted_summaries ON accepted_records (summary_at) WHERE summary_at IS NOT NULL",
         "CREATE TABLE device_positions (record_type TEXT PRIMARY KEY, last INTEGER NOT NULL) STRICT",
         "CREATE TABLE purged_records (record_type TEXT NOT NULL, item_id TEXT NOT NULL, PRIMARY KEY (record_type, item_id)) STRICT",
         "CREATE TABLE feed_cursor (singleton INTEGER PRIMARY KEY CHECK (singleton = 1), sequence INTEGER NOT NULL, synced_at INTEGER) STRICT",
         "CREATE TABLE bootstrap (\n    singleton INTEGER PRIMARY KEY CHECK (singleton = 1),\n    installed INTEGER NOT NULL CHECK (installed IN (0, 1)),\n    body TEXT, body_format INTEGER, body_length INTEGER, body_sha256 TEXT,\n    staged INTEGER NOT NULL DEFAULT 0 CHECK (staged >= 0),\n    after_ordinal INTEGER NOT NULL DEFAULT 0 CHECK (after_ordinal >= 0)\n  ) STRICT",
-        "CREATE TABLE bootstrap_rows (\n    position INTEGER PRIMARY KEY,\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    installation_id TEXT,\n    device_position INTEGER\n  ) STRICT"
+        "CREATE TABLE bootstrap_rows (\n    position INTEGER PRIMARY KEY,\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    installation_id TEXT,\n    device_position INTEGER,\n    summary_at INTEGER\n  ) STRICT",
+        "CREATE TABLE history (\n    singleton INTEGER PRIMARY KEY CHECK (singleton = 1),\n    recent INTEGER CHECK (recent >= 0),\n    download_requested INTEGER NOT NULL CHECK (download_requested IN (0, 1)),\n    download_total INTEGER CHECK (download_total >= 0)\n  ) STRICT"
       ],
       "rows": {
         "meta": [
@@ -1152,7 +1244,15 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
             "after_ordinal": 0
           }
         ],
-        "bootstrap_rows": []
+        "bootstrap_rows": [],
+        "history": [
+          {
+            "singleton": 1,
+            "recent": null,
+            "download_requested": 0,
+            "download_total": null
+          }
+        ]
       }
     },
     {
@@ -1170,12 +1270,14 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
         "CREATE TABLE outgoing (\n    id TEXT PRIMARY KEY,\n    activity_id TEXT UNIQUE REFERENCES activities (activity_id),\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    revisioned INTEGER NOT NULL CHECK (revisioned IN (0, 1)),\n    position INTEGER NOT NULL UNIQUE,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    dependencies TEXT NOT NULL,\n    status TEXT NOT NULL CHECK (status IN ('pending', 'accepted', 'rejected')),\n    operation_id TEXT UNIQUE,\n    request TEXT,\n    request_sha256 TEXT,\n    receipt TEXT,\n    receipt_sequence INTEGER,\n    failures INTEGER NOT NULL DEFAULT 0 CHECK (failures >= 0),\n    flagged INTEGER NOT NULL DEFAULT 0 CHECK (flagged IN (0, 1)),\n    device_position INTEGER\n  ) STRICT",
         "CREATE INDEX outgoing_pending ON outgoing (status, position)",
         "CREATE INDEX outgoing_items ON outgoing (record_type, item_id, position)",
-        "CREATE TABLE accepted_records (\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    installation_id TEXT,\n    device_position INTEGER,\n    PRIMARY KEY (record_type, item_id)\n  ) STRICT",
+        "CREATE TABLE accepted_records (\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    installation_id TEXT,\n    device_position INTEGER,\n    summary_at INTEGER,\n    PRIMARY KEY (record_type, item_id)\n  ) STRICT",
+        "CREATE INDEX accepted_summaries ON accepted_records (summary_at) WHERE summary_at IS NOT NULL",
         "CREATE TABLE device_positions (record_type TEXT PRIMARY KEY, last INTEGER NOT NULL) STRICT",
         "CREATE TABLE purged_records (record_type TEXT NOT NULL, item_id TEXT NOT NULL, PRIMARY KEY (record_type, item_id)) STRICT",
         "CREATE TABLE feed_cursor (singleton INTEGER PRIMARY KEY CHECK (singleton = 1), sequence INTEGER NOT NULL, synced_at INTEGER) STRICT",
         "CREATE TABLE bootstrap (\n    singleton INTEGER PRIMARY KEY CHECK (singleton = 1),\n    installed INTEGER NOT NULL CHECK (installed IN (0, 1)),\n    body TEXT, body_format INTEGER, body_length INTEGER, body_sha256 TEXT,\n    staged INTEGER NOT NULL DEFAULT 0 CHECK (staged >= 0),\n    after_ordinal INTEGER NOT NULL DEFAULT 0 CHECK (after_ordinal >= 0)\n  ) STRICT",
-        "CREATE TABLE bootstrap_rows (\n    position INTEGER PRIMARY KEY,\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    installation_id TEXT,\n    device_position INTEGER\n  ) STRICT"
+        "CREATE TABLE bootstrap_rows (\n    position INTEGER PRIMARY KEY,\n    record_type TEXT NOT NULL,\n    item_id TEXT NOT NULL,\n    sequence INTEGER NOT NULL,\n    body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n    installation_id TEXT,\n    device_position INTEGER,\n    summary_at INTEGER\n  ) STRICT",
+        "CREATE TABLE history (\n    singleton INTEGER PRIMARY KEY CHECK (singleton = 1),\n    recent INTEGER CHECK (recent >= 0),\n    download_requested INTEGER NOT NULL CHECK (download_requested IN (0, 1)),\n    download_total INTEGER CHECK (download_total >= 0)\n  ) STRICT"
       ],
       "rows": {
         "meta": [
@@ -1450,7 +1552,8 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
             "body_length": 1079,
             "body_sha256": "61f27f26ac647df0ba6e1c58be38450fd00404c58638c0634fd3142481d3482e",
             "installation_id": null,
-            "device_position": null
+            "device_position": null,
+            "summary_at": null
           },
           {
             "record_type": "completed-practice-session",
@@ -1461,7 +1564,8 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
             "body_length": 1085,
             "body_sha256": "cf6f92f8d5f50c66d84c4c2f1af1a0fa79b65336dda20315d43c14f4325a97c8",
             "installation_id": null,
-            "device_position": null
+            "device_position": null,
+            "summary_at": null
           }
         ],
         "device_positions": [],
@@ -1485,7 +1589,15 @@ export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {
             "after_ordinal": 0
           }
         ],
-        "bootstrap_rows": []
+        "bootstrap_rows": [],
+        "history": [
+          {
+            "singleton": 1,
+            "recent": null,
+            "download_requested": 0,
+            "download_total": null
+          }
+        ]
       }
     }
   ]
