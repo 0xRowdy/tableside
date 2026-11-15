@@ -102,7 +102,7 @@ describe('Settings → Account', () => {
       ['Sign-in methods', 'Sign-in methods'],
       ['Devices', 'Devices'],
       ['Sync status', 'Sync status'],
-      ['Download all history', 'Download all history'],
+      ['Download all history', 'Sync status'],
       ['Export my data', 'Export my data'],
       ['Delete account', 'Delete account'],
     ] as const) {
@@ -111,6 +111,8 @@ describe('Settings → Account', () => {
       await fireEvent.press(button('Back to Account'));
       await header('Account');
     }
+    // Download all history started the download, which Sync status shows.
+    expect(service().calls.filter((call) => call.method === 'downloadAllHistory')).toHaveLength(1);
   });
 
   it('changes the account currency online, and explains when it needs a connection', async () => {

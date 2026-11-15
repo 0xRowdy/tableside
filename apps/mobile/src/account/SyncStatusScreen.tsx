@@ -1,18 +1,22 @@
 // S2-20 Sync status (More → Settings → Account → Sync status): what hasn't
 // reached the account and why, with a deliberate retry; the first download on
-// a new device; and a protocol retirement's notice or the required update.
-// The frames are S2-20 "records waiting, one flagged", "can't reach
-// Tableside", "first download not finished" and "update required (30 days'
-// notice)". Not drawn there, so built from the spec's words in the frames'
-// parts: the sign-in-again, local storage and unreadable-change errors,
-// paused and needs-review rows, several flagged records, an urgent
-// restriction's reason, and the status card under a required update (the
-// frames draw that banner only as the notice's preview).
+// a new device and Download all history (#97); and a protocol retirement's
+// notice or the required update. The frames are S2-20 "records waiting, one
+// flagged", "can't reach Tableside", "first download not finished", "storage
+// full, download stopped" and "update required (30 days' notice)". Not drawn
+// there, so built from the spec's words in the frames' parts: the
+// sign-in-again, local storage and unreadable-change errors, paused and
+// needs-review rows, several flagged records, an urgent restriction's reason,
+// and the status card under a required update (the frames draw that banner
+// only as the notice's preview).
+// TODO(frames): Download all history running, throttled by a budget alert or
+// complete, and the first download stopped for storage, are unverified: S2-20
+// draws the download only stopped for storage, and its button only during the first download.
 //
 // #99 routes here from the Account area with the Account service's sync; the
 // store link behind Update arrives with the store listings (spec 7).
 
-import type { AccountSync, SyncStatus, UpdateNotice, UploadStatus } from '@tableside/account';
+import type { AccountSync, HistoryDownload, SyncStatus, UpdateNotice, UploadStatus } from '@tableside/account';
 import {
   CircleAlert,
   CloudCheck,
@@ -21,6 +25,8 @@ import {
   CloudUpload,
   Download,
   Flag,
+  HardDrive,
+  HardDriveDownload,
   Hourglass,
   RefreshCw,
   type LucideIcon,
@@ -49,11 +55,30 @@ export function SyncStatusScreen({ sync, onBack, onUpdate, now = Date.now }: Syn
   const waiting = status.uploads.filter((upload) => upload.state !== 'review');
   const flagged = status.uploads.filter((upload) => upload.state === 'flagged');
   const accountError = ACCOUNT_ERRORS.has(status.error);
+  const { history, download } = status;
+  // Short of storage: Download all history, or the first download's 90 days of detail, stopped there.
+  const full =
+    download.state === 'stopped' && download.reason === 'storage'
+      ? { what: 'Download all history', progress: download.progress, resume: () => void sync.downloadAllHistory() }
+      : history.state === 'incomplete' && history.stopped === 'storage'
+        ? { what: 'The first download', progress: history.detail, resume: () => void sync.reconcile() }
+        : null;
   return (
     <SettingsScreen title="Sync status" back={{ label: 'Account', onPress: onBack }}>
       {status.update?.state === 'retiring' && <RetiringNotice update={status.update} onUpdate={onUpdate} />}
       {required && <UpdateRequired testID="update-required" reason={status.update?.reason ?? null} onUpdate={onUpdate} />}
-      <StatusCard status={status} waiting={waiting.length} now={at} />
+      {full ? (
+        <Banner
+          testID="storage-banner"
+          icon={HardDrive}
+          tone="destructive"
+          title={`Your ${DEVICE} is full`}
+          body={`${full.what} stopped at ${percentOf(full.progress)}%. To make room, nothing unsynced or unfinished was removed. Free up space, then resume.`}
+          action={{ label: 'Resume download', onPress: full.resume }}
+        />
+      ) : (
+        <StatusCard status={status} waiting={waiting.length} now={at} />
+      )}
       {status.error === 'offline' && (
         <Banner
           testID="error-banner"
@@ -95,18 +120,26 @@ export function SyncStatusScreen({ sync, onBack, onUpdate, now = Date.now }: Syn
         />
       )}
       {flagged.length > 0 && <FlaggedBanner flagged={flagged} sync={sync} now={at} />}
-      {status.history.state === 'incomplete' && (
+      {history.state === 'incomplete' && (
         <>
-          <Progress label="Summaries and totals" fraction={status.history.summaries} />
-          <Progress label="Last 90 days of detail" fraction={status.history.detail} />
+          <Progress label="Summaries and totals" fraction={history.summaries} />
+          <Progress label="Last 90 days of detail" fraction={history.detail} />
           <Banner
             icon={Hourglass}
             tone="warning"
             title="First download isn't finished"
             body="Some sessions show a summary only until their detail arrives. Older detail downloads when you open it."
           />
+          {download.state === 'not-requested' && (
+            <>
+              <SecondaryButton icon={HardDriveDownload} label="Download all history" onPress={() => void sync.downloadAllHistory()} />
+              <Note>Download all history keeps everything on this device, for trips without a connection. It can pause and resume.</Note>
+            </>
+          )}
         </>
       )}
+      <DownloadProgress download={download} />
+      {full && <Note>If saving a session fails for the same reason, play pauses with a saving error rather than continuing unsaved.</Note>}
       {status.uploads.length > 0 && (
         <>
           <SectionLabel>Waiting</SectionLabel>
@@ -122,6 +155,28 @@ export function SyncStatusScreen({ sync, onBack, onUpdate, now = Date.now }: Syn
     </SettingsScreen>
   );
 }
+
+/** Download all history once asked for: how far it has come, why it waits, or that it's done. */
+function DownloadProgress({ download }: { download: HistoryDownload }) {
+  if (download.state === 'not-requested') return null;
+  if (download.state === 'complete') return <Note>{`All your history is on this ${DEVICE}, for trips without a connection.`}</Note>;
+  return (
+    <>
+      <Progress label="Download all history" fraction={download.progress} />
+      {download.state === 'stopped' && download.reason === 'throttled' && (
+        <Banner
+          testID="throttled-banner"
+          icon={Hourglass}
+          tone="warning"
+          title="Download all history is paused"
+          body={`It carries on by itself later. Recent detail, and anything you open, still downloads, and nothing on this ${DEVICE} was removed.`}
+        />
+      )}
+    </>
+  );
+}
+
+const percentOf = (fraction: number): number => Math.round(Math.min(1, Math.max(0, fraction)) * 100);
 
 /** The sync status, following its changes. */
 function useSyncStatus(sync: AccountSync): SyncStatus {
@@ -388,7 +443,7 @@ function SecondaryButton({ icon: Icon, label, onPress }: { icon: LucideIcon; lab
 }
 
 function Progress({ label, fraction }: { label: string; fraction: number }) {
-  const percent = Math.round(Math.min(1, Math.max(0, fraction)) * 100);
+  const percent = percentOf(fraction);
   return (
     <View
       accessible
