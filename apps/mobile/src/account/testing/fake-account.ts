@@ -13,6 +13,9 @@ import type {
   CodeRequestResult,
   CodeVerificationResult,
   CurrencyChangeResult,
+  IdentityProvider,
+  ProviderCreateResult,
+  ProviderSignInResult,
   SignOutResult,
 } from '@tableside/account';
 import { isSignedIn } from '@tableside/account';
@@ -28,6 +31,8 @@ type Call =
   | { readonly method: 'requestEmailCode'; readonly email: string; readonly intent: CodeIntent }
   | { readonly method: 'verifyEmailCode'; readonly email: string; readonly code: string }
   | { readonly method: 'setAccountCurrency'; readonly currency: string }
+  | { readonly method: 'signInWithProvider'; readonly provider: IdentityProvider }
+  | { readonly method: 'createWithProvider'; readonly provider: IdentityProvider; readonly sameIdentity: boolean }
   | { readonly method: 'resume' | 'renew' | 'signOut' };
 
 /** What the fake's Settings → Account shows unless a test changes it. */
@@ -51,7 +56,9 @@ export class FakeAccountService implements AccountService {
     verify: CodeVerificationResult[];
     signOut: SignOutResult[];
     currency: CurrencyChangeResult[];
-  } = { age: [], code: [], verify: [], signOut: [], currency: [] };
+    providerSignIn: ProviderSignInResult[];
+    providerCreate: ProviderCreateResult[];
+  } = { age: [], code: [], verify: [], signOut: [], currency: [], providerSignIn: [], providerCreate: [] };
   /** What accountSummary() answers; a changed currency updates it. */
   summary: AccountSummary | null = FAKE_SUMMARY;
   /** How many saved records haven't synced. */
@@ -147,6 +154,20 @@ export class FakeAccountService implements AccountService {
   async requestEmailCode(request: { email: string; intent: CodeIntent }) {
     this.calls.push({ method: 'requestEmailCode', ...request });
     return this.next.code.shift() ?? { status: 'sent' as const };
+  }
+
+  async signInWithProvider(provider: IdentityProvider) {
+    this.calls.push({ method: 'signInWithProvider', provider });
+    const result = this.next.providerSignIn.shift() ?? { status: 'signed-in' as const };
+    if (result.status === 'signed-in') this.setGate({ state: 'active', accountId: FAKE_ACCOUNT_ID, eligibility: '18+' });
+    return result;
+  }
+
+  async createWithProvider(provider: IdentityProvider, options: { readonly sameIdentity?: boolean } = {}) {
+    this.calls.push({ method: 'createWithProvider', provider, sameIdentity: options.sameIdentity ?? false });
+    const result = this.next.providerCreate.shift() ?? { status: 'created' as const };
+    if (result.status === 'created' || result.status === 'signed-in') this.setGate({ state: 'active', accountId: FAKE_ACCOUNT_ID, eligibility: '18+' });
+    return result;
   }
 
   async verifyEmailCode(request: { email: string; code: string }) {

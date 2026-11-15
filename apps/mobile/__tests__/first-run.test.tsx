@@ -1,6 +1,7 @@
-// Seam 3: first-run sign-in (#88, S2-13 to S2-16) as the player meets it,
-// through the real routes and the accessibility tree, over Account-service
-// fakes: welcome → age (Create only) → email and code → offline game → Home.
+// Seam 3: first-run sign-in (#88 and #89, S2-13 to S2-16) as the player meets
+// it, through the real routes and the accessibility tree, over Account-service
+// fakes: welcome → age (Create only) → sign-in method (Apple, Google or an
+// email code) → offline game → Home.
 
 import type { AccountGate } from '@tableside/account';
 import { act, cleanup, fireEvent, screen, waitFor } from '@testing-library/react-native';
@@ -76,8 +77,21 @@ function everythingSpoken(): string[] {
   return out;
 }
 
+/** Welcome → I'm new here → Continue: the age step. */
+async function startCreate() {
+  await fireEvent.press(screen.getByRole('radio', { name: "I'm new here" }));
+  await fireEvent.press(button('Continue'));
+  await header('How old are you?');
+}
+
+/** The age step's answer, then the method choice's email code. */
+async function chooseEmailMethod() {
+  await header('How do you want to sign in?');
+  await fireEvent.press(button('Create with an email code'));
+}
+
 async function signInByEmail() {
-  await fireEvent.press(button('Sign in'));
+  await fireEvent.press(button('Sign in with an email code'));
   await header('Sign in');
   await fireEvent.changeText(screen.getByLabelText('Email address'), EMAIL);
   await fireEvent.press(button('Send code'));
@@ -95,9 +109,23 @@ describe('a new installation', () => {
 
     expect(await header('Tableside')).toBeOnTheScreen();
     noTabBar();
-    expect(button('Sign in')).toHaveProp('accessibilityHint', 'For an account you already have');
-    expect(button('Create account')).toHaveProp('accessibilityHint', 'Start a new account');
-    expect(screen.getByText('You need a connection to sign in or create an account. After that, Tableside works offline.')).toBeOnTheScreen();
+    expect(screen.getByTestId('intent-switch')).toHaveProp('accessibilityRole', 'radiogroup');
+    expect(screen.getByTestId('intent-switch')).toHaveProp('accessibilityLabel', 'Do you have an account?');
+    expect(screen.getByRole('radio', { name: 'I have an account' })).toBeChecked();
+    expect(screen.getAllByRole('button').map((b) => b.props.accessibilityLabel)).toEqual([
+      'Sign in with Apple',
+      'Sign in with Google',
+      'Sign in with an email code',
+    ]);
+    expect(
+      screen.getByText('Signing in needs a connection the first time and after you sign out. After that, practice works offline.'),
+    ).toBeOnTheScreen();
+
+    await fireEvent.press(screen.getByRole('radio', { name: "I'm new here" }));
+    expect(screen.getByRole('radio', { name: "I'm new here" })).toBeChecked();
+    expect(screen.getByText(/^Create a free account\. .*First, a quick age check, then you choose how to sign in\.$/)).toBeOnTheScreen();
+    expect(screen.getAllByRole('button').map((b) => b.props.accessibilityLabel)).toEqual(['Continue']);
+    expect(screen.getByText('Creating an account needs a connection. After that, practice works offline.')).toBeOnTheScreen();
   });
 });
 
@@ -168,7 +196,7 @@ describe('code requests', () => {
     await openApp();
     await header('Tableside');
     service().next.code.push({ status: 'rate-limited', retryAfterSeconds: 30 });
-    await fireEvent.press(button('Sign in'));
+    await fireEvent.press(button('Sign in with an email code'));
     await header('Sign in');
     await fireEvent.changeText(screen.getByLabelText('Email address'), EMAIL);
     await fireEvent.press(button('Send code'));
@@ -200,7 +228,7 @@ describe('code requests', () => {
     await openApp();
     await header('Tableside');
     service().next.code.push({ status: 'failed' });
-    await fireEvent.press(button('Sign in'));
+    await fireEvent.press(button('Sign in with an email code'));
     await header('Sign in');
     await fireEvent.changeText(screen.getByLabelText('Email address'), EMAIL);
     await fireEvent.press(button('Send code'));
@@ -213,7 +241,7 @@ describe('Create', () => {
   it('asks a neutral age-range question, then the email and code, then the offline game', async () => {
     await openApp();
     await header('Tableside');
-    await fireEvent.press(button('Create account'));
+    await startCreate();
 
     expect(await header('How old are you?')).toBeOnTheScreen();
     noTabBar();
@@ -225,6 +253,7 @@ describe('Create', () => {
 
     await fireEvent.press(screen.getByRole('radio', { name: '16 to 17' }));
     await fireEvent.press(button('Continue'));
+    await chooseEmailMethod();
     expect(await header('Create your account')).toBeOnTheScreen();
     await fireEvent.changeText(screen.getByLabelText('Email address'), EMAIL);
     await fireEvent.press(button('Send code'));
@@ -242,8 +271,7 @@ describe('Create', () => {
   it('ends at under 13 with no account and nothing further asked', async () => {
     await openApp();
     await header('Tableside');
-    await fireEvent.press(button('Create account'));
-    await header('How old are you?');
+    await startCreate();
 
     await fireEvent.press(screen.getByRole('radio', { name: 'Under 13' }));
     await fireEvent.press(button('Continue'));
@@ -260,16 +288,175 @@ describe('Create', () => {
   it('asks the age question again when the server says the answer has expired', async () => {
     await openApp();
     await header('Tableside');
-    await fireEvent.press(button('Create account'));
-    await header('How old are you?');
+    await startCreate();
     await fireEvent.press(screen.getByRole('radio', { name: '18 or older' }));
     await fireEvent.press(button('Continue'));
+    await chooseEmailMethod();
     await header('Create your account');
     service().next.code.push({ status: 'age-required' });
 
     await fireEvent.changeText(screen.getByLabelText('Email address'), EMAIL);
     await fireEvent.press(button('Send code'));
     expect(await header('How old are you?')).toBeOnTheScreen();
+  });
+});
+
+describe('Apple and Google', () => {
+  it('Sign in with Apple never asks for age, and reaches Home through the offline game choice', async () => {
+    await openApp();
+    await header('Tableside');
+    await fireEvent.press(button('Sign in with Apple'));
+
+    expect(await header('Choose your offline game')).toBeOnTheScreen();
+    expect(service().calls).toEqual([{ method: 'resume' }, { method: 'signInWithProvider', provider: 'apple' }]);
+  });
+
+  it('a Sign in that finds no account says so, and Create runs the age step, then creates it for that identity', async () => {
+    await openApp();
+    await header('Tableside');
+    service().next.providerSignIn.push({ status: 'no-account' });
+    await fireEvent.press(button('Sign in with Google'));
+
+    expect(await header('No account for this Google account')).toBeOnTheScreen();
+    noTabBar();
+    expect(
+      screen.getByText(
+        "We couldn't find a Tableside account for this Google account, and we haven't created one. Create one now? You'll answer an age question first.",
+      ),
+    ).toBeOnTheScreen();
+    expect(screen.getByText('Nothing about you is stored unless you create the account.')).toBeOnTheScreen();
+    expect(screen.getAllByRole('button').map((b) => b.props.accessibilityLabel)).toEqual([
+      'Back',
+      'Create an account',
+      'Sign in with Apple instead',
+      'Sign in with an email code',
+      'Back to welcome',
+    ]);
+
+    await fireEvent.press(button('Create an account'));
+    await header('How old are you?');
+    await fireEvent.press(screen.getByRole('radio', { name: '13 to 15' }));
+    await fireEvent.press(button('Continue'));
+
+    expect(await header('Choose your offline game')).toBeOnTheScreen();
+    expect(service().calls).toEqual([
+      { method: 'resume' },
+      { method: 'signInWithProvider', provider: 'google' },
+      { method: 'answerAgeQuestion', range: '13-15' },
+      // The identity Sign in found, without asking Google again.
+      { method: 'createWithProvider', provider: 'google', sameIdentity: true },
+    ]);
+  });
+
+  it('names the Apple ID when Sign in with Apple finds no account, and offers Google instead', async () => {
+    await openApp();
+    await header('Tableside');
+    service().next.providerSignIn.push({ status: 'no-account' });
+    await fireEvent.press(button('Sign in with Apple'));
+
+    expect(await header('No account for this Apple ID')).toBeOnTheScreen();
+    await fireEvent.press(button('Sign in with Google instead'));
+    expect(await header('Choose your offline game')).toBeOnTheScreen();
+    expect(service().calls.at(-1)).toEqual({ method: 'signInWithProvider', provider: 'google' });
+  });
+
+  it('under 13, after a Sign in found no account, ends with nothing created', async () => {
+    await openApp();
+    await header('Tableside');
+    service().next.providerSignIn.push({ status: 'no-account' });
+    await fireEvent.press(button('Sign in with Apple'));
+    await header('No account for this Apple ID');
+    await fireEvent.press(button('Create an account'));
+    await header('How old are you?');
+    await fireEvent.press(screen.getByRole('radio', { name: 'Under 13' }));
+    await fireEvent.press(button('Continue'));
+
+    expect(await header("Tableside isn't available")).toBeOnTheScreen();
+    expect(service().calls.map((call) => call.method)).not.toContain('createWithProvider');
+    expect(service().gate).toEqual({ state: 'no-account' });
+  });
+
+  it('Create asks for age, then offers each method, saying it makes a new, empty account', async () => {
+    await openApp();
+    await header('Tableside');
+    await startCreate();
+    await fireEvent.press(screen.getByRole('radio', { name: '18 or older' }));
+    await fireEvent.press(button('Continue'));
+
+    expect(await header('How do you want to sign in?')).toBeOnTheScreen();
+    expect(screen.getByText('Create your account')).toBeOnTheScreen();
+    expect(screen.getByText('Step 2 of 2')).toBeOnTheScreen();
+    expect(
+      screen.getByText('This creates a new, empty Tableside account. If you already have one, sign in instead so your history comes back.'),
+    ).toBeOnTheScreen();
+    expect(screen.getAllByRole('button').map((b) => b.props.accessibilityLabel)).toEqual([
+      'Back',
+      'Continue with Apple',
+      'Continue with Google',
+      'Create with an email code',
+      'I already have an account',
+    ]);
+
+    await fireEvent.press(button('Continue with Apple'));
+    expect(await header('Choose your offline game')).toBeOnTheScreen();
+    // Nothing after Create reads as getting another account back.
+    expect(everythingSpoken().filter((text) => /welcome back|recover|restor|your history/i.test(text))).toEqual([]);
+    expect(service().calls.at(-1)).toEqual({ method: 'createWithProvider', provider: 'apple', sameIdentity: false });
+  });
+
+  it('a closed sheet changes nothing, and a failure says what to do', async () => {
+    await openApp();
+    await header('Tableside');
+    service().next.providerSignIn.push({ status: 'cancelled' }, { status: 'failed' });
+
+    await fireEvent.press(button('Sign in with Apple'));
+    await waitFor(() => expect(button('Sign in with Apple')).toBeEnabled());
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(await header('Tableside')).toBeOnTheScreen();
+
+    await fireEvent.press(button('Sign in with Google'));
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      "Couldn't continue with Google. Check your connection and try again, or use another way to sign in.",
+    );
+    noTabBar();
+  });
+
+  it('asks the age question again when Create finds the answer has expired', async () => {
+    await openApp();
+    await header('Tableside');
+    await startCreate();
+    await fireEvent.press(screen.getByRole('radio', { name: '18 or older' }));
+    await fireEvent.press(button('Continue'));
+    await header('How do you want to sign in?');
+    service().next.providerCreate.push({ status: 'age-required' });
+
+    await fireEvent.press(button('Continue with Google'));
+    expect(await header('How old are you?')).toBeOnTheScreen();
+  });
+
+  it('a fresh Create after a Sign in found no account asks the provider again', async () => {
+    await openApp();
+    await header('Tableside');
+    service().next.providerSignIn.push({ status: 'no-account' });
+    await fireEvent.press(button('Sign in with Apple'));
+    await header('No account for this Apple ID');
+    await fireEvent.press(button('Back to welcome'));
+    await header('Tableside');
+    await startCreate();
+    await fireEvent.press(screen.getByRole('radio', { name: '18 or older' }));
+    await fireEvent.press(button('Continue'));
+    await header('How do you want to sign in?');
+
+    await fireEvent.press(button('Continue with Apple'));
+    expect(await header('Choose your offline game')).toBeOnTheScreen();
+    expect(service().calls.at(-1)).toEqual({ method: 'createWithProvider', provider: 'apple', sameIdentity: false });
+  });
+
+  it('turns the two-part switch into a list of choices at large text sizes', async () => {
+    await setWindow(390, 844, 2);
+    await openApp();
+    await header('Tableside');
+    expect(screen.getByTestId('intent-switch')).toHaveStyle({ flexDirection: 'column' });
   });
 });
 
@@ -306,10 +493,10 @@ describe('accessibility', () => {
   it('never puts the code or the age band in a label, announcement or log', async () => {
     await openApp();
     await header('Tableside');
-    await fireEvent.press(button('Create account'));
-    await header('How old are you?');
+    await startCreate();
     await fireEvent.press(screen.getByRole('radio', { name: '13 to 15' }));
     await fireEvent.press(button('Continue'));
+    await chooseEmailMethod();
     await header('Create your account');
     await fireEvent.changeText(screen.getByLabelText('Email address'), EMAIL);
     await fireEvent.press(button('Send code'));
@@ -328,7 +515,7 @@ describe('accessibility', () => {
   it('works from the keyboard: the return key sends the address and the code', async () => {
     await openApp();
     await header('Tableside');
-    await fireEvent.press(button('Sign in'));
+    await fireEvent.press(button('Sign in with an email code'));
     await header('Sign in');
 
     await fireEvent.changeText(screen.getByLabelText('Email address'), EMAIL);
@@ -343,7 +530,7 @@ describe('accessibility', () => {
   it('draws a focus ring on the field that has keyboard focus', async () => {
     await openApp();
     await header('Tableside');
-    await fireEvent.press(button('Sign in'));
+    await fireEvent.press(button('Sign in with an email code'));
     await header('Sign in');
 
     const field = screen.getByLabelText('Email address');
@@ -362,11 +549,11 @@ describe('accessibility', () => {
     await openApp();
     await header('Tableside');
     expect(screen.getByTestId('first-run-scroll')).toBeOnTheScreen();
-    await fireEvent.press(button('Create account'));
-    await header('How old are you?');
+    await startCreate();
     expect(screen.getByTestId('first-run-scroll')).toBeOnTheScreen();
     await fireEvent.press(screen.getByRole('radio', { name: '18 or older' }));
     await fireEvent.press(button('Continue'));
+    await chooseEmailMethod();
     await header('Create your account');
     await fireEvent.changeText(screen.getByLabelText('Email address'), EMAIL);
     await fireEvent.press(button('Send code'));
@@ -382,6 +569,6 @@ describe('accessibility', () => {
     await openApp();
     await header('Tableside');
     expect(screen.getByRole('header', { name: 'Tableside' })).toHaveProp('maxFontSizeMultiplier', 1.5);
-    expect(screen.getByText('You need a connection to sign in or create an account. After that, Tableside works offline.')).toHaveProp('maxFontSizeMultiplier', 2);
+    expect(screen.getByText('Sign in to get your history, strategies and purchases back.')).toHaveProp('maxFontSizeMultiplier', 2);
   });
 });

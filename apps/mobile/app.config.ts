@@ -21,6 +21,8 @@ const config: ExpoConfig = {
     supportsTablet: true,
     // Allow iPad multitasking: resizable windows rather than full screen only.
     requireFullScreen: false,
+    // Sign in with Apple, native on iOS (spec 2 #89).
+    usesAppleSignIn: true,
   },
   android: {
     package: 'com.tableside.app',
@@ -52,6 +54,9 @@ const config: ExpoConfig = {
     ['expo-secure-store', { configureAndroidBackup: false }],
     // The device locale: a new account's default currency.
     'expo-localization',
+    'expo-apple-authentication',
+    'expo-web-browser',
+    './plugins/with-google-sign-in',
     './plugins/with-backup-exclusion',
     './plugins/with-engine-harness',
   ],
