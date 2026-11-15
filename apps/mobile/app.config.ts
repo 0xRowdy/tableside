@@ -4,6 +4,11 @@ import type { ExpoConfig } from 'expo/config';
 // background token (BACKGROUND in src/theme/tokens.ts) is repeated here.
 const BACKGROUND = '#0E1311';
 
+// Engine harness builds (ENGINE_HARNESS=1 at prebuild, docs/cross-runtime-harness.md)
+// leave out Sign in with Apple: Expo requires code signing for any simulator
+// build with that entitlement, and the harness never signs in.
+const ENGINE_HARNESS = process.env.ENGINE_HARNESS === '1';
+
 const config: ExpoConfig = {
   name: 'Tableside',
   slug: 'tableside',
@@ -22,7 +27,7 @@ const config: ExpoConfig = {
     // Allow iPad multitasking: resizable windows rather than full screen only.
     requireFullScreen: false,
     // Sign in with Apple, native on iOS (spec 2 #89).
-    usesAppleSignIn: true,
+    usesAppleSignIn: !ENGINE_HARNESS,
   },
   android: {
     package: 'com.tableside.app',
@@ -54,7 +59,7 @@ const config: ExpoConfig = {
     ['expo-secure-store', { configureAndroidBackup: false }],
     // The device locale: a new account's default currency.
     'expo-localization',
-    'expo-apple-authentication',
+    ...(ENGINE_HARNESS ? [] : ['expo-apple-authentication']),
     'expo-web-browser',
     './plugins/with-google-sign-in',
     './plugins/with-backup-exclusion',

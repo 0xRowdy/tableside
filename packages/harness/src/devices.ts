@@ -35,6 +35,8 @@ export async function runDeviceLeg(platform: 'ios' | 'android'): Promise<Report>
   try {
     if (platform === 'ios') {
       const udid = bootedIosSimulator();
+      log('iOS: generating native project with the harness plugin');
+      await run('pnpm', ['exec', 'expo', 'prebuild', '--platform', 'ios']);
       log(`iOS: building Release harness for simulator ${udid}`);
       await run('pnpm', ['exec', 'expo', 'run:ios', '--configuration', 'Release', '--no-bundler', '--device', udid]);
     } else {
