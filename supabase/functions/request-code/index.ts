@@ -18,7 +18,7 @@ declare const Deno: {
   serve(handler: (request: Request) => Promise<Response>): void;
 };
 
-type Intent = 'sign-in' | 'create';
+type Recipient = 'account' | 'pending' | 'none';
 type MailType = 'code' | 'no-account';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
@@ -53,9 +53,16 @@ Deno.serve(async (request) => {
     const admission = await rpc<{ admitted: boolean; retry_after?: number }>('admit_code_request', { address: email, ip: clientIp(request) });
     if (!admission.admitted) return reply(429, { status: 'rate-limited', retryAfter: admission.retry_after ?? 60 });
 
-    const code = await issueCode(email, intent, assertion);
-    const type: MailType = code === null ? 'no-account' : 'code';
-    const delivered = await deliver(email, code === null ? NO_ACCOUNT_MAIL : codeMail(code));
+    const recipient = await rpc<Recipient>('email_code_recipient', { address: email });
+    // Sign-in only reaches an existing account; Create finishes one under way, or starts one.
+    const type: MailType = intent === 'sign-in' && recipient !== 'account' ? 'no-account' : 'code';
+    let delivered = false;
+    try {
+      delivered = await deliver(email, type === 'code' ? codeMail(await issueCode(email, recipient, assertion)) : NO_ACCOUNT_MAIL);
+    } catch (error) {
+      console.error('request-code failed', error instanceof StepError ? error.step : 'unexpected');
+    }
+    // Every failure to send, whatever the step, is a failed send of its type.
     await rpc('log_email_send', { type, pacing: 'immediate', outcome: delivered ? 'sent' : 'failed' });
     return delivered ? reply(200, { status: 'sent' }) : reply(502, { status: 'failed' });
   } catch (error) {
@@ -65,14 +72,11 @@ Deno.serve(async (request) => {
 });
 
 /**
- * A fresh code for the address, or null when it gets the "No account" email.
- * Sign-in only reaches an existing account. Create makes the Auth user with
- * the assertion (the database consumes it), or finishes one already under way.
+ * A fresh code for the address. Create makes the Auth user with the assertion
+ * (the database consumes it), or finishes one already under way.
  */
-async function issueCode(email: string, intent: Intent, assertion: string): Promise<string | null> {
-  const recipient = await rpc<'account' | 'pending' | 'none'>('email_code_recipient', { address: email });
-  if (intent === 'sign-in' && recipient !== 'account') return null;
-  if (intent === 'create' && recipient === 'none') {
+async function issueCode(email: string, recipient: Recipient, assertion: string): Promise<string> {
+  if (recipient === 'none') {
     const created = await auth('/admin/users', { email, user_metadata: { eligibility_assertion: assertion } });
     // A racing Create for the same address made the user first: send it a code too.
     if (!created.ok && created.code !== 'email_exists') throw new StepError('create-user');
