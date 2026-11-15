@@ -10,6 +10,6 @@ Pod::Spec.new do |s|
   s.static_framework = true
   s.dependency 'ExpoModulesCore'
   # 7.1 added the nonce to signIn.
-  s.dependency 'GoogleSignIn', '~> 8.0'
+  s.dependency 'GoogleSignIn', '~> 9.0'
   s.source_files = '**/*.swift'
 end
