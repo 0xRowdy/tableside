@@ -99,6 +99,18 @@ describe('provisioning reviewer accounts', () => {
     expect(await isReviewerAccount(pending)).toBe(false);
   });
 
+  it('makes one reviewer account when two calls for a new address race', async () => {
+    const email = uniqueEmail('racing');
+    const answers = await Promise.all([stack.provisionReviewer(email), stack.provisionReviewer(email)]);
+
+    expect(answers.map((answer) => answer.status)).toEqual([200, 200]);
+    expect(await stack.accountCount(email)).toBe(1);
+    expect(await isReviewerAccount(email)).toBe(true);
+    // Whichever credential was issued last is the account's one.
+    const results = await Promise.all(answers.map((answer) => device('phone').account.signInAsReviewer({ email, credential: answer.body!.credential! })));
+    expect(results.filter((result) => result.status === 'signed-in')).toHaveLength(1);
+  });
+
   it('reissuing a credential replaces the last one', async () => {
     const { email, credential: first } = await reviewerAccount();
     const { status, body } = await stack.provisionReviewer(email);

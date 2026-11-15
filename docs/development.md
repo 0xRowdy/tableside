@@ -10,7 +10,7 @@
 | `packages/runner` | The headless runner: standardized sessions of any built-in strategy on a benchmark profile, on Node (`pnpm --filter @tableside/runner start --strategy <id> --profile <id> --key <16 hex>`). Spec 6 adds the coordinator and analysis. |
 | `packages/harness` | The cross-runtime test harness. See [cross-runtime-harness.md](cross-runtime-harness.md). |
 | `packages/account` | The Account service (spec 2): the app's one interface for anything account-shaped, with its observable account gate. `src/testing` is seam 2's multi-device scenario harness. |
-| `supabase` | The backend: local stack configuration, migrations (the account authority schema, RLS, storage policies, jobs) and edge functions (`request-code`, the only way to get an email code; `bind-provider-assertion`, which binds Create's age assertion to an Apple or Google identity; `provider-callback`, Apple's web-flow redirect on Android; `reviewer-sign-in` and `provision-reviewer`, app reviewers' access to reviewer accounts). Beta and production are separate projects: see [environments.md](environments.md). |
+| `supabase` | The backend: local stack configuration, migrations (the account authority schema, RLS, storage policies, jobs) and edge functions (`request-code`, the only way to get a code by email; `bind-provider-assertion`, which binds Create's age assertion to an Apple or Google identity; `provider-callback`, Apple's web-flow redirect on Android; `reviewer-sign-in` and `provision-reviewer`, app reviewers' access to reviewer accounts). Beta and production are separate projects: see [environments.md](environments.md). |
 
 ## Toolchain
 

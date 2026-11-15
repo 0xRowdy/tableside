@@ -45,7 +45,7 @@ Deno.serve(async (request) => {
   const environment = request.headers.get(ENVIRONMENT_HEADER) ?? '';
   const authorization = request.headers.get('authorization');
   const caller = { apikey: request.headers.get('apikey') ?? '', ...(authorization ? { authorization } : {}) };
-  const call = async (path: string, payload: unknown): Promise<{ ok: boolean; code?: string; body: unknown }> => {
+  const asCaller = async (path: string, payload: unknown): Promise<{ ok: boolean; code?: string; body: unknown }> => {
     const response = await fetch(`${SUPABASE_URL}${path}`, {
       method: 'POST',
       headers: { ...caller, 'content-type': 'application/json', [ENVIRONMENT_HEADER]: environment },
@@ -56,7 +56,7 @@ Deno.serve(async (request) => {
     return { ok: response.ok, code: parsed?.error_code, body: parsed };
   };
   const issueCredential = async (): Promise<string | null> => {
-    const issued = await call('/rest/v1/rpc/issue_reviewer_credential', { address: email });
+    const issued = await asCaller('/rest/v1/rpc/issue_reviewer_credential', { address: email });
     if (!issued.ok) throw new Error('issue-credential');
     return typeof issued.body === 'string' ? issued.body : null;
   };
@@ -66,23 +66,24 @@ Deno.serve(async (request) => {
     const reissued = await issueCredential();
     if (reissued) return reply(200, { status: 'provisioned', credential: reissued });
 
-    const issued = await call('/rest/v1/rpc/issue_eligibility_assertion', { age_range: '18+' });
-    const assertion = (issued.body as { assertion?: unknown } | null)?.assertion;
-    if (!issued.ok || typeof assertion !== 'string') throw new Error('assertion');
+    const age = await asCaller('/rest/v1/rpc/issue_eligibility_assertion', { age_range: '18+' });
+    const assertion = (age.body as { assertion?: unknown } | null)?.assertion;
+    if (!age.ok || typeof assertion !== 'string') throw new Error('assertion');
     // A confirmed address opens the account at once; the app metadata (which
     // only the secret key can write) designates it as it opens.
-    const created = await call('/auth/v1/admin/users', {
+    const created = await asCaller('/auth/v1/admin/users', {
       email,
       email_confirm: true,
       user_metadata: { eligibility_assertion: assertion, environment },
       app_metadata: { tableside_reviewer: true },
     });
-    if (!created.ok && created.code === 'email_exists') return reply(409, { status: 'not-designated' });
-    if (!created.ok) throw new Error('create-user');
-
+    // A failed create may be a racing call for the same address that got there
+    // first (Auth then answers email_exists, or a database error on its unique
+    // address): it is a reviewer account if that call made it.
     const credential = await issueCredential();
-    if (!credential) throw new Error('designate');
-    return reply(200, { status: 'provisioned', credential });
+    if (credential) return reply(200, { status: 'provisioned', credential });
+    if (created.code === 'email_exists') return reply(409, { status: 'not-designated' });
+    throw new Error(created.ok ? 'designate' : 'create-user');
   } catch (error) {
     if (error instanceof Refused) return reply(403, { status: 'forbidden' });
     console.error('provision-reviewer failed', error instanceof Error ? error.message : 'unexpected');

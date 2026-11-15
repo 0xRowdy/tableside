@@ -1050,7 +1050,7 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
 
     async signInAsReviewer({ email, credential }) {
       try {
-        const response = await post('/functions/v1/reviewer-sign-in', { email: email.trim(), credential });
+        const response = await post('/functions/v1/reviewer-sign-in', { email, credential });
         const body = (await response.json().catch(() => null)) as { status?: string; session?: { access_token?: unknown; refresh_token?: unknown } } | null;
         if (response.status === 401 && body?.status === 'refused') return { status: 'refused' };
         const session = body?.session;

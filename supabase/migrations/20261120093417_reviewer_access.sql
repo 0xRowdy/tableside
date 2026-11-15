@@ -37,7 +37,7 @@ create trigger designate_reviewer_account after insert on public.accounts
   for each row execute function private.designate_reviewer_account();
 
 -- ---------------------------------------------------------------------------
--- Review credentials
+-- Reviewer credentials
 -- ---------------------------------------------------------------------------
 
 -- 20 characters from a 32-letter alphabet without I, L, O or U (100 random
