@@ -29,7 +29,18 @@ export {
 export { type SyncErrorCode } from './sync/engine';
 export { type DeviceSequence, byOriginatingDevice } from './sync/ordering';
 export { type LiveChannel } from './sync/live';
-export { PROTOCOL_VERSION, type Disposition, type Envelope, type FeedEntry, type PreparedOperation, type UploadAnswer } from './sync/protocol';
+export {
+  CHUNK_BYTES,
+  PROTOCOL_VERSION,
+  REQUEST_LIMIT_BYTES,
+  type ContentManifest,
+  type Disposition,
+  type Envelope,
+  type FeedEntry,
+  type PreparedOperation,
+  type StagedChunk,
+  type UploadAnswer,
+} from './sync/protocol';
 export { PLATFORM_TABLES, type RecordKind, type RecordType, completedPracticeSession, recordTypes } from './sync/registry';
 export { type DevicePorts, type DeviceSignal, RECONCILE_INTERVAL_MS } from './sync/session';
 export {

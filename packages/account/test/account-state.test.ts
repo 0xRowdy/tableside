@@ -13,7 +13,7 @@ import {
   type SimulatedDevice,
   TEST_RECORD_TYPES,
   type TestAttempt,
-  accessTokenOf,
+  accessToken,
   createAccountByEmail,
   createDevice,
   installTestRecordTypes,
@@ -236,7 +236,7 @@ describe('server-authored state', () => {
     const assignment = { version: 1, experiment: 'pricing', group: 'self-assigned' };
     expect(await phone.account.sync.queue(testExperimentAssignment.name, assignment)).toEqual({ status: 'refused', reason: 'server-authored' });
 
-    const raw = stack.rawClient(accessTokenOf(phone));
+    const raw = stack.rawClient(accessToken(phone));
     const { request } = prepareOperation({
       protocol: PROTOCOL_VERSION,
       operation: '5'.repeat(32),
@@ -303,7 +303,7 @@ describe('purging an accepted immutable result', () => {
     ]);
 
     // A device reading the feed from the start afterwards never sees it: its entry keeps its place with nothing in it.
-    const feed = (await stack.rawClient(accessTokenOf(phone)).rpc('sync_feed_v1', { after: 0 })).data as { entries: { item: string; change: unknown }[] };
+    const feed = (await stack.rawClient(accessToken(phone)).rpc('sync_feed_v1', { after: 0 })).data as { entries: { item: string; change: unknown }[] };
     expect(feed.entries.map(({ item, change }) => [item, change === null])).toEqual([
       ['r-1', true],
       ['r-2', false],
@@ -331,7 +331,7 @@ describe('purging an accepted immutable result', () => {
     expect(await itemsOn(phone, testResult.name)).toEqual([]);
     expect(await phone.vault.store().readUploadQueue()).toEqual([]);
 
-    const raw = stack.rawClient(accessTokenOf(phone));
+    const raw = stack.rawClient(accessToken(phone));
     const again = JSON.parse(stale!.operation!.request) as Envelope;
     const { request } = prepareOperation({ ...again, operation: '6'.repeat(32) });
     expect((await raw.rpc('sync_upload_v1', { request })).data).toMatchObject({ status: 'rejected', code: 'purged' });
@@ -384,7 +384,7 @@ describe('the operation API enforces ordering, called directly', () => {
 
   it('answers "waiting", recording nothing, until every operation it names has a receipt; then accepts the identical request', async () => {
     const { phone } = await twoDevices();
-    const raw = stack.rawClient(accessTokenOf(phone));
+    const raw = stack.rawClient(accessToken(phone));
     const dependent = upload(phone, {
       operation: '7'.repeat(32),
       recordType: testContribution.name,
@@ -402,14 +402,14 @@ describe('the operation API enforces ordering, called directly', () => {
 
   it('refuses a purge whose target was never accepted', async () => {
     const { phone } = await twoDevices();
-    const raw = stack.rawClient(accessTokenOf(phone));
+    const raw = stack.rawClient(accessToken(phone));
     const purge = upload(phone, { operation: '9'.repeat(32), recordType: testResultPurge.name, item: 'r-unknown', payload: { version: 1, target: 'r-unknown' } });
     expect((await raw.rpc('sync_upload_v1', { request: purge })).data).toMatchObject({ status: 'rejected', code: 'target-not-accepted' });
   });
 
   it('holds each per-device position for one record, and positions only per-device types', async () => {
     const { phone } = await twoDevices();
-    const raw = stack.rawClient(accessTokenOf(phone));
+    const raw = stack.rawClient(accessToken(phone));
     const attempt = (id: string, position?: number) => ({
       recordType: testAttempt.name,
       item: id,
@@ -475,7 +475,7 @@ describe('per-device attempt ordering', () => {
     phone.proxy.online = false;
     for (const id of ['p-1', 'p-2', 'p-3']) await queue(phone, testAttempt.name, attempt(phone, id));
     // Positions 1 and 3 reach the account first (as another build's or a retried path might send them).
-    const raw = stack.rawClient(accessTokenOf(phone));
+    const raw = stack.rawClient(accessToken(phone));
     for (const [index, entry] of (await phone.vault.store().readUploadQueue()).entries()) {
       if (index === 1) continue;
       const { request } = prepareOperation({

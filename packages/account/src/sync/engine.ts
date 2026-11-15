@@ -8,6 +8,11 @@
 // - A disposition and the queue acknowledgement commit together; until then
 //   the entry stays pending. Upload never touches payouts, charges or any
 //   other local effect: it only acknowledges.
+// - A result too large for one request is sent as a manifest of chunks
+//   (protocol.ts). The manifest goes first; when the server reports chunks it
+//   hasn't staged (never sent, or expired), those are staged and the identical
+//   manifest is sent again. So a retry after a lost answer gets its receipt
+//   without resending a chunk, and the payload stays in the queue until then.
 // - Feed pages apply with their cursor atomically, and never past a change
 //   this build can't read.
 // - Runs coalesce: a request while a run is going makes one more run.
@@ -25,16 +30,27 @@
 // - An uncertain answer (lost, waiting, unreadable) acknowledges nothing: the
 //   entry stays pending, with every entry it holds back, until a receipt arrives.
 //
-// Retry pacing, flagged records and status (#92), chunked results (#93) and
-// revisioned items (#94) plug in here.
+// Retry pacing, flagged records and status (#92) and revisioned items (#94)
+// plug in here.
 
-import { type FeedPage, PROTOCOL_VERSION, type PreparedOperation, type UploadAnswer, prepareOperation } from './protocol';
+import {
+  type ChunkAnswer,
+  type FeedPage,
+  PROTOCOL_VERSION,
+  type PreparedOperation,
+  type StagedChunk,
+  type UploadAnswer,
+  chunksOf,
+  prepareOperation,
+} from './protocol';
 import { type RecordType, isBarrierFor } from './registry';
 import type { AcceptedRecord, Origin, QueuedUpload, RecordRef, SyncStore } from './store';
 
 /** The backend's operations. A rejection means no answer arrived (offline, lost response, denied): try later. */
 export interface SyncBackend {
   upload(request: string): Promise<UploadAnswer>;
+  /** Stages one chunk of a result, privately, for the operation whose manifest names it. */
+  stageChunk(chunk: StagedChunk): Promise<ChunkAnswer>;
   feed(after: number, pageSize: number): Promise<FeedPage>;
 }
 
@@ -151,14 +167,30 @@ export class SyncEngine {
         attempted.delete(entry.id);
         continue;
       }
-      const operation = entry.operation ?? (await store.prepareUpload(entry.id, this.envelope(type, entry)));
-      let answer: UploadAnswer;
+      let operation: PreparedOperation;
+      let chunks: StagedChunk[] | null;
       try {
-        answer = await this.options.backend.upload(operation.request);
+        operation = entry.operation ?? (await store.prepareUpload(entry.id, this.envelope(type, entry)));
+        chunks = asUnsendable(() => chunksOf(operation, entry.payload));
+      } catch (failure) {
+        if (failure instanceof UnsendableError) {
+          pass.error ??= 'unsendable';
+          continue;
+        }
+        throw failure;
+      }
+      let answer: UploadAnswer | 'offline';
+      try {
+        answer = await this.send(operation, chunks);
       } catch {
         return { ...pass, fatal: 'offline' };
       }
       if (this.stopped) return pass;
+      // Its chunks couldn't all be staged: it waits for a later run, and the others carry on.
+      if (answer === 'offline') {
+        pass.error ??= 'offline';
+        continue;
+      }
       const outcome = await this.settleUpload(entry, type, operation, answer);
       if (outcome === 'acknowledged') {
         pending.delete(entry.id);
@@ -172,8 +204,30 @@ export class SyncEngine {
     return pass;
   }
 
+  /**
+   * Sends an operation. A manifest whose chunks the server lacks gets them
+   * staged, then is sent once more. When the staging is full, or the chunks are
+   * still lacking (they expired meanwhile), it waits for the next run, as if no
+   * usable answer had arrived.
+   */
+  private async send(operation: PreparedOperation, chunks: readonly StagedChunk[] | null): Promise<UploadAnswer | 'offline'> {
+    const { backend } = this.options;
+    const answer = await backend.upload(operation.request);
+    if (answer.status !== 'chunks-missing') return answer;
+    const missing = answer.missing.map((index) => chunks?.[index]);
+    if (missing.some((chunk) => chunk === undefined)) return { status: 'malformed' };
+    for (const chunk of missing as StagedChunk[]) {
+      if (this.stopped) return 'offline';
+      const staged = await backend.stageChunk(chunk);
+      if (staged.status === 'staging-full') return 'offline';
+      if (staged.status !== 'staged') return { status: staged.status };
+    }
+    const resent = await backend.upload(operation.request);
+    return resent.status === 'chunks-missing' ? 'offline' : resent;
+  }
+
   private envelope(type: RecordType, entry: QueuedUpload): PreparedOperation {
-    return prepareOperation({
+    return asUnsendable(() => prepareOperation({
       protocol: PROTOCOL_VERSION,
       operation: this.options.newOperationId(),
       installation: this.options.installationId,
@@ -183,7 +237,7 @@ export class SyncEngine {
       payload: entry.payload,
       ...(entry.after ? { after: entry.after } : {}),
       ...(entry.position !== undefined ? { position: entry.position } : {}),
-    });
+    }));
   }
 
   /** Applies the server's answer to an upload: a receipt is acknowledged; anything else leaves it pending. */
@@ -218,6 +272,7 @@ export class SyncEngine {
         return 'incompatible';
       case 'operation-reused':
       case 'malformed':
+      case 'chunks-missing':
         return 'unsendable';
     }
   }
@@ -288,4 +343,16 @@ function originOf(change: unknown): Origin | null {
   return typeof installation === 'string' && typeof position === 'number' && Number.isSafeInteger(position) && position >= 1
     ? { installation, position }
     : null;
+}
+
+/** An entry that can't be sent as it is: its result is too large to name, or no longer matches its manifest. */
+class UnsendableError extends Error {}
+
+/** Runs `prepare`, reporting any failure as an entry that can't be sent. */
+function asUnsendable<T>(prepare: () => T): T {
+  try {
+    return prepare();
+  } catch (failure) {
+    throw new UnsendableError(failure instanceof Error ? failure.message : String(failure));
+  }
 }
