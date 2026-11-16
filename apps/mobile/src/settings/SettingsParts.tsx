@@ -58,25 +58,76 @@ export function Group({ children }: { children: ReactNode }) {
   return <View style={styles.group}>{children}</View>;
 }
 
-export function ListRow({ icon: Icon, title, detail, onPress }: { icon: LucideIcon; title: string; detail: string; onPress: () => void }) {
+/**
+ * A row that opens a screen; without `onPress` it is information only. A
+ * destructive row (Delete account) draws its icon and title in the destructive color.
+ */
+export function ListRow({
+  icon: Icon,
+  title,
+  detail,
+  value,
+  destructive = false,
+  onPress,
+}: {
+  icon: LucideIcon;
+  title: string;
+  detail?: string;
+  /** A short value before the chevron, such as a count. */
+  value?: string;
+  destructive?: boolean;
+  onPress?: () => void;
+}) {
   const { focused, focusProps } = useKeyboardFocus();
+  const content = (
+    <>
+      <View style={styles.lead}>
+        <Icon color={destructive ? palette.destructive : palette.foreground} size={18} />
+      </View>
+      <View style={styles.rowText}>
+        <Text maxFontSizeMultiplier={textScale.body} style={[styles.rowTitle, destructive && styles.destructive]}>{title}</Text>
+        {detail !== undefined && <Text maxFontSizeMultiplier={textScale.body} style={styles.rowDetail}>{detail}</Text>}
+      </View>
+      {value !== undefined && (
+        <Text maxFontSizeMultiplier={textScale.body} style={styles.rowValue}>
+          {value}
+        </Text>
+      )}
+      {onPress && <ChevronRight color={palette.mutedForeground} size={18} />}
+    </>
+  );
+  if (!onPress) {
+    return (
+      <View accessible accessibilityLabel={spoken([title, detail])} style={styles.row}>
+        {content}
+      </View>
+    );
+  }
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`${title}. ${detail}`}
+      accessibilityLabel={spoken([title, detail, value])}
       onPress={onPress}
       {...focusProps}
       style={({ pressed }) => [styles.row, pressed && styles.pressed, focused && styles.focused]}
     >
-      <View style={styles.lead}>
-        <Icon color={palette.foreground} size={18} />
-      </View>
-      <View style={styles.rowText}>
-        <Text maxFontSizeMultiplier={textScale.body} style={styles.rowTitle}>{title}</Text>
-        <Text maxFontSizeMultiplier={textScale.body} style={styles.rowDetail}>{detail}</Text>
-      </View>
-      <ChevronRight color={palette.mutedForeground} size={18} />
+      {content}
     </Pressable>
+  );
+}
+
+/** A row's parts as one spoken label: "Title. Detail. Value", with no doubled stop after a sentence. */
+function spoken(parts: readonly (string | undefined)[]): string {
+  const present = parts.filter((part): part is string => part !== undefined);
+  return present.map((part, index) => (index < present.length - 1 && !/[.?!]$/.test(part) ? `${part}.` : part)).join(' ');
+}
+
+/** A small capitalized heading over a group. */
+export function GroupLabel({ children }: { children: string }) {
+  return (
+    <Text accessibilityRole="header" maxFontSizeMultiplier={textScale.body} style={styles.groupLabel}>
+      {children}
+    </Text>
   );
 }
 
@@ -173,6 +224,9 @@ const styles = StyleSheet.create({
   rowText: { flex: 1, gap: 2 },
   rowTitle: { fontFamily: fonts.uiBold, fontSize: 15, lineHeight: 21, color: palette.foreground },
   rowDetail: { fontFamily: fonts.ui, fontSize: 13, lineHeight: 18, color: palette.mutedForeground },
+  rowValue: { fontFamily: fonts.ui, fontSize: 14, color: palette.mutedForeground },
+  destructive: { color: palette.destructive },
+  groupLabel: { fontFamily: fonts.uiBold, fontSize: 12, letterSpacing: 0.6, color: palette.mutedForeground, marginBottom: -space[2] },
   note: { fontFamily: fonts.ui, fontSize: 13, lineHeight: 20, color: palette.mutedForeground },
   sliderBlock: { gap: space[3] - 2, padding: space[4] },
   sliderHead: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: space[2] },

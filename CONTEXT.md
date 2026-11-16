@@ -116,7 +116,7 @@ The setting aside of practice sessions whose pinned engine, rule, strategy or re
 
 **Incomplete practice session**:
 An unfinished practice session found unusable (quarantined, or its saved state damaged) and so marked incomplete instead of being resumed or given an invented result.
-_Avoid_: failed session, cancelled session
+_Avoid_: failed session, canceled session
 
 **Final settlement**:
 The automatic resolution of outstanding wagers when a practice session ends, after legally removable wagers are returned. No new bets are placed during it.
@@ -261,16 +261,47 @@ A store purchase that is no longer linked to any usable Tableside account. It is
 ### Accounts and data
 
 **Installation**:
-One installation of the app on one device. Reinstalling creates a new installation.
+One installation of the app on one device. Reinstalling creates a new installation. A browser signed in to the web account page registers as one too, so it can read the account's lifecycle status; it never holds records.
+
+**Revocation**:
+Signing another device out of the account (on Devices, "Sign out this device" or "Sign out all other devices"): every session of that installation ends on the server at once, and the device locks, keeping its records, when the server's lifecycle status tells it. Only that answer moves a device to Revoked; a failed request never does. A device's label is what it calls itself, never proof of which device it is.
+_Avoid_: remote wipe, kicking a device
+
+**Backend environment**:
+One of Tableside's fully separate backends: beta, production, or a local development stack. A build talks to exactly one, and its accounts, credentials, keys and device data belong to that environment alone. A production build installed over a beta one erases the beta's device data first.
+_Avoid_: stage, tier
 
 **Account gate**:
-The account's current access state on an installation (active, signed out, revoked, deletion scheduled, recovery needed, or age unresolved), which decides whether ordinary access is open.
+The account's current access state on an installation (no account, active, renewal pending, signed out, revoked, deletion scheduled, deleted, recovery needed, age unresolved, or age ineligible), which decides whether ordinary access is open. Renewal pending is active access under cached rights while an expired token renews. Age unresolved and age ineligible keep only the restricted paths: deletion, Contact support, Make a privacy request, billing help and authenticated export. Deletion scheduled keeps Cancel deletion, deletion status, authenticated export, billing help, Contact support and Make a privacy request; its session and records stay until the deadline. Deleted means the server confirmed permanent deletion and the installation erased the account, keeping only what reads the deletion's status.
+
+**Sign-in method**:
+One way an account signs in: an Apple ID, a Google account, or the email code for its sign-in email. The account owns its methods, never the other way around; an account always keeps at least one, and a method another account uses is never merged into this one.
+_Avoid_: login, credential, identity (for the player-facing idea)
+
+**Fresh authentication**:
+Signing in again with one of the account's own sign-in methods ("Confirm it's you"), which lets that one account session change how the account signs in, revoke other devices, export or delete for a few minutes. Being signed in already, or a renewed token, never counts.
+_Avoid_: re-login, step-up
+
+**Account session**:
+One signed-in period of an account on an installation, from signing in (or switching to the account) until the next sign-in, sign-out or account switch. Work begun in an earlier account session never reads or writes the account's data.
 
 **Age eligibility**:
 An account's current established age band, or its unresolved or ineligible status, which governs access and protections. Only the current decision is kept.
 
 **Deletion undo window**:
 The 30 days after scheduling account deletion during which the player can cancel it. Access is locked and public content hidden, but nothing is destroyed.
+
+**Irreversible boundary**:
+The moment an account's deletion can no longer be undone: Delete permanently now, the end of the deletion undo window, or a verified rights request. From then the account is deleted for good, its sessions are revoked, its devices erase it, and its data is erased within seven days.
+_Avoid_: hard delete, finalization (for the player-facing idea)
+
+**Deletion-control record**:
+What a deleted account leaves behind so it stays deleted: its ID and state, when and by whom deletion was asked for, and how far the cleanup got. It holds no history, prose, purchase evidence or forfeiture ledger.
+_Avoid_: tombstone (that is a deleted record's)
+
+**Web account page**:
+The page, reachable without the app, where a player signs in with an email code, Apple or Google to schedule or cancel deletion, delete permanently now and see deletion status, under the same fresh-authentication rules as the app. Lifecycle only: no play and no records. It records Global Privacy Control as the ad-data opt-out, and loads nothing from anyone else.
+_Avoid_: web app, website (that is the marketing site)
 
 **Conflict proposal**:
 A competing edit to a private record made on another installation, preserved for the player to review instead of being silently lost.
@@ -281,8 +312,29 @@ The accepted version of a record that remains in force, and is counted once in t
 **Recovery proposal**:
 An edit to a deleted record made on another installation before it learned of the deletion. It is offered for restoration and never restored automatically.
 
+**Server export**:
+A copy of everything the account holds on Tableside's servers at one moment ("account archive" on screen): session summaries as a spreadsheet, the rest as data files, and a manifest of what's in it and what isn't. It needs fresh authentication to ask for and to download, and lasts 24 hours.
+
 **Local supplement**:
 A labelled export of records on one installation that haven't reached the account yet.
+
+**Privacy choices**:
+An account's analytics consent and the ad-data opt-out. Each grant of consent starts a new consent generation with its own random analytics ID; the opt-out records its source (in-app, support or Global Privacy Control). Withdrawing consent or limiting ad data takes effect at once, offline too; granting consent or allowing ad data again needs a connection and the account's current choices.
+_Avoid_: tracking settings, privacy settings
+
+**Command scope**:
+An installation's numbered run of uploads to one account, under a generation the account issued it. Once the account retires a scope, it refuses that scope's uploads; the installation refreshes the account's current state and reconciles its unsynced records before it sends anything else.
+
+**Unconfirmed record**:
+An unsynced record whose command scope was retired before its outcome was known, and whose outcome the account's current state doesn't show. It is kept, never sent again by itself, and waits for the player to send it again or set it aside.
+_Avoid_: lost record, orphan
+
+**Reviewer account**:
+A synthetic account made only for app store review, by a privileged operation in one backend environment, with an established adult age eligibility. It signs in with its reviewer credential instead of an email code, and is otherwise an ordinary account.
+
+**Reviewer credential**:
+The reusable secret that signs in to one reviewer account in one backend environment, and to nothing else. Issuing a new one replaces the last.
+_Avoid_: review code, bypass code
 
 **Rights request**:
 A player's request to know, correct, delete or obtain their data, handled under the publisher's privacy obligations. It is distinct from self-service editing and deletion.
