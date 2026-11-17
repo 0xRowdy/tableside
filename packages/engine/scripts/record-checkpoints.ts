@@ -34,7 +34,7 @@ import { PI, ZERO } from '../test/fixtures';
 import type { RecordedBuild, RecordedChallenge, RecordedCheckpoint } from '../test/recorded';
 import { CHECK, CONVERSION_CHECK, CONVERSION_LEARN, COUNT_CHECK, COUNT_LEARN, LEARN, seed } from '../test/challenge.fixtures';
 import { TEST_COUNTING_SCHEDULE } from '../test/blackjack-strategy.fixtures';
-import { TABLE_CHECK, TABLE_LEARN, tableSpec, withExtraPlayers } from '../test/table.fixtures';
+import { playSpec, TABLE_CHECK, TABLE_LEARN, tableSpec, withExtraPlayers } from '../test/table.fixtures';
 import { DOUBLING, FLAT_EVEN_MONEY } from '../test/strategy.fixtures';
 
 const place = (target: string, amount: string): Command => ({ kind: 'place-wager', target, amount });
@@ -189,7 +189,44 @@ const CHALLENGE_SCENARIOS: ChallengeScenario[] = [
   },
   pastReshuffle('table Observe Check, four extra players at 50%, past a reshuffle', tableSpec('check', withExtraPlayers(4, 50))),
   { name: 'table Observe Check N=1, created and not yet begun', specification: TABLE_CHECK, random: seed(3), commands: [] },
+  // #138
+  untilPhase('table Play Check N=1 with basic, an illegal move refused at a decision', playSpec('check', 'basic'), seed(1), 'decision', [{ kind: 'play', action: 'split' }]),
+  untilPhase('table Play Learn N=1 with basic, a departing move held in the correction pause', playSpec('learn', 'basic'), seed(1), 'decision', [{ kind: 'play', action: 'hit' }]),
+  untilDecisionPrompt('table Play Check N=1 with deviations, the true count asked before a decision', playSpec('check', 'deviations')),
+  {
+    name: 'table Play Learn N=2 with deviations, mid-round after a move',
+    specification: playSpec('learn', 'deviations', { interval: 2 }),
+    random: seed(2),
+    commands: [{ kind: 'begin' }, { kind: 'next-item' }, { kind: 'next-item' }, { kind: 'next-item' }],
+  },
 ];
+
+// #138
+function untilPhase(name: string, specification: ChallengeSpecification, random: ReturnType<typeof seed>, phase: ChallengeState['phase'], then: readonly ChallengeCommand[]): ChallengeScenario {
+  let state = createChallenge(specification, random);
+  const commands: ChallengeCommand[] = [];
+  while (state.phase !== phase) {
+    const command = nextChallengeCommand(state);
+    commands.push(command);
+    state = advanceAttempt(state, command).state;
+  }
+  return { name, specification, random, commands: [...commands, ...then] };
+}
+
+function untilDecisionPrompt(name: string, specification: ChallengeSpecification): ChallengeScenario {
+  const asking = (state: ChallengeState) => state.phase === 'question' && readChallengeView(state).table?.prompt?.timing === 'decision';
+  for (let n = 1; n < 400; n++) {
+    let state = createChallenge(specification, seed(n));
+    const commands: ChallengeCommand[] = [];
+    while (state.phase !== 'ended' && !asking(state)) {
+      const command = nextChallengeCommand(state);
+      commands.push(command);
+      state = advanceAttempt(state, command).state;
+    }
+    if (state.phase !== 'ended') return { name, specification, random: seed(n), commands };
+  }
+  throw new Error(`${name}: no seed asks before a decision`);
+}
 
 // #137
 function pastReshuffle(name: string, specification: ChallengeSpecification): ChallengeScenario {
@@ -217,6 +254,9 @@ function nextChallengeCommand(state: ChallengeState): ChallengeCommand {
   const view = readChallengeView(state);
   if (view.legalCommands.includes('begin')) return { kind: 'begin' };
   if (view.legalCommands.includes('next-item')) return { kind: 'next-item' };
+  // #138
+  if (view.legalCommands.includes('override-correction')) return { kind: 'override-correction' };
+  if (view.legalCommands.includes('play')) return { kind: 'play', action: view.table?.decision?.kind === 'insurance' ? 'decline-insurance' : 'stand' };
   return { kind: 'answer', value: 0 };
 }
 

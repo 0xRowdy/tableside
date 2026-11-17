@@ -110,7 +110,8 @@ export function challengeGroupKey(state: ChallengeState, pacing: ChallengePacing
 }
 
 // Spec 3 Comparison groups; Challenge content › Observe seats
-function tableGroupKey({ rules, seat, interval }: TableSetup): TableGroupKey {
+function tableGroupKey(setup: TableSetup): TableGroupKey {
+  const { rules, seat, interval } = setup;
   return {
     rules: { id: rules.id, version: rules.version },
     dealer: rules.dealer,
@@ -118,7 +119,8 @@ function tableGroupKey({ rules, seat, interval }: TableSetup): TableGroupKey {
     penetration: rules.penetration,
     extraPlayers: rules.players.otherWagers.length,
     seat,
-    countingMode: null,
+    // Spec 3 Comparison groups: counting mode; #138
+    countingMode: setup.seat === 'play' ? (setup.policy.deviations.length > 0 ? 'deviations' : 'basic') : null,
     betSchedule: false,
     baseWager: null,
     startingBalance: null,

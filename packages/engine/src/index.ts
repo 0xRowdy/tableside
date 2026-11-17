@@ -360,6 +360,7 @@ export {
   type RunningCountExplanation,
   type RunningCountReview,
   type TableCountReview,
+  type TableDecisionReview,
 } from './challenge';
 export {
   MAX_CHECKPOINT_INTERVAL,
@@ -374,6 +375,11 @@ export {
   type TableRunningExplanation,
   type TableSeatView,
   type TableSetup,
+  type ObserveSetup,
+  type PlaySetup,
+  type PlayDecision,
+  type PlaySeat,
+  type TableDecisionView,
   type TableStep,
   type TableView,
 } from './table-challenge';
