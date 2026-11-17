@@ -333,6 +333,7 @@ export {
   type ChallengeVariant,
   type ChallengeView,
   type CheckChallengeView,
+  type CountRange,
   type LearnChallengeView,
   type HiLoExplanation,
   type HiLoValue,
@@ -341,6 +342,7 @@ export {
   type MetricResult,
   type ReviewFact,
   type RunningCountContent,
+  type RunningCountAid,
   type RunningCountExplanation,
   type RunningCountReview,
 } from './challenge';

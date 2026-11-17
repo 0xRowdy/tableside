@@ -69,7 +69,7 @@ export interface ItemAnswers {
   readonly tries: number;
 }
 
-// Spec 3 Challenge content › Running count: Check shows cards between checkpoints ('card')
+// Spec 3 Challenge content › Running count
 export type ChallengePhase = 'ready' | 'card' | 'question' | 'explanation' | 'recorded' | 'ended';
 
 export type ChallengeEnding = 'completed' | 'abandoned';
@@ -105,7 +105,7 @@ export type ChallengeCommand =
   | { readonly kind: 'skip' }
   | { readonly kind: 'retry-item' }
   | { readonly kind: 'next-item' }
-  // Spec 3 Learn, Check and assistance: the reveal allowed learning aid command
+  // Spec 3 Learn, Check and assistance › Show/hide running count
   | { readonly kind: 'reveal-count' }
   | { readonly kind: 'end' };
 
@@ -138,6 +138,16 @@ export interface MetricResult {
 }
 
 export type ChallengeMetrics = Readonly<Record<ChallengeMetric, MetricResult | null>>;
+
+export interface CountRange {
+  readonly min: number;
+  readonly max: number;
+}
+
+export interface RunningCountAid {
+  readonly revealed: boolean;
+  readonly count: number | null;
+}
 
 export type HiLoExplanation = { readonly kind: 'hi-lo-value'; readonly rank: Rank; readonly value: HiLoValue };
 
@@ -189,10 +199,10 @@ interface ChallengeViewBase {
   readonly position: number;
   readonly item: CardValueItem | null;
   readonly choices: readonly HiLoValue[];
-  readonly countRange: { readonly min: number; readonly max: number } | null;
+  readonly countRange: CountRange | null;
   readonly checkpoints: readonly number[] | null;
   // Spec 3 Learn, Check and assistance › Show/hide running count
-  readonly countAid: { readonly revealed: boolean; readonly count: number | null } | null;
+  readonly countAid: RunningCountAid | null;
   readonly assisted: boolean;
   readonly results: ChallengeResults | null;
 }
@@ -306,7 +316,7 @@ function generate(content: ChallengeContent, stream: RandomStream): { items: Car
 
 const hiLo = (item: CardValueItem): HiLoValue => hiLoTag({ deck: 0, ...item.card }) as HiLoValue;
 
-// Spec 3 Scoring and review › Reference: the running count of exposed cards only.
+// Spec 3 Scoring and review › Reference
 const countThrough = (state: ChallengeState, position: number) => state.items.slice(0, position + 1).reduce((count, item) => count + hiLo(item), 0);
 
 const reference = (state: ChallengeState, position: number): number =>
@@ -343,11 +353,9 @@ function legalCommands(state: ChallengeState): readonly ChallengeCommandKind[] {
   return canReveal(state) ? [...legal.filter((kind) => kind !== 'end'), 'reveal-count', 'end'] : legal;
 }
 
-const countLimit = (content: ChallengeContent) => content.length;
-
 function answerProblem(state: ChallengeState, value: number): string | undefined {
   if (state.content.category === 'card-values') return HI_LO_VALUES.includes(value as HiLoValue) ? undefined : 'a card value is +1, 0 or −1';
-  const limit = countLimit(state.content);
+  const limit = state.content.length;
   return Math.abs(value) <= limit ? undefined : `a running count is a whole number from −${limit} to +${limit}`;
 }
 
@@ -461,7 +469,7 @@ export function readChallengeView(state: ChallengeState): ChallengeView {
   const item = shown ? (state.items[state.position] as CardValueItem) : null;
   const answered = state.phase === 'explanation' || state.phase === 'recorded' ? (currentAnswers(state) as ItemAnswers) : null;
   const counting = state.content.category === 'running-count';
-  const limit = countLimit(state.content);
+  const limit = state.content.length;
   const base: ChallengeViewBase = {
     attemptId: state.attempt.id,
     category: state.identities.category,

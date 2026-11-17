@@ -1,8 +1,8 @@
 // Spec 3 S3-03 P4WjR, drVnR, BFdJT, S3-04 qdnQm, S3-05 EDnGd, S3-06 C53yTW; #158, #132, #133
 
-import type { ChallengeCard, ChallengeCategory, ChallengeEntry, ChallengeView, HiLoValue, LearnFeedback } from '@tableside/engine';
+import type { ChallengeCard, ChallengeCategory, ChallengeEntry, ChallengeView, CountRange, HiLoValue, LearnFeedback } from '@tableside/engine';
 import { Check, CircleCheck, CircleDot, CircleX, SkipForward, X } from 'lucide-react-native';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/Button';
@@ -36,6 +36,8 @@ import {
 } from '@/training/challenge-text';
 import type { LearnerCommand } from '@/training/service';
 
+const SIDE_BY_SIDE_MAX_FONT_SCALE = 1.35;
+
 const SUIT_TOKEN = { spades: 'suitSpade', hearts: 'suitHeart', diamonds: 'suitDiamond', clubs: 'suitClub' } as const;
 
 export function ChallengeExercise({
@@ -58,7 +60,6 @@ export function ChallengeExercise({
   const answering = view.legalCommands.includes('answer') && ready;
   const feedback = view.variant === 'learn' ? view.feedback : null;
   const entered = view.variant === 'check' ? view.entered : null;
-  const checkpoint = checkpointOf(view);
   return (
     <ScrollView style={styles.screen} contentContainerStyle={{ paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right, paddingBottom: space[6] }}>
       <View style={styles.header}>
@@ -79,74 +80,111 @@ export function ChallengeExercise({
       </View>
       <View style={styles.body}>
         {saveFailed && <SaveFailedBanner busy={busy} onRetry={onRetrySave} />}
-        {view.item && <PlayingCard card={view.item.card} />}
-        {view.item && !feedback && view.countRange === null && (
-          <Text maxFontSizeMultiplier={textScale.display} style={styles.prompt}>
-            {CARD_PROMPT}
-          </Text>
-        )}
-        {view.phase === 'question' && view.countRange !== null && (
-          <View style={styles.countPrompt}>
-            {checkpoint && (
-              <Text maxFontSizeMultiplier={textScale.body} style={styles.checkpointKicker}>
-                {checkpointKicker(checkpoint)}
-              </Text>
-            )}
-            <Text maxFontSizeMultiplier={textScale.display} style={styles.prompt}>
-              {countPrompt(view.position)}
-            </Text>
-          </View>
-        )}
-        {view.phase === 'card' && checkpoint && (
-          <Text maxFontSizeMultiplier={textScale.body} style={styles.keep}>
-            {keepCounting(checkpoint)}
-          </Text>
-        )}
-        {view.countAid && <CountAid key={view.attemptId} variant={view.variant} aid={view.countAid} enabled={ready && view.legalCommands.includes('reveal-count')} onReveal={() => onCommand({ kind: 'reveal-count' })} />}
         {view.countRange === null ? (
           <>
+            {view.item && <PlayingCard card={view.item.card} />}
+            {view.item && !feedback && (
+              <Text maxFontSizeMultiplier={textScale.display} style={styles.prompt}>
+                {CARD_PROMPT}
+              </Text>
+            )}
             <View style={styles.choices}>
               {view.choices.map((value) => (
                 <Choice key={value} value={value} state={choiceState(value, feedback, entered)} enabled={answering} onPress={() => onCommand({ kind: 'answer', value })} />
               ))}
             </View>
             {view.legalCommands.includes('skip') && <Button label={SKIP_LABEL} icon={SkipForward} variant="outline" stretch disabled={!answering} onPress={() => onCommand({ kind: 'skip' })} />}
+            {view.phase === 'recorded' && entered !== null && <RecordedNotice entered={entered} category={view.category} />}
+            {feedback && <CoachNote feedback={feedback} position={view.position} canRetry={view.legalCommands.includes('retry-item')} enabled={ready} onCommand={onCommand} />}
           </>
         ) : (
-          view.phase === 'question' && (
-            <CountEntry
-              key={view.position}
-              label={COUNT_LABEL}
-              range={view.countRange}
-              enabled={answering}
-              onSubmit={(value) => onCommand({ kind: 'answer', value })}
-              onSkip={() => onCommand({ kind: 'skip' })}
-              onRejected={onInputRejected}
-            />
-          )
+          <CountingBody view={view} range={view.countRange} ready={ready} answering={answering} onCommand={onCommand} onInputRejected={onInputRejected} />
         )}
-        {view.phase === 'card' && <Button label={NEXT_CARD} stretch disabled={!ready} onPress={() => onCommand({ kind: 'next-item' })} />}
-        {view.phase === 'recorded' && entered !== null && <RecordedNotice entered={entered} category={view.category} />}
-        {feedback && <CoachNote feedback={feedback} position={view.position} canRetry={view.legalCommands.includes('retry-item')} enabled={ready} onCommand={onCommand} />}
       </View>
     </ScrollView>
   );
 }
 
-function PlayingCard({ card }: { card: ChallengeCard }) {
+// Spec 3 S3-04 qdnQm, uGcdq, l3UjHq
+function CountingBody({
+  view,
+  range,
+  ready,
+  answering,
+  onCommand,
+  onInputRejected,
+}: {
+  view: ChallengeView;
+  range: CountRange;
+  ready: boolean;
+  answering: boolean;
+  onCommand: (command: LearnerCommand) => void;
+  onInputRejected: () => void;
+}) {
+  const { width, height, fontScale } = useWindowDimensions();
+  const sideBySide = width > height && fontScale <= SIDE_BY_SIDE_MAX_FONT_SCALE;
+  const feedback = view.variant === 'learn' ? view.feedback : null;
+  const entered = view.variant === 'check' ? view.entered : null;
+  const checkpoint = checkpointOf(view);
+  return (
+    <View testID="count-columns" style={[styles.columns, { flexDirection: sideBySide ? 'row' : 'column' }]}>
+      <View style={[styles.column, sideBySide && styles.side]}>
+        <View style={[styles.cardRow, sideBySide && styles.cardStack]}>
+          {view.item && <PlayingCard card={view.item.card} small={!sideBySide} />}
+          {view.phase === 'question' && (
+            <View style={[styles.countPrompt, !sideBySide && styles.promptBeside]}>
+              {checkpoint && (
+                <Text maxFontSizeMultiplier={textScale.body} style={[styles.checkpointKicker, !sideBySide && styles.start]}>
+                  {checkpointKicker(checkpoint)}
+                </Text>
+              )}
+              <Text maxFontSizeMultiplier={textScale.display} style={[styles.prompt, !sideBySide && styles.start]}>
+                {countPrompt(view.position)}
+              </Text>
+            </View>
+          )}
+          {view.phase === 'card' && checkpoint && (
+            <Text maxFontSizeMultiplier={textScale.body} style={[styles.keep, !sideBySide && styles.promptBeside, !sideBySide && styles.start]}>
+              {keepCounting(checkpoint)}
+            </Text>
+          )}
+        </View>
+        {view.countAid && <CountAid key={view.attemptId} variant={view.variant} aid={view.countAid} enabled={ready && view.legalCommands.includes('reveal-count')} onReveal={() => onCommand({ kind: 'reveal-count' })} />}
+      </View>
+      <View style={[styles.column, sideBySide && styles.side]}>
+        {view.phase === 'question' && (
+          <CountEntry
+            key={view.position}
+            label={COUNT_LABEL}
+            range={range}
+            enabled={answering}
+            onSubmit={(value) => onCommand({ kind: 'answer', value })}
+            onSkip={() => onCommand({ kind: 'skip' })}
+            onRejected={onInputRejected}
+          />
+        )}
+        {view.phase === 'card' && <Button label={NEXT_CARD} stretch disabled={!ready} onPress={() => onCommand({ kind: 'next-item' })} />}
+        {view.phase === 'recorded' && entered !== null && <RecordedNotice entered={entered} category={view.category} />}
+        {feedback && <CoachNote feedback={feedback} position={view.position} canRetry={view.legalCommands.includes('retry-item')} enabled={ready} onCommand={onCommand} />}
+      </View>
+    </View>
+  );
+}
+
+function PlayingCard({ card, small = false }: { card: ChallengeCard; small?: boolean }) {
   const color = palette[SUIT_TOKEN[card.suit]];
   const glyph = SUIT_GLYPH[card.suit];
   return (
-    <View accessible accessibilityLabel={cardName(card)} testID="challenge-card" style={styles.card}>
+    <View accessible accessibilityLabel={cardName(card)} testID="challenge-card" style={[styles.card, small && styles.smallCard]}>
       <View style={styles.corner}>
-        <Text maxFontSizeMultiplier={1} style={[styles.rank, { color }]}>
+        <Text maxFontSizeMultiplier={1} style={[styles.rank, small && styles.smallRank, { color }]}>
           {cardRank(card)}
         </Text>
-        <Text maxFontSizeMultiplier={1} style={[styles.cornerSuit, { color }]}>
+        <Text maxFontSizeMultiplier={1} style={[styles.cornerSuit, small && styles.smallSuit, { color }]}>
           {glyph}
         </Text>
       </View>
-      <Text maxFontSizeMultiplier={1} style={[styles.pip, { color }]}>
+      <Text maxFontSizeMultiplier={1} style={[styles.pip, small && styles.smallPip, { color }]}>
         {glyph}
       </Text>
     </View>
@@ -276,6 +314,17 @@ const styles = StyleSheet.create({
   pip: { alignSelf: 'flex-end', fontSize: 60, lineHeight: 64 },
   prompt: { fontFamily: fonts.uiBold, fontSize: 18, color: palette.foreground, textAlign: 'center' },
   countPrompt: { gap: space[1] },
+  columns: { gap: space[4] },
+  column: { gap: space[4] },
+  side: { flex: 1, justifyContent: 'center' },
+  cardRow: { flexDirection: 'row', alignItems: 'center', gap: space[4] },
+  cardStack: { flexDirection: 'column' },
+  promptBeside: { flex: 1 },
+  start: { textAlign: 'left' },
+  smallRank: { fontSize: 22, lineHeight: 24 },
+  smallSuit: { fontSize: 14, lineHeight: 16 },
+  smallPip: { fontSize: 28, lineHeight: 30 },
+  smallCard: { alignSelf: 'auto', width: 58, height: 82, paddingVertical: space[1], paddingHorizontal: space[1] + 2 },
   checkpointKicker: { fontFamily: fonts.uiBold, fontSize: 14, color: palette.mutedForeground, textAlign: 'center' },
   keep: { fontFamily: fonts.ui, fontSize: 15, lineHeight: 21, color: palette.mutedForeground, textAlign: 'center' },
   choices: { flexDirection: 'row', gap: space[3] - 2 },

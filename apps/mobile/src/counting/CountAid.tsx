@@ -1,6 +1,6 @@
 // Spec 3 Learn, Check and assistance › Show/hide running count; S3-04 qdnQm, S3-05 EDnGd; #133
 
-import type { ChallengeVariant } from '@tableside/engine';
+import type { ChallengeVariant, RunningCountAid } from '@tableside/engine';
 import { Eye } from 'lucide-react-native';
 import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
@@ -19,7 +19,7 @@ export function CountAid({
   onReveal,
 }: {
   variant: ChallengeVariant;
-  aid: { readonly revealed: boolean; readonly count: number | null };
+  aid: RunningCountAid;
   enabled: boolean;
   onReveal: () => void;
 }) {

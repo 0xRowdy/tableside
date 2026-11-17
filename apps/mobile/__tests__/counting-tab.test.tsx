@@ -325,7 +325,7 @@ describe('the Counting tab', () => {
         if (card === 13) {
           const before = cues().length;
           await fireEvent.press(screen.getByRole('button', { name: 'Submit' }));
-          expect(screen.getByRole('alert')).toHaveTextContent('Enter a count first. Nothing was submitted, and it doesn’t count against you.');
+          expect(screen.getByRole('alert')).toHaveTextContent("Enter a count first. Nothing was submitted, and it doesn't count against you.");
           expect(cues().slice(before)).toEqual(['input-rejected']);
           expect(screen.getByText('Card 13 of 52 · checkpoint 1 of 4')).toBeOnTheScreen();
           await enterCount(count);

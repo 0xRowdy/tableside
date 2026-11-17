@@ -1,6 +1,7 @@
 // Spec 3 S3-04 qdnQm, S3-06 C53yTW; Learn, Check and assistance › Malformed input; #133
 
 import { CornerDownLeft, Delete, Info, SkipForward } from 'lucide-react-native';
+import type { CountRange } from '@tableside/engine';
 import { useState, type ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
@@ -20,7 +21,7 @@ export function CountEntry({
   onRejected,
 }: {
   label: string;
-  range: { readonly min: number; readonly max: number };
+  range: CountRange;
   enabled: boolean;
   onSubmit: (value: number) => void;
   onSkip: () => void;

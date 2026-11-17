@@ -1,6 +1,6 @@
-// Spec 3 S3-01 to S3-09 (PDCaD, RqPCB, buD2R, qdnQm, EDnGd, C53yTW, h0MsKr); S5-17 j3UhJ; #158, #133
+// Spec 3 S3-01 to S3-09; S5-17 j3UhJ; #158, #132, #150, #133
 
-import { runningCountDrift, type ChallengeCategory, type ChallengeEntry, type ChallengeMetric, type ChallengeVariant, type ChallengeView, type HiLoValue, type LearnFeedback, type MetricResult, type ReviewFact, type RunningCountReview } from '@tableside/engine';
+import { runningCountDrift, type AssistanceClass, type ChallengeCategory, type CountRange, type ChallengeEntry, type ChallengeMetric, type ChallengeVariant, type ChallengeView, type HiLoValue, type LearnFeedback, type MetricResult, type ReviewFact, type RunningCountReview } from '@tableside/engine';
 
 import { cardName, rankName, signed } from '@/play/blackjack-text';
 import { GAME_WORDS } from '@/play/game-words';
@@ -120,7 +120,7 @@ export const PACING_LABEL = 'self-paced';
 
 export const progressText = (position: number, length: number) => `Card ${position} of ${length}`;
 
-// Spec 3 S3-04 qdnQm: the checkpoint block a Check card belongs to.
+// Spec 3 S3-04 qdnQm
 export const checkpointOf = (view: Pick<ChallengeView, 'checkpoints' | 'position'>) => {
   const index = view.checkpoints?.findIndex((card) => card >= view.position) ?? -1;
   return view.checkpoints && index >= 0 ? { number: index + 1, of: view.checkpoints.length, card: view.checkpoints[index] as number } : null;
@@ -186,7 +186,7 @@ export type CountProblem = 'empty' | 'sign-only' | 'not-whole' | 'out-of-range';
 
 export type ParsedCount = { readonly ok: true; readonly value: number } | { readonly ok: false; readonly problem: CountProblem };
 
-export function parseCount(text: string, range: { readonly min: number; readonly max: number }): ParsedCount {
+export function parseCount(text: string, range: CountRange): ParsedCount {
   const trimmed = text.trim().replace(/[−–]/g, '-');
   if (trimmed === '') return { ok: false, problem: 'empty' };
   if (trimmed === '-' || trimmed === '+') return { ok: false, problem: 'sign-only' };
@@ -196,12 +196,12 @@ export function parseCount(text: string, range: { readonly min: number; readonly
   return { ok: true, value: value === 0 ? 0 : value };
 }
 
-const NOTHING_SUBMITTED = 'Nothing was submitted, and it doesn’t count against you.';
+const NOTHING_SUBMITTED = "Nothing was submitted, and it doesn't count against you.";
 
-export const countProblemText = (problem: CountProblem, range: { readonly min: number; readonly max: number }) =>
+export const countProblemText = (problem: CountProblem, range: CountRange) =>
   ({
     empty: `Enter a count first. ${NOTHING_SUBMITTED}`,
-    'sign-only': "Add a number after the sign. Nothing was submitted, and it doesn't count against you.",
+    'sign-only': `Add a number after the sign. ${NOTHING_SUBMITTED}`,
     'not-whole': `Enter a whole number. ${NOTHING_SUBMITTED}`,
     'out-of-range': `Enter a count from ${signed(range.min)} to ${signed(range.max)}. ${NOTHING_SUBMITTED}`,
   })[problem];
@@ -225,7 +225,7 @@ export const REVEAL_WARNING = {
 } as const;
 
 // Spec 3 Learn, Check and assistance › Answer accepted
-export const recordedText = (entered: ChallengeEntry, category: ChallengeCategory = 'card-values') => {
+export const recordedText = (entered: ChallengeEntry, category: ChallengeCategory) => {
   if (entered === 'skip') return 'Skip recorded. Next card in a moment.';
   return category === 'running-count' ? `Count ${signed(entered)} recorded. Next card in a moment.` : 'Answer recorded. Next card in a moment.';
 };
@@ -245,7 +245,7 @@ export const COMPLETED: Record<ChallengeVariant, { readonly title: string; reado
 };
 
 // Spec 3 S3-08 cX5Gc
-export function completedText(groupKey: { readonly variant: ChallengeVariant; readonly assistanceClass: string }, assistanceStep: number | null) {
+export function completedText(groupKey: { readonly variant: ChallengeVariant; readonly assistanceClass: AssistanceClass }, assistanceStep: number | null) {
   if (groupKey.assistanceClass !== 'assisted-check') return COMPLETED[groupKey.variant];
   return {
     title: 'Completed · assisted',
@@ -271,7 +271,7 @@ export const RESULT_ROWS: readonly { readonly metric: ChallengeMetric; readonly 
   { metric: 'true-count', title: 'True count', tested: (total) => `${total} questions` },
 ];
 
-// Spec 3 S3-08 cX5Gc: tested skills first.
+// Spec 3 S3-08 cX5Gc
 export const resultRows = (metrics: Readonly<Record<ChallengeMetric, MetricResult | null>>) => [...RESULT_ROWS].sort((a, b) => Number(metrics[b.metric] !== null) - Number(metrics[a.metric] !== null));
 
 export const NOT_TESTED = 'Not tested';
@@ -305,7 +305,7 @@ export interface ReviewRowText {
   readonly label: string;
 }
 
-export function reviewText(fact: ReviewFact, variant: ChallengeVariant = 'check'): ReviewRowText {
+export function reviewText(fact: ReviewFact, variant: ChallengeVariant): ReviewRowText {
   const { entered, reference } = fact;
   const outcome: ReviewOutcome = entered === 'skip' ? 'skipped' : entered === reference ? 'match' : 'off';
   const off = entered === 'skip' ? 0 : Math.abs(entered - reference);

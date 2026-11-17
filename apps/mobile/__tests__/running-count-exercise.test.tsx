@@ -1,4 +1,4 @@
-// Spec 3 Learn, Check and assistance; Information hiding (end to end), Testing Decisions › Seam 3; S3-04 qdnQm, S3-05 EDnGd, S3-06 C53yTW; #133
+// Spec 3 Learn, Check and assistance, Seam 3; S3-04 qdnQm, l3UjHq, S3-05 EDnGd, S3-06 C53yTW; #133
 
 import { CHALLENGE_CONTENT } from '@tableside/definitions';
 import {
@@ -11,7 +11,8 @@ import {
   type ChallengeVariant,
   type ChallengeView,
 } from '@tableside/engine';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react-native';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react-native';
+import * as ReactNative from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { ChallengeExercise } from '@/counting/ChallengeExercise';
@@ -116,11 +117,11 @@ describe('the running-count exercise', () => {
 
   it('rejects malformed counts locally with cue 9 and a neutral message, submitting nothing (S3-06 C53yTW)', async () => {
     const cases: [string, string][] = [
-      ['', 'Enter a count first. Nothing was submitted, and it doesn’t count against you.'],
+      ['', "Enter a count first. Nothing was submitted, and it doesn't count against you."],
       ['−', "Add a number after the sign. Nothing was submitted, and it doesn't count against you."],
-      ['2.5', 'Enter a whole number. Nothing was submitted, and it doesn’t count against you.'],
-      ['abc', 'Enter a whole number. Nothing was submitted, and it doesn’t count against you.'],
-      ['60', 'Enter a count from −52 to +52. Nothing was submitted, and it doesn’t count against you.'],
+      ['2.5', "Enter a whole number. Nothing was submitted, and it doesn't count against you."],
+      ['abc', "Enter a whole number. Nothing was submitted, and it doesn't count against you."],
+      ['60', "Enter a count from −52 to +52. Nothing was submitted, and it doesn't count against you."],
     ];
     for (const [typed, message] of cases) {
       const presented = await present(readChallengeView(attempt('check', 1, nexts(12))));
@@ -201,5 +202,22 @@ describe('the running-count exercise', () => {
     expectNoFeedbackColors(recorded);
     expect(screen.getByText(`Count ${right > 0 ? `+${right}` : right < 0 ? `−${-right}` : '0'} recorded. Next card in a moment.`)).toBeOnTheScreen();
     expectNotPresented(recorded, ['Correct', 'Off by', 'Match']);
+  });
+
+  it('lays out the card and prompt beside the entry in landscape, keeping typed digits when the device rotates (S3-04 l3UjHq)', async () => {
+    const window = ReactNative.Dimensions.get('window');
+    const resize = (width: number, height: number, fontScale: number) =>
+      act(() => ReactNative.Dimensions.set({ window: { ...window, width, height, fontScale }, screen: { ...window, width, height, fontScale } }));
+    const direction = () => ReactNative.StyleSheet.flatten(screen.getByTestId('count-columns').props.style).flexDirection;
+    await resize(390, 844, 1);
+    await present(readChallengeView(attempt('check', 1, nexts(12))));
+    expect(direction()).toBe('column');
+    await press('7');
+    await resize(1180, 820, 1);
+    expect(direction()).toBe('row');
+    expect(screen.getByLabelText('Running count')).toHaveDisplayValue('7');
+    await resize(1180, 820, 2);
+    expect(direction()).toBe('column');
+    await act(() => ReactNative.Dimensions.set({ window, screen: window }));
   });
 });
