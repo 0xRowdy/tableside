@@ -137,7 +137,8 @@ export const scriptedResponseLine = (name: string, explanation: StrategyStepExpl
 
 export function scriptedTurnLine(game: GameId, turn: ScriptedTurn, index: number, open = false): string {
   const words = GAME_WORDS[game];
-  return `${words.Turn} ${index + 1}: ${betsText(turn.wagers, words)}. ${words.scriptedOutcome(turn.outcome, open)}`;
+  const wagers = turn.wagers.length > 0 ? betsText(turn.wagers, words) : 'no bets';
+  return `${words.Turn} ${index + 1}: ${wagers}. ${words.scriptedOutcome(turn.outcome, open)}`;
 }
 
 // Spec 3 Lessons › Structure (Handoff); S3-12 pX6CV, S3-13 ZBpF3; #145
@@ -188,3 +189,10 @@ export const LEARN_THIS_GAME_DETAIL: Record<GameId, string> = {
   craps: 'Craps basics and the five strategy lessons. Optional, and lessons never use allowance.',
   roulette: 'Roulette basics and the five strategy lessons. Optional, and lessons never use allowance.',
 };
+
+// Spec 3 S3-12 hGHha; Amendment 1 C11; #154
+export const SOURCES_HEADING = 'Sources';
+export const sourcesStepText = (step: number, steps: number) => `${stepText(step, steps)} · ${SOURCES_HEADING}`;
+export const SOURCES_INTRO = "Tableside wrote this lesson. Where it draws on other work, the exact page, section or video time is linked below. Those authors didn't write or approve it.";
+export const CREDITS_HEADING = 'Credits';
+export const CREDITS_NOTE = 'Links open in your browser; these credits are bundled for offline reading.';

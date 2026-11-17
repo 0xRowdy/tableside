@@ -6,13 +6,16 @@ import {
   createActivity,
   explainStrategyBets,
   RANDOM_PROTOCOL_VERSION,
+  ODDS_CAPS,
   strategyPlay,
   type ActivityState,
   type BlackjackActivityState,
   type Command,
+  type CrapsActivityState,
   type DomainFact,
   type Explanation,
   type GameId,
+  type OddsCap,
   type PlayExplanation,
   type PlayMove,
   type Rank,
@@ -25,6 +28,8 @@ import {
 import { basicStrategy, BLACKJACK_PRESETS, playingDeviations, type BlackjackPreset, type CardValue } from './blackjack/reference';
 import { blackjackRules } from './blackjack/rules';
 import { BLACKJACK_MODES, BLACKJACK_REFERENCE_IDENTITY, blackjackStrategy, countingMode, type BlackjackMode } from './blackjack/strategies';
+import { CRAPS_STRATEGIES } from './craps-strategies';
+import { standardCraps } from './craps';
 import { ROULETTE_PRESETS } from './roulette';
 import { ROULETTE_STRATEGIES } from './roulette-strategies';
 import type { ScriptedChoice } from './worked-examples';
@@ -38,14 +43,17 @@ export interface RouletteOutcome {
   readonly pocket: RoulettePocket;
 }
 
-// #152: cards already out of the shoe (counted), then this round's cards in deal order
+export interface CrapsOutcome {
+  readonly dice: readonly [number, number];
+}
+
+// #152
 export interface BlackjackOutcome {
   readonly shown: readonly Rank[];
   readonly dealt: readonly Rank[];
 }
 
-// TODO(#154)
-export type ScriptedOutcome = RouletteOutcome | BlackjackOutcome;
+export type ScriptedOutcome = RouletteOutcome | CrapsOutcome | BlackjackOutcome;
 
 export interface StrategyBetsAnswer {
   readonly kind: 'bets';
@@ -102,10 +110,28 @@ const ROULETTE_STAGE: Stage = {
   },
   stack: (state, outcome) => {
     const roulette = state as RouletteActivityState;
-    if (!roulette.outcome || !('pocket' in outcome)) throw new Error('no spin to stack');
+    if (!roulette.outcome || !('pocket' in outcome)) throw new Error('no spin to stack a pocket on');
     return { ...roulette, outcome: { ...roulette.outcome, pocket: outcome.pocket } };
   },
 };
+
+// #154
+const CRAPS_STAGE: Stage = {
+  strategies: CRAPS_STRATEGIES,
+  start: (example, definition) => {
+    if (!ODDS_CAPS.includes(example.table as OddsCap)) throw new Error(`${example.table} is not a craps odds cap`);
+    return createActivity(
+      { ...identity, game: 'craps', rules: standardCraps(example.table as OddsCap), strategy: { definition, parameters: example.parameters }, reference: null, fundingSource: 'practice-funding', funding: example.practiceFunding },
+      REPLAY_STREAM,
+    );
+  },
+  stack: (state, outcome) => {
+    const craps = state as CrapsActivityState;
+    if (!craps.outcome || !('dice' in outcome)) throw new Error('no roll to stack dice on');
+    return { ...craps, outcome: { ...craps.outcome, dice: outcome.dice } };
+  },
+};
+
 
 // #152
 const RANK_TEXT = (rank: Rank) => (rank === 1 ? 'A' : rank >= 10 ? 'T' : String(rank));
@@ -169,7 +195,7 @@ const BLACKJACK_STAGE: Stage = {
   },
 };
 
-const STAGES: Partial<Record<GameId, Stage>> = { roulette: ROULETTE_STAGE, blackjack: BLACKJACK_STAGE };
+const STAGES: Partial<Record<GameId, Stage>> = { roulette: ROULETTE_STAGE, craps: CRAPS_STAGE, blackjack: BLACKJACK_STAGE };
 
 function send(state: ActivityState, command: Command): { state: ActivityState; facts: readonly DomainFact[] } {
   const result = advanceActivity(state, { sequence: state.sequence, commandId: `replay-${state.sequence}`, command });

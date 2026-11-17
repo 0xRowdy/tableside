@@ -12,6 +12,7 @@ import {
   type LessonContent,
   type LessonHandoff,
   type LessonSection,
+  type LessonSource,
   type LessonStep,
   type WorkedExample,
 } from '@tableside/definitions';
@@ -94,7 +95,12 @@ export interface LessonView {
   readonly example: WorkedExample | null;
   // Spec 3 Lessons › Structure (Handoff)
   readonly handoffs: readonly LessonHandoff[];
+  // Spec 3 Amendment 1 C11; S3-12 hGHha; #154
+  readonly sources: readonly LessonSource[];
 }
+
+// Spec 3 S3-12 hGHha; #154
+export const stepCount = (lesson: Pick<LessonContent, 'steps' | 'sources'>): number => lesson.steps.length + (lesson.sources.length > 0 ? 1 : 0);
 
 export interface TrainingOptions {
   readonly lessons?: readonly Lesson[];
@@ -216,7 +222,7 @@ export class TrainingService {
       title,
       summary,
       section,
-      steps: content ? content.steps.length : null,
+      steps: content ? stepCount(content) : null,
       access: 'available' as const,
       status: content ? lessonProgress(events, progressKey(id, content)).status : { kind: 'not-started' as const },
     }));
@@ -231,7 +237,7 @@ export class TrainingService {
 
   stepForward(id: string, from: number): Promise<LessonView> {
     const lesson = this.authored(id);
-    return this.record(lesson, { kind: 'bookmark', step: Math.min(from + 1, lesson.content.steps.length) });
+    return this.record(lesson, { kind: 'bookmark', step: Math.min(from + 1, stepCount(lesson.content)) });
   }
 
   stepBack(id: string, from: number): Promise<LessonView> {
@@ -315,7 +321,7 @@ export class TrainingService {
   }
 }
 
-const progressKey = (id: string, content: LessonContent) => ({ id, materialVersion: content.materialVersion, steps: content.steps.length });
+const progressKey = (id: string, content: LessonContent) => ({ id, materialVersion: content.materialVersion, steps: stepCount(content) });
 
 function viewOf(lesson: AuthoredLesson, progress: LessonProgress, step: number, prompt: LessonView['prompt']): LessonView {
   const { change } = lesson.content;
@@ -329,5 +335,6 @@ function viewOf(lesson: AuthoredLesson, progress: LessonProgress, step: number, 
     notice: progress.changed && change ? { kind: progress.changed, change } : null,
     example: lesson.content.workedExample,
     handoffs: lesson.content.handoffs,
+    sources: lesson.content.sources,
   };
 }
