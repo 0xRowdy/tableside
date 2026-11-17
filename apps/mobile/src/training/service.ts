@@ -28,7 +28,8 @@ import type { TrainingAdapters } from './adapters';
 import type { ChallengeAllowance } from './allowance';
 import { ChallengeController, type AttemptSnapshot, type DirectSuspendCause, type LearnerCommand, type PauseCause, type StartProblem } from './controller';
 import { DeviceLearningPreferences, type LearningPreferences } from './learning-preferences';
-import { attemptEarned, progressProjection, type AttemptEarned, type Progress, type ProgressAttempt } from './progress';
+import { attemptEarned, milestoneCandidates, progressProjection, readinessOutcome, type AttemptEarned, type Progress, type ProgressAttempt, type ProgressMilestone } from './progress';
+import { milestoneSlot } from './readiness-milestone';
 import { lessonProgress, type LessonChange, type LessonProgress, type LessonProgressChange, type LessonStatus } from './lesson-progress';
 
 // Spec 3 Recommendations
@@ -189,8 +190,10 @@ export class TrainingService {
     return () => this.listeners.delete(listener);
   };
 
-  load(): Promise<void> {
-    return this.challenges.load();
+  async load(): Promise<void> {
+    await this.challenges.load();
+    // Spec 3 Synchronized record types › Readiness milestone
+    await this.recordMilestones().catch(() => undefined);
   }
 
   listCatalog(): readonly CatalogEntry[] {
@@ -284,11 +287,29 @@ export class TrainingService {
   now = (): number => this.adapters.clock.now();
 
   async progress(): Promise<Progress> {
-    return progressProjection(await this.attempts());
+    return progressProjection(await this.attempts(), await this.milestones());
   }
 
+  // Spec 3 Comparison groups (Milestones); Audio and haptics (cue 16)
   private async earned(record: ChallengeAttemptRecord): Promise<AttemptEarned> {
-    return attemptEarned(await this.attempts(), record.attemptId);
+    await this.recordMilestones().catch(() => undefined);
+    const attempts = await this.attempts();
+    const own = milestoneCandidates(attempts, this.adapters.device).map((milestone) => ({ record: milestone, local: true }));
+    return { ...attemptEarned(attempts, record.attemptId), readiness: readinessOutcome(attempts, [...(await this.milestones()), ...own], record.attemptId) };
+  }
+
+  // Spec 3 Synchronized record types › Readiness milestone
+  private async recordMilestones(): Promise<void> {
+    const recorded = await this.adapters.store.readMilestones();
+    const missing = milestoneCandidates(await this.attempts(), this.adapters.device).filter(
+      (candidate) => !recorded.some((milestone) => milestoneSlot(milestone) === milestoneSlot(candidate)),
+    );
+    for (const milestone of missing) await this.adapters.store.recordMilestone(milestone);
+  }
+
+  // TODO(#148)
+  private async milestones(): Promise<readonly ProgressMilestone[]> {
+    return (await this.adapters.store.readMilestones()).map((record) => ({ record, local: true }));
   }
 
   // TODO(#142)

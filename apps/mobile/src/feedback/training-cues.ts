@@ -2,7 +2,7 @@
 import type { StrategyStepAnswer, WorkedExample } from '@tableside/definitions';
 import type { ChallengeFact, ChallengeView } from '@tableside/engine';
 
-import { setsPersonalBest } from '@/training/progress';
+import { earnsRecord } from '@/training/progress';
 import type { TrainingService, TrainingSnapshot } from '@/training/service';
 
 import type { CueName } from './catalog';
@@ -12,9 +12,13 @@ import type { FeedbackService } from './service';
 export const CONTENT_SHOWN_CUE: CueName = 'card-dealt';
 export const learnAnswerCue = (correct: boolean): CueName => (correct ? 'correct' : 'incorrect');
 
-// Spec 3 Amendment 1 B4; #155, #152
+// Spec 3 Amendment 1 B4; #155, #152, #153
 export const EXAMPLE_CUES: Readonly<Record<WorkedExample['kind'], { readonly shown: CueName | null; answer(correct: boolean, asks: StrategyStepAnswer['kind'] | null): CueName[] }>> = {
   'card-value': { shown: CONTENT_SHOWN_CUE, answer: (correct) => [learnAnswerCue(correct)] },
+  'running-count': { shown: CONTENT_SHOWN_CUE, answer: (correct) => [learnAnswerCue(correct)] },
+  conversion: { shown: CONTENT_SHOWN_CUE, answer: (correct) => [learnAnswerCue(correct)] },
+  // Spec 3 Audio and haptics (cue 11 at a table checkpoint)
+  'table-count': { shown: 'checkpoint-due', answer: (correct) => [learnAnswerCue(correct)] },
   'strategy-step': {
     shown: null,
     answer: (correct, asks) => {
@@ -63,7 +67,7 @@ export function followTraining(training: TrainingService, feedback: FeedbackServ
     } else if (next.status === 'ended' && previous.status === 'active') {
       feedback.cue('attempt-ended');
       // Spec 3 Comparison groups, records and progression (Milestones); #140
-      if (setsPersonalBest(next.earned)) feedback.cue('milestone');
+      if (earnsRecord(next.earned)) feedback.cue('milestone');
     }
   });
 }

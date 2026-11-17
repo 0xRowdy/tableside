@@ -211,7 +211,7 @@ const edge = (preset: BlackjackPreset) => `${blackjackHouseEdge(preset).percent}
 const scheduleLine = ({ from, amount }: (typeof BET_SCHEDULE)[number], index: number) =>
   `${from === null ? 'Below +1' : index === BET_SCHEDULE.length - 1 ? `+${from} or higher` : `+${from}`}: bet ${amount}`;
 
-const lesson = (id: string, title: string, summary: string, content: Omit<LessonContent, 'version' | 'materialVersion' | 'change'>): Lesson => ({
+export const lesson = (id: string, title: string, summary: string, content: Omit<LessonContent, 'version' | 'materialVersion' | 'change'>): Lesson => ({
   id,
   title,
   summary,
@@ -223,7 +223,7 @@ const lesson = (id: string, title: string, summary: string, content: Omit<Lesson
 const guided = (strategy: string | null): LessonHandoff => ({ kind: 'guided-practice', game: 'blackjack', strategy });
 const FREE_PLAY: LessonHandoff = { kind: 'free-play', game: 'blackjack' };
 
-const step = (heading: string, paragraphs: readonly string[], extra: Pick<LessonStep, 'publishedNote' | 'source'> = {}): LessonStep => ({ heading, paragraphs, ...extra });
+export const step = (heading: string, paragraphs: readonly string[], extra: Pick<LessonStep, 'publishedNote' | 'source'> = {}): LessonStep => ({ heading, paragraphs, ...extra });
 
 const SIXTEEN_V10 = basicStrategy(DEFAULT, 'hard', 16, 10);
 const ELEVEN_V6 = basicStrategy(DEFAULT, 'hard', 11, 6);

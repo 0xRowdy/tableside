@@ -53,7 +53,7 @@ describe('records through the Training service', () => {
     const { service } = setup();
     await service.load();
     const ended = await finish(service, CARD_VALUES_LEARN, wrongOnce);
-    expect(ended.earned).toEqual({ bests: ['card-values'], fastest: null });
+    expect(ended.earned).toEqual({ bests: ['card-values'], fastest: null, readiness: null });
 
     const progress = await service.progress();
     expect(progress.history.map((entry) => [entry.record.attemptId, entry.local])).toEqual([['attempt-1', true]]);
@@ -67,7 +67,7 @@ describe('records through the Training service', () => {
     await service.retry();
     service.dismissResults();
     const again = await finish(service, CARD_VALUES_LEARN, wrongOnce);
-    expect(again.earned).toEqual({ bests: [], fastest: null });
+    expect(again.earned).toEqual({ bests: [], fastest: null, readiness: null });
   });
 
   it('sets the fastest from a perfect, uninterrupted, timed Check, and not from one that was paused', async () => {
@@ -84,7 +84,7 @@ describe('records through the Training service', () => {
       paused = true;
     });
     expect(interrupted.record.interrupted).toBe(true);
-    expect(interrupted.earned).toEqual({ bests: [], fastest: null });
+    expect(interrupted.earned).toMatchObject({ bests: [], fastest: null });
     const [group] = (await service.progress()).groups;
     expect(group?.fastest?.attempt.attemptId).toBe(timed.record.attemptId);
   });

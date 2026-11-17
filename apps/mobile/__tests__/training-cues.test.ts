@@ -164,6 +164,18 @@ describe('cues during a challenge attempt', () => {
     expect(ports.sound.played.slice(before).map((play) => play.cue)).not.toContain('milestone');
   });
 
+  // #141
+  it('plays cue 16 with the success haptic on the results of the Check that earns a readiness milestone, even with no new personal best', async () => {
+    const { service, ports } = await setup('check');
+    await answerAll(service, reference);
+    const before = ports.sound.played.length;
+    await service.retry();
+    await answerAll(service, reference);
+    expect(service.snapshot()).toMatchObject({ status: 'ended', earned: { bests: [], fastest: null, readiness: { kind: 'earned' } } });
+    expect(ports.sound.played.slice(before).map((play) => play.cue).slice(-2)).toEqual(['attempt-ended', 'milestone']);
+    expect(ports.haptics.fired.at(-1)).toBe('success');
+  });
+
   it('plays no cue 16 for an abandoned attempt', async () => {
     const { service, ports } = await setup('check');
     await service.end();
