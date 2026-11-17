@@ -121,6 +121,20 @@ function tableGroupKey({ rules, seat, interval }: TableSetup): TableGroupKey {
 export function challengeAttemptRecord(state: ChallengeState, context: AttemptRecordContext): UnsequencedAttemptRecord {
   const results = challengeResults(state);
   if (!results) throw new Error(`attempt ${state.attempt.id} has not ended`);
+  return recordOf(state, context, { ending: results.ending, metrics: results.metrics, review: results.review, assistanceStep: results.assistanceStep });
+}
+
+// Spec 3 Attempt lifecycle (unusable), Amendment 1 C3; #135
+export function unusableAttemptRecord(state: ChallengeState, context: AttemptRecordContext): UnsequencedAttemptRecord {
+  const metrics: ChallengeMetrics = { 'card-values': null, 'running-count': null, 'true-count': null, 'playing-adherence': null, 'betting-adherence': null };
+  return recordOf(state, context, { ending: 'unusable', metrics, review: [], assistanceStep: state.revealedAt });
+}
+
+function recordOf(
+  state: ChallengeState,
+  context: AttemptRecordContext,
+  results: { readonly ending: AttemptEndingReason; readonly metrics: ChallengeMetrics; readonly review: readonly ReviewFact[]; readonly assistanceStep: number | null },
+): UnsequencedAttemptRecord {
   const { identities } = state;
   return {
     recordVersion: CHALLENGE_RECORD_VERSION,

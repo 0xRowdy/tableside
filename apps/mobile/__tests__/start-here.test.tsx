@@ -31,6 +31,7 @@ jest.mock('@/training/app-adapters', () => {
         newId: () => `event-${++next}`,
         device: 'test-device',
         owner: 'local',
+        quarantine: { version: 0, entries: [] },
       };
     },
   };
@@ -46,6 +47,7 @@ const onThisDevice = () =>
     newId: () => 'unused',
     device: 'test-device',
     owner: 'local',
+    quarantine: { version: 0, entries: [] },
   });
 
 const START_HERE_TEXT = '24 short lessons on the three games, counting and the app. Open any, in any order.';

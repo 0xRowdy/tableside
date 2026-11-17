@@ -23,9 +23,10 @@ import {
 } from '@tableside/definitions';
 import { CHALLENGE_VARIANTS, MAX_CHECKPOINT_INTERVAL, MAX_OTHER_PLAYERS, PENETRATIONS, type ChallengeAttemptRecord, type ChallengeCategory, type ChallengeGroupKey, type ChallengeVariant } from '@tableside/engine';
 
+import type { LifecycleEvent } from '../practice/adapters';
 import type { TrainingAdapters } from './adapters';
 import type { ChallengeAllowance } from './allowance';
-import { ChallengeController, type AttemptSnapshot, type LearnerCommand, type StartProblem } from './controller';
+import { ChallengeController, type AttemptSnapshot, type DirectSuspendCause, type LearnerCommand, type PauseCause, type StartProblem } from './controller';
 import { DeviceLearningPreferences, type LearningPreferences } from './learning-preferences';
 import { lessonProgress, type LessonChange, type LessonProgress, type LessonProgressChange, type LessonStatus } from './lesson-progress';
 
@@ -43,6 +44,8 @@ export interface CatalogEntry {
 export interface ChallengeSetup {
   readonly category: CatalogCategory;
   readonly variant: ChallengeVariant;
+  // Spec 3 Attempt lifecycle › Performance timer; #135
+  readonly timed?: boolean;
   // Spec 3 User stories 27
   readonly table?: TableOptions;
 }
@@ -84,8 +87,6 @@ function isTableOptions(value: unknown): value is TableOptions {
   );
 }
 
-const withOptions = (setup: { readonly category: CatalogCategory; readonly variant: ChallengeVariant }, table: unknown): ChallengeSetup =>
-  setup.category === 'table' && isTableOptions(table) ? { ...setup, table } : setup;
 
 // Spec 3 Training service interface › Results: Retry keeps the attempt's settings
 export function retrySetup(groupKey: ChallengeGroupKey): ChallengeSetup {
@@ -209,10 +210,10 @@ export class TrainingService {
       return this.refresh();
     }
     this.diagnostics = null;
-    const remembered = withOptions(setup, setup.table);
+    const remembered = rememberedSetup(setup);
     await this.adapters.store.writePreference(LAST_SETUP, JSON.stringify(remembered)).catch(() => undefined);
     const table = remembered.table ? observeSetup(remembered.table) : undefined;
-    await this.challenges.start(setup.variant, CHALLENGE_CONTENT[setup.category as ChallengeCategory], table);
+    await this.challenges.start(setup.variant, CHALLENGE_CONTENT[setup.category as ChallengeCategory], setup.timed === true, table);
   }
 
   submit(command: LearnerCommand): Promise<void> {
@@ -221,6 +222,41 @@ export class TrainingService {
 
   retrySave(): Promise<void> {
     return this.challenges.retrySave();
+  }
+
+  // Spec 3 Training service interface › Resume / suspend / pause / end; #135
+  pause(cause?: PauseCause): void {
+    this.challenges.pause(cause);
+  }
+
+  resume(): Promise<void> {
+    return this.challenges.resume();
+  }
+
+  // Spec 3 Attempt lifecycle › Performance timer
+  performanceMs = (): number | null => this.challenges.performanceMs();
+
+  // Spec 3 Training service interface › End
+  end(options?: { readonly showResults?: boolean }): Promise<void> {
+    return this.challenges.end(options);
+  }
+
+  // Spec 3 Attempt lifecycle › Charge (Retry)
+  async retry(): Promise<void> {
+    const snapshot = this.current;
+    if (snapshot.status !== 'ended') return;
+    const { record } = snapshot;
+    this.dismissResults();
+    await this.startAttempt({ ...retrySetup(record.groupKey), timed: record.performanceMs !== null });
+  }
+
+  // Spec 3 Amendment 1 B5
+  suspend(cause?: DirectSuspendCause): void {
+    this.challenges.suspend(cause);
+  }
+
+  lifecycle(event: LifecycleEvent): Promise<void> {
+    return this.challenges.lifecycle(event);
   }
 
   // Spec 3 Amendment 4 §2–3
@@ -247,8 +283,9 @@ export class TrainingService {
     if (text === null) return null;
     try {
       const value = JSON.parse(text) as Partial<ChallengeSetup>;
-      if (!isCatalogCategory(value.category) || !CHALLENGE_VARIANTS.includes(value.variant as ChallengeVariant)) return null;
-      return withOptions({ category: value.category, variant: value.variant as ChallengeVariant }, value.table);
+      return isCatalogCategory(value.category) && CHALLENGE_VARIANTS.includes(value.variant as ChallengeVariant)
+        ? rememberedSetup({ category: value.category, variant: value.variant as ChallengeVariant, timed: value.timed === true, table: value.table })
+        : null;
     } catch {
       return null;
     }
@@ -359,6 +396,11 @@ export class TrainingService {
   private notify(): void {
     for (const listener of this.listeners) listener();
   }
+}
+
+function rememberedSetup({ category, variant, timed, table }: ChallengeSetup): ChallengeSetup {
+  const setup: ChallengeSetup = timed ? { category, variant, timed } : { category, variant };
+  return category === 'table' && isTableOptions(table) ? { ...setup, table } : setup;
 }
 
 const progressKey = (id: string, content: LessonContent) => ({ id, materialVersion: content.materialVersion, steps: stepCount(content) });

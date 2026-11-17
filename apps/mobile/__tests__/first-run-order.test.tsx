@@ -31,6 +31,7 @@ const onThisDevice = () =>
     newId: () => 'unused',
     device: 'test-device',
     owner: 'local',
+    quarantine: { version: 0, entries: [] },
   });
 
 type Launch = { stored: AccountGate; offlineGame: GameId | null; latest: ReturnType<typeof fakeAppAccount> | null };

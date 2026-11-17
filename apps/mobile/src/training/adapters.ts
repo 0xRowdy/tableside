@@ -1,5 +1,5 @@
 // Spec 3 Modules › Training service; #158
-import type { EntropySource } from '@tableside/engine';
+import type { EntropySource, QuarantineList } from '@tableside/engine';
 
 import type { AccessSupervisor, Clock } from '../practice/adapters';
 import type { ChallengeAllowanceState } from './allowance';
@@ -15,4 +15,6 @@ export interface TrainingAdapters {
   newId(): string;
   readonly device: string;
   readonly owner: string;
+  // Spec 3 Attempt lifecycle (unusable); #135
+  readonly quarantine: QuarantineList;
 }

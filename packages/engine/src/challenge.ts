@@ -620,6 +620,21 @@ function apply(state: ChallengeState, command: ChallengeCommand): { change: Chan
   }
 }
 
+// Spec 3 Attempt lifecycle › Performance timer; #135, #137
+export const challengeLength = (state: ChallengeState): number => (state.content.category === 'table' ? state.content.rounds : state.content.length);
+
+export function challengeReached(state: ChallengeState): number {
+  if (state.content.category === 'table') return (state.table as TableProgress).round;
+  return Math.min(state.position + 1, state.content.length);
+}
+
+export function lastAnswerGiven(state: ChallengeState): boolean {
+  if (state.phase === 'ended') return true;
+  if (state.phase !== 'recorded' && state.phase !== 'explanation') return false;
+  const atLastItem = state.content.category === 'table' ? state.position + 1 >= state.items.length && challengeReached(state) >= state.content.rounds : state.position + 1 >= state.content.length;
+  return atLastItem;
+}
+
 // Spec 3 Scoring and review
 export function challengeResults(state: ChallengeState): ChallengeResults | null {
   if (state.phase !== 'ended' || state.ending === null) return null;

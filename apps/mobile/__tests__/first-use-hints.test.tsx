@@ -68,6 +68,7 @@ const newService = () =>
     newId: () => 'unused',
     device: 'test-device',
     owner: 'local',
+    quarantine: { version: 0, entries: [] },
   });
 
 beforeAll(() => {
@@ -94,7 +95,21 @@ async function mount(ids: readonly HintId[], children: ReactNode, service = newS
 }
 
 const exercise = (view: ChallengeView) => (
-  <ChallengeExercise view={view} busy={false} saveFailed={false} onCommand={(command) => void sent.push(command)} onInputRejected={() => undefined} onRetrySave={() => undefined} />
+  <ChallengeExercise
+    view={view}
+    busy={false}
+    saveFailed={false}
+    hold={null}
+    timer={null}
+    performanceMs={() => null}
+    onPause={() => undefined}
+    onResume={() => undefined}
+    onEnd={() => undefined}
+    onLeave={() => undefined}
+    onCommand={(command) => void sent.push(command)}
+    onInputRejected={() => undefined}
+    onRetrySave={() => undefined}
+  />
 );
 
 const EXERCISE_HINTS: readonly HintId[] = ['count-entry', 'show-count'];
@@ -145,7 +160,8 @@ describe('first-use hints on the running-count exercise', () => {
     expect(sent).toEqual([]);
   });
 
-  it('offer Help labelled as in the frame, and none on a card-values exercise, which has no hints', async () => {
+  // #135: Help is the exercise's single help affordance (S3-05 T9sCI)
+  it('offer Help labelled as in the frame; on a card-values exercise, which has no hints, Help opens operational help only', async () => {
     const counting = readChallengeView(attempt(nexts(3)));
     await mount(exerciseHints(counting), exercise(counting));
     expect(screen.getByRole('button', { name: 'Help' })).toHaveTextContent('Help');
@@ -160,7 +176,8 @@ describe('first-use hints on the running-count exercise', () => {
     );
     expect(exerciseHints(cardValues)).toEqual([]);
     await mount(exerciseHints(cardValues), exercise(cardValues));
-    expect(screen.queryByRole('button', { name: 'Help' })).toBeNull();
+    await press('Help');
+    expect(screen.getByTestId('attempt-help')).toBeOnTheScreen();
     expect(screen.queryAllByTestId(/^first-use-hint-/)).toEqual([]);
   });
 

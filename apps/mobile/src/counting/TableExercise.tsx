@@ -2,14 +2,14 @@
 
 import type { ChallengeEntry, ChallengeView, LearnFeedback, TableHandView, TableView } from '@tableside/engine';
 import { ArrowRight, ChevronsRight, CircleDot, Hand, Info, Layers, Shuffle } from 'lucide-react-native';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import type { ReactNode } from 'react';
+import { StyleSheet, Text, View } from 'react-native';
 
 import { Button } from '@/components/Button';
 import { PlayingCard } from '@/counting/CardChoices';
 import { signed } from '@/play/blackjack-text';
-import { FirstUseHint, HelpButton } from '@/lessons/FirstUseHints';
-import { BlackjackFeltRules, FaceDownCard, FeltBadge, PhaseStepper, SaveFailedBanner, StatStrip, type PhaseStep } from '@/play/TableChrome';
+import { FirstUseHint } from '@/lessons/FirstUseHints';
+import { BlackjackFeltRules, FaceDownCard, FeltBadge, PhaseStepper, StatStrip, type PhaseStep } from '@/play/TableChrome';
 import { fonts, palette, radius, space, textScale } from '@/theme/tokens';
 import { conversionText } from '@/training/blackjack-conversion-text';
 import {
@@ -19,7 +19,6 @@ import {
   continueText,
   DEALER,
   decksText,
-  edgeText,
   enteredLine,
   handText,
   KEEP_THE_COUNT,
@@ -44,7 +43,6 @@ import {
   STATUS_TEXT,
   tableRecordedText,
   tableRunningText,
-  tableSubtitle,
   TRUE_COUNT,
   TRY_AGAIN,
   YOUR_SEAT,
@@ -74,44 +72,12 @@ function phaseSteps(table: TableView): PhaseStep[] {
   return PHASES.map((label, index) => ({ label, state: index < reached ? 'done' : index === reached ? 'current' : 'upcoming' }));
 }
 
-export function TableExercise({
-  view,
-  table,
-  busy,
-  saveFailed,
-  onCommand,
-  onInputRejected,
-  onRetrySave,
-}: {
-  view: ChallengeView;
-  table: TableView;
-  busy: boolean;
-  saveFailed: boolean;
-  onCommand: (command: LearnerCommand) => void;
-  onInputRejected: () => void;
-  onRetrySave: () => void;
-}) {
-  const insets = useSafeAreaInsets();
-  const ready = !busy && !saveFailed;
-  const feedback = view.variant === 'learn' ? view.feedback : null;
-  const entered = view.variant === 'check' ? view.entered : null;
+// Spec 3 S3-07 v82z3, heGUV
+export function TableProgress({ view, table, timer }: { view: ChallengeView; table: TableView; timer: ReactNode }) {
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={{ paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right, paddingBottom: space[6] }}>
-      <View style={styles.header}>
-        <View style={styles.titles}>
-          <Text accessibilityRole="header" maxFontSizeMultiplier={textScale.display} style={styles.title}>
-            Table counting
-          </Text>
-          <Text maxFontSizeMultiplier={textScale.body} style={styles.subtitle}>
-            {tableSubtitle(view.variant, table)}
-          </Text>
-          <Text maxFontSizeMultiplier={textScale.body} style={styles.subtitle}>
-            {edgeText(table.rules)}
-          </Text>
-        </View>
-        <HelpButton />
-      </View>
+    <>
       <PhaseStepper steps={phaseSteps(table)} />
+      {timer && <View style={styles.timer}>{timer}</View>}
       <StatStrip
         stats={[
           { label: YOUR_SEAT, spoken: YOUR_SEAT_SPOKEN, value: SIMULATED },
@@ -119,9 +85,29 @@ export function TableExercise({
         ]}
         status={STATUS_TEXT[status(view, table)]}
       />
+    </>
+  );
+}
+
+export function TableBody({
+  view,
+  table,
+  ready,
+  onCommand,
+  onInputRejected,
+}: {
+  view: ChallengeView;
+  table: TableView;
+  ready: boolean;
+  onCommand: (command: LearnerCommand) => void;
+  onInputRejected: () => void;
+}) {
+  const feedback = view.variant === 'learn' ? view.feedback : null;
+  const entered = view.variant === 'check' ? view.entered : null;
+  return (
+    <>
       <Felt table={table} />
       <View style={styles.panel}>
-        {saveFailed && <SaveFailedBanner busy={busy} onRetry={onRetrySave} />}
         {table.step === 'shuffle' && <ShufflePanel table={table} enabled={ready} onContinue={() => onCommand({ kind: 'next-item' })} />}
         {(table.step === 'deal' || table.step === 'reveal') && (
           <>
@@ -137,13 +123,11 @@ export function TableExercise({
             <Button label={NEXT_CARD} icon={ChevronsRight} stretch disabled={!ready} onPress={() => onCommand({ kind: 'next-item' })} />
           </>
         )}
-        {table.prompt && (
-          <CheckpointPanel view={view} table={table} feedback={feedback} entered={entered} ready={ready} onCommand={onCommand} onInputRejected={onInputRejected} />
-        )}
+        {table.prompt && <CheckpointPanel view={view} table={table} feedback={feedback} entered={entered} ready={ready} onCommand={onCommand} onInputRejected={onInputRejected} />}
         {view.countAid && <FirstUseHint id="show-count" />}
         {view.countAid && <CountAid key={view.attemptId} variant={view.variant} aid={view.countAid} enabled={ready && view.legalCommands.includes('reveal-count')} onReveal={() => onCommand({ kind: 'reveal-count' })} />}
       </View>
-    </ScrollView>
+    </>
   );
 }
 
@@ -338,11 +322,7 @@ function SeatHand({ hand }: { hand: TableHandView }) {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: palette.background },
-  header: { flexDirection: 'row', alignItems: 'center', gap: space[2], minHeight: 60, paddingLeft: space[4], paddingRight: space[2], paddingVertical: space[1] },
-  titles: { flex: 1, gap: 2 },
-  title: { fontFamily: fonts.uiBold, fontSize: 17, color: palette.foreground },
-  subtitle: { fontFamily: fonts.ui, fontSize: 13, color: palette.mutedForeground },
+  timer: { paddingHorizontal: space[4], paddingTop: space[1], alignItems: 'flex-end' },
   felt: { gap: space[3], padding: space[4], borderRadius: radius.lg, backgroundColor: palette.felt, alignItems: 'center', minHeight: 280 },
   decks: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: space[1], paddingVertical: space[1], paddingHorizontal: space[3], borderRadius: radius.pill, backgroundColor: palette.feltDeep },
   decksText: { fontFamily: fonts.uiBold, fontSize: 14, color: palette.feltText },
@@ -351,7 +331,7 @@ const styles = StyleSheet.create({
   seatLabel: { fontFamily: fonts.uiBold, fontSize: 12, color: palette.feltText },
   action: { flexDirection: 'row', alignItems: 'center', gap: space[1], paddingVertical: space[1], paddingHorizontal: space[3], borderRadius: radius.pill, backgroundColor: palette.primary },
   actionText: { fontFamily: fonts.uiBold, fontSize: 14, color: palette.primaryForeground },
-  panel: { gap: space[3], paddingHorizontal: space[4], paddingTop: space[4] },
+  panel: { gap: space[3] },
   kicker: { fontFamily: fonts.uiBold, fontSize: 12, letterSpacing: 0.6, color: palette.mutedForeground },
   panelTitle: { fontFamily: fonts.display, fontSize: 22, color: palette.foreground },
   checkpointTitle: { fontFamily: fonts.uiBold, fontSize: 17, color: palette.foreground },

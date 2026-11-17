@@ -62,7 +62,7 @@ describe('standard craps lessons', () => {
     const correct = (id: string) => {
       const example = lesson(id).content!.workedExample!;
       expect([example.kind, example.step]).toEqual(['strategy-step', 2]);
-      return example.kind === 'strategy-step' ? example.choices.filter((choice) => choice.response.correct).map((choice) => choice.answer.bets) : [];
+      return example.kind === 'strategy-step' ? example.choices.filter((choice) => choice.response.correct).map((choice) => (choice.answer.kind === 'bets' ? choice.answer.bets : null)) : [];
     };
     expect(correct('pass-with-odds')).toEqual([[{ target: 'pass-odds', amount: '10' }]]);
     expect(correct('flat-place-6-8')).toEqual([[{ target: 'place-6', amount: '12' }, { target: 'place-8', amount: '12' }]]);

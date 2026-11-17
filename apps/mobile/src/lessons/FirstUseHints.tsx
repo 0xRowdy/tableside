@@ -72,6 +72,12 @@ export function FirstUseHint({ id }: { id: HintId }) {
   );
 }
 
+// #135
+export function useReopenHints(): () => void {
+  const hints = useContext(ScreenHintContext);
+  return () => hints?.reopen();
+}
+
 export function HelpButton() {
   const hints = useContext(ScreenHintContext);
   const { focused, focusProps } = useKeyboardFocus();

@@ -57,7 +57,21 @@ async function present(view: ChallengeView) {
   sent = [];
   await render(
     <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 0, left: 0, right: 0, bottom: 0 } }}>
-      <ChallengeExercise view={view} busy={view.phase === 'recorded'} saveFailed={false} onCommand={(command) => void sent.push(command)} onInputRejected={() => undefined} onRetrySave={() => undefined} />
+      <ChallengeExercise
+        view={view}
+        busy={view.phase === 'recorded'}
+        saveFailed={false}
+        hold={null}
+        timer={null}
+        performanceMs={() => null}
+        onCommand={(command) => void sent.push(command)}
+        onInputRejected={() => undefined}
+        onRetrySave={() => undefined}
+        onPause={() => undefined}
+        onResume={() => undefined}
+        onEnd={() => undefined}
+        onLeave={() => undefined}
+      />
     </SafeAreaProvider>,
   );
   return presentedScreen(screen.toJSON() as never, events, { mask: ['table-felt'] });

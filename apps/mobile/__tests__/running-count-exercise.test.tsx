@@ -63,6 +63,13 @@ async function present(view: ChallengeView) {
         view={view}
         busy={view.phase === 'recorded'}
         saveFailed={false}
+        hold={null}
+        timer={null}
+        performanceMs={() => null}
+        onPause={() => undefined}
+        onResume={() => undefined}
+        onEnd={() => undefined}
+        onLeave={() => undefined}
         onCommand={(command) => void sent.push(command)}
         onInputRejected={() => void rejected++}
         onRetrySave={() => undefined}

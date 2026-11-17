@@ -112,6 +112,9 @@ describe('a recorded database', () => {
     await service.load();
     const snapshot = service.snapshot();
     expect(snapshot).toMatchObject({ status: 'active', view: { attemptId: database.unfinishedAttempt?.attemptId, phase: database.unfinishedAttempt?.phase, position: database.unfinishedAttempt?.position } });
+    // Spec 3 Amendment 1 C1; #135
+    expect(service.snapshot()).toMatchObject({ hold: { cause: 'recovered' } });
+    await service.resume();
     await service.submit({ kind: 'skip' });
     expect(service.snapshot()).toMatchObject({ status: 'active', view: { phase: 'explanation', feedback: { entered: 'skip' } } });
   });

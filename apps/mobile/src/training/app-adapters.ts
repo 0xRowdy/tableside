@@ -1,4 +1,5 @@
 // #158
+import { QUARANTINE_LIST } from '@tableside/definitions';
 import * as Crypto from 'expo-crypto';
 
 import { alwaysAllowed } from '../practice/adapters';
@@ -19,5 +20,6 @@ export function createTrainingAdapters(): TrainingAdapters {
     newId: () => Crypto.randomUUID(),
     device: 'this-device',
     owner: 'local',
+    quarantine: QUARANTINE_LIST,
   };
 }

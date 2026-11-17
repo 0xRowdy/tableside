@@ -1,7 +1,7 @@
-// Spec 3 S3-08 liAfT, CEb6T, cX5Gc; #158, #132, #150, #133
+// Spec 3 S3-08 liAfT, CEb6T, cX5Gc, UXrpw; #158, #132, #150, #133, #135
 
 import type { ChallengeAttemptRecord } from '@tableside/engine';
-import { CircleCheckBig, Divide, Hash, Info, ListChecks, RotateCcw, Square, type LucideIcon } from 'lucide-react-native';
+import { CircleAlert, CircleCheckBig, Divide, Hash, Info, ListChecks, RotateCcw, Square, type LucideIcon } from 'lucide-react-native';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -11,7 +11,7 @@ import { resultsSubtitle } from '@/training/blackjack-table-text';
 import {
   ASSISTED_NOTE,
   CATEGORY_TEXT,
-  completedText,
+  endingText,
   NOT_TESTED,
   PACING_LABEL,
   RESULT_ROWS,
@@ -36,12 +36,28 @@ const ROW_ICON: Record<(typeof RESULT_ROWS)[number]['metric'], LucideIcon> = {
   'betting-adherence': Square,
 };
 
-export function ChallengeResults({ record, allowance, onRetry, onReview }: { record: ChallengeAttemptRecord; allowance: AllowanceCopy | undefined; onRetry: () => void; onReview: () => void }) {
+export function ChallengeResults({
+  record,
+  position,
+  explanation,
+  allowance,
+  onRetry,
+  onReview,
+}: {
+  record: ChallengeAttemptRecord;
+  position: number;
+  explanation: string | null;
+  allowance: AllowanceCopy | undefined;
+  onRetry: () => void;
+  onReview: () => void;
+}) {
   const insets = useSafeAreaInsets();
   const { groupKey } = record;
-  const completed = completedText(groupKey, record.assistanceStep);
-  const assisted = groupKey.assistanceClass === 'assisted-check';
-  const note = resultsNote(groupKey.variant, allowance);
+  const ending = endingText(record, position, explanation);
+  const completed = record.endingReason === 'completed';
+  const assisted = completed && groupKey.assistanceClass === 'assisted-check';
+  const note = completed ? resultsNote(groupKey.variant, allowance) : (allowance?.results ?? '');
+  const EndingIcon = ending.kind === 'alert' ? CircleAlert : CircleCheckBig;
   return (
     <ScrollView style={styles.screen} contentContainerStyle={{ paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right, paddingBottom: space[6] }}>
       <View style={styles.header}>
@@ -53,15 +69,15 @@ export function ChallengeResults({ record, allowance, onRetry, onReview }: { rec
         </Text>
       </View>
       <View style={styles.body}>
-        <View style={styles.box}>
-          <CircleCheckBig color={palette.foreground} size={24} />
+        <View style={[styles.box, ending.kind === 'alert' && styles.alert]}>
+          <EndingIcon color={ending.kind === 'alert' ? palette.warning : palette.foreground} size={24} />
           <View style={styles.boxText}>
             <Text maxFontSizeMultiplier={textScale.body} style={styles.boxTitle}>
-              {completed.title}
+              {ending.title}
             </Text>
-            {completed.detail && (
+            {ending.detail && (
               <Text maxFontSizeMultiplier={textScale.body} style={styles.boxDetail}>
-                {completed.detail}
+                {ending.detail}
               </Text>
             )}
           </View>
@@ -107,6 +123,11 @@ export function ChallengeResults({ record, allowance, onRetry, onReview }: { rec
             );
           })}
         </View>
+        {ending.note && (
+          <Text maxFontSizeMultiplier={textScale.body} style={styles.note}>
+            {ending.note}
+          </Text>
+        )}
         {record.review.length > 0 && <Button label={REVIEW_LABEL[groupKey.category]} icon={ListChecks} variant="outline" stretch onPress={onReview} />}
         <Button label={RETRY_LABEL[groupKey.category]} icon={RotateCcw} stretch disabled={startWaits(allowance)} onPress={onRetry} />
         {note.length > 0 && (
@@ -126,6 +147,7 @@ const styles = StyleSheet.create({
   subtitle: { fontFamily: fonts.ui, fontSize: 12, color: palette.mutedForeground },
   body: { gap: space[4], paddingTop: space[2], paddingHorizontal: space[4] },
   box: { flexDirection: 'row', gap: space[3], padding: space[4], borderRadius: radius.lg, borderWidth: 1, borderColor: palette.controlBorder, backgroundColor: palette.card },
+  alert: { borderWidth: 2, borderColor: palette.warning },
   boxText: { flex: 1, gap: space[1] },
   boxTitle: { fontFamily: fonts.uiBold, fontSize: 17, color: palette.foreground },
   boxDetail: { fontFamily: fonts.ui, fontSize: 14, lineHeight: 20, color: palette.mutedForeground },

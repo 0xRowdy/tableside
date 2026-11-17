@@ -2,46 +2,78 @@
 import {
   advanceActivity,
   canonicalJson,
+  canonicalShoe,
   createActivity,
   explainStrategyBets,
+  hiLoTag,
   RANDOM_PROTOCOL_VERSION,
   ODDS_CAPS,
+  referenceCount,
+  strategyPlay,
   type ActivityState,
+  type BlackjackActivityState,
   type Command,
   type CrapsActivityState,
+  type DeviationPlay,
   type DomainFact,
   type Explanation,
   type GameId,
   type OddsCap,
+  type PlayExplanation,
+  type PlayChoice,
+  type PlayMove,
+  type Rank,
   type RouletteActivityState,
   type RoulettePocket,
   type StrategyDefinition,
   type Wager,
 } from '@tableside/engine';
 
+import { basicStrategy, BLACKJACK_PRESETS, playingDeviations, type BlackjackPreset, type CardValue, type DeviationAction } from './blackjack/reference';
+import { blackjackRules } from './blackjack/rules';
+import { BLACKJACK_MODES, BLACKJACK_REFERENCE_IDENTITY, blackjackStrategy, countingMode, type BlackjackMode } from './blackjack/strategies';
 import { CRAPS_STRATEGIES } from './craps-strategies';
 import { standardCraps } from './craps';
 import { ROULETTE_PRESETS } from './roulette';
 import { ROULETTE_STRATEGIES } from './roulette-strategies';
-import type { ScriptedChoice } from './worked-examples';
+import type { ScriptedChoice, ScriptedResponse } from './worked-examples';
 
 export interface ScriptedTurn {
   readonly wagers: readonly Wager[];
   readonly outcome: ScriptedOutcome;
 }
 
-export type ScriptedOutcome = { readonly pocket: RoulettePocket } | { readonly dice: readonly [number, number] };
+export interface RouletteOutcome {
+  readonly pocket: RoulettePocket;
+}
 
-// TODO(#152)
+export interface CrapsOutcome {
+  readonly dice: readonly [number, number];
+}
+
+// #152
+export interface BlackjackOutcome {
+  readonly shown: readonly Rank[];
+  readonly dealt: readonly Rank[];
+}
+
+export type ScriptedOutcome = RouletteOutcome | CrapsOutcome | BlackjackOutcome;
+
 export interface StrategyBetsAnswer {
   readonly kind: 'bets';
   readonly bets: readonly Wager[];
 }
 
-export type StrategyStepAnswer = StrategyBetsAnswer;
+// #152
+export interface StrategyPlayAnswer {
+  readonly kind: 'play';
+  readonly move: PlayMove;
+}
+
+export type StrategyStepAnswer = StrategyBetsAnswer | StrategyPlayAnswer;
 
 // Spec 3 Lessons › Structure (worked examples)
-export type StrategyStepExplanation = Explanation;
+export type StrategyStepExplanation = Explanation | PlayExplanation;
 
 export interface StrategyStepExample {
   readonly kind: 'strategy-step';
@@ -63,6 +95,9 @@ interface Stage {
   readonly strategies: readonly StrategyDefinition[];
   start(example: StrategyStepExample, definition: StrategyDefinition): ActivityState;
   stack(state: ActivityState, outcome: ScriptedOutcome): ActivityState;
+  // #152
+  readonly definition?: (example: StrategyStepExample) => StrategyDefinition | undefined;
+  readonly replayTurn?: (state: ActivityState, turn: ScriptedTurn, atDecision: boolean) => ActivityState;
 }
 
 const identity = { activityId: 'worked-example', owner: 'worked-example', device: 'build' } as const;
@@ -101,7 +136,77 @@ const CRAPS_STAGE: Stage = {
   },
 };
 
-const STAGES: Partial<Record<GameId, Stage>> = { roulette: ROULETTE_STAGE, craps: CRAPS_STAGE };
+
+// #152
+const RANK_TEXT = (rank: Rank) => (rank === 1 ? 'A' : rank >= 10 ? 'T' : String(rank));
+
+function stackShoe(state: BlackjackActivityState, outcome: BlackjackOutcome): BlackjackActivityState {
+  const cards = canonicalShoe(state.rules.decks);
+  const order = state.shoe?.order ?? cards.map((_, index) => index);
+  const next = state.shoe?.next ?? 0;
+  const remaining = order.slice(next);
+  const top = [...outcome.shown, ...outcome.dealt].map((rank) => {
+    const at = remaining.findIndex((index) => cards[index]!.rank === rank);
+    if (at < 0) throw new Error(`no ${RANK_TEXT(rank)} left to stack`);
+    return remaining.splice(at, 1)[0]!;
+  });
+  const cut = Math.floor((cards.length * state.rules.penetration) / 100);
+  return { ...state, shoe: { order: [...order.slice(0, next), ...top, ...remaining], next: next + outcome.shown.length, cut } };
+}
+
+const isBlackjackOutcome = (outcome: ScriptedOutcome): outcome is BlackjackOutcome => 'dealt' in outcome;
+const MAX_SCRIPTED_DECISIONS = 20;
+
+// Spec 1 Built-in strategies, Guided practice
+const BLACKJACK_STAGE: Stage = {
+  strategies: [],
+  definition: (example) => {
+    const preset = example.table as BlackjackPreset;
+    const mode = example.strategy as BlackjackMode;
+    if (!BLACKJACK_PRESETS.includes(preset) || !BLACKJACK_MODES.includes(mode)) return undefined;
+    const schedule = example.parameters['bet-schedule'] === 'on';
+    return schedule && !countingMode(mode) ? undefined : blackjackStrategy(preset, mode, schedule);
+  },
+  start: (example, definition) =>
+    createActivity(
+      {
+        ...identity,
+        game: 'blackjack',
+        rules: blackjackRules(example.table as BlackjackPreset),
+        strategy: { definition, parameters: {} },
+        reference: { ...BLACKJACK_REFERENCE_IDENTITY },
+        fundingSource: 'practice-funding',
+        funding: example.practiceFunding,
+      },
+      REPLAY_STREAM,
+    ),
+  stack: (state, outcome) => {
+    if (!isBlackjackOutcome(outcome)) throw new Error('a blackjack turn stacks cards');
+    return stackShoe(state as BlackjackActivityState, outcome);
+  },
+  replayTurn: (state, turn, atDecision) => {
+    if (!isBlackjackOutcome(turn.outcome)) throw new Error('a blackjack turn stacks cards');
+    const outcome = turn.outcome;
+    const stacked = BLACKJACK_STAGE.stack(place(state, turn.wagers), outcome) as BlackjackActivityState;
+    const begun = send(stacked, { kind: 'begin-turn' });
+    if (corrected(begun.facts)) throw new Error(`the scripted bet (${diagnosticBets(turn.wagers)}) does not follow the strategy`);
+    let current = begun.state;
+    for (let decision = 0; !atDecision && current.phase !== 'revealing-outcome'; decision++) {
+      const command = strategyPlay(current);
+      if (!command || decision === MAX_SCRIPTED_DECISIONS) throw new Error(`the scripted round stops at a ${current.phase} the strategy can't play`);
+      current = send(current, command).state;
+    }
+    const used = (current as BlackjackActivityState).shoe!.next - stacked.shoe!.next;
+    if (used !== outcome.dealt.length) throw new Error(`the scripted round deals ${outcome.dealt.length} cards but uses ${used}`);
+    const visible = atDecision ? [outcome.dealt[0]!, outcome.dealt[1]!, outcome.dealt[2]!] : outcome.dealt;
+    const scripted = [...outcome.shown, ...visible].reduce((sum, rank) => sum + hiLoTag({ deck: 0, rank, suit: 'spades' }), 0);
+    const engine = referenceCount(current as BlackjackActivityState);
+    if (engine.running !== scripted) throw new Error(`the scripted cards count ${scripted}, but the engine's running count is ${engine.running}`);
+    return atDecision ? current : send(current, { kind: 'settle-turn' }).state;
+  },
+};
+
+const STAGES: Partial<Record<GameId, Stage>> = { roulette: ROULETTE_STAGE, craps: CRAPS_STAGE, blackjack: BLACKJACK_STAGE };
 
 function send(state: ActivityState, command: Command): { state: ActivityState; facts: readonly DomainFact[] } {
   const result = advanceActivity(state, { sequence: state.sequence, commandId: `replay-${state.sequence}`, command });
@@ -113,7 +218,7 @@ function place(state: ActivityState, wagers: readonly Wager[]): ActivityState {
   return wagers.reduce((current, wager) => send(current, { kind: 'place-wager', target: wager.target, amount: wager.amount }).state, state);
 }
 
-const corrected = (facts: readonly DomainFact[]) => facts.find((fact) => fact.kind === 'correction-offered') as (DomainFact & { explanation: Explanation }) | undefined;
+const corrected = (facts: readonly DomainFact[]) => facts.find((fact) => fact.kind === 'correction-offered') as (DomainFact & { explanation: StrategyStepExplanation }) | undefined;
 
 const diagnosticBets = (bets: readonly Wager[]) => (bets.length === 0 ? 'no bets' : bets.map((bet) => `${bet.amount} on ${bet.target}`).join(' and '));
 
@@ -122,13 +227,16 @@ export function strategyStepProblems(example: StrategyStepExample): readonly str
   const problems: string[] = [];
   const stage = STAGES[example.game];
   if (!stage) return [`no worked-example replay for ${example.game} strategies yet`];
-  const definition = stage.strategies.find((strategy) => strategy.id === example.strategy);
+  const definition = stage.definition ? stage.definition(example) : stage.strategies.find((strategy) => strategy.id === example.strategy);
   if (!definition) return [`the worked example names no built-in ${example.game} strategy: ${example.strategy}`];
+  const playing = example.choices.some((choice) => choice.answer.kind === 'play');
+  if (playing && (!stage.replayTurn || example.choices.some((choice) => choice.answer.kind !== 'play'))) return ['a worked example asks for bets or for a play, not both, in a game with plays'];
+  if (playing && example.turns.length === 0) return ['a worked example asking for a play deals the hand in its last turn'];
   const seen = new Set<string>();
   for (const { answer } of example.choices) {
-    const key = canonicalJson([...answer.bets].sort((a, b) => a.target.localeCompare(b.target)));
-    if (answer.bets.length === 0) problems.push('a worked example choice places at least one bet');
-    else if (seen.has(key)) problems.push(`worked example choice ${diagnosticBets(answer.bets)} is offered twice`);
+    const key = answer.kind === 'play' ? canonicalJson(answer.move) : canonicalJson([...answer.bets].sort((a, b) => a.target.localeCompare(b.target)));
+    if (answer.kind === 'bets' && answer.bets.length === 0) problems.push('a worked example choice places at least one bet');
+    else if (seen.has(key)) problems.push(`worked example choice ${answerText(answer)} is offered twice`);
     seen.add(key);
   }
   if (problems.length > 0) return problems;
@@ -137,6 +245,10 @@ export function strategyStepProblems(example: StrategyStepExample): readonly str
   try {
     state = stage.start(example, definition);
     example.turns.forEach((turn, index) => {
+      if (stage.replayTurn) {
+        state = stage.replayTurn(state, turn, playing && index === example.turns.length - 1);
+        return;
+      }
       const begun = send(place(state, turn.wagers), { kind: 'begin-turn' });
       if (corrected(begun.facts)) throw new Error(`scripted turn ${index + 1} (${diagnosticBets(turn.wagers)}) does not follow ${definition.name}`);
       state = send(stage.stack(begun.state, turn.outcome), { kind: 'settle-turn' }).state;
@@ -144,6 +256,13 @@ export function strategyStepProblems(example: StrategyStepExample): readonly str
   } catch (error) {
     return [`the worked example does not replay through the engine: ${error instanceof Error ? error.message : String(error)}`];
   }
+  return playing ? playProblems(example, state) : betProblems(example, state, definition);
+}
+
+const answerText = (answer: StrategyStepAnswer) => (answer.kind === 'play' ? answer.move.action : diagnosticBets(answer.bets));
+
+function betProblems(example: StrategyStepExample, state: ActivityState, definition: StrategyDefinition): readonly string[] {
+  const problems: string[] = [];
   const run = state.strategy;
   if (!run || run.status !== 'active') return [`after the scripted turns ${definition.name} has no next bet (its cycle ended)`];
   const engine = explainStrategyBets(state)!;
@@ -151,21 +270,98 @@ export function strategyStepProblems(example: StrategyStepExample): readonly str
   const replayed = canonicalJson(engine);
 
   for (const { answer, response } of example.choices) {
+    if (answer.kind !== 'bets') continue;
     const label = `worked example, choice ${diagnosticBets(answer.bets)}`;
-    let correction: Explanation | undefined;
+    let correction: StrategyStepExplanation | undefined;
     try {
       correction = corrected(send(place(state, answer.bets), { kind: 'begin-turn' }).facts)?.explanation;
     } catch (error) {
       problems.push(`${label}: does not replay through the engine: ${error instanceof Error ? error.message : String(error)}`);
       continue;
     }
-    const correct = correction === undefined;
-    if (response.correct !== correct) problems.push(`${label}: scripted as ${response.correct ? 'correct' : 'incorrect'}, but the engine marks it ${correct ? 'correct' : 'incorrect'}`);
     if (correction && canonicalJson(correction) !== replayed) problems.push(`${label}: the engine's correction differs from its prescription`);
-    const scripted = canonicalJson(response.explanation);
-    if (scripted !== replayed) problems.push(`${label}: the scripted explanation ${scripted} differs from the engine's ${replayed}`);
-    if (response.note !== null && !response.note.trim()) problems.push(`${label}: an empty note is written as null`);
+    problems.push(...responseProblems(label, response, correction === undefined, replayed));
   }
-  if (example.choices.filter((choice) => choice.response.correct).length !== 1) problems.push('a worked example has exactly one correct choice');
+  return [...problems, ...oneCorrect(example)];
+}
+
+function responseProblems(label: string, response: ScriptedResponse<StrategyStepExplanation>, correct: boolean, replayed: string): string[] {
+  const problems: string[] = [];
+  if (response.correct !== correct) problems.push(`${label}: scripted as ${response.correct ? 'correct' : 'incorrect'}, but the engine marks it ${correct ? 'correct' : 'incorrect'}`);
+  const scripted = canonicalJson(response.explanation);
+  if (scripted !== replayed) problems.push(`${label}: the scripted explanation ${scripted} differs from the engine's ${replayed}`);
+  if (response.note !== null && !response.note.trim()) problems.push(`${label}: an empty note is written as null`);
+  return problems;
+}
+
+const oneCorrect = (example: StrategyStepExample) => (example.choices.filter((choice) => choice.response.correct).length === 1 ? [] : ['a worked example has exactly one correct choice']);
+
+const moveCommand = (move: PlayMove): Command =>
+  move.action === 'insure' ? { kind: 'place-wager', target: 'insurance', amount: move.amount ?? '0' } : { kind: 'play', action: move.action };
+
+// #152; Spec 1 Guided practice
+function playProblems(example: StrategyStepExample, state: ActivityState): readonly string[] {
+  const problems: string[] = [];
+  const replays = example.choices.map(({ answer, response }) => {
+    const move = (answer as StrategyPlayAnswer).move;
+    const label = `worked example, choice ${move.action}`;
+    try {
+      return { label, response, correction: corrected(send(state, moveCommand(move)).facts)?.explanation as PlayExplanation | undefined };
+    } catch (error) {
+      problems.push(`${label}: does not replay through the engine: ${error instanceof Error ? error.message : String(error)}`);
+      return null;
+    }
+  });
+  const engine = replays.find((replay) => replay?.correction)?.correction;
+  if (!engine) return [...problems, 'a worked example offers at least one play the strategy corrects'];
+  const replayed = canonicalJson(engine);
+  for (const replay of replays) {
+    if (!replay) continue;
+    const { label, response, correction } = replay;
+    if (correction && canonicalJson(correction) !== replayed) problems.push(`${label}: the engine explains this decision differently for another choice`);
+    problems.push(...responseProblems(label, response, correction === undefined, replayed));
+  }
+  return [...problems, ...oneCorrect(example), ...certifiedProblems(engine, example.table as BlackjackPreset)];
+}
+
+const CERTIFIED_PLAY: Readonly<Record<DeviationAction, DeviationPlay>> = {
+  hit: 'hit',
+  stand: 'stand',
+  double: 'double',
+  split: 'split',
+  surrender: 'surrender',
+  insure: 'insure',
+  decline: 'decline',
+  basicWithoutSurrender: 'basic',
+};
+const DEVIATION_CHOICE: Readonly<Record<Exclude<DeviationPlay, 'basic'>, PlayChoice>> = {
+  hit: 'hit',
+  stand: 'stand',
+  double: 'double',
+  split: 'split',
+  surrender: 'surrender',
+  insure: 'insure',
+  decline: 'decline-insurance',
+};
+
+// Spec 3 Lessons › Structure (worked examples)
+function certifiedProblems(explanation: PlayExplanation, preset: BlackjackPreset): readonly string[] {
+  const problems: string[] = [];
+  const { cell, deviation } = explanation;
+  if (cell?.table === 'first') {
+    const reference = basicStrategy(preset, cell.kind, cell.hand, cell.up as CardValue).action;
+    if (reference !== cell.play) problems.push(`the engine plays ${cell.kind} ${cell.hand} vs ${cell.up} as ${cell.play}, but the certified ${preset} table says ${reference}`);
+  }
+  if (deviation) {
+    const row = playingDeviations(preset).find((candidate) => `${candidate.dealerRule} ${candidate.situation}` === deviation.id);
+    const certified = row && [row.threshold, row.direction === 'deviateAtOrAbove' ? 'deviate-at-or-above' : 'basic-at-or-above', CERTIFIED_PLAY[row.atOrAbove], CERTIFIED_PLAY[row.below]];
+    if (canonicalJson(certified) !== canonicalJson([deviation.threshold, deviation.direction, deviation.atOrAbove, deviation.below])) {
+      problems.push(`the engine's index for ${deviation.situation} is not the certified ${preset} row`);
+    }
+  }
+  const taught = deviation && deviation.play !== 'basic' ? DEVIATION_CHOICE[deviation.play] : cell?.play;
+  if (explanation.unavailable.length === 0 && taught !== undefined && taught !== explanation.prescribed.action) {
+    problems.push(`the engine prescribes ${explanation.prescribed.action}, but the certified ${preset} reference teaches ${taught}`);
+  }
   return problems;
 }

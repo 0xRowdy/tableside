@@ -32,6 +32,7 @@ function setup(options: { store?: MemoryTrainingStore; hints?: Readonly<Record<H
       newId: () => 'unused',
       device: 'test-device',
       owner: 'local',
+      quarantine: { version: 0, entries: [] },
     },
     options.hints ? { hints: options.hints } : {},
   );

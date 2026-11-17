@@ -94,6 +94,7 @@ export {
   type LessonSection,
   type LessonSource,
   type LessonStep,
+  type PublishedNote,
 } from './lessons';
 
 export { HINT_IDS, HINT_MAX_LENGTH, HINTS, hintProblems, type Hint, type HintId } from './hints';

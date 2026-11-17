@@ -3,9 +3,9 @@ import type { ChallengeAttemptRecord, UnsequencedAttemptRecord } from '@tablesid
 
 import { StoreWriteError } from '../practice/memory-store';
 import type { LessonProgressEvent, UnsequencedLessonEvent } from './lesson-progress';
-import type { AttemptCommitOutcome, AttemptTransitionCommit, CommittedAttemptTransition, NewAttempt, StoredAttempt, TrainingStore } from './store';
+import { withLifecycle, type AttemptLifecycle, type AttemptCommitOutcome, type AttemptTransitionCommit, type CommittedAttemptTransition, type NewAttempt, type StoredAttempt, type TrainingStore } from './store';
 
-type Operation = 'createAttempt' | 'commitAttemptTransition' | 'recordAttempt' | 'readAttemptReceipt' | 'writePreference' | 'recordLessonEvent';
+type Operation = 'createAttempt' | 'commitAttemptTransition' | 'saveAttemptLifecycle' | 'recordAttempt' | 'readAttemptReceipt' | 'writePreference' | 'recordLessonEvent';
 
 interface Row {
   attempt: string;
@@ -36,7 +36,7 @@ export class MemoryTrainingStore implements TrainingStore {
   createAttempt(attempt: NewAttempt): Promise<StoredAttempt> {
     return this.injectable('createAttempt', () => {
       const existing = this.disk.attempts.get(attempt.attemptId);
-      if (existing) return parse<StoredAttempt>(existing.attempt);
+      if (existing) return storedAttempt(existing.attempt);
       if (this.unfinished()) throw new StoreWriteError('this device already has an unfinished challenge attempt');
       const stored: StoredAttempt = { ...attempt, sequence: 0, charge: null, record: null };
       this.disk.attempts.set(attempt.attemptId, { attempt: JSON.stringify(stored), transitions: new Map() });
@@ -47,7 +47,7 @@ export class MemoryTrainingStore implements TrainingStore {
   loadAttempt(attemptId: string): Promise<StoredAttempt | null> {
     return this.enqueue(() => {
       const row = this.disk.attempts.get(attemptId);
-      return row ? parse<StoredAttempt>(row.attempt) : null;
+      return row ? storedAttempt(row.attempt) : null;
     });
   }
 
@@ -64,7 +64,7 @@ export class MemoryTrainingStore implements TrainingStore {
       if (attempt.sequence !== commit.priorSequence) return { status: 'sequence-conflict', sequence: attempt.sequence };
       const transition: CommittedAttemptTransition = { receipt: commit.receipt, checkpoint: commit.checkpoint, facts: commit.facts };
       row.transitions.set(commit.receipt.commandId, JSON.stringify(transition));
-      row.attempt = JSON.stringify({ ...attempt, checkpoint: commit.checkpoint, sequence: commit.priorSequence + 1, charge: attempt.charge ?? commit.charge });
+      row.attempt = JSON.stringify({ ...attempt, checkpoint: commit.checkpoint, sequence: commit.priorSequence + 1, charge: attempt.charge ?? commit.charge, lifecycle: commit.lifecycle });
       return { status: 'committed' };
     });
   }
@@ -80,6 +80,14 @@ export class MemoryTrainingStore implements TrainingStore {
     return this.enqueue(() => {
       const row = this.disk.attempts.get(attemptId);
       if (row && parse<StoredAttempt>(row.attempt).sequence === 0) this.disk.attempts.delete(attemptId);
+    });
+  }
+
+  saveAttemptLifecycle(attemptId: string, lifecycle: AttemptLifecycle): Promise<void> {
+    return this.injectable('saveAttemptLifecycle', () => {
+      const row = this.require(attemptId);
+      const attempt = storedAttempt(row.attempt);
+      if (!attempt.record) row.attempt = JSON.stringify({ ...attempt, lifecycle });
     });
   }
 
@@ -130,7 +138,7 @@ export class MemoryTrainingStore implements TrainingStore {
 
   private unfinished(): StoredAttempt | null {
     for (const row of this.disk.attempts.values()) {
-      const attempt = parse<StoredAttempt>(row.attempt);
+      const attempt = storedAttempt(row.attempt);
       if (!attempt.record) return attempt;
     }
     return null;
@@ -161,4 +169,5 @@ export class MemoryTrainingStore implements TrainingStore {
 }
 
 const parse = <T>(text: string): T => JSON.parse(text) as T;
+const storedAttempt = (text: string): StoredAttempt => withLifecycle(parse<Omit<StoredAttempt, 'lifecycle'> & Partial<Pick<StoredAttempt, 'lifecycle'>>>(text));
 const clone = <T>(value: T): T => parse<T>(JSON.stringify(value));

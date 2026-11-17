@@ -1,10 +1,11 @@
-// Spec 3 S3-02 buD2R, ZreSb, Amendment 4 §2–3; Lessons › Entry points; #158, #150, #145, #137
+// Spec 3 S3-02 buD2R, ZreSb, Amendment 4 §2–3; Lessons › Entry points; #158, #150, #145, #135, #137
 
 import { CHALLENGE_VARIANTS, type ChallengeVariant } from '@tableside/engine';
 import { BookOpen, Check, CircleAlert, Play } from 'lucide-react-native';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Button } from '@/components/Button';
+import { SwitchRow } from '@/components/SwitchRow';
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
 import { LearnRow } from '@/lessons/LessonEntries';
 import { SettingsScreen } from '@/settings/SettingsParts';
@@ -16,6 +17,9 @@ import {
   START_PROBLEM,
   startLabel,
   startWaits,
+  TIME_THIS,
+  TIME_THIS_DETAIL,
+  TIMING_LABEL,
   VARIANT_LABEL,
   VARIANT_HELP,
   variantLabel,
@@ -75,6 +79,14 @@ export function ChallengeSetupScreen({
         </Text>
       </View>
       {setup.table && <TableSetupOptions options={setup.table} onChange={(table) => onChange({ ...setup, table })} />}
+      <View style={styles.section}>
+        <Text maxFontSizeMultiplier={textScale.body} style={styles.label}>
+          {TIMING_LABEL}
+        </Text>
+        <View style={styles.card}>
+          <SwitchRow title={TIME_THIS} detail={TIME_THIS_DETAIL} value={setup.timed === true} onChange={(timed) => onChange({ ...setup, timed })} />
+        </View>
+      </View>
       {WHAT_YOU_DO[entry.category] && (
         <View style={styles.section}>
           <Text maxFontSizeMultiplier={textScale.body} style={styles.label}>
@@ -144,6 +156,7 @@ const styles = StyleSheet.create({
   banner: { flexDirection: 'row', gap: space[3], padding: 14, borderRadius: 12, borderWidth: 1, borderColor: palette.controlBorder, backgroundColor: palette.card },
   problem: { borderColor: palette.destructive },
   bannerText: { flex: 1, fontFamily: fonts.uiBold, fontSize: 14, lineHeight: 20, color: palette.foreground },
+  card: { borderRadius: 12, borderWidth: 1, borderColor: palette.border, backgroundColor: palette.card, overflow: 'hidden' },
   disabled: { opacity: 0.4 },
   focused: { borderColor: palette.ring },
 });

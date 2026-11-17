@@ -27,6 +27,7 @@ jest.mock('@/training/app-adapters', () => {
         newId: () => 'attempt-1',
         device: 'test-device',
         owner: 'local',
+        quarantine: { version: 0, entries: [] },
       };
     },
   };
