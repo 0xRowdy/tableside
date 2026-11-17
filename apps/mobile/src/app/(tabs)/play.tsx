@@ -6,12 +6,14 @@ import { Button } from '@/components/Button';
 import { Placeholder } from '@/components/Placeholder';
 import { findGame } from '@/games';
 import { useFollow } from '@/hooks/use-follow';
+import { ScreenHints } from '@/lessons/FirstUseHints';
 import { practicePrefill } from '@/lessons/routes';
 import { BlackjackSetup } from '@/play/BlackjackSetup';
 import { BlackjackTable } from '@/play/BlackjackTable';
 import { CrapsSetup } from '@/play/CrapsSetup';
 import { CrapsTable } from '@/play/CrapsTable';
 import { EndSessionDialog } from '@/play/EndSessionDialog';
+import { TABLE_HINTS } from '@/play/bet-selector/Presentation';
 import { IncompleteSession } from '@/play/IncompleteSession';
 import { RouletteSetup } from '@/play/RouletteSetup';
 import { RouletteTable } from '@/play/RouletteTable';
@@ -19,6 +21,7 @@ import { SessionResult } from '@/play/SessionResult';
 import { SuspendedSession } from '@/play/SuspendedSession';
 import type { PracticeController, PracticeSnapshot } from '@/practice/controller';
 import { usePractice } from '@/practice/PracticeProvider';
+import { useTrainingService } from '@/training/TrainingProvider';
 
 const isSwitched = (snapshot: PracticeSnapshot) =>
   snapshot.status === 'completed' && (snapshot.result.endingReason === 'switch' || snapshot.result.endingReason === 'reset');
@@ -39,6 +42,7 @@ export default function Play() {
   const prefill = practicePrefill(params);
   const setupKey = `${params.game}:${params.practice ?? ''}:${params.strategy ?? ''}`;
   const { controller, snapshot } = usePractice();
+  const training = useTrainingService();
   const [switchingFrom, setSwitchingFrom] = useState<string | null>(null);
   const activeGame = snapshot.status === 'active' ? snapshot.view.game : null;
   const switchTo = game && activeGame && game.id !== activeGame ? game.id : null;
@@ -76,7 +80,10 @@ export default function Play() {
         );
       return (
         <>
-          {table}
+          {/* Spec 3 Lessons › Structure (First-use hints); #146 */}
+          <ScreenHints service={training} ids={TABLE_HINTS}>
+            {table}
+          </ScreenHints>
           {switchTo && (
             <EndSessionDialog
               visible={switchingFrom !== snapshot.view.activityId}

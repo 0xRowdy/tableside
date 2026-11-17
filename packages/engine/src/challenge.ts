@@ -1,7 +1,7 @@
-// Spec 3 Modules › Engine; Challenge content (from #4); Learn, Check and assistance; #158, #132, #133
+// Spec 3 Modules › Engine; Challenge content; Learn, Check and assistance; #158, #132, #133, #134
 
 import { STATE_SCHEMA_VERSION, type Receipt, type RejectionReason, type VersionedIdentity } from './activity';
-import { hiLoTag } from './blackjack';
+import { hiLoTag, truncatedTrueCount } from './blackjack';
 import { canonicalJson } from './canonical';
 import { canonicalShoe, shuffle, type Rank, type Suit } from './draws';
 import { RANDOM_PROTOCOL_VERSION, RandomStream, uniformInt, type RandomStreamIdentity, type RandomStreamState } from './random';
@@ -9,9 +9,9 @@ import { sha256Hex } from './sha256';
 import { hasExactKeys, isCount, isRecord, isText } from './shape';
 import { ENGINE_VERSION } from './version';
 
-export type ChallengeCategory = 'card-values' | 'running-count';
+export type ChallengeCategory = 'card-values' | 'running-count' | 'conversion';
 
-export const CHALLENGE_CATEGORIES: readonly ChallengeCategory[] = ['card-values', 'running-count'];
+export const CHALLENGE_CATEGORIES: readonly ChallengeCategory[] = ['card-values', 'running-count', 'conversion'];
 
 export type ChallengeVariant = 'learn' | 'check';
 
@@ -37,7 +37,17 @@ export interface RunningCountContent {
   readonly reference: VersionedIdentity;
 }
 
-export type ChallengeContent = CardValuesContent | RunningCountContent;
+// Spec 3 Challenge content › Conversion
+export interface ConversionContent {
+  readonly category: 'conversion';
+  readonly id: string;
+  readonly version: number;
+  readonly length: number;
+  readonly maxRunningCount: number;
+  readonly maxDecks: number;
+}
+
+export type ChallengeContent = CardValuesContent | RunningCountContent | ConversionContent;
 
 export interface ChallengeSpecification {
   readonly attemptId: string;
@@ -59,6 +69,14 @@ export interface ChallengeCard {
 export interface CardValueItem {
   readonly card: ChallengeCard;
 }
+
+// Spec 3 Challenge content › Conversion
+export interface ConversionItem {
+  readonly running: number;
+  readonly decks: number;
+}
+
+export type ChallengeItem = CardValueItem | ConversionItem;
 
 export type ChallengeEntry = number | 'skip';
 
@@ -90,7 +108,7 @@ export interface ChallengeState {
   readonly phase: ChallengePhase;
   readonly ending: ChallengeEnding | null;
   readonly position: number;
-  readonly items: readonly CardValueItem[];
+  readonly items: readonly ChallengeItem[];
   readonly rejected: number;
   readonly answers: readonly ItemAnswers[];
   // Spec 3 Learn, Check and assistance › Show/hide running count
@@ -139,6 +157,9 @@ export interface MetricResult {
 
 export type ChallengeMetrics = Readonly<Record<ChallengeMetric, MetricResult | null>>;
 
+// Spec 3 Scoring and review › Metrics
+export const CATEGORY_METRIC: Readonly<Record<ChallengeCategory, ChallengeMetric>> = { 'card-values': 'card-values', 'running-count': 'running-count', conversion: 'true-count' };
+
 export interface CountRange {
   readonly min: number;
   readonly max: number;
@@ -152,6 +173,11 @@ export interface RunningCountAid {
 export type HiLoExplanation = { readonly kind: 'hi-lo-value'; readonly rank: Rank; readonly value: HiLoValue };
 
 export type RunningCountExplanation = { readonly kind: 'running-count'; readonly rank: Rank; readonly value: HiLoValue; readonly before: number; readonly count: number };
+
+// Spec 3 Learn, Check and assistance › Learn; Lessons › Content requirements; #134
+export type ConversionExplanation = { readonly kind: 'conversion'; readonly running: number; readonly decks: number; readonly trueCount: number; readonly exact: boolean };
+
+export type ChallengeExplanation = HiLoExplanation | RunningCountExplanation | ConversionExplanation;
 
 export interface CardValueReview {
   readonly kind: 'card-value';
@@ -171,7 +197,18 @@ export interface RunningCountReview {
   readonly error: number | null;
 }
 
-export type ReviewFact = CardValueReview | RunningCountReview;
+// Spec 3 Scoring and review › Review facts
+export interface ConversionReview {
+  readonly kind: 'conversion';
+  readonly position: number;
+  readonly running: number;
+  readonly decks: number;
+  readonly entered: ChallengeEntry;
+  readonly reference: number;
+  readonly error: number | null;
+}
+
+export type ReviewFact = CardValueReview | RunningCountReview | ConversionReview;
 
 export interface ChallengeResults {
   readonly ending: ChallengeEnding;
@@ -186,7 +223,7 @@ export interface LearnFeedback {
   readonly correct: boolean;
   readonly reference: number;
   readonly scored: boolean;
-  readonly explanation: HiLoExplanation | RunningCountExplanation;
+  readonly explanation: ChallengeExplanation;
 }
 
 interface ChallengeViewBase {
@@ -197,7 +234,7 @@ interface ChallengeViewBase {
   readonly legalCommands: readonly ChallengeCommandKind[];
   readonly length: number;
   readonly position: number;
-  readonly item: CardValueItem | null;
+  readonly item: ChallengeItem | null;
   readonly choices: readonly HiLoValue[];
   readonly countRange: CountRange | null;
   readonly checkpoints: readonly number[] | null;
@@ -233,6 +270,7 @@ const RANK_COUNT = 13;
 export function contentProblem(content: unknown): string | undefined {
   if (!isRecord(content)) return 'a content definition is an object';
   if (content.category === 'running-count') return runningCountProblem(content);
+  if (content.category === 'conversion') return conversionProblem(content);
   if (!hasExactKeys(content, ['category', 'id', 'version', 'length', 'coverage'])) return 'a card-values content definition has a category, id, version, length and coverage';
   if (content.category !== 'card-values') return `unsupported challenge category ${String(content.category)}`;
   if (!isText(content.id) || !isCount(content.version) || content.version < 1) return 'the content definition needs an id and a version from 1';
@@ -254,6 +292,22 @@ function runningCountProblem(content: Record<string, unknown>): string | undefin
   if (!isCount(length) || length < 1 || length > decks * 52) return 'the length must fit in the shoe';
   if (!Array.isArray(checkpoints) || checkpoints.length === 0 || checkpoints.at(-1) !== length) return 'checkpoints must end at the last card';
   if (!checkpoints.every((card, index) => isCount(card) && card >= 1 && (index === 0 || card > (checkpoints[index - 1] as number)))) return 'checkpoints are increasing card positions';
+  return undefined;
+}
+
+// Spec 3 Challenge content › Conversion
+const MIN_CONVERSION_LENGTH = 4;
+const MAX_CONVERSION_LENGTH = 40;
+
+function conversionProblem(content: Record<string, unknown>): string | undefined {
+  if (!hasExactKeys(content, ['category', 'id', 'version', 'length', 'maxRunningCount', 'maxDecks'])) {
+    return 'a conversion content definition has a category, id, version, length, maxRunningCount and maxDecks';
+  }
+  if (!isText(content.id) || !isCount(content.version) || content.version < 1) return 'the content definition needs an id and a version from 1';
+  const { length, maxRunningCount, maxDecks } = content;
+  if (!isCount(length) || length < MIN_CONVERSION_LENGTH || length > MAX_CONVERSION_LENGTH) return `a conversion set has ${MIN_CONVERSION_LENGTH} to ${MAX_CONVERSION_LENGTH} questions`;
+  if (!isCount(maxRunningCount) || maxRunningCount < 1 || maxRunningCount > MAX_DECKS * 52) return `the largest running count is a whole number from 1 to ${MAX_DECKS * 52}`;
+  if (!isCount(maxDecks) || maxDecks < 2 || maxDecks > MAX_DECKS) return `decks remaining go up to a whole number from 2 to ${MAX_DECKS}`;
   return undefined;
 }
 
@@ -285,7 +339,7 @@ export function createChallenge(spec: ChallengeSpecification, random: RandomStre
       random: { protocol: position.protocol, key: position.key, session: position.session },
     },
     variant: spec.variant,
-    content: content.category === 'running-count' ? { ...content, checkpoints: [...content.checkpoints], reference: { ...content.reference } } : { ...content },
+    content: copyContent(content),
     sequence: 0,
     phase: 'ready',
     ending: null,
@@ -299,8 +353,34 @@ export function createChallenge(spec: ChallengeSpecification, random: RandomStre
   };
 }
 
+const copyContent = (content: ChallengeContent): ChallengeContent =>
+  content.category === 'running-count' ? { ...content, checkpoints: [...content.checkpoints], reference: { ...content.reference } } : { ...content };
+
+// Spec 3 Challenge content › Conversion
+const halfDecks = (item: ConversionItem) => Math.round(item.decks * 2);
+const isExact = (item: ConversionItem) => (2 * item.running) % halfDecks(item) === 0;
+
+function coversConversion(items: readonly ConversionItem[]): boolean {
+  const has = (test: (item: ConversionItem) => boolean) => items.some(test);
+  return (
+    has((item) => item.running === 0) &&
+    has((item) => item.running !== 0 && isExact(item)) &&
+    has((item) => item.running > 0 && !isExact(item)) &&
+    has((item) => item.running < 0 && !isExact(item))
+  );
+}
+
 // Spec 3 Challenge content › Generation
-function generate(content: ChallengeContent, stream: RandomStream): { items: CardValueItem[]; rejected: number } {
+function generate(content: ChallengeContent, stream: RandomStream): { items: ChallengeItem[]; rejected: number } {
+  if (content.category === 'conversion') {
+    for (let rejected = 0; ; rejected++) {
+      const items = Array.from({ length: content.length }, (): ConversionItem => {
+        const running = uniformInt(stream, 2 * content.maxRunningCount + 1) - content.maxRunningCount;
+        return { running, decks: (uniformInt(stream, 2 * content.maxDecks) + 1) / 2 };
+      });
+      if (coversConversion(items)) return { items, rejected };
+    }
+  }
   if (content.category === 'running-count') {
     const exposed = shuffle(stream, canonicalShoe(content.decks)).slice(0, content.length);
     return { items: exposed.map(({ rank, suit }) => ({ card: { rank, suit } })), rejected: 0 };
@@ -314,13 +394,19 @@ function generate(content: ChallengeContent, stream: RandomStream): { items: Car
   }
 }
 
-const hiLo = (item: CardValueItem): HiLoValue => hiLoTag({ deck: 0, ...item.card }) as HiLoValue;
+const hiLo = (item: ChallengeItem): HiLoValue => hiLoTag({ deck: 0, ...(item as CardValueItem).card }) as HiLoValue;
 
 // Spec 3 Scoring and review › Reference
 const countThrough = (state: ChallengeState, position: number) => state.items.slice(0, position + 1).reduce((count, item) => count + hiLo(item), 0);
 
-const reference = (state: ChallengeState, position: number): number =>
-  state.content.category === 'running-count' ? countThrough(state, position) : hiLo(state.items[position] as CardValueItem);
+// Spec 3 Challenge content › Conversion
+export const conversionTrueCount = (item: ConversionItem): number => truncatedTrueCount(item.running, halfDecks(item));
+
+function reference(state: ChallengeState, position: number): number {
+  const item = state.items[position] as ChallengeItem;
+  if (state.content.category === 'running-count') return countThrough(state, position);
+  return state.content.category === 'conversion' ? conversionTrueCount(item as ConversionItem) : hiLo(item);
+}
 
 const isCorrect = (state: ChallengeState, position: number, entry: ChallengeEntry) => entry !== 'skip' && entry === reference(state, position);
 
@@ -353,10 +439,18 @@ function legalCommands(state: ChallengeState): readonly ChallengeCommandKind[] {
   return canReveal(state) ? [...legal.filter((kind) => kind !== 'end'), 'reveal-count', 'end'] : legal;
 }
 
+// Spec 3 Learn, Check and assistance › Malformed input
+function countRange(content: ChallengeContent): CountRange | null {
+  if (content.category === 'card-values') return null;
+  const limit = content.category === 'conversion' ? 2 * content.maxRunningCount : content.length;
+  return { min: -limit, max: limit };
+}
+
 function answerProblem(state: ChallengeState, value: number): string | undefined {
-  if (state.content.category === 'card-values') return HI_LO_VALUES.includes(value as HiLoValue) ? undefined : 'a card value is +1, 0 or −1';
-  const limit = state.content.length;
-  return Math.abs(value) <= limit ? undefined : `a running count is a whole number from −${limit} to +${limit}`;
+  const range = countRange(state.content);
+  if (!range) return HI_LO_VALUES.includes(value as HiLoValue) ? undefined : 'a card value is +1, 0 or −1';
+  const what = state.content.category === 'conversion' ? 'a true count' : 'a running count';
+  return value >= range.min && value <= range.max ? undefined : `${what} is a whole number from −${range.max} to +${range.max}`;
 }
 
 function isCommand(value: unknown): value is ChallengeCommand {
@@ -439,15 +533,17 @@ export function challengeResults(state: ChallengeState): ChallengeResults | null
   const review: ReviewFact[] = state.answers.map((answers, index): ReviewFact => {
     const entered = answers.first;
     const correct = reference(state, answers.position);
-    if (state.content.category === 'running-count') {
-      const error = entered === 'skip' ? null : entered - correct;
-      return { kind: 'running-count', checkpoint: index + 1, position: answers.position + 1, entered, reference: correct, error };
+    const error = entered === 'skip' ? null : entered - correct;
+    if (state.content.category === 'running-count') return { kind: 'running-count', checkpoint: index + 1, position: answers.position + 1, entered, reference: correct, error };
+    if (state.content.category === 'conversion') {
+      const { running, decks } = state.items[answers.position] as ConversionItem;
+      return { kind: 'conversion', position: answers.position + 1, running, decks, entered, reference: correct, error };
     }
     const item = state.items[answers.position] as CardValueItem;
     return { kind: 'card-value', position: answers.position + 1, card: item.card, entered, reference: correct as HiLoValue };
   });
   const metrics = Object.fromEntries(CHALLENGE_METRICS.map((metric) => [metric, null])) as Record<ChallengeMetric, MetricResult | null>;
-  metrics[state.content.category] = review.length === 0 ? null : { correct: review.filter((fact) => fact.entered === fact.reference).length, total: review.length };
+  metrics[CATEGORY_METRIC[state.content.category]] = review.length === 0 ? null : { correct: review.filter((fact) => fact.entered === fact.reference).length, total: review.length };
   return { ending: state.ending, metrics, review, assisted: assisted(state), assistanceStep: state.revealedAt };
 }
 
@@ -464,12 +560,30 @@ export function runningCountDrift(review: readonly ReviewFact[]): { readonly fro
 // Spec 3 Learn, Check and assistance
 const assisted = (state: ChallengeState) => state.variant === 'learn' || state.revealedAt !== null;
 
+// Spec 3 Challenge content › Conversion
+export const conversionExplanation = (item: ConversionItem): ConversionExplanation => ({
+  kind: 'conversion',
+  running: item.running,
+  decks: item.decks,
+  trueCount: conversionTrueCount(item),
+  exact: isExact(item),
+});
+
+function explain(state: ChallengeState, item: ChallengeItem): ChallengeExplanation {
+  if (state.content.category === 'conversion') return conversionExplanation(item as ConversionItem);
+  const { rank } = (item as CardValueItem).card;
+  if (state.content.category === 'card-values') return { kind: 'hi-lo-value', rank, value: hiLo(item) };
+  const count = countThrough(state, state.position);
+  return { kind: 'running-count', rank, value: hiLo(item), before: count - hiLo(item), count };
+}
+
+const copyItem = (item: ChallengeItem): ChallengeItem => ('card' in item ? { card: { ...item.card } } : { ...item });
+
 export function readChallengeView(state: ChallengeState): ChallengeView {
   const shown = SHOWING.includes(state.phase);
-  const item = shown ? (state.items[state.position] as CardValueItem) : null;
+  const item = shown ? (state.items[state.position] as ChallengeItem) : null;
   const answered = state.phase === 'explanation' || state.phase === 'recorded' ? (currentAnswers(state) as ItemAnswers) : null;
   const counting = state.content.category === 'running-count';
-  const limit = state.content.length;
   const base: ChallengeViewBase = {
     attemptId: state.attempt.id,
     category: state.identities.category,
@@ -478,9 +592,9 @@ export function readChallengeView(state: ChallengeState): ChallengeView {
     legalCommands: [...legalCommands(state)],
     length: state.content.length,
     position: item ? state.position + 1 : 0,
-    item: item && { card: { ...item.card } },
-    choices: item && !counting ? HI_LO_VALUES : [],
-    countRange: counting ? { min: -limit, max: limit } : null,
+    item: item && copyItem(item),
+    choices: item && state.content.category === 'card-values' ? HI_LO_VALUES : [],
+    countRange: countRange(state.content),
     checkpoints: state.content.category === 'running-count' && state.variant === 'check' ? [...state.content.checkpoints] : null,
     countAid: counting ? { revealed: state.revealedAt !== null, count: item && state.revealedAt !== null ? countThrough(state, state.position) : null } : null,
     assisted: assisted(state),
@@ -497,9 +611,7 @@ export function readChallengeView(state: ChallengeState): ChallengeView {
             correct: isCorrect(state, state.position, answered.last),
             reference: reference(state, state.position),
             scored: answered.tries === 1,
-            explanation: counting
-              ? { kind: 'running-count', rank: item.card.rank, value: hiLo(item), before: countThrough(state, state.position) - hiLo(item), count: countThrough(state, state.position) }
-              : { kind: 'hi-lo-value', rank: item.card.rank, value: hiLo(item) },
+            explanation: explain(state, item),
           }
         : null,
   };

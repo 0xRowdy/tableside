@@ -1,6 +1,7 @@
 // Spec 3 Challenge content (from #4); #158, #132
 import {
   advanceChallenge,
+  type CardValueItem,
   createChallenge,
   RANDOM_PROTOCOL_VERSION,
   readChallengeView,
@@ -32,6 +33,13 @@ export const COUNT_LEARN: ChallengeSpecification = { ...LEARN, content: RUNNING_
 
 export const COUNT_CHECK: ChallengeSpecification = { ...COUNT_LEARN, variant: 'check' };
 
+// #134
+export const CONVERSION_V1 = { category: 'conversion', id: 'conversion', version: 1, length: 10, maxRunningCount: 20, maxDecks: 6 } as const;
+
+export const CONVERSION_LEARN: ChallengeSpecification = { ...LEARN, content: CONVERSION_V1 };
+
+export const CONVERSION_CHECK: ChallengeSpecification = { ...CONVERSION_LEARN, variant: 'check' };
+
 export const seed = (n: number): RandomStreamIdentity => ({ protocol: RANDOM_PROTOCOL_VERSION, key: [n, 0x9e3779b9], session: [n * 7 + 1, 0] });
 
 export function step(state: ChallengeState, command: ChallengeCommand): ChallengeState {
@@ -61,3 +69,10 @@ export function checkView(state: ChallengeState): CheckChallengeView {
   if (view.variant !== 'check') throw new Error('expected a Check view');
   return view;
 }
+
+// #134
+export const cardItems = (state: ChallengeState): CardValueItem[] =>
+  state.items.map((item) => {
+    if (!('card' in item)) throw new Error('expected card items');
+    return item;
+  });

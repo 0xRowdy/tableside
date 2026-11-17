@@ -32,7 +32,7 @@ import { CRAPS_SPEC } from '../test/craps.cases';
 import { PASS_WITH_ODDS } from '../test/craps-strategy.fixtures';
 import { PI, ZERO } from '../test/fixtures';
 import type { RecordedBuild, RecordedChallenge, RecordedCheckpoint } from '../test/recorded';
-import { CHECK, COUNT_CHECK, COUNT_LEARN, LEARN, seed } from '../test/challenge.fixtures';
+import { CHECK, CONVERSION_CHECK, CONVERSION_LEARN, COUNT_CHECK, COUNT_LEARN, LEARN, seed } from '../test/challenge.fixtures';
 import { TEST_COUNTING_SCHEDULE } from '../test/blackjack-strategy.fixtures';
 import { DOUBLING, FLAT_EVEN_MONEY } from '../test/strategy.fixtures';
 
@@ -156,6 +156,14 @@ const CHALLENGE_SCENARIOS: ChallengeScenario[] = [
     specification: COUNT_CHECK,
     random: seed(1),
     commands: [{ kind: 'begin' }, ...Array.from({ length: 12 }, (): ChallengeCommand => ({ kind: 'next-item' })), { kind: 'skip' }],
+  },
+  // #134
+  { name: 'conversion Learn, a wrong true count explained', specification: CONVERSION_LEARN, random: seed(1), commands: [{ kind: 'begin' }, { kind: 'answer', value: -3 }] },
+  {
+    name: 'conversion Check, a true count recorded',
+    specification: CONVERSION_CHECK,
+    random: seed(1),
+    commands: [{ kind: 'begin' }, { kind: 'answer', value: -2 }, { kind: 'next-item' }, { kind: 'answer', value: 23 }],
   },
 ];
 

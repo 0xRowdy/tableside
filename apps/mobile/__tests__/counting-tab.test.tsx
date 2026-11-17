@@ -1,4 +1,4 @@
-// Spec 3 Testing Decisions › Seam 3; S3-01 PDCaD, S3-02 buD2R, S3-03 P4WjR, drVnR, BFdJT, S3-04 qdnQm, S3-05 EDnGd, S3-06 C53yTW, S3-08 liAfT, CEb6T, cX5Gc, S3-09 h0MsKr; #158, #132, #133
+// Spec 3 Testing Decisions › Seam 3; S3-01 PDCaD, S3-02 buD2R, S3-03 P4WjR, drVnR, BFdJT, S3-04 qdnQm, S3-05 EDnGd, S3-06 C53yTW, zAatf, Qv1An, S3-08 liAfT, CEb6T, cX5Gc, S3-09 h0MsKr; #158, #132, #133, #134
 
 import { cleanup, fireEvent, screen, within } from '@testing-library/react-native';
 import { renderRouter } from 'expo-router/testing-library';
@@ -72,6 +72,8 @@ describe('the Counting tab', () => {
     expect(screen.getByRole('button', { name: 'Check: Card values' })).toBeEnabled();
     expect(screen.getByRole('button', { name: 'Learn: Running count' })).toBeEnabled();
     expect(screen.getByRole('button', { name: 'Check: Running count' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Learn: True-count conversion' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Check: True-count conversion' })).toBeEnabled();
     expect(screen.getByText('Recommendations use your accuracy only, never speed or winnings. Nothing here is locked.')).toBeOnTheScreen();
   });
 
@@ -377,6 +379,95 @@ describe('the Counting tab', () => {
       expect(screen.getByText('Completed · Learn')).toBeOnTheScreen();
       expect(screen.getByLabelText('Running count, 52 cards: 51 of 52')).toBeOnTheScreen();
       expect(cues().filter((cue) => cue === 'input-rejected')).toEqual([]);
+    });
+  });
+
+  describe('true-count conversion', () => {
+    const SPOKEN = /^Running count, (minus |plus )?(\d+)$/;
+    const typed = (count: number) => (count < 0 ? `−${-count}` : String(count));
+    const signedText = (count: number) => (count > 0 ? `+${count}` : count < 0 ? `−${-count}` : '0');
+
+    function given() {
+      const [, sign, digits] = SPOKEN.exec(screen.getByLabelText(SPOKEN).props.accessibilityLabel as string)!;
+      const running = (sign === 'minus ' ? -1 : 1) * Number(digits);
+      const decks = Number((screen.getByLabelText(/^Decks remaining, /).props.accessibilityLabel as string).split(', ')[1]);
+      // Spec 3 Challenge content › Conversion: the quotient truncated toward zero
+      return { running, decks, trueCount: Math.trunc(running / decks) || 0 };
+    }
+
+    async function enterTrueCount(count: number) {
+      await fireEvent.changeText(screen.getByLabelText('True count'), typed(count));
+      await fireEvent.press(screen.getByRole('button', { name: 'Submit' }));
+    }
+
+    async function start(variant: 'Learn' | 'Check') {
+      await renderRouter('./src/app', { initialUrl: '/counting' });
+      await screen.findByRole('header', { name: 'Counting' });
+      await fireEvent.press(screen.getByRole('button', { name: `${variant}: True-count conversion` }));
+      await screen.findByRole('header', { name: 'True-count conversion' });
+      expect(screen.getByText('10 questions. Each gives a running count and the decks remaining; enter the true count. Only your first answer to each question is scored.')).toBeOnTheScreen();
+      await fireEvent.press(within(screen.getByLabelText('Variant')).getByRole('radio', { name: variant }));
+      await fireEvent.press(screen.getByRole('button', { name: `Start ${variant} attempt` }));
+      await screen.findByText('Question 1 of 10');
+    }
+
+    it('runs a Check attempt: ten questions with no correctness shown, then results and a review of each question', async () => {
+      await start('Check');
+      const seen: number[] = [];
+      for (let question = 1; question <= 10; question++) {
+        await screen.findByText(`Question ${question} of 10`);
+        const { running, trueCount } = given();
+        seen.push(running);
+        expect(screen.queryByRole('switch')).toBeNull();
+        if (question === 1) {
+          const before = cues().length;
+          await enterTrueCount(41);
+          expect(screen.getByRole('alert')).toHaveTextContent("Enter a count from −40 to +40. Nothing was submitted, and it doesn't count against you.");
+          expect(cues().slice(before)).toEqual(['input-rejected']);
+        }
+        if (question === 2) await enterTrueCount(trueCount + 1);
+        else if (question === 10) await fireEvent.press(screen.getByRole('button', { name: 'Skip' }));
+        else await enterTrueCount(trueCount);
+        expect(screen.queryByText(/Correct|Off by|Match|truncat/)).toBeNull();
+      }
+      expect([seen.some((running) => running === 0), seen.some((running) => running > 0), seen.some((running) => running < 0)]).toEqual([true, true, true]);
+
+      await screen.findByRole('header', { name: 'Results' });
+      expect(cues().filter((cue) => cue === 'answer-accepted')).toHaveLength(10);
+      expect(screen.getByText('True-count conversion · Check · self-paced')).toBeOnTheScreen();
+      expect(screen.getByLabelText('True count, 10 questions: 8 of 10')).toBeOnTheScreen();
+      expect(screen.getByLabelText('Running count, Not tested: N/A')).toBeOnTheScreen();
+      expect(screen.getByRole('button', { name: 'Retry with new questions' })).toBeEnabled();
+
+      await fireEvent.press(screen.getByRole('button', { name: 'Review questions' }));
+      await screen.findByRole('header', { name: 'Question review' });
+      expect(screen.getByText('True-count conversion · Check · 8 / 10')).toBeOnTheScreen();
+      expect(screen.getAllByLabelText(/^Question \d+, .* divided by [\d.]+: /)).toHaveLength(10);
+      expect(screen.getByLabelText(/^Question 2, .*: you entered .*, error plus 1, off by 1$/)).toBeOnTheScreen();
+      expect(screen.getByLabelText(/^Question 10, .*: skipped, correct .*, counts as incorrect$/)).toBeOnTheScreen();
+      expect(screen.queryByTestId('drift-note')).toBeNull();
+    });
+
+    it('runs a Learn attempt: each answer is explained with the arithmetic before the next question', async () => {
+      await start('Learn');
+      for (let question = 1; question <= 10; question++) {
+        await screen.findByText(`Question ${question} of 10`);
+        const { trueCount } = given();
+        if (question === 1) {
+          await enterTrueCount(trueCount + 1);
+          expect(screen.getByText(`The true count is ${signedText(trueCount)}.`)).toBeOnTheScreen();
+          expect(screen.getByTestId('coach-note')).toHaveTextContent(/÷/);
+          await fireEvent.press(screen.getByRole('button', { name: 'Try this question again' }));
+        }
+        await enterTrueCount(trueCount);
+        expect(screen.getByText(`${signedText(trueCount)} is right.`)).toBeOnTheScreen();
+        expect(screen.getByLabelText('True count')).toHaveDisplayValue(typed(trueCount));
+        expect(screen.getByRole('button', { name: 'Read the conversion lesson' })).toBeDisabled();
+        await fireEvent.press(screen.getByRole('button', { name: 'Next question' }));
+      }
+      await screen.findByRole('header', { name: 'Results' });
+      expect(screen.getByText('Completed · Learn')).toBeOnTheScreen();
+      expect(screen.getByLabelText('True count, 10 questions: 9 of 10')).toBeOnTheScreen();
     });
   });
 });

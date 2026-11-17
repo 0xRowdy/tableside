@@ -70,7 +70,7 @@ export { QUARANTINE_LIST } from './quarantine';
 
 export { benchmarkProfile, BENCHMARK_PROFILES } from './benchmark-profiles';
 
-export { CARD_VALUES_CONTENT, CATALOG_CATEGORIES, CHALLENGE_CONTENT, RUNNING_COUNT_CONTENT, type CatalogCategory } from './challenges';
+export { CARD_VALUES_CONTENT, CATALOG_CATEGORIES, CHALLENGE_CONTENT, CONVERSION_CONTENT, RUNNING_COUNT_CONTENT, type CatalogCategory } from './challenges';
 
 export {
   APP_ORIENTATION,
@@ -85,6 +85,8 @@ export {
   type LessonStep,
   type PublishedNote,
 } from './lessons';
+
+export { HINT_IDS, HINT_MAX_LENGTH, HINTS, hintProblems, type Hint, type HintId } from './hints';
 
 export { workedExampleProblems, type CardValueExample, type ScriptedChoice, type ScriptedResponse, type WorkedExample } from './worked-examples';
 export {

@@ -1,4 +1,4 @@
-// Spec 3 Screens; Lessons › Entry points, Structure (Handoff); #158, #132, #145, #133
+// Spec 3 Screens; Lessons › Entry points, Structure; #158, #132, #145, #133, #134, #146
 import { CHALLENGE_LESSONS } from '@tableside/definitions';
 import { CHALLENGE_VARIANTS, type ChallengeVariant } from '@tableside/engine';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
@@ -6,12 +6,13 @@ import { useCallback, useState } from 'react';
 
 import { Placeholder } from '@/components/Placeholder';
 import { CardReview } from '@/counting/CardReview';
-import { ChallengeExercise } from '@/counting/ChallengeExercise';
+import { ChallengeExercise, exerciseHints } from '@/counting/ChallengeExercise';
 import { ChallengeResults } from '@/counting/ChallengeResults';
 import { ChallengeSetupScreen } from '@/counting/ChallengeSetupScreen';
 import { CountingHome } from '@/counting/CountingHome';
 import { useFeedback } from '@/feedback/FeedbackProvider';
 import { useLoaded } from '@/hooks/use-loaded';
+import { ScreenHints } from '@/lessons/FirstUseHints';
 import { lessonHref } from '@/lessons/routes';
 import { allowanceCopy, COUNTING_TITLE, FINDING_ATTEMPT } from '@/training/challenge-text';
 import { setupFor, type ChallengeSetup, type TrainingService, type TrainingSnapshot } from '@/training/service';
@@ -44,15 +45,19 @@ export default function Counting() {
       return <Placeholder title={COUNTING_TITLE} message={FINDING_ATTEMPT} />;
     case 'active':
       return (
-        <ChallengeExercise
-          view={snapshot.view}
-          busy={snapshot.busy}
-          saveFailed={snapshot.save === 'failed'}
-          onCommand={(command) => void service.submit(command)}
-          // Spec 3 Learn, Check and assistance › Malformed input: cue 9
-          onInputRejected={() => feedback.cue('input-rejected')}
-          onRetrySave={() => void service.retrySave()}
-        />
+        <ScreenHints service={service} ids={exerciseHints(snapshot.view)}>
+          <ChallengeExercise
+            view={snapshot.view}
+            busy={snapshot.busy}
+            saveFailed={snapshot.save === 'failed'}
+            onCommand={(command) => void service.submit(command)}
+            // Spec 3 Learn, Check and assistance › Malformed input: cue 9
+            onInputRejected={() => feedback.cue('input-rejected')}
+            onRetrySave={() => void service.retrySave()}
+            lesson={lessons?.find((lesson) => lesson.id === CHALLENGE_LESSONS[snapshot.view.category])}
+            onOpenLesson={openLesson}
+          />
+        </ScreenHints>
       );
     case 'ended':
       if (reviewing === snapshot.record.attemptId) return <CardReview

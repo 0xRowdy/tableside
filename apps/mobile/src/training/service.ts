@@ -1,9 +1,12 @@
-// Spec 3 Modules › Training service; Training service interface; #158, #132, #133
+// Spec 3 Modules › Training service; Training service interface; #158, #132, #133, #134
 
 import {
   CATALOG_CATEGORIES,
   CHALLENGE_CONTENT,
+  HINTS,
   LESSONS,
+  type Hint,
+  type HintId,
   type CatalogCategory,
   type Lesson,
   type LessonContent,
@@ -17,6 +20,7 @@ import { CHALLENGE_VARIANTS, type ChallengeAttemptRecord, type ChallengeCategory
 import type { TrainingAdapters } from './adapters';
 import type { ChallengeAllowance } from './allowance';
 import { ChallengeController, type AttemptSnapshot, type LearnerCommand, type StartProblem } from './controller';
+import { DeviceLearningPreferences, type LearningPreferences } from './learning-preferences';
 import { lessonProgress, type LessonChange, type LessonProgress, type LessonProgressChange, type LessonStatus } from './lesson-progress';
 
 // Spec 3 Recommendations
@@ -51,7 +55,11 @@ export type TrainingSnapshot =
 
 export type { LearnerCommand, StartProblem };
 
-const READY: Readonly<Partial<Record<CatalogCategory, readonly ChallengeVariant[]>>> = { 'card-values': ['learn', 'check'], 'running-count': ['learn', 'check'] };
+const READY: Readonly<Partial<Record<CatalogCategory, readonly ChallengeVariant[]>>> = {
+  'card-values': ['learn', 'check'],
+  'running-count': ['learn', 'check'],
+  conversion: ['learn', 'check'],
+};
 
 // Spec 3 Amendment 1 C7
 export const LAST_SETUP = 'challenge.last-setup';
@@ -90,7 +98,10 @@ export interface LessonView {
 
 export interface TrainingOptions {
   readonly lessons?: readonly Lesson[];
+  readonly hints?: Readonly<Record<HintId, Hint>>;
 }
+
+export type { LearningPreferences };
 
 type AuthoredLesson = Lesson & { readonly content: LessonContent };
 
@@ -104,12 +115,15 @@ export class TrainingService {
 
   private readonly lessons: readonly Lesson[];
   private lessonChanges = 0;
+  private readonly preferences: DeviceLearningPreferences;
+  private learningChanges = 0;
 
   constructor(
     private readonly adapters: TrainingAdapters,
     options: TrainingOptions = {},
   ) {
     this.lessons = options.lessons ?? LESSONS;
+    this.preferences = new DeviceLearningPreferences(adapters.store, options.hints ?? HINTS);
     this.challenges = new ChallengeController(adapters);
     this.challenges.subscribe(() => this.refresh());
   }
@@ -117,6 +131,8 @@ export class TrainingService {
   snapshot = (): TrainingSnapshot => this.current;
 
   lessonRevision = (): number => this.lessonChanges;
+
+  learningRevision = (): number => this.learningChanges;
 
   subscribe = (listener: () => void): (() => void) => {
     this.listeners.add(listener);
@@ -231,6 +247,29 @@ export class TrainingService {
 
   async completeLesson(id: string): Promise<void> {
     await this.record(this.authored(id), { kind: 'completed' });
+  }
+
+  // Spec 3 Lessons › Entry points, Structure (First-use hints), Amendment 1 C7; #146
+  learningPreferences(): Promise<LearningPreferences> {
+    return this.preferences.read();
+  }
+
+  setStartHere(shown: boolean): Promise<void> {
+    return this.changePreferences(this.preferences.setStartHere(shown));
+  }
+
+  hintSeen(id: HintId): Promise<void> {
+    return this.changePreferences(this.preferences.hintSeen(id));
+  }
+
+  resetHints(): Promise<void> {
+    return this.changePreferences(this.preferences.resetHints());
+  }
+
+  private async changePreferences(change: Promise<void>): Promise<void> {
+    await change;
+    this.learningChanges++;
+    this.notify();
   }
 
   private authored(id: string): AuthoredLesson {

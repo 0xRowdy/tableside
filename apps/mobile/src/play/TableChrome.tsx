@@ -7,6 +7,7 @@ import { Button } from '@/components/Button';
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
 import { useFollow } from '@/hooks/use-follow';
 import { useLoaded } from '@/hooks/use-loaded';
+import { HelpButton } from '@/lessons/FirstUseHints';
 import type { SetupTerms } from '@/practice/adapters';
 import { SAVE_RETRY_MS, type AccessStop, type ActiveSnapshot, type PracticeController, type PracticeSnapshot, type Suspension } from '@/practice/controller';
 import { usePractice } from '@/practice/PracticeProvider';
@@ -39,6 +40,7 @@ export function TableTopBar({
           {subtitle}
         </Text>
       </View>
+      <HelpButton />
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="End session"

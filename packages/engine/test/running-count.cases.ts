@@ -14,7 +14,7 @@ import {
   type ChallengeState,
 } from '../src';
 
-import { ANSWER, begun, COUNT_CHECK, COUNT_LEARN, checkView, learnView, NEXT, RETRY, REVEAL, run, seed, SKIP, step } from './challenge.fixtures';
+import { ANSWER, begun, cardItems, COUNT_CHECK, COUNT_LEARN, checkView, learnView, NEXT, RETRY, REVEAL, run, seed, SKIP, step } from './challenge.fixtures';
 import { throws } from './fixtures';
 import { expectCheckViewHides } from './information-hiding';
 
@@ -30,7 +30,7 @@ const SEED_1_CHECKPOINTS = [-2, 0, -1, -7];
 const HI_LO_OF_CARDS_14_TO_21 = { '6s': 1, '8h': 0, '2h': 1, '10h': -1, '13c': -1, '5c': 1, '13h': -1, '7s': 0 };
 const SEED_1_AFTER_21 = -2 + Object.values(HI_LO_OF_CARDS_14_TO_21).reduce((sum, value) => sum + value, 0);
 
-const cards = (state: ChallengeState) => state.items.map((item) => `${item.card.rank}${item.card.suit[0]}`);
+const cards = (state: ChallengeState) => cardItems(state).map((item) => `${item.card.rank}${item.card.suit[0]}`);
 
 const nexts = (count: number): ChallengeCommand[] => Array.from({ length: count }, () => NEXT);
 
