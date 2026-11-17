@@ -9,6 +9,14 @@
 - Read with `Get`, `Print`, `GetVariables` and `TakeScreenshot`. Edit only for a ticket that asks for frame changes (see Editing).
 - The file keeps hidden leftovers. Skip every subtree with `enabled === false` or `visible === false`.
 - Functions don't persist between `execute` calls: define helpers in the same call that uses them.
+- If the MCP is unavailable (for example, the pen.dev plan's usage limit), read through the Pen CLI in headless mode instead. It needs no running app. Pipe `execute` calls in and point `--out` at a scratch path so the repo file is never written. It may print a 401 error stack when the CLI login has expired; local reads still run.
+
+  ```sh
+  printf '%s\n' "execute({ input: '<snippet>' })" 'exit()' \
+    | pen interactive --in design/Tableside.pen --out "$TMPDIR/pen-read.pen"
+  ```
+
+  The snippet sits inside single quotes, so use double quotes for strings within it. Use the CLI for reading only; frame edits still go through the live session (see Editing).
 
 Dump one frame's visible text and layout:
 
