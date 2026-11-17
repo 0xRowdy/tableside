@@ -4,7 +4,7 @@ import type { ConversionExplanation, HiLoExplanation, RunningCountExplanation, T
 
 import { CARD_VALUES_CONTENT, CONVERSION_CONTENT, RUNNING_COUNT_CONTENT, TABLE_CONTENT } from '../challenges';
 import type { ConversionExample, RunningCountExample, TableCountExample } from '../counting-examples';
-import type { LessonSource } from '../lessons';
+import type { Lesson, LessonSource } from '../lessons';
 import type { CardValueExample } from '../worked-examples';
 import { indexRule, lesson, publishedGaps, publishedNote, step } from './blackjack';
 
@@ -187,15 +187,16 @@ export const TABLE_COUNTING_EXAMPLE: TableCountExample = {
   ],
 };
 
-export const TABLE_COUNTING_LESSON = lesson('table-counting', 'Table counting', 'Count a live table: checkpoints, Observe and Play, assistance', {
+const TABLE_COUNTING_FIRST = lesson('table-counting', 'Table counting', 'Count a live table: checkpoints, Observe and Play, assistance', {
   steps: [
     step('Counting at a table', [
       `The table challenge deals ${TABLE_CONTENT.rounds} rounds of six-deck blackjack from a fresh shoe, starting at 0. You choose the rules, how deep into the shoe to deal, and up to four other players; the ${TABLE_CONTENT.rounds} rounds and these choices are Tableside’s own practice settings. Every card you can see counts, including the other players’ cards.`,
       'The dealer’s face-down card counts only once it is turned over. When the dealer checks for blackjack and doesn’t have it, the card still stays out of the count.',
     ], { source: SOURCE.bjaRunning }),
-    step('Observe, and Play later', [
+    step('Observe and Play', [
       'In Observe, a simulated player plays your seat at the table minimum and you only keep the count. Tableside suggests starting table counting here.',
-      'A Play option, where you also make the playing decisions for your seat, is coming in a later update.',
+      'In Play, you also make every playing decision for your seat, betting the table minimum. Choose counting with basic, or counting with deviations, which at N = 1 also asks for the true count before each decision that depends on the count. Your playing is scored apart from your counts, against the strategy at the actual count, not the count you entered.',
+      'In Learn, a move that departs from the strategy pauses before it’s played: take it back, or keep it, which still counts as a playing miss. In Check, a move that isn’t allowed is refused straight away, and nothing says whether an allowed move is right until the results.',
     ]),
     step('Checkpoints and N', [
       'N sets how often you’re asked, from every round up to every 10 rounds. At N = 1 you enter the running and true count before each bet, and the running count after each round. Above 1, you enter both after every N rounds, and after the last rounds if they don’t make a full block.',
@@ -213,3 +214,14 @@ export const TABLE_COUNTING_LESSON = lesson('table-counting', 'Table counting', 
   handoffs: [{ kind: 'learn-challenge', category: 'table' }],
   sources: [SOURCE.bjaRunning],
 });
+
+// Spec 3 Lessons › Progress (material change); #138
+export const TABLE_COUNTING_LESSON: Lesson = {
+  ...TABLE_COUNTING_FIRST,
+  content: {
+    ...TABLE_COUNTING_FIRST.content!,
+    version: 2,
+    materialVersion: 2,
+    change: 'Play is here: you can now make the playing decisions for your seat, counting with basic strategy or with deviations, so the Observe and Play step is new.',
+  },
+};
