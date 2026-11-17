@@ -1,12 +1,11 @@
-// Spec 3 S3-02 buD2R, ZreSb, Amendment 4 §2–3; Lessons › Entry points; #158, #150, #145, #135
+// Spec 3 S3-02 buD2R, ZreSb, Amendment 4 §2–3; Lessons › Entry points; #158, #150, #145, #135, #140
 
 import { CHALLENGE_VARIANTS, type ChallengeVariant } from '@tableside/engine';
-import { BookOpen, Check, CircleAlert, Play } from 'lucide-react-native';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { BookOpen, CircleAlert, Play } from 'lucide-react-native';
+import { StyleSheet, Text, View } from 'react-native';
 
 import { Button } from '@/components/Button';
 import { SwitchRow } from '@/components/SwitchRow';
-import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
 import { LearnRow } from '@/lessons/LessonEntries';
 import { SettingsScreen } from '@/settings/SettingsParts';
 import { fonts, palette, space, textScale } from '@/theme/tokens';
@@ -31,6 +30,7 @@ import { LEARN_THIS_SKILL, learnThisSkillDetail } from '@/training/lesson-text';
 import type { CatalogEntry, ChallengeSetup, LessonEntry, StartProblem } from '@/training/service';
 
 import { AllowanceBanner } from './AllowanceBanner';
+import { Segmented } from './Segmented';
 
 export function ChallengeSetupScreen({
   entry,
@@ -62,17 +62,12 @@ export function ChallengeSetupScreen({
         <Text maxFontSizeMultiplier={textScale.body} style={styles.label}>
           {VARIANT_LABEL}
         </Text>
-        <View accessibilityRole="radiogroup" accessibilityLabel="Variant" style={styles.segmented}>
-          {CHALLENGE_VARIANTS.map((variant: ChallengeVariant) => (
-            <Segment
-              key={variant}
-              label={variantLabel(variant)}
-              selected={setup.variant === variant}
-              disabled={!entry.ready.includes(variant)}
-              onPress={() => onChange({ ...setup, variant })}
-            />
-          ))}
-        </View>
+        <Segmented
+          label="Variant"
+          options={CHALLENGE_VARIANTS.map((variant: ChallengeVariant) => ({ value: variant, label: variantLabel(variant), disabled: !entry.ready.includes(variant), hint: entry.ready.includes(variant) ? undefined : NOT_READY_HINT }))}
+          selected={setup.variant}
+          onSelect={(variant) => onChange({ ...setup, variant })}
+        />
         <Text maxFontSizeMultiplier={textScale.body} style={styles.help}>
           {VARIANT_HELP}
         </Text>
@@ -110,51 +105,12 @@ export function ChallengeSetupScreen({
   );
 }
 
-function Segment({ label, selected, disabled, onPress }: { label: string; selected: boolean; disabled: boolean; onPress: () => void }) {
-  const { focused, focusProps } = useKeyboardFocus();
-  return (
-    <Pressable
-      accessibilityRole="radio"
-      accessibilityLabel={label}
-      accessibilityHint={disabled ? NOT_READY_HINT : undefined}
-      accessibilityState={{ checked: selected, disabled }}
-      disabled={disabled}
-      onPress={onPress}
-      {...focusProps}
-      style={[styles.segment, selected && styles.segmentSelected, disabled && styles.disabled, focused && styles.focused]}
-    >
-      {selected && <Check color={palette.primaryForeground} size={16} />}
-      <Text maxFontSizeMultiplier={textScale.body} style={[styles.segmentText, selected && styles.segmentTextSelected]}>
-        {label}
-      </Text>
-    </Pressable>
-  );
-}
-
 const styles = StyleSheet.create({
   section: { gap: space[3] - 2 },
   label: { fontFamily: fonts.uiBold, fontSize: 12, letterSpacing: 0.6, color: palette.mutedForeground },
   help: { fontFamily: fonts.ui, fontSize: 13, lineHeight: 19, color: palette.mutedForeground },
-  segmented: { flexDirection: 'row', gap: space[1], padding: space[1], borderRadius: 12, borderWidth: 1, borderColor: palette.controlBorder, backgroundColor: palette.muted },
-  segment: {
-    flex: 1,
-    minHeight: 44,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: space[1] + 2,
-    paddingHorizontal: space[2],
-    borderRadius: 9,
-    borderWidth: 2,
-    borderColor: palette.transparent,
-  },
-  segmentSelected: { backgroundColor: palette.primary },
-  segmentText: { fontFamily: fonts.uiBold, fontSize: 14, color: palette.foreground },
-  segmentTextSelected: { color: palette.primaryForeground },
   banner: { flexDirection: 'row', gap: space[3], padding: 14, borderRadius: 12, borderWidth: 1, borderColor: palette.controlBorder, backgroundColor: palette.card },
   problem: { borderColor: palette.destructive },
   bannerText: { flex: 1, fontFamily: fonts.uiBold, fontSize: 14, lineHeight: 20, color: palette.foreground },
   card: { borderRadius: 12, borderWidth: 1, borderColor: palette.border, backgroundColor: palette.card, overflow: 'hidden' },
-  disabled: { opacity: 0.4 },
-  focused: { borderColor: palette.ring },
 });

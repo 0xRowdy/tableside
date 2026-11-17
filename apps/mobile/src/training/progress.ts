@@ -1,4 +1,4 @@
-// Spec 3 Modules › Training service (Progress projection); Comparison groups, records and progression; Amendment 1 C2, C3; #140
+// Spec 3 Modules › Training service (Progress projection); Comparison groups; Amendment 1 C2; #140
 
 import { canonicalJson, CHALLENGE_METRICS, type ChallengeAttemptRecord, type ChallengeGroupKey, type ChallengeMetric, type MetricResult } from '@tableside/engine';
 
@@ -29,9 +29,7 @@ export interface Fastest {
 }
 
 export interface Progress {
-  // most recent activity first
   readonly groups: readonly GroupProgress[];
-  // newest first
   readonly history: readonly ProgressAttempt[];
 }
 
@@ -80,7 +78,7 @@ export function attemptEarned(attempts: readonly ProgressAttempt[], attemptId: s
   return { bests, fastest: fastest?.attempt === record && (!previous || fastest.performanceMs < previous.performanceMs) ? fastest.performanceMs : null };
 }
 
-// Spec 3 Comparison groups (local and accepted attempts); Synchronized record types › Challenge attempt (identity)
+// Spec 3 Comparison groups (local and accepted attempts); Synchronized record types
 function distinct(attempts: readonly ProgressAttempt[]): ProgressAttempt[] {
   const byIdentity = new Map<string, ProgressAttempt>();
   for (const entry of attempts) {
@@ -144,7 +142,6 @@ const beats = (a: PersonalBest, b: PersonalBest) => {
   return ranked !== 0 ? ranked > 0 : lowerIdentity(a.attempt, b.attempt);
 };
 
-// Ratio, then the larger denominator
 const rank = (a: MetricResult, b: MetricResult) => Math.sign(a.correct * b.total - b.correct * a.total) || Math.sign(a.total - b.total);
 
 // Spec 3 Synchronized record types › Challenge attempt (identity)

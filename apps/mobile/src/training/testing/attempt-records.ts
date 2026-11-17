@@ -2,6 +2,8 @@
 import { CHALLENGE_RECORD_VERSION, type ChallengeAttemptRecord, type ChallengeGroupKey, type ChallengeMetric, type MetricResult } from '@tableside/engine';
 
 import type { ProgressAttempt } from '../progress';
+import type { TrainingStore } from '../store';
+import { newAttempt } from './store-contract';
 
 export const RUNNING_COUNT_CHECK: ChallengeGroupKey = {
   category: 'running-count',
@@ -15,7 +17,7 @@ export const RUNNING_COUNT_CHECK: ChallengeGroupKey = {
   table: null,
 };
 
-// TODO(#137): category 'table' once the engine has it
+// TODO(#137)
 export const TABLE_PLAY_CHECK: ChallengeGroupKey = {
   category: 'running-count',
   variant: 'check',
@@ -84,3 +86,11 @@ export function attemptRecord(fixture: AttemptFixture): ChallengeAttemptRecord {
 }
 
 export const attempt = (fixture: AttemptFixture): ProgressAttempt => ({ record: attemptRecord(fixture), local: fixture.local ?? true });
+
+// Spec 3 Synchronized record types › Challenge attempt (written once at ending)
+export async function storeAttempts(store: TrainingStore, records: readonly ChallengeAttemptRecord[]): Promise<void> {
+  for (const { deviceSequence: _sequence, ...record } of records) {
+    await store.createAttempt(newAttempt(record.attemptId));
+    await store.recordAttempt(record);
+  }
+}

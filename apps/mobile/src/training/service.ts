@@ -235,6 +235,8 @@ export class TrainingService {
   }
 
   // Spec 3 Comparison groups, records and progression; S3-10 OVKkc; #140
+  now = (): number => this.adapters.clock.now();
+
   async progress(): Promise<Progress> {
     return progressProjection(await this.attempts());
   }
@@ -243,7 +245,7 @@ export class TrainingService {
     return attemptEarned(await this.attempts(), record.attemptId);
   }
 
-  // TODO(#142): add accepted attempts and mark the accepted local ones
+  // TODO(#142)
   private async attempts(): Promise<readonly ProgressAttempt[]> {
     return (await this.adapters.store.readAttemptRecords()).map((record) => ({ record, local: true }));
   }
