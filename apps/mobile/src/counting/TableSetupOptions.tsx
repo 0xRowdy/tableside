@@ -37,7 +37,7 @@ export function TableSetupOptions({ options, onChange }: { options: TableOptions
           label="Who plays your seat"
           options={[
             { label: OBSERVE, selected: options.seat === 'observe', onPress: () => set({ seat: 'observe' }) },
-            // TODO(#139)
+            // TODO(#138)
             { label: PLAY, selected: false, disabled: true, disabledHint: NOT_READY_HINT, onPress: () => undefined },
           ]}
         />
