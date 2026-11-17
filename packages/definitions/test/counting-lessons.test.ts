@@ -42,7 +42,9 @@ describe('counting lessons', () => {
     expect(conversion).toContain('Blackjack Apprenticeship’s example divides −7 by 2 decks and gets −3, which matches Tableside, but the page doesn’t say how to round');
     expect(conversion).not.toMatch(/Apprenticeship truncates/);
     expect(conversion).toContain('its example rounds 7 ÷ 4 = 1.75 up to 2 to keep it simple; Tableside’s convention gives +1 there');
-    expect(conversion).toContain('For hard 13 against a 2, Tableside teaches: stand at 0 or higher, and hit below that.');
+    expect(conversion).toContain('With the dealer standing on soft 17, Tableside teaches for hard 13 against a 2: stand at 0 or higher, and hit below that.');
+    const zero = lesson('true-count-conversion').content!.steps.find((s) => s.heading === 'Why it matters at zero')!;
+    expect(zero.publishedNote!.paragraphs[0]).toMatch(/^For hard 13 against a 2, Tableside teaches: stand at 0 or higher, and hit below that\. Schlesinger’s published Illustrious 18 value is −1, one count lower\./);
     expect(conversion).toContain('tie rule and teaching-continuation rule');
     const example = lesson('true-count-conversion').content!.workedExample!;
     expect(example).toMatchObject({ kind: 'conversion', running: 7, decks: 2 });

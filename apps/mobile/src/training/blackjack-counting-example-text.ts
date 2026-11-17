@@ -10,8 +10,6 @@ export const GIVEN_DECKS = 'Decks remaining';
 export const TRUE_COUNT_PROMPT = "What's the true count?";
 export const RUNNING_COUNT_PROMPT = "What's the running count now?";
 export const ROUND_PROMPT = "What's the running count after the round?";
-export const SEAT_LABEL = 'Your seat (Observe)';
-export const DEALER_LABEL = 'Dealer';
 export const roundLead = (round: number, before: number) => `Round ${round} has just finished, with the dealer’s hole card turned over. The count was ${signed(before)} before the round.`;
 
 const plain = (value: number) => (value < 0 ? `−${-value}` : String(value));

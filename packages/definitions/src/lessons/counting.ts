@@ -2,12 +2,11 @@
 // docs/research/counting-lessons.md
 import type { ConversionExplanation, HiLoExplanation, RunningCountExplanation, TableRunningExplanation } from '@tableside/engine';
 
-import { playingDeviations } from '../blackjack/reference';
 import { CARD_VALUES_CONTENT, CONVERSION_CONTENT, RUNNING_COUNT_CONTENT, TABLE_CONTENT } from '../challenges';
 import type { ConversionExample, RunningCountExample, TableCountExample } from '../counting-examples';
-import type { Lesson, LessonContent, LessonSource, LessonStep } from '../lessons';
+import type { LessonSource } from '../lessons';
 import type { CardValueExample } from '../worked-examples';
-import { indexRule } from './blackjack';
+import { indexRule, lesson, publishedGaps, publishedNote, step } from './blackjack';
 
 // Spec 3 Amendment 1 C11; docs/research/counting-lessons.md Citable sources
 const SOURCE = {
@@ -21,6 +20,11 @@ const SOURCE = {
     citation: 'Blackjack Apprenticeship, “How To Count Cards”, section “Step 3: Calculate A “True Count” Or Count Per Deck”',
     url: 'https://www.blackjackapprenticeship.com/how-to-count-cards/',
   },
+  schlesinger: {
+    citation:
+      'Michael Shackleford, Wizard of Odds, “Introduction to the High-Low Card Counting Strategy”, section “How it Works”, tables “Illustrious 18” and “Fab 4 Surrenders” (from Don Schlesinger, Blackjack Attack, 2004 ed., p. 62, republished with permission)',
+    url: 'https://wizardofodds.com/games/blackjack/card-counting/high-low/',
+  },
   certified: { citation: 'Tableside certified blackjack coaching reference, indices_S17_final.csv and indices_H17_final.csv (frozen 2026-09-14, manifest 9892826d)', url: null },
   wizardTrue: {
     citation: 'Michael Shackleford, Wizard of Odds, “Introduction to the High-Low Card Counting Strategy”, section “How it Works”, step 3',
@@ -28,19 +32,10 @@ const SOURCE = {
   },
 } as const satisfies Record<string, LessonSource>;
 
-const step = (heading: string, paragraphs: readonly string[], extra: Pick<LessonStep, 'publishedNote' | 'source'> = {}): LessonStep => ({ heading, paragraphs, ...extra });
-const lesson = (id: string, title: string, summary: string, content: Omit<LessonContent, 'version' | 'materialVersion' | 'change'>): Lesson => ({
-  id,
-  title,
-  summary,
-  section: 'blackjack',
-  game: 'blackjack',
-  content: { version: 1, materialVersion: 1, change: null, ...content },
-});
 
-// Spec 3 Lessons and worked examples: "zero-threshold indices use the truncated true count"
-const THIRTEEN_V2 = playingDeviations('S17_LS').find((deviation) => deviation.situation === '13 vs 2');
-if (!THIRTEEN_V2 || THIRTEEN_V2.threshold !== 0) throw new Error('the conversion lesson expects 13 vs 2 to have an index of 0');
+// Spec 3 Lessons and worked examples (conversion lesson); Amendment 1 B2
+const THIRTEEN_V2 = publishedGaps('S17_LS').find((gap) => gap.deviation.situation === '13 vs 2');
+if (!THIRTEEN_V2 || THIRTEEN_V2.deviation.threshold !== 0) throw new Error('the conversion lesson expects 13 vs 2 to have an index of 0');
 
 const [FIRST_CHECKPOINT, SECOND_CHECKPOINT, THIRD_CHECKPOINT, LAST_CHECKPOINT] = RUNNING_COUNT_CONTENT.checkpoints;
 
@@ -130,34 +125,34 @@ export const CONVERSION_LESSON = lesson('true-count-conversion', 'True-count con
   steps: [
     step('Why convert', [
       'The true count is the running count per deck still to be dealt: the running count divided by the decks remaining. Tableside’s index plays and its bet schedule use the true count, never the running count on its own.',
-    ]),
+    ], { source: SOURCE.bjaTrue }),
     step('Estimate the decks remaining', [
-      'Judge the cards still in the shoe, not the discard tray, to the nearest half deck. When it’s exactly between two half decks, go up. Never use less than half a deck.',
+      'Judge the cards still in the shoe to the nearest half deck. When it’s exactly between two half decks, go up. Never use less than half a deck.',
       'So 130 cards left is 2½ decks, 117 cards (exactly between 2 and 2½) is 2½, and with only a few cards left you still divide by ½. At the table challenge Tableside shows you this number, worked out this way from the cards actually left; the conversion challenge gives it to you directly. This estimate is Tableside’s convention.',
     ]),
     step('Divide, then truncate toward zero', [
       'Divide the running count by the decks remaining and drop any fraction, toward zero. +7 with 2 decks left is +3.5, which becomes +3. −7 with 2 decks left is −3.5, which becomes −3, not −4.',
       'Truncating is Tableside’s convention, not rounding: −0.5 becomes 0, and +1.75 becomes +1.',
-    ], { source: SOURCE.bjaTrue }),
+    ]),
     step('Other sources round differently', [
       'Introductory examples elsewhere follow other conventions, or don’t say what to do with a fraction. Blackjack Apprenticeship’s example divides −7 by 2 decks and gets −3, which matches Tableside, but the page doesn’t say how to round a fraction or how finely to estimate the decks. Wizard of Odds says a rough estimate will do, and its example rounds 7 ÷ 4 = 1.75 up to 2 to keep it simple; Tableside’s convention gives +1 there.',
       'Tableside uses one convention everywhere, so the count you practice is the count you’re graded on.',
     ], { source: SOURCE.wizardTrue }),
     step('Why it matters at zero', [
-      `Some index plays have an index of 0. For hard 13 against a 2, Tableside teaches: ${indexRule(THIRTEEN_V2)}. With a running count of −1 and 2 decks left, −0.5 truncates to 0, so you stand. Rounding −0.5 to −1 would have you hit.`,
-      'Tableside worked out its own index plays under this convention. Together with its tie rule and teaching-continuation rule, that is why some of its index numbers differ from published charts. The differences come from how Tableside sets its own values, so they don’t make the published charts wrong; the Basic with deviations lesson lists them.',
-    ], { source: SOURCE.certified }),
+      `Some index plays have an index of 0. With the dealer standing on soft 17, Tableside teaches for hard 13 against a 2: ${indexRule(THIRTEEN_V2.deviation)}. With a running count of −1 and 2 decks left, −0.5 truncates to 0, so you stand. Rounding −0.5 to −1 would have you hit.`,
+      'Tableside worked out its own index plays under this convention. Together with its tie rule and teaching-continuation rule, that is why some of its index numbers differ from published charts; the Basic with deviations lesson lists them.',
+    ], { publishedNote: publishedNote(THIRTEEN_V2) }),
     step('The conversion challenge', [
       `The challenge asks ${CONVERSION_CONTENT.length} questions. Each gives a running count from −${CONVERSION_CONTENT.maxRunningCount} to +${CONVERSION_CONTENT.maxRunningCount} and the decks remaining, in half decks from ½ to ${CONVERSION_CONTENT.maxDecks}. Every set includes a zero count, both signs, a division that comes out exact, and fractions that need truncating each way.`,
-      'Learn explains each answer and lets you try again; Check shows how you did at the end. Only your first answer to each question is scored.',
+      'Learn explains each answer and lets you try again; Check shows how you did at the end. Only your first answer to each question is scored. The number of questions and their ranges are Tableside’s own practice settings.',
     ]),
   ],
   workedExample: CONVERSION_EXAMPLE,
   handoffs: [{ kind: 'learn-challenge', category: 'conversion' }],
-  sources: [SOURCE.bjaTrue, SOURCE.wizardTrue, SOURCE.certified],
+  sources: [SOURCE.bjaTrue, SOURCE.wizardTrue, SOURCE.schlesinger],
 });
 
-// Spec 3 Count checkpoints (table): the hole card counts only once it is turned over
+// Spec 3 Count checkpoints (table)
 const ROUND_ONE: TableRunningExplanation = {
   kind: 'table-running',
   round: 1,
@@ -195,8 +190,8 @@ export const TABLE_COUNTING_EXAMPLE: TableCountExample = {
 export const TABLE_COUNTING_LESSON = lesson('table-counting', 'Table counting', 'Count a live table: checkpoints, Observe and Play, assistance', {
   steps: [
     step('Counting at a table', [
-      `The table challenge deals ${TABLE_CONTENT.rounds} rounds of six-deck blackjack from a fresh shoe, starting at 0. You choose the rules, how deep into the shoe to deal, and up to four other players. Every card you can see counts, including the other players’ cards.`,
-      'The dealer’s face-down card counts only once it is turned over. A dealer who checks for blackjack and doesn’t have it tells you nothing about that card’s value.',
+      `The table challenge deals ${TABLE_CONTENT.rounds} rounds of six-deck blackjack from a fresh shoe, starting at 0. You choose the rules, how deep into the shoe to deal, and up to four other players; the ${TABLE_CONTENT.rounds} rounds and these choices are Tableside’s own practice settings. Every card you can see counts, including the other players’ cards.`,
+      'The dealer’s face-down card counts only once it is turned over. When the dealer checks for blackjack and doesn’t have it, the card still stays out of the count.',
     ], { source: SOURCE.bjaRunning }),
     step('Observe, and Play later', [
       'In Observe, a simulated player plays your seat at the table minimum and you only keep the count. Tableside suggests starting table counting here.',
@@ -204,7 +199,7 @@ export const TABLE_COUNTING_LESSON = lesson('table-counting', 'Table counting', 
     ]),
     step('Checkpoints and N', [
       'N sets how often you’re asked, from every round up to every 10 rounds. At N = 1 you enter the running and true count before each bet, and the running count after each round. Above 1, you enter both after every N rounds, and after the last rounds if they don’t make a full block.',
-      'For the true count, Tableside shows the decks remaining, estimated from the cards actually left in the shoe as in the conversion lesson. When the cut card is reached, the round finishes, the shoe is reshuffled and the count starts again at 0. This checkpoint schedule is Tableside’s own.',
+      'For the true count, Tableside shows the decks remaining, estimated from the cards actually left in the shoe as in the conversion lesson. When the cut card is reached, the round finishes, the shoe is reshuffled and the count starts again at 0. This checkpoint schedule and the reset are Tableside’s own.',
     ]),
     step('Show count and assistance', [
       'As in the running count challenge, the Show running count switch shows the count of the cards exposed so far. It starts hidden.',
@@ -218,5 +213,3 @@ export const TABLE_COUNTING_LESSON = lesson('table-counting', 'Table counting', 
   handoffs: [{ kind: 'learn-challenge', category: 'table' }],
   sources: [SOURCE.bjaRunning],
 });
-
-export const COUNTING_LESSONS: readonly Lesson[] = [CARD_VALUES_LESSON, RUNNING_COUNT_LESSON, CONVERSION_LESSON, TABLE_COUNTING_LESSON];

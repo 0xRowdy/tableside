@@ -8,18 +8,16 @@ import { signed } from '@/play/blackjack-text';
 import { fonts, palette, radius, space, textScale } from '@/theme/tokens';
 import {
   conversionExampleText,
-  DEALER_LABEL,
   GIVEN_DECKS,
   GIVEN_RUNNING_COUNT,
   ROUND_PROMPT,
   roundLead,
   RUNNING_COUNT_PROMPT,
   runningCountExampleText,
-  SEAT_LABEL,
   TRUE_COUNT_PROMPT,
 } from '@/training/blackjack-counting-example-text';
 import { decksText } from '@/training/blackjack-conversion-text';
-import { runningHeadline, tableRunningText } from '@/training/blackjack-table-text';
+import { DEALER, runningHeadline, tableRunningText, YOUR_SEAT } from '@/training/blackjack-table-text';
 import { spokenValue, type ChoiceState } from '@/training/challenge-text';
 
 export interface ScriptedAnswer {
@@ -118,8 +116,8 @@ function TableCount(props: Props<TableCountExample>) {
         {roundLead(explanation.round, explanation.before)}
       </Text>
       <View style={styles.table}>
-        <Hand label={DEALER_LABEL} cards={example.dealer} />
-        <Hand label={SEAT_LABEL} cards={example.seat} />
+        <Hand label={DEALER} cards={example.dealer} />
+        <Hand label={YOUR_SEAT} cards={example.seat} />
       </View>
       <Prompt text={ROUND_PROMPT} />
       <Choices choices={example.choices} {...props} />
@@ -134,12 +132,17 @@ export function BlackjackCountingExample(props: Props<CountingExample>) {
   return <TableCount {...props} example={example} />;
 }
 
-// Spec 3 Lessons › Structure (worked examples render engine-format explanation facts)
+// Spec 3 Lessons › Structure (worked examples)
 export function countingAnswer(example: CountingExample, picked: number): ScriptedAnswer {
-  const { note } = example.choices[picked]!.response;
-  if (example.kind === 'conversion') return { headline: conversionExampleText(example.choices[picked]!.response.explanation), detail: null, note };
-  if (example.kind === 'running-count') return { headline: runningCountExampleText(example.choices[picked]!.response.explanation), detail: null, note };
-  const explanation = example.choices[picked]!.response.explanation;
+  if (example.kind === 'conversion') {
+    const { explanation, note } = example.choices[picked]!.response;
+    return { headline: conversionExampleText(explanation), detail: null, note };
+  }
+  if (example.kind === 'running-count') {
+    const { explanation, note } = example.choices[picked]!.response;
+    return { headline: runningCountExampleText(explanation), detail: null, note };
+  }
+  const { explanation, note } = example.choices[picked]!.response;
   return { headline: runningHeadline(explanation.count), detail: tableRunningText(explanation, 'after-round'), note };
 }
 

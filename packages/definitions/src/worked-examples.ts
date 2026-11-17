@@ -15,7 +15,7 @@ import {
 } from '@tableside/engine';
 
 import { CARD_VALUES_CONTENT } from './challenges';
-import { countingExampleProblems, isPlayingCard, type CountingExample } from './counting-examples';
+import { answerText, countingExampleProblems, isPlayingCard, type CountingExample } from './counting-examples';
 import { strategyStepProblems, type StrategyStepExample } from './strategy-examples';
 
 export interface ScriptedResponse<Explanation> {
@@ -38,7 +38,6 @@ export interface CardValueExample {
 
 export type WorkedExample = CardValueExample | StrategyStepExample | CountingExample;
 
-const answerText = (answer: HiLoValue) => (answer > 0 ? `+${answer}` : String(answer));
 
 // Spec 1 Testing Decisions (fixed-scenario fixtures); #144
 const REPLAY_STREAM = { protocol: RANDOM_PROTOCOL_VERSION, key: [0, 0], session: [0, 0] } as const;

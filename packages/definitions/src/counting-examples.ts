@@ -50,15 +50,16 @@ export interface TableCountExample {
 
 export type CountingExample = ConversionExample | RunningCountExample | TableCountExample;
 
-export const COUNTING_EXAMPLE_KINDS: readonly CountingExample['kind'][] = ['conversion', 'running-count', 'table-count'];
-
 const SUITS: readonly string[] = ['clubs', 'diamonds', 'hearts', 'spades'];
 export const isPlayingCard = (card: ChallengeCard) => Number.isInteger(card.rank) && card.rank >= 1 && card.rank <= 13 && SUITS.includes(card.suit);
-const answerText = (answer: number) => (answer > 0 ? `+${answer}` : String(answer));
+export const answerText = (answer: number) => (answer > 0 ? `+${answer}` : String(answer));
 const SUIT_GLYPH: Readonly<Record<string, string>> = { clubs: '♣', diamonds: '♦', hearts: '♥', spades: '♠' };
 const RANK_GLYPH: Readonly<Record<number, string>> = { 1: 'A', 11: 'J', 12: 'Q', 13: 'K' };
 const cardText = (card: ChallengeCard) => `${RANK_GLYPH[card.rank] ?? String(card.rank)}${SUIT_GLYPH[card.suit] ?? '?'}`;
 const cardsText = (cards: readonly ChallengeCard[]) => cards.map(cardText).join(' ');
+const sameCards = (a: readonly ChallengeCard[], b: readonly ChallengeCard[]) => canonicalJson(a.map(({ rank, suit }) => ({ rank, suit }))) === canonicalJson(b.map(({ rank, suit }) => ({ rank, suit })));
+
+class UndealtRound extends Error {}
 
 // Spec 3 Challenge content › Conversion
 const RUNNING_LIMIT = CONVERSION_CONTENT.maxRunningCount;
@@ -133,8 +134,8 @@ function replayTable(example: TableCountExample, answer: number): LearnFeedback 
     if (prompt?.timing === 'after-round') {
       const seat = view.table.seats.find((candidate) => candidate.learner)?.hands.flatMap((hand) => hand.cards) ?? [];
       const dealer = view.table.dealer.cards.flatMap((card) => (card ? [card] : []));
-      if (cardsText(seat) !== cardsText(example.seat) || cardsText(dealer) !== cardsText(example.dealer)) {
-        throw new Error(`the table deals the seat ${cardsText(seat)} and the dealer ${cardsText(dealer)}, not the seat ${cardsText(example.seat)} and the dealer ${cardsText(example.dealer)}`);
+      if (!sameCards(seat, example.seat) || !sameCards(dealer, example.dealer)) {
+        throw new UndealtRound(`the table deals the seat ${cardsText(seat)} and the dealer ${cardsText(dealer)}, not the seat ${cardsText(example.seat)} and the dealer ${cardsText(example.dealer)}`);
       }
       return feedbackOf(readChallengeView(commit(state, { kind: 'answer', value: answer })));
     }
@@ -188,9 +189,8 @@ export function countingExampleProblems(example: CountingExample): readonly stri
     try {
       engine = replay(example, answer);
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      if (message.startsWith('the table deals')) return [`worked example: ${message}`];
-      problems.push(`${label}: does not replay through the engine: ${message}`);
+      if (error instanceof UndealtRound) return [`worked example: ${error.message}`];
+      problems.push(`${label}: does not replay through the engine: ${error instanceof Error ? error.message : String(error)}`);
       continue;
     }
     if (response.correct !== engine.correct) {
