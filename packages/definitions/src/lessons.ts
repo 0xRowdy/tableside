@@ -2,6 +2,7 @@
 import type { GameId, StrategyDefinition } from '@tableside/engine';
 
 import { BLACKJACK_MODES } from './blackjack/strategies';
+import { BASIC_STRATEGY, BASIC_WITH_DEVIATIONS, BET_SCHEDULE_LESSON, BLACKJACK_BASICS, COUNTING_WITH_BASIC, COUNTING_WITH_DEVIATIONS } from './lessons/blackjack';
 import { CATALOG_CATEGORIES, type CatalogCategory } from './challenges';
 import { CRAPS_STRATEGIES } from './craps-strategies';
 import { APP_ORIENTATION, BUILDING_A_STRATEGY } from './lessons/app-and-builder';
@@ -15,6 +16,16 @@ export type LessonSection = 'app' | 'blackjack' | 'craps' | 'roulette' | 'builde
 export interface LessonStep {
   readonly heading: string;
   readonly paragraphs: readonly string[];
+  // Spec 3 Amendment 1 B2; Amendment 2 §3 (lesson player); S3-12 l8pMS
+  readonly publishedNote?: PublishedNote;
+  // Spec 3 Lessons › Content requirements; Amendment 1 C11; Amendment 2 §3 (lesson player)
+  readonly source?: LessonSource;
+}
+
+// Spec 3 Amendment 1 B2; Amendment 2 §3 (lesson player); S3-12 l8pMS
+export interface PublishedNote {
+  readonly paragraphs: readonly string[];
+  readonly source: LessonSource;
 }
 
 // Spec 3 Lessons › Structure (Handoff)
@@ -60,16 +71,16 @@ const slot = (section: LessonSection, id: string, title: string): Lesson => ({ i
 // Spec 3 Lessons › Inventory, Amendment 1 B1
 export const LESSONS: readonly Lesson[] = [
   APP_ORIENTATION,
-  slot('blackjack', 'blackjack-basics', 'Blackjack basics'),
-  slot('blackjack', 'basic-strategy', 'Basic strategy'),
-  slot('blackjack', 'basic-with-deviations', 'Basic with deviations'),
-  slot('blackjack', 'counting-with-basic', 'Counting with basic'),
-  slot('blackjack', 'counting-with-deviations', 'Counting with deviations'),
+  BLACKJACK_BASICS,
+  BASIC_STRATEGY,
+  BASIC_WITH_DEVIATIONS,
+  COUNTING_WITH_BASIC,
+  COUNTING_WITH_DEVIATIONS,
   slot('blackjack', 'card-values', 'Card values'),
   slot('blackjack', 'running-count', 'Running count'),
   slot('blackjack', 'true-count-conversion', 'True-count conversion'),
   slot('blackjack', 'table-counting', 'Table counting'),
-  slot('blackjack', 'bet-schedule', 'Bet schedule'),
+  BET_SCHEDULE_LESSON,
   ...CRAPS_LESSONS,
   ...ROULETTE_LESSONS,
   BUILDING_A_STRATEGY,
@@ -84,6 +95,7 @@ export const CHALLENGE_LESSONS: Readonly<Record<CatalogCategory, string>> = {
 };
 
 const IDENTITY = /^[a-z0-9]+(-[a-z0-9]+)*$/;
+const sameSource = (a: LessonSource, b: LessonSource) => a.citation === b.citation && a.url === b.url;
 const isVersion = (value: number) => Number.isInteger(value) && value > 0;
 
 // Spec 3 Testing Decisions › Build-time check
@@ -107,6 +119,15 @@ export function lessonProblems(lessons: readonly Lesson[]): readonly string[] {
     content.steps.forEach((step, index) => {
       if (!step.heading.trim()) report(`step ${index + 1} has no heading`);
       if (!step.paragraphs.some((paragraph) => paragraph.trim())) report(`step ${index + 1} has no text`);
+      if (step.publishedNote && !step.publishedNote.paragraphs.some((paragraph) => paragraph.trim())) report(`step ${index + 1} has an empty note on the published value`);
+      if (step.publishedNote && step.source) report(`step ${index + 1} cites its source twice: a note on the published value carries the step's source`);
+      const cited = step.publishedNote?.source ?? step.source;
+      if (cited && !content.sources.some((source) => sameSource(source, cited))) report(`step ${index + 1} cites a source missing from the lesson’s sources`);
+    });
+    content.sources.forEach((source, index) => {
+      if (!source.citation.trim()) report(`source ${index + 1} has no citation`);
+      else if (source.url !== null && !source.url.startsWith('https://')) report(`source ${index + 1} is not an https link`);
+      else if (content.sources.slice(0, index).some((earlier) => sameSource(earlier, source))) report(`source ${index + 1} repeats an earlier one`);
     });
     if (content.workedExample) workedExampleProblems(content.workedExample, content.steps.length).forEach(report);
     const offered = new Set<string>();

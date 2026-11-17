@@ -9,7 +9,7 @@ import { formatUnits, halfUnits } from './units';
 export const cardShort = (card: Card) => `${cardRank(card)}${SUIT_GLYPH[card.suit]}`;
 
 
-const upName = (card: Card) => (card.rank === 1 ? 'an ace' : card.rank === 8 ? 'an 8' : `a ${cardValue(card)}`);
+export const upName = (card: Card) => (card.rank === 1 ? 'an ace' : card.rank === 8 ? 'an 8' : `a ${cardValue(card)}`);
 const upValue = (value: number) => (value === 1 ? 'A' : String(value));
 
 const IMPERATIVE: Record<PlayChoice, string> = {
@@ -123,6 +123,15 @@ function unavailableLine(play: PlayChoice, reason: 'rule' | 'balance', explanati
 const moveName = (correction: PlayCorrection) =>
   correction.actual.action === 'insure' && correction.actual.amount ? `insurance of ${formatUnits(correction.actual.amount)}` : PLAY_NOUN[correction.actual.action];
 
+// Spec 1 S1-05; Spec 3 Lessons › Structure (worked examples)
+export function playHeadline(strategyName: string, explanation: PlayExplanation): string {
+  const { situation, deviation } = explanation;
+  const play = explanation.prescribed.action;
+  if (situation.decision === 'insurance') return `${strategyName} ${play === 'insure' ? 'takes insurance' : 'declines insurance'}${deviation ? ' at this count' : ''}.`;
+  const atCount = deviation && deviation.side === (deviation.direction === 'deviate-at-or-above' ? 'at-or-above' : 'below');
+  return `${strategyName} ${verbPhrase(play, handWords(explanation))} against ${upName(situation.up)}${atCount ? ' at this count' : ''}.`;
+}
+
 export function playCorrectionCopy(strategyName: string, correction: PlayCorrection, rules: { dealer: 'S17' | 'H17'; lateSurrender: boolean }, countSupplied = true): CorrectionCopy {
   const { explanation } = correction;
   const { situation, deviation, cell } = explanation;
@@ -132,9 +141,7 @@ export function playCorrectionCopy(strategyName: string, correction: PlayCorrect
   const rulesName = `${rules.dealer}, ${rules.lateSurrender ? 'LS' : 'no LS'}`;
   const count = situation.count;
 
-  const headline = insurance
-    ? `${strategyName} ${play === 'insure' ? 'takes insurance' : 'declines insurance'}${deviation ? ' at this count' : ''}.`
-    : `${strategyName} ${verbPhrase(play, hand)} against ${upName(situation.up)}${deviation && deviation.side === (deviation.direction === 'deviate-at-or-above' ? 'at-or-above' : 'below') ? ' at this count' : ''}.`;
+  const headline = playHeadline(strategyName, explanation);
 
   const lines: string[] = [];
   const cards = situation.cards.map(cardShort).join(' ');

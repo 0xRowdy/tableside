@@ -30,6 +30,7 @@ export {
   type DomainFact,
   type BetCorrection,
   explainStrategyBets,
+  strategyPlay,
   isPlayCorrection,
   type CycleEnd,
   type CycleTurn,

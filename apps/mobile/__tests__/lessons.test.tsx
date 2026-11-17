@@ -2,7 +2,7 @@
 
 import { act, cleanup, fireEvent, screen, within } from '@testing-library/react-native';
 import { renderRouter } from 'expo-router/testing-library';
-import { Dimensions } from 'react-native';
+import { Dimensions, Linking } from 'react-native';
 
 import type { Lesson } from '@tableside/definitions';
 
@@ -105,8 +105,8 @@ describe('lessons', () => {
       'STRATEGY BUILDER · 1',
     ]);
     expect(button('App orientation. Not started · Tabs, help, practice vs casino records')).toBeEnabled();
-    expect(button('Blackjack basics. Not started')).toBeDisabled();
-    expect(button('Blackjack basics. Not started')).toHaveProp('accessibilityHint', 'Not available in this version yet.');
+    expect(button('Card values. Not started')).toBeDisabled();
+    expect(button('Card values. Not started')).toHaveProp('accessibilityHint', 'Not available in this version yet.');
     expect(button('Building a strategy. Not started · Conditions, amounts, conflicts, fallbacks, stopping')).toBeEnabled();
   });
 
@@ -190,6 +190,81 @@ describe('lessons', () => {
     await fireEvent.press(button('Restart lesson'));
     await screen.findByText('Step 1 of 5');
     expect(screen.queryByRole('header', { name: 'Completed (earlier version)' })).toBeNull();
+  });
+
+  // Spec 3 Amendment 1 B2, C11; Amendment 2 §3 (lesson player); #152
+  it('show a step’s note on our index against the published charts, with its source as a text link opened only on request', async () => {
+    const open = jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined);
+    const orientation = actualLessons()[0]!;
+    const source = { citation: 'Wizard of Odds, “High-Low Card Counting”, Illustrious 18 table', url: 'https://wizardofodds.com/games/blackjack/card-counting/high-low/' };
+    const [first, ...rest] = orientation.content!.steps;
+    servedLessons()[0] = {
+      ...orientation,
+      content: { ...orientation.content!, steps: [{ ...first!, publishedNote: { paragraphs: ['Tableside teaches standing at +1; the published chart uses 0.'], source } }, { ...rest[0]!, source }, ...rest.slice(1)], sources: [source] },
+    };
+    await openOrientation();
+    expect(screen.getByRole('header', { name: 'Our index vs published charts' })).toBeOnTheScreen();
+    expect(screen.getByText('Tableside teaches standing at +1; the published chart uses 0.')).toBeOnTheScreen();
+    const link = screen.getByRole('link', { name: 'Source: Wizard of Odds, “High-Low Card Counting”, Illustrious 18 table' });
+    expect(open).not.toHaveBeenCalled();
+    await fireEvent.press(link);
+    expect(open).toHaveBeenCalledWith('https://wizardofodds.com/games/blackjack/card-counting/high-low/');
+
+    const headings = orientation.content!.steps.map((step) => step.heading);
+    await fireEvent.press(button('Next'));
+    await header(headings[1]!);
+    expect(screen.queryByRole('header', { name: 'Our index vs published charts' })).toBeNull();
+    expect(screen.getByRole('link', { name: /^Source: Wizard of Odds/ })).toBeOnTheScreen();
+    await fireEvent.press(button('Next'));
+    await header(headings[2]!);
+    expect(screen.queryByRole('link')).toBeNull();
+    open.mockRestore();
+  });
+
+  // Spec 3 Lessons › Content requirements (deviation lessons); #152
+  it('open Basic with deviations at the step comparing our 16 vs 10 index with the published chart', async () => {
+    await openCatalog();
+    await fireEvent.press(button(/^Basic with deviations\. Not started/));
+    await header('Basic with deviations');
+    expect(screen.getByText('Lesson · Blackjack')).toBeOnTheScreen();
+    await fireEvent.press(button('Next'));
+    await header('The index plays');
+    await fireEvent.press(button('Next'));
+    expect(await header('When the count changes a decision')).toBeOnTheScreen();
+    expect(screen.getByText(/^Step 3 of \d+$/)).toBeOnTheScreen();
+    expect(screen.getByRole('header', { name: 'Our index vs published charts' })).toBeOnTheScreen();
+    expect(screen.getByText(/^For hard 16 against a 10, Tableside teaches: stand at \+1 or higher, otherwise hit\./)).toBeOnTheScreen();
+    expect(screen.getByRole('link', { name: /^Source: / })).toBeOnTheScreen();
+  });
+
+  // Spec 3 Lessons › Structure (worked examples); Amendment 1 B4; #152
+  it('replay a blackjack decision as a worked example: the hand, the count, the play and the engine’s explanation', async () => {
+    await openCatalog();
+    await fireEvent.press(button(/^Basic with deviations\. Not started/));
+    await header('Basic with deviations');
+    await fireEvent.press(button('Next'));
+    await header('The index plays');
+    await fireEvent.press(button('Next'));
+    await header('When the count changes a decision');
+    await fireEvent.press(button('Try the worked example (optional)'));
+    await header('Worked example');
+    expect(
+      screen.getByText('Round 1: 10 on your hand. Already out of the shoe: 2, 3, 4, 5, 6, 2, 3, 4. You have 9 and 7; the dealer shows a 10. Running count +7, 6 decks left: true count +1.'),
+    ).toBeOnTheScreen();
+    expect(screen.getByText('What’s the play here in basic with deviations?')).toBeOnTheScreen();
+
+    await fireEvent.press(button('Hit'));
+    expect(button('Hit')).toHaveProp('accessibilityValue', { text: 'Your pick' });
+    expect(button('Stand')).toHaveProp('accessibilityValue', { text: 'Correct' });
+    expect(within(screen.getByTestId('scripted-response')).getByText('Basic with deviations stands on 16 against a 10 at this count.')).toBeOnTheScreen();
+    expect(screen.getByText('Hitting is the basic play. The supplied true count is +1, which reaches the index, so you stand.')).toBeOnTheScreen();
+    const played = () => device.latest?.sound.played.map((play) => play.cue);
+    expect(played()).toEqual(['correction-offered']);
+    await fireEvent.press(button('Try it again'));
+    await fireEvent.press(button('Stand'));
+    expect(played()).toEqual(['correction-offered']);
+    await fireEvent.press(button('Continue'));
+    expect(await header('Plays that kick in when the count drops')).toBeOnTheScreen();
   });
 
   it('are silent: the Learning screen, catalog and lesson text play no cue or haptic', async () => {
