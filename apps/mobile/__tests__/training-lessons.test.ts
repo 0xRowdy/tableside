@@ -69,12 +69,18 @@ describe('the Training service lessons', () => {
       title: 'App orientation',
       summary: 'Tabs, help, practice vs casino records',
       section: 'app',
-      steps: 4,
+      steps: 5,
       access: 'available',
       status: { kind: 'not-started' },
     });
     expect(catalog.filter((entry) => entry.steps !== null).map((entry) => entry.id)).toEqual([
       ORIENTATION,
+      'craps-basics',
+      'pass-with-odds',
+      'flat-place-6-8',
+      'dont-pass-with-lay-odds',
+      'three-point-molly',
+      'press-and-collect-6-8',
       'roulette-basics',
       'flat-even-money',
       'fixed-two-dozen-coverage',
@@ -170,7 +176,7 @@ describe('the Training service lessons', () => {
       title: 'App orientation',
       summary: 'Tabs, help, practice vs casino records',
       section: 'app',
-      steps: 4,
+      steps: 5,
       access: 'available',
       status: { kind: 'completed' },
     });

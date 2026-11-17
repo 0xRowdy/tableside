@@ -5,6 +5,7 @@ import { BLACKJACK_MODES } from './blackjack/strategies';
 import { CATALOG_CATEGORIES, type CatalogCategory } from './challenges';
 import { CRAPS_STRATEGIES } from './craps-strategies';
 import { APP_ORIENTATION, BUILDING_A_STRATEGY } from './lessons/app-and-builder';
+import { CRAPS_LESSONS } from './lessons/craps';
 import { ROULETTE_LESSONS } from './lessons/roulette';
 import { ROULETTE_STRATEGIES } from './roulette-strategies';
 import { workedExampleProblems, type WorkedExample } from './worked-examples';
@@ -69,12 +70,7 @@ export const LESSONS: readonly Lesson[] = [
   slot('blackjack', 'true-count-conversion', 'True-count conversion'),
   slot('blackjack', 'table-counting', 'Table counting'),
   slot('blackjack', 'bet-schedule', 'Bet schedule'),
-  slot('craps', 'craps-basics', 'Craps basics'),
-  slot('craps', 'pass-with-odds', 'Pass with odds'),
-  slot('craps', 'flat-place-6-8', 'Flat place 6 and 8'),
-  slot('craps', 'dont-pass-with-lay-odds', "Don't pass with lay odds"),
-  slot('craps', 'three-point-molly', 'Three-point Molly (bounded)'),
-  slot('craps', 'press-and-collect-6-8', 'Press-and-collect 6 and 8 (capped)'),
+  ...CRAPS_LESSONS,
   ...ROULETTE_LESSONS,
   BUILDING_A_STRATEGY,
 ];

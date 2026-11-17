@@ -2,7 +2,7 @@ import type { ScriptedOutcome } from '@tableside/definitions';
 import { INSURANCE_TARGET, type BlackjackPermittedView, type CrapsPermittedView, type GameId, type PermittedView, type RoulettePermittedView, type StrategyView } from '@tableside/engine';
 
 import { statusText } from './blackjack-text';
-import { crapsStatus, crapsTargetName } from './craps-text';
+import { crapsStatus, crapsTargetName, rollSentence } from './craps-text';
 import { describePocket, STATUS, targetName } from './roulette-text';
 import type { TurnWord } from './strategy-text';
 
@@ -38,7 +38,7 @@ export const GAME_WORDS: Readonly<Record<GameId, GameWords>> = {
     noneCommitted: 'None between spins',
     noWagers: 'No wagers yet. Choose one above, set its stake, then spin.',
     status: (view) => STATUS[(view as RoulettePermittedView).phase],
-    scriptedOutcome: (outcome) => `The ball lands on ${describePocket(outcome.pocket)}.`,
+    scriptedOutcome: (outcome) => ('pocket' in outcome ? `The ball lands on ${describePocket(outcome.pocket)}.` : ''),
   },
   craps: {
     title: 'Craps',
@@ -54,8 +54,7 @@ export const GAME_WORDS: Readonly<Record<GameId, GameWords>> = {
     // TODO(spec 1 craps bet selector frame copy)
     noWagers: 'No wagers yet. Choose one above, set its stake, then roll.',
     status: (view) => crapsStatus(view as CrapsPermittedView),
-    // TODO(#154)
-    scriptedOutcome: () => '',
+    scriptedOutcome: (outcome) => ('dice' in outcome ? rollSentence(outcome.dice) : ''),
   },
   blackjack: {
     title: 'Blackjack',
