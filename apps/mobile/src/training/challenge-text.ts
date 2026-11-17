@@ -1,9 +1,10 @@
-// Spec 3 S3-01 to S3-09; S5-17 j3UhJ; #158, #132, #150, #133, #134
+// Spec 3 S3-01 to S3-09; S5-17 j3UhJ; #158, #132, #150, #133, #134, #137
 
 import { runningCountDrift, type AssistanceClass, type ChallengeCategory, type ChallengeEntry, type ChallengeMetric, type ChallengeVariant, type ChallengeView, type ConversionReview, type CountRange, type HiLoExplanation, type HiLoValue, type LearnFeedback, type MetricResult, type ReviewFact, type RunningCountReview } from '@tableside/engine';
 
 import { cardName, rankName, signed } from '@/play/blackjack-text';
 import { conversionText, decksText } from '@/training/blackjack-conversion-text';
+import { completedRounds, RETRY_WITH_NEW_SHOE, runningHeadline, tableCheckpointTitle, tableRunningText } from '@/training/blackjack-table-text';
 import { GAME_WORDS } from '@/play/game-words';
 
 import type { ChallengeAllowance } from './allowance';
@@ -150,6 +151,7 @@ export function feedbackText(feedback: LearnFeedback, position: number): { reado
     const answer = signed(explanation.trueCount);
     return { kicker: CONVERSION_KICKER, headline: feedback.correct ? `${answer} is right.` : `The true count is ${answer}.`, detail: conversionText(explanation) };
   }
+  if (explanation.kind === 'table-running') return { kicker, headline: runningHeadline(explanation.count), detail: tableRunningText(explanation, 'block') };
   if (explanation.kind === 'running-count') {
     return {
       kicker,
@@ -269,11 +271,21 @@ export const COMPLETED: Record<ChallengeVariant, { readonly title: string; reado
 };
 
 // Spec 3 S3-08 cX5Gc
-export function completedText(groupKey: { readonly variant: ChallengeVariant; readonly assistanceClass: AssistanceClass }, assistanceStep: number | null) {
-  if (groupKey.assistanceClass !== 'assisted-check') return COMPLETED[groupKey.variant];
+export function completedText(
+  groupKey: { readonly variant: ChallengeVariant; readonly assistanceClass: AssistanceClass; readonly category?: ChallengeCategory; readonly length?: number },
+  assistanceStep: number | null,
+) {
+  // Spec 3 S3-08 e5MASr
+  const table = groupKey.category === 'table' && groupKey.length !== undefined;
+  const rounds = (title: string) => (table ? title.replace('Completed · ', `Completed · ${completedRounds(groupKey.length as number)} · `) : title);
+  if (groupKey.assistanceClass !== 'assisted-check') {
+    const completed = COMPLETED[groupKey.variant];
+    return { ...completed, title: rounds(completed.title) };
+  }
+  const when = assistanceStep === null || table ? '' : ` at card ${assistanceStep}`;
   return {
-    title: 'Completed · assisted',
-    detail: `You showed the running count${assistanceStep === null ? '' : ` at card ${assistanceStep}`}, which marks the whole attempt assisted. It's compared only with other assisted attempts at these settings.`,
+    title: rounds('Completed · assisted'),
+    detail: `You showed the running count${when}, which marks the whole attempt assisted. It's compared only with other assisted attempts at these settings.`,
     note: null,
   };
 }
@@ -285,14 +297,22 @@ export const ASSISTED_NOTE = {
 
 export const resultsNote = (variant: ChallengeVariant, allowance: AllowanceCopy | undefined) => [COMPLETED[variant].note, allowance?.results].filter(Boolean).join(' ');
 export const SCORES_LABEL = 'SKILL SCORES · FIRST ANSWERS';
-export const REVIEW_LABEL: Record<ChallengeCategory, string> = { 'card-values': 'Review cards', 'running-count': 'Review checkpoints', conversion: 'Review questions' };
+export const REVIEW_LABEL: Record<ChallengeCategory, string> = { 'card-values': 'Review cards', 'running-count': 'Review checkpoints', conversion: 'Review questions', table: 'Review checkpoints' };
 // TODO(#135)
-export const RETRY_LABEL: Record<ChallengeCategory, string> = { 'card-values': 'Retry with new cards', 'running-count': 'Retry with a new shuffle', conversion: 'Retry with new questions' };
+export const RETRY_LABEL: Record<ChallengeCategory, string> = {
+  'card-values': 'Retry with new cards',
+  'running-count': 'Retry with a new shuffle',
+  conversion: 'Retry with new questions',
+  table: RETRY_WITH_NEW_SHOE,
+};
 
-export const RESULT_ROWS: readonly { readonly metric: ChallengeMetric; readonly title: string; readonly tested: (total: number, variant: ChallengeVariant) => string }[] = [
+const checkpoints = (total: number) => `${total} ${total === 1 ? 'checkpoint' : 'checkpoints'}`;
+
+export const RESULT_ROWS: readonly { readonly metric: ChallengeMetric; readonly title: string; readonly tested: (total: number, variant: ChallengeVariant, category: ChallengeCategory) => string }[] = [
   { metric: 'card-values', title: 'Card values', tested: (total) => `${total} cards` },
-  { metric: 'running-count', title: 'Running count', tested: (total, variant) => (variant === 'check' ? `${total} ${total === 1 ? 'checkpoint' : 'checkpoints'}` : `${total} cards`) },
-  { metric: 'true-count', title: 'True count', tested: (total) => `${total} questions` },
+  { metric: 'running-count', title: 'Running count', tested: (total, variant, category) => (variant === 'check' || category === 'table' ? checkpoints(total) : `${total} cards`) },
+  // Spec 3 S3-08 e5MASr, Amendment 2 §3
+  { metric: 'true-count', title: 'True count', tested: (total, _variant, category) => (category === 'table' ? checkpoints(total) : `${total} questions`) },
 ];
 
 // Spec 3 S3-08 cX5Gc
@@ -305,7 +325,7 @@ export const scoreText = (result: MetricResult | null) => (result ? `${result.co
 export const spokenScore = (result: MetricResult | null) => (result ? `${result.correct} of ${result.total}` : 'N/A');
 
 // Spec 3 S3-09 h0MsKr, BjuKf; Scoring and review › Review facts
-export const REVIEW_TITLE: Record<ChallengeCategory, string> = { 'card-values': 'Card review', 'running-count': 'Checkpoint review', conversion: 'Question review' };
+export const REVIEW_TITLE: Record<ChallengeCategory, string> = { 'card-values': 'Card review', 'running-count': 'Checkpoint review', conversion: 'Question review', table: 'Checkpoint review' };
 export const YOU_LABEL = 'You';
 export const CORRECT_LABEL = 'Correct';
 export const ERROR_LABEL = 'Error';
@@ -341,6 +361,11 @@ export function reviewText(fact: ReviewFact, variant: ChallengeVariant): ReviewR
     return { ...shared, title: `Card ${fact.position} · ${cardName(fact.card)}`, error: null, label: `Card ${fact.position}, ${cardName(fact.card)}: ${spokenEntry}, correct ${spokenValue(reference)}, ${spoken(off)}` };
   }
   if (fact.kind === 'conversion') return questionText(fact, shared, `${spokenEntry}, correct ${spokenValue(reference)}`, spoken(off));
+  if (fact.kind === 'table') {
+    const title = tableCheckpointTitle(fact);
+    const error = fact.error === null ? '—' : signed(fact.error);
+    return { ...shared, title, error, label: `${title}: ${spokenEntry}, correct ${spokenValue(reference)}${fact.error === null ? '' : `, error ${spokenValue(fact.error)}`}, ${spoken(off)}` };
+  }
   return checkpointText(fact, variant, shared, `${spokenEntry}, correct ${spokenValue(reference)}`, spoken(off));
 }
 

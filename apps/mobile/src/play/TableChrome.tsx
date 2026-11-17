@@ -87,15 +87,26 @@ export function PhaseStepper({ steps }: { steps: readonly PhaseStep[] }) {
 
 export function SessionStrip({ balance, onTable, status }: { balance: string; onTable: string; status: string }) {
   return (
+    <StatStrip
+      stats={[
+        { label: 'SESSION BALANCE', spoken: 'Session balance', value: balance },
+        { label: 'ON TABLE', spoken: 'On table', value: onTable },
+      ]}
+      status={status}
+    />
+  );
+}
+
+// Spec 3 S3-07 v82z3
+export function StatStrip({ stats, status }: { stats: readonly { readonly label: string; readonly spoken: string; readonly value: string }[]; status: string }) {
+  return (
     <View style={styles.strip}>
-      <View accessible accessibilityLabel={`Session balance ${balance}`} style={styles.stat}>
-        <Text maxFontSizeMultiplier={textScale.body} style={styles.statLabel}>SESSION BALANCE</Text>
-        <Text maxFontSizeMultiplier={textScale.body} style={styles.statValue}>{balance}</Text>
-      </View>
-      <View accessible accessibilityLabel={`On table ${onTable}`} style={styles.stat}>
-        <Text maxFontSizeMultiplier={textScale.body} style={styles.statLabel}>ON TABLE</Text>
-        <Text maxFontSizeMultiplier={textScale.body} style={styles.statValue}>{onTable}</Text>
-      </View>
+      {stats.map((stat) => (
+        <View key={stat.label} accessible accessibilityLabel={`${stat.spoken} ${stat.value}`} style={styles.stat}>
+          <Text maxFontSizeMultiplier={textScale.body} style={styles.statLabel}>{stat.label}</Text>
+          <Text maxFontSizeMultiplier={textScale.body} style={styles.statValue}>{stat.value}</Text>
+        </View>
+      ))}
       <View accessible accessibilityLabel={`Status ${status}`} style={styles.statusTag}>
         <Text maxFontSizeMultiplier={textScale.body} style={styles.statusText}>{status}</Text>
       </View>

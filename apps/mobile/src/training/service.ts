@@ -1,8 +1,12 @@
-// Spec 3 Modules › Training service; Training service interface; #158, #132, #133, #134
+// Spec 3 Modules › Training service; Training service interface; #158, #132, #133, #134, #137
 
 import {
+  BLACKJACK_PRESETS,
   CATALOG_CATEGORIES,
   CHALLENGE_CONTENT,
+  DEFAULT_TABLE_SETUP,
+  observeSetup,
+  type TableOptions,
   HINTS,
   LESSONS,
   type Hint,
@@ -16,7 +20,7 @@ import {
   type LessonStep,
   type WorkedExample,
 } from '@tableside/definitions';
-import { CHALLENGE_VARIANTS, type ChallengeAttemptRecord, type ChallengeCategory, type ChallengeVariant } from '@tableside/engine';
+import { CHALLENGE_VARIANTS, MAX_CHECKPOINT_INTERVAL, MAX_OTHER_PLAYERS, PENETRATIONS, type ChallengeAttemptRecord, type ChallengeCategory, type ChallengeGroupKey, type ChallengeVariant } from '@tableside/engine';
 
 import type { TrainingAdapters } from './adapters';
 import type { ChallengeAllowance } from './allowance';
@@ -38,12 +42,13 @@ export interface CatalogEntry {
 export interface ChallengeSetup {
   readonly category: CatalogCategory;
   readonly variant: ChallengeVariant;
+  // Spec 3 User stories 27
+  readonly table?: TableOptions;
 }
 
-export interface SetupDiagnostic {
-  readonly field: 'category' | 'variant';
-  readonly problem: 'unknown' | 'not-ready';
-}
+export type { TableOptions };
+
+export type SetupDiagnostic = { readonly field: 'category' | 'variant'; readonly problem: 'unknown' | 'not-ready' } | { readonly field: 'table'; readonly problem: 'invalid' };
 
 export interface SetupValidation {
   readonly valid: boolean;
@@ -60,14 +65,44 @@ const READY: Readonly<Partial<Record<CatalogCategory, readonly ChallengeVariant[
   'card-values': ['learn', 'check'],
   'running-count': ['learn', 'check'],
   conversion: ['learn', 'check'],
+  table: ['learn', 'check'],
 };
+
+// Spec 3 Challenge content › Table; S3-02 ZreSb
+function isTableOptions(value: unknown): value is TableOptions {
+  if (typeof value !== 'object' || value === null) return false;
+  const options = value as Record<string, unknown>;
+  const whole = (n: unknown, min: number, max: number) => Number.isInteger(n) && (n as number) >= min && (n as number) <= max;
+  return (
+    Object.keys(options).length === 5 &&
+    options.seat === 'observe' &&
+    BLACKJACK_PRESETS.includes(options.preset as TableOptions['preset']) &&
+    PENETRATIONS.includes(options.penetration as number) &&
+    whole(options.extraPlayers, 0, MAX_OTHER_PLAYERS) &&
+    whole(options.interval, 1, MAX_CHECKPOINT_INTERVAL)
+  );
+}
+
+const withOptions = (setup: { readonly category: CatalogCategory; readonly variant: ChallengeVariant }, table: unknown): ChallengeSetup =>
+  setup.category === 'table' && isTableOptions(table) ? { ...setup, table } : setup;
+
+// Spec 3 Training service interface › Results: Retry keeps the attempt's settings
+export function retrySetup(groupKey: ChallengeGroupKey): ChallengeSetup {
+  const { category, variant, table } = groupKey;
+  if (!table) return { category, variant };
+  const preset = `${table.dealer}_${table.lateSurrender ? 'LS' : 'noLS'}` as const;
+  return { category, variant, table: { seat: 'observe', preset, penetration: table.penetration, extraPlayers: table.extraPlayers, interval: table.checkpointInterval } };
+}
 
 // Spec 3 Amendment 1 C7
 export const LAST_SETUP = 'challenge.last-setup';
 
 export function setupFor(entry: CatalogEntry, preferred: readonly (ChallengeSetup | null | undefined)[]): ChallengeSetup {
   const fits = preferred.find((setup) => setup?.category === entry.category && entry.ready.includes(setup.variant));
-  return fits ?? { category: entry.category, variant: entry.ready[0] ?? 'learn' };
+  const chosen = fits ?? { category: entry.category, variant: entry.ready[0] ?? 'learn' };
+  if (entry.category !== 'table' || chosen.table) return chosen;
+  const remembered = preferred.find((setup) => setup?.category === 'table' && setup.table)?.table;
+  return { ...chosen, table: remembered ?? DEFAULT_TABLE_SETUP };
 }
 
 // Spec 3 Training service interface › List catalog, Lesson progress; #143
@@ -153,7 +188,7 @@ export class TrainingService {
     return SUGGESTED_ORDER.map((category) => ({ category, available: true, ready: READY[category] ?? [] }));
   }
 
-  validateSetup(setup: { readonly category: unknown; readonly variant: unknown }): SetupValidation {
+  validateSetup(setup: { readonly category: unknown; readonly variant: unknown; readonly table?: unknown }): SetupValidation {
     const diagnostics: SetupDiagnostic[] = [];
     const known = isCatalogCategory(setup.category);
     if (!known) diagnostics.push({ field: 'category', problem: 'unknown' });
@@ -162,6 +197,7 @@ export class TrainingService {
     else if (known && diagnostics.length === 0 && !READY[setup.category as CatalogCategory]?.includes(setup.variant as ChallengeVariant)) {
       diagnostics.push({ field: 'variant', problem: 'not-ready' });
     }
+    if (setup.category === 'table' && !isTableOptions(setup.table)) diagnostics.push({ field: 'table', problem: 'invalid' });
     return { valid: diagnostics.length === 0, diagnostics };
   }
 
@@ -172,8 +208,10 @@ export class TrainingService {
       return this.refresh();
     }
     this.diagnostics = null;
-    await this.adapters.store.writePreference(LAST_SETUP, JSON.stringify({ category: setup.category, variant: setup.variant })).catch(() => undefined);
-    await this.challenges.start(setup.variant, CHALLENGE_CONTENT[setup.category as ChallengeCategory]);
+    const remembered = withOptions(setup, setup.table);
+    await this.adapters.store.writePreference(LAST_SETUP, JSON.stringify(remembered)).catch(() => undefined);
+    const table = remembered.table ? observeSetup(remembered.table) : undefined;
+    await this.challenges.start(setup.variant, CHALLENGE_CONTENT[setup.category as ChallengeCategory], table);
   }
 
   submit(command: LearnerCommand): Promise<void> {
@@ -208,7 +246,8 @@ export class TrainingService {
     if (text === null) return null;
     try {
       const value = JSON.parse(text) as Partial<ChallengeSetup>;
-      return isCatalogCategory(value.category) && CHALLENGE_VARIANTS.includes(value.variant as ChallengeVariant) ? { category: value.category, variant: value.variant as ChallengeVariant } : null;
+      if (!isCatalogCategory(value.category) || !CHALLENGE_VARIANTS.includes(value.variant as ChallengeVariant)) return null;
+      return withOptions({ category: value.category, variant: value.variant as ChallengeVariant }, value.table);
     } catch {
       return null;
     }

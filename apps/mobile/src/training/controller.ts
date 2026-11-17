@@ -1,5 +1,5 @@
 // Spec 3 Modules › Training service › Challenge controller
-// Spec 3 Attempt lifecycle; Amendment 1 C6; #158, #132, #133
+// Spec 3 Attempt lifecycle; Amendment 1 C6; #158, #132, #133, #137
 
 import {
   advanceChallenge,
@@ -16,6 +16,7 @@ import {
   type ChallengeState,
   type ChallengeVariant,
   type ChallengeView,
+  type TableSetup,
 } from '@tableside/engine';
 
 import type { AccessDenial } from '../practice/adapters';
@@ -75,7 +76,7 @@ export class ChallengeController {
   }
 
   // Spec 3 Training service interface › Start attempt
-  async start(variant: ChallengeVariant, content: ChallengeContent): Promise<void> {
+  async start(variant: ChallengeVariant, content: ChallengeContent, table?: TableSetup): Promise<void> {
     await this.exclusive(async () => {
       let stored: StoredAttempt | null;
       try {
@@ -104,7 +105,7 @@ export class ChallengeController {
 
       const attemptId = this.adapters.newId();
       const random = streamIdentityFromEntropy(this.adapters.entropy);
-      const specification = { attemptId, owner: this.adapters.owner, device: this.adapters.device, variant, content };
+      const specification = { attemptId, owner: this.adapters.owner, device: this.adapters.device, variant, content, ...(table ? { table } : {}) };
       const initial = createChallenge(specification, random);
       const created = { attemptId, admission, specification, random, checkpoint: encodeChallengeCheckpoint(initial), createdAt: this.adapters.clock.now() };
       let attempt: StoredAttempt | null;

@@ -1,4 +1,4 @@
-// Spec 3 S3-04 qdnQm, S3-05 EDnGd, S3-06 C53yTW, zAatf, Qv1An; #132, #133, #134, #146
+// Spec 3 S3-04 qdnQm, S3-05 EDnGd, S3-06 C53yTW, zAatf, Qv1An, S3-07; #132, #133, #134, #146, #137
 
 import type { HintId } from '@tableside/definitions';
 import type { ChallengeCategory, ChallengeEntry, ChallengeView, ConversionItem, CountRange, LearnFeedback } from '@tableside/engine';
@@ -15,6 +15,7 @@ import { SaveFailedBanner } from '@/play/TableChrome';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/theme/tokens';
 import { CountAid } from './CountAid';
 import { CountEntry } from './CountEntry';
+import { TableExercise } from './TableExercise';
 import { decksText } from '@/training/blackjack-conversion-text';
 import {
   CARD_PROMPT,
@@ -77,6 +78,7 @@ export function ChallengeExercise({
   const answering = view.legalCommands.includes('answer') && ready;
   const feedback = view.variant === 'learn' ? view.feedback : null;
   const entered = view.variant === 'check' ? view.entered : null;
+  if (view.table) return <TableExercise view={view} table={view.table} busy={busy} saveFailed={saveFailed} onCommand={onCommand} onInputRejected={onInputRejected} onRetrySave={onRetrySave} />;
   return (
     <ScrollView style={styles.screen} contentContainerStyle={{ paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right, paddingBottom: space[6] }}>
       <View style={styles.header}>

@@ -1,4 +1,4 @@
-// Spec 3 Screens; Lessons › Entry points, Structure; #158, #132, #145, #133, #134, #146
+// Spec 3 Screens; Lessons › Entry points, Structure; #158, #132, #145, #133, #134, #146, #137
 import { CHALLENGE_LESSONS } from '@tableside/definitions';
 import { CHALLENGE_VARIANTS, type ChallengeVariant } from '@tableside/engine';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
@@ -15,7 +15,7 @@ import { useLoaded } from '@/hooks/use-loaded';
 import { ScreenHints } from '@/lessons/FirstUseHints';
 import { lessonHref } from '@/lessons/routes';
 import { allowanceCopy, COUNTING_TITLE, FINDING_ATTEMPT } from '@/training/challenge-text';
-import { setupFor, type ChallengeSetup, type TrainingService, type TrainingSnapshot } from '@/training/service';
+import { retrySetup, setupFor, type ChallengeSetup, type TrainingService, type TrainingSnapshot } from '@/training/service';
 import { useLessons, useTraining } from '@/training/TrainingProvider';
 
 const lastSetupOf = (service: TrainingService) => service.lastSetup();
@@ -72,9 +72,9 @@ export default function Counting() {
           onReview={() => setReviewing(snapshot.record.attemptId)}
           allowance={allowance}
           onRetry={() => {
-            const { category: retried, variant } = snapshot.record.groupKey;
+            const retried = retrySetup(snapshot.record.groupKey);
             service.dismissResults();
-            void service.startAttempt({ category: retried, variant });
+            void service.startAttempt(retried);
           }}
         />
       );

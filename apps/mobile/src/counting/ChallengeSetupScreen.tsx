@@ -1,4 +1,4 @@
-// Spec 3 S3-02 buD2R, ZreSb, Amendment 4 §2–3; Lessons › Entry points; #158, #150, #145
+// Spec 3 S3-02 buD2R, ZreSb, Amendment 4 §2–3; Lessons › Entry points; #158, #150, #145, #137
 
 import { CHALLENGE_VARIANTS, type ChallengeVariant } from '@tableside/engine';
 import { BookOpen, Check, CircleAlert, Play } from 'lucide-react-native';
@@ -27,6 +27,7 @@ import { LEARN_THIS_SKILL, learnThisSkillDetail } from '@/training/lesson-text';
 import type { CatalogEntry, ChallengeSetup, LessonEntry, StartProblem } from '@/training/service';
 
 import { AllowanceBanner } from './AllowanceBanner';
+import { TableSetupOptions } from './TableSetupOptions';
 
 export function ChallengeSetupScreen({
   entry,
@@ -73,6 +74,7 @@ export function ChallengeSetupScreen({
           {VARIANT_HELP}
         </Text>
       </View>
+      {setup.table && <TableSetupOptions options={setup.table} onChange={(table) => onChange({ ...setup, table })} />}
       {WHAT_YOU_DO[entry.category] && (
         <View style={styles.section}>
           <Text maxFontSizeMultiplier={textScale.body} style={styles.label}>

@@ -84,7 +84,7 @@ export function ChallengeResults({ record, allowance, onRetry, onReview }: { rec
         <View style={styles.group}>
           {resultRows(record.metrics).map((row, index) => {
             const result = record.metrics[row.metric];
-            const detail = result ? row.tested(result.total, groupKey.variant) : NOT_TESTED;
+            const detail = result ? row.tested(result.total, groupKey.variant, groupKey.category) : NOT_TESTED;
             const Icon = ROW_ICON[row.metric];
             return (
               <View key={row.metric} accessible accessibilityLabel={`${row.title}, ${detail}: ${spokenScore(result)}`} style={[styles.row, index > 0 && styles.rowDivider]}>
