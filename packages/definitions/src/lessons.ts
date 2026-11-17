@@ -1,5 +1,7 @@
-// Spec 3 Modules › Definitions package; Lessons and worked examples (#48); Amendment 1 B1, C10; #143
+// Spec 3 Modules › Definitions package; Lessons and worked examples (#48); Amendment 1 B1, C10; #143, #144
 import type { GameId } from '@tableside/engine';
+
+import { workedExampleProblems, type WorkedExample } from './worked-examples';
 
 export type LessonSection = 'app' | 'blackjack' | 'craps' | 'roulette' | 'builder';
 
@@ -20,8 +22,7 @@ export interface LessonContent {
   readonly materialVersion: number;
   readonly change: string | null;
   readonly steps: readonly LessonStep[];
-  // TODO(#144)
-  readonly workedExample: null;
+  readonly workedExample: WorkedExample | null;
   // TODO(#145)
   readonly handoffs: readonly [];
   readonly sources: readonly LessonSource[];
@@ -140,6 +141,7 @@ export function lessonProblems(lessons: readonly Lesson[]): readonly string[] {
       if (!step.heading.trim()) report(`step ${index + 1} has no heading`);
       if (!step.paragraphs.some((paragraph) => paragraph.trim())) report(`step ${index + 1} has no text`);
     });
+    if (content.workedExample) workedExampleProblems(content.workedExample, content.steps.length).forEach(report);
   }
   return problems;
 }
