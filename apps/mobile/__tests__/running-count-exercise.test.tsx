@@ -17,7 +17,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { ChallengeExercise } from '@/counting/ChallengeExercise';
 import type { LearnerCommand } from '@/training/service';
-import { HI_LO_BY_RANK } from '@/training/testing/hi-lo';
+import { cardOf, HI_LO_BY_RANK } from '@/training/testing/hi-lo';
 import {
   expectIndistinguishable,
   expectNoFeedbackColors,
@@ -42,7 +42,7 @@ function attempt(variant: ChallengeVariant, n: number, commands: readonly Challe
   return state;
 }
 
-const countAfter = (state: ChallengeState, cards: number) => state.items.slice(0, cards).reduce((count, item) => count + HI_LO_BY_RANK[item.card.rank]!, 0);
+const countAfter = (state: ChallengeState, cards: number) => state.items.slice(0, cards).reduce((count, item) => count + HI_LO_BY_RANK[cardOf(item).rank]!, 0);
 
 let events: AccessibilityEvents;
 let sent: LearnerCommand[];
@@ -184,7 +184,7 @@ describe('the running-count exercise', () => {
     expect(sent).toEqual([{ kind: 'reveal-count' }]);
 
     const first = attempt('learn', 1);
-    const card = first.items[0]!.card;
+    const card = cardOf(first.items[0]);
     const value = HI_LO_BY_RANK[card.rank]!;
     const wrong = value === 1 ? 0 : 1;
     await present(readChallengeView(attempt('learn', 1, [{ kind: 'answer', value: wrong }])));

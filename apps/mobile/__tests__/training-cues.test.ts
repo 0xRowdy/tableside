@@ -10,9 +10,9 @@ import { FakeClock, entropyFromWords, PI_WORDS } from '@/practice/testing/substi
 import { plentyAllowance } from '@/training/allowance';
 import { MemoryTrainingStore } from '@/training/memory-store';
 import { TrainingService, type TrainingSnapshot } from '@/training/service';
-import { HI_LO_BY_RANK } from '@/training/testing/hi-lo';
+import { cardOf, HI_LO_BY_RANK } from '@/training/testing/hi-lo';
 
-const reference = (view: ChallengeView) => HI_LO_BY_RANK[view.item!.card.rank]!;
+const reference = (view: ChallengeView) => HI_LO_BY_RANK[cardOf(view.item).rank]!;
 const wrongFor = (view: ChallengeView) => (reference(view) === 1 ? -1 : 1);
 
 async function setup(variant: ChallengeVariant, store = new MemoryTrainingStore(), quarantine: QuarantineList = EMPTY_QUARANTINE_LIST) {

@@ -1,5 +1,5 @@
-// Spec 3 Modules › Definitions package; Challenge content (from #4); #158, #133
-import type { CardValuesContent, ChallengeCategory, ChallengeContent, RunningCountContent } from '@tableside/engine';
+// Spec 3 Modules › Definitions package; Challenge content (from #4); #158, #133, #134
+import type { CardValuesContent, ChallengeCategory, ChallengeContent, ConversionContent, RunningCountContent } from '@tableside/engine';
 
 import { BLACKJACK_REFERENCE_IDENTITY } from './blackjack/strategies';
 
@@ -16,7 +16,14 @@ export const RUNNING_COUNT_CONTENT: RunningCountContent = {
   reference: BLACKJACK_REFERENCE_IDENTITY,
 };
 
-export const CHALLENGE_CONTENT: Readonly<Record<ChallengeCategory, ChallengeContent>> = { 'card-values': CARD_VALUES_CONTENT, 'running-count': RUNNING_COUNT_CONTENT };
+// Spec 3 Challenge content › Conversion
+export const CONVERSION_CONTENT: ConversionContent = { category: 'conversion', id: 'conversion', version: 1, length: 10, maxRunningCount: 20, maxDecks: 6 };
+
+export const CHALLENGE_CONTENT: Readonly<Record<ChallengeCategory, ChallengeContent>> = {
+  'card-values': CARD_VALUES_CONTENT,
+  'running-count': RUNNING_COUNT_CONTENT,
+  conversion: CONVERSION_CONTENT,
+};
 // Spec 3 Challenge content (from #4), Recommendations; #145
 export const CATALOG_CATEGORIES = ['card-values', 'running-count', 'conversion', 'table'] as const;
 export type CatalogCategory = (typeof CATALOG_CATEGORIES)[number];

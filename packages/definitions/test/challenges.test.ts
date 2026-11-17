@@ -1,4 +1,4 @@
-// Spec 3 Challenge content (from #4); #158, #133
+// Spec 3 Challenge content (from #4); #158, #133, #134
 import { contentProblem, createChallenge, advanceChallenge, RANDOM_PROTOCOL_VERSION } from '@tableside/engine';
 import { describe, expect, it } from 'vitest';
 
@@ -19,6 +19,10 @@ describe('challenge content definitions', () => {
       checkpoints: [13, 26, 39, 52],
       reference: BLACKJACK_REFERENCE_IDENTITY,
     });
+  });
+
+  it('include conversion: 10 questions, running counts within ±20 and decks remaining up to 6, with no blackjack reference pinned', () => {
+    expect(CHALLENGE_CONTENT.conversion).toEqual({ category: 'conversion', id: 'conversion', version: 1, length: 10, maxRunningCount: 20, maxDecks: 6 });
   });
 
   it('are each accepted by the engine and generate their length', () => {

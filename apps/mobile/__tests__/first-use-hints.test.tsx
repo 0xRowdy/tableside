@@ -23,7 +23,7 @@ import { FakeClock, entropyFromWords, PI_WORDS } from '@/practice/testing/substi
 import { plentyAllowance } from '@/training/allowance';
 import { MemoryTrainingStore } from '@/training/memory-store';
 import { TrainingService, type LearnerCommand } from '@/training/service';
-import { HI_LO_BY_RANK } from '@/training/testing/hi-lo';
+import { cardOf, HI_LO_BY_RANK } from '@/training/testing/hi-lo';
 import {
   expectIndistinguishable,
   expectNoFeedbackColors,
@@ -37,8 +37,8 @@ const seed = (n: number) => ({ protocol: RANDOM_PROTOCOL_VERSION, key: [n, 0x9e3
 const NEXT: ChallengeCommand = { kind: 'next-item' };
 const nexts = (count: number) => Array.from({ length: count }, () => NEXT);
 
-function attempt(commands: readonly ChallengeCommand[], n = 1): ChallengeState {
-  let state = createChallenge({ attemptId: 'attempt-1', owner: 'local', device: 'test-device', variant: 'check', content: CHALLENGE_CONTENT['running-count'] }, seed(n));
+function attempt(commands: readonly ChallengeCommand[], n = 1, category: 'running-count' | 'conversion' = 'running-count', variant: 'learn' | 'check' = 'check'): ChallengeState {
+  let state = createChallenge({ attemptId: 'attempt-1', owner: 'local', device: 'test-device', variant, content: CHALLENGE_CONTENT[category] }, seed(n));
   for (const command of [{ kind: 'begin' } as const, ...commands]) {
     const result = advanceChallenge(state, { sequence: state.sequence, commandId: `c-${state.sequence}`, command });
     if (result.status !== 'committed') throw new Error(`refused ${JSON.stringify(command)}`);
@@ -52,7 +52,7 @@ function seedWhere(test: (n: number) => boolean): number {
   throw new Error('no seed');
 }
 
-const countAfter = (state: ChallengeState, cards: number) => state.items.slice(0, cards).reduce((count, item) => count + HI_LO_BY_RANK[item.card.rank]!, 0);
+const countAfter = (state: ChallengeState, cards: number) => state.items.slice(0, cards).reduce((count, item) => count + HI_LO_BY_RANK[cardOf(item).rank]!, 0);
 
 let store: MemoryTrainingStore;
 let events: AccessibilityEvents;
@@ -206,6 +206,29 @@ describe('first-use hints on the running-count exercise', () => {
     const asking = presentedScreen(screen.toJSON() as never, events, { mask: ['challenge-card'] });
     expectNoFeedbackColors(asking);
     expectNotPresented(asking, ['Correct', 'Wrong', 'reference', 'Reference']);
+  });
+});
+
+// #134
+describe('the count-entry hint on the true-count exercise (S3-06 zAatf)', () => {
+  it('is the screen’s only hint, shown above the true-count entry while a question is asked', async () => {
+    const question = readChallengeView(attempt([], 1, 'conversion'));
+    expect(exerciseHints(question)).toEqual(['count-entry']);
+    await mount(exerciseHints(question), exercise(question));
+    expect(screen.getByTestId('first-use-hint-count-entry')).toHaveTextContent(`NEW HERE · COUNT ENTRY${HINTS['count-entry'].text}Reread from Help (?)Got it`);
+    expect(screen.queryByTestId('first-use-hint-show-count')).toBeNull();
+    for (const key of ['1', 'Submit', 'Skip']) expect(screen.getByRole('button', { name: key })).toBeEnabled();
+    await press('Got it, hide the Count entry hint');
+    expect(screen.queryByTestId('first-use-hint-count-entry')).toBeNull();
+    await press('Help');
+    expect(screen.getByTestId('first-use-hint-count-entry')).toBeOnTheScreen();
+  });
+
+  it('is not shown while Learn explains the answer', async () => {
+    const explained = readChallengeView(attempt([{ kind: 'answer', value: 0 }], 1, 'conversion', 'learn'));
+    await mount(exerciseHints(explained), exercise(explained));
+    expect(screen.getByTestId('coach-note')).toBeOnTheScreen();
+    expect(screen.queryByTestId('first-use-hint-count-entry')).toBeNull();
   });
 });
 

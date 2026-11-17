@@ -5,17 +5,22 @@ import {
   createActivity,
   explainStrategyBets,
   RANDOM_PROTOCOL_VERSION,
+  ODDS_CAPS,
   type ActivityState,
   type Command,
+  type CrapsActivityState,
   type DomainFact,
   type Explanation,
   type GameId,
+  type OddsCap,
   type RouletteActivityState,
   type RoulettePocket,
   type StrategyDefinition,
   type Wager,
 } from '@tableside/engine';
 
+import { CRAPS_STRATEGIES } from './craps-strategies';
+import { standardCraps } from './craps';
 import { ROULETTE_PRESETS } from './roulette';
 import { ROULETTE_STRATEGIES } from './roulette-strategies';
 import type { ScriptedChoice } from './worked-examples';
@@ -25,8 +30,7 @@ export interface ScriptedTurn {
   readonly outcome: ScriptedOutcome;
 }
 
-// TODO(#154)
-export type ScriptedOutcome = { readonly pocket: RoulettePocket };
+export type ScriptedOutcome = { readonly pocket: RoulettePocket } | { readonly dice: readonly [number, number] };
 
 // TODO(#152)
 export interface StrategyBetsAnswer {
@@ -75,12 +79,29 @@ const ROULETTE_STAGE: Stage = {
   },
   stack: (state, outcome) => {
     const roulette = state as RouletteActivityState;
-    if (!roulette.outcome) throw new Error('no spin to stack');
+    if (!roulette.outcome || !('pocket' in outcome)) throw new Error('no spin to stack a pocket on');
     return { ...roulette, outcome: { ...roulette.outcome, pocket: outcome.pocket } };
   },
 };
 
-const STAGES: Partial<Record<GameId, Stage>> = { roulette: ROULETTE_STAGE };
+// #154
+const CRAPS_STAGE: Stage = {
+  strategies: CRAPS_STRATEGIES,
+  start: (example, definition) => {
+    if (!ODDS_CAPS.includes(example.table as OddsCap)) throw new Error(`${example.table} is not a craps odds cap`);
+    return createActivity(
+      { ...identity, game: 'craps', rules: standardCraps(example.table as OddsCap), strategy: { definition, parameters: example.parameters }, reference: null, fundingSource: 'practice-funding', funding: example.practiceFunding },
+      REPLAY_STREAM,
+    );
+  },
+  stack: (state, outcome) => {
+    const craps = state as CrapsActivityState;
+    if (!craps.outcome || !('dice' in outcome)) throw new Error('no roll to stack dice on');
+    return { ...craps, outcome: { ...craps.outcome, dice: outcome.dice } };
+  },
+};
+
+const STAGES: Partial<Record<GameId, Stage>> = { roulette: ROULETTE_STAGE, craps: CRAPS_STAGE };
 
 function send(state: ActivityState, command: Command): { state: ActivityState; facts: readonly DomainFact[] } {
   const result = advanceActivity(state, { sequence: state.sequence, commandId: `replay-${state.sequence}`, command });

@@ -7,7 +7,7 @@ import { plentyAllowance } from '@/training/allowance';
 import { RECORDED_MS } from '@/training/controller';
 import { MemoryTrainingStore } from '@/training/memory-store';
 import { TrainingService, type ChallengeSetup, type TrainingSnapshot } from '@/training/service';
-import { HI_LO_BY_RANK } from '@/training/testing/hi-lo';
+import { cardOf, HI_LO_BY_RANK } from '@/training/testing/hi-lo';
 import { attemptTransition, chargeFor, newAttempt } from '@/training/testing/store-contract';
 
 const LEARN_CARD_VALUES = { category: 'card-values', variant: 'learn' } as const;
@@ -39,7 +39,7 @@ function active(snapshot: TrainingSnapshot) {
 
 const viewOf = (service: TrainingService): ChallengeView => active(service.snapshot()).view;
 
-const reference = (view: ChallengeView) => HI_LO_BY_RANK[view.item!.card.rank]!;
+const reference = (view: ChallengeView) => HI_LO_BY_RANK[cardOf(view.item).rank]!;
 
 async function started(setupOf: ChallengeSetup, options: Parameters<typeof setup>[0] = {}) {
   const harness = setup(options);
@@ -312,13 +312,13 @@ describe('challenge attempt lifecycle', () => {
       const firstCards: string[] = [];
       for (let guard = 0; guard < 100 && service.snapshot().status === 'active'; guard++) {
         const view = viewOf(service);
-        if (view.phase === 'question') firstCards.push(`${view.item!.card.rank}${view.item!.card.suit}`);
+        if (view.phase === 'question') firstCards.push(`${cardOf(view.item).rank}${cardOf(view.item).suit}`);
         await service.submit(view.phase === 'question' ? { kind: 'answer', value: reference(view) } : { kind: 'next-item' });
       }
       await service.retry();
       const retried = viewOf(service);
       expect([retried.attemptId, retried.position, retried.variant, admissions.length]).toEqual(['attempt-2', 1, 'learn', 2]);
-      expect(`${retried.item!.card.rank}${retried.item!.card.suit}`).not.toBe(firstCards[0]);
+      expect(`${cardOf(retried.item).rank}${cardOf(retried.item).suit}`).not.toBe(firstCards[0]);
       expect((await store.loadAttempt('attempt-2'))?.charge?.effect.effectId.activity).toBe('attempt-2');
     });
 

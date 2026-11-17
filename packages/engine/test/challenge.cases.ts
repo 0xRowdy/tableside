@@ -3,7 +3,7 @@ import type { TestCase } from '@tableside/harness';
 
 import { advanceChallenge, canonicalJson, challengeAttemptRecord, challengeResults, ENGINE_VERSION, createChallenge, decodeChallengeCheckpoint, encodeChallengeCheckpoint, readChallengeView, unusableAttemptRecord, type ChallengeState } from '../src';
 
-import { ANSWER, begun, CHECK, checkView, LEARN, learnView, NEXT, RETRY, run, seed, SKIP, step } from './challenge.fixtures';
+import { ANSWER, begun, cardItems, CHECK, checkView, LEARN, learnView, NEXT, RETRY, run, seed, SKIP, step } from './challenge.fixtures';
 import { throws } from './fixtures';
 import { expectCheckViewHides, revealingFields } from './information-hiding';
 
@@ -14,7 +14,7 @@ const SEED_1_HI_LO = [1, 0, -1, 1, 0, 1, -1, 1, 1, -1, -1, 0, 1, 1, 1, -1, 0, 0,
 const RANKS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13];
 const SUITS = ['clubs', 'diamonds', 'hearts', 'spades'];
 
-const cards = (state: ChallengeState) => state.items.map((item) => `${item.card.rank}${item.card.suit[0]}`);
+const cards = (state: ChallengeState) => cardItems(state).map((item) => `${item.card.rank}${item.card.suit[0]}`);
 
 export const challengeCases: TestCase[] = [
   {
@@ -32,7 +32,7 @@ export const challengeCases: TestCase[] = [
       const suitsSeen = new Set<string>();
       for (let n = 0; n < 300; n++) {
         const state = begun(LEARN, seed(n));
-        const items = state.items;
+        const items = cardItems(state);
         t.equal([n, items.length], [n, 20]);
         t.equal([n, [...new Set(items.map((item) => item.card.rank))].sort((a, b) => a - b)], [n, RANKS]);
         for (const item of items) {
@@ -145,7 +145,7 @@ export const challengeCases: TestCase[] = [
         [
           tampered((v) => (v.position = 5)),
           tampered((v) => ((v.items as { card: { rank: number } }[])[0]!.card.rank = 13)),
-          tampered((v) => (v.schema = 10)),
+          tampered((v) => (v.schema = (v.schema as number) + 1)),
           tampered((v) => ((v.identities as { engine: string }).engine = '99.0.0')),
           decodeChallengeCheckpoint('{').ok ? 'ok' : 'damaged',
         ],
@@ -337,7 +337,7 @@ export const challengeCases: TestCase[] = [
         for (const state of states) {
           const others: ChallengeState = {
             ...state,
-            items: state.items.map((item, index) => (index === state.position ? item : { card: { rank: item.card.rank === 13 ? 1 : 13, suit: 'spades' } })),
+            items: cardItems(state).map((item, index) => (index === state.position ? item : { card: { rank: item.card.rank === 13 ? 1 : 13, suit: 'spades' } })),
           };
           t.equal([spec.variant, readChallengeView(others)], [spec.variant, readChallengeView(state)]);
         }

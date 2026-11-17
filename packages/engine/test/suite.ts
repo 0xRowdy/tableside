@@ -7,6 +7,7 @@ import { blackjackGuidedCases } from './blackjack-guided.cases';
 import { blackjackTableCases } from './blackjack-table.cases';
 import { challengeCases } from './challenge.cases';
 import { compatibilityCases } from './compatibility.cases';
+import { conversionCases } from './conversion.cases';
 import { countingCases } from './counting.cases';
 import { crapsCases } from './craps.cases';
 import { crapsMenuCases } from './craps-menu.cases';
@@ -55,5 +56,6 @@ export const engineSuite: Suite = {
     ...standardizedCases,
     ...challengeCases,
     ...runningCountCases,
+    ...conversionCases,
   ],
 };

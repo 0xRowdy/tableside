@@ -1,6 +1,6 @@
-// Spec 3 S3-09 h0MsKr, BjuKf; Scoring and review › Review facts, Attribution; #132, #133
+// Spec 3 S3-09 h0MsKr, BjuKf; Scoring and review › Review facts, Attribution; #132, #133, #134
 
-import type { ChallengeAttemptRecord } from '@tableside/engine';
+import { CATEGORY_METRIC, type ChallengeAttemptRecord } from '@tableside/engine';
 import { BookOpen, CircleCheckBig, CircleX, SkipForward, TrendingUp } from 'lucide-react-native';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -48,7 +48,7 @@ export function CardReview({
     <ScrollView style={styles.screen} contentContainerStyle={{ paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right, paddingBottom: space[6] }}>
       <SetupHeader
         title={REVIEW_TITLE[groupKey.category]}
-        subtitle={`${CATEGORY_TEXT[groupKey.category].title} · ${variantLabel(groupKey.variant)} · ${scoreText(record.metrics[groupKey.category])}`}
+        subtitle={`${CATEGORY_TEXT[groupKey.category].title} · ${variantLabel(groupKey.variant)} · ${scoreText(record.metrics[CATEGORY_METRIC[groupKey.category]])}`}
         backTo={RESULTS_TITLE}
         onBack={onBack}
       />
