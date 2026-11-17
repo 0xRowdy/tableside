@@ -35,6 +35,16 @@ describe('screen-reader speech', () => {
     expect(speech.speaking()).toBe(false);
   });
 
+  it('on iOS, an announcement VoiceOver dropped still counts as unheard, so the card is not passed over', async () => {
+    const accessibility = fakeAccessibility(true);
+    const time = 0;
+    const speech = screenReaderSpeech('ios', () => time);
+    await flush();
+    speech.announce('7 of hearts');
+    accessibility.emit('announcementFinished', { announcement: '7 of hearts', success: false });
+    expect(speech.speaking()).toBe(true);
+  });
+
   it('on Android, is speaking for about as long as TalkBack takes to read the words', async () => {
     fakeAccessibility(true);
     let time = 0;

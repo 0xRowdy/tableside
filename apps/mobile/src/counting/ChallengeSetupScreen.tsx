@@ -14,9 +14,10 @@ import {
   CATEGORY_TEXT,
   COUNTING_TITLE,
   NOT_READY_HINT,
+  PACE_GROUP,
   PACE_HELP,
   PACE_LABEL,
-  PACE_OPTION,
+  paceOption,
   START_PROBLEM,
   startLabel,
   startWaits,
@@ -31,7 +32,7 @@ import {
   type AllowanceCopy,
 } from '@/training/challenge-text';
 import { LEARN_THIS_SKILL, learnThisSkillDetail } from '@/training/lesson-text';
-import type { CatalogEntry, ChallengeSetup, LessonEntry, StartProblem } from '@/training/service';
+import { pacingOf, type CatalogEntry, type ChallengeSetup, type LessonEntry, type StartProblem } from '@/training/service';
 
 import { AllowanceBanner } from './AllowanceBanner';
 
@@ -85,19 +86,19 @@ export function ChallengeSetupScreen({
           <Text maxFontSizeMultiplier={textScale.body} style={styles.label}>
             {PACE_LABEL}
           </Text>
-          <View accessibilityRole="radiogroup" accessibilityLabel="Card pace" style={styles.segmented}>
+          <View accessibilityRole="radiogroup" accessibilityLabel={PACE_GROUP} style={styles.segmented}>
             {entry.pacings.map((pacing) => (
               <Segment
                 key={pacing}
-                label={PACE_OPTION[pacing].label}
-                spoken={PACE_OPTION[pacing].spoken}
-                selected={(setup.pacing ?? 'self-paced') === pacing}
+                label={paceOption(pacing).label}
+                spoken={paceOption(pacing).spoken}
+                selected={pacingOf(setup) === pacing}
                 disabled={false}
                 onPress={() => onChange({ ...setup, pacing })}
               />
             ))}
           </View>
-          {(setup.pacing ?? 'self-paced') !== 'self-paced' && (
+          {pacingOf(setup) !== 'self-paced' && (
             <Text maxFontSizeMultiplier={textScale.body} style={styles.help}>
               {PACE_HELP}
             </Text>

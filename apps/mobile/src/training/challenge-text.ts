@@ -7,7 +7,7 @@ import { conversionText, decksText } from '@/training/blackjack-conversion-text'
 import { GAME_WORDS } from '@/play/game-words';
 
 import type { ChallengeAllowance } from './allowance';
-import type { AttemptHold } from './controller';
+import { PACE_SECONDS, type AttemptHold } from './controller';
 import type { CatalogCategory, StartProblem } from './service';
 
 export const CATEGORY_TEXT: Record<CatalogCategory, { readonly title: string; readonly description: string }> = {
@@ -120,17 +120,16 @@ export const variantLabel = (variant: ChallengeVariant) => (variant === 'learn' 
 
 // Spec 3 S3-02 buD2R, S3-04 qmDou, S3-05 qGARl; Attempt lifecycle › Automatic pacing; #136
 export const PACE_LABEL = 'CARD PACE';
-export const PACE_OPTION: Record<ChallengePacing, { readonly label: string; readonly spoken: string }> = {
-  'self-paced': { label: 'Self-paced', spoken: 'Self-paced' },
-  '3s': { label: '3 s', spoken: '3 seconds' },
-  '2s': { label: '2 s', spoken: '2 seconds' },
-  '1s': { label: '1 s', spoken: '1 second' },
-};
+export const PACE_GROUP = 'Card pace';
+export function paceOption(pacing: ChallengePacing): { readonly label: string; readonly spoken: string } {
+  const seconds = PACE_SECONDS[pacing];
+  if (seconds === null) return { label: 'Self-paced', spoken: 'Self-paced' };
+  return { label: `${seconds} s`, spoken: `${seconds} ${seconds === 1 ? 'second' : 'seconds'}` };
+}
 export const PACE_HELP = "Cards advance on their own and pause whenever a count is due. There's no answer deadline.";
-export const pacingLabel = (pacing: ChallengePacing) => (pacing === 'self-paced' ? 'self-paced' : `${PACE_OPTION[pacing].label} pace`);
+export const pacingLabel = (pacing: ChallengePacing) => (PACE_SECONDS[pacing] === null ? 'self-paced' : `${paceOption(pacing).label} pace`);
 export const PACE_WAITING = 'Paused for your answer · no deadline';
 export const screenReaderName = (platform: string) => (platform === 'ios' ? 'VoiceOver' : 'TalkBack');
-const paceSeconds = (pacing: ChallengePacing) => PACE_OPTION[pacing].label.replace(' s', '');
 
 export const progressText = (position: number, length: number) => `Card ${position} of ${length}`;
 
@@ -426,7 +425,8 @@ export interface HoldContext {
 export function holdText(hold: AttemptHold, { variant, position, pacing, reader }: HoldContext): { readonly title: string; readonly lead: string; readonly notes: readonly string[] } {
   // Spec 3 S3-05 qGARl; #136
   if (hold.kind === 'auto-paused') {
-    const pace = pacing === 'self-paced' ? 'pace' : `${paceSeconds(pacing)}-second pace`;
+    const seconds = PACE_SECONDS[pacing];
+    const pace = seconds === null ? 'pace' : `${seconds}-second pace`;
     return {
       title: "Paused so you don't miss a card",
       lead: `${reader} was still reading card ${position} when card ${position + 1} was due, so the attempt paused. No card was skipped, and the ${pace} won't change.`,

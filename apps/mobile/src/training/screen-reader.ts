@@ -18,8 +18,8 @@ export function screenReaderSpeech(platform: typeof Platform.OS = Platform.OS, n
     enabled = on;
     if (!on) pending = null;
   });
-  AccessibilityInfo.addEventListener('announcementFinished', ({ announcement }: { announcement: string }) => {
-    if (pending?.message === announcement) pending = null;
+  AccessibilityInfo.addEventListener('announcementFinished', ({ announcement, success }: { announcement: string; success: boolean }) => {
+    if (success && pending?.message === announcement) pending = null;
   });
   return {
     announce(message) {

@@ -170,7 +170,7 @@ export class TrainingService {
       diagnostics.push({ field: 'variant', problem: 'not-ready' });
     }
     // Spec 3 Attempt lifecycle › Automatic pacing; #136
-    const pacing = setup.pacing ?? 'self-paced';
+    const pacing = pacingOf(setup);
     if (!CHALLENGE_PACINGS.includes(pacing as ChallengePacing)) diagnostics.push({ field: 'pacing', problem: 'unknown' });
     else if (known && !pacingsOf(setup.category as CatalogCategory).includes(pacing as ChallengePacing)) diagnostics.push({ field: 'pacing', problem: 'not-ready' });
     return { valid: diagnostics.length === 0, diagnostics };
@@ -184,7 +184,7 @@ export class TrainingService {
     }
     this.diagnostics = null;
     await this.adapters.store.writePreference(LAST_SETUP, JSON.stringify(rememberedSetup(setup))).catch(() => undefined);
-    await this.challenges.start(setup.variant, CHALLENGE_CONTENT[setup.category as ChallengeCategory], { timed: setup.timed === true, pacing: setup.pacing ?? 'self-paced' });
+    await this.challenges.start(setup.variant, CHALLENGE_CONTENT[setup.category as ChallengeCategory], { timed: setup.timed === true, pacing: pacingOf(setup) });
   }
 
   submit(command: LearnerCommand): Promise<void> {
@@ -378,6 +378,8 @@ const rememberedSetup = ({ category, variant, timed, pacing }: ChallengeSetup): 
 });
 
 // Spec 3 Attempt lifecycle › Automatic pacing; #136
+export const pacingOf = <T>(setup: { readonly pacing?: T }): T | 'self-paced' => setup.pacing ?? 'self-paced';
+
 const pacingsOf = (category: CatalogCategory): readonly ChallengePacing[] =>
   CHALLENGE_PACINGS.filter((pacing) => pacingApplies(category, pacing));
 

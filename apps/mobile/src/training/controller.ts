@@ -33,7 +33,7 @@ export type StartProblem = 'invalid-setup' | 'access-denied' | 'access-uncertain
 export const RECORDED_MS = 800;
 
 // Spec 3 Attempt lifecycle › Automatic pacing; S3-02 buD2R; #136
-export const PACE_MS: Readonly<Record<ChallengePacing, number | null>> = { 'self-paced': null, '3s': 3000, '2s': 2000, '1s': 1000 };
+export const PACE_SECONDS: Readonly<Record<ChallengePacing, number | null>> = { 'self-paced': null, '3s': 3, '2s': 2, '1s': 1 };
 
 export type LearnerCommand = Extract<ChallengeCommand, { readonly kind: 'answer' | 'skip' | 'retry-item' | 'next-item' | 'reveal-count' }>;
 
@@ -534,14 +534,14 @@ export class ChallengeController {
   // Spec 3 Attempt lifecycle › Automatic pacing; #133 handoff
   private armPace(): void {
     const state = this.state;
-    const ms = PACE_MS[this.attemptLifecycle.pacing];
-    if (!state || ms === null || state.phase !== 'card' || this.hold || this.pending) return;
+    const seconds = PACE_SECONDS[this.attemptLifecycle.pacing];
+    if (!state || seconds === null || state.phase !== 'card' || this.hold || this.pending) return;
     const card = `${state.attempt.id}/${state.position}`;
     if (this.paceArmed?.card === card) return;
     const token = ++this.paceTokens;
     this.paceArmed = { card, token };
     void this.adapters.clock
-      .sleep(ms)
+      .sleep(seconds * 1000)
       .then(() => this.paceDue(token))
       .catch(() => undefined);
   }
