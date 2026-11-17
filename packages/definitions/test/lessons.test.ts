@@ -3,8 +3,6 @@ import { describe, expect, it } from 'vitest';
 
 import { APP_ORIENTATION, CATALOG_CATEGORIES, CHALLENGE_LESSONS, LESSONS, lessonProblems, type Lesson, type LessonHandoff } from '../src';
 
-const authored = (lesson: Lesson) => lesson.content !== null;
-
 describe('lesson definitions', () => {
   it('list 24 lesson slots: 1 app, 10 blackjack, 6 standard craps, 6 roulette, 1 builder', () => {
     expect(LESSONS.map((lesson) => [lesson.section, lesson.title])).toEqual([
@@ -40,14 +38,6 @@ describe('lesson definitions', () => {
     expect(new Set(LESSONS.filter((lesson) => lesson.section === 'craps').map((lesson) => lesson.game))).toEqual(new Set(['craps']));
   });
 
-  it('author App orientation at version 1 (navigation, help, practice vs casino records), with no material change yet; roulette is covered in roulette-lessons.test.ts', () => {
-    expect(LESSONS.filter(authored).filter((lesson) => lesson.section !== 'roulette').map((lesson) => lesson.id)).toEqual(['app-orientation']);
-    const orientation = LESSONS[0]!;
-    expect(orientation.summary).toBe('Tabs, help, practice vs casino records');
-    expect(orientation.content).toMatchObject({ version: 1, materialVersion: 1, change: null, workedExample: null, handoffs: [], sources: [] });
-    expect(orientation.content?.steps.map((step) => step.heading)).toEqual(['Find your way around', 'Help when you need it', 'Practice records and casino records', 'Lessons at your own pace']);
-  });
-
   it('pass build-time validation', () => {
     expect(lessonProblems(LESSONS)).toEqual([]);
   });
@@ -64,8 +54,8 @@ describe('lesson definitions', () => {
   });
 
   describe('validation reports', () => {
-    const orientation = LESSONS[0]!;
-    const content = orientation.content!;
+    const content = { ...LESSONS[0]!.content!, handoffs: [] };
+    const orientation: Lesson = { ...LESSONS[0]!, content };
 
     it('duplicate and malformed identities', () => {
       expect(lessonProblems([orientation, orientation, { ...orientation, id: 'App Orientation' }])).toEqual([

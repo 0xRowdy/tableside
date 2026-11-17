@@ -1,4 +1,4 @@
-// Spec 3 Screens; Lessons › Entry points, Structure (Handoff); #158, #132, #145
+// Spec 3 Screens; Lessons › Entry points, Structure (Handoff); #158, #132, #145, #133
 import { CHALLENGE_LESSONS } from '@tableside/definitions';
 import { CHALLENGE_VARIANTS, type ChallengeVariant } from '@tableside/engine';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
@@ -10,6 +10,7 @@ import { ChallengeExercise } from '@/counting/ChallengeExercise';
 import { ChallengeResults } from '@/counting/ChallengeResults';
 import { ChallengeSetupScreen } from '@/counting/ChallengeSetupScreen';
 import { CountingHome } from '@/counting/CountingHome';
+import { useFeedback } from '@/feedback/FeedbackProvider';
 import { useLoaded } from '@/hooks/use-loaded';
 import { lessonHref } from '@/lessons/routes';
 import { allowanceCopy, COUNTING_TITLE, FINDING_ATTEMPT } from '@/training/challenge-text';
@@ -21,6 +22,7 @@ const allowanceOf = async (service: TrainingService, _reloadOnStatus: TrainingSn
 
 export default function Counting() {
   const { service, snapshot } = useTraining();
+  const feedback = useFeedback();
   const { category, variant } = useLocalSearchParams<{ category?: string; variant?: string }>();
   const { lessons } = useLessons();
   const remembered = useLoaded(lastSetupOf, service);
@@ -47,11 +49,18 @@ export default function Counting() {
           busy={snapshot.busy}
           saveFailed={snapshot.save === 'failed'}
           onCommand={(command) => void service.submit(command)}
+          // Spec 3 Learn, Check and assistance › Malformed input: cue 9
+          onInputRejected={() => feedback.cue('input-rejected')}
           onRetrySave={() => void service.retrySave()}
         />
       );
     case 'ended':
-      if (reviewing === snapshot.record.attemptId) return <CardReview record={snapshot.record} onBack={() => setReviewing(null)} />;
+      if (reviewing === snapshot.record.attemptId) return <CardReview
+            record={snapshot.record}
+            lesson={lessons?.find((lesson) => lesson.id === CHALLENGE_LESSONS[snapshot.record.groupKey.category])}
+            onOpenLesson={openLesson}
+            onBack={() => setReviewing(null)}
+          />;
       return (
         <ChallengeResults
           record={snapshot.record}

@@ -1,4 +1,4 @@
-// Spec 3 Challenge content, Learn, Check and assistance, Scoring and review; #158, #132
+// Spec 3 Challenge content, Learn, Check and assistance, Scoring and review; #158, #132, #133
 import type { TestCase } from '@tableside/harness';
 
 import { advanceChallenge, canonicalJson, challengeAttemptRecord, challengeResults, ENGINE_VERSION, createChallenge, decodeChallengeCheckpoint, encodeChallengeCheckpoint, readChallengeView, type ChallengeState } from '../src';
@@ -145,7 +145,7 @@ export const challengeCases: TestCase[] = [
         [
           tampered((v) => (v.position = 5)),
           tampered((v) => ((v.items as { card: { rank: number } }[])[0]!.card.rank = 13)),
-          tampered((v) => (v.schema = 9)),
+          tampered((v) => (v.schema = 10)),
           tampered((v) => ((v.identities as { engine: string }).engine = '99.0.0')),
           decodeChallengeCheckpoint('{').ok ? 'ok' : 'damaged',
         ],
@@ -252,6 +252,9 @@ export const challengeCases: TestCase[] = [
         position: 1,
         item: { card: { rank: 5, suit: 'diamonds' } },
         choices: [1, 0, -1],
+        countRange: null,
+        checkpoints: null,
+        countAid: null,
         entered: -1,
         assisted: false,
         results: null,

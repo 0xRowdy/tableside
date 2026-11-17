@@ -20,6 +20,7 @@ import { moneyCases } from './money.cases';
 import { randomCases } from './random.cases';
 import { recordCases } from './record.cases';
 import { rouletteCases } from './roulette.cases';
+import { runningCountCases } from './running-count.cases';
 import { runtimeCases } from './runtime.cases';
 import { standardizedCases } from './standardized.cases';
 import { strategyCases } from './strategy.cases';
@@ -53,5 +54,6 @@ export const engineSuite: Suite = {
     ...compatibilityCases,
     ...standardizedCases,
     ...challengeCases,
+    ...runningCountCases,
   ],
 };

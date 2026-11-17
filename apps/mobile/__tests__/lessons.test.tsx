@@ -1,4 +1,4 @@
-// Spec 3 Testing Decisions › Seam 3; S3-11 sVqX1, S3-12 l8pMS and aJV2y, S3-13 JJl51 and Fvlgc, Settings › Learning NvGyZ; Amendment 1 B4, D; #143, #144
+// Spec 3 Testing Decisions › Seam 3; S3-11 sVqX1, S3-12 l8pMS and aJV2y, S3-13 JJl51 and Fvlgc, Settings › Learning NvGyZ; Amendment 1 B4, D; #143, #144, #151
 
 import { act, cleanup, fireEvent, screen, within } from '@testing-library/react-native';
 import { renderRouter } from 'expo-router/testing-library';
@@ -107,7 +107,7 @@ describe('lessons', () => {
     expect(button('App orientation. Not started · Tabs, help, practice vs casino records')).toBeEnabled();
     expect(button('Blackjack basics. Not started')).toBeDisabled();
     expect(button('Blackjack basics. Not started')).toHaveProp('accessibilityHint', 'Not available in this version yet.');
-    expect(button('Building a strategy. Not started')).toBeDisabled();
+    expect(button('Building a strategy. Not started · Conditions, amounts, conflicts, fallbacks, stopping')).toBeEnabled();
   });
 
   it('step through App orientation, keep the place for Resume or Restart, and finish without a score', async () => {
@@ -129,7 +129,7 @@ describe('lessons', () => {
     expect(screen.queryByText('You stopped at step 2 of 4.')).toBeNull();
 
     await fireEvent.press(button('Next'));
-    await header('Practice records and casino records');
+    await header('Practice, casino and challenge records');
     await fireEvent.press(button('Back'));
     await header('Help when you need it');
     await fireEvent.press(button('Next'));
@@ -137,6 +137,9 @@ describe('lessons', () => {
     await header('Lessons at your own pace');
     expect(screen.queryByRole('button', { name: 'Next' })).toBeNull();
     await fireEvent.press(button('Finish'));
+    expect(await header('Practice what you learned')).toBeOnTheScreen();
+    for (const game of ['Blackjack', 'Craps', 'Roulette']) expect(button(new RegExp(`^Free play · ${game}\\b`))).toBeOnTheScreen();
+    await fireEvent.press(button('Back to lessons'));
 
     expect(await screen.findByRole('button', { name: 'App orientation. Completed · Tabs, help, practice vs casino records' })).toBeOnTheScreen();
     await fireEvent.press(button('Back to Learning'));
@@ -147,7 +150,7 @@ describe('lessons', () => {
     await openOrientation();
     await fireEvent.press(button('Next'));
     await fireEvent.press(await screen.findByRole('button', { name: 'Next' }));
-    await header('Practice records and casino records');
+    await header('Practice, casino and challenge records');
     await fireEvent.press(button('Back to Lessons'));
     await fireEvent.press(await screen.findByRole('button', { name: /^App orientation\. In progress · Step 3 of 4/ }));
     await fireEvent.press(await screen.findByRole('button', { name: 'Restart from step 1' }));
@@ -162,11 +165,12 @@ describe('lessons', () => {
 
   it('show "Completed (earlier version)" with the reason after a material change, until the learner restarts or moves on in the new version', async () => {
     await openOrientation();
-    for (const heading of ['Help when you need it', 'Practice records and casino records', 'Lessons at your own pace']) {
+    for (const heading of ['Help when you need it', 'Practice, casino and challenge records', 'Lessons at your own pace']) {
       await fireEvent.press(button('Next'));
       await header(heading);
     }
     await fireEvent.press(button('Finish'));
+    await fireEvent.press(await screen.findByRole('button', { name: 'Back to lessons' }));
     await screen.findByRole('button', { name: /^App orientation\. Completed/ });
     await cleanup();
 
@@ -245,7 +249,7 @@ describe('lessons', () => {
       expect(cues()).toEqual(['card-dealt', 'incorrect', 'correct']);
 
       await fireEvent.press(button('Continue'));
-      expect(await header('Practice records and casino records')).toBeOnTheScreen();
+      expect(await header('Practice, casino and challenge records')).toBeOnTheScreen();
       expect(await store().findUnfinishedAttempt()).toBeNull();
       expect(await store().readAttemptRecords()).toEqual([]);
       expect((await store().readLessonEvents()).map((event) => event.event)).toEqual([
@@ -292,7 +296,7 @@ describe('lessons', () => {
       await header('Worked example');
       expect(screen.queryByRole('button', { name: 'Continue' })).toBeNull();
       await fireEvent.press(button('Skip example'));
-      expect(await header('Practice records and casino records')).toBeOnTheScreen();
+      expect(await header('Practice, casino and challenge records')).toBeOnTheScreen();
       expect(cues()).toEqual(['card-dealt', 'card-dealt']);
     });
   });

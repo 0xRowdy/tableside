@@ -1,5 +1,5 @@
 // Spec 3 Modules › Training service › Challenge controller
-// Spec 3 Attempt lifecycle; Amendment 1 C6; #158, #132
+// Spec 3 Attempt lifecycle; Amendment 1 C6; #158, #132, #133
 
 import {
   advanceChallenge,
@@ -28,7 +28,7 @@ export type StartProblem = 'invalid-setup' | 'access-denied' | 'access-uncertain
 // Spec 3 S3-03 BFdJT
 export const RECORDED_MS = 800;
 
-export type LearnerCommand = Extract<ChallengeCommand, { readonly kind: 'answer' | 'skip' | 'retry-item' | 'next-item' }>;
+export type LearnerCommand = Extract<ChallengeCommand, { readonly kind: 'answer' | 'skip' | 'retry-item' | 'next-item' | 'reveal-count' }>;
 
 export type AttemptSnapshot =
   | { readonly status: 'loading' }

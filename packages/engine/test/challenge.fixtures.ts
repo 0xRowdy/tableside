@@ -18,6 +18,20 @@ export const LEARN: ChallengeSpecification = { attemptId: 'attempt-1', owner: 'o
 
 export const CHECK: ChallengeSpecification = { ...LEARN, variant: 'check' };
 
+export const RUNNING_COUNT_V1 = {
+  category: 'running-count',
+  id: 'running-count',
+  version: 1,
+  length: 52,
+  decks: 6,
+  checkpoints: [13, 26, 39, 52],
+  reference: { id: 'blackjack-reference', version: 1 },
+} as const;
+
+export const COUNT_LEARN: ChallengeSpecification = { ...LEARN, content: RUNNING_COUNT_V1 };
+
+export const COUNT_CHECK: ChallengeSpecification = { ...COUNT_LEARN, variant: 'check' };
+
 export const seed = (n: number): RandomStreamIdentity => ({ protocol: RANDOM_PROTOCOL_VERSION, key: [n, 0x9e3779b9], session: [n * 7 + 1, 0] });
 
 export function step(state: ChallengeState, command: ChallengeCommand): ChallengeState {
@@ -30,10 +44,11 @@ export const run = (state: ChallengeState, commands: readonly ChallengeCommand[]
 
 export const begun = (spec: ChallengeSpecification = LEARN, random: RandomStreamIdentity = seed(1)) => step(createChallenge(spec, random), { kind: 'begin' });
 
-export const ANSWER = (value: -1 | 0 | 1): ChallengeCommand => ({ kind: 'answer', value });
+export const ANSWER = (value: number): ChallengeCommand => ({ kind: 'answer', value });
 export const NEXT: ChallengeCommand = { kind: 'next-item' };
 export const RETRY: ChallengeCommand = { kind: 'retry-item' };
 export const SKIP: ChallengeCommand = { kind: 'skip' };
+export const REVEAL: ChallengeCommand = { kind: 'reveal-count' };
 
 export function learnView(state: ChallengeState): LearnChallengeView {
   const view = readChallengeView(state);
