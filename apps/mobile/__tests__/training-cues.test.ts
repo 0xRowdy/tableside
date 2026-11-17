@@ -17,7 +17,8 @@ const wrongFor = (view: ChallengeView) => (reference(view) === 1 ? -1 : 1);
 
 async function setup(variant: ChallengeVariant, store = new MemoryTrainingStore(), quarantine: QuarantineList = EMPTY_QUARANTINE_LIST) {
   const clock = new FakeClock(1_790_000_000_000, true);
-  const service = new TrainingService({ store, access: alwaysAllowed, allowance: plentyAllowance(() => clock.now()), clock, entropy: entropyFromWords(PI_WORDS), newId: () => 'attempt-1', device: 'test-device', owner: 'local', quarantine });
+  let next = 0;
+  const service = new TrainingService({ store, access: alwaysAllowed, allowance: plentyAllowance(() => clock.now()), clock, entropy: entropyFromWords(PI_WORDS), newId: () => `attempt-${++next}`, device: 'test-device', owner: 'local', quarantine });
   const ports = substituteFeedbackPorts(null);
   const settings = new DeviceSettings(ports.storage);
   await settings.load();
@@ -52,9 +53,10 @@ describe('cues during a challenge attempt', () => {
     const wrong = await setup('check');
     await answerAll(wrong.service, wrongFor);
 
-    const expected = ['card-dealt', ...Array.from({ length: 19 }, () => ['answer-accepted', 'card-dealt']).flat(), 'answer-accepted', 'attempt-ended'];
+    // each run's first completed attempt sets its group's personal best (#140)
+    const expected = ['card-dealt', ...Array.from({ length: 19 }, () => ['answer-accepted', 'card-dealt']).flat(), 'answer-accepted', 'attempt-ended', 'milestone'];
     expect(right.ports.sound.played.map((play) => play.cue)).toEqual(expected);
-    expect(right.ports.haptics.fired).toEqual([...Array.from({ length: 20 }, () => 'selection'), 'impact-light']);
+    expect(right.ports.haptics.fired).toEqual([...Array.from({ length: 20 }, () => 'selection'), 'impact-light', 'success']);
     const heard = (run: typeof right) => run.heard.map(({ cue, at }) => ({ cue, at }));
     expect(heard(wrong)).toEqual(heard(right));
     expect([wrong.ports.sound.played, wrong.ports.haptics.fired]).toEqual([right.ports.sound.played, right.ports.haptics.fired]);
@@ -144,5 +146,26 @@ describe('cues during a challenge attempt', () => {
     expect(later.ports.sound.played).toEqual([]);
     await later.service.submit({ kind: 'answer', value: 1 });
     expect(later.ports.sound.played.map((play) => play.cue)).toEqual(['answer-accepted', 'card-dealt']);
+  });
+
+  // Spec 3 Comparison groups, records and progression (Milestones); Audio and haptics (cue 16); #140
+  it('plays cue 16 with the success haptic on the results of an attempt that sets a personal best, and not on one that sets none', async () => {
+    const { service, ports } = await setup('learn');
+    await answerAll(service, reference);
+    expect(service.snapshot()).toMatchObject({ status: 'ended', earned: { bests: ['card-values'] } });
+    expect(ports.sound.played.map((play) => play.cue).slice(-2)).toEqual(['attempt-ended', 'milestone']);
+    expect(ports.haptics.fired.at(-1)).toBe('success');
+
+    const before = ports.sound.played.length;
+    await service.retry();
+    await answerAll(service, wrongFor);
+    expect(service.snapshot()).toMatchObject({ status: 'ended', earned: { bests: [], fastest: null } });
+    expect(ports.sound.played.slice(before).map((play) => play.cue)).not.toContain('milestone');
+  });
+
+  it('plays no cue 16 for an abandoned attempt', async () => {
+    const { service, ports } = await setup('check');
+    await service.end();
+    expect(ports.sound.played.map((play) => play.cue)).toEqual(['card-dealt', 'attempt-ended']);
   });
 });

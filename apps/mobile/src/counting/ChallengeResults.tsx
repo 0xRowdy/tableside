@@ -1,7 +1,7 @@
-// Spec 3 S3-08 liAfT, CEb6T, cX5Gc, UXrpw; #158, #132, #150, #133, #135
+// Spec 3 S3-08 liAfT, CEb6T, cX5Gc, UXrpw; #158, #132, #150, #133, #135, #140
 
 import type { ChallengeAttemptRecord } from '@tableside/engine';
-import { CircleAlert, CircleCheckBig, Divide, Hash, Info, ListChecks, RotateCcw, Square, type LucideIcon } from 'lucide-react-native';
+import { CircleAlert, CircleCheckBig, Divide, Flag, Hash, Info, ListChecks, RotateCcw, Square, Trophy, type LucideIcon } from 'lucide-react-native';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -26,6 +26,8 @@ import {
   variantLabel,
   type AllowanceCopy,
 } from '@/training/challenge-text';
+import { setsPersonalBest, type AttemptEarned } from '@/training/progress';
+import { personalBestText } from '@/training/records-text';
 
 const ROW_ICON: Record<(typeof RESULT_ROWS)[number]['metric'], LucideIcon> = {
   'card-values': Square,
@@ -39,6 +41,7 @@ export function ChallengeResults({
   record,
   position,
   explanation,
+  earned,
   allowance,
   onRetry,
   onReview,
@@ -46,6 +49,7 @@ export function ChallengeResults({
   record: ChallengeAttemptRecord;
   position: number;
   explanation: string | null;
+  earned: AttemptEarned;
   allowance: AllowanceCopy | undefined;
   onRetry: () => void;
   onReview: () => void;
@@ -94,6 +98,7 @@ export function ChallengeResults({
             </View>
           </View>
         )}
+        {setsPersonalBest(earned) && <PersonalBestBox {...personalBestText(groupKey, earned)} />}
         <Text maxFontSizeMultiplier={textScale.body} style={styles.label}>
           {SCORES_LABEL}
         </Text>
@@ -139,6 +144,31 @@ export function ChallengeResults({
   );
 }
 
+// Spec 3 S3-08 liAfT, CEb6T
+function PersonalBestBox({ title, detail, fastest }: { title: string; detail: string; fastest: string | null }) {
+  return (
+    <View accessible accessibilityLabel={[`${title}.`, detail, fastest && `${fastest}.`].filter(Boolean).join(' ')} style={[styles.box, styles.earned]}>
+      <Flag color={palette.primary} size={24} />
+      <View style={styles.boxText}>
+        <Text maxFontSizeMultiplier={textScale.body} style={styles.boxTitle}>
+          {title}
+        </Text>
+        <Text maxFontSizeMultiplier={textScale.body} style={styles.boxDetail}>
+          {detail}
+        </Text>
+        <View style={styles.badge}>
+          <Trophy color={palette.primary} size={14} />
+          {fastest && (
+            <Text maxFontSizeMultiplier={textScale.body} style={styles.badgeText}>
+              {fastest}
+            </Text>
+          )}
+        </View>
+      </View>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: palette.background },
   header: { gap: 1, minHeight: 56, justifyContent: 'center', paddingHorizontal: space[6] - space[1], paddingVertical: space[1] },
@@ -147,6 +177,21 @@ const styles = StyleSheet.create({
   body: { gap: space[4], paddingTop: space[2], paddingHorizontal: space[4] },
   box: { flexDirection: 'row', gap: space[3], padding: space[4], borderRadius: radius.lg, borderWidth: 1, borderColor: palette.controlBorder, backgroundColor: palette.card },
   alert: { borderWidth: 2, borderColor: palette.warning },
+  earned: { borderColor: palette.primary },
+  badge: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space[1] + 2,
+    marginTop: space[1],
+    paddingVertical: space[1],
+    paddingHorizontal: 10,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: palette.primary,
+    backgroundColor: palette.secondary,
+  },
+  badgeText: { fontFamily: fonts.uiBold, fontSize: 13, color: palette.foreground },
   boxText: { flex: 1, gap: space[1] },
   boxTitle: { fontFamily: fonts.uiBold, fontSize: 17, color: palette.foreground },
   boxDetail: { fontFamily: fonts.ui, fontSize: 14, lineHeight: 20, color: palette.mutedForeground },
