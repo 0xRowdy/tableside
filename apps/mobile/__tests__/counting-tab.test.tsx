@@ -353,6 +353,7 @@ describe('the Counting tab', () => {
       expect(screen.getByLabelText(/^Checkpoint 1, after card 13: you entered .*, error 0, match$/)).toBeOnTheScreen();
       expect(screen.getByLabelText(/^Checkpoint 2, after card 26: you entered .*, error plus 2, off by 2$/)).toBeOnTheScreen();
       expect(screen.getByLabelText(`Checkpoint 4, after card 52: skipped, correct ${count > 0 ? `plus ${count}` : count < 0 ? `minus ${-count}` : '0'}, counts as incorrect`)).toBeOnTheScreen();
+      expect(screen.getByRole('button', { name: 'Running count lesson. Suggested after this attempt' })).toBeDisabled();
       expect(screen.getByTestId('drift-note')).toHaveTextContent(
         'From checkpoint 2 on, your count ran 2 above the reference. One early miss likely carried through. Each checkpoint still counts as its own error.',
       );

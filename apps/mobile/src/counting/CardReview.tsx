@@ -1,10 +1,11 @@
 // Spec 3 S3-09 h0MsKr, BjuKf; Scoring and review › Review facts, Attribution; #132, #133
 
 import type { ChallengeAttemptRecord } from '@tableside/engine';
-import { CircleCheckBig, CircleX, SkipForward, TrendingUp } from 'lucide-react-native';
+import { BookOpen, CircleCheckBig, CircleX, SkipForward, TrendingUp } from 'lucide-react-native';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { LearnRow } from '@/lessons/LessonEntries';
 import { SetupHeader } from '@/play/setup/SetupParts';
 import { fonts, palette, radius, space, textScale } from '@/theme/tokens';
 import {
@@ -18,8 +19,10 @@ import {
   scoreText,
   variantLabel,
   YOU_LABEL,
+  SUGGESTED_LESSON,
   type ReviewOutcome,
 } from '@/training/challenge-text';
+import type { LessonEntry } from '@/training/service';
 
 const OUTCOME_ICON: Record<ReviewOutcome, { readonly Icon: typeof CircleX; readonly color: string }> = {
   match: { Icon: CircleCheckBig, color: palette.correct },
@@ -27,7 +30,17 @@ const OUTCOME_ICON: Record<ReviewOutcome, { readonly Icon: typeof CircleX; reado
   skipped: { Icon: SkipForward, color: palette.mistake },
 };
 
-export function CardReview({ record, onBack }: { record: ChallengeAttemptRecord; onBack: () => void }) {
+export function CardReview({
+  record,
+  lesson,
+  onOpenLesson,
+  onBack,
+}: {
+  record: ChallengeAttemptRecord;
+  lesson: LessonEntry | undefined;
+  onOpenLesson: (id: string) => void;
+  onBack: () => void;
+}) {
   const insets = useSafeAreaInsets();
   const { groupKey } = record;
   const drift = driftText(record.review, groupKey.variant);
@@ -72,6 +85,7 @@ export function CardReview({ record, onBack }: { record: ChallengeAttemptRecord;
             </Text>
           </View>
         )}
+        {lesson && <LearnRow icon={BookOpen} title={`${lesson.title} lesson`} detail={SUGGESTED_LESSON} disabled={lesson.steps === null} onPress={() => onOpenLesson(lesson.id)} />}
       </View>
     </ScrollView>
   );

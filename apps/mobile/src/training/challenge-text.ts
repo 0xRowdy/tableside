@@ -287,6 +287,7 @@ export const REVIEW_TITLE: Record<ChallengeCategory, string> = { 'card-values': 
 export const YOU_LABEL = 'You';
 export const CORRECT_LABEL = 'Correct';
 export const ERROR_LABEL = 'Error';
+export const SUGGESTED_LESSON = 'Suggested after this attempt';
 export const SKIPPED = 'Skipped';
 
 export type ReviewOutcome = 'match' | 'off' | 'skipped';

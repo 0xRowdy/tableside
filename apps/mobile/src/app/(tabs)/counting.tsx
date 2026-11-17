@@ -55,7 +55,12 @@ export default function Counting() {
         />
       );
     case 'ended':
-      if (reviewing === snapshot.record.attemptId) return <CardReview record={snapshot.record} onBack={() => setReviewing(null)} />;
+      if (reviewing === snapshot.record.attemptId) return <CardReview
+            record={snapshot.record}
+            lesson={lessons?.find((lesson) => lesson.id === CHALLENGE_LESSONS[snapshot.record.groupKey.category])}
+            onOpenLesson={openLesson}
+            onBack={() => setReviewing(null)}
+          />;
       return (
         <ChallengeResults
           record={snapshot.record}
