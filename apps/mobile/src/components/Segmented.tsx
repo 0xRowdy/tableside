@@ -9,7 +9,6 @@ import { fonts, palette, space, textScale } from '@/theme/tokens';
 export interface SegmentOption<T extends string> {
   readonly value: T;
   readonly label: string;
-  /** What a screen reader says, when it differs from the visible label. */
   readonly spoken?: string;
   readonly disabled?: boolean;
   readonly hint?: string;
