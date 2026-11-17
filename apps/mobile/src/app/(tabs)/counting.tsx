@@ -1,5 +1,5 @@
 // Spec 3 Screens; Lessons › Entry points, Structure; Attempt lifecycle; Amendment 1 B5
-// #158, #132, #145, #133, #134, #135, #146, #140
+// #158, #132, #145, #133, #134, #135, #146, #140, #141
 import { CHALLENGE_LESSONS } from '@tableside/definitions';
 import { CHALLENGE_VARIANTS, type ChallengeVariant } from '@tableside/engine';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
@@ -18,11 +18,14 @@ import { useLoaded } from '@/hooks/use-loaded';
 import { ScreenHints } from '@/lessons/FirstUseHints';
 import { lessonHref } from '@/lessons/routes';
 import { allowanceCopy, COUNTING_TITLE, FINDING_ATTEMPT, NEEDS_UPDATE } from '@/training/challenge-text';
+import { catalogCategory } from '@/training/progress';
 import { setupFor, type ChallengeSetup, type TrainingService, type TrainingSnapshot } from '@/training/service';
 import { useLessons, useTraining } from '@/training/TrainingProvider';
 
 const lastSetupOf = (service: TrainingService) => service.lastSetup();
 const allowanceOf = async (service: TrainingService, _reloadOnStatus: TrainingSnapshot['status']) => allowanceCopy(await service.allowance());
+// Spec 3 Comparison groups (Recommendations); Information hiding: recomputed only when an attempt ends
+const progressOf = (service: TrainingService, _reloadOnStatus: TrainingSnapshot['status']) => service.progress();
 
 export default function Counting() {
   const { service, snapshot } = useTraining();
@@ -32,6 +35,7 @@ export default function Counting() {
   const remembered = useLoaded(lastSetupOf, service);
   // Spec 3 Amendment 4 §2
   const allowance = useLoaded(allowanceOf, service, snapshot.status);
+  const progress = useLoaded(progressOf, service, snapshot.status);
   const [chosen, setChosen] = useState<ChallengeSetup | null>(null);
   const [reviewing, setReviewing] = useState<string | null>(null);
   // Spec 3 S3-01 Uq05w
@@ -76,7 +80,7 @@ export default function Counting() {
         if (recordsScreen) return recordsScreen;
         return (
           <>
-            <CountingHome catalog={catalog} allowance={allowance} lessons={lessons} onOpenLesson={openLesson} onChoose={setNext} onOpenRecords={openRecords} />
+            <CountingHome catalog={catalog} allowance={allowance} progress={progress} lessons={lessons} onOpenLesson={openLesson} onChoose={setNext} onOpenRecords={openRecords} />
             {next && (
               <UnfinishedSheet
                 view={view}
@@ -144,6 +148,13 @@ export default function Counting() {
           onReview={() => setReviewing(snapshot.record.attemptId)}
           allowance={allowance}
           onRetry={() => void service.retry()}
+          // Spec 3 S3-08 nXGFk; #141
+          lesson={lessons?.find((lesson) => lesson.id === CHALLENGE_LESSONS[snapshot.record.groupKey.category])}
+          onOpenLesson={openLesson}
+          onPracticeLearn={() => {
+            service.dismissResults();
+            chooseSetup({ category: catalogCategory(snapshot.record.groupKey), variant: 'learn' });
+          }}
         />
       );
     case 'none': {
@@ -153,6 +164,7 @@ export default function Counting() {
           <CountingHome
             catalog={catalog}
             allowance={allowance}
+            progress={progress}
             lessons={lessons}
             onOpenLesson={openLesson}
             onChoose={chooseSetup}

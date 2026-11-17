@@ -43,6 +43,8 @@ export interface AllowanceCopy {
   readonly banner: { readonly title: string; readonly detail: string | null; readonly action: AllowanceAction | null };
   readonly setup: { readonly text: string; readonly action: AllowanceAction | null };
   readonly results: string;
+  // Spec 3 S3-08 nXGFk: what a Learn round uses after a review suggestion; #141
+  readonly practice: string;
 }
 
 // Spec 3 Training service interface › Start attempt
@@ -56,6 +58,7 @@ export const ARRIVES_LATER: Record<AllowanceAction, string> = {
 
 const UNLIMITED = 'Unlimited challenges (premium)';
 const RETRY_STARTS_FRESH = 'Retry starts a fresh attempt.';
+const LESSONS_FREE = 'Lessons never use one.';
 const attempts = (count: number) => (count === 1 ? 'attempt' : 'attempts');
 
 // Spec 5 Allowance device, transfer, replacement and timezone
@@ -74,7 +77,7 @@ export function resetTimeText(instant: number, timeZone: string): string {
 
 export function allowanceCopy(allowance: ChallengeAllowance): AllowanceCopy {
   if (allowance.kind === 'premium') {
-    return { standing: 'premium', banner: { title: UNLIMITED, detail: null, action: null }, setup: { text: UNLIMITED, action: null }, results: `${UNLIMITED}. ${RETRY_STARTS_FRESH}` };
+    return { standing: 'premium', banner: { title: UNLIMITED, detail: null, action: null }, setup: { text: UNLIMITED, action: null }, results: `${UNLIMITED}. ${RETRY_STARTS_FRESH}`, practice: `${UNLIMITED}. ${LESSONS_FREE}` };
   }
   const { amount, left, resetsAt, timeZone, allowanceDevice } = allowance;
   if (!allowanceDevice.here) {
@@ -85,6 +88,7 @@ export function allowanceCopy(allowance: ChallengeAllowance): AllowanceCopy {
       banner: { title: where, detail: moveHere, action: 'offline-and-allowance' },
       setup: { text: `${where} ${moveHere}`, action: null },
       results: `${where} ${moveHere}`,
+      practice: `${where} ${moveHere}`,
     };
   }
   const reset = resetTimeText(resetsAt, timeZone);
@@ -95,6 +99,7 @@ export function allowanceCopy(allowance: ChallengeAllowance): AllowanceCopy {
       banner: { title: 'No challenge attempts left today', detail: `${usedUp} Lessons, worked examples and your records stay open.`, action: 'see-premium' },
       setup: { text: usedUp, action: 'see-premium' },
       results: usedUp,
+      practice: `${usedUp} ${LESSONS_FREE}`,
     };
   }
   return {
@@ -106,6 +111,7 @@ export function allowanceCopy(allowance: ChallengeAllowance): AllowanceCopy {
     },
     setup: { text: `Starting uses 1 of your ${left} ${attempts(left)} left today. Resuming doesn't use another.`, action: null },
     results: `${left} ${attempts(left)} left today. ${RETRY_STARTS_FRESH}`,
+    practice: `Learn uses 1 of your ${left} ${attempts(left)} left today. ${LESSONS_FREE}`,
   };
 }
 

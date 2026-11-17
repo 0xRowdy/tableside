@@ -6,6 +6,7 @@ import type { AssistanceClass, AttemptEndingReason, ChallengeAttemptRecord, Chal
 import { dayText } from '@/account/account-text';
 
 import { pacingLabel, spokenScore, scoreText, timerText, variantLabel } from './challenge-text';
+import { MILESTONE_HISTORY } from './readiness-text';
 import { everyMetricPerfect, type AttemptEarned, type GroupProgress, type ProgressAttempt } from './progress';
 import type { CatalogCategory } from './service';
 
@@ -78,8 +79,8 @@ export function fastestText(group: GroupProgress): StatText {
   return { label: 'Fastest', value, spoken: value };
 }
 
-export const groupLabel = (group: GroupProgress, stats: readonly StatText[]) =>
-  [`${groupTitle(group.key)}, ${settingsText(group.key)}`, ...stats.map((stat) => `${stat.label} ${stat.spoken}`)].join('. ');
+export const groupLabel = (group: GroupProgress, stats: readonly StatText[], milestone: string | null = null) =>
+  [`${groupTitle(group.key)}, ${settingsText(group.key)}`, ...stats.map((stat) => `${stat.label} ${stat.spoken}`), milestone].filter(Boolean).join('. ');
 
 const ENDING: Record<AttemptEndingReason, string> = {
   completed: 'completed',
@@ -99,13 +100,15 @@ function whenText(at: number, now: number): string {
 }
 
 // Spec 3 S3-10 OVKkc (attempt history)
-export function historyText({ record, local }: ProgressAttempt, now: number): { readonly title: string; readonly detail: string; readonly value: string } {
+export function historyText({ record, local }: ProgressAttempt, now: number, earnedMilestone = false): { readonly title: string; readonly detail: string; readonly value: string } {
   const { groupKey: key } = record;
   const completed = record.endingReason === 'completed';
   const detail = [
     whenText(record.endedAt, now),
     key.pacing === 'self-paced' ? null : pacingLabel(key.pacing),
     completed ? (CHECK_ASSISTANCE[key.assistanceClass] ?? ENDING.completed) : ENDING[record.endingReason],
+    // #141
+    earnedMilestone ? MILESTONE_HISTORY : null,
     versionText(key),
     local ? LOCAL_LABEL : null,
   ].filter(Boolean);
