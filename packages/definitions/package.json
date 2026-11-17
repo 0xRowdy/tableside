@@ -6,7 +6,7 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "build": "tsx scripts/blackjack-reference.ts check",
+    "build": "tsx scripts/blackjack-reference.ts check && tsx scripts/check-lessons.ts",
     "reference:write": "tsx scripts/blackjack-reference.ts write",
     "typecheck": "pnpm run build && tsc -p . && tsc -p tsconfig.node.json"
   },

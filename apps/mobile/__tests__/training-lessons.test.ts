@@ -5,6 +5,7 @@ import { alwaysAllowed, type AccessSupervisor } from '@/practice/adapters';
 import { FakeClock, entropyFromWords, PI_WORDS } from '@/practice/testing/substitutes';
 import { MemoryTrainingStore } from '@/training/memory-store';
 import { TrainingService } from '@/training/service';
+import { FIVE_OF_HEARTS, withWorkedExample } from '@/training/testing/worked-example';
 
 const ORIENTATION = 'app-orientation';
 
@@ -83,6 +84,17 @@ describe('the Training service lessons', () => {
     expect(view).toMatchObject({ id: ORIENTATION, title: 'App orientation', section: 'app', step: 1, prompt: null, notice: null });
     expect(view.steps.map((step) => step.heading)).toEqual(APP_ORIENTATION.content!.steps.map((step) => step.heading));
     expect(await store.readLessonEvents()).toEqual([]);
+  });
+
+  // Spec 3 Lessons › Structure (worked examples); #144
+  it("serves the lesson's worked-example script, asking nothing of access or the allowance; leaving the example moves on past its step", async () => {
+    const { service, store, asked } = setup({ lessons: withWorkedExample(LESSONS) });
+    expect((await service.openLesson(ORIENTATION)).example).toEqual(FIVE_OF_HEARTS);
+    expect((await setup().service.openLesson(ORIENTATION)).example).toBeNull();
+    expect(await service.stepForward(ORIENTATION, FIVE_OF_HEARTS.step)).toMatchObject({ step: 3, example: FIVE_OF_HEARTS });
+    expect((await store.readLessonEvents()).map((event) => event.event)).toEqual([{ kind: 'bookmark', step: 3 }]);
+    expect(await store.readAttemptRecords()).toEqual([]);
+    expect(asked).toEqual([]);
   });
 
   it('steps forward and back, writing an immutable bookmark event with the installation sequence each time', async () => {

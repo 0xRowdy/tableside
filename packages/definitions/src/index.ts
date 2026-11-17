@@ -84,3 +84,5 @@ export {
   type LessonSource,
   type LessonStep,
 } from './lessons';
+
+export { workedExampleProblems, type CardValueExample, type ScriptedChoice, type ScriptedResponse, type WorkedExample } from './worked-examples';

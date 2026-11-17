@@ -1,13 +1,14 @@
-// Spec 3 S3-12 l8pMS, pX6CV, S3-13 JJl51, Fvlgc and ZBpF3; Amendment 1 B4, C10; #143, #145
+// Spec 3 S3-12 l8pMS, pX6CV, S3-13 JJl51, Fvlgc, ZBpF3; Amendment 1 B4, C10; #143, #144, #145
 
 import type { LessonHandoff } from '@tableside/definitions';
-import { ArrowLeft, ArrowRight, ChevronRight, GraduationCap, Play, RefreshCcw, RotateCcw, Shuffle, Spade, type LucideIcon } from 'lucide-react-native';
+import { ArrowLeft, ArrowRight, ChevronRight, GraduationCap, Play, RefreshCcw, RotateCcw, Shuffle, Spade, SquarePlay, type LucideIcon } from 'lucide-react-native';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Sheet, SheetText } from '@/components/Sheet';
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
 import { TextLink } from '@/lessons/LessonEntries';
+import { NavButton } from '@/lessons/LessonParts';
 import { BackButton } from '@/settings/SettingsParts';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/theme/tokens';
 import type { AllowanceCopy } from '@/training/challenge-text';
@@ -29,6 +30,7 @@ import {
   SAVE_FAILED,
   stepText,
   stoppedAt,
+  TRY_EXAMPLE,
 } from '@/training/lesson-text';
 import type { LessonView } from '@/training/service';
 
@@ -39,6 +41,7 @@ export interface LessonActions {
   readonly onFinish: () => void;
   readonly onRestart: () => void;
   readonly onResume: () => void;
+  readonly onExample: () => void;
   readonly onHandoff: (handoff: LessonHandoff) => void;
 }
 
@@ -104,6 +107,7 @@ export function LessonPlayer({
               {paragraph}
             </Text>
           ))}
+          {view.example?.step === view.step && <ExampleLink disabled={busy} onPress={actions.onExample} />}
           {last &&
             view.handoffs.map((handoff) => (
               <HandoffLink key={handoffLabel(handoff)} handoff={handoff} disabled={busy} onPress={() => actions.onHandoff(handoff)} />
@@ -200,6 +204,27 @@ function ChangeNotice({ notice }: { notice: NonNullable<LessonView['notice']> })
   );
 }
 
+// Spec 3 S3-12 l8pMS; #144
+function ExampleLink({ disabled, onPress }: { disabled: boolean; onPress: () => void }) {
+  const { focused, focusProps } = useKeyboardFocus();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={TRY_EXAMPLE}
+      accessibilityState={{ disabled }}
+      disabled={disabled}
+      onPress={onPress}
+      {...focusProps}
+      style={({ pressed }) => [styles.exampleLink, pressed && styles.pressed, focused && styles.focused]}
+    >
+      <SquarePlay color={palette.primary} size={18} />
+      <Text maxFontSizeMultiplier={textScale.body} style={styles.exampleLabel}>
+        {TRY_EXAMPLE}
+      </Text>
+    </Pressable>
+  );
+}
+
 function IconButton({ icon: Icon, label, disabled, onPress }: { icon: LucideIcon; label: string; disabled: boolean; onPress: () => void }) {
   const { focused, focusProps } = useKeyboardFocus();
   return (
@@ -213,42 +238,6 @@ function IconButton({ icon: Icon, label, disabled, onPress }: { icon: LucideIcon
       style={[styles.iconButton, focused && styles.focused]}
     >
       <Icon color={palette.foreground} size={22} />
-    </Pressable>
-  );
-}
-
-function NavButton({
-  icon: Icon,
-  label,
-  primary = false,
-  quiet = false,
-  block = false,
-  disabled,
-  onPress,
-}: {
-  icon?: LucideIcon;
-  label: string;
-  primary?: boolean;
-  quiet?: boolean;
-  block?: boolean;
-  disabled: boolean;
-  onPress: () => void;
-}) {
-  const { focused, focusProps } = useKeyboardFocus();
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      accessibilityState={{ disabled }}
-      disabled={disabled}
-      onPress={onPress}
-      {...focusProps}
-      style={({ pressed }) => [styles.navButton, block && styles.block, primary && styles.navPrimary, quiet && styles.navQuiet, pressed && styles.pressed, disabled && styles.disabled, focused && styles.focused]}
-    >
-      {Icon && <Icon color={primary ? palette.primaryForeground : palette.foreground} size={18} />}
-      <Text maxFontSizeMultiplier={textScale.body} style={[styles.navLabel, primary && styles.navPrimaryLabel]}>
-        {label}
-      </Text>
     </Pressable>
   );
 }
@@ -280,28 +269,17 @@ const styles = StyleSheet.create({
   segmentDone: { backgroundColor: palette.primary },
   heading: { fontFamily: fonts.display, fontSize: 26, lineHeight: 32, color: palette.foreground },
   paragraph: { fontFamily: fonts.ui, fontSize: 16, lineHeight: 25, color: palette.foreground },
-  alert: { fontFamily: fonts.ui, fontSize: 14, lineHeight: 20, color: palette.destructive },
-  nav: { flexDirection: 'row', flexWrap: 'wrap', gap: space[2] + 2, paddingTop: space[2] },
-  navButton: {
-    flexGrow: 1,
-    flexBasis: 140,
-    minHeight: 52,
+  exampleLink: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    alignSelf: 'flex-start',
     gap: space[2],
-    paddingHorizontal: space[6] - space[1],
-    paddingVertical: space[3],
+    minHeight: MIN_TOUCH_TARGET,
+    paddingHorizontal: space[1],
     borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: palette.controlBorder,
-    backgroundColor: palette.secondary,
+    borderWidth: 2,
+    borderColor: palette.transparent,
   },
-  block: { flexGrow: 0, flexBasis: 'auto', alignSelf: 'stretch' },
-  navPrimary: { borderColor: palette.primary, backgroundColor: palette.primary },
-  navLabel: { flexShrink: 1, fontFamily: fonts.uiBold, fontSize: 15, color: palette.foreground, textAlign: 'center' },
-  navPrimaryLabel: { color: palette.primaryForeground },
-  navQuiet: { borderColor: palette.transparent, backgroundColor: palette.transparent },
   option: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -315,6 +293,9 @@ const styles = StyleSheet.create({
   optionText: { flex: 1, gap: 2 },
   optionTitle: { fontFamily: fonts.uiBold, fontSize: 16, lineHeight: 24, color: palette.foreground },
   optionDetail: { fontFamily: fonts.ui, fontSize: 13, lineHeight: 18, color: palette.mutedForeground },
+  exampleLabel: { flexShrink: 1, fontFamily: fonts.uiBold, fontSize: 15, color: palette.primary },
+  alert: { fontFamily: fonts.ui, fontSize: 14, lineHeight: 20, color: palette.destructive },
+  nav: { flexDirection: 'row', flexWrap: 'wrap', gap: space[2] + 2, paddingTop: space[2] },
   pressed: { opacity: 0.8 },
   disabled: { opacity: 0.4 },
   focused: { borderColor: palette.ring, borderWidth: 2 },

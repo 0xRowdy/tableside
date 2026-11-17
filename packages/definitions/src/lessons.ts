@@ -5,6 +5,7 @@ import { BLACKJACK_MODES } from './blackjack/strategies';
 import { CATALOG_CATEGORIES, type CatalogCategory } from './challenges';
 import { CRAPS_STRATEGIES } from './craps-strategies';
 import { ROULETTE_STRATEGIES } from './roulette-strategies';
+import { workedExampleProblems, type WorkedExample } from './worked-examples';
 
 export type LessonSection = 'app' | 'blackjack' | 'craps' | 'roulette' | 'builder';
 
@@ -32,8 +33,7 @@ export interface LessonContent {
   readonly materialVersion: number;
   readonly change: string | null;
   readonly steps: readonly LessonStep[];
-  // TODO(#144)
-  readonly workedExample: null;
+  readonly workedExample: WorkedExample | null;
   readonly handoffs: readonly LessonHandoff[];
   readonly sources: readonly LessonSource[];
 }
@@ -159,6 +159,7 @@ export function lessonProblems(lessons: readonly Lesson[]): readonly string[] {
       if (!step.heading.trim()) report(`step ${index + 1} has no heading`);
       if (!step.paragraphs.some((paragraph) => paragraph.trim())) report(`step ${index + 1} has no text`);
     });
+    if (content.workedExample) workedExampleProblems(content.workedExample, content.steps.length).forEach(report);
     const offered = new Set<string>();
     content.handoffs.forEach((handoff, index) => {
       const problem = handoffProblem(lesson, handoff);
