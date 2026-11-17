@@ -21,6 +21,7 @@ const servedLessons = () => (jest.requireMock('@tableside/definitions') as { LES
 jest.mock('@/training/app-adapters', () => {
   const { FakeClock, entropyFromWords, PI_WORDS } = jest.requireActual('@/practice/testing/substitutes');
   const { alwaysAllowed } = jest.requireActual('@/practice/adapters');
+  const { plentyAllowance } = jest.requireActual('@/training/allowance');
   const { MemoryTrainingStore } = jest.requireActual('@/training/memory-store');
   let next = 0;
   return {
@@ -29,6 +30,7 @@ jest.mock('@/training/app-adapters', () => {
       return {
         store: mockStore,
         access: alwaysAllowed,
+        allowance: plentyAllowance(() => Date.now()),
         clock: new FakeClock(undefined, true),
         entropy: entropyFromWords(PI_WORDS),
         newId: () => `event-${++next}`,

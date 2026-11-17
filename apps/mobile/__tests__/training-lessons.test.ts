@@ -35,6 +35,12 @@ function setup(options: { store?: MemoryTrainingStore; lessons?: readonly Lesson
     {
       store,
       access: refusingAccess(asked),
+      allowance: {
+        challengeAllowance: async () => {
+          asked.push('challengeAllowance');
+          throw new Error('lessons never read the challenge allowance');
+        },
+      },
       clock: new FakeClock(1_790_000_000_000, true),
       entropy: entropyFromWords(PI_WORDS),
       newId: () => `${prefix}-${++next}`,
@@ -193,7 +199,7 @@ describe('the Training service lessons', () => {
     expect(await service.openLesson(ORIENTATION)).toMatchObject({ step: 1, prompt: null, notice: { kind: 'since-last-visit', change: 'help moved' } });
   });
 
-  it('is unmetered: listing, opening, stepping, restarting and completing never ask the access supervisor or start an attempt', async () => {
+  it('is unmetered: listing, opening, stepping, restarting and completing never ask the access supervisor or the allowance, or start an attempt', async () => {
     const { service, store, asked } = setup();
     await service.listLessons();
     await service.openLesson(ORIENTATION);
