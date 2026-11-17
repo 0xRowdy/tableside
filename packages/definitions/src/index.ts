@@ -88,3 +88,12 @@ export {
 export { HINT_IDS, HINT_MAX_LENGTH, HINTS, hintProblems, type Hint, type HintId } from './hints';
 
 export { workedExampleProblems, type CardValueExample, type ScriptedChoice, type ScriptedResponse, type WorkedExample } from './worked-examples';
+export {
+  strategyStepProblems,
+  type ScriptedOutcome,
+  type ScriptedTurn,
+  type StrategyBetsAnswer,
+  type StrategyStepAnswer,
+  type StrategyStepExample,
+  type StrategyStepExplanation,
+} from './strategy-examples';

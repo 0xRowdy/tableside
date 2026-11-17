@@ -15,6 +15,7 @@ import {
 } from '@tableside/engine';
 
 import { CARD_VALUES_CONTENT } from './challenges';
+import { strategyStepProblems, type StrategyStepExample } from './strategy-examples';
 
 export interface ScriptedResponse<Explanation> {
   readonly correct: boolean;
@@ -34,7 +35,7 @@ export interface CardValueExample {
   readonly choices: readonly ScriptedChoice<HiLoValue, HiLoExplanation>[];
 }
 
-export type WorkedExample = CardValueExample;
+export type WorkedExample = CardValueExample | StrategyStepExample;
 
 const SUITS: readonly string[] = ['clubs', 'diamonds', 'hearts', 'spades'];
 const isCard = (card: ChallengeCard) => Number.isInteger(card.rank) && card.rank >= 1 && card.rank <= 13 && SUITS.includes(card.suit);
@@ -62,6 +63,12 @@ export function workedExampleProblems(example: WorkedExample, steps: number): re
   const problems: string[] = [];
   if (!Number.isInteger(example.step) || example.step < 1 || example.step > steps) problems.push(`the worked example is on step ${example.step}, but the lesson has ${steps} steps`);
   if (example.choices.length < 2) problems.push('a worked example offers at least two choices');
+  if (example.kind === 'strategy-step') return problems.length > 0 ? problems : strategyStepProblems(example);
+  return [...problems, ...cardValueProblems(example)];
+}
+
+function cardValueProblems(example: CardValueExample): readonly string[] {
+  const problems: string[] = [];
   const seen = new Set<HiLoValue>();
   for (const { answer } of example.choices) {
     if (!HI_LO_VALUES.includes(answer)) problems.push(`worked example choice ${String(answer)} is not a Hi-Lo value`);

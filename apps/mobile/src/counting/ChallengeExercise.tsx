@@ -10,6 +10,7 @@ import { Button } from '@/components/Button';
 import { Choice, PlayingCard } from '@/counting/CardChoices';
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
 import { FirstUseHint, HelpButton } from '@/lessons/FirstUseHints';
+import { signed } from '@/play/blackjack-text';
 import { SaveFailedBanner } from '@/play/TableChrome';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/theme/tokens';
 import { CountAid } from './CountAid';
@@ -30,6 +31,7 @@ import {
   PACING_LABEL,
   recordedText,
   SKIP_LABEL,
+  spokenValue,
   TRY_AGAIN,
   variantLabel,
 } from '@/training/challenge-text';
@@ -96,7 +98,7 @@ export function ChallengeExercise({
             )}
             <View style={styles.choices}>
               {view.choices.map((value) => (
-                <Choice key={value} value={value} state={choiceState(value, feedback, entered)} enabled={answering} onPress={() => onCommand({ kind: 'answer', value })} />
+                <Choice key={value} label={signed(value)} spoken={spokenValue(value)} state={choiceState(value, feedback, entered)} enabled={answering} onPress={() => onCommand({ kind: 'answer', value })} />
               ))}
             </View>
             {view.legalCommands.includes('skip') && <Button label={SKIP_LABEL} icon={SkipForward} variant="outline" stretch disabled={!answering} onPress={() => onCommand({ kind: 'skip' })} />}
