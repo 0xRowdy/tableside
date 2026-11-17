@@ -1,4 +1,4 @@
-// Spec 3 Screens; Lessons › Entry points, Structure (Handoff); #158, #132, #145, #133
+// Spec 3 Screens; Lessons › Entry points, Structure (Handoff); #158, #132, #145, #133, #134
 import { CHALLENGE_LESSONS } from '@tableside/definitions';
 import { CHALLENGE_VARIANTS, type ChallengeVariant } from '@tableside/engine';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
@@ -52,6 +52,8 @@ export default function Counting() {
           // Spec 3 Learn, Check and assistance › Malformed input: cue 9
           onInputRejected={() => feedback.cue('input-rejected')}
           onRetrySave={() => void service.retrySave()}
+          lesson={lessons?.find((lesson) => lesson.id === CHALLENGE_LESSONS[snapshot.view.category])}
+          onOpenLesson={openLesson}
         />
       );
     case 'ended':

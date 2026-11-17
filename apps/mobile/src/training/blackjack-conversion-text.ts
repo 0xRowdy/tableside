@@ -7,6 +7,7 @@ import { signed } from '@/play/blackjack-text';
 export const decksText = (decks: number) => String(decks);
 
 const TWO_PLACES = 100;
+const HALF = 0.5;
 
 // Spec 3 Lessons › Content requirements; S3-06 Qv1An
 export function conversionText(explanation: ConversionExplanation): string {
@@ -16,9 +17,9 @@ export function conversionText(explanation: ConversionExplanation): string {
   if (exact) return `${division} = ${signed(trueCount)} exactly, so the true count is ${signed(trueCount)}.`;
   const quotient = running / decks;
   const shown = Math.round(quotient * TWO_PLACES) / TWO_PLACES;
+  const truncated = `${division} ${shown === quotient ? '=' : '≈'} ${signed(shown)}. Tableside truncates toward zero, so ${signed(trueCount)}.`;
+  const slipsAway = running < 0 || quotient - trueCount >= HALF;
+  if (!slipsAway) return truncated;
   const away = trueCount + Math.sign(running);
-  return (
-    `${division} ${shown === quotient ? '=' : '≈'} ${signed(shown)}. Tableside truncates toward zero, so ${signed(trueCount)}. ` +
-    `Rounding ${running > 0 ? 'up' : 'down'} to ${signed(away)} is the common slip; some charts online round differently.`
-  );
+  return `${truncated} Rounding ${running > 0 ? 'up' : 'down'} to ${signed(away)} is the common slip; some charts online round differently.`;
 }

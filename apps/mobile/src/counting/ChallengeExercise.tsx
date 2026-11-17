@@ -1,7 +1,7 @@
 // Spec 3 S3-03 P4WjR, S3-04 qdnQm, S3-05 EDnGd, S3-06 C53yTW, zAatf, Qv1An; #132, #133, #134
 
 import type { ChallengeCategory, ChallengeEntry, ChallengeView, ConversionItem, CountRange, LearnFeedback } from '@tableside/engine';
-import { CircleCheck, CircleDot, CircleX, SkipForward } from 'lucide-react-native';
+import { CircleCheck, CircleDot, CircleX, Info, SkipForward } from 'lucide-react-native';
 import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -23,15 +23,17 @@ import {
   countPrompt,
   GIVEN_DECKS,
   GIVEN_RUNNING_COUNT,
-  NEXT_LABEL,
+  NEXT_QUESTION,
   spokenValue,
   TRUE_COUNT_LABEL,
   TRUE_COUNT_PROMPT,
-  TRY_AGAIN_LABEL,
+  TRY_AGAIN,
+  TRY_QUESTION_AGAIN,
   exerciseProgress,
   keepCounting,
   choiceState,
   COACH_NAME,
+  CONVERSION_LESSON_ACTION,
   feedbackText,
   NEXT_CARD,
   PACING_LABEL,
@@ -39,7 +41,7 @@ import {
   SKIP_LABEL,
   variantLabel,
 } from '@/training/challenge-text';
-import type { LearnerCommand } from '@/training/service';
+import type { LearnerCommand, LessonEntry } from '@/training/service';
 
 const SIDE_BY_SIDE_MAX_FONT_SCALE = 1.35;
 
@@ -50,6 +52,8 @@ export function ChallengeExercise({
   onCommand,
   onInputRejected,
   onRetrySave,
+  lesson,
+  onOpenLesson,
 }: {
   view: ChallengeView;
   busy: boolean;
@@ -57,6 +61,8 @@ export function ChallengeExercise({
   onCommand: (command: LearnerCommand) => void;
   onInputRejected: () => void;
   onRetrySave: () => void;
+  lesson?: LessonEntry;
+  onOpenLesson?: (id: string) => void;
 }) {
   const insets = useSafeAreaInsets();
   const ready = !busy && !saveFailed;
@@ -84,7 +90,15 @@ export function ChallengeExercise({
       <View style={styles.body}>
         {saveFailed && <SaveFailedBanner busy={busy} onRetry={onRetrySave} />}
         {view.category === 'conversion' && view.countRange ? (
-          <ConversionBody view={view} range={view.countRange} ready={ready} answering={answering} onCommand={onCommand} onInputRejected={onInputRejected} />
+          <ConversionBody
+            view={view}
+            range={view.countRange}
+            ready={ready}
+            answering={answering}
+            onCommand={onCommand}
+            onInputRejected={onInputRejected}
+            onLesson={lesson?.steps != null && onOpenLesson ? () => onOpenLesson(lesson.id) : null}
+          />
         ) : view.countRange === null ? (
           <>
             {view.item && 'card' in view.item && <PlayingCard card={view.item.card} />}
@@ -100,7 +114,7 @@ export function ChallengeExercise({
             </View>
             {view.legalCommands.includes('skip') && <Button label={SKIP_LABEL} icon={SkipForward} variant="outline" stretch disabled={!answering} onPress={() => onCommand({ kind: 'skip' })} />}
             {view.phase === 'recorded' && entered !== null && <RecordedNotice entered={entered} category={view.category} />}
-            {feedback && <CoachNote feedback={feedback} category={view.category} position={view.position} canRetry={view.legalCommands.includes('retry-item')} enabled={ready} onCommand={onCommand} />}
+            {feedback && <CoachNote feedback={feedback} position={view.position} canRetry={view.legalCommands.includes('retry-item')} enabled={ready} onCommand={onCommand} />}
           </>
         ) : (
           <CountingBody view={view} range={view.countRange} ready={ready} answering={answering} onCommand={onCommand} onInputRejected={onInputRejected} />
@@ -170,7 +184,7 @@ function CountingBody({
         )}
         {view.phase === 'card' && <Button label={NEXT_CARD} stretch disabled={!ready} onPress={() => onCommand({ kind: 'next-item' })} />}
         {view.phase === 'recorded' && entered !== null && <RecordedNotice entered={entered} category={view.category} />}
-        {feedback && <CoachNote feedback={feedback} category={view.category} position={view.position} canRetry={view.legalCommands.includes('retry-item')} enabled={ready} onCommand={onCommand} />}
+        {feedback && <CoachNote feedback={feedback} position={view.position} canRetry={view.legalCommands.includes('retry-item')} enabled={ready} onCommand={onCommand} />}
       </View>
     </View>
   );
@@ -184,6 +198,7 @@ function ConversionBody({
   answering,
   onCommand,
   onInputRejected,
+  onLesson,
 }: {
   view: ChallengeView;
   range: CountRange;
@@ -191,6 +206,7 @@ function ConversionBody({
   answering: boolean;
   onCommand: (command: LearnerCommand) => void;
   onInputRejected: () => void;
+  onLesson: (() => void) | null;
 }) {
   const { width, height, fontScale } = useWindowDimensions();
   const sideBySide = width > height && fontScale <= SIDE_BY_SIDE_MAX_FONT_SCALE;
@@ -201,10 +217,10 @@ function ConversionBody({
     <View testID="count-columns" style={[styles.columns, { flexDirection: sideBySide ? 'row' : 'column' }]}>
       <View style={[styles.column, sideBySide && styles.side]}>
         {question && <GivenValues question={question} />}
-        {feedback && <CoachNote feedback={feedback} category={view.category} position={view.position} canRetry={view.legalCommands.includes('retry-item')} enabled={ready} onCommand={onCommand} />}
+        {feedback && <ConversionNote feedback={feedback} canRetry={view.legalCommands.includes('retry-item')} enabled={ready} onCommand={onCommand} onLesson={onLesson} />}
       </View>
       <View style={[styles.column, sideBySide && styles.side]}>
-        {view.phase === 'question' && (
+        {(view.phase === 'question' || feedback) && (
           <>
             <Text maxFontSizeMultiplier={textScale.display} style={[styles.prompt, styles.start]}>
               {TRUE_COUNT_PROMPT}
@@ -217,10 +233,53 @@ function ConversionBody({
               onSubmit={(value) => onCommand({ kind: 'answer', value })}
               onSkip={() => onCommand({ kind: 'skip' })}
               onRejected={onInputRejected}
+              next={feedback ? { label: NEXT_QUESTION, enabled: ready, onPress: () => onCommand({ kind: 'next-item' }) } : undefined}
             />
           </>
         )}
         {view.phase === 'recorded' && entered !== null && <RecordedNotice entered={entered} category={view.category} />}
+      </View>
+    </View>
+  );
+}
+
+// Spec 3 S3-06 Qv1An
+function ConversionNote({
+  feedback,
+  canRetry,
+  enabled,
+  onCommand,
+  onLesson,
+}: {
+  feedback: LearnFeedback;
+  canRetry: boolean;
+  enabled: boolean;
+  onCommand: (command: LearnerCommand) => void;
+  onLesson: (() => void) | null;
+}) {
+  const text = feedbackText(feedback, 0);
+  return (
+    <View style={styles.coach} accessibilityLiveRegion="polite" testID="coach-note">
+      <View style={styles.coachHead}>
+        <View style={styles.who}>
+          <Text maxFontSizeMultiplier={textScale.body} style={styles.coachName}>
+            {COACH_NAME}
+          </Text>
+          <Text maxFontSizeMultiplier={textScale.body} style={[styles.kicker, { color: palette.coachAccent }]}>
+            {text.kicker}
+          </Text>
+        </View>
+        <Info color={palette.coachAccent} size={18} />
+      </View>
+      <Text maxFontSizeMultiplier={textScale.display} style={styles.headline}>
+        {text.headline}
+      </Text>
+      <Text maxFontSizeMultiplier={textScale.body} style={styles.detail}>
+        {text.detail}
+      </Text>
+      <View style={styles.coachActions}>
+        <CoachButton label={CONVERSION_LESSON_ACTION} primary enabled={enabled && onLesson !== null} onPress={() => onLesson?.()} />
+        {canRetry && <CoachButton label={TRY_QUESTION_AGAIN} enabled={enabled} onPress={() => onCommand({ kind: 'retry-item' })} />}
       </View>
     </View>
   );
@@ -262,14 +321,12 @@ function RecordedNotice({ entered, category }: { entered: ChallengeEntry; catego
 
 function CoachNote({
   feedback,
-  category,
   position,
   canRetry,
   enabled,
   onCommand,
 }: {
   feedback: LearnFeedback;
-  category: ChallengeCategory;
   position: number;
   canRetry: boolean;
   enabled: boolean;
@@ -298,8 +355,8 @@ function CoachNote({
         {text.detail}
       </Text>
       <View style={styles.coachActions}>
-        <CoachButton label={NEXT_LABEL[category]} primary enabled={enabled} onPress={() => onCommand({ kind: 'next-item' })} />
-        {canRetry && <CoachButton label={TRY_AGAIN_LABEL[category]} enabled={enabled} onPress={() => onCommand({ kind: 'retry-item' })} />}
+        <CoachButton label={NEXT_CARD} primary enabled={enabled} onPress={() => onCommand({ kind: 'next-item' })} />
+        {canRetry && <CoachButton label={TRY_AGAIN} enabled={enabled} onPress={() => onCommand({ kind: 'retry-item' })} />}
       </View>
     </View>
   );

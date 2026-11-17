@@ -70,7 +70,7 @@ export function checkView(state: ChallengeState): CheckChallengeView {
   return view;
 }
 
-// #134: the cards of a card-values or running-count attempt
+// #134
 export const cardItems = (state: ChallengeState): CardValueItem[] =>
   state.items.map((item) => {
     if (!('card' in item)) throw new Error('expected card items');

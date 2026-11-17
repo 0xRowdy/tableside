@@ -461,6 +461,8 @@ describe('the Counting tab', () => {
         }
         await enterTrueCount(trueCount);
         expect(screen.getByText(`${signedText(trueCount)} is right.`)).toBeOnTheScreen();
+        expect(screen.getByLabelText('True count')).toHaveDisplayValue(typed(trueCount));
+        expect(screen.getByRole('button', { name: 'Read the conversion lesson' })).toBeDisabled();
         await fireEvent.press(screen.getByRole('button', { name: 'Next question' }));
       }
       await screen.findByRole('header', { name: 'Results' });

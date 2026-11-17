@@ -30,7 +30,7 @@ const seed = { protocol: RANDOM_PROTOCOL_VERSION, key: [1, 0x9e3779b9], session:
 
 const NEXT: ChallengeCommand = { kind: 'next-item' };
 
-// The questions of S3-06 (question 4 is the frames' −7 with 2 decks remaining)
+// Spec 3 S3-06 zAatf, Qv1An
 const QUESTIONS: ConversionItem[] = [
   { running: 0, decks: 3 },
   { running: 8, decks: 2 },
@@ -44,7 +44,7 @@ const QUESTIONS: ConversionItem[] = [
   { running: -13, decks: 4.5 },
 ];
 
-// Hand-computed: each running count ÷ decks remaining, truncated toward zero
+// docs/cross-runtime-harness.md Adding cases
 const TRUE_COUNTS = [0, 4, 3, -3, 0, 10, -6, 3, 0, -2];
 
 function attempt(variant: ChallengeVariant, commands: readonly ChallengeCommand[] = [], questions: readonly ConversionItem[] = QUESTIONS): ChallengeState {
@@ -131,17 +131,42 @@ describe('the true-count conversion exercise', () => {
     await present(readChallengeView(atQuestion4('learn', [{ kind: 'answer', value: -3 }])));
     expect(screen.getByText('Learn · self-paced')).toBeOnTheScreen();
     expect(screen.getByLabelText('Running count, minus 7')).toBeOnTheScreen();
+    expect(screen.getByText('Marcus · Learn')).toBeOnTheScreen();
+    expect(screen.getByText('TRUE COUNT')).toBeOnTheScreen();
     expect(screen.getByText('−3 is right.')).toBeOnTheScreen();
     expect(screen.getByText('−7 ÷ 2 = −3.5. Tableside truncates toward zero, so −3. Rounding down to −4 is the common slip; some charts online round differently.')).toBeOnTheScreen();
     expect(screen.queryByRole('button', { name: 'Try this question again' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Read the conversion lesson' })).toBeDisabled();
+    expect(screen.getByText('Enter the true count')).toBeOnTheScreen();
+    expect(screen.getByLabelText('True count')).toHaveDisplayValue('');
+    for (const key of ['1', '0', 'Change sign', 'Delete', 'Skip']) expect(screen.getByRole('button', { name: key })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: 'Submit' })).toBeNull();
     await press('Next question');
     expect(sent).toEqual([{ kind: 'next-item' }]);
 
     await present(readChallengeView(atQuestion4('learn', [{ kind: 'answer', value: -4 }])));
-    expect(screen.getByText('NOT QUITE · YOUR FIRST ANSWER IS SCORED')).toBeOnTheScreen();
     expect(screen.getByText('The true count is −3.')).toBeOnTheScreen();
     await press('Try this question again');
     expect(sent).toEqual([{ kind: 'retry-item' }]);
+
+    await cleanup();
+    let opened: string[] = [];
+    await render(
+      <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 0, left: 0, right: 0, bottom: 0 } }}>
+        <ChallengeExercise
+          view={readChallengeView(atQuestion4('learn', [{ kind: 'answer', value: -3 }]))}
+          busy={false}
+          saveFailed={false}
+          onCommand={() => undefined}
+          onInputRejected={() => undefined}
+          onRetrySave={() => undefined}
+          lesson={{ id: 'true-count-conversion', title: 'True-count conversion', summary: null, section: 'blackjack', steps: 4, access: 'available', status: 'not-started' } as never}
+          onOpenLesson={(id) => void (opened = [...opened, id])}
+        />
+      </SafeAreaProvider>,
+    );
+    await press('Read the conversion lesson');
+    expect(opened).toEqual(['true-count-conversion']);
 
     const explained = async (index: number, value: number) => {
       await present(readChallengeView(attempt('learn', [...TRUE_COUNTS.slice(0, index).flatMap((answer): ChallengeCommand[] => [{ kind: 'answer', value: answer }, NEXT]), { kind: 'answer', value }])));
@@ -149,7 +174,10 @@ describe('the true-count conversion exercise', () => {
     };
     expect(await explained(0, 0)).toHaveTextContent('0 ÷ 3 = 0, so the true count is 0.', { exact: false });
     expect(await explained(1, 4)).toHaveTextContent('+8 ÷ 2 = +4 exactly, so the true count is +4.', { exact: false });
-    expect(await explained(2, 3)).toHaveTextContent('+11 ÷ 3.5 ≈ +3.14. Tableside truncates toward zero, so +3. Rounding up to +4 is the common slip; some charts online round differently.', { exact: false });
+    await explained(2, 3);
+    expect(screen.getByText('+11 ÷ 3.5 ≈ +3.14. Tableside truncates toward zero, so +3.')).toBeOnTheScreen();
+    await present(readChallengeView(attempt('learn', [{ kind: 'answer', value: 3 }], [{ running: 7, decks: 2 }, ...QUESTIONS.slice(1)])));
+    expect(screen.getByText('+7 ÷ 2 = +3.5. Tableside truncates toward zero, so +3. Rounding up to +4 is the common slip; some charts online round differently.')).toBeOnTheScreen();
     expect(await explained(8, 0)).toHaveTextContent('+1 ÷ 4 = +0.25. Tableside truncates toward zero, so 0.', { exact: false });
     expect(await explained(4, 0)).toHaveTextContent('−5 ÷ 6 ≈ −0.83. Tableside truncates toward zero, so 0. Rounding down to −1 is the common slip; some charts online round differently.', { exact: false });
   });

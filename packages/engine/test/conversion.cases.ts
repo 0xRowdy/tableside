@@ -23,8 +23,8 @@ const SEED_1_TRUE_COUNTS_BY_HAND = [-2, 24, 3, 3, -5, 0, 3, 0, 6, 18];
 
 const questions = (state: ChallengeState) => state.items.map((item) => ('running' in item ? [item.running, item.decks] : null));
 
-// Spec 3 Challenge content › Conversion: hand-checked coverage of one question
-const isExact = ([running, decks]: readonly number[]) => (2 * (running as number)) % (2 * (decks as number)) === 0;
+// Spec 3 Challenge content › Conversion
+const isExact = ([running, decks]: readonly number[]) => Number.isInteger((running as number) / (decks as number));
 
 // Spec 3 Testing Decisions › Seam 1
 const BOUNDARIES = [

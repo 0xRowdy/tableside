@@ -148,7 +148,7 @@ export function feedbackText(feedback: LearnFeedback, position: number): { reado
   const kicker = feedback.correct ? (feedback.scored ? 'CORRECT' : 'CORRECT ON RETRY · YOUR FIRST ANSWER IS SCORED') : 'NOT QUITE · YOUR FIRST ANSWER IS SCORED';
   if (explanation.kind === 'conversion') {
     const answer = signed(explanation.trueCount);
-    return { kicker, headline: feedback.correct ? `${answer} is right.` : `The true count is ${answer}.`, detail: conversionText(explanation) };
+    return { kicker: CONVERSION_KICKER, headline: feedback.correct ? `${answer} is right.` : `The true count is ${answer}.`, detail: conversionText(explanation) };
   }
   if (explanation.kind === 'running-count') {
     return {
@@ -168,8 +168,10 @@ export const COACH_NAME = 'Marcus · Learn';
 export const NEXT_CARD = 'Next card';
 export const TRY_AGAIN = 'Try this card again';
 // Spec 3 S3-06 Qv1An
-export const NEXT_LABEL: Record<ChallengeCategory, string> = { 'card-values': NEXT_CARD, 'running-count': NEXT_CARD, conversion: 'Next question' };
-export const TRY_AGAIN_LABEL: Record<ChallengeCategory, string> = { 'card-values': TRY_AGAIN, 'running-count': TRY_AGAIN, conversion: 'Try this question again' };
+export const NEXT_QUESTION = 'Next question';
+export const TRY_QUESTION_AGAIN = 'Try this question again';
+export const CONVERSION_KICKER = 'TRUE COUNT';
+export const CONVERSION_LESSON_ACTION = 'Read the conversion lesson';
 
 export type ChoiceState = 'your-answer' | 'your-pick' | 'correct' | 'recorded' | null;
 

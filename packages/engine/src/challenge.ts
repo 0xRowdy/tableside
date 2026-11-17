@@ -157,7 +157,7 @@ export interface MetricResult {
 
 export type ChallengeMetrics = Readonly<Record<ChallengeMetric, MetricResult | null>>;
 
-// Spec 3 Scoring and review › Metrics: the one metric each category tests
+// Spec 3 Scoring and review › Metrics
 export const CATEGORY_METRIC: Readonly<Record<ChallengeCategory, ChallengeMetric>> = { 'card-values': 'card-values', 'running-count': 'running-count', conversion: 'true-count' };
 
 export interface CountRange {
@@ -306,7 +306,7 @@ function conversionProblem(content: Record<string, unknown>): string | undefined
   if (!isText(content.id) || !isCount(content.version) || content.version < 1) return 'the content definition needs an id and a version from 1';
   const { length, maxRunningCount, maxDecks } = content;
   if (!isCount(length) || length < MIN_CONVERSION_LENGTH || length > MAX_CONVERSION_LENGTH) return `a conversion set has ${MIN_CONVERSION_LENGTH} to ${MAX_CONVERSION_LENGTH} questions`;
-  if (!isCount(maxRunningCount) || maxRunningCount < 1 || maxRunningCount > MAX_DECKS * 52) return 'the largest running count is a whole number from 1';
+  if (!isCount(maxRunningCount) || maxRunningCount < 1 || maxRunningCount > MAX_DECKS * 52) return `the largest running count is a whole number from 1 to ${MAX_DECKS * 52}`;
   if (!isCount(maxDecks) || maxDecks < 2 || maxDecks > MAX_DECKS) return `decks remaining go up to a whole number from 2 to ${MAX_DECKS}`;
   return undefined;
 }
@@ -439,7 +439,7 @@ function legalCommands(state: ChallengeState): readonly ChallengeCommandKind[] {
   return canReveal(state) ? [...legal.filter((kind) => kind !== 'end'), 'reveal-count', 'end'] : legal;
 }
 
-// Spec 3 Learn, Check and assistance › Malformed input: the widest answer the content allows
+// Spec 3 Learn, Check and assistance › Malformed input
 function countRange(content: ChallengeContent): CountRange | null {
   if (content.category === 'card-values') return null;
   const limit = content.category === 'conversion' ? 2 * content.maxRunningCount : content.length;
@@ -450,7 +450,7 @@ function answerProblem(state: ChallengeState, value: number): string | undefined
   const range = countRange(state.content);
   if (!range) return HI_LO_VALUES.includes(value as HiLoValue) ? undefined : 'a card value is +1, 0 or −1';
   const what = state.content.category === 'conversion' ? 'a true count' : 'a running count';
-  return value >= range.min && value <= range.max ? undefined : `${what} is a whole number from ${range.min} to +${range.max}`;
+  return value >= range.min && value <= range.max ? undefined : `${what} is a whole number from −${range.max} to +${range.max}`;
 }
 
 function isCommand(value: unknown): value is ChallengeCommand {
