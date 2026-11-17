@@ -1,4 +1,5 @@
 // #100
+// docs/account-service.md Supabase Auth
 
 import { codeMail, deliver } from '../_shared/mail.ts';
 import { serviceRpc } from '../_shared/service.ts';

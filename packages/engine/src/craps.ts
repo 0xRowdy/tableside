@@ -1,4 +1,5 @@
 // Spec 1 Game rules, Standard craps
+// docs/development.md Releases: recorded checkpoints and the quarantine list
 
 import type { ActivityStateBase, Change, Command, CommandKind, CrapsPermittedView, DomainFact, GameCommand, GameModule, Step, Wager } from './activity';
 import { rollDice } from './draws';

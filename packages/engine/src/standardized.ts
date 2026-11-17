@@ -1,4 +1,5 @@
 // Spec 1 Amendment 6 §1, §2
+// docs/development.md Game rules spec 1 leaves open
 
 import {
   advanceActivity,

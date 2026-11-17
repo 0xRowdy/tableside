@@ -1,3 +1,4 @@
+// docs/development.md House-edge sources
 import { ODDS_CAPS, STANDARD_CRAPS, type OddsCap } from '@tableside/engine';
 import { describe, expect, it } from 'vitest';
 

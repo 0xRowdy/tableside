@@ -1,3 +1,4 @@
+// docs/cross-runtime-harness.md Adding cases
 import type { BenchmarkProfile, StrategyDefinition } from '../src';
 
 export const CERTIFIED_BLACKJACK = {

@@ -1,4 +1,5 @@
 // Spec 2 App-review access, Amendment 1 C4; #107
+// docs/account-service.md Supabase Auth
 
 import { generateCode } from '../_shared/codes.ts';
 import { StepError, environmentOf, readJsonPost, reply, serviceAuth, serviceRpc } from '../_shared/service.ts';

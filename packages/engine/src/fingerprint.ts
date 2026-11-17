@@ -1,4 +1,5 @@
 // Spec 1 Amendment 6 §3
+// docs/development.md Releases: recorded checkpoints and the quarantine list
 
 import { canonicalJson } from './canonical';
 import { add, decodeMoney, encodeMoney, money, mul, sub, compare, type Money } from './money';

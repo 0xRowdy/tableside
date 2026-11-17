@@ -1,3 +1,4 @@
+// docs/development.md Engine portability
 export function canonicalJson(value: unknown): string {
   switch (typeof value) {
     case 'string':

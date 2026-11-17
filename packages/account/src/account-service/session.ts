@@ -1,3 +1,4 @@
+// docs/account-service.md supabase-js and postgrest-js
 import { ELIGIBILITY_REFRESH_MS } from '../eligibility';
 import { SyncEngine } from '../sync/engine';
 import { SyncSession } from '../sync/session';

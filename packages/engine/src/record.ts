@@ -1,4 +1,5 @@
 // Spec 1 Amendment 2 §B
+// docs/development.md Releases: recorded checkpoints and the quarantine list
 
 import { readPermittedView, stopCause, type ActivityState, type AdherenceMeasure, type GameId, type StopCause, type StrategyDeparture, type VersionedIdentity } from './activity';
 import { summarizeFunding, type FundingSource } from './funding';

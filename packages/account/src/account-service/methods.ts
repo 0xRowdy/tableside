@@ -1,4 +1,5 @@
 // Spec 2 S2-18
+// docs/account-service.md Supabase Auth
 
 import { freshCodeAnswer, freshProviderAnswer } from '../lifecycle-answers';
 

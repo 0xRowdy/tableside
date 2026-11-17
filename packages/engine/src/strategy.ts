@@ -1,3 +1,4 @@
+// docs/development.md Engine portability
 import type { Command } from './activity';
 import { canonicalJson } from './canonical';
 import { add, compare, decodeMoney, encodeMoney, money, mul, sub, MoneyFormatError, type Money } from './money';

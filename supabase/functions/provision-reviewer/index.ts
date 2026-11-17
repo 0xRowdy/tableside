@@ -1,4 +1,5 @@
 // Spec 2 Amendment 8 §6; #107
+// docs/account-service.md Supabase Auth
 
 import { ENVIRONMENT_HEADER, StepError, environmentOf, readJsonPost, reply } from '../_shared/service.ts';
 

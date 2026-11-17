@@ -1,4 +1,5 @@
 // docs/decisions/mobile-platform-shared-game-engine.md Reproducible random protocol
+// docs/development.md Engine portability
 
 export type Words4 = readonly [number, number, number, number];
 export type Words2 = readonly [number, number];

@@ -1,4 +1,5 @@
 // #101
+// docs/account-service.md Apple and Google
 
 import { verifyProviderJwt } from '../_shared/id-token.ts';
 import { devicesSignedOutMail, sendSecurityNotice } from '../_shared/mail.ts';

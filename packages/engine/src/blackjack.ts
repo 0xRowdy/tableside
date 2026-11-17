@@ -1,3 +1,4 @@
+// docs/development.md Game rules spec 1 leaves open
 import type { ActivityStateBase, BlackjackPermittedView, Command, CommandKind, DomainFact, GameCommand, GameModule, PendingCorrection, PermittedViewBase, Step, StrategyView, Wager } from './activity';
 import { canonicalShoe, shuffle, type Card, type Rank, type Suit } from './draws';
 import { add, compare, decodeMoney, encodeMoney, money, mul, neg, sub, type Money } from './money';

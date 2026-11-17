@@ -1,3 +1,4 @@
+// docs/account-service.md supabase-js and postgrest-js
 import type { RealtimeChannel, SupabaseClient } from '@supabase/supabase-js';
 
 import type { SyncBackend } from './engine';

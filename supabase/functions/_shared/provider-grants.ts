@@ -1,4 +1,5 @@
 // Spec 2 Deletion; #109; docs/environments.md
+// docs/account-service.md Apple and Google
 
 import { verifyIdToken } from './id-token.ts';
 

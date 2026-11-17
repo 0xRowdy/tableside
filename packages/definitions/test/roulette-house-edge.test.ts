@@ -1,3 +1,4 @@
+// docs/development.md House-edge sources
 import { oneSpinOutcomeTable, rouletteLayout, type PlacementKind, type RouletteWheel } from '@tableside/engine';
 import { describe, expect, it } from 'vitest';
 

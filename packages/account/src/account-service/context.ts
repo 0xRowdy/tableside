@@ -1,3 +1,4 @@
+// docs/account-service.md supabase-js and postgrest-js
 import { type SupabaseClient, createClient } from '@supabase/supabase-js';
 
 import { backendPost } from '../backend-request';

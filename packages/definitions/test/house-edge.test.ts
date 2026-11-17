@@ -1,3 +1,4 @@
+// docs/development.md House-edge sources
 import { describe, expect, it } from 'vitest';
 
 import { BLACKJACK_REFERENCE, blackjackHouseEdge, type BlackjackPreset } from '../src/index';
