@@ -1,5 +1,5 @@
 // Spec 3 Audio and haptics, Learn, Check and assistance, Testing Decisions › Seam 3 (cue dispatch); #132
-import type { ChallengeVariant, ChallengeView } from '@tableside/engine';
+import { EMPTY_QUARANTINE_LIST, type ChallengeVariant, type ChallengeView } from '@tableside/engine';
 
 import { FeedbackService } from '@/feedback/service';
 import { DeviceSettings } from '@/feedback/settings';
@@ -17,7 +17,7 @@ const wrongFor = (view: ChallengeView) => (reference(view) === 1 ? -1 : 1);
 
 async function setup(variant: ChallengeVariant, store = new MemoryTrainingStore()) {
   const clock = new FakeClock(1_790_000_000_000, true);
-  const service = new TrainingService({ store, access: alwaysAllowed, allowance: plentyAllowance(() => clock.now()), clock, entropy: entropyFromWords(PI_WORDS), newId: () => 'attempt-1', device: 'test-device', owner: 'local' });
+  const service = new TrainingService({ store, access: alwaysAllowed, allowance: plentyAllowance(() => clock.now()), clock, entropy: entropyFromWords(PI_WORDS), newId: () => 'attempt-1', device: 'test-device', owner: 'local', quarantine: EMPTY_QUARANTINE_LIST });
   const ports = substituteFeedbackPorts(null);
   const settings = new DeviceSettings(ports.storage);
   await settings.load();
@@ -104,6 +104,9 @@ describe('cues during a challenge attempt', () => {
     await first.service.submit({ kind: 'answer', value: 1 });
     first.stop();
     const later = await setup('check', first.store.reopen());
+    expect(later.ports.sound.played).toEqual([]);
+    // Spec 3 Amendment 1 C1; #135
+    await later.service.resume();
     expect(later.ports.sound.played).toEqual([]);
     await later.service.submit({ kind: 'answer', value: 1 });
     expect(later.ports.sound.played.map((play) => play.cue)).toEqual(['answer-accepted', 'card-dealt']);

@@ -162,5 +162,8 @@ export class MemoryTrainingStore implements TrainingStore {
 
 const parse = <T>(text: string): T => JSON.parse(text) as T;
 // #135
-const storedAttempt = (text: string): StoredAttempt => ({ timing: UNTIMED, ...parse<StoredAttempt>(text) });
+const storedAttempt = (text: string): StoredAttempt => {
+  const attempt = parse<Omit<StoredAttempt, 'timing'> & Partial<Pick<StoredAttempt, 'timing'>>>(text);
+  return { ...attempt, timing: attempt.timing ?? UNTIMED };
+};
 const clone = <T>(value: T): T => parse<T>(JSON.stringify(value));

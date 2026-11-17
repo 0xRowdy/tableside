@@ -1,5 +1,5 @@
 // Spec 3 Testing Decisions › Seam 2 (Lifecycle, Pause/suspend, Timer, Failure injection); Attempt lifecycle; Amendment 1 B5, C1, C3, C6; #135
-import type { ChallengeView } from '@tableside/engine';
+import { EMPTY_QUARANTINE_LIST, ENGINE_VERSION, type ChallengeView, type QuarantineList } from '@tableside/engine';
 
 import { alwaysAllowed, type AccessDecision, type AccessSupervisor, type Disposition } from '@/practice/adapters';
 import { FakeClock, entropyFromWords, PI_WORDS } from '@/practice/testing/substitutes';
@@ -8,11 +8,12 @@ import { RECORDED_MS } from '@/training/controller';
 import { MemoryTrainingStore } from '@/training/memory-store';
 import { TrainingService, type ChallengeSetup, type TrainingSnapshot } from '@/training/service';
 import { HI_LO_BY_RANK } from '@/training/testing/hi-lo';
+import { attemptTransition, chargeFor, newAttempt } from '@/training/testing/store-contract';
 
 const LEARN_CARD_VALUES = { category: 'card-values', variant: 'learn' } as const;
 const CHECK_CARD_VALUES = { category: 'card-values', variant: 'check' } as const;
 
-function setup(options: { access?: Partial<AccessSupervisor>; store?: MemoryTrainingStore; clock?: FakeClock } = {}) {
+function setup(options: { access?: Partial<AccessSupervisor>; store?: MemoryTrainingStore; clock?: FakeClock; quarantine?: QuarantineList } = {}) {
   const store = options.store ?? new MemoryTrainingStore();
   const admissions: unknown[] = [];
   const access: AccessSupervisor = {
@@ -25,9 +26,9 @@ function setup(options: { access?: Partial<AccessSupervisor>; store?: MemoryTrai
   };
   let next = 0;
   let draws = 0;
-  const entropy = { randomBytes: (length: number) => entropyFromWords([PI_WORDS[0] + draws++, PI_WORDS[1], PI_WORDS[2], PI_WORDS[3]]).randomBytes(length) };
+  const entropy = { randomBytes: (length: 16) => entropyFromWords([PI_WORDS[0] + draws++, PI_WORDS[1], PI_WORDS[2], PI_WORDS[3]]).randomBytes(length) };
   const clock = options.clock ?? new FakeClock(1_790_000_000_000, true);
-  const service = new TrainingService({ store, access, allowance: plentyAllowance(() => clock.now()), clock, entropy, newId: () => `attempt-${++next}`, device: 'test-device', owner: 'local' });
+  const service = new TrainingService({ store, access, allowance: plentyAllowance(() => clock.now()), clock, entropy, newId: () => `attempt-${++next}`, device: 'test-device', owner: 'local', quarantine: options.quarantine ?? EMPTY_QUARANTINE_LIST });
   return { service, store, admissions, clock };
 }
 
@@ -118,9 +119,9 @@ describe('challenge attempt lifecycle', () => {
   // Spec 3 Amendment 1 B5, C1
   describe('direct suspend', () => {
     it.each([
-      ['tab-bar navigation', 'navigation', (service: TrainingService) => service.suspend('navigation')],
-      ['backgrounding', 'app-lifecycle', (service: TrainingService) => void service.lifecycle('backgrounded')],
-      ['signing out', 'sign-out', (service: TrainingService) => void service.lifecycle('signed-out')],
+      ['tab-bar navigation', 'navigation', (service: TrainingService): void => service.suspend('navigation')],
+      ['backgrounding', 'app-lifecycle', (service: TrainingService): void => void service.lifecycle('backgrounded')],
+      ['signing out', 'sign-out', (service: TrainingService): void => void service.lifecycle('signed-out')],
     ] as const)('on %s holds the attempt with its answers, and marks it interrupted', async (_name, cause, suspend) => {
       const { service, store } = await started(CHECK_CARD_VALUES);
       await service.submit({ kind: 'answer', value: 1 });
@@ -386,6 +387,49 @@ describe('challenge attempt lifecycle', () => {
       await finish(service);
       await service.retry();
       expect([active(service.snapshot()).timer?.ms, admissions.length]).toEqual([0, 2]);
+    });
+  });
+
+  // Spec 3 Attempt lifecycle › Phases (unusable); Amendment 1 C3; docs/development.md Releases
+  describe('an attempt this build can no longer run', () => {
+    const DEFECT: QuarantineList = { version: 2, entries: [{ id: 'defect-1', match: { engine: ENGINE_VERSION }, explanation: 'A defect affected these cards.' }] };
+
+    it('ends a quarantined attempt as unusable: one neutral record, its charge kept, and the device free for the next attempt', async () => {
+      const first = await started(CHECK_CARD_VALUES);
+      await first.service.submit({ kind: 'answer', value: 1 });
+      const { attemptId } = viewOf(first.service);
+
+      const later = setup({ store: first.store.reopen(), quarantine: DEFECT });
+      await later.service.load();
+      expect(later.service.snapshot()).toMatchObject({
+        status: 'ended',
+        record: { attemptId, endingReason: 'unusable', metrics: { 'card-values': null }, review: [], interrupted: true, performanceMs: null },
+      });
+      expect([(await later.store.readAttemptRecords()).length, (await later.store.loadAttempt(attemptId))?.charge?.effect.amount]).toEqual([1, '1']);
+      later.service.dismissResults();
+      await later.service.startAttempt(LEARN_CARD_VALUES);
+      expect(viewOf(later.service).attemptId).toBe('attempt-1');
+    });
+
+    it('ends a charged attempt whose checkpoint is damaged as unusable', async () => {
+      const store = new MemoryTrainingStore();
+      await store.createAttempt(newAttempt('broken'));
+      await store.commitAttemptTransition(attemptTransition('broken', 0, { charge: chargeFor('broken') }));
+      const { service } = setup({ store });
+      await service.load();
+      expect(service.snapshot()).toMatchObject({ status: 'ended', record: { attemptId: 'broken', endingReason: 'unusable', groupKey: { category: 'card-values', variant: 'learn' } } });
+    });
+
+    it('leaves an attempt from a later build untouched and asks for the update', async () => {
+      const store = new MemoryTrainingStore();
+      const later = '{"schema":999,"identities":{},"attempt":{},"receipts":[]}';
+      await store.createAttempt(newAttempt('later', { checkpoint: later }));
+      await store.commitAttemptTransition({ ...attemptTransition('later', 0, { charge: chargeFor('later') }), checkpoint: later });
+      const { service } = setup({ store });
+      await service.load();
+      expect(service.snapshot()).toEqual({ status: 'needs-update' });
+      await service.startAttempt(LEARN_CARD_VALUES);
+      expect([service.snapshot(), (await store.findUnfinishedAttempt())?.attemptId, await store.readAttemptRecords()]).toEqual([{ status: 'needs-update' }, 'later', []]);
     });
   });
 });

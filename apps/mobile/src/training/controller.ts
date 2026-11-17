@@ -7,8 +7,10 @@ import {
   createChallenge,
   decodeChallengeCheckpoint,
   encodeChallengeCheckpoint,
+  quarantineStatus,
   readChallengeView,
   streamIdentityFromEntropy,
+  unusableAttemptRecord,
   type ChallengeAttemptRecord,
   type ChallengeCommand,
   type ChallengeContent,
@@ -81,7 +83,9 @@ export type AttemptSnapshot =
       readonly hold: AttemptHold | null;
       readonly timer: PerformanceTimer | null;
     }
-  | { readonly status: 'ended'; readonly record: ChallengeAttemptRecord; readonly position: number };
+  | { readonly status: 'ended'; readonly record: ChallengeAttemptRecord; readonly position: number; readonly explanation: string | null }
+  // docs/development.md Releases
+  | { readonly status: 'needs-update' };
 
 type Committed = { readonly state: ChallengeState; readonly facts: readonly ChallengeFact[] };
 
@@ -107,6 +111,8 @@ export class ChallengeController {
   private showResults = true;
   private timing: AttemptTiming = UNTIMED;
   private timedSince: number | null = null;
+  // Spec 3 Amendment 1 C3
+  private unusable: string | null | undefined = undefined;
 
   constructor(private readonly adapters: TrainingAdapters) {}
 
@@ -120,15 +126,9 @@ export class ChallengeController {
   async load(): Promise<void> {
     await this.exclusive(async () => {
       const stored = await this.adapters.store.findUnfinishedAttempt().catch(() => null);
-      if (!stored) return this.showNone(null);
-      const state = this.decode(stored);
-      // TODO(#135)
-      if (state.phase === 'ready') return this.showNone(null);
-      this.adopt(stored, state);
-      if (state.phase === 'ended') await this.record();
-      // Spec 3 Amendment 1 C1
-      else this.holdNow('recovered', null);
-      await this.drive();
+      // Spec 3 Amendment 1 C6
+      if (!stored || stored.sequence === 0) return this.showNone(null);
+      await this.recover(stored);
     });
   }
 
@@ -143,12 +143,9 @@ export class ChallengeController {
       } catch {
         return this.showNone('save-failed');
       }
+      if (this.current.status === 'needs-update') return;
       if (stored) {
-        const leftover = this.decode(stored);
-        if (leftover.phase !== 'ready') {
-          this.adopt(stored, leftover);
-          return this.holdNow('recovered', null);
-        }
+        if (stored.sequence > 0) return this.recover(stored);
         // Spec 3 Amendment 1 C6
         const discarded = await this.adapters.store.discardUnchargedAttempt(stored.attemptId).then(
           () => true,
@@ -181,6 +178,34 @@ export class ChallengeController {
       this.timedSince = null;
       await this.beginCharged(attempt, initial);
     });
+  }
+
+  // Spec 3 Attempt lifecycle › Durability; Amendment 1 C1, C3; docs/development.md Releases
+  private async recover(stored: StoredAttempt): Promise<void> {
+    const opened = this.open(stored);
+    if (opened.kind === 'needs-update') {
+      this.current = { status: 'needs-update' };
+      return this.notify();
+    }
+    this.adopt(stored, opened.state);
+    this.interrupted = true;
+    if (opened.kind === 'unusable') {
+      this.unusable = opened.explanation;
+      return this.record();
+    }
+    if (opened.state.phase === 'ended') return this.record();
+    this.holdNow('recovered', null);
+    await this.drive();
+  }
+
+  private open(stored: StoredAttempt): { readonly kind: 'resumable'; readonly state: ChallengeState } | { readonly kind: 'unusable'; readonly state: ChallengeState; readonly explanation: string | null } | { readonly kind: 'needs-update' } {
+    const decoded = decodeChallengeCheckpoint(stored.checkpoint);
+    if (!decoded.ok) {
+      if (decoded.error.kind === 'unsupported') return { kind: 'needs-update' };
+      return { kind: 'unusable', state: createChallenge(stored.specification, stored.random), explanation: null };
+    }
+    const quarantine = quarantineStatus({ identities: { ...decoded.state.identities, rules: null, strategy: null } }, this.adapters.quarantine);
+    return quarantine.quarantined ? { kind: 'unusable', state: decoded.state, explanation: quarantine.explanation } : { kind: 'resumable', state: decoded.state };
   }
 
   // Spec 3 Amendment 1 C6
@@ -370,7 +395,8 @@ export class ChallengeController {
   private async record(): Promise<void> {
     const state = this.requireState();
     const attempt = this.attempt as StoredAttempt;
-    const unsequenced = challengeAttemptRecord(state, {
+    const unusable = this.unusable;
+    const unsequenced = (unusable === undefined ? challengeAttemptRecord : unusableAttemptRecord)(state, {
       installation: this.adapters.device,
       startedAt: attempt.charge?.chargedAt ?? attempt.createdAt,
       endedAt: this.adapters.clock.now(),
@@ -395,15 +421,8 @@ export class ChallengeController {
       this.state = null;
       return this.showNone(null);
     }
-    this.current = { status: 'ended', record, position: Math.min(state.position + 1, state.content.length) };
+    this.current = { status: 'ended', record, position: Math.min(state.position + 1, state.content.length), explanation: unusable ?? null };
     this.notify();
-  }
-
-  private decode(stored: StoredAttempt): ChallengeState {
-    const decoded = decodeChallengeCheckpoint(stored.checkpoint);
-    // TODO(#135)
-    if (!decoded.ok) throw new Error(`attempt ${stored.attemptId} can't be resumed: ${decoded.error.message}`);
-    return decoded.state;
   }
 
   private adopt(stored: StoredAttempt, state: ChallengeState, facts: readonly ChallengeFact[] = []): void {
@@ -412,6 +431,7 @@ export class ChallengeController {
       this.interrupted = false;
       this.timing = stored.timing;
       this.timedSince = null;
+      this.unusable = undefined;
     }
     this.attempt = stored;
     this.state = state;

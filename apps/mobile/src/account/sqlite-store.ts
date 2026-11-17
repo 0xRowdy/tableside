@@ -1161,8 +1161,9 @@ async function readAttempt(tx: SqlExecutor, attemptId: string): Promise<StoredAt
   if (!row) return null;
   const charge = await tx.get<BodyRow>(`SELECT ${BODY} FROM challenge_charges WHERE attempt_id = ?`, [attemptId]);
   const record = await tx.get<BodyRow>(`SELECT ${BODY} FROM challenge_attempt_records WHERE attempt_id = ?`, [attemptId]);
+  const body = decode<Omit<NewAttempt, 'timing'> & Partial<Pick<NewAttempt, 'timing'>>>(row);
   // #135
-  return { timing: UNTIMED, ...decode<NewAttempt>(row), sequence: row.sequence, charge: charge ? decode<AttemptCharge>(charge) : null, record: record ? decode<ChallengeAttemptRecord>(record) : null };
+  return { ...body, timing: body.timing ?? UNTIMED, sequence: row.sequence, charge: charge ? decode<AttemptCharge>(charge) : null, record: record ? decode<ChallengeAttemptRecord>(record) : null };
 }
 
 async function readAttemptTransition(tx: SqlExecutor, attemptId: string, commandId: string): Promise<CommittedAttemptTransition | null> {

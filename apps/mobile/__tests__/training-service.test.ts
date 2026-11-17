@@ -1,5 +1,5 @@
 // Spec 3 Testing Decisions › Seam 2, Amendment 1 C6; #158, #132
-import { createChallenge, encodeChallengeCheckpoint, type ChallengeView } from '@tableside/engine';
+import { createChallenge, EMPTY_QUARANTINE_LIST, encodeChallengeCheckpoint, type ChallengeView } from '@tableside/engine';
 
 import { alwaysAllowed, type AccessSupervisor } from '@/practice/adapters';
 import { FakeClock, entropyFromWords, PI_WORDS } from '@/practice/testing/substitutes';
@@ -28,7 +28,7 @@ function setup(options: { access?: Partial<AccessSupervisor>; store?: MemoryTrai
   };
   let next = 0;
   const clock = options.clock ?? new FakeClock(1_790_000_000_000, true);
-  const service = new TrainingService({ store, access, allowance: plentyAllowance(() => clock.now()), clock, entropy: entropyFromWords(PI_WORDS), newId: () => `attempt-${++next}`, device: 'test-device', owner: 'local' });
+  const service = new TrainingService({ store, access, allowance: plentyAllowance(() => clock.now()), clock, entropy: entropyFromWords(PI_WORDS), newId: () => `attempt-${++next}`, device: 'test-device', owner: 'local', quarantine: EMPTY_QUARANTINE_LIST });
   return { service, store, admissions, clock };
 }
 

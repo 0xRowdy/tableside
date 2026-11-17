@@ -1,7 +1,7 @@
 // Spec 3 Challenge content, Learn, Check and assistance, Scoring and review; #158, #132, #133
 import type { TestCase } from '@tableside/harness';
 
-import { advanceChallenge, canonicalJson, challengeAttemptRecord, challengeResults, ENGINE_VERSION, createChallenge, decodeChallengeCheckpoint, encodeChallengeCheckpoint, readChallengeView, type ChallengeState } from '../src';
+import { advanceChallenge, canonicalJson, challengeAttemptRecord, challengeResults, ENGINE_VERSION, createChallenge, decodeChallengeCheckpoint, encodeChallengeCheckpoint, readChallengeView, unusableAttemptRecord, type ChallengeState } from '../src';
 
 import { ANSWER, begun, CHECK, checkView, LEARN, learnView, NEXT, RETRY, run, seed, SKIP, step } from './challenge.fixtures';
 import { throws } from './fixtures';
@@ -196,6 +196,26 @@ export const challengeCases: TestCase[] = [
         endedAt: 61_000,
       });
       t.equal(throws(() => challengeAttemptRecord(begun(), { installation: 'd', startedAt: 0, endedAt: 0, interrupted: false, performanceMs: null, meteringBasis: 'premium', allowancePolicyVersion: null })), 'Error');
+    },
+  },
+  // Spec 3 Attempt lifecycle (unusable), Amendment 1 C3; #135
+  {
+    name: 'challenge: an unusable attempt makes a neutral record that earns nothing, keeping its identities and assistance step',
+    run: (t) => {
+      const partway = run(begun(CHECK), [ANSWER(1), NEXT, ANSWER(0)]);
+      const record = unusableAttemptRecord(partway, {
+        installation: 'device-1',
+        startedAt: 1_000,
+        endedAt: 9_000,
+        interrupted: true,
+        performanceMs: null,
+        meteringBasis: 'challenge-attempt',
+        allowancePolicyVersion: null,
+      });
+      t.equal(
+        [record.endingReason, record.metrics, record.review, record.assistanceStep, record.groupKey.assistanceClass, record.attemptId, record.interrupted],
+        ['unusable', { 'card-values': null, 'running-count': null, 'true-count': null, 'playing-adherence': null, 'betting-adherence': null }, [], null, 'unassisted-check', 'attempt-1', true],
+      );
     },
   },
   {

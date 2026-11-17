@@ -1,4 +1,5 @@
 // Spec 3 Testing Decisions › Seam 2 (lessons); Lessons › Progress, Handoff; Amendment 1 C10; #143, #145
+import { EMPTY_QUARANTINE_LIST } from '@tableside/engine';
 import { APP_ORIENTATION, LESSONS, type Lesson, type LessonHandoff } from '@tableside/definitions';
 
 import { alwaysAllowed, type AccessSupervisor } from '@/practice/adapters';
@@ -47,6 +48,7 @@ function setup(options: { store?: MemoryTrainingStore; lessons?: readonly Lesson
       newId: () => `${prefix}-${++next}`,
       device: 'test-device',
       owner: 'local',
+      quarantine: EMPTY_QUARANTINE_LIST,
     },
     options.lessons ? { lessons: options.lessons } : {},
   );
