@@ -5,7 +5,7 @@ import { useState } from 'react';
 
 import { Placeholder } from '@/components/Placeholder';
 import { useFeedback } from '@/feedback/FeedbackProvider';
-import { CONTENT_SHOWN_CUE } from '@/feedback/training-cues';
+import { exampleShownCue } from '@/feedback/training-cues';
 import { useLoaded } from '@/hooks/use-loaded';
 import { LessonPlayer } from '@/lessons/LessonPlayer';
 import { handoffHref, lessonsHref } from '@/lessons/routes';
@@ -94,7 +94,8 @@ export default function LessonScreen() {
         onResume: () => setLatest({ ...view, prompt: null }),
         onHandoff: handOff,
         onExample: () => {
-          feedback.cue(CONTENT_SHOWN_CUE);
+          const cue = view.example && exampleShownCue(view.example.kind);
+          if (cue) feedback.cue(cue);
           setTrying(true);
         },
       }}

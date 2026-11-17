@@ -1,10 +1,12 @@
 // Spec 3 S3-11 sVqX1, S3-12 l8pMS, pX6CV, S3-13 JJl51, Fvlgc, ZBpF3, Learning NvGyZ; #143, #145
 
-import { BLACKJACK_MODES, CRAPS_STRATEGIES, ROULETTE_STRATEGIES, type LessonHandoff, type LessonSection } from '@tableside/definitions';
+import { BLACKJACK_MODES, CRAPS_STRATEGIES, ROULETTE_STRATEGIES, type LessonHandoff, type LessonSection, type ScriptedTurn, type StrategyStepAnswer } from '@tableside/definitions';
 import type { GameId } from '@tableside/engine';
 
 import { findGame } from '@/games';
 import { BLACKJACK_MODE_TEXT } from '@/play/blackjack-text';
+import { betsText } from '@/play/coaching-text';
+import { GAME_WORDS } from '@/play/game-words';
 
 import { CATEGORY_TEXT, NOT_READY_HINT, type AllowanceCopy } from './challenge-text';
 import type { LessonStatus } from './lesson-progress';
@@ -78,6 +80,9 @@ export function noticeText(notice: NonNullable<LessonView['notice']>): { readonl
     : { title: 'Lesson updated', text: `This lesson changed since you were last here: ${notice.change}. It starts again from step 1.` };
 }
 
+const lowerFirst = (text: string) => text.charAt(0).toLowerCase() + text.slice(1);
+const capitalizeFirst = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
+
 // Spec 3 S3-12 l8pMS and aJV2y; Lessons › Structure (worked examples); #144
 export const TRY_EXAMPLE = 'Try the worked example (optional)';
 export const WORKED_EXAMPLE = 'Worked example';
@@ -86,8 +91,18 @@ export const TRY_IT_AGAIN = 'Try it again';
 export const CONTINUE = 'Continue';
 export const SKIP_EXAMPLE = 'Skip example';
 
+// Spec 3 Lessons › Structure (worked examples): a strategy's next bet after a fixed table state; #155
+export const SO_FAR = 'So far';
+export const strategyName = (id: string) => STRATEGY_NAMES.get(id) ?? id;
+export const strategyPrompt = (name: string) => `What does ${name} bet next?`;
+export const strategyChoiceText = (game: GameId, answer: StrategyStepAnswer) => capitalizeFirst(betsText(answer.bets, GAME_WORDS[game]));
+
+export function scriptedTurnLine(game: GameId, turn: ScriptedTurn, index: number): string {
+  const words = GAME_WORDS[game];
+  return `${words.Turn} ${index + 1}: ${betsText(turn.wagers, words)}. ${words.scriptedOutcome(turn.outcome)}`;
+}
+
 // Spec 3 Lessons › Structure (Handoff); S3-12 pX6CV, S3-13 ZBpF3; #145
-const lowerFirst = (text: string) => text.charAt(0).toLowerCase() + text.slice(1);
 const gameTitle = (game: GameId) => findGame(game)?.title ?? game;
 const STRATEGY_NAMES: ReadonlyMap<string, string> = new Map([
   ...BLACKJACK_MODES.map((mode) => [mode, BLACKJACK_MODE_TEXT[mode].label] as const),

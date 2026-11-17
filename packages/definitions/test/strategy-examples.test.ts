@@ -3,8 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import { CAPPED_MARTINGALE, CRAPS_STRATEGIES, strategyStepProblems, workedExampleProblems, type StrategyStepExample, type StrategyStepExplanation } from '../src';
 
-// After 10 on red loses to 2 black and 20 on red loses to 0, Martingale's third stake is 40.
-const FORTY: StrategyStepExplanation = {
+const FORTY_AFTER_LOSSES_TO_2_AND_0: StrategyStepExplanation = {
   situation: { available: '970', subjects: { 'last-pocket-color': 'green', 'last-result': 'loss' }, values: {} },
   instructions: [{ id: 'stake', label: 'The current stake on your even-money target' }],
   prescription: { status: 'prescribed', bets: [{ target: 'red', amount: '40' }], held: [] },
@@ -21,14 +20,14 @@ const MARTINGALE: StrategyStepExample = {
   strategy: CAPPED_MARTINGALE.id,
   parameters: { target: 'red' },
   table: 'single-zero',
-  funding: '1000',
+  practiceFunding: '1000',
   turns: [
     { wagers: [{ target: 'red', amount: '10' }], outcome: { pocket: 2 } },
     { wagers: [{ target: 'red', amount: '20' }], outcome: { pocket: 0 } },
   ],
   choices: [
-    { answer: red('40'), response: { correct: true, explanation: FORTY, note: null } },
-    { answer: red('10'), response: { correct: false, explanation: FORTY, note: 'A loss doubles the stake.' } },
+    { answer: red('40'), response: { correct: true, explanation: FORTY_AFTER_LOSSES_TO_2_AND_0, note: null } },
+    { answer: red('10'), response: { correct: false, explanation: FORTY_AFTER_LOSSES_TO_2_AND_0, note: 'A loss doubles the stake.' } },
   ],
 };
 
@@ -40,7 +39,7 @@ describe('strategy-step worked examples', () => {
 
   it('report a choice scripted against the engine’s assessment, or an explanation the engine did not give', () => {
     const [right, wrong] = MARTINGALE.choices;
-    const stale = { ...FORTY, situation: { ...FORTY.situation, available: '1000' } };
+    const stale = { ...FORTY_AFTER_LOSSES_TO_2_AND_0, situation: { ...FORTY_AFTER_LOSSES_TO_2_AND_0.situation, available: '1000' } };
     expect(
       strategyStepProblems({
         ...MARTINGALE,

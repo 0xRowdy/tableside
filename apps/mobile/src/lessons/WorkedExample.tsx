@@ -1,7 +1,6 @@
-// Spec 3 S3-12 aJV2y; Lessons › Structure (worked examples); Amendment 1 B4; #144
+// Spec 3 S3-12 aJV2y; Lessons › Structure (worked examples); Amendment 1 B4; #144, #155
 
-import type { WorkedExample as Script } from '@tableside/definitions';
-import type { HiLoValue } from '@tableside/engine';
+import type { CardValueExample, WorkedExample as Script, StrategyStepExample } from '@tableside/definitions';
 import { ArrowRight, RotateCcw, SkipForward } from 'lucide-react-native';
 import { useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -9,28 +8,37 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Choice, PlayingCard } from '@/counting/CardChoices';
 import { useFeedback } from '@/feedback/FeedbackProvider';
-import { learnAnswerCue } from '@/feedback/training-cues';
+import { exampleAnswerCues } from '@/feedback/training-cues';
 import { NavButton } from '@/lessons/LessonParts';
+import { prescriptionLine } from '@/play/coaching-text';
+import { GAME_WORDS } from '@/play/game-words';
+import { signed } from '@/play/blackjack-text';
 import { BackButton } from '@/settings/SettingsParts';
 import { fonts, palette, radius, space, textScale } from '@/theme/tokens';
-import { CARD_PROMPT, hiLoText, type ChoiceState } from '@/training/challenge-text';
-import { CONTINUE, EXAMPLE_NOTE, SKIP_EXAMPLE, TRY_IT_AGAIN, WORKED_EXAMPLE } from '@/training/lesson-text';
+import { CARD_PROMPT, hiLoText, spokenValue, type ChoiceState } from '@/training/challenge-text';
+import { CONTINUE, EXAMPLE_NOTE, SKIP_EXAMPLE, scriptedTurnLine, strategyName, strategyPrompt, strategyChoiceText, SO_FAR, TRY_IT_AGAIN, WORKED_EXAMPLE } from '@/training/lesson-text';
 
-const scriptedChoiceState = (answer: HiLoValue, correct: boolean, picked: HiLoValue | null): ChoiceState => {
+const scriptedChoiceState = (index: number, correct: boolean, picked: number | null): ChoiceState => {
   if (picked === null) return null;
   if (correct) return 'correct';
-  return answer === picked ? 'your-pick' : null;
+  return index === picked ? 'your-pick' : null;
 };
+
+interface Picking {
+  readonly picked: number | null;
+  readonly onPick: (index: number, correct: boolean) => void;
+}
 
 export function WorkedExample({ example, lesson, busy, onBack, onDone }: { example: Script; lesson: string; busy: boolean; onBack: () => void; onDone: () => void }) {
   const insets = useSafeAreaInsets();
   const feedback = useFeedback();
-  const [picked, setPicked] = useState<HiLoValue | null>(null);
-  const response = example.choices.find((choice) => choice.answer === picked)?.response ?? null;
-  const pick = (answer: HiLoValue, correct: boolean) => {
-    setPicked(answer);
-    feedback.cue(learnAnswerCue(correct));
+  const [picked, setPicked] = useState<number | null>(null);
+  const response = picked === null ? null : (example.choices[picked]?.response ?? null);
+  const onPick = (index: number, correct: boolean) => {
+    setPicked(index);
+    for (const cue of exampleAnswerCues(example.kind, correct)) feedback.cue(cue);
   };
+  const headline = response && (example.kind === 'card-value' ? hiLoText(example.choices[picked!]!.response.explanation) : prescriptionLine(strategyName(example.strategy), example.choices[picked!]!.response.explanation, GAME_WORDS[example.game]));
   return (
     <ScrollView
       testID="worked-example-scroll"
@@ -52,19 +60,11 @@ export function WorkedExample({ example, lesson, busy, onBack, onDone }: { examp
         <Text maxFontSizeMultiplier={textScale.body} style={styles.note}>
           {EXAMPLE_NOTE}
         </Text>
-        <PlayingCard card={example.card} />
-        <Text maxFontSizeMultiplier={textScale.display} style={styles.prompt}>
-          {CARD_PROMPT}
-        </Text>
-        <View style={styles.choices}>
-          {example.choices.map(({ answer, response: { correct } }) => (
-            <Choice key={answer} value={answer} state={scriptedChoiceState(answer, correct, picked)} enabled={picked === null} onPress={() => pick(answer, correct)} />
-          ))}
-        </View>
+        {example.kind === 'card-value' ? <CardValue example={example} picked={picked} onPick={onPick} /> : <StrategyStep example={example} picked={picked} onPick={onPick} />}
         {response && (
           <View style={styles.response} accessibilityLiveRegion="polite" testID="scripted-response">
             <Text maxFontSizeMultiplier={textScale.display} style={styles.headline}>
-              {hiLoText(response.explanation)}
+              {headline}
             </Text>
             {response.note && (
               <Text maxFontSizeMultiplier={textScale.body} style={styles.detail}>
@@ -88,6 +88,50 @@ export function WorkedExample({ example, lesson, busy, onBack, onDone }: { examp
   );
 }
 
+function CardValue({ example, picked, onPick }: { example: CardValueExample } & Picking) {
+  return (
+    <>
+      <PlayingCard card={example.card} />
+      <Text maxFontSizeMultiplier={textScale.display} style={styles.prompt}>
+        {CARD_PROMPT}
+      </Text>
+      <View style={styles.choices}>
+        {example.choices.map(({ answer, response: { correct } }, index) => (
+          <Choice key={answer} label={signed(answer)} spoken={spokenValue(answer)} state={scriptedChoiceState(index, correct, picked)} enabled={picked === null} onPress={() => onPick(index, correct)} />
+        ))}
+      </View>
+    </>
+  );
+}
+
+// Spec 3 Lessons › Structure (worked examples): a fixed table state and the strategy's next bet; #155
+function StrategyStep({ example, picked, onPick }: { example: StrategyStepExample } & Picking) {
+  const name = strategyName(example.strategy);
+  return (
+    <>
+      <View style={styles.history}>
+        <Text accessibilityRole="header" maxFontSizeMultiplier={textScale.body} style={styles.historyTitle}>
+          {SO_FAR}
+        </Text>
+        {example.turns.map((turn, index) => (
+          <Text key={index} maxFontSizeMultiplier={textScale.body} style={styles.historyLine}>
+            {scriptedTurnLine(example.game, turn, index)}
+          </Text>
+        ))}
+      </View>
+      <Text maxFontSizeMultiplier={textScale.display} style={styles.prompt}>
+        {strategyPrompt(name)}
+      </Text>
+      <View style={styles.stacked}>
+        {example.choices.map(({ answer, response: { correct } }, index) => {
+          const text = strategyChoiceText(example.game, answer);
+          return <Choice key={text} label={text} spoken={text} wide state={scriptedChoiceState(index, correct, picked)} enabled={picked === null} onPress={() => onPick(index, correct)} />;
+        })}
+      </View>
+    </>
+  );
+}
+
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: palette.background },
   header: { flexDirection: 'row', alignItems: 'center', gap: space[1], minHeight: 56, paddingLeft: space[1], paddingRight: space[2] },
@@ -98,6 +142,10 @@ const styles = StyleSheet.create({
   note: { fontFamily: fonts.ui, fontSize: 13, lineHeight: 20, color: palette.mutedForeground },
   prompt: { fontFamily: fonts.uiBold, fontSize: 18, color: palette.foreground },
   choices: { flexDirection: 'row', gap: space[3] - 2 },
+  stacked: { gap: space[2] + 2 },
+  history: { gap: space[1], padding: 14, borderRadius: radius.lg - 2, backgroundColor: palette.card },
+  historyTitle: { fontFamily: fonts.uiBold, fontSize: 13, color: palette.mutedForeground },
+  historyLine: { fontFamily: fonts.ui, fontSize: 15, lineHeight: 22, color: palette.foreground },
   response: { gap: space[1], padding: 14, borderRadius: radius.lg - 2, borderWidth: 1, borderColor: palette.controlBorder, backgroundColor: palette.card },
   headline: { fontFamily: fonts.uiBold, fontSize: 15, lineHeight: 23, color: palette.foreground },
   detail: { fontFamily: fonts.ui, fontSize: 14, lineHeight: 22, color: palette.mutedForeground },

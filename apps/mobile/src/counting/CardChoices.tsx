@@ -1,13 +1,13 @@
 // Spec 3 S3-03 P4WjR, drVnR, BFdJT; S3-12 aJV2y; #158, #132, #144
 
-import type { ChallengeCard, HiLoValue } from '@tableside/engine';
+import type { ChallengeCard } from '@tableside/engine';
 import { Check, CircleDot, X } from 'lucide-react-native';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
-import { cardName, cardRank, signed, SUIT_GLYPH } from '@/play/blackjack-text';
+import { cardName, cardRank, SUIT_GLYPH } from '@/play/blackjack-text';
 import { fonts, palette, space, textScale } from '@/theme/tokens';
-import { CHOICE_TAG, spokenValue, type ChoiceState } from '@/training/challenge-text';
+import { CHOICE_TAG, type ChoiceState } from '@/training/challenge-text';
 
 const SUIT_TOKEN = { spades: 'suitSpade', hearts: 'suitHeart', diamonds: 'suitDiamond', clubs: 'suitClub' } as const;
 
@@ -34,23 +34,23 @@ export function PlayingCard({ card }: { card: ChallengeCard }) {
 const CHOICE_TONE = { correct: palette.correct, 'your-answer': palette.mistake, 'your-pick': palette.mistake, recorded: palette.foreground } as const;
 const CHOICE_ICON = { correct: Check, 'your-answer': X, 'your-pick': X, recorded: CircleDot } as const;
 
-export function Choice({ value, state, enabled, onPress }: { value: HiLoValue; state: ChoiceState; enabled: boolean; onPress: () => void }) {
+export function Choice({ label, spoken, wide = false, state, enabled, onPress }: { label: string; spoken: string; wide?: boolean; state: ChoiceState; enabled: boolean; onPress: () => void }) {
   const { focused, focusProps } = useKeyboardFocus();
   const tone = state ? CHOICE_TONE[state] : palette.controlBorder;
   const Icon = state ? CHOICE_ICON[state] : X;
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={spokenValue(value)}
+      accessibilityLabel={spoken}
       accessibilityValue={state ? { text: CHOICE_TAG[state] } : undefined}
       accessibilityState={{ disabled: !enabled }}
       disabled={!enabled}
       onPress={onPress}
       {...focusProps}
-      style={({ pressed }) => [styles.choice, { borderColor: tone }, state !== null && styles.choiceMarked, pressed && styles.pressed, focused && styles.focused]}
+      style={({ pressed }) => [styles.choice, wide && styles.wide, { borderColor: tone }, state !== null && styles.choiceMarked, pressed && styles.pressed, focused && styles.focused]}
     >
-      <Text maxFontSizeMultiplier={textScale.body} style={styles.choiceValue}>
-        {signed(value)}
+      <Text maxFontSizeMultiplier={textScale.body} style={[styles.choiceValue, wide && styles.wideValue]}>
+        {label}
       </Text>
       {state && (
         <View style={styles.tag}>
@@ -82,6 +82,8 @@ const styles = StyleSheet.create({
     backgroundColor: palette.secondary,
   },
   choiceMarked: { borderWidth: 2, minHeight: 96 },
+  wide: { flex: 0, minHeight: 64, paddingHorizontal: space[4] },
+  wideValue: { fontSize: 18, textAlign: 'center' },
   choiceValue: { fontFamily: fonts.uiBold, fontSize: 30, color: palette.foreground },
   tag: { flexDirection: 'row', alignItems: 'center', gap: space[1] },
   tagText: { fontFamily: fonts.uiBold, fontSize: 12 },

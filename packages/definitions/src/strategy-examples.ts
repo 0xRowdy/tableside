@@ -22,16 +22,15 @@ import { ROULETTE_PRESETS } from './roulette';
 import { ROULETTE_STRATEGIES } from './roulette-strategies';
 import type { ScriptedChoice } from './worked-examples';
 
-// A turn already played before the question: the wagers placed (they must follow the strategy) and the outcome stacked into the engine state.
 export interface ScriptedTurn {
   readonly wagers: readonly Wager[];
   readonly outcome: ScriptedOutcome;
 }
 
-// One variant per game; craps (#154) adds its dice and blackjack (#152) its cards, each with a stacker in STAGES.
+// #154 adds craps dice, #152 blackjack cards
 export type ScriptedOutcome = { readonly pocket: RoulettePocket };
 
-// The learner's answer: the wagers the strategy places next. Blackjack playing decisions (#152) add a play-move variant here.
+// #152 adds blackjack play moves
 export interface StrategyBetsAnswer {
   readonly kind: 'bets';
   readonly bets: readonly Wager[];
@@ -39,19 +38,18 @@ export interface StrategyBetsAnswer {
 
 export type StrategyStepAnswer = StrategyBetsAnswer;
 
-// Engine-format explanation fact for the question (the same Explanation guided practice shows at a correction).
+// Spec 3 Lessons › Structure (worked examples render engine-format explanation facts)
 export type StrategyStepExplanation = Explanation;
 
 export interface StrategyStepExample {
   readonly kind: 'strategy-step';
   readonly step: number;
   readonly game: GameId;
-  // A built-in strategy's id, and the parameters chosen at setup.
+  // Spec 1 Built-in strategies
   readonly strategy: string;
   readonly parameters: Readonly<Record<string, string>>;
-  // A preset of the game's rules (roulette: its wheel), and the practice funding.
   readonly table: string;
-  readonly funding: string;
+  readonly practiceFunding: string;
   readonly turns: readonly ScriptedTurn[];
   readonly choices: readonly ScriptedChoice<StrategyStepAnswer, StrategyStepExplanation>[];
 }
@@ -74,7 +72,7 @@ const ROULETTE_STAGE: Stage = {
     const rules = ROULETTE_PRESETS[example.table as keyof typeof ROULETTE_PRESETS];
     if (!rules) throw new Error(`${example.table} is not a roulette wheel`);
     return createActivity(
-      { ...identity, game: 'roulette', rules, strategy: { definition, parameters: example.parameters }, reference: null, fundingSource: 'practice-funding', funding: example.funding },
+      { ...identity, game: 'roulette', rules, strategy: { definition, parameters: example.parameters }, reference: null, fundingSource: 'practice-funding', funding: example.practiceFunding },
       REPLAY_STREAM,
     );
   },
@@ -92,8 +90,7 @@ const ROULETTE_STAGE: Stage = {
 
 const STAGES: Partial<Record<GameId, Stage>> = { roulette: ROULETTE_STAGE };
 
-// Craps and blackjack built-ins are named here so a strategy from the wrong game is reported as such.
-const BUILT_IN: Readonly<Record<string, readonly StrategyDefinition[]>> = { roulette: ROULETTE_STRATEGIES, craps: CRAPS_STRATEGIES };
+const BUILT_IN_ELSEWHERE: Readonly<Record<string, readonly StrategyDefinition[]>> = { roulette: ROULETTE_STRATEGIES, craps: CRAPS_STRATEGIES };
 
 function send(state: ActivityState, command: Command): { state: ActivityState; facts: readonly DomainFact[] } {
   const result = advanceActivity(state, { sequence: state.sequence, commandId: `replay-${state.sequence}`, command });
@@ -109,14 +106,14 @@ const corrected = (facts: readonly DomainFact[]) => facts.find((fact) => fact.ki
 
 const betsText = (bets: readonly Wager[]) => (bets.length === 0 ? 'no bets' : bets.map((bet) => `${bet.amount} on ${bet.target}`).join(' and '));
 
-// Replays the scripted turns through guided practice, then asks the engine what the strategy prescribes next and how it assesses each choice.
+// Spec 3 Testing Decisions › Build-time check; Spec 1 Guided practice
 export function strategyStepProblems(example: StrategyStepExample): readonly string[] {
   const problems: string[] = [];
   const stage = STAGES[example.game];
   if (!stage) return [`no worked-example replay for ${example.game} strategies yet`];
   const definition = stage.strategies.find((strategy) => strategy.id === example.strategy);
   if (!definition) {
-    const elsewhere = Object.entries(BUILT_IN).find(([, strategies]) => strategies.some((strategy) => strategy.id === example.strategy));
+    const elsewhere = Object.entries(BUILT_IN_ELSEWHERE).find(([, strategies]) => strategies.some((strategy) => strategy.id === example.strategy));
     return [elsewhere ? `the worked example's strategy ${example.strategy} is a ${elsewhere[0]} strategy, not ${example.game}` : `the worked example names no built-in ${example.game} strategy: ${example.strategy}`];
   }
   const seen = new Set<string>();
