@@ -1,9 +1,11 @@
 // Spec 3 Lessons › Inventory, Content requirements; Amendment 1 C11; #154
 // docs/research/craps-lessons.md
-import type { StrategyDefinition } from '@tableside/engine';
+import type { StrategyDefinition, Wager } from '@tableside/engine';
 
 import { DONT_PASS_WITH_LAY_ODDS, FLAT_PLACE_6_8, PASS_WITH_ODDS, PRESS_AND_COLLECT_6_8, THREE_POINT_MOLLY } from '../craps-strategies';
 import type { Lesson, LessonContent, LessonHandoff, LessonSource, LessonStep } from '../lessons';
+import type { StrategyStepExample, StrategyStepExplanation } from '../strategy-examples';
+import type { ScriptedChoice } from '../worked-examples';
 
 const FREE_PLAY: LessonHandoff = { kind: 'free-play', game: 'craps' };
 
@@ -20,14 +22,14 @@ const guidedPractice = (strategy: StrategyDefinition): Practice => ({
 });
 
 // Spec 3 S3-12 pX6CV
-const crapsLesson = (id: string, title: string, summary: string, steps: readonly LessonStep[], practice: Practice, sources: readonly LessonSource[]): Lesson => {
+const crapsLesson = (id: string, title: string, summary: string, steps: readonly LessonStep[], practice: Practice, sources: readonly LessonSource[], workedExample: StrategyStepExample | null): Lesson => {
   const last = steps[steps.length - 1]!;
   const content: LessonContent = {
     version: 1,
     materialVersion: 1,
     change: null,
     steps: [...steps.slice(0, -1), { ...last, paragraphs: [...last.paragraphs, practice.text] }],
-    workedExample: null,
+    workedExample,
     handoffs: practice.handoffs,
     sources,
   };
@@ -49,6 +51,141 @@ const bellagio = (pages: string): LessonSource => ({ citation: `Bellagio, Gaming
 const own = (what: string): LessonSource => ({ citation: `Tableside's own, not the sources': ${what}.`, url: null });
 const EDGE_TABLE = wizard('Craps Odds: House Edge of Every Bet', 'table “Craps House Edge”', WOO_EDGES);
 const NO_SYSTEM_BEATS_THE_EDGE = wizard('The Truth about Betting Systems', 'sections “Introduction” and “The Martingale”', WOO_SYSTEMS);
+
+
+// Spec 3 Lessons › Structure (worked examples); S3-12 aJV2y; #155
+const bets = (...placed: readonly [string, string][]): Wager[] => placed.map(([target, amount]) => ({ target, amount }));
+const roll = (wagers: Wager[], dice: readonly [number, number]) => ({ wagers, outcome: { dice } });
+const choice = (answer: Wager[], correct: boolean, explanation: StrategyStepExplanation, note: string | null): ScriptedChoice<StrategyStepExample['choices'][number]['answer'], StrategyStepExplanation> => ({
+  answer: { kind: 'bets', bets: answer },
+  response: { correct, explanation, note },
+});
+const example = (step: number, strategy: StrategyDefinition, turns: StrategyStepExample['turns'], choices: StrategyStepExample['choices']): StrategyStepExample => ({
+  kind: 'strategy-step',
+  step,
+  game: 'craps',
+  strategy: strategy.id,
+  parameters: {},
+  table: '3-4-5x',
+  practiceFunding: '1000',
+  turns,
+  choices,
+});
+
+const NOTHING_ON = Object.fromEntries([
+  ...['pass', 'dont-pass'].map((bet) => [bet, 'off']),
+  ...['4', '5', '6', '8', '9', '10'].flatMap((n) => [[`come-${n}`, 'off'], [`dont-come-${n}`, 'off']]),
+  ['come-bases', '0'],
+]) as Readonly<Record<string, string>>;
+const tableSubjects = (subjects: Readonly<Record<string, string>>) => ({ ...NOTHING_ON, ...subjects });
+
+const PASS_ODDS_ON_6: StrategyStepExplanation = {
+  fallback: null,
+  instructions: [{ id: 'pass-odds', label: '10 odds behind your pass line once the point is set' }],
+  prescription: { bets: [{ amount: '10', target: 'pass' }, { amount: '10', target: 'pass-odds' }], held: [], status: 'prescribed' },
+  situation: {
+    available: '1000',
+    subjects: tableSubjects({ 'last-result': 'push', pass: 'on', point: '6', puck: 'on' }),
+    values: {},
+  },
+  state: { counters: {}, cycleTurn: 1, lastResult: 'push', lists: {} },
+};
+const FLAT_PLACE_AFTER_A_6: StrategyStepExplanation = {
+  fallback: null,
+  instructions: [{ id: 'place', label: 'Place 6 and 8, 12 each, once a point is on' }],
+  prescription: { bets: [{ amount: '12', target: 'place-6' }, { amount: '12', target: 'place-8' }], held: [], status: 'prescribed' },
+  situation: {
+    available: '1014',
+    subjects: tableSubjects({ 'last-result': 'win', point: '4', puck: 'on' }),
+    values: {},
+  },
+  state: { counters: { up: '1' }, cycleTurn: 2, lastResult: 'win', lists: {} },
+};
+const LAY_AGAINST_4: StrategyStepExplanation = {
+  fallback: null,
+  instructions: [{ id: 'lay-4-10', label: 'Lay 20 to win 10 against 4 or 10' }],
+  prescription: { bets: [{ amount: '10', target: 'dont-pass' }, { amount: '20', target: 'dont-pass-odds' }], held: [], status: 'prescribed' },
+  situation: {
+    available: '1000',
+    subjects: tableSubjects({ 'dont-pass': 'on', 'last-result': 'push', point: '4', puck: 'on' }),
+    values: {},
+  },
+  state: { counters: {}, cycleTurn: 1, lastResult: 'push', lists: {} },
+};
+const MOLLY_COME_ON_6: StrategyStepExplanation = {
+  fallback: null,
+  instructions: [
+    { id: 'add-come', label: 'One more come bet of 10 while fewer than two come bets are working' },
+    { id: 'come-6', label: '10 odds on your come bet on 6' },
+    { id: 'pass-odds', label: '10 odds behind your pass line once the point is set' },
+  ],
+  prescription: {
+    bets: [
+      { amount: '10', target: 'come' },
+      { amount: '10', target: 'come-6' },
+      { amount: '10', target: 'come-6-odds' },
+      { amount: '10', target: 'pass' },
+      { amount: '10', target: 'pass-odds' },
+    ],
+    held: [],
+    status: 'prescribed',
+  },
+  situation: {
+    available: '1000',
+    subjects: tableSubjects({ 'come-6': 'on', 'come-bases': '1', 'last-result': 'push', pass: 'on', point: '5', puck: 'on' }),
+    values: {},
+  },
+  state: { counters: {}, cycleTurn: 2, lastResult: 'push', lists: {} },
+};
+const PRESS_SECOND_6: StrategyStepExplanation = {
+  fallback: null,
+  instructions: [
+    { id: 'place-6', label: 'Place 6 at its current stake once a point is on' },
+    { id: 'place-8', label: 'Place 8 at its current stake once a point is on' },
+  ],
+  prescription: { bets: [{ amount: '24', target: 'place-6' }, { amount: '12', target: 'place-8' }], held: [], status: 'prescribed' },
+  situation: {
+    available: '1028',
+    subjects: tableSubjects({ 'last-result': 'win', point: '4', puck: 'on' }),
+    values: {},
+  },
+  state: { counters: { 'press-6': '0', 'press-8': '0', 'stake-6': '24', 'stake-8': '12', up: '1' }, cycleTurn: 3, lastResult: 'win', lists: {} },
+};
+
+const PASS_WITH_ODDS_EXAMPLE = example(2, PASS_WITH_ODDS, [roll(bets(['pass', '10']), [2, 4])], [
+  choice(bets(['pass-odds', '10']), true, PASS_ODDS_ON_6, null),
+  choice(bets(['pass-odds', '30']), false, PASS_ODDS_ON_6, 'The strategy takes 10 in odds, equal to the line bet, even where the table allows more.'),
+  choice(bets(['place-6', '12']), false, PASS_ODDS_ON_6, 'This strategy adds odds behind the pass line, not a place bet.'),
+]);
+
+const FLAT_PLACE_EXAMPLE = example(2, FLAT_PLACE_6_8, [roll([], [1, 3]), roll(bets(['place-6', '12'], ['place-8', '12']), [2, 4])], [
+  choice(bets(['place-6', '12'], ['place-8', '12']), true, FLAT_PLACE_AFTER_A_6, null),
+  choice(bets(['place-6', '24'], ['place-8', '12']), false, FLAT_PLACE_AFTER_A_6, 'Flat place collects every win. It never presses.'),
+  choice(bets(['place-6', '18'], ['place-8', '18']), false, FLAT_PLACE_AFTER_A_6, 'The stakes stay at 12 each after a win.'),
+]);
+
+const DONT_PASS_EXAMPLE = example(2, DONT_PASS_WITH_LAY_ODDS, [roll(bets(['dont-pass', '10']), [1, 3])], [
+  choice(bets(['dont-pass-odds', '20']), true, LAY_AGAINST_4, null),
+  choice(bets(['dont-pass-odds', '10']), false, LAY_AGAINST_4, 'Against 4, laying 10 wins only 5. The strategy lays 20 to win 10.'),
+  choice(bets(['dont-pass-odds', '40']), false, LAY_AGAINST_4, 'Laying 40 against 4 would win 20. The strategy lays only enough to win 10.'),
+]);
+
+const MOLLY_EXAMPLE = example(2, THREE_POINT_MOLLY, [roll(bets(['pass', '10']), [2, 3]), roll(bets(['pass-odds', '10'], ['come', '10']), [3, 3])], [
+  choice(bets(['come-6-odds', '10'], ['come', '10']), true, MOLLY_COME_ON_6, null),
+  choice(bets(['come-6-odds', '10']), false, MOLLY_COME_ON_6, "With one come bet on a number, there's room for one more."),
+  choice(bets(['come', '10']), false, MOLLY_COME_ON_6, 'The come bet that moved to 6 gets its 10 odds.'),
+]);
+
+const PRESS_EXAMPLE = example(
+  2,
+  PRESS_AND_COLLECT_6_8,
+  [roll([], [1, 3]), roll(bets(['place-6', '12'], ['place-8', '12']), [3, 3]), roll(bets(['place-6', '12'], ['place-8', '12']), [2, 4])],
+  [
+    choice(bets(['place-6', '24'], ['place-8', '12']), true, PRESS_SECOND_6, null),
+    choice(bets(['place-6', '12'], ['place-8', '12']), false, PRESS_SECOND_6, 'The first 6 was collected, so this one presses: the 6 goes up by 12.'),
+    choice(bets(['place-6', '24'], ['place-8', '24']), false, PRESS_SECOND_6, "Each number keeps its own turn. The 8 hasn't been hit, so it stays at 12."),
+  ],
+);
 
 const HOUSE_EDGE_STAYS = "Changing stakes doesn't remove the house edge.";
 
@@ -110,6 +247,7 @@ export const CRAPS_LESSONS: readonly Lesson[] = [
       bellagio('printed pp. 13–14'),
       own('the default table conditions and practice funding'),
     ],
+    null,
   ),
 
   crapsLesson(
@@ -156,6 +294,7 @@ export const CRAPS_LESSONS: readonly Lesson[] = [
       njDge('13:69F-1.6(a)'),
       own('the 10-unit pass bet and 10 odds at every odds setting'),
     ],
+    PASS_WITH_ODDS_EXAMPLE,
   ),
 
   crapsLesson(
@@ -200,6 +339,7 @@ export const CRAPS_LESSONS: readonly Lesson[] = [
       bellagio('printed p. 14, “Place Bets”'),
       own('12 on each of 6 and 8 with no line bet, kept up but off through the come-out'),
     ],
+    FLAT_PLACE_EXAMPLE,
   ),
 
   crapsLesson(
@@ -248,6 +388,7 @@ export const CRAPS_LESSONS: readonly Lesson[] = [
       bellagio('printed pp. 13–14, “Don’t Pass Line” and “Odds”'),
       own('the 10-unit bet and laying odds to win 10'),
     ],
+    DONT_PASS_EXAMPLE,
   ),
 
   crapsLesson(
@@ -297,6 +438,7 @@ export const CRAPS_LESSONS: readonly Lesson[] = [
       njDge('13:69F-1.2(a)3, 1.3(e) and 1.6(c)'),
       own('at most two come bets, 10 odds on each, and carrying on after a seven-out'),
     ],
+    MOLLY_EXAMPLE,
   ),
 
   crapsLesson(
@@ -337,5 +479,6 @@ export const CRAPS_LESSONS: readonly Lesson[] = [
     ],
     guidedPractice(PRESS_AND_COLLECT_6_8),
     [EDGE_TABLE, NO_SYSTEM_BEATS_THE_EDGE, njDge('13:69F-1.2(a)5 and 1.4(b)'), own('the whole routine, from collecting first to the 48 cap and the reset on a seven-out')],
+    PRESS_EXAMPLE,
   ),
 ];

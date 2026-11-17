@@ -655,3 +655,17 @@ Sources:
 - **Bellagio guide date.** The guide is the 2016 edition and describes one operator's tables, not every casino.
 - **Wizard of Odds full-odds figures.** The per-cap figures come from the "How to Play Craps" Strategy tables. Appendix 1 gives only the formulas and the double-odds examples.
 - **Built-in display names.** The definitions are named "Three-point Molly" and "Press-and-collect 6 and 8". "bounded" and "capped" appear only in the lesson slot titles (`packages/definitions/src/lessons.ts`).
+
+## 8. Worked examples (engine replay)
+
+Each strategy lesson's worked example (`packages/definitions/src/lessons/craps.ts`) is replayed at build time by `strategyStepProblems` (`packages/definitions/src/strategy-examples.ts`). The replay uses guided practice on standard craps at 3-4-5x with 1,000 practice funding and the scripted dice stacked into engine state. Each scripted explanation must equal the engine's, and each choice's correct/incorrect mark must match the engine's correction, or the build fails. The payouts quoted in the choice notes come from §2.3: a lay of 10 against 4 wins 5, and a lay of 40 wins 20.
+
+| Lesson | Scripted rolls | Engine's next bet |
+| --- | --- | --- |
+| Pass with odds | pass 10, roll 2+4 (point 6) | pass 10 + pass odds 10 |
+| Flat place 6 and 8 | nothing on the come-out, roll 1+3 (point 4); place 6 and 8 at 12, roll 2+4 (6 wins 14) | place 6 and 8 at 12 (available 1,014) |
+| Don't pass with lay odds | don't pass 10, roll 1+3 (point 4) | don't pass 10 + lay 20 |
+| Three-point Molly | pass 10, roll 2+3 (point 5); pass odds 10 and come 10, roll 3+3 (come moves to 6) | come 10, come 6 with 10 odds, pass with 10 odds |
+| Press-and-collect 6 and 8 | nothing, roll 1+3 (point 4); 12 each, roll 3+3 (collect); 12 each, roll 2+4 (press) | place 6 at 24, place 8 at 12 |
+
+Craps basics has no worked example, because it has no strategy decision to replay.

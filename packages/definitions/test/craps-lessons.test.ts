@@ -2,7 +2,7 @@
 import { ODDS_CAPS } from '@tableside/engine';
 import { describe, expect, it } from 'vitest';
 
-import { CRAPS_EDGE_WAGERS, crapsHouseEdge, LESSONS, lessonProblems, standardCraps, type Lesson } from '../src';
+import { CRAPS_EDGE_WAGERS, crapsHouseEdge, LESSONS, lessonProblems, standardCraps, strategyStepProblems, type Lesson, type StrategyStepExample } from '../src';
 
 const craps = () => LESSONS.filter((lesson) => lesson.section === 'craps');
 const lesson = (id: string) => LESSONS.find((candidate) => candidate.id === id)!;
@@ -54,6 +54,32 @@ describe('standard craps lessons', () => {
     const stated = craps().flatMap((subject) => copy(subject).match(/\d+\.\d+%/g) ?? []);
     expect(stated.length).toBeGreaterThan(0);
     expect(stated.filter((figure) => !engine.has(figure))).toEqual([]);
+  });
+
+  // Spec 3 Lessons › Structure (worked examples); S3-12 aJV2y; #155
+  it('script a next-bet worked example for each strategy, replayed through guided practice; basics has no strategy to script', () => {
+    expect(lesson('craps-basics').content!.workedExample).toBeNull();
+    const correct = (id: string) => {
+      const example = lesson(id).content!.workedExample!;
+      expect([example.kind, example.step]).toEqual(['strategy-step', 2]);
+      return example.kind === 'strategy-step' ? example.choices.filter((choice) => choice.response.correct).map((choice) => choice.answer.bets) : [];
+    };
+    expect(correct('pass-with-odds')).toEqual([[{ target: 'pass-odds', amount: '10' }]]);
+    expect(correct('flat-place-6-8')).toEqual([[{ target: 'place-6', amount: '12' }, { target: 'place-8', amount: '12' }]]);
+    expect(correct('dont-pass-with-lay-odds')).toEqual([[{ target: 'dont-pass-odds', amount: '20' }]]);
+    expect(correct('three-point-molly')).toEqual([[{ target: 'come-6-odds', amount: '10' }, { target: 'come', amount: '10' }]]);
+    expect(correct('press-and-collect-6-8')).toEqual([[{ target: 'place-6', amount: '24' }, { target: 'place-8', amount: '12' }]]);
+  });
+
+  it('report a craps example whose table is not an odds cap or whose scripted turn does not follow the strategy', () => {
+    const example = lesson('pass-with-odds').content!.workedExample as StrategyStepExample;
+    expect(strategyStepProblems({ ...example, table: '100x' })).toEqual(['the worked example does not replay through the engine: 100x is not a craps odds cap']);
+    expect(strategyStepProblems({ ...example, turns: [{ wagers: [{ target: 'dont-pass', amount: '10' }], outcome: { dice: [2, 4] } }] })).toEqual([
+      'the worked example does not replay through the engine: scripted turn 1 (10 on dont-pass) does not follow Pass with odds',
+    ]);
+    expect(strategyStepProblems({ ...example, turns: [{ wagers: [{ target: 'pass', amount: '10' }], outcome: { pocket: 6 } }] })).toEqual([
+      'the worked example does not replay through the engine: no roll to stack dice on',
+    ]);
   });
 
   it('make no profitability, readiness or predicted-result claims', () => {

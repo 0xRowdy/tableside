@@ -99,7 +99,8 @@ export const strategyChoiceText = (game: GameId, answer: StrategyStepAnswer) => 
 
 export function scriptedTurnLine(game: GameId, turn: ScriptedTurn, index: number): string {
   const words = GAME_WORDS[game];
-  return `${words.Turn} ${index + 1}: ${betsText(turn.wagers, words)}. ${words.scriptedOutcome(turn.outcome)}`;
+  const wagers = turn.wagers.length > 0 ? betsText(turn.wagers, words) : 'no bets';
+  return `${words.Turn} ${index + 1}: ${wagers}. ${words.scriptedOutcome(turn.outcome)}`;
 }
 
 // Spec 3 Lessons › Structure (Handoff); S3-12 pX6CV, S3-13 ZBpF3; #145
