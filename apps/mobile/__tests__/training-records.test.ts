@@ -6,6 +6,7 @@ import { entropyFromWords, FakeClock, PI_WORDS } from '@/practice/testing/substi
 import { plentyAllowance } from '@/training/allowance';
 import { MemoryTrainingStore } from '@/training/memory-store';
 import { TrainingService, type ChallengeSetup } from '@/training/service';
+import { NO_SCREEN_READER } from '@/training/speech';
 import { cardOf, HI_LO_BY_RANK } from '@/training/testing/hi-lo';
 
 function setup() {
@@ -22,6 +23,7 @@ function setup() {
     device: 'test-device',
     owner: 'local',
     quarantine: EMPTY_QUARANTINE_LIST,
+    speech: NO_SCREEN_READER,
   });
   return { service, clock };
 }
