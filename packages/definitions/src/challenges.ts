@@ -4,3 +4,7 @@ import type { CardValuesContent, ChallengeCategory, ChallengeContent } from '@ta
 export const CARD_VALUES_CONTENT: CardValuesContent = { category: 'card-values', id: 'card-values', version: 1, length: 20, coverage: 'every-rank' };
 
 export const CHALLENGE_CONTENT: Readonly<Record<ChallengeCategory, ChallengeContent>> = { 'card-values': CARD_VALUES_CONTENT };
+
+// Spec 3 Challenge content (from #4), Recommendations; #145
+export const CATALOG_CATEGORIES = ['card-values', 'running-count', 'conversion', 'table'] as const;
+export type CatalogCategory = (typeof CATALOG_CATEGORIES)[number];

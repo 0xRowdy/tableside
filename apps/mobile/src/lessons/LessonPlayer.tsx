@@ -1,17 +1,25 @@
-// Spec 3 S3-12 l8pMS, S3-13 JJl51 and Fvlgc; Amendment 1 B4, C10; #143, #144
+// Spec 3 S3-12 l8pMS, pX6CV, S3-13 JJl51, Fvlgc, ZBpF3; Amendment 1 B4, C10; #143, #144, #145
 
-import { ArrowLeft, ArrowRight, Play, RefreshCcw, RotateCcw, SquarePlay, type LucideIcon } from 'lucide-react-native';
+import type { LessonHandoff } from '@tableside/definitions';
+import { ArrowLeft, ArrowRight, ChevronRight, GraduationCap, Play, RefreshCcw, RotateCcw, Shuffle, Spade, SquarePlay, type LucideIcon } from 'lucide-react-native';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Sheet, SheetText } from '@/components/Sheet';
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
+import { TextLink } from '@/lessons/LessonEntries';
 import { NavButton } from '@/lessons/LessonParts';
 import { BackButton } from '@/settings/SettingsParts';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/theme/tokens';
+import type { AllowanceCopy } from '@/training/challenge-text';
 import {
   BACK,
+  BACK_TO_LESSONS,
   FINISH,
+  HANDOFF_INTRO,
+  HANDOFF_TITLE,
+  handoffDetail,
+  handoffLabel,
   lessonKind,
   NEXT,
   noticeText,
@@ -34,9 +42,29 @@ export interface LessonActions {
   readonly onRestart: () => void;
   readonly onResume: () => void;
   readonly onExample: () => void;
+  readonly onHandoff: (handoff: LessonHandoff) => void;
 }
 
-export function LessonPlayer({ view, back, busy, saveFailed, actions }: { view: LessonView; back: string; busy: boolean; saveFailed: boolean; actions: LessonActions }) {
+// Spec 3 S3-13 ZBpF3
+export interface HandoffSheet {
+  readonly allowance: AllowanceCopy | undefined;
+}
+
+export function LessonPlayer({
+  view,
+  back,
+  busy,
+  saveFailed,
+  handoffSheet,
+  actions,
+}: {
+  view: LessonView;
+  back: string;
+  busy: boolean;
+  saveFailed: boolean;
+  handoffSheet: HandoffSheet | null;
+  actions: LessonActions;
+}) {
   const insets = useSafeAreaInsets();
   const step = view.steps[view.step - 1]!;
   const last = view.step === view.steps.length;
@@ -80,6 +108,10 @@ export function LessonPlayer({ view, back, busy, saveFailed, actions }: { view: 
             </Text>
           ))}
           {view.example?.step === view.step && <ExampleLink disabled={busy} onPress={actions.onExample} />}
+          {last &&
+            view.handoffs.map((handoff) => (
+              <HandoffLink key={handoffLabel(handoff)} handoff={handoff} disabled={busy} onPress={() => actions.onHandoff(handoff)} />
+            ))}
           {saveFailed && (
             <Text accessibilityRole="alert" maxFontSizeMultiplier={textScale.body} style={styles.alert}>
               {SAVE_FAILED}
@@ -103,7 +135,55 @@ export function LessonPlayer({ view, back, busy, saveFailed, actions }: { view: 
           <SheetText small>{RESTART_NOTE}</SheetText>
         </Sheet>
       )}
+      {handoffSheet && (
+        <Sheet title={HANDOFF_TITLE} onClose={actions.onLeave} testID="lesson-handoff-scroll">
+          <SheetText>{HANDOFF_INTRO}</SheetText>
+          {view.handoffs.map((handoff) => (
+            <HandoffOption key={handoffLabel(handoff)} handoff={handoff} detail={handoffDetail(handoff, handoffSheet.allowance)} disabled={busy} onPress={() => actions.onHandoff(handoff)} />
+          ))}
+          <NavButton label={BACK_TO_LESSONS} quiet block disabled={false} onPress={actions.onLeave} />
+        </Sheet>
+      )}
     </>
+  );
+}
+
+const SHEET_ICON: Record<LessonHandoff['kind'], LucideIcon> = { 'learn-challenge': GraduationCap, 'guided-practice': Spade, 'free-play': Shuffle };
+
+// Spec 3 S3-12 pX6CV
+function HandoffLink({ handoff, disabled, onPress }: { handoff: LessonHandoff; disabled: boolean; onPress: () => void }) {
+  const accent = handoff.kind !== 'free-play';
+  return <TextLink icon={accent ? GraduationCap : Play} label={handoffLabel(handoff)} accent={accent} disabled={disabled} onPress={onPress} />;
+}
+
+// Spec 3 S3-13 ZBpF3
+function HandoffOption({ handoff, detail, disabled, onPress }: { handoff: LessonHandoff; detail: string; disabled: boolean; onPress: () => void }) {
+  const { focused, focusProps } = useKeyboardFocus();
+  const label = handoffLabel(handoff);
+  const Icon = SHEET_ICON[handoff.kind];
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={detail ? `${label}. ${detail}` : label}
+      accessibilityState={{ disabled }}
+      disabled={disabled}
+      onPress={onPress}
+      {...focusProps}
+      style={({ pressed }) => [styles.option, pressed && styles.pressed, disabled && styles.disabled, focused && styles.focused]}
+    >
+      <Icon color={palette.foreground} size={22} />
+      <View style={styles.optionText}>
+        <Text maxFontSizeMultiplier={textScale.body} style={styles.optionTitle}>
+          {label}
+        </Text>
+        {detail ? (
+          <Text maxFontSizeMultiplier={textScale.body} style={styles.optionDetail}>
+            {detail}
+          </Text>
+        ) : null}
+      </View>
+      <ChevronRight color={palette.mutedForeground} size={20} />
+    </Pressable>
   );
 }
 
@@ -200,9 +280,23 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: palette.transparent,
   },
+  option: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space[3],
+    padding: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: palette.controlBorder,
+    backgroundColor: palette.card,
+  },
+  optionText: { flex: 1, gap: 2 },
+  optionTitle: { fontFamily: fonts.uiBold, fontSize: 16, lineHeight: 24, color: palette.foreground },
+  optionDetail: { fontFamily: fonts.ui, fontSize: 13, lineHeight: 18, color: palette.mutedForeground },
   exampleLabel: { flexShrink: 1, fontFamily: fonts.uiBold, fontSize: 15, color: palette.primary },
   alert: { fontFamily: fonts.ui, fontSize: 14, lineHeight: 20, color: palette.destructive },
   nav: { flexDirection: 'row', flexWrap: 'wrap', gap: space[2] + 2, paddingTop: space[2] },
   pressed: { opacity: 0.8 },
+  disabled: { opacity: 0.4 },
   focused: { borderColor: palette.ring, borderWidth: 2 },
 });

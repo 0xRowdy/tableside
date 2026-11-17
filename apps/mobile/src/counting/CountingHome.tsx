@@ -1,14 +1,17 @@
-// Spec 3 S3-01 PDCaD, RqPCB; spec 5 S5-17 j3UhJ; #158, #150
+// Spec 3 S3-01 PDCaD, RqPCB; spec 5 S5-17 j3UhJ; Lessons › Entry points; #158, #150, #145
 
+import { CHALLENGE_LESSONS } from '@tableside/definitions';
 import { CHALLENGE_VARIANTS, type ChallengeVariant } from '@tableside/engine';
 import { ClipboardCheck, GraduationCap, type LucideIcon } from 'lucide-react-native';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
+import { LessonLink } from '@/lessons/LessonEntries';
 import { Note, SettingsScreen } from '@/settings/SettingsParts';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/theme/tokens';
 import { CATEGORY_TEXT, COUNTING_TITLE, NOT_READY_HINT, RECOMMENDATIONS_NOTE, SUGGESTED_ORDER_LABEL, variantLabel, type AllowanceCopy } from '@/training/challenge-text';
-import type { CatalogCategory, CatalogEntry, ChallengeSetup } from '@/training/service';
+import { lessonLinkLabel } from '@/training/lesson-text';
+import type { CatalogCategory, CatalogEntry, ChallengeSetup, LessonEntry } from '@/training/service';
 
 import { AllowanceBanner } from './AllowanceBanner';
 
@@ -17,10 +20,14 @@ const VARIANT_ICON: Record<ChallengeVariant, LucideIcon> = { learn: GraduationCa
 export function CountingHome({
   catalog,
   allowance,
+  lessons,
+  onOpenLesson,
   onChoose,
 }: {
   catalog: readonly CatalogEntry[];
   allowance: AllowanceCopy | undefined;
+  lessons: readonly LessonEntry[] | undefined;
+  onOpenLesson: (lesson: string) => void;
   onChoose: (setup: ChallengeSetup) => void;
 }) {
   // Spec 5 S5-17 j3UhJ
@@ -32,7 +39,15 @@ export function CountingHome({
         {SUGGESTED_ORDER_LABEL}
       </Text>
       {catalog.map((entry, index) => (
-        <CategoryCard key={entry.category} step={index + 1} entry={entry} elsewhere={elsewhere} onChoose={onChoose} />
+        <CategoryCard
+          key={entry.category}
+          step={index + 1}
+          entry={entry}
+          elsewhere={elsewhere}
+          lesson={lessons?.find((lesson) => lesson.id === CHALLENGE_LESSONS[entry.category])}
+          onOpenLesson={onOpenLesson}
+          onChoose={onChoose}
+        />
       ))}
       <Note>{RECOMMENDATIONS_NOTE}</Note>
     </SettingsScreen>
@@ -43,11 +58,15 @@ function CategoryCard({
   step,
   entry,
   elsewhere,
+  lesson,
+  onOpenLesson,
   onChoose,
 }: {
   step: number;
   entry: CatalogEntry;
   elsewhere: string | null;
+  lesson: LessonEntry | undefined;
+  onOpenLesson: (lesson: string) => void;
   onChoose: (setup: ChallengeSetup) => void;
 }) {
   const text = CATEGORY_TEXT[entry.category];
@@ -79,6 +98,7 @@ function CategoryCard({
           />
         ))}
       </View>
+      <LessonLink label={lessonLinkLabel(entry.category)} ready={lesson !== undefined && lesson.steps !== null} onPress={() => onOpenLesson(CHALLENGE_LESSONS[entry.category])} />
     </View>
   );
 }

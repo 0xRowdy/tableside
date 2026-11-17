@@ -1,5 +1,5 @@
-// Spec 3 Testing Decisions › Seam 2 (lessons); Lessons › Progress; Amendment 1 C10; #143
-import { APP_ORIENTATION, LESSONS, type Lesson } from '@tableside/definitions';
+// Spec 3 Testing Decisions › Seam 2 (lessons); Lessons › Progress, Handoff; Amendment 1 C10; #143, #145
+import { APP_ORIENTATION, LESSONS, type Lesson, type LessonHandoff } from '@tableside/definitions';
 
 import { alwaysAllowed, type AccessSupervisor } from '@/practice/adapters';
 import { FakeClock, entropyFromWords, PI_WORDS } from '@/practice/testing/substitutes';
@@ -220,6 +220,24 @@ describe('the Training service lessons', () => {
     await service.completeLesson(ORIENTATION);
     expect(asked).toEqual([]);
     expect([await store.findUnfinishedAttempt(), await store.readAttemptRecords()]).toEqual([null, []]);
+  });
+
+  // Spec 3 Lessons › Structure (Handoff); Testing Decisions › Seam 2 (handoffs prefill setup without starting or charging); #145
+  it('offers the handoff targets with the lesson, and finishing it or preparing a handed-off Learn setup starts and charges nothing', async () => {
+    const handoffs: LessonHandoff[] = [
+      { kind: 'learn-challenge', category: 'card-values' },
+      { kind: 'guided-practice', game: 'blackjack', strategy: 'counting-with-basic' },
+      { kind: 'free-play', game: 'blackjack' },
+    ];
+    const lessons = revised({ handoffs });
+    const { service, store, asked } = setup({ lessons });
+    const view = await service.openLesson(ORIENTATION);
+    expect(view.handoffs).toEqual(handoffs);
+    await service.completeLesson(ORIENTATION);
+    expect(service.validateSetup({ category: 'card-values', variant: 'learn' })).toEqual({ valid: true, diagnostics: [] });
+    expect(asked).toEqual([]);
+    expect([await store.findUnfinishedAttempt(), await store.readAttemptRecords()]).toEqual([null, []]);
+    expect(service.snapshot()).toMatchObject({ status: 'loading' });
   });
 
   it('keeps the place it had when a progress write fails', async () => {

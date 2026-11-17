@@ -1,6 +1,10 @@
-// Spec 3 Modules › Definitions package; Lessons and worked examples (#48); Amendment 1 B1, C10; #143
-import type { GameId } from '@tableside/engine';
+// Spec 3 Modules › Definitions package; Lessons (#48); Amendment 1 B1, C10; #143, #145
+import type { GameId, StrategyDefinition } from '@tableside/engine';
 
+import { BLACKJACK_MODES } from './blackjack/strategies';
+import { CATALOG_CATEGORIES, type CatalogCategory } from './challenges';
+import { CRAPS_STRATEGIES } from './craps-strategies';
+import { ROULETTE_STRATEGIES } from './roulette-strategies';
 import { workedExampleProblems, type WorkedExample } from './worked-examples';
 
 export type LessonSection = 'app' | 'blackjack' | 'craps' | 'roulette' | 'builder';
@@ -9,6 +13,13 @@ export interface LessonStep {
   readonly heading: string;
   readonly paragraphs: readonly string[];
 }
+
+// Spec 3 Lessons › Structure (Handoff)
+export type LessonHandoff =
+  | { readonly kind: 'free-play'; readonly game: GameId }
+  // Spec 1 Built-in strategies
+  | { readonly kind: 'guided-practice'; readonly game: GameId; readonly strategy: string | null }
+  | { readonly kind: 'learn-challenge'; readonly category: CatalogCategory };
 
 // Spec 3 Lessons › Content requirements; Amendment 1 C11
 export interface LessonSource {
@@ -23,8 +34,7 @@ export interface LessonContent {
   readonly change: string | null;
   readonly steps: readonly LessonStep[];
   readonly workedExample: WorkedExample | null;
-  // TODO(#145)
-  readonly handoffs: readonly [];
+  readonly handoffs: readonly LessonHandoff[];
   readonly sources: readonly LessonSource[];
 }
 
@@ -116,6 +126,14 @@ export const LESSONS: readonly Lesson[] = [
   slot('builder', 'building-a-strategy', 'Building a strategy'),
 ];
 
+// Spec 3 Lessons › Entry points
+export const CHALLENGE_LESSONS: Readonly<Record<CatalogCategory, string>> = {
+  'card-values': 'card-values',
+  'running-count': 'running-count',
+  conversion: 'true-count-conversion',
+  table: 'table-counting',
+};
+
 const IDENTITY = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 const isVersion = (value: number) => Number.isInteger(value) && value > 0;
 
@@ -142,6 +160,42 @@ export function lessonProblems(lessons: readonly Lesson[]): readonly string[] {
       if (!step.paragraphs.some((paragraph) => paragraph.trim())) report(`step ${index + 1} has no text`);
     });
     if (content.workedExample) workedExampleProblems(content.workedExample, content.steps.length).forEach(report);
+    const offered = new Set<string>();
+    content.handoffs.forEach((handoff, index) => {
+      const problem = handoffProblem(lesson, handoff);
+      const key = JSON.stringify(handoff);
+      if (problem) report(`handoff ${index + 1} ${problem}`);
+      else if (offered.has(key)) report(`handoff ${index + 1} repeats an earlier one`);
+      offered.add(key);
+    });
   }
   return problems;
+}
+
+const strategyIds = (strategies: readonly StrategyDefinition[]) => strategies.map((strategy) => strategy.id);
+const BUILT_IN_STRATEGIES: Readonly<Record<GameId, readonly string[]>> = {
+  blackjack: BLACKJACK_MODES,
+  craps: strategyIds(CRAPS_STRATEGIES),
+  roulette: strategyIds(ROULETTE_STRATEGIES),
+};
+const GAMES = Object.keys(BUILT_IN_STRATEGIES) as GameId[];
+
+// Spec 3 Testing Decisions › Build-time check
+function handoffProblem(lesson: Lesson, handoff: LessonHandoff): string | null {
+  const target = handoff as { kind?: unknown; game?: unknown; strategy?: unknown; category?: unknown };
+  let game: GameId;
+  if (target.kind === 'learn-challenge') {
+    if (!CATALOG_CATEGORIES.includes(target.category as CatalogCategory)) return `names no counting challenge: ${String(target.category)}`;
+    game = 'blackjack';
+  } else if (target.kind === 'free-play' || target.kind === 'guided-practice') {
+    if (!GAMES.includes(target.game as GameId)) return `opens no game setup: ${String(target.game)}`;
+    game = target.game as GameId;
+    if (target.kind === 'guided-practice' && target.strategy !== null && !BUILT_IN_STRATEGIES[game].includes(target.strategy as string)) {
+      return `names no built-in ${game} strategy: ${String(target.strategy)}`;
+    }
+  } else {
+    return 'is not free play, guided practice or a Learn challenge';
+  }
+  if (lesson.game !== null && game !== lesson.game) return `opens ${game} setup from a ${lesson.game} lesson`;
+  return null;
 }
