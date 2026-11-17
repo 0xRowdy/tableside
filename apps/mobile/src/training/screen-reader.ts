@@ -3,7 +3,7 @@ import { AccessibilityInfo, Platform } from 'react-native';
 
 import type { ScreenReaderSpeech } from './speech';
 
-// shortcut: #136
+// shortcut: #161
 const TALKBACK_MS_PER_CHARACTER = 70;
 const VOICEOVER_FINISH_LIMIT_MS = 10_000;
 
