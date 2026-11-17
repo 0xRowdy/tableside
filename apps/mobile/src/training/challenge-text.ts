@@ -120,7 +120,7 @@ export const progressText = (position: number, length: number) => `Card ${positi
 
 export const spokenValue = (value: HiLoValue) => (value > 0 ? `plus ${value}` : value < 0 ? `minus ${-value}` : '0');
 
-// Spec 3 Learn, Check and assistance; Lessons › Structure (worked examples render the same fact, #144)
+// Spec 3 Learn, Check and assistance; Lessons › Structure (worked examples); #144
 export const hiLoText = (explanation: HiLoExplanation) => `${rankName(explanation.rank)} counts ${signed(explanation.value)} in Hi-Lo.`;
 
 export function feedbackText(feedback: LearnFeedback): { readonly kicker: string; readonly headline: string; readonly detail: string } {

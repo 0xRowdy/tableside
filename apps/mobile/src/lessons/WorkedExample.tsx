@@ -10,13 +10,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Choice, PlayingCard } from '@/counting/CardChoices';
 import { useFeedback } from '@/feedback/FeedbackProvider';
 import { learnAnswerCue } from '@/feedback/training-cues';
-import { NavButton } from '@/lessons/LessonPlayer';
+import { NavButton } from '@/lessons/LessonParts';
 import { BackButton } from '@/settings/SettingsParts';
 import { fonts, palette, radius, space, textScale } from '@/theme/tokens';
 import { CARD_PROMPT, hiLoText, type ChoiceState } from '@/training/challenge-text';
 import { CONTINUE, EXAMPLE_NOTE, SKIP_EXAMPLE, TRY_IT_AGAIN, WORKED_EXAMPLE } from '@/training/lesson-text';
 
-const choiceState = (answer: HiLoValue, correct: boolean, picked: HiLoValue | null): ChoiceState => {
+const scriptedChoiceState = (answer: HiLoValue, correct: boolean, picked: HiLoValue | null): ChoiceState => {
   if (picked === null) return null;
   if (correct) return 'correct';
   return answer === picked ? 'your-pick' : null;
@@ -58,7 +58,7 @@ export function WorkedExample({ example, lesson, busy, onBack, onDone }: { examp
         </Text>
         <View style={styles.choices}>
           {example.choices.map(({ answer, response: { correct } }) => (
-            <Choice key={answer} value={answer} state={choiceState(answer, correct, picked)} enabled={picked === null} onPress={() => pick(answer, correct)} />
+            <Choice key={answer} value={answer} state={scriptedChoiceState(answer, correct, picked)} enabled={picked === null} onPress={() => pick(answer, correct)} />
           ))}
         </View>
         {response && (

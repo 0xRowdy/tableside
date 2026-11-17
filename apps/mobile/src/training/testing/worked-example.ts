@@ -1,7 +1,7 @@
 // Spec 3 Lessons › Structure (worked examples); #144
 import { APP_ORIENTATION, type Lesson, type WorkedExample } from '@tableside/definitions';
 
-// Spec 1 Game rules, Counting (Hi-Lo): a 5 counts +1
+// Spec 1 Game rules, Counting (Hi-Lo)
 export const FIVE_OF_HEARTS: WorkedExample = {
   kind: 'card-value',
   step: 2,

@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import { APP_ORIENTATION, lessonProblems, type Lesson, type WorkedExample } from '../src';
 
-// Spec 1 Game rules, Counting (Hi-Lo): 2–6 are +1, 7–9 are 0, ten-value cards and aces are −1
+// Spec 1 Game rules, Counting (Hi-Lo)
 const FIVE_OF_HEARTS: WorkedExample = {
   kind: 'card-value',
   step: 2,

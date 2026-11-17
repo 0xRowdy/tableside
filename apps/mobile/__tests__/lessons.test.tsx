@@ -196,7 +196,7 @@ describe('lessons', () => {
 
   // Spec 3 Lessons › Structure (worked examples); Amendment 1 B4, Amendment 4 §2; #144
   describe('worked examples', () => {
-    // Spec 3 user story 12: lessons and worked examples keep working once today's allowance is used
+    // Spec 3 user story 12
     const usedUp: ChallengeAllowanceState = {
       challengeAllowance: async () => ({ kind: 'free', amount: 5, left: 0, resetsAt: Date.now() + 3_600_000, timeZone: 'America/Denver', allowanceDevice: { here: true } }),
     };

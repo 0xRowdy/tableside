@@ -6,7 +6,7 @@ import type { TrainingService, TrainingSnapshot } from '@/training/service';
 import type { CueName } from './catalog';
 import type { FeedbackService } from './service';
 
-// Spec 3 Audio and haptics; Amendment 1 B4 (worked examples reuse these, #144)
+// Spec 3 Audio and haptics; Amendment 1 B4; #144
 export const CONTENT_SHOWN_CUE: CueName = 'card-dealt';
 export const learnAnswerCue = (correct: boolean): CueName => (correct ? 'correct' : 'incorrect');
 
