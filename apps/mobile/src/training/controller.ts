@@ -22,7 +22,7 @@ import {
 import type { AccessDecision, AccessDenial, LifecycleEvent } from '../practice/adapters';
 import { RECONNECT_TO_VERIFY, SAVE_RETRY_MS } from '../practice/controller';
 import type { TrainingAdapters } from './adapters';
-import { CHALLENGE_CHARGE, type Admission, type AttemptCharge, type CommittedAttemptTransition, type StoredAttempt } from './store';
+import { CHALLENGE_CHARGE, UNTIMED, type Admission, type AttemptCharge, type AttemptTiming, type CommittedAttemptTransition, type StoredAttempt } from './store';
 
 export type StartProblem = 'invalid-setup' | 'access-denied' | 'access-uncertain' | 'save-failed';
 
@@ -40,12 +40,24 @@ export interface AttemptHold {
   readonly reached: boolean;
   readonly reason: string | null;
   readonly resumeBlocked: string | null;
+  // Spec 1 Amendment 4 A2
+  readonly endBlocked: string | null;
 }
 
 // Spec 3 Amendment 1 C6
 const HOLD_RANK: Record<HoldCause, number> = { learner: 0, 'speech-backlog': 0, navigation: 1, 'app-lifecycle': 1, recovered: 1, 'sign-out': 2, access: 2 };
 
 const ITEM_FINISHED: ReadonlySet<ChallengePhase> = new Set(['ready', 'card', 'recorded', 'ended']);
+
+// Spec 3 Attempt lifecycle › Performance timer
+const TIMED_PHASES: ReadonlySet<ChallengePhase> = new Set(['card', 'question', 'recorded']);
+
+const answeredLast = (state: ChallengeState) => state.phase === 'ended' || (state.position + 1 >= state.content.length && (state.phase === 'recorded' || state.phase === 'explanation'));
+
+export interface PerformanceTimer {
+  readonly ms: number;
+  readonly since: number | null;
+}
 
 const HOLD_KIND: Record<HoldCause, AttemptHold['kind']> = {
   learner: 'paused',
@@ -67,16 +79,18 @@ export type AttemptSnapshot =
       readonly busy: boolean;
       readonly save: 'saved' | 'failed';
       readonly hold: AttemptHold | null;
+      readonly timer: PerformanceTimer | null;
     }
-  | { readonly status: 'ended'; readonly record: ChallengeAttemptRecord };
+  | { readonly status: 'ended'; readonly record: ChallengeAttemptRecord; readonly position: number };
 
 type Committed = { readonly state: ChallengeState; readonly facts: readonly ChallengeFact[] };
 
-type Pending = { readonly kind: 'transition'; readonly command: LearnerCommand } | { readonly kind: 'record' };
+type Pending = { readonly kind: 'transition'; readonly command: LearnerCommand | { readonly kind: 'end' } } | { readonly kind: 'record' };
 
 const UNANSWERED: AccessDenial = { status: 'uncertain', provenance: 'unanswered', disposition: 'stop' };
 
 const CANT_RESUME = "This attempt can't resume right now.";
+const CHECK_FAILED = "Couldn't check whether this attempt can end. Try again.";
 
 export class ChallengeController {
   private current: AttemptSnapshot = { status: 'loading' };
@@ -90,6 +104,9 @@ export class ChallengeController {
   private hold: AttemptHold | null = null;
   private interrupted = false;
   private resumeQueued = false;
+  private showResults = true;
+  private timing: AttemptTiming = UNTIMED;
+  private timedSince: number | null = null;
 
   constructor(private readonly adapters: TrainingAdapters) {}
 
@@ -116,8 +133,10 @@ export class ChallengeController {
   }
 
   // Spec 3 Training service interface › Start attempt
-  async start(variant: ChallengeVariant, content: ChallengeContent): Promise<void> {
+  async start(variant: ChallengeVariant, content: ChallengeContent, timed = false): Promise<void> {
     await this.exclusive(async () => {
+      // Spec 3 Attempt lifecycle › One unfinished attempt
+      if (this.state && this.current.status === 'active') return;
       let stored: StoredAttempt | null;
       try {
         stored = await this.adapters.store.findUnfinishedAttempt();
@@ -150,7 +169,7 @@ export class ChallengeController {
       const random = streamIdentityFromEntropy(this.adapters.entropy);
       const specification = { attemptId, owner: this.adapters.owner, device: this.adapters.device, variant, content };
       const initial = createChallenge(specification, random);
-      const created = { attemptId, admission, specification, random, checkpoint: encodeChallengeCheckpoint(initial), createdAt: this.adapters.clock.now() };
+      const created = { attemptId, admission, specification, random, checkpoint: encodeChallengeCheckpoint(initial), createdAt: this.adapters.clock.now(), timing: { ...UNTIMED, timed } };
       let attempt: StoredAttempt | null;
       try {
         attempt = await this.adapters.store.createAttempt(created);
@@ -158,6 +177,8 @@ export class ChallengeController {
         attempt = await this.adapters.store.loadAttempt(attemptId).catch(() => null);
       }
       if (!attempt) return this.showNone('save-failed');
+      this.timing = attempt.timing;
+      this.timedSince = null;
       await this.beginCharged(attempt, initial);
     });
   }
@@ -220,6 +241,28 @@ export class ChallengeController {
     });
   }
 
+  // Spec 3 Training service interface › End; Attempt lifecycle › Charge
+  async end(options: { readonly showResults?: boolean } = {}): Promise<void> {
+    await this.exclusive(async () => {
+      const state = this.state;
+      if (!state || this.current.status !== 'active' || this.pending) return;
+      const hold = this.hold;
+      if (hold?.kind === 'suspended') {
+        const gate = await this.adapters.access
+          .beforeEndWhileSuspended({ activityId: state.attempt.id })
+          .catch(() => ({ status: 'blocked', reason: CHECK_FAILED }) as const);
+        if (this.hold !== hold) return;
+        if (gate.status === 'blocked') {
+          this.hold = { ...hold, endBlocked: gate.reason };
+          return this.publish();
+        }
+      }
+      this.hold = null;
+      this.showResults = options.showResults ?? true;
+      await this.send({ kind: 'end' });
+    });
+  }
+
   // Spec 3 Amendment 1 B5
   suspend(cause: 'navigation' | 'app-lifecycle' | 'sign-out' = 'navigation'): void {
     this.holdNow(cause, null);
@@ -250,7 +293,7 @@ export class ChallengeController {
     this.resumeQueued = false;
     this.interrupted = true;
     const reached = !atBoundary || (previous?.reached ?? false) || ITEM_FINISHED.has(state.phase);
-    this.hold = { kind: HOLD_KIND[cause], cause, reached, reason, resumeBlocked: null };
+    this.hold = { kind: HOLD_KIND[cause], cause, reached, reason, resumeBlocked: null, endBlocked: null };
     this.publish();
   }
 
@@ -272,7 +315,7 @@ export class ChallengeController {
     this.showNone(null);
   }
 
-  private async send(command: LearnerCommand): Promise<void> {
+  private async send(command: LearnerCommand | { readonly kind: 'end' }): Promise<void> {
     const state = this.requireState();
     const next = await this.commit(state, command, null);
     if (!next) {
@@ -310,6 +353,7 @@ export class ChallengeController {
         receipt: result.receipt,
         facts: result.facts as ChallengeFact[],
         charge,
+        timing: this.timingNow(),
       });
       if (outcome.status === 'committed') return { state: result.state, facts: result.facts };
       if (outcome.status === 'already-committed') found = outcome.transition;
@@ -331,7 +375,7 @@ export class ChallengeController {
       startedAt: attempt.charge?.chargedAt ?? attempt.createdAt,
       endedAt: this.adapters.clock.now(),
       interrupted: this.interrupted,
-      performanceMs: null,
+      performanceMs: this.timing.timed ? this.timingNow().performanceMs : null,
       meteringBasis: attempt.admission.meteringBasis,
       allowancePolicyVersion: attempt.admission.allowancePolicyVersion ?? null,
     });
@@ -345,7 +389,13 @@ export class ChallengeController {
       this.pending = { kind: 'record' };
       return this.publish();
     }
-    this.current = { status: 'ended', record };
+    if (!this.showResults) {
+      this.showResults = true;
+      this.attempt = null;
+      this.state = null;
+      return this.showNone(null);
+    }
+    this.current = { status: 'ended', record, position: Math.min(state.position + 1, state.content.length) };
     this.notify();
   }
 
@@ -360,6 +410,8 @@ export class ChallengeController {
     if (this.attempt?.attemptId !== stored.attemptId) {
       this.hold = null;
       this.interrupted = false;
+      this.timing = stored.timing;
+      this.timedSince = null;
     }
     this.attempt = stored;
     this.state = state;
@@ -409,13 +461,28 @@ export class ChallengeController {
     this.notify();
   }
 
+  // Spec 3 Attempt lifecycle › Performance timer
+  private retime(): void {
+    const state = this.state;
+    const running = this.timing.timed && state !== null && TIMED_PHASES.has(state.phase) && !answeredLast(state) && !this.hold?.reached;
+    if (running === (this.timedSince !== null)) return;
+    this.timing = this.timingNow();
+    this.timedSince = running ? this.adapters.clock.now() : null;
+  }
+
+  private timingNow(): AttemptTiming {
+    const since = this.timedSince;
+    return since === null ? this.timing : { ...this.timing, performanceMs: this.timing.performanceMs + (this.adapters.clock.now() - since) };
+  }
+
   private publish(): void {
     if (this.current.status === 'ended') return;
+    this.retime();
     if (!this.state) {
       if (this.current.status === 'none') this.showNone(this.current.problem);
       return;
     }
-    this.current = { status: 'active', view: readChallengeView(this.state), facts: this.facts, busy: this.busy, save: this.pending ? 'failed' : 'saved', hold: this.hold };
+    this.current = { status: 'active', view: readChallengeView(this.state), facts: this.facts, busy: this.busy, save: this.pending ? 'failed' : 'saved', hold: this.hold, timer: this.timing.timed ? { ms: this.timing.performanceMs, since: this.timedSince } : null };
     this.notify();
   }
 

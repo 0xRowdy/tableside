@@ -24,8 +24,10 @@ function setup(options: { access?: Partial<AccessSupervisor>; store?: MemoryTrai
     ...options.access,
   };
   let next = 0;
+  let draws = 0;
+  const entropy = { randomBytes: (length: number) => entropyFromWords([PI_WORDS[0] + draws++, PI_WORDS[1], PI_WORDS[2], PI_WORDS[3]]).randomBytes(length) };
   const clock = options.clock ?? new FakeClock(1_790_000_000_000, true);
-  const service = new TrainingService({ store, access, allowance: plentyAllowance(() => clock.now()), clock, entropy: entropyFromWords(PI_WORDS), newId: () => `attempt-${++next}`, device: 'test-device', owner: 'local' });
+  const service = new TrainingService({ store, access, allowance: plentyAllowance(() => clock.now()), clock, entropy, newId: () => `attempt-${++next}`, device: 'test-device', owner: 'local' });
   return { service, store, admissions, clock };
 }
 
@@ -247,6 +249,79 @@ describe('challenge attempt lifecycle', () => {
     });
   });
 
+  // Spec 3 Attempt lifecycle › Charge, One unfinished attempt; Testing Decisions › Seam 2 › Lifecycle
+  describe('ending, retrying and the one unfinished attempt', () => {
+    it('ending an attempt abandons it: it keeps its one charge and writes one record, with results from the answers given', async () => {
+      const { service, store } = await started(CHECK_CARD_VALUES);
+      await service.submit({ kind: 'answer', value: 1 });
+      await service.submit({ kind: 'answer', value: 1 });
+      await service.end();
+      const snapshot = service.snapshot();
+      if (snapshot.status !== 'ended') throw new Error(snapshot.status);
+      expect(snapshot).toMatchObject({ position: 3, record: { endingReason: 'abandoned', metrics: { 'card-values': { total: 2 } } } });
+      expect((await store.loadAttempt(snapshot.record.attemptId))?.charge?.effect.amount).toBe('1');
+      expect(await store.readAttemptRecords()).toEqual([snapshot.record]);
+    });
+
+    it('ends a paused attempt from the pause sheet', async () => {
+      const { service } = await started(LEARN_CARD_VALUES);
+      service.pause();
+      await service.end();
+      expect(service.snapshot()).toMatchObject({ status: 'ended', record: { endingReason: 'abandoned', interrupted: true } });
+    });
+
+    it('asks the supervisor before ending a suspended attempt, and keeps it when ending is blocked', async () => {
+      const blocked = 'Ending waits until access is checked.';
+      const { service } = await started(LEARN_CARD_VALUES, {
+        access: {
+          onLifecycle: async () => ({ status: 'denied', provenance: 'test', disposition: 'suspend' }),
+          beforeEndWhileSuspended: async () => ({ status: 'blocked', reason: blocked }),
+        },
+      });
+      await service.lifecycle('access-changed');
+      await service.end();
+      expect(active(service.snapshot()).hold).toMatchObject({ endBlocked: blocked });
+    });
+
+    it('keeps one unfinished attempt per device: starting another changes nothing until the first is ended', async () => {
+      const { service, store, admissions } = await started(CHECK_CARD_VALUES);
+      service.pause();
+      const held = active(service.snapshot());
+      await service.startAttempt({ category: 'running-count', variant: 'learn' });
+      expect([service.snapshot(), admissions.length]).toEqual([held, 1]);
+
+      await service.end({ showResults: false });
+      expect(service.snapshot()).toMatchObject({ status: 'none', problem: null });
+      expect((await store.readAttemptRecords()).map((record) => record.endingReason)).toEqual(['abandoned']);
+      await service.startAttempt({ category: 'running-count', variant: 'learn' });
+      expect(viewOf(service)).toMatchObject({ category: 'running-count', variant: 'learn' });
+    });
+
+    it('Retry starts a new randomized attempt with its own charge', async () => {
+      const { service, store, admissions } = await started(LEARN_CARD_VALUES);
+      const firstCards: string[] = [];
+      for (let guard = 0; guard < 100 && service.snapshot().status === 'active'; guard++) {
+        const view = viewOf(service);
+        if (view.phase === 'question') firstCards.push(`${view.item!.card.rank}${view.item!.card.suit}`);
+        await service.submit(view.phase === 'question' ? { kind: 'answer', value: reference(view) } : { kind: 'next-item' });
+      }
+      await service.retry();
+      const retried = viewOf(service);
+      expect([retried.attemptId, retried.position, retried.variant, admissions.length]).toEqual(['attempt-2', 1, 'learn', 2]);
+      expect(`${retried.item!.card.rank}${retried.item!.card.suit}`).not.toBe(firstCards[0]);
+      expect((await store.loadAttempt('attempt-2'))?.charge?.effect.effectId.activity).toBe('attempt-2');
+    });
+
+    it('resuming costs nothing, and an attempt that runs past the daily reset is not charged again', async () => {
+      const { service, store, admissions, clock } = await started(LEARN_CARD_VALUES);
+      service.pause();
+      clock.advance(26 * 60 * 60 * 1000);
+      await service.resume();
+      const record = await finish(service);
+      expect([admissions.length, (await store.loadAttempt(record.attemptId))?.charge?.chargedAt]).toEqual([1, 1_790_000_000_000]);
+    });
+  });
+
   // Spec 3 Attempt lifecycle › Durability; Amendment 1 C1
   describe('recovery after the app ends', () => {
     it('reopens the attempt suspended in its committed phase, resumes without a charge, and marks it interrupted', async () => {
@@ -260,6 +335,57 @@ describe('challenge attempt lifecycle', () => {
       await later.service.resume();
       const record = await finish(later.service);
       expect([record.interrupted, later.admissions, (await later.store.loadAttempt(record.attemptId))?.charge?.effect.amount]).toEqual([true, [], '1']);
+    });
+  });
+
+  // Spec 3 Attempt lifecycle › Performance timer; Testing Decisions › Seam 2 › Timer
+  describe('performance timer', () => {
+    it('times from the first card to the final answer, leaving out Learn explanations and pauses', async () => {
+      const { service, clock } = await started({ ...LEARN_CARD_VALUES, timed: true });
+      expect(active(service.snapshot()).timer).toEqual({ ms: 0, since: 1_790_000_000_000 });
+      clock.advance(3_000);
+      await service.submit({ kind: 'answer', value: reference(viewOf(service)) });
+      expect(active(service.snapshot()).timer).toEqual({ ms: 3_000, since: null });
+      clock.advance(5_000);
+      await service.submit({ kind: 'next-item' });
+      clock.advance(2_000);
+      service.pause();
+      clock.advance(10_000);
+      await service.resume();
+      clock.advance(1_000);
+      await service.submit({ kind: 'answer', value: reference(viewOf(service)) });
+      const record = await finish(service);
+      expect(record.performanceMs).toBe(6_000);
+    });
+
+    it('counts the recorded pause after each Check answer except the last', async () => {
+      const { service } = await started({ ...CHECK_CARD_VALUES, timed: true });
+      expect((await finish(service)).performanceMs).toBe(19 * RECORDED_MS);
+    });
+
+    it('records no performance time when timing is off, the default', async () => {
+      const { service } = await started(LEARN_CARD_VALUES);
+      expect(active(service.snapshot()).timer).toBeNull();
+      expect((await finish(service)).performanceMs).toBeNull();
+    });
+
+    it('keeps the time committed before the app ended', async () => {
+      const first = await started({ ...LEARN_CARD_VALUES, timed: true });
+      first.clock.advance(4_000);
+      await first.service.submit({ kind: 'answer', value: reference(viewOf(first.service)) });
+
+      const later = setup({ store: first.store.reopen() });
+      await later.service.load();
+      await later.service.resume();
+      expect((await finish(later.service)).performanceMs).toBe(4_000);
+    });
+
+    it('remembers timing with the last setup, and Retry keeps it', async () => {
+      const { service, admissions } = await started({ ...CHECK_CARD_VALUES, timed: true });
+      expect(await service.lastSetup()).toEqual({ ...CHECK_CARD_VALUES, timed: true });
+      await finish(service);
+      await service.retry();
+      expect([active(service.snapshot()).timer?.ms, admissions.length]).toEqual([0, 2]);
     });
   });
 });

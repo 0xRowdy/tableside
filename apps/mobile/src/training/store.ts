@@ -16,6 +16,14 @@ export interface Admission {
   readonly allowancePolicyVersion?: string;
 }
 
+// Spec 3 Attempt lifecycle › Performance timer; #135
+export interface AttemptTiming {
+  readonly timed: boolean;
+  readonly performanceMs: number;
+}
+
+export const UNTIMED: AttemptTiming = { timed: false, performanceMs: 0 };
+
 export interface NewAttempt {
   readonly attemptId: string;
   readonly admission: Admission;
@@ -23,6 +31,7 @@ export interface NewAttempt {
   readonly random: RandomStreamIdentity;
   readonly checkpoint: string;
   readonly createdAt: number;
+  readonly timing: AttemptTiming;
 }
 
 // Spec 3 Amendment 1 C6
@@ -45,6 +54,7 @@ export interface AttemptTransitionCommit {
   readonly facts: readonly ChallengeFact[];
   // Spec 3 Amendment 1 C6
   readonly charge: AttemptCharge | null;
+  readonly timing: AttemptTiming;
 }
 
 export interface CommittedAttemptTransition {

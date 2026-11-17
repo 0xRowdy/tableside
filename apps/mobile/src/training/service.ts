@@ -34,6 +34,8 @@ export interface CatalogEntry {
 export interface ChallengeSetup {
   readonly category: CatalogCategory;
   readonly variant: ChallengeVariant;
+  // Spec 3 Attempt lifecycle › Performance timer; #135
+  readonly timed?: boolean;
 }
 
 export interface SetupDiagnostic {
@@ -151,8 +153,8 @@ export class TrainingService {
       return this.refresh();
     }
     this.diagnostics = null;
-    await this.adapters.store.writePreference(LAST_SETUP, JSON.stringify({ category: setup.category, variant: setup.variant })).catch(() => undefined);
-    await this.challenges.start(setup.variant, CHALLENGE_CONTENT[setup.category as ChallengeCategory]);
+    await this.adapters.store.writePreference(LAST_SETUP, JSON.stringify(rememberedSetup(setup))).catch(() => undefined);
+    await this.challenges.start(setup.variant, CHALLENGE_CONTENT[setup.category as ChallengeCategory], setup.timed === true);
   }
 
   submit(command: LearnerCommand): Promise<void> {
@@ -170,6 +172,21 @@ export class TrainingService {
 
   resume(): Promise<void> {
     return this.challenges.resume();
+  }
+
+  // Spec 3 Training service interface › End
+  end(options?: { readonly showResults?: boolean }): Promise<void> {
+    return this.challenges.end(options);
+  }
+
+  // Spec 3 Attempt lifecycle › Charge (Retry)
+  async retry(): Promise<void> {
+    const snapshot = this.current;
+    if (snapshot.status !== 'ended') return;
+    const { record } = snapshot;
+    const { category, variant } = record.groupKey;
+    this.dismissResults();
+    await this.startAttempt({ category, variant, timed: record.performanceMs !== null });
   }
 
   // Spec 3 Amendment 1 B5
@@ -205,7 +222,9 @@ export class TrainingService {
     if (text === null) return null;
     try {
       const value = JSON.parse(text) as Partial<ChallengeSetup>;
-      return isCatalogCategory(value.category) && CHALLENGE_VARIANTS.includes(value.variant as ChallengeVariant) ? { category: value.category, variant: value.variant as ChallengeVariant } : null;
+      return isCatalogCategory(value.category) && CHALLENGE_VARIANTS.includes(value.variant as ChallengeVariant)
+        ? rememberedSetup({ category: value.category, variant: value.variant as ChallengeVariant, timed: value.timed === true })
+        : null;
     } catch {
       return null;
     }
@@ -294,6 +313,8 @@ export class TrainingService {
     for (const listener of this.listeners) listener();
   }
 }
+
+const rememberedSetup = ({ category, variant, timed }: ChallengeSetup): ChallengeSetup => (timed ? { category, variant, timed } : { category, variant });
 
 const progressKey = (id: string, content: LessonContent) => ({ id, materialVersion: content.materialVersion, steps: content.steps.length });
 

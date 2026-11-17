@@ -16,6 +16,7 @@ import type {
 } from '../practice/store';
 import {
   CHALLENGE_ATTEMPT_RECORD_TYPE,
+  UNTIMED,
   type AttemptCharge,
   type AttemptCommitOutcome,
   type AttemptTransitionCommit,
@@ -439,7 +440,7 @@ export class SqliteActivityStore implements ActivityStore, TrainingStore {
       const { attemptId, admission, specification, random, createdAt } = attempt;
       await tx.run('UPDATE challenge_attempts SET sequence = ?, body = ?, body_format = ?, body_length = ?, body_sha256 = ? WHERE attempt_id = ?', [
         commit.priorSequence + 1,
-        ...encode({ attemptId, admission, specification, random, createdAt, checkpoint: commit.checkpoint } satisfies NewAttempt),
+        ...encode({ attemptId, admission, specification, random, createdAt, checkpoint: commit.checkpoint, timing: commit.timing } satisfies NewAttempt),
         commit.attemptId,
       ]);
       return { status: 'committed' };
@@ -1160,7 +1161,8 @@ async function readAttempt(tx: SqlExecutor, attemptId: string): Promise<StoredAt
   if (!row) return null;
   const charge = await tx.get<BodyRow>(`SELECT ${BODY} FROM challenge_charges WHERE attempt_id = ?`, [attemptId]);
   const record = await tx.get<BodyRow>(`SELECT ${BODY} FROM challenge_attempt_records WHERE attempt_id = ?`, [attemptId]);
-  return { ...decode<NewAttempt>(row), sequence: row.sequence, charge: charge ? decode<AttemptCharge>(charge) : null, record: record ? decode<ChallengeAttemptRecord>(record) : null };
+  // #135
+  return { timing: UNTIMED, ...decode<NewAttempt>(row), sequence: row.sequence, charge: charge ? decode<AttemptCharge>(charge) : null, record: record ? decode<ChallengeAttemptRecord>(record) : null };
 }
 
 async function readAttemptTransition(tx: SqlExecutor, attemptId: string, commandId: string): Promise<CommittedAttemptTransition | null> {

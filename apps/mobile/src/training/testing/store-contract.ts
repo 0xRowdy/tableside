@@ -2,7 +2,7 @@
 import type { ChallengeFact, Receipt, UnsequencedAttemptRecord } from '@tableside/engine';
 
 import type { UnsequencedLessonEvent } from '../lesson-progress';
-import { CHALLENGE_CHARGE, type AttemptCharge, type AttemptTransitionCommit, type NewAttempt, type TrainingStore } from '../store';
+import { CHALLENGE_CHARGE, UNTIMED, type AttemptCharge, type AttemptTiming, type AttemptTransitionCommit, type NewAttempt, type TrainingStore } from '../store';
 
 export interface TrainingStoreUnderTest {
   readonly store: TrainingStore;
@@ -25,6 +25,7 @@ export function newAttempt(attemptId: string, overrides: Partial<NewAttempt> = {
     random: { ...RANDOM, key: [...RANDOM.key], session: [...RANDOM.session] } as NewAttempt['random'],
     checkpoint: `{"attempt":"${attemptId}","sequence":0}`,
     createdAt: 1_790_000_000_000,
+    timing: UNTIMED,
     ...overrides,
   };
 }
@@ -36,7 +37,7 @@ export const chargeFor = (attemptId: string, chargedAt = 1_790_000_001_000): Att
 
 const receipt = (sequence: number, command: string): Receipt => ({ commandId: `cmd-${sequence}`, sequence, command, disposition: 'applied' });
 
-export function attemptTransition(attemptId: string, priorSequence: number, options: { charge?: AttemptCharge | null; command?: string; facts?: ChallengeFact[] } = {}): AttemptTransitionCommit {
+export function attemptTransition(attemptId: string, priorSequence: number, options: { charge?: AttemptCharge | null; command?: string; facts?: ChallengeFact[]; timing?: AttemptTiming } = {}): AttemptTransitionCommit {
   return {
     attemptId,
     priorSequence,
@@ -44,6 +45,7 @@ export function attemptTransition(attemptId: string, priorSequence: number, opti
     receipt: receipt(priorSequence, options.command ?? '{"kind":"begin"}'),
     facts: options.facts ?? [{ kind: 'content-shown', position: 0 }],
     charge: options.charge ?? null,
+    timing: options.timing ?? UNTIMED,
   };
 }
 
@@ -105,6 +107,16 @@ export function describeTrainingStoreContract(name: string, open: () => Promise<
       expect(await reopened.findUnfinishedAttempt()).toEqual(created);
       expect(await reopened.loadAttempt('a-1')).toEqual(created);
       expect(await reopened.loadAttempt('missing')).toBeNull();
+    });
+
+    // Spec 3 Attempt lifecycle › Performance timer; #135
+    it('keeps the attempt timing it was created with, and the timing of each later transition, across a reopen', async () => {
+      const subject = await open();
+      await subject.store.createAttempt(newAttempt('a-1', { timing: { timed: true, performanceMs: 0 } }));
+      expect((await subject.store.loadAttempt('a-1'))?.timing).toEqual({ timed: true, performanceMs: 0 });
+      await subject.store.commitAttemptTransition(attemptTransition('a-1', 0, { charge: chargeFor('a-1'), timing: { timed: true, performanceMs: 4_250 } }));
+      const reopened = await subject.reopen();
+      expect((await reopened.findUnfinishedAttempt())?.timing).toEqual({ timed: true, performanceMs: 4_250 });
     });
 
     it('refuses a second unfinished attempt on the device', async () => {
