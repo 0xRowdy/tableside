@@ -1,8 +1,8 @@
-// Spec 3 S3-12 l8pMS, pX6CV, S3-13 JJl51, Fvlgc, ZBpF3; Amendment 1 B4, C10; #143, #144, #145
+// Spec 3 S3-12 l8pMS, pX6CV, S3-13 JJl51, Fvlgc, ZBpF3; Amendment 1 B2, B4, C10, C11; Amendment 2 §3; #143, #144, #145, #152
 
-import type { LessonHandoff } from '@tableside/definitions';
+import type { LessonHandoff, LessonSource } from '@tableside/definitions';
 import { ArrowLeft, ArrowRight, ChevronRight, GraduationCap, Play, RefreshCcw, RotateCcw, Shuffle, Spade, SquarePlay, type LucideIcon } from 'lucide-react-native';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Sheet, SheetText } from '@/components/Sheet';
@@ -23,11 +23,13 @@ import {
   lessonKind,
   NEXT,
   noticeText,
+  PUBLISHED_NOTE_TITLE,
   RESTART_FROM_START,
   RESTART_LESSON,
   RESTART_NOTE,
   resumeAt,
   SAVE_FAILED,
+  sourceText,
   stepText,
   stoppedAt,
   TRY_EXAMPLE,
@@ -107,6 +109,7 @@ export function LessonPlayer({
               {paragraph}
             </Text>
           ))}
+          {step.publishedNote ? <PublishedNote paragraphs={step.publishedNote} source={step.source} /> : step.source && <StepSource source={step.source} />}
           {view.example?.step === view.step && <ExampleLink disabled={busy} onPress={actions.onExample} />}
           {last &&
             view.handoffs.map((handoff) => (
@@ -204,6 +207,50 @@ function ChangeNotice({ notice }: { notice: NonNullable<LessonView['notice']> })
   );
 }
 
+// Spec 3 S3-12 l8pMS; Amendment 1 B2; Amendment 2 §3 (lesson player); #152
+function PublishedNote({ paragraphs, source }: { paragraphs: readonly string[]; source: LessonSource | undefined }) {
+  return (
+    <View style={styles.publishedNote}>
+      <Text accessibilityRole="header" maxFontSizeMultiplier={textScale.body} style={styles.publishedTitle}>
+        {PUBLISHED_NOTE_TITLE}
+      </Text>
+      {paragraphs.map((paragraph, index) => (
+        <Text key={index} maxFontSizeMultiplier={textScale.body} style={styles.publishedText}>
+          {paragraph}
+        </Text>
+      ))}
+      {source && <StepSource source={source} />}
+    </View>
+  );
+}
+
+// Spec 3 Amendment 1 C11: text links only, opened on request
+function StepSource({ source }: { source: LessonSource }) {
+  const { focused, focusProps } = useKeyboardFocus();
+  const label = sourceText(source.citation);
+  const { url } = source;
+  if (url === null) {
+    return (
+      <Text maxFontSizeMultiplier={textScale.body} style={styles.source}>
+        {label}
+      </Text>
+    );
+  }
+  return (
+    <Pressable
+      accessibilityRole="link"
+      accessibilityLabel={label}
+      onPress={() => void Linking.openURL(url)}
+      {...focusProps}
+      style={({ pressed }) => [styles.sourceLink, pressed && styles.pressed, focused && styles.focused]}
+    >
+      <Text maxFontSizeMultiplier={textScale.body} style={styles.source}>
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
 // Spec 3 S3-12 l8pMS; #144
 function ExampleLink({ disabled, onPress }: { disabled: boolean; onPress: () => void }) {
   const { focused, focusProps } = useKeyboardFocus();
@@ -269,6 +316,11 @@ const styles = StyleSheet.create({
   segmentDone: { backgroundColor: palette.primary },
   heading: { fontFamily: fonts.display, fontSize: 26, lineHeight: 32, color: palette.foreground },
   paragraph: { fontFamily: fonts.ui, fontSize: 16, lineHeight: 25, color: palette.foreground },
+  publishedNote: { gap: space[2] - 2, padding: 14, borderRadius: 14, borderWidth: 1, borderColor: palette.controlBorder, backgroundColor: palette.card },
+  publishedTitle: { fontFamily: fonts.uiBold, fontSize: 14, lineHeight: 22, color: palette.foreground },
+  publishedText: { fontFamily: fonts.ui, fontSize: 14, lineHeight: 22, color: palette.mutedForeground },
+  source: { fontFamily: fonts.ui, fontSize: 13, lineHeight: 19, color: palette.primary },
+  sourceLink: { minHeight: MIN_TOUCH_TARGET, justifyContent: 'center', borderRadius: radius.sm, borderWidth: 2, borderColor: palette.transparent },
   exampleLink: {
     flexDirection: 'row',
     alignItems: 'center',

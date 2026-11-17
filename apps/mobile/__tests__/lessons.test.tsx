@@ -2,7 +2,7 @@
 
 import { act, cleanup, fireEvent, screen, within } from '@testing-library/react-native';
 import { renderRouter } from 'expo-router/testing-library';
-import { Dimensions } from 'react-native';
+import { Dimensions, Linking } from 'react-native';
 
 import type { Lesson } from '@tableside/definitions';
 
@@ -183,6 +183,34 @@ describe('lessons', () => {
     await fireEvent.press(button('Restart lesson'));
     await screen.findByText('Step 1 of 4');
     expect(screen.queryByRole('header', { name: 'Completed (earlier version)' })).toBeNull();
+  });
+
+  // Spec 3 Amendment 1 B2, C11; Amendment 2 §3 (lesson player); #152
+  it('show a step’s note on our index against the published charts, with its source as a text link opened only on request', async () => {
+    const open = jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined);
+    const orientation = actualLessons()[0]!;
+    const source = { citation: 'Wizard of Odds, “High-Low Card Counting”, Illustrious 18 table', url: 'https://wizardofodds.com/games/blackjack/card-counting/high-low/' };
+    const [first, ...rest] = orientation.content!.steps;
+    servedLessons()[0] = {
+      ...orientation,
+      content: { ...orientation.content!, steps: [{ ...first!, publishedNote: ['Tableside teaches standing at +1; the published chart uses 0.'], source }, { ...rest[0]!, source }, ...rest.slice(1)], sources: [source] },
+    };
+    await openOrientation();
+    expect(screen.getByRole('header', { name: 'Our index vs published charts' })).toBeOnTheScreen();
+    expect(screen.getByText('Tableside teaches standing at +1; the published chart uses 0.')).toBeOnTheScreen();
+    const link = screen.getByRole('link', { name: 'Source: Wizard of Odds, “High-Low Card Counting”, Illustrious 18 table' });
+    expect(open).not.toHaveBeenCalled();
+    await fireEvent.press(link);
+    expect(open).toHaveBeenCalledWith('https://wizardofodds.com/games/blackjack/card-counting/high-low/');
+
+    await fireEvent.press(button('Next'));
+    await header('Help when you need it');
+    expect(screen.queryByRole('header', { name: 'Our index vs published charts' })).toBeNull();
+    expect(screen.getByRole('link', { name: /^Source: Wizard of Odds/ })).toBeOnTheScreen();
+    await fireEvent.press(button('Next'));
+    await header('Practice records and casino records');
+    expect(screen.queryByRole('link')).toBeNull();
+    open.mockRestore();
   });
 
   it('are silent: the Learning screen, catalog and lesson text play no cue or haptic', async () => {

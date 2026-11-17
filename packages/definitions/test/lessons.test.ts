@@ -170,6 +170,39 @@ describe('lesson definitions', () => {
       });
     });
 
+    // Spec 3 Amendment 1 B2, C11; Amendment 2 §3 (lesson player); #152
+    describe('step sources and the published-chart note', () => {
+      const chart = { citation: 'Blackjack Apprenticeship, “Blackjack Deviations”, The Illustrious 18', url: 'https://www.blackjackapprenticeship.com/blackjack-deviations/' };
+      const step = { heading: 'When the count changes a decision', paragraphs: ['Stand on 16 against a 10 at +1 or higher.'] };
+
+      it('accept a step citing a listed source, with or without a note on the published value', () => {
+        expect(
+          lessonProblems([
+            { ...orientation, content: { ...content, steps: [{ ...step, source: chart, publishedNote: ['Tableside teaches +1; the chart uses 0.'] }, { ...step, source: chart }], sources: [chart] } },
+          ]),
+        ).toEqual([]);
+      });
+
+      it('a note on the published value with no source, or a cited source missing from the lesson’s sources', () => {
+        expect(
+          lessonProblems([{ ...orientation, content: { ...content, steps: [{ ...step, publishedNote: ['Tableside teaches +1.'] }, { ...step, source: chart }], sources: [] } }]),
+        ).toEqual(['app-orientation: step 1 compares with a published value but cites no source', 'app-orientation: step 2 cites a source missing from the lesson’s sources']);
+      });
+
+      it('an empty note, an empty citation, a source that is not an https link, or a source listed twice', () => {
+        const blank = { citation: ' ', url: null };
+        const insecure = { citation: 'Wizard of Odds, Hi-Lo', url: 'http://wizardofodds.com/' };
+        expect(
+          lessonProblems([{ ...orientation, content: { ...content, steps: [{ ...step, source: chart, publishedNote: [''] }], sources: [chart, blank, insecure, chart] } }]),
+        ).toEqual([
+          'app-orientation: step 1 has an empty note on the published value',
+          'app-orientation: source 2 has no citation',
+          'app-orientation: source 3 is not an https link',
+          'app-orientation: source 4 repeats an earlier one',
+        ]);
+      });
+    });
+
     it('a lesson with no steps or an empty step', () => {
       expect(
         lessonProblems([

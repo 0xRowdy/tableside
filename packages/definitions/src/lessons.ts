@@ -12,6 +12,10 @@ export type LessonSection = 'app' | 'blackjack' | 'craps' | 'roulette' | 'builde
 export interface LessonStep {
   readonly heading: string;
   readonly paragraphs: readonly string[];
+  // Spec 3 Amendment 1 B2; Amendment 2 §3 (lesson player): the "Our index vs published charts" box
+  readonly publishedNote?: readonly string[];
+  // Spec 3 Lessons › Content requirements; Amendment 1 C11; Amendment 2 §3 (lesson player)
+  readonly source?: LessonSource;
 }
 
 // Spec 3 Lessons › Structure (Handoff)
@@ -135,6 +139,7 @@ export const CHALLENGE_LESSONS: Readonly<Record<CatalogCategory, string>> = {
 };
 
 const IDENTITY = /^[a-z0-9]+(-[a-z0-9]+)*$/;
+const sameSource = (a: LessonSource, b: LessonSource) => a.citation === b.citation && a.url === b.url;
 const isVersion = (value: number) => Number.isInteger(value) && value > 0;
 
 // Spec 3 Testing Decisions › Build-time check
@@ -158,6 +163,15 @@ export function lessonProblems(lessons: readonly Lesson[]): readonly string[] {
     content.steps.forEach((step, index) => {
       if (!step.heading.trim()) report(`step ${index + 1} has no heading`);
       if (!step.paragraphs.some((paragraph) => paragraph.trim())) report(`step ${index + 1} has no text`);
+      if (step.publishedNote && !step.publishedNote.some((paragraph) => paragraph.trim())) report(`step ${index + 1} has an empty note on the published value`);
+      else if (step.publishedNote && !step.source) report(`step ${index + 1} compares with a published value but cites no source`);
+      const cited = step.source;
+      if (cited && !content.sources.some((source) => sameSource(source, cited))) report(`step ${index + 1} cites a source missing from the lesson’s sources`);
+    });
+    content.sources.forEach((source, index) => {
+      if (!source.citation.trim()) report(`source ${index + 1} has no citation`);
+      else if (source.url !== null && !source.url.startsWith('https://')) report(`source ${index + 1} is not an https link`);
+      else if (content.sources.slice(0, index).some((earlier) => sameSource(earlier, source))) report(`source ${index + 1} repeats an earlier one`);
     });
     if (content.workedExample) workedExampleProblems(content.workedExample, content.steps.length).forEach(report);
     const offered = new Set<string>();

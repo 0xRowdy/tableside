@@ -78,6 +78,10 @@ export function noticeText(notice: NonNullable<LessonView['notice']>): { readonl
     : { title: 'Lesson updated', text: `This lesson changed since you were last here: ${notice.change}. It starts again from step 1.` };
 }
 
+// Spec 3 S3-12 l8pMS; Amendment 1 B2, C11; Amendment 2 §3 (lesson player); #152
+export const PUBLISHED_NOTE_TITLE = 'Our index vs published charts';
+export const sourceText = (citation: string) => `Source: ${citation}`;
+
 // Spec 3 S3-12 l8pMS and aJV2y; Lessons › Structure (worked examples); #144
 export const TRY_EXAMPLE = 'Try the worked example (optional)';
 export const WORKED_EXAMPLE = 'Worked example';
