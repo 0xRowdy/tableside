@@ -83,6 +83,15 @@ describe('challenge attempt lifecycle', () => {
       expect(viewOf(service)).toMatchObject({ phase: 'explanation', position: before.position });
     });
 
+    // Spec 3 Attempt lifecycle › Automatic pacing; Amendment 1 C1
+    it('auto-pauses for a speech backlog, which also marks the attempt interrupted', async () => {
+      const { service } = await started(LEARN_CARD_VALUES);
+      service.pause('speech-backlog');
+      expect(active(service.snapshot()).hold).toMatchObject({ kind: 'auto-paused', cause: 'speech-backlog' });
+      await service.resume();
+      expect((await finish(service)).interrupted).toBe(true);
+    });
+
     it('marks the attempt interrupted; an attempt never paused is not', async () => {
       const paused = await started(LEARN_CARD_VALUES);
       paused.service.pause();
@@ -430,6 +439,103 @@ describe('challenge attempt lifecycle', () => {
       expect(service.snapshot()).toEqual({ status: 'needs-update' });
       await service.startAttempt(LEARN_CARD_VALUES);
       expect([service.snapshot(), (await store.findUnfinishedAttempt())?.attemptId, await store.readAttemptRecords()]).toEqual([{ status: 'needs-update' }, 'later', []]);
+    });
+  });
+
+  // Spec 3 Testing Decisions › Seam 2 › Pause/suspend (trace equivalence), Failure injection
+  describe('durability', () => {
+    type Step = { readonly kind: 'answer'; readonly value: number } | { readonly kind: 'next-item' };
+    const RUNNING_CHECK = { category: 'running-count', variant: 'check' } as const;
+
+    async function play(service: TrainingService, between: (step: number) => Promise<TrainingService>) {
+      let current = service;
+      for (let step = 0; step < 120 && current.snapshot().status === 'active'; step++) {
+        current = await between(step);
+        const view = viewOf(current);
+        const command: Step = view.phase === 'question' ? { kind: 'answer', value: step % 3 } : { kind: 'next-item' };
+        await current.submit(command);
+      }
+      const snapshot = current.snapshot();
+      if (snapshot.status !== 'ended') throw new Error(snapshot.status);
+      return { service: current, record: snapshot.record };
+    }
+
+    it('resuming after a pause, a suspension or a restart gives the same trace as never stopping', async () => {
+      const steady = await started(RUNNING_CHECK);
+      const unbroken = await play(steady.service, async () => steady.service);
+
+      const interrupted = await started(RUNNING_CHECK);
+      let store = interrupted.store;
+      const broken = await play(interrupted.service, async (step) => {
+        const service = interrupted.service;
+        if (step === 5) service.pause();
+        if (step === 13) service.suspend('navigation');
+        if (step === 30) await service.lifecycle('backgrounded');
+        if (step === 40) {
+          store = store.reopen();
+          const later = setup({ store });
+          await later.service.load();
+          await later.service.resume();
+          interrupted.service = later.service;
+          return later.service;
+        }
+        await service.resume();
+        return service;
+      });
+
+      const checkpoint = async (harness: { store: MemoryTrainingStore }, attemptId: string) => (await harness.store.loadAttempt(attemptId))?.checkpoint;
+      expect(await checkpoint({ store }, broken.record.attemptId)).toBe(await checkpoint(steady, unbroken.record.attemptId));
+      const comparable = ({ interrupted: _i, startedAt: _s, endedAt: _e, deviceSequence: _d, ...rest }: typeof broken.record) => rest;
+      expect(comparable(broken.record)).toEqual(comparable(unbroken.record));
+      expect([broken.record.interrupted, unbroken.record.interrupted]).toEqual([true, false]);
+    });
+
+    async function withFailure(failAt: number, operation: 'commitAttemptTransition' | 'recordAttempt' | 'createAttempt', when: 'before' | 'after', abandon: boolean) {
+      const store = new MemoryTrainingStore();
+      const { service } = setup({ store });
+      await service.load();
+      let writes = 0;
+      const maybeFail = () => {
+        if (writes++ === failAt) store.failNext(operation, when);
+      };
+      maybeFail();
+      await service.startAttempt(CHECK_CARD_VALUES);
+      for (let guard = 0; guard < 20 && service.snapshot().status === 'none'; guard++) await service.startAttempt(CHECK_CARD_VALUES);
+      for (let step = 0; step < 200 && service.snapshot().status === 'active'; step++) {
+        const snapshot = active(service.snapshot());
+        if (snapshot.save === 'failed') {
+          await service.retrySave();
+          continue;
+        }
+        maybeFail();
+        if (abandon && snapshot.view.position === 4) await service.end();
+        else await service.submit(snapshot.view.phase === 'question' ? { kind: 'answer', value: 1 } : { kind: 'next-item' });
+      }
+      const attempts = await Promise.all(['attempt-1', 'attempt-2', 'attempt-3'].map((id) => store.loadAttempt(id)));
+      return { snapshot: service.snapshot(), charges: attempts.filter((attempt) => attempt?.charge).length, records: await store.readAttemptRecords() };
+    }
+
+    it.each([
+      ['commitAttemptTransition', 'before'],
+      ['commitAttemptTransition', 'after'],
+      ['recordAttempt', 'before'],
+      ['recordAttempt', 'after'],
+      ['createAttempt', 'before'],
+      ['createAttempt', 'after'],
+    ] as const)('a %s failure %s writing, at any point of a completed or abandoned attempt, leaves one charge and one record', async (operation, when) => {
+      for (const abandon of [false, true]) {
+        for (let failAt = 0; failAt < (abandon ? 6 : 22); failAt++) {
+          const outcome = await withFailure(failAt, operation, when, abandon);
+          expect([failAt, abandon, outcome.snapshot.status, outcome.charges, outcome.records.length, outcome.records[0]?.endingReason]).toEqual([
+            failAt,
+            abandon,
+            'ended',
+            1,
+            1,
+            abandon ? 'abandoned' : 'completed',
+          ]);
+        }
+      }
     });
   });
 });

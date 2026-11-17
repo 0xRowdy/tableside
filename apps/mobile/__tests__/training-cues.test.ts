@@ -83,6 +83,29 @@ describe('cues during a challenge attempt', () => {
     expect(ports.sound.played.at(-1)?.cue).toBe('milestone');
   });
 
+  // #132 handoff; #135
+  it('keeps holding feedback cues while a Check attempt is paused or suspended, and plays no cue for pausing or resuming', async () => {
+    const { service, ports, feedback } = await setup('check');
+    service.pause();
+    feedback.cue('correct');
+    await service.resume();
+    service.suspend('navigation');
+    feedback.cue('milestone');
+    await service.resume();
+    expect(ports.sound.played.map((play) => play.cue)).toEqual(['card-dealt']);
+  });
+
+  // Spec 3 Audio and haptics (cue 12); #135
+  it('plays cue 12 when the learner ends an attempt from it, and not when it is ended to set up another', async () => {
+    const shown = await setup('check');
+    await shown.service.end();
+    expect(shown.ports.sound.played.map((play) => play.cue)).toEqual(['card-dealt', 'attempt-ended']);
+
+    const hidden = await setup('check');
+    await hidden.service.end({ showResults: false });
+    expect(hidden.ports.sound.played.map((play) => play.cue)).toEqual(['card-dealt']);
+  });
+
   it('Learn: a right answer plays cue 13 and a wrong one cue 14 with its haptic; Learn never plays cue 10', async () => {
     const { service, ports } = await setup('learn');
     const first = service.snapshot();
