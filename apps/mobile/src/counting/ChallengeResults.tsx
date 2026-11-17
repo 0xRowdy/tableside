@@ -1,4 +1,4 @@
-// Spec 3 S3-08 liAfT, CEb6T; #158, #132
+// Spec 3 S3-08 liAfT, CEb6T; #158, #132, #150
 
 import type { ChallengeAttemptRecord } from '@tableside/engine';
 import { CircleCheckBig, Divide, Hash, ListChecks, RotateCcw, Square, type LucideIcon } from 'lucide-react-native';
@@ -20,7 +20,9 @@ import {
   SCORES_LABEL,
   scoreText,
   spokenScore,
+  startWaits,
   variantLabel,
+  type AllowanceCopy,
 } from '@/training/challenge-text';
 
 const ROW_ICON: Record<(typeof RESULT_ROWS)[number]['metric'], LucideIcon> = {
@@ -31,10 +33,11 @@ const ROW_ICON: Record<(typeof RESULT_ROWS)[number]['metric'], LucideIcon> = {
   'betting-adherence': Square,
 };
 
-export function ChallengeResults({ record, onRetry, onReview }: { record: ChallengeAttemptRecord; onRetry: () => void; onReview: () => void }) {
+export function ChallengeResults({ record, allowance, onRetry, onReview }: { record: ChallengeAttemptRecord; allowance: AllowanceCopy | undefined; onRetry: () => void; onReview: () => void }) {
   const insets = useSafeAreaInsets();
   const { groupKey } = record;
   const completed = COMPLETED[groupKey.variant];
+  const note = resultsNote(groupKey.variant, allowance);
   return (
     <ScrollView style={styles.screen} contentContainerStyle={{ paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right, paddingBottom: space[6] }}>
       <View style={styles.header}>
@@ -88,10 +91,12 @@ export function ChallengeResults({ record, onRetry, onReview }: { record: Challe
           })}
         </View>
         {record.review.length > 0 && <Button label={REVIEW_CARDS} icon={ListChecks} variant="outline" stretch onPress={onReview} />}
-        <Button label={RETRY_LABEL} icon={RotateCcw} stretch onPress={onRetry} />
-        <Text maxFontSizeMultiplier={textScale.body} style={styles.note}>
-          {resultsNote(groupKey.variant)}
-        </Text>
+        <Button label={RETRY_LABEL} icon={RotateCcw} stretch disabled={startWaits(allowance)} onPress={onRetry} />
+        {note.length > 0 && (
+          <Text maxFontSizeMultiplier={textScale.body} style={styles.note}>
+            {note}
+          </Text>
+        )}
       </View>
     </ScrollView>
   );

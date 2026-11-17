@@ -3,6 +3,8 @@ import { createChallenge, encodeChallengeCheckpoint, type ChallengeView } from '
 
 import { alwaysAllowed, type AccessSupervisor } from '@/practice/adapters';
 import { FakeClock, entropyFromWords, PI_WORDS } from '@/practice/testing/substitutes';
+import { plentyAllowance } from '@/training/allowance';
+import { resetTimeText } from '@/training/challenge-text';
 import { MemoryTrainingStore } from '@/training/memory-store';
 import { RECORDED_MS } from '@/training/controller';
 import { TrainingService, type TrainingSnapshot } from '@/training/service';
@@ -26,7 +28,7 @@ function setup(options: { access?: Partial<AccessSupervisor>; store?: MemoryTrai
   };
   let next = 0;
   const clock = options.clock ?? new FakeClock(1_790_000_000_000, true);
-  const service = new TrainingService({ store, access, clock, entropy: entropyFromWords(PI_WORDS), newId: () => `attempt-${++next}`, device: 'test-device', owner: 'local' });
+  const service = new TrainingService({ store, access, allowance: plentyAllowance(() => clock.now()), clock, entropy: entropyFromWords(PI_WORDS), newId: () => `attempt-${++next}`, device: 'test-device', owner: 'local' });
   return { service, store, admissions, clock };
 }
 
@@ -205,6 +207,21 @@ describe('the Training service', () => {
     await answerEveryCard(service, reference);
     expect(service.snapshot()).toMatchObject({ status: 'ended', record: { metrics: { 'card-values': { correct: 20, total: 20 } } } });
     expect(await store.readAttemptRecords()).toHaveLength(1);
+  });
+
+  // #150
+  it('reports a plentiful free allowance by default that charges never use up, resetting at the next midnight', async () => {
+    const { service, clock } = setup();
+    await service.startAttempt(LEARN_CARD_VALUES);
+    await answerEveryCard(service, reference);
+    const allowance = await service.allowance();
+    if (allowance.kind !== 'free') throw new Error(`expected a free allowance, got ${allowance.kind}`);
+    expect(allowance.left).toBe(allowance.amount);
+    expect(allowance.left).toBeGreaterThan(0);
+    expect(allowance.allowanceDevice).toEqual({ here: true });
+    expect(allowance.resetsAt).toBeGreaterThan(clock.now());
+    expect(allowance.resetsAt - clock.now()).toBeLessThanOrEqual(25 * 60 * 60 * 1000);
+    expect(resetTimeText(allowance.resetsAt, allowance.timeZone)).toMatch(/^12:00 AM /);
   });
 
   it('remembers the last setup as a device-local preference in the account database', async () => {

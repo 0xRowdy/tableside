@@ -2,11 +2,14 @@
 import type { EntropySource } from '@tableside/engine';
 
 import type { AccessSupervisor, Clock } from '../practice/adapters';
+import type { ChallengeAllowanceState } from './allowance';
 import type { TrainingStore } from './store';
 
 export interface TrainingAdapters {
   readonly store: TrainingStore;
   readonly access: AccessSupervisor;
+  // #150
+  readonly allowance: ChallengeAllowanceState;
   readonly clock: Clock;
   readonly entropy: EntropySource;
   newId(): string;

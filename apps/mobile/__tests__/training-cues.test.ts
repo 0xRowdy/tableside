@@ -7,6 +7,7 @@ import { substituteFeedbackPorts } from '@/feedback/testing/substitutes';
 import { followTraining } from '@/feedback/training-cues';
 import { alwaysAllowed } from '@/practice/adapters';
 import { FakeClock, entropyFromWords, PI_WORDS } from '@/practice/testing/substitutes';
+import { plentyAllowance } from '@/training/allowance';
 import { MemoryTrainingStore } from '@/training/memory-store';
 import { TrainingService, type TrainingSnapshot } from '@/training/service';
 import { HI_LO_BY_RANK } from '@/training/testing/hi-lo';
@@ -16,7 +17,7 @@ const wrongFor = (view: ChallengeView) => (reference(view) === 1 ? -1 : 1);
 
 async function setup(variant: ChallengeVariant, store = new MemoryTrainingStore()) {
   const clock = new FakeClock(1_790_000_000_000, true);
-  const service = new TrainingService({ store, access: alwaysAllowed, clock, entropy: entropyFromWords(PI_WORDS), newId: () => 'attempt-1', device: 'test-device', owner: 'local' });
+  const service = new TrainingService({ store, access: alwaysAllowed, allowance: plentyAllowance(() => clock.now()), clock, entropy: entropyFromWords(PI_WORDS), newId: () => 'attempt-1', device: 'test-device', owner: 'local' });
   const ports = substituteFeedbackPorts(null);
   const settings = new DeviceSettings(ports.storage);
   await settings.load();

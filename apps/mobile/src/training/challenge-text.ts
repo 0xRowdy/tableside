@@ -1,10 +1,11 @@
-// Spec 3 S3-01 PDCaD, S3-02 buD2R, S3-03 P4WjR, drVnR, BFdJT, S3-08, S3-09 h0MsKr; #158, #132
+// Spec 3 S3-01 PDCaD, RqPCB, S3-02 buD2R, S3-03, S3-08, S3-09 h0MsKr; S5-17 j3UhJ; #158, #132, #150
 
 import type { CardValueReview, ChallengeEntry, ChallengeMetric, ChallengeVariant, HiLoValue, LearnFeedback, MetricResult } from '@tableside/engine';
 
 import { cardName, rankName, signed } from '@/play/blackjack-text';
 import { GAME_WORDS } from '@/play/game-words';
 
+import type { ChallengeAllowance } from './allowance';
 import type { CatalogCategory, StartProblem } from './service';
 
 export const CATEGORY_TEXT: Record<CatalogCategory, { readonly title: string; readonly description: string }> = {
@@ -29,8 +30,79 @@ export const WHAT_YOU_DO: Partial<Record<CatalogCategory, string>> = {
   'card-values': '20 cards covering every rank, one at a time. Choose +1, 0 or −1 for each. Only your first answer to each card is scored.',
 };
 
-// TODO(#150)
-export const CHARGE_NOTICE = 'Starting uses 1 challenge attempt. Resuming doesn’t use another.';
+// Spec 3 Amendment 4 §2–3; spec 5 Amendment 1 E, Amendment 7 §4
+export type AllowanceAction = 'see-premium' | 'offline-and-allowance';
+
+export interface AllowanceCopy {
+  readonly standing: 'premium' | 'available' | 'used-up' | 'elsewhere';
+  readonly banner: { readonly title: string; readonly detail: string | null; readonly action: AllowanceAction | null };
+  readonly setup: { readonly text: string; readonly action: AllowanceAction | null };
+  readonly results: string;
+}
+
+// Spec 3 Training service interface › Start attempt
+export const startWaits = (copy: AllowanceCopy | undefined) => copy?.standing === 'used-up' || copy?.standing === 'elsewhere';
+
+export const ALLOWANCE_ACTION_LABEL: Record<AllowanceAction, string> = { 'see-premium': 'See premium', 'offline-and-allowance': 'Offline & allowance' };
+export const ARRIVES_LATER: Record<AllowanceAction, string> = {
+  'see-premium': 'Plans arrive in a later update.',
+  'offline-and-allowance': 'Offline & allowance arrives in a later update.',
+};
+
+const UNLIMITED = 'Unlimited challenges (premium)';
+const RETRY_STARTS_FRESH = 'Retry starts a fresh attempt.';
+const attempts = (count: number) => (count === 1 ? 'attempt' : 'attempts');
+
+// Spec 5 Allowance device, transfer, replacement and timezone
+export function resetTimeText(instant: number, timeZone: string): string {
+  const parts = (timeZoneName: 'longGeneric' | 'long') =>
+    new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit', timeZone, timeZoneName }).formatToParts(instant);
+  let found: Intl.DateTimeFormatPart[];
+  try {
+    found = parts('longGeneric');
+  } catch {
+    found = parts('long').map((item) => (item.type === 'timeZoneName' ? { ...item, value: item.value.replace(/ (Standard|Daylight) Time$/, ' Time') } : item));
+  }
+  const part = (type: Intl.DateTimeFormatPartTypes) => found.find((item) => item.type === type)?.value ?? '';
+  return `${part('hour')}:${part('minute')} ${part('dayPeriod')} ${part('timeZoneName')}`;
+}
+
+export function allowanceCopy(allowance: ChallengeAllowance): AllowanceCopy {
+  if (allowance.kind === 'premium') {
+    return { standing: 'premium', banner: { title: UNLIMITED, detail: null, action: null }, setup: { text: UNLIMITED, action: null }, results: `${UNLIMITED}. ${RETRY_STARTS_FRESH}` };
+  }
+  const { amount, left, resetsAt, timeZone, allowanceDevice } = allowance;
+  if (!allowanceDevice.here) {
+    const where = `Today's challenge attempts are on ${allowanceDevice.name}.`;
+    const moveHere = 'Move them here in More › Settings › Offline & allowance.';
+    return {
+      standing: 'elsewhere',
+      banner: { title: where, detail: moveHere, action: 'offline-and-allowance' },
+      setup: { text: `${where} ${moveHere}`, action: null },
+      results: `${where} ${moveHere}`,
+    };
+  }
+  const reset = resetTimeText(resetsAt, timeZone);
+  if (left === 0) {
+    const usedUp = `You've used today's ${amount} challenge ${attempts(amount)}. They reset at ${reset}.`;
+    return {
+      standing: 'used-up',
+      banner: { title: 'No challenge attempts left today', detail: `${usedUp} Lessons, worked examples and your records stay open.`, action: 'see-premium' },
+      setup: { text: usedUp, action: 'see-premium' },
+      results: usedUp,
+    };
+  }
+  return {
+    standing: 'available',
+    banner: {
+      title: `${left} of ${amount} challenge ${attempts(amount)} left today · resets at ${reset}`,
+      detail: "Starting an attempt uses one. Resuming one, showing the count and lessons don't.",
+      action: 'see-premium',
+    },
+    setup: { text: `Starting uses 1 of your ${left} ${attempts(left)} left today. Resuming doesn't use another.`, action: null },
+    results: `${left} ${attempts(left)} left today. ${RETRY_STARTS_FRESH}`,
+  };
+}
 
 export const START_PROBLEM: Record<StartProblem, string> = {
   'invalid-setup': 'This setup can’t start. Nothing was used.',
@@ -84,21 +156,21 @@ export const enteredText = (entry: ChallengeEntry) => (entry === 'skip' ? 'skipp
 
 // Spec 3 S3-08 liAfT
 export const RESULTS_TITLE = 'Results';
-export const COMPLETED: Record<ChallengeVariant, { readonly title: string; readonly detail: string | null }> = {
+export const COMPLETED: Record<ChallengeVariant, { readonly title: string; readonly detail: string | null; readonly note: string | null }> = {
   learn: {
     title: 'Completed · Learn',
     detail: 'Learn scores your first answer to each card, even when you corrected it afterwards. Learn attempts never count toward a readiness milestone.',
+    note: "When you're ready, try Check: it holds every answer until the end.",
   },
   // Spec 3 S3-08 CEb6T; TODO(#135)
-  check: { title: 'Completed · unassisted', detail: null },
+  check: { title: 'Completed · unassisted', detail: null, note: null },
 };
+
+export const resultsNote = (variant: ChallengeVariant, allowance: AllowanceCopy | undefined) => [COMPLETED[variant].note, allowance?.results].filter(Boolean).join(' ');
 export const SCORES_LABEL = 'SKILL SCORES · FIRST ANSWERS';
 export const REVIEW_CARDS = 'Review cards';
 // TODO(#135)
 export const RETRY_LABEL = 'Retry with new cards';
-// TODO(#150)
-export const RETRY_NOTE = 'Retry uses 1 challenge attempt.';
-export const resultsNote = (variant: ChallengeVariant) => (variant === 'learn' ? `When you're ready, try Check: it holds every answer until the end. ${RETRY_NOTE}` : RETRY_NOTE);
 
 export const RESULT_ROWS: readonly { readonly metric: ChallengeMetric; readonly title: string; readonly tested: (length: number) => string }[] = [
   { metric: 'card-values', title: 'Card values', tested: (length) => `${length} cards` },
