@@ -1,13 +1,15 @@
-// Spec 3 Challenge content › Table, Reshuffle, Observe seats, Information; Count checkpoints; #137
+// Spec 3 Challenge content › Table, Reshuffle, Observe seats; Count checkpoints; #137, #138
 
-import type { DomainFact } from './activity';
+import { advanceActivity, createActivity, readPermittedView, type Command, type DomainFact, type PlayCorrection } from './activity';
 import {
   BLACKJACK_RULES,
   blackjackTable,
   countOf,
   dealerFinished,
   freshShoe,
+  HAND_TARGET,
   handResult,
+  INSURANCE_TARGET,
   handTotal,
   hiLoTag,
   isBlackjackRuleSet,
@@ -21,9 +23,12 @@ import {
   type HandTotal,
   type SeatStrategy,
   type Shoe,
+  type BlackjackActivityState,
 } from './blackjack';
+import { BLACKJACK_VOCABULARY, blackjackModeOf, playSituation, prescribePlay, type BlackjackPlayPolicy, type PlayChoice, type PlayExplanation } from './blackjack-strategy';
+import { FUNDING_CEILING } from './funding';
 import type { Card, Rank, Suit } from './draws';
-import { RandomStream, type RandomStreamState } from './random';
+import { RandomStream, type RandomStreamIdentity, type RandomStreamState } from './random';
 import { hasExactKeys, isCount, isText, type VersionedIdentity } from './shape';
 
 export interface TableContent {
@@ -35,20 +40,48 @@ export interface TableContent {
 }
 
 // Spec 3 S3-02 ZreSb
-export interface TableSetup {
+export interface ObserveSetup {
   readonly seat: 'observe';
   readonly rules: BlackjackRuleSet;
   readonly strategy: SeatStrategy;
   readonly interval: number;
 }
 
+// Spec 3 User stories 28; S3-02 FkMDw; #138
+export interface PlaySetup {
+  readonly seat: 'play';
+  readonly rules: BlackjackRuleSet;
+  readonly policy: BlackjackPlayPolicy;
+  readonly interval: number;
+}
+
+export type TableSetup = ObserveSetup | PlaySetup;
+
+// Spec 3 Scoring and review › Reference, Attribution; #138
+export interface PlayDecision {
+  readonly position: number;
+  readonly prompt: number | null;
+  readonly explanation: PlayExplanation;
+  readonly attempts: readonly { readonly action: PlayChoice; readonly legal: boolean }[];
+  readonly played: PlayChoice | null;
+  readonly resolution: 'followed' | 'departed' | 'retried' | 'overridden' | null;
+}
+
+// Spec 3 Challenge content › Table (Play); #138
+export interface PlaySeat {
+  readonly activity: BlackjackActivityState;
+  readonly decisions: readonly PlayDecision[];
+  readonly correction: PlayCorrection | null;
+}
+
 export interface TableProgress {
   readonly setup: TableSetup;
   readonly shoe: Shoe | null;
   readonly round: number;
+  readonly seat: PlaySeat | null;
 }
 
-export type CheckpointTiming = 'before-bet' | 'after-round' | 'block';
+export type CheckpointTiming = 'before-bet' | 'after-round' | 'block' | 'decision';
 
 export type TableCount = 'running' | 'true';
 
@@ -58,7 +91,7 @@ interface TableCard {
 }
 
 export type TableEvent =
-  | { readonly kind: 'played'; readonly target: string; readonly action: BlackjackAction }
+  | { readonly kind: 'played'; readonly target: string; readonly action: BlackjackAction | 'insure' }
   | { readonly kind: 'split'; readonly target: string; readonly into: string }
   | { readonly kind: 'peeked'; readonly result: 'no-blackjack' | 'blackjack' };
 
@@ -66,7 +99,16 @@ export type TableStep =
   | { readonly step: 'shuffle'; readonly round: number }
   | { readonly step: 'deal'; readonly round: number; readonly to: string; readonly face: TableCard | null; readonly events: readonly TableEvent[] }
   | { readonly step: 'reveal'; readonly round: number; readonly face: TableCard; readonly events: readonly TableEvent[] }
-  | { readonly step: 'prompt'; readonly round: number; readonly checkpoint: number; readonly timing: CheckpointTiming; readonly count: TableCount };
+  | { readonly step: 'prompt'; readonly round: number; readonly checkpoint: number; readonly timing: CheckpointTiming; readonly count: TableCount }
+  // Spec 3 User stories 37, 38; #138
+  | {
+      readonly step: 'decision';
+      readonly round: number;
+      readonly target: string;
+      readonly decision: 'insurance' | 'hand';
+      readonly actions: readonly PlayChoice[];
+      readonly events: readonly TableEvent[];
+    };
 
 export type TablePrompt = Extract<TableStep, { readonly step: 'prompt' }>;
 
@@ -90,21 +132,27 @@ export function tableContentProblem(content: Record<string, unknown>): string | 
 }
 
 export function tableSetupProblem(setup: unknown): string | undefined {
-  if (!hasExactKeys(setup, ['seat', 'rules', 'strategy', 'interval'])) return 'a table setup has a seat, rules, strategy and interval';
-  if (setup.seat !== 'observe') return `unsupported seat ${String(setup.seat)}`;
+  const play = hasExactKeys(setup, ['seat', 'rules', 'policy', 'interval']) && setup.seat === 'play';
+  if (!play && !hasExactKeys(setup, ['seat', 'rules', 'strategy', 'interval'])) return 'a table setup has a seat, rules, a strategy or playing policy, and interval';
+  if (!play && setup.seat !== 'observe') return `unsupported seat ${String(setup.seat)}`;
   if (!isBlackjackRuleSet(setup.rules)) return 'the table needs spec 1 blackjack rules';
-  if (!isSeatStrategy(setup.strategy, setup.rules.lateSurrender)) return "the simulated seat needs a basic strategy for the table's rules";
+  if (play) {
+    const { dealer, lateSurrender, limits } = setup.rules;
+    const policy = setup.policy as Record<string, unknown>;
+    if ((BLACKJACK_VOCABULARY.playProblems?.(policy, { dealer, lateSurrender, limits }) ?? []).length > 0) return "your seat needs a playing policy for the table's rules";
+    if (policy.count !== 'player') return 'in table counting you keep the count yourself';
+  } else if (!isSeatStrategy(setup.strategy, setup.rules.lateSurrender)) return "the simulated seat needs a basic strategy for the table's rules";
   if (!isCount(setup.interval) || setup.interval < 1 || setup.interval > MAX_CHECKPOINT_INTERVAL) return `the checkpoint interval is 1 to ${MAX_CHECKPOINT_INTERVAL} rounds`;
   return undefined;
 }
 
-const cardOf = (card: Card): TableCard => ({ rank: card.rank, suit: card.suit });
+export const cardOf = (card: Card): TableCard => ({ rank: card.rank, suit: card.suit });
 const asCard = (card: TableCard): Card => ({ deck: 0, ...card });
 const hiLo = (card: TableCard) => hiLoTag(asCard(card));
 
-function stepsOf(facts: readonly DomainFact[], round: number): TableStep[] {
+function stepsOf(facts: readonly DomainFact[], round: number, first: readonly TableEvent[] = []): { steps: TableStep[]; pending: TableEvent[] } {
   const steps: TableStep[] = [];
-  let events: TableEvent[] = [];
+  let events: TableEvent[] = [...first];
   for (const fact of facts as readonly BlackjackDomainFact[]) {
     switch (fact.kind) {
       case 'played':
@@ -128,15 +176,37 @@ function stepsOf(facts: readonly DomainFact[], round: number): TableStep[] {
         break;
     }
   }
-  if (events.length > 0) throw new Error(`round ${round} ended with plays after its last card`);
+  return { steps, pending: events };
+}
+
+function roundSteps(facts: readonly DomainFact[], round: number): TableStep[] {
+  const { steps, pending } = stepsOf(facts, round);
+  noPlaysAfterLastCard(pending, round);
   return steps;
 }
+
+function noPlaysAfterLastCard(pending: readonly TableEvent[], round: number): void {
+  if (pending.length > 0) throw new Error(`round ${round} ended with plays after its last card`);
+}
+
+// Spec 3 User stories 37, 38; #138
+export const currentDecision = (seat: PlaySeat): PlayDecision => seat.decisions.at(-1) as PlayDecision;
 
 // Spec 3 Count checkpoints (table)
 export const tableCheckpointRounds = (interval: number, rounds: number): number[] =>
   Array.from({ length: rounds }, (_, index) => index + 1).filter((round) => round % interval === 0 || round === rounds);
 
 const lastCheckpoint = (steps: readonly TableStep[]) => steps.reduce((last, step) => (step.step === 'prompt' ? step.checkpoint : last), 0);
+
+const promptsAt = (earlier: readonly TableStep[], round: number, timing: CheckpointTiming, counts: readonly TableCount[]): TableStep[] => {
+  const checkpoint = lastCheckpoint(earlier) + 1;
+  return counts.map((count) => ({ step: 'prompt', round, checkpoint, timing, count }));
+};
+
+function roundEndPrompts(setup: TableSetup, content: TableContent, earlier: readonly TableStep[], round: number): TableStep[] {
+  if (setup.interval === 1) return promptsAt(earlier, round, 'after-round', ['running']);
+  return tableCheckpointRounds(setup.interval, content.rounds).includes(round) ? promptsAt(earlier, round, 'block', ['running', 'true']) : [];
+}
 
 // Spec 3 Count checkpoints (table), Reshuffle, Observe seats
 export function dealTableRound(
@@ -145,6 +215,7 @@ export function dealTableRound(
   steps: readonly TableStep[],
   random: RandomStreamState,
 ): { readonly steps: TableStep[]; readonly progress: TableProgress; readonly random: RandomStreamState } {
+  if (progress.setup.seat === 'play') return { ...openPlayRound(progress, content, steps), random };
   const { setup } = progress;
   const round = progress.round + 1;
   const rules = blackjackTable(setup.rules);
@@ -156,17 +227,104 @@ export function dealTableRound(
     random = stream.state();
     if (progress.shoe !== null) dealt.push({ step: 'shuffle', round });
   }
-  let checkpoint = lastCheckpoint(steps);
-  const prompts = (timing: CheckpointTiming, counts: readonly TableCount[]) => {
-    checkpoint++;
-    for (const count of counts) dealt.push({ step: 'prompt', round, checkpoint, timing, count });
-  };
-  if (setup.interval === 1) prompts('before-bet', ['running', 'true']);
+  if (setup.interval === 1) dealt.push(...promptsAt(steps, round, 'before-bet', ['running', 'true']));
   const simulated = simulateRound(rules, setup.strategy, shoe, round);
-  dealt.push(...stepsOf(simulated.facts, round));
-  if (setup.interval === 1) prompts('after-round', ['running']);
-  else if (tableCheckpointRounds(setup.interval, content.rounds).includes(round)) prompts('block', ['running', 'true']);
+  dealt.push(...roundSteps(simulated.facts, round));
+  dealt.push(...roundEndPrompts(setup, content, [...steps, ...dealt], round));
   return { steps: dealt, progress: { ...progress, shoe: simulated.shoe, round }, random };
+}
+
+// Spec 3 Play challenge funding (base wager only until #139)
+const ALWAYS_AFFORDABLE = String(FUNDING_CEILING);
+
+export function openPlaySeat(setup: PlaySetup, content: TableContent, attempt: { readonly id: string; readonly owner: string; readonly device: string }, random: RandomStreamIdentity): PlaySeat {
+  const activity = createActivity(
+    {
+      game: 'blackjack',
+      activityId: `${attempt.id}/seat`,
+      owner: attempt.owner,
+      device: attempt.device,
+      rules: setup.rules,
+      strategy: null,
+      reference: { ...content.reference },
+      fundingSource: 'practice-funding',
+      funding: ALWAYS_AFFORDABLE,
+    },
+    random,
+  );
+  return { activity, decisions: [], correction: null };
+}
+
+function seatCommand(activity: BlackjackActivityState, command: Command): { readonly activity: BlackjackActivityState; readonly facts: readonly DomainFact[] } {
+  const result = advanceActivity(activity, { sequence: activity.sequence, commandId: `seat-${activity.sequence}`, command });
+  if (result.status !== 'committed' || result.facts.some((fact) => fact.kind === 'illegal-action')) throw new Error(`the seat refused ${JSON.stringify(command)}`);
+  return { activity: result.state, facts: result.facts };
+}
+
+const seatOf = (progress: TableProgress) => progress.seat as PlaySeat;
+
+// Spec 3 Count checkpoints (table), Reshuffle; #138
+function openPlayRound(progress: TableProgress, content: TableContent, steps: readonly TableStep[]): { readonly steps: TableStep[]; readonly progress: TableProgress } {
+  const round = progress.round + 1;
+  const seat = seatOf(progress);
+  const { shoe } = seat.activity;
+  const opening: TableStep[] = shoe !== null && shoe.next >= shoe.cut ? [{ step: 'shuffle', round }] : [];
+  if (progress.setup.interval === 1) opening.push(...promptsAt([...steps, ...opening], round, 'before-bet', ['running', 'true']));
+  const wagered = seatCommand(seat.activity, { kind: 'place-wager', target: HAND_TARGET, amount: progress.setup.rules.limits.initial.min });
+  const begun = seatCommand(wagered.activity, { kind: 'begin-turn' });
+  const next = continuePlayRound({ ...progress, round, seat: { ...seat, activity: begun.activity } }, content, [...steps, ...opening], begun.facts, []);
+  return { steps: [...opening, ...next.steps], progress: next.progress };
+}
+
+// Spec 3 Count checkpoints (table): deviation-decision prompts; Amendment 1 A3; #138
+function continuePlayRound(
+  progress: TableProgress,
+  content: TableContent,
+  earlier: readonly TableStep[],
+  facts: readonly DomainFact[],
+  first: readonly TableEvent[],
+): { readonly steps: TableStep[]; readonly progress: TableProgress } {
+  const setup = progress.setup as PlaySetup;
+  const seat = seatOf(progress);
+  const { steps, pending } = stepsOf(facts, progress.round, first);
+  const decision = playSituation(seat.activity);
+  if (decision === undefined || seat.activity.phase !== 'open-decision') {
+    noPlaysAfterLastCard(pending, progress.round);
+    const settled = seatCommand(seat.activity, { kind: 'settle-turn' });
+    steps.push(...roundEndPrompts(setup, content, [...earlier, ...steps], progress.round));
+    return { steps, progress: { ...progress, seat: { ...seat, activity: settled.activity } } };
+  }
+  const explanation = prescribePlay(setup.policy, decision.situation, decision.target, decision.hand);
+  let prompt: number | null = null;
+  if (setup.interval === 1 && explanation.deviation !== null) {
+    prompt = earlier.length + steps.length;
+    steps.push(...promptsAt([...earlier, ...steps], progress.round, 'decision', ['true']));
+  }
+  const offer = readPermittedView(seat.activity);
+  const actions: PlayChoice[] = offer.insuranceOffer ? ['insure', 'decline-insurance'] : [...offer.playActions];
+  const position = earlier.length + steps.length;
+  steps.push({ step: 'decision', round: progress.round, target: decision.target, decision: decision.situation.decision, actions, events: pending });
+  const recorded: PlayDecision = { position, prompt, explanation, attempts: [], played: null, resolution: null };
+  return { steps, progress: { ...progress, seat: { ...seat, decisions: [...seat.decisions, recorded] } } };
+}
+
+// Spec 3 User stories 37, 38; Learn, Check and assistance; #138
+export function playMove(
+  progress: TableProgress,
+  content: TableContent,
+  steps: readonly TableStep[],
+  move: PlayChoice,
+  resolution: NonNullable<PlayDecision['resolution']>,
+): { readonly steps: TableStep[]; readonly progress: TableProgress } {
+  const seat = seatOf(progress);
+  const decision = currentDecision(seat);
+  const insurance = readPermittedView(seat.activity).insuranceOffer;
+  const command: Command = move === 'insure' ? { kind: 'place-wager', target: INSURANCE_TARGET, amount: (insurance as { max: string }).max } : { kind: 'play', action: move };
+  const played = seatCommand(seat.activity, command);
+  const target = (steps[decision.position] as Extract<TableStep, { step: 'decision' }>).target;
+  const decisions = [...seat.decisions.slice(0, -1), { ...decision, played: move, resolution }];
+  const next = { ...progress, seat: { activity: played.activity, decisions, correction: null } };
+  return continuePlayRound(next, content, steps, played.facts, move === 'insure' ? [{ kind: 'played', target, action: 'insure' }] : []);
 }
 
 // Spec 3 Scoring and review › Reference; Challenge content › Divisor, Information
@@ -230,7 +388,7 @@ export interface TableHandView {
   readonly total: HandTotal;
   readonly doubled: boolean;
   readonly surrendered: boolean;
-  readonly action: BlackjackAction | null;
+  readonly action: BlackjackAction | 'insure' | null;
   readonly result: 'win' | 'loss' | 'push' | null;
 }
 
@@ -240,8 +398,17 @@ export interface TableSeatView {
   readonly hands: readonly TableHandView[];
 }
 
+// Spec 3 Learn, Check and assistance › Check (legal choices only); S3-07 kLgWV; #138
+export interface TableDecisionView {
+  readonly target: string;
+  readonly kind: 'insurance' | 'hand';
+  readonly actions: readonly PlayChoice[];
+  readonly refused: PlayChoice | null;
+}
+
 export interface TableView {
-  readonly seat: 'observe';
+  readonly seat: TableSetup['seat'];
+  readonly countingMode: TableCountingMode | null;
   readonly round: number;
   readonly rounds: number;
   readonly interval: number;
@@ -249,6 +416,7 @@ export interface TableView {
   readonly rules: { readonly dealer: 'S17' | 'H17'; readonly lateSurrender: boolean; readonly penetration: number; readonly extraPlayers: number; readonly minimum: string };
   readonly step: TableStep['step'];
   readonly prompt: { readonly checkpoint: number; readonly timing: CheckpointTiming; readonly count: TableCount } | null;
+  readonly decision: TableDecisionView | null;
   readonly decks: number;
   readonly dealer: { readonly cards: readonly (TableCard | null)[]; readonly total: HandTotal | null; readonly peek: 'no-blackjack' | 'blackjack' | null };
   readonly seats: readonly TableSeatView[];
@@ -260,7 +428,7 @@ interface WorkHand {
   cards: TableCard[];
   doubled: boolean;
   surrendered: boolean;
-  action: BlackjackAction | null;
+  action: BlackjackAction | 'insure' | null;
 }
 
 // Spec 3 Information hiding (end to end)
@@ -280,7 +448,7 @@ export function tableView(progress: TableProgress, content: TableContent, steps:
   let revealed = false;
   for (let index = 0; index <= position; index++) {
     const step = steps[index] as TableStep;
-    if (step.round !== round || (step.step !== 'deal' && step.step !== 'reveal')) continue;
+    if (step.round !== round || (step.step !== 'deal' && step.step !== 'reveal' && step.step !== 'decision')) continue;
     for (const event of step.events) {
       if (event.kind === 'peeked') peek = event.result;
       else if (event.kind === 'played') {
@@ -295,6 +463,7 @@ export function tableView(progress: TableProgress, content: TableContent, steps:
         seat.hands.splice(at + 1, 0, { ...hand(event.into), cards: [split.cards.pop() as TableCard] });
       }
     }
+    if (step.step === 'decision') continue;
     if (step.step === 'reveal') {
       dealer[1] = { ...step.face };
       revealed = true;
@@ -305,8 +474,12 @@ export function tableView(progress: TableProgress, content: TableContent, steps:
   const asHands = (hands: readonly WorkHand[]): BlackjackHand[] => hands.map((h) => ({ target: h.target, cards: h.cards.map(asCard), doubled: h.doubled, surrendered: h.surrendered, done: true }));
   const settled = revealed && dealerFinished(visible, seats.map((seat) => asHands(seat.hands)), rules.dealer);
   const prompt = current.step === 'prompt' ? { checkpoint: current.checkpoint, timing: current.timing, count: current.count } : null;
+  const attempts = current.step === 'decision' ? (progress.seat?.decisions.find((decision) => decision.position === position)?.attempts ?? []) : [];
+  const last = attempts.at(-1);
+  const decision = current.step === 'decision' ? { target: current.target, kind: current.decision, actions: [...current.actions], refused: last && !last.legal ? last.action : null } : null;
   return {
     seat: setup.seat,
+    countingMode: countingModeOf(setup),
     round,
     rounds: content.rounds,
     interval: setup.interval,
@@ -314,6 +487,7 @@ export function tableView(progress: TableProgress, content: TableContent, steps:
     rules: { dealer: rules.dealer, lateSurrender: rules.lateSurrender, penetration: rules.penetration, extraPlayers: rules.players.otherWagers.length, minimum: rules.limits.initial.min },
     step: current.step,
     prompt,
+    decision,
     decks: tableCountAt(steps, position).decks,
     dealer: { cards: dealer, total: visible.length > 0 ? handTotal(visible) : null, peek },
     seats: seats.map((seat) => {
@@ -335,5 +509,12 @@ export function tableView(progress: TableProgress, content: TableContent, steps:
     settled,
   };
 }
+
+// Spec 3 Comparison groups: counting mode
+// Spec 3 User stories 28; #138
+export type TableCountingMode = 'basic' | 'deviations';
+
+export const countingModeOf = (setup: TableSetup): TableCountingMode | null =>
+  setup.seat === 'play' ? (blackjackModeOf(setup.policy) === 'counting-with-deviations' ? 'deviations' : 'basic') : null;
 
 export const copyTableSetup = (setup: TableSetup): TableSetup => JSON.parse(JSON.stringify(setup)) as TableSetup;

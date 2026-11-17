@@ -1,4 +1,4 @@
-// Spec 3 Audio and haptics; Learn, Check and assistance › Answer accepted; #132, #140, #137
+// Spec 3 Audio and haptics; Learn, Check and assistance › Answer accepted; #132, #140, #137, #138
 import type { StrategyStepAnswer, WorkedExample } from '@tableside/definitions';
 import type { ChallengeFact, ChallengeView } from '@tableside/engine';
 
@@ -38,6 +38,12 @@ function cuesForChallenge(view: ChallengeView, facts: readonly ChallengeFact[]):
         return [learnAnswerCue(view.feedback?.correct === true)];
       case 'checkpoint-due':
         return ['checkpoint-due'];
+      // Spec 3 Learn, Check and assistance › Check: cue 9 is a legality event
+      case 'move-refused':
+        return ['input-rejected'];
+      // Spec 3 Amendment 1 B4: cue 15 on the Play Learn correction pause
+      case 'correction-offered':
+        return ['correction-offered'];
       case 'shoe-shuffled':
       case 'attempt-ended':
         return [];

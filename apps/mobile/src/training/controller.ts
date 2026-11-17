@@ -39,7 +39,8 @@ export const RECORDED_MS = 800;
 // Spec 3 Attempt lifecycle › Automatic pacing; S3-02 buD2R; #136
 export const PACE_SECONDS: Readonly<Record<ChallengePacing, number | null>> = { 'self-paced': null, '3s': 3, '2s': 2, '1s': 1 };
 
-export type LearnerCommand = Extract<ChallengeCommand, { readonly kind: 'answer' | 'skip' | 'retry-item' | 'next-item' | 'reveal-count' }>;
+// Spec 3 Training service interface › Submit command; #138
+export type LearnerCommand = Extract<ChallengeCommand, { readonly kind: 'answer' | 'skip' | 'retry-item' | 'next-item' | 'reveal-count' | 'play' | 'retry-correction' | 'override-correction' }>;
 
 // Spec 3 Attempt lifecycle › Phases, Pause; Amendment 1 B5, C1
 export type HoldCause = 'learner' | 'speech-backlog' | 'navigation' | 'app-lifecycle' | 'sign-out' | 'recovered' | 'access';
@@ -70,7 +71,8 @@ const HOLDS: Record<HoldCause, { readonly kind: AttemptHold['kind']; readonly ra
 const ITEM_FINISHED: ReadonlySet<ChallengePhase> = new Set(['ready', 'card', 'recorded', 'ended']);
 
 // Spec 3 Attempt lifecycle › Performance timer
-const TIMED_PHASES: ReadonlySet<ChallengePhase> = new Set(['card', 'question', 'recorded']);
+// Spec 3 Attempt lifecycle › Performance timer (table actions count); #138
+const TIMED_PHASES: ReadonlySet<ChallengePhase> = new Set(['card', 'question', 'recorded', 'decision']);
 
 const answeredLast = (state: ChallengeState) => lastAnswerGiven(state);
 

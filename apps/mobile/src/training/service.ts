@@ -6,7 +6,7 @@ import {
   CATALOG_CATEGORIES,
   CHALLENGE_CONTENT,
   DEFAULT_TABLE_SETUP,
-  observeSetup,
+  tableSetup,
   type TableOptions,
   HINTS,
   LESSONS,
@@ -78,14 +78,15 @@ const READY: Readonly<Partial<Record<CatalogCategory, readonly ChallengeVariant[
   table: ['learn', 'check'],
 };
 
-// Spec 3 Challenge content › Table; S3-02 ZreSb
+// Spec 3 Challenge content › Table; S3-02 ZreSb, FkMDw; #138
 function isTableOptions(value: unknown): value is TableOptions {
   if (typeof value !== 'object' || value === null) return false;
   const options = value as Record<string, unknown>;
   const whole = (n: unknown, min: number, max: number) => Number.isInteger(n) && (n as number) >= min && (n as number) <= max;
   return (
-    Object.keys(options).length === 5 &&
-    options.seat === 'observe' &&
+    Object.keys(options).length === 6 &&
+    (options.seat === 'observe' || options.seat === 'play') &&
+    (options.countingMode === 'basic' || options.countingMode === 'deviations') &&
     BLACKJACK_PRESETS.includes(options.preset as TableOptions['preset']) &&
     PENETRATIONS.includes(options.penetration as number) &&
     whole(options.extraPlayers, 0, MAX_OTHER_PLAYERS) &&
@@ -99,7 +100,8 @@ export function retrySetup(groupKey: ChallengeGroupKey): ChallengeSetup {
   const { category, variant, table } = groupKey;
   if (!table) return { category, variant };
   const preset = blackjackPreset(table.dealer, table.lateSurrender);
-  return { category, variant, table: { seat: 'observe', preset, penetration: table.penetration, extraPlayers: table.extraPlayers, interval: table.checkpointInterval } };
+  const countingMode = table.countingMode ?? DEFAULT_TABLE_SETUP.countingMode;
+  return { category, variant, table: { seat: table.seat, preset, penetration: table.penetration, extraPlayers: table.extraPlayers, interval: table.checkpointInterval, countingMode } };
 }
 
 // Spec 3 Amendment 1 C7
@@ -224,7 +226,7 @@ export class TrainingService {
     this.diagnostics = null;
     const remembered = rememberedSetup(setup);
     await this.adapters.store.writePreference(LAST_SETUP, JSON.stringify(remembered)).catch(() => undefined);
-    const table = remembered.table ? observeSetup(remembered.table) : undefined;
+    const table = remembered.table ? tableSetup(remembered.table) : undefined;
     await this.challenges.start(setup.variant, CHALLENGE_CONTENT[setup.category as ChallengeCategory], { timed: setup.timed === true, pacing: pacingOf(setup), ...(table ? { table } : {}) });
   }
 

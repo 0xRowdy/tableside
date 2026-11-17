@@ -80,7 +80,7 @@ export const compatibilityCases: TestCase[] = [
           t.equal([recorded.name, canonicalJson(facts), canonicalJson(challengeResults(state))], [recorded.name, recorded.facts, recorded.results]);
         }
       }
-      t.equal([...phases].sort(), ['card', 'explanation', 'question', 'ready', 'recorded']);
+      t.equal([...phases].sort(), ['card', 'correction', 'decision', 'explanation', 'question', 'ready', 'recorded']);
     },
   },
   {

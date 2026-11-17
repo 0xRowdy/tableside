@@ -12,12 +12,12 @@ const text = (id: string) => lesson(id).content!.steps.flatMap((step) => [step.h
 const IDS = ['card-values', 'running-count', 'true-count-conversion', 'table-counting'];
 
 describe('counting lessons', () => {
-  it('author card values, running count, conversion and table counting at version 1, valid and blackjack-only', () => {
+  it('author card values, running count and conversion at version 1 and table counting at version 2 (Play), valid and blackjack-only', () => {
     expect(IDS.map((id) => [lesson(id).title, lesson(id).section, lesson(id).content!.version, lesson(id).content!.materialVersion])).toEqual([
       ['Card values', 'blackjack', 1, 1],
       ['Running count', 'blackjack', 1, 1],
       ['True-count conversion', 'blackjack', 1, 1],
-      ['Table counting', 'blackjack', 1, 1],
+      ['Table counting', 'blackjack', 2, 2],
     ]);
     expect(lessonProblems(IDS.map(lesson))).toEqual([]);
     expect(lessonProblems(LESSONS)).toEqual([]);
@@ -53,7 +53,19 @@ describe('counting lessons', () => {
   it('explain in the table lesson that showing the count in Check marks the attempt assisted permanently', () => {
     const table = text('table-counting');
     expect(table).toContain('In Check, showing the count marks the whole attempt assisted, permanently, even if you hide it again.');
-    for (const fact of ['Observe', 'Play option', 'coming in a later update', 'N = 1', 'every 10 rounds', 'turned over', 'starts again at 0']) expect(table).toContain(fact);
+    for (const fact of ['Observe', 'N = 1', 'every 10 rounds', 'turned over', 'starts again at 0']) expect(table).toContain(fact);
+  });
+
+  // Spec 3 Lessons › Progress (material change); #138
+  it('teach Play in the table lesson now that it ships, as a material change that restarts bookmarks', () => {
+    const table = text('table-counting');
+    expect(table).not.toContain('coming in a later update');
+    for (const fact of ['In Play, you also make every playing decision for your seat', 'counting with deviations', 'before each decision that depends on the count', 'take it back', 'still counts as a playing miss', 'refused straight away']) {
+      expect(table).toContain(fact);
+    }
+    const { version, materialVersion, change } = lesson('table-counting').content!;
+    expect([version, materialVersion]).toEqual([2, 2]);
+    expect(change).toMatch(/Play/);
   });
 
   // Spec 3 gate 9; Amendment 1 C11

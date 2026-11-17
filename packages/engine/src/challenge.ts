@@ -1,15 +1,20 @@
 // Spec 3 Modules › Engine; Challenge content; Learn, Check and assistance; #158, #132–#134, #137
 
-import { STATE_SCHEMA_VERSION, type Receipt, type RejectionReason, type VersionedIdentity } from './activity';
-import { hiLoTag, truncatedTrueCount } from './blackjack';
+import { STATE_SCHEMA_VERSION, type PlayCorrection, type Receipt, type RejectionReason, type VersionedIdentity } from './activity';
+import { hiLoTag, truncatedTrueCount, type HandTotal } from './blackjack';
+import { prescribeAtTrueCount, type PlayChoice } from './blackjack-strategy';
 import { canonicalJson } from './canonical';
 import { canonicalShoe, shuffle, type Rank, type Suit } from './draws';
 import { RANDOM_PROTOCOL_VERSION, RandomStream, uniformInt, type RandomStreamIdentity, type RandomStreamState } from './random';
 import { sha256Hex } from './sha256';
 import { hasExactKeys, isCount, isRecord, isText } from './shape';
 import {
+  cardOf,
   copyTableSetup,
+  currentDecision,
   dealTableRound,
+  openPlaySeat,
+  playMove,
   tableContentProblem,
   tableCountAt,
   tableCountRange,
@@ -17,6 +22,8 @@ import {
   tableSetupProblem,
   tableView,
   type CheckpointTiming,
+  type PlayDecision,
+  type PlaySetup,
   type TableContent,
   type TableCount,
   type TableProgress,
@@ -109,7 +116,8 @@ export interface ItemAnswers {
 }
 
 // Spec 3 Challenge content › Running count
-export type ChallengePhase = 'ready' | 'card' | 'question' | 'explanation' | 'recorded' | 'ended';
+// Spec 3 User stories 37, 38 (Play decisions and the Learn correction pause); #138
+export type ChallengePhase = 'ready' | 'card' | 'question' | 'explanation' | 'recorded' | 'decision' | 'correction' | 'ended';
 
 export type ChallengeEnding = 'completed' | 'abandoned';
 
@@ -148,6 +156,10 @@ export type ChallengeCommand =
   | { readonly kind: 'next-item' }
   // Spec 3 Learn, Check and assistance › Show/hide running count
   | { readonly kind: 'reveal-count' }
+  // Spec 3 Training service interface › Submit command (playing action, retry/override); #138
+  | { readonly kind: 'play'; readonly action: PlayChoice }
+  | { readonly kind: 'retry-correction' }
+  | { readonly kind: 'override-correction' }
   | { readonly kind: 'end' };
 
 export type ChallengeCommandKind = ChallengeCommand['kind'];
@@ -165,6 +177,10 @@ export type ChallengeFact =
   // Spec 3 Challenge content › Reshuffle
   | { readonly kind: 'shoe-shuffled'; readonly position: number }
   | { readonly kind: 'answer-accepted'; readonly position: number; readonly scored: boolean }
+  // Spec 3 Learn, Check and assistance › Check: cue 9 is a legality event; #138
+  | { readonly kind: 'move-refused'; readonly position: number; readonly action: PlayChoice }
+  // Spec 3 Audio and haptics: cue 15, Amendment 1 B4; #138
+  | { readonly kind: 'correction-offered'; readonly position: number }
   | { readonly kind: 'attempt-ended'; readonly ending: ChallengeEnding };
 
 export type ChallengeAdvance =
@@ -248,7 +264,31 @@ export interface TableCountReview {
   readonly error: number | null;
 }
 
-export type ReviewFact = CardValueReview | RunningCountReview | ConversionReview | TableCountReview;
+// Spec 3 Scoring and review › Review facts (per decision), Attribution; S3-09 VToCp; #138
+export interface TableDecisionReview {
+  readonly kind: 'table-decision';
+  readonly round: number;
+  readonly position: number;
+  readonly decision: 'insurance' | 'hand';
+  readonly hand: number;
+  readonly hands: number;
+  readonly cards: readonly ChallengeCard[];
+  readonly total: HandTotal;
+  readonly pair: boolean;
+  readonly up: ChallengeCard;
+  readonly trueCount: number;
+  readonly countDependent: boolean;
+  readonly prescribed: PlayChoice;
+  readonly fallback: boolean;
+  readonly chosen: PlayChoice;
+  readonly refused: readonly PlayChoice[];
+  readonly played: PlayChoice | null;
+  readonly resolution: PlayDecision['resolution'];
+  readonly entered: ChallengeEntry | null;
+  readonly atEntered: PlayChoice | null;
+}
+
+export type ReviewFact = CardValueReview | RunningCountReview | ConversionReview | TableCountReview | TableDecisionReview;
 
 export interface ChallengeResults {
   readonly ending: ChallengeEnding;
@@ -289,6 +329,8 @@ interface ChallengeViewBase {
 export interface LearnChallengeView extends ChallengeViewBase {
   readonly variant: 'learn';
   readonly feedback: LearnFeedback | null;
+  // Spec 3 Learn, Check and assistance › Learn (Play correction pause); S3-07 j4X6V; #138
+  readonly correction: PlayCorrection | null;
 }
 
 // Spec 3 Learn, Check and assistance › Check
@@ -394,10 +436,18 @@ export function createChallenge(spec: ChallengeSpecification, random: RandomStre
     rejected: 0,
     answers: [],
     revealedAt: null,
-    table: spec.table ? { setup: copyTableSetup(spec.table), shoe: null, round: 0 } : null,
+    table: spec.table ? { setup: copyTableSetup(spec.table), shoe: null, round: 0, seat: spec.table.seat === 'play' ? playSeat(spec.table, content as TableContent, spec, random) : null } : null,
     random: position,
     receipts: [],
   };
+}
+
+function playSeat(setup: PlaySetup, content: TableContent, spec: ChallengeSpecification, random: RandomStreamIdentity) {
+  try {
+    return openPlaySeat(copyTableSetup(setup) as PlaySetup, content, { id: spec.attemptId, owner: spec.owner, device: spec.device }, random);
+  } catch (error) {
+    throw new ChallengeSpecificationError(`your seat can't be opened: ${error instanceof Error ? error.message : String(error)}`);
+  }
 }
 
 function copyContent(content: ChallengeContent): ChallengeContent {
@@ -480,11 +530,15 @@ function shownFacts(state: ChallengeState, position: number): ChallengeFact[] {
   }
   const step = state.items[position] as TableStep;
   if (step.step === 'shuffle') return [{ kind: 'shoe-shuffled', position }];
-  if (step.step === 'prompt') return step.count === 'running' ? [{ kind: 'checkpoint-due', position }] : [];
+  if (step.step === 'prompt') return step.count === 'running' || step.timing === 'decision' ? [{ kind: 'checkpoint-due', position }] : [];
+  if (step.step === 'decision') return [];
   return [{ kind: 'content-shown', position }];
 }
 
-const showingPhase = (state: ChallengeState, position: number): ChallengePhase => (asks(state, position) ? 'question' : 'card');
+function showingPhase(state: ChallengeState, position: number): ChallengePhase {
+  if (asks(state, position)) return 'question';
+  return state.content.category === 'table' && (state.items[position] as TableStep).step === 'decision' ? 'decision' : 'card';
+}
 
 const currentAnswers = (state: ChallengeState): ItemAnswers | undefined => {
   const last = state.answers.at(-1);
@@ -497,10 +551,12 @@ const LEGAL: Record<ChallengePhase, readonly ChallengeCommandKind[]> = {
   question: ['answer', 'skip', 'end'],
   explanation: ['retry-item', 'next-item', 'end'],
   recorded: ['next-item', 'end'],
+  decision: ['play', 'end'],
+  correction: ['retry-correction', 'override-correction', 'end'],
   ended: [],
 };
 
-const SHOWING: readonly ChallengePhase[] = ['card', 'question', 'explanation', 'recorded'];
+const SHOWING: readonly ChallengePhase[] = ['card', 'question', 'explanation', 'recorded', 'decision', 'correction'];
 
 const canReveal = (state: ChallengeState) => counting(state) && state.revealedAt === null && SHOWING.includes(state.phase);
 
@@ -531,13 +587,19 @@ function answerProblem(state: ChallengeState, value: number): string | undefined
   return value >= range.min && value <= range.max ? undefined : `${what} is a whole number from −${range.max} to +${range.max}`;
 }
 
+const PLAY_CHOICES: readonly PlayChoice[] = ['hit', 'stand', 'double', 'split', 'surrender', 'insure', 'decline-insurance'];
+
 function isCommand(value: unknown): value is ChallengeCommand {
   if (!isRecord(value)) return false;
   switch (value.kind) {
     case 'answer':
       return hasExactKeys(value, ['kind', 'value']) && Number.isSafeInteger(value.value);
+    case 'play':
+      return hasExactKeys(value, ['kind', 'action']) && PLAY_CHOICES.includes(value.action as PlayChoice);
     case 'begin':
     case 'reveal-count':
+    case 'retry-correction':
+    case 'override-correction':
     case 'skip':
     case 'retry-item':
     case 'next-item':
@@ -615,9 +677,45 @@ function apply(state: ChallengeState, command: ChallengeCommand): { change: Chan
     }
     case 'reveal-count':
       return { change: { revealedAt: state.position + 1 }, facts: [] };
+    case 'play':
+      return play(state, command.action);
+    case 'retry-correction':
+    case 'override-correction': {
+      const correction = (state.table as TableProgress).seat?.correction as PlayCorrection;
+      const move = command.kind === 'retry-correction' ? correction.explanation.prescribed.action : correction.actual.action;
+      return played(state, move, command.kind === 'retry-correction' ? 'retried' : 'overridden');
+    }
     case 'end':
       return { change: { phase: 'ended', ending: 'abandoned' }, facts: [{ kind: 'attempt-ended', ending: 'abandoned' }] };
   }
+}
+
+// Spec 3 User stories 37, 38; Scoring and review › Attribution; #138
+function play(state: ChallengeState, action: PlayChoice): { change: Change; facts: ChallengeFact[] } {
+  const table = state.table as TableProgress;
+  const seat = table.seat as NonNullable<TableProgress['seat']>;
+  const decision = currentDecision(seat);
+  const legal = (state.items[state.position] as Extract<TableStep, { step: 'decision' }>).actions.includes(action);
+  const tried: PlayDecision = { ...decision, attempts: [...decision.attempts, { action, legal }] };
+  const withAttempt = { ...table, seat: { ...seat, decisions: [...seat.decisions.slice(0, -1), tried] } };
+  if (!legal) return { change: { table: withAttempt }, facts: [{ kind: 'move-refused', position: state.position, action }] };
+  const prescribed = decision.explanation.prescribed.action;
+  if (state.variant === 'learn' && action !== prescribed) {
+    const correction: PlayCorrection = {
+      id: `${state.attempt.id}/departure/${state.sequence}`,
+      turn: table.round,
+      decision: seat.decisions.length - 1,
+      explanation: decision.explanation,
+      actual: { action, amount: null },
+    };
+    return { change: { phase: 'correction', table: { ...withAttempt, seat: { ...withAttempt.seat, correction } } }, facts: [{ kind: 'correction-offered', position: state.position }] };
+  }
+  return played({ ...state, table: withAttempt }, action, action === prescribed ? 'followed' : 'departed');
+}
+
+function played(state: ChallengeState, move: PlayChoice, resolution: NonNullable<PlayDecision['resolution']>): { change: Change; facts: ChallengeFact[] } {
+  const next = playMove(state.table as TableProgress, state.content as TableContent, tableSteps(state), move, resolution);
+  return show(state, { table: { ...next.progress }, items: [...state.items, ...next.steps] }, state.position + 1);
 }
 
 // Spec 3 Attempt lifecycle › Performance timer; #135, #137
@@ -655,12 +753,65 @@ export function challengeResults(state: ChallengeState): ChallengeResults | null
     return { kind: 'card-value', position: answers.position + 1, card: item.card, entered, reference: correct as HiLoValue };
   });
   const metrics = Object.fromEntries(CHALLENGE_METRICS.map((metric) => [metric, null])) as Record<ChallengeMetric, MetricResult | null>;
-  const score = (facts: readonly ReviewFact[]): MetricResult | null => (facts.length === 0 ? null : { correct: facts.filter((fact) => fact.entered === fact.reference).length, total: facts.length });
+  const score = <F extends ReviewFact>(facts: readonly F[], right: (fact: F) => boolean): MetricResult | null => (facts.length === 0 ? null : { correct: facts.filter(right).length, total: facts.length });
+  const counted = (fact: Exclude<ReviewFact, TableDecisionReview>) => fact.entered === fact.reference;
+  const counts = review as Exclude<ReviewFact, TableDecisionReview>[];
   if (state.content.category === 'table') {
-    metrics['running-count'] = score(review.filter((fact) => fact.kind === 'table' && fact.count === 'running'));
-    metrics['true-count'] = score(review.filter((fact) => fact.kind === 'table' && fact.count === 'true'));
-  } else metrics[CATEGORY_METRIC[state.content.category]] = score(review);
+    metrics['running-count'] = score(counts.filter((fact) => fact.kind === 'table' && fact.count === 'running'), counted);
+    metrics['true-count'] = score(counts.filter((fact) => fact.kind === 'table' && fact.count === 'true'), counted);
+    const decisions = decisionReviews(state);
+    if (state.table?.setup.seat === 'play') metrics['playing-adherence'] = score(decisions, (fact) => fact.chosen === fact.prescribed);
+    review.push(...decisions);
+    review.sort((a, b) => a.position - b.position);
+  } else metrics[CATEGORY_METRIC[state.content.category]] = score(counts, counted);
   return { ending: state.ending, metrics, review, assisted: assisted(state), assistanceStep: state.revealedAt };
+}
+
+
+// Spec 3 Scoring and review › Reference, Attribution; #138
+function decisionReviews(state: ChallengeState): TableDecisionReview[] {
+  const table = state.table as TableProgress;
+  if (table.seat === null) return [];
+  const setup = table.setup as PlaySetup;
+  return table.seat.decisions.flatMap((decision): TableDecisionReview[] => {
+    const [first] = decision.attempts;
+    if (!first) return [];
+    const { situation, prescribed } = decision.explanation;
+    const prompt = decision.prompt === null ? undefined : state.answers.find((answers) => answers.position === decision.prompt);
+    const entered = prompt ? prompt.first : null;
+    return [
+      {
+        kind: 'table-decision',
+        round: (state.items[decision.position] as TableStep).round,
+        position: decision.position + 1,
+        decision: situation.decision,
+        hand: situation.hand,
+        hands: situation.hands,
+        cards: situation.cards.map(cardOf),
+        total: { ...situation.total },
+        pair: situation.pair,
+        up: cardOf(situation.up),
+        trueCount: tableCountAt(tableSteps(state), decision.position).trueCount,
+        countDependent: decision.explanation.deviation !== null,
+        prescribed: prescribed.action,
+        fallback: decision.explanation.unavailable.length > 0,
+        chosen: first.action,
+        refused: decision.attempts.flatMap((attempt) => (attempt.legal ? [] : [attempt.action])),
+        played: decision.played,
+        resolution: decision.resolution,
+        entered,
+        atEntered: typeof entered === 'number' ? policyAt(setup, decision, entered) : null,
+      },
+    ];
+  });
+}
+
+
+function policyAt(setup: PlaySetup, decision: PlayDecision, trueCount: number): PlayChoice {
+  const { situation } = decision.explanation;
+  const rules = { dealer: setup.rules.dealer, lateSurrender: setup.rules.lateSurrender };
+  const { decision: kind, cards, hands, up, available, stake } = situation;
+  return prescribeAtTrueCount(setup.policy, { game: 'blackjack', rules, decision: kind, cards, hands, up, balance: available, stake }, trueCount).prescribed.action;
 }
 
 // Spec 3 Scoring and review › Attribution; S3-09 h0MsKr
@@ -742,6 +893,7 @@ export function readChallengeView(state: ChallengeState): ChallengeView {
             explanation: explain(state, item),
           }
         : null,
+    correction: state.phase === 'correction' ? (state.table?.seat?.correction ?? null) : null,
   };
 }
 

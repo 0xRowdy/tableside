@@ -1,6 +1,6 @@
-// Spec 3 Count checkpoints (table), Reshuffle, Information hiding, Seam 3; S3-07 v82z3, AcmMa, bh8oE, xjtSW, heGUV, j4tjKT; #137
+// Spec 3 Count checkpoints (table), Reshuffle, Information hiding, Seam 3; S3-07 v82z3, AcmMa, bh8oE, xjtSW, heGUV, j4tjKT, E3Gbeh, kLgWV, qRHlC, j4X6V; S3-09 VToCp; #137, #138
 
-import { DEFAULT_TABLE_SETUP, observeSetup, TABLE_CONTENT, type TableOptions } from '@tableside/definitions';
+import { DEFAULT_TABLE_SETUP, tableSetup, TABLE_CONTENT, type TableOptions } from '@tableside/definitions';
 import {
   advanceChallenge,
   createChallenge,
@@ -15,14 +15,16 @@ import {
 import { cleanup, fireEvent, render, screen } from '@testing-library/react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { CardReview } from '@/counting/CardReview';
 import { ChallengeExercise } from '@/counting/ChallengeExercise';
+import { attemptRecord, TABLE_PLAY_CHECK } from '@/training/testing/attempt-records';
 import type { LearnerCommand } from '@/training/service';
 import { expectIndistinguishable, expectNoFeedbackColors, presentedScreen, watchAccessibilityEvents, type AccessibilityEvents } from '@/training/testing/information-hiding';
 
 const seed = (n: number) => ({ protocol: RANDOM_PROTOCOL_VERSION, key: [n, 0x9e3779b9], session: [n * 7 + 1, 0] }) as const;
 
 function attempt(variant: ChallengeVariant, n: number, options: Partial<TableOptions> = {}): ChallengeState {
-  const table = observeSetup({ ...DEFAULT_TABLE_SETUP, ...options });
+  const table = tableSetup({ ...DEFAULT_TABLE_SETUP, ...options });
   return send(createChallenge({ attemptId: 'attempt-1', owner: 'local', device: 'test-device', variant, content: TABLE_CONTENT, table }, seed(n)), { kind: 'begin' });
 }
 
@@ -177,5 +179,142 @@ describe('the table counting exercise', () => {
     expectNoFeedbackColors(recorded);
     const other = await present(readChallengeView(send(at(2), { kind: 'answer', value: 3 })));
     expectIndistinguishable(other, recorded);
+  });
+});
+
+// Spec 3 User stories 37, 38; Learn, Check and assistance; Amendment 1 A3, B2, B4; #138
+describe('the table counting exercise in Play', () => {
+  const play = (variant: ChallengeVariant, n: number, countingMode: TableOptions['countingMode'] = 'basic') => attempt(variant, n, { seat: 'play', countingMode });
+  const atDecision = (state: ChallengeState) => advanceUntil(state, (candidate) => candidate.phase === 'decision');
+
+  it('offers every move at the learner\'s decision, without the practice balance (S3-07 E3Gbeh, Amendment 2 §3)', async () => {
+    const decision = await present(readChallengeView(atDecision(play('check', 1))));
+    expect(screen.getByText('Check · Play · S17 LS · 75% · N = 1')).toBeOnTheScreen();
+    expect(screen.getByText('You')).toBeOnTheScreen();
+    expect(screen.getByRole('header', { name: 'Your move' })).toBeOnTheScreen();
+    expect(screen.getByText('Check · your move')).toBeOnTheScreen();
+    expect(screen.getByText('You have hard 14 against a 3. Choose a move; the next card waits for you.')).toBeOnTheScreen();
+    expect(screen.queryByText(/balance/i)).toBeNull();
+    for (const move of ['Hit', 'Stand', 'Double', 'Split', 'Surrender']) expect(screen.getByRole('button', { name: move })).toBeEnabled();
+    expectNoFeedbackColors(decision);
+    await press('Stand');
+    expect(sent).toEqual([{ kind: 'play', action: 'stand' }]);
+  });
+
+  it('refuses an illegal move by legality alone, then lets the learner choose again (S3-07 kLgWV)', async () => {
+    const refused = await present(readChallengeView(send(atDecision(play('check', 1)), { kind: 'play', action: 'split' })));
+    expect(screen.getByText('THAT MOVE ISN’T AVAILABLE')).toBeOnTheScreen();
+    expect(screen.getByText('You can only split two cards of the same value.')).toBeOnTheScreen();
+    expect(
+      screen.getByText('K♦ 4♣ isn’t a pair, so Split isn’t a legal move. During a Check attempt Tableside only tells you what’s allowed. It won’t say which move is right, before or after you choose.'),
+    ).toBeOnTheScreen();
+    expectNoFeedbackColors(refused);
+    await press('Choose again');
+    expect(screen.getByRole('button', { name: 'Stand' })).toBeOnTheScreen();
+  });
+
+  it('asks the true count before a count-dependent decision without showing the move, the index or the reference (S3-07 qRHlC)', async () => {
+    let asking: ChallengeState | null = null;
+    for (let n = 1; n < 100 && !asking; n++) {
+      try {
+        asking = advanceUntil(play('check', n, 'deviations'), (state) => state.phase === 'question' && (stepOf(state) as { timing?: string }).timing === 'decision');
+      } catch {
+        asking = null;
+      }
+    }
+    const shown = await present(readChallengeView(asking as ChallengeState));
+    expect(screen.getByText('Check · Play · with deviations · N = 1')).toBeOnTheScreen();
+    expect(screen.getByText('Count before your move')).toBeOnTheScreen();
+    expect(screen.getByText('Before your decision: true count')).toBeOnTheScreen();
+    expect(screen.getByText('Enter the true count, then choose your move.')).toBeOnTheScreen();
+    expect(screen.getByText('This prompt means the decision depends on the count. It never shows the right move, the index or the reference count.')).toBeOnTheScreen();
+    expect(screen.getByLabelText('True count')).toBeOnTheScreen();
+    expectNoFeedbackColors(shown);
+  });
+
+  it('pauses a departing Learn move before it plays, with retry or override (S3-07 j4X6V)', async () => {
+    await present(readChallengeView(send(atDecision(play('learn', 1)), { kind: 'play', action: 'hit' })));
+    expect(screen.getByText('Correction')).toBeOnTheScreen();
+    expect(screen.getByText('Marcus · Learn, counting with basic')).toBeOnTheScreen();
+    expect(screen.getByText('Before your hit')).toBeOnTheScreen();
+    expect(screen.getByText('Stand on 14 against a 3.')).toBeOnTheScreen();
+    expect(screen.getByText("Your hit hasn't been played yet.")).toBeOnTheScreen();
+    expect(screen.getByText('“Keep my hit” is recorded once as an override and scored as a playing miss.')).toBeOnTheScreen();
+    await press('Take it back & stand');
+    await press('Keep my hit');
+    expect(sent).toEqual([{ kind: 'retry-correction' }, { kind: 'override-correction' }]);
+  });
+
+  it('gives the taught index, the published one and why they differ when a Learn deviation correction departs (Amendment 1 B2)', async () => {
+    let paused: ChallengeState | null = null;
+    for (let n = 1; n < 300 && !paused; n++) {
+      let state = play('learn', n, 'deviations');
+      for (let guard = 0; guard < 400 && state.phase !== 'ended' && !paused; guard++) {
+        if (state.phase === 'decision') {
+          const decision = state.table?.seat?.decisions.at(-1);
+          const deviation = decision?.explanation.deviation;
+          const prescribed = decision?.explanation.prescribed.action;
+          const other = readChallengeView(state).table?.decision?.actions.find((move) => move !== prescribed);
+          if (deviation && (deviation.published.schlesinger.difference ?? 0) !== 0 && other) {
+            paused = send(state, { kind: 'play', action: other });
+            break;
+          }
+          state = send(state, { kind: 'play', action: prescribed ?? 'stand' });
+        } else state = send(state, state.phase === 'question' ? { kind: 'skip' } : { kind: 'next-item' });
+      }
+    }
+    await present(readChallengeView(paused as ChallengeState));
+    expect(screen.getByText('Why Tableside\'s index can differ from published charts')).toBeOnTheScreen();
+    expect(screen.getByText(/Tableside teaches [+−-]?\d+/)).toBeOnTheScreen();
+    expect(screen.getByText(/You keep the count yourself; this uses the real count, not the one you entered\./)).toBeOnTheScreen();
+  });
+});
+
+// Spec 3 S3-09 VToCp, aEdMd; Scoring and review › Attribution; #138
+describe('the table Play decision review', () => {
+  it('says match, miss or fallback in words and names the right policy on a wrong count without excusing it', async () => {
+    const decision = {
+      kind: 'table-decision',
+      round: 6,
+      decision: 'hand',
+      hand: 0,
+      hands: 1,
+      cards: [
+        { rank: 7, suit: 'clubs' },
+        { rank: 4, suit: 'diamonds' },
+        { rank: 5, suit: 'spades' },
+      ],
+      total: { value: 16, soft: false },
+      pair: false,
+      up: { rank: 10, suit: 'diamonds' },
+      countDependent: true,
+      refused: [],
+      played: 'hit',
+      resolution: 'departed',
+    } as const;
+    const record = {
+      ...attemptRecord({ id: 'a', key: TABLE_PLAY_CHECK, scores: { 'running-count': [20, 20], 'true-count': [10, 11], 'playing-adherence': [1, 2] } }),
+      review: [
+        { kind: 'table', checkpoint: 12, round: 6, timing: 'decision', count: 'true', position: 80, entered: 0, reference: 2, error: -2 },
+        { ...decision, position: 81, trueCount: 2, prescribed: 'stand', fallback: false, chosen: 'hit', entered: 0, atEntered: 'hit' },
+        { ...decision, round: 8, position: 95, cards: [{ rank: 6, suit: 'clubs' }, { rank: 5, suit: 'hearts' }, { rank: 2, suit: 'clubs' }], total: { value: 13, soft: false }, up: { rank: 6, suit: 'spades' }, countDependent: false, trueCount: 0, prescribed: 'stand', fallback: true, chosen: 'stand', played: 'stand', resolution: 'followed', entered: null, atEntered: null },
+      ],
+    } as const;
+    await render(
+      <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 0, left: 0, right: 0, bottom: 0 } }}>
+        <CardReview record={record as never} lesson={undefined} onOpenLesson={() => undefined} onBack={() => undefined} />
+      </SafeAreaProvider>,
+    );
+    expect(screen.getByText('Decision review')).toBeOnTheScreen();
+    expect(screen.getByText('Table counting · Check · Play')).toBeOnTheScreen();
+    expect(screen.getByText('Round 6 · true count before the decision')).toBeOnTheScreen();
+    expect(screen.getByText('Round 6 · hard 16 vs 10')).toBeOnTheScreen();
+    expect(screen.getByText('Playing miss')).toBeOnTheScreen();
+    expect(screen.getByText('TC +2')).toBeOnTheScreen();
+    expect(screen.getByText('Round 8 · hard 13 vs 6 · fallback')).toBeOnTheScreen();
+    expect(screen.getByText('Fallback applied')).toBeOnTheScreen();
+    expect(
+      screen.getByText('Right policy, wrong count: in round 6 you entered a true count of 0, and at 0 hitting 16 against 10 is the right play. The miss came from the count, not the strategy. Both still count as errors.'),
+    ).toBeOnTheScreen();
   });
 });
