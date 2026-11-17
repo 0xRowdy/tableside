@@ -122,6 +122,8 @@ export {
   type RestrictiveChange,
   privacyChoice,
 } from './privacy-record';
+// #142
+export { challengeAttempt, challengeAttemptSummary } from './challenge-attempt-record';
 export {
   BOOTSTRAP_PAGE_SIZE,
   DETAIL_PAGES_PER_RUN,

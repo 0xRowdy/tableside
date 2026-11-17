@@ -2,6 +2,7 @@
 
 import { type CompletedPracticeSessionRecord, canonicalJson, decodeMoney } from '@tableside/engine';
 
+import { challengeAttempt } from '../challenge-attempt-record';
 import { privacyChoice } from '../privacy-record';
 
 import type { QueuedUpload, ReconcileOutcome, RecordRef } from './store';
@@ -164,7 +165,10 @@ export function prerequisitesOf(
 }
 
 export const recordTypes: ReadonlyMap<string, RecordType> = new Map<string, RecordType>(
-  [completedPracticeSession as unknown as RecordType, privacyChoice as unknown as RecordType].map((type) => [type.name, type]),
+  [completedPracticeSession as unknown as RecordType, privacyChoice as unknown as RecordType, challengeAttempt as unknown as RecordType].map((type) => [
+    type.name,
+    type,
+  ]),
 );
 
 export type RevisionBase = number | { readonly operation: string };

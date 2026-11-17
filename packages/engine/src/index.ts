@@ -358,6 +358,7 @@ export {
   type RunningCountReview,
 } from './challenge';
 export {
+  ATTEMPT_ENDING_REASONS,
   CHALLENGE_RECORD_VERSION,
   challengeAttemptRecord,
   unusableAttemptRecord,
@@ -366,6 +367,7 @@ export {
   type AttemptEndingReason,
   type AttemptRecordContext,
   type ChallengeAttemptRecord,
+  type ChallengeAttemptSummary,
   type ChallengeFinances,
   type ChallengeGroupKey,
   type ChallengePacing,

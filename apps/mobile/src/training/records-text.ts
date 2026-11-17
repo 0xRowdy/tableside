@@ -1,7 +1,7 @@
 // Spec 3 S3-10 OVKkc (Amendment 2 §3), S3-01 PDCaD, S3-08 liAfT, CEb6T; Comparison groups; #140
 
 import { CHALLENGE_CONTENT } from '@tableside/definitions';
-import type { AssistanceClass, AttemptEndingReason, ChallengeAttemptRecord, ChallengeCategory, ChallengeGroupKey, ChallengeMetric, ChallengePacing } from '@tableside/engine';
+import type { AssistanceClass, AttemptEndingReason, ChallengeAttemptSummary, ChallengeCategory, ChallengeGroupKey, ChallengeMetric, ChallengePacing } from '@tableside/engine';
 
 import { dayText } from '@/account/account-text';
 
@@ -99,6 +99,9 @@ function whenText(at: number, now: number): string {
   return day === yesterday.toDateString() ? 'Yesterday' : dayText(at);
 }
 
+// Spec 3 Amendment 1 C8; #142
+export const REVIEW_UNAVAILABLE = "This attempt's review isn't on this device yet. Try again when you're online.";
+
 // Spec 3 S3-10 OVKkc (attempt history)
 export function historyText({ record, local }: ProgressAttempt, now: number): { readonly title: string; readonly detail: string; readonly value: string } {
   const { groupKey: key } = record;
@@ -113,7 +116,7 @@ export function historyText({ record, local }: ProgressAttempt, now: number): { 
   return { title: `${RECORD_TITLE[key.category]} · ${variantLabel(key.variant)}`, detail: detail.join(' · '), value: historyValue(record) };
 }
 
-function historyValue(record: ChallengeAttemptRecord): string {
+function historyValue(record: Pick<ChallengeAttemptSummary, 'endingReason' | 'metrics'>): string {
   if (record.endingReason === 'insufficient-funds') return 'Partial';
   if (record.endingReason !== 'completed') return '—';
   const tested = Object.values(record.metrics).filter((result) => result !== null);

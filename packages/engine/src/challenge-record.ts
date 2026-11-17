@@ -73,6 +73,11 @@ export interface ChallengeAttemptRecord {
 
 export type UnsequencedAttemptRecord = Omit<ChallengeAttemptRecord, 'deviceSequence'>;
 
+// Spec 3 Amendment 1 C8: everything but the review facts (the detail)
+export type ChallengeAttemptSummary = Omit<ChallengeAttemptRecord, 'review'>;
+
+export const ATTEMPT_ENDING_REASONS: readonly AttemptEndingReason[] = ['completed', 'abandoned', 'insufficient-funds', 'unusable'];
+
 export interface AttemptRecordContext {
   readonly installation: string;
   readonly startedAt: number;

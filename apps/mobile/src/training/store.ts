@@ -1,6 +1,6 @@
 // Spec 3 Attempt lifecycle › Durability; Amendment 1 C6, C7; #158
 
-import type { ChallengeAttemptRecord, ChallengeFact, ChallengeSpecification, RandomStreamIdentity, Receipt, UnsequencedAttemptRecord } from '@tableside/engine';
+import type { ChallengeAttemptRecord, ChallengeAttemptSummary, ChallengeFact, ChallengeSpecification, RandomStreamIdentity, Receipt, UnsequencedAttemptRecord } from '@tableside/engine';
 
 import type { AllowanceEffect, MeteringBasis } from '../practice/store';
 import type { LessonProgressEvent, UnsequencedLessonEvent } from './lesson-progress';
@@ -88,7 +88,12 @@ export interface ChallengeStore {
   // Spec 3 Synchronized record types › Challenge attempt
   recordAttempt(record: UnsequencedAttemptRecord): Promise<ChallengeAttemptRecord>;
   readAttemptRecords(): Promise<readonly ChallengeAttemptRecord[]>;
+  // #142
+  readAcceptedAttempts(): Promise<readonly AcceptedAttempt[]>;
 }
+
+// Spec 3 Amendment 1 C8; #142
+export type AcceptedAttempt = ChallengeAttemptSummary & { readonly review?: ChallengeAttemptRecord['review'] };
 
 // Spec 3 Amendment 1 C7
 export interface DevicePreferences {

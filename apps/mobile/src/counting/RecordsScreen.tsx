@@ -26,10 +26,12 @@ import {
   RECORD_CLASSES,
   RECORDS_NOTE,
   RECORDS_TITLE,
+  REVIEW_UNAVAILABLE,
   settingsText,
   type StatText,
 } from '@/training/records-text';
 import type { LessonEntry, TrainingService } from '@/training/service';
+import type { AcceptedAttempt } from '@/training/store';
 
 import { CardReview } from './CardReview';
 
@@ -51,6 +53,13 @@ export function RecordsScreen({
   const records = useLoaded(recordsOf, service);
   const [assistance, setAssistance] = useState<AssistanceClass>('unassisted-check');
   const [reviewing, setReviewing] = useState<ChallengeAttemptRecord | null>(null);
+  const [unavailable, setUnavailable] = useState(false);
+  // Spec 3 Amendment 1 C8; #142
+  const openReview = async (attemptId: string) => {
+    const record = await service.attemptReview(attemptId);
+    setUnavailable(!record || record.review.length === 0);
+    if (record && record.review.length > 0) setReviewing(record);
+  };
 
   if (reviewing) {
     return (
@@ -74,6 +83,7 @@ export function RecordsScreen({
         <GroupCard key={group.id} group={group} />
       ))}
       <GroupLabel>{HISTORY_LABEL}</GroupLabel>
+      {unavailable && <Note>{REVIEW_UNAVAILABLE}</Note>}
       {records && records.progress.history.length === 0 ? (
         <Note>{NO_HISTORY}</Note>
       ) : (
@@ -88,7 +98,7 @@ export function RecordsScreen({
                 title={text.title}
                 detail={text.detail}
                 value={text.value}
-                onPress={record.review.length > 0 ? () => setReviewing(record) : undefined}
+                onPress={hasReview(record) ? () => void openReview(record.attemptId) : undefined}
               />
             );
           })}
@@ -98,6 +108,10 @@ export function RecordsScreen({
     </SettingsScreen>
   );
 }
+
+// Spec 3 Amendment 1 C8
+const hasReview = (record: AcceptedAttempt) =>
+  record.review ? record.review.length > 0 : Object.values(record.metrics).some((result) => result !== null && result.total > 0);
 
 function GroupCard({ group }: { group: GroupProgress }) {
   const stats = [...bestText(group), ...(group.key.assistanceClass === 'unassisted-check' ? [fastestText(group)] : [])];

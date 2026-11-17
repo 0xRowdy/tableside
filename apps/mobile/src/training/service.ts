@@ -245,9 +245,22 @@ export class TrainingService {
     return attemptEarned(await this.attempts(), record.attemptId);
   }
 
-  // TODO(#142)
+  // Spec 3 Comparison groups (local and accepted attempts); #142
   private async attempts(): Promise<readonly ProgressAttempt[]> {
-    return (await this.adapters.store.readAttemptRecords()).map((record) => ({ record, local: true }));
+    const { store } = this.adapters;
+    const [local, accepted] = await Promise.all([store.readAttemptRecords(), store.readAcceptedAttempts()]);
+    return [...accepted.map((record) => ({ record, local: false })), ...local.map((record) => ({ record, local: true }))];
+  }
+
+  // Spec 3 Amendment 1 C8; #142
+  async attemptReview(attemptId: string): Promise<ChallengeAttemptRecord | null> {
+    const { store, attemptDetail } = this.adapters;
+    const local = (await store.readAttemptRecords()).find((record) => record.attemptId === attemptId);
+    if (local) return local;
+    const accepted = (await store.readAcceptedAttempts()).find((record) => record.attemptId === attemptId);
+    if (!accepted) return null;
+    if (accepted.review) return { ...accepted, review: accepted.review };
+    return attemptDetail ? attemptDetail(attemptId) : null;
   }
 
   dismissResults(): void {

@@ -97,6 +97,28 @@ describe('the server export', () => {
   });
 });
 
+// Spec 3 Synchronized record types › Challenge attempt (exported as JSON); #142
+describe('challenge attempts in the server export', () => {
+  it('holds every synced challenge attempt whole as versioned JSON, with no CSV and no device preference', async () => {
+    const { phone, email } = await signedInPhone('attempts');
+    const first = await phone.playCheck({ wrong: 1 });
+    const second = await phone.playCheck({ abandonAfter: 2 });
+    await phone.account.sync.reconcile();
+    expect(await phone.account.sync.countWaiting()).toBe(0);
+
+    const { files } = await exportArchive(phone, email);
+    const manifest = JSON.parse(files.get('manifest.json')!) as { files: { path: string; format: string; records?: number }[] };
+    expect(manifest.files.find((file) => file.path === 'challenge-attempts.json')).toMatchObject({ format: 'json', records: 2 });
+    expect(files.has('challenge-attempts.csv')).toBe(false);
+    const json = JSON.parse(files.get('challenge-attempts.json')!) as { records: { endedAt: number }[] };
+    expect(json).toMatchObject({ version: 1, recordType: 'challenge-attempt', payloadVersion: 1 });
+    expect(json.records).toEqual([first, second].sort((a, b) => a.endedAt - b.endedAt));
+    for (const preference of ['challenge.last-setup', 'learning.start-here-dismissed', 'learning.hints-seen']) {
+      for (const [path, text] of files) expect(text, path).not.toContain(preference);
+    }
+  });
+});
+
 async function objectPath(accountId: string): Promise<string> {
   const [row] = await stack.sql<{ object_path: string }[]>`
     select object_path from private.exports where account_id = ${accountId} order by requested_at desc limit 1`;

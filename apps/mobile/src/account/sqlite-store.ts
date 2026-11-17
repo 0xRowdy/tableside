@@ -1,6 +1,13 @@
 // Spec 2 Local storage
 
-import { canonicalJson, sha256Hex, type ChallengeAttemptRecord, type UnsequencedAttemptRecord } from '@tableside/engine';
+import {
+  canonicalJson,
+  decodeChallengeCheckpoint,
+  sha256Hex,
+  type ChallengeAttemptRecord,
+  type ChallengeEntry,
+  type UnsequencedAttemptRecord,
+} from '@tableside/engine';
 
 import type {
   ActivityStore,
@@ -17,6 +24,7 @@ import type {
 import {
   CHALLENGE_ATTEMPT_RECORD_TYPE,
   withLifecycle,
+  type AcceptedAttempt,
   type AttemptLifecycle,
   type AttemptCharge,
   type AttemptCommitOutcome,
@@ -30,14 +38,24 @@ import { LESSON_PROGRESS_RECORD_TYPE, type LessonProgressEvent, type Unsequenced
 import type { SqlConnection, SqlExecutor } from './sql';
 import { createSchema, readSchemaVersion, schemaVersionOf, STORE_MIGRATIONS, STORE_SCHEMA_VERSION, type StoreMigration } from './store-schema';
 
-export interface UnfinishedActivity {
-  readonly activityId: string;
-  readonly kind: 'practice-session';
-  readonly game: string;
-  readonly mode: 'free-play' | 'guided';
-  readonly startedAt: number;
-  readonly steps: number;
-}
+export type UnfinishedActivity =
+  | {
+      readonly activityId: string;
+      readonly kind: 'practice-session';
+      readonly game: string;
+      readonly mode: 'free-play' | 'guided';
+      readonly startedAt: number;
+      readonly steps: number;
+    }
+  // Spec 3 Amendment 1 C9
+  | {
+      readonly activityId: string;
+      readonly kind: 'challenge-attempt';
+      readonly category: string;
+      readonly variant: string;
+      readonly startedAt: number;
+      readonly answers: readonly { readonly position: number; readonly entered: ChallengeEntry }[];
+    };
 
 export interface PreparedOperation {
   readonly operationId: string;
@@ -302,17 +320,21 @@ export class SqliteActivityStore implements ActivityStore, TrainingStore {
 
   // Spec 2 Export, Amendment 2 §5
   async readUnfinishedActivities(): Promise<readonly UnfinishedActivity[]> {
-    const activity = await this.findUnfinished();
-    if (!activity) return [];
+    const [activity, attempt] = await Promise.all([this.findUnfinished(), this.findUnfinishedAttempt()]);
     return [
-      {
-        activityId: activity.activityId,
-        kind: 'practice-session',
-        game: activity.specification.game,
-        mode: activity.specification.strategy === null ? 'free-play' : 'guided',
-        startedAt: activity.createdAt,
-        steps: activity.sequence,
-      },
+      ...(activity
+        ? [
+            {
+              activityId: activity.activityId,
+              kind: 'practice-session',
+              game: activity.specification.game,
+              mode: activity.specification.strategy === null ? 'free-play' : 'guided',
+              startedAt: activity.createdAt,
+              steps: activity.sequence,
+            } as const,
+          ]
+        : []),
+      ...(attempt ? [unfinishedAttempt(attempt)] : []),
     ];
   }
 
@@ -472,6 +494,7 @@ export class SqliteActivityStore implements ActivityStore, TrainingStore {
   }
 
   recordAttempt(record: UnsequencedAttemptRecord): Promise<ChallengeAttemptRecord> {
+    let queued = false;
     return this.transaction(async (tx) => {
       if (record.owner !== this.identity.accountId || record.installation !== this.identity.installationId) {
         throw new StoreMismatchError(`the record of ${record.attemptId} belongs to another account or installation`);
@@ -488,8 +511,24 @@ export class SqliteActivityStore implements ActivityStore, TrainingStore {
         ...encode(sequenced),
       ]);
       await tx.run(`UPDATE challenge_attempts SET status = 'ended' WHERE attempt_id = ?`, [record.attemptId]);
+      // Spec 3 Attempt lifecycle › Durability; #142
+      const sync: QueuedBody = { id: `${CHALLENGE_ATTEMPT_RECORD_TYPE}/${record.attemptId}`, kind: CHALLENGE_ATTEMPT_RECORD_TYPE, record: sequenced };
+      await tx.run(
+        `INSERT INTO outgoing (id, activity_id, record_type, item_id, revisioned, position, ${BODY}, dependencies, status, device_position)
+         VALUES (?, NULL, ?, ?, 0, (SELECT coalesce(max(position), 0) + 1 FROM outgoing), ?, ?, ?, ?, '[]', 'pending', ?)`,
+        [sync.id, CHALLENGE_ATTEMPT_RECORD_TYPE, record.attemptId, ...encode(sync), deviceSequence],
+      );
+      queued = true;
       return decodeText<ChallengeAttemptRecord>(encode(sequenced)[0]);
+    }).then((result) => {
+      if (queued) this.notifyQueued();
+      return result;
     });
+  }
+
+  // #142
+  readAcceptedAttempts(): Promise<readonly AcceptedAttempt[]> {
+    return this.readAcceptedRecords(CHALLENGE_ATTEMPT_RECORD_TYPE).then((records) => records.map((record) => record.payload as AcceptedAttempt));
   }
 
   readAttemptRecords(): Promise<readonly ChallengeAttemptRecord[]> {
@@ -1168,6 +1207,19 @@ async function nextDevicePosition(tx: SqlExecutor, recordType: string): Promise<
   const position = (last?.last ?? 0) + 1;
   await tx.run('INSERT INTO device_positions (record_type, last) VALUES (?, ?) ON CONFLICT (record_type) DO UPDATE SET last = excluded.last', [recordType, position]);
   return position;
+}
+
+// Spec 3 Amendment 1 C9
+function unfinishedAttempt(attempt: StoredAttempt): UnfinishedActivity {
+  const decoded = decodeChallengeCheckpoint(attempt.checkpoint);
+  return {
+    activityId: attempt.attemptId,
+    kind: 'challenge-attempt',
+    category: attempt.specification.content.category,
+    variant: attempt.specification.variant,
+    startedAt: attempt.createdAt,
+    answers: decoded.ok ? decoded.state.answers.map((answer) => ({ position: answer.position + 1, entered: answer.first })) : [],
+  };
 }
 
 async function readAttempt(tx: SqlExecutor, attemptId: string): Promise<StoredAttempt | null> {

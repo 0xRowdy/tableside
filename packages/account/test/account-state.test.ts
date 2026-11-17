@@ -2,7 +2,7 @@
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { type AcceptedRecord, PLATFORM_TABLES, PROTOCOL_VERSION, type RecordType, byOriginatingDevice, completedPracticeSession } from '../src';
+import { type AcceptedRecord, PLATFORM_TABLES, PROTOCOL_VERSION, type RecordType, byOriginatingDevice, challengeAttempt, completedPracticeSession } from '../src';
 import { type Envelope, prepareOperation } from '../src/sync/protocol';
 import {
   type DirectCommands,
@@ -496,7 +496,7 @@ describe('per-device attempt ordering', () => {
 
 describe('the registry’s test-only types', () => {
   it('are registered on the server with the same kind, acceptance, ordering, purge hook, snapshot and detail function, and covered by deletion', async () => {
-    for (const type of [...TEST_RECORD_TYPES, completedPracticeSession as unknown as RecordType]) {
+    for (const type of [...TEST_RECORD_TYPES, completedPracticeSession as unknown as RecordType, challengeAttempt as unknown as RecordType]) {
       const [row] = await stack.sql<{ kind: string; accept: string | null; ordering: string; purgeable: boolean; snapshot: string | null; detail: string | null }[]>`
         select kind, accept::regproc::text as accept, ordering, purge is not null as purgeable, snapshot::regproc::text as snapshot,
                detail::regproc::text as detail

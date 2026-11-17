@@ -1,5 +1,5 @@
 // Spec 3 Modules › Training service; #158
-import type { EntropySource, QuarantineList } from '@tableside/engine';
+import type { ChallengeAttemptRecord, EntropySource, QuarantineList } from '@tableside/engine';
 
 import type { AccessSupervisor, Clock } from '../practice/adapters';
 import type { ChallengeAllowanceState } from './allowance';
@@ -17,4 +17,6 @@ export interface TrainingAdapters {
   readonly owner: string;
   // Spec 3 Attempt lifecycle (unusable); #135
   readonly quarantine: QuarantineList;
+  // Spec 3 Amendment 1 C8; #142
+  readonly attemptDetail?: (attemptId: string) => Promise<ChallengeAttemptRecord | null>;
 }

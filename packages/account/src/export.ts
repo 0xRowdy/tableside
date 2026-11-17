@@ -26,14 +26,24 @@ export type ServerExportDownload =
   | { readonly status: 'not-ready' }
   | { readonly status: 'failed' };
 
-export interface UnfinishedActivity {
-  readonly activityId: string;
-  readonly kind: 'practice-session';
-  readonly game: string;
-  readonly mode: 'free-play' | 'guided';
-  readonly startedAt: number;
-  readonly steps: number;
-}
+export type UnfinishedActivity =
+  | {
+      readonly activityId: string;
+      readonly kind: 'practice-session';
+      readonly game: string;
+      readonly mode: 'free-play' | 'guided';
+      readonly startedAt: number;
+      readonly steps: number;
+    }
+  // Spec 3 Amendment 1 C9
+  | {
+      readonly activityId: string;
+      readonly kind: 'challenge-attempt';
+      readonly category: string;
+      readonly variant: string;
+      readonly startedAt: number;
+      readonly answers: readonly { readonly position: number; readonly entered: number | 'skip' }[];
+    };
 
 export interface UnfinishedActivities {
   readUnfinishedActivities(): Promise<readonly UnfinishedActivity[]>;
