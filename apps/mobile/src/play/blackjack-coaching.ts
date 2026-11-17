@@ -9,7 +9,7 @@ import { formatUnits, halfUnits } from './units';
 export const cardShort = (card: Card) => `${cardRank(card)}${SUIT_GLYPH[card.suit]}`;
 
 
-const upName = (card: Card) => (card.rank === 1 ? 'an ace' : card.rank === 8 ? 'an 8' : `a ${cardValue(card)}`);
+export const upName = (card: Card) => (card.rank === 1 ? 'an ace' : card.rank === 8 ? 'an 8' : `a ${cardValue(card)}`);
 const upValue = (value: number) => (value === 1 ? 'A' : String(value));
 
 const IMPERATIVE: Record<PlayChoice, string> = {

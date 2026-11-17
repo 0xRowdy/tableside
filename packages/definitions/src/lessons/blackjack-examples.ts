@@ -170,7 +170,7 @@ export const BASIC_STRATEGY_EXAMPLE: StrategyStepExample = {
         action: 'stand',
         amount: null,
       },
-    }, response: { correct: false, explanation: SIXTEEN_V10, note: 'Standing isn’t the basic play for 16 against a 10 at any table.' } },
+    }, response: { correct: false, explanation: SIXTEEN_V10, note: 'Standing isn’t the basic play for 16 against a 10 at any of Tableside’s tables.' } },
     { answer: {
       kind: 'play',
       move: {
@@ -512,9 +512,9 @@ const BET_AT_PLUS_ONE: StrategyStepExplanation = {
     status: 'prescribed',
   },
   situation: {
-    available: '990',
+    available: '1000',
     subjects: {
-      'last-result': 'loss',
+      'last-result': 'push',
     },
     values: {
       'true-count': '1',
@@ -523,7 +523,7 @@ const BET_AT_PLUS_ONE: StrategyStepExplanation = {
   state: {
     counters: {},
     cycleTurn: 1,
-    lastResult: 'loss',
+    lastResult: 'push',
     lists: {},
   },
 };
@@ -539,7 +539,7 @@ export const BET_SCHEDULE_EXAMPLE: StrategyStepExample = {
   table: 'S17_LS',
   practiceFunding: '1000',
   turns: [
-    { wagers: [HAND], outcome: { shown: [], dealt: [2, 6, 3, 5, 4, 2, 4, 2] } },
+    { wagers: [HAND], outcome: { shown: [2, 3, 4, 5, 6], dealt: [10, 6, 10, 4, 2, 3, 5] } },
   ],
   choices: [
     { answer: {
@@ -550,7 +550,7 @@ export const BET_SCHEDULE_EXAMPLE: StrategyStepExample = {
           amount: '10',
         },
       ],
-    }, response: { correct: false, explanation: BET_AT_PLUS_ONE, note: '10 is the bet below +1. After this round the true count is +1.' } },
+    }, response: { correct: false, explanation: BET_AT_PLUS_ONE, note: '10 is the bet below +1. The true count was 0 before this round and is +1 after it.' } },
     { answer: {
       kind: 'bets',
       bets: [
@@ -559,7 +559,7 @@ export const BET_SCHEDULE_EXAMPLE: StrategyStepExample = {
           amount: '20',
         },
       ],
-    }, response: { correct: true, explanation: BET_AT_PLUS_ONE, note: 'Eight low cards make the running count +8 with 6 decks left: a true count of +1.' } },
+    }, response: { correct: true, explanation: BET_AT_PLUS_ONE, note: 'Five low cards before the round and +3 in it make the running count +8 with 6 decks left: a true count of +1.' } },
     { answer: {
       kind: 'bets',
       bets: [

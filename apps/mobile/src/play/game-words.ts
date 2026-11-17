@@ -1,7 +1,8 @@
 import type { ScriptedOutcome } from '@tableside/definitions';
-import { BLACKJACK_RULES, countOf, hiLoTag, INSURANCE_TARGET, type BlackjackPermittedView, type CrapsPermittedView, type GameId, type PermittedView, type RoulettePermittedView, type StrategyView } from '@tableside/engine';
+import { BLACKJACK_RULES, countOf, hiLoTag, INSURANCE_TARGET, type Card, type Rank, type BlackjackPermittedView, type CrapsPermittedView, type GameId, type PermittedView, type RoulettePermittedView, type StrategyView } from '@tableside/engine';
 
-import { signed, statusText } from './blackjack-text';
+import { upName } from './blackjack-coaching';
+import { cardRank, signed, statusText } from './blackjack-text';
 import { crapsStatus, crapsTargetName, rollSentence } from './craps-text';
 import { describePocket, STATUS, targetName } from './roulette-text';
 import type { TurnWord } from './strategy-text';
@@ -19,23 +20,28 @@ export interface GameWords {
   readonly noneCommitted: string;
   readonly noWagers: string;
   readonly status: (view: PermittedView) => string;
-  readonly scriptedOutcome: (outcome: ScriptedOutcome, open: boolean) => string;
+  readonly scriptedOutcome: (outcome: ScriptedOutcome, atDecision: boolean) => string;
 }
 
 const blackjackTarget = (target: string) => (target === INSURANCE_TARGET ? 'insurance' : 'your hand');
 
 // Spec 3 Lessons › Structure (worked examples); Spec 1 Counting (Hi-Lo); #152
-const RANK_SHORT = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
 const SHOE_CARDS = BLACKJACK_RULES.decks * 52;
 
-function blackjackOutcome(outcome: ScriptedOutcome, open: boolean): string {
+function blackjackOutcome(outcome: ScriptedOutcome, atDecision: boolean): string {
   if (!('dealt' in outcome)) return '';
-  const rank = (value: number) => RANK_SHORT[value - 1] ?? String(value);
-  const [first, up, second] = outcome.dealt;
-  const visible = open ? [first, up, second] : outcome.dealt;
-  const parts = outcome.shown.length > 0 ? [`Already out of the shoe: ${outcome.shown.map(rank).join(', ')}.`] : [];
-  parts.push(open ? `You have ${rank(first ?? 0)} and ${rank(second ?? 0)}; the dealer shows ${up === 1 ? 'an ace' : up === 8 ? 'an 8' : `a ${rank(up ?? 0)}`}.` : `Dealt in order: ${outcome.dealt.map(rank).join(', ')}.`);
-  const running = [...outcome.shown, ...visible].reduce<number>((sum, value) => (value === undefined ? sum : sum + hiLoTag({ deck: 0, rank: value, suit: 'spades' })), 0);
+  const cards = (ranks: readonly Rank[]): Card[] => ranks.map((rank) => ({ deck: 0, rank, suit: 'spades' }));
+  const dealt = cards(outcome.dealt);
+  const [first, up, second] = dealt;
+  const visible = atDecision ? [first, up, second].filter((card) => card !== undefined) : dealt;
+  const parts = outcome.shown.length > 0 ? [`Already out of the shoe: ${cards(outcome.shown).map(cardRank).join(', ')}.`] : [];
+  parts.push(
+    atDecision && first && up && second
+      ? `You have ${cardRank(first)} and ${cardRank(second)}; the dealer shows ${upName(up)}.`
+      : `Dealt in order: ${dealt.map(cardRank).join(', ')}.`,
+  );
+  if (atDecision && outcome.shown.length === 0) return parts.join(' ');
+  const running = [...cards(outcome.shown), ...visible].reduce((sum, card) => sum + hiLoTag(card), 0);
   const count = countOf({ running, remaining: SHOE_CARDS - outcome.shown.length - outcome.dealt.length });
   parts.push(`Running count ${signed(count.running)}, ${count.decks} decks left: true count ${signed(count.trueCount)}.`);
   return parts.join(' ');

@@ -5,18 +5,22 @@ import {
   canonicalShoe,
   createActivity,
   explainStrategyBets,
+  hiLoTag,
   RANDOM_PROTOCOL_VERSION,
   ODDS_CAPS,
+  referenceCount,
   strategyPlay,
   type ActivityState,
   type BlackjackActivityState,
   type Command,
   type CrapsActivityState,
+  type DeviationPlay,
   type DomainFact,
   type Explanation,
   type GameId,
   type OddsCap,
   type PlayExplanation,
+  type PlayChoice,
   type PlayMove,
   type Rank,
   type RouletteActivityState,
@@ -25,14 +29,14 @@ import {
   type Wager,
 } from '@tableside/engine';
 
-import { basicStrategy, BLACKJACK_PRESETS, playingDeviations, type BlackjackPreset, type CardValue } from './blackjack/reference';
+import { basicStrategy, BLACKJACK_PRESETS, playingDeviations, type BlackjackPreset, type CardValue, type DeviationAction } from './blackjack/reference';
 import { blackjackRules } from './blackjack/rules';
 import { BLACKJACK_MODES, BLACKJACK_REFERENCE_IDENTITY, blackjackStrategy, countingMode, type BlackjackMode } from './blackjack/strategies';
 import { CRAPS_STRATEGIES } from './craps-strategies';
 import { standardCraps } from './craps';
 import { ROULETTE_PRESETS } from './roulette';
 import { ROULETTE_STRATEGIES } from './roulette-strategies';
-import type { ScriptedChoice } from './worked-examples';
+import type { ScriptedChoice, ScriptedResponse } from './worked-examples';
 
 export interface ScriptedTurn {
   readonly wagers: readonly Wager[];
@@ -93,7 +97,7 @@ interface Stage {
   stack(state: ActivityState, outcome: ScriptedOutcome): ActivityState;
   // #152
   readonly definition?: (example: StrategyStepExample) => StrategyDefinition | undefined;
-  readonly replayTurn?: (state: ActivityState, turn: ScriptedTurn, open: boolean) => ActivityState;
+  readonly replayTurn?: (state: ActivityState, turn: ScriptedTurn, atDecision: boolean) => ActivityState;
 }
 
 const identity = { activityId: 'worked-example', owner: 'worked-example', device: 'build' } as const;
@@ -180,18 +184,25 @@ const BLACKJACK_STAGE: Stage = {
     if (!isBlackjackOutcome(outcome)) throw new Error('a blackjack turn stacks cards');
     return stackShoe(state as BlackjackActivityState, outcome);
   },
-  replayTurn: (state, turn, open) => {
-    const begun = send(BLACKJACK_STAGE.stack(place(state, turn.wagers), turn.outcome), { kind: 'begin-turn' });
+  replayTurn: (state, turn, atDecision) => {
+    if (!isBlackjackOutcome(turn.outcome)) throw new Error('a blackjack turn stacks cards');
+    const outcome = turn.outcome;
+    const stacked = BLACKJACK_STAGE.stack(place(state, turn.wagers), outcome) as BlackjackActivityState;
+    const begun = send(stacked, { kind: 'begin-turn' });
     if (corrected(begun.facts)) throw new Error(`the scripted bet (${diagnosticBets(turn.wagers)}) does not follow the strategy`);
     let current = begun.state;
-    if (open) return current;
-    for (let decision = 0; decision < MAX_SCRIPTED_DECISIONS; decision++) {
-      if (current.phase === 'revealing-outcome') return send(current, { kind: 'settle-turn' }).state;
+    for (let decision = 0; !atDecision && current.phase !== 'revealing-outcome'; decision++) {
       const command = strategyPlay(current);
-      if (!command) throw new Error(`the scripted round stops at a ${current.phase} the strategy can't play`);
+      if (!command || decision === MAX_SCRIPTED_DECISIONS) throw new Error(`the scripted round stops at a ${current.phase} the strategy can't play`);
       current = send(current, command).state;
     }
-    throw new Error('the scripted round never finishes');
+    const used = (current as BlackjackActivityState).shoe!.next - stacked.shoe!.next;
+    if (used !== outcome.dealt.length) throw new Error(`the scripted round deals ${outcome.dealt.length} cards but uses ${used}`);
+    const visible = atDecision ? [outcome.dealt[0]!, outcome.dealt[1]!, outcome.dealt[2]!] : outcome.dealt;
+    const scripted = [...outcome.shown, ...visible].reduce((sum, rank) => sum + hiLoTag({ deck: 0, rank, suit: 'spades' }), 0);
+    const engine = referenceCount(current as BlackjackActivityState);
+    if (engine.running !== scripted) throw new Error(`the scripted cards count ${scripted}, but the engine's running count is ${engine.running}`);
+    return atDecision ? current : send(current, { kind: 'settle-turn' }).state;
   },
 };
 
@@ -268,21 +279,27 @@ function betProblems(example: StrategyStepExample, state: ActivityState, definit
       problems.push(`${label}: does not replay through the engine: ${error instanceof Error ? error.message : String(error)}`);
       continue;
     }
-    const correct = correction === undefined;
-    if (response.correct !== correct) problems.push(`${label}: scripted as ${response.correct ? 'correct' : 'incorrect'}, but the engine marks it ${correct ? 'correct' : 'incorrect'}`);
     if (correction && canonicalJson(correction) !== replayed) problems.push(`${label}: the engine's correction differs from its prescription`);
-    const scripted = canonicalJson(response.explanation);
-    if (scripted !== replayed) problems.push(`${label}: the scripted explanation ${scripted} differs from the engine's ${replayed}`);
-    if (response.note !== null && !response.note.trim()) problems.push(`${label}: an empty note is written as null`);
+    problems.push(...responseProblems(label, response, correction === undefined, replayed));
   }
-  if (example.choices.filter((choice) => choice.response.correct).length !== 1) problems.push('a worked example has exactly one correct choice');
+  return [...problems, ...oneCorrect(example)];
+}
+
+function responseProblems(label: string, response: ScriptedResponse<StrategyStepExplanation>, correct: boolean, replayed: string): string[] {
+  const problems: string[] = [];
+  if (response.correct !== correct) problems.push(`${label}: scripted as ${response.correct ? 'correct' : 'incorrect'}, but the engine marks it ${correct ? 'correct' : 'incorrect'}`);
+  const scripted = canonicalJson(response.explanation);
+  if (scripted !== replayed) problems.push(`${label}: the scripted explanation ${scripted} differs from the engine's ${replayed}`);
+  if (response.note !== null && !response.note.trim()) problems.push(`${label}: an empty note is written as null`);
   return problems;
 }
+
+const oneCorrect = (example: StrategyStepExample) => (example.choices.filter((choice) => choice.response.correct).length === 1 ? [] : ['a worked example has exactly one correct choice']);
 
 const moveCommand = (move: PlayMove): Command =>
   move.action === 'insure' ? { kind: 'place-wager', target: 'insurance', amount: move.amount ?? '0' } : { kind: 'play', action: move.action };
 
-// #152; Spec 1 Guided practice (corrections); the certified basic and index files
+// #152; Spec 1 Guided practice
 function playProblems(example: StrategyStepExample, state: ActivityState): readonly string[] {
   const problems: string[] = [];
   const replays = example.choices.map(({ answer, response }) => {
@@ -301,18 +318,33 @@ function playProblems(example: StrategyStepExample, state: ActivityState): reado
   for (const replay of replays) {
     if (!replay) continue;
     const { label, response, correction } = replay;
-    const correct = correction === undefined;
-    if (response.correct !== correct) problems.push(`${label}: scripted as ${response.correct ? 'correct' : 'incorrect'}, but the engine marks it ${correct ? 'correct' : 'incorrect'}`);
     if (correction && canonicalJson(correction) !== replayed) problems.push(`${label}: the engine explains this decision differently for another choice`);
-    const scripted = canonicalJson(response.explanation);
-    if (scripted !== replayed) problems.push(`${label}: the scripted explanation ${scripted} differs from the engine's ${replayed}`);
-    if (response.note !== null && !response.note.trim()) problems.push(`${label}: an empty note is written as null`);
+    problems.push(...responseProblems(label, response, correction === undefined, replayed));
   }
-  if (example.choices.filter((choice) => choice.response.correct).length !== 1) problems.push('a worked example has exactly one correct choice');
-  return [...problems, ...certifiedProblems(engine, example.table as BlackjackPreset)];
+  return [...problems, ...oneCorrect(example), ...certifiedProblems(engine, example.table as BlackjackPreset)];
 }
 
-// Spec 3 Lessons › Structure (worked examples): prescriptions match the certified reference
+const CERTIFIED_PLAY: Readonly<Record<DeviationAction, DeviationPlay>> = {
+  hit: 'hit',
+  stand: 'stand',
+  double: 'double',
+  split: 'split',
+  surrender: 'surrender',
+  insure: 'insure',
+  decline: 'decline',
+  basicWithoutSurrender: 'basic',
+};
+const DEVIATION_CHOICE: Readonly<Record<Exclude<DeviationPlay, 'basic'>, PlayChoice>> = {
+  hit: 'hit',
+  stand: 'stand',
+  double: 'double',
+  split: 'split',
+  surrender: 'surrender',
+  insure: 'insure',
+  decline: 'decline-insurance',
+};
+
+// Spec 3 Lessons › Structure (worked examples)
 function certifiedProblems(explanation: PlayExplanation, preset: BlackjackPreset): readonly string[] {
   const problems: string[] = [];
   const { cell, deviation } = explanation;
@@ -322,7 +354,14 @@ function certifiedProblems(explanation: PlayExplanation, preset: BlackjackPreset
   }
   if (deviation) {
     const row = playingDeviations(preset).find((candidate) => `${candidate.dealerRule} ${candidate.situation}` === deviation.id);
-    if (row?.threshold !== deviation.threshold) problems.push(`the engine's index for ${deviation.situation} is not the certified ${preset} value`);
+    const certified = row && [row.threshold, row.direction === 'deviateAtOrAbove' ? 'deviate-at-or-above' : 'basic-at-or-above', CERTIFIED_PLAY[row.atOrAbove], CERTIFIED_PLAY[row.below]];
+    if (canonicalJson(certified) !== canonicalJson([deviation.threshold, deviation.direction, deviation.atOrAbove, deviation.below])) {
+      problems.push(`the engine's index for ${deviation.situation} is not the certified ${preset} row`);
+    }
+  }
+  const taught = deviation && deviation.play !== 'basic' ? DEVIATION_CHOICE[deviation.play] : cell?.play;
+  if (explanation.unavailable.length === 0 && taught !== undefined && taught !== explanation.prescribed.action) {
+    problems.push(`the engine prescribes ${explanation.prescribed.action}, but the certified ${preset} reference teaches ${taught}`);
   }
   return problems;
 }

@@ -1,5 +1,5 @@
 // Spec 3 Audio and haptics; Learn, Check and assistance › Answer accepted; #132
-import type { WorkedExample } from '@tableside/definitions';
+import type { StrategyStepAnswer, WorkedExample } from '@tableside/definitions';
 import type { ChallengeFact, ChallengeView } from '@tableside/engine';
 
 import type { TrainingService, TrainingSnapshot } from '@/training/service';
@@ -12,7 +12,7 @@ export const CONTENT_SHOWN_CUE: CueName = 'card-dealt';
 export const learnAnswerCue = (correct: boolean): CueName => (correct ? 'correct' : 'incorrect');
 
 // Spec 3 Amendment 1 B4; #155, #152
-export const EXAMPLE_CUES: Readonly<Record<WorkedExample['kind'], { readonly shown: CueName | null; answer(correct: boolean, asks: 'bets' | 'play' | null): CueName[] }>> = {
+export const EXAMPLE_CUES: Readonly<Record<WorkedExample['kind'], { readonly shown: CueName | null; answer(correct: boolean, asks: StrategyStepAnswer['kind'] | null): CueName[] }>> = {
   'card-value': { shown: CONTENT_SHOWN_CUE, answer: (correct) => [learnAnswerCue(correct)] },
   'strategy-step': {
     shown: null,

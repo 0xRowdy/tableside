@@ -104,7 +104,7 @@ describe('blackjack strategy-step worked examples', () => {
     }
   });
 
-  // docs/research/blackjack-lessons.md Deviations (S17 16 vs T: stand at +1 or higher)
+  // docs/research/blackjack-lessons.md Deviations
   it('teach standing on 16 against a 10 at a supplied true count of +1, with no surrender at the table', () => {
     expect(SIXTEEN.table).toBe('S17_noLS');
     expect(SIXTEEN.choices.map(({ answer, response }) => [answer, response.correct])).toEqual([
@@ -122,6 +122,16 @@ describe('blackjack strategy-step worked examples', () => {
     ]);
     const fewerLowCards = { ...SIXTEEN, turns: [{ ...SIXTEEN.turns[0]!, outcome: { shown: [2, 3], dealt: [9, 10, 7, 9] } }] } as StrategyStepExample;
     expect(strategyStepProblems(fewerLowCards)).toContain('worked example, choice stand: scripted as correct, but the engine marks it incorrect');
+  });
+
+  it('report a scripted round that uses more or fewer cards than it deals', () => {
+    const turn = (dealt: number[], shown: number[] = []) => [{ wagers: [{ target: 'hand-1', amount: '10' }], outcome: { shown, dealt } }] as StrategyStepExample['turns'];
+    expect(strategyStepProblems({ ...BET_SCHEDULE_EXAMPLE, turns: turn([2, 6, 3, 5, 4, 2, 4, 2]) })).toEqual([
+      'the worked example does not replay through the engine: the scripted round deals 8 cards but uses 10',
+    ]);
+    expect(strategyStepProblems({ ...SIXTEEN, turns: turn([9, 10, 7, 9, 5], [2, 3, 4, 5, 6, 2, 3, 4]) })).toEqual([
+      'the worked example does not replay through the engine: the scripted round deals 5 cards but uses 4',
+    ]);
   });
 
   it('report an unknown mode or table, a bet schedule without a counting mode, mixed bet and play answers, or a play with no hand dealt', () => {

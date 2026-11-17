@@ -135,10 +135,10 @@ export const strategyChoiceText = (game: GameId, answer: StrategyStepAnswer) =>
 export const scriptedResponseLine = (name: string, explanation: StrategyStepExplanation, game: GameId) =>
   'kind' in explanation && explanation.kind === 'play' ? playHeadline(capitalizeFirst(name), explanation) : prescriptionLine(capitalizeFirst(name), explanation as Explanation, GAME_WORDS[game]);
 
-export function scriptedTurnLine(game: GameId, turn: ScriptedTurn, index: number, open = false): string {
+export function scriptedTurnLine(game: GameId, turn: ScriptedTurn, index: number, atDecision = false): string {
   const words = GAME_WORDS[game];
   const wagers = turn.wagers.length > 0 ? betsText(turn.wagers, words) : 'no bets';
-  return `${words.Turn} ${index + 1}: ${wagers}. ${words.scriptedOutcome(turn.outcome, open)}`;
+  return `${words.Turn} ${index + 1}: ${wagers}. ${words.scriptedOutcome(turn.outcome, atDecision)}`;
 }
 
 // Spec 3 Lessons › Structure (Handoff); S3-12 pX6CV, S3-13 ZBpF3; #145
