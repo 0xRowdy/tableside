@@ -5,7 +5,15 @@ import { basename, join } from 'node:path';
 
 import {
   advanceActivity,
+  advanceChallenge,
   canonicalJson,
+  challengeAttemptRecord,
+  createChallenge,
+  encodeChallengeCheckpoint,
+  readChallengeView,
+  type ChallengeCommand,
+  type ChallengeSpecification,
+  type ChallengeState,
   completedPracticeRecord,
   createActivity,
   encodeCheckpoint,
@@ -25,6 +33,8 @@ import { STORE_SCHEMA_VERSION } from '../src/account/store-schema';
 import { dumpDatabase } from '../src/account/testing/database-dump';
 import { nodeSqlCipherDriver } from '../src/account/testing/node-sqlcipher';
 import type { RecordedDatabase, RecordedStoreSchema } from '../src/account/testing/recorded';
+import { LAST_SETUP } from '../src/training/service';
+import { CHALLENGE_CHARGE } from '../src/training/store';
 
 const IDENTITY: StoreIdentity = { environment: 'production', accountId: 'recorded-account', installationId: 'recorded-installation' };
 const KEY = '5e'.repeat(32);
@@ -150,6 +160,62 @@ function historyDatabase(): Promise<RecordedDatabase> {
   });
 }
 
+// #158
+async function playAttempt(store: SqliteActivityStore, specification: ChallengeSpecification, random: RandomStreamIdentity, commands: readonly ChallengeCommand[]): Promise<ChallengeState> {
+  let state = createChallenge(specification, random);
+  const admission = { provenance: 'recorded', meteringBasis: 'challenge-attempt' } as const;
+  await store.createAttempt({ attemptId: specification.attemptId, admission, specification, random, checkpoint: encodeChallengeCheckpoint(state), createdAt: CREATED_AT });
+  for (const [index, command] of commands.entries()) {
+    const result = advanceChallenge(state, { sequence: state.sequence, commandId: `${specification.attemptId}/${state.sequence}`, command });
+    if (result.status !== 'committed') throw new Error(`${specification.attemptId}: refused ${JSON.stringify(command)}`);
+    const charge = index === 0 ? { effect: { effectId: { grant: 'recorded', activity: specification.attemptId, sequence: 0 }, kind: CHALLENGE_CHARGE, amount: '1' }, chargedAt: CREATED_AT } : null;
+    const outcome = await store.commitAttemptTransition({
+      attemptId: specification.attemptId,
+      priorSequence: state.sequence,
+      checkpoint: encodeChallengeCheckpoint(result.state),
+      receipt: result.receipt,
+      facts: result.facts,
+      charge,
+    });
+    if (outcome.status !== 'committed') throw new Error(`${specification.attemptId}: ${outcome.status}`);
+    state = result.state;
+  }
+  return state;
+}
+
+function challengeDatabase(): Promise<RecordedDatabase> {
+  const recorded = build!.challenges?.find((challenge) => challenge.phase === 'question');
+  if (!recorded) throw new Error('the engine recording has no challenge waiting for an answer');
+  const commands = (JSON.parse(recorded.checkpoint) as { receipts: { command: string }[] }).receipts.map((receipt) => JSON.parse(receipt.command) as ChallengeCommand);
+  const specificationOf = (attemptId: string) => ({ ...(recorded.specification as ChallengeSpecification), attemptId, owner: IDENTITY.accountId, device: IDENTITY.installationId });
+  const unfinished = specificationOf('attempt-2');
+  return record('card values, an attempt waiting for an answer after a finished one', null, async (store) => {
+    const finished = await playAttempt(store, specificationOf('attempt-1'), recorded.random as RandomStreamIdentity, [...commands, ...(recorded.continuation as ChallengeCommand[])]);
+    if (finished.phase !== 'ended') throw new Error('the recorded continuation did not end the attempt');
+    await store.recordAttempt(
+      challengeAttemptRecord(finished, {
+        installation: IDENTITY.installationId,
+        startedAt: CREATED_AT,
+        endedAt: CREATED_AT + 120_000,
+        interrupted: false,
+        performanceMs: null,
+        meteringBasis: 'challenge-attempt',
+        allowancePolicyVersion: null,
+      }),
+    );
+    await playAttempt(store, unfinished, recorded.random as RandomStreamIdentity, commands);
+    await store.writePreference(LAST_SETUP, JSON.stringify({ category: 'card-values', variant: 'learn' }));
+  }).then((database) => ({ ...database, unfinishedAttempt: { attemptId: unfinished.attemptId, phase: 'question', position: readChallengeView(createAndReplay(unfinished, recorded.random as RandomStreamIdentity, commands)).position } }));
+}
+
+function createAndReplay(specification: ChallengeSpecification, random: RandomStreamIdentity, commands: readonly ChallengeCommand[]): ChallengeState {
+  return commands.reduce<ChallengeState>((state, command) => {
+    const result = advanceChallenge(state, { sequence: state.sequence, commandId: `${specification.attemptId}/${state.sequence}`, command });
+    if (result.status !== 'committed') throw new Error('refused');
+    return result.state;
+  }, createChallenge(specification, random));
+}
+
 const exportName = `RECORDED_STORE_SCHEMA_${STORE_SCHEMA_VERSION}`;
 const RECORDED = join(__dirname, '../src/account/testing/recorded');
 const target = join(RECORDED, `store-schema-${STORE_SCHEMA_VERSION}.ts`);
@@ -158,7 +224,7 @@ if (basename(target) in released) throw new Error(`${target} is a released schem
 if (existsSync(target) && !process.argv.includes('--replace')) throw new Error(`${target} exists: pass --replace to re-record this unreleased schema`);
 
 async function main(): Promise<void> {
-  const databases = [...(await Promise.all(build!.checkpoints.map(unfinishedDatabase))), await historyDatabase()];
+  const databases = [...(await Promise.all(build!.checkpoints.map(unfinishedDatabase))), await historyDatabase(), await challengeDatabase()];
   const recording: RecordedStoreSchema = { storeSchema: STORE_SCHEMA_VERSION, engine: ENGINE_VERSION, stateSchema: STATE_SCHEMA_VERSION, databases };
   writeFileSync(
     target,

@@ -5,8 +5,17 @@ import { fileURLToPath } from 'node:url';
 
 import {
   advanceActivity,
+  advanceChallenge,
   canonicalJson,
+  challengeResults,
   createActivity,
+  createChallenge,
+  encodeChallengeCheckpoint,
+  readChallengeView,
+  type ChallengeCommand,
+  type ChallengeFact,
+  type ChallengeSpecification,
+  type ChallengeState,
   encodeCheckpoint,
   ENGINE_VERSION,
   readPermittedView,
@@ -22,7 +31,8 @@ import { BJ_SPEC, BJ_STREAM } from '../test/blackjack.fixtures';
 import { CRAPS_SPEC } from '../test/craps.cases';
 import { PASS_WITH_ODDS } from '../test/craps-strategy.fixtures';
 import { PI, ZERO } from '../test/fixtures';
-import type { RecordedBuild, RecordedCheckpoint } from '../test/recorded';
+import type { RecordedBuild, RecordedChallenge, RecordedCheckpoint } from '../test/recorded';
+import { LEARN, seed } from '../test/challenge.fixtures';
 import { TEST_COUNTING_SCHEDULE } from '../test/blackjack-strategy.fixtures';
 import { DOUBLING, FLAT_EVEN_MONEY } from '../test/strategy.fixtures';
 
@@ -119,13 +129,67 @@ function record(scenario: Scenario): RecordedCheckpoint {
   };
 }
 
+// #158
+interface ChallengeScenario {
+  readonly name: string;
+  readonly specification: ChallengeSpecification;
+  readonly random: RandomStreamIdentity;
+  readonly commands: readonly ChallengeCommand[];
+}
+
+const CHALLENGE_SCENARIOS: ChallengeScenario[] = [
+  { name: 'card values Learn, created and not yet begun', specification: LEARN, random: seed(1), commands: [] },
+  { name: 'card values Learn, a card waiting for its answer', specification: LEARN, random: seed(1), commands: [{ kind: 'begin' }, { kind: 'answer', value: 1 }, { kind: 'next-item' }] },
+  { name: 'card values Learn, a wrong answer explained', specification: LEARN, random: seed(1), commands: [{ kind: 'begin' }, { kind: 'answer', value: 1 }, { kind: 'next-item' }, { kind: 'answer', value: 1 }] },
+];
+
+function advanceAttempt(state: ChallengeState, command: ChallengeCommand): { state: ChallengeState; facts: readonly ChallengeFact[] } {
+  const result = advanceChallenge(state, { sequence: state.sequence, commandId: `record-${state.sequence}`, command });
+  if (result.status !== 'committed') throw new Error(`refused ${JSON.stringify(command)}: ${JSON.stringify(result)}`);
+  return result;
+}
+
+function nextChallengeCommand(state: ChallengeState): ChallengeCommand {
+  const view = readChallengeView(state);
+  if (view.legalCommands.includes('begin')) return { kind: 'begin' };
+  if (view.legalCommands.includes('next-item')) return { kind: 'next-item' };
+  return { kind: 'answer', value: 0 };
+}
+
+function recordChallenge(scenario: ChallengeScenario): RecordedChallenge {
+  let state = createChallenge(scenario.specification, scenario.random);
+  for (const command of scenario.commands) state = advanceAttempt(state, command).state;
+  const checkpoint = encodeChallengeCheckpoint(state);
+  const phase = state.phase;
+  const continuation: ChallengeCommand[] = [];
+  const facts: ChallengeFact[] = [];
+  while (state.phase !== 'ended') {
+    const command = nextChallengeCommand(state);
+    const next = advanceAttempt(state, command);
+    continuation.push(command);
+    facts.push(...next.facts);
+    state = next.state;
+  }
+  return {
+    name: scenario.name,
+    category: scenario.specification.content.category,
+    phase,
+    specification: JSON.parse(canonicalJson(scenario.specification)),
+    random: JSON.parse(canonicalJson(scenario.random)),
+    checkpoint,
+    continuation,
+    facts: canonicalJson(facts),
+    results: canonicalJson(challengeResults(state)),
+  };
+}
+
 const exportName = `RECORDED_ENGINE_${ENGINE_VERSION.replaceAll('.', '_')}_SCHEMA_${STATE_SCHEMA_VERSION}`;
 const target = fileURLToPath(new URL(`../test/recorded/engine-${ENGINE_VERSION}-schema-${STATE_SCHEMA_VERSION}.ts`, import.meta.url));
 const released = JSON.parse(readFileSync(new URL('../test/recorded/released.json', import.meta.url), 'utf8')) as Record<string, string>;
 if (basename(target) in released) throw new Error(`${target} is a released build's recording: it is never rewritten`);
 if (existsSync(target) && !process.argv.includes('--replace')) throw new Error(`${target} exists: pass --replace to re-record this unreleased build`);
 
-const build: RecordedBuild = { engine: ENGINE_VERSION, schema: STATE_SCHEMA_VERSION, checkpoints: SCENARIOS.map(record) };
+const build: RecordedBuild = { engine: ENGINE_VERSION, schema: STATE_SCHEMA_VERSION, checkpoints: SCENARIOS.map(record), challenges: CHALLENGE_SCENARIOS.map(recordChallenge) };
 writeFileSync(
   target,
   '// docs/development.md Releases: recorded checkpoints and the quarantine list\n' +
