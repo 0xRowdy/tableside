@@ -1,4 +1,4 @@
-// Spec 3 Modules › Training service; Training service interface; #158
+// Spec 3 Modules › Training service; Training service interface; #158, #132
 
 import { CHALLENGE_CONTENT } from '@tableside/definitions';
 import { CHALLENGE_VARIANTS, type ChallengeAttemptRecord, type ChallengeCategory, type ChallengeVariant } from '@tableside/engine';
@@ -38,7 +38,7 @@ export type TrainingSnapshot =
 
 export type { LearnerCommand, StartProblem };
 
-const READY: Readonly<Partial<Record<CatalogCategory, readonly ChallengeVariant[]>>> = { 'card-values': ['learn'] };
+const READY: Readonly<Partial<Record<CatalogCategory, readonly ChallengeVariant[]>>> = { 'card-values': ['learn', 'check'] };
 
 
 // Spec 3 Amendment 1 C7

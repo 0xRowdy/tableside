@@ -24,7 +24,7 @@ export class FeedbackService {
     readonly settings: DeviceSettings,
   ) {}
 
-  // TODO(spec 3)
+  // Spec 3 Audio and haptics
   setCheckActive(active: boolean): void {
     this.checkActive = active;
   }
