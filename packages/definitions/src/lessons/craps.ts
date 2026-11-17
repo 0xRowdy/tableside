@@ -1,6 +1,5 @@
-// Spec 3 Lessons › Inventory (standard craps), Content requirements; Amendment 1 C11; #48; #154
-// Every fact here is recorded in docs/research/craps-lessons.md: rules and payouts from the engine,
-// stakes, caps and resets from ../craps-strategies.ts, house edges from crapsHouseEdge (../craps.ts).
+// Spec 3 Lessons › Inventory, Content requirements; Amendment 1 C11; #154
+// docs/research/craps-lessons.md
 import type { StrategyDefinition } from '@tableside/engine';
 
 import { DONT_PASS_WITH_LAY_ODDS, FLAT_PLACE_6_8, PASS_WITH_ODDS, PRESS_AND_COLLECT_6_8, THREE_POINT_MOLLY } from '../craps-strategies';
@@ -52,7 +51,7 @@ export const CRAPS_LESSONS: Readonly<Record<string, CrapsLesson>> = {
       {
         heading: 'Placing a bet',
         paragraphs: [
-          "Tap a spot on the felt, or open the bet list to see every wager with what it pays and its house edge. Choose one, set the total stake with − and +, and place it. A draft isn't on the table until you place it.",
+          "Tap a spot on the felt to add a chip to the pass line, don't pass, come, odds or the field. For place, buy, lay, hardways and propositions, open Numbers and center bets. That bet selector lists each wager with what it pays and its house edge: choose one, set the total stake with − and +, and place it. A draft isn't on the table until you place it.",
           "Some bets become contracts. Once a point is set, a pass line bet stays until it wins or loses, and you can't lower it or take it down, though you can add odds behind it. Place bets aren't contracts: you can change or remove them between rolls. “Why locked?” on a bet explains which kind it is.",
         ],
       },

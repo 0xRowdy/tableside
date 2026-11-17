@@ -1,4 +1,4 @@
-// Spec 3 Lessons › Inventory, Content requirements, Structure; Amendment 1 C11; Testing Decisions › Build-time check; #154
+// Spec 3 Lessons › Content requirements; Amendment 1 C11; #154
 import { ODDS_CAPS } from '@tableside/engine';
 import { describe, expect, it } from 'vitest';
 
