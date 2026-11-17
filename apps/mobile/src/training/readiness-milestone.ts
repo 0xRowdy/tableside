@@ -2,7 +2,7 @@
 
 import { canonicalJson, type ChallengeGroupKey } from '@tableside/engine';
 
-// Spec 2 registry record type; #148 syncs it with its barrier
+// Spec 2 registry; #148
 export const READINESS_MILESTONE_RECORD_TYPE = 'readiness-milestone';
 
 export const READINESS_MILESTONE_RECORD_VERSION = 1 as const;
@@ -17,4 +17,4 @@ export interface ReadinessMilestoneRecord {
 }
 
 // Spec 3 Comparison groups (Readiness streak); Amendment 1 B3
-export const milestoneGroup = (milestone: Pick<ReadinessMilestoneRecord, 'installation' | 'groupKey'>): string => `${milestone.installation}/${canonicalJson(milestone.groupKey)}`;
+export const milestoneSlot = (milestone: Pick<ReadinessMilestoneRecord, 'installation' | 'groupKey'>): string => `${milestone.installation}/${canonicalJson(milestone.groupKey)}`;

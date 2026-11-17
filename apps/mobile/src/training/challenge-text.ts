@@ -43,7 +43,7 @@ export interface AllowanceCopy {
   readonly banner: { readonly title: string; readonly detail: string | null; readonly action: AllowanceAction | null };
   readonly setup: { readonly text: string; readonly action: AllowanceAction | null };
   readonly results: string;
-  // Spec 3 S3-08 nXGFk: what a Learn round uses after a review suggestion; #141
+  // Spec 3 S3-08 nXGFk; #141
   readonly practice: string;
 }
 

@@ -3,7 +3,7 @@
 import { CATALOG_CATEGORIES, type CatalogCategory } from '@tableside/definitions';
 import { canonicalJson, CHALLENGE_METRICS, type ChallengeAttemptRecord, type ChallengeGroupKey, type ChallengeMetric, type MetricResult } from '@tableside/engine';
 
-import { milestoneGroup, READINESS_MILESTONE_RECORD_VERSION, type ReadinessMilestoneRecord } from './readiness-milestone';
+import { milestoneSlot, READINESS_MILESTONE_RECORD_VERSION, type ReadinessMilestoneRecord } from './readiness-milestone';
 
 // Spec 3 Comparison groups (local and accepted attempts)
 export interface ProgressAttempt {
@@ -30,7 +30,7 @@ export interface GroupProgress {
   readonly completed: boolean;
   readonly bests: readonly PersonalBest[];
   readonly fastest: Fastest | null;
-  // Spec 3 Comparison groups (Milestones): the group's earliest milestone from any installation
+  // Spec 3 Comparison groups (Milestones)
   readonly milestone: EarnedMilestone | null;
 }
 
@@ -65,7 +65,7 @@ export interface Recommendation {
   readonly enter: 'observe' | null;
 }
 
-// Spec 3 Comparison groups (Milestones): earned on this attempt, or kept with a review suggestion
+// Spec 3 Comparison groups (Milestones)
 export type ReadinessOutcome = { readonly kind: 'earned'; readonly next: CatalogCategory | null } | { readonly kind: 'kept'; readonly earnedAt: number };
 
 // Spec 3 Comparison groups › Milestones; Audio and haptics (cue 16)
@@ -78,12 +78,14 @@ export interface AttemptEarned extends PersonalBestEarned {
   readonly readiness: ReadinessOutcome | null;
 }
 
-export const NOTHING_EARNED: AttemptEarned = { bests: [], fastest: null, readiness: null };
+const NO_PERSONAL_BEST: PersonalBestEarned = { bests: [], fastest: null };
+
+export const NOTHING_EARNED: AttemptEarned = { ...NO_PERSONAL_BEST, readiness: null };
 
 export const setsPersonalBest = (earned: PersonalBestEarned) => earned.bests.length > 0 || earned.fastest !== null;
 
 // Spec 3 Comparison groups (Milestones); Audio and haptics (cue 16)
-export const earnsCue = (earned: AttemptEarned) => setsPersonalBest(earned) || earned.readiness?.kind === 'earned';
+export const earnsRecord = (earned: AttemptEarned) => setsPersonalBest(earned) || earned.readiness?.kind === 'earned';
 
 export const comparisonGroup = (key: ChallengeGroupKey): string => canonicalJson(key);
 
@@ -108,8 +110,8 @@ export function progressProjection(attempts: readonly ProgressAttempt[], milesto
   };
 }
 
-// Spec 3 Comparison groups (Milestones): what this attempt's results show about readiness
-export function readinessEarned(attempts: readonly ProgressAttempt[], milestones: readonly ProgressMilestone[], attemptId: string): ReadinessOutcome | null {
+// Spec 3 Comparison groups (Milestones)
+export function readinessOutcome(attempts: readonly ProgressAttempt[], milestones: readonly ProgressMilestone[], attemptId: string): ReadinessOutcome | null {
   const record = distinct(attempts).find((entry) => entry.record.attemptId === attemptId)?.record;
   if (!record) return null;
   const records = milestones.map((milestone) => milestone.record);
@@ -118,8 +120,7 @@ export function readinessEarned(attempts: readonly ProgressAttempt[], milestones
     return { kind: 'earned', next: next === catalogCategory(record.groupKey) ? null : next };
   }
   const kept = earliestMilestones(milestones).get(comparisonGroup(record.groupKey));
-  const slipped = record.endingReason === 'completed' && record.groupKey.assistanceClass === 'unassisted-check' && !meetsReadinessThreshold(record);
-  return kept && slipped ? { kind: 'kept', earnedAt: kept.earnedAt } : null;
+  return kept && belowReadinessThreshold(record) ? { kind: 'kept', earnedAt: kept.earnedAt } : null;
 }
 
 // Spec 3 Comparison groups (Recommendations)
@@ -141,13 +142,13 @@ export function recommendation(milestones: readonly ReadinessMilestoneRecord[]):
   return { category: after, reason: { kind: 'beyond', suggestions }, enter: null };
 }
 
-// Spec 3 Comparison groups: a table group key marks table counting
+// Spec 3 Comparison groups
 export const catalogCategory = (key: Pick<ChallengeGroupKey, 'category' | 'table'>): CatalogCategory => (key.table ? 'table' : key.category);
 
 function earliestMilestones(milestones: readonly ProgressMilestone[]): Map<string, EarnedMilestone> {
   const byIdentity = new Map<string, ProgressMilestone>();
   for (const entry of milestones) {
-    const identity = `${milestoneGroup(entry.record)}/${entry.record.attempts.join('/')}`;
+    const identity = `${milestoneSlot(entry.record)}/${entry.record.attempts.join('/')}`;
     const known = byIdentity.get(identity);
     if (!known || (known.local && !entry.local)) byIdentity.set(identity, entry);
   }
@@ -163,7 +164,7 @@ function earliestMilestones(milestones: readonly ProgressMilestone[]): Map<strin
 export function attemptEarned(attempts: readonly ProgressAttempt[], attemptId: string): PersonalBestEarned {
   const all = distinct(attempts).map((entry) => entry.record);
   const record = all.find((candidate) => candidate.attemptId === attemptId);
-  if (record?.endingReason !== 'completed') return { bests: [], fastest: null };
+  if (record?.endingReason !== 'completed') return NO_PERSONAL_BEST;
   const id = comparisonGroup(record.groupKey);
   const group = all.filter((candidate) => candidate.endingReason === 'completed' && comparisonGroup(candidate.groupKey) === id);
   const before = group.filter((candidate) => candidate !== record);
@@ -214,7 +215,10 @@ const COUNTING_METRICS: readonly ChallengeMetric[] = ['card-values', 'running-co
 const READINESS_THRESHOLD = 0.95;
 
 // Spec 3 Comparison groups (Readiness streak)
-export function meetsReadinessThreshold(record: ChallengeAttemptRecord): boolean {
+export const belowReadinessThreshold = (record: ChallengeAttemptRecord) =>
+  record.endingReason === 'completed' && record.groupKey.assistanceClass === 'unassisted-check' && !meetsReadinessThreshold(record);
+
+function meetsReadinessThreshold(record: ChallengeAttemptRecord): boolean {
   const tested = COUNTING_METRICS.flatMap((metric) => record.metrics[metric] ?? []).filter((result) => result.total > 0);
   return tested.length > 0 && tested.every((result) => result.correct >= READINESS_THRESHOLD * result.total);
 }

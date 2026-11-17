@@ -79,7 +79,7 @@ export function fastestText(group: GroupProgress): StatText {
   return { label: 'Fastest', value, spoken: value };
 }
 
-export const groupLabel = (group: GroupProgress, stats: readonly StatText[], milestone: string | null = null) =>
+export const groupLabel = (group: GroupProgress, stats: readonly StatText[], milestone: string | null) =>
   [`${groupTitle(group.key)}, ${settingsText(group.key)}`, ...stats.map((stat) => `${stat.label} ${stat.spoken}`), milestone].filter(Boolean).join('. ');
 
 const ENDING: Record<AttemptEndingReason, string> = {
@@ -100,7 +100,7 @@ function whenText(at: number, now: number): string {
 }
 
 // Spec 3 S3-10 OVKkc (attempt history)
-export function historyText({ record, local }: ProgressAttempt, now: number, earnedMilestone = false): { readonly title: string; readonly detail: string; readonly value: string } {
+export function historyText({ record, local }: ProgressAttempt, now: number, earnedMilestone: boolean): { readonly title: string; readonly detail: string; readonly value: string } {
   const { groupKey: key } = record;
   const completed = record.endingReason === 'completed';
   const detail = [

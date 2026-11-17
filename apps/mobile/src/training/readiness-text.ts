@@ -1,28 +1,22 @@
 // Spec 3 S3-01 PDCaD, S3-08 CEb6T, nXGFk, S3-10 OVKkc; Comparison groups; #141
 
-import type { ChallengeAttemptRecord, ChallengeGroupKey } from '@tableside/engine';
+import type { ChallengeGroupKey } from '@tableside/engine';
 
 import { dayText } from '@/account/account-text';
 import { GAME_WORDS } from '@/play/game-words';
 
 import { CATEGORY_TEXT, pacingLabel, scoreText, timerText, variantLabel, type AllowanceCopy } from './challenge-text';
-import { attemptIdentity, catalogCategory, meetsReadinessThreshold, setsPersonalBest, type AttemptEarned, type GroupProgress, type Progress, type Recommendation, type TableStretch } from './progress';
+import { attemptIdentity, catalogCategory, setsPersonalBest, type AttemptEarned, type GroupProgress, type Progress, type Recommendation, type TableStretch } from './progress';
 import type { CatalogCategory } from './service';
 
 const lowerFirst = (text: string) => text.charAt(0).toLowerCase() + text.slice(1);
 
-const MILESTONE_SKILL: Record<CatalogCategory, string> = {
-  'card-values': 'card-values',
-  'running-count': 'running-count',
-  conversion: 'true-count conversion',
-  table: 'table-counting',
-};
-
-const ACCURACY_SKILL: Record<CatalogCategory, string> = {
-  'card-values': 'card-value',
-  'running-count': 'running-count',
-  conversion: 'true-count',
-  table: 'table-counting',
+// Spec 3 S3-01 PDCaD, S3-08 CEb6T, nXGFk
+const READINESS_WORDS: Record<CatalogCategory, { readonly milestone: string; readonly accuracy: string; readonly lesson: string }> = {
+  'card-values': { milestone: 'card-values', accuracy: 'card-value', lesson: 'card values' },
+  'running-count': { milestone: 'running-count', accuracy: 'running-count', lesson: 'running count' },
+  conversion: { milestone: 'true-count conversion', accuracy: 'true-count', lesson: 'true-count conversion' },
+  table: { milestone: 'table-counting', accuracy: 'table-counting', lesson: 'table counting' },
 };
 
 // Spec 3 S3-01 PDCaD
@@ -45,13 +39,13 @@ export function recommendationText({ category, reason, enter }: Recommendation):
       return `${title} is first on the suggested path.`;
     case 'next':
       return [
-        `You earned the ${MILESTONE_SKILL[reason.after]} readiness milestone. ${title} is next on the suggested path.`,
+        `You earned the ${READINESS_WORDS[reason.after].milestone} readiness milestone. ${title} is next on the suggested path.`,
         enter === 'observe' ? 'Start with Observe.' : null,
       ]
         .filter(Boolean)
         .join(' ');
     case 'beyond':
-      return `You earned the ${MILESTONE_SKILL[category]} readiness milestone. To stretch it, try ${orList(reason.suggestions.map((stretch) => STRETCH[stretch]))}.`;
+      return `You earned the ${READINESS_WORDS[category].milestone} readiness milestone. To stretch it, try ${orList(reason.suggestions.map((stretch) => STRETCH[stretch]))}.`;
   }
 }
 
@@ -82,13 +76,10 @@ const bestScore = (group: GroupProgress) => scoreText(group.bests[0]?.result ?? 
 // Spec 3 S3-08 CEb6T, nXGFk
 export const BELOW_THRESHOLD = 'Below 95% this time. That restarts the streak for these settings.';
 
-export const belowThreshold = (record: ChallengeAttemptRecord) =>
-  record.endingReason === 'completed' && record.groupKey.assistanceClass === 'unassisted-check' && !meetsReadinessThreshold(record);
-
 export const MILESTONE_EARNED = 'Readiness milestone earned';
 
 export const milestoneDetail = (key: Pick<ChallengeGroupKey, 'category' | 'table'>) =>
-  `Two unassisted Check attempts in a row at 95% or better, at these settings, on this device. It describes your ${ACCURACY_SKILL[catalogCategory(key)]} accuracy at these settings only.`;
+  `Two unassisted Check attempts in a row at 95% or better, at these settings, on this device. It describes your ${READINESS_WORDS[catalogCategory(key)].accuracy} accuracy at these settings only.`;
 
 // Spec 3 S3-08 CEb6T
 export function milestonePill(earned: AttemptEarned): string | null {
@@ -98,17 +89,11 @@ export function milestonePill(earned: AttemptEarned): string | null {
 
 export const MILESTONE_KEPT = 'Your milestone stays earned';
 
-const LESSON_NAME: Record<CatalogCategory, string> = {
-  'card-values': 'card values',
-  'running-count': 'running count',
-  conversion: 'true-count conversion',
-  table: 'table counting',
-};
 
 export const keptDetail = (key: Pick<ChallengeGroupKey, 'category' | 'table'>, earnedAt: number) =>
-  `You earned the ${ACCURACY_SKILL[catalogCategory(key)]} readiness milestone at these settings on ${dayText(earnedAt)}. A slip never takes it away. To brush up: a Learn ${GAME_WORDS.blackjack.turn}, or the ${LESSON_NAME[catalogCategory(key)]} lesson.`;
+  `You earned the ${READINESS_WORDS[catalogCategory(key)].accuracy} readiness milestone at these settings on ${dayText(earnedAt)}. A slip never takes it away. To brush up: a Learn ${GAME_WORDS.blackjack.turn}, or the ${READINESS_WORDS[catalogCategory(key)].lesson} lesson.`;
 
-export const openLessonLabel = (key: Pick<ChallengeGroupKey, 'category' | 'table'>) => `Open the ${LESSON_NAME[catalogCategory(key)]} lesson`;
+export const openLessonLabel = (key: Pick<ChallengeGroupKey, 'category' | 'table'>) => `Open the ${READINESS_WORDS[catalogCategory(key)].lesson} lesson`;
 export const PRACTICE_IN_LEARN = 'Practice in Learn';
 
 export const nextOnPath = (next: CatalogCategory) => `Next on the suggested path: ${lowerFirst(CATEGORY_TEXT[next].title)}.`;

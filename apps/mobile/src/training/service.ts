@@ -23,8 +23,8 @@ import type { TrainingAdapters } from './adapters';
 import type { ChallengeAllowance } from './allowance';
 import { ChallengeController, type AttemptSnapshot, type DirectSuspendCause, type LearnerCommand, type PauseCause, type StartProblem } from './controller';
 import { DeviceLearningPreferences, type LearningPreferences } from './learning-preferences';
-import { attemptEarned, milestoneCandidates, progressProjection, readinessEarned, type AttemptEarned, type Progress, type ProgressAttempt, type ProgressMilestone } from './progress';
-import { milestoneGroup } from './readiness-milestone';
+import { attemptEarned, milestoneCandidates, progressProjection, readinessOutcome, type AttemptEarned, type Progress, type ProgressAttempt, type ProgressMilestone } from './progress';
+import { milestoneSlot } from './readiness-milestone';
 import { lessonProgress, type LessonChange, type LessonProgress, type LessonProgressChange, type LessonStatus } from './lesson-progress';
 
 // Spec 3 Recommendations
@@ -156,7 +156,7 @@ export class TrainingService {
 
   async load(): Promise<void> {
     await this.challenges.load();
-    // Spec 3 Synchronized record types › Readiness milestone: one missed when its attempt ended
+    // Spec 3 Synchronized record types › Readiness milestone
     await this.recordMilestones().catch(() => undefined);
   }
 
@@ -256,14 +256,15 @@ export class TrainingService {
   private async earned(record: ChallengeAttemptRecord): Promise<AttemptEarned> {
     await this.recordMilestones().catch(() => undefined);
     const attempts = await this.attempts();
-    return { ...attemptEarned(attempts, record.attemptId), readiness: readinessEarned(attempts, await this.milestones(), record.attemptId) };
+    const own = milestoneCandidates(attempts, this.adapters.device).map((milestone) => ({ record: milestone, local: true }));
+    return { ...attemptEarned(attempts, record.attemptId), readiness: readinessOutcome(attempts, [...(await this.milestones()), ...own], record.attemptId) };
   }
 
   // Spec 3 Synchronized record types › Readiness milestone
   private async recordMilestones(): Promise<void> {
     const recorded = await this.adapters.store.readMilestones();
     const missing = milestoneCandidates(await this.attempts(), this.adapters.device).filter(
-      (candidate) => !recorded.some((milestone) => milestoneGroup(milestone) === milestoneGroup(candidate)),
+      (candidate) => !recorded.some((milestone) => milestoneSlot(milestone) === milestoneSlot(candidate)),
     );
     for (const milestone of missing) await this.adapters.store.recordMilestone(milestone);
   }

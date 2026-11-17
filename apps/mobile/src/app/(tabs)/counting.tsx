@@ -24,7 +24,7 @@ import { useLessons, useTraining } from '@/training/TrainingProvider';
 
 const lastSetupOf = (service: TrainingService) => service.lastSetup();
 const allowanceOf = async (service: TrainingService, _reloadOnStatus: TrainingSnapshot['status']) => allowanceCopy(await service.allowance());
-// Spec 3 Comparison groups (Recommendations); Information hiding: recomputed only when an attempt ends
+// Spec 3 Comparison groups (Recommendations); Information hiding
 const progressOf = (service: TrainingService, _reloadOnStatus: TrainingSnapshot['status']) => service.progress();
 
 export default function Counting() {
@@ -149,7 +149,7 @@ export default function Counting() {
           allowance={allowance}
           onRetry={() => void service.retry()}
           // Spec 3 S3-08 nXGFk; #141
-          lesson={lessons?.find((lesson) => lesson.id === CHALLENGE_LESSONS[snapshot.record.groupKey.category])}
+          lesson={lessons?.find((lesson) => lesson.id === CHALLENGE_LESSONS[catalogCategory(snapshot.record.groupKey)])}
           onOpenLesson={openLesson}
           onPracticeLearn={() => {
             service.dismissResults();

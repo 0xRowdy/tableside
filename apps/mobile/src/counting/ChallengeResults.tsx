@@ -26,10 +26,9 @@ import {
   variantLabel,
   type AllowanceCopy,
 } from '@/training/challenge-text';
-import { setsPersonalBest, type AttemptEarned } from '@/training/progress';
+import { belowReadinessThreshold, setsPersonalBest, type AttemptEarned } from '@/training/progress';
 import {
   BELOW_THRESHOLD,
-  belowThreshold,
   keptDetail,
   MILESTONE_EARNED,
   MILESTONE_KEPT,
@@ -70,7 +69,7 @@ export function ChallengeResults({
   allowance: AllowanceCopy | undefined;
   onRetry: () => void;
   onReview: () => void;
-  // Spec 3 S3-08 nXGFk: the review suggestion's lesson and Learn round
+  // Spec 3 S3-08 nXGFk
   lesson: LessonEntry | undefined;
   onOpenLesson: (id: string) => void;
   onPracticeLearn: () => void;
@@ -83,7 +82,7 @@ export function ChallengeResults({
   // Spec 3 Comparison groups (Milestones); #141
   const { readiness } = earned;
   const reviewSuggested = readiness?.kind === 'kept';
-  const detail = [ending.detail, belowThreshold(record) ? BELOW_THRESHOLD : null].filter(Boolean).join(' ');
+  const detail = [ending.detail, belowReadinessThreshold(record) ? BELOW_THRESHOLD : null].filter(Boolean).join(' ');
   const note = reviewSuggested
     ? practiceNote(allowance)
     : [completed ? resultsNote(groupKey.variant, allowance) : (allowance?.results ?? ''), readiness?.kind === 'earned' && readiness.next ? nextOnPath(readiness.next) : null]
@@ -192,7 +191,7 @@ export function ChallengeResults({
   );
 }
 
-// Spec 3 S3-08 CEb6T, nXGFk: the milestone box hosts the personal-best pill
+// Spec 3 S3-08 CEb6T, nXGFk
 function ReadinessBox({ title, detail, pill }: { title: string; detail: string; pill: string | null }) {
   return (
     <View accessible accessibilityLabel={[`${title}.`, detail, pill && `${pill}.`].filter(Boolean).join(' ')} style={[styles.box, styles.earned]}>

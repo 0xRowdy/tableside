@@ -212,7 +212,7 @@ function challengeDatabase(): Promise<RecordedDatabase> {
     const progress = { recordVersion: 1, owner: IDENTITY.accountId, installation: IDENTITY.installationId, lesson, recordedAt: CREATED_AT } as const;
     await store.recordLessonEvent({ ...progress, eventId: 'lesson-event-1', event: { kind: 'completed' } });
     await store.recordLessonEvent({ ...progress, eventId: 'lesson-event-2', event: { kind: 'bookmark', step: 2 } });
-    // #141: a stored row for the upgrade to keep (its cited attempts are not in this database)
+    // #141
     await store.recordMilestone({
       recordVersion: 1,
       owner: IDENTITY.accountId,

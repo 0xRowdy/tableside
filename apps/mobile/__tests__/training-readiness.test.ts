@@ -103,13 +103,13 @@ describe('readiness through the Training service', () => {
     expect((await finish(other, CHECK, right)).earned.readiness).toEqual({ kind: 'earned', next: 'running-count' });
   });
 
-  it('records a milestone missed at the end of its attempt when the service next loads', async () => {
+  it('shows a milestone whose record failed to save on its results, and records it when the service next loads', async () => {
     const store = new MemoryTrainingStore();
     const first = setup(store).service;
     await first.load();
     await finish(first, CHECK, right);
     store.failNext('recordMilestone', 'before');
-    expect((await finish(first, CHECK, right)).earned.readiness).toBeNull();
+    expect((await finish(first, CHECK, right)).earned.readiness).toEqual({ kind: 'earned', next: 'running-count' });
     expect(await store.readMilestones()).toEqual([]);
 
     const again = setup(store.reopen()).service;

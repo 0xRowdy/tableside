@@ -31,7 +31,7 @@ export function CountingHome({
 }: {
   catalog: readonly CatalogEntry[];
   allowance: AllowanceCopy | undefined;
-  // Spec 3 Comparison groups (Recommendations); from ended attempts only (Information hiding)
+  // Spec 3 Comparison groups (Recommendations); Information hiding
   progress: Progress | undefined;
   lessons: readonly LessonEntry[] | undefined;
   onOpenLesson: (lesson: string) => void;
