@@ -25,6 +25,8 @@ export const wheelZeros = (wheel: RouletteWheel): RoulettePocket[] => (wheel ===
 
 export const describePocket = (pocket: RoulettePocket) => `${pocket} ${pocketColor(pocket)}`;
 
+export const lastSpinLine = (color: string) => `The last spin landed on ${color}.`;
+
 export { formatSigned, formatUnits, speakSigned, totalOnTable } from './units';
 
 export const ORDINAL = ['1st', '2nd', '3rd'] as const;

@@ -3,7 +3,10 @@ import path from 'node:path';
 import { defineConfig } from 'eslint/config';
 import tseslint from 'typescript-eslint';
 
+import games, { PER_GAME_FILES } from './scripts/eslint/game-branches.mjs';
 import comments from './scripts/eslint/reference-comments.mjs';
+
+const GAME_BRANCHES_TO_MOVE = ['packages/engine/src/record.ts'];
 
 const portability = {
   rules: {
@@ -71,6 +74,12 @@ export default defineConfig(
   { ignores: ['**/node_modules/**', '**/dist/**', 'apps/mobile/**', 'harness-reports/**', '.claude/**'] },
   ...tseslint.configs.recommended,
   { plugins: { comments }, rules: { 'comments/reference-only': 'error' } },
+  {
+    files: ['packages/engine/src/**/*.ts', 'packages/definitions/src/**/*.ts'],
+    ignores: [...PER_GAME_FILES, ...GAME_BRANCHES_TO_MOVE],
+    plugins: { games },
+    rules: { 'games/no-game-branch': 'error' },
+  },
   { files: ['packages/engine/**/*.ts', 'packages/definitions/**/*.ts'], plugins: { portability } },
   {
     files: ['packages/engine/**/*.ts'],

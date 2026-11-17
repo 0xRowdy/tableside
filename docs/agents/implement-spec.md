@@ -19,7 +19,7 @@ You build one ticket in your own worktree.
 3. Commit with conventional commits, `#<t>` in the body.
 4. Run Skill `code-review` on your branch since its merge-base with the integration branch. Fix each finding or record why it is invalid; commit the fixes.
 5. Merge the integration branch's current tip into your branch, resolve conflicts, and get `pnpm typecheck && pnpm lint && pnpm test` green.
-6. Report: branch, worktree path and head sha; each acceptance criterion met or not (with the reason); each review finding fixed or invalid (with the reason); anything deferred, such as device-only criteria or gaps in the frames.
+6. Report: branch, worktree path and head sha; each acceptance criterion met or not (with the reason); each review finding fixed or invalid (with the reason); for each screen the ticket changes, a simulator screenshot (a recording for motion or a flow) beside the frame id it matches; anything deferred, such as device-only criteria or gaps in the frames.
 
 The merger owns the integration branch: leave pushing, PRs and issue state to it. Run the Node harness leg only (`pnpm --filter @tableside/engine test`); the orchestrator runs the iOS and Android legs one at a time, since they share the devices.
 

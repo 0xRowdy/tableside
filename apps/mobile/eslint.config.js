@@ -2,6 +2,10 @@ const { defineConfig } = require('eslint/config');
 const expoConfig = require('eslint-config-expo/flat');
 
 const comments = require('../../scripts/eslint/reference-comments.mjs').default;
+const { default: games, PER_GAME_FILES } = require('../../scripts/eslint/game-branches.mjs');
+
+const GAME_DISPATCH = ['src/app/(tabs)/play.tsx'];
+const GAME_BRANCHES_TO_MOVE = ['src/practice/controller.ts', 'src/play/EndSessionDialog.tsx'];
 
 const HOOKS = 'src/hooks/**';
 const PLATFORM_ADAPTERS = ['src/practice/app-adapters.ts', 'src/account/device-ports.ts', 'src/account/native-vault.ts'];
@@ -18,6 +22,18 @@ module.exports = defineConfig([
   expoConfig,
   { ignores: ['dist/*', 'ios/*', 'android/*'] },
   { plugins: { comments }, rules: { 'comments/reference-only': 'error' } },
+  {
+    files: ['src/**/*.{ts,tsx}'],
+    ignores: [...PER_GAME_FILES, ...GAME_DISPATCH, ...GAME_BRANCHES_TO_MOVE],
+    plugins: { games },
+    rules: { 'games/no-game-branch': 'error' },
+  },
+  {
+    files: ['src/**/*.{ts,tsx}'],
+    ignores: [...PER_GAME_FILES, 'src/play/game-words.ts', 'src/**/recorded/**', 'src/theme/**'],
+    plugins: { games },
+    rules: { 'games/no-game-words': 'error' },
+  },
   {
     files: ['src/**/*.{ts,tsx}'],
     ignores: ['src/play/units.ts'],

@@ -1,6 +1,8 @@
 import type { AdherenceMeasure, BetCorrection, CycleEnd, Explanation, PendingStrategyAction, StrategyView, Wager } from '@tableside/engine';
 
+import { pointLine } from './craps-text';
 import { GAME_WORDS, type GameWords } from './game-words';
+import { lastSpinLine } from './roulette-text';
 import { capitalize, formatUnits, totalStake } from './units';
 
 export type CoachWords = Pick<GameWords, 'targetName' | 'turn' | 'Turn' | 'contracts'>;
@@ -44,9 +46,9 @@ export function correctionLines(correction: BetCorrection, words: CoachWords = R
   const lines: string[] = [];
   const { available, subjects } = explanation.situation;
   const color = subjects['last-pocket-color'];
-  if (color !== undefined && color !== 'none') lines.push(`The last spin landed on ${color}.`);
+  if (color !== undefined && color !== 'none') lines.push(lastSpinLine(color));
   const point = subjects.point;
-  if (point !== undefined) lines.push(point === 'none' ? 'The puck is off: the next roll is a come-out roll.' : `The point is ${point}.`);
+  if (point !== undefined) lines.push(pointLine(point));
   const trueCount = explanation.situation.values['true-count'];
   if (countKept) lines.push('Checked against the actual true count, which you keep in this mode.');
   else if (trueCount !== undefined) lines.push(`The true count is ${Number(trueCount) > 0 ? '+' : ''}${trueCount}, supplied by Tableside in this mode.`);

@@ -162,6 +162,7 @@ export function BlackjackTable({ snapshot }: { snapshot: ActiveSnapshot }) {
           <View style={styles.column}>
             {selector ? (
               <BetSelector
+                game="blackjack"
                 catalog={catalog}
                 wagers={placed}
                 balance={view.balance}

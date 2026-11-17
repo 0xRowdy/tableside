@@ -1,6 +1,6 @@
 // Spec 1 S1-03
 
-import { add, compare, decodeMoney, encodeMoney, money, mul, type DomainFact, type IllegalActionReason } from '@tableside/engine';
+import { add, compare, decodeMoney, encodeMoney, money, mul, type DomainFact, type GameId, type IllegalActionReason } from '@tableside/engine';
 import { useRef, useState, type RefObject } from 'react';
 import { AccessibilityInfo, Pressable, StyleSheet, Text, TextInput, View, type HostInstance } from 'react-native';
 
@@ -10,6 +10,7 @@ import { useMoveFocus } from '@/hooks/use-accessibility';
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/theme/tokens';
 
+import { GAME_WORDS } from '../game-words';
 import { capitalize, formatUnits, sumUnits } from '../units';
 import {
   draftToggle,
@@ -27,6 +28,7 @@ import {
 } from './catalog';
 
 export interface BetSelectorProps {
+  readonly game: GameId;
   readonly catalog: WagerCatalog;
   readonly wagers: readonly PlacedWager[];
   readonly balance: string;
@@ -300,7 +302,7 @@ function CommittedStake({ wager, choice }: { wager: PlacedWager; choice: WagerCh
   );
 }
 
-function YourWagers({ catalog, wagers, canPlace, onRemove, openEditor }: BetSelectorProps & { openEditor: OpenEditor }) {
+function YourWagers({ game, catalog, wagers, canPlace, onRemove, openEditor }: BetSelectorProps & { openEditor: OpenEditor }) {
   const heading = useRef<HostInstance>(null);
   const [removing, setRemoving] = useState<{ readonly target: string } | null>(null);
   const [explaining, setExplaining] = useState<string | null>(null);
@@ -314,7 +316,7 @@ function YourWagers({ catalog, wagers, canPlace, onRemove, openEditor }: BetSele
         Your wagers · {wagers.length}
       </Text>
       {wagers.length === 0 && (
-        <Text maxFontSizeMultiplier={textScale.body} style={styles.rowDetail}>No wagers yet. Choose one above, set its stake, then spin.</Text>
+        <Text maxFontSizeMultiplier={textScale.body} style={styles.rowDetail}>{GAME_WORDS[game].noWagers}</Text>
       )}
       {wagers.map((wager) => {
         const found = findChoice(catalog, wager.target);

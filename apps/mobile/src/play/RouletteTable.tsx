@@ -119,6 +119,7 @@ export function RouletteTable({ snapshot }: { snapshot: ActiveSnapshot }) {
                 </View>
               ) : (
                 <BetSelector
+                  game="roulette"
                   catalog={catalog}
                   wagers={placed}
                   balance={view.balance}

@@ -16,6 +16,7 @@ export interface GameWords {
   readonly wagerName: (target: string) => string;
   readonly contracts: boolean;
   readonly noneCommitted: string;
+  readonly noWagers: string;
   readonly status: (view: PermittedView) => string;
 }
 
@@ -33,6 +34,7 @@ export const GAME_WORDS: Readonly<Record<GameId, GameWords>> = {
     wagerName: targetName,
     contracts: false,
     noneCommitted: 'None between spins',
+    noWagers: 'No wagers yet. Choose one above, set its stake, then spin.',
     status: (view) => STATUS[(view as RoulettePermittedView).phase],
   },
   craps: {
@@ -46,6 +48,8 @@ export const GAME_WORDS: Readonly<Record<GameId, GameWords>> = {
     wagerName: crapsTargetName,
     contracts: true,
     noneCommitted: 'No contracts on the table',
+    // TODO(spec 1 craps bet selector frame copy)
+    noWagers: 'No wagers yet. Choose one above, set its stake, then roll.',
     status: (view) => crapsStatus(view as CrapsPermittedView),
   },
   blackjack: {
@@ -59,6 +63,7 @@ export const GAME_WORDS: Readonly<Record<GameId, GameWords>> = {
     wagerName: (target) => (target === INSURANCE_TARGET ? 'Insurance' : 'Initial wager'),
     contracts: false,
     noneCommitted: 'None between rounds',
+    noWagers: 'No wagers yet. Set a stake above, then deal.',
     status: (view) => statusText(view as BlackjackPermittedView),
   },
 };

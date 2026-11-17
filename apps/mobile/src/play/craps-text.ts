@@ -60,6 +60,8 @@ export function workingToggle(view: CrapsPermittedView, target: string): { title
 
 export const puckText = (point: number | null) => (point === null ? 'Puck OFF · no point yet' : `Puck ON · point ${point}`);
 
+export const pointLine = (point: string) => (point === 'none' ? 'The puck is off: the next roll is a come-out roll.' : `The point is ${point}.`);
+
 export function crapsStatus(view: CrapsPermittedView): string {
   const phase: Record<Phase, string> = {
     'open-decision': view.table.point === null ? 'Come-out roll' : `Point ${view.table.point} · betting`,

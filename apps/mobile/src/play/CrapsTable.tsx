@@ -175,6 +175,7 @@ export function CrapsTable({ snapshot }: { snapshot: ActiveSnapshot }) {
                 </View>
               ) : (
                 <BetSelector
+                  game="craps"
                   catalog={catalog}
                   wagers={placed}
                   balance={view.balance}
