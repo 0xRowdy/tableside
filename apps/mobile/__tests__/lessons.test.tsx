@@ -282,7 +282,7 @@ describe('lessons', () => {
       await fireEvent.press(button('40 on Red'));
       expect(cues()).toEqual(['stake-set', 'correction-offered', 'stake-set']);
       await fireEvent.press(button('Continue'));
-      expect(await header('Practice records and casino records')).toBeOnTheScreen();
+      expect(await header('Practice, casino and challenge records')).toBeOnTheScreen();
       expect(await store().readAttemptRecords()).toEqual([]);
     });
 
