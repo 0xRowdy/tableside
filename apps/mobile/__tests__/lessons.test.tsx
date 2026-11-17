@@ -96,6 +96,7 @@ describe('lessons', () => {
   });
 
   it('list all 24 in their five groups, in any order, with App orientation open to start', async () => {
+    servedLessons().splice(0, Infinity, ...actualLessons().map((lesson) => (lesson.id === 'card-values' ? { ...lesson, summary: null, content: null } : lesson)));
     await openCatalog();
     expect(screen.getByText('Open any lesson, in any order. Finishing one just marks it completed: no scores, badges or locks.')).toBeOnTheScreen();
     expect(screen.getAllByRole('header').map((item) => item.props.children)).toEqual([

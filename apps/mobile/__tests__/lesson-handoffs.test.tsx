@@ -198,12 +198,13 @@ describe('lesson handoffs', () => {
 
 describe('lesson entry points', () => {
   it('the Counting tab offers the lesson beside each category (PDCaD), opening it by identity', async () => {
+    servedLessons().splice(0, Infinity, ...servedLessons().map((lesson) => (lesson.id === 'table-counting' ? { ...lesson, content: null } : lesson)));
     await renderRouter('./src/app', { initialUrl: '/counting' });
     await header('Counting');
     expect(screen.getAllByRole('link').map((link) => [link.props.accessibilityLabel, link.props.accessibilityState?.disabled ?? false])).toEqual([
       ['Lesson: card values', false],
       ['Lesson: running count', false],
-      ['Lesson: true-count conversion', true],
+      ['Lesson: true-count conversion', false],
       ['Lesson: table counting', true],
     ]);
     expect(screen.getByRole('link', { name: 'Lesson: table counting' })).toHaveProp('accessibilityHint', 'Not available in this version yet.');

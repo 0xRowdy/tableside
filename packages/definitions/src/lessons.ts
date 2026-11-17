@@ -1,9 +1,10 @@
-// Spec 3 Modules › Definitions package; Lessons (#48); Amendment 1 B1, C10; #143, #145
+// Spec 3 Modules › Definitions package; Lessons (#48); Amendment 1 B1, C10; #143, #145, #153
 import type { GameId, StrategyDefinition } from '@tableside/engine';
 
 import { BLACKJACK_MODES } from './blackjack/strategies';
 import { BASIC_STRATEGY, BASIC_WITH_DEVIATIONS, BET_SCHEDULE_LESSON, BLACKJACK_BASICS, COUNTING_WITH_BASIC, COUNTING_WITH_DEVIATIONS } from './lessons/blackjack';
 import { CATALOG_CATEGORIES, type CatalogCategory } from './challenges';
+import { CARD_VALUES_LESSON, CONVERSION_LESSON, RUNNING_COUNT_LESSON, TABLE_COUNTING_LESSON } from './lessons/counting';
 import { CRAPS_STRATEGIES } from './craps-strategies';
 import { APP_ORIENTATION, BUILDING_A_STRATEGY } from './lessons/app-and-builder';
 import { CRAPS_LESSONS } from './lessons/craps';
@@ -66,8 +67,6 @@ const sectionGame = (section: LessonSection): GameId | null => (section === 'app
 
 export { APP_ORIENTATION };
 
-const slot = (section: LessonSection, id: string, title: string): Lesson => ({ id, title, summary: null, section, game: sectionGame(section), content: null });
-
 // Spec 3 Lessons › Inventory, Amendment 1 B1
 export const LESSONS: readonly Lesson[] = [
   APP_ORIENTATION,
@@ -76,10 +75,10 @@ export const LESSONS: readonly Lesson[] = [
   BASIC_WITH_DEVIATIONS,
   COUNTING_WITH_BASIC,
   COUNTING_WITH_DEVIATIONS,
-  slot('blackjack', 'card-values', 'Card values'),
-  slot('blackjack', 'running-count', 'Running count'),
-  slot('blackjack', 'true-count-conversion', 'True-count conversion'),
-  slot('blackjack', 'table-counting', 'Table counting'),
+  CARD_VALUES_LESSON,
+  RUNNING_COUNT_LESSON,
+  CONVERSION_LESSON,
+  TABLE_COUNTING_LESSON,
   BET_SCHEDULE_LESSON,
   ...CRAPS_LESSONS,
   ...ROULETTE_LESSONS,
