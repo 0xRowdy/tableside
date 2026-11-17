@@ -1,6 +1,6 @@
 // Spec 3 S3-01 to S3-09; S5-17 j3UhJ; #158, #132, #150, #133
 
-import { runningCountDrift, type AssistanceClass, type ChallengeCategory, type CountRange, type ChallengeEntry, type ChallengeMetric, type ChallengeVariant, type ChallengeView, type HiLoValue, type LearnFeedback, type MetricResult, type ReviewFact, type RunningCountReview } from '@tableside/engine';
+import { runningCountDrift, type AssistanceClass, type ChallengeCategory, type ChallengeEntry, type ChallengeMetric, type ChallengeVariant, type ChallengeView, type CountRange, type HiLoExplanation, type HiLoValue, type LearnFeedback, type MetricResult, type ReviewFact, type RunningCountReview } from '@tableside/engine';
 
 import { cardName, rankName, signed } from '@/play/blackjack-text';
 import { GAME_WORDS } from '@/play/game-words';
@@ -134,7 +134,9 @@ export function exerciseProgress(view: ChallengeView): string {
 
 export const spokenValue = (value: number) => (value > 0 ? `plus ${value}` : value < 0 ? `minus ${-value}` : '0');
 
-// Spec 3 Learn, Check and assistance
+// Spec 3 Learn, Check and assistance; Lessons › Structure (worked examples); #144
+export const hiLoText = (explanation: Pick<HiLoExplanation, 'rank' | 'value'>) => `${rankName(explanation.rank)} counts ${signed(explanation.value)} in Hi-Lo.`;
+
 export function feedbackText(feedback: LearnFeedback, position: number): { readonly kicker: string; readonly headline: string; readonly detail: string } {
   const { explanation } = feedback;
   const kicker = feedback.correct ? (feedback.scored ? 'CORRECT' : 'CORRECT ON RETRY · YOUR FIRST ANSWER IS SCORED') : 'NOT QUITE · YOUR FIRST ANSWER IS SCORED';
@@ -142,12 +144,12 @@ export function feedbackText(feedback: LearnFeedback, position: number): { reado
     return {
       kicker,
       headline: `The count after card ${position} is ${signed(explanation.count)}.`,
-      detail: `It was ${signed(explanation.before)}, and ${rankName(explanation.rank)} counts ${signed(explanation.value)} in Hi-Lo.`,
+      detail: `It was ${signed(explanation.before)}, and ${hiLoText(explanation)}`,
     };
   }
   return {
     kicker,
-    headline: `${rankName(explanation.rank)} counts ${signed(explanation.value)} in Hi-Lo.`,
+    headline: hiLoText(explanation),
     detail: 'Hi-Lo values: 2 to 6 are +1. 7, 8 and 9 are 0. 10, J, Q, K and A are −1.',
   };
 }
@@ -156,7 +158,7 @@ export const COACH_NAME = 'Marcus · Learn';
 export const NEXT_CARD = 'Next card';
 export const TRY_AGAIN = 'Try this card again';
 
-export type ChoiceState = 'your-answer' | 'correct' | 'recorded' | null;
+export type ChoiceState = 'your-answer' | 'your-pick' | 'correct' | 'recorded' | null;
 
 export const choiceState = (value: HiLoValue, feedback: LearnFeedback | null, entered: ChallengeEntry | null): ChoiceState => {
   if (entered !== null) return value === entered ? 'recorded' : null;
@@ -165,7 +167,7 @@ export const choiceState = (value: HiLoValue, feedback: LearnFeedback | null, en
   return value === feedback.entered ? 'your-answer' : null;
 };
 
-export const CHOICE_TAG = { 'your-answer': 'Your answer', correct: 'Correct', recorded: 'Recorded' } as const;
+export const CHOICE_TAG = { 'your-answer': 'Your answer', 'your-pick': 'Your pick', correct: 'Correct', recorded: 'Recorded' } as const;
 
 export const CARD_PROMPT = "What's this card's Hi-Lo value?";
 export const SKIP_LABEL = 'Skip (counts as incorrect)';

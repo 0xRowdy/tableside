@@ -70,6 +70,19 @@ export { QUARANTINE_LIST } from './quarantine';
 
 export { benchmarkProfile, BENCHMARK_PROFILES } from './benchmark-profiles';
 
-export { CARD_VALUES_CONTENT, CHALLENGE_CONTENT, RUNNING_COUNT_CONTENT } from './challenges';
+export { CARD_VALUES_CONTENT, CATALOG_CATEGORIES, CHALLENGE_CONTENT, RUNNING_COUNT_CONTENT, type CatalogCategory } from './challenges';
 
-export { APP_ORIENTATION, LESSONS, lessonProblems, type Lesson, type LessonContent, type LessonSection, type LessonSource, type LessonStep } from './lessons';
+export {
+  APP_ORIENTATION,
+  CHALLENGE_LESSONS,
+  LESSONS,
+  lessonProblems,
+  type Lesson,
+  type LessonContent,
+  type LessonHandoff,
+  type LessonSection,
+  type LessonSource,
+  type LessonStep,
+} from './lessons';
+
+export { workedExampleProblems, type CardValueExample, type ScriptedChoice, type ScriptedResponse, type WorkedExample } from './worked-examples';

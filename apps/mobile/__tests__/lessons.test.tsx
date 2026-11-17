@@ -1,4 +1,4 @@
-// Spec 3 Testing Decisions › Seam 3; S3-11 sVqX1, S3-12 l8pMS, S3-13 JJl51 and Fvlgc, Settings › Learning NvGyZ; Amendment 1 B4, D; #143
+// Spec 3 Testing Decisions › Seam 3; S3-11 sVqX1, S3-12 l8pMS and aJV2y, S3-13 JJl51 and Fvlgc, Settings › Learning NvGyZ; Amendment 1 B4, D; #143, #144
 
 import { act, cleanup, fireEvent, screen, within } from '@testing-library/react-native';
 import { renderRouter } from 'expo-router/testing-library';
@@ -7,8 +7,12 @@ import { Dimensions } from 'react-native';
 import type { Lesson } from '@tableside/definitions';
 
 import type { substituteFeedbackPorts } from '@/feedback/testing/substitutes';
+import type { ChallengeAllowanceState } from '@/training/allowance';
+import type { MemoryTrainingStore } from '@/training/memory-store';
+import { withWorkedExample } from '@/training/testing/worked-example';
 
 let mockStore: unknown = null;
+let mockAllowance: ChallengeAllowanceState | null = null;
 
 jest.mock('@tableside/definitions', () => {
   const actual = jest.requireActual('@tableside/definitions');
@@ -30,7 +34,7 @@ jest.mock('@/training/app-adapters', () => {
       return {
         store: mockStore,
         access: alwaysAllowed,
-        allowance: plentyAllowance(() => Date.now()),
+        allowance: mockAllowance ?? plentyAllowance(() => Date.now()),
         clock: new FakeClock(undefined, true),
         entropy: entropyFromWords(PI_WORDS),
         newId: () => `event-${++next}`,
@@ -65,6 +69,7 @@ async function openOrientation() {
 
 beforeEach(() => {
   mockStore = null;
+  mockAllowance = null;
   servedLessons().splice(0, Infinity, ...actualLessons());
 });
 
@@ -187,6 +192,81 @@ describe('lessons', () => {
     await header('Find your way around');
     expect(device.latest?.sound.played).toEqual([]);
     expect(device.latest?.haptics.fired).toEqual([]);
+  });
+
+  // Spec 3 Lessons › Structure (worked examples); Amendment 1 B4, Amendment 4 §2; #144
+  describe('worked examples', () => {
+    // Spec 3 user story 12
+    const usedUp: ChallengeAllowanceState = {
+      challengeAllowance: async () => ({ kind: 'free', amount: 5, left: 0, resetsAt: Date.now() + 3_600_000, timeZone: 'America/Denver', allowanceDevice: { here: true } }),
+    };
+    const cues = () => device.latest?.sound.played.map((play) => play.cue);
+    const store = () => mockStore as MemoryTrainingStore;
+
+    beforeEach(() => {
+      servedLessons().splice(0, Infinity, ...withWorkedExample(actualLessons()));
+      mockAllowance = usedUp;
+    });
+
+    async function openExample() {
+      await openOrientation();
+      expect(screen.queryByRole('button', { name: 'Try the worked example (optional)' })).toBeNull();
+      await fireEvent.press(button('Next'));
+      await header('Help when you need it');
+      await fireEvent.press(button('Try the worked example (optional)'));
+      await header('Worked example');
+    }
+
+    it('play the scripted response to each choice with the play cues, replay freely, and record nothing but the lesson step', async () => {
+      await openExample();
+      expect(screen.getByText('App orientation')).toBeOnTheScreen();
+      expect(screen.getByText("Practice here is scripted. It never uses an attempt and isn't recorded.")).toBeOnTheScreen();
+      expect(screen.getByLabelText('5 of hearts')).toBeOnTheScreen();
+      expect(screen.getByText("What's this card's Hi-Lo value?")).toBeOnTheScreen();
+      expect(screen.getAllByRole('button').filter((item) => ['plus 1', '0', 'minus 1'].includes(item.props.accessibilityLabel))).toHaveLength(3);
+      expect(cues()).toEqual(['card-dealt']);
+
+      await fireEvent.press(button('0'));
+      expect(button('0')).toHaveProp('accessibilityValue', { text: 'Your pick' });
+      expect(button('plus 1')).toHaveProp('accessibilityValue', { text: 'Correct' });
+      expect(button('minus 1')).toHaveProp('accessibilityValue', undefined);
+      expect(button('plus 1')).toBeDisabled();
+      expect(screen.getByText('5 counts +1 in Hi-Lo.')).toBeOnTheScreen();
+      expect(screen.getByText('Only 7, 8 and 9 count 0.')).toBeOnTheScreen();
+      expect(cues()).toEqual(['card-dealt', 'incorrect']);
+      expect(device.latest?.haptics.fired).toEqual(['error']);
+
+      await fireEvent.press(button('Try it again'));
+      expect(button('0')).toHaveProp('accessibilityValue', undefined);
+      expect(screen.queryByText('5 counts +1 in Hi-Lo.')).toBeNull();
+      await fireEvent.press(button('plus 1'));
+      expect(button('plus 1')).toHaveProp('accessibilityValue', { text: 'Correct' });
+      expect(screen.getByText('Low cards leaving the shoe help you, so they count up.')).toBeOnTheScreen();
+      expect(cues()).toEqual(['card-dealt', 'incorrect', 'correct']);
+
+      await fireEvent.press(button('Continue'));
+      expect(await header('Practice records and casino records')).toBeOnTheScreen();
+      expect(await store().findUnfinishedAttempt()).toBeNull();
+      expect(await store().readAttemptRecords()).toEqual([]);
+      expect((await store().readLessonEvents()).map((event) => event.event)).toEqual([
+        { kind: 'bookmark', step: 2 },
+        { kind: 'bookmark', step: 3 },
+      ]);
+    });
+
+    it('can be skipped from the step that has one, and Back returns to that step without moving on', async () => {
+      await openExample();
+      await fireEvent.press(button('Back to App orientation'));
+      expect(await header('Help when you need it')).toBeOnTheScreen();
+      expect((await store().readLessonEvents()).map((event) => event.event)).toEqual([{ kind: 'bookmark', step: 2 }]);
+
+      await fireEvent.press(button('Try the worked example (optional)'));
+      await header('Worked example');
+      expect(screen.queryByRole('button', { name: 'Continue' })).toBeNull();
+      await fireEvent.press(button('Skip example'));
+      expect(await header('Practice records and casino records')).toBeOnTheScreen();
+      expect(cues()).toEqual(['card-dealt', 'card-dealt']);
+    });
   });
 
   describe.each([

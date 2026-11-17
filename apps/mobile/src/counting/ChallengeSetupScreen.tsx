@@ -1,11 +1,12 @@
-// Spec 3 S3-02 buD2R, ZreSb, Amendment 4 §2–3; #158, #150
+// Spec 3 S3-02 buD2R, ZreSb, Amendment 4 §2–3; Lessons › Entry points; #158, #150, #145
 
 import { CHALLENGE_VARIANTS, type ChallengeVariant } from '@tableside/engine';
-import { Check, CircleAlert, Play } from 'lucide-react-native';
+import { BookOpen, Check, CircleAlert, Play } from 'lucide-react-native';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Button } from '@/components/Button';
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
+import { LearnRow } from '@/lessons/LessonEntries';
 import { SettingsScreen } from '@/settings/SettingsParts';
 import { fonts, palette, space, textScale } from '@/theme/tokens';
 import {
@@ -22,7 +23,8 @@ import {
   WHAT_YOU_DO_LABEL,
   type AllowanceCopy,
 } from '@/training/challenge-text';
-import type { CatalogEntry, ChallengeSetup, StartProblem } from '@/training/service';
+import { LEARN_THIS_SKILL, learnThisSkillDetail } from '@/training/lesson-text';
+import type { CatalogEntry, ChallengeSetup, LessonEntry, StartProblem } from '@/training/service';
 
 import { AllowanceBanner } from './AllowanceBanner';
 
@@ -32,6 +34,8 @@ export function ChallengeSetupScreen({
   allowance,
   problem,
   busy,
+  lesson,
+  onOpenLesson,
   onChange,
   onStart,
   onBack,
@@ -41,6 +45,8 @@ export function ChallengeSetupScreen({
   allowance: AllowanceCopy | undefined;
   problem: StartProblem | null;
   busy: boolean;
+  lesson: LessonEntry | undefined;
+  onOpenLesson: (lesson: string) => void;
   onChange: (setup: ChallengeSetup) => void;
   onStart: () => void;
   onBack: () => void;
@@ -77,6 +83,7 @@ export function ChallengeSetupScreen({
           </Text>
         </View>
       )}
+      {lesson && <LearnRow icon={BookOpen} title={LEARN_THIS_SKILL} detail={learnThisSkillDetail(lesson)} disabled={lesson.steps === null} onPress={() => onOpenLesson(lesson.id)} />}
       {allowance && <AllowanceBanner standing={allowance.standing} title={allowance.setup.text} action={allowance.setup.action} />}
       {problem && (
         <View style={[styles.banner, styles.problem]}>
