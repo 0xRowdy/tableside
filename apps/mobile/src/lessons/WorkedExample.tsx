@@ -1,4 +1,4 @@
-// Spec 3 S3-12 aJV2y; Lessons › Structure (worked examples); Amendment 1 B4; #144, #155
+// Spec 3 S3-12 aJV2y; Lessons › Structure (worked examples); Amendment 1 B4; #144, #152, #155
 
 import type { CardValueExample, WorkedExample as Script, StrategyStepExample } from '@tableside/definitions';
 import { ArrowRight, RotateCcw, SkipForward } from 'lucide-react-native';
@@ -10,13 +10,23 @@ import { Choice, PlayingCard } from '@/counting/CardChoices';
 import { useFeedback } from '@/feedback/FeedbackProvider';
 import { EXAMPLE_CUES } from '@/feedback/training-cues';
 import { NavButton } from '@/lessons/LessonParts';
-import { prescriptionLine } from '@/play/coaching-text';
-import { GAME_WORDS } from '@/play/game-words';
 import { signed } from '@/play/blackjack-text';
 import { BackButton } from '@/settings/SettingsParts';
 import { fonts, palette, radius, space, textScale } from '@/theme/tokens';
 import { CARD_PROMPT, hiLoText, spokenValue, type ChoiceState } from '@/training/challenge-text';
-import { CONTINUE, EXAMPLE_NOTE, SKIP_EXAMPLE, scriptedTurnLine, strategyName, strategyPrompt, strategyChoiceText, SO_FAR, TRY_IT_AGAIN, WORKED_EXAMPLE } from '@/training/lesson-text';
+import {
+  CONTINUE,
+  EXAMPLE_NOTE,
+  exampleStrategyName,
+  scriptedResponseLine,
+  scriptedTurnLine,
+  SKIP_EXAMPLE,
+  SO_FAR,
+  strategyChoiceText,
+  strategyPrompt,
+  TRY_IT_AGAIN,
+  WORKED_EXAMPLE,
+} from '@/training/lesson-text';
 
 const scriptedChoiceState = (index: number, correct: boolean, picked: number | null): ChoiceState => {
   if (picked === null) return null;
@@ -50,7 +60,7 @@ export function WorkedExample({ example, lesson, busy, onBack, onDone }: { examp
   const [picked, setPicked] = useState<number | null>(null);
   const onPick = (index: number, correct: boolean) => {
     setPicked(index);
-    for (const cue of EXAMPLE_CUES[example.kind].answer(correct)) feedback.cue(cue);
+    for (const cue of EXAMPLE_CUES[example.kind].answer(correct, example.kind === 'strategy-step' ? (example.choices[0]?.answer.kind ?? null) : null)) feedback.cue(cue);
   };
   return (
     <ScrollView
@@ -109,7 +119,8 @@ function CardValue({ example, picked, onPick }: { example: CardValueExample } & 
 
 // Spec 3 Lessons › Structure (worked examples); #155
 function StrategyStep({ example, picked, onPick }: { example: StrategyStepExample } & Picking) {
-  const name = strategyName(example.strategy);
+  const name = exampleStrategyName(example);
+  const asks = example.choices[0]?.answer.kind ?? 'bets';
   const response = picked === null ? null : example.choices[picked]!.response;
   return (
     <>
@@ -119,12 +130,12 @@ function StrategyStep({ example, picked, onPick }: { example: StrategyStepExampl
         </Text>
         {example.turns.map((turn, index) => (
           <Text key={index} maxFontSizeMultiplier={textScale.body} style={styles.historyLine}>
-            {scriptedTurnLine(example.game, turn, index)}
+            {scriptedTurnLine(example.game, turn, index, asks === 'play' && index === example.turns.length - 1)}
           </Text>
         ))}
       </View>
       <Text maxFontSizeMultiplier={textScale.display} style={styles.prompt}>
-        {strategyPrompt(name)}
+        {strategyPrompt(name, asks)}
       </Text>
       <View style={styles.stacked}>
         {example.choices.map(({ answer, response: { correct } }, index) => {
@@ -132,7 +143,7 @@ function StrategyStep({ example, picked, onPick }: { example: StrategyStepExampl
           return <Choice key={text} label={text} spoken={text} wide state={scriptedChoiceState(index, correct, picked)} enabled={picked === null} onPress={() => onPick(index, correct)} />;
         })}
       </View>
-      {response && <Response headline={prescriptionLine(name, response.explanation, GAME_WORDS[example.game])} note={response.note} />}
+      {response && <Response headline={scriptedResponseLine(name, response.explanation, example.game)} note={response.note} />}
     </>
   );
 }

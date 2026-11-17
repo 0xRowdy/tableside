@@ -1,11 +1,12 @@
 // Spec 3 S3-11 sVqX1, S3-12 l8pMS, pX6CV, S3-13 JJl51, Fvlgc, ZBpF3, Learning NvGyZ; #143, #145
 
-import { BLACKJACK_MODES, CRAPS_STRATEGIES, ROULETTE_STRATEGIES, type LessonHandoff, type LessonSection, type ScriptedTurn, type StrategyStepAnswer } from '@tableside/definitions';
-import type { GameId } from '@tableside/engine';
+import { BLACKJACK_MODES, CRAPS_STRATEGIES, ROULETTE_STRATEGIES, type LessonHandoff, type LessonSection, type ScriptedTurn, type StrategyStepAnswer, type StrategyStepExample, type StrategyStepExplanation } from '@tableside/definitions';
+import type { Explanation, GameId } from '@tableside/engine';
 
 import { findGame } from '@/games';
-import { BLACKJACK_MODE_TEXT } from '@/play/blackjack-text';
-import { betsText } from '@/play/coaching-text';
+import { BLACKJACK_MODE_TEXT, moveText } from '@/play/blackjack-text';
+import { playHeadline } from '@/play/blackjack-coaching';
+import { betsText, prescriptionLine } from '@/play/coaching-text';
 import { GAME_WORDS } from '@/play/game-words';
 
 import { CATEGORY_TEXT, NOT_READY_HINT, type AllowanceCopy } from './challenge-text';
@@ -98,12 +99,20 @@ export const SKIP_EXAMPLE = 'Skip example';
 // Spec 3 Lessons › Structure (worked examples); #155
 export const SO_FAR = 'So far';
 export const strategyName = (id: string) => STRATEGY_NAMES.get(id) ?? id;
-export const strategyPrompt = (name: string) => `What does ${name} bet next?`;
-export const strategyChoiceText = (game: GameId, answer: StrategyStepAnswer) => capitalizeFirst(betsText(answer.bets, GAME_WORDS[game]));
+// #152
+const BET_SCHEDULE_NAME = 'the bet schedule';
+export const exampleStrategyName = (example: Pick<StrategyStepExample, 'strategy' | 'parameters'>) =>
+  example.parameters['bet-schedule'] === 'on' ? BET_SCHEDULE_NAME : strategyName(example.strategy);
+export const strategyPrompt = (name: string, answer: StrategyStepAnswer['kind']) => (answer === 'play' ? `What’s the play here in ${lowerFirst(name)}?` : `What does ${name} bet next?`);
+export const strategyChoiceText = (game: GameId, answer: StrategyStepAnswer) =>
+  capitalizeFirst(answer.kind === 'play' ? moveText(answer.move) : betsText(answer.bets, GAME_WORDS[game]));
 
-export function scriptedTurnLine(game: GameId, turn: ScriptedTurn, index: number): string {
+export const scriptedResponseLine = (name: string, explanation: StrategyStepExplanation, game: GameId) =>
+  'kind' in explanation && explanation.kind === 'play' ? playHeadline(capitalizeFirst(name), explanation) : prescriptionLine(capitalizeFirst(name), explanation as Explanation, GAME_WORDS[game]);
+
+export function scriptedTurnLine(game: GameId, turn: ScriptedTurn, index: number, open = false): string {
   const words = GAME_WORDS[game];
-  return `${words.Turn} ${index + 1}: ${betsText(turn.wagers, words)}. ${words.scriptedOutcome(turn.outcome)}`;
+  return `${words.Turn} ${index + 1}: ${betsText(turn.wagers, words)}. ${words.scriptedOutcome(turn.outcome, open)}`;
 }
 
 // Spec 3 Lessons › Structure (Handoff); S3-12 pX6CV, S3-13 ZBpF3; #145

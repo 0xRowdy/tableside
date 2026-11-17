@@ -207,12 +207,13 @@ describe('lessons', () => {
     await fireEvent.press(link);
     expect(open).toHaveBeenCalledWith('https://wizardofodds.com/games/blackjack/card-counting/high-low/');
 
+    const headings = orientation.content!.steps.map((step) => step.heading);
     await fireEvent.press(button('Next'));
-    await header('Help when you need it');
+    await header(headings[1]!);
     expect(screen.queryByRole('header', { name: 'Our index vs published charts' })).toBeNull();
     expect(screen.getByRole('link', { name: /^Source: Wizard of Odds/ })).toBeOnTheScreen();
     await fireEvent.press(button('Next'));
-    await header('Practice records and casino records');
+    await header(headings[2]!);
     expect(screen.queryByRole('link')).toBeNull();
     open.mockRestore();
   });
@@ -231,6 +232,36 @@ describe('lessons', () => {
     expect(screen.getByRole('header', { name: 'Our index vs published charts' })).toBeOnTheScreen();
     expect(screen.getByText(/^For hard 16 against a 10, Tableside teaches: stand at \+1 or higher, otherwise hit\./)).toBeOnTheScreen();
     expect(screen.getByRole('link', { name: /^Source: / })).toBeOnTheScreen();
+  });
+
+  // Spec 3 Lessons › Structure (worked examples); Amendment 1 B4; #152
+  it('replay a blackjack decision as a worked example: the hand, the count, the play and the engine’s explanation', async () => {
+    await openCatalog();
+    await fireEvent.press(button(/^Basic with deviations\. Not started/));
+    await header('Basic with deviations');
+    await fireEvent.press(button('Next'));
+    await header('The index plays');
+    await fireEvent.press(button('Next'));
+    await header('When the count changes a decision');
+    await fireEvent.press(button('Try the worked example (optional)'));
+    await header('Worked example');
+    expect(
+      screen.getByText('Round 1: 10 on your hand. Already out of the shoe: 2, 3, 4, 5, 6, 2, 3, 4. You have 9 and 7; the dealer shows a 10. Running count +7, 6 decks left: true count +1.'),
+    ).toBeOnTheScreen();
+    expect(screen.getByText('What’s the play here in basic with deviations?')).toBeOnTheScreen();
+
+    await fireEvent.press(button('Hit'));
+    expect(button('Hit')).toHaveProp('accessibilityValue', { text: 'Your pick' });
+    expect(button('Stand')).toHaveProp('accessibilityValue', { text: 'Correct' });
+    expect(within(screen.getByTestId('scripted-response')).getByText('Basic with deviations stands on 16 against a 10 at this count.')).toBeOnTheScreen();
+    expect(screen.getByText('Hitting is the basic play. The supplied true count is +1, which reaches the index, so you stand.')).toBeOnTheScreen();
+    const played = () => device.latest?.sound.played.map((play) => play.cue);
+    expect(played()).toEqual(['correction-offered']);
+    await fireEvent.press(button('Try it again'));
+    await fireEvent.press(button('Stand'));
+    expect(played()).toEqual(['correction-offered']);
+    await fireEvent.press(button('Continue'));
+    expect(await header('Plays that kick in when the count drops')).toBeOnTheScreen();
   });
 
   it('are silent: the Learning screen, catalog and lesson text play no cue or haptic', async () => {

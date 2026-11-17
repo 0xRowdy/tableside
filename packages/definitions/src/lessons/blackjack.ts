@@ -2,6 +2,14 @@
 // docs/research/blackjack-lessons.md
 import type { Lesson, LessonContent, LessonHandoff, LessonSource, LessonStep, PublishedNote } from '../lessons';
 import { BET_SCHEDULE } from '../blackjack/strategies';
+import {
+  BASIC_STRATEGY_EXAMPLE,
+  BASICS_EXAMPLE,
+  BET_SCHEDULE_EXAMPLE,
+  COUNTING_BASIC_EXAMPLE,
+  COUNTING_DEVIATIONS_EXAMPLE,
+  DEVIATIONS_EXAMPLE,
+} from './blackjack-examples';
 import { basicStrategy, blackjackHouseEdge, playingDeviations, type BlackjackPreset, type DeviationAction, type PlayingDeviation, type PublishedCost } from '../blackjack/reference';
 
 // Spec 3 Amendment 1 C11; docs/research/blackjack-lessons.md Citable sources
@@ -203,13 +211,13 @@ const edge = (preset: BlackjackPreset) => `${blackjackHouseEdge(preset).percent}
 const scheduleLine = ({ from, amount }: (typeof BET_SCHEDULE)[number], index: number) =>
   `${from === null ? 'Below +1' : index === BET_SCHEDULE.length - 1 ? `+${from} or higher` : `+${from}`}: bet ${amount}`;
 
-const lesson = (id: string, title: string, summary: string, content: Omit<LessonContent, 'version' | 'materialVersion' | 'change' | 'workedExample'>): Lesson => ({
+const lesson = (id: string, title: string, summary: string, content: Omit<LessonContent, 'version' | 'materialVersion' | 'change'>): Lesson => ({
   id,
   title,
   summary,
   section: 'blackjack',
   game: 'blackjack',
-  content: { version: 1, materialVersion: 1, change: null, workedExample: null, ...content },
+  content: { version: 1, materialVersion: 1, change: null, ...content },
 });
 
 const guided = (strategy: string | null): LessonHandoff => ({ kind: 'guided-practice', game: 'blackjack', strategy });
@@ -245,6 +253,7 @@ export const BLACKJACK_BASICS = lesson('blackjack-basics', 'Blackjack basics', '
       'Practice play uses simulated chips, never real money. Each practice session starts fresh: you choose the buy-in in setup (1,000 unless you change it), and Rebuy adds more during the practice session. A practice session that runs on your daily training bankroll has no buy-in and no rebuys.',
     ]),
   ],
+  workedExample: BASICS_EXAMPLE,
   handoffs: [FREE_PLAY, guided('basic')],
   sources: [SOURCE.wizardBasic, SOURCE.bjaOrder],
 });
@@ -267,6 +276,7 @@ export const BASIC_STRATEGY = lesson('basic-strategy', 'Basic strategy', 'The be
       `Playing every hand by the chart keeps the house edge as low as the rules allow, ${edge('S17_LS')} at the default table. It doesn’t remove it, and no chart predicts how a session will go.`,
     ]),
   ],
+  workedExample: BASIC_STRATEGY_EXAMPLE,
   handoffs: [guided('basic'), FREE_PLAY],
   sources: [SOURCE.wizardBasic, SOURCE.bjaOrder],
 });
@@ -300,6 +310,7 @@ export const BASIC_WITH_DEVIATIONS = lesson('basic-with-deviations', 'Basic with
     step('Blackjack Apprenticeship’s S17 chart', chartSummary('S17_LS'), { source: SOURCE.bjaS17 }),
     step('Blackjack Apprenticeship’s H17 chart', chartSummary('H17_LS'), { source: SOURCE.bjaH17 }),
   ],
+  workedExample: DEVIATIONS_EXAMPLE,
   handoffs: [guided('basic-with-deviations')],
   sources: [SOURCE.schlesinger, SOURCE.bjaS17, SOURCE.bjaH17, SOURCE.certified],
 });
@@ -320,6 +331,7 @@ export const COUNTING_WITH_BASIC = lesson('counting-with-basic', 'Counting with 
       'In either counting mode you can add the optional bet schedule, which sets each bet from the true count before the deal. Here the count still never changes a play.',
     ]),
   ],
+  workedExample: COUNTING_BASIC_EXAMPLE,
   handoffs: [guided('counting-with-basic'), { kind: 'learn-challenge', category: 'running-count' }],
   sources: [SOURCE.bjaCounting, SOURCE.hiLoValues],
 });
@@ -342,6 +354,7 @@ export const COUNTING_WITH_DEVIATIONS = lesson('counting-with-deviations', 'Coun
       `The thresholds are the same as in Basic with deviations, including insurance at ${signed(INSURANCE.threshold)}. Where they differ from published charts, that lesson explains the difference and why; for example, a pair of tens against a 6 splits at ${signed(TENS_GAP.deviation.threshold)} or higher here.`,
     ], { publishedNote: publishedNote(TENS_GAP) }),
   ],
+  workedExample: COUNTING_DEVIATIONS_EXAMPLE,
   handoffs: [guided('counting-with-deviations'), { kind: 'learn-challenge', category: 'table' }],
   sources: [SOURCE.bjaDeviations, SOURCE.schlesinger, SOURCE.certified],
 });
@@ -362,6 +375,7 @@ export const BET_SCHEDULE_LESSON = lesson('bet-schedule', 'Bet schedule', 'Table
       'This schedule is Tableside’s own, a simple ramp to practice following. Published counting guides say to raise your bet as the true count rises, but they don’t give this ramp. It isn’t a recommendation for real play.',
     ], { source: SOURCE.bjaBetting }),
   ],
+  workedExample: BET_SCHEDULE_EXAMPLE,
   handoffs: [guided('counting-with-basic'), guided('counting-with-deviations')],
   sources: [SOURCE.bjaBetting],
 });
