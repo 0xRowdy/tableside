@@ -17,7 +17,7 @@ export const APP_ORIENTATION: Lesson = {
         paragraphs: [
           'Six tabs sit along the bottom of the screen. Home has the three games: blackjack, standard craps and roulette. Play opens your current table, or game setup when nothing is running. Counting holds the four counting challenges. Community holds strategies other players publish. Saved keeps your practice and casino sessions. More holds your strategies, Settings and support.',
           'Leaving a table for another tab keeps your practice session exactly where it was, and coming back picks it up again. Only stopping, resetting or switching games ends it.',
-          'Nothing is in a fixed order. Open any tab, any game or any lesson whenever you like.',
+          'There is no set order. Open the tabs, games and lessons in whatever order suits you.',
         ],
       },
       {
@@ -25,14 +25,14 @@ export const APP_ORIENTATION: Lesson = {
         paragraphs: [
           'The first time you meet an unfamiliar control, such as the bet selector or count entry, a short hint explains it. Dismiss it and it stays dismissed on this device.',
           "Each game's setup offers Learn this game, and the Counting tab has a lesson beside each challenge. Every lesson, this one included, is in More › Settings › Learning, where you can also bring back the hints and the Start here card. Lessons never use challenge attempts or allowance.",
-          'During a Check attempt, help with entering answers, skipping and pausing stays open. The counting lessons, and for a Play Check the strategy-mode and bet-schedule lessons, wait until the attempt ends.',
+          'During a Check attempt, help with entering answers, skipping, pausing and the show-count toggle stays open. The counting lessons, and for a Play Check the four blackjack mode lessons and the bet-schedule lesson, wait until the attempt ends.',
         ],
       },
       {
         heading: 'Practice, casino and challenge records',
         paragraphs: [
           'Tableside keeps three kinds of records apart. A practice session is simulated play. Saved › Practice lists each one you finish with its result, and shows how closely you followed your strategy separately from the money.',
-          "A casino session is real play you record yourself: the game, when you played, your buy-ins and cash-out, and if you like the casino's name and the table rules. It uses your real currency, works offline and is strictly private: never shared, published or compared.",
+          "A casino session is real play you record yourself: the game, when you played, your buy-ins and cash-out, and if you like the casino's name and the table conditions. It uses your real currency, works offline and is strictly private: never shared, published or compared.",
           "Counting challenge results score your accuracy, never winnings, and a Play challenge's balance stays out of your practice totals. All of these describe what happened. None of them predicts how you'll do next time.",
         ],
       },
@@ -54,8 +54,8 @@ export const APP_ORIENTATION: Lesson = {
   },
 };
 
-// Spec 4 (#54) Strategy model, builder and editor rules, Amendments 1–2; decision #5
-export const BUILDER: Lesson = {
+// Spec 4 (#54), Amendments 1–2; docs/research/lessons-app-orientation-and-builder.md
+export const BUILDING_A_STRATEGY: Lesson = {
   id: 'building-a-strategy',
   title: 'Building a strategy',
   summary: 'Conditions, amounts, conflicts, fallbacks, stopping',
@@ -69,7 +69,7 @@ export const BUILDER: Lesson = {
       {
         heading: 'Start from a strategy',
         paragraphs: [
-          'More › Strategies lists the built-in strategies and your own. Customize a strategy copies a built-in or one of yours into a private strategy that only you see, and the original never changes. Start blank begins from nothing. Building is free and works offline.',
+          'More › Strategies lists the built-in strategies and your own. Customize a strategy copies a built-in or one of yours into a private strategy that only you see, and the original never changes. Start blank begins with no rules of your own, so the defaults apply until you add some. Building is free and works offline.',
           "Craps and roulette strategies are written as guided sentences in four groups: starting bets, conditions, adjustments and stopping rules. A blackjack strategy starts from the reference chart for a rule preset: you change single decisions, edit deviations and set a bet schedule, and every changed cell is marked with the reference play beside it. Each strategy states the table conditions it's written for.",
         ],
       },
@@ -85,15 +85,15 @@ export const BUILDER: Lesson = {
         paragraphs: [
           'Each rule names a bet and an amount. Adjustments change amounts after an outcome: press, collect, regress, double after a loss or add a unit, each up to a cap you set. Every bet keeps its own counter, so a press on the 6 never advances the 8, and progression lists such as Labouchere are edited directly.',
           "Amounts are checked as you type against the bet's legal targets, increments, working rules and the table limits. An amount that doesn't fit is explained, never rounded, resized or swapped for another bet.",
-          "Bets that must go up together form a group, placed completely or not at all. If the balance can't cover the whole group, none of it goes up: 12 each on the 6 and 8 needs 24, so a balance of 20 places neither.",
-          "Each rule shows its own wager's house edge under the table rules. Changing bets or stakes doesn't remove the house edge.",
+          "Bets that must go up together form a group, placed completely or not at all. If the balance can't cover the whole group, none of it goes up: 12 each on the 6 and 8 needs 24, so a balance of 20 places neither. A win that's already paid stays paid: if the press that follows would break a table limit, the press waits until you stop or override it.",
+          "Each rule shows its own wager's house edge under the table conditions. Changing bets or stakes doesn't remove the house edge.",
         ],
       },
       {
         heading: 'Explanations: check what it does',
         paragraphs: [
           'A plain-language description is written from your rules and changes whenever they do, so you can check it says what you meant.',
-          'In the preview, pick an example situation to see which rule matches, what it prescribes, any fallback and the counters afterwards, or step through a short sequence. The preview is labelled "Illustration, not a result": it\'s free and records nothing.',
+          'In the preview, pick an example situation to see which rule matches, what it prescribes, any fallback and the counters afterwards, or step through a short sequence. The preview is labeled "Illustration, not a result": it\'s free and records nothing.',
           "You can add a strategy note to a rule. It's your own note, shown after a correction apart from the coach's explanation and never during a Check attempt, and it never changes what the strategy does.",
         ],
       },
@@ -115,7 +115,7 @@ export const BUILDER: Lesson = {
       {
         heading: 'Stopping, saving and practicing',
         paragraphs: [
-          'In Tableside, stopping rules belong to the current cycle: for example, stop new bets when this cycle is up 150 or down 200, whichever comes first, or end the cycle when the list runs out. Every list and progression needs a cap or a stop.',
+          'A cycle is one run of the strategy, from its starting bets until its stopping or completion rules are met. In Tableside, stopping rules belong to the current cycle: for example, stop new bets when this cycle is up 150 or down 200, whichever comes first, or end the cycle when the list runs out. Every list and progression needs a cap or a stop.',
           'When a cycle stops, removable bets come back and bets that must stay, such as a craps pass bet, settle with no new bets. A new cycle starts only when you restart it, and restarting never tops up the balance.',
           'Edits save to your working copy as you go. Save revision makes a fixed version once nothing is incomplete or in conflict. Test in practice opens guided-practice setup with your latest revision; nothing starts, and no allowance is used, until you press Start. A practice session keeps the revision it started with, even if you save a newer one.',
         ],

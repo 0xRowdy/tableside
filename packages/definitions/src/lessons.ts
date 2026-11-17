@@ -4,7 +4,7 @@ import type { GameId, StrategyDefinition } from '@tableside/engine';
 import { BLACKJACK_MODES } from './blackjack/strategies';
 import { CATALOG_CATEGORIES, type CatalogCategory } from './challenges';
 import { CRAPS_STRATEGIES } from './craps-strategies';
-import { APP_ORIENTATION, BUILDER } from './lessons/app-and-builder';
+import { APP_ORIENTATION, BUILDING_A_STRATEGY } from './lessons/app-and-builder';
 import { ROULETTE_STRATEGIES } from './roulette-strategies';
 import { workedExampleProblems, type WorkedExample } from './worked-examples';
 
@@ -80,7 +80,7 @@ export const LESSONS: readonly Lesson[] = [
   slot('roulette', 'capped-martingale', 'Capped Martingale'),
   slot('roulette', 'three-win-parlay', 'Three-win parlay'),
   slot('roulette', 'bounded-labouchere', 'Bounded Labouchere'),
-  BUILDER,
+  BUILDING_A_STRATEGY,
 ];
 
 // Spec 3 Lessons › Entry points

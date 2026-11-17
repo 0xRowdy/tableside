@@ -38,7 +38,7 @@ Primary sources read:
 - Saved has **Practice** and **Casino** segments (S4 *Solution*).
 - More holds Strategies (spec 4), Settings (Sound & haptics, Account, Learning; spec 5 adds Plan and Offline & allowance) and support (S1; S1 Amendment 4; S4 Amendment 1 V).
 - Leaving a table through the tab bar suspends the session in place, and returning resumes it. Only an explicit stop, reset or game switch ends it (S1 *Active-session navigation*).
-- Lessons have no required order, prerequisites or placement test (S3 story 6; D48).
+- Lessons have no required order, prerequisites or placement test (S3 story 6; D48). Offline, other games' lessons need a connection (S3 story 17), so the lesson promises only that there is no set order, not that everything is always open.
 
 ### Help
 
@@ -58,7 +58,7 @@ Primary sources read:
 
 ### Lesson progress
 
-- A lesson keeps its place: Resume or Restart. Completion means finishing it, with no score, award or unlock (S3 *Progress*, story 19; D48).
+- A lesson keeps its place: Resume or Restart. Completion means finishing the explanation or example, with no score, award or unlock (S3 *Progress*, story 19; D48). There is no test to pass at the end: completion is only finishing (D48 "Completion means finishing the explanation/example, without a score or unlock").
 
 ## Builder
 
@@ -71,6 +71,7 @@ Primary sources read:
 - More › Strategies holds the built-in strategies and your own **private strategies**. **Customize a strategy** (prominent) copies a built-in or saved strategy; **Start blank** is secondary (S4 *Solution*, stories 1–4; S4 Amendment 1 V).
 - Customizing makes your own private copy and never changes the built-in. The copy records its source, and changes against the source are marked (S4 stories 4, 19; *Customize*).
 - Creating and editing strategies is free and works offline (S4 story 8; S4 Amendment 3 §5).
+- **Start blank** begins with no rules of your own: craps and roulette default to no new bets with existing bets kept where legal, and blackjack starts with every decision following the selected preset's reference, shown as defaults (S4 *Start blank*).
 - A strategy states its **declared table conditions** (blackjack rule preset; craps odds and field options and the limits its amounts assume; roulette wheel) (S4 *Strategy model*; CX).
 
 ### Conditions
@@ -109,14 +110,15 @@ Primary sources read:
 - For situations your rules don't cover, craps and roulette default to **no new bets, existing bets kept** where legal; blackjack defaults to the selected preset's reference play. Defaults are visible and editable (S4 story 17, *Start blank*; D5).
 - **Legal fallback**: for each blackjack action that might be unavailable, the strategy names an alternative, defaulting to the reference's validated fallback (S4 story 21; D5; CX).
 - Following a prescribed deviation or a legal fallback counts as following the strategy (S4 Amendment 2 B7; CX **Strategy adherence**).
-- A custom blackjack change is never presented as better play or higher profit; the editor shows the reference action labelled "Reference" and never "correct" (S4 story 22; S4 Amendment 1 N).
+- A custom blackjack change is never presented as better play or higher profit; the editor shows the reference action labelled "Reference", never claims better or worse expected results, and calls nothing "correct" (S4 story 22, *Custom-change wording*; S4 Amendment 1 N).
 
 ### Stopping
 
+- A **strategy cycle** is a sequence of bets governed by a strategy's starting state and its completion or stopping rules (CX).
 - Stopping rules are cycle-scoped: stop new bets when this cycle is up or down a set amount, or end the cycle when the list empties (S4 story 16; S4 Amendment 1 S). Example: "Stop new bets when this cycle is up 150 or down 200, whichever comes first" (S4 Amendment 1 S).
 - Stopping new bets ends the **cycle**: outstanding wagers resolve, then a new cycle needs an explicit restart, and starting one never replenishes the balance (S4 Amendment 2 B8; CX **Strategy cycle**).
 - No rule reads profit, loss or turns across cycles or since the session started (S4 Amendment 1 B2).
-- **Strategy settlement**: when a cycle ends or you stop the strategy, legally removable wagers come back, then the contracts left on the table settle automatically; no new bets are placed (CX; S1 Amendment 10 §1).
+- **Strategy settlement**: when a cycle ends or you stop the strategy, legally removable wagers come back, then the contracts left on the table (craps pass and come bets with their number set) settle automatically; no new bets are placed (CX; S1 Amendment 10 §1).
 - A settled win stays settled even when the next adjustment can't execute: the press waits as a **pending strategy action** (D5; CX).
 
 ### Saving and practising
