@@ -1,4 +1,4 @@
-// Spec 3 S3-02 buD2R, S3-10 OVKkc; #158, #140
+// Spec 3 S3-02 buD2R, S3-10 OVKkc; #158, #140, #136
 
 import { Check } from 'lucide-react-native';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
@@ -9,6 +9,8 @@ import { fonts, palette, space, textScale } from '@/theme/tokens';
 export interface SegmentOption<T extends string> {
   readonly value: T;
   readonly label: string;
+  /** What a screen reader says, when it differs from the visible label. */
+  readonly spoken?: string;
   readonly disabled?: boolean;
   readonly hint?: string;
 }
@@ -29,7 +31,7 @@ function Segment<T extends string>({ option, selected, onPress }: { option: Segm
   return (
     <Pressable
       accessibilityRole="radio"
-      accessibilityLabel={option.label}
+      accessibilityLabel={option.spoken ?? option.label}
       accessibilityHint={option.hint}
       accessibilityState={{ checked: selected, disabled }}
       disabled={disabled}

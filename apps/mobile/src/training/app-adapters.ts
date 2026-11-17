@@ -1,4 +1,4 @@
-// #158
+// #158, #136
 import { QUARANTINE_LIST } from '@tableside/definitions';
 import * as Crypto from 'expo-crypto';
 
@@ -7,6 +7,7 @@ import { sleep } from '../practice/app-adapters';
 import type { TrainingAdapters } from './adapters';
 import { plentyAllowance } from './allowance';
 import { MemoryTrainingStore } from './memory-store';
+import { screenReaderSpeech } from './screen-reader';
 
 export function createTrainingAdapters(): TrainingAdapters {
   const clock = { now: () => Date.now(), sleep };
@@ -21,5 +22,6 @@ export function createTrainingAdapters(): TrainingAdapters {
     device: 'this-device',
     owner: 'local',
     quarantine: QUARANTINE_LIST,
+    speech: screenReaderSpeech(),
   };
 }

@@ -1,4 +1,4 @@
-// Spec 3 Modules › Training service; Amendment 1 B5; #158, #132, #135
+// Spec 3 Modules › Training service; Amendment 1 B5; #158, #132, #135, #136
 import type { AccountService } from '@tableside/account';
 import { createContext, useContext, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { AppState } from 'react-native';
@@ -10,6 +10,7 @@ import { useLoaded } from '@/hooks/use-loaded';
 
 import { createTrainingAdapters } from './app-adapters';
 import { TrainingService, type LearningPreferences, type LessonEntry } from './service';
+import { followSpokenCards } from './speech';
 
 const TrainingContext = createContext<TrainingService | null>(null);
 
@@ -28,14 +29,15 @@ function followAppLifecycle(training: TrainingService): () => void {
 export function TrainingProvider({ children }: { children: ReactNode }) {
   const { account } = useAccount();
   const { service: accounts } = account;
-  const [service] = useState(() => {
+  const [{ service, speech }] = useState(() => {
     const adapters = account.training(createTrainingAdapters());
-    return new TrainingService({ ...adapters, access: withAccountGate(adapters.access, () => accounts.gate) });
+    return { service: new TrainingService({ ...adapters, access: withAccountGate(adapters.access, () => accounts.gate) }), speech: adapters.speech };
   });
   useLoaded((training) => training.load(), service);
   useFollow(followAccountSessionEnding, accounts, service);
   useFollow(followAccountGate, accounts, service);
   useFollow(followAppLifecycle, service);
+  useFollow(followSpokenCards, service, speech);
   return <TrainingContext.Provider value={service}>{children}</TrainingContext.Provider>;
 }
 

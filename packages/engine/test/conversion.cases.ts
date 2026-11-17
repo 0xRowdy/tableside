@@ -165,7 +165,7 @@ export const conversionCases: TestCase[] = [
       if (!decoded.ok) throw new Error(decoded.error.message);
       t.equal([encodeChallengeCheckpoint(decoded.state), readChallengeView(decoded.state)], [text, readChallengeView(midway)]);
       const ended = step(begun(CONVERSION_CHECK, seed(5)), { kind: 'end' });
-      const record = challengeAttemptRecord(ended, { installation: 'd', startedAt: 0, endedAt: 1, interrupted: false, performanceMs: null, meteringBasis: 'challenge-attempt', allowancePolicyVersion: null });
+      const record = challengeAttemptRecord(ended, { installation: 'd', startedAt: 0, endedAt: 1, interrupted: false, performanceMs: null, meteringBasis: 'challenge-attempt', allowancePolicyVersion: null, pacing: 'self-paced' });
       t.equal([record.groupKey.category, record.groupKey.assistanceClass, record.groupKey.countRevealed, record.groupKey.reference, record.groupKey.length, record.metrics['true-count']], [
         'conversion',
         'unassisted-check',
