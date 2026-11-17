@@ -1,4 +1,4 @@
-// Spec 3 Modules › Engine; Challenge content (from #4); Learn, Check and assistance; #158
+// Spec 3 Modules › Engine; Challenge content (from #4); Learn, Check and assistance; #158, #132
 
 import { STATE_SCHEMA_VERSION, type Receipt, type RejectionReason, type VersionedIdentity } from './activity';
 import { hiLoTag } from './blackjack';
@@ -57,7 +57,7 @@ export interface ItemAnswers {
   readonly tries: number;
 }
 
-export type ChallengePhase = 'ready' | 'question' | 'explanation' | 'ended';
+export type ChallengePhase = 'ready' | 'question' | 'explanation' | 'recorded' | 'ended';
 
 export type ChallengeEnding = 'completed' | 'abandoned';
 
@@ -150,10 +150,9 @@ export interface LearnFeedback {
   readonly explanation: HiLoExplanation;
 }
 
-export interface ChallengeView {
+interface ChallengeViewBase {
   readonly attemptId: string;
   readonly category: ChallengeCategory;
-  readonly variant: ChallengeVariant;
   readonly phase: ChallengePhase;
   readonly sequence: number;
   readonly legalCommands: readonly ChallengeCommandKind[];
@@ -161,10 +160,22 @@ export interface ChallengeView {
   readonly position: number;
   readonly item: CardValueItem | null;
   readonly choices: readonly HiLoValue[];
-  readonly feedback: LearnFeedback | null;
   readonly assisted: boolean;
   readonly results: ChallengeResults | null;
 }
+
+export interface LearnChallengeView extends ChallengeViewBase {
+  readonly variant: 'learn';
+  readonly feedback: LearnFeedback | null;
+}
+
+// Spec 3 Learn, Check and assistance › Check
+export interface CheckChallengeView extends ChallengeViewBase {
+  readonly variant: 'check';
+  readonly entered: ChallengeEntry | null;
+}
+
+export type ChallengeView = LearnChallengeView | CheckChallengeView;
 
 export class ChallengeSpecificationError extends Error {
   constructor(message: string) {
@@ -192,8 +203,6 @@ export function createChallenge(spec: ChallengeSpecification, random: RandomStre
   if (!hasExactKeys(spec, ['attemptId', 'owner', 'device', 'variant', 'content'])) fail('the specification has an attempt id, owner, device, variant and content');
   if (!isText(spec.attemptId) || !isText(spec.owner) || !isText(spec.device)) fail('attempt id, owner and device are required');
   if (!CHALLENGE_VARIANTS.includes(spec.variant)) fail(`unknown variant ${String(spec.variant)}`);
-  // TODO(#132)
-  if (spec.variant !== 'learn') fail('only the Learn variant is built');
   const problem = contentProblem(spec.content);
   if (problem) fail(problem);
   let stream: RandomStream;
@@ -247,6 +256,7 @@ const LEGAL: Record<ChallengePhase, readonly ChallengeCommandKind[]> = {
   ready: ['begin', 'end'],
   question: ['answer', 'skip', 'end'],
   explanation: ['retry-item', 'next-item', 'end'],
+  recorded: ['next-item', 'end'],
   ended: [],
 };
 
@@ -310,7 +320,7 @@ function apply(state: ChallengeState, command: ChallengeCommand): { change: Chan
       const earlier = state.answers[state.position];
       const answered: ItemAnswers = earlier ? { ...earlier, last: entry, tries: earlier.tries + 1 } : { first: entry, last: entry, tries: 1 };
       const answers = [...state.answers.slice(0, state.position), answered];
-      return { change: { phase: 'explanation', answers }, facts: [{ kind: 'answer-accepted', position: state.position, scored: !earlier }] };
+      return { change: { phase: state.variant === 'check' ? 'recorded' : 'explanation', answers }, facts: [{ kind: 'answer-accepted', position: state.position, scored: !earlier }] };
     }
     case 'retry-item':
       return { change: { phase: 'question' }, facts: [] };
@@ -340,12 +350,12 @@ export function challengeResults(state: ChallengeState): ChallengeResults | null
 const assisted = (state: ChallengeState) => state.variant === 'learn';
 
 export function readChallengeView(state: ChallengeState): ChallengeView {
-  const item = state.phase === 'question' || state.phase === 'explanation' ? (state.items[state.position] as CardValueItem) : null;
-  const answered = state.phase === 'explanation' ? (state.answers[state.position] as ItemAnswers) : null;
-  return {
+  const shown = state.phase === 'question' || state.phase === 'explanation' || state.phase === 'recorded';
+  const item = shown ? (state.items[state.position] as CardValueItem) : null;
+  const answered = state.phase === 'explanation' || state.phase === 'recorded' ? (state.answers[state.position] as ItemAnswers) : null;
+  const base: ChallengeViewBase = {
     attemptId: state.attempt.id,
     category: state.identities.category,
-    variant: state.variant,
     phase: state.phase,
     sequence: state.sequence,
     legalCommands: [...legalCommands(state)],
@@ -353,6 +363,13 @@ export function readChallengeView(state: ChallengeState): ChallengeView {
     position: item ? state.position + 1 : 0,
     item: item && { card: { ...item.card } },
     choices: item ? HI_LO_VALUES : [],
+    assisted: assisted(state),
+    results: challengeResults(state),
+  };
+  if (state.variant === 'check') return { ...base, variant: 'check', entered: answered && answered.last };
+  return {
+    ...base,
+    variant: 'learn',
     feedback:
       item && answered
         ? {
@@ -363,8 +380,6 @@ export function readChallengeView(state: ChallengeState): ChallengeView {
             explanation: { kind: 'hi-lo-value', rank: item.card.rank, value: reference(item) },
           }
         : null,
-    assisted: assisted(state),
-    results: challengeResults(state),
   };
 }
 

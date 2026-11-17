@@ -1,4 +1,4 @@
-// Spec 3 Testing Decisions › Seam 2, Amendment 1 C6; #158
+// Spec 3 Testing Decisions › Seam 2, Amendment 1 C6; #158, #132
 import { createChallenge, encodeChallengeCheckpoint, type ChallengeView } from '@tableside/engine';
 
 import { alwaysAllowed, type AccessSupervisor } from '@/practice/adapters';
@@ -6,16 +6,16 @@ import { FakeClock, entropyFromWords, PI_WORDS } from '@/practice/testing/substi
 import { plentyAllowance } from '@/training/allowance';
 import { resetTimeText } from '@/training/challenge-text';
 import { MemoryTrainingStore } from '@/training/memory-store';
+import { RECORDED_MS } from '@/training/controller';
 import { TrainingService, type TrainingSnapshot } from '@/training/service';
 import { CHALLENGE_CHARGE } from '@/training/store';
 import { newAttempt } from '@/training/testing/store-contract';
+import { HI_LO_BY_RANK } from '@/training/testing/hi-lo';
 
 const LEARN_CARD_VALUES = { category: 'card-values', variant: 'learn' } as const;
+const CHECK_CARD_VALUES = { category: 'card-values', variant: 'check' } as const;
 
-// Spec 1 Game rules, Counting (Hi-Lo)
-const HI_LO: Record<number, -1 | 0 | 1> = { 1: -1, 2: 1, 3: 1, 4: 1, 5: 1, 6: 1, 7: 0, 8: 0, 9: 0, 10: -1, 11: -1, 12: -1, 13: -1 };
-
-function setup(options: { access?: Partial<AccessSupervisor>; store?: MemoryTrainingStore } = {}) {
+function setup(options: { access?: Partial<AccessSupervisor>; store?: MemoryTrainingStore; clock?: FakeClock } = {}) {
   const store = options.store ?? new MemoryTrainingStore();
   const admissions: unknown[] = [];
   const access: AccessSupervisor = {
@@ -27,7 +27,7 @@ function setup(options: { access?: Partial<AccessSupervisor>; store?: MemoryTrai
     ...options.access,
   };
   let next = 0;
-  const clock = new FakeClock(1_790_000_000_000, true);
+  const clock = options.clock ?? new FakeClock(1_790_000_000_000, true);
   const service = new TrainingService({ store, access, allowance: plentyAllowance(() => clock.now()), clock, entropy: entropyFromWords(PI_WORDS), newId: () => `attempt-${++next}`, device: 'test-device', owner: 'local' });
   return { service, store, admissions, clock };
 }
@@ -44,13 +44,15 @@ async function answerEveryCard(service: TrainingService, choose: (view: Challeng
   }
 }
 
-const reference = (view: ChallengeView) => HI_LO[view.item!.card.rank]!;
+const reference = (view: ChallengeView) => HI_LO_BY_RANK[view.item!.card.rank]!;
+
+const feedbackOf = (view: ChallengeView) => (view.variant === 'learn' ? view.feedback : undefined);
 
 describe('the Training service', () => {
   it('lists the four challenge categories in the suggested order, all available, with no exercise content', () => {
     const { service } = setup();
     expect(service.listCatalog()).toEqual([
-      { category: 'card-values', available: true, ready: ['learn'] },
+      { category: 'card-values', available: true, ready: ['learn', 'check'] },
       { category: 'running-count', available: true, ready: [] },
       { category: 'conversion', available: true, ready: [] },
       { category: 'table', available: true, ready: [] },
@@ -60,7 +62,7 @@ describe('the Training service', () => {
   it('validates a setup with structured diagnostics, creating and charging nothing', async () => {
     const { service, store } = setup();
     expect(service.validateSetup(LEARN_CARD_VALUES)).toEqual({ valid: true, diagnostics: [] });
-    expect(service.validateSetup({ category: 'card-values', variant: 'check' })).toEqual({ valid: false, diagnostics: [{ field: 'variant', problem: 'not-ready' }] });
+    expect(service.validateSetup(CHECK_CARD_VALUES)).toEqual({ valid: true, diagnostics: [] });
     expect(service.validateSetup({ category: 'running-count', variant: 'learn' })).toEqual({ valid: false, diagnostics: [{ field: 'category', problem: 'not-ready' }] });
     expect(service.validateSetup({ category: 'baccarat', variant: 'quiz' })).toEqual({
       valid: false,
@@ -78,7 +80,7 @@ describe('the Training service', () => {
     await service.startAttempt(LEARN_CARD_VALUES);
 
     const view = active(service.snapshot());
-    expect([view.phase, view.position, view.length, view.feedback]).toEqual(['question', 1, 20, null]);
+    expect([view.phase, view.position, view.length, feedbackOf(view)]).toEqual(['question', 1, 20, null]);
     expect(admissions).toEqual([LEARN_CARD_VALUES]);
     const stored = await store.loadAttempt(view.attemptId);
     expect(stored?.charge).toEqual({ effect: { effectId: { grant: 'spec-1-stub', activity: view.attemptId, sequence: 0 }, kind: CHALLENGE_CHARGE, amount: '1' }, chargedAt: 1_790_000_000_000 });
@@ -89,8 +91,8 @@ describe('the Training service', () => {
   it('shows no content and charges nothing for an invalid setup', async () => {
     const { service, store, admissions } = setup();
     await service.load();
-    await service.startAttempt({ category: 'card-values', variant: 'check' });
-    expect(service.snapshot()).toEqual({ status: 'none', problem: 'invalid-setup', diagnostics: [{ field: 'variant', problem: 'not-ready' }], busy: false });
+    await service.startAttempt({ category: 'running-count', variant: 'check' });
+    expect(service.snapshot()).toEqual({ status: 'none', problem: 'invalid-setup', diagnostics: [{ field: 'category', problem: 'not-ready' }], busy: false });
     expect([admissions, await store.findUnfinishedAttempt(), await store.readAttemptRecords()]).toEqual([[], null, []]);
   });
 
@@ -166,11 +168,11 @@ describe('the Training service', () => {
     let expected = 0;
     for (let guard = 0; guard < 100 && service.snapshot().status === 'active'; guard++) {
       const view = active(service.snapshot());
-      if (view.phase === 'question' && view.feedback === null) {
+      if (view.phase === 'question' && feedbackOf(view) === null) {
         if (reference(view) === 1) expected++;
         await service.submit({ kind: 'answer', value: 1 });
       } else if (view.phase === 'explanation' && view.legalCommands.includes('retry-item')) {
-        expect(view.feedback).toMatchObject({ correct: false, scored: true, reference: reference(view) });
+        expect(feedbackOf(view)).toMatchObject({ correct: false, scored: true, reference: reference(view) });
         await service.submit({ kind: 'retry-item' });
         await service.submit({ kind: 'answer', value: reference(view) });
       } else {
@@ -243,6 +245,75 @@ describe('the Training service', () => {
     const later = setup({ store: store.reopen() });
     await later.service.load();
     expect(active(later.service.snapshot())).toEqual(before);
+    expect(later.admissions).toEqual([]);
+  });
+
+  it('runs a Check attempt: each entry is recorded with no correctness, the next card follows after the same pause for right and wrong, and results review every card', async () => {
+    const { service, clock } = setup();
+    await service.load();
+    await service.startAttempt(CHECK_CARD_VALUES);
+    const timeline: { at: number; snapshot: TrainingSnapshot }[] = [];
+    service.subscribe(() => timeline.push({ at: clock.now(), snapshot: service.snapshot() }));
+
+    const review: { position: number; entered: unknown; reference: number }[] = [];
+    const pauses = new Set<string>();
+    for (let card = 1; card <= 20; card++) {
+      const view = active(service.snapshot());
+      expect([view.phase, view.position, view.legalCommands]).toEqual(['question', card, ['answer', 'skip', 'end']]);
+      const right = reference(view);
+      const entered = card === 4 ? 'skip' : card % 2 === 1 ? right : right === 1 ? -1 : 1;
+      review.push({ position: card, entered, reference: right });
+      timeline.length = 0;
+      const submittedAt = clock.now();
+      await service.submit(entered === 'skip' ? { kind: 'skip' } : { kind: 'answer', value: entered });
+
+      const isRecorded = (entry: (typeof timeline)[number]) => entry.snapshot.status === 'active' && entry.snapshot.view.phase === 'recorded';
+      const recorded = timeline.find(isRecorded)!;
+      const after = timeline.slice(timeline.indexOf(recorded)).find((entry) => !isRecorded(entry))!;
+      const recordedView = active(recorded.snapshot);
+      expect(recordedView).toMatchObject({ variant: 'check', position: card, entered, legalCommands: ['next-item', 'end'], results: null, assisted: false });
+      expect(recordedView).not.toHaveProperty('feedback');
+      pauses.add(`${recorded.at - submittedAt}/${after.at - recorded.at}`);
+    }
+    expect([...pauses]).toEqual([`0/${RECORDED_MS}`]);
+
+    const snapshot = service.snapshot();
+    if (snapshot.status !== 'ended') throw new Error('not ended');
+    const correct = review.filter((item) => item.entered === item.reference).length;
+    expect(snapshot.record).toMatchObject({
+      endingReason: 'completed',
+      groupKey: { category: 'card-values', variant: 'check', assistanceClass: 'unassisted-check', countRevealed: false },
+      metrics: { 'card-values': { correct, total: 20 } },
+      assistanceStep: null,
+    });
+    expect(snapshot.record.review.map(({ position, entered, reference: value }) => ({ position, entered, reference: value }))).toEqual(review);
+  });
+
+  it('leaves the catalog and the attempt records as they were until a Check attempt ends', async () => {
+    const { service, store } = setup();
+    await service.load();
+    const before = service.listCatalog();
+    await service.startAttempt(CHECK_CARD_VALUES);
+    for (let card = 1; card < 20; card++) {
+      await service.submit({ kind: 'answer', value: 1 });
+      expect([service.listCatalog(), await store.readAttemptRecords()]).toEqual([before, []]);
+    }
+    await service.submit({ kind: 'answer', value: 1 });
+    expect(await store.readAttemptRecords()).toHaveLength(1);
+  });
+
+  it('moves on to the next card when it picks up a Check attempt whose answer was recorded', async () => {
+    const store = new MemoryTrainingStore();
+    const first = setup({ store, clock: new FakeClock(1_790_000_000_000, false) });
+    await first.service.load();
+    await first.service.startAttempt(CHECK_CARD_VALUES);
+    void first.service.submit({ kind: 'answer', value: 0 });
+    for (let tries = 0; tries < 50 && (await store.findUnfinishedAttempt())?.sequence !== 2; tries++) await Promise.resolve();
+    expect((await store.findUnfinishedAttempt())?.sequence).toBe(2);
+
+    const later = setup({ store: store.reopen() });
+    await later.service.load();
+    expect(active(later.service.snapshot())).toMatchObject({ phase: 'question', position: 2 });
     expect(later.admissions).toEqual([]);
   });
 });

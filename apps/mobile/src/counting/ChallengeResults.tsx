@@ -1,7 +1,7 @@
-// Spec 3 S3-08 liAfT, CEb6T; #158, #150
+// Spec 3 S3-08 liAfT, CEb6T; #158, #132, #150
 
 import type { ChallengeAttemptRecord } from '@tableside/engine';
-import { CircleCheckBig, Divide, Hash, RotateCcw, Square, type LucideIcon } from 'lucide-react-native';
+import { CircleCheckBig, Divide, Hash, ListChecks, RotateCcw, Square, type LucideIcon } from 'lucide-react-native';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -9,13 +9,14 @@ import { Button } from '@/components/Button';
 import { fonts, palette, radius, space, textScale } from '@/theme/tokens';
 import {
   CATEGORY_TEXT,
-  COMPLETED_LEARN,
-  COMPLETED_LEARN_TEXT,
+  COMPLETED,
   NOT_TESTED,
   PACING_LABEL,
   RESULT_ROWS,
   RESULTS_TITLE,
   RETRY_LABEL,
+  resultsNote,
+  REVIEW_CARDS,
   SCORES_LABEL,
   scoreText,
   spokenScore,
@@ -32,9 +33,11 @@ const ROW_ICON: Record<(typeof RESULT_ROWS)[number]['metric'], LucideIcon> = {
   'betting-adherence': Square,
 };
 
-export function ChallengeResults({ record, allowance, onRetry }: { record: ChallengeAttemptRecord; allowance: AllowanceCopy | undefined; onRetry: () => void }) {
+export function ChallengeResults({ record, allowance, onRetry, onReview }: { record: ChallengeAttemptRecord; allowance: AllowanceCopy | undefined; onRetry: () => void; onReview: () => void }) {
   const insets = useSafeAreaInsets();
   const { groupKey } = record;
+  const completed = COMPLETED[groupKey.variant];
+  const note = resultsNote(groupKey.variant, allowance);
   return (
     <ScrollView style={styles.screen} contentContainerStyle={{ paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right, paddingBottom: space[6] }}>
       <View style={styles.header}>
@@ -50,11 +53,13 @@ export function ChallengeResults({ record, allowance, onRetry }: { record: Chall
           <CircleCheckBig color={palette.foreground} size={24} />
           <View style={styles.boxText}>
             <Text maxFontSizeMultiplier={textScale.body} style={styles.boxTitle}>
-              {COMPLETED_LEARN}
+              {completed.title}
             </Text>
-            <Text maxFontSizeMultiplier={textScale.body} style={styles.boxDetail}>
-              {COMPLETED_LEARN_TEXT}
-            </Text>
+            {completed.detail && (
+              <Text maxFontSizeMultiplier={textScale.body} style={styles.boxDetail}>
+                {completed.detail}
+              </Text>
+            )}
           </View>
         </View>
         <Text maxFontSizeMultiplier={textScale.body} style={styles.label}>
@@ -85,10 +90,11 @@ export function ChallengeResults({ record, allowance, onRetry }: { record: Chall
             );
           })}
         </View>
+        {record.review.length > 0 && <Button label={REVIEW_CARDS} icon={ListChecks} variant="outline" stretch onPress={onReview} />}
         <Button label={RETRY_LABEL} icon={RotateCcw} stretch disabled={startWaits(allowance)} onPress={onRetry} />
-        {allowance && (
+        {note.length > 0 && (
           <Text maxFontSizeMultiplier={textScale.body} style={styles.note}>
-            {allowance.results}
+            {note}
           </Text>
         )}
       </View>

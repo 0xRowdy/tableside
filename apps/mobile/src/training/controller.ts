@@ -1,5 +1,5 @@
 // Spec 3 Modules › Training service › Challenge controller
-// Spec 3 Attempt lifecycle; Amendment 1 C6; #158
+// Spec 3 Attempt lifecycle; Amendment 1 C6; #158, #132
 
 import {
   advanceChallenge,
@@ -25,13 +25,18 @@ import { CHALLENGE_CHARGE, type Admission, type AttemptCharge, type CommittedAtt
 
 export type StartProblem = 'invalid-setup' | 'access-denied' | 'access-uncertain' | 'save-failed';
 
+// Spec 3 S3-03 BFdJT
+export const RECORDED_MS = 800;
+
 export type LearnerCommand = Extract<ChallengeCommand, { readonly kind: 'answer' | 'skip' | 'retry-item' | 'next-item' }>;
 
 export type AttemptSnapshot =
   | { readonly status: 'loading' }
   | { readonly status: 'none'; readonly problem: Exclude<StartProblem, 'invalid-setup'> | null; readonly busy: boolean }
-  | { readonly status: 'active'; readonly view: ChallengeView; readonly busy: boolean; readonly save: 'saved' | 'failed' }
+  | { readonly status: 'active'; readonly view: ChallengeView; readonly facts: readonly ChallengeFact[]; readonly busy: boolean; readonly save: 'saved' | 'failed' }
   | { readonly status: 'ended'; readonly record: ChallengeAttemptRecord };
+
+type Committed = { readonly state: ChallengeState; readonly facts: readonly ChallengeFact[] };
 
 type Pending = { readonly kind: 'transition'; readonly command: LearnerCommand } | { readonly kind: 'record' };
 
@@ -42,6 +47,7 @@ export class ChallengeController {
   private readonly listeners = new Set<() => void>();
   private attempt: StoredAttempt | null = null;
   private state: ChallengeState | null = null;
+  private facts: readonly ChallengeFact[] = [];
   private busy = false;
   private pending: Pending | null = null;
   private retryFor: Pending | null = null;
@@ -64,6 +70,7 @@ export class ChallengeController {
       if (state.phase === 'ready') return this.showNone(null);
       this.adopt(stored, state);
       if (state.phase === 'ended') await this.record();
+      await this.drive();
     });
   }
 
@@ -124,13 +131,14 @@ export class ChallengeController {
       return this.showNone('save-failed');
     }
     const charged = await this.adapters.store.loadAttempt(stored.attemptId).catch(() => null);
-    this.adopt(charged ?? { ...stored, charge }, committed);
+    this.adopt(charged ?? { ...stored, charge }, committed.state, committed.facts);
   }
 
   async submit(command: LearnerCommand): Promise<void> {
     await this.exclusive(async () => {
       if (!this.state || this.pending) return;
       await this.send(command);
+      await this.drive();
     });
   }
 
@@ -141,6 +149,7 @@ export class ChallengeController {
       this.pending = null;
       if (pending.kind === 'record') await this.record();
       else await this.send(pending.command);
+      await this.drive();
     });
   }
 
@@ -158,16 +167,25 @@ export class ChallengeController {
       this.pending = { kind: 'transition', command };
       return this.publish();
     }
-    this.state = next;
+    this.state = next.state;
+    this.facts = next.facts;
     this.publish();
-    if (next.phase === 'ended') await this.record();
+    if (next.state.phase === 'ended') await this.record();
+  }
+
+  // Spec 3 Learn, Check and assistance › Answer accepted; S3-03 BFdJT
+  private async drive(): Promise<void> {
+    while (this.state?.phase === 'recorded' && !this.pending) {
+      await this.adapters.clock.sleep(RECORDED_MS);
+      await this.send({ kind: 'next-item' });
+    }
   }
 
   // Spec 1 Durability steps 2–4
-  private async commit(state: ChallengeState, command: ChallengeCommand, charge: AttemptCharge | null): Promise<ChallengeState | null> {
+  private async commit(state: ChallengeState, command: ChallengeCommand, charge: AttemptCharge | null): Promise<Committed | null> {
     const commandId = `${state.attempt.id}/${state.sequence}`;
     const result = advanceChallenge(state, { sequence: state.sequence, commandId, command });
-    if (result.status !== 'committed') return state;
+    if (result.status !== 'committed') return { state, facts: [] };
     const { store } = this.adapters;
     let found: CommittedAttemptTransition | null = null;
     try {
@@ -179,7 +197,7 @@ export class ChallengeController {
         facts: result.facts as ChallengeFact[],
         charge,
       });
-      if (outcome.status === 'committed') return result.state;
+      if (outcome.status === 'committed') return { state: result.state, facts: result.facts };
       if (outcome.status === 'already-committed') found = outcome.transition;
     } catch {
       found = await store.readAttemptReceipt(state.attempt.id, commandId).catch(() => null);
@@ -187,7 +205,7 @@ export class ChallengeController {
     if (found === null || found.receipt.command !== result.receipt.command) return null;
     const decoded = decodeChallengeCheckpoint(found.checkpoint);
     if (!decoded.ok) throw new Error(`attempt ${state.attempt.id} has a damaged checkpoint: ${decoded.error.message}`);
-    return decoded.state;
+    return { state: decoded.state, facts: found.facts };
   }
 
   // Spec 3 Attempt lifecycle › Durability
@@ -225,9 +243,10 @@ export class ChallengeController {
     return decoded.state;
   }
 
-  private adopt(stored: StoredAttempt, state: ChallengeState): void {
+  private adopt(stored: StoredAttempt, state: ChallengeState, facts: readonly ChallengeFact[] = []): void {
     this.attempt = stored;
     this.state = state;
+    this.facts = facts;
     this.pending = null;
     this.publish();
   }
@@ -275,7 +294,7 @@ export class ChallengeController {
       if (this.current.status === 'none') this.showNone(this.current.problem);
       return;
     }
-    this.current = { status: 'active', view: readChallengeView(this.state), busy: this.busy, save: this.pending ? 'failed' : 'saved' };
+    this.current = { status: 'active', view: readChallengeView(this.state), facts: this.facts, busy: this.busy, save: this.pending ? 'failed' : 'saved' };
     this.notify();
   }
 

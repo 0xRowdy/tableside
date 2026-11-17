@@ -1818,6 +1818,169 @@ export const RECORDED_ENGINE_0_0_0_SCHEMA_8: RecordedBuild = {
       ],
       "facts": "[{\"kind\":\"content-shown\",\"position\":2},{\"kind\":\"answer-accepted\",\"position\":2,\"scored\":true},{\"kind\":\"content-shown\",\"position\":3},{\"kind\":\"answer-accepted\",\"position\":3,\"scored\":true},{\"kind\":\"content-shown\",\"position\":4},{\"kind\":\"answer-accepted\",\"position\":4,\"scored\":true},{\"kind\":\"content-shown\",\"position\":5},{\"kind\":\"answer-accepted\",\"position\":5,\"scored\":true},{\"kind\":\"content-shown\",\"position\":6},{\"kind\":\"answer-accepted\",\"position\":6,\"scored\":true},{\"kind\":\"content-shown\",\"position\":7},{\"kind\":\"answer-accepted\",\"position\":7,\"scored\":true},{\"kind\":\"content-shown\",\"position\":8},{\"kind\":\"answer-accepted\",\"position\":8,\"scored\":true},{\"kind\":\"content-shown\",\"position\":9},{\"kind\":\"answer-accepted\",\"position\":9,\"scored\":true},{\"kind\":\"content-shown\",\"position\":10},{\"kind\":\"answer-accepted\",\"position\":10,\"scored\":true},{\"kind\":\"content-shown\",\"position\":11},{\"kind\":\"answer-accepted\",\"position\":11,\"scored\":true},{\"kind\":\"content-shown\",\"position\":12},{\"kind\":\"answer-accepted\",\"position\":12,\"scored\":true},{\"kind\":\"content-shown\",\"position\":13},{\"kind\":\"answer-accepted\",\"position\":13,\"scored\":true},{\"kind\":\"content-shown\",\"position\":14},{\"kind\":\"answer-accepted\",\"position\":14,\"scored\":true},{\"kind\":\"content-shown\",\"position\":15},{\"kind\":\"answer-accepted\",\"position\":15,\"scored\":true},{\"kind\":\"content-shown\",\"position\":16},{\"kind\":\"answer-accepted\",\"position\":16,\"scored\":true},{\"kind\":\"content-shown\",\"position\":17},{\"kind\":\"answer-accepted\",\"position\":17,\"scored\":true},{\"kind\":\"content-shown\",\"position\":18},{\"kind\":\"answer-accepted\",\"position\":18,\"scored\":true},{\"kind\":\"content-shown\",\"position\":19},{\"kind\":\"answer-accepted\",\"position\":19,\"scored\":true},{\"ending\":\"completed\",\"kind\":\"attempt-ended\"}]",
       "results": "{\"assistanceStep\":null,\"assisted\":true,\"ending\":\"completed\",\"metrics\":{\"betting-adherence\":null,\"card-values\":{\"correct\":5,\"total\":20},\"playing-adherence\":null,\"running-count\":null,\"true-count\":null},\"review\":[{\"card\":{\"rank\":5,\"suit\":\"diamonds\"},\"entered\":1,\"kind\":\"card-value\",\"position\":1,\"reference\":1},{\"card\":{\"rank\":7,\"suit\":\"diamonds\"},\"entered\":1,\"kind\":\"card-value\",\"position\":2,\"reference\":0},{\"card\":{\"rank\":10,\"suit\":\"clubs\"},\"entered\":0,\"kind\":\"card-value\",\"position\":3,\"reference\":-1},{\"card\":{\"rank\":2,\"suit\":\"clubs\"},\"entered\":0,\"kind\":\"card-value\",\"position\":4,\"reference\":1},{\"card\":{\"rank\":7,\"suit\":\"hearts\"},\"entered\":0,\"kind\":\"card-value\",\"position\":5,\"reference\":0},{\"card\":{\"rank\":2,\"suit\":\"spades\"},\"entered\":0,\"kind\":\"card-value\",\"position\":6,\"reference\":1},{\"card\":{\"rank\":11,\"suit\":\"hearts\"},\"entered\":0,\"kind\":\"card-value\",\"position\":7,\"reference\":-1},{\"card\":{\"rank\":4,\"suit\":\"spades\"},\"entered\":0,\"kind\":\"card-value\",\"position\":8,\"reference\":1},{\"card\":{\"rank\":6,\"suit\":\"hearts\"},\"entered\":0,\"kind\":\"card-value\",\"position\":9,\"reference\":1},{\"card\":{\"rank\":11,\"suit\":\"clubs\"},\"entered\":0,\"kind\":\"card-value\",\"position\":10,\"reference\":-1},{\"card\":{\"rank\":12,\"suit\":\"diamonds\"},\"entered\":0,\"kind\":\"card-value\",\"position\":11,\"reference\":-1},{\"card\":{\"rank\":9,\"suit\":\"hearts\"},\"entered\":0,\"kind\":\"card-value\",\"position\":12,\"reference\":0},{\"card\":{\"rank\":2,\"suit\":\"diamonds\"},\"entered\":0,\"kind\":\"card-value\",\"position\":13,\"reference\":1},{\"card\":{\"rank\":6,\"suit\":\"hearts\"},\"entered\":0,\"kind\":\"card-value\",\"position\":14,\"reference\":1},{\"card\":{\"rank\":2,\"suit\":\"spades\"},\"entered\":0,\"kind\":\"card-value\",\"position\":15,\"reference\":1},{\"card\":{\"rank\":1,\"suit\":\"clubs\"},\"entered\":0,\"kind\":\"card-value\",\"position\":16,\"reference\":-1},{\"card\":{\"rank\":9,\"suit\":\"spades\"},\"entered\":0,\"kind\":\"card-value\",\"position\":17,\"reference\":0},{\"card\":{\"rank\":8,\"suit\":\"diamonds\"},\"entered\":0,\"kind\":\"card-value\",\"position\":18,\"reference\":0},{\"card\":{\"rank\":3,\"suit\":\"clubs\"},\"entered\":0,\"kind\":\"card-value\",\"position\":19,\"reference\":1},{\"card\":{\"rank\":13,\"suit\":\"spades\"},\"entered\":0,\"kind\":\"card-value\",\"position\":20,\"reference\":-1}]}"
+    },
+    {
+      "name": "card values Check, an answer recorded",
+      "category": "card-values",
+      "phase": "recorded",
+      "specification": {
+        "attemptId": "attempt-1",
+        "content": {
+          "category": "card-values",
+          "coverage": "every-rank",
+          "id": "card-values",
+          "length": 20,
+          "version": 1
+        },
+        "device": "device-1",
+        "owner": "owner-1",
+        "variant": "check"
+      },
+      "random": {
+        "key": [
+          1,
+          2654435769
+        ],
+        "protocol": 1,
+        "session": [
+          8,
+          0
+        ]
+      },
+      "checkpoint": "{\"answers\":[{\"first\":1,\"last\":1,\"tries\":1},{\"first\":1,\"last\":1,\"tries\":1}],\"attempt\":{\"device\":\"device-1\",\"id\":\"attempt-1\",\"owner\":\"owner-1\"},\"content\":{\"category\":\"card-values\",\"coverage\":\"every-rank\",\"id\":\"card-values\",\"length\":20,\"version\":1},\"ending\":null,\"identities\":{\"category\":\"card-values\",\"content\":{\"id\":\"card-values\",\"version\":1},\"engine\":\"0.0.0\",\"random\":{\"key\":[1,2654435769],\"protocol\":1,\"session\":[8,0]},\"reference\":null},\"items\":[{\"card\":{\"rank\":5,\"suit\":\"diamonds\"}},{\"card\":{\"rank\":7,\"suit\":\"diamonds\"}},{\"card\":{\"rank\":10,\"suit\":\"clubs\"}},{\"card\":{\"rank\":2,\"suit\":\"clubs\"}},{\"card\":{\"rank\":7,\"suit\":\"hearts\"}},{\"card\":{\"rank\":2,\"suit\":\"spades\"}},{\"card\":{\"rank\":11,\"suit\":\"hearts\"}},{\"card\":{\"rank\":4,\"suit\":\"spades\"}},{\"card\":{\"rank\":6,\"suit\":\"hearts\"}},{\"card\":{\"rank\":11,\"suit\":\"clubs\"}},{\"card\":{\"rank\":12,\"suit\":\"diamonds\"}},{\"card\":{\"rank\":9,\"suit\":\"hearts\"}},{\"card\":{\"rank\":2,\"suit\":\"diamonds\"}},{\"card\":{\"rank\":6,\"suit\":\"hearts\"}},{\"card\":{\"rank\":2,\"suit\":\"spades\"}},{\"card\":{\"rank\":1,\"suit\":\"clubs\"}},{\"card\":{\"rank\":9,\"suit\":\"spades\"}},{\"card\":{\"rank\":8,\"suit\":\"diamonds\"}},{\"card\":{\"rank\":3,\"suit\":\"clubs\"}},{\"card\":{\"rank\":13,\"suit\":\"spades\"}}],\"phase\":\"recorded\",\"position\":1,\"random\":{\"block\":[200,0],\"exhausted\":false,\"key\":[1,2654435769],\"lane\":0,\"protocol\":1,\"session\":[8,0]},\"receipts\":[{\"command\":\"{\\\"kind\\\":\\\"begin\\\"}\",\"commandId\":\"record-0\",\"disposition\":\"applied\",\"sequence\":0},{\"command\":\"{\\\"kind\\\":\\\"answer\\\",\\\"value\\\":1}\",\"commandId\":\"record-1\",\"disposition\":\"applied\",\"sequence\":1},{\"command\":\"{\\\"kind\\\":\\\"next-item\\\"}\",\"commandId\":\"record-2\",\"disposition\":\"applied\",\"sequence\":2},{\"command\":\"{\\\"kind\\\":\\\"answer\\\",\\\"value\\\":1}\",\"commandId\":\"record-3\",\"disposition\":\"applied\",\"sequence\":3}],\"rejected\":39,\"schema\":8,\"sequence\":4,\"variant\":\"check\"}",
+      "continuation": [
+        {
+          "kind": "next-item"
+        },
+        {
+          "kind": "answer",
+          "value": 0
+        },
+        {
+          "kind": "next-item"
+        },
+        {
+          "kind": "answer",
+          "value": 0
+        },
+        {
+          "kind": "next-item"
+        },
+        {
+          "kind": "answer",
+          "value": 0
+        },
+        {
+          "kind": "next-item"
+        },
+        {
+          "kind": "answer",
+          "value": 0
+        },
+        {
+          "kind": "next-item"
+        },
+        {
+          "kind": "answer",
+          "value": 0
+        },
+        {
+          "kind": "next-item"
+        },
+        {
+          "kind": "answer",
+          "value": 0
+        },
+        {
+          "kind": "next-item"
+        },
+        {
+          "kind": "answer",
+          "value": 0
+        },
+        {
+          "kind": "next-item"
+        },
+        {
+          "kind": "answer",
+          "value": 0
+        },
+        {
+          "kind": "next-item"
+        },
+        {
+          "kind": "answer",
+          "value": 0
+        },
+        {
+          "kind": "next-item"
+        },
+        {
+          "kind": "answer",
+          "value": 0
+        },
+        {
+          "kind": "next-item"
+        },
+        {
+          "kind": "answer",
+          "value": 0
+        },
+        {
+          "kind": "next-item"
+        },
+        {
+          "kind": "answer",
+          "value": 0
+        },
+        {
+          "kind": "next-item"
+        },
+        {
+          "kind": "answer",
+          "value": 0
+        },
+        {
+          "kind": "next-item"
+        },
+        {
+          "kind": "answer",
+          "value": 0
+        },
+        {
+          "kind": "next-item"
+        },
+        {
+          "kind": "answer",
+          "value": 0
+        },
+        {
+          "kind": "next-item"
+        },
+        {
+          "kind": "answer",
+          "value": 0
+        },
+        {
+          "kind": "next-item"
+        },
+        {
+          "kind": "answer",
+          "value": 0
+        },
+        {
+          "kind": "next-item"
+        },
+        {
+          "kind": "answer",
+          "value": 0
+        },
+        {
+          "kind": "next-item"
+        }
+      ],
+      "facts": "[{\"kind\":\"content-shown\",\"position\":2},{\"kind\":\"answer-accepted\",\"position\":2,\"scored\":true},{\"kind\":\"content-shown\",\"position\":3},{\"kind\":\"answer-accepted\",\"position\":3,\"scored\":true},{\"kind\":\"content-shown\",\"position\":4},{\"kind\":\"answer-accepted\",\"position\":4,\"scored\":true},{\"kind\":\"content-shown\",\"position\":5},{\"kind\":\"answer-accepted\",\"position\":5,\"scored\":true},{\"kind\":\"content-shown\",\"position\":6},{\"kind\":\"answer-accepted\",\"position\":6,\"scored\":true},{\"kind\":\"content-shown\",\"position\":7},{\"kind\":\"answer-accepted\",\"position\":7,\"scored\":true},{\"kind\":\"content-shown\",\"position\":8},{\"kind\":\"answer-accepted\",\"position\":8,\"scored\":true},{\"kind\":\"content-shown\",\"position\":9},{\"kind\":\"answer-accepted\",\"position\":9,\"scored\":true},{\"kind\":\"content-shown\",\"position\":10},{\"kind\":\"answer-accepted\",\"position\":10,\"scored\":true},{\"kind\":\"content-shown\",\"position\":11},{\"kind\":\"answer-accepted\",\"position\":11,\"scored\":true},{\"kind\":\"content-shown\",\"position\":12},{\"kind\":\"answer-accepted\",\"position\":12,\"scored\":true},{\"kind\":\"content-shown\",\"position\":13},{\"kind\":\"answer-accepted\",\"position\":13,\"scored\":true},{\"kind\":\"content-shown\",\"position\":14},{\"kind\":\"answer-accepted\",\"position\":14,\"scored\":true},{\"kind\":\"content-shown\",\"position\":15},{\"kind\":\"answer-accepted\",\"position\":15,\"scored\":true},{\"kind\":\"content-shown\",\"position\":16},{\"kind\":\"answer-accepted\",\"position\":16,\"scored\":true},{\"kind\":\"content-shown\",\"position\":17},{\"kind\":\"answer-accepted\",\"position\":17,\"scored\":true},{\"kind\":\"content-shown\",\"position\":18},{\"kind\":\"answer-accepted\",\"position\":18,\"scored\":true},{\"kind\":\"content-shown\",\"position\":19},{\"kind\":\"answer-accepted\",\"position\":19,\"scored\":true},{\"ending\":\"completed\",\"kind\":\"attempt-ended\"}]",
+      "results": "{\"assistanceStep\":null,\"assisted\":false,\"ending\":\"completed\",\"metrics\":{\"betting-adherence\":null,\"card-values\":{\"correct\":5,\"total\":20},\"playing-adherence\":null,\"running-count\":null,\"true-count\":null},\"review\":[{\"card\":{\"rank\":5,\"suit\":\"diamonds\"},\"entered\":1,\"kind\":\"card-value\",\"position\":1,\"reference\":1},{\"card\":{\"rank\":7,\"suit\":\"diamonds\"},\"entered\":1,\"kind\":\"card-value\",\"position\":2,\"reference\":0},{\"card\":{\"rank\":10,\"suit\":\"clubs\"},\"entered\":0,\"kind\":\"card-value\",\"position\":3,\"reference\":-1},{\"card\":{\"rank\":2,\"suit\":\"clubs\"},\"entered\":0,\"kind\":\"card-value\",\"position\":4,\"reference\":1},{\"card\":{\"rank\":7,\"suit\":\"hearts\"},\"entered\":0,\"kind\":\"card-value\",\"position\":5,\"reference\":0},{\"card\":{\"rank\":2,\"suit\":\"spades\"},\"entered\":0,\"kind\":\"card-value\",\"position\":6,\"reference\":1},{\"card\":{\"rank\":11,\"suit\":\"hearts\"},\"entered\":0,\"kind\":\"card-value\",\"position\":7,\"reference\":-1},{\"card\":{\"rank\":4,\"suit\":\"spades\"},\"entered\":0,\"kind\":\"card-value\",\"position\":8,\"reference\":1},{\"card\":{\"rank\":6,\"suit\":\"hearts\"},\"entered\":0,\"kind\":\"card-value\",\"position\":9,\"reference\":1},{\"card\":{\"rank\":11,\"suit\":\"clubs\"},\"entered\":0,\"kind\":\"card-value\",\"position\":10,\"reference\":-1},{\"card\":{\"rank\":12,\"suit\":\"diamonds\"},\"entered\":0,\"kind\":\"card-value\",\"position\":11,\"reference\":-1},{\"card\":{\"rank\":9,\"suit\":\"hearts\"},\"entered\":0,\"kind\":\"card-value\",\"position\":12,\"reference\":0},{\"card\":{\"rank\":2,\"suit\":\"diamonds\"},\"entered\":0,\"kind\":\"card-value\",\"position\":13,\"reference\":1},{\"card\":{\"rank\":6,\"suit\":\"hearts\"},\"entered\":0,\"kind\":\"card-value\",\"position\":14,\"reference\":1},{\"card\":{\"rank\":2,\"suit\":\"spades\"},\"entered\":0,\"kind\":\"card-value\",\"position\":15,\"reference\":1},{\"card\":{\"rank\":1,\"suit\":\"clubs\"},\"entered\":0,\"kind\":\"card-value\",\"position\":16,\"reference\":-1},{\"card\":{\"rank\":9,\"suit\":\"spades\"},\"entered\":0,\"kind\":\"card-value\",\"position\":17,\"reference\":0},{\"card\":{\"rank\":8,\"suit\":\"diamonds\"},\"entered\":0,\"kind\":\"card-value\",\"position\":18,\"reference\":0},{\"card\":{\"rank\":3,\"suit\":\"clubs\"},\"entered\":0,\"kind\":\"card-value\",\"position\":19,\"reference\":1},{\"card\":{\"rank\":13,\"suit\":\"spades\"},\"entered\":0,\"kind\":\"card-value\",\"position\":20,\"reference\":-1}]}"
     }
   ]
 };

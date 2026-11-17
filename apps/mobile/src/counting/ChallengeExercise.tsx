@@ -1,15 +1,17 @@
-// Spec 3 S3-03 P4WjR; #158
+// Spec 3 S3-03 P4WjR, drVnR, BFdJT; #158, #132
 
-import type { ChallengeCard, ChallengeView, HiLoValue, LearnFeedback } from '@tableside/engine';
-import { Check, CircleCheck, CircleX, X } from 'lucide-react-native';
+import type { ChallengeCard, ChallengeEntry, ChallengeView, HiLoValue, LearnFeedback } from '@tableside/engine';
+import { Check, CircleCheck, CircleDot, CircleX, SkipForward, X } from 'lucide-react-native';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { Button } from '@/components/Button';
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
 import { cardName, cardRank, signed, SUIT_GLYPH } from '@/play/blackjack-text';
 import { SaveFailedBanner } from '@/play/TableChrome';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/theme/tokens';
 import {
+  CARD_PROMPT,
   CATEGORY_TEXT,
   CHOICE_TAG,
   choiceState,
@@ -18,9 +20,12 @@ import {
   NEXT_CARD,
   PACING_LABEL,
   progressText,
+  recordedText,
+  SKIP_LABEL,
   spokenValue,
   TRY_AGAIN,
   variantLabel,
+  type ChoiceState,
 } from '@/training/challenge-text';
 import type { LearnerCommand } from '@/training/service';
 
@@ -41,6 +46,8 @@ export function ChallengeExercise({
 }) {
   const insets = useSafeAreaInsets();
   const answering = view.legalCommands.includes('answer') && !busy && !saveFailed;
+  const feedback = view.variant === 'learn' ? view.feedback : null;
+  const entered = view.variant === 'check' ? view.entered : null;
   return (
     <ScrollView style={styles.screen} contentContainerStyle={{ paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right, paddingBottom: space[6] }}>
       <View style={styles.header}>
@@ -62,12 +69,19 @@ export function ChallengeExercise({
       <View style={styles.body}>
         {saveFailed && <SaveFailedBanner busy={busy} onRetry={onRetrySave} />}
         {view.item && <PlayingCard card={view.item.card} />}
+        {view.item && !feedback && (
+          <Text maxFontSizeMultiplier={textScale.display} style={styles.prompt}>
+            {CARD_PROMPT}
+          </Text>
+        )}
         <View style={styles.choices}>
           {view.choices.map((value) => (
-            <Choice key={value} value={value} feedback={view.feedback} enabled={answering} onPress={() => onCommand({ kind: 'answer', value })} />
+            <Choice key={value} value={value} state={choiceState(value, feedback, entered)} enabled={answering} onPress={() => onCommand({ kind: 'answer', value })} />
           ))}
         </View>
-        {view.feedback && <CoachNote feedback={view.feedback} canRetry={view.legalCommands.includes('retry-item')} enabled={!busy && !saveFailed} onCommand={onCommand} />}
+        {view.legalCommands.includes('skip') && <Button label={SKIP_LABEL} icon={SkipForward} variant="outline" stretch disabled={!answering} onPress={() => onCommand({ kind: 'skip' })} />}
+        {view.phase === 'recorded' && entered !== null && <RecordedNotice entered={entered} />}
+        {feedback && <CoachNote feedback={feedback} canRetry={view.legalCommands.includes('retry-item')} enabled={!busy && !saveFailed} onCommand={onCommand} />}
       </View>
     </ScrollView>
   );
@@ -93,11 +107,13 @@ function PlayingCard({ card }: { card: ChallengeCard }) {
   );
 }
 
-function Choice({ value, feedback, enabled, onPress }: { value: HiLoValue; feedback: LearnFeedback | null; enabled: boolean; onPress: () => void }) {
+const CHOICE_TONE = { correct: palette.correct, 'your-answer': palette.mistake, recorded: palette.foreground } as const;
+const CHOICE_ICON = { correct: Check, 'your-answer': X, recorded: CircleDot } as const;
+
+function Choice({ value, state, enabled, onPress }: { value: HiLoValue; state: ChoiceState; enabled: boolean; onPress: () => void }) {
   const { focused, focusProps } = useKeyboardFocus();
-  const state = choiceState(value, feedback);
-  const tone = state === 'correct' ? palette.correct : state === 'your-answer' ? palette.mistake : palette.controlBorder;
-  const Icon = state === 'correct' ? Check : X;
+  const tone = state ? CHOICE_TONE[state] : palette.controlBorder;
+  const Icon = state ? CHOICE_ICON[state] : X;
   return (
     <Pressable
       accessibilityRole="button"
@@ -121,6 +137,18 @@ function Choice({ value, feedback, enabled, onPress }: { value: HiLoValue; feedb
         </View>
       )}
     </Pressable>
+  );
+}
+
+// Spec 3 Learn, Check and assistance › Answer accepted
+function RecordedNotice({ entered }: { entered: ChallengeEntry }) {
+  return (
+    <View style={styles.recorded} accessibilityLiveRegion="polite" testID="recorded-notice">
+      <CircleDot color={palette.foreground} size={18} />
+      <Text maxFontSizeMultiplier={textScale.body} style={styles.recordedText}>
+        {recordedText(entered)}
+      </Text>
+    </View>
   );
 }
 
@@ -188,6 +216,7 @@ const styles = StyleSheet.create({
   rank: { fontFamily: fonts.uiBold, fontSize: 40, lineHeight: 44 },
   cornerSuit: { fontSize: 28, lineHeight: 30 },
   pip: { alignSelf: 'flex-end', fontSize: 60, lineHeight: 64 },
+  prompt: { fontFamily: fonts.uiBold, fontSize: 18, color: palette.foreground, textAlign: 'center' },
   choices: { flexDirection: 'row', gap: space[3] - 2 },
   choice: {
     flex: 1,
@@ -204,6 +233,8 @@ const styles = StyleSheet.create({
   choiceValue: { fontFamily: fonts.uiBold, fontSize: 30, color: palette.foreground },
   tag: { flexDirection: 'row', alignItems: 'center', gap: space[1] },
   tagText: { fontFamily: fonts.uiBold, fontSize: 12 },
+  recorded: { flexDirection: 'row', alignItems: 'center', gap: space[2], paddingVertical: space[3], paddingHorizontal: 14, borderRadius: 12, borderWidth: 1, borderColor: palette.controlBorder, backgroundColor: palette.card },
+  recordedText: { flex: 1, fontFamily: fonts.ui, fontSize: 14, color: palette.foreground },
   coach: { gap: space[3] - 2, paddingTop: 14, paddingHorizontal: space[4], paddingBottom: space[4], borderRadius: radius.lg, borderWidth: 1, borderColor: palette.coachAccent, backgroundColor: palette.coach },
   coachHead: { flexDirection: 'row', alignItems: 'flex-start', gap: space[3] - 2 },
   who: { flex: 1 },

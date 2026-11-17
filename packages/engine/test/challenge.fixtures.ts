@@ -1,9 +1,22 @@
-// Spec 3 Challenge content (from #4); #158
-import { advanceChallenge, createChallenge, RANDOM_PROTOCOL_VERSION, type ChallengeCommand, type ChallengeSpecification, type ChallengeState, type RandomStreamIdentity } from '../src';
+// Spec 3 Challenge content (from #4); #158, #132
+import {
+  advanceChallenge,
+  createChallenge,
+  RANDOM_PROTOCOL_VERSION,
+  readChallengeView,
+  type ChallengeCommand,
+  type ChallengeSpecification,
+  type ChallengeState,
+  type CheckChallengeView,
+  type LearnChallengeView,
+  type RandomStreamIdentity,
+} from '../src';
 
 export const CARD_VALUES_V1 = { category: 'card-values', id: 'card-values', version: 1, length: 20, coverage: 'every-rank' } as const;
 
 export const LEARN: ChallengeSpecification = { attemptId: 'attempt-1', owner: 'owner-1', device: 'device-1', variant: 'learn', content: CARD_VALUES_V1 };
+
+export const CHECK: ChallengeSpecification = { ...LEARN, variant: 'check' };
 
 export const seed = (n: number): RandomStreamIdentity => ({ protocol: RANDOM_PROTOCOL_VERSION, key: [n, 0x9e3779b9], session: [n * 7 + 1, 0] });
 
@@ -21,3 +34,15 @@ export const ANSWER = (value: -1 | 0 | 1): ChallengeCommand => ({ kind: 'answer'
 export const NEXT: ChallengeCommand = { kind: 'next-item' };
 export const RETRY: ChallengeCommand = { kind: 'retry-item' };
 export const SKIP: ChallengeCommand = { kind: 'skip' };
+
+export function learnView(state: ChallengeState): LearnChallengeView {
+  const view = readChallengeView(state);
+  if (view.variant !== 'learn') throw new Error('expected a Learn view');
+  return view;
+}
+
+export function checkView(state: ChallengeState): CheckChallengeView {
+  const view = readChallengeView(state);
+  if (view.variant !== 'check') throw new Error('expected a Check view');
+  return view;
+}

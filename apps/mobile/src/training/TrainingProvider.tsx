@@ -1,4 +1,4 @@
-// Spec 3 Modules › Training service; #158
+// Spec 3 Modules › Training service; #158, #132
 import { createContext, useContext, useState, useSyncExternalStore, type ReactNode } from 'react';
 
 import { useAccount } from '@/account/AccountProvider';
@@ -21,9 +21,14 @@ export function TrainingProvider({ children }: { children: ReactNode }) {
   return <TrainingContext.Provider value={service}>{children}</TrainingContext.Provider>;
 }
 
-export function useTraining() {
+export function useTrainingService(): TrainingService {
   const service = useContext(TrainingContext);
-  if (!service) throw new Error('useTraining needs a TrainingProvider');
+  if (!service) throw new Error('useTrainingService needs a TrainingProvider');
+  return service;
+}
+
+export function useTraining() {
+  const service = useTrainingService();
   const snapshot = useSyncExternalStore(service.subscribe, service.snapshot);
   return { service, snapshot };
 }
