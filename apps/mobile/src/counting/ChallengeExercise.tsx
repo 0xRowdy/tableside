@@ -1,5 +1,6 @@
-// Spec 3 S3-03 P4WjR, drVnR, BFdJT, S3-04 qdnQm, S3-05 EDnGd, r5pCx, T9sCI, S3-06 C53yTW; #158, #132, #133, #135
+// Spec 3 S3-03 P4WjR, drVnR, BFdJT, S3-04 qdnQm, S3-05 EDnGd, r5pCx, T9sCI, S3-06 C53yTW; #158, #132, #133, #135, #146
 
+import type { HintId } from '@tableside/definitions';
 import type { ChallengeCategory, ChallengeEntry, ChallengeView, CountRange, LearnFeedback } from '@tableside/engine';
 import { CircleAlert, CircleCheck, CircleDot, CircleHelp, CircleX, Pause, SkipForward, Timer, type LucideIcon } from 'lucide-react-native';
 import { useState } from 'react';
@@ -10,6 +11,8 @@ import { Button } from '@/components/Button';
 import { Choice, PlayingCard } from '@/counting/CardChoices';
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
 import { usePolling } from '@/hooks/use-polling';
+import { FirstUseHint, useReopenHints } from '@/lessons/FirstUseHints';
+import { signed } from '@/play/blackjack-text';
 import { SaveFailedBanner } from '@/play/TableChrome';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/theme/tokens';
 import { HelpSheet, HoldSheet } from './AttemptSheets';
@@ -28,22 +31,29 @@ import {
   COACH_NAME,
   exerciseSubtitle,
   feedbackText,
-  HELP_LABEL,
   NEXT_CARD,
   PAUSE_LABEL,
   recordedText,
   SKIP_LABEL,
   spokenTimer,
+  spokenValue,
   timerText,
   TRY_AGAIN,
   turnBoundaryText,
 } from '@/training/challenge-text';
 import type { AttemptHold, PerformanceTimer } from '@/training/controller';
+import { HELP_HINT, HELP_LABEL } from '@/training/lesson-text';
 import type { LearnerCommand } from '@/training/service';
 
 const TIMER_TICK_MS = 1000;
 
 const SIDE_BY_SIDE_MAX_FONT_SCALE = 1.35;
+
+// Spec 3 Lessons › Structure (First-use hints); #146
+export function exerciseHints(view: ChallengeView): readonly HintId[] {
+  if (view.countRange === null) return [];
+  return view.countAid ? ['count-entry', 'show-count'] : ['count-entry'];
+}
 
 export function ChallengeExercise({
   view,
@@ -76,6 +86,7 @@ export function ChallengeExercise({
 }) {
   const insets = useSafeAreaInsets();
   const [helping, setHelping] = useState(false);
+  const reopenHints = useReopenHints();
   const held = hold?.reached ?? false;
   const ready = !busy && !saveFailed && !held;
   const answering = view.legalCommands.includes('answer') && ready;
@@ -92,7 +103,17 @@ export function ChallengeExercise({
             {exerciseSubtitle(view.variant, timer !== null, hold)}
           </Text>
         </View>
-        <HeaderButton label={HELP_LABEL} icon={CircleHelp} enabled onPress={() => setHelping(true)} />
+        {/* #146 */}
+        <HeaderButton
+          label={HELP_LABEL}
+          hint={HELP_HINT}
+          icon={CircleHelp}
+          enabled
+          onPress={() => {
+            reopenHints();
+            setHelping(true);
+          }}
+        />
         <HeaderButton label={PAUSE_LABEL} icon={Pause} enabled={!held} onPress={onPause} />
       </View>
       <View style={styles.progress}>
@@ -126,7 +147,7 @@ export function ChallengeExercise({
             )}
             <View style={styles.choices}>
               {view.choices.map((value) => (
-                <Choice key={value} value={value} state={choiceState(value, feedback, entered)} enabled={answering} onPress={() => onCommand({ kind: 'answer', value })} />
+                <Choice key={value} label={signed(value)} spoken={spokenValue(value)} state={choiceState(value, feedback, entered)} enabled={answering} onPress={() => onCommand({ kind: 'answer', value })} />
               ))}
             </View>
             {view.legalCommands.includes('skip') && <Button label={SKIP_LABEL} icon={SkipForward} variant="outline" stretch disabled={!answering} onPress={() => onCommand({ kind: 'skip' })} />}
@@ -143,12 +164,13 @@ export function ChallengeExercise({
   );
 }
 
-function HeaderButton({ label, icon: Icon, enabled, onPress }: { label: string; icon: LucideIcon; enabled: boolean; onPress: () => void }) {
+function HeaderButton({ label, hint, icon: Icon, enabled, onPress }: { label: string; hint?: string; icon: LucideIcon; enabled: boolean; onPress: () => void }) {
   const { focused, focusProps } = useKeyboardFocus();
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={label}
+      accessibilityHint={hint}
       accessibilityState={{ disabled: !enabled }}
       disabled={!enabled}
       onPress={onPress}
@@ -222,9 +244,11 @@ function CountingBody({
             </Text>
           )}
         </View>
+        {view.countAid && <FirstUseHint id="show-count" />}
         {view.countAid && <CountAid key={view.attemptId} variant={view.variant} aid={view.countAid} enabled={ready && view.legalCommands.includes('reveal-count')} onReveal={() => onCommand({ kind: 'reveal-count' })} />}
       </View>
       <View style={[styles.column, sideBySide && styles.side]}>
+        {view.phase === 'question' && <FirstUseHint id="count-entry" />}
         {view.phase === 'question' && (
           <CountEntry
             key={view.position}

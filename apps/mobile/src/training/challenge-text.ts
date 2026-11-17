@@ -343,7 +343,6 @@ export const TIME_THIS = 'Time this attempt';
 export const TIME_THIS_DETAIL = 'Optional. Only perfect, unassisted, uninterrupted timed Check attempts set a fastest time.';
 
 // Spec 3 S3-04 qdnQm, S3-05 r5pCx, qGARl
-export const HELP_LABEL = 'Help';
 export const PAUSE_LABEL = 'Pause';
 
 export const exerciseSubtitle = (variant: ChallengeVariant, timed: boolean, hold: AttemptHold | null) =>

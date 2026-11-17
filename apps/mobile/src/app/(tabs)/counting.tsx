@@ -1,4 +1,4 @@
-// Spec 3 Screens; Lessons › Entry points, Structure (Handoff); Attempt lifecycle; Amendment 1 B5; #158, #132, #145, #133, #135
+// Spec 3 Screens; Lessons › Entry points, Structure; Attempt lifecycle; Amendment 1 B5; #158, #132, #145, #133, #135, #146
 import { CHALLENGE_LESSONS } from '@tableside/definitions';
 import { CHALLENGE_VARIANTS, type ChallengeVariant } from '@tableside/engine';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
@@ -7,12 +7,13 @@ import { useCallback, useState } from 'react';
 import { Placeholder } from '@/components/Placeholder';
 import { UnfinishedSheet } from '@/counting/AttemptSheets';
 import { CardReview } from '@/counting/CardReview';
-import { ChallengeExercise } from '@/counting/ChallengeExercise';
+import { ChallengeExercise, exerciseHints } from '@/counting/ChallengeExercise';
 import { ChallengeResults } from '@/counting/ChallengeResults';
 import { ChallengeSetupScreen } from '@/counting/ChallengeSetupScreen';
 import { CountingHome } from '@/counting/CountingHome';
 import { useFeedback } from '@/feedback/FeedbackProvider';
 import { useLoaded } from '@/hooks/use-loaded';
+import { ScreenHints } from '@/lessons/FirstUseHints';
 import { lessonHref } from '@/lessons/routes';
 import { allowanceCopy, COUNTING_TITLE, FINDING_ATTEMPT, NEEDS_UPDATE } from '@/training/challenge-text';
 import { setupFor, type ChallengeSetup, type TrainingService, type TrainingSnapshot } from '@/training/service';
@@ -93,7 +94,8 @@ export default function Counting() {
         );
       }
       return (
-        <ChallengeExercise
+        <ScreenHints service={service} ids={exerciseHints(view)}>
+          <ChallengeExercise
           view={view}
           busy={snapshot.busy}
           saveFailed={snapshot.save === 'failed'}
@@ -111,7 +113,8 @@ export default function Counting() {
             setBrowsing(true);
             router.setParams({ category: undefined, variant: undefined });
           }}
-        />
+          />
+        </ScreenHints>
       );
     }
     case 'ended':

@@ -1,4 +1,4 @@
-// Spec 3 Testing Decisions › Seam 3; S3-11 sVqX1, S3-12 l8pMS and aJV2y, S3-13 JJl51 and Fvlgc, Settings › Learning NvGyZ; Amendment 1 B4, D; #143, #144
+// Spec 3 Testing Decisions › Seam 3; S3-11 sVqX1, S3-12 l8pMS and aJV2y, S3-13 JJl51 and Fvlgc, Settings › Learning NvGyZ; Amendment 1 B4, D; #143, #144, #151
 
 import { act, cleanup, fireEvent, screen, within } from '@testing-library/react-native';
 import { renderRouter } from 'expo-router/testing-library';
@@ -9,7 +9,7 @@ import type { Lesson } from '@tableside/definitions';
 import type { substituteFeedbackPorts } from '@/feedback/testing/substitutes';
 import type { ChallengeAllowanceState } from '@/training/allowance';
 import type { MemoryTrainingStore } from '@/training/memory-store';
-import { withWorkedExample } from '@/training/testing/worked-example';
+import { MARTINGALE_STRATEGY_STEP, withWorkedExample } from '@/training/testing/worked-example';
 
 let mockStore: unknown = null;
 let mockAllowance: ChallengeAllowanceState | null = null;
@@ -90,7 +90,7 @@ describe('lessons', () => {
     expect(button('Back to Settings')).toBeOnTheScreen();
     expect(screen.getByRole('header', { name: 'LESSONS' })).toBeOnTheScreen();
     expect(await screen.findByRole('button', { name: 'Lesson catalog. 24 lessons · 0 completed · 0 in progress' })).toBeOnTheScreen();
-    expect(screen.getByText("Lessons never score you, award anything or lock anything. They're available to every account, including when today's challenge attempts are used up.")).toBeOnTheScreen();
+    expect(screen.getByText("Lessons never score you, award anything or lock anything. They're available to every account, including when today's challenge attempts are used up. Start here and hint settings stay on this device.")).toBeOnTheScreen();
     expect(within(screen.getByTestId('tab-bar')).getByRole('tab', { name: 'More', selected: true })).toBeOnTheScreen();
   });
 
@@ -108,7 +108,7 @@ describe('lessons', () => {
     expect(button('App orientation. Not started · Tabs, help, practice vs casino records')).toBeEnabled();
     expect(button('Blackjack basics. Not started')).toBeDisabled();
     expect(button('Blackjack basics. Not started')).toHaveProp('accessibilityHint', 'Not available in this version yet.');
-    expect(button('Building a strategy. Not started')).toBeDisabled();
+    expect(button('Building a strategy. Not started · Conditions, amounts, conflicts, fallbacks, stopping')).toBeEnabled();
   });
 
   it('step through App orientation, keep the place for Resume or Restart, and finish without a score', async () => {
@@ -130,7 +130,7 @@ describe('lessons', () => {
     expect(screen.queryByText('You stopped at step 2 of 4.')).toBeNull();
 
     await fireEvent.press(button('Next'));
-    await header('Practice records and casino records');
+    await header('Practice, casino and challenge records');
     await fireEvent.press(button('Back'));
     await header('Help when you need it');
     await fireEvent.press(button('Next'));
@@ -138,6 +138,9 @@ describe('lessons', () => {
     await header('Lessons at your own pace');
     expect(screen.queryByRole('button', { name: 'Next' })).toBeNull();
     await fireEvent.press(button('Finish'));
+    expect(await header('Practice what you learned')).toBeOnTheScreen();
+    for (const game of ['Blackjack', 'Craps', 'Roulette']) expect(button(new RegExp(`^Free play · ${game}\\b`))).toBeOnTheScreen();
+    await fireEvent.press(button('Back to lessons'));
 
     expect(await screen.findByRole('button', { name: 'App orientation. Completed · Tabs, help, practice vs casino records' })).toBeOnTheScreen();
     await fireEvent.press(button('Back to Learning'));
@@ -148,7 +151,7 @@ describe('lessons', () => {
     await openOrientation();
     await fireEvent.press(button('Next'));
     await fireEvent.press(await screen.findByRole('button', { name: 'Next' }));
-    await header('Practice records and casino records');
+    await header('Practice, casino and challenge records');
     await fireEvent.press(button('Back to Lessons'));
     await fireEvent.press(await screen.findByRole('button', { name: /^App orientation\. In progress · Step 3 of 4/ }));
     await fireEvent.press(await screen.findByRole('button', { name: 'Restart from step 1' }));
@@ -163,11 +166,12 @@ describe('lessons', () => {
 
   it('show "Completed (earlier version)" with the reason after a material change, until the learner restarts or moves on in the new version', async () => {
     await openOrientation();
-    for (const heading of ['Help when you need it', 'Practice records and casino records', 'Lessons at your own pace']) {
+    for (const heading of ['Help when you need it', 'Practice, casino and challenge records', 'Lessons at your own pace']) {
       await fireEvent.press(button('Next'));
       await header(heading);
     }
     await fireEvent.press(button('Finish'));
+    await fireEvent.press(await screen.findByRole('button', { name: 'Back to lessons' }));
     await screen.findByRole('button', { name: /^App orientation\. Completed/ });
     await cleanup();
 
@@ -246,13 +250,41 @@ describe('lessons', () => {
       expect(cues()).toEqual(['card-dealt', 'incorrect', 'correct']);
 
       await fireEvent.press(button('Continue'));
-      expect(await header('Practice records and casino records')).toBeOnTheScreen();
+      expect(await header('Practice, casino and challenge records')).toBeOnTheScreen();
       expect(await store().findUnfinishedAttempt()).toBeNull();
       expect(await store().readAttemptRecords()).toEqual([]);
       expect((await store().readLessonEvents()).map((event) => event.event)).toEqual([
         { kind: 'bookmark', step: 2 },
         { kind: 'bookmark', step: 3 },
       ]);
+    });
+
+    // Spec 3 Lessons › Structure (worked examples); #155
+    it('a strategy step shows the scripted spins, offers the next bets, and answers with the prescription and play cues', async () => {
+      servedLessons().splice(0, Infinity, ...withWorkedExample(actualLessons(), MARTINGALE_STRATEGY_STEP));
+      await openOrientation();
+      await fireEvent.press(button('Next'));
+      await header('Help when you need it');
+      await fireEvent.press(button('Try the worked example (optional)'));
+      await header('Worked example');
+      expect(screen.getByText('Spin 1: 10 on Red. The ball lands on 2 black.')).toBeOnTheScreen();
+      expect(screen.getByText('Spin 2: 20 on Red. The ball lands on 0 green.')).toBeOnTheScreen();
+      expect(screen.getByText('What does Capped Martingale bet next?')).toBeOnTheScreen();
+      expect(cues()).toEqual([]);
+
+      await fireEvent.press(button('10 on Red'));
+      expect(button('10 on Red')).toHaveProp('accessibilityValue', { text: 'Your pick' });
+      expect(button('40 on Red')).toHaveProp('accessibilityValue', { text: 'Correct' });
+      expect(screen.getByText('Capped Martingale bets 40 on Red.')).toBeOnTheScreen();
+      expect(screen.getByText('Only a win starts the next cycle at 10.')).toBeOnTheScreen();
+      expect(cues()).toEqual(['stake-set', 'correction-offered']);
+
+      await fireEvent.press(button('Try it again'));
+      await fireEvent.press(button('40 on Red'));
+      expect(cues()).toEqual(['stake-set', 'correction-offered', 'stake-set']);
+      await fireEvent.press(button('Continue'));
+      expect(await header('Practice, casino and challenge records')).toBeOnTheScreen();
+      expect(await store().readAttemptRecords()).toEqual([]);
     });
 
     it('can be skipped from the step that has one, and Back returns to that step without moving on', async () => {
@@ -265,7 +297,7 @@ describe('lessons', () => {
       await header('Worked example');
       expect(screen.queryByRole('button', { name: 'Continue' })).toBeNull();
       await fireEvent.press(button('Skip example'));
-      expect(await header('Practice records and casino records')).toBeOnTheScreen();
+      expect(await header('Practice, casino and challenge records')).toBeOnTheScreen();
       expect(cues()).toEqual(['card-dealt', 'card-dealt']);
     });
   });

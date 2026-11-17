@@ -29,6 +29,7 @@ export {
   type CommandKind,
   type DomainFact,
   type BetCorrection,
+  explainStrategyBets,
   isPlayCorrection,
   type CycleEnd,
   type CycleTurn,
