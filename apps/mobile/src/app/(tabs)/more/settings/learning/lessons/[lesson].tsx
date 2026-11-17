@@ -16,22 +16,22 @@ export default function LessonScreen() {
   const { lesson = '' } = useLocalSearchParams<{ lesson: string }>();
   const { service } = useTraining();
   const opened = useLoaded(openOf, service, lesson);
-  const [moved, setMoved] = useState<LessonView | null>(null);
+  const [latest, setLatest] = useState<LessonView | null>(null);
   const [busy, setBusy] = useState(false);
   const [saveFailed, setSaveFailed] = useState(false);
-  const view = moved?.id === lesson ? moved : opened;
+  const view = latest?.id === lesson ? latest : opened;
 
   if (opened === null) return <Placeholder title={LESSONS_TITLE} message={NOT_READY_HINT} />;
   if (!view) return <Placeholder title={LESSONS_TITLE} message={OPENING_LESSON} />;
 
   const leave = () => router.dismissTo('/more/settings/learning/lessons');
-  const run = (operation: () => Promise<LessonView | void>) => {
+  const save = (operation: () => Promise<LessonView | void>) => {
     setBusy(true);
     void operation()
       .then(
         (next) => {
           setSaveFailed(false);
-          if (next) setMoved(next);
+          if (next) setLatest(next);
           else leave();
         },
         () => setSaveFailed(true),
@@ -47,11 +47,11 @@ export default function LessonScreen() {
       saveFailed={saveFailed}
       actions={{
         onLeave: leave,
-        onNext: () => run(() => service.stepForward(lesson, view.step)),
-        onBack: () => run(() => service.stepBack(lesson, view.step)),
-        onRestart: () => run(() => service.restartLesson(lesson)),
-        onFinish: () => run(() => service.completeLesson(lesson)),
-        onResume: () => setMoved({ ...view, prompt: null }),
+        onNext: () => save(() => service.stepForward(lesson, view.step)),
+        onBack: () => save(() => service.stepBack(lesson, view.step)),
+        onRestart: () => save(() => service.restartLesson(lesson)),
+        onFinish: () => save(() => service.completeLesson(lesson)),
+        onResume: () => setLatest({ ...view, prompt: null }),
       }}
     />
   );

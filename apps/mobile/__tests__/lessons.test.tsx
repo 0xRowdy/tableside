@@ -153,7 +153,7 @@ describe('lessons', () => {
     expect(await header('Find your way around')).toBeOnTheScreen();
   });
 
-  it('show "Completed (earlier version)" with the reason after a material change, until the learner restarts', async () => {
+  it('show "Completed (earlier version)" with the reason after a material change, until the learner restarts or moves on in the new version', async () => {
     await openOrientation();
     for (const heading of ['Help when you need it', 'Practice records and casino records', 'Lessons at your own pace']) {
       await fireEvent.press(button('Next'));

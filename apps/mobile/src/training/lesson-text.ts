@@ -21,7 +21,7 @@ export const LESSONS_TITLE = 'Lessons';
 export const CATALOG_INTRO = 'Open any lesson, in any order. Finishing one just marks it completed: no scores, badges or locks.';
 export const FINDING_LESSONS = 'Finding your lessons…';
 
-export const SECTION_LABEL: Record<LessonSection, string> = {
+const SECTION_LABEL: Record<LessonSection, string> = {
   app: 'APP',
   blackjack: 'BLACKJACK',
   craps: 'STANDARD CRAPS',
@@ -65,7 +65,7 @@ export const SAVE_FAILED = 'Couldn’t save your place in this lesson. Try again
 
 // Spec 3 Lessons › Progress, Amendment 1 C10
 export function noticeText(notice: NonNullable<LessonView['notice']>): { readonly title: string; readonly text: string } {
-  return notice.kind === 'changed-after-completion'
+  return notice.kind === 'after-completion'
     ? {
         title: 'Completed (earlier version)',
         text: `This lesson changed after you finished it: ${notice.change}. Restart from step 1 to see the new version. Your earlier completion stays in your history.`,

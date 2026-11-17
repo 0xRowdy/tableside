@@ -1,6 +1,5 @@
 // Spec 3 S3-11 sVqX1; #143
 
-import type { LessonSection } from '@tableside/definitions';
 import { ChevronRight, Circle, CircleCheckBig, CircleDotDashed, RefreshCcw, type LucideIcon } from 'lucide-react-native';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
@@ -11,8 +10,6 @@ import { NOT_READY_HINT } from '@/training/challenge-text';
 import type { LessonStatus } from '@/training/lesson-progress';
 import { CATALOG_INTRO, FINDING_LESSONS, lessonDetail, LESSONS_TITLE, sectionHeading } from '@/training/lesson-text';
 import type { LessonEntry } from '@/training/service';
-
-const SECTIONS: readonly LessonSection[] = ['app', 'blackjack', 'craps', 'roulette', 'builder'];
 
 const STATUS_ICON: Record<LessonStatus['kind'], LucideIcon> = {
   'not-started': Circle,
@@ -34,7 +31,7 @@ export function LessonCatalog({
     <SettingsScreen title={LESSONS_TITLE} back={back}>
       <Note>{lessons ? CATALOG_INTRO : FINDING_LESSONS}</Note>
       {lessons &&
-        SECTIONS.map((section) => {
+        [...new Set(lessons.map((lesson) => lesson.section))].map((section) => {
           const inSection = lessons.filter((lesson) => lesson.section === section);
           return (
             <View key={section} style={styles.section}>

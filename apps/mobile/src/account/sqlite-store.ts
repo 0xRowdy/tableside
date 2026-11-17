@@ -465,12 +465,7 @@ export class SqliteActivityStore implements ActivityStore, TrainingStore {
       if (!attempt) throw new StoreError(`no attempt ${record.attemptId}`);
       if (attempt.record) return attempt.record;
       // Spec 3 Synchronized record types
-      const last = await tx.get<{ last: number }>('SELECT last FROM device_positions WHERE record_type = ?', [CHALLENGE_ATTEMPT_RECORD_TYPE]);
-      const deviceSequence = (last?.last ?? 0) + 1;
-      await tx.run('INSERT INTO device_positions (record_type, last) VALUES (?, ?) ON CONFLICT (record_type) DO UPDATE SET last = excluded.last', [
-        CHALLENGE_ATTEMPT_RECORD_TYPE,
-        deviceSequence,
-      ]);
+      const deviceSequence = await nextDevicePosition(tx, CHALLENGE_ATTEMPT_RECORD_TYPE);
       const sequenced: ChallengeAttemptRecord = { ...record, deviceSequence };
       await tx.run(`INSERT INTO challenge_attempt_records (attempt_id, device_sequence, ${BODY}) VALUES (?, ?, ?, ?, ?, ?)`, [
         record.attemptId,
@@ -496,12 +491,7 @@ export class SqliteActivityStore implements ActivityStore, TrainingStore {
       }
       const existing = await tx.get<BodyRow>(`SELECT ${BODY} FROM lesson_progress_events WHERE event_id = ?`, [event.eventId]);
       if (existing) return decode<LessonProgressEvent>(existing);
-      const last = await tx.get<{ last: number }>('SELECT last FROM device_positions WHERE record_type = ?', [LESSON_PROGRESS_RECORD_TYPE]);
-      const deviceSequence = (last?.last ?? 0) + 1;
-      await tx.run('INSERT INTO device_positions (record_type, last) VALUES (?, ?) ON CONFLICT (record_type) DO UPDATE SET last = excluded.last', [
-        LESSON_PROGRESS_RECORD_TYPE,
-        deviceSequence,
-      ]);
+      const deviceSequence = await nextDevicePosition(tx, LESSON_PROGRESS_RECORD_TYPE);
       const sequenced: LessonProgressEvent = { ...event, deviceSequence };
       await tx.run(`INSERT INTO lesson_progress_events (event_id, device_sequence, ${BODY}) VALUES (?, ?, ?, ?, ?, ?)`, [event.eventId, deviceSequence, ...encode(sequenced)]);
       return decodeText<LessonProgressEvent>(encode(sequenced)[0]);
@@ -587,15 +577,7 @@ export class SqliteActivityStore implements ActivityStore, TrainingStore {
 
   queueUpload(entry: NewUpload): Promise<QueuedUpload> {
     return this.transaction(async (tx): Promise<QueuedUpload> => {
-      let position: number | null = null;
-      if (entry.positioned) {
-        const last = await tx.get<{ last: number }>('SELECT last FROM device_positions WHERE record_type = ?', [entry.recordType]);
-        position = (last?.last ?? 0) + 1;
-        await tx.run(
-          'INSERT INTO device_positions (record_type, last) VALUES (?, ?) ON CONFLICT (record_type) DO UPDATE SET last = excluded.last',
-          [entry.recordType, position],
-        );
-      }
+      const position = entry.positioned ? await nextDevicePosition(tx, entry.recordType) : null;
       const body: QueuedBody = { id: entry.id, kind: entry.recordType, record: entry.payload };
       await tx.run(
         `INSERT INTO outgoing (id, activity_id, record_type, item_id, revisioned, position, ${BODY}, dependencies, status, device_position)
@@ -1163,6 +1145,14 @@ async function putAccepted(tx: SqlExecutor, record: AcceptedRecord): Promise<voi
 async function purgeRecord(tx: SqlExecutor, ref: RecordRef): Promise<void> {
   await tx.run('DELETE FROM accepted_records WHERE record_type = ? AND item_id = ?', [ref.recordType, ref.item]);
   await tx.run('INSERT OR IGNORE INTO purged_records (record_type, item_id) VALUES (?, ?)', [ref.recordType, ref.item]);
+}
+
+// Spec 3 Synchronized record types
+async function nextDevicePosition(tx: SqlExecutor, recordType: string): Promise<number> {
+  const last = await tx.get<{ last: number }>('SELECT last FROM device_positions WHERE record_type = ?', [recordType]);
+  const position = (last?.last ?? 0) + 1;
+  await tx.run('INSERT INTO device_positions (record_type, last) VALUES (?, ?) ON CONFLICT (record_type) DO UPDATE SET last = excluded.last', [recordType, position]);
+  return position;
 }
 
 async function readAttempt(tx: SqlExecutor, attemptId: string): Promise<StoredAttempt | null> {

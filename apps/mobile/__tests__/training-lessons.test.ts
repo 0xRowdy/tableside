@@ -108,6 +108,15 @@ describe('the Training service lessons', () => {
     expect(await service.openLesson(ORIENTATION)).toMatchObject({ step: 3, prompt: { kind: 'resume-or-restart', step: 3 }, notice: null });
   });
 
+  it('restarts nothing when there is no place to reset: an unstarted or just-finished lesson stays as it was', async () => {
+    const { service, store } = setup();
+    expect(await service.restartLesson(ORIENTATION)).toMatchObject({ step: 1, prompt: null, notice: null });
+    expect(await statusOf(service)).toEqual({ kind: 'not-started' });
+    await service.completeLesson(ORIENTATION);
+    await service.restartLesson(ORIENTATION);
+    expect((await store.readLessonEvents()).map((event) => event.event.kind)).toEqual(['completed']);
+  });
+
   it('restarts at step 1, writing a restarted event, and keeps completion', async () => {
     const { service, store } = setup();
     await service.stepForward(ORIENTATION, 1);
@@ -166,7 +175,7 @@ describe('the Training service lessons', () => {
     expect(await service.openLesson(ORIENTATION)).toMatchObject({
       step: 1,
       prompt: null,
-      notice: { kind: 'changed-after-completion', change: 'the Saved tab was described' },
+      notice: { kind: 'after-completion', change: 'the Saved tab was described' },
     });
 
     expect(await service.restartLesson(ORIENTATION)).toMatchObject({ step: 1, notice: null });
@@ -181,7 +190,7 @@ describe('the Training service lessons', () => {
     await first.service.stepForward(ORIENTATION, 1);
     const { service } = setup({ store: first.store.reopen(), lessons: revised({ version: 3, materialVersion: 3, change: 'help moved' }) });
     expect(await statusOf(service)).toEqual({ kind: 'not-started' });
-    expect(await service.openLesson(ORIENTATION)).toMatchObject({ step: 1, prompt: null, notice: { kind: 'changed-since-last-visit', change: 'help moved' } });
+    expect(await service.openLesson(ORIENTATION)).toMatchObject({ step: 1, prompt: null, notice: { kind: 'since-last-visit', change: 'help moved' } });
   });
 
   it('is unmetered: listing, opening, stepping, restarting and completing never ask the access supervisor or start an attempt', async () => {

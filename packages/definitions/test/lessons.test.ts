@@ -65,9 +65,9 @@ describe('lesson definitions', () => {
 
     it('a game association that does not match the section', () => {
       expect(lessonProblems([{ ...orientation, game: 'blackjack' }, { ...LESSONS[1]!, game: null }, { ...LESSONS[11]!, game: 'roulette' }])).toEqual([
-        'app-orientation: an app lesson has no game',
-        'blackjack-basics: a blackjack lesson is associated with blackjack',
-        'craps-basics: a craps lesson is associated with craps',
+        'app-orientation: a lesson in the app section must be associated with no game, not blackjack',
+        'blackjack-basics: a lesson in the blackjack section must be associated with blackjack, not no game',
+        'craps-basics: a lesson in the craps section must be associated with craps, not roulette',
       ]);
     });
 

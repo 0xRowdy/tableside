@@ -25,10 +25,12 @@ export type LessonStatus =
   | { readonly kind: 'completed' }
   | { readonly kind: 'completed-earlier-version' };
 
+export type LessonChange = 'after-completion' | 'since-last-visit';
+
 export interface LessonProgress {
   readonly status: LessonStatus;
   readonly bookmark: number | null;
-  readonly changed: 'after-completion' | 'since-last-visit' | null;
+  readonly changed: LessonChange | null;
 }
 
 // Spec 3 Amendment 1 C10
@@ -47,6 +49,6 @@ export function lessonProgress(events: readonly LessonProgressEvent[], lesson: {
       : completedBefore
         ? { kind: 'completed-earlier-version' }
         : { kind: 'not-started' };
-  const changed = current.length > 0 || own.length === 0 ? null : completedBefore ? 'after-completion' : 'since-last-visit';
+  const changed: LessonChange | null = current.length > 0 || own.length === 0 ? null : completedBefore ? 'after-completion' : 'since-last-visit';
   return { status, bookmark, changed };
 }

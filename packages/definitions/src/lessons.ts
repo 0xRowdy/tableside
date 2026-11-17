@@ -36,14 +36,10 @@ export interface Lesson {
   readonly content: LessonContent | null;
 }
 
-const slot = (section: LessonSection, id: string, title: string): Lesson => ({
-  id,
-  title,
-  summary: null,
-  section,
-  game: section === 'app' || section === 'builder' ? null : section,
-  content: null,
-});
+// Spec 3 Lessons › Access
+const sectionGame = (section: LessonSection): GameId | null => (section === 'app' || section === 'builder' ? null : section);
+
+const slot = (section: LessonSection, id: string, title: string): Lesson => ({ id, title, summary: null, section, game: sectionGame(section), content: null });
 
 export const APP_ORIENTATION: Lesson = {
   id: 'app-orientation',
@@ -131,11 +127,8 @@ export function lessonProblems(lessons: readonly Lesson[]): readonly string[] {
     if (seen.has(lesson.id)) report('the identity is used twice');
     seen.add(lesson.id);
     if (!IDENTITY.test(lesson.id)) report('the identity is not lowercase words joined by hyphens');
-    if (lesson.section === 'app' || lesson.section === 'builder') {
-      if (lesson.game !== null) report(`${lesson.section === 'app' ? 'an app' : 'a builder'} lesson has no game`);
-    } else if (lesson.game !== lesson.section) {
-      report(`a ${lesson.section} lesson is associated with ${lesson.section}`);
-    }
+    const game = sectionGame(lesson.section);
+    if (lesson.game !== game) report(`a lesson in the ${lesson.section} section must be associated with ${game ?? 'no game'}, not ${lesson.game ?? 'no game'}`);
     const { content } = lesson;
     if (!content) continue;
     if (!isVersion(content.version) || !isVersion(content.materialVersion)) report('the version is not a positive whole number');

@@ -5,7 +5,7 @@ import { CHALLENGE_VARIANTS, type ChallengeAttemptRecord, type ChallengeCategory
 
 import type { TrainingAdapters } from './adapters';
 import { ChallengeController, type AttemptSnapshot, type LearnerCommand, type StartProblem } from './controller';
-import { lessonProgress, type LessonProgress, type LessonProgressChange, type LessonStatus } from './lesson-progress';
+import { lessonProgress, type LessonChange, type LessonProgress, type LessonProgressChange, type LessonStatus } from './lesson-progress';
 
 // Spec 3 Recommendations
 export const SUGGESTED_ORDER = ['card-values', 'running-count', 'conversion', 'table'] as const;
@@ -70,7 +70,7 @@ export interface LessonView {
   readonly steps: readonly LessonStep[];
   readonly prompt: { readonly kind: 'resume-or-restart'; readonly step: number } | null;
   // Spec 3 Lessons › Progress, Amendment 1 C10
-  readonly notice: { readonly kind: 'changed-after-completion' | 'changed-since-last-visit'; readonly change: string } | null;
+  readonly notice: { readonly kind: LessonChange; readonly change: string } | null;
 }
 
 export interface TrainingOptions {
@@ -172,7 +172,7 @@ export class TrainingService {
     }
   }
 
-  // Spec 3 Lessons › Access: lessons are unmetered, so nothing here asks the access supervisor
+  // Spec 3 Lessons › Access
   async listLessons(): Promise<readonly LessonEntry[]> {
     const events = await this.adapters.store.readLessonEvents();
     return this.lessons.map(({ id, title, summary, section, content }) => ({
@@ -202,8 +202,11 @@ export class TrainingService {
     return this.record(this.authored(id), { kind: 'bookmark', step: Math.max(from - 1, 1) });
   }
 
-  restartLesson(id: string): Promise<LessonView> {
-    return this.record(this.authored(id), { kind: 'restarted' });
+  async restartLesson(id: string): Promise<LessonView> {
+    const lesson = this.authored(id);
+    const progress = await this.progressOf(lesson);
+    if ((progress.bookmark ?? 1) === 1 && progress.changed === null) return viewOf(lesson, progress, 1, null);
+    return this.record(lesson, { kind: 'restarted' });
   }
 
   async completeLesson(id: string): Promise<void> {
@@ -264,6 +267,6 @@ function viewOf(lesson: AuthoredLesson, progress: LessonProgress, step: number, 
     step,
     steps: lesson.content.steps,
     prompt,
-    notice: progress.changed && change ? { kind: progress.changed === 'after-completion' ? 'changed-after-completion' : 'changed-since-last-visit', change } : null,
+    notice: progress.changed && change ? { kind: progress.changed, change } : null,
   };
 }
