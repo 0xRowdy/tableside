@@ -1,18 +1,38 @@
 // Spec 3 Lessons › Inventory (standard craps), Content requirements; Amendment 1 C11; #48; #154
 // Every fact here is recorded in docs/research/craps-lessons.md: rules and payouts from the engine,
 // stakes, caps and resets from ../craps-strategies.ts, house edges from crapsHouseEdge (../craps.ts).
+import type { StrategyDefinition } from '@tableside/engine';
+
 import { DONT_PASS_WITH_LAY_ODDS, FLAT_PLACE_6_8, PASS_WITH_ODDS, PRESS_AND_COLLECT_6_8, THREE_POINT_MOLLY } from '../craps-strategies';
 import type { Lesson, LessonContent, LessonHandoff, LessonSource, LessonStep } from '../lessons';
 
 type CrapsLesson = Pick<Lesson, 'summary' | 'content'>;
 
 const FREE_PLAY: LessonHandoff = { kind: 'free-play', game: 'craps' };
-const practise = (strategy: string): readonly LessonHandoff[] => [{ kind: 'guided-practice', game: 'craps', strategy }, FREE_PLAY];
 
-const SOURCES: Record<string, LessonSource> = {};
+// Spec 3 S3-12 pX6CV ("Practice it"); Lessons › Structure (Handoff); #145
+interface Practice {
+  readonly handoffs: readonly LessonHandoff[];
+  readonly text: string;
+}
+const NOTHING_STARTS = 'The setup screen shows whether starting uses your allowance. Nothing starts until you press Start.';
+const FREE_PLAY_ONLY: Practice = { handoffs: [FREE_PLAY], text: `Practice it: open craps free play. ${NOTHING_STARTS}` };
+const practise = (strategy: StrategyDefinition): Practice => ({
+  handoffs: [{ kind: 'guided-practice', game: 'craps', strategy: strategy.id }, FREE_PLAY],
+  text: `Practice it: open guided practice with ${strategy.name.charAt(0).toLowerCase()}${strategy.name.slice(1)} prefilled, or free play. ${NOTHING_STARTS}`,
+});
 
-const lesson = (summary: string, steps: readonly LessonStep[], handoffs: readonly LessonHandoff[], sources: readonly LessonSource[]): CrapsLesson => {
-  const content: LessonContent = { version: 1, materialVersion: 1, change: null, steps, workedExample: null, handoffs, sources };
+const lesson = (summary: string, steps: readonly LessonStep[], practice: Practice, sources: readonly LessonSource[]): CrapsLesson => {
+  const last = steps[steps.length - 1]!;
+  const content: LessonContent = {
+    version: 1,
+    materialVersion: 1,
+    change: null,
+    steps: [...steps.slice(0, -1), { ...last, paragraphs: [...last.paragraphs, practice.text] }],
+    workedExample: null,
+    handoffs: practice.handoffs,
+    sources,
+  };
   return { summary, content };
 };
 
@@ -65,7 +85,7 @@ export const CRAPS_LESSONS: Readonly<Record<string, CrapsLesson>> = {
         ],
       },
     ],
-    [FREE_PLAY],
+    FREE_PLAY_ONLY,
     [],
   ),
 
@@ -104,7 +124,7 @@ export const CRAPS_LESSONS: Readonly<Record<string, CrapsLesson>> = {
         ],
       },
     ],
-    practise(PASS_WITH_ODDS.id),
+    practise(PASS_WITH_ODDS),
     [],
   ),
 
@@ -140,7 +160,7 @@ export const CRAPS_LESSONS: Readonly<Record<string, CrapsLesson>> = {
         paragraphs: ["Place 6 and 8 each carry a 1.52% house edge on every bet that's decided. Flat stakes keep the amount at risk steady; they don't change the edge."],
       },
     ],
-    practise(FLAT_PLACE_6_8.id),
+    practise(FLAT_PLACE_6_8),
     [],
   ),
 
@@ -180,7 +200,7 @@ export const CRAPS_LESSONS: Readonly<Record<string, CrapsLesson>> = {
         ],
       },
     ],
-    practise(DONT_PASS_WITH_LAY_ODDS.id),
+    practise(DONT_PASS_WITH_LAY_ODDS),
     [],
   ),
 
@@ -220,7 +240,7 @@ export const CRAPS_LESSONS: Readonly<Record<string, CrapsLesson>> = {
         ],
       },
     ],
-    practise(THREE_POINT_MOLLY.id),
+    practise(THREE_POINT_MOLLY),
     [],
   ),
 
@@ -258,9 +278,8 @@ export const CRAPS_LESSONS: Readonly<Record<string, CrapsLesson>> = {
         ],
       },
     ],
-    practise(PRESS_AND_COLLECT_6_8.id),
+    practise(PRESS_AND_COLLECT_6_8),
     [],
   ),
 };
 
-void SOURCES;
