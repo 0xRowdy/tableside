@@ -1,4 +1,4 @@
-// Spec 3 S3-03 P4WjR, drVnR, BFdJT; S3-12 aJV2y; #158, #132, #144
+// Spec 3 S3-03 P4WjR, drVnR, BFdJT, S3-04 qdnQm; S3-12 aJV2y; #158, #132, #144, #133
 
 import type { ChallengeCard, HiLoValue } from '@tableside/engine';
 import { Check, CircleDot, X } from 'lucide-react-native';
@@ -11,20 +11,20 @@ import { CHOICE_TAG, spokenValue, type ChoiceState } from '@/training/challenge-
 
 const SUIT_TOKEN = { spades: 'suitSpade', hearts: 'suitHeart', diamonds: 'suitDiamond', clubs: 'suitClub' } as const;
 
-export function PlayingCard({ card }: { card: ChallengeCard }) {
+export function PlayingCard({ card, small = false }: { card: ChallengeCard; small?: boolean }) {
   const color = palette[SUIT_TOKEN[card.suit]];
   const glyph = SUIT_GLYPH[card.suit];
   return (
-    <View accessible accessibilityLabel={cardName(card)} testID="challenge-card" style={styles.card}>
+    <View accessible accessibilityLabel={cardName(card)} testID="challenge-card" style={[styles.card, small && styles.smallCard]}>
       <View style={styles.corner}>
-        <Text maxFontSizeMultiplier={1} style={[styles.rank, { color }]}>
+        <Text maxFontSizeMultiplier={1} style={[styles.rank, small && styles.smallRank, { color }]}>
           {cardRank(card)}
         </Text>
-        <Text maxFontSizeMultiplier={1} style={[styles.cornerSuit, { color }]}>
+        <Text maxFontSizeMultiplier={1} style={[styles.cornerSuit, small && styles.smallSuit, { color }]}>
           {glyph}
         </Text>
       </View>
-      <Text maxFontSizeMultiplier={1} style={[styles.pip, { color }]}>
+      <Text maxFontSizeMultiplier={1} style={[styles.pip, small && styles.smallPip, { color }]}>
         {glyph}
       </Text>
     </View>
@@ -70,6 +70,10 @@ const styles = StyleSheet.create({
   rank: { fontFamily: fonts.uiBold, fontSize: 40, lineHeight: 44 },
   cornerSuit: { fontSize: 28, lineHeight: 30 },
   pip: { alignSelf: 'flex-end', fontSize: 60, lineHeight: 64 },
+  smallCard: { alignSelf: 'auto', width: 58, height: 82, paddingVertical: space[1], paddingHorizontal: space[1] + 2 },
+  smallRank: { fontSize: 22, lineHeight: 24 },
+  smallSuit: { fontSize: 14, lineHeight: 16 },
+  smallPip: { fontSize: 28, lineHeight: 30 },
   choice: {
     flex: 1,
     minHeight: 80,
