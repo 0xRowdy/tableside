@@ -1,4 +1,4 @@
-// Spec 3 Testing Decisions › Seam 2 (lessons); Lessons › Progress, Handoff; Amendment 1 C10; #143, #145
+// Spec 3 Testing Decisions › Seam 2 (lessons); Lessons › Progress, Handoff; Amendment 1 C10; #143, #145, #153
 import { EMPTY_QUARANTINE_LIST } from '@tableside/engine';
 import { APP_ORIENTATION, LESSONS, type Lesson, type LessonHandoff } from '@tableside/definitions';
 
@@ -64,7 +64,7 @@ beforeEach(() => {
 });
 
 describe('the Training service lessons', () => {
-  it('lists all 24 lesson slots with completion, bookmark and access state; only written lessons can be opened', async () => {
+  it('lists all 24 lessons with completion, bookmark and access state', async () => {
     const { service } = setup();
     const catalog = await service.listLessons();
     expect(catalog).toHaveLength(24);
@@ -84,6 +84,10 @@ describe('the Training service lessons', () => {
       'basic-with-deviations',
       'counting-with-basic',
       'counting-with-deviations',
+      'card-values',
+      'running-count',
+      'true-count-conversion',
+      'table-counting',
       'bet-schedule',
       'craps-basics',
       'pass-with-odds',
@@ -99,6 +103,11 @@ describe('the Training service lessons', () => {
       'bounded-labouchere',
       'building-a-strategy',
     ]);
+  });
+
+  it('lists an unwritten lesson without steps and refuses to open it', async () => {
+    const { service } = setup({ lessons: LESSONS.map((lesson) => (lesson.id === 'card-values' ? { ...lesson, content: null } : lesson)) });
+    const catalog = await service.listLessons();
     expect(catalog[6]).toMatchObject({ id: 'card-values', section: 'blackjack', steps: null, status: { kind: 'not-started' } });
     await expect(service.openLesson('card-values')).rejects.toThrow(/not available/);
   });
