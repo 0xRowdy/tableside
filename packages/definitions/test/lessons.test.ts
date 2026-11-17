@@ -41,7 +41,15 @@ describe('lesson definitions', () => {
   });
 
   it('author App orientation at version 1 (navigation, help, practice vs casino records), with no material change yet', () => {
-    expect(LESSONS.filter(authored).map((lesson) => lesson.id)).toEqual(['app-orientation']);
+    expect(LESSONS.filter(authored).map((lesson) => lesson.id)).toEqual([
+      'app-orientation',
+      'craps-basics',
+      'pass-with-odds',
+      'flat-place-6-8',
+      'dont-pass-with-lay-odds',
+      'three-point-molly',
+      'press-and-collect-6-8',
+    ]);
     const orientation = LESSONS[0]!;
     expect(orientation.summary).toBe('Tabs, help, practice vs casino records');
     expect(orientation.content).toMatchObject({ version: 1, materialVersion: 1, change: null, workedExample: null, handoffs: [], sources: [] });
@@ -75,7 +83,7 @@ describe('lesson definitions', () => {
     });
 
     it('a game association that does not match the section', () => {
-      expect(lessonProblems([{ ...orientation, game: 'blackjack' }, { ...LESSONS[1]!, game: null }, { ...LESSONS[11]!, game: 'roulette' }])).toEqual([
+      expect(lessonProblems([{ ...orientation, game: 'blackjack' }, { ...LESSONS[1]!, game: null }, { ...LESSONS[11]!, game: 'roulette', content: null }])).toEqual([
         'app-orientation: a lesson in the app section must be associated with no game, not blackjack',
         'blackjack-basics: a lesson in the blackjack section must be associated with blackjack, not no game',
         'craps-basics: a lesson in the craps section must be associated with craps, not roulette',
