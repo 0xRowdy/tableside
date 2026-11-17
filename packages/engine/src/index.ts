@@ -377,6 +377,7 @@ export {
   type TableSetup,
   type ObserveSetup,
   type PlaySetup,
+  type TableCountingMode,
   type PlayDecision,
   type PlaySeat,
   type TableDecisionView,

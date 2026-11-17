@@ -1,5 +1,5 @@
 // Spec 3 Modules › Definitions package; Challenge content (from #4); #158, #133, #134, #137, #138
-import type { BlackjackPlayPolicy, CardValuesContent, ChallengeCategory, ChallengeContent, ConversionContent, RunningCountContent, TableContent, TableSetup } from '@tableside/engine';
+import type { BlackjackPlayPolicy, CardValuesContent, ChallengeCategory, TableCountingMode, ChallengeContent, ConversionContent, RunningCountContent, TableContent, TableSetup } from '@tableside/engine';
 
 import type { BlackjackPreset } from './blackjack/reference';
 import { blackjackRules, DEFAULT_BLACKJACK_PRESET, DEFAULT_PENETRATION } from './blackjack/rules';
@@ -33,8 +33,6 @@ export const CHALLENGE_CONTENT: Readonly<Record<ChallengeCategory, ChallengeCont
 };
 
 // Spec 3 User stories 27, 28; S3-02 ZreSb, FkMDw
-export type TableCountingMode = 'basic' | 'deviations';
-
 export interface TableOptions {
   readonly seat: 'observe' | 'play';
   readonly preset: BlackjackPreset;

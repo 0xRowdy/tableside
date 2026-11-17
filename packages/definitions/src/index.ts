@@ -81,7 +81,6 @@ export {
   TABLE_CONTENT,
   type CatalogCategory,
   type TableOptions,
-  type TableCountingMode,
 } from './challenges';
 
 export {

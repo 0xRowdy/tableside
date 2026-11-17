@@ -76,7 +76,7 @@ function status(view: ChallengeView, table: TableView): TableStatus {
   if (view.variant === 'learn' && view.feedback) return 'feedback';
   if (view.phase === 'correction') return 'correction';
   if (table.step === 'shuffle') return 'shuffled';
-  if (table.decision) return 'deciding';
+  if (table.decision) return view.variant === 'check' ? 'check-deciding' : 'deciding';
   if (table.prompt?.timing === 'decision') return 'count-first';
   if (table.prompt) return 'checkpoint';
   return table.seat === 'play' ? 'dealing' : 'observing';

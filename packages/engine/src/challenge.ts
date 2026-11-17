@@ -2,14 +2,16 @@
 
 import { STATE_SCHEMA_VERSION, type PlayCorrection, type Receipt, type RejectionReason, type VersionedIdentity } from './activity';
 import { hiLoTag, truncatedTrueCount, type HandTotal } from './blackjack';
-import { prescribePlay, type PlayChoice } from './blackjack-strategy';
+import { prescribeAtTrueCount, type PlayChoice } from './blackjack-strategy';
 import { canonicalJson } from './canonical';
-import { canonicalShoe, shuffle, type Card, type Rank, type Suit } from './draws';
+import { canonicalShoe, shuffle, type Rank, type Suit } from './draws';
 import { RANDOM_PROTOCOL_VERSION, RandomStream, uniformInt, type RandomStreamIdentity, type RandomStreamState } from './random';
 import { sha256Hex } from './sha256';
 import { hasExactKeys, isCount, isRecord, isText } from './shape';
 import {
+  cardOf,
   copyTableSetup,
+  currentDecision,
   dealTableRound,
   openPlaySeat,
   playMove,
@@ -692,7 +694,7 @@ function apply(state: ChallengeState, command: ChallengeCommand): { change: Chan
 function play(state: ChallengeState, action: PlayChoice): { change: Change; facts: ChallengeFact[] } {
   const table = state.table as TableProgress;
   const seat = table.seat as NonNullable<TableProgress['seat']>;
-  const decision = seat.decisions.at(-1) as PlayDecision;
+  const decision = currentDecision(seat);
   const legal = (state.items[state.position] as Extract<TableStep, { step: 'decision' }>).actions.includes(action);
   const tried: PlayDecision = { ...decision, attempts: [...decision.attempts, { action, legal }] };
   const withAttempt = { ...table, seat: { ...seat, decisions: [...seat.decisions.slice(0, -1), tried] } };
@@ -765,7 +767,6 @@ export function challengeResults(state: ChallengeState): ChallengeResults | null
   return { ending: state.ending, metrics, review, assisted: assisted(state), assistanceStep: state.revealedAt };
 }
 
-const cardOf = (card: Card): ChallengeCard => ({ rank: card.rank, suit: card.suit });
 
 // Spec 3 Scoring and review › Reference, Attribution; #138
 function decisionReviews(state: ChallengeState): TableDecisionReview[] {
@@ -805,22 +806,12 @@ function decisionReviews(state: ChallengeState): TableDecisionReview[] {
   });
 }
 
-const UNDEALT_SHOE = 312;
-const shoeAtTrueCount = (trueCount: number) => ({ running: 6 * trueCount, remaining: UNDEALT_SHOE });
 
 function policyAt(setup: PlaySetup, decision: PlayDecision, trueCount: number): PlayChoice {
   const { situation } = decision.explanation;
-  return prescribePlay(setup.policy, {
-    game: 'blackjack',
-    rules: { dealer: setup.rules.dealer, lateSurrender: setup.rules.lateSurrender },
-    decision: situation.decision,
-    cards: situation.cards,
-    hands: situation.hands,
-    up: situation.up,
-    balance: situation.available,
-    stake: situation.stake,
-    shoe: shoeAtTrueCount(trueCount),
-  }).prescribed.action;
+  const rules = { dealer: setup.rules.dealer, lateSurrender: setup.rules.lateSurrender };
+  const { decision: kind, cards, hands, up, available, stake } = situation;
+  return prescribeAtTrueCount(setup.policy, { game: 'blackjack', rules, decision: kind, cards, hands, up, balance: available, stake }, trueCount).prescribed.action;
 }
 
 // Spec 3 Scoring and review › Attribution; S3-09 h0MsKr

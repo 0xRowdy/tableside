@@ -25,7 +25,7 @@ import {
   type Shoe,
   type BlackjackActivityState,
 } from './blackjack';
-import { BLACKJACK_VOCABULARY, playSituation, prescribePlay, type BlackjackPlayPolicy, type PlayChoice, type PlayExplanation } from './blackjack-strategy';
+import { BLACKJACK_VOCABULARY, blackjackModeOf, playSituation, prescribePlay, type BlackjackPlayPolicy, type PlayChoice, type PlayExplanation } from './blackjack-strategy';
 import { FUNDING_CEILING } from './funding';
 import type { Card, Rank, Suit } from './draws';
 import { RandomStream, type RandomStreamIdentity, type RandomStreamState } from './random';
@@ -146,7 +146,7 @@ export function tableSetupProblem(setup: unknown): string | undefined {
   return undefined;
 }
 
-const cardOf = (card: Card): TableCard => ({ rank: card.rank, suit: card.suit });
+export const cardOf = (card: Card): TableCard => ({ rank: card.rank, suit: card.suit });
 const asCard = (card: TableCard): Card => ({ deck: 0, ...card });
 const hiLo = (card: TableCard) => hiLoTag(asCard(card));
 
@@ -181,9 +181,16 @@ function stepsOf(facts: readonly DomainFact[], round: number, first: readonly Ta
 
 function roundSteps(facts: readonly DomainFact[], round: number): TableStep[] {
   const { steps, pending } = stepsOf(facts, round);
-  if (pending.length > 0) throw new Error(`round ${round} ended with plays after its last card`);
+  noPlaysAfterLastCard(pending, round);
   return steps;
 }
+
+function noPlaysAfterLastCard(pending: readonly TableEvent[], round: number): void {
+  if (pending.length > 0) throw new Error(`round ${round} ended with plays after its last card`);
+}
+
+// Spec 3 User stories 37, 38; #138
+export const currentDecision = (seat: PlaySeat): PlayDecision => seat.decisions.at(-1) as PlayDecision;
 
 // Spec 3 Count checkpoints (table)
 export const tableCheckpointRounds = (interval: number, rounds: number): number[] =>
@@ -282,7 +289,7 @@ function continuePlayRound(
   const { steps, pending } = stepsOf(facts, progress.round, first);
   const decision = playSituation(seat.activity);
   if (decision === undefined || seat.activity.phase !== 'open-decision') {
-    if (pending.length > 0) throw new Error(`round ${progress.round} ended with plays after its last card`);
+    noPlaysAfterLastCard(pending, progress.round);
     const settled = seatCommand(seat.activity, { kind: 'settle-turn' });
     steps.push(...roundEndPrompts(setup, content, [...earlier, ...steps], progress.round));
     return { steps, progress: { ...progress, seat: { ...seat, activity: settled.activity } } };
@@ -310,7 +317,7 @@ export function playMove(
   resolution: NonNullable<PlayDecision['resolution']>,
 ): { readonly steps: TableStep[]; readonly progress: TableProgress } {
   const seat = seatOf(progress);
-  const decision = seat.decisions.at(-1) as PlayDecision;
+  const decision = currentDecision(seat);
   const insurance = readPermittedView(seat.activity).insuranceOffer;
   const command: Command = move === 'insure' ? { kind: 'place-wager', target: INSURANCE_TARGET, amount: (insurance as { max: string }).max } : { kind: 'play', action: move };
   const played = seatCommand(seat.activity, command);
@@ -401,7 +408,7 @@ export interface TableDecisionView {
 
 export interface TableView {
   readonly seat: TableSetup['seat'];
-  readonly countingMode: 'basic' | 'deviations' | null;
+  readonly countingMode: TableCountingMode | null;
   readonly round: number;
   readonly rounds: number;
   readonly interval: number;
@@ -472,7 +479,7 @@ export function tableView(progress: TableProgress, content: TableContent, steps:
   const decision = current.step === 'decision' ? { target: current.target, kind: current.decision, actions: [...current.actions], refused: last && !last.legal ? last.action : null } : null;
   return {
     seat: setup.seat,
-    countingMode: playingMode(setup),
+    countingMode: countingModeOf(setup),
     round,
     rounds: content.rounds,
     interval: setup.interval,
@@ -504,6 +511,10 @@ export function tableView(progress: TableProgress, content: TableContent, steps:
 }
 
 // Spec 3 Comparison groups: counting mode
-export const playingMode = (setup: TableSetup): TableView['countingMode'] => (setup.seat === 'play' ? (setup.policy.deviations.length > 0 ? 'deviations' : 'basic') : null);
+// Spec 3 User stories 28; #138
+export type TableCountingMode = 'basic' | 'deviations';
+
+export const countingModeOf = (setup: TableSetup): TableCountingMode | null =>
+  setup.seat === 'play' ? (blackjackModeOf(setup.policy) === 'counting-with-deviations' ? 'deviations' : 'basic') : null;
 
 export const copyTableSetup = (setup: TableSetup): TableSetup => JSON.parse(JSON.stringify(setup)) as TableSetup;

@@ -3,7 +3,7 @@
 import type { VersionedIdentity } from './activity';
 import { challengeResults, type ChallengeCategory, type ChallengeMetrics, type ChallengeState, type ChallengeVariant, type ReviewFact } from './challenge';
 import type { RandomStreamIdentity } from './random';
-import { playingMode, type TableSetup } from './table-challenge';
+import { countingModeOf, type TableCountingMode, type TableSetup } from './table-challenge';
 import type { MeteringBasis } from './record';
 
 export const CHALLENGE_RECORD_VERSION = 1 as const;
@@ -26,7 +26,7 @@ export interface TableGroupKey {
   readonly penetration: number;
   readonly extraPlayers: number;
   readonly seat: 'observe' | 'play';
-  readonly countingMode: 'basic' | 'deviations' | null;
+  readonly countingMode: TableCountingMode | null;
   readonly betSchedule: boolean;
   readonly baseWager: string | null;
   readonly startingBalance: string | null;
@@ -120,7 +120,7 @@ function tableGroupKey(setup: TableSetup): TableGroupKey {
     extraPlayers: rules.players.otherWagers.length,
     seat,
     // Spec 3 Comparison groups: counting mode; #138
-    countingMode: playingMode(setup),
+    countingMode: countingModeOf(setup),
     betSchedule: false,
     baseWager: null,
     startingBalance: null,

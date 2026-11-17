@@ -19,6 +19,7 @@ import {
 
 import { ANSWER, begun, checkView, learnView, NEXT, seed, SKIP, step } from './challenge.fixtures';
 import { expectCheckViewHides } from './information-hiding';
+import { TEST_POLICY } from './blackjack-strategy.fixtures';
 import { playSpec } from './table.fixtures';
 
 const stepOf = (state: ChallengeState) => state.items[state.position] as TableStep;
@@ -72,6 +73,14 @@ function dependsOnCount(step: Extract<TableStep, { step: 'decision' }>, cards: r
   const surrender = two && hands === 1;
   const basicSurrenders16v10 = surrender;
   return (total === 16 && u === 10 && !basicSurrenders16v10) || (total === 12 && u === 3) || (total === 13 && u === 2) || (two && total === 10 && u === 10) || (surrender && u === 10 && (total === 14 || total === 15));
+}
+
+// Spec 3 Testing Decisions › Seam 1 (independent fixtures: TEST_POLICY's first-decision rows)
+function standingIsBasic(fact: TableDecisionReview): boolean {
+  if (fact.decision === 'insurance') return fact.chosen === 'decline-insurance';
+  const up = value(fact.up);
+  const row = fact.pair ? TEST_POLICY.first.pair[value(fact.cards[0] as { rank: number }) - 1] : fact.total.soft ? TEST_POLICY.first.soft[fact.total.value - 12] : TEST_POLICY.first.hard[fact.total.value - 4];
+  return row?.[up - 1] === 'S';
 }
 
 function findSeed(spec: ChallengeSpecification, wanted: (ended: ChallengeState) => boolean, decide = standing): number {
@@ -148,7 +157,7 @@ export const tablePlayCases: TestCase[] = [
       const results = challengeResults(ended);
       const decisions = decisionsOf(ended);
       t.equal([results?.ending, decisions.length > 0, results?.metrics['card-values'], results?.metrics['betting-adherence']], ['completed', true, null, null]);
-      t.equal(results?.metrics['playing-adherence'], { correct: decisions.filter((fact) => fact.prescribed === fact.chosen).length, total: decisions.length });
+      t.equal(results?.metrics['playing-adherence'], { correct: decisions.filter(standingIsBasic).length, total: decisions.length });
       t.equal(results?.metrics['running-count'], { correct: 0, total: 20 });
       t.equal(results?.metrics['true-count'], { correct: 0, total: 10 });
       const positions = results?.review.map((fact) => fact.position) ?? [];

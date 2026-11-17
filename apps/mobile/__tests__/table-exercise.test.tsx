@@ -192,6 +192,7 @@ describe('the table counting exercise in Play', () => {
     expect(screen.getByText('Check · Play · S17 LS · 75% · N = 1')).toBeOnTheScreen();
     expect(screen.getByText('You')).toBeOnTheScreen();
     expect(screen.getByRole('header', { name: 'Your move' })).toBeOnTheScreen();
+    expect(screen.getByText('Check · your move')).toBeOnTheScreen();
     expect(screen.getByText('You have hard 14 against a 3. Choose a move; the next card waits for you.')).toBeOnTheScreen();
     expect(screen.queryByText(/balance/i)).toBeNull();
     for (const move of ['Hit', 'Stand', 'Double', 'Split', 'Surrender']) expect(screen.getByRole('button', { name: move })).toBeEnabled();
@@ -306,7 +307,7 @@ describe('the table Play decision review', () => {
     );
     expect(screen.getByText('Decision review')).toBeOnTheScreen();
     expect(screen.getByText('Table counting · Check · Play')).toBeOnTheScreen();
-    expect(screen.getByText('Checkpoint 12 · round 6, before the decision · true count')).toBeOnTheScreen();
+    expect(screen.getByText('Round 6 · true count before the decision')).toBeOnTheScreen();
     expect(screen.getByText('Round 6 · hard 16 vs 10')).toBeOnTheScreen();
     expect(screen.getByText('Playing miss')).toBeOnTheScreen();
     expect(screen.getByText('TC +2')).toBeOnTheScreen();

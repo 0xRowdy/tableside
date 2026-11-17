@@ -56,7 +56,7 @@ export const YOUR_SEAT_SPOKEN = 'Your seat';
 export const roundOf = (table: Pick<TableView, 'round' | 'rounds'>) => `${table.round} of ${table.rounds}`;
 export const PHASES = ['Bet', 'Deal', 'Play', 'Settle'] as const;
 
-export type TableStatus = 'observing' | 'checkpoint' | 'shuffled' | 'feedback' | 'dealing' | 'deciding' | 'count-first' | 'correction';
+export type TableStatus = 'observing' | 'checkpoint' | 'shuffled' | 'feedback' | 'dealing' | 'deciding' | 'check-deciding' | 'count-first' | 'correction';
 export const STATUS_TEXT: Record<TableStatus, string> = {
   observing: 'Observing',
   checkpoint: 'Count checkpoint',
@@ -64,6 +64,8 @@ export const STATUS_TEXT: Record<TableStatus, string> = {
   feedback: 'Learn feedback',
   dealing: 'Dealing',
   deciding: 'Your move',
+  // Spec 3 S3-07 kLgWV
+  'check-deciding': 'Check · your move',
   'count-first': 'Count before your move',
   correction: 'Correction',
 };
@@ -149,7 +151,9 @@ const TIMING_TEXT = {
   block: (round: number) => `after round ${round}`,
   decision: (round: number) => `round ${round}, before the decision`,
 } as const;
-export const tableCheckpointTitle = (fact: TableCountReview) => `Checkpoint ${fact.checkpoint} · ${TIMING_TEXT[fact.timing](fact.round)} · ${fact.count === 'running' ? 'running' : 'true'} count`;
+export const tableCheckpointTitle = (fact: TableCountReview) =>
+  // Spec 3 S3-09 VToCp
+  fact.timing === 'decision' ? `Round ${fact.round} · true count before the decision` : `Checkpoint ${fact.checkpoint} · ${TIMING_TEXT[fact.timing](fact.round)} · ${fact.count === 'running' ? 'running' : 'true'} count`;
 export const RETRY_WITH_NEW_SHOE = 'Retry with a new shoe';
 
 // Spec 3 S3-08 e5MASr
