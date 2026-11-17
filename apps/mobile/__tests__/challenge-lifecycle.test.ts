@@ -348,6 +348,28 @@ describe('challenge attempt lifecycle', () => {
     });
   });
 
+  describe('the interrupted flag across the app ending', () => {
+    async function endedBeforeItsRecord(pauseFirst: boolean) {
+      const first = await started(LEARN_CARD_VALUES);
+      if (pauseFirst) {
+        first.service.pause();
+        await first.service.resume();
+      }
+      first.store.failNext('recordAttempt', 'before');
+      await finish(first.service).catch(() => undefined);
+      const later = setup({ store: first.store.reopen() });
+      await later.service.load();
+      const snapshot = later.service.snapshot();
+      if (snapshot.status !== 'ended') throw new Error(snapshot.status);
+      return snapshot.record;
+    }
+
+    it('records an attempt whose last answer was saved before the app ended as uninterrupted, unless it was held before', async () => {
+      expect((await endedBeforeItsRecord(false)).interrupted).toBe(false);
+      expect((await endedBeforeItsRecord(true)).interrupted).toBe(true);
+    });
+  });
+
   // Spec 3 Attempt lifecycle › Performance timer; Testing Decisions › Seam 2 › Timer
   describe('performance timer', () => {
     it('times from the first card to the final answer, leaving out Learn explanations and pauses', async () => {
@@ -388,6 +410,18 @@ describe('challenge attempt lifecycle', () => {
       await later.service.load();
       await later.service.resume();
       expect((await finish(later.service)).performanceMs).toBe(4_000);
+    });
+
+    it('keeps the time up to a pause when the app ends while the attempt is held', async () => {
+      const first = await started({ ...LEARN_CARD_VALUES, timed: true });
+      first.clock.advance(3_000);
+      first.service.pause();
+      await settle(() => true);
+
+      const later = setup({ store: first.store.reopen() });
+      await later.service.load();
+      await later.service.resume();
+      expect((await finish(later.service)).performanceMs).toBe(3_000);
     });
 
     it('remembers timing with the last setup, and Retry keeps it', async () => {

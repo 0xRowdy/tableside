@@ -32,22 +32,23 @@ export function HoldSheet({
       <Text maxFontSizeMultiplier={textScale.body} style={styles.lead}>
         {text.lead}
       </Text>
-      {[hold.resumeBlocked, hold.endBlocked].map(
-        (problem) =>
-          problem && (
-            <View key={problem} style={styles.problem}>
-              <CircleAlert color={palette.warning} size={20} />
-              <Text accessibilityRole="alert" maxFontSizeMultiplier={textScale.body} style={styles.problemText}>
-                {problem}
-              </Text>
-            </View>
-          ),
-      )}
+      {[hold.resumeBlocked, hold.endBlocked].map((problem) => problem && <WarningNote key={problem} text={problem} />)}
       <Button label={RESUME_LABEL} icon={Play} stretch disabled={busy} onPress={onResume} />
       <Button label={END_ATTEMPT} icon={CircleStop} variant="outline" stretch disabled={busy} onPress={onEnd} />
-      <SheetText small>{text.end}</SheetText>
+      {text.end && <SheetText small>{text.end}</SheetText>}
       {text.lessons && <SheetText small>{text.lessons}</SheetText>}
     </Sheet>
+  );
+}
+
+export function WarningNote({ text }: { text: string }) {
+  return (
+    <View style={styles.warning}>
+      <CircleAlert color={palette.warning} size={20} />
+      <Text accessibilityRole="alert" maxFontSizeMultiplier={textScale.body} style={styles.warningText}>
+        {text}
+      </Text>
+    </View>
   );
 }
 
@@ -118,8 +119,8 @@ export function UnfinishedSheet({
 
 const styles = StyleSheet.create({
   lead: { fontFamily: fonts.ui, fontSize: 16, lineHeight: 23, color: palette.foreground },
-  problem: { flexDirection: 'row', gap: space[3], padding: 14, borderRadius: 12, borderWidth: 1, borderColor: palette.warning, backgroundColor: palette.card },
-  problemText: { flex: 1, fontFamily: fonts.uiBold, fontSize: 14, lineHeight: 20, color: palette.foreground },
+  warning: { flexDirection: 'row', gap: space[3], padding: 14, borderRadius: 12, borderWidth: 1, borderColor: palette.warning, backgroundColor: palette.card },
+  warningText: { flex: 1, fontFamily: fonts.uiBold, fontSize: 14, lineHeight: 20, color: palette.foreground },
   row: { flexDirection: 'row', gap: space[4] },
   rowText: { flex: 1, gap: space[1] },
   rowTitle: { fontFamily: fonts.uiBold, fontSize: 15, lineHeight: 21, color: palette.foreground },

@@ -16,7 +16,8 @@ import type {
 } from '../practice/store';
 import {
   CHALLENGE_ATTEMPT_RECORD_TYPE,
-  UNTIMED,
+  withLifecycle,
+  type AttemptLifecycle,
   type AttemptCharge,
   type AttemptCommitOutcome,
   type AttemptTransitionCommit,
@@ -440,7 +441,7 @@ export class SqliteActivityStore implements ActivityStore, TrainingStore {
       const { attemptId, admission, specification, random, createdAt } = attempt;
       await tx.run('UPDATE challenge_attempts SET sequence = ?, body = ?, body_format = ?, body_length = ?, body_sha256 = ? WHERE attempt_id = ?', [
         commit.priorSequence + 1,
-        ...encode({ attemptId, admission, specification, random, createdAt, checkpoint: commit.checkpoint, timing: commit.timing } satisfies NewAttempt),
+        ...encode({ attemptId, admission, specification, random, createdAt, checkpoint: commit.checkpoint, lifecycle: commit.lifecycle } satisfies NewAttempt),
         commit.attemptId,
       ]);
       return { status: 'committed' };
@@ -454,6 +455,19 @@ export class SqliteActivityStore implements ActivityStore, TrainingStore {
   discardUnchargedAttempt(attemptId: string): Promise<void> {
     return this.transaction(async (tx) => {
       await tx.run(`DELETE FROM challenge_attempts WHERE attempt_id = ? AND sequence = 0 AND status = 'unfinished'`, [attemptId]);
+    });
+  }
+
+  // #135
+  saveAttemptLifecycle(attemptId: string, lifecycle: AttemptLifecycle): Promise<void> {
+    return this.transaction(async (tx) => {
+      const attempt = await readAttempt(tx, attemptId);
+      if (!attempt || attempt.record) return;
+      const { admission, specification, random, createdAt, checkpoint } = attempt;
+      await tx.run(`UPDATE challenge_attempts SET body = ?, body_format = ?, body_length = ?, body_sha256 = ? WHERE attempt_id = ? AND status = 'unfinished'`, [
+        ...encode({ attemptId, admission, specification, random, createdAt, checkpoint, lifecycle } satisfies NewAttempt),
+        attemptId,
+      ]);
     });
   }
 
@@ -1161,9 +1175,8 @@ async function readAttempt(tx: SqlExecutor, attemptId: string): Promise<StoredAt
   if (!row) return null;
   const charge = await tx.get<BodyRow>(`SELECT ${BODY} FROM challenge_charges WHERE attempt_id = ?`, [attemptId]);
   const record = await tx.get<BodyRow>(`SELECT ${BODY} FROM challenge_attempt_records WHERE attempt_id = ?`, [attemptId]);
-  const body = decode<Omit<NewAttempt, 'timing'> & Partial<Pick<NewAttempt, 'timing'>>>(row);
-  // #135
-  return { ...body, timing: body.timing ?? UNTIMED, sequence: row.sequence, charge: charge ? decode<AttemptCharge>(charge) : null, record: record ? decode<ChallengeAttemptRecord>(record) : null };
+  const body = withLifecycle(decode<Omit<NewAttempt, 'lifecycle'> & Partial<Pick<NewAttempt, 'lifecycle'>>>(row));
+  return { ...body, sequence: row.sequence, charge: charge ? decode<AttemptCharge>(charge) : null, record: record ? decode<ChallengeAttemptRecord>(record) : null };
 }
 
 async function readAttemptTransition(tx: SqlExecutor, attemptId: string, commandId: string): Promise<CommittedAttemptTransition | null> {

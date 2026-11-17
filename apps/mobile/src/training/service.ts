@@ -20,7 +20,7 @@ import { CHALLENGE_VARIANTS, type ChallengeAttemptRecord, type ChallengeCategory
 import type { LifecycleEvent } from '../practice/adapters';
 import type { TrainingAdapters } from './adapters';
 import type { ChallengeAllowance } from './allowance';
-import { ChallengeController, type AttemptSnapshot, type LearnerCommand, type StartProblem } from './controller';
+import { ChallengeController, type AttemptSnapshot, type DirectSuspendCause, type LearnerCommand, type PauseCause, type StartProblem } from './controller';
 import { DeviceLearningPreferences, type LearningPreferences } from './learning-preferences';
 import { lessonProgress, type LessonChange, type LessonProgress, type LessonProgressChange, type LessonStatus } from './lesson-progress';
 
@@ -178,7 +178,7 @@ export class TrainingService {
   }
 
   // Spec 3 Training service interface › Resume / suspend / pause / end; #135
-  pause(cause?: 'learner' | 'speech-backlog'): void {
+  pause(cause?: PauseCause): void {
     this.challenges.pause(cause);
   }
 
@@ -205,7 +205,7 @@ export class TrainingService {
   }
 
   // Spec 3 Amendment 1 B5
-  suspend(cause?: 'navigation' | 'app-lifecycle' | 'sign-out'): void {
+  suspend(cause?: DirectSuspendCause): void {
     this.challenges.suspend(cause);
   }
 

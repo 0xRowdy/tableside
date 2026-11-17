@@ -16,13 +16,20 @@ export interface Admission {
   readonly allowancePolicyVersion?: string;
 }
 
-// Spec 3 Attempt lifecycle › Performance timer; #135
-export interface AttemptTiming {
+// Spec 3 Attempt lifecycle › Pause, Performance timer; Amendment 1 C1; #135
+export interface AttemptLifecycle {
   readonly timed: boolean;
   readonly performanceMs: number;
+  readonly interrupted: boolean;
 }
 
-export const UNTIMED: AttemptTiming = { timed: false, performanceMs: 0 };
+export const FRESH_LIFECYCLE: AttemptLifecycle = { timed: false, performanceMs: 0, interrupted: false };
+
+// #135
+export const withLifecycle = <T extends { readonly lifecycle?: AttemptLifecycle }>(body: T): T & { readonly lifecycle: AttemptLifecycle } => ({
+  ...body,
+  lifecycle: { ...FRESH_LIFECYCLE, ...body.lifecycle },
+});
 
 export interface NewAttempt {
   readonly attemptId: string;
@@ -31,7 +38,7 @@ export interface NewAttempt {
   readonly random: RandomStreamIdentity;
   readonly checkpoint: string;
   readonly createdAt: number;
-  readonly timing: AttemptTiming;
+  readonly lifecycle: AttemptLifecycle;
 }
 
 // Spec 3 Amendment 1 C6
@@ -54,7 +61,7 @@ export interface AttemptTransitionCommit {
   readonly facts: readonly ChallengeFact[];
   // Spec 3 Amendment 1 C6
   readonly charge: AttemptCharge | null;
-  readonly timing: AttemptTiming;
+  readonly lifecycle: AttemptLifecycle;
 }
 
 export interface CommittedAttemptTransition {
@@ -76,6 +83,8 @@ export interface ChallengeStore {
   readAttemptReceipt(attemptId: string, commandId: string): Promise<CommittedAttemptTransition | null>;
   // Spec 3 Amendment 1 C6
   discardUnchargedAttempt(attemptId: string): Promise<void>;
+  // Spec 3 Attempt lifecycle › Pause; #135
+  saveAttemptLifecycle(attemptId: string, lifecycle: AttemptLifecycle): Promise<void>;
   // Spec 3 Synchronized record types › Challenge attempt
   recordAttempt(record: UnsequencedAttemptRecord): Promise<ChallengeAttemptRecord>;
   readAttemptRecords(): Promise<readonly ChallengeAttemptRecord[]>;

@@ -1,5 +1,5 @@
 // Spec 3 Audio and haptics, Learn, Check and assistance, Testing Decisions › Seam 3 (cue dispatch); #132
-import { EMPTY_QUARANTINE_LIST, type ChallengeVariant, type ChallengeView } from '@tableside/engine';
+import { EMPTY_QUARANTINE_LIST, ENGINE_VERSION, type ChallengeVariant, type ChallengeView, type QuarantineList } from '@tableside/engine';
 
 import { FeedbackService } from '@/feedback/service';
 import { DeviceSettings } from '@/feedback/settings';
@@ -15,9 +15,9 @@ import { HI_LO_BY_RANK } from '@/training/testing/hi-lo';
 const reference = (view: ChallengeView) => HI_LO_BY_RANK[view.item!.card.rank]!;
 const wrongFor = (view: ChallengeView) => (reference(view) === 1 ? -1 : 1);
 
-async function setup(variant: ChallengeVariant, store = new MemoryTrainingStore()) {
+async function setup(variant: ChallengeVariant, store = new MemoryTrainingStore(), quarantine: QuarantineList = EMPTY_QUARANTINE_LIST) {
   const clock = new FakeClock(1_790_000_000_000, true);
-  const service = new TrainingService({ store, access: alwaysAllowed, allowance: plentyAllowance(() => clock.now()), clock, entropy: entropyFromWords(PI_WORDS), newId: () => 'attempt-1', device: 'test-device', owner: 'local', quarantine: EMPTY_QUARANTINE_LIST });
+  const service = new TrainingService({ store, access: alwaysAllowed, allowance: plentyAllowance(() => clock.now()), clock, entropy: entropyFromWords(PI_WORDS), newId: () => 'attempt-1', device: 'test-device', owner: 'local', quarantine });
   const ports = substituteFeedbackPorts(null);
   const settings = new DeviceSettings(ports.storage);
   await settings.load();
@@ -28,10 +28,12 @@ async function setup(variant: ChallengeVariant, store = new MemoryTrainingStore(
     heard.push({ cue, at: clock.now() - 1_790_000_000_000, snapshot: service.snapshot() });
     play(cue, volume);
   };
+  const seen: TrainingSnapshot[] = [];
+  service.subscribe(() => seen.push(service.snapshot()));
   const stop = followTraining(service, feedback);
   await service.load();
   await service.startAttempt({ category: 'card-values', variant });
-  return { service, ports, feedback, heard, stop, store };
+  return { service, ports, feedback, heard, stop, store, seen };
 }
 
 async function answerAll(service: TrainingService, choose: (view: ChallengeView) => -1 | 0 | 1) {
@@ -104,6 +106,15 @@ describe('cues during a challenge attempt', () => {
     const hidden = await setup('check');
     await hidden.service.end({ showResults: false });
     expect(hidden.ports.sound.played.map((play) => play.cue)).toEqual(['card-dealt']);
+  });
+
+  // Spec 3 Audio and haptics (cue 12), Amendment 1 C3; #135
+  it('plays no cue 12 for an attempt that ends unusable as the app starts', async () => {
+    const first = await setup('check');
+    const later = await setup('check', first.store.reopen(), { version: 2, entries: [{ id: 'defect', match: { engine: ENGINE_VERSION }, explanation: 'A defect.' }] });
+    expect(later.service.snapshot()).toMatchObject({ status: 'ended', record: { endingReason: 'unusable' } });
+    expect(later.ports.sound.played.map((play) => play.cue)).not.toContain('attempt-ended');
+    expect(later.seen.map((snapshot) => snapshot.status)).not.toContain('active');
   });
 
   it('Learn: a right answer plays cue 13 and a wrong one cue 14 with its haptic; Learn never plays cue 10', async () => {

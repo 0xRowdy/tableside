@@ -1,8 +1,9 @@
-// Spec 3 S3-03 P4WjR, drVnR, BFdJT, S3-04 qdnQm, S3-05 EDnGd, r5pCx, T9sCI, S3-06 C53yTW; #135
+// Spec 3 S3-03 P4WjR, drVnR, BFdJT, S3-04 qdnQm, S3-05 EDnGd, r5pCx, T9sCI, S3-06 C53yTW
+// #158, #132, #133, #135, #146
 
 import type { HintId } from '@tableside/definitions';
 import type { ChallengeCategory, ChallengeEntry, ChallengeView, CountRange, LearnFeedback } from '@tableside/engine';
-import { CircleAlert, CircleCheck, CircleDot, CircleHelp, CircleX, Pause, SkipForward, Timer, type LucideIcon } from 'lucide-react-native';
+import { CircleCheck, CircleDot, CircleHelp, CircleX, Pause, SkipForward, Timer, type LucideIcon } from 'lucide-react-native';
 import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -15,7 +16,7 @@ import { FirstUseHint, useReopenHints } from '@/lessons/FirstUseHints';
 import { signed } from '@/play/blackjack-text';
 import { SaveFailedBanner } from '@/play/TableChrome';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/theme/tokens';
-import { HelpSheet, HoldSheet } from './AttemptSheets';
+import { HelpSheet, HoldSheet, WarningNote } from './AttemptSheets';
 import { CountAid } from './CountAid';
 import { CountEntry } from './CountEntry';
 import {
@@ -128,14 +129,7 @@ export function ChallengeExercise({
       </View>
       <View style={styles.body}>
         {saveFailed && <SaveFailedBanner busy={busy} onRetry={onRetrySave} />}
-        {hold && !hold.reached && (
-          <View style={styles.boundary}>
-            <CircleAlert color={palette.warning} size={20} />
-            <Text accessibilityRole="alert" maxFontSizeMultiplier={textScale.body} style={styles.boundaryText}>
-              {turnBoundaryText(hold)}
-            </Text>
-          </View>
-        )}
+        {hold && !hold.reached && <WarningNote text={turnBoundaryText(hold)} />}
         {view.countRange === null ? (
           <>
             {view.item && <PlayingCard card={view.item.card} />}
@@ -350,8 +344,6 @@ const styles = StyleSheet.create({
   progressRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space[2] },
   timer: { flexDirection: 'row', alignItems: 'center', gap: space[1] },
   timerText: { fontFamily: fonts.uiBold, fontSize: 13, color: palette.mutedForeground, fontVariant: ['tabular-nums'] },
-  boundary: { flexDirection: 'row', gap: space[3], padding: 14, borderRadius: 12, borderWidth: 1, borderColor: palette.warning, backgroundColor: palette.card },
-  boundaryText: { flex: 1, fontFamily: fonts.uiBold, fontSize: 14, lineHeight: 20, color: palette.foreground },
   title: { fontFamily: fonts.uiBold, fontSize: 17, color: palette.foreground },
   subtitle: { fontFamily: fonts.ui, fontSize: 13, color: palette.mutedForeground },
   progress: { gap: space[1] + 2, paddingHorizontal: space[4], paddingTop: space[1] + 2, paddingBottom: space[3] - 2 },

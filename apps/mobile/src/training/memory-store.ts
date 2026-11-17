@@ -3,9 +3,9 @@ import type { ChallengeAttemptRecord, UnsequencedAttemptRecord } from '@tablesid
 
 import { StoreWriteError } from '../practice/memory-store';
 import type { LessonProgressEvent, UnsequencedLessonEvent } from './lesson-progress';
-import { UNTIMED, type AttemptCommitOutcome, type AttemptTransitionCommit, type CommittedAttemptTransition, type NewAttempt, type StoredAttempt, type TrainingStore } from './store';
+import { withLifecycle, type AttemptLifecycle, type AttemptCommitOutcome, type AttemptTransitionCommit, type CommittedAttemptTransition, type NewAttempt, type StoredAttempt, type TrainingStore } from './store';
 
-type Operation = 'createAttempt' | 'commitAttemptTransition' | 'recordAttempt' | 'readAttemptReceipt' | 'writePreference' | 'recordLessonEvent';
+type Operation = 'createAttempt' | 'commitAttemptTransition' | 'saveAttemptLifecycle' | 'recordAttempt' | 'readAttemptReceipt' | 'writePreference' | 'recordLessonEvent';
 
 interface Row {
   attempt: string;
@@ -64,7 +64,7 @@ export class MemoryTrainingStore implements TrainingStore {
       if (attempt.sequence !== commit.priorSequence) return { status: 'sequence-conflict', sequence: attempt.sequence };
       const transition: CommittedAttemptTransition = { receipt: commit.receipt, checkpoint: commit.checkpoint, facts: commit.facts };
       row.transitions.set(commit.receipt.commandId, JSON.stringify(transition));
-      row.attempt = JSON.stringify({ ...attempt, checkpoint: commit.checkpoint, sequence: commit.priorSequence + 1, charge: attempt.charge ?? commit.charge, timing: commit.timing });
+      row.attempt = JSON.stringify({ ...attempt, checkpoint: commit.checkpoint, sequence: commit.priorSequence + 1, charge: attempt.charge ?? commit.charge, lifecycle: commit.lifecycle });
       return { status: 'committed' };
     });
   }
@@ -80,6 +80,14 @@ export class MemoryTrainingStore implements TrainingStore {
     return this.enqueue(() => {
       const row = this.disk.attempts.get(attemptId);
       if (row && parse<StoredAttempt>(row.attempt).sequence === 0) this.disk.attempts.delete(attemptId);
+    });
+  }
+
+  saveAttemptLifecycle(attemptId: string, lifecycle: AttemptLifecycle): Promise<void> {
+    return this.injectable('saveAttemptLifecycle', () => {
+      const row = this.require(attemptId);
+      const attempt = storedAttempt(row.attempt);
+      if (!attempt.record) row.attempt = JSON.stringify({ ...attempt, lifecycle });
     });
   }
 
@@ -161,9 +169,5 @@ export class MemoryTrainingStore implements TrainingStore {
 }
 
 const parse = <T>(text: string): T => JSON.parse(text) as T;
-// #135
-const storedAttempt = (text: string): StoredAttempt => {
-  const attempt = parse<Omit<StoredAttempt, 'timing'> & Partial<Pick<StoredAttempt, 'timing'>>>(text);
-  return { ...attempt, timing: attempt.timing ?? UNTIMED };
-};
+const storedAttempt = (text: string): StoredAttempt => withLifecycle(parse<Omit<StoredAttempt, 'lifecycle'> & Partial<Pick<StoredAttempt, 'lifecycle'>>>(text));
 const clone = <T>(value: T): T => parse<T>(JSON.stringify(value));

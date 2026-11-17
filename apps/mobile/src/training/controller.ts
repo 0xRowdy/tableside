@@ -24,7 +24,7 @@ import {
 import type { AccessDecision, AccessDenial, LifecycleEvent } from '../practice/adapters';
 import { RECONNECT_TO_VERIFY, SAVE_RETRY_MS } from '../practice/controller';
 import type { TrainingAdapters } from './adapters';
-import { CHALLENGE_CHARGE, UNTIMED, type Admission, type AttemptCharge, type AttemptTiming, type CommittedAttemptTransition, type StoredAttempt } from './store';
+import { CHALLENGE_CHARGE, FRESH_LIFECYCLE, type Admission, type AttemptCharge, type AttemptLifecycle, type CommittedAttemptTransition, type StoredAttempt } from './store';
 
 export type StartProblem = 'invalid-setup' | 'access-denied' | 'access-uncertain' | 'save-failed';
 
@@ -35,6 +35,8 @@ export type LearnerCommand = Extract<ChallengeCommand, { readonly kind: 'answer'
 
 // Spec 3 Attempt lifecycle › Phases, Pause; Amendment 1 B5, C1
 export type HoldCause = 'learner' | 'speech-backlog' | 'navigation' | 'app-lifecycle' | 'sign-out' | 'recovered' | 'access';
+export type PauseCause = Extract<HoldCause, 'learner' | 'speech-backlog'>;
+export type DirectSuspendCause = Extract<HoldCause, 'navigation' | 'app-lifecycle' | 'sign-out'>;
 
 export interface AttemptHold {
   readonly kind: 'paused' | 'auto-paused' | 'suspended';
@@ -46,8 +48,16 @@ export interface AttemptHold {
   readonly endBlocked: string | null;
 }
 
-// Spec 3 Amendment 1 C6
-const HOLD_RANK: Record<HoldCause, number> = { learner: 0, 'speech-backlog': 0, navigation: 1, 'app-lifecycle': 1, recovered: 1, 'sign-out': 2, access: 2 };
+// Spec 3 Amendment 1 C6: a hold gives way only to one of equal or higher rank
+const HOLDS: Record<HoldCause, { readonly kind: AttemptHold['kind']; readonly rank: number }> = {
+  learner: { kind: 'paused', rank: 0 },
+  'speech-backlog': { kind: 'auto-paused', rank: 0 },
+  navigation: { kind: 'suspended', rank: 1 },
+  'app-lifecycle': { kind: 'suspended', rank: 1 },
+  recovered: { kind: 'suspended', rank: 1 },
+  'sign-out': { kind: 'suspended', rank: 2 },
+  access: { kind: 'suspended', rank: 2 },
+};
 
 const ITEM_FINISHED: ReadonlySet<ChallengePhase> = new Set(['ready', 'card', 'recorded', 'ended']);
 
@@ -60,16 +70,6 @@ export interface PerformanceTimer {
   readonly ms: number;
   readonly since: number | null;
 }
-
-const HOLD_KIND: Record<HoldCause, AttemptHold['kind']> = {
-  learner: 'paused',
-  'speech-backlog': 'auto-paused',
-  navigation: 'suspended',
-  'app-lifecycle': 'suspended',
-  'sign-out': 'suspended',
-  recovered: 'suspended',
-  access: 'suspended',
-};
 
 export type AttemptSnapshot =
   | { readonly status: 'loading' }
@@ -89,7 +89,12 @@ export type AttemptSnapshot =
 
 type Committed = { readonly state: ChallengeState; readonly facts: readonly ChallengeFact[] };
 
-type Pending = { readonly kind: 'transition'; readonly command: LearnerCommand | { readonly kind: 'end' } } | { readonly kind: 'record' };
+type ControllerCommand = LearnerCommand | Extract<ChallengeCommand, { readonly kind: 'end' }>;
+
+type Pending = { readonly kind: 'transition'; readonly command: ControllerCommand } | { readonly kind: 'record' };
+
+// Spec 3 Amendment 1 C3
+type Unusable = { readonly explanation: string | null };
 
 const UNANSWERED: AccessDenial = { status: 'uncertain', provenance: 'unanswered', disposition: 'stop' };
 
@@ -106,13 +111,11 @@ export class ChallengeController {
   private pending: Pending | null = null;
   private retryFor: Pending | null = null;
   private hold: AttemptHold | null = null;
-  private interrupted = false;
   private resumeQueued = false;
   private showResults = true;
-  private timing: AttemptTiming = UNTIMED;
+  private attemptLifecycle: AttemptLifecycle = FRESH_LIFECYCLE;
   private timedSince: number | null = null;
-  // Spec 3 Amendment 1 C3
-  private unusable: string | null | undefined = undefined;
+  private unusable: Unusable | null = null;
 
   constructor(private readonly adapters: TrainingAdapters) {}
 
@@ -166,7 +169,7 @@ export class ChallengeController {
       const random = streamIdentityFromEntropy(this.adapters.entropy);
       const specification = { attemptId, owner: this.adapters.owner, device: this.adapters.device, variant, content };
       const initial = createChallenge(specification, random);
-      const created = { attemptId, admission, specification, random, checkpoint: encodeChallengeCheckpoint(initial), createdAt: this.adapters.clock.now(), timing: { ...UNTIMED, timed } };
+      const created = { attemptId, admission, specification, random, checkpoint: encodeChallengeCheckpoint(initial), createdAt: this.adapters.clock.now(), lifecycle: { ...FRESH_LIFECYCLE, timed } };
       let attempt: StoredAttempt | null;
       try {
         attempt = await this.adapters.store.createAttempt(created);
@@ -174,7 +177,7 @@ export class ChallengeController {
         attempt = await this.adapters.store.loadAttempt(attemptId).catch(() => null);
       }
       if (!attempt) return this.showNone('save-failed');
-      this.timing = attempt.timing;
+      this.attemptLifecycle = attempt.lifecycle;
       this.timedSince = null;
       await this.beginCharged(attempt, initial);
     });
@@ -187,13 +190,15 @@ export class ChallengeController {
       this.current = { status: 'needs-update' };
       return this.notify();
     }
-    this.adopt(stored, opened.state);
-    this.interrupted = true;
-    if (opened.kind === 'unusable') {
-      this.unusable = opened.explanation;
+    if (opened.kind === 'unusable' || opened.state.phase === 'ended') {
+      this.adopt(stored, opened.state, [], { quiet: true });
+      if (opened.kind === 'unusable') {
+        this.unusable = { explanation: opened.explanation };
+        this.attemptLifecycle = { ...this.attemptLifecycle, interrupted: true };
+      }
       return this.record();
     }
-    if (opened.state.phase === 'ended') return this.record();
+    this.adopt(stored, opened.state);
     this.holdNow('recovered', null);
     await this.drive();
   }
@@ -238,7 +243,7 @@ export class ChallengeController {
   }
 
   // Spec 3 Attempt lifecycle › Pause; Amendment 1 C1
-  pause(cause: 'learner' | 'speech-backlog' = 'learner'): void {
+  pause(cause: PauseCause = 'learner'): void {
     this.holdNow(cause, null);
   }
 
@@ -289,7 +294,7 @@ export class ChallengeController {
   }
 
   // Spec 3 Amendment 1 B5
-  suspend(cause: 'navigation' | 'app-lifecycle' | 'sign-out' = 'navigation'): void {
+  suspend(cause: DirectSuspendCause = 'navigation'): void {
     this.holdNow(cause, null);
   }
 
@@ -314,12 +319,13 @@ export class ChallengeController {
     const state = this.state;
     if (!state || this.current.status !== 'active') return;
     const previous = this.hold;
-    if (previous && HOLD_RANK[previous.cause] > HOLD_RANK[cause]) return;
+    if (previous && HOLDS[previous.cause].rank > HOLDS[cause].rank) return;
     this.resumeQueued = false;
-    this.interrupted = true;
+    this.attemptLifecycle = { ...this.attemptLifecycle, interrupted: true };
     const reached = !atBoundary || (previous?.reached ?? false) || ITEM_FINISHED.has(state.phase);
-    this.hold = { kind: HOLD_KIND[cause], cause, reached, reason, resumeBlocked: null, endBlocked: null };
+    this.hold = { kind: HOLDS[cause].kind, cause, reached, reason, resumeBlocked: null, endBlocked: null };
     this.publish();
+    void this.adapters.store.saveAttemptLifecycle(state.attempt.id, this.lifecycleNow()).catch(() => undefined);
   }
 
   async retrySave(): Promise<void> {
@@ -340,7 +346,7 @@ export class ChallengeController {
     this.showNone(null);
   }
 
-  private async send(command: LearnerCommand | { readonly kind: 'end' }): Promise<void> {
+  private async send(command: ControllerCommand): Promise<void> {
     const state = this.requireState();
     const next = await this.commit(state, command, null);
     if (!next) {
@@ -378,7 +384,7 @@ export class ChallengeController {
         receipt: result.receipt,
         facts: result.facts as ChallengeFact[],
         charge,
-        timing: this.timingNow(),
+        lifecycle: this.lifecycleNow(),
       });
       if (outcome.status === 'committed') return { state: result.state, facts: result.facts };
       if (outcome.status === 'already-committed') found = outcome.transition;
@@ -396,12 +402,12 @@ export class ChallengeController {
     const state = this.requireState();
     const attempt = this.attempt as StoredAttempt;
     const unusable = this.unusable;
-    const unsequenced = (unusable === undefined ? challengeAttemptRecord : unusableAttemptRecord)(state, {
+    const unsequenced = (unusable === null ? challengeAttemptRecord : unusableAttemptRecord)(state, {
       installation: this.adapters.device,
       startedAt: attempt.charge?.chargedAt ?? attempt.createdAt,
       endedAt: this.adapters.clock.now(),
-      interrupted: this.interrupted,
-      performanceMs: this.timing.timed ? this.timingNow().performanceMs : null,
+      interrupted: this.attemptLifecycle.interrupted,
+      performanceMs: this.attemptLifecycle.timed ? this.lifecycleNow().performanceMs : null,
       meteringBasis: attempt.admission.meteringBasis,
       allowancePolicyVersion: attempt.admission.allowancePolicyVersion ?? null,
     });
@@ -421,23 +427,22 @@ export class ChallengeController {
       this.state = null;
       return this.showNone(null);
     }
-    this.current = { status: 'ended', record, position: Math.min(state.position + 1, state.content.length), explanation: unusable ?? null };
+    this.current = { status: 'ended', record, position: Math.min(state.position + 1, state.content.length), explanation: unusable?.explanation ?? null };
     this.notify();
   }
 
-  private adopt(stored: StoredAttempt, state: ChallengeState, facts: readonly ChallengeFact[] = []): void {
+  private adopt(stored: StoredAttempt, state: ChallengeState, facts: readonly ChallengeFact[] = [], options: { readonly quiet?: boolean } = {}): void {
     if (this.attempt?.attemptId !== stored.attemptId) {
       this.hold = null;
-      this.interrupted = false;
-      this.timing = stored.timing;
+      this.attemptLifecycle = stored.lifecycle;
       this.timedSince = null;
-      this.unusable = undefined;
+      this.unusable = null;
     }
     this.attempt = stored;
     this.state = state;
     this.facts = facts;
     this.pending = null;
-    this.publish();
+    if (!options.quiet) this.publish();
   }
 
   private requireState(): ChallengeState {
@@ -482,19 +487,20 @@ export class ChallengeController {
   }
 
   // Spec 3 Attempt lifecycle › Performance timer
-  performanceMs = (): number | null => (this.state && this.timing.timed ? this.timingNow().performanceMs : null);
+  performanceMs = (): number | null => (this.state && this.attemptLifecycle.timed ? this.lifecycleNow().performanceMs : null);
 
   private retime(): void {
     const state = this.state;
-    const running = this.timing.timed && state !== null && TIMED_PHASES.has(state.phase) && !answeredLast(state) && !this.hold?.reached;
+    const running = this.attemptLifecycle.timed && state !== null && TIMED_PHASES.has(state.phase) && !answeredLast(state) && !this.hold?.reached;
     if (running === (this.timedSince !== null)) return;
-    this.timing = this.timingNow();
+    this.attemptLifecycle = this.lifecycleNow();
     this.timedSince = running ? this.adapters.clock.now() : null;
   }
 
-  private timingNow(): AttemptTiming {
+  // TODO(#117)
+  private lifecycleNow(): AttemptLifecycle {
     const since = this.timedSince;
-    return since === null ? this.timing : { ...this.timing, performanceMs: this.timing.performanceMs + (this.adapters.clock.now() - since) };
+    return since === null ? this.attemptLifecycle : { ...this.attemptLifecycle, performanceMs: this.attemptLifecycle.performanceMs + (this.adapters.clock.now() - since) };
   }
 
   private publish(): void {
@@ -504,7 +510,7 @@ export class ChallengeController {
       if (this.current.status === 'none') this.showNone(this.current.problem);
       return;
     }
-    this.current = { status: 'active', view: readChallengeView(this.state), facts: this.facts, busy: this.busy, save: this.pending ? 'failed' : 'saved', hold: this.hold, timer: this.timing.timed ? { ms: this.timing.performanceMs, since: this.timedSince } : null };
+    this.current = { status: 'active', view: readChallengeView(this.state), facts: this.facts, busy: this.busy, save: this.pending ? 'failed' : 'saved', hold: this.hold, timer: this.attemptLifecycle.timed ? { ms: this.attemptLifecycle.performanceMs, since: this.timedSince } : null };
     this.notify();
   }
 

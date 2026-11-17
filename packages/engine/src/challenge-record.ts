@@ -1,7 +1,7 @@
 // Spec 3 Synchronized record types › Challenge attempt, Amendment 4 §1; #158, #133
 
 import type { VersionedIdentity } from './activity';
-import { CHALLENGE_METRICS, challengeResults, type ChallengeCategory, type ChallengeMetrics, type ChallengeState, type ChallengeVariant, type ReviewFact } from './challenge';
+import { challengeResults, type ChallengeCategory, type ChallengeMetrics, type ChallengeState, type ChallengeVariant, type ReviewFact } from './challenge';
 import type { RandomStreamIdentity } from './random';
 import type { MeteringBasis } from './record';
 
@@ -105,7 +105,7 @@ export function challengeAttemptRecord(state: ChallengeState, context: AttemptRe
 
 // Spec 3 Attempt lifecycle (unusable), Amendment 1 C3; #135
 export function unusableAttemptRecord(state: ChallengeState, context: AttemptRecordContext): UnsequencedAttemptRecord {
-  const metrics = Object.fromEntries(CHALLENGE_METRICS.map((metric) => [metric, null])) as unknown as ChallengeMetrics;
+  const metrics: ChallengeMetrics = { 'card-values': null, 'running-count': null, 'true-count': null, 'playing-adherence': null, 'betting-adherence': null };
   return recordOf(state, context, { ending: 'unusable', metrics, review: [], assistanceStep: state.revealedAt });
 }
 

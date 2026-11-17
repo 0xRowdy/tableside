@@ -243,7 +243,7 @@ export const COMPLETED: Record<ChallengeVariant, { readonly title: string; reado
     detail: 'Learn scores your first answer to each card, even when you corrected it afterwards. Learn attempts never count toward a readiness milestone.',
     note: "When you're ready, try Check: it holds every answer until the end.",
   },
-    // Spec 3 S3-08 CEb6T
+  // Spec 3 S3-08 CEb6T
   check: { title: 'Completed · unassisted', detail: null, note: null },
 };
 
@@ -346,9 +346,13 @@ export const TIME_THIS_DETAIL = 'Optional. Only perfect, unassisted, uninterrupt
 export const PAUSE_LABEL = 'Pause';
 
 export const exerciseSubtitle = (variant: ChallengeVariant, timed: boolean, hold: AttemptHold | null) =>
-  [variantLabel(variant), PACING_LABEL, timed ? 'timed' : null, hold?.reached ? HOLD_STATE[hold.kind] : null].filter(Boolean).join(' · ');
+  [variantLabel(variant), PACING_LABEL, timed ? 'timed' : null, hold?.reached ? holdState(hold) : null].filter(Boolean).join(' · ');
 
-const HOLD_STATE: Record<AttemptHold['kind'], string> = { paused: 'paused', 'auto-paused': 'auto-paused', suspended: 'paused' };
+// Spec 3 S3-05 r5pCx ("Switching apps or tabs pauses an attempt too"); CONTEXT.md Suspension
+const SHOWN_AS_PAUSED: ReadonlySet<AttemptHold['cause']> = new Set(['learner', 'navigation', 'app-lifecycle']);
+const holdState = (hold: AttemptHold) => (hold.kind === 'auto-paused' ? 'auto-paused' : SHOWN_AS_PAUSED.has(hold.cause) ? 'paused' : 'suspended');
+
+const CANT_CONTINUE = "This attempt can't continue right now.";
 
 const pad = (value: number) => String(value).padStart(2, '0');
 export function timerText(ms: number): string {
@@ -366,24 +370,30 @@ const SAVED_PLACE = "Your answers and place are saved. Switching apps or tabs pa
 export const RESUME_LABEL = 'Resume';
 export const END_ATTEMPT = 'End attempt';
 
-export function holdText(hold: AttemptHold, variant: ChallengeVariant): { readonly title: string; readonly lead: string; readonly end: string; readonly lessons: string | null } {
+export function holdText(hold: AttemptHold, variant: ChallengeVariant): { readonly title: string; readonly lead: string; readonly end: string | null; readonly lessons: string | null } {
+  // Spec 3 S3-05 qGARl
+  if (hold.kind === 'auto-paused') {
+    return {
+      title: "Paused so you don't miss a card",
+      lead: "This counts as an interruption: accuracy still counts, but the attempt can't set a fastest time. Self-paced mode never pauses like this.",
+      end: null,
+      lessons: null,
+    };
+  }
   const end = variant === 'check' ? "Ending keeps today's attempt used, earns no record and restarts progress toward the readiness milestone for these settings." : "Ending keeps today's attempt used and earns no record.";
   const lessons = variant === 'check' ? 'The four counting lessons are available after this attempt. Other lessons are open now.' : null;
   const shared = { end, lessons };
-  if (hold.kind === 'auto-paused') {
-    return { ...shared, title: "Paused so you don't miss a card", lead: "This counts as an interruption: accuracy still counts, but the attempt can't set a fastest time." };
-  }
   if (hold.cause === 'access' || hold.cause === 'sign-out') {
-    return { ...shared, title: 'Attempt suspended', lead: `${hold.reason ?? "This attempt can't continue right now."} Your answers and place are saved, and nothing was shown or scored since.` };
+    return { ...shared, title: 'Attempt suspended', lead: `${hold.reason ?? CANT_CONTINUE} Your answers and place are saved, and nothing was shown or scored since.` };
   }
   if (hold.cause === 'recovered') {
-    return { ...shared, title: 'Attempt paused', lead: "Tableside closed during this attempt. Your answers and place are saved, and the attempt can't set a fastest time." };
+    return { ...shared, title: 'Attempt suspended', lead: "Tableside closed during this attempt. Your answers and place are saved, and the attempt can't set a fastest time." };
   }
   return { ...shared, title: 'Attempt paused', lead: SAVED_PLACE };
 }
 
 // Spec 3 Amendment 1 C6
-export const turnBoundaryText = (hold: AttemptHold) => `${hold.reason ?? "This attempt can't continue right now."} Finish this card; the attempt is suspended before the next one.`;
+export const turnBoundaryText = (hold: AttemptHold) => `${hold.reason ?? CANT_CONTINUE} Finish this card; the attempt is suspended before the next one.`;
 
 // Spec 3 S3-05 T9sCI; Learn, Check and assistance (operational help)
 export function helpText(view: Pick<ChallengeView, 'variant' | 'countRange' | 'countAid'>): {
