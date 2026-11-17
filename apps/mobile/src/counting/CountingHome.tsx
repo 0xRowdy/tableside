@@ -1,16 +1,17 @@
-// Spec 3 S3-01 PDCaD, RqPCB; spec 5 S5-17 j3UhJ; Lessons › Entry points; #158, #150, #145
+// Spec 3 S3-01 PDCaD, RqPCB; spec 5 S5-17 j3UhJ; Lessons › Entry points; #158, #150, #145, #140
 
 import { CHALLENGE_LESSONS } from '@tableside/definitions';
 import { CHALLENGE_VARIANTS, type ChallengeVariant } from '@tableside/engine';
-import { ClipboardCheck, GraduationCap, type LucideIcon } from 'lucide-react-native';
+import { ClipboardCheck, GraduationCap, Trophy, type LucideIcon } from 'lucide-react-native';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
 import { LessonLink } from '@/lessons/LessonEntries';
-import { Note, SettingsScreen } from '@/settings/SettingsParts';
+import { Group, ListRow, Note, SettingsScreen } from '@/settings/SettingsParts';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/theme/tokens';
 import { CATEGORY_TEXT, COUNTING_TITLE, NOT_READY_HINT, RECOMMENDATIONS_NOTE, SUGGESTED_ORDER_LABEL, variantLabel, type AllowanceCopy } from '@/training/challenge-text';
 import { lessonLinkLabel } from '@/training/lesson-text';
+import { RECORDS_ROW } from '@/training/records-text';
 import type { CatalogCategory, CatalogEntry, ChallengeSetup, LessonEntry } from '@/training/service';
 
 import { AllowanceBanner } from './AllowanceBanner';
@@ -23,12 +24,14 @@ export function CountingHome({
   lessons,
   onOpenLesson,
   onChoose,
+  onOpenRecords,
 }: {
   catalog: readonly CatalogEntry[];
   allowance: AllowanceCopy | undefined;
   lessons: readonly LessonEntry[] | undefined;
   onOpenLesson: (lesson: string) => void;
   onChoose: (setup: ChallengeSetup) => void;
+  onOpenRecords: () => void;
 }) {
   // Spec 5 S5-17 j3UhJ
   const elsewhere = allowance?.standing === 'elsewhere' ? allowance.setup.text : null;
@@ -49,6 +52,9 @@ export function CountingHome({
           onChoose={onChoose}
         />
       ))}
+      <Group>
+        <ListRow icon={Trophy} title={RECORDS_ROW.title} detail={RECORDS_ROW.detail} onPress={onOpenRecords} />
+      </Group>
       <Note>{RECOMMENDATIONS_NOTE}</Note>
     </SettingsScreen>
   );

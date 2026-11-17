@@ -27,6 +27,7 @@ import {
 import type { AccessDecision, AccessDenial, LifecycleEvent } from '../practice/adapters';
 import { RECONNECT_TO_VERIFY, SAVE_RETRY_MS } from '../practice/controller';
 import type { TrainingAdapters } from './adapters';
+import { NOTHING_EARNED, type AttemptEarned } from './progress';
 import { CHALLENGE_CHARGE, FRESH_LIFECYCLE, type Admission, type AttemptCharge, type AttemptLifecycle, type CommittedAttemptTransition, type StoredAttempt } from './store';
 
 export type StartProblem = 'invalid-setup' | 'access-denied' | 'access-uncertain' | 'save-failed';
@@ -86,7 +87,14 @@ export type AttemptSnapshot =
       readonly hold: AttemptHold | null;
       readonly timer: PerformanceTimer | null;
     }
-  | { readonly status: 'ended'; readonly record: ChallengeAttemptRecord; readonly position: number; readonly explanation: string | null }
+  | {
+      readonly status: 'ended';
+      readonly record: ChallengeAttemptRecord;
+      readonly position: number;
+      readonly explanation: string | null;
+      // Spec 3 Comparison groups, records and progression; #140
+      readonly earned: AttemptEarned;
+    }
   // docs/development.md Releases
   | { readonly status: 'needs-update' };
 
@@ -120,7 +128,11 @@ export class ChallengeController {
   private timedSince: number | null = null;
   private unusable: Unusable | null = null;
 
-  constructor(private readonly adapters: TrainingAdapters) {}
+  constructor(
+    private readonly adapters: TrainingAdapters,
+    // Spec 3 Modules › Training service (Progress projection); #140
+    private readonly earnedBy: (record: ChallengeAttemptRecord) => Promise<AttemptEarned>,
+  ) {}
 
   snapshot = (): AttemptSnapshot => this.current;
 
@@ -430,7 +442,8 @@ export class ChallengeController {
       this.state = null;
       return this.showNone(null);
     }
-    this.current = { status: 'ended', record, position: challengeReached(state), explanation: unusable?.explanation ?? null };
+    const earned = await this.earnedBy(record).catch(() => NOTHING_EARNED);
+    this.current = { status: 'ended', record, position: challengeReached(state), explanation: unusable?.explanation ?? null, earned };
     this.notify();
   }
 

@@ -1,12 +1,17 @@
 // Spec 3 S3-07 v82z3, AcmMa, bh8oE, xjtSW, heGUV; S3-02 ZreSb; #137
 
 import { blackjackHouseEdge, blackjackPreset, type BlackjackPreset } from '@tableside/definitions';
-import { tableCheckpointRounds, type BlackjackAction, type ChallengeEntry, ChallengeVariant, TableCountReview, TableHandView, TableRunningExplanation, TableView } from '@tableside/engine';
+import { tableCheckpointRounds, type BlackjackAction, type ChallengeEntry, type TableGroupKey, ChallengeVariant, TableCountReview, TableHandView, TableRunningExplanation, TableView } from '@tableside/engine';
 
 import { cardRank, signed, SUIT_GLYPH } from '@/play/blackjack-text';
 
 const presetText = (dealer: 'S17' | 'H17', lateSurrender: boolean) => `${dealer} ${lateSurrender ? 'LS' : 'no LS'}`;
 const players = (count: number) => `${count} ${count === 1 ? 'player' : 'players'}`;
+
+// Spec 3 S3-10 OVKkc
+export const tableGroupTitle = (table: TableGroupKey) => `Table counting · ${table.seat === 'observe' ? 'Observe' : 'Play'}`;
+export const tableSettingsText = (table: TableGroupKey) =>
+  [presetText(table.dealer, table.lateSurrender), `${table.penetration}%`, players(table.extraPlayers), `N = ${table.checkpointInterval}`].join(' · ');
 
 // Spec 3 S3-08 e5MASr
 export const resultsSubtitle = (variant: ChallengeVariant) => `Table counting · ${variant === 'learn' ? 'Learn' : 'Check'} · Observe`;

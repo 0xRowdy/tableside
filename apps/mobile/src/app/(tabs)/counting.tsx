@@ -1,5 +1,5 @@
 // Spec 3 Screens; Lessons › Entry points, Structure; Attempt lifecycle; Amendment 1 B5
-// #158, #132, #145, #133, #134, #135, #146, #137
+// #158, #132, #145, #133, #134, #135, #146, #140, #137
 import { CHALLENGE_LESSONS } from '@tableside/definitions';
 import { CHALLENGE_VARIANTS, type ChallengeVariant } from '@tableside/engine';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
@@ -12,6 +12,7 @@ import { ChallengeExercise, exerciseHints } from '@/counting/ChallengeExercise';
 import { ChallengeResults } from '@/counting/ChallengeResults';
 import { ChallengeSetupScreen } from '@/counting/ChallengeSetupScreen';
 import { CountingHome } from '@/counting/CountingHome';
+import { RecordsScreen } from '@/counting/RecordsScreen';
 import { useFeedback } from '@/feedback/FeedbackProvider';
 import { useLoaded } from '@/hooks/use-loaded';
 import { ScreenHints } from '@/lessons/FirstUseHints';
@@ -26,7 +27,7 @@ const allowanceOf = async (service: TrainingService, _reloadOnStatus: TrainingSn
 export default function Counting() {
   const { service, snapshot } = useTraining();
   const feedback = useFeedback();
-  const { category, variant } = useLocalSearchParams<{ category?: string; variant?: string }>();
+  const { category, variant, records } = useLocalSearchParams<{ category?: string; variant?: string; records?: string }>();
   const { lessons } = useLessons();
   const remembered = useLoaded(lastSetupOf, service);
   // Spec 3 Amendment 4 §2
@@ -41,6 +42,9 @@ export default function Counting() {
   // Spec 3 Lessons › Structure (Handoff)
   const handedOff = entry && CHALLENGE_VARIANTS.includes(variant as ChallengeVariant) ? { category: entry.category, variant: variant as ChallengeVariant } : null;
   const openLesson = (lesson: string) => router.navigate(lessonHref(lesson));
+  // Spec 3 S3-10 OVKkc
+  const openRecords = () => router.setParams({ records: '1' });
+  const recordsScreen = records === '1' && <RecordsScreen service={service} lessons={lessons} onOpenLesson={openLesson} onBack={() => router.setParams({ records: undefined })} />;
 
   // Spec 3 Amendment 4 §6; Amendment 1 B5
   useFocusEffect(
@@ -69,9 +73,10 @@ export default function Counting() {
       const { view, hold } = snapshot;
       // Spec 3 Attempt lifecycle › One unfinished attempt; S3-01 Uq05w
       if (browsing && hold?.reached) {
+        if (recordsScreen) return recordsScreen;
         return (
           <>
-            <CountingHome catalog={catalog} allowance={allowance} lessons={lessons} onOpenLesson={openLesson} onChoose={setNext} />
+            <CountingHome catalog={catalog} allowance={allowance} lessons={lessons} onOpenLesson={openLesson} onChoose={setNext} onOpenRecords={openRecords} />
             {next && (
               <UnfinishedSheet
                 view={view}
@@ -134,6 +139,7 @@ export default function Counting() {
           record={snapshot.record}
           position={snapshot.position}
           explanation={snapshot.explanation}
+          earned={snapshot.earned}
           onReview={() => setReviewing(snapshot.record.attemptId)}
           allowance={allowance}
           onRetry={() => void service.retry()}
@@ -141,6 +147,7 @@ export default function Counting() {
       );
     case 'none': {
       if (!entry) {
+        if (recordsScreen) return recordsScreen;
         return (
           <CountingHome
             catalog={catalog}
@@ -148,6 +155,7 @@ export default function Counting() {
             lessons={lessons}
             onOpenLesson={openLesson}
             onChoose={chooseSetup}
+            onOpenRecords={openRecords}
           />
         );
       }

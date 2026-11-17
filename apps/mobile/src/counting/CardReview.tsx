@@ -1,4 +1,4 @@
-// Spec 3 S3-09 h0MsKr, BjuKf; Scoring and review › Review facts, Attribution; #132, #133, #134
+// Spec 3 S3-09 h0MsKr, BjuKf, S3-10 OVKkc; Scoring and review › Review facts; #132, #133, #134, #140
 
 import { CATEGORY_METRIC, type ChallengeAttemptRecord } from '@tableside/engine';
 import { BookOpen, CircleCheckBig, CircleX, SkipForward, TrendingUp } from 'lucide-react-native';
@@ -34,11 +34,13 @@ export function CardReview({
   record,
   lesson,
   onOpenLesson,
+  backTo = RESULTS_TITLE,
   onBack,
 }: {
   record: ChallengeAttemptRecord;
   lesson: LessonEntry | undefined;
   onOpenLesson: (id: string) => void;
+  backTo?: string;
   onBack: () => void;
 }) {
   const insets = useSafeAreaInsets();
@@ -49,7 +51,7 @@ export function CardReview({
       <SetupHeader
         title={REVIEW_TITLE[groupKey.category]}
         subtitle={`${CATEGORY_TEXT[groupKey.category].title} · ${variantLabel(groupKey.variant)} · ${scoreText(record.metrics[CATEGORY_METRIC[groupKey.category]])}`}
-        backTo={RESULTS_TITLE}
+        backTo={backTo}
         onBack={onBack}
       />
       <View style={styles.body}>

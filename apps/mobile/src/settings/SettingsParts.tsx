@@ -89,7 +89,7 @@ export function ListRow({
   );
   if (!onPress) {
     return (
-      <View accessible accessibilityLabel={spoken([title, detail])} style={styles.row}>
+      <View accessible accessibilityLabel={spoken([title, detail, value])} style={styles.row}>
         {content}
       </View>
     );
