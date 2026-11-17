@@ -1,8 +1,10 @@
 // Spec 3 Modules › Training service › Challenge controller
-// Spec 3 Attempt lifecycle; Amendment 1 C6; #158, #132, #133
+// Spec 3 Attempt lifecycle; Amendment 1 C6; #158, #132, #133, #135, #137
 
 import {
   advanceChallenge,
+  challengeReached,
+  lastAnswerGiven,
   challengeAttemptRecord,
   createChallenge,
   decodeChallengeCheckpoint,
@@ -15,10 +17,12 @@ import {
   type ChallengeCommand,
   type ChallengeContent,
   type ChallengeFact,
+  type ChallengePacing,
   type ChallengePhase,
   type ChallengeState,
   type ChallengeVariant,
   type ChallengeView,
+  type TableSetup,
 } from '@tableside/engine';
 
 import type { AccessDecision, AccessDenial, LifecycleEvent } from '../practice/adapters';
@@ -31,6 +35,9 @@ export type StartProblem = 'invalid-setup' | 'access-denied' | 'access-uncertain
 
 // Spec 3 S3-03 BFdJT
 export const RECORDED_MS = 800;
+
+// Spec 3 Attempt lifecycle › Automatic pacing; S3-02 buD2R; #136
+export const PACE_SECONDS: Readonly<Record<ChallengePacing, number | null>> = { 'self-paced': null, '3s': 3, '2s': 2, '1s': 1 };
 
 export type LearnerCommand = Extract<ChallengeCommand, { readonly kind: 'answer' | 'skip' | 'retry-item' | 'next-item' | 'reveal-count' }>;
 
@@ -65,7 +72,7 @@ const ITEM_FINISHED: ReadonlySet<ChallengePhase> = new Set(['ready', 'card', 're
 // Spec 3 Attempt lifecycle › Performance timer
 const TIMED_PHASES: ReadonlySet<ChallengePhase> = new Set(['card', 'question', 'recorded']);
 
-const answeredLast = (state: ChallengeState) => state.phase === 'ended' || (state.position + 1 >= state.content.length && (state.phase === 'recorded' || state.phase === 'explanation'));
+const answeredLast = (state: ChallengeState) => lastAnswerGiven(state);
 
 export interface PerformanceTimer {
   readonly ms: number;
@@ -83,6 +90,7 @@ export type AttemptSnapshot =
       readonly save: 'saved' | 'failed';
       readonly hold: AttemptHold | null;
       readonly timer: PerformanceTimer | null;
+      readonly pacing: ChallengePacing;
     }
   | {
       readonly status: 'ended';
@@ -124,6 +132,10 @@ export class ChallengeController {
   private attemptLifecycle: AttemptLifecycle = FRESH_LIFECYCLE;
   private timedSince: number | null = null;
   private unusable: Unusable | null = null;
+  // Spec 3 Attempt lifecycle › Automatic pacing; #136
+  private paceArmed: { readonly card: string; readonly token: number } | null = null;
+  private paceTokens = 0;
+  private paceQueued: number | null = null;
 
   constructor(
     private readonly adapters: TrainingAdapters,
@@ -148,7 +160,7 @@ export class ChallengeController {
   }
 
   // Spec 3 Training service interface › Start attempt
-  async start(variant: ChallengeVariant, content: ChallengeContent, timed = false): Promise<void> {
+  async start(variant: ChallengeVariant, content: ChallengeContent, options: { readonly timed: boolean; readonly pacing: ChallengePacing; readonly table?: TableSetup }): Promise<void> {
     await this.exclusive(async () => {
       // Spec 3 Attempt lifecycle › One unfinished attempt
       if (this.state && this.current.status === 'active') return;
@@ -179,9 +191,9 @@ export class ChallengeController {
 
       const attemptId = this.adapters.newId();
       const random = streamIdentityFromEntropy(this.adapters.entropy);
-      const specification = { attemptId, owner: this.adapters.owner, device: this.adapters.device, variant, content };
+      const specification = { attemptId, owner: this.adapters.owner, device: this.adapters.device, variant, content, ...(options.table ? { table: options.table } : {}) };
       const initial = createChallenge(specification, random);
-      const created = { attemptId, admission, specification, random, checkpoint: encodeChallengeCheckpoint(initial), createdAt: this.adapters.clock.now(), lifecycle: { ...FRESH_LIFECYCLE, timed } };
+      const created = { attemptId, admission, specification, random, checkpoint: encodeChallengeCheckpoint(initial), createdAt: this.adapters.clock.now(), lifecycle: { ...FRESH_LIFECYCLE, timed: options.timed, pacing: options.pacing } };
       let attempt: StoredAttempt | null;
       try {
         attempt = await this.adapters.store.createAttempt(created);
@@ -279,6 +291,8 @@ export class ChallengeController {
       }
       this.hold = null;
       this.publish();
+      // Spec 3 S3-05 qGARl
+      if (hold.cause === 'speech-backlog' && state.phase === 'card' && this.state === state) await this.send({ kind: 'next-item' });
       await this.drive();
     });
   }
@@ -336,6 +350,7 @@ export class ChallengeController {
     this.attemptLifecycle = { ...this.attemptLifecycle, interrupted: true };
     const reached = !atBoundary || (previous?.reached ?? false) || ITEM_FINISHED.has(state.phase);
     this.hold = { kind: HOLDS[cause].kind, cause, reached, reason, resumeBlocked: null, endBlocked: null };
+    this.paceArmed = null;
     this.publish();
     void this.adapters.store.saveAttemptLifecycle(state.attempt.id, this.lifecycleNow()).catch(() => undefined);
   }
@@ -422,6 +437,7 @@ export class ChallengeController {
       performanceMs: this.attemptLifecycle.timed ? this.lifecycleNow().performanceMs : null,
       meteringBasis: attempt.admission.meteringBasis,
       allowancePolicyVersion: attempt.admission.allowancePolicyVersion ?? null,
+      pacing: this.attemptLifecycle.pacing,
     });
     let record: ChallengeAttemptRecord | null;
     try {
@@ -440,7 +456,7 @@ export class ChallengeController {
       return this.showNone(null);
     }
     const earned = await this.earnedBy(record).catch(() => NOTHING_EARNED);
-    this.current = { status: 'ended', record, position: Math.min(state.position + 1, state.content.length), explanation: unusable?.explanation ?? null, earned };
+    this.current = { status: 'ended', record, position: challengeReached(state), explanation: unusable?.explanation ?? null, earned };
     this.notify();
   }
 
@@ -477,6 +493,9 @@ export class ChallengeController {
         this.resumeQueued = false;
         void this.resume();
       }
+      const due = this.paceQueued;
+      this.paceQueued = null;
+      if (due !== null) void this.paceDue(due);
     }
   }
 
@@ -523,8 +542,39 @@ export class ChallengeController {
       if (this.current.status === 'none') this.showNone(this.current.problem);
       return;
     }
-    this.current = { status: 'active', view: readChallengeView(this.state), facts: this.facts, busy: this.busy, save: this.pending ? 'failed' : 'saved', hold: this.hold, timer: this.attemptLifecycle.timed ? { ms: this.attemptLifecycle.performanceMs, since: this.timedSince } : null };
+    this.current = { status: 'active', view: readChallengeView(this.state), facts: this.facts, busy: this.busy, save: this.pending ? 'failed' : 'saved', hold: this.hold, timer: this.attemptLifecycle.timed ? { ms: this.attemptLifecycle.performanceMs, since: this.timedSince } : null, pacing: this.attemptLifecycle.pacing };
     this.notify();
+    this.armPace();
+  }
+
+  // Spec 3 Attempt lifecycle › Automatic pacing; #133 handoff
+  private armPace(): void {
+    const state = this.state;
+    const seconds = PACE_SECONDS[this.attemptLifecycle.pacing];
+    if (!state || seconds === null || state.phase !== 'card' || this.hold || this.pending) return;
+    const card = `${state.attempt.id}/${state.position}`;
+    if (this.paceArmed?.card === card) return;
+    const token = ++this.paceTokens;
+    this.paceArmed = { card, token };
+    void this.adapters.clock
+      .sleep(seconds * 1000)
+      .then(() => this.paceDue(token))
+      .catch(() => undefined);
+  }
+
+  private async paceDue(token: number): Promise<void> {
+    if (this.paceArmed?.token !== token) return;
+    if (this.busy) {
+      this.paceQueued = token;
+      return;
+    }
+    // Spec 3 Attempt lifecycle › Automatic pacing (speech backlog); Amendment 1 C1
+    if (this.adapters.speech.speaking()) return this.pause('speech-backlog');
+    await this.exclusive(async () => {
+      if (this.paceArmed?.token !== token || this.state?.phase !== 'card' || this.hold || this.pending) return;
+      await this.send({ kind: 'next-item' });
+      await this.drive();
+    });
   }
 
   private notify(): void {

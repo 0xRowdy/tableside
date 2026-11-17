@@ -11,6 +11,7 @@ import { plentyAllowance } from '@/training/allowance';
 import { MemoryTrainingStore } from '@/training/memory-store';
 import { TrainingService, type TrainingSnapshot } from '@/training/service';
 import { cardOf, HI_LO_BY_RANK } from '@/training/testing/hi-lo';
+import { NO_SCREEN_READER } from '@/training/speech';
 
 const reference = (view: ChallengeView) => HI_LO_BY_RANK[cardOf(view.item).rank]!;
 const wrongFor = (view: ChallengeView) => (reference(view) === 1 ? -1 : 1);
@@ -18,7 +19,7 @@ const wrongFor = (view: ChallengeView) => (reference(view) === 1 ? -1 : 1);
 async function setup(variant: ChallengeVariant, store = new MemoryTrainingStore(), quarantine: QuarantineList = EMPTY_QUARANTINE_LIST) {
   const clock = new FakeClock(1_790_000_000_000, true);
   let next = 0;
-  const service = new TrainingService({ store, access: alwaysAllowed, allowance: plentyAllowance(() => clock.now()), clock, entropy: entropyFromWords(PI_WORDS), newId: () => `attempt-${++next}`, device: 'test-device', owner: 'local', quarantine });
+  const service = new TrainingService({ store, access: alwaysAllowed, allowance: plentyAllowance(() => clock.now()), clock, entropy: entropyFromWords(PI_WORDS), newId: () => `attempt-${++next}`, device: 'test-device', owner: 'local', quarantine, speech: NO_SCREEN_READER });
   const ports = substituteFeedbackPorts(null);
   const settings = new DeviceSettings(ports.storage);
   await settings.load();
@@ -161,6 +162,18 @@ describe('cues during a challenge attempt', () => {
     await answerAll(service, wrongFor);
     expect(service.snapshot()).toMatchObject({ status: 'ended', earned: { bests: [], fastest: null } });
     expect(ports.sound.played.slice(before).map((play) => play.cue)).not.toContain('milestone');
+  });
+
+  // #141
+  it('plays cue 16 with the success haptic on the results of the Check that earns a readiness milestone, even with no new personal best', async () => {
+    const { service, ports } = await setup('check');
+    await answerAll(service, reference);
+    const before = ports.sound.played.length;
+    await service.retry();
+    await answerAll(service, reference);
+    expect(service.snapshot()).toMatchObject({ status: 'ended', earned: { bests: [], fastest: null, readiness: { kind: 'earned' } } });
+    expect(ports.sound.played.slice(before).map((play) => play.cue).slice(-2)).toEqual(['attempt-ended', 'milestone']);
+    expect(ports.haptics.fired.at(-1)).toBe('success');
   });
 
   it('plays no cue 16 for an abandoned attempt', async () => {

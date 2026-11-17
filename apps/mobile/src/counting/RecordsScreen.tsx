@@ -1,8 +1,8 @@
-// Spec 3 S3-10 OVKkc (Amendment 2 §3); Comparison groups, records and progression; #140
+// Spec 3 S3-10 OVKkc (Amendment 2 §3); Comparison groups, records and progression; #140, #141
 
 import { CHALLENGE_LESSONS } from '@tableside/definitions';
 import type { AssistanceClass, AttemptEndingReason, ChallengeAttemptRecord } from '@tableside/engine';
-import { CircleAlert, CircleCheckBig, CircleStop, CloudOff, type LucideIcon } from 'lucide-react-native';
+import { CircleAlert, CircleCheckBig, CircleStop, CloudOff, Flag, type LucideIcon } from 'lucide-react-native';
 import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
@@ -12,6 +12,7 @@ import { Group, GroupLabel, ListRow, Note, SettingsScreen } from '@/settings/Set
 import { fonts, palette, radius, space, textScale } from '@/theme/tokens';
 import { COUNTING_TITLE } from '@/training/challenge-text';
 import { attemptIdentity, offersReview, type GroupProgress, type Progress } from '@/training/progress';
+import { earningAttempts, milestoneLine } from '@/training/readiness-text';
 import {
   bestsLabel,
   bestText,
@@ -72,6 +73,7 @@ export function RecordsScreen({
     );
   }
 
+  const earned = records ? earningAttempts(records.progress) : new Set<string>();
   const groups = records?.progress.groups.filter((group) => group.key.assistanceClass === assistance && group.attempts.some((entry) => entry.record.endingReason !== 'unusable')) ?? [];
   return (
     <SettingsScreen title={RECORDS_TITLE} back={{ label: COUNTING_TITLE, onPress: onBack }}>
@@ -88,7 +90,7 @@ export function RecordsScreen({
       ) : (
         <Group>
           {records?.progress.history.map((entry) => {
-            const text = historyText(entry, records.now);
+            const text = historyText(entry, records.now, earned.has(attemptIdentity(entry.record)));
             const { record } = entry;
             return (
               <ListRow
@@ -110,8 +112,9 @@ export function RecordsScreen({
 
 function GroupCard({ group }: { group: GroupProgress }) {
   const stats = [...bestText(group), ...(group.key.assistanceClass === 'unassisted-check' ? [fastestText(group)] : [])];
+  const milestone = milestoneLine(group);
   return (
-    <View accessible accessibilityLabel={groupLabel(group, stats)} style={styles.card}>
+    <View accessible accessibilityLabel={groupLabel(group, stats, milestone)} style={styles.card}>
       <Text maxFontSizeMultiplier={textScale.body} style={styles.title}>
         {groupTitle(group.key)}
       </Text>
@@ -123,6 +126,14 @@ function GroupCard({ group }: { group: GroupProgress }) {
           <Stat key={stat.label} stat={stat} />
         ))}
       </View>
+      {milestone && (
+        <View style={styles.milestone}>
+          <Flag color={palette.primary} size={14} />
+          <Text maxFontSizeMultiplier={textScale.body} style={styles.milestoneText}>
+            {milestone}
+          </Text>
+        </View>
+      )}
     </View>
   );
 }
@@ -147,5 +158,7 @@ const styles = StyleSheet.create({
   stats: { flexDirection: 'row', flexWrap: 'wrap', gap: space[2] },
   stat: { flexGrow: 1, flexBasis: 140, gap: 2 },
   statLabel: { fontFamily: fonts.ui, fontSize: 12, color: palette.mutedForeground },
+  milestone: { flexDirection: 'row', alignItems: 'center', gap: space[1] + 2 },
+  milestoneText: { flex: 1, fontFamily: fonts.ui, fontSize: 13, color: palette.foreground },
   statValue: { fontFamily: fonts.uiBold, fontSize: 16, color: palette.foreground },
 });

@@ -1,8 +1,9 @@
-// Spec 3 Synchronized record types › Challenge attempt, Amendment 4 §1; #158, #133
+// Spec 3 Synchronized record types › Challenge attempt, Amendment 4 §1; #158, #133, #137
 
 import type { VersionedIdentity } from './activity';
 import { challengeResults, type ChallengeCategory, type ChallengeMetrics, type ChallengeState, type ChallengeVariant, type ReviewFact } from './challenge';
 import type { RandomStreamIdentity } from './random';
+import type { TableSetup } from './table-challenge';
 import type { MeteringBasis } from './record';
 
 export const CHALLENGE_RECORD_VERSION = 1 as const;
@@ -11,9 +12,17 @@ export type AssistanceClass = 'learn' | 'assisted-check' | 'unassisted-check';
 
 export type ChallengePacing = 'self-paced' | '3s' | '2s' | '1s';
 
+export const CHALLENGE_PACINGS: readonly ChallengePacing[] = ['self-paced', '3s', '2s', '1s'];
+
+// Spec 3 Attempt lifecycle › Automatic pacing; #136
+export const pacingApplies = (category: string, pacing: ChallengePacing): boolean => pacing === 'self-paced' || category === 'running-count';
+
 // Spec 3 Comparison groups
 export interface TableGroupKey {
   readonly rules: VersionedIdentity;
+  // Spec 3 Comparison groups: the rule preset
+  readonly dealer: 'S17' | 'H17';
+  readonly lateSurrender: boolean;
   readonly penetration: number;
   readonly extraPlayers: number;
   readonly seat: 'observe' | 'play';
@@ -86,9 +95,12 @@ export interface AttemptRecordContext {
   readonly performanceMs: number | null;
   readonly meteringBasis: MeteringBasis;
   readonly allowancePolicyVersion: string | null;
+  // Spec 3 Comparison groups; #136
+  readonly pacing: ChallengePacing;
 }
 
-export function challengeGroupKey(state: ChallengeState): ChallengeGroupKey {
+export function challengeGroupKey(state: ChallengeState, pacing: ChallengePacing): ChallengeGroupKey {
+  if (!pacingApplies(state.identities.category, pacing)) throw new Error(`${state.identities.category} has no ${pacing} pacing`);
   return {
     category: state.identities.category,
     variant: state.variant,
@@ -96,9 +108,26 @@ export function challengeGroupKey(state: ChallengeState): ChallengeGroupKey {
     countRevealed: state.revealedAt !== null,
     content: { ...state.identities.content },
     reference: state.identities.reference && { ...state.identities.reference },
-    length: state.content.length,
-    pacing: 'self-paced',
-    table: null,
+    length: state.content.category === 'table' ? state.content.rounds : state.content.length,
+    pacing,
+    table: state.table && tableGroupKey(state.table.setup),
+  };
+}
+
+// Spec 3 Comparison groups; Challenge content › Observe seats
+function tableGroupKey({ rules, seat, interval }: TableSetup): TableGroupKey {
+  return {
+    rules: { id: rules.id, version: rules.version },
+    dealer: rules.dealer,
+    lateSurrender: rules.lateSurrender,
+    penetration: rules.penetration,
+    extraPlayers: rules.players.otherWagers.length,
+    seat,
+    countingMode: null,
+    betSchedule: false,
+    baseWager: null,
+    startingBalance: null,
+    checkpointInterval: interval,
   };
 }
 
@@ -125,7 +154,7 @@ function recordOf(
     attemptId: state.attempt.id,
     owner: state.attempt.owner,
     installation: context.installation,
-    groupKey: challengeGroupKey(state),
+    groupKey: challengeGroupKey(state, context.pacing),
     identities: {
       engine: identities.engine,
       content: { ...identities.content },

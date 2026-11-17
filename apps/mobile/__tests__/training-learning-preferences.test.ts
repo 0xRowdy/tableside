@@ -6,6 +6,7 @@ import { FakeClock, entropyFromWords, PI_WORDS } from '@/practice/testing/substi
 import { MemoryTrainingStore } from '@/training/memory-store';
 import { HINTS_SEEN, START_HERE_DISMISSED } from '@/training/learning-preferences';
 import { TrainingService } from '@/training/service';
+import { NO_SCREEN_READER } from '@/training/speech';
 
 const refusingAccess = Object.fromEntries(
   Object.keys(alwaysAllowed).map((name) => [
@@ -33,6 +34,7 @@ function setup(options: { store?: MemoryTrainingStore; hints?: Readonly<Record<H
       device: 'test-device',
       owner: 'local',
       quarantine: { version: 0, entries: [] },
+      speech: NO_SCREEN_READER,
     },
     options.hints ? { hints: options.hints } : {},
   );

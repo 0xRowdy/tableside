@@ -1,8 +1,13 @@
-// Spec 3 Modules › Training service; Training service interface; #158, #132, #133, #134
+// Spec 3 Modules › Training service; Training service interface; #158, #132, #133, #134, #137
 
 import {
+  BLACKJACK_PRESETS,
+  blackjackPreset,
   CATALOG_CATEGORIES,
   CHALLENGE_CONTENT,
+  DEFAULT_TABLE_SETUP,
+  observeSetup,
+  type TableOptions,
   HINTS,
   LESSONS,
   type Hint,
@@ -16,14 +21,15 @@ import {
   type LessonStep,
   type WorkedExample,
 } from '@tableside/definitions';
-import { CHALLENGE_VARIANTS, type ChallengeAttemptRecord, type ChallengeCategory, type ChallengeVariant } from '@tableside/engine';
+import { CHALLENGE_PACINGS, CHALLENGE_VARIANTS, MAX_CHECKPOINT_INTERVAL, MAX_OTHER_PLAYERS, pacingApplies, PENETRATIONS, type ChallengeAttemptRecord, type ChallengeCategory, type ChallengeGroupKey, type ChallengePacing, type ChallengeVariant } from '@tableside/engine';
 
 import type { LifecycleEvent } from '../practice/adapters';
 import type { TrainingAdapters } from './adapters';
 import type { ChallengeAllowance } from './allowance';
 import { ChallengeController, type AttemptSnapshot, type DirectSuspendCause, type LearnerCommand, type PauseCause, type StartProblem } from './controller';
 import { DeviceLearningPreferences, type LearningPreferences } from './learning-preferences';
-import { attemptEarned, progressProjection, type AttemptEarned, type Progress, type ProgressAttempt } from './progress';
+import { attemptEarned, milestoneCandidates, progressProjection, readinessOutcome, type AttemptEarned, type Progress, type ProgressAttempt, type ProgressMilestone } from './progress';
+import { milestoneSlot } from './readiness-milestone';
 import { lessonProgress, type LessonChange, type LessonProgress, type LessonProgressChange, type LessonStatus } from './lesson-progress';
 
 // Spec 3 Recommendations
@@ -35,6 +41,8 @@ export interface CatalogEntry {
   readonly category: CatalogCategory;
   readonly available: true;
   readonly ready: readonly ChallengeVariant[];
+  // Spec 3 Attempt lifecycle › Automatic pacing; #136
+  readonly pacings: readonly ChallengePacing[];
 }
 
 export interface ChallengeSetup {
@@ -42,12 +50,15 @@ export interface ChallengeSetup {
   readonly variant: ChallengeVariant;
   // Spec 3 Attempt lifecycle › Performance timer; #135
   readonly timed?: boolean;
+  // Spec 3 Attempt lifecycle › Automatic pacing; #136
+  readonly pacing?: ChallengePacing;
+  // Spec 3 User stories 27
+  readonly table?: TableOptions;
 }
 
-export interface SetupDiagnostic {
-  readonly field: 'category' | 'variant';
-  readonly problem: 'unknown' | 'not-ready';
-}
+export type { TableOptions };
+
+export type SetupDiagnostic = { readonly field: 'category' | 'variant' | 'pacing'; readonly problem: 'unknown' | 'not-ready' } | { readonly field: 'table'; readonly problem: 'invalid' };
 
 export interface SetupValidation {
   readonly valid: boolean;
@@ -64,14 +75,42 @@ const READY: Readonly<Partial<Record<CatalogCategory, readonly ChallengeVariant[
   'card-values': ['learn', 'check'],
   'running-count': ['learn', 'check'],
   conversion: ['learn', 'check'],
+  table: ['learn', 'check'],
 };
+
+// Spec 3 Challenge content › Table; S3-02 ZreSb
+function isTableOptions(value: unknown): value is TableOptions {
+  if (typeof value !== 'object' || value === null) return false;
+  const options = value as Record<string, unknown>;
+  const whole = (n: unknown, min: number, max: number) => Number.isInteger(n) && (n as number) >= min && (n as number) <= max;
+  return (
+    Object.keys(options).length === 5 &&
+    options.seat === 'observe' &&
+    BLACKJACK_PRESETS.includes(options.preset as TableOptions['preset']) &&
+    PENETRATIONS.includes(options.penetration as number) &&
+    whole(options.extraPlayers, 0, MAX_OTHER_PLAYERS) &&
+    whole(options.interval, 1, MAX_CHECKPOINT_INTERVAL)
+  );
+}
+
+
+// Spec 3 Training service interface › Results: Retry keeps the attempt's settings
+export function retrySetup(groupKey: ChallengeGroupKey): ChallengeSetup {
+  const { category, variant, table } = groupKey;
+  if (!table) return { category, variant };
+  const preset = blackjackPreset(table.dealer, table.lateSurrender);
+  return { category, variant, table: { seat: 'observe', preset, penetration: table.penetration, extraPlayers: table.extraPlayers, interval: table.checkpointInterval } };
+}
 
 // Spec 3 Amendment 1 C7
 export const LAST_SETUP = 'challenge.last-setup';
 
 export function setupFor(entry: CatalogEntry, preferred: readonly (ChallengeSetup | null | undefined)[]): ChallengeSetup {
   const fits = preferred.find((setup) => setup?.category === entry.category && entry.ready.includes(setup.variant));
-  return fits ?? { category: entry.category, variant: entry.ready[0] ?? 'learn' };
+  const chosen = fits ?? { category: entry.category, variant: entry.ready[0] ?? 'learn' };
+  if (entry.category !== 'table' || chosen.table) return chosen;
+  const remembered = preferred.find((setup) => setup?.category === 'table' && setup.table)?.table;
+  return { ...chosen, table: remembered ?? DEFAULT_TABLE_SETUP };
 }
 
 // Spec 3 Training service interface › List catalog, Lesson progress; #143
@@ -149,15 +188,17 @@ export class TrainingService {
     return () => this.listeners.delete(listener);
   };
 
-  load(): Promise<void> {
-    return this.challenges.load();
+  async load(): Promise<void> {
+    await this.challenges.load();
+    // Spec 3 Synchronized record types › Readiness milestone
+    await this.recordMilestones().catch(() => undefined);
   }
 
   listCatalog(): readonly CatalogEntry[] {
-    return SUGGESTED_ORDER.map((category) => ({ category, available: true, ready: READY[category] ?? [] }));
+    return SUGGESTED_ORDER.map((category) => ({ category, available: true, ready: READY[category] ?? [], pacings: pacingsOf(category) }));
   }
 
-  validateSetup(setup: { readonly category: unknown; readonly variant: unknown }): SetupValidation {
+  validateSetup(setup: { readonly category: unknown; readonly variant: unknown; readonly pacing?: unknown; readonly table?: unknown }): SetupValidation {
     const diagnostics: SetupDiagnostic[] = [];
     const known = isCatalogCategory(setup.category);
     if (!known) diagnostics.push({ field: 'category', problem: 'unknown' });
@@ -166,6 +207,11 @@ export class TrainingService {
     else if (known && diagnostics.length === 0 && !READY[setup.category as CatalogCategory]?.includes(setup.variant as ChallengeVariant)) {
       diagnostics.push({ field: 'variant', problem: 'not-ready' });
     }
+    // Spec 3 Attempt lifecycle › Automatic pacing; #136
+    const pacing = pacingOf(setup);
+    if (!CHALLENGE_PACINGS.includes(pacing as ChallengePacing)) diagnostics.push({ field: 'pacing', problem: 'unknown' });
+    else if (known && !pacingsOf(setup.category as CatalogCategory).includes(pacing as ChallengePacing)) diagnostics.push({ field: 'pacing', problem: 'not-ready' });
+    if (setup.category === 'table' && !isTableOptions(setup.table)) diagnostics.push({ field: 'table', problem: 'invalid' });
     return { valid: diagnostics.length === 0, diagnostics };
   }
 
@@ -176,8 +222,10 @@ export class TrainingService {
       return this.refresh();
     }
     this.diagnostics = null;
-    await this.adapters.store.writePreference(LAST_SETUP, JSON.stringify(rememberedSetup(setup))).catch(() => undefined);
-    await this.challenges.start(setup.variant, CHALLENGE_CONTENT[setup.category as ChallengeCategory], setup.timed === true);
+    const remembered = rememberedSetup(setup);
+    await this.adapters.store.writePreference(LAST_SETUP, JSON.stringify(remembered)).catch(() => undefined);
+    const table = remembered.table ? observeSetup(remembered.table) : undefined;
+    await this.challenges.start(setup.variant, CHALLENGE_CONTENT[setup.category as ChallengeCategory], { timed: setup.timed === true, pacing: pacingOf(setup), ...(table ? { table } : {}) });
   }
 
   submit(command: LearnerCommand): Promise<void> {
@@ -210,9 +258,8 @@ export class TrainingService {
     const snapshot = this.current;
     if (snapshot.status !== 'ended') return;
     const { record } = snapshot;
-    const { category, variant } = record.groupKey;
     this.dismissResults();
-    await this.startAttempt({ category, variant, timed: record.performanceMs !== null });
+    await this.startAttempt({ ...retrySetup(record.groupKey), timed: record.performanceMs !== null, pacing: record.groupKey.pacing });
   }
 
   // Spec 3 Amendment 1 B5
@@ -238,11 +285,29 @@ export class TrainingService {
   now = (): number => this.adapters.clock.now();
 
   async progress(): Promise<Progress> {
-    return progressProjection(await this.attempts());
+    return progressProjection(await this.attempts(), await this.milestones());
   }
 
+  // Spec 3 Comparison groups (Milestones); Audio and haptics (cue 16)
   private async earned(record: ChallengeAttemptRecord): Promise<AttemptEarned> {
-    return attemptEarned(await this.attempts(), record.attemptId);
+    await this.recordMilestones().catch(() => undefined);
+    const attempts = await this.attempts();
+    const own = milestoneCandidates(attempts, this.adapters.device).map((milestone) => ({ record: milestone, local: true }));
+    return { ...attemptEarned(attempts, record.attemptId), readiness: readinessOutcome(attempts, [...(await this.milestones()), ...own], record.attemptId) };
+  }
+
+  // Spec 3 Synchronized record types › Readiness milestone
+  private async recordMilestones(): Promise<void> {
+    const recorded = await this.adapters.store.readMilestones();
+    const missing = milestoneCandidates(await this.attempts(), this.adapters.device).filter(
+      (candidate) => !recorded.some((milestone) => milestoneSlot(milestone) === milestoneSlot(candidate)),
+    );
+    for (const milestone of missing) await this.adapters.store.recordMilestone(milestone);
+  }
+
+  // TODO(#148)
+  private async milestones(): Promise<readonly ProgressMilestone[]> {
+    return (await this.adapters.store.readMilestones()).map((record) => ({ record, local: true }));
   }
 
   // Spec 3 Comparison groups (local and accepted attempts); #142
@@ -277,9 +342,9 @@ export class TrainingService {
     if (text === null) return null;
     try {
       const value = JSON.parse(text) as Partial<ChallengeSetup>;
-      return isCatalogCategory(value.category) && CHALLENGE_VARIANTS.includes(value.variant as ChallengeVariant)
-        ? rememberedSetup({ category: value.category, variant: value.variant as ChallengeVariant, timed: value.timed === true })
-        : null;
+      if (!isCatalogCategory(value.category) || !CHALLENGE_VARIANTS.includes(value.variant as ChallengeVariant)) return null;
+      const pacing = pacingsOf(value.category).includes(value.pacing as ChallengePacing) ? (value.pacing as ChallengePacing) : 'self-paced';
+      return rememberedSetup({ category: value.category, variant: value.variant as ChallengeVariant, timed: value.timed === true, pacing, ...(value.table === undefined ? {} : { table: value.table }) });
     } catch {
       return null;
     }
@@ -392,7 +457,21 @@ export class TrainingService {
   }
 }
 
-const rememberedSetup = ({ category, variant, timed }: ChallengeSetup): ChallengeSetup => (timed ? { category, variant, timed } : { category, variant });
+function rememberedSetup({ category, variant, timed, pacing, table }: ChallengeSetup): ChallengeSetup {
+  return {
+    category,
+    variant,
+    ...(timed ? { timed } : {}),
+    ...(pacing && pacing !== 'self-paced' ? { pacing } : {}),
+    ...(category === 'table' && isTableOptions(table) ? { table } : {}),
+  };
+}
+
+// Spec 3 Attempt lifecycle › Automatic pacing; #136
+export const pacingOf = <T>(setup: { readonly pacing?: T }): T | 'self-paced' => setup.pacing ?? 'self-paced';
+
+const pacingsOf = (category: CatalogCategory): readonly ChallengePacing[] =>
+  CHALLENGE_PACINGS.filter((pacing) => pacingApplies(category, pacing));
 
 const progressKey = (id: string, content: LessonContent) => ({ id, materialVersion: content.materialVersion, steps: stepCount(content) });
 

@@ -65,6 +65,7 @@ async function present(view: ChallengeView) {
         saveFailed={false}
         hold={null}
         timer={null}
+        pacing="self-paced"
         performanceMs={() => null}
         onPause={() => undefined}
         onResume={() => undefined}

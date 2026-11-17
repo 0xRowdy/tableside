@@ -1,8 +1,8 @@
-// Spec 3 Audio and haptics; Learn, Check and assistance › Answer accepted; #132, #140
+// Spec 3 Audio and haptics; Learn, Check and assistance › Answer accepted; #132, #140, #137
 import type { StrategyStepAnswer, WorkedExample } from '@tableside/definitions';
 import type { ChallengeFact, ChallengeView } from '@tableside/engine';
 
-import { setsPersonalBest } from '@/training/progress';
+import { earnsRecord } from '@/training/progress';
 import type { TrainingService, TrainingSnapshot } from '@/training/service';
 
 import type { CueName } from './catalog';
@@ -32,6 +32,9 @@ function cuesForChallenge(view: ChallengeView, facts: readonly ChallengeFact[]):
       case 'answer-accepted':
         if (view.variant === 'check') return ['answer-accepted'];
         return [learnAnswerCue(view.feedback?.correct === true)];
+      case 'checkpoint-due':
+        return ['checkpoint-due'];
+      case 'shoe-shuffled':
       case 'attempt-ended':
         return [];
     }
@@ -54,7 +57,7 @@ export function followTraining(training: TrainingService, feedback: FeedbackServ
     } else if (next.status === 'ended' && previous.status === 'active') {
       feedback.cue('attempt-ended');
       // Spec 3 Comparison groups, records and progression (Milestones); #140
-      if (setsPersonalBest(next.earned)) feedback.cue('milestone');
+      if (earnsRecord(next.earned)) feedback.cue('milestone');
     }
   });
 }

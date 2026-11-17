@@ -1,4 +1,4 @@
-// Spec 3 Testing Decisions › Seam 3; S3-01 PDCaD, S3-02 buD2R, S3-03 P4WjR, drVnR, BFdJT, S3-04 qdnQm, S3-05 EDnGd, S3-06 C53yTW, zAatf, Qv1An, S3-08 liAfT, CEb6T, cX5Gc, S3-09 h0MsKr; #158, #132, #133, #134
+// Spec 3 Testing Decisions › Seam 3; S3-01 PDCaD, S3-02 buD2R, S3-03 P4WjR, drVnR, BFdJT, S3-04 qdnQm, S3-05 EDnGd, S3-06 C53yTW, zAatf, Qv1An, S3-08 liAfT, CEb6T, cX5Gc, S3-09 h0MsKr, S3-02 ZreSb, S3-07 v82z3; #158, #132, #133, #134, #137
 
 import { cleanup, fireEvent, screen, within } from '@testing-library/react-native';
 import { renderRouter } from 'expo-router/testing-library';
@@ -28,6 +28,7 @@ jest.mock('@/training/app-adapters', () => {
         device: 'test-device',
         owner: 'local',
         quarantine: { version: 0, entries: [] },
+        speech: jest.requireActual('@/training/speech').NO_SCREEN_READER,
       };
     },
   };
@@ -469,6 +470,70 @@ describe('the Counting tab', () => {
       await screen.findByRole('header', { name: 'Results' });
       expect(screen.getByText('Completed · Learn')).toBeOnTheScreen();
       expect(screen.getByLabelText('True count, 10 questions: 9 of 10')).toBeOnTheScreen();
+    });
+  });
+
+  // Spec 3 Challenge content › Table, Count checkpoints (table); S3-02 ZreSb, S3-07, S3-08 e5MASr
+  describe('table counting', () => {
+    async function openTable(variant: 'Learn' | 'Check') {
+      await renderRouter('./src/app', { initialUrl: '/counting' });
+      await screen.findByRole('header', { name: 'Counting' });
+      await fireEvent.press(screen.getByRole('button', { name: `${variant}: Table counting` }));
+      await screen.findByRole('header', { name: 'Table counting' });
+    }
+
+    it('sets up Observe with the rule preset, penetration, extra players and N, and starts on those settings (S3-02 ZreSb)', async () => {
+      await openTable('Check');
+      expect(screen.getByText('WHO PLAYS YOUR SEAT')).toBeOnTheScreen();
+      const seat = within(screen.getByLabelText('Who plays your seat'));
+      expect(seat.getByRole('radio', { name: 'Observe' })).toBeChecked();
+      expect(seat.getByRole('radio', { name: 'Play' })).toBeDisabled();
+      expect(within(screen.getByLabelText('Rule preset')).getByRole('radio', { name: /S17 · late surrender/ })).toBeChecked();
+      expect(screen.getByText('75%')).toBeOnTheScreen();
+      expect(screen.getByText('0 players')).toBeOnTheScreen();
+      expect(screen.getByText('Every round')).toBeOnTheScreen();
+      expect(screen.getByText('No balance or decisions in Observe')).toBeOnTheScreen();
+      await fireEvent.press(within(screen.getByLabelText('Rule preset')).getByRole('radio', { name: /H17 · no surrender/ }));
+      await fireEvent.press(screen.getByRole('button', { name: 'Less shoe penetration' }));
+      await fireEvent.press(screen.getByRole('button', { name: 'More extra players' }));
+      await fireEvent.press(screen.getByRole('button', { name: 'Checkpoints less often' }));
+      await fireEvent.press(screen.getByRole('button', { name: 'Checkpoints less often' }));
+      expect(screen.getByText('Every 3 rounds')).toBeOnTheScreen();
+      await fireEvent.press(screen.getByRole('button', { name: 'Start Check attempt' }));
+      expect(await screen.findByText('Check · Observe · H17 no LS · 70% · 1 player · N = 3')).toBeOnTheScreen();
+      expect(screen.getByText('Keep the count')).toBeOnTheScreen();
+    });
+
+    it('runs a Check attempt with N = 10: cards one at a time, cue 11 at the checkpoint, results score running and true counts, and Retry keeps the settings', async () => {
+      await openTable('Check');
+      for (let n = 1; n < 10; n++) await fireEvent.press(screen.getByRole('button', { name: 'Checkpoints less often' }));
+      await fireEvent.press(screen.getByRole('button', { name: 'Start Check attempt' }));
+      await screen.findByText('Check · Observe · S17 LS · 75% · N = 10');
+      for (let guard = 0; guard < 400 && !screen.queryByRole('header', { name: 'Results' }); guard++) {
+        const next = screen.queryByRole('button', { name: 'Next card' });
+        if (next && !next.props.accessibilityState?.disabled) {
+          await fireEvent.press(next);
+          continue;
+        }
+        const field = screen.queryByLabelText(/^(Running|True) count$/);
+        if (field) {
+          await fireEvent.changeText(field, '0');
+          await fireEvent.press(screen.getByRole('button', { name: /^(Submit|Next: true count)$/ }));
+          continue;
+        }
+        await screen.findByRole('button', { name: /Next card|Submit|Next: true count/ }).catch(() => undefined);
+      }
+      await screen.findByRole('header', { name: 'Results' });
+      expect(cues().filter((cue) => cue === 'checkpoint-due')).toEqual(['checkpoint-due']);
+      expect(screen.getByText('Completed · 10 of 10 rounds · unassisted')).toBeOnTheScreen();
+      expect(screen.getByLabelText(/^Running count, 1 checkpoint: (0|1) of 1$/)).toBeOnTheScreen();
+      expect(screen.getByLabelText(/^True count, 1 checkpoint: (0|1) of 1$/)).toBeOnTheScreen();
+      await fireEvent.press(screen.getByRole('button', { name: 'Review checkpoints' }));
+      expect(await screen.findByText('Checkpoint 1 · after round 10 · running count')).toBeOnTheScreen();
+      expect(screen.getByText('Checkpoint 1 · after round 10 · true count')).toBeOnTheScreen();
+      await fireEvent.press(screen.getByRole('button', { name: 'Back to Results' }));
+      await fireEvent.press(await screen.findByRole('button', { name: 'Retry with a new shoe' }));
+      expect(await screen.findByText('Check · Observe · S17 LS · 75% · N = 10')).toBeOnTheScreen();
     });
   });
 });

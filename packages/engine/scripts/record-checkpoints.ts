@@ -34,6 +34,7 @@ import { PI, ZERO } from '../test/fixtures';
 import type { RecordedBuild, RecordedChallenge, RecordedCheckpoint } from '../test/recorded';
 import { CHECK, CONVERSION_CHECK, CONVERSION_LEARN, COUNT_CHECK, COUNT_LEARN, LEARN, seed } from '../test/challenge.fixtures';
 import { TEST_COUNTING_SCHEDULE } from '../test/blackjack-strategy.fixtures';
+import { TABLE_CHECK, TABLE_LEARN, tableSpec, withExtraPlayers } from '../test/table.fixtures';
 import { DOUBLING, FLAT_EVEN_MONEY } from '../test/strategy.fixtures';
 
 const place = (target: string, amount: string): Command => ({ kind: 'place-wager', target, amount });
@@ -165,7 +166,46 @@ const CHALLENGE_SCENARIOS: ChallengeScenario[] = [
     random: seed(1),
     commands: [{ kind: 'begin' }, { kind: 'answer', value: -2 }, { kind: 'next-item' }, { kind: 'answer', value: 23 }],
   },
+  // #137
+  {
+    name: 'table Observe Learn N=1, a wrong running count after round 1 explained',
+    specification: TABLE_LEARN,
+    random: seed(1),
+    commands: [
+      { kind: 'begin' },
+      { kind: 'answer', value: 0 },
+      { kind: 'next-item' },
+      { kind: 'answer', value: 0 },
+      { kind: 'next-item' },
+      ...Array.from({ length: 8 }, (): ChallengeCommand => ({ kind: 'next-item' })),
+      { kind: 'answer', value: 4 },
+    ],
+  },
+  {
+    name: 'table Observe Check N=3, mid-round with the count revealed',
+    specification: tableSpec('check', { interval: 3 }),
+    random: seed(1),
+    commands: [{ kind: 'begin' }, { kind: 'next-item' }, { kind: 'next-item' }, { kind: 'reveal-count' }],
+  },
+  pastReshuffle('table Observe Check, four extra players at 50%, past a reshuffle', tableSpec('check', withExtraPlayers(4, 50))),
+  { name: 'table Observe Check N=1, created and not yet begun', specification: TABLE_CHECK, random: seed(3), commands: [] },
 ];
+
+// #137
+function pastReshuffle(name: string, specification: ChallengeSpecification): ChallengeScenario {
+  const shuffled = (state: ChallengeState) => state.items.some((item, index) => 'step' in item && item.step === 'shuffle' && index < state.position);
+  for (let n = 1; n < 400; n++) {
+    let state = createChallenge(specification, seed(n));
+    const commands: ChallengeCommand[] = [];
+    while (state.phase !== 'ended' && !shuffled(state)) {
+      const command = nextChallengeCommand(state);
+      commands.push(command);
+      state = advanceAttempt(state, command).state;
+    }
+    if (state.phase !== 'ended') return { name, specification, random: seed(n), commands };
+  }
+  throw new Error(`${name}: no seed reshuffles`);
+}
 
 function advanceAttempt(state: ChallengeState, command: ChallengeCommand): { state: ChallengeState; facts: readonly ChallengeFact[] } {
   const result = advanceChallenge(state, { sequence: state.sequence, commandId: `record-${state.sequence}`, command });

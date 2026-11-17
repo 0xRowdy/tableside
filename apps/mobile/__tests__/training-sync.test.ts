@@ -12,6 +12,7 @@ import { entropyFromWords, FakeClock, PI_WORDS } from '@/practice/testing/substi
 import { plentyAllowance } from '@/training/allowance';
 import { CHALLENGE_ATTEMPT_RECORD_TYPE } from '@/training/store';
 import { TrainingService, type ChallengeSetup } from '@/training/service';
+import { NO_SCREEN_READER } from '@/training/speech';
 import { cardOf, HI_LO_BY_RANK } from '@/training/testing/hi-lo';
 import { attemptRecord, newAttempt } from '@/training/testing/store-contract';
 
@@ -66,6 +67,7 @@ function trainingOn(store: SqliteActivityStore, attemptDetail?: (attemptId: stri
     device: IDENTITY.installationId,
     owner: IDENTITY.accountId,
     quarantine: EMPTY_QUARANTINE_LIST,
+    speech: NO_SCREEN_READER,
     ...(attemptDetail ? { attemptDetail } : {}),
   });
 }

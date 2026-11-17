@@ -1,18 +1,19 @@
-// Spec 3 S3-08 liAfT, CEb6T, cX5Gc, UXrpw; #158, #132, #150, #133, #135, #140
+// Spec 3 S3-08 liAfT, CEb6T, nXGFk, cX5Gc, UXrpw; #158, #132, #150, #133, #135, #140, #141
 
 import type { ChallengeAttemptRecord } from '@tableside/engine';
-import { CircleAlert, CircleCheckBig, Divide, Flag, Hash, Info, ListChecks, RotateCcw, Square, Trophy, type LucideIcon } from 'lucide-react-native';
+import { BookOpen, CircleAlert, CircleCheckBig, Divide, Flag, GraduationCap, Hash, Info, ListChecks, RotateCcw, Square, Trophy, type LucideIcon } from 'lucide-react-native';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/Button';
 import { fonts, palette, radius, space, textScale } from '@/theme/tokens';
+import { resultsSubtitle } from '@/training/blackjack-table-text';
 import {
   ASSISTED_NOTE,
   CATEGORY_TEXT,
   endingText,
   NOT_TESTED,
-  PACING_LABEL,
+  pacingLabel,
   RESULT_ROWS,
   resultRows,
   RESULTS_TITLE,
@@ -26,8 +27,21 @@ import {
   variantLabel,
   type AllowanceCopy,
 } from '@/training/challenge-text';
-import { setsPersonalBest, type AttemptEarned } from '@/training/progress';
+import { belowReadinessThreshold, setsPersonalBest, type AttemptEarned } from '@/training/progress';
+import {
+  BELOW_THRESHOLD,
+  keptDetail,
+  MILESTONE_EARNED,
+  MILESTONE_KEPT,
+  milestoneDetail,
+  milestonePill,
+  nextOnPath,
+  openLessonLabel,
+  practiceNote,
+  PRACTICE_IN_LEARN,
+} from '@/training/readiness-text';
 import { personalBestText } from '@/training/records-text';
+import type { LessonEntry } from '@/training/service';
 
 const ROW_ICON: Record<(typeof RESULT_ROWS)[number]['metric'], LucideIcon> = {
   'card-values': Square,
@@ -45,6 +59,9 @@ export function ChallengeResults({
   allowance,
   onRetry,
   onReview,
+  lesson,
+  onOpenLesson,
+  onPracticeLearn,
 }: {
   record: ChallengeAttemptRecord;
   position: number;
@@ -53,13 +70,25 @@ export function ChallengeResults({
   allowance: AllowanceCopy | undefined;
   onRetry: () => void;
   onReview: () => void;
+  // Spec 3 S3-08 nXGFk
+  lesson: LessonEntry | undefined;
+  onOpenLesson: (id: string) => void;
+  onPracticeLearn: () => void;
 }) {
   const insets = useSafeAreaInsets();
   const { groupKey } = record;
   const ending = endingText(record, position, explanation);
   const completed = record.endingReason === 'completed';
   const assisted = completed && groupKey.assistanceClass === 'assisted-check';
-  const note = completed ? resultsNote(groupKey.variant, allowance) : (allowance?.results ?? '');
+  // Spec 3 Comparison groups (Milestones); #141
+  const { readiness } = earned;
+  const reviewSuggested = readiness?.kind === 'kept';
+  const detail = [ending.detail, belowReadinessThreshold(record) ? BELOW_THRESHOLD : null].filter(Boolean).join(' ');
+  const note = reviewSuggested
+    ? practiceNote(allowance)
+    : [completed ? resultsNote(groupKey.variant, allowance) : (allowance?.results ?? ''), readiness?.kind === 'earned' && readiness.next ? nextOnPath(readiness.next) : null]
+        .filter(Boolean)
+        .join(' ');
   const EndingIcon = ending.kind === 'alert' ? CircleAlert : CircleCheckBig;
   return (
     <ScrollView style={styles.screen} contentContainerStyle={{ paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right, paddingBottom: space[6] }}>
@@ -68,7 +97,7 @@ export function ChallengeResults({
           {RESULTS_TITLE}
         </Text>
         <Text maxFontSizeMultiplier={textScale.body} style={styles.subtitle}>
-          {`${CATEGORY_TEXT[groupKey.category].title} · ${variantLabel(groupKey.variant)} · ${PACING_LABEL}`}
+          {groupKey.table ? resultsSubtitle(groupKey.variant) : `${CATEGORY_TEXT[groupKey.category].title} · ${variantLabel(groupKey.variant)} · ${pacingLabel(groupKey.pacing)}`}
         </Text>
       </View>
       <View style={styles.body}>
@@ -78,9 +107,9 @@ export function ChallengeResults({
             <Text maxFontSizeMultiplier={textScale.body} style={styles.boxTitle}>
               {ending.title}
             </Text>
-            {ending.detail && (
+            {detail.length > 0 && (
               <Text maxFontSizeMultiplier={textScale.body} style={styles.boxDetail}>
-                {ending.detail}
+                {detail}
               </Text>
             )}
           </View>
@@ -98,14 +127,19 @@ export function ChallengeResults({
             </View>
           </View>
         )}
-        {setsPersonalBest(earned) && <PersonalBestBox {...personalBestText(groupKey, earned)} />}
+        {readiness?.kind === 'earned' ? (
+          <ReadinessBox title={MILESTONE_EARNED} detail={milestoneDetail(groupKey)} pill={milestonePill(earned)} />
+        ) : (
+          setsPersonalBest(earned) && <PersonalBestBox {...personalBestText(groupKey, earned)} />
+        )}
+        {readiness?.kind === 'kept' && <ReadinessBox title={MILESTONE_KEPT} detail={keptDetail(groupKey, readiness.earnedAt)} pill={null} />}
         <Text maxFontSizeMultiplier={textScale.body} style={styles.label}>
           {SCORES_LABEL}
         </Text>
         <View style={styles.group}>
           {resultRows(record.metrics).map((row, index) => {
             const result = record.metrics[row.metric];
-            const detail = result ? row.tested(result.total, groupKey.variant) : NOT_TESTED;
+            const detail = result ? row.tested(result.total, groupKey.variant, groupKey.category) : NOT_TESTED;
             const Icon = ROW_ICON[row.metric];
             return (
               <View key={row.metric} accessible accessibilityLabel={`${row.title}, ${detail}: ${spokenScore(result)}`} style={[styles.row, index > 0 && styles.rowDivider]}>
@@ -133,7 +167,21 @@ export function ChallengeResults({
           </Text>
         )}
         {record.review.length > 0 && <Button label={REVIEW_LABEL[groupKey.category]} icon={ListChecks} variant="outline" stretch onPress={onReview} />}
-        <Button label={RETRY_LABEL[groupKey.category]} icon={RotateCcw} stretch disabled={startWaits(allowance)} onPress={onRetry} />
+        {reviewSuggested ? (
+          <>
+            <Button
+              label={openLessonLabel(groupKey)}
+              icon={BookOpen}
+              variant="outline"
+              stretch
+              disabled={!lesson || lesson.steps === null}
+              onPress={() => lesson && onOpenLesson(lesson.id)}
+            />
+            <Button label={PRACTICE_IN_LEARN} icon={GraduationCap} stretch disabled={startWaits(allowance)} onPress={onPracticeLearn} />
+          </>
+        ) : (
+          <Button label={RETRY_LABEL[groupKey.category]} icon={RotateCcw} stretch disabled={startWaits(allowance)} onPress={onRetry} />
+        )}
         {note.length > 0 && (
           <Text maxFontSizeMultiplier={textScale.body} style={styles.note}>
             {note}
@@ -141,6 +189,31 @@ export function ChallengeResults({
         )}
       </View>
     </ScrollView>
+  );
+}
+
+// Spec 3 S3-08 CEb6T, nXGFk
+function ReadinessBox({ title, detail, pill }: { title: string; detail: string; pill: string | null }) {
+  return (
+    <View accessible accessibilityLabel={[`${title}.`, detail, pill && `${pill}.`].filter(Boolean).join(' ')} style={[styles.box, styles.earned]}>
+      <Flag color={palette.primary} size={24} />
+      <View style={styles.boxText}>
+        <Text maxFontSizeMultiplier={textScale.body} style={styles.boxTitle}>
+          {title}
+        </Text>
+        <Text maxFontSizeMultiplier={textScale.body} style={styles.boxDetail}>
+          {detail}
+        </Text>
+        {pill && (
+          <View style={styles.badge}>
+            <Trophy color={palette.primary} size={14} />
+            <Text maxFontSizeMultiplier={textScale.body} style={styles.badgeText}>
+              {pill}
+            </Text>
+          </View>
+        )}
+      </View>
+    </View>
   );
 }
 

@@ -193,7 +193,7 @@ function challengeDatabase(): Promise<RecordedDatabase> {
   return record('card values, an attempt waiting for an answer after a finished one', null, async (store) => {
     const finished = await playAttempt(store, specificationOf('attempt-1'), recorded.random as RandomStreamIdentity, [...commands, ...(recorded.continuation as ChallengeCommand[])]);
     if (finished.phase !== 'ended') throw new Error('the recorded continuation did not end the attempt');
-    await store.recordAttempt(
+    const finishedRecord = await store.recordAttempt(
       challengeAttemptRecord(finished, {
         installation: IDENTITY.installationId,
         startedAt: CREATED_AT,
@@ -202,6 +202,7 @@ function challengeDatabase(): Promise<RecordedDatabase> {
         performanceMs: null,
         meteringBasis: 'challenge-attempt',
         allowancePolicyVersion: null,
+        pacing: 'self-paced',
       }),
     );
     await playAttempt(store, unfinished, recorded.random as RandomStreamIdentity, commands);
@@ -211,6 +212,15 @@ function challengeDatabase(): Promise<RecordedDatabase> {
     const progress = { recordVersion: 1, owner: IDENTITY.accountId, installation: IDENTITY.installationId, lesson, recordedAt: CREATED_AT } as const;
     await store.recordLessonEvent({ ...progress, eventId: 'lesson-event-1', event: { kind: 'completed' } });
     await store.recordLessonEvent({ ...progress, eventId: 'lesson-event-2', event: { kind: 'bookmark', step: 2 } });
+    // #141
+    await store.recordMilestone({
+      recordVersion: 1,
+      owner: IDENTITY.accountId,
+      installation: IDENTITY.installationId,
+      groupKey: { ...finishedRecord.groupKey, variant: 'check', assistanceClass: 'unassisted-check' },
+      attempts: ['recorded-check-1', 'recorded-check-2'],
+      earnedAt: CREATED_AT + 60_000,
+    });
   }).then((database) => ({ ...database, unfinishedAttempt: { attemptId: unfinished.attemptId, phase: 'question', position: readChallengeView(createAndReplay(unfinished, recorded.random as RandomStreamIdentity, commands)).position } }));
 }
 

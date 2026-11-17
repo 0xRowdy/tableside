@@ -2,6 +2,7 @@
 import type { ChallengeFact, Receipt, UnsequencedAttemptRecord } from '@tableside/engine';
 
 import type { UnsequencedLessonEvent } from '../lesson-progress';
+import type { ReadinessMilestoneRecord } from '../readiness-milestone';
 import { CHALLENGE_CHARGE, FRESH_LIFECYCLE, type AttemptCharge, type AttemptLifecycle, type AttemptTransitionCommit, type NewAttempt, type TrainingStore } from '../store';
 
 export interface TrainingStoreUnderTest {
@@ -96,6 +97,20 @@ export function lessonEvent(eventId: string, overrides: Partial<UnsequencedLesso
   };
 }
 
+// #141
+export function milestone(attempts: readonly [string, string], overrides: Partial<ReadinessMilestoneRecord> = {}): ReadinessMilestoneRecord {
+  const { groupKey } = attemptRecord(attempts[1]);
+  return {
+    recordVersion: 1,
+    owner: 'local',
+    installation: 'test-device',
+    groupKey: { ...groupKey, variant: 'check', assistanceClass: 'unassisted-check' },
+    attempts,
+    earnedAt: 1_790_000_060_000,
+    ...overrides,
+  };
+}
+
 export function describeTrainingStoreContract(name: string, open: () => Promise<TrainingStoreUnderTest>): void {
   describe(`${name} (training store contract)`, () => {
     it('keeps one unfinished attempt, with its admission and checkpoint, across a reopen', async () => {
@@ -109,10 +124,10 @@ export function describeTrainingStoreContract(name: string, open: () => Promise<
       expect(await reopened.loadAttempt('missing')).toBeNull();
     });
 
-    // Spec 3 Attempt lifecycle › Performance timer; #135
+    // Spec 3 Attempt lifecycle › Performance timer, Automatic pacing; #135, #136
     it('keeps the attempt lifecycle it was created with, then the one of each transition or save, across a reopen', async () => {
       const subject = await open();
-      const timed = { timed: true, performanceMs: 0, interrupted: false };
+      const timed = { timed: true, performanceMs: 0, interrupted: false, pacing: '2s' } as const;
       await subject.store.createAttempt(newAttempt('a-1', { lifecycle: timed }));
       expect((await subject.store.loadAttempt('a-1'))?.lifecycle).toEqual(timed);
       await subject.store.commitAttemptTransition(attemptTransition('a-1', 0, { charge: chargeFor('a-1'), lifecycle: { ...timed, performanceMs: 4_250 } }));
@@ -215,6 +230,20 @@ export function describeTrainingStoreContract(name: string, open: () => Promise<
         { ...lessonEvent('e-3', { event: { kind: 'completed' }, lesson: { id: 'other', version: 3, materialVersion: 2 } }), deviceSequence: 3 },
       ]);
       expect((await reopened.readAttemptRecords()).map((record) => record.deviceSequence)).toEqual([1]);
+    });
+
+    // #141
+    it("keeps one readiness milestone per group, the first one written, across a reopen", async () => {
+      const subject = await open();
+      const { store } = subject;
+      expect(await store.readMilestones()).toEqual([]);
+      const first = milestone(['a-1', 'a-2']);
+      expect(await store.recordMilestone(first)).toEqual(first);
+      expect(await store.recordMilestone(milestone(['a-3', 'a-4'], { earnedAt: 5 }))).toEqual(first);
+      const other = milestone(['a-5', 'a-6'], { groupKey: { ...first.groupKey, pacing: '2s' } });
+      await store.recordMilestone(other);
+      const reopened = await subject.reopen();
+      expect(await reopened.readMilestones()).toEqual([first, other]);
     });
   });
 }

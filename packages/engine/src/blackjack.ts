@@ -167,7 +167,7 @@ const STRATEGY_ROWS = {
 const isRows = (value: unknown, count: number, letters: string): value is string[] =>
   Array.isArray(value) && value.length === count && value.every((row) => typeof row === 'string' && row.length === 10 && [...row].every((c) => letters.includes(c)));
 
-function isSeatStrategy(value: unknown, lateSurrender: boolean): value is SeatStrategy {
+export function isSeatStrategy(value: unknown, lateSurrender: boolean): value is SeatStrategy {
   const surrender = lateSurrender ? 'R' : '';
   if (!hasExactKeys(value, ['first', 'pairWithoutSurrender', 'pairAtCap', 'later', 'laterWithoutDouble'])) return false;
   const { first, later, laterWithoutDouble } = value;
@@ -238,7 +238,7 @@ export const blackjackTable = (rules: BlackjackRuleSet): BlackjackTable => ({
   },
 });
 
-const cutIndex = (table: BlackjackTable) => Math.floor((SHOE.length * table.penetration) / 100);
+const cutIndex = (table: Pick<BlackjackTable, 'penetration'>) => Math.floor((SHOE.length * table.penetration) / 100);
 
 const learnerPosition = (rules: BlackjackTable) => rules.players.learnerSeat + 1;
 const otherPositions = (rules: BlackjackTable) => rules.players.otherWagers.map((_, k) => (k < rules.players.learnerSeat ? k + 1 : k + 2));
@@ -455,8 +455,7 @@ class Table {
     this.finish();
   }
 
-  playSeat(seat: { seat: number; hands: WorkHand[] }) {
-    const strategy = this.rules.players.strategy as SeatStrategy;
+  playSeat(seat: { seat: number; hands: WorkHand[] }, strategy = this.rules.players.strategy as SeatStrategy, target = (n: number) => `seat-${seat.seat}-hand-${n}`) {
     const up = cardValue(this.round.dealer[0] as Card);
     for (let index = this.nextHand(seat.hands); index !== null; index = this.nextHand(seat.hands)) {
       const hand = seat.hands[index] as WorkHand;
@@ -480,7 +479,7 @@ class Table {
           hand.done = true;
           break;
         case 'split':
-          this.split(seat.hands, index, `seat-${seat.seat}-hand-${seat.hands.length + 1}`);
+          this.split(seat.hands, index, target(seat.hands.length + 1));
           this.deal(hand);
           if (splitAce(hand, seat.hands) || handTotal(hand.cards).value >= 21) hand.done = true;
           break;
@@ -583,21 +582,14 @@ const TWO = money(2n);
 
 const insuranceMax = (wagers: readonly Wager[]) => mul(decodeMoney((wagers[0] as Wager).amount), HALF);
 
-function beginRound(state: BlackjackActivityState): BlackjackStep {
-  if (state.wagers.length === 0) return { illegal: 'no-wager' };
-  const facts: DomainFact[] = [];
-  let shoe = state.shoe;
-  let random = state.random;
-  if (shoe === null || shoe.next >= shoe.cut) {
-    const stream = RandomStream.restore(state.random);
-    const order = shuffle(stream, SHOE.map((_, index) => index));
-    random = stream.state();
-    shoe = { order, next: 0, cut: cutIndex(state.rules) };
-    facts.push({ kind: 'shoe-shuffled', cards: SHOE.length, cut: shoe.cut });
-  }
-  const turn = state.turn + 1;
-  facts.push({ kind: 'turn-began', turn, wagers: state.wagers });
-  const rules = state.rules;
+// Spec 3 Challenge content › Reshuffle; Spec 1 Game rules
+export const freshShoe = (stream: RandomStream, rules: Pick<BlackjackTable, 'penetration'>): Shoe => ({
+  order: shuffle(stream, SHOE.map((_, index) => index)),
+  next: 0,
+  cut: cutIndex(rules),
+});
+
+function openRound(rules: BlackjackTable, shoe: Shoe, turn: number): Table {
   const empty = (target: string): WorkHand => ({ target, cards: [], doubled: false, surrendered: false, done: false });
   const round: WorkRound = {
     dealer: [],
@@ -609,17 +601,72 @@ function beginRound(state: BlackjackActivityState): BlackjackStep {
     others: otherPositions(rules).map((seat) => ({ seat, hands: [empty(`seat-${seat}-hand-1`)] })),
   };
   const table = new Table(round, new Dealer(shoe), turn, rules);
-  const me = learnerPosition(rules);
-  const seated = [...round.others.map((seat) => ({ position: seat.seat, hand: seat.hands[0] as WorkHand })), { position: me, hand: round.hands[0] as WorkHand }].sort(
+  const seated = [...round.others.map((seat) => ({ position: seat.seat, hand: seat.hands[0] as WorkHand })), { position: learnerPosition(rules), hand: round.hands[0] as WorkHand }].sort(
     (a, b) => a.position - b.position,
   );
   for (const { hand } of seated) table.deal(hand);
   round.dealer.push(table.dealer.card());
-  facts.push(...table.facts.splice(0), { kind: 'card-dealt', turn, to: 'dealer', card: round.dealer[0] as Card });
+  table.facts.push({ kind: 'card-dealt', turn, to: 'dealer', card: round.dealer[0] as Card });
   for (const { hand } of seated) table.deal(hand);
   round.dealer.push(table.dealer.card());
-  facts.push(...table.facts.splice(0), { kind: 'card-dealt', turn, to: 'dealer', card: null });
+  table.facts.push({ kind: 'card-dealt', turn, to: 'dealer', card: null });
   for (const { hand } of seated) hand.done = isNatural(hand.cards);
+  return table;
+}
+
+export interface SimulatedRound {
+  readonly outcome: BlackjackRound;
+  readonly shoe: Shoe;
+  readonly facts: readonly DomainFact[];
+}
+
+// Spec 3 Challenge content › Observe seats
+export function simulateRound(rules: BlackjackTable, strategy: SeatStrategy, shoe: Shoe, turn: number): SimulatedRound {
+  const table = openRound(rules, shoe, turn);
+  const round = table.round;
+  table.peek();
+  if (round.peek !== 'blackjack') {
+    const me = learnerPosition(rules);
+    const seats = [...round.others, { seat: me, hands: round.hands }].sort((a, b) => a.seat - b.seat);
+    for (const seat of seats) {
+      if (seat.seat === me) table.playSeat(seat, strategy, (n) => `hand-${n}`);
+      else table.playSeat(seat);
+    }
+  }
+  table.finish();
+  return { outcome: round, shoe: table.dealer.done(), facts: table.facts };
+}
+
+// Spec 1 Game rules
+export const seatPositions = (rules: BlackjackTable): { readonly learner: number; readonly others: readonly number[] } => ({ learner: learnerPosition(rules), others: otherPositions(rules) });
+
+// Spec 1 Game rules
+export function dealerFinished(dealer: readonly Card[], players: readonly (readonly { readonly cards: readonly Card[]; readonly surrendered: boolean }[])[], rule: BlackjackTable['dealer']): boolean {
+  const live = players.some((hands) => hands.some((hand) => !busted(hand.cards) && !hand.surrendered && !naturalIn(hand, hands)));
+  const total = handTotal(dealer);
+  return !live || isNatural(dealer.slice(0, 2)) || total.value > 17 || (total.value === 17 && !(total.soft && rule === 'H17'));
+}
+
+// Spec 1 Game rules
+export const handResult = (hand: BlackjackHand, hands: readonly BlackjackHand[], dealer: readonly Card[]): 'win' | 'loss' | 'push' =>
+  resultOf(handNet(hand, hands, { dealer } as BlackjackRound, money(1n)));
+
+function beginRound(state: BlackjackActivityState): BlackjackStep {
+  if (state.wagers.length === 0) return { illegal: 'no-wager' };
+  const facts: DomainFact[] = [];
+  let shoe = state.shoe;
+  let random = state.random;
+  if (shoe === null || shoe.next >= shoe.cut) {
+    const stream = RandomStream.restore(state.random);
+    shoe = freshShoe(stream, state.rules);
+    random = stream.state();
+    facts.push({ kind: 'shoe-shuffled', cards: SHOE.length, cut: shoe.cut });
+  }
+  const turn = state.turn + 1;
+  facts.push({ kind: 'turn-began', turn, wagers: state.wagers });
+  const table = openRound(state.rules, shoe, turn);
+  const round = table.round;
+  facts.push(...table.facts.splice(0));
 
   if ((round.dealer[0] as Card).rank === 1) {
     round.insurance = 'offered';

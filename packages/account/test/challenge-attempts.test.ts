@@ -143,10 +143,17 @@ describe('per-device order', () => {
     expect(sequence?.runs.map((run) => run.map((record) => record.item))).toEqual([records.map((record) => record.attemptId)]);
   });
 
-  it('keeps each device’s attempts in their own sequence on every device, never stitched together', async () => {
+  it('keeps each device’s attempts in their own sequence on every device, never stitched into one streak', async () => {
     const { phone, tablet } = await twoDevices('stitch');
-    const fromPhone = [await phone.playCheck(), await phone.playCheck()];
+    const milestonesOn = async (d: SimulatedDevice) => (await (await d.training()).progress()).groups.map((group) => group.milestone?.record.installation ?? null);
+    const fromPhone = [await phone.playCheck()];
     const fromTablet = [await tablet.playCheck()];
+    await synced(phone, tablet);
+    // Spec 3 Comparison groups › Readiness streak, Amendment 1 B3
+    expect(await milestonesOn(phone)).toEqual([null]);
+    expect(await milestonesOn(tablet)).toEqual([null]);
+    fromPhone.push(await phone.playCheck());
+    expect(await milestonesOn(phone)).toEqual([installationOf(phone)]);
     await synced(phone, tablet);
     for (const d of [phone, tablet]) {
       const sequences = byOriginatingDevice(await acceptedOn(d)).map(({ installation, runs }) => [installation, runs.map((run) => run.map((record) => record.item))]);

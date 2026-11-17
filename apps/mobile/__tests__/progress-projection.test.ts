@@ -25,7 +25,8 @@ describe('the progress projection', () => {
     });
 
     const tableVariations: readonly [string, ChallengeGroupKey['table']][] = [
-      ['rule preset', { ...table, rules: { id: 'blackjack-h17-ls', version: 1 } }],
+      ['rule preset', { ...table, dealer: 'H17' }],
+      ['late surrender', { ...table, lateSurrender: false }],
       ['penetration', { ...table, penetration: 50 }],
       ['extra players', { ...table, extraPlayers: 4 }],
       ['Observe/Play', { ...table, seat: 'observe' }],

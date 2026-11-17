@@ -25,6 +25,7 @@ import { runningCountCases } from './running-count.cases';
 import { runtimeCases } from './runtime.cases';
 import { standardizedCases } from './standardized.cases';
 import { strategyCases } from './strategy.cases';
+import { tableCases } from './table.cases';
 import { guidedCases } from './guided.cases';
 import { progressionCases } from './progression.cases';
 
@@ -57,5 +58,6 @@ export const engineSuite: Suite = {
     ...challengeCases,
     ...runningCountCases,
     ...conversionCases,
+    ...tableCases,
   ],
 };

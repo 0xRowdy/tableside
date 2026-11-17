@@ -24,6 +24,7 @@ import { plentyAllowance } from '@/training/allowance';
 import { MemoryTrainingStore } from '@/training/memory-store';
 import { TrainingService, type LearnerCommand } from '@/training/service';
 import { cardOf, HI_LO_BY_RANK } from '@/training/testing/hi-lo';
+import { NO_SCREEN_READER } from '@/training/speech';
 import {
   expectIndistinguishable,
   expectNoFeedbackColors,
@@ -69,6 +70,7 @@ const newService = () =>
     device: 'test-device',
     owner: 'local',
     quarantine: { version: 0, entries: [] },
+    speech: NO_SCREEN_READER,
   });
 
 beforeAll(() => {
@@ -101,6 +103,7 @@ const exercise = (view: ChallengeView) => (
     saveFailed={false}
     hold={null}
     timer={null}
+    pacing="self-paced"
     performanceMs={() => null}
     onPause={() => undefined}
     onResume={() => undefined}

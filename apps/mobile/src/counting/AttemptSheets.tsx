@@ -1,32 +1,32 @@
-// Spec 3 S3-05 r5pCx, T9sCI, qGARl; S3-01 Uq05w; Attempt lifecycle; #135
+// Spec 3 S3-05 r5pCx, T9sCI, qGARl; S3-01 Uq05w; Attempt lifecycle; #135, #136
 
-import type { ChallengeVariant, ChallengeView } from '@tableside/engine';
+import type { ChallengeView } from '@tableside/engine';
 import { BookOpen, CircleAlert, CircleStop, Eye, Keyboard, Pause, Play, SkipForward, type LucideIcon } from 'lucide-react-native';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { Button } from '@/components/Button';
 import { Sheet, SheetText } from '@/components/Sheet';
 import { fonts, palette, radius, space, textScale } from '@/theme/tokens';
-import { END_ATTEMPT, helpText, holdText, RESUME_LABEL, unfinishedText } from '@/training/challenge-text';
+import { END_ATTEMPT, helpText, holdText, RESUME_LABEL, unfinishedText, type HoldContext } from '@/training/challenge-text';
 import type { AttemptHold } from '@/training/controller';
 import type { CatalogCategory } from '@/training/service';
 
 export function HoldSheet({
   hold,
-  variant,
+  context,
   busy,
   onResume,
   onEnd,
   onClose,
 }: {
   hold: AttemptHold;
-  variant: ChallengeVariant;
+  context: HoldContext;
   busy: boolean;
   onResume: () => void;
   onEnd: () => void;
   onClose: () => void;
 }) {
-  const text = holdText(hold, variant);
+  const text = holdText(hold, context);
   return (
     <Sheet title={text.title} onClose={onClose} testID="attempt-hold">
       <Text maxFontSizeMultiplier={textScale.body} style={styles.lead}>
@@ -35,8 +35,11 @@ export function HoldSheet({
       {[hold.resumeBlocked, hold.endBlocked].map((problem) => problem && <WarningNote key={problem} text={problem} />)}
       <Button label={RESUME_LABEL} icon={Play} stretch disabled={busy} onPress={onResume} />
       <Button label={END_ATTEMPT} icon={CircleStop} variant="outline" stretch disabled={busy} onPress={onEnd} />
-      {text.end && <SheetText small>{text.end}</SheetText>}
-      {text.lessons && <SheetText small>{text.lessons}</SheetText>}
+      {text.notes.map((note) => (
+        <SheetText key={note} small>
+          {note}
+        </SheetText>
+      ))}
     </Sheet>
   );
 }

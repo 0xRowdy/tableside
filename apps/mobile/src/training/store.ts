@@ -1,9 +1,10 @@
 // Spec 3 Attempt lifecycle › Durability; Amendment 1 C6, C7; #158
 
-import type { ChallengeAttemptRecord, ChallengeAttemptSummary, ChallengeFact, ChallengeSpecification, RandomStreamIdentity, Receipt, UnsequencedAttemptRecord } from '@tableside/engine';
+import type { ChallengeAttemptRecord, ChallengeAttemptSummary, ChallengeFact, ChallengePacing, ChallengeSpecification, RandomStreamIdentity, Receipt, UnsequencedAttemptRecord } from '@tableside/engine';
 
 import type { AllowanceEffect, MeteringBasis } from '../practice/store';
 import type { LessonProgressEvent, UnsequencedLessonEvent } from './lesson-progress';
+import type { ReadinessMilestoneRecord } from './readiness-milestone';
 
 export const CHALLENGE_ATTEMPT_RECORD_TYPE = 'challenge-attempt';
 
@@ -16,14 +17,15 @@ export interface Admission {
   readonly allowancePolicyVersion?: string;
 }
 
-// Spec 3 Attempt lifecycle › Pause, Performance timer; Amendment 1 C1; #135
+// Spec 3 Attempt lifecycle › Pause, Performance timer, Automatic pacing; Amendment 1 C1; #135, #136
 export interface AttemptLifecycle {
   readonly timed: boolean;
   readonly performanceMs: number;
   readonly interrupted: boolean;
+  readonly pacing: ChallengePacing;
 }
 
-export const FRESH_LIFECYCLE: AttemptLifecycle = { timed: false, performanceMs: 0, interrupted: false };
+export const FRESH_LIFECYCLE: AttemptLifecycle = { timed: false, performanceMs: 0, interrupted: false, pacing: 'self-paced' };
 
 // #135
 export const withLifecycle = <T extends { readonly lifecycle?: AttemptLifecycle }>(body: T): T & { readonly lifecycle: AttemptLifecycle } => ({
@@ -107,4 +109,10 @@ export interface LessonProgressStore {
   readLessonEvents(): Promise<readonly LessonProgressEvent[]>;
 }
 
-export type TrainingStore = ChallengeStore & DevicePreferences & LessonProgressStore;
+// Spec 3 Synchronized record types › Readiness milestone; #141
+export interface MilestoneStore {
+  recordMilestone(milestone: ReadinessMilestoneRecord): Promise<ReadinessMilestoneRecord>;
+  readMilestones(): Promise<readonly ReadinessMilestoneRecord[]>;
+}
+
+export type TrainingStore = ChallengeStore & DevicePreferences & LessonProgressStore & MilestoneStore;

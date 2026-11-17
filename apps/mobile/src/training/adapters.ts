@@ -3,6 +3,7 @@ import type { ChallengeAttemptRecord, EntropySource, QuarantineList } from '@tab
 
 import type { AccessSupervisor, Clock } from '../practice/adapters';
 import type { ChallengeAllowanceState } from './allowance';
+import type { ScreenReaderSpeech } from './screen-reader-port';
 import type { TrainingStore } from './store';
 
 export interface TrainingAdapters {
@@ -17,6 +18,8 @@ export interface TrainingAdapters {
   readonly owner: string;
   // Spec 3 Attempt lifecycle (unusable); #135
   readonly quarantine: QuarantineList;
+  // Spec 3 Attempt lifecycle › Automatic pacing; #136
+  readonly speech: ScreenReaderSpeech;
   // Spec 3 Amendment 1 C8; #142
   readonly attemptDetail?: (attemptId: string) => Promise<ChallengeAttemptRecord | null>;
 }

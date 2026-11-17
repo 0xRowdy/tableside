@@ -1,11 +1,12 @@
 // Spec 3 S3-03 P4WjR, drVnR, BFdJT, S3-04 qdnQm, S3-05 EDnGd, r5pCx, T9sCI
-// Spec 3 S3-06 C53yTW, zAatf, Qv1An; #158, #132, #133, #134, #135, #146
+// Spec 3 S3-06 C53yTW, zAatf, Qv1An, S3-07; S3-04 qmDou; S3-05 qGARl
+// #158, #132, #133, #134, #135, #146, #136, #137
 
 import type { HintId } from '@tableside/definitions';
-import type { ChallengeCategory, ChallengeEntry, ChallengeView, ConversionItem, CountRange, LearnFeedback } from '@tableside/engine';
-import { CircleCheck, CircleDot, CircleHelp, CircleX, Info, Pause, SkipForward, Timer, type LucideIcon } from 'lucide-react-native';
+import type { ChallengeCategory, ChallengeEntry, ChallengePacing, ChallengeView, ConversionItem, CountRange, LearnFeedback } from '@tableside/engine';
+import { CircleCheck, CircleDot, CircleHelp, CirclePause, CircleX, Info, Pause, SkipForward, Timer, type LucideIcon } from 'lucide-react-native';
 import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Platform, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/Button';
@@ -18,7 +19,10 @@ import { SaveFailedBanner } from '@/play/TableChrome';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/theme/tokens';
 import { HelpSheet, HoldSheet, WarningNote } from './AttemptSheets';
 import { CountAid } from './CountAid';
+import { CoachButton } from './CoachButton';
 import { CountEntry } from './CountEntry';
+import { TableBody, TableProgress } from './TableExercise';
+import { edgeText, tableSubtitle } from '@/training/blackjack-table-text';
 import { decksText } from '@/training/blackjack-conversion-text';
 import {
   CARD_PROMPT,
@@ -43,8 +47,10 @@ import {
   exerciseSubtitle,
   feedbackText,
   NEXT_CARD,
+  PACE_WAITING,
   PAUSE_LABEL,
   recordedText,
+  screenReaderName,
   SKIP_LABEL,
   spokenTimer,
   timerText,
@@ -70,6 +76,7 @@ export function ChallengeExercise({
   saveFailed,
   hold,
   timer,
+  pacing,
   performanceMs,
   onCommand,
   onInputRejected,
@@ -86,6 +93,7 @@ export function ChallengeExercise({
   saveFailed: boolean;
   hold: AttemptHold | null;
   timer: PerformanceTimer | null;
+  pacing: ChallengePacing;
   performanceMs: () => number | null;
   onCommand: (command: LearnerCommand) => void;
   onInputRejected: () => void;
@@ -113,8 +121,13 @@ export function ChallengeExercise({
             {CATEGORY_TEXT[view.category].title}
           </Text>
           <Text maxFontSizeMultiplier={textScale.body} style={styles.subtitle}>
-            {exerciseSubtitle(view.variant, timer !== null, hold)}
+            {view.table ? tableSubtitle(view.variant, view.table) : exerciseSubtitle(view.variant, pacing, timer !== null, hold)}
           </Text>
+          {view.table && (
+            <Text maxFontSizeMultiplier={textScale.body} style={styles.subtitle}>
+              {edgeText(view.table.rules)}
+            </Text>
+          )}
         </View>
         <HeaderButton
           label={HELP_LABEL}
@@ -128,6 +141,9 @@ export function ChallengeExercise({
         />
         <HeaderButton label={PAUSE_LABEL} icon={Pause} enabled={!held} onPress={onPause} />
       </View>
+      {view.table ? (
+        <TableProgress view={view} table={view.table} timer={timer && <PerformanceTime timer={timer} performanceMs={performanceMs} />} />
+      ) : (
       <View style={styles.progress}>
         <View style={styles.progressRow}>
           <Text maxFontSizeMultiplier={textScale.body} style={styles.progressText}>
@@ -139,10 +155,13 @@ export function ChallengeExercise({
           <View style={[styles.fill, { width: `${(view.position / view.length) * 100}%` }]} />
         </View>
       </View>
+      )}
       <View style={styles.body}>
         {saveFailed && <SaveFailedBanner busy={busy} onRetry={onRetrySave} />}
         {hold && !hold.reached && <WarningNote text={turnBoundaryText(hold)} />}
-        {view.category === 'conversion' && view.countRange ? (
+        {view.table ? (
+          <TableBody view={view} table={view.table} ready={ready} onCommand={onCommand} onInputRejected={onInputRejected} />
+        ) : view.category === 'conversion' && view.countRange ? (
           <ConversionBody
             view={view}
             range={view.countRange}
@@ -170,10 +189,10 @@ export function ChallengeExercise({
             {feedback && <CoachNote feedback={feedback} position={view.position} canRetry={view.legalCommands.includes('retry-item')} enabled={ready} onCommand={onCommand} />}
           </>
         ) : (
-          <CountingBody view={view} range={view.countRange} ready={ready} answering={answering} onCommand={onCommand} onInputRejected={onInputRejected} />
+          <CountingBody view={view} range={view.countRange} automatic={pacing !== 'self-paced'} ready={ready} answering={answering} onCommand={onCommand} onInputRejected={onInputRejected} />
         )}
       </View>
-      {hold?.reached && !helping && <HoldSheet hold={hold} variant={view.variant} busy={busy} onResume={onResume} onEnd={onEnd} onClose={onLeave} />}
+      {hold?.reached && !helping && <HoldSheet hold={hold} context={{ variant: view.variant, position: view.position, pacing, reader: screenReaderName(Platform.OS) }} busy={busy} onResume={onResume} onEnd={onEnd} onClose={onLeave} />}
       {helping && <HelpSheet view={view} onClose={() => setHelping(false)} />}
     </ScrollView>
   );
@@ -219,6 +238,7 @@ function PerformanceTime({ timer, performanceMs }: { timer: PerformanceTimer; pe
 function CountingBody({
   view,
   range,
+  automatic,
   ready,
   answering,
   onCommand,
@@ -226,6 +246,7 @@ function CountingBody({
 }: {
   view: ChallengeView;
   range: CountRange;
+  automatic: boolean;
   ready: boolean;
   answering: boolean;
   onCommand: (command: LearnerCommand) => void;
@@ -236,6 +257,7 @@ function CountingBody({
   const feedback = view.variant === 'learn' ? view.feedback : null;
   const entered = view.variant === 'check' ? view.entered : null;
   const checkpoint = checkpointOf(view);
+  const waiting = automatic && (view.phase === 'question' || view.phase === 'explanation');
   return (
     <View testID="count-columns" style={[styles.columns, { flexDirection: sideBySide ? 'row' : 'column' }]}>
       <View style={[styles.column, sideBySide && styles.side]}>
@@ -259,6 +281,7 @@ function CountingBody({
             </Text>
           )}
         </View>
+        {waiting && <PaceWaiting />}
         {view.countAid && <FirstUseHint id="show-count" />}
         {view.countAid && <CountAid key={view.attemptId} variant={view.variant} aid={view.countAid} enabled={ready && view.legalCommands.includes('reveal-count')} onReveal={() => onCommand({ kind: 'reveal-count' })} />}
       </View>
@@ -275,10 +298,22 @@ function CountingBody({
             onRejected={onInputRejected}
           />
         )}
-        {view.phase === 'card' && <Button label={NEXT_CARD} stretch disabled={!ready} onPress={() => onCommand({ kind: 'next-item' })} />}
+        {view.phase === 'card' && !automatic && <Button label={NEXT_CARD} stretch disabled={!ready} onPress={() => onCommand({ kind: 'next-item' })} />}
         {view.phase === 'recorded' && entered !== null && <RecordedNotice entered={entered} category={view.category} />}
         {feedback && <CoachNote feedback={feedback} position={view.position} canRetry={view.legalCommands.includes('retry-item')} enabled={ready} onCommand={onCommand} />}
       </View>
+    </View>
+  );
+}
+
+// Spec 3 S3-04 qmDou; #136
+function PaceWaiting() {
+  return (
+    <View style={styles.pace}>
+      <CirclePause color={palette.foreground} size={14} />
+      <Text maxFontSizeMultiplier={textScale.body} style={styles.paceText}>
+        {PACE_WAITING}
+      </Text>
     </View>
   );
 }
@@ -456,24 +491,6 @@ function CoachNote({
   );
 }
 
-function CoachButton({ label, primary = false, enabled, onPress }: { label: string; primary?: boolean; enabled: boolean; onPress: () => void }) {
-  const { focused, focusProps } = useKeyboardFocus();
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityState={{ disabled: !enabled }}
-      disabled={!enabled}
-      onPress={onPress}
-      {...focusProps}
-      style={({ pressed }) => [styles.coachButton, primary ? styles.coachPrimary : styles.coachSecondary, pressed && styles.pressed, focused && styles.coachFocused]}
-    >
-      <Text maxFontSizeMultiplier={textScale.body} style={[styles.coachButtonText, primary && styles.coachPrimaryText]}>
-        {label}
-      </Text>
-    </Pressable>
-  );
-}
-
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: palette.background },
   header: { flexDirection: 'row', alignItems: 'center', gap: space[2], minHeight: 60, paddingHorizontal: space[4], paddingVertical: space[1] },
@@ -500,6 +517,8 @@ const styles = StyleSheet.create({
   cardStack: { flexDirection: 'column' },
   promptBeside: { flex: 1 },
   start: { textAlign: 'left' },
+  pace: { flexDirection: 'row', alignSelf: 'flex-start', alignItems: 'center', gap: space[1] + 2, paddingVertical: space[1] + 2, paddingHorizontal: 10, borderRadius: radius.pill, backgroundColor: palette.muted },
+  paceText: { fontFamily: fonts.ui, fontSize: 13, color: palette.foreground },
   checkpointKicker: { fontFamily: fonts.uiBold, fontSize: 14, color: palette.mutedForeground, textAlign: 'center' },
   keep: { fontFamily: fonts.ui, fontSize: 15, lineHeight: 21, color: palette.mutedForeground, textAlign: 'center' },
   choices: { flexDirection: 'row', gap: space[3] - 2 },
@@ -517,12 +536,6 @@ const styles = StyleSheet.create({
   headline: { fontFamily: fonts.uiBold, fontSize: 17, color: palette.ink },
   detail: { fontFamily: fonts.ui, fontSize: 14, lineHeight: 20, color: palette.inkMuted },
   coachActions: { flexDirection: 'row', flexWrap: 'wrap', gap: space[2] },
-  coachButton: { minHeight: MIN_TOUCH_TARGET, justifyContent: 'center', paddingHorizontal: 14, borderRadius: radius.md, borderWidth: 2 },
-  coachPrimary: { backgroundColor: palette.ink, borderColor: palette.ink },
-  coachSecondary: { borderColor: palette.inkMuted },
-  coachButtonText: { fontFamily: fonts.uiBold, fontSize: 14, color: palette.ink },
-  coachPrimaryText: { color: palette.coach },
-  coachFocused: { borderColor: palette.coachAccent },
   pressed: { opacity: 0.8 },
   focused: { borderColor: palette.ring, borderWidth: 2 },
 });

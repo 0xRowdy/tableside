@@ -1,4 +1,5 @@
-// Spec 3 Testing Decisions › Seam 2, Amendment 1 C6; #158, #132
+// Spec 3 Testing Decisions › Seam 2, Amendment 1 C6; #158, #132, #137
+import { DEFAULT_TABLE_SETUP, observeSetup } from '@tableside/definitions';
 import { createChallenge, EMPTY_QUARANTINE_LIST, encodeChallengeCheckpoint, type ChallengeView } from '@tableside/engine';
 
 import { alwaysAllowed, type AccessSupervisor } from '@/practice/adapters';
@@ -11,6 +12,7 @@ import { TrainingService, type TrainingSnapshot } from '@/training/service';
 import { CHALLENGE_CHARGE } from '@/training/store';
 import { newAttempt } from '@/training/testing/store-contract';
 import { cardOf, HI_LO_BY_RANK } from '@/training/testing/hi-lo';
+import { NO_SCREEN_READER } from '@/training/speech';
 
 const LEARN_CARD_VALUES = { category: 'card-values', variant: 'learn' } as const;
 const CHECK_CARD_VALUES = { category: 'card-values', variant: 'check' } as const;
@@ -28,7 +30,7 @@ function setup(options: { access?: Partial<AccessSupervisor>; store?: MemoryTrai
   };
   let next = 0;
   const clock = options.clock ?? new FakeClock(1_790_000_000_000, true);
-  const service = new TrainingService({ store, access, allowance: plentyAllowance(() => clock.now()), clock, entropy: entropyFromWords(PI_WORDS), newId: () => `attempt-${++next}`, device: 'test-device', owner: 'local', quarantine: EMPTY_QUARANTINE_LIST });
+  const service = new TrainingService({ store, access, allowance: plentyAllowance(() => clock.now()), clock, entropy: entropyFromWords(PI_WORDS), newId: () => `attempt-${++next}`, device: 'test-device', owner: 'local', quarantine: EMPTY_QUARANTINE_LIST, speech: NO_SCREEN_READER });
   return { service, store, admissions, clock };
 }
 
@@ -52,10 +54,10 @@ describe('the Training service', () => {
   it('lists the four challenge categories in the suggested order, all available, with no exercise content', () => {
     const { service } = setup();
     expect(service.listCatalog()).toEqual([
-      { category: 'card-values', available: true, ready: ['learn', 'check'] },
-      { category: 'running-count', available: true, ready: ['learn', 'check'] },
-      { category: 'conversion', available: true, ready: ['learn', 'check'] },
-      { category: 'table', available: true, ready: [] },
+      { category: 'card-values', available: true, ready: ['learn', 'check'], pacings: ['self-paced'] },
+      { category: 'running-count', available: true, ready: ['learn', 'check'], pacings: ['self-paced', '3s', '2s', '1s'] },
+      { category: 'conversion', available: true, ready: ['learn', 'check'], pacings: ['self-paced'] },
+      { category: 'table', available: true, ready: ['learn', 'check'], pacings: ['self-paced'] },
     ]);
   });
 
@@ -65,7 +67,7 @@ describe('the Training service', () => {
     expect(service.validateSetup(CHECK_CARD_VALUES)).toEqual({ valid: true, diagnostics: [] });
     expect(service.validateSetup({ category: 'running-count', variant: 'check' })).toEqual({ valid: true, diagnostics: [] });
     expect(service.validateSetup({ category: 'conversion', variant: 'learn' })).toEqual({ valid: true, diagnostics: [] });
-    expect(service.validateSetup({ category: 'table', variant: 'learn' })).toEqual({ valid: false, diagnostics: [{ field: 'category', problem: 'not-ready' }] });
+    expect(service.validateSetup({ category: 'table', variant: 'learn', table: DEFAULT_TABLE_SETUP })).toEqual({ valid: true, diagnostics: [] });
     expect(service.validateSetup({ category: 'baccarat', variant: 'quiz' })).toEqual({
       valid: false,
       diagnostics: [
@@ -94,7 +96,7 @@ describe('the Training service', () => {
     const { service, store, admissions } = setup();
     await service.load();
     await service.startAttempt({ category: 'table', variant: 'check' });
-    expect(service.snapshot()).toEqual({ status: 'none', problem: 'invalid-setup', diagnostics: [{ field: 'category', problem: 'not-ready' }], busy: false });
+    expect(service.snapshot()).toEqual({ status: 'none', problem: 'invalid-setup', diagnostics: [{ field: 'table', problem: 'invalid' }], busy: false });
     expect([admissions, await store.findUnfinishedAttempt(), await store.readAttemptRecords()]).toEqual([[], null, []]);
   });
 
@@ -336,5 +338,57 @@ describe('the Training service', () => {
     await later.service.resume();
     expect(active(later.service.snapshot())).toMatchObject({ phase: 'question', position: 2 });
     expect(later.admissions).toEqual([]);
+  });
+
+  // Spec 3 User stories 27; Challenge content › Table
+  it('validates table options: preset, penetration 50–80% in steps of 5, 0–4 extra players, N from 1 to 10, Observe only', () => {
+    const { service } = setup();
+    const table = (options: object) => service.validateSetup({ category: 'table', variant: 'check', table: { ...DEFAULT_TABLE_SETUP, ...options } });
+    const invalid = { valid: false, diagnostics: [{ field: 'table', problem: 'invalid' }] };
+    expect([table({ preset: 'H17_noLS', penetration: 50, extraPlayers: 4, interval: 10 }), table({ penetration: 80, interval: 1 })]).toEqual([
+      { valid: true, diagnostics: [] },
+      { valid: true, diagnostics: [] },
+    ]);
+    for (const bad of [{ penetration: 85 }, { penetration: 72 }, { extraPlayers: 5 }, { extraPlayers: -1 }, { interval: 0 }, { interval: 11 }, { interval: 2.5 }, { preset: 'S19' }, { seat: 'play' }]) {
+      expect([bad, table(bad)]).toEqual([bad, invalid]);
+    }
+    expect(service.validateSetup({ category: 'table', variant: 'check' })).toEqual(invalid);
+  });
+
+  it('starts a table Observe attempt from its options: the simulated seat plays the preset, and results score running and true counts', async () => {
+    const { service, store, admissions } = setup();
+    await service.load();
+    const options = { ...DEFAULT_TABLE_SETUP, preset: 'H17_LS', penetration: 60, extraPlayers: 2, interval: 3 } as const;
+    await service.startAttempt({ category: 'table', variant: 'check', table: options });
+    expect(admissions).toEqual([{ category: 'table', variant: 'check' }]);
+    expect((await store.findUnfinishedAttempt())?.specification.table).toEqual(observeSetup(options));
+    const first = active(service.snapshot());
+    expect([first.category, first.phase, first.table?.round, first.table?.interval, first.table?.rules]).toEqual([
+      'table',
+      'card',
+      1,
+      3,
+      { dealer: 'H17', lateSurrender: true, penetration: 60, extraPlayers: 2, minimum: '10' },
+    ]);
+    for (let guard = 0; guard < 2000 && service.snapshot().status === 'active'; guard++) {
+      const view = active(service.snapshot());
+      await service.submit(view.phase === 'question' ? { kind: 'skip' } : { kind: 'next-item' });
+    }
+    const [record] = await store.readAttemptRecords();
+    expect([record?.endingReason, record?.metrics['running-count'], record?.metrics['true-count'], record?.groupKey.table?.checkpointInterval]).toEqual([
+      'completed',
+      { correct: 0, total: 4 },
+      { correct: 0, total: 4 },
+      3,
+    ]);
+  });
+
+  it('remembers table options with the last setup', async () => {
+    const store = new MemoryTrainingStore();
+    const first = setup({ store });
+    await first.service.load();
+    const chosen = { category: 'table', variant: 'learn', table: { ...DEFAULT_TABLE_SETUP, interval: 4 } } as const;
+    await first.service.startAttempt(chosen);
+    expect(await setup({ store: store.reopen() }).service.lastSetup()).toEqual(chosen);
   });
 });

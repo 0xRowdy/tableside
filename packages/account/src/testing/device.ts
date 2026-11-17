@@ -17,6 +17,7 @@ import { attemptDetailFrom } from '../../../../apps/mobile/src/account/training'
 import { alwaysAllowed } from '../../../../apps/mobile/src/practice/adapters';
 import { plentyAllowance } from '../../../../apps/mobile/src/training/allowance';
 import { TrainingService } from '../../../../apps/mobile/src/training/service';
+import { NO_SCREEN_READER } from '../../../../apps/mobile/src/training/screen-reader-port';
 import { HI_LO_BY_RANK, cardOf } from '../../../../apps/mobile/src/training/testing/hi-lo';
 import type { AgeSignal, EligibilityBand, PlatformAgeSignals } from '../eligibility';
 import type { EnvironmentName } from '../environment';
@@ -387,6 +388,7 @@ export function createDevice(stack: LocalStack, options: DeviceOptions): Simulat
       device: installationId,
       owner: accountId,
       quarantine: EMPTY_QUARANTINE_LIST,
+      speech: NO_SCREEN_READER,
       attemptDetail: attemptDetailFrom(account.records),
     });
     followAccountGate(account, service);

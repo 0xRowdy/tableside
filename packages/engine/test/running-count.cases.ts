@@ -1,4 +1,4 @@
-// Spec 3 Challenge content, Learn, Check and assistance, Scoring and review, Seam 1; #133
+// Spec 3 Challenge content, Learn, Check and assistance, Scoring, Audio and haptics; #133, #137
 import type { TestCase } from '@tableside/harness';
 
 import {
@@ -37,6 +37,21 @@ const nexts = (count: number): ChallengeCommand[] => Array.from({ length: count 
 const answeringEachCheckpoint = (entries: readonly ChallengeCommand[]) => [...nexts(12), ...entries.flatMap((entry, index) => [entry, ...(index < 3 ? [NEXT, ...nexts(12)] : [NEXT])])];
 
 export const runningCountCases: TestCase[] = [
+  {
+    name: 'running count Check: cue 11 is due as each checkpoint prompt appears, and never in Learn, where every card is asked',
+    run: (t) => {
+      const facts = (state: ChallengeState, command: ChallengeCommand) => {
+        const result = advanceChallenge(state, { sequence: state.sequence, commandId: `f-${state.sequence}`, command });
+        if (result.status !== 'committed') throw new Error(JSON.stringify(result));
+        return result.facts;
+      };
+      const beforeCheckpoint = run(begun(COUNT_CHECK, seed(1)), nexts(11));
+      t.equal(facts(beforeCheckpoint, NEXT), [{ kind: 'content-shown', position: 12 }, { kind: 'checkpoint-due', position: 12 }]);
+      t.equal(facts(run(begun(COUNT_CHECK, seed(1)), nexts(10)), NEXT), [{ kind: 'content-shown', position: 11 }]);
+      const learn = run(begun(COUNT_LEARN, seed(1)), [ANSWER(-1)]);
+      t.equal(facts(learn, NEXT), [{ kind: 'content-shown', position: 1 }]);
+    },
+  },
   {
     name: 'running count: 52 cards exposed from index 0 of a shuffled six-deck shoe, starting at zero',
     run: (t) => {
@@ -179,7 +194,7 @@ export const runningCountCases: TestCase[] = [
       const ended = run(result.state, [...nexts(5), ANSWER(0), NEXT, ...nexts(12), ANSWER(-1), NEXT, ...nexts(12), ANSWER(-7), NEXT]);
       const results = challengeResults(ended);
       t.equal([results?.assisted, results?.assistanceStep, results?.metrics['running-count']], [true, 21, { correct: 4, total: 4 }]);
-      const record = challengeAttemptRecord(ended, { installation: 'd', startedAt: 0, endedAt: 1, interrupted: false, performanceMs: null, meteringBasis: 'challenge-attempt', allowancePolicyVersion: null });
+      const record = challengeAttemptRecord(ended, { installation: 'd', startedAt: 0, endedAt: 1, interrupted: false, performanceMs: null, meteringBasis: 'challenge-attempt', allowancePolicyVersion: null, pacing: 'self-paced' });
       t.equal([record.groupKey.assistanceClass, record.groupKey.countRevealed, record.groupKey.reference, record.groupKey.length, record.assistanceStep], [
         'assisted-check',
         true,
@@ -197,10 +212,25 @@ export const runningCountCases: TestCase[] = [
       const shown = run(begun(COUNT_LEARN, seed(1)), [ANSWER(-1), NEXT, REVEAL]);
       t.equal([learnView(shown).countAid, learnView(shown).legalCommands], [{ revealed: true, count: 0 }, ['answer', 'skip', 'end']]);
       const ended = step(shown, { kind: 'end' });
-      const record = challengeAttemptRecord(ended, { installation: 'd', startedAt: 0, endedAt: 1, interrupted: false, performanceMs: null, meteringBasis: 'challenge-attempt', allowancePolicyVersion: null });
+      const record = challengeAttemptRecord(ended, { installation: 'd', startedAt: 0, endedAt: 1, interrupted: false, performanceMs: null, meteringBasis: 'challenge-attempt', allowancePolicyVersion: null, pacing: 'self-paced' });
       t.equal([record.groupKey.assistanceClass, record.groupKey.countRevealed, record.assistanceStep, record.endingReason], ['learn', true, 2, 'abandoned']);
-      const hidden = challengeAttemptRecord(step(begun(COUNT_LEARN, seed(1)), { kind: 'end' }), { installation: 'd', startedAt: 0, endedAt: 1, interrupted: false, performanceMs: null, meteringBasis: 'challenge-attempt', allowancePolicyVersion: null });
+      const hidden = challengeAttemptRecord(step(begun(COUNT_LEARN, seed(1)), { kind: 'end' }), { installation: 'd', startedAt: 0, endedAt: 1, interrupted: false, performanceMs: null, meteringBasis: 'challenge-attempt', allowancePolicyVersion: null, pacing: 'self-paced' });
       t.equal([hidden.groupKey.countRevealed, hidden.assistanceStep], [false, null]);
+    },
+  },
+  // Spec 3 Comparison groups (pacing); Attempt lifecycle › Automatic pacing; #136
+  {
+    name: 'running count: the pacing joins the comparison group key; card values and conversion have no automatic pacing',
+    run: (t) => {
+      const ended = step(begun(COUNT_LEARN, seed(1)), { kind: 'end' });
+      const context = { installation: 'd', startedAt: 0, endedAt: 1, interrupted: false, performanceMs: null, meteringBasis: 'challenge-attempt', allowancePolicyVersion: null } as const;
+      t.equal(
+        (['self-paced', '3s', '2s', '1s'] as const).map((pacing) => challengeAttemptRecord(ended, { ...context, pacing }).groupKey.pacing),
+        ['self-paced', '3s', '2s', '1s'],
+      );
+      const cardValues = step(begun(), { kind: 'end' });
+      t.equal(challengeAttemptRecord(cardValues, { ...context, pacing: 'self-paced' }).groupKey.pacing, 'self-paced');
+      t.equal(throws(() => challengeAttemptRecord(cardValues, { ...context, pacing: '2s' })), 'Error');
     },
   },
   {
