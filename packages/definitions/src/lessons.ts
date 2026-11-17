@@ -1,4 +1,4 @@
-// Spec 3 Modules › Definitions package; Lessons and worked examples (#48); Amendment 1 B1, C10; #143, #144
+// Spec 3 Modules › Definitions package; Lessons and worked examples (#48); Amendment 1 B1, C10; #143
 import type { GameId } from '@tableside/engine';
 
 import { workedExampleProblems, type WorkedExample } from './worked-examples';

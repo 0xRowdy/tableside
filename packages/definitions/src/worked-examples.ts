@@ -40,7 +40,7 @@ const SUITS: readonly string[] = ['clubs', 'diamonds', 'hearts', 'spades'];
 const isCard = (card: ChallengeCard) => Number.isInteger(card.rank) && card.rank >= 1 && card.rank <= 13 && SUITS.includes(card.suit);
 const answerText = (answer: HiLoValue) => (answer > 0 ? `+${answer}` : String(answer));
 
-// Spec 1 Testing Decisions (fixed-scenario fixtures): the scripted card is stacked first, as the reference tests stack a shoe
+// Spec 1 Testing Decisions (fixed-scenario fixtures); #144
 const REPLAY_STREAM = { protocol: RANDOM_PROTOCOL_VERSION, key: [0, 0], session: [0, 0] } as const;
 
 function commit(state: ChallengeState, command: ChallengeCommand): ChallengeState {
