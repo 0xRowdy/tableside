@@ -35,6 +35,20 @@ const lesson = (summary: string, steps: readonly LessonStep[], practice: Practic
   return { summary, content };
 };
 
+// Spec 3 Amendment 1 C11: exact sections, text links
+const WOO_BASICS = 'https://wizardofodds.com/games/craps/basics/';
+const WOO_DERIVED = 'https://wizardofodds.com/games/craps/appendix/1/';
+const WOO_EDGES = 'https://wizardofodds.com/games/craps/appendix/2/';
+const WOO_SYSTEMS = 'https://wizardofodds.com/gambling/betting-systems/';
+const NJ_DGE = 'https://www.nj.gov/oag/ge/docs/Regulations/CHAPTER69F.pdf';
+const BELLAGIO = 'https://static.mgmresorts.com/content/dam/MGM/bellagio/casino/bellagio-casino-gaming-guide.pdf';
+
+const wizard = (title: string, sections: string, url: string): LessonSource => ({ citation: `Michael Shackleford, Wizard of Odds, “${title}”, ${sections}`, url });
+const njDge = (sections: string): LessonSource => ({ citation: `New Jersey Division of Gaming Enforcement, craps rules, N.J.A.C. ${sections}`, url: NJ_DGE });
+const bellagio = (pages: string): LessonSource => ({ citation: `Bellagio, Gaming Guide 2016, Craps, ${pages}`, url: BELLAGIO });
+const EDGE_TABLE = wizard('Craps Odds: House Edge of Every Bet', 'table “Craps House Edge”', WOO_EDGES);
+const NO_SYSTEM_BEATS_THE_EDGE = wizard('The Truth about Betting Systems', 'sections “Introduction” and “The Martingale”', WOO_SYSTEMS);
+
 const HOUSE_EDGE_STAYS = "Changing stakes doesn't remove the house edge.";
 
 export const CRAPS_LESSONS: Readonly<Record<string, CrapsLesson>> = {
@@ -45,47 +59,53 @@ export const CRAPS_LESSONS: Readonly<Record<string, CrapsLesson>> = {
         heading: 'Come-out roll and point',
         paragraphs: [
           'The puck tells you where the round stands. With the puck OFF, the next roll is a come-out roll. A pass line bet wins on 7 or 11 and loses on 2, 3 or 12. Any other total (4, 5, 6, 8, 9 or 10) becomes the point, and the puck turns ON.',
-          "With a point on, the pass line wins if the point is rolled again before a 7, and loses if a 7 comes first. That 7 is the seven-out, and the next roll is a new come-out. Don't pass is the other side: it wins on 2 or 3 and on a 7 before the point, loses on 7 or 11 and when the point repeats, and a 12 on the come-out is a tie (bar 12).",
+          "With a point on, the pass line wins if the point is rolled again before a 7, and loses if a 7 comes first. That 7 is the seven-out, and the next roll is a new come-out. Don't pass is the other side: it wins on 2 or 3 and on a 7 before the point, loses on 7 or 11 and when the point repeats, and a 12 on the come-out is a tie that leaves the bet on the table (bar 12).",
+          "Come and don't come work the same way, but you make them while a point is on, and each one moves to the next number rolled.",
         ],
       },
       {
         heading: 'Placing a bet',
         paragraphs: [
           "Tap a spot on the felt to add a chip to the pass line, don't pass, come, odds or the field. For place, buy, lay, hardways and propositions, open Numbers and center bets. That bet selector lists each wager with what it pays and its house edge: choose one, set the total stake with − and +, and place it. A draft isn't on the table until you place it.",
-          "Some bets become contracts. Once a point is set, a pass line bet stays until it wins or loses, and you can't lower it or take it down, though you can add odds behind it. Place bets aren't contracts: you can change or remove them between rolls. “Why locked?” on a bet explains which kind it is.",
+          "Some bets become contracts. Once a point is set, a pass line bet stays until it wins or loses, and you can't lower it or take it down, though you can add odds behind it. An established don't bet can only come down, with its odds. Place bets aren't contracts: you can change or remove them between rolls. “Why locked?” on a bet explains which kind it is.",
         ],
       },
       {
         heading: 'Table conditions',
         paragraphs: [
           'Setup chooses the table: the maximum odds (1x, 2x, 3-4-5x, 5x or 10x the line bet), whether the field pays 3:1 or 2:1 on 12, and the table limits. The table header repeats them during play.',
-          'Place bets and come odds are off on the come-out roll unless you turn them on, so a come-out 7 returns them instead of taking them. A bet that is off stays on the table and takes no action.',
+          "Place bets and come odds are off on the come-out roll unless you turn them on. A bet that is off stays on the table and takes no action, so a come-out 7 doesn't take an off place bet. Off come odds come back if their come bet is decided on that roll.",
         ],
       },
       {
         heading: 'Rolling and settlement',
         paragraphs: [
-          'Press Roll when your bets are set. Each roll settles every bet it decides, and the table lists what happened: what won and how much, what lost, and what was off and came back. A place bet that wins is paid and stays up.',
-          "Bets the roll doesn't decide stay where they are for the next roll.",
+          'Each turn runs Come-out (or Betting, once a point is on), then Roll, then Settle. Press Roll when your bets are set. The roll settles every bet it decides, and the table lists what happened: the roll, any new point, what won and how much, what lost, what pushed and what was off and came back, then your balance. A place bet that wins is paid and stays up.',
+          "Bets the roll doesn't decide stay for the next roll. When you end a session, bets that can come down come back, and contracts settle by automatic rolls.",
         ],
       },
       {
         heading: 'Funding',
         paragraphs: [
-          "Each practice session starts with the chips you choose at setup. Every bet comes out of that balance, and a bet you can't cover isn't placed. Rebuy adds chips during the session, up to the funding limit, and the setup and rebuy sheets show how much has been added so far.",
+          "Each practice session starts with the chips you choose at setup, 1,000 unless you change it. Every bet comes out of that balance, and a bet you can't cover isn't placed. Rebuy adds chips during the session; it counts as funding, not as a win. A session funded from a training bankroll has no buy-in and no rebuys.",
           "Practice chips are for practice only. They never stand for money you'd win or lose at a casino.",
         ],
       },
       {
         heading: 'The house edge',
         paragraphs: [
-          "Every craps bet except odds carries a house edge, set by how it pays against the chance of the roll. On this table the pass line is 1.41%, don't pass 1.36%, place 6 and 8 1.52%, and the field 2.78% when 12 pays 3:1. Odds pay true odds, so their edge is 0.00%. The setup screen shows the edge for the rules you choose.",
+          "Every craps bet except odds carries a house edge, set by how it pays against the chance of the roll. On this table the pass line is 1.41%, don't pass 1.36%, place 6 and 8 1.52%, and the field 2.78% when 12 pays 3:1. Odds pay true odds, so their edge is 0%. The setup screen shows the edge for the rules you choose.",
           "Practising helps you place bets correctly and follow what happens. It doesn't change those numbers.",
         ],
       },
     ],
     FREE_PLAY_ONLY,
-    [],
+    [
+      wizard('How to Play Craps', 'sections “Pass”, “Don’t Pass”, “Come, Don’t Come”, “Place”, “Turning Bets On and Off” and “Field Bet”', WOO_BASICS),
+      EDGE_TABLE,
+      njDge('13:69F-1.2(a), 1.3(c)–(e) and 1.4(b)'),
+      bellagio('printed pp. 13–14'),
+    ],
   ),
 
   'pass-with-odds': lesson(
@@ -113,7 +133,7 @@ export const CRAPS_LESSONS: Readonly<Record<string, CrapsLesson>> = {
         heading: 'Limits and stopping',
         paragraphs: [
           "The strategy always takes 10 in odds, equal to the line bet, whatever larger odds the table allows. Its 10-unit stakes and equal odds are Tableside's own defaults, not a published system.",
-          "There's no stopping rule inside the strategy: you decide when to end. If you end with a point on, the pass line and its odds roll on until they settle, with no new bets.",
+          "There's no stopping rule inside the strategy: you decide when to end. If you end with a point on, your pass line bet can't come down, so it settles by automatic rolls, with no new bets. If you start while a point is already on, the strategy waits for the next come-out.",
         ],
       },
       {
@@ -124,7 +144,11 @@ export const CRAPS_LESSONS: Readonly<Record<string, CrapsLesson>> = {
       },
     ],
     practise(PASS_WITH_ODDS),
-    [],
+    [
+      wizard('How to Play Craps', 'sections “Pass”, “The Odds” and “Strategy”', WOO_BASICS),
+      wizard('How the House Edge for Each Bet is Derived', 'section “Pass/Come”', WOO_DERIVED),
+      njDge('13:69F-1.6(a)'),
+    ],
   ),
 
   'flat-place-6-8': lesson(
@@ -151,7 +175,7 @@ export const CRAPS_LESSONS: Readonly<Record<string, CrapsLesson>> = {
         heading: 'Seven-out and limits',
         paragraphs: [
           'A seven-out loses both bets, 24 in all. Wait for the next point, then place 12 on each again.',
-          "Placing 12 on each, collecting every win, and keeping them up through the come-out are Tableside's own variant, not a published system. There's no stopping rule inside it: you decide when to end.",
+          "Placing 12 on each with no line bet, collecting every win, and keeping them up through the come-out are Tableside's own variant, not a published system. Both bets go on together or not at all. There's no stopping rule inside it: you decide when to end, and place bets come back when you stop.",
         ],
       },
       {
@@ -160,7 +184,12 @@ export const CRAPS_LESSONS: Readonly<Record<string, CrapsLesson>> = {
       },
     ],
     practise(FLAT_PLACE_6_8),
-    [],
+    [
+      wizard('How to Play Craps', 'sections “Place” and “Turning Bets On and Off”', WOO_BASICS),
+      EDGE_TABLE,
+      njDge('13:69F-1.2(a)5 and 1.4(b)'),
+      bellagio('printed p. 14, “Place Bets”'),
+    ],
   ),
 
   'dont-pass-with-lay-odds': lesson(
@@ -188,8 +217,8 @@ export const CRAPS_LESSONS: Readonly<Record<string, CrapsLesson>> = {
       {
         heading: 'Limits and stopping',
         paragraphs: [
-          "The table lets don't bets come down, but this strategy keeps the bet and its lay until they settle. Its 10-unit bet and lay-to-win-10 sizing are Tableside's own variant, not a published system.",
-          "There's no stopping rule inside it: you decide when to end. If you end with a point on, the bets on the table roll on until they settle, with no new bets.",
+          "An established don't bet can come down with its lay, though it can't be changed. This strategy never takes it down: it keeps the bet and its lay until they settle. Its 10-unit bet and lay-to-win-10 sizing are Tableside's own variant, not a published system.",
+          "There's no stopping rule inside it: you decide when to end. When you stop, your don't pass bet and its lay come back.",
         ],
       },
       {
@@ -200,7 +229,12 @@ export const CRAPS_LESSONS: Readonly<Record<string, CrapsLesson>> = {
       },
     ],
     practise(DONT_PASS_WITH_LAY_ODDS),
-    [],
+    [
+      wizard('How to Play Craps', 'sections “Don’t Pass”, “Laying the Odds” and “Strategy”', WOO_BASICS),
+      wizard('How the House Edge for Each Bet is Derived', 'section “Don’t Pass/Don’t Come”', WOO_DERIVED),
+      njDge('13:69F-1.2(a)2, 1.3(d) and 1.6(b)'),
+      bellagio('printed pp. 13–14, “Don’t Pass Line” and “Odds”'),
+    ],
   ),
 
   'three-point-molly': lesson(
@@ -221,14 +255,15 @@ export const CRAPS_LESSONS: Readonly<Record<string, CrapsLesson>> = {
         heading: 'When numbers hit',
         paragraphs: [
           "When a come bet's number is rolled again, it and its odds win and come down. With room again, make another come bet. When the point is made, the pass line and its odds win; bet 10 on the pass line for the next come-out.",
-          'On the come-out roll, come bets already on numbers still work, but their odds are off. No new come bets are made until a point is set.',
+          'On the come-out roll, come bets already on numbers still work, but their odds are off: a come-out 7 loses those come bets and returns their odds. No new come bets are made until a point is set.',
         ],
       },
       {
         heading: 'Seven-out, limits and stopping',
         paragraphs: [
           'A seven-out loses the pass line, every come bet on a number and the odds on all of them. A come bet still waiting in the come area wins on that same 7.',
-          "The cap of two come bets and 10 odds on each are Tableside's own bounds, not a published system. There's no stopping rule inside it: you decide when to end, and contracts on the table roll on until they settle.",
+          "The published Three Point Molly takes the largest odds the table allows and ends at a seven-out. Tableside's own bounded version caps you at two come bets, fixes the odds at 10, and carries on with a new pass bet after a seven-out. At most 60 is on the table.",
+          "There's no stopping rule inside it: you decide when to end, and contracts on the table settle by automatic rolls.",
         ],
       },
       {
@@ -240,7 +275,12 @@ export const CRAPS_LESSONS: Readonly<Record<string, CrapsLesson>> = {
       },
     ],
     practise(THREE_POINT_MOLLY),
-    [],
+    [
+      wizard('Three Point Molly', 'sections “Rules” and “Analysis”', 'https://wizardofodds.com/gambling/three-point-molly/'),
+      NO_SYSTEM_BEATS_THE_EDGE,
+      wizard('How to Play Craps', 'sections “Come, Don’t Come” and “Turning Bets On and Off”', WOO_BASICS),
+      njDge('13:69F-1.2(a)3, 1.3(e) and 1.6(c)'),
+    ],
   ),
 
   'press-and-collect-6-8': lesson(
@@ -260,14 +300,14 @@ export const CRAPS_LESSONS: Readonly<Record<string, CrapsLesson>> = {
       {
         heading: 'The cap and the reset',
         paragraphs: [
-          'At 48, four times the starting bet, the number stops pressing and collects every hit. When the point is made, both stakes and their press-or-collect turn carry on, with the bets off for the come-out roll.',
+          'At 48, four times the starting bet, the number stops pressing and collects every hit. At most 96 is on the table. When the point is made, both stakes and their press-or-collect turn carry on, with the bets off for the come-out roll; a come-out 7 changes nothing.',
           "A seven-out loses both bets and resets both numbers to 12, collecting first again. The 48 cap and this reset are Tableside's own, not a published system.",
         ],
       },
       {
         heading: 'Limits and stopping',
         paragraphs: [
-          "If your balance can't cover a press, the strategy waits instead of borrowing or changing the plan. There's no stopping rule inside it: you decide when to end.",
+          "If a press can't be placed, because of your balance or the table maximum, the win stays paid, the bet stays where it was and the press waits for you. Collect instead ends the strategy's cycle and takes the place bets down. There's no stopping rule inside it: you decide when to end.",
         ],
       },
       {
@@ -278,7 +318,7 @@ export const CRAPS_LESSONS: Readonly<Record<string, CrapsLesson>> = {
       },
     ],
     practise(PRESS_AND_COLLECT_6_8),
-    [],
+    [EDGE_TABLE, NO_SYSTEM_BEATS_THE_EDGE, njDge('13:69F-1.2(a)5 and 1.4(b)')],
   ),
 };
 
