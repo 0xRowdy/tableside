@@ -69,7 +69,7 @@ describe('the Training service lessons', () => {
       title: 'App orientation',
       summary: 'Tabs, help, practice vs casino records',
       section: 'app',
-      steps: 4,
+      steps: 5,
       access: 'available',
       status: { kind: 'not-started' },
     });
@@ -81,6 +81,7 @@ describe('the Training service lessons', () => {
       'dont-pass-with-lay-odds',
       'three-point-molly',
       'press-and-collect-6-8',
+      'building-a-strategy',
     ]);
     expect(catalog[1]).toMatchObject({ id: 'blackjack-basics', section: 'blackjack', steps: null, status: { kind: 'not-started' } });
     await expect(service.openLesson('blackjack-basics')).rejects.toThrow(/not available/);
@@ -169,7 +170,7 @@ describe('the Training service lessons', () => {
       title: 'App orientation',
       summary: 'Tabs, help, practice vs casino records',
       section: 'app',
-      steps: 4,
+      steps: 5,
       access: 'available',
       status: { kind: 'completed' },
     });
