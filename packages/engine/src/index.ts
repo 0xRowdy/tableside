@@ -309,6 +309,7 @@ export {
   encodeChallengeCheckpoint,
   HI_LO_VALUES,
   readChallengeView,
+  runningCountDrift,
   type CardValueItem,
   type CardValueReview,
   type CardValuesContent,
@@ -339,6 +340,9 @@ export {
   type LearnFeedback,
   type MetricResult,
   type ReviewFact,
+  type RunningCountContent,
+  type RunningCountExplanation,
+  type RunningCountReview,
 } from './challenge';
 export {
   CHALLENGE_RECORD_VERSION,

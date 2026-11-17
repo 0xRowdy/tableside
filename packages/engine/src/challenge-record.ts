@@ -1,4 +1,4 @@
-// Spec 3 Synchronized record types › Challenge attempt, Amendment 4 §1; #158
+// Spec 3 Synchronized record types › Challenge attempt, Amendment 4 §1; #158, #133
 
 import type { VersionedIdentity } from './activity';
 import { challengeResults, type ChallengeCategory, type ChallengeMetrics, type ChallengeState, type ChallengeVariant, type ReviewFact } from './challenge';
@@ -87,8 +87,8 @@ export function challengeGroupKey(state: ChallengeState): ChallengeGroupKey {
   return {
     category: state.identities.category,
     variant: state.variant,
-    assistanceClass: state.variant === 'learn' ? 'learn' : 'unassisted-check',
-    countRevealed: false,
+    assistanceClass: state.variant === 'learn' ? 'learn' : state.revealedAt === null ? 'unassisted-check' : 'assisted-check',
+    countRevealed: state.revealedAt !== null,
     content: { ...state.identities.content },
     reference: state.identities.reference && { ...state.identities.reference },
     length: state.content.length,
