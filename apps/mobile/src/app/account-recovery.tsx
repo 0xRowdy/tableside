@@ -1,19 +1,4 @@
-// When this installation can't open the account's data (spec 2, *Account
-// gate*, *Key states*; user story 23). The vault kept the files untouched, and
-// nothing here overwrites or deletes them.
-//
-// - Recovery needed (the key or database is lost or unreadable): Restore
-//   synced history makes a fresh database, under a new installation of its
-//   own, and signs out; signing in to the same account downloads the synced
-//   history into it. Records that hadn't reached the account stay only in the
-//   kept original.
-// - A database from a later build (needs-update): update the app to open it.
-// - A migration that failed: the data is as it was; reopening tries again.
-//
-// No tab bar here, so every variant links to Contact support and Make a
-// privacy request (Amendment 9 §1), and can sign out or use another account.
-// TODO(frames): S2-23 draws no Recovery needed, update-required-at-open or
-// migration-failed variant; the copy and layout follow the other locked states.
+// TODO(spec 2 S2-23)
 
 import { Redirect, router } from 'expo-router';
 import { HardDriveDownload, LogOut, RotateCw, TriangleAlert, UserRound } from 'lucide-react-native';
@@ -73,7 +58,6 @@ export default function AccountRecovery() {
     setFailed(false);
     const { status } = await service.recover();
     setBusy(false);
-    // Signed out now: the signed-out screen offers the sign-in that downloads the synced history.
     if (status === 'failed') setFailed(true);
   };
   return (

@@ -1,11 +1,4 @@
-// Seam 2, chunked results (#93): a practice session too large for one request
-// reaches the account's other device whole, through bounded, content-hashed
-// chunks staged privately; nothing partial is ever visible or counted, the
-// device keeps the session until the final receipt, abandoned staging expires
-// after 24 hours without progress, and resending the same bytes makes no new
-// result. Faults are injected at the network (fault proxy), the app process
-// (kill and restart) and the server clock (privileged SQL), never inside the
-// Account service.
+// #93
 
 import { createHash } from 'node:crypto';
 
@@ -24,10 +17,8 @@ function device(name: string): SimulatedDevice {
 }
 afterEach(() => devices.splice(0).forEach((d) => d.dispose()));
 
-/** Four times the request limit: sent in about a dozen chunks. */
 const LONG = 4 * REQUEST_LIMIT_BYTES;
 
-/** A phone that created an account and a tablet signed in to it, the tablet in the background (no live hints). */
 async function twoDevices() {
   const phone = device('phone');
   const tablet = device('tablet');
@@ -43,10 +34,8 @@ async function twoDevices() {
 
 const sessionsOn = async (d: SimulatedDevice) => d.vault.store().readAcceptedRecords(completedPracticeSession.name);
 
-/** A practice session as the account accepted it: whole, at the account's first sequence. */
 const acceptedFirst = (result: { readonly activityId: string }) => [{ recordType: completedPracticeSession.name, item: result.activityId, sequence: 1, payload: result }];
 
-/** The killed app starts again, back online. */
 async function reopen(d: SimulatedDevice) {
   d.proxy.onRequest = null;
   d.proxy.online = true;
@@ -54,10 +43,8 @@ async function reopen(d: SimulatedDevice) {
   await d.account.sync.idle();
 }
 
-/** Requests a device sent to an operation. */
 const callsTo = (d: SimulatedDevice, operation: string) => d.proxy.sent.filter(({ url }) => url.includes(`/rpc/${operation}`));
 
-/** The device goes offline as its `count`th chunk leaves, so that chunk and the rest never arrive. */
 function offlineAtChunk(d: SimulatedDevice, count: number) {
   let chunks = 0;
   d.proxy.onRequest = (url) => {
@@ -65,7 +52,6 @@ function offlineAtChunk(d: SimulatedDevice, count: number) {
   };
 }
 
-/** What the tablet sees of the account: its accepted sessions after reconciling, and the feed as a direct call reads it. */
 async function seenByTablet(tablet: SimulatedDevice) {
   tablet.foreground = true;
   await tablet.account.sync.idle();
@@ -74,7 +60,6 @@ async function seenByTablet(tablet: SimulatedDevice) {
   return { sessions: await sessionsOn(tablet), feed: (feed.data as { entries: unknown[] }).entries };
 }
 
-/** Moves a result's staged chunks' arrival back by `hours`, as if that long had passed on the server; returns the job's command. */
 async function ageStaging(accountId: string, hours: number) {
   const { sql } = localStack();
   await sql`update private.staged_chunks set received_at = received_at - make_interval(hours => ${hours}) where account_id = ${accountId}`;
@@ -110,7 +95,6 @@ describe('a practice session too large for one request', () => {
     await phone.account.sync.idle();
     expect(callsTo(phone, 'sync_stage_chunk_v1')).toHaveLength(4);
 
-    // Three chunks are staged: no device sees a session, and the feed holds nothing.
     expect(await seenByTablet(tablet)).toEqual({ sessions: [], feed: [] });
     const [queued] = await phone.vault.store().readUploadQueue();
     expect(queued?.payload).toEqual(result);
@@ -118,7 +102,6 @@ describe('a practice session too large for one request', () => {
     phone.kill();
     await reopen(phone);
 
-    // Only the chunks that never arrived were sent again.
     const chunks = chunksOf(queued!.operation!, queued!.payload)!;
     expect(callsTo(phone, 'sync_stage_chunk_v1')).toHaveLength(4 + chunks.length - 3);
     const seen = await seenByTablet(tablet);
@@ -130,7 +113,6 @@ describe('a practice session too large for one request', () => {
     const { phone, tablet } = await twoDevices();
     let uploads = 0;
     phone.proxy.onRequest = (url) => {
-      // The first upload names the chunks missing; the second, after staging them, is the final acceptance.
       if (url.includes('/rpc/sync_upload_v1') && ++uploads === 2) phone.proxy.dropNextResponse('sync_upload_v1');
     };
 
@@ -148,7 +130,6 @@ describe('a practice session too large for one request', () => {
 });
 
 describe('abandoned staging', () => {
-  /** A long session three of whose chunks were staged before the phone went offline and its app was killed. */
   async function abandoned() {
     const devices = await twoDevices();
     const { phone } = devices;
@@ -165,7 +146,6 @@ describe('abandoned staging', () => {
     await (await ageStaging(accountId, 24))();
 
     await reopen(phone);
-    // Every chunk was staged again.
     expect(callsTo(phone, 'sync_stage_chunk_v1')).toHaveLength(4 + chunks.length);
     expect((await seenByTablet(tablet)).sessions).toEqual(acceptedFirst(result));
   });
@@ -192,9 +172,7 @@ describe('abandoned staging', () => {
 });
 
 describe('the chunk operations, called directly', () => {
-  /** The phone's own installation: the server takes uploads only from the caller's registered installation. */
   let installation = '';
-  /** A practice result of the account's, `size` bytes long, prepared as `operation` would send it. */
   function longResult(accountId: string, operation: string, size = 3 * REQUEST_LIMIT_BYTES, commands = direct) {
     const payload = {
       recordVersion: 1,
@@ -221,7 +199,6 @@ describe('the chunk operations, called directly', () => {
     return { request: prepared.request, chunks: chunksOf(prepared, payload)! };
   }
 
-  /** The commands of the installation the direct calls upload as. */
   let direct: DirectCommands | undefined;
   async function signedIn() {
     const { phone, accountId } = await twoDevices();
@@ -247,7 +224,6 @@ describe('the chunk operations, called directly', () => {
     expect(await upload()).toMatchObject({ status: 'accepted', sequence: 1 });
     expect(await upload()).toMatchObject({ status: 'accepted', sequence: 1 });
 
-    // The same result's bytes staged and named again, under another operation: the one acceptance.
     const again = longResult(accountId, '2');
     for (const chunk of again.chunks) await raw.rpc('sync_stage_chunk_v1', chunkCallArguments(chunk));
     expect(await upload(again.request)).toMatchObject({ status: 'accepted', sequence: 1 });
@@ -267,7 +243,6 @@ describe('the chunk operations, called directly', () => {
     expect(await stage({ protocol: 2 })).toEqual({ status: 'incompatible', supported: [1] });
     expect((await localStack().rawClient().rpc('sync_stage_chunk_v1', chunkCallArguments(chunk))).error).not.toBeNull();
 
-    // A manifest whose staged chunks rejoin to other text is refused, durably.
     const manifest = JSON.parse(request) as { content: { sha256: string } };
     const wrong = canonicalJson({ ...manifest, operation: '4'.repeat(32), content: { ...manifest.content, sha256: 'f'.repeat(64) } });
     for (const each of chunks) await raw.rpc('sync_stage_chunk_v1', chunkCallArguments(each));
@@ -283,7 +258,6 @@ describe('the chunk operations, called directly', () => {
     const { accountId, raw } = await signedIn();
     const { chunks } = longResult(accountId, '6');
     const { sql } = localStack();
-    // 128 MiB already staged under made-up results.
     await sql`insert into private.staged_chunks (account_id, record_type, item_id, sha256, data)
       select ${accountId}, ${completedPracticeSession.name}, 'filler-' || n, md5(n::text) || md5(n::text), repeat('x', 49152)
       from generate_series(1, 2731) n`;

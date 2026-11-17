@@ -1,7 +1,4 @@
-// S2-15 Age — unresolved before any account exists (Create path, nothing
-// kept): a required platform check stands in the way, so no answer can decide.
-// The frame (B5g04d) draws only Contact support; Amendment 9 §1 adds Make a
-// privacy request to every restricted screen, and amendments win over frames.
+// Spec 2 Amendment 9 §1
 
 import { router } from 'expo-router';
 

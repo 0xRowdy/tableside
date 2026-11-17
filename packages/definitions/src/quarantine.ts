@@ -1,8 +1,4 @@
-// The quarantine list shipped with the app (Amendment 3 §1): combinations of
-// pinned identities a proven defect affects. A completed record's quarantine
-// status is derived from this list on every read, never stored, and the
-// server mirrors the same plain, versioned data (Amendment 6 §6). Each new
-// entry bumps the version; entries are never edited or removed.
+// Spec 1 Amendment 3 §1, Amendment 6 §6
 
 import type { QuarantineList } from '@tableside/engine';
 

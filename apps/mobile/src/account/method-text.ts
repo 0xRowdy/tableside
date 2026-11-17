@@ -1,22 +1,19 @@
-// Player wording for Sign-in methods (S2-18) and Confirm it's you.
+// Spec 2 S2-18
 
 import type { SignInMethod, SignInMethodEntry } from '@tableside/account';
 
 import { PROVIDERS } from './providers';
 
-/** "Apple", "Google", "Email code". */
 export function methodName(method: SignInMethod): string {
   return method === 'email' ? 'Email code' : PROVIDERS[method].name;
 }
 
-/** What a method card says under its name: Apple's relay address as Hide My Email, the email code's address as verified. */
 export function methodDetail({ method, email }: SignInMethodEntry): string | undefined {
   if (!email) return undefined;
   if (method === 'email') return `${email} · verified`;
   return /@privaterelay\.appleid\.com$/i.test(email) ? `Hide My Email · ${email}` : email;
 }
 
-/** Why Confirm it's you is asked, for each change it guards. */
 export function confirmReason(
   change:
     | { readonly kind: 'add' | 'remove'; readonly method: SignInMethod }

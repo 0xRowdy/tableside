@@ -5,11 +5,7 @@ import { describe, expect, it } from 'vitest';
 
 import { ENGINE_VERSION, STATE_SCHEMA_VERSION } from '../packages/engine/src';
 
-// Unfinished activities are never aged out (#80). Every released build's
-// recorded checkpoints stay exactly as that build wrote them (their SHA-256 is
-// in released.json, added when the build ships), and the engine suite keeps
-// resuming every one. The build under development keeps its own recording,
-// re-recorded while its behaviour still changes.
+// #80
 const RECORDED = new URL('../packages/engine/test/recorded/', import.meta.url);
 const CURRENT = `engine-${ENGINE_VERSION}-schema-${STATE_SCHEMA_VERSION}.ts`;
 

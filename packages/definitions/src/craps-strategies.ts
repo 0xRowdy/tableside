@@ -1,16 +1,8 @@
-// Built-in craps strategies (spec #51, Built-in strategies): executable data
-// in the standard craps strategy vocabulary, with no special-cased code, so a
-// builder-authored equivalent runs identically. Amounts are on the default
-// 10-minimum table. A craps prescription is the whole table for the next roll:
-// bases already established are restated at their amounts.
-//
-// Place amounts and press counters persist through a made point (the place
-// bets stay up, off, on the come-out) and reset after a seven-out: the "up"
-// counter is 1 from the place bets' first roll until a seven-out takes them.
+// Spec 1 Built-in strategies
 
 import type { StrategyAdjustment, StrategyCondition, StrategyDefinition, StrategyInstruction } from '@tableside/engine';
 
-/** Written for every launch odds cap at the launch default limits (#3). */
+// #3
 const LAUNCH_TABLE = {
   odds: ['1x', '2x', '3-4-5x', '5x', '10x'],
   limits: { flat: { min: '10', max: '1000' }, props: { min: '1', max: '100' } },
@@ -20,7 +12,6 @@ const POINTS = ['4', '5', '6', '8', '9', '10'] as const;
 const is = (subject: string, value: string): StrategyCondition => ({ subject, is: value });
 const lit = (value: string) => ({ lit: value });
 const bet = (target: string, amount: string) => ({ target: { target }, amount: lit(amount) });
-/** The point is on and this base is established on it. */
 const onAnyPoint = (base: string, points: readonly string[] = POINTS): StrategyCondition => ({ any: points.map((n) => ({ all: [is('point', n), is(base, 'on')] })) });
 const upOnComeOut: StrategyCondition = { all: [is('puck', 'off'), { compare: { counter: 'up' }, op: 'eq', to: lit('1') }] };
 
@@ -47,8 +38,7 @@ export const PASS_WITH_ODDS: StrategyDefinition = {
   note: 'Pass 10, then 10 odds once a point is set.',
 };
 
-/** Either place bet on the table for a roll keeps them up; a seven-out takes them down (each number's loss is the same seven). */
-const UP: StrategyAdjustment[] = [
+const UP_UNTIL_SEVEN_OUT: StrategyAdjustment[] = [
   { id: 'up-6', on: 'any', wager: 'place-6', counter: 'up', to: lit('1') },
   { id: 'up-8', on: 'any', wager: 'place-8', counter: 'up', to: lit('1') },
   { id: 'seven-out-6', on: 'loss', wager: 'place-6', counter: 'up', to: lit('0') },
@@ -68,7 +58,7 @@ export const FLAT_PLACE_6_8: StrategyDefinition = {
     { id: 'place', label: 'Place 6 and 8, 12 each, once a point is on', when: is('puck', 'on'), bets: [bet('place-6', '12'), bet('place-8', '12')] },
     { id: 'keep', label: 'Keep place 6 and 8 up, off, on the come-out', when: upOnComeOut, bets: [bet('place-6', '12'), bet('place-8', '12')] },
   ],
-  adjustments: UP,
+  adjustments: UP_UNTIL_SEVEN_OUT,
   stopWhen: null,
   note: '12 on each after the point. Collect every win.',
 };
@@ -157,10 +147,9 @@ export const PRESS_AND_COLLECT_6_8: StrategyDefinition = {
     { id: `place-${n}`, label: `Place ${n} at its current stake once a point is on`, when: is('puck', 'on'), bets: [pressed(n)] },
     { id: `keep-${n}`, label: `Keep place ${n} up, off, on the come-out`, when: upOnComeOut, bets: [pressed(n)] },
   ]),
-  adjustments: [...UP, ...pressing('6'), ...pressing('8')],
+  adjustments: [...UP_UNTIL_SEVEN_OUT, ...pressing('6'), ...pressing('8')],
   stopWhen: null,
   note: 'Collect the first hit, then alternate press and collect up to 48.',
 };
 
-/** The built-in craps strategies, in picker order. */
 export const CRAPS_STRATEGIES: readonly StrategyDefinition[] = [PASS_WITH_ODDS, FLAT_PLACE_6_8, DONT_PASS_WITH_LAY_ODDS, THREE_POINT_MOLLY, PRESS_AND_COLLECT_6_8];

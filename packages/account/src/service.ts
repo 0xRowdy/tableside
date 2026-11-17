@@ -1,8 +1,4 @@
-// The Account service: the one interface the app uses for anything
-// account-shaped (spec 2, *Modules*). It exposes the observable account gate
-// and hides Supabase, the network and storage from its callers. It is
-// composed here from one module per area (account-service/), which share a
-// small context: the backend client, the gate and the account-session generation.
+// Spec 2 Modules
 
 import { createAgeEligibility } from './account-service/age';
 import { createContext } from './account-service/context';
@@ -30,7 +26,6 @@ import { isCurrency } from './values';
 
 export * from './account-service/types';
 
-/** The currency an account without one on record shows: the server's own default. */
 const DEFAULT_CURRENCY = 'USD';
 
 const isSignInMethod = (provider: unknown): provider is SignInMethod => provider === 'apple' || provider === 'google' || provider === 'email';
@@ -53,7 +48,6 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
     for (const listener of syncListeners) listener(status);
   });
 
-  /** What this installation knows without the network: the stored session's user and the remembered currency. */
   const localSummary = async (): Promise<AccountSummary> => {
     const user = (await session.storedSession())?.user;
     const methods = (user?.identities ?? []).map((identity) => identity.provider).filter(isSignInMethod);
@@ -66,7 +60,6 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
     };
   };
 
-  /** Records the currency the server answered with, unless the account session moved on meanwhile. */
   const rememberCurrency = (at: number, currency: string) =>
     ctx.writeCredentials(async () => {
       const remembered = await ctx.readRemembered();
@@ -99,7 +92,6 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
           await rememberCurrency(at, answer.currency);
         }
       } catch {
-        // Offline: what this installation already knows.
       }
       return at === ctx.generation && opensOrdinaryAccess(ctx.gate) ? summary : null;
     },
@@ -154,7 +146,6 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
         try {
           return (await session.sync?.store.readUploadQueue())?.length ?? 0;
         } catch {
-          // The account session ended while counting.
           return 0;
         }
       },
@@ -172,7 +163,6 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
     devices: createDevices(ctx),
     export: accountExport({
       operation: (name) => ctx.operation(name, undefined, 'restricted'),
-      // The bucket's storage policy authorizes it against live state; the path is the account's own object.
       download: (path) =>
         ctx.withSessionToken('restricted', (token) =>
           options.fetch(`${backend.url}/storage/v1/object/authenticated/account-exports/${path.split('/').map(encodeURIComponent).join('/')}`, {
@@ -192,7 +182,6 @@ export function createAccountService(options: AccountServiceOptions): AccountSer
   return service;
 }
 
-/** The server's account summary, or null when it isn't one. */
 function parseSummary(data: unknown): AccountSummary | null {
   const value = data as { email?: unknown; methods?: unknown; currency?: unknown; currency_changeable?: unknown; devices?: unknown } | null;
   if (!value || !isCurrency(value.currency) || !Array.isArray(value.methods) || typeof value.currency_changeable !== 'boolean' || typeof value.devices !== 'number') {

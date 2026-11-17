@@ -1,11 +1,4 @@
-// Blackjack session setup (design frame S1-02 i1tnq): free play or guided
-// practice in one of the four modes (basic; basic with deviations; counting
-// with basic; counting with deviations), with the optional Hi-Lo bet schedule
-// alongside a counting mode; the four named presets, which the dealer and
-// surrender switches also set; penetration and other players as steppers;
-// editable initial-wager limits; the house edge of these rules; and a fresh
-// buy-in. Guided practice pins the preset's built-in strategy; without the
-// schedule the bets stay the player's.
+// Spec 1 S1-02
 
 import {
   BET_SCHEDULE,
@@ -50,10 +43,9 @@ const GROUPS: readonly LimitGroup<'initial'>[] = [
   { key: 'initial', label: 'Initial wager', help: 'Whole units of 1 or more. Insurance, splits and doubles can go over the maximum.' },
 ];
 
-/** "10 / 20 / 40 / 60 / 80 by true count…" (S1-02 i1tnq, stated as amounts per Amendment 9 §7), from the schedule itself. */
+// Spec 1 S1-02, Amendment 9 §7
 const SCHEDULE_DETAIL = `${BET_SCHEDULE.map((band) => formatUnits(band.amount)).join(' / ')} by true count. Scored separately from your play.`;
 
-/** Each mode as the setup frame (S1-02 i1tnq) words it. */
 const MODE_TEXT: Record<BlackjackMode, { label: string; help: string }> = {
   basic: { label: 'Basic strategy', help: 'Coaches every decision for these table rules.' },
   'basic-with-deviations': { label: 'Basic with deviations', help: 'Adds index plays. Tableside shows you the count.' },
@@ -61,13 +53,11 @@ const MODE_TEXT: Record<BlackjackMode, { label: string; help: string }> = {
   'counting-with-deviations': { label: 'Counting with deviations', help: 'You keep the count. Basic plus index plays.' },
 };
 
-/** What the bet schedule bets on the first deal of a fresh shoe (a true count of 0), from the engine's Explain prescription. */
 function scheduleOpening(strategy: StrategyDefinition, rules: ReturnType<typeof blackjackRules>): Opening | null {
   const situation = {
     game: 'blackjack',
     rules: { dealer: rules.dealer, lateSurrender: rules.lateSurrender, limits: rules.limits },
     balance: '1000000000',
-    // A fresh six-deck shoe.
     shoe: { running: 0, remaining: 312 },
   };
   const explained = explainPrescription(strategy, {}, situation, initialProgress(strategy));
@@ -76,7 +66,7 @@ function scheduleOpening(strategy: StrategyDefinition, rules: ReturnType<typeof 
   return { kind: 'strategy', amount: totalStake(bets), strategyName: strategy.name, bets: betsText(bets, BLACKJACK_WORDS) };
 }
 
-/** Above this text scale the preset chips become a list (annotation V0ckk). */
+// Spec 1 S1-02 annotation V0ckk
 const CHIPS_MAX_FONT_SCALE = 1.35;
 
 export function BlackjackSetup({ problem, problemReason = null, busy }: { problem: StartProblem | null; problemReason?: string | null; busy: boolean }) {
@@ -93,11 +83,9 @@ export function BlackjackSetup({ problem, problemReason = null, busy }: { proble
   const surrender = preset.endsWith('_LS');
   const setRules = (dealerHits: boolean, lateSurrender: boolean) => setPreset(`${dealerHits ? 'H17' : 'S17'}_${lateSurrender ? 'LS' : 'noLS'}`);
   const accepted = limits.accepted;
-  // The bet schedule goes only with a counting mode; switching away leaves the bets to the player.
   const betSchedule = schedule && countingMode(mode);
   const definition = blackjackStrategy(preset, mode, betSchedule);
   const rules = accepted ? blackjackRules(preset, penetration, others, accepted) : null;
-  // A schedule's amounts must fit the edited limits; Tableside never changes them.
   const fit = guided && betSchedule && rules ? strategyTableCompatibility(definition, {}, rules) : null;
   let opening: Opening | null = rules ? { kind: 'table', amount: rules.limits.initial.min } : null;
   if (rules && fit?.compatible) opening = scheduleOpening(definition, rules);

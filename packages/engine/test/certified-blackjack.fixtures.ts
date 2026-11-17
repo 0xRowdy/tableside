@@ -1,8 +1,3 @@
-// Copies of two shipped blackjack benchmark profiles and certified built-in
-// strategies (S17 LS basic; H17 no-LS counting with deviations and the bet
-// schedule), so the cross-runtime suite traces them; the engine can't import
-// the definitions package. The runner's tests check these copies still equal
-// the shipped data. Regenerate from the definitions package if they change.
 import type { BenchmarkProfile, StrategyDefinition } from '../src';
 
 export const CERTIFIED_BLACKJACK = {

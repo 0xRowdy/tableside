@@ -1,9 +1,4 @@
-// Synthesizes the sixteen launch sound cues (#49, #66) as original works: sine
-// tones and seeded noise only, no samples or third-party material. The output
-// is deterministic, so re-running it reproduces the committed files byte for
-// byte; provenance.json records each file's SHA-256.
-//
-//   node apps/mobile/scripts/generate-cue-sounds.mjs
+// #49, #66
 
 import { writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -12,7 +7,6 @@ import { fileURLToPath } from 'node:url';
 const RATE = 22_050;
 const OUT = join(dirname(fileURLToPath(import.meta.url)), '..', 'assets', 'sounds');
 
-// xorshift32: a seeded noise source, so the files never change between runs.
 function noise(seed) {
   let x = seed >>> 0 || 1;
   return () => {
@@ -25,10 +19,8 @@ function noise(seed) {
   };
 }
 
-/** A buffer of `seconds` of silence to mix voices into. */
 const silence = (seconds) => new Float64Array(Math.round(seconds * RATE));
 
-/** A tone gliding from `from` to `to` Hz with a fast attack and exponential decay. */
 function tone(buffer, { at = 0, length, from, to = from, gain = 0.5, decay = 6 }) {
   const start = Math.round(at * RATE);
   const count = Math.round(length * RATE);
@@ -41,7 +33,6 @@ function tone(buffer, { at = 0, length, from, to = from, gain = 0.5, decay = 6 }
   }
 }
 
-/** A noise burst, low-passed by a one-pole filter (`smooth` near 1 is darker). */
 function burst(buffer, { at = 0, length, gain = 0.4, smooth = 0.6, decay = 10, seed = 1 }) {
   const start = Math.round(at * RATE);
   const count = Math.round(length * RATE);
@@ -79,7 +70,6 @@ const CUES = {
     return b;
   },
   '05-ball-landed': () => {
-    // The wheel: ticks that slow down, then the ball drops into a pocket.
     const b = silence(1.8);
     let at = 0;
     for (let i = 0; at < 1.45; i++) {
@@ -152,7 +142,6 @@ const CUES = {
   },
 };
 
-/** 16-bit mono PCM WAV. */
 function wav(samples) {
   const data = Buffer.alloc(samples.length * 2);
   samples.forEach((s, i) => data.writeInt16LE(Math.round(Math.max(-1, Math.min(1, s)) * 32_767), i * 2));
@@ -162,8 +151,8 @@ function wav(samples) {
   header.write('WAVE', 8);
   header.write('fmt ', 12);
   header.writeUInt32LE(16, 16);
-  header.writeUInt16LE(1, 20); // PCM
-  header.writeUInt16LE(1, 22); // mono
+  header.writeUInt16LE(1, 20);
+  header.writeUInt16LE(1, 22);
   header.writeUInt32LE(RATE, 24);
   header.writeUInt32LE(RATE * 2, 28);
   header.writeUInt16LE(2, 32);

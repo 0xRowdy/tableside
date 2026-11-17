@@ -8,26 +8,18 @@ import { createAppAccount, type AppAccount } from './app-account';
 
 export { isAgeRestricted, isRestricted, opensOrdinaryAccess, type SignedInGate } from '@tableside/account';
 
-/** Gate states whose age eligibility isn't established: the account is open for its restricted paths only. */
 export type AgeRestrictedGate = Extract<AccountGate, { state: 'age-unresolved' | 'age-ineligible' }>;
 
 interface AccountContextValue {
   readonly account: AppAccount;
   readonly service: AccountService;
   readonly gate: AccountGate;
-  /** The signed-in account's offline game selection: undefined while it loads, null before the player makes it. */
   readonly offlineGame: GameId | null | undefined;
   selectOfflineGame(game: GameId): Promise<void>;
 }
 
 const AccountContext = createContext<AccountContextValue | null>(null);
 
-/**
- * Owns the app's account. On launch it reopens the account this installation
- * last signed in to, with no network (spec 2: connectivity is needed only for
- * first sign-in), and renders nothing until it has looked. An expired token
- * renews when the app comes to the foreground.
- */
 export function AccountProvider({ children }: { children: ReactNode }) {
   const [account] = useState(createAppAccount);
   const { service } = account;
@@ -40,7 +32,6 @@ export function AccountProvider({ children }: { children: ReactNode }) {
     const restore = () =>
       service.resume().then(
         () => live && setReady(true),
-        // A locked keychain: the next foreground tries again.
         () => undefined,
       );
     void restore();
@@ -55,7 +46,6 @@ export function AccountProvider({ children }: { children: ReactNode }) {
     };
   }, [service]);
 
-  // Renewal pending renews at once; so does a restricted account, whose restricted paths need the server.
   useEffect(() => {
     if (gate.state === 'renewal-pending' || isRestricted(gate)) void service.renew();
   }, [gate, service]);

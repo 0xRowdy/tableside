@@ -1,10 +1,4 @@
-// The graphical roulette layout (design frames "05 Roulette — Betting" and
-// "S1-04 Roulette — double-zero layout"). Every spot takes the selected chip
-// with one tap: the numbers and zeros straight up, the outside areas at their
-// payouts. Splits, streets, corners, lines and the zero bets are placed from
-// the bet selector, whose "Find by number" lists every bet covering a number.
-// Placements and payouts come from the engine's permitted view; nothing here
-// decides coverage or legality.
+// Spec 1 S1-04
 
 import type { RoulettePermittedView as PermittedView, RoulettePocket } from '@tableside/engine';
 import { useState } from 'react';
@@ -40,8 +34,6 @@ export function RouletteFelt({
   wagerOn: (target: string) => string | undefined;
   onSpot: (target: string) => void;
 }) {
-  // The side columns line up with the twelve number rows, between the zero row
-  // and the column row, whatever height larger text gives those rows.
   const [edges, setEdges] = useState({ top: MIN_TOUCH_TARGET, bottom: MIN_TOUCH_TARGET });
   const measure = (edge: 'top' | 'bottom') => (event: LayoutChangeEvent) => {
     const height = event.nativeEvent.layout.height;
@@ -51,7 +43,6 @@ export function RouletteFelt({
   const placement = (target: string) => view.table.placements.find((p) => p.target === target);
   const hint = `Adds ${formatUnits(chip)}.`;
 
-  /** An outside area; with no label, its payout is the label (the column spots read "2 to 1"). */
   const outside = (target: string, label: string | null, style: StyleProp<ViewStyle>, color: ColorToken = 'felt') => {
     const payout = placement(target)?.payout ?? '';
     const wager = wagerOn(target);
@@ -72,7 +63,6 @@ export function RouletteFelt({
     );
   };
 
-  /** A number or zero, straight up; its value also says when other bets cover it. */
   const pocketSpot = (pocket: RoulettePocket, style: StyleProp<ViewStyle>) => {
     const target = `straight-${pocket}`;
     const straight = wagerOn(target);
@@ -168,7 +158,6 @@ function Spot({
           <Text maxFontSizeMultiplier={textScale.body} style={styles.markerText}>{formatUnits(marker)}</Text>
         </View>
       )}
-      {/* Another bet covers this pocket: marked by a symbol, not only the outline. */}
       {marker === undefined && covered && <Text maxFontSizeMultiplier={textScale.body} style={styles.spotCaption}>{'•'}</Text>}
     </Pressable>
   );

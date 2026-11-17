@@ -1,10 +1,4 @@
-// S2-21 Export my data (More → Settings → Account, and the restricted gate
-// states' "Export my data"): the account archive (the server export: asked
-// for after Confirm it's you, built by the server, emailed when ready,
-// downloaded for 24 hours) and this device's local supplement (made here with
-// no upload, from what hasn't synced). The screen always says records on
-// other devices that haven't synced aren't included.
-// TODO(frames): unverified against S2-21 — the frame couldn't be read (Pencil unreachable). Every state here (none, preparing, ready, failed, expired, ended, offline), its copy and layout come from spec 2 *Export*, Amendment 1 B2 and #102.
+// TODO(spec 2 S2-21)
 
 import type { AccountGate, ServerExport, SignInMethodEntry } from '@tableside/account';
 import { useFocusEffect } from 'expo-router';
@@ -19,7 +13,6 @@ import { ConfirmItsYouSheet } from './ConfirmItsYouSheet';
 import { InlineMessage, Status } from './FirstRunParts';
 import { confirmReason } from './method-text';
 
-/** How often the screen looks again while the archive is being prepared. */
 const PREPARING_POLL_MS = 3000;
 
 export const OTHER_DEVICES_NOTE =
@@ -27,7 +20,6 @@ export const OTHER_DEVICES_NOTE =
 
 const FAILED = "Couldn't reach Tableside. Check your connection and try again.";
 
-/** A size in words: "48 KB", "1.2 MB". */
 export function sizeText(bytes: number): string {
   if (bytes < 1000 * 1000) return `${Math.max(1, Math.round(bytes / 1000))} KB`;
   return `${(bytes / (1000 * 1000)).toFixed(1)} MB`;
@@ -35,7 +27,6 @@ export function sizeText(bytes: number): string {
 
 const untilText = (at: number) => new Date(at).toLocaleString(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' });
 
-/** What the archive row says about the latest server export. */
 function archiveDetail(latest: ServerExport | null): string {
   if (latest === null) return 'Needs a connection. Check it, then come back.';
   switch (latest.state) {
@@ -56,10 +47,8 @@ function archiveDetail(latest: ServerExport | null): string {
   }
 }
 
-/** How much a local supplement holds: records not synced yet (unfinished activities among them), and conflicts awaiting review. */
 type SupplementCounts = { readonly unsynced: number; readonly conflicts: number };
 
-/** What the supplement row says about this device. */
 function supplementDetail(counts: SupplementCounts | null): string {
   if (counts === null) return 'Made on this device from what it holds; nothing is uploaded.';
   const { unsynced, conflicts } = counts;
@@ -71,7 +60,6 @@ function supplementDetail(counts: SupplementCounts | null): string {
   return `${parts.join(' and ')}, each labeled so it isn't mistaken for a finished session. Nothing is uploaded.`;
 }
 
-/** The account an export copy belongs to: the open one's. */
 const gateAccount = (gate: AccountGate): string | null => ('accountId' in gate ? gate.accountId : null);
 
 export function ExportScreen({ back }: { back: { label: string; onPress: () => void } }) {
@@ -96,14 +84,12 @@ export function ExportScreen({ back }: { back: { label: string; onPress: () => v
     }, [reload, service]),
   );
 
-  // While the archive is prepared, look again now and then.
   useEffect(() => {
     if (latest?.state !== 'preparing') return;
     const timer = setInterval(() => void reload(), PREPARING_POLL_MS);
     return () => clearInterval(timer);
   }, [latest?.state, reload]);
 
-  /** Asks the player to confirm it's them, then carries on. */
   const confirmFirst = async (then: 'request' | 'download') => {
     const methods = await service.freshAuthentication.methods();
     if (methods) setConfirming({ methods, then });

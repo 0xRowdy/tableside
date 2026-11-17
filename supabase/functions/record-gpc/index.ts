@@ -1,18 +1,4 @@
-// Global Privacy Control on the web account page (spec 2 Amendment 8 §5,
-// #106): when a signed-in visitor's browser sends GPC, the ad-data opt-out is
-// recorded with source GPC. The signal is the browser's own Sec-GPC request
-// header, which no page script can set, so the source recorded is what the
-// browser said. An account whose ad data is already limited keeps its choice.
-//
-// POST, with the caller's own access token as the bearer and naming its
-// backend environment in x-tableside-environment like every request, from a
-// browser sending Sec-GPC: 1. Answers:
-//   200 { status: 'recorded' | 'already-limited' }
-//   400 { status: 'no-signal' }        the request carries no Sec-GPC: 1
-//   401 { status: 'not-signed-in' }
-//   400 { status: 'invalid' } | 502 { status: 'failed' }
-//
-// Nothing here logs a token.
+// Spec 2 Amendment 8 §5; #106
 
 import { callerOf } from '../_shared/caller.ts';
 import { withCors } from '../_shared/cors.ts';

@@ -1,9 +1,4 @@
-// The blackjack table's wager catalog for the bet selector (design frame
-// S1-03 "Blackjack — no wagers"): the one initial wager on the learner's box.
-// Doubles and splits are decisions during the hand, not catalog wagers. While
-// insurance is offered the catalog holds only the insurance wager, so a lower
-// amount than the decision panel's half can be chosen (frame "insurance
-// offered").
+// Spec 1 S1-03
 
 import { decodeMoney, INSURANCE_TARGET, type BlackjackPermittedView } from '@tableside/engine';
 
@@ -16,7 +11,6 @@ const COMMITTED_REASON = 'In play until the hand settles.';
 export function blackjackCatalog(view: BlackjackPermittedView): WagerCatalog {
   const offer = view.insuranceOffer;
   if (offer) {
-    // Whole units here; exactly half (when that is a half unit) is the panel's "Insure" button.
     const whole = decodeMoney(offer.max);
     const max = (whole.n / whole.d).toString();
     return {

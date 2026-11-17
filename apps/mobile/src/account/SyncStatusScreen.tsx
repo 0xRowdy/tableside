@@ -1,26 +1,5 @@
-// S2-20 Sync status (More → Settings → Account → Sync status): what hasn't
-// reached the account and why, with a deliberate retry; the first download on
-// a new device and Download all history (#97); and a protocol retirement's
-// notice or the required update. The frames are S2-20 "records waiting, one
-// flagged", "can't reach Tableside", "first download not finished", "storage
-// full, download stopped" and "update required (30 days' notice)". Not drawn
-// there, so built from the spec's words in the frames' parts: the
-// sign-in-again, local storage and unreadable-change errors, paused and
-// needs-review rows, several flagged records, an urgent restriction's reason,
-// and the status card under a required update (the frames draw that banner
-// only as the notice's preview).
-// TODO(frames): Download all history running, throttled by a budget alert or
-// complete, and the first download stopped for storage, are unverified: S2-20
-// draws the download only stopped for storage, and its button only during the first download.
-// TODO(frames): the note that waiting records are lost if the app is deleted (the reinstall
-// warning, #97) is unverified: S2-20 doesn't draw it; its words follow S2-17's sign-out sheet.
-// Nor is a record whose outcome couldn't be confirmed after a long time away
-// (#98): it shows as needing review, and the decision on it (send again, or
-// set aside) is the screens of the spec that owns its record type.
-// TODO(frames): the unconfirmed row, built from the spec's words.
-//
-// #99 routes here from the Account area with the Account service's sync; the
-// store link behind Update arrives with the store listings (spec 7).
+// TODO(spec 2 S2-20)
+// TODO(spec 7)
 
 import type { AccountSync, HistoryDownload, SyncStatus, UpdateNotice, UploadStatus } from '@tableside/account';
 import {
@@ -48,9 +27,7 @@ import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale, type ColorT
 export interface SyncStatusScreenProps {
   readonly sync: AccountSync;
   readonly onBack: () => void;
-  /** Opens this app's store listing. */
   readonly onUpdate: () => void;
-  /** The device's clock, in milliseconds since the epoch. */
   readonly now?: () => number;
 }
 
@@ -62,7 +39,6 @@ export function SyncStatusScreen({ sync, onBack, onUpdate, now = Date.now }: Syn
   const flagged = status.uploads.filter((upload) => upload.state === 'flagged');
   const accountError = ACCOUNT_ERRORS.has(status.error);
   const { history, download } = status;
-  // Short of storage: Download all history, or the first download's 90 days of detail, stopped there.
   const storageStop =
     download.state === 'stopped' && download.reason === 'storage'
       ? { what: 'Download all history', progress: download.progress, resume: () => void sync.downloadAllHistory() }
@@ -165,7 +141,6 @@ export function SyncStatusScreen({ sync, onBack, onUpdate, now = Date.now }: Syn
   );
 }
 
-/** Download all history once asked for: how far it has come, why it waits, or that it's done. */
 function DownloadProgress({ download }: { download: HistoryDownload }) {
   if (download.state === 'not-requested') return null;
   if (download.state === 'complete') return <Note>{`All your history is on this ${DEVICE}, for trips without a connection.`}</Note>;
@@ -187,19 +162,15 @@ function DownloadProgress({ download }: { download: HistoryDownload }) {
 
 const percentOf = (fraction: number): number => Math.round(Math.min(1, Math.max(0, fraction)) * 100);
 
-/** The sync status, following its changes. */
 function useSyncStatus(sync: AccountSync): SyncStatus {
   const [latest, setLatest] = useState(() => ({ sync, status: sync.status }));
   useEffect(() => sync.subscribe((status) => setLatest({ sync, status })), [sync]);
-  // Until another sync reports a change, its current status.
   return latest.sync === sync ? latest.status : sync.status;
 }
 
-/** Where the records are: "this iPhone" on the frames. */
 const DEVICE = Platform.OS === 'ios' ? (Platform.isPad ? 'iPad' : 'iPhone') : 'device';
 const STORE_ACTION = Platform.OS === 'ios' ? 'Update in the App Store' : 'Update in Google Play';
 
-/** Errors that stop the whole run: the status card says sync can't happen now. */
 const ACCOUNT_ERRORS: ReadonlySet<SyncStatus['error']> = new Set(['offline', 'sign-in-required', 'storage']);
 
 function StatusCard({ status, waiting, now }: { status: SyncStatus; waiting: number; now: number }) {
@@ -247,7 +218,6 @@ function UpdateRequired({ reason, onUpdate, preview = false, testID }: { reason:
       title="Sync stopped: update required"
       body="Your local records are kept and nothing is deleted. Update to sync them."
       detail={reason}
-      // The preview of what happens later offers the same update.
       action={{ label: 'Update', onPress: onUpdate }}
       preview={preview}
     />
@@ -276,11 +246,6 @@ function FlaggedBanner({ flagged, sync, now }: { flagged: readonly UploadStatus[
   );
 }
 
-/**
- * Each record state's row: its label and tone, what its detail says, whether
- * it is failing (a flag), and whether it uploads by itself (refused records,
- * and those awaiting the player's decision, don't).
- */
 const ROW_STATE: Record<UploadStatus['state'], { label: string; tone: ColorToken; detail: string; failing: boolean; uploads: boolean }> = {
   waiting: { label: 'Local', tone: 'mutedForeground', detail: `this ${DEVICE}`, failing: false, uploads: true },
   paused: { label: 'Paused', tone: 'mutedForeground', detail: 'waits for a failing record', failing: false, uploads: true },
@@ -315,7 +280,6 @@ function UploadRow({ upload, now, first }: { upload: UploadStatus; now: number; 
   );
 }
 
-/** A record's name on the screen: the game's practice session, or a plain record. */
 function titleOf(upload: UploadStatus): string {
   const game = isRecord(upload.payload) ? findGame(upload.payload.game) : undefined;
   return upload.recordType === 'completed-practice-session' && game ? `${game.title} session` : 'Record';
@@ -327,7 +291,6 @@ function detailOf(upload: UploadStatus, now: number): string {
   return day ? `${day} · ${detail}` : detail;
 }
 
-/** When the record was made: "Today 9:41", "Yesterday" or "14 Oct" (a time only for today, and only when asked). */
 function dayOf(upload: UploadStatus, now: number, withTime: boolean): string {
   const endedAt = isRecord(upload.payload) ? upload.payload.endedAt : undefined;
   if (typeof endedAt !== 'number') return '';
@@ -341,7 +304,6 @@ function dayOf(upload: UploadStatus, now: number, withTime: boolean): string {
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
-/** "just now", "2 minutes ago", "2 hours ago", "3 days ago". */
 function ago(then: number, now: number): string {
   const minutes = Math.floor(Math.max(0, now - then) / 60_000);
   const unit = (count: number, name: string) => `${count} ${name}${count === 1 ? '' : 's'} ago`;
@@ -352,10 +314,6 @@ function ago(then: number, now: number): string {
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null;
-
-// ---------------------------------------------------------------------------
-// Parts: the frames' status card, banner, progress, list and button
-// ---------------------------------------------------------------------------
 
 function Card({ icon: Icon, tone, title, body }: { icon: LucideIcon; tone: ColorToken; title: string; body: string }) {
   return (

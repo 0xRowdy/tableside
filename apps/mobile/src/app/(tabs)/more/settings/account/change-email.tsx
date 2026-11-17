@@ -1,8 +1,4 @@
-// S2-18 Change email: confirm it's you first (P5pP8), then the new address
-// (V2l31Q). Secure Email Change sends a code to both addresses, and the
-// current one keeps working until both are confirmed. Changing an address
-// the player can no longer reach is support's (spec 2, *Sign-in, linking and recovery*).
-// TODO(frames): the step entering both codes, the changed confirmation, the problem messages and the loading and no-connection notes are unverified against S2-18, which draws none of them.
+// TODO(spec 2 S2-18)
 
 import type { SignInMethodEntry } from '@tableside/account';
 import { router, useFocusEffect } from 'expo-router';

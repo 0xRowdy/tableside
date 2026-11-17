@@ -1,7 +1,4 @@
-// The persistent six-tab bar. It stays one row at every text size: labels don't
-// scale with system text, and the platform's large-content pattern shows an
-// enlarged label instead — the iOS Large Content Viewer, or on Android a
-// preview while a tab is held.
+// docs/development.md Accessibility notes for the shell
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { TabListProps, TabTriggerSlotProps } from 'expo-router/ui';
 import { createContext, use, useState, type ReactNode } from 'react';
@@ -12,10 +9,6 @@ import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space } from '@/theme/tokens';
 import type { TabDefinition } from './tabs';
 
-/**
- * Android's largest font scale on the Android 10 floor; larger scales exist on
- * newer versions. Android stores it as a 32-bit float, so compare in float.
- */
 const ANDROID_LARGE_CONTENT_FONT_SCALE = Math.fround(1.3);
 
 const PreviewContext = createContext<{ preview: (tab: TabDefinition | null) => void }>({ preview: () => {} });
@@ -34,7 +27,6 @@ export function TabBar({ children, style, ...props }: TabListProps & { children?
   );
 }
 
-// `ref` is dropped: TabTrigger's ref type doesn't match Pressable's, and nothing uses it.
 export function TabButton({ tab, isFocused = false, ref: _ref, ...props }: TabTriggerSlotProps & { tab: TabDefinition }) {
   const { preview } = use(PreviewContext);
   const { fontScale } = useWindowDimensions();
@@ -78,14 +70,12 @@ export function TabButton({ tab, isFocused = false, ref: _ref, ...props }: TabTr
   );
 }
 
-/** The Large Content Viewer selects on lift with no touch event; TabTrigger's handler accepts that on native. */
 function selectWithoutEvent(onPress: TabTriggerSlotProps['onPress']) {
   (onPress as (() => void) | undefined)?.();
 }
 
 function LargeContentPreview({ tab }: { tab: TabDefinition }) {
   const Icon = tab.icon;
-  // A visual aid only: screen readers already announce the full tab label.
   return (
     <View testID="large-content-preview" pointerEvents="none" importantForAccessibility="no-hide-descendants" style={styles.preview}>
       <Icon size={56} color={palette.foreground} />
@@ -97,7 +87,6 @@ function LargeContentPreview({ tab }: { tab: TabDefinition }) {
 }
 
 const styles = StyleSheet.create({
-  // TabList's own style lays its children out in a row; the bar is a column holding one row of items.
   bar: {
     flexDirection: 'column',
     justifyContent: 'flex-start',

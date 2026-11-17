@@ -1,4 +1,4 @@
-// S2-21 Export my data, from More → Settings → Account.
+// Spec 2 S2-21
 
 import { router } from 'expo-router';
 

@@ -1,4 +1,4 @@
-// What a crash report may carry (spec 2, *Observability and privacy boundaries*; #108).
+// Spec 2 Observability and privacy boundaries; #108
 
 import { describe, expect, it } from 'vitest';
 
@@ -7,12 +7,12 @@ import { SyncCallError } from './sync/protocol';
 
 const PRIVATE = [
   'player@example.com',
-  '482913', // an email code
-  'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJhY2NvdW50In0.c2lnbmF0dXJl', // an access token
+  '482913',
+  'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJhY2NvdW50In0.c2lnbmF0dXJl',
   'refresh-token-value',
-  'Bellagio', // a casino session's casino
-  '1763164800000', // a clock anchor
-  '16-17', // an age band
+  'Bellagio',
+  '1763164800000',
+  '16-17',
 ];
 
 describe('a crash report', () => {

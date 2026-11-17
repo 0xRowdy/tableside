@@ -1,10 +1,3 @@
-// Seam 2's global setup: waits, once per run, until the local stack is ready
-// for scenarios rather than merely started. Right after `pnpm stack start`,
-// Realtime accepts subscriptions before it delivers the database's broadcasts
-// (realtime.send, which carries every "account changed" hint), and each edge
-// function boots its worker on its first request; a scenario that met either
-// failed or ran past its timeout on the first run after a fresh start.
-
 import { readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
@@ -18,7 +11,6 @@ export default async function stackReady(): Promise<void> {
   const deadline = Date.now() + READY_WITHIN_MS;
   try {
     await broadcastsDelivered(stack, deadline);
-    // Each function's worker boots on its first request: a preflight is enough, whatever it answers.
     for (const name of readdirSync(functionsDir).filter((entry) => !entry.startsWith('_'))) {
       await fetch(`${stack.url}/functions/v1/${name}`, { method: 'OPTIONS' })
         .then((response) => response.arrayBuffer())
@@ -29,7 +21,6 @@ export default async function stackReady(): Promise<void> {
   }
 }
 
-/** Resolves once a broadcast sent from the database reaches a subscribed client. */
 async function broadcastsDelivered(stack: ReturnType<typeof localStack>, deadline: number): Promise<void> {
   const client = stack.rawClient();
   const topic = `stack-ready-${process.pid}-${Date.now()}`;

@@ -1,7 +1,4 @@
-// The sync engine's failure rules over a scripted backend and an in-memory
-// store (spec 2, *Retries* and *Protocol versions*): backoff, retry-after,
-// flagged records and their dependents, review, renewal and required updates.
-// Seam 2 covers the same rules against the local stack.
+// Spec 2 Retries, Protocol versions
 
 import { canonicalJson, sha256Hex } from '@tableside/engine';
 import { describe, expect, it } from 'vitest';
@@ -54,15 +51,12 @@ interface Entry {
   unconfirmed?: true;
 }
 
-/** The sync store port in memory: what the SQLite store does, without durability. */
 class MemoryStore implements SyncStore {
   readonly entries: Entry[] = [];
   readonly accepted: AcceptedRecord[] = [];
   cursor = 0;
   syncedAt: number | null = null;
-  /** Established by default: these tests are about an installation that has its baseline. */
   bootstrap: BootstrapProgress = { installed: true };
-  /** A generation adopted by default, likewise. */
   generation: number | null = 1;
   last = 0;
   readonly purged: { recordType: string; item: string }[] = [];
@@ -207,9 +201,7 @@ class MemoryStore implements SyncStore {
     return true;
   }
   history: HistoryProgress = { recent: null, download: null };
-  /** Fails every detail write, as a full disk does. */
   failWrites = false;
-  /** The latest record held for each item. */
   private held(): AcceptedRecord[] {
     const latest = new Map<string, AcceptedRecord>();
     for (const record of this.accepted) latest.set(`${record.recordType}/${record.item}`, record);
@@ -229,7 +221,6 @@ class MemoryStore implements SyncStore {
     return (await this.readSummaries({ ...(since !== undefined ? { since } : {}), limit: Infinity })).length;
   }
   async applyDetails(records: readonly AcceptedRecord[]): Promise<number> {
-    // The account store's failure for a full disk.
     if (this.failWrites) throw Object.assign(new Error('database or disk is full'), { kind: 'full' });
     let applied = 0;
     for (const record of records) {
@@ -267,7 +258,6 @@ class MemoryStore implements SyncStore {
   }
 }
 
-/** A test-only immutable record type: `{ id: string }` notes. */
 const note: RecordType<{ id: string }> = {
   name: 'note',
   kind: 'immutable-result',
@@ -285,10 +275,8 @@ const note: RecordType<{ id: string }> = {
 
 type Answer = UploadAnswer | SyncCallError;
 
-/** A backend the test scripts: each upload's answer by the item it names, the protocol's status, and the calls made. */
 class ScriptedBackend implements SyncBackend {
   protocolStatus: ProtocolStatus | SyncCallError = { status: 'supported' };
-  /** Every call, in order, as "protocol", "upload <item>" or "feed". */
   readonly calls: string[] = [];
   private readonly answers = new Map<string, Answer>();
   everything: SyncCallError | null = null;
@@ -310,7 +298,7 @@ class ScriptedBackend implements SyncBackend {
     if (command.generation !== this.serving) return { status: 'stale-scope', reason: 'retired' };
     const scripted = this.answers.get(item);
     if (scripted instanceof SyncCallError) throw scripted;
-    // A manifest (#93): nothing is decided until every chunk it names is staged.
+    // #93
     const { content } = JSON.parse(request) as { content?: { chunks: string[] } };
     const missing = (content?.chunks ?? []).flatMap((sha256, index) => (this.staged.has(sha256) ? [] : [index]));
     if (missing.length > 0) return { status: 'chunks-missing', missing };
@@ -320,23 +308,19 @@ class ScriptedBackend implements SyncBackend {
     if (scripted?.status === 'rejected') return { status: 'rejected', operation, requestHash, code: scripted.code };
     return { status: 'accepted', operation, requestHash, sequence: ++this.sequence };
   }
-  /** The chunks staged, by SHA-256. */
   readonly staged = new Set<string>();
   async stageChunk(chunk: StagedChunk): Promise<ChunkAnswer> {
     this.calls.push('stage');
     this.staged.add(chunk.sha256);
     return { status: 'staged' };
   }
-  /** What each feed call answers first, in turn (a reset, say); then the account's feed entries after its cursor. */
   readonly feedPages: FeedPage[] = [];
-  /** The account's feed entries, which a feed call answers after its cursor. */
   readonly feedEntries: FeedEntry[] = [];
   async feed(after: number): Promise<FeedPage> {
     this.calls.push('feed');
     if (this.everything) throw this.everything;
     return this.feedPages.shift() ?? { entries: this.feedEntries.filter((entry) => entry.sequence > after), more: false };
   }
-  /** What each snapshot page answers, in turn; an empty, complete page when none is scripted. */
   readonly bootstrapPages: BootstrapPage[] = [];
   private snapshots = 0;
   async bootstrap(): Promise<BootstrapSnapshot> {
@@ -349,11 +333,8 @@ class ScriptedBackend implements SyncBackend {
     if (this.everything) throw this.everything;
     return this.bootstrapPages.shift() ?? { status: 'page', rows: [], more: false };
   }
-  /** The account's records with detail, by item: what a details call answers from. */
   readonly withDetail = new Map<string, { sequence: number; change: unknown }>();
-  /** A budget alert holds bulk downloads back for this many seconds; null: none. */
   throttle: number | null = null;
-  /** Every request each details call named, with whether it was bulk. */
   readonly detailCalls: { bulk: boolean; items: string[] }[] = [];
   async details(requests: readonly DetailRequest[], bulk: boolean): Promise<DetailPage> {
     this.calls.push(bulk ? 'details bulk' : 'details');
@@ -373,7 +354,6 @@ class ScriptedBackend implements SyncBackend {
   uploadsOf(item: string): number {
     return this.calls.filter((call) => call === `upload ${item}`).length;
   }
-  /** The scope calls, apart from `calls`, as "new" or "settled <n>", and the generation the server serves. */
   readonly scopeCalls: string[] = [];
   serving = 1;
   async scope(_installation: string, generation: number | null, settled: number | null): Promise<ScopeAnswer> {
@@ -387,7 +367,6 @@ class ScriptedBackend implements SyncBackend {
   }
 }
 
-/** A test-only revisioned item of plain text values. */
 const memo = revisionedItemType<string>({
   name: 'memo',
   payloadVersion: 1,
@@ -399,10 +378,8 @@ const memo = revisionedItemType<string>({
   deletion: { serverTables: [] },
 });
 
-/** A test-only account-state operation: what a stale scope leaves unconfirmed. */
 const toggle: RecordType<{ id: string }> = { ...note, name: 'toggle', kind: 'account-state-operation', acceptance: 'private.accept_toggle_v1' };
 
-/** A test-only result with a detail: `{ id, at, detail }`, held as a summary (no detail) after a snapshot. */
 interface Session {
   id: string;
   at: number;
@@ -434,7 +411,6 @@ function engine(options: { random?: number; storage?: () => number | null; types
     clock: () => clock.now,
     random: () => options.random ?? 0.5,
   });
-  /** Moves the clock to the engine's next automatic retry and runs it, as the session's timer does. */
   const retryWhenDue = async () => {
     const due = sync.retryAt;
     if (due === null) throw new Error('no retry is due');
@@ -475,7 +451,6 @@ describe('when the server can’t be reached', () => {
     await sync.reconcile();
     const calls = backend.calls.length;
 
-    // A save, a live hint and the 60 s cadence all arrive before the retry is due.
     store.queue('n2', { id: 'n2' });
     await sync.reconcile('automatic');
     expect(backend.calls).toHaveLength(calls);
@@ -535,7 +510,6 @@ describe('a record that fails by itself', () => {
     backend.answer('bad', { status: 'malformed' });
     store.queue('bad', { id: 'bad' });
     await sync.reconcile();
-    // Its own backoff: a save meanwhile uploads, and the failing record waits for its turn.
     store.queue('a', { id: 'a' });
     await sync.reconcile('automatic');
     expect(backend.uploadsOf('bad')).toBe(1);
@@ -551,7 +525,6 @@ describe('a record that fails by itself', () => {
     await sync.reconcile();
     expect(backend.uploadsOf('bad')).toBe(5);
     expect(store.accepted.map((record) => record.item)).toEqual(['a', 'b']);
-    // Never deleted.
     expect((await store.readUploadQueue()).map((entry) => entry.id)).toEqual(['bad']);
   });
 
@@ -560,7 +533,6 @@ describe('a record that fails by itself', () => {
     backend.answer('bad', new SyncCallError('refused'));
     store.queue('bad', { id: 'bad' });
     await sync.reconcile();
-    // The server goes down before the record's turn, so the account backs off past it.
     backend.everything = new SyncCallError('unreachable');
     clock.now += 100;
     store.queue('a', { id: 'a' });
@@ -686,7 +658,6 @@ describe('status', () => {
   });
 });
 
-/** A test-only switch: turning it off is queued; turning it on is online only and waits for any pending "off". */
 type Switch = { id: string; on: boolean };
 const switchType: RecordType<Switch> = {
   ...(note as unknown as RecordType<Switch>),
@@ -782,7 +753,6 @@ describe('bootstrap', () => {
     const { backend, sync, clock, events } = unbootstrapped();
     backend.bootstrapPages.push({ status: 'page', rows: [], more: true });
     backend.everything = null;
-    // The first page arrives, then the network goes before the next.
     const page = backend.bootstrapPage.bind(backend);
     let pages = 0;
     backend.bootstrapPage = async (...args) => {
@@ -805,10 +775,6 @@ describe('bootstrap', () => {
 
 describe('history detail', () => {
   const DAY = 86_400_000;
-  /**
-   * An installed baseline of session summaries, `ages` days old each (by the
-   * engine's clock), whose detail the account holds at the same sequence.
-   */
   const withSummaries = (made: ReturnType<typeof engine>, ages: readonly number[]) => {
     ages.forEach((age, index) => {
       const id = `s-${index + 1}`;
@@ -856,9 +822,7 @@ describe('history detail', () => {
     expect(backend.detailCalls).toEqual([]);
     expect(await summariesOn(store)).toEqual(['s-1', 's-2']);
     expect(sync.status.history).toEqual({ state: 'incomplete', summaries: 1, detail: 0, stopped: 'storage' });
-    // The upload still went: only downloads stop.
     expect(store.entries.map((entry) => entry.status)).toEqual(['accepted']);
-    // Automatic runs leave it stopped; a deliberate one checks the room again.
     await sync.reconcile('automatic');
     expect(backend.detailCalls).toEqual([]);
     free = 1024 * 1024 * 1024;
@@ -881,7 +845,6 @@ describe('history detail', () => {
     await sync.reconcile();
     expect(await store.countSummaries()).toBe(1_500);
 
-    // The answer to the third page is lost: the run ends there, and backs off.
     let pages = 0;
     const details = backend.details.bind(backend);
     backend.details = async (requests, bulk) => {
@@ -891,14 +854,10 @@ describe('history detail', () => {
     await sync.downloadAllHistory();
     expect(store.history.download).toEqual({ total: 1_500 });
     expect(sync.status.download).toEqual({ state: 'downloading', progress: 200 / 1_500 });
-    // Optional work: the run itself didn't fail, and nothing backs off.
     expect(sync.status.error).toBeNull();
     expect(sync.retryAt).toBeNull();
     expect(backend.detailCalls[0]?.items.slice(0, 2)).toEqual(['s-1', 's-2']);
 
-    // The next run (the app reopened, say) carries on from where it stopped,
-    // eight pages at a time, handing over to another run in between: the
-    // caller waits for its own run only.
     await sync.reconcile();
     expect(sync.status.download).toEqual({ state: 'downloading', progress: 1_000 / 1_500 });
     await sync.idle();
@@ -915,10 +874,8 @@ describe('history detail', () => {
     backend.throttle = 600;
     await sync.downloadAllHistory();
     expect(backend.detailCalls).toEqual([{ bulk: false, items: ['s-1'] }]);
-    // The recent one counts: its detail is here.
     expect(sync.status.download).toEqual({ state: 'stopped', progress: 1 / 3, reason: 'throttled' });
     expect(await summariesOn(store)).toEqual(['s-2', 's-3']);
-    // Not asked again during the wait.
     await sync.reconcile();
     expect(backend.calls.filter((call) => call === 'details bulk')).toHaveLength(1);
     backend.throttle = null;
@@ -937,7 +894,6 @@ describe('history detail', () => {
     const opened = await sync.detail('session', 's-1');
     expect(opened).toMatchObject({ status: 'detail', record: { item: 's-1', sequence: 1, payload: { detail: 'detail of s-1' } } });
     expect(opened.status === 'detail' && opened.record.summaryAt).toBeFalsy();
-    // Kept: opening again asks nothing.
     const calls = backend.detailCalls.length;
     expect((await sync.detail('session', 's-1')).status).toBe('detail');
     expect(backend.detailCalls).toHaveLength(calls);
@@ -953,7 +909,6 @@ describe('history detail', () => {
     backend.feedEntries.push({ sequence: 2, recordType: 'session', item: 's-1', change: revised });
     const opened = await sync.detail('session', 's-1');
     expect(opened).toMatchObject({ status: 'detail', record: { sequence: 2, payload: { detail: 'revised' } } });
-    // Asked by the revision held, told it changed, and the feed brought the new one: not asked again.
     expect(backend.detailCalls).toEqual([{ bulk: false, items: ['s-1'] }]);
     expect(backend.calls.indexOf('feed')).toBeGreaterThan(backend.calls.indexOf('details'));
   });
@@ -982,7 +937,6 @@ describe('operational metrics (#108)', () => {
     backend.everything = null;
     clock.now += 1_000;
     await sync.reconcile();
-    // Nothing failed and nothing is left waiting.
     expect(named(events, 'sync_run_failed')).toHaveLength(1);
     expect(named(events, 'sync_queue_age')).toHaveLength(1);
   });
@@ -1017,7 +971,6 @@ describe('operational metrics (#108)', () => {
 });
 
 describe('a stale command scope (#98)', () => {
-  /** Two notes and a toggle sent under generation 1 with no answer, then the server retires it. */
   async function retired() {
     const setup = engine();
     const { store, backend } = setup;
@@ -1037,13 +990,11 @@ describe('a stale command scope (#98)', () => {
     const before = backend.calls.length;
     await sync.reconcile();
     await sync.idle();
-    // The refused upload, the refresh, then the resent notes under the new generation (the server deduplicates them by identity).
     expect(backend.calls.slice(before)).toEqual(['protocol', 'upload n1', 'feed', 'protocol', 'upload n1', 'upload n2', 'feed']);
     expect(backend.uploadsOf('t1')).toBe(0);
     expect(backend.scopeCalls).toContain('new');
     expect(store.generation).toBe(3);
     expect(store.accepted.map((record) => record.item)).toEqual(['n1', 'n2']);
-    // The toggle's outcome isn't in the account's state: it waits for the player, never sent again by itself.
     expect(sync.status.uploads).toEqual([expect.objectContaining({ id: 't1', state: 'unconfirmed' })]);
     await sync.reconcile();
     expect(backend.uploadsOf('t1')).toBe(0);
@@ -1065,7 +1016,6 @@ describe('a stale command scope (#98)', () => {
     expect(other.backend.uploadsOf('t1')).toBe(0);
     expect(other.sync.status.uploads).toEqual([expect.objectContaining({ id: 't1', state: 'review' })]);
     expect(await other.store.readRejectedUploads()).toEqual([expect.objectContaining({ id: 't1', code: 'set-aside' })]);
-    // A record the server refused isn't the player's to resend.
     await other.sync.decideUnconfirmed('t1', 'send-again');
     expect(other.backend.uploadsOf('t1')).toBe(0);
   });
@@ -1089,7 +1039,6 @@ describe('a stale command scope (#98)', () => {
     store.last = 1;
     await sync.reconcile();
     await sync.idle();
-    // The stale report, the new generation, and the new generation's first report (nothing settled under it yet).
     expect(backend.scopeCalls).toEqual(['settled 1', 'new', 'settled 0']);
     expect(store.generation).toBe(6);
   });
@@ -1119,13 +1068,9 @@ describe('a stale scope’s revisioned edits (#98)', () => {
       conflict: proposals.length > 0 ? { generation: 1, proposals: proposals.map((id) => ({ id, kind: 'edit', installation: 'other', value: 'theirs' })) } : null,
     });
     const edits = [
-      // Accepted as a proposal: the account shows its operation among them.
       { item: 'proposed', base: 1, value: 'mine', held: (operation: string) => state(2, 'theirs', [operation]) },
-      // Accepted as the next revision: the account holds its value.
       { item: 'accepted', base: 1, value: 'mine', held: () => state(2, 'mine') },
-      // Never received: the account's revision is still its base.
       { item: 'unreceived', base: 3, value: 'mine', held: () => state(3, 'old') },
-      // Moved on since, by others or by it: no way to tell.
       { item: 'ambiguous', base: 1, value: 'mine', held: () => state(4, 'theirs') },
     ];
     for (const edit of edits) {

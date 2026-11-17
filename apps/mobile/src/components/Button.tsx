@@ -16,15 +16,11 @@ export function Button({
 }: {
   label: string;
   onPress: () => void;
-  /** Ghost: no fill, for the lesser choice beside a primary one. */
   variant?: 'primary' | 'secondary' | 'ghost';
   disabled?: boolean;
-  /** Fill the container's width instead of hugging the label. */
   stretch?: boolean;
   hint?: string;
-  /** Drawn before the label. */
   icon?: LucideIcon;
-  /** What a screen reader says, when the label alone is ambiguous (several "Remove" buttons). */
   accessibilityLabel?: string;
 }) {
   const { focused, focusProps } = useKeyboardFocus();

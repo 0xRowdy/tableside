@@ -1,17 +1,4 @@
-// The export job (spec 2, #102): builds every queued server export into the
-// private account-exports bucket, then removes what ended exports left there.
-// The database wakes it (pg_net, after a request, an invalidation or the
-// upkeep cron); a wake carries no authority, since the work comes from the
-// database with the service role, so anyone waking it only makes it look.
-//
-// POST, naming the backend environment in x-tableside-environment. Answers
-// 200 { built, removed } or 502 { status: 'failed' }.
-//
-// For each export: the database writes its files as parts in one snapshot
-// (begin_export_build); this pages them, zips them, stores the zip, marks it
-// ready and emails "export ready". A failure marks the build failed and its
-// partial object is removed by the sweep. Nothing here logs an address,
-// account, path or record.
+// Spec 2 Export; #102
 
 import { exportReadyMail, sendSecurityNotice } from '../_shared/mail.ts';
 import { environmentOf, reply, rpcJson, serviceFetch, serviceRpc } from '../_shared/service.ts';
@@ -19,8 +6,7 @@ import { type ZipEntry, zip } from '../_shared/zip.ts';
 
 declare const Deno: { serve(handler: (request: Request) => Promise<Response>): void };
 const BUCKET = 'account-exports';
-/** Builds per wake: the rest wait for the next one. */
-const MAX_BUILDS = 5;
+const MAX_BUILDS_PER_WAKE = 5;
 
 const rpc = rpcJson;
 
@@ -28,7 +14,6 @@ function storage(method: 'POST' | 'DELETE', path: string, body: BodyInit, conten
   return serviceFetch(`/storage/v1/object/${path}`, { method, body, headers: { 'content-type': contentType, 'x-upsert': 'true' } });
 }
 
-/** Every part of a building export, each path's text in order; null once it ended. */
 async function readFiles(environment: string, exportId: string): Promise<ZipEntry[] | null> {
   const files: { path: string; chunks: string[] }[] = [];
   let after = -1;
@@ -64,7 +49,6 @@ async function build(environment: string, claimed: { export: string; path: strin
     if (finished.status === 'ready' && finished.expiresAt) {
       await sendSecurityNotice(environment, finished.email, exportReadyMail(finished.expiresAt), 'export-ready');
     } else {
-      // It ended while this was building: what was just stored goes now (a sweep may have run before it landed).
       const removed = await storage('DELETE', BUCKET, JSON.stringify({ prefixes: [claimed.path] }), 'application/json');
       await removed.body?.cancel();
     }
@@ -75,7 +59,6 @@ async function build(environment: string, claimed: { export: string; path: strin
   }
 }
 
-/** Removes ended exports' objects through the Storage API (the database can't). */
 async function sweep(environment: string): Promise<number> {
   const ended = await rpc<{ export: string; path: string }[]>(environment, 'exports_to_remove');
   if (ended.length === 0) return 0;
@@ -93,7 +76,7 @@ Deno.serve(async (request) => {
   const environment = environmentOf(request);
   try {
     let built = 0;
-    for (; built < MAX_BUILDS; built++) {
+    for (; built < MAX_BUILDS_PER_WAKE; built++) {
       const claimed = await rpc<{ status: string; export?: string; path?: string }>(environment, 'begin_export_build');
       if (claimed.status !== 'building' || !claimed.export || !claimed.path) break;
       await build(environment, { export: claimed.export, path: claimed.path });

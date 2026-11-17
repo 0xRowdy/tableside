@@ -1,6 +1,3 @@
-// Language behavior the engine depends on for exact money and the Philox v1
-// random protocol. Hermes implements its own JavaScript engine, so these pin
-// down the primitives before engine code is built on them.
 import type { TestCase } from '@tableside/harness';
 
 export const runtimeCases: TestCase[] = [
@@ -16,7 +13,7 @@ export const runtimeCases: TestCase[] = [
   {
     name: 'runtime: BigInt division truncates toward zero',
     run: (t) => {
-      // Spec 1's Hi-Lo conversion truncates toward zero: +7/2 → +3, −7/2 → −3.
+      // Spec 1 Game rules, Counting (Hi-Lo)
       t.equal([7n / 2n, -7n / 2n, 7n % 2n, -7n % 2n], [3n, -3n, 1n, -1n]);
     },
   },
@@ -31,13 +28,12 @@ export const runtimeCases: TestCase[] = [
   {
     name: 'runtime: 32-bit unsigned multiply gives exact high and low words',
     run: (t) => {
-      // Philox4x32 multiplier M0 = 0xD2511F53 times the largest 32-bit word.
-      const m = 0xd2511f53;
-      const x = 0xffffffff;
-      t.equal(Math.imul(m, x) >>> 0, 0x2daee0ad);
-      const wide = BigInt(m) * BigInt(x);
+      const philoxM0 = 0xd2511f53;
+      const maxWord = 0xffffffff;
+      t.equal(Math.imul(philoxM0, maxWord) >>> 0, 0x2daee0ad);
+      const wide = BigInt(philoxM0) * BigInt(maxWord);
       t.equal([Number(wide >> 32n), Number(wide & 0xffffffffn)], [0xd2511f52, 0x2daee0ad]);
-      t.record('lo', Math.imul(m, x) >>> 0);
+      t.record('lo', Math.imul(philoxM0, maxWord) >>> 0);
     },
   },
   {

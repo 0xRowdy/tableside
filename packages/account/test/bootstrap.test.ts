@@ -1,10 +1,4 @@
-// Seam 2: new-device bootstrap (#96; spec 2, *Bootstrap*, Amendments 1 A6,
-// 2 §4, 4 §1 and §3, 7 §3). A device signing in to an account with history
-// gets every summary and lifetime total from one snapshot at one watermark,
-// staged locally page by page, then installs the baseline and the cursor
-// together before any later feed entry. Proven with seam 2's test-only types
-// (src/testing/record-types.ts) standing in for specs 3, 4 and 6. Faults are
-// injected at the network, the app process and the server's state.
+// Spec 2 Bootstrap, Amendments 1 A6, 2 §4, 4 §1 and §3, 7 §3; #96
 
 import { afterEach, describe, expect, it } from 'vitest';
 
@@ -28,14 +22,6 @@ import {
 
 const stack = localStack();
 
-/**
- * How long an upload waits for the synchronization head before it gives up
- * (`lock_timeout` in sync_upload_v1). A heavy account's snapshot must hold the
- * head for less, so it never times out another device's upload; it is also
- * under the API's 8 s statement timeout. 100,001 practice-session summaries
- * took about 2.2 s on the local stack (2026-11-14), and with 10,000 casino
- * sessions besides, about 2.5 s; the hosted project is qualified at launch gate 12.
- */
 const UPLOAD_LOCK_TIMEOUT = '5s';
 
 const devices: SimulatedDevice[] = [];
@@ -46,7 +32,6 @@ function device(name: string): SimulatedDevice {
 }
 afterEach(() => devices.splice(0).forEach((d) => d.dispose()));
 
-/** Queues a record on a device and expects it queued. */
 async function queue(d: SimulatedDevice, recordType: string, payload: unknown) {
   const result = await d.account.sync.queue(recordType, payload);
   if (result.status !== 'queued') throw new Error(`${recordType} was refused: ${result.reason}`);
@@ -56,7 +41,6 @@ async function queue(d: SimulatedDevice, recordType: string, payload: unknown) {
 const result = (id: string, amount: string) => ({ version: 1, resultId: id, amount, detail: `detail of ${id}: private-${id}-marker` });
 const casinoValue = (net: string, game = 'blackjack'): TestRevisionedValue => ({ game, currency: 'USD', net });
 
-/** A phone with an account that has history: two results with detail, a practice session, two revisioned items (one deleted). */
 async function accountWithHistory() {
   const email = uniqueEmail('bootstrap');
   const phone = device('phone');
@@ -80,11 +64,6 @@ const accountOf = (d: SimulatedDevice): string => {
 const installationOf = (d: SimulatedDevice) => d.vault.store().identity.installationId;
 const payloads = async (d: SimulatedDevice, recordType: string) => (await d.vault.store().readAcceptedRecords(recordType)).map((record) => record.payload);
 
-/**
- * Accepts `count` test results for an account straight into the server's
- * rows, as that many uploads would have: the results, their feed entries
- * (with detail) and the head, in one transaction under the head. Each adds 1 to the practice total.
- */
 async function seedResults(accountId: string, count: number, prefix = 'seeded') {
   await stack.sql.begin(async (tx) => {
     await tx`insert into private.sync_heads (account_id) values (${accountId}) on conflict do nothing`;
@@ -102,7 +81,6 @@ async function seedResults(accountId: string, count: number, prefix = 'seeded') 
   });
 }
 
-/** Takes the device offline as it asks for its `page`th snapshot page (from 1), so that page and everything after it is lost. */
 function offlineAtPage(d: SimulatedDevice, page: number) {
   let pages = 0;
   d.proxy.onRequest = (url) => {
@@ -110,7 +88,6 @@ function offlineAtPage(d: SimulatedDevice, page: number) {
   };
 }
 
-/** Resolves once another transaction is waiting for, or holding, the account's head lock taken by a snapshot. */
 async function eventuallyHeld(accountId: string): Promise<void> {
   for (let tries = 0; tries < 200; tries++) {
     const [running] = await stack.sql<{ n: number }[]>`
@@ -121,20 +98,17 @@ async function eventuallyHeld(accountId: string): Promise<void> {
   throw new Error(`no snapshot started for ${accountId}`);
 }
 
-/** The bootstrap calls a device sent from the `since`th request on. */
 const bootstrapCalls = (d: SimulatedDevice, since = 0) =>
   d.proxy.sent.slice(since).flatMap(({ url, body }) =>
     url.includes('sync_bootstrap_page_v1') ? [`page after ${(JSON.parse(body ?? '{}') as { after: number }).after}`] : url.includes('sync_bootstrap_v1') ? ['snapshot'] : [],
   );
 
-/** The account's totals as the server keeps them. */
 async function serverTotals(d: SimulatedDevice): Promise<{ sequence: number; totals: TotalsRow[] }> {
   const { data, error } = await stack.rawClient(accessToken(d)).rpc('account_totals_v1');
   if (error) throw new Error(error.message);
   return data as { sequence: number; totals: TotalsRow[] };
 }
 
-/** Every feed request a device sent, by the cursor it asked after. */
 const feedRequests = (d: SimulatedDevice) =>
   d.proxy.sent.filter(({ url }) => url.includes('sync_feed_v1')).map(({ body }) => (JSON.parse(body ?? '{}') as { after: number }).after);
 
@@ -148,22 +122,18 @@ describe('a new device', () => {
     await tablet.account.sync.idle();
 
     const store = tablet.vault.store();
-    // Summaries, then the newest 90 days' detail (#97): the results (undated, so long ago) stay
-    // summaries without their detail; the practice session, played just now, arrives whole.
+    // #97
     expect((await store.readAcceptedRecords(testResult.name)).map((record) => record.payload)).toEqual([
       { version: 1, resultId: 'r-1', amount: '7' },
       { version: 1, resultId: 'r-2', amount: '-5/2' },
     ]);
     const [session] = await store.readAcceptedRecords('completed-practice-session');
     expect(session?.payload).toEqual(practice);
-    // Each revisioned item's current accepted revision, the tombstone included.
     expect((await tablet.account.records.revisionedItems(testRevisionedItem.name)).map(({ item, accepted }) => ({ item, accepted }))).toEqual([
       { item: 'casino-1', accepted: { revision: 1, deleted: false, value: casinoValue('40'), conflict: null } },
       { item: 'casino-2', accepted: { revision: 2, deleted: true, value: null, conflict: null } },
     ]);
-    // The lifetime totals match the server's at the watermark.
     expect((await tablet.account.records.totals()).account).toEqual(totals);
-    // The feed starts at the watermark: nothing at or before it was fetched again.
     expect(feedRequests(tablet)).toEqual([head]);
     expect(await store.readFeedCursor()).toBe(head);
     expect(tablet.account.sync.status.history).toEqual({ state: 'complete' });
@@ -179,10 +149,8 @@ describe('a snapshot holds', () => {
     expect(await signInByEmail(laptop, email)).toEqual({ status: 'signed-in' });
     await Promise.all([phone.account.sync.idle(), laptop.account.sync.idle()]);
 
-    // Attempts (spec 3) keep their originating-device positions.
     await queue(phone, testAttempt.name, { version: 1, attemptId: 'a-1', passed: true, at: 1 });
     await queue(phone, testAttempt.name, { version: 1, attemptId: 'a-2', passed: false, at: 2 });
-    // Two strategies, each with two revisions; one strategy is then deleted.
     for (const strategy of ['s-kept', 's-deleted']) {
       await phone.account.records.save(testRevisionedItem.name, strategy, casinoValue('0'));
       await queue(phone, testStrategyRevision.name, { version: 1, revisionId: `${strategy}-r1`, strategy, executable: 'one' });
@@ -190,7 +158,6 @@ describe('a snapshot holds', () => {
     }
     await phone.account.sync.reconcile();
     await phone.account.records.delete(testRevisionedItem.name, 's-deleted');
-    // An open conflict: the laptop edits an item from a revision the phone has moved on from.
     await phone.account.records.save(testRevisionedItem.name, 'casino-1', casinoValue('10'));
     await phone.account.sync.reconcile();
     await laptop.account.sync.reconcile();
@@ -200,14 +167,12 @@ describe('a snapshot holds', () => {
     await phone.account.sync.reconcile();
     laptop.proxy.online = true;
     await laptop.account.sync.reconcile();
-    // A purged result, and server-authored state.
     await queue(phone, testResult.name, result('r-gone', '9'));
     await phone.account.sync.reconcile();
     await queue(phone, testResultPurge.name, { version: 1, target: 'r-gone' });
     await stack.sql`select private.assign_test_experiment(${accountOf(phone)}, 'pricing', 'b')`;
     await phone.account.sync.reconcile();
 
-    // A third code request for the address, beyond the two the limit admits at once.
     await stack.resetCodeRequests();
     const tablet = device('tablet');
     expect(await signInByEmail(tablet, email)).toEqual({ status: 'signed-in' });
@@ -224,7 +189,6 @@ describe('a snapshot holds', () => {
     expect(await payloads(tablet, testExperimentAssignment.name)).toEqual([{ version: 1, experiment: 'pricing', group: 'b' }]);
     expect(await payloads(tablet, testResult.name)).toEqual([]);
     expect((await tablet.account.records.totals()).account).toEqual((await serverTotals(phone)).totals);
-    // Three devices and a dozen runs: headroom for a stack that has just started.
   }, 60_000);
 });
 
@@ -244,13 +208,11 @@ describe('paging a snapshot', () => {
     await tablet.account.sync.idle();
     tablet.proxy.onRequest = null;
 
-    // One page of 100 staged: nothing installed yet, and nothing of the feed fetched.
     expect(tablet.account.sync.status.history).toEqual({ state: 'incomplete', summaries: 0.4, detail: 0, stopped: null });
     expect(await tablet.vault.store().readAcceptedRecords(testResult.name)).toEqual([]);
     expect(await tablet.vault.store().readFeedCursor()).toBe(0);
     expect((await tablet.account.records.totals()).account).toEqual(totals);
 
-    // The app dies and starts again: it carries on from the staged page, with the same snapshot.
     await tablet.restart();
     expect(tablet.account.sync.status.history).toEqual({ state: 'incomplete', summaries: 0.4, detail: 0, stopped: null });
     const before = tablet.proxy.sent.length;
@@ -285,10 +247,8 @@ describe('an expired snapshot', () => {
     const [made] = await stack.sql<{ hours: number }[]>`
       select (extract(epoch from expires_at - created_at) / 3600)::int as hours from private.bootstrap_snapshots where account_id = ${accountId}`;
     expect(made?.hours).toBe(24);
-    // Offline meanwhile, the tablet saves a result of its own.
     await queue(tablet, testResult.name, result('mine', '3'));
 
-    // A day passes on the server, and the expiry job runs.
     await stack.sql`update private.bootstrap_snapshots set expires_at = now() - interval '1 second' where account_id = ${accountId}`;
     await stack.sql`select private.expire_bootstrap_snapshots()`;
     expect(await stack.sql`select 1 from private.bootstrap_rows where account_id = ${accountId}`).toHaveLength(0);
@@ -314,7 +274,6 @@ describe('a bootstrap overlapping concurrent edits', () => {
     expect(await signInByEmail(laptop, email)).toEqual({ status: 'signed-in' });
     await Promise.all([phone.account.sync.idle(), laptop.account.sync.idle()]);
     const accountId = accountOf(phone);
-    // History: items to edit and delete, a result to purge, a conflict to resolve, and enough rows for two pages.
     await phone.account.records.save(testRevisionedItem.name, 'casino-1', casinoValue('10'));
     await phone.account.records.save(testRevisionedItem.name, 'casino-2', casinoValue('20'));
     await phone.account.records.save(testRevisionedItem.name, 'casino-c', casinoValue('30'));
@@ -331,7 +290,6 @@ describe('a bootstrap overlapping concurrent edits', () => {
     await seedResults(accountId, 150);
     const { sequence: watermark } = await serverTotals(phone);
 
-    // The tablet's snapshot is made, and its first page staged.
     await stack.resetCodeRequests();
     const tablet = device('tablet');
     offlineAtPage(tablet, 2);
@@ -339,7 +297,6 @@ describe('a bootstrap overlapping concurrent edits', () => {
     await tablet.account.sync.idle();
     tablet.proxy.onRequest = null;
 
-    // Meanwhile the phone carries on.
     await phone.account.records.save(testRevisionedItem.name, 'casino-1', casinoValue('11'));
     await phone.account.records.delete(testRevisionedItem.name, 'casino-2');
     await queue(phone, testResult.name, result('r-new', '6'));
@@ -350,7 +307,6 @@ describe('a bootstrap overlapping concurrent edits', () => {
       await phone.account.records.resolve(testRevisionedItem.name, 'casino-c', { generation: conflict.generation, reviewed: conflict.proposals.map((p) => p.id), value: casinoValue('32') }),
     ).toEqual({ status: 'resolved' });
 
-    // The snapshot's rows redact what the feed redacted.
     const rows = JSON.stringify(await stack.sql`select change from private.bootstrap_rows where account_id = ${accountId}`);
     expect(rows).not.toContain('r-purged');
     expect(rows).not.toContain('-778/3');
@@ -365,7 +321,6 @@ describe('a bootstrap overlapping concurrent edits', () => {
     expect(results).toHaveLength(151);
     expect(results).toContain('r-new');
     expect(results).not.toContain('r-purged');
-    // The feed continued after the watermark.
     expect(feedRequests(tablet)[0]).toBe(watermark);
     const server = await serverTotals(phone);
     expect((await tablet.account.records.totals()).account).toEqual(server.totals);
@@ -382,7 +337,6 @@ describe('a bootstrap overlapping concurrent edits', () => {
 
     let snapshot: Promise<{ data: unknown }> | null = null;
     await stack.sql.begin(async (tx) => {
-      // An acceptance in progress: it holds the head, and has written rows not yet committed.
       const [head] = await tx<{ sequence: number }[]>`select sequence::int from private.sync_heads where account_id = ${accountId} for update`;
       await tx`insert into private.test_results (account_id, result_id, payload, sequence)
         values (${accountId}, 'late', jsonb_build_object('version', 1, 'resultId', 'late', 'amount', '5'), ${head!.sequence + 1})`;
@@ -390,7 +344,6 @@ describe('a bootstrap overlapping concurrent edits', () => {
         values (${accountId}, ${head!.sequence + 1}, 'test-result', 'late', jsonb_build_object('record', jsonb_build_object('version', 1, 'resultId', 'late', 'amount', '5')))`;
       await tx`update private.sync_heads set sequence = sequence + 1 where account_id = ${accountId}`;
       snapshot = Promise.resolve(raw.rpc('sync_bootstrap_v1', { installation: installationOf(phone) }));
-      // The snapshot can't be made while the head is held.
       expect(await Promise.race([snapshot.then(() => 'made'), new Promise((resolve) => setTimeout(() => resolve('waiting'), 500))])).toBe('waiting');
     });
     const { data } = await snapshot!;
@@ -413,8 +366,6 @@ describe('the snapshot’s lock', () => {
     const played = await phone.playPracticeSession();
     await phone.account.sync.idle();
     const accountId = accountOf(phone);
-    // 100,000 more sessions like the one played, accepted straight into the server's rows. The
-    // totals trigger is skipped while seeding (it would take minutes) and the totals written once.
     await stack.sql.begin(async (tx) => {
       await tx`set local session_replication_role = replica`;
       await tx`insert into private.practice_results (account_id, result_id, payload, installation_id, operation_id, sequence)
@@ -434,9 +385,6 @@ describe('the snapshot’s lock', () => {
     });
     const raw = stack.rawClient(accessToken(phone));
 
-    // While the snapshot holds the head, an upload's wait for it (the same lock, with the
-    // upload's lock_timeout) succeeds: measured on the server, not by the client's round trip.
-    // The builder sends only once awaited: Promise.resolve starts it now.
     const made = Promise.resolve(raw.rpc('sync_bootstrap_v1', { installation: installationOf(phone) }));
     await eventuallyHeld(accountId);
     const waited = await stack.sql.begin(async (tx) => {
@@ -467,21 +415,16 @@ describe('a raw client calling the bootstrap operations', () => {
     const { data } = await owner.rpc('sync_bootstrap_v1', { installation });
     const { snapshot } = data as { snapshot: string };
 
-    // Only its own registered installation's: never another device's, or one it made up.
     expect((await owner.rpc('sync_bootstrap_v1', { installation: installationOf(other) })).error).not.toBeNull();
     expect((await owner.rpc('sync_bootstrap_v1', { installation: 'made-up' })).error).not.toBeNull();
 
-    // Another account's session can't read it, or even tell it exists.
     expect((await stack.rawClient(accessToken(other)).rpc('sync_bootstrap_page_v1', { snapshot, after: 0 })).data).toEqual({ status: 'expired' });
-    // No session at all.
     expect((await stack.rawClient().rpc('sync_bootstrap_v1', { installation: 'raw-anon' })).error).not.toBeNull();
     expect((await stack.rawClient().rpc('sync_bootstrap_page_v1', { snapshot, after: 0 })).error).not.toBeNull();
-    // An account whose deletion is scheduled: ordinary access is closed.
     await stack.sql`update public.accounts set state = 'deletion_scheduled', deletion_deadline = now() + interval '30 days', deletion_scheduled_at = now() where account_id = ${accountOf(phone)}`;
     expect((await owner.rpc('sync_bootstrap_page_v1', { snapshot, after: 0 })).error).not.toBeNull();
     expect((await owner.rpc('sync_bootstrap_v1', { installation })).error).not.toBeNull();
     await stack.sql`update public.accounts set state = 'active', deletion_deadline = null, deletion_scheduled_at = null where account_id = ${accountOf(phone)}`;
-    // A revoked session, its access token unexpired.
     const revoked = stack.rawClient(accessToken(phone));
     expect((await revoked.rpc('sync_bootstrap_page_v1', { snapshot, after: 0 })).data).toMatchObject({ status: 'page' });
     await phone.account.signOut();

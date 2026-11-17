@@ -1,7 +1,4 @@
-// Blackjack rule presets (#3): six decks, S17 or H17 x late surrender on or
-// off (default S17 + LS), penetration 50-80% in 5% steps (default 75%),
-// initial-wager limits 10/1,000 units (editable at setup) and 0-4 other
-// players (default none).
+// #3
 
 import { BLACKJACK_RULES, type BlackjackRuleSet } from '@tableside/engine';
 
@@ -18,15 +15,8 @@ const PRESETS: Readonly<Record<BlackjackPreset, Pick<BlackjackRuleSet, 'dealer' 
   H17_noLS: { dealer: 'H17', lateSurrender: false },
 };
 
-/** The launch initial-wager limits. */
 export const BLACKJACK_LIMITS: BlackjackRuleSet['limits'] = { initial: { min: '10', max: '1000' } };
 
-/**
- * The rule set a blackjack activity pins for a preset, penetration and number
- * of other players. Other players bet the table minimum and play the preset's
- * basic strategy; the learner sits after them, so their cards are out before
- * each of the learner's decisions.
- */
 export function blackjackRules(
   preset: BlackjackPreset = DEFAULT_BLACKJACK_PRESET,
   penetration = DEFAULT_PENETRATION,

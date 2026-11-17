@@ -4,7 +4,7 @@ import { useFeedbackSettings } from '@/feedback/FeedbackProvider';
 import { SwitchRow } from '@/components/SwitchRow';
 import { Group, Note, SettingsScreen, VolumeSlider } from '@/settings/SettingsParts';
 
-/** S1-12: one Sound effects slider (0 is off) and one Haptics switch, stored on this device only. */
+// Spec 1 S1-12
 export default function SoundAndHaptics() {
   const { settings, current } = useFeedbackSettings();
   return (

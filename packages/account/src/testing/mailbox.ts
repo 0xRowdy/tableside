@@ -1,6 +1,3 @@
-// The captured mailbox: the local stack's mail catcher (Mailpit), which
-// receives everything Auth sends locally.
-
 interface MessageSummary {
   readonly ID: string;
 }
@@ -8,7 +5,6 @@ interface MessageSummary {
 export class Mailbox {
   constructor(private readonly mailUrl: string) {}
 
-  /** Plain-text bodies of the messages sent to an address, newest first. */
   async messages(email: string): Promise<string[]> {
     const query = encodeURIComponent(`to:"${email}"`);
     const found = (await (await fetch(`${this.mailUrl}/api/v1/search?query=${query}`)).json()) as { messages: MessageSummary[] };
@@ -17,11 +13,6 @@ export class Mailbox {
     );
   }
 
-  /**
-   * The code in the newest message to an address that carries one (a security
-   * notice carries none), waiting briefly for it to arrive. With `after`,
-   * waits for a code other than that one.
-   */
   async latestCode(email: string, options: { readonly after?: string } = {}): Promise<string> {
     for (let attempt = 0; attempt < 50; attempt++) {
       const code = (await this.messages(email)).map((message) => /\b(\d{6})\b/.exec(message)?.[1]).find(Boolean);

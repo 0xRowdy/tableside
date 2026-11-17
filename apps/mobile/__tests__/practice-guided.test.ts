@@ -1,8 +1,3 @@
-// Seam 2: guided practice through the practice controller on substitute
-// adapters, including failure injection around a correction. A restart is a
-// new controller over a reopened in-memory store. Spins come from the
-// Random123 "pi digits" stream: 27 (red), 0, 25 (red).
-
 import { FIXED_TWO_DOZENS, FLAT_EVEN_MONEY } from '@tableside/definitions';
 import type { DomainFact } from '@tableside/engine';
 
@@ -12,7 +7,6 @@ import type { ActivityStore } from '@/practice/store';
 import { FakeClock, substituteAdapters } from '@/practice/testing/substitutes';
 
 const turnsAsked: number[] = [];
-/** Charges one turn of allowance per turn, as spec 5's turn metering will, and notes each ask. */
 const chargingAccess: AccessSupervisor = {
   ...alwaysAllowed,
   beforeTurn: async ({ turn }) => {
@@ -45,7 +39,6 @@ async function restart(adapters: ReturnType<typeof setup>['adapters']) {
   const store = adapters.store.reopen();
   const controller = new PracticeController({ ...adapters, store, clock: new FakeClock(undefined, true) });
   await controller.load();
-  // An interrupted session resumes in its committed phase.
   await controller.resume();
   return { controller, store };
 }
@@ -165,7 +158,6 @@ describe('failure injection: restart during a correction', () => {
     const { adapters, controller: first } = await guided();
     await first.placeWager('red', '50');
     await first.spin();
-    // The app dies with the correction on screen.
     const { controller, store } = await restart(adapters);
     const snapshot = active(controller.snapshot());
     expect([snapshot.view.phase, snapshot.view.strategy?.correction?.id]).toEqual(['correction', 'activity-1/departure/1']);

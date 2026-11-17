@@ -1,21 +1,14 @@
-// Typed table limits at setup: the drafts the player edits, the engine's
-// judgement of each, and the words that explain a problem. A draft is never
-// corrected; only a limit the engine accepts reaches the rules.
-
 import { BASE_WAGER_CEILING, checkLimitInput, type Limit, type LimitAmountProblem, type LimitInputCheck } from '@tableside/engine';
 
 import { formatUnits, withoutGrouping } from '../units';
 
-/** One limit group's draft, as typed (thousands separators allowed). */
 export interface LimitDraft {
   readonly min: string;
   readonly max: string;
 }
 
-/** A game's limit groups, in screen order. */
 export interface LimitGroup<K extends string> {
   readonly key: K;
-  /** "Inside bets"; also names the fields ("Inside bets minimum, in units"). */
   readonly label: string;
   readonly help: string;
 }
@@ -25,9 +18,7 @@ export type LimitEnd = 'min' | 'max';
 export interface LimitProblem<K extends string> {
   readonly group: K;
   readonly end: LimitEnd;
-  /** Shown under the field. */
   readonly inline: string;
-  /** The banner's sentence. */
   readonly summary: string;
 }
 
@@ -35,7 +26,6 @@ export const draftOf = (limit: Limit): LimitDraft => ({ min: formatUnits(limit.m
 
 export const checkDraft = (draft: LimitDraft): LimitInputCheck => checkLimitInput(withoutGrouping(draft.min), withoutGrouping(draft.max));
 
-/** Each problem as a phrase: a sentence under the field, a clause in the banner. */
 const PHRASE: Record<LimitAmountProblem, string> = {
   missing: 'enter an amount',
   'not-a-number': 'digits only, in whole units',
@@ -48,10 +38,6 @@ const sentence = (phrase: string) => `${phrase.charAt(0).toUpperCase()}${phrase.
 
 const WONT_CHANGE = "We won't change it for you.";
 
-/**
- * Every problem with the drafts, in screen order. With a single group the
- * banner says "Table limits"; with several it names the group.
- */
 export function limitProblems<K extends string>(groups: readonly LimitGroup<K>[], drafts: Readonly<Record<K, LimitDraft>>): LimitProblem<K>[] {
   const problems: LimitProblem<K>[] = [];
   for (const group of groups) {
@@ -82,7 +68,6 @@ export function limitProblems<K extends string>(groups: readonly LimitGroup<K>[]
   return problems;
 }
 
-/** The accepted limits, or null while any draft has a problem. */
 export function acceptedLimits<K extends string>(groups: readonly LimitGroup<K>[], drafts: Readonly<Record<K, LimitDraft>>): Record<K, Limit> | null {
   const limits = {} as Record<K, Limit>;
   for (const group of groups) {
@@ -93,7 +78,6 @@ export function acceptedLimits<K extends string>(groups: readonly LimitGroup<K>[
   return limits;
 }
 
-/** "Go to the minimum", or with several groups "Go to the inside bets minimum". */
 export function goToLabel<K extends string>(groups: readonly LimitGroup<K>[], problem: LimitProblem<K>): string {
   const end = problem.end === 'min' ? 'minimum' : 'maximum';
   if (groups.length === 1) return `Go to the ${end}`;

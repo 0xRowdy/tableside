@@ -1,8 +1,4 @@
-// Seam 3: Devices (#101, S2-19) and the locked state of a device that was
-// signed out from another (S2-23), through the real routes and the
-// accessibility tree, over Account-service fakes: the sign-ins with what each
-// device calls itself and "this device", signing one or all others out after
-// Confirm it's you, and the lock that keeps records until a fresh sign-in.
+// #101; spec 2 S2-19, S2-23
 
 import type { AccountGate } from '@tableside/account';
 import { act, cleanup, fireEvent, screen, within } from '@testing-library/react-native';
@@ -21,7 +17,6 @@ type Launch = { stored: AccountGate; offlineGame: GameId | null; latest: ReturnT
 const launch = jest.requireMock<Launch>('@/account/app-account');
 const service = () => launch.latest!.service;
 
-/** How the copy names this device. */
 const DEVICE = Platform.OS === 'ios' ? 'iPhone' : 'device';
 
 let logged: unknown[][] = [];
@@ -51,7 +46,6 @@ const header = (name: string | RegExp) => screen.findByRole('header', { name });
 const button = (name: string | RegExp) => screen.getByRole('button', { name });
 const sheet = (testID: string) => within(screen.getByTestId(testID));
 
-/** Opens Devices from Account, after `prepare` scripts the fake. */
 async function openDevices(prepare?: () => void) {
   await renderRouter('./src/app', { initialUrl: '/more/settings/account' });
   prepare?.();
@@ -67,7 +61,6 @@ describe('Devices', () => {
     expect(screen.getByLabelText('iPhone 15 · iOS 18. Last active now. This device')).toBeOnTheScreen();
     expect(screen.getByLabelText('iPad Air · iPadOS 18. Last active 2 days ago')).toBeOnTheScreen();
     expect(screen.getByLabelText('Pixel 8 · Android 15. Last active 3 months ago')).toBeOnTheScreen();
-    // This device signs out with Sign out, on Account; every other one here.
     expect(button('Sign out iPad Air')).toBeOnTheScreen();
     expect(button('Sign out Pixel 8')).toBeOnTheScreen();
     expect(screen.queryByRole('button', { name: 'Sign out iPhone 15' })).toBeNull();
@@ -85,7 +78,6 @@ describe('Devices', () => {
     expect(confirm.getByText("You'll need to confirm it's you first. We'll send a security email.")).toBeOnTheScreen();
     await fireEvent.press(confirm.getByRole('button', { name: 'Sign out Pixel 8' }));
 
-    // Confirm it's you, with one of the account's methods; then the sign-out goes through.
     const fresh = within(await screen.findByTestId('confirm-its-you'));
     await fireEvent.press(fresh.getByRole('button', { name: /Apple/ }));
     expect(await screen.findByText('Signed out Pixel 8')).toBeOnTheScreen();
@@ -140,7 +132,6 @@ describe('Devices', () => {
     await fireEvent.press(button('Sign out all other devices'));
     await fireEvent.press(await screen.findByRole('button', { name: 'Sign out 2 other devices' }));
     expect(await screen.findByText('Signed out 2 other devices')).toBeOnTheScreen();
-    // No device label or address reached a log.
     expect(JSON.stringify(logged)).not.toMatch(/iPad|Pixel|player@example\.com/);
   });
 });

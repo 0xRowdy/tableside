@@ -1,22 +1,4 @@
-// Create with Apple or Google (spec 2, #89; Amendment 3 §1): binds the age
-// step's eligibility assertion to the provider identity the player is
-// creating an account for, so Auth's before-user-created hook lets that one
-// identity, and no other, become a new Auth user. Signing in with the same ID
-// token then creates the user, and the database consumes the assertion.
-//
-// POST { provider, idToken, nonce, assertion }, naming its backend environment
-// in x-tableside-environment like every request (docs/environments.md).
-//   200 { status: 'bound' }          the assertion now covers this identity
-//   200 { status: 'existing' }       the identity already has an account: sign in instead (nothing bound)
-//   403 { status: 'age-required' }   no usable assertion (used, expired, or bound to another identity)
-//   401 { status: 'invalid-token' }  not a valid ID token from this provider for this app and nonce
-//   400 { status: 'invalid' }        not a request this function understands
-//   502 { status: 'failed' }
-//
-// The ID token is verified here, as Auth will verify it (signature, issuer,
-// audience, expiry and the nonce the client holds), so nobody can bind an
-// assertion to an identity they can't sign in as. Nothing here logs a token,
-// nonce, assertion or claim.
+// Spec 2 Amendment 3 §1; #89
 
 import { sha256Hex, verifyIdToken } from '../_shared/id-token.ts';
 import { environmentOf, readJsonPost, reply, serviceRpc } from '../_shared/service.ts';

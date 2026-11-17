@@ -1,13 +1,10 @@
-// Per-device ordering (spec 2, *Per-device attempt ordering*): records sit at
-// their originating installation's positions, whatever order they arrived in
-// and whatever their clocks say. Expectations are worked by hand.
+// Spec 2 Per-device attempt ordering
 
 import { describe, expect, it } from 'vitest';
 
 import { byOriginatingDevice } from './ordering';
 import type { AcceptedRecord } from './store';
 
-/** An accepted attempt: arrival order is the account sequence, `at` its device clock. */
 const attempt = (installation: string, position: number, sequence: number, at: number): AcceptedRecord => ({
   recordType: 'challenge-attempt',
   item: `${installation}-${position}`,
@@ -18,7 +15,6 @@ const attempt = (installation: string, position: number, sequence: number, at: n
 
 describe('records by originating device', () => {
   it('orders each installation by position: not by arrival, and not by clock', async () => {
-    // Arrived 3, 1, 2; the clock went backwards before position 2.
     const records = [attempt('phone', 3, 1, 3_000), attempt('phone', 1, 2, 2_000), attempt('phone', 2, 3, 1_000)];
     const [phone] = byOriginatingDevice(records);
     expect(phone?.positions.map((record) => record?.item)).toEqual(['phone-1', 'phone-2', 'phone-3']);
@@ -39,7 +35,6 @@ describe('records by originating device', () => {
     expect(gap?.positions.map((record) => record?.item ?? null)).toEqual(['phone-1', null, 'phone-3', 'phone-4']);
     expect(gap?.runs.map((run) => run.map((record) => record.item))).toEqual([['phone-1'], ['phone-3', 'phone-4']]);
 
-    // The late upload fills its original position.
     const [filled] = byOriginatingDevice([...early, attempt('phone', 2, 4, 2)]);
     expect(filled?.runs.map((run) => run.map((record) => record.item))).toEqual([['phone-1', 'phone-2', 'phone-3', 'phone-4']]);
   });

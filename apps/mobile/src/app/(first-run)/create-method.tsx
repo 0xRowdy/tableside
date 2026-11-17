@@ -1,6 +1,4 @@
-// S2-13 Create account — choose a method, after the age step: Apple, Google
-// or an email code. It says plainly that this makes a new, empty account, so
-// it never reads as getting another account back.
+// Spec 2 S2-13
 
 import { router } from 'expo-router';
 import { Mail } from 'lucide-react-native';

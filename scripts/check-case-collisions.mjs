@@ -1,11 +1,7 @@
-// Fails when two tracked paths differ only by case. macOS and Windows
-// checkouts can hold only one of them, so the other silently disappears.
-
 import { execFileSync } from 'node:child_process';
 
 const paths = execFileSync('git', ['ls-files', '-z'], { encoding: 'utf8' }).split('\0').filter(Boolean);
 
-// Every directory prefix too: `Docs/a.md` and `docs/b.md` collide on the folder.
 const seen = new Map();
 for (const path of paths) {
   const parts = path.split('/');

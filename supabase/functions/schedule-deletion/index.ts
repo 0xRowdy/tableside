@@ -1,22 +1,4 @@
-// Schedule deletion with a 30-day undo (spec 2, #103; S2-22), after the player
-// confirmed it's them (fresh-auth). The account locks at once with a
-// server-set deadline; sessions, methods and data stay until then. The request
-// that schedules it sends the "deletion scheduled" email (deadline and undo);
-// a retry with the same operation ID, or a request while deletion is already
-// scheduled, answers the schedule as it stands and sends nothing. A retry of
-// a request whose scheduling was canceled since is never accepted again.
-//
-// POST, with the caller's own access token as the bearer and naming its
-// backend environment in x-tableside-environment like every request:
-//   { operationId }   32 hex characters, the same for every retry of one request
-// Answers:
-//   200 { status: 'scheduled', deadline, scheduledAt }
-//   409 { status: 'not-scheduled' }   a retry, after its scheduling was canceled
-//   403 { status: 'fresh-authentication-required' }
-//   401 { status: 'not-signed-in' }
-//   400 { status: 'invalid' } | 502 { status: 'failed' }
-//
-// Nothing here logs a token or address.
+// Spec 2 S2-22; #103
 
 import { callerOf } from '../_shared/caller.ts';
 import { withCors } from '../_shared/cors.ts';

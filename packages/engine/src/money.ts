@@ -1,9 +1,3 @@
-// Exact money. Every amount is a normalized rational: a BigInt numerator and a
-// positive BigInt denominator with no common factor (zero is 0/1). The
-// canonical encoding writes the components as decimal integers, "n" when the
-// denominator is 1 and "n/d" otherwise, so every value round-trips exactly.
-// Nothing here rounds except `commission`, the one rule-prescribed rounding.
-
 export interface Money {
   readonly n: bigint;
   readonly d: bigint;
@@ -23,7 +17,6 @@ function gcd(a: bigint, b: bigint): bigint {
   return x;
 }
 
-/** The normalized value n/d. Throws RangeError for a zero denominator. */
 export function money(n: bigint, d = 1n): Money {
   if (d === 0n) throw new RangeError('money denominator must not be zero');
   if (d < 0n) [n, d] = [-n, -d];
@@ -37,27 +30,23 @@ export const sub = (a: Money, b: Money): Money => money(a.n * b.d - b.n * a.d, a
 export const mul = (a: Money, b: Money): Money => money(a.n * b.n, a.d * b.d);
 export const neg = (a: Money): Money => money(-a.n, a.d);
 
-/** a / b. Throws RangeError when b is zero. */
 export function div(a: Money, b: Money): Money {
   if (b.n === 0n) throw new RangeError('cannot divide money by zero');
   return money(a.n * b.d, a.d * b.n);
 }
 
-/** -1, 0 or 1 as a is less than, equal to or greater than b. */
 export function compare(a: Money, b: Money): -1 | 0 | 1 {
   const left = a.n * b.d;
   const right = b.n * a.d;
   return left < right ? -1 : left > right ? 1 : 0;
 }
 
-/** The canonical encoding: "n" or "n/d" in decimal. */
 export function encodeMoney(value: Money): string {
   return value.d === 1n ? value.n.toString() : `${value.n.toString()}/${value.d.toString()}`;
 }
 
 const CANONICAL = /^(-?)(0|[1-9][0-9]*)(?:\/([1-9][0-9]*))?$/;
 
-/** Decodes the canonical encoding; any other spelling throws MoneyFormatError. */
 export function decodeMoney(text: string): Money {
   const match = typeof text === 'string' ? CANONICAL.exec(text) : null;
   if (!match) throw new MoneyFormatError(String(text));
@@ -70,10 +59,6 @@ export function decodeMoney(text: string): Money {
   return { n: sign === '-' ? -n : n, d };
 }
 
-/**
- * The rule-prescribed commission (buy: on the stake; standalone lay: on the
- * potential gross win): basis × rate rounded up to a whole unit, minimum 1.
- */
 export function commission(basis: Money, rate: Money): Money {
   if (basis.n <= 0n || rate.n <= 0n) throw new RangeError('commission needs a positive basis and rate');
   const exact = mul(basis, rate);

@@ -1,6 +1,4 @@
-// S2-13 Sign in with Apple / Google — no account for this identity. Sign in
-// never creates one: this says so, and Create an account runs the age step,
-// then creates the account for this same identity.
+// Spec 2 S2-13
 
 import type { IdentityProvider } from '@tableside/account';
 import { router, useLocalSearchParams } from 'expo-router';

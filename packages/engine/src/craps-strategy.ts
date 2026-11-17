@@ -1,15 +1,4 @@
-// The standard craps strategy vocabulary (Amendment 2 A3): what a craps
-// strategy can test (the puck, the point, which line bases are established
-// and how many come bases are working), the targets it can bet (the whole
-// standard menu), its table conditions (the odds caps it is written for and
-// the table limits) and the situation of one betting decision. It is
-// standard craps' own, so crapless craps can replace it. The interpreter
-// itself is game-agnostic (strategy.ts).
-//
-// A craps prescription is the whole table the next roll should see: bases
-// already established stay in it at their amounts (they can't change), and
-// standing bets that stayed up after a win are prescribed again at the
-// amounts the strategy's counters hold.
+// Spec 1 Amendment 2 A3
 
 import {
   CRAPS_POINTS,
@@ -31,25 +20,19 @@ import type { StrategyGame, StrategyVocabulary } from './strategy';
 
 type Limits = CrapsRuleSet['limits'];
 
-/** A craps strategy's declared table conditions: the odds caps it is written for and the table limits. */
 export interface CrapsStrategyTable {
   readonly odds: readonly OddsCap[];
   readonly limits: Limits;
 }
 
-/** One craps betting decision, as Explain prescription takes it. */
 export interface CrapsSituation {
   readonly game: 'craps';
   readonly rules: { readonly odds: OddsCap; readonly field: FieldPayout; readonly limits: Limits };
-  /** Funds for the next roll's wagers: the balance plus every stake on the table (bases included). Canonical money. */
   readonly balance: string;
-  /** The point, or null while the puck is off. */
   readonly point: CrapsPoint | null;
-  /** The line bases established on the table, in table order. */
   readonly bases: readonly CrapsBase[];
 }
 
-/** An actual table, as a situation states it: the declared shape plus the puck and the bases. */
 interface CrapsTableNow extends CrapsStrategyTable {
   readonly point: CrapsPoint | null;
   readonly bases: readonly CrapsBase[];
@@ -63,14 +46,12 @@ const SUBJECTS: Record<string, readonly string[]> = {
   puck: ON_OFF,
   point: ['none', ...POINT_VALUES],
   ...Object.fromEntries(BASE_SUBJECTS.map((subject) => [subject, ON_OFF])),
-  /** Come bases that have traveled to a number (a come bet still in the come area is not one yet). */
   'come-bases': ['0', '1', '2', '3', '4', '5', '6'],
 };
 
 const limitsProblems = (limits: unknown, path: string) => limitGroupProblems(limits, ['flat', 'props'], path);
 
-/** A canonical whole-unit amount within the base-wager ceiling. */
-const whole = (value: unknown) => {
+const wholeWithinCeiling = (value: unknown) => {
   const amount = parseMoney(value);
   return isWholeIn(amount, 1n, BASE_WAGER_CEILING) ? amount : undefined;
 };
@@ -94,7 +75,7 @@ function situationProblem(situation: unknown): string | undefined {
   for (const base of bases as unknown[]) {
     if (!hasExactKeys(base, ['amount', 'target']) || typeof base.target !== 'string') return 'a base has a target and an amount';
     if (!isBaseTarget(base.target, point as CrapsPoint | null) || seen.has(base.target)) return `${String(base.target)} can't be an established base here`;
-    const amount = whole(base.amount);
+    const amount = wholeWithinCeiling(base.amount);
     if (!amount || encodeMoney(amount) !== base.amount) return 'a base amount is whole units';
     if (crapsBetProblem(rules as unknown as CrapsRuleSet, base.target, amount)) return `${base.target} ${base.amount} is outside the table limits`;
     seen.add(base.target);
@@ -127,7 +108,6 @@ export const CRAPS_VOCABULARY: StrategyVocabulary<CrapsSituation> = {
   },
   betRequirement(table, target, amount) {
     const { odds, limits, point, bases } = table as CrapsTableNow;
-    // Judged under the first declared cap for a declared table: amounts that hold on every roll don't depend on it.
     const rules = { odds: odds[0] as OddsCap, limits };
     const requirement = crapsBetProblem(rules, target, amount, point === undefined ? undefined : { point, bases });
     if (!requirement) return undefined;
@@ -144,21 +124,18 @@ export const CRAPS_VOCABULARY: StrategyVocabulary<CrapsSituation> = {
   subject: subjectOf,
 };
 
-/** The table limit a bet fails: proposition limits for hardways and one-roll bets, flat limits otherwise (the horn's are per part). */
 function limitFor(target: string, limits: Limits, requirement: 'below-minimum' | 'above-maximum'): string {
   const props = /^(hard-|prop-|any-)/.test(target) || target === 'horn';
   const limit = props ? limits.props : limits.flat;
   return requirement === 'below-minimum' ? limit.min : limit.max;
 }
 
-/** Craps' part of guided practice: its vocabulary, its table conditions, and the betting situation of a state. */
 export const CRAPS_STRATEGY: StrategyGame<CrapsActivityState> = {
   vocabulary: CRAPS_VOCABULARY as StrategyVocabulary,
   tableForRules: (rules) => {
     const { odds, limits } = rules as Pick<CrapsRuleSet, 'odds' | 'limits'>;
     return { odds: [odds], limits };
   },
-  // Every stake on the table counts toward the funds for the next roll: the prescription restates the bases at their amounts.
   situation: (state): CrapsSituation => ({
     game: 'craps',
     rules: { odds: state.rules.odds, field: state.rules.field, limits: state.rules.limits },

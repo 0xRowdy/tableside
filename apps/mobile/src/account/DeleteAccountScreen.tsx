@@ -1,16 +1,5 @@
-// S2-22 Delete account (More → Settings → Account, and the age-restricted
-// paused screen's "Delete account"): Confirm it's you first, then the export
-// offer, the store's subscription and refund paths (canceling isn't needed),
-// and what scheduling does (access locks, public content is hidden, data is
-// kept, billing continues), before the choice: schedule deletion with a
-// 30-day undo, or Delete permanently now. Delete permanently now shows its
-// own warnings first (#104: unsynced records lost, "Deleted author", paid
-// time forfeited, no undo) and asks once more. Online only: nothing is
-// queued. Once scheduled, the gate locks and the deletion-scheduled screen
-// (S2-23) replaces this one; once deleted, the device erases the account and the
-// Deleted screen replaces it.
-// TODO(frames): unverified against S2-22 — the frame couldn't be read (Pencil unreachable). The steps, copy and layout come from spec 2 *Deletion*, Amendments 1 C2–C3, 3 §3–4 and 9 §3, and #103/#104.
-// TODO(spec 7 D9): "Paid time is forfeited" is provisional (Amendment 9 §3): under Outcome B its copy follows the owner's choice recorded there.
+// TODO(spec 2 S2-22)
+// TODO(spec 7 D9)
 
 import { DELETION_UNKNOWN, SCHEDULE_UNKNOWN, type SignInMethodEntry } from '@tableside/account';
 import { Archive, CloudOff, CreditCard, Download, EyeOff, Lock, Trash2, UserX } from 'lucide-react-native';
@@ -27,7 +16,6 @@ import { confirmReason } from './method-text';
 
 export const DELETION_NEEDS_CONNECTION = 'Deleting your account needs a connection, and nothing is saved to send later. Connect, then try again.';
 
-/** What Delete permanently now says is lost with the records this device hasn't synced. */
 export function unsyncedDetail(waiting: number | null): string {
   if (waiting === null || waiting === 0) return "Anything on this device that hasn't reached your account is erased with it, and can't be recovered.";
   return `${waiting === 1 ? '1 record' : `${waiting} records`} on this device ${waiting === 1 ? "hasn't" : "haven't"} reached your account. ${waiting === 1 ? "It's" : "They're"} erased with it, and can't be recovered.`;
@@ -44,7 +32,6 @@ export function DeleteAccountScreen({ back, onExport }: { back: { label: string;
   const [problem, setProblem] = useState<string | null>(null);
   const store = STORES[deviceStore()];
 
-  /** Loads the methods Confirm it's you offers, and asks: none means no connection. */
   const ask = useCallback((found: readonly SignInMethodEntry[] | null) => {
     setMethods(found);
     setConfirming(found ? 'begin' : null);
@@ -66,7 +53,6 @@ export function DeleteAccountScreen({ back, onExport }: { back: { label: string;
     setProblem(null);
     try {
       const result = await service.deletion.schedule();
-      // 'scheduled': the gate is Deletion scheduled now, and its screen replaces this one.
       if (result.status === 'fresh-authentication-required') setConfirming('schedule');
       else if (result.status === 'offline') setProblem(DELETION_NEEDS_CONNECTION);
       else if (result.status === 'failed') setProblem(SCHEDULE_UNKNOWN);
@@ -75,7 +61,6 @@ export function DeleteAccountScreen({ back, onExport }: { back: { label: string;
     }
   };
 
-  /** Shows Delete permanently now's own warnings, with how many records haven't synced. */
   const choosePermanent = async () => {
     setPermanent(true);
     setProblem(null);
@@ -87,7 +72,6 @@ export function DeleteAccountScreen({ back, onExport }: { back: { label: string;
     setProblem(null);
     try {
       const result = await service.deletion.deletePermanently();
-      // 'deleted': the gate is Deleted now, and its screen replaces this one.
       if (result.status === 'fresh-authentication-required') setConfirming('delete');
       else if (result.status === 'offline') setProblem(DELETION_NEEDS_CONNECTION);
       else if (result.status === 'failed') setProblem(DELETION_UNKNOWN);

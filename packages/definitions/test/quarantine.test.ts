@@ -2,8 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { QUARANTINE_LIST } from '../src';
 
-// The shipped quarantine list (#80) is plain versioned data, mirrored on the
-// server (Amendment 6 §6). Every entry must name what it quarantines and say why.
+// #80, Spec 1 Amendment 3 §1, Amendment 6 §6
 describe('the shipped quarantine list', () => {
   it('is versioned plain data whose entries each name an identity, with a unique id and an explanation', () => {
     expect(Number.isInteger(QUARANTINE_LIST.version) && QUARANTINE_LIST.version >= 1).toBe(true);

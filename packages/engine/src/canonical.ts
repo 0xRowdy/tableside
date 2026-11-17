@@ -1,7 +1,3 @@
-// Canonical JSON for checkpoints: object keys sorted by UTF-16 code units, no
-// whitespace, and only values every runtime encodes the same way (strings,
-// finite numbers, booleans, null, arrays and plain objects).
-
 export function canonicalJson(value: unknown): string {
   switch (typeof value) {
     case 'string':

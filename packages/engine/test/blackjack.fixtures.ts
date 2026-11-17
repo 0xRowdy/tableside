@@ -1,7 +1,4 @@
-// Shared inputs for the blackjack engine-interface cases: a six-deck S17 +
-// late-surrender free-play activity at the launch defaults (#3: initial wager
-// 10-1,000, 75% penetration), and stacked shoes for situations a shuffle
-// rarely deals.
+// Spec 1 Game rules
 import {
   canonicalShoe,
   createActivity,
@@ -40,11 +37,6 @@ export const BJ_SPEC: BlackjackActivitySpecification = {
   funding: '1000',
 };
 
-/**
- * The Random123 "pi digits" stream. Its six-deck shuffle starts 2♠T, 1♠T, 1♦J,
- * 3♠6, 1♦A, 0♥T, 4♥9, 5♦T, 3♠5, 2♥3 (deck index then suit, from the Python
- * reference in draws.cases).
- */
 export const BJ_STREAM = PI;
 
 export const bet = (amount: string): Command => ({ kind: 'place-wager', target: 'hand-1', amount });
@@ -60,19 +52,12 @@ export const SETTLE: Command = { kind: 'settle-turn' };
 export const STOP: Command = { kind: 'request-stop' };
 export const FINAL: Command = { kind: 'advance-final-settlement' };
 
-/** Cards dealt before the cut card, floor(312 x penetration), worked by hand: 312 x 0.55 = 171.6 and so on. */
+// Spec 1 Game rules
 export const CUT: Record<number, number> = { 50: 156, 55: 171, 60: 187, 65: 202, 70: 218, 75: 234, 80: 249 };
 
-/** "A", "2".."9", "T", "J", "Q", "K" to a rank. */
 const RANK_OF: Record<string, Rank> = { A: 1, T: 10, J: 11, Q: 12, K: 13 };
 const rankOf = (label: string): Rank => RANK_OF[label] ?? (Number(label) as Rank);
 
-/**
- * A fresh activity whose shoe is already in place, stacked so the given ranks
- * come off in order (any suit) from position `at`, where dealing resumes; the
- * rest are in canonical order. The state
- * passes checkpoint validation, so it is one the engine could hold.
- */
 export function stacked(ranks: string, spec: BlackjackActivitySpecification = BJ_SPEC, at = 0): BlackjackActivityState {
   const shoe = canonicalShoe(6);
   const used = new Set<number>();
@@ -91,10 +76,6 @@ export function stacked(ranks: string, spec: BlackjackActivitySpecification = BJ
   return decoded.state as BlackjackActivityState;
 }
 
-/**
- * A guided activity whose shoe deals `seen` first (cards already exposed in
- * earlier rounds) and then `round`; the rest in canonical order.
- */
 export function counted(seen: string, round: string, spec: BlackjackActivitySpecification): BlackjackActivityState {
   const base = stacked(`${seen} ${round}`, spec);
   const next = seen.split(' ').filter(Boolean).length;
@@ -103,17 +84,7 @@ export function counted(seen: string, round: string, spec: BlackjackActivitySpec
   return decoded.state as BlackjackActivityState;
 }
 
-/** Eight low cards seen: running count +8. */
 export const PLUS_EIGHT = '2 3 4 5 6 2 3 4';
-/**
- * A small hand-written chart for the simulated players in engine cases (the
- * certified tables are checked against the engine in the definitions
- * package). Up cards A, 2..9, 10. Hard: hit to 9; double 10 against 2-9 and 11
- * against 2-10; stand 12-16 against 2-6, else hit, except surrender 16 against
- * 10; stand 17+. Soft: hit to 17, stand 18+. Pairs: always split aces and
- * eights, stand on tens, else play the hard total. At four hands a pair of
- * aces stands and eights play hard 16.
- */
 const HIT_ROW = 'HHHHHHHHHH';
 const STAND_ROW = 'SSSSSSSSSS';
 const TEN_ROW = 'HDDDDDDDDH';
@@ -129,7 +100,6 @@ const hardRows = (from: number, to: number, sixteen: string, double: boolean) =>
     return total <= 16 ? STIFF_ROW : STAND_ROW;
   });
 const softRows = (from: number, to: number) => Array.from({ length: to - from + 1 }, (_, i) => (from + i <= 17 ? HIT_ROW : STAND_ROW));
-/** Pair rows A, 2..10: 2,2 to 7,7 and 9,9 play their hard total. */
 const pairs = (aces: string, eights: string) => [aces, HIT_ROW, HIT_ROW, HIT_ROW, TEN_ROW, STIFF_ROW, STIFF_ROW, eights, STAND_ROW, STAND_ROW];
 const SPLIT_ROW = 'PPPPPPPPPP';
 export const TEST_STRATEGY: SeatStrategy = {
@@ -140,7 +110,6 @@ export const TEST_STRATEGY: SeatStrategy = {
   laterWithoutDouble: { hard: hardRows(4, 21, STIFF_ROW, false), soft: softRows(12, 21) },
 };
 
-/** The launch table with simulated players: their fixed wagers in seat order, and the learner's seat from first base (from 0). */
 export const withPlayers = (learnerSeat: number, otherWagers: string[], spec: BlackjackActivitySpecification = BJ_SPEC): BlackjackActivitySpecification => ({
   ...spec,
   rules: { ...spec.rules, players: { learnerSeat, otherWagers, strategy: otherWagers.length > 0 ? TEST_STRATEGY : null } },

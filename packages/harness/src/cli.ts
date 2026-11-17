@@ -1,9 +1,4 @@
-// Cross-runtime harness command line. See docs/cross-runtime-harness.md.
-//
-//   harness [all]                 Node, iOS and Android legs, then compare
-//   harness node [--grep text]    run the suite on Node only
-//   harness ios | android         run the suite in the app on a simulator / emulator
-//   harness compare <reports...>  compare saved reports
+// docs/cross-runtime-harness.md Running it
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
@@ -27,7 +22,6 @@ const { positionals, values } = parseArgs({
 });
 const [command = 'all', ...rest] = positionals;
 
-// pnpm runs scripts from the package directory; resolve user paths from where the command was run.
 const fromInvocation = (file: string) => path.resolve(process.env.INIT_CWD ?? process.cwd(), file);
 
 async function loadSuite(): Promise<Suite> {
@@ -79,7 +73,6 @@ async function deviceLeg(platform: 'ios' | 'android'): Promise<Report> {
   return report;
 }
 
-/** The Node leg plus the Hermes leg for each device platform, so a device report from another engine fails. */
 const legsFor = (platforms: readonly string[]): Leg[] =>
   LAUNCH_LEGS.filter((leg) => leg.platform === 'node' || platforms.includes(leg.platform));
 

@@ -1,8 +1,4 @@
-// Seam 3: roulette progressions and strategy cycles (design frames S1-06
-// pending strategy action, S1-07 cycle result), through the real routes on the
-// in-memory adapters, driven only through the accessibility tree. Spins come
-// from the all-zero Random123 stream: 0, 7, 3, 36, 14, 3, 34 on single zero
-// (7, 3, 36, 14 and 34 are red), so black loses every one of them.
+// Spec 1 S1-06, S1-07
 
 import { act, cleanup, fireEvent, screen, within } from '@testing-library/react-native';
 import { renderRouter } from 'expo-router/testing-library';
@@ -41,7 +37,6 @@ async function startGuided(strategy: string, target: string, buyIn?: string) {
   await screen.findByLabelText(`Session balance ${buyIn ?? '1,000'}`);
 }
 
-/** Sets the total stake on Black in the bet list, then spins. */
 async function spinBlack(stake: number) {
   const list = screen.queryByRole('tab', { name: 'Bet list', selected: false });
   if (list) await fireEvent.press(list);
@@ -54,11 +49,9 @@ async function spinBlack(stake: number) {
   const turn = announcements.length;
   await fireEvent.press(screen.getByRole('button', { name: 'Spin' }));
   await screen.findByLabelText(/^Last spin:/);
-  // The spin settled (it was not held in a correction).
   expect(announcements.slice(turn).join(' ')).toMatch(/Black [\d,]+ (wins|loses)/);
 }
 
-/** Every label, hint and text on screen, for information-hiding checks. */
 function everything(): string {
   const texts: string[] = [];
   const visit = (node: unknown) => {
@@ -92,7 +85,6 @@ describe('roulette progressions', () => {
     await startGuided('Capped Martingale', 'Black');
     for (const stake of [10, 20, 40, 80, 160]) {
       await spinBlack(stake);
-      // The next stake stays the player's to work out: it never appears before they bet.
       expect(everything()).not.toMatch(new RegExp(`\\b${stake * 2} on Black`));
     }
     await spinBlack(320);
@@ -109,7 +101,6 @@ describe('roulette progressions', () => {
     expect(screen.getByLabelText('Status Cycle ended')).toBeOnTheScreen();
     expect(screen.getByRole('button', { name: 'Spin' })).toBeDisabled();
 
-    // Rotating keeps the result: it lives in the committed state.
     await setWindow(844, 390);
     expect(within(screen.getByTestId('cycle-panel')).getByLabelText('Cycle result minus 630, Loss')).toBeOnTheScreen();
 
@@ -139,14 +130,12 @@ describe('roulette progressions', () => {
     expect(await screen.findByLabelText('Session balance 70')).toBeOnTheScreen();
     expect(announcements.join(' ')).toMatch(/Rebuy 50 added\. Total funding 100\. The strategy can place its next bet again\./);
     expect(screen.queryByTestId('pending-panel')).toBeNull();
-    // The rebuy didn't bet for the player.
     expect(screen.getByText('No wagers yet')).toBeOnTheScreen();
   });
 
   it('at the largest text the cycle result reflows and keeps its actions', async () => {
     await startGuided('Three-win parlay', 'Black');
     await setWindow(390, 844, 3.1);
-    // 0 loses: a parlay loss completes the cycle.
     await spinBlack(10);
     const panel = within(await screen.findByTestId('cycle-panel'));
     expect(panel.getByRole('header', { name: 'Cycle complete' })).toBeOnTheScreen();

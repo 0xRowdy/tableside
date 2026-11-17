@@ -1,6 +1,4 @@
-// Seam 3: S2-20 Sync status, over an Account-service fake, driven only through
-// the accessibility tree: waiting records, a flagged record and its retry,
-// errors, the first download, and required updates with their notice.
+// Spec 2 S2-20
 
 import type { AccountSync, SyncStatus, UploadStatus } from '@tableside/account';
 import { act, fireEvent, render, screen, within } from '@testing-library/react-native';
@@ -9,7 +7,6 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { SyncStatusScreen } from '@/account/SyncStatusScreen';
 
-/** Today, 14 Nov 2026 at 9:43 on the device's clock. */
 const NOW = new Date(2026, 10, 14, 9, 43).getTime();
 const at = (month: number, day: number, hour = 12, minute = 0) => new Date(2026, month, day, hour, minute).getTime();
 
@@ -33,7 +30,6 @@ const SYNCED: SyncStatus = {
   download: { state: 'not-requested' },
 };
 
-/** An Account service's sync, with a status the test sets and the actions it records. */
 function fakeSync(status: Partial<SyncStatus>) {
   let current: SyncStatus = { ...SYNCED, ...status };
   const listeners = new Set<(status: SyncStatus) => void>();
@@ -260,7 +256,6 @@ describe('S2-20 Sync status', () => {
     expect(banner.getByText('Your local records are kept and nothing is deleted. Update to sync them.')).toBeOnTheScreen();
     expect(banner.getByText('A security fix needs this update.')).toBeOnTheScreen();
     expect(screen.getByText('1 record waiting to sync')).toBeOnTheScreen();
-    // Retrying can't help until the update; only the update is offered.
     expect(screen.queryByRole('button', { name: /^(Retry now|Sync now)$/ })).toBeNull();
     await fireEvent.press(banner.getByRole('button', { name: 'Update' }));
     expect(actions.onUpdate).toHaveBeenCalled();

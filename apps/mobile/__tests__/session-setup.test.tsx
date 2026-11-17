@@ -1,9 +1,4 @@
-// Seam 3: session setup for all three games (design frames S1-02: blackjack
-// i1tnq, craps GAXET, roulette XQukd, invalid limits T66Sqw, buy-in can't cover
-// tUFpp, incompatible strategy S4-13 YwrCf; S5-10 allowance lines), through the
-// real routes on the in-memory adapters, driven only through the accessibility
-// tree. Expected values: spec #51 user stories 3-12 and Default table limits;
-// house edges from the definitions package's published-source tests.
+// Spec 1 S1-02 (i1tnq, GAXET, XQukd, T66Sqw, tUFpp), S4-13 YwrCf, S5-10
 
 import { act, cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react-native';
 import { renderRouter } from 'expo-router/testing-library';
@@ -85,7 +80,6 @@ describe('session setup', () => {
       expect(screen.getByRole('switch', { name: 'Dealer hits soft 17' })).not.toBeChecked();
       expect(screen.getByRole('switch', { name: 'Late surrender' })).not.toBeChecked();
       expect(screen.getByText(/House edge with basic strategy: 0\.40%/)).toBeOnTheScreen();
-      // A property of the rules, never a prediction.
       expect(screen.getByText(/property of these rules, not a prediction/)).toBeOnTheScreen();
     });
 
@@ -217,7 +211,6 @@ describe('session setup', () => {
       expect(buyIn()).toHaveProp('value', '250');
       expect(screen.getByText('Your last roulette buy-in. Each session starts fresh.')).toBeOnTheScreen();
 
-      // Another launch: the preference is on the device; other games keep their own.
       storage().stored = storage().latest?.text ?? null;
       await cleanup();
       await open('roulette', 'Roulette');
@@ -307,7 +300,6 @@ describe('session setup', () => {
       await fireEvent.press(start());
       await screen.findByLabelText('Session balance 1,000');
       expect(await screen.findByLabelText('TIME: 12 min of guided practice left today')).toBeOnTheScreen();
-      // Nothing promotes premium during play.
       expect(screen.queryByRole('button', { name: 'See premium' })).toBeNull();
     });
 

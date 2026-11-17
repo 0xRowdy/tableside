@@ -1,9 +1,4 @@
-// Seam 2, signing out of this device (#99, spec 2 *Sessions, revocation*):
-// current-session scope only, an open practice session saved and paused
-// through spec 1's direct suspend, the database closed and kept with its key,
-// credentials cleared. Offline it acts at once and never claims the server
-// session ended. Another account on the same installation sees none of the
-// first account's data, and late answers for the first account are dropped.
+// Spec 2 Sessions, revocation; #99
 
 import { afterEach, describe, expect, it } from 'vitest';
 
@@ -26,13 +21,10 @@ async function signedIn(phone: SimulatedDevice, label: string) {
   return { email, accountId: gate.accountId };
 }
 
-/** The Auth credentials this device holds for its environment, if any. */
 const authCredentials = (phone: SimulatedDevice) => phone.credentials.items.get(`tableside.${phone.environment}.auth`) ?? null;
 const accessToken = (stored: string) => (JSON.parse(stored) as { access_token: string }).access_token;
-/** The Auth session an access token belongs to. */
 const sessionId = (token: string) => (JSON.parse(Buffer.from(token.split('.')[1]!, 'base64url').toString()) as { session_id: string }).session_id;
 
-/** Whether the server still accepts an access token for its own account. */
 async function serverAccepts(token: string): Promise<boolean> {
   const { data, error } = await stack.rawClient(token).rpc('current_account');
   return !error && data !== null;
@@ -53,11 +45,9 @@ describe('signing out of this device', () => {
     expect(phone.account.gate).toEqual({ state: 'signed-out', accountId });
     expect(phone.vault.openAccount).toBeNull();
     expect(authCredentials(phone)).toBeNull();
-    // This session ended; the tablet's (another session of the account) did not.
     expect(await serverAccepts(token)).toBe(false);
     expect(await serverAccepts(tabletToken)).toBe(true);
 
-    // The next launch stays signed out, offline, sending nothing.
     phone.proxy.online = false;
     const sent = phone.proxy.sent.length;
     await phone.restart();
@@ -65,9 +55,7 @@ describe('signing out of this device', () => {
     expect(phone.vault.openAccount).toBeNull();
     expect(phone.proxy.sent.length).toBe(sent);
 
-    // Signing in to the same account online reopens the same database.
     phone.proxy.online = true;
-    // A third code for the address in a minute would wait out its pacing.
     await stack.resetCodeRequests();
     expect(await signInByEmail(phone, email)).toEqual({ status: 'signed-in' });
     expect(phone.account.gate).toEqual({ state: 'active', accountId, eligibility: '18+' });
@@ -78,7 +66,6 @@ describe('signing out of this device', () => {
     const phone = device('sign-out-practice');
     const { email } = await signedIn(phone, 'sign-out-practice');
     const practice = await phone.startPracticeSession();
-    // A wager is still saving when the player signs out: it finishes, then nothing more happens.
     const saving = practice.placeWager('red', '10');
 
     await phone.account.signOut();
@@ -101,7 +88,6 @@ describe('signing out of this device', () => {
 
     phone.proxy.online = true;
     expect(await phone.account.signOut()).toEqual({ status: 'signed-out', serverSessionEnded: true });
-    // The session is gone, with its refresh tokens.
     expect(await stack.sql`select 1 from auth.sessions where id = ${session}`).toHaveLength(0);
   });
 
@@ -123,7 +109,6 @@ describe('signing out of this device', () => {
     expect(phone.account.gate).toEqual({ state: 'signed-out', accountId });
     expect(phone.vault.openAccount).toBeNull();
     expect(authCredentials(phone)).toBeNull();
-    // The server was never told, and nothing pretends it was.
     expect(await serverAccepts(token)).toBe(true);
   });
 });
@@ -151,7 +136,6 @@ describe('another account on the same installation', () => {
     const phone = device('late-answer');
     await signedIn(phone, 'late-first');
     await phone.playPracticeSession();
-    // The first account's upload answer is held past its sign-out and the next sign-in.
     const held = phone.proxy.delayNextResponse('sync_upload_v1');
     void phone.account.sync.reconcile();
     await held.arrived;

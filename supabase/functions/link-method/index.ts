@@ -1,25 +1,4 @@
-// Add a sign-in method (spec 2, #100; S2-18): after the player confirmed it's
-// them (fresh-auth), and with proof of the new method. A method another
-// account signs in with is a conflict, never a merge. Every method added
-// sends the account a security notice.
-//
-// POST, with the caller's own access token as the bearer and naming its
-// backend environment in x-tableside-environment like every request:
-//   { method: 'provider', provider, idToken, nonce }  an ID token for the Apple or Google identity to add,
-//                                                     minted for a nonce from issue_proof_nonce_v1
-//   { method: 'email', step: 'send' }                 emails a code to the account's sign-in email
-//   { method: 'email', code }                         adds the email-code method with that code
-// Answers:
-//   200 { status: 'linked' | 'already-linked' | 'sent' }
-//   409 { status: 'conflict' }                         another account signs in with this identity
-//   403 { status: 'fresh-authentication-required' }
-//   401 { status: 'invalid-token' | 'invalid-code' | 'not-signed-in' }
-//   429 { status: 'rate-limited', retryAfter }         code requests, as request-code limits them
-//   422 { status: 'no-address' }                       no confirmed sign-in email to add the method for
-//   502 { status: 'failed' }
-//   400 { status: 'invalid' }
-//
-// Nothing here logs a token, nonce, code, claim or address.
+// Spec 2 S2-18; #100
 
 import { callerOf, emailCodeValid, provenIdentity } from '../_shared/caller.ts';
 import { admitCodeRequest, logSend, sendCodeEmail } from '../_shared/codes.ts';
@@ -72,7 +51,6 @@ Deno.serve(async (request) => {
     }
 
     if (body.method === 'email' && typeof body.code === 'string' && /^\d{6}$/.test(body.code)) {
-      // Checked again, not remembered: the account may have changed since the code was sent.
       const address = await rpc<Outcome>('email_method_address', who);
       if (address.status !== 'ready' || !address.email) return reply(STATUS_CODES[address.status] ?? 502, { status: address.status });
       if (!(await emailCodeValid(address.email, body.code, caller.authUserId))) return reply(401, { status: 'invalid-code' });
@@ -86,16 +64,13 @@ Deno.serve(async (request) => {
   }
 });
 
-/** Answers a link's outcome, sending the security notice first when a method was added. */
 async function finish(environment: string, outcome: Outcome, label: string): Promise<Response> {
   if (outcome.status !== 'linked') return reply(STATUS_CODES[outcome.status] ?? 502, { status: outcome.status });
   const delivered = outcome.email ? await deliver(outcome.email, methodLinkedMail(label), 'security') : false;
-  // The method is added either way: a notice that couldn't go is logged as a failed send, never retried.
   await logSend(environment, 'method-linked', delivered);
   return reply(200, { status: 'linked' });
 }
 
-/** Emails the account's sign-in address a code, under request-code's limits. */
 async function sendCode(environment: string, email: string, ip: string): Promise<Response> {
   const refused = await admitCodeRequest(environment, email, ip);
   if (refused) return refused;

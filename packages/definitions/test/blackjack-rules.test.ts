@@ -3,8 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import { BLACKJACK_PRESETS, blackjackRules, DEFAULT_BLACKJACK_PRESET } from '../src/index';
 
-// Launch rules (#3 / spec #51): six decks; S17/H17 x late surrender on/off,
-// default S17 + LS; penetration 50-80% in 5% steps, default 75%; initial wager 10/1,000.
+// Spec 1 Game rules; #3
 describe('blackjack rule presets', () => {
   it('defaults to S17 with late surrender, 75% penetration and initial-wager limits 10/1,000', () => {
     expect(DEFAULT_BLACKJACK_PRESET).toBe('S17_LS');

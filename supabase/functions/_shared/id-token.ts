@@ -1,15 +1,4 @@
-// Verifies a provider's ID token (Apple, Google, or a local stack's test
-// identity provider) the way Auth does: an RS256 signature by one of the
-// issuer's published keys, the issuer, an allowed audience, an unexpired
-// token and, when asked, the nonce claim. Nothing here logs a token or claim.
-//
-// Each provider's settings come from the function's environment:
-//   TABLESIDE_ID_TOKEN_<PROVIDER>_ISSUER      the issuer, whose discovery document names its keys
-//   TABLESIDE_ID_TOKEN_<PROVIDER>_AUDIENCES   comma-separated client IDs (Apple: bundle ID and Services ID)
-// where <PROVIDER> is Auth's name for it (APPLE, GOOGLE, KEYCLOAK). A provider
-// without settings is refused. Locally only the test identity provider is set
-// (config.toml [edge_runtime.secrets]); beta and production set Apple and
-// Google (docs/environments.md).
+// docs/environments.md
 
 declare const Deno: { env: { get(name: string): string | undefined } };
 
@@ -26,7 +15,6 @@ interface ProviderConfig {
   readonly audiences: readonly string[];
 }
 
-/** Clock skew allowed on expiry, as Auth allows. */
 const LEEWAY_SECONDS = 30;
 
 export function providerConfig(provider: string): ProviderConfig | null {
@@ -40,10 +28,6 @@ export function providerConfig(provider: string): ProviderConfig | null {
   return issuer && audiences.length > 0 ? { issuer, audiences } : null;
 }
 
-/**
- * The token's claims when it is valid for `provider` (and carries the nonce
- * claim `hashedNonce`, when given); otherwise null.
- */
 export async function verifyIdToken(provider: string, token: string, hashedNonce?: string): Promise<IdTokenClaims | null> {
   const claims = (await verifyProviderJwt(provider, token)) as Partial<IdTokenClaims> | null;
   if (!claims) return null;
@@ -53,13 +37,6 @@ export async function verifyIdToken(provider: string, token: string, hashedNonce
   return claims as IdTokenClaims;
 }
 
-/**
- * The claims of a JWT `provider` signed (an ID token, or a security event
- * such as Apple's server-to-server notification or Google's), when its
- * signature is by one of the issuer's published keys, its issuer is the
- * provider's and an audience is one of the app's. Null otherwise. Lifetime
- * and the other claims are the caller's to check.
- */
 export async function verifyProviderJwt(provider: string, token: string): Promise<Record<string, unknown> | null> {
   const config = providerConfig(provider);
   if (!config) return null;
@@ -76,7 +53,6 @@ export async function verifyProviderJwt(provider: string, token: string): Promis
   const signed = new TextEncoder().encode(`${headerPart}.${claimsPart}`);
   if (!(await crypto.subtle.verify('RSASSA-PKCS1-v1_5', key, signature, signed))) return null;
 
-  // Google writes its issuer with or without the scheme, and its security events with a trailing slash.
   const issuers = config.issuer === 'https://accounts.google.com' ? [config.issuer, 'accounts.google.com', 'https://accounts.google.com/'] : [config.issuer];
   const audiences = Array.isArray(claims.aud) ? claims.aud : [claims.aud];
   if (typeof claims.iss !== 'string' || !issuers.includes(claims.iss)) return null;
@@ -84,13 +60,11 @@ export async function verifyProviderJwt(provider: string, token: string): Promis
   return claims;
 }
 
-/** SHA-256 of `text`, as lowercase hex: how a provider's nonce claim relates to the client's nonce. */
 export async function sha256Hex(text: string): Promise<string> {
   const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text)));
   return Array.from(digest, (byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 
-// Each issuer's keys, kept for the worker's life and fetched again for a key ID they don't have (rotation).
 const keySets = new Map<string, Map<string, CryptoKey>>();
 
 async function signingKey(issuer: string, keyId: string): Promise<CryptoKey | null> {

@@ -1,6 +1,4 @@
-// Seam 2: age eligibility (#90). Bands, platform signals against the fallback
-// declaration, the restricted gate states, offline retention, and the suspend
-// of an active spec-1 practice session when eligibility changes.
+// #90
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -17,7 +15,6 @@ function device(name: string): SimulatedDevice {
 }
 afterEach(() => devices.splice(0).forEach((d) => d.dispose()));
 
-/** Creates an account on a setup device, which stays signed in to it. */
 async function createAccountOn(email: string, band: EligibilityBand = '18+') {
   const setup = device('setup');
   expect(await createAccountByEmail(setup, email, band)).toEqual({ status: 'signed-in' });
@@ -28,7 +25,6 @@ async function createAccountOn(email: string, band: EligibilityBand = '18+') {
 
 const createAccount = async (email: string, band: EligibilityBand = '18+') => (await createAccountOn(email, band)).accountId;
 
-/** What support review (or a platform signal reported from another device) leaves as the account's record. */
 async function setServerRecord(accountId: string, band: string, source = 'platform-signal') {
   await localStack().sql`update public.eligibility set band = ${band}, source = ${source} where account_id = ${accountId}`;
 }
@@ -42,7 +38,6 @@ describe('signing in to an account whose eligibility is not established', () => 
     const phone = device('phone');
     expect(await signInByEmail(phone, email)).toEqual({ status: 'signed-in' });
     expect(phone.account.gate).toEqual({ state: 'age-ineligible', accountId });
-    // Restricted paths (export, the local supplement) need the database: it is open.
     expect(phone.vault.openAccount).toBe(accountId);
   });
 
@@ -57,7 +52,6 @@ describe('signing in to an account whose eligibility is not established', () => 
   });
 });
 
-/** The account's one current record, as the server keeps it. */
 async function serverRecords(accountId: string) {
   return localStack().sql<{ band: string; source: string; policy_version: number }[]>`
     select band, source, policy_version from public.eligibility where account_id = ${accountId}`;
@@ -127,7 +121,6 @@ describe('an existing account on a new device', () => {
 
     expect(await signInByEmail(tablet, email)).toEqual({ status: 'signed-in' });
     expect(tablet.account.gate).toEqual({ state: 'active', accountId, eligibility: '13-15' });
-    // Sign in never asks for age: the platform check runs without a prompt.
     expect(tablet.ageSignals.checks).toEqual(['silent']);
   });
 
@@ -140,12 +133,10 @@ describe('an existing account on a new device', () => {
 
     expect(await signInByEmail(tablet, email)).toEqual({ status: 'signed-in' });
     expect(tablet.account.gate).toEqual({ state: 'age-unresolved', accountId, reason: 'check-pending' });
-    // It isn't age information: the account's record and its other devices are untouched.
     expect(await serverRecords(accountId)).toEqual([{ band: '18+', source: 'declaration', policy_version: 1 }]);
     await phone.account.refreshEligibility();
     expect(phone.account.gate).toEqual({ state: 'active', accountId, eligibility: '18+' });
 
-    // Once the platform no longer requires the check, the record governs again.
     tablet.ageSignals.signal = { kind: 'unavailable' };
     await tablet.account.refreshEligibility();
     expect(tablet.account.gate).toEqual({ state: 'active', accountId, eligibility: '18+' });
@@ -205,7 +196,6 @@ describe('retrying while unresolved', () => {
     await signInByEmail(phone, email);
     expect(phone.account.gate).toEqual({ state: 'age-unresolved', accountId, reason: 'check-pending' });
 
-    // A third code request for the address, beyond the two the limit admits at once.
     await localStack().resetCodeRequests();
     const tablet = device('tablet');
     expect(await signInByEmail(tablet, email)).toEqual({ status: 'signed-in' });
@@ -213,7 +203,6 @@ describe('retrying while unresolved', () => {
     expect(await tablet.account.answerAgeQuestion('18+')).toEqual({ status: 'unresolved' });
     expect(await serverRecords(accountId)).toEqual([]);
 
-    // Once the phone's platform no longer requires it, the question may decide.
     phone.ageSignals.signal = { kind: 'unavailable' };
     await phone.account.refreshEligibility();
     expect(await tablet.account.answerAgeQuestion('18+')).toEqual({ status: 'eligible' });
@@ -458,7 +447,6 @@ describe('learning of a change', () => {
     expect(phone.account.gate).toEqual({ state: 'active', accountId, eligibility: '16-17' });
     expect(await serverRecords(accountId)).toEqual([{ band: '16-17', source: 'declaration', policy_version: 1 }]);
 
-    // Support review raises it; the device takes the server's record.
     await setServerRecord(accountId, '18+', 'declaration');
     await phone.account.refreshEligibility();
     expect(phone.account.gate).toEqual({ state: 'active', accountId, eligibility: '18+' });
@@ -480,12 +468,10 @@ describe('an active practice session', () => {
     await phone.account.refreshEligibility();
     await vi.waitFor(() => expect(practice.snapshot()).toMatchObject({ status: 'active', suspension: { cause: 'access', kind: 'immediate', reached: true } }));
 
-    // Nothing more is revealed or settled: the spin is refused, ending is blocked, no completion exists.
     await practice.spin();
     await practice.endSession();
     expect(practice.snapshot()).toMatchObject({ status: 'active', view: { phase: 'open-decision', balance: '990' } });
     expect(await phone.vault.store().readOutgoing()).toEqual([]);
-    // The session is saved in its committed phase, waiting.
     expect((await phone.vault.store().findUnfinished())?.activityId).toBe(unfinished?.activityId);
   });
 

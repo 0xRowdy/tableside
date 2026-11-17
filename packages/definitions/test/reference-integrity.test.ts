@@ -11,8 +11,7 @@ import { buildProblems, MODULE_PATH, REFERENCE_DIR } from '../scripts/blackjack-
 import { BLACKJACK_REFERENCE, BLACKJACK_REFERENCE_IDENTITY } from '../src/index';
 import { REFERENCE_FILES } from '../src/blackjack/reference-files.generated';
 
-// SHA-256 per file from reference-manifest.json at
-// research/blackjack-coaching-validation@ae3776d (frozen_files).
+// docs/development.md Blackjack reference
 const FROZEN: Record<string, string> = {
   'basic_S17_LS.csv': '77fd89fe6491380c15d077a1e58eea24739ea87ae7db89a8fac11b9c096e63d8',
   'basic_S17_noLS.csv': '8c9c38381e60bd11eecb8eed3c0e434efcfed246c5fc6fd9c04819382fca47f7',
@@ -81,13 +80,10 @@ describe('certified blackjack reference integrity (launch gate 2)', () => {
   });
 
   it('ships no research calculator code', () => {
-    // The research's scripts (including the GPL-linked farmer_driver.cpp) are
-    // listed in its manifest; none may appear anywhere in the product tree.
     const manifest = JSON.parse(readFileSync(join(REFERENCE_DIR, 'reference-manifest.json'), 'utf8')) as {
       scripts: Record<string, string>;
       calculator: { files_used: string[] };
     };
-    // Plus the GPL calculator's own sources (src/blackjack.cpp, src/blackjack.h), never vendored.
     const calculatorFiles = manifest.calculator.files_used.map((path) => path.split('/').pop() ?? path);
     expect(calculatorFiles).toEqual(['blackjack.cpp', 'blackjack.h']);
     const researchScripts = new Set([...Object.keys(manifest.scripts), ...calculatorFiles]);

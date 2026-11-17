@@ -1,71 +1,36 @@
-// The Account service's records (spec 2, *Revisioned items, conflicts,
-// tombstones and totals*): revisioned items as this installation shows them,
-// their conflicts' resolution, and lifetime totals. Spec 4's casino sessions
-// and private strategies build their screens on these.
-//
-// - Account totals count what the account accepted, each record's accepted
-//   version once: a conflict's baseline, never its proposals, and nothing for
-//   a tombstone. A pending edit of an accepted record is in no total.
-// - Records saved here that the account hasn't accepted yet are labeled local,
-//   and summed apart.
-// - A record held as a snapshot's summary gets its detail when it is opened
-//   (`detail`), if the first download or Download all history hasn't brought it.
-// - While a new device's first download is staging, the account's totals are
-//   the snapshot's (every summary at its watermark), with whatever this
-//   installation had accepted after the watermark.
+// Spec 2 Revisioned items, conflicts, tombstones and totals
 
 import type { DetailResult, Resolution, ResolutionOutcome, SyncEngine } from './engine';
 import type { Contribution, RecordType, RevisionedState } from './registry';
 import type { SyncStore } from './store';
 import { type TotalsRow, sumContributions } from './totals';
 
-/** A revisioned item as this installation shows it. */
 export interface RevisionedItemView {
   readonly item: string;
-  /**
-   * local: saved on this installation only; the account hasn't received it, and no account total counts it.
-   * pending: the account has the item, and a change made here awaits the account.
-   * accepted: as the account accepted it.
-   */
   readonly status: 'local' | 'pending' | 'accepted';
-  /** What this installation shows: its own latest change while local or pending, else the accepted value. null: deleted. */
   readonly value: unknown;
-  /** The account's accepted state, with any open conflict: what account totals count. */
   readonly accepted: RevisionedState<unknown> | null;
 }
 
 export interface AccountTotals {
-  /** What the account accepted. */
   readonly account: readonly TotalsRow[];
-  /** Records saved on this installation that the account hasn't accepted yet, labeled local. */
   readonly local: readonly TotalsRow[];
 }
 
 export type ResolutionResult =
   | { readonly status: Exclude<ResolutionOutcome, 'conflict-changed'> }
-  /** The conflict changed after it was reviewed: the item as it now is, to review again. */
   | { readonly status: 'conflict-changed'; readonly item: RevisionedItemView | null };
 
 export interface AccountRecords {
-  /** Saves a revisioned item on this installation (new or edited); it uploads by itself. */
   save(recordType: string, item: string, value: unknown): Promise<void>;
-  /** Deletes a revisioned item on this installation; it uploads by itself. */
   delete(recordType: string, item: string): Promise<void>;
-  /** Every revisioned item of a type on this installation, deleted ones included (their recovery proposals need review). */
   revisionedItems(recordType: string): Promise<readonly RevisionedItemView[]>;
-  /** Resolves an open conflict. Needs the network: nothing is queued. */
   resolve(recordType: string, item: string, resolution: Resolution): Promise<ResolutionResult>;
   totals(): Promise<AccountTotals>;
-  /**
-   * A record's detail (spec 2, *History*): kept here already, or fetched now
-   * by the accepted revision this installation holds and kept from then on;
-   * a changed revision is reconciled first. Needs the network only when the
-   * detail isn't here yet. Offline with no open account session.
-   */
+  // Spec 2 History
   detail(recordType: string, item: string): Promise<DetailResult>;
 }
 
-/** The open account session's store and sync engine, or null when no account is open. */
 export type OpenSession = () => { readonly store: SyncStore; readonly engine: SyncEngine } | null;
 
 export class NoOpenAccountError extends Error {
@@ -135,7 +100,6 @@ export function accountRecords(open: OpenSession, registry: ReadonlyMap<string, 
       const queue = await store.readUploadQueue();
       const bootstrap = await store.readBootstrap();
       const baseline = !bootstrap.installed ? bootstrap.staging : null;
-      // A result whose purge is queued no longer counts, even while its own upload is pending.
       const purging = new Set(
         queue.flatMap((entry) => {
           const target = registry.get(entry.recordType)?.purges?.(entry.payload);

@@ -1,4 +1,4 @@
-// Recorded by scripts/record-checkpoints.ts with engine 0.0.0, state schema 7. Never edit or remove.
+// docs/development.md Releases: recorded checkpoints and the quarantine list
 import type { RecordedBuild } from './index';
 
 export const RECORDED_ENGINE_0_0_0_SCHEMA_7: RecordedBuild = {

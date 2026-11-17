@@ -1,24 +1,4 @@
-// Records this build's account databases for store-migration testing (#86):
-//
-//   pnpm --filter @tableside/mobile record-databases [--replace]
-//
-// It writes src/account/testing/recorded/store-schema-<STORE_SCHEMA_VERSION>.ts.
-// Each database is written by this build's store, as the practice controller
-// writes it, in a fresh encrypted file, then read back as data:
-//
-// - one database per unfinished phase the engine's recording of this build
-//   covers (every game), holding that practice session with its committed
-//   transitions;
-// - one holding finished practice: a completed practice session with its
-//   outgoing synchronization record and an allowance effect, and a practice
-//   session marked incomplete; with sync state (#91): that result's upload
-//   acknowledged, a second result's upload sent and awaiting its receipt, and
-//   a feed page applied that brought another installation's result.
-//
-// While the schema is unreleased, --replace re-records it. When a build with
-// it is released, the recording's SHA-256 goes in recorded/released.json; from
-// then on it is never regenerated, edited or removed. A new recording must be
-// added to recorded/index.ts.
+// docs/development.md Releases: recorded checkpoints and the quarantine list
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
@@ -54,19 +34,16 @@ const directory = mkdtempSync(join(tmpdir(), 'tableside-record-'));
 const build = RECORDED_BUILDS.find((recorded) => recorded.engine === ENGINE_VERSION && recorded.schema === STATE_SCHEMA_VERSION);
 if (!build) throw new Error(`the engine has no recording of this build (engine ${ENGINE_VERSION}, schema ${STATE_SCHEMA_VERSION}): record its checkpoints first`);
 
-/** The recorded practice session's specification, owned by the recording account on its installation, under another id when given. */
 function specificationOf(recorded: RecordedCheckpoint, activityId?: string): ActivitySpecification {
   const specification = recorded.specification as ActivitySpecification;
   return { ...specification, activityId: activityId ?? specification.activityId, owner: IDENTITY.accountId, device: IDENTITY.installationId };
 }
 
-/** The commands that brought the recorded practice session to its checkpoint, from its receipts. */
 function commandsOf(recorded: RecordedCheckpoint): { commandId: string; command: Command }[] {
   const { receipts } = JSON.parse(recorded.checkpoint) as { receipts: { commandId: string; command: string }[] };
   return receipts.map((receipt) => ({ commandId: receipt.commandId, command: JSON.parse(receipt.command) as Command }));
 }
 
-/** Creates the activity and commits each command, as the practice controller does. */
 async function play(store: SqliteActivityStore, specification: ActivitySpecification, random: RandomStreamIdentity, commands: readonly { commandId: string; command: Command }[]) {
   let state: ActivityState = createActivity(specification, random);
   await store.createActivity({
@@ -108,7 +85,6 @@ async function record(name: string, unfinished: RecordedDatabase['unfinished'], 
 }
 
 async function unfinishedDatabase(recorded: RecordedCheckpoint): Promise<RecordedDatabase> {
-  // The replay reaches the engine's recorded checkpoint exactly (under the recording account's identity).
   const replayed = commandsOf(recorded).reduce<ActivityState>((state, { commandId, command }) => {
     const result = advanceActivity(state, { sequence: state.sequence, commandId, command });
     if (result.status !== 'committed') throw new Error(`${recorded.name}: refused ${JSON.stringify(command)}`);
@@ -122,13 +98,6 @@ async function unfinishedDatabase(recorded: RecordedCheckpoint): Promise<Recorde
   });
 }
 
-/**
- * Finished practice: the recorded practice session with the shortest
- * continuation played to completion (its result, outgoing synchronization
- * record and an allowance effect), and one marked incomplete. Other games'
- * results are stored the same way.
- */
-/** The upload a result is sent as, as a command: protocol 1's canonical envelope (packages/account/src/sync/protocol.ts). */
 const operationFor = (digit: string, record: { readonly activityId: string }) => (command: SyncCommand) => {
   const operationId = digit.repeat(32);
   const request = canonicalJson({
@@ -155,7 +124,6 @@ function historyDatabase(): Promise<RecordedDatabase> {
     const facts = (await store.readTransitions(finished.activityId)).flatMap((transition) => transition.facts);
     const result = await store.complete(completedPracticeRecord(state, facts, { startedAt: CREATED_AT, endedAt: CREATED_AT + 600_000, meteringBasis: 'free-play', allowancePolicyVersion: null }));
 
-    // Sync state: the server's command generation, this result uploaded and acknowledged, a second one sent and awaiting its receipt.
     await store.adoptCommandScope(1);
     const accepted = await store.prepareUpload(`completed/${finished.activityId}`, operationFor('1', result));
     await store.acknowledgeUpload(
@@ -170,7 +138,6 @@ function historyDatabase(): Promise<RecordedDatabase> {
       completedPracticeRecord(second.state, secondFacts, { startedAt: CREATED_AT + 700_000, endedAt: CREATED_AT + 900_000, meteringBasis: 'free-play', allowancePolicyVersion: null }),
     );
     await store.prepareUpload(`completed/${sent.activityId}`, operationFor('2', secondResult));
-    // The feed, applied through sequence 2: this installation's own acceptance, then another installation's result.
     const elsewhere = { ...result, activityId: 'elsewhere-1', device: 'recorded-other-installation' };
     await store.applyFeedPage(0, [
       { recordType: 'completed-practice-session', item: finished.activityId, sequence: 1, payload: result },
@@ -195,7 +162,7 @@ async function main(): Promise<void> {
   const recording: RecordedStoreSchema = { storeSchema: STORE_SCHEMA_VERSION, engine: ENGINE_VERSION, stateSchema: STATE_SCHEMA_VERSION, databases };
   writeFileSync(
     target,
-    `// Recorded by scripts/record-databases.ts with store schema ${STORE_SCHEMA_VERSION} (engine ${ENGINE_VERSION}, state schema ${STATE_SCHEMA_VERSION}). Never edit or remove.\n` +
+    '// docs/development.md Releases: recorded checkpoints and the quarantine list\n' +
       `import type { RecordedStoreSchema } from './index';\n\n` +
       `export const ${exportName}: RecordedStoreSchema = ${JSON.stringify(recording, null, 2)};\n`,
   );

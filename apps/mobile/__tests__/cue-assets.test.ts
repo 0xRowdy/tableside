@@ -1,7 +1,3 @@
-// The bundled cue sounds: every catalog cue has a file inside the app, each
-// file stays within the accepted duration, and each has a provenance record
-// that matches it byte for byte.
-
 import { createHash } from 'node:crypto';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -15,7 +11,6 @@ const provenance = JSON.parse(readFileSync(join(SOUNDS, 'provenance.json'), 'utf
 
 const wavFiles = () => readdirSync(SOUNDS).filter((name) => name.endsWith('.wav')).sort();
 
-/** Seconds of audio in a PCM WAV file, from its header. */
 function durationOf(file: Buffer): number {
   expect(file.toString('ascii', 0, 4)).toBe('RIFF');
   expect(file.toString('ascii', 8, 12)).toBe('WAVE');

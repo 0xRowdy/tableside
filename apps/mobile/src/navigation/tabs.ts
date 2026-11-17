@@ -5,11 +5,9 @@ export interface TabDefinition {
   href: '/' | '/play' | '/counting' | '/community' | '/saved' | '/more';
   label: string;
   icon: LucideIcon;
-  /** SF Symbol for the iOS Large Content Viewer. */
   systemImage: string;
 }
 
-/** The six global destinations, in tab-bar order. The tab bar is the only primary navigation. */
 export const TABS: readonly TabDefinition[] = [
   { name: 'index', href: '/', label: 'Home', icon: House, systemImage: 'house' },
   { name: 'play', href: '/play', label: 'Play', icon: Spade, systemImage: 'suit.spade' },

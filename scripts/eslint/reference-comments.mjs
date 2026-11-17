@@ -2,7 +2,7 @@ const MAX_LENGTH = 100;
 
 const DIRECTIVE = /^(eslint(-disable(-next-line|-line)?|-enable)?\s|globals?\s|@ts-(expect-error|ignore|nocheck|check)\b|@(vitest|jest)-environment\s|prettier-ignore\b|(istanbul|c8) ignore\b)/;
 const TRIPLE_SLASH = /^\/\s*<reference\s/;
-const REFERENCE = /^([Ss]pec \d+|ADR \d+|#\d+|docs\/\S+|TODO\((#\d+|[Ss]pec \d+[^)]*)\)$|shortcut: #\d+$)/;
+const REFERENCE = /^([Ss]pec \d+|ADR \d+|#\d+\b|docs\/\S+|TODO\((#\d+|[Ss]pec \d+[^)]*)\)$|shortcut: #\d+$)/;
 
 const MESSAGE =
   'Comments are references (CODING_STANDARDS.md): one line citing a spec section, ADR, issue or docs/ page, ' +

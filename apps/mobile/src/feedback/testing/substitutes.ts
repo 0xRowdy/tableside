@@ -1,6 +1,3 @@
-// Substitute feedback ports for tests: they record what would have played and
-// keep the preferences file in memory.
-
 import type { CueName, HapticPattern } from '../catalog';
 import type { FeedbackPorts } from '../service';
 import type { SettingsStorage } from '../settings';
@@ -39,7 +36,6 @@ export interface SubstituteFeedbackPorts extends FeedbackPorts {
   readonly sound: RecordingSound;
   readonly haptics: RecordingHaptics;
   readonly storage: MemorySettingsStorage;
-  /** Set false to put the app in the background. */
   foreground: boolean;
 }
 

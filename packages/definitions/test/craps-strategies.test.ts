@@ -24,11 +24,7 @@ import {
   THREE_POINT_MOLLY,
 } from '../src/index';
 
-// Spec #51, Built-in strategies (craps rows), on the default 10-minimum table:
-// pass 10 with 10 odds; place 6 and 8 at 12 each after the point; don't pass
-// 10 laying 20 / 15 / 12 to win 10 against 4-10 / 5-9 / 6-8; Three-point Molly
-// with at most two 10 come bases and 10 odds on each; press-and-collect from 12
-// to a 48 cap.
+// Spec 1 Built-in strategies
 const rules = standardCraps();
 const situation = (point: CrapsSituation['point'], bases: [string, string][] = []): CrapsSituation => ({
   game: 'craps',

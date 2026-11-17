@@ -1,15 +1,8 @@
-// Android backup rules (spec 2, *Backup exclusion*): the account vault's
-// directory (databases, WAL and sidecars, the installation identifier) and
-// SecureStore's key material stay out of Auto Backup (Android 11 and lower,
-// full-backup-content) and out of cloud backup and device-to-device transfer
-// (Android 12 and higher, data-extraction-rules). Everything else keeps the
-// platform default. These rules replace expo-secure-store's own, which is
-// configured with configureAndroidBackup: false.
+// Spec 2 Backup exclusion
 const fs = require('fs');
 const path = require('path');
 const { withAndroidManifest, withDangerousMod } = require('expo/config-plugins');
 
-/** The vault's directory under the app's files directory (src/account/native-vault.ts). */
 const VAULT_DIRECTORY = 'tableside-vault';
 
 const EXCLUDES = [`<exclude domain="file" path="${VAULT_DIRECTORY}"/>`, '<exclude domain="sharedpref" path="SecureStore"/>'];

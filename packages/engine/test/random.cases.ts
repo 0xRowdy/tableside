@@ -1,8 +1,3 @@
-// Philox4x32-10 random protocol v1. Generator vectors are the Random123
-// known-answer tests (tests/kat_vectors, "philox4x32 10" rows). Application
-// vectors were produced by an independent Python implementation of the
-// protocol (test/reference/philox_reference.py, checked against the same known answers) or derived by hand from
-// the known-answer outputs, as noted per case.
 import type { TestCase } from '@tableside/harness';
 
 import {
@@ -45,7 +40,6 @@ export const randomCases: TestCase[] = [
   {
     name: 'random: the stream reads counter [blockLow, blockHigh, sessionLow, sessionHigh] and key [keyLow, keyHigh]',
     run: (t) => {
-      // The pi known-answer counter is block 0x85a308d3_243f6a88 of session 0x03707344_13198a2e.
       const stream = RandomStream.restore({ ...PI, block: [0x243f6a88, 0x85a308d3], lane: 0, exhausted: false });
       const draws = [stream.nextUint32(), stream.nextUint32(), stream.nextUint32(), stream.nextUint32()];
       t.equal(hex(draws), ['d16cfe09', '94fdcceb', '5001e420', '24126ea1']);
@@ -57,7 +51,6 @@ export const randomCases: TestCase[] = [
       const stream = RandomStream.create(ZERO);
       t.equal(stream.state(), { ...ZERO, block: [0, 0], lane: 0, exhausted: false });
       const draws = Array.from({ length: 8 }, () => stream.nextUint32());
-      // Lanes 0-3 are the all-zero known answer; block 1 from the Python reference.
       t.equal(draws, [1713891541, 3781805453, 3159862348, 2600524760, 4175744164, 1555169499, 2980410603, 159317863]);
       t.equal(stream.state(), { ...ZERO, block: [2, 0], lane: 0, exhausted: false });
       t.record('draws', draws);
@@ -91,7 +84,6 @@ export const randomCases: TestCase[] = [
     name: 'random: the last tuple of the stream is drawn once, then the stream is exhausted rather than wrapping',
     run: (t) => {
       const stream = RandomStream.restore({ ...ZERO, block: [0xffffffff, 0xffffffff], lane: 3, exhausted: false });
-      // Lane 3 of counter [ffffffff, ffffffff, 0, 0], key [0, 0], from the Python reference.
       t.equal(stream.nextUint32(), 634470994);
       t.equal(stream.state(), { ...ZERO, block: [0xffffffff, 0xffffffff], lane: 3, exhausted: true });
       t.equal(throws(() => stream.nextUint32()), 'RandomStreamExhaustedError');
@@ -122,8 +114,6 @@ export const randomCases: TestCase[] = [
   {
     name: 'random: bounded sampling rejects draws at or above floor(2^32/n)*n and the rejected draws still advance',
     run: (t) => {
-      // Hand-derived from the pi known answer: n = 2^31 + 1 accepts only draws below 2^31 + 1.
-      // d16cfe09 and 94fdcceb are rejected; 5001e420 = 1342301216 is accepted and returned as is.
       const stream = RandomStream.restore({ ...PI, block: [0x243f6a88, 0x85a308d3], lane: 0, exhausted: false });
       t.equal(uniformInt(stream, 2 ** 31 + 1), 1342301216);
       t.equal(stream.state().lane, 3);
@@ -132,7 +122,6 @@ export const randomCases: TestCase[] = [
   {
     name: 'random: bounded sampling maps accepted draws by remainder for 1 <= n <= 2^32',
     run: (t) => {
-      // Four draws per n from a fresh all-zero stream, then the stream position; Python reference.
       const expected: Record<string, [number[], number[]]> = {
         '1': [[0, 0, 0, 0], [1, 0]],
         '2': [[1, 1, 0, 0], [1, 0]],

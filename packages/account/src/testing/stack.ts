@@ -1,7 +1,3 @@
-// The local Supabase stack (`supabase start` at the repository root), as seen
-// by seam 2 scenarios: its endpoints, keys, and privileged checks a scenario
-// makes about what exists on the server.
-
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -15,76 +11,38 @@ export interface LocalStack {
   readonly url: string;
   readonly publishableKey: string;
   readonly mailUrl: string;
-  /** Privileged SQL, for faults no client can cause (server clock, lifecycle states later tickets set). */
   readonly sql: postgres.Sql;
-  /** The backend environment a local stack serves (supabase/seed/local.sql). */
   readonly environment: EnvironmentName;
-  /**
-   * A raw client calling the stack directly, with no Account service: the
-   * adversary's view. It names the stack's environment on every request unless
-   * told to name another, or none (null).
-   */
   rawClient(accessToken?: string, environment?: EnvironmentName | null): SupabaseClient;
-  /** A client with the stack's service role, as a backend job uses it. Privileged: no player has it. */
   serviceClient(): SupabaseClient;
-  /**
-   * Runs `scenario` with the stack serving another environment, as if it were
-   * that environment's project, then restores it. Privileged: no client can.
-   */
   asEnvironment<T>(environment: EnvironmentName, scenario: () => Promise<T>): Promise<T>;
-  /** Moves an eligibility assertion's expiry into the past, as if its lifetime had run out on the server. */
   expireAssertion(assertion: string): Promise<void>;
-  /** The Auth user for an address, or null when none exists. */
   authUserId(email: string): Promise<string | null>;
-  /** The account signed in by an address, or null. */
   accountId(email: string): Promise<string | null>;
   accountCount(email: string): Promise<number>;
-  /**
-   * Calls the request-code function directly, with no Account service: the
-   * adversary's view. It names the stack's environment unless told to name
-   * another, or none (null).
-   */
   requestCode(body: Record<string, unknown>, environment?: EnvironmentName | null): Promise<{ readonly status: number; readonly body: unknown }>;
-  /** Clears every code-request window, as if an hour had passed for every address and network. */
   resetCodeRequests(): Promise<void>;
-  /** Moves an address's code requests (or, with null, everyone's) back in time, as if that long had passed on the server. */
   ageCodeRequests(email: string | null, seconds: number): Promise<void>;
-  /** The database's clock, to mark when a scenario began: the host's can drift from the stack's by more than a send takes. */
   serverNow(): Promise<Date>;
-  /** The send log since the scenario began (a `serverNow` mark): each entry's type, pacing and outcome, oldest first. */
   emailSends(since: Date): Promise<{ type: string; pacing: string; outcome: string }[]>;
-  /** The columns a table holds, to check what it can record. */
   columns(table: string): Promise<string[]>;
-  /**
-   * Calls the provision-reviewer function, as an operator does: with the
-   * stack's secret key unless given another key (an adversary's), naming the
-   * stack's environment unless told to name another, or none (null).
-   */
   provisionReviewer(
     email: string,
     options?: { readonly key?: string; readonly environment?: EnvironmentName | null },
   ): Promise<{ readonly status: number; readonly body: { readonly status?: string; readonly credential?: string } | null }>;
-  /** Calls the reviewer-sign-in function directly, with no Account service: the adversary's view. */
   reviewerSignIn(body: Record<string, unknown>, environment?: EnvironmentName | null): Promise<{ readonly status: number; readonly body: unknown }>;
 }
 
 const repositoryRoot = fileURLToPath(new URL('../../../../', import.meta.url));
 
-/**
- * The checkout's stack slot (`TABLESIDE_STACK_SLOT`, default 0). Slot N runs
- * the generated project in `.stacks/<N>` with every port moved up by N * 100,
- * so worktrees can run stacks side by side (`scripts/stack.mjs`).
- */
 export const stackSlot = Number(process.env.TABLESIDE_STACK_SLOT ?? '0');
 
-/** A port from supabase/config.toml, as this checkout's slot runs it. */
 export const slotPort = (port: number): number => port + stackSlot * 100;
 
 const stackWorkdir = stackSlot > 0 ? join(repositoryRoot, '.stacks', String(stackSlot)) : repositoryRoot;
 
 let stack: LocalStack | null = null;
 
-/** The running local stack. Throws with the command to run when it isn't up. */
 export function localStack(): LocalStack {
   if (stack) return stack;
   let status: string;

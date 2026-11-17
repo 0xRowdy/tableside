@@ -1,6 +1,4 @@
-// Seam 3: the S1-10 session result, rendered from a completed record alone so
-// spec 4 can reopen it from Saved, and driven through the accessibility tree.
-// Records come from the store contract's fixture, varied per case.
+// Spec 1 S1-10
 
 import type { QuarantineList, StrategyDeparture } from '@tableside/engine';
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
@@ -96,7 +94,6 @@ describe('the S1-10 session result', () => {
     expect(screen.getByRole('header', { name: 'Departures, 2' })).toBeOnTheScreen();
     expect(screen.getByLabelText('Spin 1. Strategy: 10 on Red. You: 50 on Red. Retried.')).toBeOnTheScreen();
     expect(screen.getByLabelText('Spin 3 · after black. Strategy: 10 on Red. You: 25 on Red. Overridden.')).toBeOnTheScreen();
-    // Resolution is a word, not only a colour.
     expect(screen.getByText('Retried')).toBeOnTheScreen();
     expect(screen.getByText('Overridden')).toBeOnTheScreen();
     expect(screen.getByText('This session includes an override.')).toBeOnTheScreen();

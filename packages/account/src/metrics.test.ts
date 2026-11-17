@@ -1,5 +1,4 @@
-// What the client may send before and after eligibility (spec 2 Amendment 1 C4; #90),
-// and the operational metrics sender that applies it (#108).
+// Spec 2 Amendment 1 C4; #90; #108
 
 import { describe, expect, it } from 'vitest';
 
@@ -46,7 +45,6 @@ describe('once eligibility is established', () => {
   });
 });
 
-/** A sink that keeps what it was given. */
 function memorySink(): MetricsSink & { readonly events: MetricEvent[] } {
   const events: MetricEvent[] = [];
   return { events, send: (event) => void events.push(event) };
@@ -116,10 +114,8 @@ describe('the operational metrics sender', () => {
     const { sink, metrics } = sender(adult);
     expect(metrics.record('sync_queue_age', 123_456, {})).toBe(true);
     expect(sink.events.at(-1)?.value).toBe(120_000);
-    // An age past the unit's cap reports the cap, so a time of day in milliseconds since the epoch (a clock anchor) never leaves.
     expect(metrics.record('sync_queue_age', 1_763_164_800_000, {})).toBe(true);
     expect(sink.events.at(-1)?.value).toBe(2_678_400_000);
-    // At the cap itself, rounding never takes it past.
     expect(metrics.record('sync_queue_age', 2_678_399_999, {})).toBe(true);
     expect(sink.events.at(-1)?.value).toBeLessThanOrEqual(2_678_400_000);
     expect(metrics.record('sync_queue_age', -1, {})).toBe(false);
@@ -142,9 +138,7 @@ describe('the operational metrics sender', () => {
 });
 
 describe('the catalog', () => {
-  // Words naming what never goes to analytics, logs or crash reports (spec 2,
-  // *Observability*; Amendment 5 §6): no property or value of any metric, the
-  // device's, the server's or spec 5's billing metrics, may name one.
+  // Spec 2 Observability; Amendment 5 §6
   const PRIVATE = new Set([
     'token', 'receipt', 'evidence', 'purchase', 'grant', 'anchor', 'clock', 'response', 'ad', 'email', 'address', 'installation',
     'device', 'user', 'id', 'age', 'birth', 'body', 'payload', 'casino', 'strategy', 'otp', 'name', 'ip',

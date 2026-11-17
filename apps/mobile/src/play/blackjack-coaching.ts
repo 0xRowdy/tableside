@@ -1,10 +1,4 @@
-// Blackjack coaching prose (design frames 04b, S1-05 "BJ guided, before
-// move", its largest-text panel, and S1-04 "basic with deviations, count
-// supplied"). Every line is rendered from the engine's explanation facts for
-// one playing decision: the hand and up card, the table cell, the deviation and
-// the count it was decided at, the unavailable plays and their fallbacks, and
-// the published index comparison. Nothing is judged and nothing added that the
-// facts don't hold.
+// Spec 1 S1-05
 
 import { cardValue, type BlackjackCount, type BlackjackDeviation, type Card, type DeviationPlay, type PlayChoice, type PlayCorrection, type PlayExplanation, type PublishedIndex } from '@tableside/engine';
 
@@ -12,16 +6,12 @@ import { cardRank, PLAY_NOUN, signed, SUIT_GLYPH, totalText } from './blackjack-
 import type { CorrectionCopy } from './coaching-text';
 import { formatUnits, halfUnits } from './units';
 
-/** "A♥": a card as the table shows it. */
 export const cardShort = (card: Card) => `${cardRank(card)}${SUIT_GLYPH[card.suit]}`;
 
 
-/** The up card by value: "a 5", "an ace", "a 10". */
 const upName = (card: Card) => (card.rank === 1 ? 'an ace' : card.rank === 8 ? 'an 8' : `a ${cardValue(card)}`);
-/** An up-card value: "A" or "10". */
 const upValue = (value: number) => (value === 1 ? 'A' : String(value));
 
-/** The imperative for each play: "If you can't double: hit." */
 const IMPERATIVE: Record<PlayChoice, string> = {
   hit: 'hit',
   stand: 'stand',
@@ -32,7 +22,6 @@ const IMPERATIVE: Record<PlayChoice, string> = {
   'decline-insurance': 'decline insurance',
 };
 
-/** A hand in words: "soft 17", "16", "a pair of 8s". */
 function handWords(explanation: PlayExplanation): string {
   const { situation } = explanation;
   if (situation.pair) {
@@ -42,7 +31,6 @@ function handWords(explanation: PlayExplanation): string {
   return totalText(situation.total);
 }
 
-/** "doubles soft 17", "stands on 16", "splits a pair of 8s", "takes insurance". */
 function verbPhrase(play: PlayChoice, hand: string): string {
   switch (play) {
     case 'hit':
@@ -62,12 +50,10 @@ function verbPhrase(play: PlayChoice, hand: string): string {
   }
 }
 
-/** A deviation's play in words, with the basic play named where it is "basic". */
 const deviationPlay = (play: DeviationPlay) => (play === 'basic' ? 'play basic strategy' : play === 'decline' ? 'decline insurance' : play === 'insure' ? 'take insurance' : play);
 
 const SOURCE: Record<'schlesinger' | 'bja', string> = { schlesinger: 'Illustrious 18 / Fab 4 (Schlesinger)', bja: 'Blackjack Apprenticeship chart' };
 
-/** Why a taught index differs from the published ones, when it does; empty when they agree or aren't comparable. */
 export function indexDifferenceLines(deviation: BlackjackDeviation, rules: { dealer: 'S17' | 'H17'; lateSurrender: boolean }): string[] {
   const taught = signed(deviation.threshold);
   const differing = (['schlesinger', 'bja'] as const).filter((source) => {
@@ -100,11 +86,9 @@ export function indexDifferenceLines(deviation: BlackjackDeviation, rules: { dea
   return lines;
 }
 
-/** The count line as the table shows it: "Running +9 · 4.5 decks left · +9 ÷ 4.5 = +2". */
 export const countWorking = (count: BlackjackCount) =>
   `Running ${signed(count.running)} · ${count.decks} decks left · ${signed(count.running)} ÷ ${count.decks} = ${signed(count.trueCount)}`;
 
-/** "16 vs 10: stand at +1 or more (basic hits)": one deviation as a short rule. */
 export function deviationRule(deviation: BlackjackDeviation): string {
   const basicSide = deviation.direction === 'deviate-at-or-above' ? deviation.below : deviation.atOrAbove;
   const deviating = deviation.direction === 'deviate-at-or-above' ? deviation.atOrAbove : deviation.below;
@@ -114,10 +98,6 @@ export function deviationRule(deviation: BlackjackDeviation): string {
   return `${deviation.situation}: ${deviationPlay(basicSide)} at ${signed(deviation.threshold)} or more, ${deviationPlay(deviating)} below`;
 }
 
-/**
- * Before the deal (never during a decision): the deviation whose index is the
- * current true count, and the next index above it.
- */
 export function deviationsAtCount(deviations: readonly BlackjackDeviation[], trueCount: number): { at: BlackjackDeviation | null; next: BlackjackDeviation | null } {
   const sorted = [...deviations].sort((a, b) => a.threshold - b.threshold);
   return { at: sorted.find((d) => d.threshold === trueCount) ?? null, next: sorted.find((d) => d.threshold > trueCount) ?? null };
@@ -140,15 +120,9 @@ function unavailableLine(play: PlayChoice, reason: 'rule' | 'balance', explanati
 }
 
 
-/** The moves as words: "your stand", "your insurance of 5". */
 const moveName = (correction: PlayCorrection) =>
   correction.actual.action === 'insure' && correction.actual.amount ? `insurance of ${formatUnits(correction.actual.amount)}` : PLAY_NOUN[correction.actual.action];
 
-/**
- * The correction pause for one blackjack decision. `countSupplied` is false in
- * the counting modes, where the player keeps the count and play is assessed
- * against the actual one.
- */
 export function playCorrectionCopy(strategyName: string, correction: PlayCorrection, rules: { dealer: 'S17' | 'H17'; lateSurrender: boolean }, countSupplied = true): CorrectionCopy {
   const { explanation } = correction;
   const { situation, deviation, cell } = explanation;
@@ -174,7 +148,6 @@ export function playCorrectionCopy(strategyName: string, correction: PlayCorrect
     lines.push(`${source} ${verbPhrase(cell.play, hand)} against ${upValue(cell.up)}.`);
   } else if (!deviation) lines.push('Basic strategy never takes insurance.');
   if (deviation) {
-    // In the counting modes the engine's view carries no count: the player keeps it.
     lines.push(
       countSupplied && count
         ? `The true count is ${signed(count.trueCount)}, supplied by Tableside in this mode (${countWorking(count)}).`

@@ -1,7 +1,3 @@
-// A bottom sheet over a dimmed screen (the frames' Sheet Header: grabber,
-// title, Close), as a modal the screen reader stays inside. At large text
-// sizes it takes the whole screen, so nothing is cut off; its content scrolls.
-
 import { X } from 'lucide-react-native';
 import type { ReactNode } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
@@ -9,7 +5,6 @@ import { Modal, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, Vi
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/theme/tokens';
 
-/** Above this text size the sheet takes the whole screen. */
 const FULL_SCREEN_FONT_SCALE = 1.5;
 
 export function Sheet({ title, onClose, testID, children }: { title: string; onClose: () => void; testID?: string; children: ReactNode }) {
@@ -35,7 +30,6 @@ export function Sheet({ title, onClose, testID, children }: { title: string; onC
   );
 }
 
-/** Body text in a sheet. */
 export function SheetText({ children, small = false }: { children: ReactNode; small?: boolean }) {
   return (
     <Text maxFontSizeMultiplier={textScale.body} style={small ? styles.note : styles.text}>

@@ -1,7 +1,3 @@
-// The roulette table (design frame "05 Roulette — Betting"). It renders only
-// the engine's permitted view and forwards taps to the practice controller;
-// it never advances the game or decides what is legal.
-
 import { isPlayCorrection, type CycleTurn, type RoulettePermittedView as PermittedView, type RoulettePocket } from '@tableside/engine';
 import { useEffect, useMemo, useState } from 'react';
 import { AccessibilityInfo, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
@@ -26,7 +22,6 @@ import { AccessStopBanner, AllowanceLine, ChipRack, EndingSteps, PhaseStepper, S
 
 type ActiveSnapshot = ActivePracticeSnapshot & { readonly view: PermittedView };
 
-/** Above this text scale, a wide window stacks the felt and the controls so text has room. */
 const SIDE_BY_SIDE_MAX_FONT_SCALE = 1.35;
 
 
@@ -56,19 +51,17 @@ export function RouletteTable({ snapshot }: { snapshot: ActiveSnapshot }) {
   const [confirming, setConfirming] = useState(false);
   const [rebuying, setRebuying] = useState(false);
   const [stoppingStrategy, setStoppingStrategy] = useState(false);
-  // Held here, above both presentations, so rotation, resizing and switching keep the draft.
+  // docs/decisions/mobile-device-support-accessibility.md
   const [presentation, setPresentation] = useState<Presentation>('table');
   const [draft, setDraft] = useState<BetDraft>(EMPTY_DRAFT);
   const { view, facts, busy, save } = snapshot;
   const catalog = useMemo(() => rouletteCatalog(view), [view]);
   const placed = useMemo(() => roulettePlacedWagers(view), [view]);
   const drafted = isDraftPending(draft, placed) ? findChoice(catalog, draft.target) : undefined;
-  // The sheet shows only while a rebuy is offered (the table waits for input).
   const rebuyOpen = rebuying && view.legalCommands.includes('rebuy');
   const addRebuy = async (amount: string) => {
     await controller.rebuy(amount);
     const latest = controller.snapshot();
-    // Committed: close. Refused or not saved: keep the sheet and the draft.
     if (latest.status !== 'active' || latest.facts.some((fact) => fact.kind === 'funding-added')) setRebuying(false);
   };
 
@@ -76,9 +69,6 @@ export function RouletteTable({ snapshot }: { snapshot: ActiveSnapshot }) {
   const legal = (kind: PermittedView['legalCommands'][number]) => ready && view.legalCommands.includes(kind);
   const message = useMemo(() => describeFacts(facts, view), [facts, view]);
 
-  // Announce every committed transition as it is published, including ones
-  // that pass before the next render (an automatic settle right after a reveal),
-  // and a save failure that pauses play.
   useEffect(() => {
     const initial = controller.snapshot();
     let announced = initial.status === 'active' ? initial.view.sequence : -1;
@@ -91,7 +81,6 @@ export function RouletteTable({ snapshot }: { snapshot: ActiveSnapshot }) {
       failed = nowFailed;
       if (latest.view.sequence === announced) return;
       announced = latest.view.sequence;
-      // A state adopted from the store carries no facts of its own: restate where things stand.
       const text = describeFacts(latest.facts, latest.view) ?? `${STATUS[latest.view.phase]}. Balance ${formatUnits(latest.view.balance)}.`;
       AccessibilityInfo.announceForAccessibility(text);
     });
@@ -260,7 +249,6 @@ export function RouletteTable({ snapshot }: { snapshot: ActiveSnapshot }) {
   );
 }
 
-/** A cycle's spin for the cycle result: "Spin 1 · 10 on Black", "Lost · 0 green". */
 function describeTurn(turn: CycleTurn, index: number): TurnWords {
   const pocket: RoulettePocket = turn.outcome === '00' ? '00' : Number(turn.outcome);
   const result = turn.net.startsWith('-') ? 'Lost' : turn.net === '0' ? 'Even' : 'Won';

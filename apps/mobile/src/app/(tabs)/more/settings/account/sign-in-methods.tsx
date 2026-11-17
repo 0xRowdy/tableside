@@ -1,9 +1,4 @@
-// S2-18 Sign-in methods (More → Settings → Account): the account's methods,
-// with Remove and Change email, and the methods to add. Every change asks the
-// player to confirm it's them first; a method another account uses is a
-// conflict, never a merge; the last method can't be removed. A second method
-// is explained, never required.
-// TODO(frames): the "added" and "removed" status lines, the problem messages, the loading and no-connection notes, and the add-email-code code step are unverified against S2-18, which draws none of them.
+// TODO(spec 2 S2-18)
 
 import type { IdentityProvider, SignInMethod, SignInMethodEntry } from '@tableside/account';
 import { router, useFocusEffect } from 'expo-router';
@@ -27,10 +22,9 @@ export default function SignInMethodsScreen() {
   const { service } = useAccount();
   const [methods, setMethods] = useState<readonly SignInMethodEntry[] | null | undefined>();
   const [confirming, setConfirmingChange] = useState<Change | null>(null);
-  // Each request to confirm opens a new sheet, even straight after the last one closed.
-  const [confirmations, setConfirmations] = useState(0);
+  const [confirmSheetKey, setConfirmSheetKey] = useState(0);
   const setConfirming = (change: Change | null) => {
-    if (change) setConfirmations((count) => count + 1);
+    if (change) setConfirmSheetKey((count) => count + 1);
     setConfirmingChange(change);
   };
   const [conflict, setConflict] = useState<IdentityProvider | null>(null);
@@ -62,7 +56,6 @@ export default function SignInMethodsScreen() {
     void reload();
   };
 
-  /** Runs a change once the player has confirmed it's them; a confirmation that ran out asks again. */
   const apply = async (change: Change) => {
     setBusy(true);
     setProblem(null);
@@ -98,7 +91,6 @@ export default function SignInMethodsScreen() {
   const remove = (entry: SignInMethodEntry) => {
     setStatus(null);
     setProblem(null);
-    // The only method can't go, so there's nothing to confirm.
     if (methods.length <= 1) setLastMethod(entry.id);
     else setConfirming({ kind: 'remove', entry });
   };
@@ -175,7 +167,7 @@ export default function SignInMethodsScreen() {
       <Note>{"Changes ask you to confirm it's you. We email you when a method is added or a device is signed out."}</Note>
       {confirming && (
         <ConfirmItsYouSheet
-          key={confirmations}
+          key={confirmSheetKey}
           reason={confirmReason(confirming.kind === 'add' ? confirming : { kind: 'remove', method: confirming.entry.method })}
           methods={confirmWith}
           onClose={() => setConfirming(null)}
@@ -204,7 +196,6 @@ export default function SignInMethodsScreen() {
   );
 }
 
-/** Adding the email code: the code sent to the account's sign-in email proves it. */
 function EmailMethodCodeSheet({ email, onClose, onLinked, onExpired }: { email: string; onClose: () => void; onLinked: () => void; onExpired: () => void }) {
   const { service } = useAccount();
   const [code, setCode] = useState('');

@@ -1,16 +1,9 @@
-// Seam 3: the bet selector and wager editor on the roulette table, rendered
-// through the real routes on the in-memory adapters and driven only through
-// the accessibility tree. Spins come from the Random123 "pi digits" stream:
-// 27 (red) first.
-
 import { act, cleanup, fireEvent, screen, within } from '@testing-library/react-native';
 import { renderRouter } from 'expo-router/testing-library';
 import { AccessibilityInfo, Dimensions, StyleSheet } from 'react-native';
 
 import type { substituteAdapters } from '@/practice/testing/substitutes';
 
-// The app runs on the substitute adapters. The clock runs on its own unless a
-// test holds it to keep a spin's committed wagers on screen.
 const mockAdapters: { latest: ReturnType<typeof substituteAdapters> | null; autoClock: boolean } = { latest: null, autoClock: true };
 jest.mock('@/practice/app-adapters', () => {
   const { FakeClock, substituteAdapters: create } = jest.requireActual('@/practice/testing/substitutes');
@@ -36,7 +29,6 @@ async function startSession() {
   await screen.findByLabelText('Session balance 1,000');
 }
 
-/** The committed checkpoint and stored sequence, as the store holds them. */
 async function storedSession() {
   const stored = await mockAdapters.latest?.store.load('activity-1');
   return { checkpoint: stored?.checkpoint, sequence: stored?.sequence };
@@ -49,9 +41,7 @@ const choice = (name: string) => screen.getByRole('radio', { name });
 const stakeField = () => screen.getByLabelText(/^Total stake for /);
 const setButton = () => screen.getByRole('button', { name: /^Set / });
 
-/** Chooses a wager and its numbers in the bet list and types a total stake, without setting it. */
 async function draftWager(kindName: RegExp, choiceName: string, stake: string) {
-  // An open editor goes back to the list first.
   const back = screen.queryByRole('button', { name: 'All wagers' });
   if (back) await fireEvent.press(back);
   await fireEvent.press(kind(kindName));

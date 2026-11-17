@@ -1,6 +1,3 @@
-// Account-service fakes for seam 3 screen tests: a scripted Account service
-// with no network or storage, and the app account around it.
-
 import type {
   AccountDeletion,
   AccountExport,
@@ -64,7 +61,6 @@ type Call =
   | { readonly method: 'createWithProvider'; readonly provider: IdentityProvider; readonly sameIdentity: boolean }
   | { readonly method: 'resume' | 'renew' | 'signOut' | 'recover' | 'checkAge' | 'refreshEligibility' | 'downloadAllHistory' };
 
-/** What the fake's Settings → Account shows unless a test changes it. */
 export const FAKE_SUMMARY: AccountSummary = {
   email: 'player@example.com',
   methods: ['apple', 'email'],
@@ -73,7 +69,6 @@ export const FAKE_SUMMARY: AccountSummary = {
   devices: 3,
 };
 
-/** The sign-in methods the fake's account has unless a test changes them: Apple (Hide My Email) and the email code. */
 export const FAKE_METHODS: readonly SignInMethodEntry[] = [
   { id: 'method-apple', method: 'apple', email: 'x7k2@privaterelay.appleid.com' },
   { id: 'method-email', method: 'email', email: 'player@example.com' },
@@ -81,7 +76,6 @@ export const FAKE_METHODS: readonly SignInMethodEntry[] = [
 
 const DAY = 86_400_000;
 
-/** The local supplement the fake builds unless a test changes it: one unsynced practice session, nothing else. */
 export const FAKE_SUPPLEMENT: LocalSupplement = {
   format: 'tableside-local-supplement',
   version: 1,
@@ -94,7 +88,6 @@ export const FAKE_SUPPLEMENT: LocalSupplement = {
   unfinished: [],
 };
 
-/** The devices the fake's account is signed in on unless a test changes them: this iPhone (active now), an iPad (2 days ago) and a Pixel (3 months ago). */
 export function fakeDevices(now = Date.now()): readonly DeviceEntry[] {
   return [
     { id: 'device-iphone', platform: 'ios', label: 'iPhone 15 · iOS 18', lastActiveAt: now, thisDevice: true },
@@ -103,15 +96,12 @@ export function fakeDevices(now = Date.now()): readonly DeviceEntry[] {
   ];
 }
 
-/** An Account service whose answers a test scripts. Unscripted calls succeed. */
 export class FakeAccountService implements AccountService {
   private current: AccountGate = { state: 'no-account' };
   private readonly listeners = new Set<(gate: AccountGate) => void>();
   readonly calls: Call[] = [];
-  /** Answers for the next calls, used in order. */
   readonly next: {
     age: AgeAnswerResult[];
-    /** Platform age checks' answers; unscripted, the platform proves nothing ("question"). */
     check: AgeCheckResult[];
     code: CodeRequestResult[];
     verify: CodeVerificationResult[];
@@ -121,16 +111,12 @@ export class FakeAccountService implements AccountService {
     providerCreate: ProviderCreateResult[];
     reviewer: ReviewerSignInResult[];
   } = { age: [], check: [], code: [], verify: [], signOut: [], currency: [], providerSignIn: [], providerCreate: [], reviewer: [] };
-  /** Whether the device offers a platform age check. */
   platformAgeCheck = false;
-  /** What accountSummary() answers; a changed currency updates it. */
   summary: AccountSummary | null = FAKE_SUMMARY;
-  /** How many saved records haven't synced. */
   waitingCount = 0;
   private readonly ending = new Set<() => Promise<void>>();
 
   constructor(
-    /** The gate resume() reopens into: what this installation was signed in to. */
     private readonly stored: AccountGate = { state: 'no-account' },
   ) {}
 
@@ -145,7 +131,6 @@ export class FakeAccountService implements AccountService {
     };
   };
 
-  /** Moves the gate, as the real service does when it learns something. */
   setGate(gate: AccountGate) {
     this.current = gate;
     for (const listener of this.listeners) listener(gate);
@@ -158,7 +143,6 @@ export class FakeAccountService implements AccountService {
     return { status: this.stored.state === 'signed-out' || this.stored.state === 'revoked' ? ('signed-out' as const) : ('resumed' as const) };
   }
 
-  /** Like the real service: the session-ending handlers run first, then the gate is Signed out. */
   async signOut(): Promise<SignOutResult> {
     this.calls.push({ method: 'signOut' });
     const gate = this.current;
@@ -169,7 +153,6 @@ export class FakeAccountService implements AccountService {
     return this.next.signOut.shift() ?? { status: 'signed-out' as const, serverSessionEnded: true };
   }
 
-  /** Like the real service: a fresh database is made, then this signs out for the new sign-in that restores synced history. */
   async recover(): Promise<{ readonly status: 'sign-in-needed' | 'failed' }> {
     this.calls.push({ method: 'recover' });
     const gate = this.current;
@@ -196,7 +179,6 @@ export class FakeAccountService implements AccountService {
     return result;
   }
 
-  /** No synchronization runs in screen tests. */
   readonly sync: AccountSync = {
     status: { live: false, error: null, lastSyncedAt: null, uploads: [], update: null, history: { state: 'complete' }, download: { state: 'not-requested' } },
     subscribe: () => () => undefined,
@@ -211,9 +193,7 @@ export class FakeAccountService implements AccountService {
     queue: async () => ({ status: 'refused', reason: 'no-account' }),
   };
 
-  /** The account's sign-in methods: list() answers them, and an unscripted link or removal changes them. Null: offline. */
   methods: readonly SignInMethodEntry[] | null = FAKE_METHODS;
-  /** Answers for the next fresh-authentication and sign-in-method calls, used in order; unscripted ones succeed. */
   readonly methodsNext: {
     fresh: FreshAuthenticationResult[];
     freshCode: CodeRequestResult[];
@@ -224,7 +204,6 @@ export class FakeAccountService implements AccountService {
     changeEmail: EmailChangeResult[];
     confirmEmailChange: EmailChangeConfirmation[];
   } = { fresh: [], freshCode: [], link: [], emailMethodCode: [], emailMethod: [], remove: [], changeEmail: [], confirmEmailChange: [] };
-  /** Each fresh-authentication and sign-in-method call, in order, as "name argument". */
   readonly methodCalls: string[] = [];
 
   readonly freshAuthentication: FreshAuthentication = {
@@ -277,11 +256,8 @@ export class FakeAccountService implements AccountService {
     },
   };
 
-  /** The account's devices: list() answers them, and an unscripted sign-out removes them. Null: offline. */
   deviceEntries: readonly DeviceEntry[] | null = fakeDevices();
-  /** Answers for the next device sign-outs, used in order; unscripted ones succeed. */
   readonly devicesNext: { signOut: DeviceSignOutResult[] } = { signOut: [] };
-  /** Each device sign-out, in order, as "sign-out <id>" or "sign-out-others". */
   readonly deviceCalls: string[] = [];
 
   private signedOutDevices(keep: (entry: DeviceEntry) => boolean): DeviceSignOutResult {
@@ -304,13 +280,9 @@ export class FakeAccountService implements AccountService {
     },
   };
 
-  /** The latest server export: what serverExport() answers, and what a request sets. Null: offline. */
   serverExportState: ServerExport | null = { state: 'none' };
-  /** Answers for the next export requests and downloads, used in order; unscripted ones succeed. */
   readonly exportNext: { request: ServerExportRequest[]; download: ServerExportDownload[] } = { request: [], download: [] };
-  /** What localSupplement() builds. */
   supplement: LocalSupplement | null = FAKE_SUPPLEMENT;
-  /** Each export call, in order: "request", "download" or "supplement". */
   readonly exportCalls: string[] = [];
 
   readonly export: AccountExport = {
@@ -331,20 +303,15 @@ export class FakeAccountService implements AccountService {
     },
   };
 
-  /** What deletion.status() answers while the restricted paths are open. Null: offline. */
   deletionState: DeletionStatus | null = { status: 'none' };
-  /** Answers for the next deletion calls, used in order; unscripted ones succeed. */
   readonly deletionNext: { schedule: ScheduleDeletionResult[]; cancel: CancelDeletionResult[]; deletePermanently: DeletePermanentlyResult[] } = {
     schedule: [],
     cancel: [],
     deletePermanently: [],
   };
-  /** What deletion.status() answers once Deleted. Null: offline. */
   deletionProgress: DeletionProgress | null = null;
-  /** Each deletion call, in order: "schedule", "cancel", "delete-permanently", "status" or "dismiss". */
   readonly deletionCalls: string[] = [];
 
-  /** As the real service: a scheduling locks the gate with its deadline, and a cancel reopens the same account. */
   readonly deletion: AccountDeletion = {
     schedule: async () => {
       this.deletionCalls.push('schedule');
@@ -383,7 +350,6 @@ export class FakeAccountService implements AccountService {
     },
   };
 
-  /** No account records in screen tests (spec 4's screens script their own). */
   readonly records: AccountRecords = {
     save: async () => undefined,
     delete: async () => undefined,
@@ -393,7 +359,6 @@ export class FakeAccountService implements AccountService {
     detail: async () => ({ status: 'offline' }),
   };
 
-  /** No privacy choices in screen tests (spec 7's controls script their own). */
   readonly privacy: AccountPrivacy = {
     read: async () => null,
     withdrawAnalytics: async () => ({ status: 'unavailable' }),
@@ -420,7 +385,6 @@ export class FakeAccountService implements AccountService {
     this.calls.push({ method: 'refreshEligibility' });
   }
 
-  /** On a restricted account, an answer moves the gate as the real service does. */
   private resolving<T extends AgeCheckResult>(result: T): T {
     const gate = this.current;
     if (gate.state !== 'age-unresolved' && gate.state !== 'age-ineligible') return result;
@@ -463,7 +427,6 @@ export class FakeAccountService implements AccountService {
   }
 }
 
-/** The app account over a fake service; offline game choices live in a map. */
 export function fakeAppAccount(options: { readonly stored?: AccountGate; readonly offlineGame?: GameId | null } = {}) {
   const service = new FakeAccountService(options.stored);
   const offlineGames = new Map<string, GameId>();
@@ -473,9 +436,7 @@ export function fakeAppAccount(options: { readonly stored?: AccountGate; readonl
   const account: AppAccount & {
     readonly service: FakeAccountService;
     readonly offlineGames: Map<string, GameId>;
-    /** The restricted paths opened, in order. */
     readonly opened: RestrictedPath[];
-    /** The export files handed to the share sheet, in order. */
     readonly shared: ExportFile[];
   } = {
     service,
@@ -490,7 +451,6 @@ export function fakeAppAccount(options: { readonly stored?: AccountGate; readonl
       clear: async () => undefined,
     },
     restrictedPaths: { open: (path) => void opened.push(path) },
-    // Practice keeps the adapters it was given: tests choose the store.
     practice: (base) => base,
     offlineGame: {
       get: async (accountId) => offlineGames.get(accountId) ?? null,
@@ -502,5 +462,4 @@ export function fakeAppAccount(options: { readonly stored?: AccountGate; readonl
   return account;
 }
 
-/** The gate of a signed-in account: what most app tests reopen into (with an offline game selected, in jest.setup.ts). */
 export const SIGNED_IN: AccountGate = { state: 'active', accountId: FAKE_ACCOUNT_ID, eligibility: '18+' };

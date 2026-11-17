@@ -1,13 +1,10 @@
-// A labelled on/off switch filling its row (design component "Toggle Row"),
-// used by Settings and by the bet selector's stake editor.
-
 import { Check } from 'lucide-react-native';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
 import { fonts, MIN_TOUCH_TARGET, palette, space, textScale } from '@/theme/tokens';
 
-/** On and off differ by knob position and a check mark, not only color. */
+// docs/decisions/mobile-device-support-accessibility.md Q1–Q9
 export function SwitchRow({
   title,
   detail,

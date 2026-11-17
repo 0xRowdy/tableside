@@ -1,7 +1,4 @@
-// The vault's native adapters at their platform boundary: what they ask of
-// SecureStore and Expo SQLite, and the Android backup rules. Native behavior
-// itself (the keychain, SQLCipher, iCloud and Auto Backup) is qualified on
-// devices (spec 2, launch gate 1).
+// Spec 2 launch gate 1
 
 import * as SecureStore from 'expo-secure-store';
 import * as SQLite from 'expo-sqlite';
@@ -114,7 +111,6 @@ describe('Android backup rules', () => {
     expect(backupRules.VAULT_DIRECTORY).toBe(VAULT_DIRECTORY);
     for (const xml of [backupRules.FULL_BACKUP_CONTENT, section(backupRules.DATA_EXTRACTION_RULES, 'cloud-backup'), section(backupRules.DATA_EXTRACTION_RULES, 'device-transfer')]) {
       for (const exclude of excludes) expect(xml).toContain(exclude);
-      // Nothing is included explicitly, so no rule re-admits the vault.
       expect(xml).not.toContain('<include');
     }
   });

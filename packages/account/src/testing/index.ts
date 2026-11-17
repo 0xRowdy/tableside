@@ -1,5 +1,4 @@
-// Seam 2's multi-device scenario harness (spec 2, *Testing Decisions*),
-// reused by later spec 2 tickets and specs 3–6. Node only.
+// Spec 2 Testing Decisions
 
 export {
   FakeAgeSignals,

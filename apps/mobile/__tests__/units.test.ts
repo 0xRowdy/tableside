@@ -1,8 +1,3 @@
-// Amount arithmetic for the tables and setup: exact canonical money, never raw
-// BigInt on ledger text. A 3:2 blackjack payout on an odd bet leaves a
-// fractional balance ("2045/2" is 1,022.5), and every sum the screens show must
-// take it. Expected values are worked by hand.
-
 import { decimalUnits, differenceUnits, formatUnits, halfUnits, smallerUnits, sumUnits, totalStake, wholeUnits } from '@/play/units';
 
 describe('amount arithmetic', () => {

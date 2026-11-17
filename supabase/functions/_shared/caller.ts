@@ -1,6 +1,4 @@
-// What the functions acting for a signed-in player share (#100): who is
-// calling, from their own token, and checking an emailed code without
-// touching their session. Nothing here logs a token or code.
+// #100
 
 import { type IdTokenClaims, sha256Hex, verifyIdToken } from './id-token.ts';
 import { ENVIRONMENT_HEADER, serviceRpc } from './service.ts';
@@ -13,16 +11,9 @@ const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
 export interface Caller {
   readonly sessionId: string;
   readonly authUserId: string;
-  /** The email method's address, if the account has that method. */
   readonly email: string | null;
 }
 
-/**
- * The caller, from the bearer token the request carries: the database checks
- * its signature, that its session still exists, that it is from this
- * environment, and that its account is signed in (#90's restricted-path
- * gate, private.signed_in_account). Null otherwise.
- */
 export async function callerOf(request: Request): Promise<Caller | null> {
   const authorization = request.headers.get('authorization') ?? '';
   if (!/^Bearer \S+$/.test(authorization)) return null;
@@ -49,13 +40,6 @@ export async function callerOf(request: Request): Promise<Caller | null> {
   };
 }
 
-/**
- * Who an Apple or Google proof says the player is: `{ provider, idToken, nonce }`,
- * where the nonce is one the server issued to the caller's session for this
- * proof (issue_proof_nonce_v1), used up here, and the ID token was minted for
- * it. So a token from an earlier sign-in, or a proof already used, never
- * counts. 'invalid' when the request isn't a proof at all.
- */
 export async function provenIdentity(
   request: Request,
   caller: Caller,
@@ -69,12 +53,6 @@ export async function provenIdentity(
   return claims ? { provider, claims } : 'invalid-token';
 }
 
-/**
- * Whether `code` is the email code Auth issued `email` (through request-code
- * or link-method), for `authUserId`. Auth checks it the way it checks a
- * sign-in code, using it up; the session that answer opens is ended at once,
- * so the caller's own session is the only one that changes.
- */
 export async function emailCodeValid(email: string, code: string, authUserId: string): Promise<boolean> {
   const response = await fetch(`${SUPABASE_URL}/auth/v1/verify`, {
     method: 'POST',

@@ -1,6 +1,4 @@
-// Runs the engine's cross-runtime suite on this device's Hermes and posts the
-// report to the harness on the development machine. See
-// docs/cross-runtime-harness.md.
+// docs/cross-runtime-harness.md
 import { runSuite, type Report, type Runtime } from '@tableside/harness';
 import { engineSuite } from '@tableside/engine/test-suite';
 import { useEffect, useState } from 'react';
@@ -8,7 +6,6 @@ import { Platform, StyleSheet, Text, View } from 'react-native';
 
 import { palette } from '@/theme/tokens';
 
-// Set by the harness (packages/harness/src/devices.ts) when it builds the app.
 const REPORT_URL = process.env.EXPO_PUBLIC_ENGINE_HARNESS_URL;
 
 declare const HermesInternal: { getRuntimeProperties?: () => Record<string, string | undefined> } | undefined;
@@ -44,7 +41,6 @@ async function send(report: Report): Promise<void> {
 }
 
 export function HarnessApp() {
-  // The suite is synchronous, so it runs once, during the first render.
   const [{ report, summary }] = useState(() => {
     const result = runSuite(engineSuite, currentRuntime());
     const failed = result.cases.filter((c) => c.status === 'fail').length;

@@ -1,13 +1,7 @@
-// A database as data, for recorded databases (testing/recorded): its schema
-// statements in creation order and every table's rows in rowid order, read
-// and written through the store's own verified connection.
-
 import type { SqlConnection, SqlValue } from '../sql';
 
 export interface DatabaseDump {
-  /** The schema's statements, in the order the database created them. */
   readonly schema: readonly string[];
-  /** Every table's rows, in rowid order. */
   readonly rows: Readonly<Record<string, readonly Readonly<Record<string, SqlValue>>[]>>;
 }
 
@@ -26,7 +20,6 @@ export function dumpDatabase(connection: SqlConnection): Promise<DatabaseDump> {
   });
 }
 
-/** Writes a dump into an empty database. */
 export function restoreDatabase(connection: SqlConnection, dump: DatabaseDump): Promise<void> {
   return connection.transaction(async (tx) => {
     for (const statement of dump.schema) await tx.run(statement);

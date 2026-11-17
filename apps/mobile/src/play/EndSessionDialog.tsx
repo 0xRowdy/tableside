@@ -1,7 +1,4 @@
-// The End session confirmation (design frame S1-09 "End session — confirm"):
-// the three ending steps, shown before anything is returned or settled. Its
-// switch variant (S1-09 egZUB) asks before another game's setup opens: the
-// current session ends first, its result is saved, then that setup opens.
+// Spec 1 S1-09
 
 import type { GameId, PermittedView, Wager } from '@tableside/engine';
 import { Modal, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -12,11 +9,6 @@ import { fonts, palette, radius, space, textScale } from '@/theme/tokens';
 import { GAME_WORDS } from './game-words';
 import { formatUnits } from './units';
 
-/**
- * What ending would do with each wager. Roulette: every wager comes back
- * between spins. Craps: contracts on their number stay and roll on to settle.
- * Blackjack: the initial wager comes back between rounds; a dealt round settles.
- */
 function endingWagers(view: PermittedView): { removable: readonly Wager[]; committed: readonly Wager[] } {
   if (view.wagersCommitted) return { removable: [], committed: view.wagers };
   if (view.game !== 'craps') return { removable: view.wagers, committed: [] };
@@ -37,12 +29,10 @@ export function EndSessionDialog({
   onCancel: () => void;
   onConfirm: () => void;
   cancelLabel?: string;
-  /** The game whose setup opens once this session has ended. */
   switchTo?: GameId;
 }) {
-  // Game ids are the lower-case game names used in sentences.
-  const from = view.game;
-  const to = switchTo;
+  const currentGameName = view.game;
+  const nextGameName = switchTo;
   const words = GAME_WORDS[view.game];
   const { removable, committed } = endingWagers(view);
   const list = (wagers: readonly Wager[], none: string) =>
@@ -53,11 +43,11 @@ export function EndSessionDialog({
         <ScrollView contentContainerStyle={styles.dialogScroll}>
           <View accessibilityViewIsModal style={styles.dialog}>
             <Text accessibilityRole="header" maxFontSizeMultiplier={textScale.display} style={styles.dialogTitle}>
-              {to ? `Switch to ${to}?` : 'End this session?'}
+              {nextGameName ? `Switch to ${nextGameName}?` : 'End this session?'}
             </Text>
             <Text maxFontSizeMultiplier={textScale.body} style={styles.dialogText}>
-              {to
-                ? `Starting ${to} ends this ${from} session first. Resetting the table does the same.`
+              {nextGameName
+                ? `Starting ${nextGameName} ends this ${currentGameName} session first. Resetting the table does the same.`
                 : "Ending works in three steps, and it can't be undone once settlement starts."}
             </Text>
             {[
@@ -69,8 +59,8 @@ export function EndSessionDialog({
                 title: 'Committed wagers settle automatically',
                 detail: list(committed, words.noneCommitted),
               },
-              to
-                ? { title: `Your ${from} result is saved, then ${to} setup opens`, detail: 'Results and departures in Saved › Practice' }
+              nextGameName
+                ? { title: `Your ${currentGameName} result is saved, then ${nextGameName} setup opens`, detail: 'Results and departures in Saved › Practice' }
                 : { title: 'You see the session result', detail: 'Buy-in, rebuys, final cash-out, net result and maximum drawdown' },
             ].map((step, index) => (
               <View key={step.title} accessible accessibilityLabel={`${index + 1}. ${step.title}. ${step.detail}`} style={styles.dialogStep}>
@@ -78,7 +68,7 @@ export function EndSessionDialog({
                 <Text maxFontSizeMultiplier={textScale.body} style={styles.dialogText}>{step.detail}</Text>
               </View>
             ))}
-            <Button label={to ? `End ${from} session and switch` : 'End session'} stretch onPress={onConfirm} />
+            <Button label={nextGameName ? `End ${currentGameName} session and switch` : 'End session'} stretch onPress={onConfirm} />
             <Button label={cancelLabel} variant="secondary" stretch onPress={onCancel} />
           </View>
         </ScrollView>

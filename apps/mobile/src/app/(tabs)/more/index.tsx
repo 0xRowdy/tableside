@@ -3,7 +3,7 @@ import { Settings } from 'lucide-react-native';
 
 import { Group, ListRow, SettingsScreen } from '@/settings/SettingsParts';
 
-/** More holds what isn't one of the five main destinations. Strategies (spec 4) and Help join it later. */
+// TODO(spec 4)
 export default function More() {
   return (
     <SettingsScreen title="More">

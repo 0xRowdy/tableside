@@ -1,21 +1,4 @@
-// Confirm it's you (spec 2, #100; S2-18): the player signs in again with one
-// of the account's own methods, and the caller's session is recorded as
-// freshly authenticated for a few minutes (private.fresh_authentications).
-// Being signed in already, or refreshing a token, never counts.
-//
-// POST, with the caller's own access token as the bearer and naming its
-// backend environment in x-tableside-environment like every request:
-//   { method: 'email', code }                      the code request-code sent to the email method's address
-//   { method: 'provider', provider, idToken, nonce } an ID token for one of the account's Apple or Google
-//                                                   identities, minted for a nonce from issue_proof_nonce_v1
-// Answers:
-//   200 { status: 'confirmed' }
-//   401 { status: 'invalid-code' | 'invalid-token' }   the proof didn't check out
-//   403 { status: 'not-a-method' }                     a valid proof, but not of one of this account's methods
-//   401 { status: 'not-signed-in' }                    no live session behind the token
-//   400 { status: 'invalid' } | 502 { status: 'failed' }
-//
-// Nothing here logs a token, nonce, code or claim.
+// Spec 2 S2-18; #100
 
 import { callerOf, emailCodeValid, provenIdentity } from '../_shared/caller.ts';
 import { withCors } from '../_shared/cors.ts';

@@ -26,7 +26,6 @@ const theme = {
 };
 
 export default function RootLayout() {
-  // Bundled with the app, so loading works offline and takes no network time.
   const [fontsLoaded, fontError] = useFonts({ Fraunces_400Regular, Inter_400Regular, Inter_500Medium, Inter_700Bold });
   const ready = fontsLoaded || fontError !== null;
 
@@ -46,7 +45,6 @@ export default function RootLayout() {
   );
 }
 
-/** The splash stays until the fonts load and the account has reopened (or there is none). */
 function HideSplash() {
   useEffect(() => {
     void SplashScreen.hideAsync();

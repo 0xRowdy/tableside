@@ -1,20 +1,6 @@
-// The web account page (S2-24; spec 2 *Deletion*, Amendments 1 C2, 3 §3–4,
-// 8 §5, 9 §1–2): sign in with an email code, then the deletion choice
-// (schedule deletion, or Delete permanently now) after Confirm it's you,
-// Cancel deletion during the window, and deletion status (scheduled with its
-// deadline, processing, completed). Lifecycle only: no gameplay. Billing help
-// shows both stores' subscription management and refund-request paths, since
-// a browser doesn't say which store the player bought through.
-//
-// Plain DOM, rendered from one state: each view is a fresh tree under <main>.
-// A new view moves focus to its heading; within a view, focus stays on the
-// control that had it (or moves to the field a step asks for). Messages go
-// to live regions that stay in place, so screen readers announce them.
-// Billing help is on every view, signed in or not (Amendment 1 C2: kept visible
-// before erasure); the export is offered first, from the app.
-// TODO(spec 7 D9): "Paid time is forfeited" is provisional (Amendment 9 §3): under Outcome B its copy follows the owner's choice recorded there.
-// TODO(frames): unverified against S2-24 — the frame couldn't be read (Pencil unreachable). The copy and layout come from spec 2 *Deletion* and Amendments 1 B1, C2, 3 §3–4, 8 §5 and 9 §1–2, and the app's S2-22/S2-23 screens.
-// TODO(frames): S2-24 predates Apple and Google sign-in on the page (#52 review): their "Sign in with" and "Confirm with" buttons follow the app's S2-13 method buttons until a frame draws them.
+// Spec 2 Deletion, Amendments 1 C2, 3 §3–4, 8 §5, 9 §1–2
+// TODO(spec 7 D9)
+// TODO(spec 2 S2-24)
 
 import {
   BACKUPS_DETAIL,
@@ -38,36 +24,25 @@ import {
   scheduledDetail,
 } from '@tableside/account/web';
 
-/** A deletion action, which may first need Confirm it's you. */
 type Action = 'schedule' | 'cancel' | 'delete';
 
 interface PageState {
   busy: boolean;
-  /** The email typed on the sign-in step; the code step once a code was sent. */
   email: string;
   codeSentTo: string | null;
-  /** This session confirmed it's the player (for the server's few minutes). */
   confirmed: boolean;
-  /** Confirm it's you is asked for: a code was sent, and the action to run once confirmed, if any. */
   confirming: { readonly codeSent: boolean; readonly then: Action | null } | null;
-  /** Delete permanently now's own warnings are showing. */
   permanent: boolean;
-  /** An announcement (role=status) and a problem (role=alert). */
   notice: string;
   problem: string;
-  /** The field to focus after the next render. */
   focus: string | null;
 }
 
 const NEEDS_CONNECTION = "Couldn't reach Tableside. Check your connection and try again.";
 
-/** The browser's address bar: a provider's return to the page, and sending the browser to a provider's page. */
 export interface PageNavigation {
-  /** The page URL's query ('' for none). */
   query(): string;
-  /** Sends the browser to `url` (Apple's or Google's sign-in page). */
   go(url: string): void;
-  /** Leaves the page at its plain URL, its query gone. */
   clearQuery(): void;
 }
 
@@ -79,14 +54,11 @@ export function mountAccountPage(main: HTMLElement, account: WebAccount, navigat
   const doc = main.ownerDocument;
   const state: PageState = { busy: false, email: '', codeSentTo: null, confirmed: false, confirming: null, permanent: false, notice: '', problem: '', focus: null };
 
-  // The live regions stay in place across renders, so changes to them are announced.
   const content = doc.createElement('div');
   const status = el('p', { role: 'status', class: 'note' });
   const alert = el('p', { role: 'alert', class: 'problem' });
 
   let screen = '';
-  // The control that last had focus: a busy render disables it (which drops
-  // focus), so it is remembered here rather than read back from the document.
   let lastFocus: string | undefined;
   main.addEventListener('focusin', (event) => {
     const key = event.target instanceof HTMLElement ? event.target.dataset.focus : undefined;
@@ -123,7 +95,6 @@ export function mountAccountPage(main: HTMLElement, account: WebAccount, navigat
     );
   }
 
-  /** Both stores' billing help: deleting never cancels a subscription, and only the store decides a refund. */
   const billingHelp = () => [
     el('h2', {}, 'Your subscription'),
     el(
@@ -136,14 +107,12 @@ export function mountAccountPage(main: HTMLElement, account: WebAccount, navigat
     ),
   ];
 
-  /** Before deleting: the export (from the app) and the stores' billing help. */
   const beforeYouGo = () => [
     el('h2', {}, 'Before you go'),
     el('ul', { class: 'rows' }, row('Export my data first', "In the app: More → Settings → Account → Export my data. Deletion doesn't wait for it.")),
     ...billingHelp(),
   ];
 
-  /** A form with one field and its submit button; Enter submits it. */
   const form = (
     field: { readonly id: string; readonly label: string; readonly attributes: Record<string, string | boolean>; readonly hint?: string },
     submit: string,
@@ -172,7 +141,6 @@ export function mountAccountPage(main: HTMLElement, account: WebAccount, navigat
     return { node, input };
   };
 
-  /** Runs a step with the page busy, then renders what it left. */
   const run = async (step: () => Promise<void>) => {
     if (state.busy) return;
     state.busy = true;
@@ -191,8 +159,6 @@ export function mountAccountPage(main: HTMLElement, account: WebAccount, navigat
 
   const codeProblem = (result: CodeRequestResult): string =>
     result.status === 'sent' || result.status === 'age-required' ? codeRequestProblem({ status: 'failed' }) : codeRequestProblem(result);
-
-  // ---- Signed out: sign in with an email code ------------------------------
 
   const sendSignInCode = (email: string) =>
     run(async () => {
@@ -293,15 +259,11 @@ export function mountAccountPage(main: HTMLElement, account: WebAccount, navigat
     ];
   };
 
-  // ---- Apple and Google ----------------------------------------------------
-
-  /** A button for each provider this page signs in with. */
   const providerButtons = (verb: string, focusPrefix: string, start: (provider: WebProvider) => void) =>
     account.providers.length === 0
       ? []
       : [el('div', { class: 'actions' }, ...account.providers.map((provider) => button(`${verb} ${PROVIDER_NAMES[provider]}`, 'secondary', `${focusPrefix}-${provider}`, () => start(provider))))];
 
-  /** Sends the browser to the provider's page; the flow comes back to this page (finishProviderReturn). */
   const goToProvider = (begin: () => Promise<string | null>) =>
     run(async () => {
       const url = await begin();
@@ -315,7 +277,6 @@ export function mountAccountPage(main: HTMLElement, account: WebAccount, navigat
   const signInWithProvider = (provider: WebProvider) => goToProvider(() => account.startProviderSignIn(provider));
   const confirmWithProvider = (provider: WebProvider) => goToProvider(() => account.confirm.startProvider(provider));
 
-  /** A provider's flow came back to the page: finish it, and say how it went. Signing in never cancels a deletion. */
   const finishProviderReturn = async (query: string) => {
     navigation.clearQuery();
     const result = await account.completeProviderSignIn(query);
@@ -327,8 +288,6 @@ export function mountAccountPage(main: HTMLElement, account: WebAccount, navigat
       state.notice = 'Confirmed. Choose what to do with your account.';
     }
   };
-
-  // ---- Confirm it's you ----------------------------------------------------
 
   const sendConfirmCode = (then: Action | null) =>
     run(async () => {
@@ -368,7 +327,6 @@ export function mountAccountPage(main: HTMLElement, account: WebAccount, navigat
       if (then) await act(then);
     });
 
-  /** Asks the player to confirm it's them, then runs `then`. */
   const confirmPanel = (then: Action | null) => {
     if (!state.confirming?.codeSent) {
       return [
@@ -392,9 +350,6 @@ export function mountAccountPage(main: HTMLElement, account: WebAccount, navigat
     ];
   };
 
-  // ---- Deletion actions ----------------------------------------------------
-
-  /** Runs a deletion action; one that needs Confirm it's you asks for it, then runs again. */
   const act = async (action: Action) => {
     const result = action === 'schedule' ? await account.schedule() : action === 'cancel' ? await account.cancel() : await account.deletePermanently();
     if (result.status === 'fresh-authentication-required') {
@@ -570,7 +525,6 @@ export function mountAccountPage(main: HTMLElement, account: WebAccount, navigat
     if (key !== screen) {
       screen = key;
       doc.title = `${content.querySelector('h1')?.textContent ?? 'Your account'} · Tableside`;
-      // A new view: its field when it asks for one, otherwise its heading.
       const field = target ? content.querySelector<HTMLElement>(`[data-focus="${target}"]`) : null;
       (field ?? content.querySelector<HTMLElement>('h1'))?.focus();
       return;
@@ -578,7 +532,6 @@ export function mountAccountPage(main: HTMLElement, account: WebAccount, navigat
     const find = (key: string | null | undefined) => (key ? content.querySelector<HTMLElement>(`[data-focus="${key}"]`) : null);
     const next = find(target) ?? find(lastFocus);
     if (next) next.focus();
-    // The control that had focus is gone (a step finished): the heading takes it, so focus is never lost to the page.
     else if (!content.contains(doc.activeElement)) content.querySelector<HTMLElement>('h1')?.focus();
   }
 

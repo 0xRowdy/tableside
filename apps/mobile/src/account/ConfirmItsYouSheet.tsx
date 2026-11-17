@@ -1,9 +1,4 @@
-// S2-18 "Confirm it's you (re-authenticate)": before a change to how the
-// account signs in (and, for later tickets, revoking devices, export and
-// deletion), the player signs in again with one of the account's own methods.
-// Being signed in already isn't enough. The Account service confirms it for
-// this session only, for a few minutes.
-// TODO(frames): the code-entry step after "Send a code", the problem messages, and the removal's reason (method-text.ts) are unverified against S2-18, which draws only the choice of method for adding one.
+// TODO(spec 2 S2-18)
 
 import { INVALID_CODE, type SignInMethodEntry } from '@tableside/account';
 import { Mail } from 'lucide-react-native';
@@ -22,9 +17,7 @@ export function ConfirmItsYouSheet({
   onConfirmed,
   onClose,
 }: {
-  /** Why it's asked: what the change does. */
   reason: string;
-  /** The methods the player may confirm with (for a removal, the ones that stay). */
   methods: readonly SignInMethodEntry[];
   onConfirmed: () => void;
   onClose: () => void;

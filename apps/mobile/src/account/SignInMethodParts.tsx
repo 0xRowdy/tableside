@@ -1,6 +1,4 @@
-// Building blocks of Sign-in methods (S2-18): a method's card with its
-// actions, an "Add a method" row, and the banners for a method that belongs to
-// another account and for the last method.
+// Spec 2 S2-18
 
 import type { SignInMethod, SignInMethodEntry } from '@tableside/account';
 import { ChevronRight, Lock, Mail, Pencil, Users, X } from 'lucide-react-native';
@@ -14,14 +12,12 @@ import { LinkButton } from './FirstRunParts';
 import { methodDetail, methodName } from './method-text';
 import { PROVIDERS } from './providers';
 
-/** A method's glyph: Apple's, Google's, or an envelope for the email code. */
 function MethodIcon({ method }: { method: SignInMethod }) {
   if (method === 'email') return <Mail color={palette.foreground} size={18} />;
   const Glyph = PROVIDERS[method].icon;
   return <Glyph color={palette.foreground} size={18} />;
 }
 
-/** One method: its name and address, then Remove (and Change email, for the email code). */
 export function MethodCard({
   entry,
   onRemove,
@@ -66,7 +62,6 @@ export function MethodCard({
   );
 }
 
-/** A method to add, with why a second one helps. */
 export function AddMethodRow({ method, detail, onPress, disabled }: { method: SignInMethod; detail: string; onPress: () => void; disabled: boolean }) {
   const { focused, focusProps } = useKeyboardFocus();
   const name = methodName(method);
@@ -96,11 +91,6 @@ export function AddMethodRow({ method, detail, onPress, disabled }: { method: Si
   );
 }
 
-/**
- * A card with an icon, a title read as an alert, its explanation and an
- * optional action: the last method (a lock, warning) or a method another
- * account owns (people, destructive).
- */
 export function Banner({
   tone,
   title,

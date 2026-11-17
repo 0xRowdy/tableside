@@ -1,6 +1,3 @@
-// SHA-256 behind checkpoint hashes. Expected digests: the FIPS 180-2 examples
-// ("abc", the 448-bit message) and, for padding boundaries and UTF-8 text,
-// Node's OpenSSL-backed crypto.createHash('sha256'), an independent implementation.
 import type { TestCase } from '@tableside/harness';
 
 import { sha256Hex } from '../src';

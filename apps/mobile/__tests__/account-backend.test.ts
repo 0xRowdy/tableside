@@ -1,5 +1,3 @@
-// The build's backend environment comes from its build-time settings alone.
-
 import { buildBackend } from '@/account/backend';
 
 const SETTINGS = ['EXPO_PUBLIC_TABLESIDE_ENVIRONMENT', 'EXPO_PUBLIC_TABLESIDE_SUPABASE_URL', 'EXPO_PUBLIC_TABLESIDE_SUPABASE_PUBLISHABLE_KEY'] as const;

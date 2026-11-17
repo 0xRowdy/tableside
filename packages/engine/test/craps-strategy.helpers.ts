@@ -1,6 +1,3 @@
-// Drives guided craps sessions for the craps strategy cases: the player
-// follows what Explain prescription says for the situation the permitted view
-// shows, one decision at a time.
 import {
   advanceActivity,
   createActivity,
@@ -32,7 +29,6 @@ export function guidedCraps(definition: StrategyDefinition, stream: RandomStream
   return createActivity({ ...CRAPS_SPEC, rules, funding: extra.funding ?? '1000', strategy: { definition, parameters: {} } }, stream);
 }
 
-/** The situation as the player sees it: the puck, the bases on the table, and every funds for the next roll. */
 export function situationOf(state: ActivityState): CrapsSituation {
   const view = crapsView(state);
   const point = view.table.point;
@@ -47,7 +43,6 @@ export function situationOf(state: ActivityState): CrapsSituation {
   };
 }
 
-/** What Explain prescription says now, from the strategy state (with any adjustment still waiting). */
 export function prescriptionNow(state: ActivityState): Prescription {
   const run = state.strategy as NonNullable<ActivityState['strategy']>;
   const explained = explainPrescription(run.definition, run.parameters, situationOf(state), run.deferred?.progress ?? run.progress);
@@ -62,18 +57,12 @@ export function send(state: ActivityState, command: Command): { state: ActivityS
 }
 
 export interface Decision {
-  /** The table the roll began with, "target amount" each. */
   readonly bets: string;
   readonly total: number;
   readonly point: number | null;
   readonly balance: string;
 }
 
-/**
- * Follows the prescription for up to `rolls` rolls: sets the table to exactly
- * the prescribed wagers, rolls, settles. Stops early at a pending action,
- * a correction, a cycle completion or strategy settlement.
- */
 export function follow(state: ActivityState, rolls: number): { state: ActivityState; decisions: Decision[]; facts: DomainFact[] } {
   const decisions: Decision[] = [];
   const facts: DomainFact[] = [];

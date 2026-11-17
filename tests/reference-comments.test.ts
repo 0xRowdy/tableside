@@ -32,6 +32,7 @@ describe('reference comments rule', () => {
   it.each([
     ['// Clamp first, the server rounds down.', 'an explanation'],
     ['// TODO: tidy this up', 'a TODO without a reference'],
+    ['// #000000B3 over the felt reads at 4.5:1', 'a hex colour, which is not an issue number'],
     ['// TODO(frames): unverified against S2-22', 'a TODO citing no spec or issue'],
     ['// shortcut: linear scan, fine below 1k rows', 'a shortcut without an issue'],
     ['/**\n * Spec 2 Deletion\n */', 'a multi-line block'],

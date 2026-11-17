@@ -1,7 +1,4 @@
-// The shared game engine: portable TypeScript that runs unchanged on Node and
-// on the app's bundled Hermes. It has no React, Expo, Node-only, network,
-// storage, clock, account, advertising or subscription dependency; the app and
-// the runner supply adapters. The portability rule is enforced by lint.
+// docs/development.md Engine portability
 
 export { ENGINE_VERSION } from './version';
 export { checkLimitInput, type LimitAmountProblem, type LimitInputCheck } from './limits';

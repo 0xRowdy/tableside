@@ -1,9 +1,4 @@
-// Seam 2, failure injection for a craps strategy adjustment (spec #51,
-// Strategy execution semantics): settlement and the next adjustment are
-// separate transitions. Capped press-and-collect at a 20 place maximum on the
-// all-zero stream (totals 8 8 9 6 11 5 3 5 2 6): the 10th roll's place 6 win
-// pays 14 and its press to 24 is blocked. A crash around that settlement's
-// commit, then a restart, pays the win exactly once and keeps the press waiting.
+// #51 Strategy execution semantics
 
 import { PRESS_AND_COLLECT_6_8 } from '@tableside/definitions';
 import type { CrapsPermittedView, DomainFact } from '@tableside/engine';
@@ -32,7 +27,6 @@ async function committedFacts(store: ActivityStore, activityId: string): Promise
 
 const placeSixWins = (facts: DomainFact[]) => facts.filter((fact) => fact.kind === 'wager-settled' && fact.target === 'place-6' && fact.result === 'win');
 
-/** Plays the strategy up to the 10th roll, whose settlement commit fails as told. */
 async function toBlockedPress(when: 'before' | 'after') {
   const adapters = substituteAdapters({ clock: new FakeClock(undefined, true), words: [0, 0, 0, 0] });
   const controller = new PracticeController(adapters);
@@ -44,7 +38,7 @@ async function toBlockedPress(when: 'before' | 'after') {
     if (transition.facts.some((fact) => fact.kind === 'wager-settled' && fact.turn === 10)) store.failNext('commitTransition', when);
     return commit(transition);
   };
-  await controller.beginTurn(); // 8 with nothing at stake
+  await controller.beginTurn();
   await controller.placeWager('place-6', '12');
   await controller.placeWager('place-8', '12');
   for (let roll = 2; roll <= 10; roll++) await controller.beginTurn();
@@ -55,7 +49,6 @@ describe('a craps strategy adjustment under failure injection', () => {
   it.each(['before', 'after'] as const)('the settlement commit fails %s writing, the app restarts: one payout, and the press still waits', async (when) => {
     const { adapters, store } = await toBlockedPress(when);
 
-    // The app restarts: a new controller over the same durable data.
     const reopened = store.reopen();
     const restarted = new PracticeController({ ...adapters, store: reopened, clock: new FakeClock(undefined, true) });
     await restarted.load();
@@ -69,10 +62,8 @@ describe('a craps strategy adjustment under failure injection', () => {
       { target: 'place-6', amount: '12' },
       { target: 'place-8', amount: '12' },
     ]);
-    // Paid once: the first hit on roll 4 and the second on roll 10.
     expect(placeSixWins(await committedFacts(reopened, 'activity-1')).map((fact) => fact.kind === 'wager-settled' && fact.turn)).toEqual([4, 10]);
 
-    // Resolving it pays nothing again; the record nets the three 14s once each.
     await restarted.collectInstead();
     expect(view(restarted.snapshot())).toMatchObject({ phase: 'cycle-completion', balance: '1042', wagers: [] });
     expect(placeSixWins(await committedFacts(reopened, 'activity-1'))).toHaveLength(2);

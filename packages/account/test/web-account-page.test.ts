@@ -1,11 +1,4 @@
-// Seam 2, the web account page (#106; S2-24; spec 2 *Deletion*, Amendments
-// 3 §4, 8 §5, 9 §2). Reachable without the app, it signs in with an email
-// code and runs the app's own deletion operations under the same
-// fresh-authentication rules: schedule deletion, Cancel deletion, Delete
-// permanently now, and deletion status (scheduled with deadline, processing,
-// completed), which a browser can still read once the account is gone. When
-// a signed-in visitor's browser sends Global Privacy Control, the ad-data
-// opt-out is recorded with source GPC.
+// Spec 2 Deletion, S2-24, Amendments 3 §4, 8 §5, 9 §2; #106
 
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
@@ -30,7 +23,6 @@ afterEach(() => devices.splice(0).forEach((d) => d.dispose()));
 
 const DAY_MS = 24 * 60 * 60_000;
 
-/** A browser's Web Storage, in memory. */
 class MemoryStorage implements WebStorage {
   readonly entries = new Map<string, string>();
   getItem(key: string) {
@@ -44,14 +36,8 @@ class MemoryStorage implements WebStorage {
   }
 }
 
-/**
- * One browser: its lasting storage (localStorage) outlives each tab, whose
- * session storage is its own. A browser with Global Privacy Control on adds
- * Sec-GPC: 1 to every request it sends; no page script can.
- */
 const idp = new TestIdentityProvider();
 
-/** Where provider-callback sends the page's Apple and Google flows back to (TABLESIDE_WEB_ACCOUNT_URL in supabase/config.toml). */
 const PAGE_URL = 'http://localhost:5173/';
 
 function browser(options: { readonly gpc?: boolean } = {}) {
@@ -72,7 +58,6 @@ function browser(options: { readonly gpc?: boolean } = {}) {
       lasting,
       randomBytes: (count: number) => crypto.getRandomValues(new Uint8Array(count)),
       globalPrivacyControl: () => options.gpc === true,
-      // The test identity provider stands in for Apple's and Google's web pages.
       providers: {
         apple: { authorizeUrl: idp.authorizeUrl, clientId: idp.clientId, authName: idp.provider },
         google: { authorizeUrl: idp.authorizeUrl, clientId: idp.clientId, authName: idp.provider },
@@ -91,7 +76,6 @@ async function phoneAccount(label: string) {
   return { phone, email, accountId: gate.accountId };
 }
 
-/** Signs a tab in with an emailed code, as if the code-request backoff had passed since the last code. */
 async function signIn(page: WebAccount, phone: SimulatedDevice, email: string) {
   await stack.ageCodeRequests(email, 3600);
   const previous = await phone.mailbox.latestCode(email).catch(() => undefined);
@@ -99,7 +83,6 @@ async function signIn(page: WebAccount, phone: SimulatedDevice, email: string) {
   expect(await page.signIn(email, await phone.mailbox.latestCode(email, previous ? { after: previous } : {}))).toEqual({ status: 'signed-in' });
 }
 
-/** Confirm it's you on the page, with a further emailed code. */
 async function confirm(page: WebAccount, phone: SimulatedDevice, email: string) {
   await stack.ageCodeRequests(email, 3600);
   const previous = await phone.mailbox.latestCode(email);
@@ -123,7 +106,6 @@ describe('the web account page', () => {
     const listed = await phone.account.devices.list();
     expect(listed).toContainEqual(expect.objectContaining({ platform: 'web', label: 'Web browser', thisDevice: false }));
 
-    // A reload keeps the tab signed in; signing out ends the server session.
     expect(await page.start()).toEqual({ state: 'signed-in', email, deletion: { status: 'none' } });
     await page.signOut();
     expect(page.view).toEqual({ state: 'signed-out' });
@@ -144,7 +126,6 @@ describe('the web account page', () => {
     expect(scheduled.deadline - Date.now()).toBeGreaterThan(29 * DAY_MS);
     expect(page.view).toEqual({ state: 'signed-in', email, deletion: { status: 'scheduled', deadline: scheduled.deadline, scheduledAt: expect.any(Number) } });
 
-    // The phone locks once it hears; signing in on the web again never cancels.
     await phone.account.refreshEligibility();
     expect(phone.account.gate).toMatchObject({ state: 'deletion-scheduled', deadline: scheduled.deadline });
     const later = web.tab();
@@ -180,18 +161,15 @@ describe('the web account page', () => {
       },
       { timeout: 60_000, interval: 250 },
     );
-    // A new tab in the same browser, with the session long gone, still reads the status.
     const reopened = web.tab();
     const view = await reopened.start();
     expect(view).toEqual({ state: 'deleted', progress: expect.objectContaining({ status: 'completed', completedAt: expect.any(Number) }) });
-    // The phone erases the account once it hears, as it would from the app's own deletion.
     await phone.account.refreshEligibility();
     expect(phone.account.gate.state).toBe('deleted');
 
     await reopened.dismiss();
     expect(reopened.view).toEqual({ state: 'signed-out' });
     expect(await web.tab().start()).toEqual({ state: 'signed-out' });
-    // Nothing of the deletion's credential is left in the browser.
     expect([...web.lasting.entries.keys()].some((key) => key.includes('deleted'))).toBe(false);
   });
 
@@ -215,14 +193,12 @@ describe('Global Privacy Control on the web account page', () => {
     const web = browser({ gpc: true });
     const page = web.tab();
     await page.start();
-    // Nothing is recorded before sign-in: there is no account to record it for.
     expect(web.requests.some((request) => request.url.includes('record-gpc'))).toBe(false);
     await signIn(page, phone, email);
     expect(await serverChoices(accountId)).toEqual({ ad_data_opt_out_source: 'gpc' });
     await phone.account.sync.reconcile();
     expect((await phone.account.privacy.read())?.adDataOptOut).toEqual({ source: 'gpc' });
 
-    // A later visit leaves the recorded choice as it is.
     const choices = async () =>
       (await sql<{ count: number }[]>`select count(*)::int as count from private.sync_feed where account_id = ${accountId} and record_type = 'privacy-choice'`)[0]?.count;
     const before = await choices();
@@ -278,7 +254,6 @@ describe('the functions the web account page calls', () => {
       body: '{}',
     });
     await answer.arrayBuffer();
-    // Exactly one allowed origin: a repeated header would make the browser refuse the answer.
     expect(answer.headers.get('access-control-allow-origin')).toBe('*');
   });
 });
@@ -294,7 +269,6 @@ describe('Apple and Google sign-in on the web page (user story 46: reachable wit
     return { subject: id, email: `${id}@example.com` };
   };
 
-  /** An account made in the app with a provider: no email-code method at all. */
   async function providerAccount(provider: 'apple' | 'google') {
     const phone = createDevice(stack, { name: 'phone', identityProvider: idp });
     devices.push(phone);
@@ -307,13 +281,11 @@ describe('Apple and Google sign-in on the web page (user story 46: reachable wit
     return { phone, someone, accountId: gate.accountId };
   }
 
-  /** The browser goes to the provider's page and back to the page, which finishes the flow. */
   async function throughProvider(page: WebAccount, url: string | null, identity: ProviderIdentity | null) {
     expect(url).not.toBeNull();
     const location = await idp.playWebAuthorize(url!, identity);
     expect(location?.startsWith(PAGE_URL)).toBe(true);
     const query = location!.slice(location!.indexOf('?') + 1);
-    // Only the state comes back in the URL: never a token or code.
     expect(query).not.toMatch(/id_token|code=/);
     expect(page.isProviderReturn(query)).toBe(true);
     return page.completeProviderSignIn(query);

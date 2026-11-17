@@ -1,8 +1,3 @@
-// Seam 3: a guided blackjack practice session coaches from the strategy
-// revision it pinned at its start, even when the app now ships another
-// revision of that built-in. The session is created on the same in-memory
-// store before the app opens, as an earlier build would have left it.
-
 import { blackjackRules, blackjackStrategy } from '@tableside/definitions';
 import type { BlackjackPlayPolicy, StrategyDefinition } from '@tableside/engine';
 import { fireEvent, screen, within } from '@testing-library/react-native';
@@ -34,7 +29,6 @@ describe('a pinned blackjack strategy revision', () => {
     const adapters = createAppAdapters();
     const current = blackjackStrategy('S17_LS', 'basic-with-deviations');
     const policy = current.play as BlackjackPlayPolicy;
-    // An earlier revision that taught only the indices at or below 0: nothing comes "next" above this count.
     const pinned: StrategyDefinition = { ...current, revision: current.revision + 1, play: { ...policy, deviations: policy.deviations.filter((d) => d.threshold <= 0) } };
     expect(policy.deviations.some((d) => d.threshold > 0)).toBe(true);
     const earlier = new PracticeController(adapters);

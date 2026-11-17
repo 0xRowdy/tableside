@@ -1,6 +1,4 @@
-// Seam 2, email codes (#88): every code request sends an email, the answer is
-// the same whether or not the address has an account, and the per-address and
-// per-IP limits apply equally to both.
+// #88
 
 import { afterEach, describe, expect, it } from 'vitest';
 
@@ -22,7 +20,6 @@ async function existingAccount(label: string): Promise<string> {
   return email;
 }
 
-/** The newest message to an address, waiting briefly for one to arrive. */
 async function newestMessage(d: SimulatedDevice, email: string, count = 1): Promise<string> {
   for (let attempt = 0; attempt < 50; attempt++) {
     const messages = await d.mailbox.messages(email);
@@ -68,7 +65,6 @@ describe('a sign-in code request', () => {
   });
 
   it('reports a delivery failure at once, the same either way, with no retry', async () => {
-    // The mail catcher refuses these recipients, as a provider refuses an undeliverable address.
     const known = await existingAccount('undeliverable');
     const undeliverableKnown = `"x"${known}`;
     await stack.sql`update auth.users set email = ${undeliverableKnown} where lower(email) = lower(${known})`;
@@ -93,7 +89,6 @@ describe('a sign-in code request', () => {
       expect(await stack.requestCode({ email, intent: 'sign-in' })).toEqual({ status: 200, body: { status: 'sent' } });
       return performance.now() - started;
     };
-    // Every admitted request waits out the same floor (300 ms), above either path's own time.
     for (const elapsed of [await timed(known), await timed(uniqueEmail('timing-unknown'))]) expect(elapsed).toBeGreaterThanOrEqual(290);
   });
 
@@ -110,7 +105,6 @@ describe('code-request limits', () => {
     const phone = device('phone');
 
     for (const email of [known, unknown]) {
-      // A fresh hour for this network, so only the address limit applies.
       await stack.resetCodeRequests();
       const request = () => phone.account.requestEmailCode({ email, intent: 'sign-in' });
       expect(await request()).toEqual({ status: 'sent' });
@@ -127,7 +121,6 @@ describe('code-request limits', () => {
 
       await stack.ageCodeRequests(email, 120);
       expect(await request()).toEqual({ status: 'sent' });
-      // Five in the hour: the next waits for the oldest to leave the window.
       await stack.ageCodeRequests(email, 600);
       const capped = await request();
       expect(capped.status).toBe('rate-limited');
@@ -159,7 +152,6 @@ describe('code-request limits', () => {
     }
     await stack.ageCodeRequests(null, 480);
     expect(await request(9)).toEqual({ status: 'sent' });
-    // Ten in the hour: the next waits for the oldest to leave the window.
     await stack.ageCodeRequests(null, 960);
     const capped = await request(10);
     expect(capped.status).toBe('rate-limited');

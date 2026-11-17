@@ -1,11 +1,4 @@
-// Seam 2, sign-in methods and fresh authentication (#100, S2-18). Adding,
-// removing and changing a sign-in method needs a fresh sign-in on the
-// requesting session ("Confirm it's you"); being signed in already, or a
-// token refresh, never counts. A method another account signs in with is a
-// conflict, never a merge; the account always keeps a method; Secure Email
-// Change confirms both addresses; linking sends a security email. The test
-// identity provider stands in for Apple and Google, so a linked Google
-// identity lists as Apple here.
+// Spec 2 S2-18; #100
 
 import { createHash } from 'node:crypto';
 
@@ -39,14 +32,12 @@ function device(name: string): SimulatedDevice {
 }
 
 let counter = 0;
-/** A person at the provider no earlier run has seen. */
 function person(label: string): ProviderIdentity {
   counter += 1;
   const id = `${label}-${Date.now().toString(36)}-${counter}`;
   return { subject: id, email: `${id}@example.com` };
 }
 
-/** A new email account on a fresh device. */
 async function emailAccount(label: string) {
   const phone = device(label);
   const email = uniqueEmail(label);
@@ -54,7 +45,6 @@ async function emailAccount(label: string) {
   return { phone, email };
 }
 
-/** A new account created with the provider (Apple) on a fresh device. */
 async function providerAccount(label: string) {
   const phone = device(label);
   const someone = person(label);
@@ -64,7 +54,6 @@ async function providerAccount(label: string) {
   return { phone, someone };
 }
 
-/** Confirm it's you with an emailed code (as if the code-request backoff had passed since signing in). */
 async function confirmByEmail(phone: SimulatedDevice, email: string) {
   await stack.ageCodeRequests(email, 3600);
   const previous = await phone.mailbox.latestCode(email);
@@ -76,7 +65,6 @@ const methods = async (phone: SimulatedDevice) => ((await phone.account.signInMe
 const entry = async (phone: SimulatedDevice, method: SignInMethodEntry['method']) =>
   ((await phone.account.signInMethods.list()) ?? []).find((each) => each.method === method)!;
 
-/** Ages every fresh authentication of an account's sessions, as if its window had passed on the server. */
 const ageFreshAuthentications = (email: string) =>
   stack.sql`update private.fresh_authentications set authenticated_at = authenticated_at - interval '6 minutes'
     where auth_user_id = (select id from auth.users where lower(email) = lower(${email}))`;
@@ -93,7 +81,6 @@ describe('Confirm it’s you', () => {
     expect(await phone.account.signInMethods.link('apple')).toEqual({ status: 'fresh-authentication-required' });
     expect(await phone.account.signInMethods.changeEmail(uniqueEmail('not-fresh-new'))).toEqual({ status: 'fresh-authentication-required' });
     expect(await methods(phone)).toEqual(['email']);
-    // Signing in again on another device is a new session, and isn't a confirmation either.
     const tablet = device('not-fresh-tablet');
     expect(await signInByEmail(tablet, email)).toEqual({ status: 'signed-in' });
     tablet.providers!.accounts.apple = person('not-fresh-tablet');
@@ -119,7 +106,6 @@ describe('Confirm it’s you', () => {
     await confirmByEmail(phone, email);
     await ageFreshAuthentications(email);
 
-    // The same session, refreshed directly: a new access token, still not fresh.
     const stored = JSON.parse([...phone.credentials.items.entries()].find(([key]) => key.endsWith('.auth'))![1]) as { refresh_token: string };
     const { data, error } = await stack.rawClient().auth.refreshSession({ refresh_token: stored.refresh_token });
     expect(error).toBeNull();
@@ -199,7 +185,6 @@ describe('adding a method', () => {
 
   it('email code, for an Apple account’s sign-in email, after its emailed code', async () => {
     const { phone, someone } = await providerAccount('add-email');
-    // Without the method, email sign-in reaches no account.
     const before = device('add-email-before');
     expect(await before.account.requestEmailCode({ email: someone.email, intent: 'sign-in' })).toEqual({ status: 'sent' });
     expect((await before.mailbox.messages(someone.email))[0]).toMatch(/no Tableside account/);
@@ -233,7 +218,6 @@ describe('removing a method', () => {
     expect(await phone.account.signInMethods.link('apple')).toEqual({ status: 'linked' });
     const emailMethod = await entry(phone, 'email');
 
-    // Confirmed with the email code, so removing the email code needs another method.
     expect(await phone.account.signInMethods.remove(emailMethod.id)).toEqual({ status: 'confirm-with-another-method' });
     expect(await phone.account.freshAuthentication.withProvider('apple')).toEqual({ status: 'confirmed' });
     expect(await phone.account.signInMethods.remove(emailMethod.id)).toEqual({ status: 'removed' });
@@ -265,7 +249,6 @@ describe('removing a method', () => {
       phone.providers!.accounts.apple = person(label);
       expect(await phone.account.signInMethods.link('apple')).toEqual({ status: 'linked' });
     }
-    // Confirmed with the email code: both Apple IDs may go, but not together with the last method.
     const apples = ((await phone.account.signInMethods.list()) ?? []).filter((each) => each.method === 'apple');
     const outcomes = await Promise.all(apples.map((each) => phone.account.signInMethods.remove(each.id)));
     expect(outcomes).toEqual([{ status: 'removed' }, { status: 'removed' }]);
@@ -286,7 +269,6 @@ describe('changing the email', () => {
     const fresh = await phone.mailbox.latestCode(next);
     expect(await stack.emailSends(since)).toEqual(expect.arrayContaining([{ type: 'email-change', pacing: 'immediate', outcome: 'sent' }]));
 
-    // A wrong code changes nothing.
     expect(await phone.account.signInMethods.confirmEmailChange({ currentCode: current, newCode: fresh === '000000' ? '111111' : '000000' })).toEqual({
       status: 'invalid-code',
       address: 'new',
@@ -316,7 +298,6 @@ describe('Auth’s own endpoints, called directly', () => {
     const next = uniqueEmail('raw-email-new');
     const raw = stack.rawClient(accessToken(phone));
     expect((await raw.auth.updateUser({ email: next })).error).not.toBeNull();
-    // Even fresh, a change the session didn't authorize first is refused.
     await confirmByEmail(phone, email);
     expect((await raw.auth.updateUser({ email: next })).error).not.toBeNull();
     expect(await phone.mailbox.messages(next)).toEqual([]);
@@ -388,7 +369,6 @@ describe('an Apple or Google proof, called directly', () => {
   it('counts only for a nonce the server issued to this session, once: an earlier sign-in’s token proves nothing', async () => {
     const { phone, someone } = await providerAccount('replay');
     const token = accessToken(phone);
-    // A token minted for a nonce the player chose (as at sign-in) isn't a confirmation.
     const own = 'f'.repeat(64);
     expect(await freshAuth(token, { method: 'provider', provider: idp.provider, idToken: idp.idToken(someone, { nonce: sha256(own) }), nonce: own })).toEqual({
       status: 401,
@@ -400,7 +380,6 @@ describe('an Apple or Google proof, called directly', () => {
     expect(await freshAuth(token, proof)).toEqual({ status: 200, body: { status: 'confirmed' } });
     expect(await freshAuth(token, proof)).toEqual({ status: 401, body: { status: 'invalid-token' } });
 
-    // Another session of the account can't use this session's nonce.
     const tablet = device('replay-tablet');
     tablet.providers!.accounts.apple = someone;
     expect(await tablet.account.signInWithProvider('apple')).toEqual({ status: 'signed-in' });

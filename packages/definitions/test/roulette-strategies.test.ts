@@ -25,10 +25,7 @@ import {
   THREE_WIN_PARLAY,
 } from '../src/index';
 
-// Spec #51, Built-in strategies: "Flat even-money: 1 unit on the selected
-// even-money target (default red)"; "Fixed two-dozen coverage: 1 unit on each
-// selected dozen (default 1-12 and 13-24)". Amounts are on the default
-// 10-minimum table (#3: outside bets 10-1,000), so 1 unit is 10.
+// Spec 1 Built-in strategies
 const situation = (wheel: 'single-zero' | 'double-zero'): RouletteSituation => ({
   game: 'roulette',
   rules: { wheel, limits: ROULETTE_PRESETS[wheel].limits },
@@ -77,19 +74,11 @@ describe('roulette built-in strategies', () => {
   });
 });
 
-// Spec #51, Built-in strategies: "Capped Martingale: 1/2/4/8/16/32 after
-// successive losses; a win completes and resets; a loss at 32 terminates at
-// cap"; "Three-win parlay: 1/2/4 after consecutive wins; a loss or third win
-// completes and resets"; "Bounded Labouchere: start [1,2,3]; bet first+last
-// (or sole); win removes endpoints; loss appends stake; empty completes; max
-// required stake 32 units". Each coached spin bets exactly what Explain
-// prescribes; the all-zero Random123 stream spins 0, 7, 3, 36, 14, 3 on single
-// zero (7 3 36 14 red), so black loses six times running and red wins after 0.
+// Spec 1 Built-in strategies
 describe('roulette built-in progressions', () => {
   const ZERO_STREAM = { protocol: RANDOM_PROTOCOL_VERSION, key: [0, 0], session: [0, 0] } as const;
   type Step = { stake: string; phase: string };
 
-  /** Follows the strategy for `spins` spins on target, recording each stake and the phase after it settles. */
   function follow(definition: StrategyDefinition, target: string, spins: number): { steps: Step[]; state: ActivityState } {
     let state: ActivityState = createActivity(
       {
@@ -138,8 +127,7 @@ describe('roulette built-in progressions', () => {
     expect([state.phase, state.balance, readPermittedView(state).strategy?.cycleEnd]).toEqual(['cycle-completion', '370', 'cap']);
   });
 
-  it('a Martingale win completes the cycle', () => {
-    // Red: 0 loses 10, 7 wins 20.
+  it('a Martingale win completes the cycle: on red, 0 loses 10 and 7 wins 20', () => {
     const { steps, state } = follow(CAPPED_MARTINGALE, 'red', 10);
     expect(steps.map((s) => s.stake)).toEqual(['10', '20']);
     expect([state.balance, readPermittedView(state).strategy?.cycleEnd]).toEqual(['1010', 'completed']);
@@ -152,7 +140,6 @@ describe('roulette built-in progressions', () => {
   });
 
   it('a builder copy of the same data runs to an identical trace and checkpoint hash (Amendment 2 A3)', () => {
-    /** Each spin's checkpoint hash, following the strategy for up to eight spins on black (six losses, then 3 red). */
     const hashes = (definition: StrategyDefinition) => {
       let state: ActivityState = createActivity(
         {
@@ -199,8 +186,7 @@ describe('roulette built-in progressions', () => {
     }
   });
 
-  it('Labouchere bets 40 from 1, 2, 3, adds a loss, crosses off wins and completes on an empty line', () => {
-    // Red: 0 loses 40 (line 1,2,3,4); 7 wins 50 (2,3); 3 wins 50 (empty).
+  it('Labouchere bets 40 from 1, 2, 3, adds a loss, crosses off wins and completes on an empty line: on red, 0 loses 40, then 7 and 3 win 50 each', () => {
     const { steps, state } = follow(BOUNDED_LABOUCHERE, 'red', 10);
     expect(steps.map((s) => s.stake)).toEqual(['40', '50', '50']);
     expect([state.balance, readPermittedView(state).strategy?.cycleEnd]).toEqual(['1060', 'completed']);

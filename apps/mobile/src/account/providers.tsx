@@ -1,14 +1,9 @@
-// How Apple and Google appear on the sign-in screens (S2-13): their names,
-// what each calls the player's identity, and their glyphs.
+// Spec 2 S2-13
 
 import type { IdentityProvider } from '@tableside/account';
 import { Apple, type LucideProps } from 'lucide-react-native';
 import Svg, { Circle, Line } from 'react-native-svg';
 
-/**
- * The frames draw Google with lucide's Chrome glyph, which lucide-react-native
- * 1.x no longer ships, so it is drawn here from the same geometry.
- */
 function ChromeGlyph({ color = 'currentColor', size = 24, strokeWidth = 2 }: LucideProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
@@ -22,9 +17,7 @@ function ChromeGlyph({ color = 'currentColor', size = 24, strokeWidth = 2 }: Luc
 }
 
 export interface ProviderDisplay {
-  /** "Apple", "Google". */
   readonly name: string;
-  /** What the provider calls the player's identity there. */
   readonly identity: string;
   readonly icon: (props: LucideProps) => React.ReactNode;
 }

@@ -1,15 +1,4 @@
-// The blackjack built-in strategies (spec #51): each preset's rule-specific
-// basic strategy, with or without the certified deviation curriculum (the S17
-// or H17 index file; the Fab 4 surrenders only in late-surrender presets), in
-// four modes by who keeps the Hi-Lo count: nobody (basic), Tableside (basic
-// with deviations), or the player, from whom it is hidden while play is
-// assessed against the actual count (counting with basic, counting with
-// deviations). A counting mode may add the Hi-Lo bet schedule as betting
-// instructions; otherwise the bets are the player's own. Each is plain
-// strategy data in the engine's blackjack vocabulary, packed from the
-// certified reference: the basic table with its validated legal fallbacks, the
-// continuation table for later decisions, and the index plays with their
-// published comparisons.
+// Spec 1 Built-in strategies
 import { HAND_TARGET, type BlackjackDeviation, type BlackjackMode, type BlackjackPlayPolicy, type DeviationPlay, type PublishedIndex, type StrategyDefinition, type StrategyInstruction } from '@tableside/engine';
 
 import {
@@ -25,7 +14,6 @@ import {
   type PublishedCost,
 } from './reference';
 
-/** The four guided modes, in the order setup offers them. */
 export const BLACKJACK_MODES: readonly BlackjackMode[] = ['basic', 'basic-with-deviations', 'counting-with-basic', 'counting-with-deviations'];
 export type { BlackjackMode };
 
@@ -36,15 +24,10 @@ const MODE_NAMES: Readonly<Record<BlackjackMode, string>> = {
   'counting-with-deviations': 'Counting with deviations',
 };
 
-/** The modes in which the player keeps the count; only these take the bet schedule. */
 export const countingMode = (mode: BlackjackMode) => mode === 'counting-with-basic' || mode === 'counting-with-deviations';
 const deviating = (mode: BlackjackMode) => mode === 'basic-with-deviations' || mode === 'counting-with-deviations';
 
-/**
- * The Hi-Lo bet schedule: the amount bet by integer true count, from each
- * band's lower edge (null: below +1). Spec #51 gives it as 1/2/4/6/8 times a
- * base of 10; player copy states the amounts (Amendment 9 §7).
- */
+// Spec 1 Game rules, Counting (Hi-Lo), Amendment 9 §7
 export const BET_SCHEDULE: readonly { readonly from: number | null; readonly amount: string }[] = [
   { from: null, amount: '10' },
   { from: 1, amount: '20' },
@@ -53,7 +36,6 @@ export const BET_SCHEDULE: readonly { readonly from: number | null; readonly amo
   { from: 4, amount: '80' },
 ];
 
-/** The schedule as betting instructions: the highest band the true count reaches wins by priority. */
 const scheduleInstructions = (): StrategyInstruction[] =>
   BET_SCHEDULE.map(({ from, amount }) => ({
     id: from === null ? 'true-count-below-1' : `true-count-${from}`,
@@ -66,14 +48,12 @@ const scheduleInstructions = (): StrategyInstruction[] =>
 const LETTERS: Readonly<Record<string, string>> = { hit: 'H', stand: 'S', double: 'D', split: 'P', surrender: 'R' };
 const UP_CARDS: readonly CardValue[] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 const range = (from: number, to: number) => Array.from({ length: to - from + 1 }, (_, i) => from + i);
-/** One row: a letter per up card, ace first. */
 const row = (cell: (up: CardValue) => string | null) => UP_CARDS.map((up) => LETTERS[cell(up) ?? ''] ?? '-').join('');
 
 const dealerRule = (preset: BlackjackPreset) => (preset.startsWith('H17') ? 'H17' : 'S17');
 const lateSurrender = (preset: BlackjackPreset) => preset.endsWith('_LS');
 
 function policy(preset: BlackjackPreset, mode: BlackjackMode): BlackjackPlayPolicy {
-  /** Hard 4-20, soft 12-20 and pairs A-10, each cell read through `pick`. */
   const first = (pick: (cell: BasicStrategyCell) => string | null) => ({
     hard: range(4, 20).map((hand) => row((up) => pick(basicStrategy(preset, 'hard', hand, up)))),
     soft: range(12, 20).map((hand) => row((up) => pick(basicStrategy(preset, 'soft', hand, up)))),
@@ -118,7 +98,6 @@ const PLAYS: Readonly<Record<DeviationAction, DeviationPlay>> = {
   basicWithoutSurrender: 'basic',
 };
 
-/** "+0.0188": four decimals, as the research prints a per-bet cost. */
 const perBet = (cost: PublishedCost) => `${cost.perBet < 0 ? '-' : '+'}${Math.abs(cost.perBet).toFixed(4)}`;
 const published = (value: string, difference: number | null, costs: readonly PublishedCost[]): PublishedIndex => ({
   value,
@@ -146,11 +125,6 @@ function deviation(d: PlayingDeviation): BlackjackDeviation {
 
 const cache = new Map<string, StrategyDefinition>();
 
-/**
- * The built-in strategy for a preset and mode, optionally with the Hi-Lo bet
- * schedule (counting modes only): pure strategy data the engine validates and
- * pins. Its note names the reference version it was packed from.
- */
 export function blackjackStrategy(preset: BlackjackPreset, mode: BlackjackMode, betSchedule = false): StrategyDefinition {
   if (betSchedule && !countingMode(mode)) throw new Error('the bet schedule goes with a counting mode');
   const key = `${preset} ${mode} ${betSchedule}`;
@@ -176,11 +150,6 @@ export function blackjackStrategy(preset: BlackjackPreset, mode: BlackjackMode, 
   return definition;
 }
 
-/**
- * The reference identity a guided blackjack activity pins alongside its
- * strategy, derived from the frozen manifest's hash (and the reference's major
- * version), so different reference content can never share an identity.
- */
 export const BLACKJACK_REFERENCE_IDENTITY = {
   id: `blackjack-coaching-reference@${BLACKJACK_REFERENCE.manifest.slice(0, 16)}`,
   version: Number(BLACKJACK_REFERENCE.version.split('.')[0]),

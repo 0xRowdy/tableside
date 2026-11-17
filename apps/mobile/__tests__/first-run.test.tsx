@@ -1,7 +1,4 @@
-// Seam 3: first-run sign-in (#88 and #89, S2-13 to S2-16) as the player meets
-// it, through the real routes and the accessibility tree, over Account-service
-// fakes: welcome → age (Create only) → sign-in method (Apple, Google or an
-// email code) → offline game → Home.
+// #88, #89; spec 2 S2-13 to S2-16
 
 import type { AccountGate } from '@tableside/account';
 import { act, cleanup, fireEvent, screen, waitFor } from '@testing-library/react-native';
@@ -27,7 +24,6 @@ beforeAll(async () => {
   for (const method of ['log', 'info', 'warn', 'error', 'debug'] as const) {
     jest.spyOn(console, method).mockImplementation((...args: unknown[]) => void logged.push(args));
   }
-  // The first render transforms the route tree; pay that once.
   await renderRouter('./src/app', { initialUrl: '/' });
   await cleanup();
 }, 180_000);
@@ -61,7 +57,6 @@ const header = (name: string | RegExp) => screen.findByRole('header', { name });
 const button = (name: string | RegExp) => screen.getByRole('button', { name });
 const noTabBar = () => expect(screen.queryByTestId('tab-bar')).toBeNull();
 
-/** Every accessibility label and text on screen, for checking what a screen reader could read out. */
 function everythingSpoken(): string[] {
   const out: string[] = [];
   type Node = typeof screen.root;
@@ -77,14 +72,12 @@ function everythingSpoken(): string[] {
   return out;
 }
 
-/** Welcome → I'm new here → Continue: the age step. */
 async function startCreate() {
   await fireEvent.press(screen.getByRole('radio', { name: "I'm new here" }));
   await fireEvent.press(button('Continue'));
   await header('How old are you?');
 }
 
-/** The age step's answer, then the method choice's email code. */
 async function chooseEmailMethod() {
   await header('How do you want to sign in?');
   await fireEvent.press(button('Create with an email code'));
@@ -422,7 +415,6 @@ describe('Apple and Google', () => {
       { method: 'resume' },
       { method: 'signInWithProvider', provider: 'google' },
       { method: 'answerAgeQuestion', range: '13-15' },
-      // The identity Sign in found, without asking Google again.
       { method: 'createWithProvider', provider: 'google', sameIdentity: true },
     ]);
   });
@@ -478,7 +470,6 @@ describe('Apple and Google', () => {
 
     await fireEvent.press(button('Continue with Apple'));
     expect(await header('Choose your offline game')).toBeOnTheScreen();
-    // Nothing after Create reads as getting another account back.
     expect(everythingSpoken().filter((text) => /welcome back|recover|restor|your history/i.test(text))).toEqual([]);
     expect(service().calls.at(-1)).toEqual({ method: 'createWithProvider', provider: 'apple', sameIdentity: false });
   });

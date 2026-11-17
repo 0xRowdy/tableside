@@ -1,7 +1,3 @@
-// Seam 2: the practice controller with substitute adapters (in-memory store,
-// fake clock, deterministic entropy, always-allowed access supervisor).
-// Spin outcomes come from the Random123 "pi digits" stream: 27, 0, 25, 31, 9.
-
 import { ENDING_STEP_MS, PracticeController, REVEAL_MS, type PracticeSnapshot } from '@/practice/controller';
 import { FakeClock, PI_WORDS, substituteAdapters } from '@/practice/testing/substitutes';
 
@@ -142,7 +138,6 @@ describe('spinning', () => {
 
     const settled = active(controller.snapshot());
     expect(settled.view.phase).toBe('settled-outcome');
-    // 27 is red: red 10 returns 20; straight 17 loses its 5. 985 + 20.
     expect(settled.view.balance).toBe('1005');
     expect(settled.view.wagers).toEqual([]);
     expect(settled.facts).toEqual([
@@ -203,7 +198,6 @@ describe('spinning', () => {
     expect(view.outcome).toEqual({ turn: 1, pocket: 27 });
     expect(view.phase).toBe('settled-outcome');
     expect(view.balance).toBe('1010');
-    // The spin committed once; the retry recovered it rather than drawing again.
     expect((await store.readReceipt(view.activityId, `${view.activityId}/1`))?.facts).toContainEqual({ kind: 'outcome-generated', turn: 1, pocket: 27 });
     expect((await store.load(view.activityId))?.sequence).toBe(3);
   });
@@ -221,7 +215,6 @@ describe('spinning', () => {
       { kind: 'turn-began', turn: 1, wagers: [{ target: 'red', amount: '10' }] },
       { kind: 'outcome-generated', turn: 1, pocket: 27 },
     ]);
-    // Every published view is a committed one: the transition that led to it has a receipt.
     for (const snapshot of published) {
       if (snapshot.status !== 'active' || snapshot.view.sequence === 0) continue;
       expect(await store.readReceipt(view.activityId, `${view.activityId}/${snapshot.view.sequence - 1}`)).not.toBeNull();
@@ -265,7 +258,6 @@ describe('spinning', () => {
     void controller.spin();
     await waitFor(() => adapters.clock.pending === 1);
 
-    // The app restarts: a new controller over the same durable store.
     const restarted = new PracticeController({ ...adapters, clock: new FakeClock(undefined, true) });
     await restarted.load();
     await restarted.resume();
@@ -298,7 +290,7 @@ describe('ending', () => {
   it('returns removable wagers, settles automatically and records one result and one sync record', async () => {
     const { controller, store } = await started();
     await controller.placeWager('red', '10');
-    await controller.spin(); // 27: red wins, balance 1010
+    await controller.spin();
     await controller.placeWager('straight-17', '5');
 
     await controller.endSession();
@@ -316,7 +308,6 @@ describe('ending', () => {
       { kind: 'wager-returned', target: 'straight-17', amount: '5' },
     ]);
 
-    // Loading again finds nothing unfinished and writes nothing more.
     const again = new PracticeController({ ...substituteAdapters(), store });
     await again.load();
     expect(again.snapshot().status).toBe('none');
@@ -361,7 +352,6 @@ describe('ending', () => {
 });
 
 describe('craps', () => {
-  // Pi stream rolls: 8 (point), 11, 6, 4, 12, 8 (point made).
   async function crapsStarted() {
     const context = setup();
     await context.controller.load();
@@ -401,21 +391,20 @@ describe('craps', () => {
       status: 'completed',
       result: { game: 'craps', buyIn: '1000', finalCashOut: '1010', netResult: '10', identities: { rules: { id: 'standard-craps', version: 2 } } },
     });
-    // Pass, roll, settle, odds, stop, then one final-settlement roll each for 11, 6, 4, 12 and 8.
     expect((await store.load('activity-1'))?.sequence).toBe(10);
     expect(await store.readOutgoing()).toHaveLength(1);
   });
 });
 
 describe('funding', () => {
-  // The worked example of spec #51 (Results): 1,000 → 600 → rebuy 1,000 → win 100.
+  // #51 Results
   async function workedExample(controller: PracticeController) {
     await controller.placeWager('black', '400');
-    await controller.spin(); // 27: black loses, balance 600
+    await controller.spin();
     await controller.rebuy('1000');
     await controller.placeWager('straight-0', '3');
     await controller.placeWager('straight-1', '5');
-    await controller.spin(); // 0: +105 and −5, balance 1,700
+    await controller.spin();
   }
 
   it('adds a rebuy while the table waits for input and records buy-in, rebuys, net result and maximum drawdown', async () => {

@@ -1,12 +1,7 @@
-// How guided practice's facts are announced, the same at every table: a
-// correction, a departure, a pending strategy action, a cycle's end and the
-// strategy stopping. A table passes its word for a turn ("spin" or "roll").
-
 import type { CycleEnd, DomainFact, PauseReason } from '@tableside/engine';
 
 export type TurnWord = 'spin' | 'roll' | 'round';
 
-/** How a cycle-end fact is announced. */
 const CYCLE_END_ANNOUNCEMENT: Record<CycleEnd, (turn: TurnWord) => string> = {
   completed: () => 'The strategy cycle is complete.',
   cap: () => 'The strategy cycle ended at its cap.',
@@ -16,7 +11,6 @@ const CYCLE_END_ANNOUNCEMENT: Record<CycleEnd, (turn: TurnWord) => string> = {
   envelope: () => 'The strategy cycle ended: its next stake is too large to compute.',
 };
 
-/** A pending strategy action, announced when it begins. The pending panel shows the amounts. */
 const PAUSED: Record<PauseReason, string> = {
   'unfunded-group': "Strategy paused: your balance can't cover its next bets. No new strategy bets.",
   limit: 'Strategy paused: its next bets are outside the table limits. No new strategy bets.',
@@ -24,7 +18,6 @@ const PAUSED: Record<PauseReason, string> = {
   stop: 'Strategy paused by its stop rule. No new strategy bets.',
 };
 
-/** A guided-practice fact in one sentence, or null for a fact the table words itself. */
 export function strategyFactSentence(fact: DomainFact, turn: TurnWord): string | null {
   switch (fact.kind) {
     case 'correction-offered':

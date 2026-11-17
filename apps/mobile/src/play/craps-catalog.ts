@@ -1,9 +1,3 @@
-// Craps's wager catalog for the bet selector, built from the engine's
-// permitted view: every wager the table offers now (line bets the puck
-// allows, odds behind established bets, place, buy, lay, field, hardways,
-// propositions and the horn) with their limits, increments, payouts and the
-// house edge of these rules.
-
 import { crapsHouseEdge, type CrapsWager } from '@tableside/definitions';
 import type { CrapsPermittedView as PermittedView } from '@tableside/engine';
 
@@ -13,10 +7,8 @@ import { formatUnits } from './units';
 
 type Placement = PermittedView['table']['placements'][number];
 
-/** Short chooser labels: the number for box bets and hardways, the name otherwise. */
 const shortLabel = (target: string) => /^(place|buy|lay|hard)-(\d+)$/.exec(target)?.[2] ?? crapsTargetName(target);
 
-/** The payout as the stake editor says it: the field and the horn pay differently by total. */
 function payoutText(placement: Placement): string {
   if (placement.kind === 'horn') return '30:1 on 2 or 12, 15:1 on 3 or 11, per part';
   if (placement.kind === 'field') return '1:1, more on 2 and 12';
@@ -37,19 +29,16 @@ function choice(view: PermittedView, placement: Placement): WagerChoice {
   };
 }
 
-/** The value of a placed wager's working toggle: its instruction, else the usual come-out status. */
 export function placedToggle(view: PermittedView, target: string): boolean | undefined {
   const toggle = workingToggle(view, target);
   const status = view.table.wagers.find((item) => item.target === target);
   return toggle && status ? (status.instruction ?? toggle.usual) : undefined;
 }
 
-/** "6·8 1.52% · 5·9 4.00% · 4·10 6.67%": the edge of a box family, number pairs sharing one value. */
 function boxEdges(family: 'place' | 'buy' | 'lay', edge: (wager: CrapsWager) => string): string {
   return ([[6, 8], [5, 9], [4, 10]] as const).map(([a, b]) => `${a}·${b} ${edge(`${family}-${a}`)}%`).join(' · ');
 }
 
-/** Buy and lay edges at each number's minimum stake, where rounding the commission up costs the most. */
 function minimumEdges(family: 'buy' | 'lay', placements: readonly Placement[], edge: (wager: CrapsWager, stake?: string) => string): string {
   return ([6, 5, 4] as const)
     .map((n) => {
@@ -141,7 +130,6 @@ export function crapsCatalog(view: PermittedView): WagerCatalog {
 
 const ROLLING = 'Committed to this roll until it settles. It can’t be changed or taken down.';
 
-/** The wagers on the table, for the selector: contracts stay committed and say why, with their working status. */
 export function crapsPlacedWagers(view: PermittedView): PlacedWager[] {
   return view.wagers.map((wager) => {
     const status = view.table.wagers.find((item) => item.target === wager.target);

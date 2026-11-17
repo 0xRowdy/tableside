@@ -1,7 +1,3 @@
-// The feedback service's ports on a real device: expo-audio for the bundled
-// cues, expo-haptics for the standard platform patterns, and a file in the
-// app's document directory for the two preferences.
-
 import { createAudioPlayer, setAudioModeAsync, type AudioPlayer } from 'expo-audio';
 import { File, Paths } from 'expo-file-system';
 import * as Haptics from 'expo-haptics';
@@ -11,12 +7,7 @@ import type { CueName, HapticPattern } from './catalog';
 import type { FeedbackPorts } from './service';
 import { CUE_SOUNDS } from './sounds';
 
-/**
- * The silent switch and silent or vibrate mode silence every app sound
- * (playsInSilentMode is true by default, so it is set off explicitly). Cues
- * mix with other apps' audio without ducking it or taking Android audio focus,
- * and nothing plays in the background.
- */
+// Spec 1 Audio and haptics
 export const AUDIO_MODE = {
   playsInSilentMode: false,
   interruptionMode: 'mixWithOthers',
@@ -24,7 +15,6 @@ export const AUDIO_MODE = {
   allowsRecording: false,
 } as const;
 
-/** iOS: the standard feedback generators, which follow the system haptics setting. */
 const IOS_HAPTICS: Record<HapticPattern, () => Promise<void>> = {
   selection: () => Haptics.selectionAsync(),
   'impact-light': () => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light),
@@ -35,12 +25,7 @@ const IOS_HAPTICS: Record<HapticPattern, () => Promise<void>> = {
   error: () => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error),
 };
 
-/**
- * Android: the system haptic feedback constants (View.performHapticFeedback),
- * which follow the system touch-feedback setting, unlike the vibrator that
- * impactAsync and notificationAsync use there. The nearest constant stands in
- * for each pattern; how each feels is measured on devices (gate 8).
- */
+// Spec 1 Launch gates 8
 const ANDROID_HAPTICS: Record<HapticPattern, Haptics.AndroidHaptics> = {
   selection: Haptics.AndroidHaptics.Segment_Tick,
   'impact-light': Haptics.AndroidHaptics.Clock_Tick,
@@ -59,7 +44,6 @@ export const SETTINGS_FILE = 'sound-and-haptics.json';
 export function createDevicePorts(): FeedbackPorts {
   void setAudioModeAsync(AUDIO_MODE).catch(() => undefined);
 
-  // One player per cue, loaded up front so a cue starts without load time.
   const players = new Map((Object.keys(CUE_SOUNDS) as CueName[]).map((cue) => [cue, createAudioPlayer(CUE_SOUNDS[cue])]));
 
   let playing: AudioPlayer | null = null;
@@ -74,7 +58,6 @@ export function createDevicePorts(): FeedbackPorts {
   return {
     sound: {
       play(cue, volume) {
-        // A new cue cuts off one still playing.
         playing?.pause();
         const next = players.get(cue) as AudioPlayer;
         next.volume = volume;

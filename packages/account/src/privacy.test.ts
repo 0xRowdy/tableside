@@ -1,6 +1,4 @@
-// Privacy choices (#105; spec 2 Amendment 8 §1) as one installation applies
-// them: the account's accepted changes in order, then this installation's own
-// withdrawals and opt-outs that haven't reached the account yet.
+// Spec 2 Amendment 8 §1; #105
 
 import { describe, expect, it } from 'vitest';
 
@@ -73,7 +71,6 @@ describe('privacy choices', () => {
       analytics: { consent: 'withdrawn', generation: 1, analyticsId: null },
       adDataOptOut: { source: 'in-app' },
       pending: true,
-      // The account's last accepted change: what an enabling change is made from.
       basis: 3,
     });
   });

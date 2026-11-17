@@ -3,10 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import { BLACKJACK_LIMITS, blackjackRules, CRAPS_LIMITS, ROULETTE_LIMITS, rouletteRules, standardCraps } from '../src/index';
 
-// Default limits (#3 / spec #51 "Default table limits"): blackjack initial wager
-// 10/1,000; craps line/come, place/buy/lay and field 10/1,000, hardways and
-// propositions 1/100; roulette inside 1/100, outside 10/1,000. Limits are
-// editable before a session; the edited ones are what the activity pins.
+// Spec 1 Game rules, Default table limits; #3
 const random = { protocol: RANDOM_PROTOCOL_VERSION, key: [1, 2], session: [3, 4] } as const;
 const base = { activityId: 'a', owner: 'o', device: 'd', strategy: null, reference: null, fundingSource: 'practice-funding', funding: '1000' } as const;
 

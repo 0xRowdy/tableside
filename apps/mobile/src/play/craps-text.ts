@@ -1,7 +1,3 @@
-// How craps sessions read on screen and aloud. Amounts are plain units (no
-// currency symbol). Everything here is built from committed facts and the
-// engine's permitted view: the next roll is never known until it is committed.
-
 import { FUNDING_CEILING, type CrapsPermittedView, type DomainFact, type IllegalActionReason, type Phase } from '@tableside/engine';
 
 import { strategyFactSentence } from './strategy-text';
@@ -22,7 +18,6 @@ const MENU_NAMES: Record<string, string> = {
 
 const NUMBER_WORDS: Record<number, string> = { 2: 'two', 3: 'three', 4: 'four', 5: 'five', 6: 'six', 7: 'seven', 8: 'eight', 9: 'nine', 10: 'ten', 11: 'eleven', 12: 'twelve' };
 
-/** "Pass line", "Come 6", "Don't come 4 odds", "Place 6", "Buy 4", "Lay 10", "Hard 8", "Eleven (yo)". */
 export function crapsTargetName(target: string): string {
   const menu = MENU_NAMES[target];
   if (menu) return menu;
@@ -36,20 +31,16 @@ export function crapsTargetName(target: string): string {
 }
 
 
-/** "Rolled 3 and 3: 6, the hard way." Pairs of 2 to 5 make the hardway numbers. */
 export function rollSentence(dice: readonly [number, number]): string {
   const total = dice[0] + dice[1];
   const hard = dice[0] === dice[1] && total >= 4 && total <= 10 ? ', the hard way' : '';
   return `Rolled ${dice[0]} and ${dice[1]}: ${total}${hard}.`;
 }
 
-/** "six the hard way", for a hardway's long name. */
 export const hardwayWords = (n: number) => `${NUMBER_WORDS[n] ?? n} the hard way`;
 
-/** Wagers whose working status follows the puck unless the player gives an instruction. */
 const followsPuck = (target: string) => /^(place|buy)-\d+$/.test(target);
 
-/** How each switchable family's option reads: what works on the come-out, or what an off wager does. */
 const TOGGLE_DETAIL: Record<string, string> = {
   place: 'Off by default. Place bets act only while a point is on.',
   buy: 'Off by default. Buy bets act only while a point is on.',
@@ -59,22 +50,14 @@ const TOGGLE_DETAIL: Record<string, string> = {
   dont: "On by default, on every roll. Don't come odds that are off stay on the table and take no action.",
 };
 
-/**
- * The working option a wager's stake editor offers (design frame "Craps stake
- * editor"): place, buy and come odds can be told to work on the come-out;
- * lays, hardways and don't come odds can be told to be off. Other wagers
- * always work and offer none.
- */
 export function workingToggle(view: CrapsPermittedView, target: string): { title: string; detail: string; usual: boolean } | undefined {
   const usual = view.table.placements.find((p) => p.target === target)?.usualOnComeOut;
   if (usual === undefined) return undefined;
-  // The engine says which wagers take an instruction; the family only picks the words.
   const family = /^(place|buy|lay|hard|dont|come)-/.exec(target)?.[1] ?? '';
   const detail = TOGGLE_DETAIL[family] ?? (usual ? 'On by default, on every roll.' : 'Off by default on the come-out roll.');
   return usual ? { title: 'Working', detail, usual } : { title: 'Working on the come-out', detail, usual };
 }
 
-/** The puck, in words: never color alone. */
 export const puckText = (point: number | null) => (point === null ? 'Puck OFF · no point yet' : `Puck ON · point ${point}`);
 
 export function crapsStatus(view: CrapsPermittedView): string {
@@ -91,12 +74,10 @@ export function crapsStatus(view: CrapsPermittedView): string {
   return phase[view.phase];
 }
 
-/** "ON" or "OFF" for a wager on the table. */
 export function workingText(view: CrapsPermittedView, target: string): 'ON' | 'OFF' {
   return view.table.wagers.find((wager) => wager.target === target)?.working === false ? 'OFF' : 'ON';
 }
 
-/** Why a committed wager's controls can't take it down or change it. */
 export function commitmentText(target: string, point: number | null): string {
   const traveled = /^come-(\d+)$/.exec(target);
   const number = traveled ? traveled[1] : point;
@@ -142,40 +123,30 @@ function illegalMessage(reason: IllegalActionReason, target: string | null, view
       return 'Place a wager before you roll.';
     case 'not-whole-units':
       return target ? 'Stakes are whole units. Nothing was placed.' : 'Rebuys are whole units. Nothing was added.';
-    // no-wager-to-remove, unknown-target, and reasons only other games produce.
     default:
       return `${name} can't be changed. Nothing was placed.`;
   }
 }
 
-/** A working instruction, in words, with the stake: what changed against the wager's usual come-out status. */
 function workingSentence(target: string, working: boolean, view: CrapsPermittedView): string {
   const stake = view.wagers.find((wager) => wager.target === target)?.amount;
   const name = stake === undefined ? crapsTargetName(target) : `${crapsTargetName(target)} ${formatUnits(stake)}`;
   const status = view.table.wagers.find((wager) => wager.target === target);
-  // An instruction is the opposite of the usual status; none means this is the usual status.
   const usual = status?.instruction === null || status?.instruction === undefined ? working : !status.instruction;
   if (!usual) return working ? `${name} now works on the come-out roll too.` : `${name} is off on the come-out roll again, as usual.`;
   return working ? `${name} is working again.` : `${name} is now OFF until you turn it on.`;
 }
 
-/** One settled wager: its result, any commission, a horn part, and whether a winning standing bet stays up. */
 function settledSentence(fact: Extract<DomainFact, { kind: 'wager-settled' }>): string {
   const name = fact.component === undefined ? crapsTargetName(fact.target) : `Horn ${fact.component} part`;
   const stake = formatUnits(fact.stake);
   if (fact.result === 'returned') return `${name} ${stake} was off and comes back.`;
   if (fact.result === 'loss') return `${name} ${stake} loses.`;
   const commission = fact.commission === undefined ? '' : `, after commission ${formatUnits(fact.commission)}`;
-  // A standing bet that wins is paid and stays up: only the win came back.
   const staysUp = fact.returned === fact.net ? ' It stays up.' : '';
   return `${name} ${stake} wins ${formatUnits(fact.net)}${commission}.${staysUp}`;
 }
 
-/**
- * What the latest committed transition changed, in one message for the screen
- * and for screen readers: every wager with its working status, the roll, the
- * puck, each result and the balance.
- */
 export function describeCrapsFacts(facts: readonly DomainFact[], view: CrapsPermittedView): string | null {
   const parts: string[] = [];
   let balanceChanged = false;
@@ -227,14 +198,12 @@ export function describeCrapsFacts(facts: readonly DomainFact[], view: CrapsPerm
       case 'outcome-generated':
         break;
       default: {
-        // Guided practice: corrections, departures, pending actions, cycles.
         const sentence = strategyFactSentence(fact, 'roll');
         if (sentence) parts.push(sentence);
         break;
       }
     }
   }
-  // Come odds, place and buy bets go off for a come-out roll and back on with the next point: say so when the puck moves.
   const puck = facts.find((fact) => fact.kind === 'point-changed');
   const following = (pattern: (target: string) => boolean) => view.table.wagers.some((wager) => pattern(wager.target) && wager.instruction === null);
   if (puck && following((target) => /^come-\d+-odds$/.test(target))) {
@@ -243,7 +212,6 @@ export function describeCrapsFacts(facts: readonly DomainFact[], view: CrapsPerm
   if (puck && following(followsPuck)) {
     parts.push(puck.point === null ? 'Place and buy bets are OFF for the come-out roll.' : 'Place and buy bets are ON again.');
   }
-  // The strategy's cycle ended or it stopped with contracts up: they settle before anything else.
   if (view.phase === 'strategy-settlement' && facts.some((fact) => fact.kind === 'strategy-stopped' || fact.kind === 'cycle-ended')) {
     parts.push(`The dice roll on their own to settle ${view.wagers.map((wager) => `${crapsTargetName(wager.target)} ${formatUnits(wager.amount)}`).join(', ')}. No new bets.`);
   }

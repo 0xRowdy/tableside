@@ -1,6 +1,3 @@
-// What this installation remembers of the account it is signed in to (in the
-// environment's credentials), and the gate that follows from it.
-
 import { type AgeRange, type AgeSignal, type EligibilityRecord, type RequiredCheck, isEligibleBand, isRequiredCheck, parseEligibilityRecord, raisesBand, requiredCheck } from '../eligibility';
 import type { EnvironmentName } from '../environment';
 
@@ -9,40 +6,25 @@ import { isCurrency } from '../values';
 import { parseJson } from './credentials';
 import type { AccountGate, RevokedBy } from './types';
 
-/** Where the signed-in account is remembered, in the environment's credentials (so it goes with them). */
 export const rememberedAccountKey = (environment: EnvironmentName) => `tableside.${environment}.account`;
 
-/**
- * The account this installation is signed in to, as this device last knew
- * it: the account's eligibility record (the server's, or a range this
- * device's platform established), this device's own platform state, and the
- * currency it last heard of. After a sign-out only this stays: the account
- * whose database is kept here, locked.
- */
 export interface RememberedAccount {
   readonly accountId: string;
   readonly eligibility: EligibilityRecord;
-  /** A required platform check this device still owes: it restricts this device only. */
   readonly check?: RequiredCheck;
-  /** The last range this device's platform established, applied once; a later change elsewhere isn't overridden by repeating it. */
   readonly signal?: AgeRange;
-  /** The last range the server accepted from this device, so each is reported once. */
   readonly reported?: AgeRange;
   readonly currency: string | null;
   readonly signedOut: boolean;
-  /** When and by whom the server confirmed this installation's session was revoked; the account is locked (signedOut) since. */
   readonly revoked?: { readonly at: number; readonly by: RevokedBy } | undefined;
-  /** When the server last said the account's deletion is scheduled, its deadline (milliseconds since the epoch); absent otherwise. */
   readonly deletionDeadline?: number | undefined;
 }
 
-/** The eligibility part of what is remembered. */
 export type RememberedEligibility = Pick<RememberedAccount, 'eligibility' | 'check' | 'signal' | 'reported'>;
 
 export const UNAVAILABLE: AgeSignal = { kind: 'unavailable' };
 export const sameRecord = (a: EligibilityRecord, b: EligibilityRecord) => a.status === b.status && a.source === b.source;
 
-/** The eligibility after a platform answer: a required check is owed (or cleared), or a newly established range applies. */
 export function afterSignal(base: RememberedEligibility, signal: AgeSignal): RememberedEligibility {
   const owed = requiredCheck(signal);
   const next: RememberedEligibility = {
@@ -52,12 +34,11 @@ export function afterSignal(base: RememberedEligibility, signal: AgeSignal): Rem
     ...(base.reported ? { reported: base.reported } : {}),
   };
   if (signal.kind !== 'range' || signal.range === base.signal) return next;
-  // No platform answer raises a band here, nor under 13: that is support review's (#42), as on the server.
+  // #42
   if (raisesBand(base.eligibility.status, signal.range)) return next;
   return { ...next, eligibility: { status: signal.range, source: 'platform-signal' }, signal: signal.range };
 }
 
-/** Only the eligibility fields of `next`, over everything else `base` holds. */
 export const withEligibility = (base: RememberedAccount, next: RememberedEligibility): RememberedAccount => ({
   accountId: base.accountId,
   currency: base.currency,
@@ -70,7 +51,6 @@ export const withEligibility = (base: RememberedAccount, next: RememberedEligibi
   ...(next.reported ? { reported: next.reported } : {}),
 });
 
-/** The gate an open account is in. */
 export function gateFor(remembered: RememberedAccount, renewing: boolean): AccountGate {
   const { accountId, eligibility, check, deletionDeadline } = remembered;
   if (deletionDeadline !== undefined) return { state: 'deletion-scheduled', accountId, deadline: deletionDeadline };
@@ -95,7 +75,7 @@ export function parseRemembered(text: string | null): RememberedAccount | null {
       }
     | null;
   if (!value || typeof value.accountId !== 'string') return null;
-  // Remembered before #90 as the bare band, which was always declared.
+  // #90
   const eligibility = parseEligibilityRecord(typeof value.eligibility === 'string' ? { eligibility: value.eligibility } : value.eligibility);
   if (!eligibility) return null;
   return {

@@ -1,9 +1,4 @@
-// S2-19 Devices (More → Settings → Account): the sign-ins on the account,
-// each with what the device calls itself, when it was last active and which
-// is this one. Signing another device out, or all others, asks the player to
-// confirm it's them, then locks those devices (keeping their records) and
-// emails the account. This device signs out with Sign out, on Account.
-// TODO(frames): the single-device "done" banner, the unknown-device entry, the problem messages, the loading and no-connection notes, and Confirm it's you's reason are unverified against S2-19, which draws none of them.
+// TODO(spec 2 S2-19)
 
 import type { DeviceEntry, SignInMethodEntry } from '@tableside/account';
 import { router, useFocusEffect } from 'expo-router';
@@ -19,7 +14,6 @@ import { confirmReason } from '@/account/method-text';
 import { Button } from '@/components/Button';
 import { Note, SettingsScreen } from '@/settings/SettingsParts';
 
-/** What is being signed out: one other device, or every other one. */
 type Target = { readonly kind: 'one'; readonly entry: DeviceEntry } | { readonly kind: 'others'; readonly entries: readonly DeviceEntry[] };
 
 const SIGN_OUT_FAILED = "Couldn't sign out. Check your connection and try again.";
@@ -29,7 +23,6 @@ const names = (target: Target) => (target.kind === 'one' ? [deviceShortName(targ
 export default function DevicesScreen() {
   const { service } = useAccount();
   const [entries, setEntries] = useState<readonly DeviceEntry[] | null | undefined>();
-  // When the list was read: "last active" counts from then.
   const [readAt, setReadAt] = useState(0);
   const [asking, setAsking] = useState<Target | null>(null);
   const [confirming, setConfirming] = useState<{ readonly target: Target; readonly methods: readonly SignInMethodEntry[] } | null>(null);
@@ -64,7 +57,6 @@ export default function DevicesScreen() {
     );
   }
 
-  /** Signs the target out; a session that hasn't confirmed it's the player (or whose few minutes have passed) confirms first. */
   const signOut = async (target: Target) => {
     setBusy(true);
     setProblem(null);

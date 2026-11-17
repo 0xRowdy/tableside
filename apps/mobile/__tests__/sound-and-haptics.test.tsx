@@ -1,7 +1,3 @@
-// Seam 3: More → Settings → Sound & haptics, and cues during roulette play,
-// rendered through the real routes on the in-memory adapters and recording
-// feedback ports, driven only through the accessibility tree.
-
 import { act, cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react-native';
 import { renderRouter } from 'expo-router/testing-library';
 import { AccessibilityInfo, Dimensions, StyleSheet } from 'react-native';
@@ -87,7 +83,6 @@ describe('Sound & haptics settings', () => {
 
     for (let i = 0; i < 9; i++) await fireEvent(slider(), 'accessibilityAction', { nativeEvent: { actionName: 'decrement' } });
     expect(slider()).toHaveAccessibilityValue({ now: 0, text: 'Off' });
-    // Off is said in words, not shown only by an empty track.
     expect(screen.getByText('Off')).toBeOnTheScreen();
     expect(screen.getByRole('button', { name: 'Lower sound effects' })).toBeDisabled();
 
@@ -186,7 +181,7 @@ describe('cues during roulette play', () => {
     await screen.findByRole('header', { name: 'Roulette' });
     await fireEvent.press(screen.getByRole('button', { name: 'Start free play' }));
     await screen.findByLabelText('Session balance 1,000');
-    await fireEvent.press(screen.getByRole('button', { name: 'Spin' })); // nothing on the table
+    await fireEvent.press(screen.getByRole('button', { name: 'Spin' }));
     await fireEvent.press(screen.getByRole('radio', { name: '25 chip' }));
     await fireEvent.press(screen.getByRole('button', { name: /^Red,/ }));
     await fireEvent.press(screen.getByRole('button', { name: 'Spin' }));

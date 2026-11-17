@@ -1,7 +1,4 @@
-// The account vault's device adapters in the app: Expo SQLite built with
-// SQLCipher, SecureStore with device-only accessibility, the app's files
-// directory excluded from backup, and the app returning to the foreground as
-// the signal to try a locked keychain again.
+// docs/decisions/local-persistence-account-synchronization.md Storage and ownership
 
 import type { EnvironmentName } from '@tableside/account/environment';
 import * as Crypto from 'expo-crypto';
@@ -14,10 +11,8 @@ import { excludeFromBackup } from '../../modules/backup-exclusion';
 import { classifySqlError, isDatabaseKey, openVerifiedConnection, SqlError, type RawSqlConnection, type SqlDriver } from './sql';
 import { AccountVault, type VaultFiles, type VaultKeyStore } from './vault';
 
-/** The vault's directory under the app's documents (Android: files) directory. plugins/with-backup-exclusion.js names it too. */
 export const VAULT_DIRECTORY = 'tableside-vault';
 
-/** How long a locked keychain waits for the app to come to the foreground before trying again anyway. */
 export const LOCKED_RETRY_MS = 30_000;
 
 export function createNativeVault(environment: EnvironmentName): AccountVault {
@@ -43,12 +38,6 @@ export function createNativeVault(environment: EnvironmentName): AccountVault {
   });
 }
 
-/**
- * Expo SQLite with SQLCipher. Its own connection (never the shared cached one),
- * keyed before anything else runs, and refused outright when the build has no
- * SQLCipher: there, `PRAGMA key` would silently do nothing and the database
- * would be stored in the clear.
- */
 export const expoSqlCipherDriver: SqlDriver = {
   async open(path, keyHex) {
     if (!isDatabaseKey(keyHex)) throw new SqlError('other', 'the key must be 64 hex digits');
@@ -84,15 +73,8 @@ function expoRaw(db: SQLite.SQLiteDatabase): RawSqlConnection {
   };
 }
 
-/**
- * Device-only: never in an iCloud backup or moved to a new device (iOS); the
- * Android Keystore key never leaves the device and SecureStore's preferences
- * are excluded from Auto Backup and transfer. Readable only while unlocked, so
- * a locked device waits.
- */
 export const KEYCHAIN_OPTIONS: SecureStore.SecureStoreOptions = { keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY };
 
-/** iOS reports a locked device's keychain as errSecInteractionNotAllowed (-25308). */
 export const isKeychainLocked = (error: unknown): boolean => /-25308|interaction is not allowed|device is locked/i.test(error instanceof Error ? error.message : String(error));
 
 export const secureStoreKeys: VaultKeyStore = {
@@ -149,8 +131,7 @@ function appFiles(): VaultFiles {
     async writeText(path, text) {
       new File(path).write(text);
     },
-    // Expo exposes no fsync: durability of the migration's backup copy, manifest
-    // write and removals is part of launch gate 2's native qualification.
+    // Spec 2 launch gate 2
     async copy(from, to) {
       const target = new File(to);
       if (target.exists) target.delete();

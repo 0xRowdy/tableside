@@ -1,15 +1,9 @@
-// Seam 2 for blackjack: the practice controller with substitute adapters. The
-// shoe comes from the Random123 "pi digits" stream; its six-deck shuffle starts
-// T, T, J, 6, A, T, 9, T, 5, 3 (engine draws.cases, from the Python reference):
-// round 1 deals the player T and J against a dealer ten up with a 6 in the hole.
-
 import { blackjackRules } from '@tableside/definitions';
 import type { BlackjackPermittedView } from '@tableside/engine';
 
 import { PracticeController, REVEAL_MS, type PracticeSnapshot } from '@/practice/controller';
 import { FakeClock, substituteAdapters } from '@/practice/testing/substitutes';
 
-/** A stream whose first round deals 2♥ J♦ against an A♥ up with a 2♠ in the hole, then 5♥ (found through the engine). */
 const ACE_UP = [3, 0x5441424c, 0x45534944, 0x45] as const;
 
 function setup(words?: readonly [number, number, number, number]) {
@@ -47,7 +41,6 @@ describe('blackjack through the practice controller', () => {
     await controller.placeWager('hand-1', '10');
     await controller.beginTurn();
 
-    // A decision: the controller waits; nothing settles while time passes.
     let current = view(controller.snapshot());
     expect([current.phase, current.playActions, current.outcome?.dealer.cards[1]]).toEqual(['open-decision', ['hit', 'stand', 'double', 'split', 'surrender'], null]);
     clock.advance(10_000);
@@ -55,7 +48,6 @@ describe('blackjack through the practice controller', () => {
 
     const standing = controller.play('stand');
     await waitFor(() => clock.pending === 1);
-    // The reveal is published (and durable) before the automatic settle.
     current = view(controller.snapshot());
     expect(current.phase).toBe('revealing-outcome');
     expect(current.outcome?.dealer.cards.map((card) => card?.rank)).toEqual([10, 6, 1]);
@@ -79,7 +71,6 @@ describe('blackjack through the practice controller', () => {
 
     const suspended = controller.snapshot();
     expect(suspended.status === 'active' && suspended.suspension).toMatchObject({ reached: true, canEnd: false });
-    // Nothing is played while suspended.
     await controller.play('stand');
     expect(view(controller.snapshot()).sequence).toBe(before.sequence);
 
@@ -97,7 +88,6 @@ describe('blackjack through the practice controller', () => {
     await controller.beginTurn();
 
     await controller.endSession();
-    // The engine never stops a hand mid-decision: the player still plays it.
     expect(view(controller.snapshot()).playActions).toEqual(['hit', 'stand', 'double', 'split', 'surrender']);
 
     const standing = controller.play('stand');
@@ -148,7 +138,6 @@ describe('blackjack through the practice controller', () => {
     }
     await standing;
     const done = controller.snapshot();
-    // 12 stands; the dealer's A,2 draws the 5♥ to 18. Insurance 5 and the hand's 10 are lost, once each.
     expect(done.status === 'completed' && [done.result.finalCashOut, done.result.netResult]).toEqual(['985', '-15']);
   });
 

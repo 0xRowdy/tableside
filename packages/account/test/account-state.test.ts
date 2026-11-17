@@ -1,9 +1,4 @@
-// Seam 2 (#95): the record-type registry's remaining kinds, proven with
-// test-only record types standing in for later specs' (src/testing/record-types.ts):
-// barrier-bearing account-state operations and the reconnect order,
-// server-authored state, purging an accepted immutable result, and
-// per-device attempt ordering. Faults are injected at the network, the app
-// process and the server's state, never inside the Account service.
+// #95
 
 import { afterEach, describe, expect, it } from 'vitest';
 
@@ -41,7 +36,6 @@ function device(name: string): SimulatedDevice {
 }
 afterEach(() => devices.splice(0).forEach((d) => d.dispose()));
 
-/** A phone that created an account and a tablet signed in to it. */
 async function twoDevices() {
   const phone = device('phone');
   const tablet = device('tablet');
@@ -58,14 +52,12 @@ function accountOf(d: SimulatedDevice): string {
   return gate.accountId;
 }
 
-/** Queues a record on a device and expects it queued. */
 async function queue(d: SimulatedDevice, recordType: string, payload: unknown) {
   const result = await d.account.sync.queue(recordType, payload);
   if (result.status !== 'queued') throw new Error(`${recordType} was refused: ${result.reason}`);
   return result;
 }
 
-/** The server's receipts for an account, by item: what it decided for each upload. */
 async function receipts(accountId: string) {
   const rows = await stack.sql<{ item_id: string; record_type: string; disposition: { status: string; sequence?: number; code?: string } }[]>`
     select item_id, record_type, disposition from private.sync_receipts where account_id = ${accountId} order by received_at, operation_id`;
@@ -74,7 +66,6 @@ async function receipts(accountId: string) {
 
 const itemsOn = async (d: SimulatedDevice, recordType: string) => (await d.vault.store().readAcceptedRecords(recordType)).map((record) => record.item);
 
-/** Every sync request a device sent from the `since`th on, as "upload <record type>" or "feed", from the request bodies. */
 function requestsSent(d: SimulatedDevice, since = 0): string[] {
   return d.proxy.sent.slice(since).flatMap(({ url, body }) => {
     if (url.includes('sync_feed_v1')) return ['feed'];
@@ -84,7 +75,6 @@ function requestsSent(d: SimulatedDevice, since = 0): string[] {
   });
 }
 
-/** The record types of the uploads a device sent, in order. */
 const uploadsSent = (d: SimulatedDevice) => requestsSent(d).flatMap((request) => (request.startsWith('upload ') ? [request.slice('upload '.length)] : []));
 
 const sharingWithdrawal = (scope: string, id = `w-${scope}`) => ({ version: 1, sharingWithdrawalId: id, scope });
@@ -101,12 +91,10 @@ describe('account-state operations behind barriers', () => {
     const held = phone.proxy.delayNextResponse('sync_upload_v1');
     phone.proxy.online = true;
     await held.arrived;
-    // The sharing withdrawal is accepted on the server, its answer is still on the way: the contribution hasn't been sent.
     expect((await receipts(accountId)).map(({ item, status }) => [item, status])).toEqual([['w-practice', 'accepted']]);
     held.release();
     await phone.account.sync.idle();
 
-    // The contribution reached the server after the sharing withdrawal, which its acceptance (spec 6's stand-in rule) saw.
     expect((await receipts(accountId)).map(({ item, status, code }) => [item, status, code])).toEqual([
       ['w-practice', 'accepted', undefined],
       ['c-practice', 'rejected', 'sharing-withdrawn'],
@@ -126,7 +114,6 @@ describe('account-state operations behind barriers', () => {
     const decided = Object.fromEntries((await receipts(accountId)).map(({ item, status, code, sequence }) => [item, { status, code, sequence }]));
     expect(decided['c-practice']).toMatchObject({ status: 'accepted' });
     expect(decided['c-strategies']).toMatchObject({ status: 'rejected', code: 'sharing-withdrawn' });
-    // Sharing withdrawals go first in the reconnect order, whatever their place in the queue.
     expect(uploadsSent(phone)).toEqual([testSharingWithdrawal.name, testContribution.name, testContribution.name]);
   });
 
@@ -155,8 +142,6 @@ describe('account-state operations behind barriers', () => {
     await queue(phone, testSharingWithdrawal.name, sharingWithdrawal('practice'));
     await queue(phone, testContribution.name, contribution('practice'));
 
-    // The server accepts the sharing withdrawal, and its answer is lost. In the
-    // background, so no live hint retries it before the queue is read.
     phone.foreground = false;
     phone.proxy.dropNextResponse('sync_upload_v1');
     phone.proxy.online = true;
@@ -195,7 +180,6 @@ describe('the reconnect order', () => {
     const order = requestsSent(phone, before);
     expect(order.indexOf('upload completed-practice-session')).toBeLessThan(order.indexOf('feed'));
     expect(order.indexOf('feed')).toBeLessThan(order.indexOf(`upload ${testContribution.name}`));
-    // The phone read the tablet's sharing withdrawal before contributing; the server refused the contribution against it.
     expect(await itemsOn(phone, testSharingWithdrawal.name)).toEqual(['w-tablet']);
     expect((await receipts(accountId)).find(({ item }) => item === 'c-practice')).toMatchObject({ status: 'rejected', code: 'sharing-withdrawn' });
   });
@@ -247,7 +231,6 @@ describe('server-authored state', () => {
       payload: assignment,
     });
     expect((await raw.rpc('sync_upload_v1', { request })).data).toMatchObject({ status: 'rejected', code: 'server-authored' });
-    // The backend's own writer isn't reachable through the API.
     expect((await raw.rpc('author_server_state', { p_account: accountId, p_record_type: testExperimentAssignment.name, p_item: 'pricing', p_change: {} })).error).not.toBeNull();
     expect((await raw.schema('private').rpc('author_server_state', { p_account: accountId, p_record_type: testExperimentAssignment.name, p_item: 'pricing', p_change: {} })).error).not.toBeNull();
     expect(((await raw.rpc('sync_feed_v1', { after: 0 })).data as { entries: unknown[] }).entries).toEqual([]);
@@ -257,7 +240,6 @@ describe('server-authored state', () => {
 
 describe('purging an accepted immutable result', () => {
   const result = (id: string, amount: string) => ({ version: 1, resultId: id, amount, detail: `detail of ${id}: private-${id}-marker` });
-  /** The account's practice total for the test results, on the server and as a device holds it. */
   const serverTotal = async (accountId: string) =>
     stack.sql<{ records: number; net: string }[]>`select records::int, net from private.account_totals where account_id = ${accountId} and total = 'practice' and game = 'test'`;
   const deviceTotal = async (d: SimulatedDevice) => {
@@ -265,7 +247,6 @@ describe('purging an accepted immutable result', () => {
     return { account: account.filter((row) => row.game === 'test').map(({ records, net }) => ({ records, net })), local: local.filter((row) => row.game === 'test').length };
   };
 
-  /** Every account-owned server row that mentions `text`, by table: every table in the stack keyed by account, whatever the registry declares. */
   async function rowsMentioning(accountId: string, text: string) {
     const tables = (
       await stack.sql<{ name: string }[]>`
@@ -296,13 +277,11 @@ describe('purging an accepted immutable result', () => {
     expect(await deviceTotal(tablet)).toEqual({ account: [{ records: 2, net: '12' }], local: 0 });
 
     await queue(tablet, testResultPurge.name, { version: 1, target: 'r-1' });
-    // Gone from the purging device at once.
     expect(await itemsOn(tablet, testResult.name)).toEqual(['r-2']);
     await tablet.account.sync.idle();
     await phone.account.sync.reconcile();
     expect(await itemsOn(phone, testResult.name)).toEqual(['r-2']);
 
-    // Its contribution is gone, and nothing of it but its identity remains on the server.
     expect(await serverTotal(accountId)).toEqual([{ records: 1, net: '5' }]);
     for (const d of [phone, tablet]) expect(await deviceTotal(d)).toEqual({ account: [{ records: 1, net: '5' }], local: 0 });
     expect(await rowsMentioning(accountId, 'private-r-1-marker')).toEqual([]);
@@ -311,7 +290,6 @@ describe('purging an accepted immutable result', () => {
       { record_type: testResult.name, item_id: 'r-1' },
     ]);
 
-    // A device reading the feed from the start afterwards never sees it: its entry keeps its place with nothing in it.
     const feed = (await stack.rawClient(accessToken(phone)).rpc('sync_feed_v1', { after: 0 })).data as { entries: { item: string; change: unknown }[] };
     expect(feed.entries.map(({ item, change }) => [item, change === null])).toEqual([
       ['r-1', true],
@@ -323,8 +301,6 @@ describe('purging an accepted immutable result', () => {
 
   it('never brings it back: not by a retried upload, a new upload of it or a stale device', async () => {
     const { phone, tablet, accountId } = await twoDevices();
-    // The phone's answer for r-1 is lost; meanwhile the tablet purges it. The
-    // phone is in the background, so no live hint retries it meanwhile.
     phone.foreground = false;
     phone.proxy.dropNextResponse('sync_upload_v1');
     await queue(phone, testResult.name, result('r-1', '7'));
@@ -334,7 +310,6 @@ describe('purging an accepted immutable result', () => {
     await queue(tablet, testResultPurge.name, { version: 1, target: 'r-1' });
     await tablet.account.sync.idle();
 
-    // The retry gets its receipt back, and the feed still takes the result away.
     await phone.account.sync.reconcile();
     await phone.account.sync.reconcile();
     expect(await itemsOn(phone, testResult.name)).toEqual([]);
@@ -355,7 +330,6 @@ describe('purging an accepted immutable result', () => {
     await queue(phone, testResult.name, result('r-1', '7'));
     await queue(phone, testResultPurge.name, { version: 1, target: 'r-1' });
     expect(await itemsOn(phone, testResult.name)).toEqual([]);
-    // Its own upload is still queued, but it no longer counts, not even as local.
     expect(await deviceTotal(phone)).toEqual({ account: [], local: 0 });
 
     const held = phone.proxy.delayNextResponse('sync_upload_v1');
@@ -368,7 +342,6 @@ describe('purging an accepted immutable result', () => {
       [testResult.name, 'accepted'],
       [testResultPurge.name, 'accepted'],
     ]);
-    // Accepted, then purged: not on the device, and not counted.
     expect(await itemsOn(phone, testResult.name)).toEqual([]);
     expect(await serverTotal(accountId)).toEqual([]);
     expect(await deviceTotal(phone)).toEqual({ account: [], local: 0 });
@@ -384,9 +357,7 @@ describe('the operation API enforces ordering, called directly', () => {
     after?: string[];
     position?: number;
   }
-  /** The commands of the installation the direct calls upload as. */
   let commands: DirectCommands;
-  /** A canonical request from the device, as the next command of its installation. */
   function upload(d: SimulatedDevice, fields: UploadFields) {
     return prepareOperation({
       protocol: PROTOCOL_VERSION,
@@ -396,7 +367,6 @@ describe('the operation API enforces ordering, called directly', () => {
       ...fields,
     }).request;
   }
-  /** The phone and tablet, and a client calling the operation API directly as the phone's account. */
   async function direct() {
     const devices = await twoDevices();
     const raw = stack.rawClient(accessToken(devices.phone));
@@ -446,7 +416,6 @@ describe('the operation API enforces ordering, called directly', () => {
       status: 'rejected',
       code: 'position-unexpected',
     });
-    // The same record at its own position, under another operation, is the one acceptance.
     expect(await send('f', attempt('a-1', 1))).toMatchObject({ status: 'accepted', sequence: 1 });
   });
 
@@ -454,7 +423,7 @@ describe('the operation API enforces ordering, called directly', () => {
 });
 
 describe('per-device attempt ordering', () => {
-  /** Spec 3's rule, stood in: a milestone for `length` consecutive passing attempts on one installation. */
+  // Spec 3
   function milestone(records: readonly AcceptedRecord[], length: number): boolean {
     return byOriginatingDevice(records).some((sequence) =>
       sequence.runs.some((run) => {
@@ -484,7 +453,6 @@ describe('per-device attempt ordering', () => {
         [tablet.vault.store().identity.installationId, [['t-1']]],
       ].sort(([a], [b]) => String(a).localeCompare(String(b))),
     );
-    // Three on one device and one on another: four passes, but no four-in-a-row.
     expect(milestone(await attemptsOn(tablet), 4)).toBe(false);
     expect(milestone(await attemptsOn(tablet), 3)).toBe(true);
   });
@@ -493,9 +461,7 @@ describe('per-device attempt ordering', () => {
     const { phone, tablet } = await twoDevices();
     phone.proxy.online = false;
     for (const id of ['p-1', 'p-2', 'p-3']) await queue(phone, testAttempt.name, attempt(phone, id));
-    // Positions 1 and 3 reach the account first (as another build's or a retried path might send them).
     const raw = stack.rawClient(accessToken(phone));
-    // Another scope of the phone's installation: the phone recovers into a new one when it next uploads.
     const positions = await directCommands(raw, phone.vault.store().identity.installationId);
     for (const [index, entry] of (await phone.vault.store().readUploadQueue()).entries()) {
       if (index === 1) continue;
@@ -522,7 +488,6 @@ describe('per-device attempt ordering', () => {
     await phone.account.sync.idle();
     await tablet.account.sync.reconcile();
     const records = await attemptsOn(tablet);
-    // Arrival order was 1, 3, 2; the positions are 1, 2, 3.
     expect(records.map((record) => record.item)).toEqual(['p-1', 'p-3', 'p-2']);
     expect(byOriginatingDevice(records)[0]?.runs.map((run) => run.map((record) => record.item))).toEqual([['p-1', 'p-2', 'p-3']]);
     expect(milestone(records, 3)).toBe(true);

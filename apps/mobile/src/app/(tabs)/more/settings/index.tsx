@@ -7,7 +7,8 @@ import { useFeedbackSettings } from '@/feedback/FeedbackProvider';
 import { Group, ListRow, SettingsScreen } from '@/settings/SettingsParts';
 import { soundAndHapticsSummary } from '@/settings/summary';
 
-/** Settings (design frame "Settings"). Plan, Offline & allowance (spec 5) and Learning (spec 3) join it with their specs. */
+// TODO(spec 3)
+// TODO(spec 5)
 export default function SettingsIndex() {
   const { current } = useFeedbackSettings();
   const overview = useAccountOverview();

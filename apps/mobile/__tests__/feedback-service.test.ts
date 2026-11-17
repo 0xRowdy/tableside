@@ -1,6 +1,3 @@
-// The audio/haptics service on substitute ports: cue dispatch per the launch
-// catalog, the two device-local preferences and Check suppression.
-
 import { CUES, type CueName } from '@/feedback/catalog';
 import { FeedbackService } from '@/feedback/service';
 import { DEFAULT_SETTINGS, DeviceSettings } from '@/feedback/settings';
@@ -12,7 +9,7 @@ function setup(stored: string | null = null) {
   return { ports, settings, service: new FeedbackService(ports, settings) };
 }
 
-// The accepted pairing, written out from #49 rather than read from the catalog.
+// #49
 const HAPTICS: Record<CueName, string | null> = {
   'card-dealt': null,
   'stake-set': 'selection',
@@ -106,8 +103,8 @@ describe('the feedback service', () => {
     const { ports, service } = setup();
     service.setCheckActive(true);
 
-    service.cue('answer-accepted'); // a right answer
-    service.cue('answer-accepted'); // a wrong answer
+    service.cue('answer-accepted');
+    service.cue('answer-accepted');
 
     expect(ports.sound.played[0]).toEqual(ports.sound.played[1]);
     expect(ports.haptics.fired[0]).toEqual(ports.haptics.fired[1]);

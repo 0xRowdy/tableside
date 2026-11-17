@@ -1,11 +1,4 @@
-// Seam 2, provider revocation (#101; spec 2 *Sessions, revocation and the
-// authorization gate*, Amendment 1 C3). Apple's server-to-server
-// notifications and Google's security events reach the provider-notifications
-// function as JWTs the provider signed. Once one checks out, the method it
-// concerns is disabled (unless it is the account's only method) and the
-// sessions signed in with that kind of method are revoked, at once, whatever
-// the provider does with its own tokens. The account is never deleted. The
-// test identity provider stands in for Apple and Google.
+// Spec 2 Sessions, revocation and the authorization gate, Amendment 1 C3; #101
 
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 
@@ -41,7 +34,6 @@ function person(label: string, email?: string): ProviderIdentity {
   return { subject: id, email: email ?? `${id}@example.com` };
 }
 
-/** Posts a notification to the function as the provider would: no Supabase key, the environment in the URL. */
 async function notify(body: string, contentType = 'application/json'): Promise<number> {
   const response = await fetch(`${stack.url}/functions/v1/provider-notifications?provider=${idp.provider}&environment=${stack.environment}`, {
     method: 'POST',
@@ -55,7 +47,6 @@ async function notify(body: string, contentType = 'application/json'): Promise<n
 const methods = async (phone: SimulatedDevice) => ((await phone.account.signInMethods.list()) ?? []).map((entry) => entry.method).sort();
 const accountState = async (accountId: string) => (await stack.sql`select state from public.accounts where account_id = ${accountId}`)[0]?.state;
 
-/** An email account on a phone with Apple linked, and a tablet signed in with Apple. */
 async function emailAccountWithApple(label: string) {
   const phone = device(`${label}-phone`);
   const email = uniqueEmail(label);
@@ -84,7 +75,6 @@ describe('a provider withdrawing an identity', () => {
 
     await tablet.account.refreshEligibility();
     expect(tablet.account.gate).toEqual({ state: 'revoked', accountId, revokedAt: expect.any(Number), by: 'provider' });
-    // The email-code session stays, and the account keeps its other method.
     await phone.account.refreshEligibility();
     expect(phone.account.gate.state).toBe('active');
     expect(await methods(phone)).toEqual(['email']);
@@ -116,10 +106,8 @@ describe('a provider withdrawing an identity', () => {
     await phone.account.refreshEligibility();
     expect(phone.account.gate.state).toBe('revoked');
     expect(await accountState(gate.accountId)).toBe('active');
-    // Signing in with it again (once the player has given consent again) reaches the same account.
     expect(await phone.account.signInWithProvider('apple')).toEqual({ status: 'signed-in' });
     expect(phone.account.gate).toMatchObject({ state: 'active', accountId: gate.accountId });
-    // The same notification again does nothing more.
     expect(await notify(event)).toBe(202);
     await phone.account.refreshEligibility();
     expect(phone.account.gate.state).toBe('active');
@@ -156,11 +144,8 @@ describe('a notification that doesn’t check out', () => {
     expect(await notify(idp.appleNotification(event, { audience: 'someone-else' }))).toBe(400);
     expect(await notify(idp.appleNotification(event, { issuedAt: Math.floor(Date.now() / 1000) - 3 * 86_400 }))).toBe(400);
     expect(await notify('not a token')).toBe(400);
-    // A genuine event that withdraws nothing is acknowledged and does nothing.
     expect(await notify(idp.appleNotification({ type: 'email-enabled', sub: someone.subject, email: 'x@privaterelay.appleid.com' }))).toBe(202);
-    // A relay address that isn't the account's email method revokes nothing.
     expect(await notify(idp.appleNotification({ type: 'email-disabled', sub: someone.subject, email: 'other@privaterelay.appleid.com' }))).toBe(202);
-    // One for an identity nobody here has is acknowledged the same way.
     expect(await notify(idp.appleNotification({ type: 'consent-revoked', sub: 'nobody-at-all' }))).toBe(202);
 
     await tablet.account.refreshEligibility();

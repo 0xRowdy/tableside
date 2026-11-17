@@ -1,14 +1,4 @@
-// Seam 3: Delete account (#103, S2-22) and the deletion-scheduled lock
-// (S2-23), through the real routes and the accessibility tree, over
-// Account-service fakes. Deleting starts with Confirm it's you, then offers the
-// export, the store's subscription and refund paths, and the scheduling
-// warnings, before the choice of a 30-day undo or Delete permanently now. A
-// scheduled account locks with no tab bar, showing the deadline, Cancel
-// deletion (Confirm it's you again), deletion status, export, billing help,
-// Contact support and Make a privacy request. Delete permanently now (#104)
-// shows its own warnings (unsynced records lost, "Deleted author", paid time
-// forfeited, no undo) and asks once more; once deleted, the device is wiped
-// and the Deleted screen shows the deletion's status, with no tab bar.
+// #103, #104; spec 2 S2-22, S2-23
 
 import type { AccountGate } from '@tableside/account';
 import { act, cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react-native';
@@ -53,7 +43,6 @@ async function setWindow(width: number, height: number, fontScale = 1) {
 }
 
 const DAY = 86_400_000;
-/** The store this platform's project runs as. */
 const STORE =
   Platform.OS === 'ios'
     ? { name: 'App Store', manage: 'https://apps.apple.com/account/subscriptions', refund: 'https://reportaproblem.apple.com' }
@@ -65,7 +54,6 @@ const header = (name: string | RegExp) => screen.findByRole('header', { name });
 const button = (name: string | RegExp) => screen.getByRole('button', { name });
 const noTabBar = () => expect(screen.queryByTestId('tab-bar')).toBeNull();
 
-/** Opens Delete account from Account and confirms it's the player. */
 async function openDelete(prepare?: () => void) {
   await renderRouter('./src/app', { initialUrl: '/more/settings/account' });
   prepare?.();
@@ -94,7 +82,6 @@ describe('Delete account', () => {
     }
     expect(button('Schedule deletion')).toBeOnTheScreen();
     expect(button('Delete permanently now')).toBeOnTheScreen();
-    // Billing help, never a purchase, and no claim that anything was canceled or refunded.
     expect(screen.queryByText(/Premium|Subscribe|Buy|Upgrade|was canceled|refunded/)).toBeNull();
   });
 
@@ -183,7 +170,6 @@ describe('Delete permanently now', () => {
     providers: null,
   };
 
-  /** Opens Delete permanently now's warnings, with two records waiting to sync. */
   async function openPermanent(prepare?: () => void) {
     await openDelete(() => {
       service().waitingCount = 2;

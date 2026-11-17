@@ -1,10 +1,4 @@
-// Seam 2, export (#102, S2-21; spec 2 *Export*, Amendments 1 B2, 2 §5, 5 §3,
-// 6 §3, 7 §6 and 8 §2). The server export needs fresh online authentication;
-// a job builds it from one consistent snapshot into private storage, and it
-// downloads only for a live, freshly authenticated session of the account,
-// for 24 hours, until it is regenerated, a device is revoked or deletion is
-// scheduled. The local supplement is built on the device, offline, from what
-// hasn't reached the account, labelled so it can't pass for finished sessions.
+// Spec 2 Export, S2-21, Amendments 1 B2, 2 §5, 5 §3, 6 §3, 7 §6, 8 §2; #102
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -41,7 +35,6 @@ async function signedInPhone(label: string, band: '18+' | '13-15' = '18+') {
   return { phone, email, accountId: gate.accountId };
 }
 
-/** Confirm it's you with an emailed code (as if the code-request backoff had passed since the last code). */
 async function confirmByEmail(phone: SimulatedDevice, email: string) {
   await stack.ageCodeRequests(email, 3600);
   const previous = await phone.mailbox.latestCode(email);
@@ -49,7 +42,6 @@ async function confirmByEmail(phone: SimulatedDevice, email: string) {
   expect(await phone.account.freshAuthentication.withCode(await phone.mailbox.latestCode(email, { after: previous }))).toEqual({ status: 'confirmed' });
 }
 
-/** Waits for the export job to finish the latest export. */
 async function settled(phone: SimulatedDevice) {
   return vi.waitFor(
     async () => {
@@ -61,7 +53,6 @@ async function settled(phone: SimulatedDevice) {
   );
 }
 
-/** Requests, waits for and downloads a server export, then reads the archive. */
 async function exportArchive(phone: SimulatedDevice, email: string) {
   await confirmByEmail(phone, email);
   expect(await phone.account.export.requestServerExport()).toMatchObject({ status: 'requested' });
@@ -95,7 +86,6 @@ describe('the server export', () => {
     expect(manifest.files.find((file) => file.path === 'practice-sessions.csv')).toMatchObject({ format: 'csv', records: 2 });
     expect(manifest.omissions.map((omission) => omission.what)).toContain("Records on devices that haven't synced");
 
-    // The CSV renders each session exactly as the registry's export rendering does.
     const { header, row } = completedPracticeSession.export.csv!;
     const lines = files.get('practice-sessions.csv')!.trimEnd().split('\r\n');
     expect(lines[0]).toBe(header.join(','));
@@ -107,14 +97,12 @@ describe('the server export', () => {
   });
 });
 
-/** The account's latest export's object, as the server keeps it. */
 async function objectPath(accountId: string): Promise<string> {
   const [row] = await stack.sql<{ object_path: string }[]>`
     select object_path from private.exports where account_id = ${accountId} order by requested_at desc limit 1`;
   return row!.object_path;
 }
 
-/** A raw GET of an export object, with a token or none: the adversary's view of the bucket. */
 async function fetchObject(path: string, token?: string): Promise<number> {
   const response = await fetch(`${stack.url}/storage/v1/object/authenticated/account-exports/${path}`, {
     headers: { apikey: stack.publishableKey, ...(token ? { authorization: `Bearer ${token}` } : {}) },
@@ -123,15 +111,12 @@ async function fetchObject(path: string, token?: string): Promise<number> {
   return response.status;
 }
 
-/** Whether the bucket still holds the object, once the job has had its turn. */
 const objectStored = async (path: string) =>
   (await stack.sql`select 1 from storage.objects where bucket_id = 'account-exports' and name = ${path}`).length > 0;
 
-/** Moves the account's fresh authentication past its few minutes, as if they had passed. */
 const staleFreshAuthentication = (token: string) =>
   stack.sql`update private.fresh_authentications set authenticated_at = now() - interval '6 minutes' where session_id = ${sessionOf(token)}`;
 
-/** The Auth session an access token belongs to. */
 const sessionOf = (token: string) => (JSON.parse(Buffer.from(token.split('.')[1]!, 'base64url').toString()) as { session_id: string }).session_id;
 
 describe('asking for and downloading the server export', () => {
@@ -142,7 +127,6 @@ describe('asking for and downloading the server export', () => {
 
     await confirmByEmail(phone, email);
     expect(await phone.account.export.requestServerExport()).toMatchObject({ status: 'requested', export: { state: 'preparing' } });
-    // Asking again while it's being built answers with the same one.
     const again = await phone.account.export.requestServerExport();
     expect(['preparing', 'requested']).toContain(again.status);
     expect(await settled(phone)).toMatchObject({ state: 'ready', bytes: expect.any(Number) });
@@ -163,7 +147,6 @@ describe('asking for and downloading the server export', () => {
     const intruder = await signedInPhone('intruder');
     await confirmByEmail(intruder.phone, intruder.email);
     expect(await fetchObject(path, accessToken(intruder.phone))).not.toBe(200);
-    // Nor can another account ask about it, or write to the bucket.
     expect(await intruder.phone.account.export.serverExport()).toEqual({ state: 'none' });
     const upload = await stack.rawClient(accessToken(intruder.phone)).storage.from('account-exports').upload(`${intruder.accountId}/x.zip`, new Blob(['x']), { contentType: 'application/zip' });
     expect(upload.error).not.toBeNull();
@@ -232,7 +215,6 @@ describe('the export job', () => {
     const { phone, email, accountId } = await signedInPhone('stopped');
     await phone.playPracticeSession();
     await phone.account.sync.reconcile();
-    // An export whose build began and then its function died: its parts are written, nothing stored.
     const [queued] = await stack.sql<{ export_id: string }[]>`
       insert into private.exports (account_id, object_path) values (${accountId}, ${`${accountId}/stopped.zip`}) returning export_id`;
     const [began] = await stack.sql<{ build: { status: string; export: string } }[]>`select public.begin_export_build() as build`;
@@ -251,7 +233,6 @@ describe('the export job', () => {
       expect(row!.object_pending).toBe(false);
     }, { timeout: 20_000, interval: 250 });
 
-    // Asking again works as usual.
     expect((await exportArchive(phone, email)).files.get('practice-sessions.csv')!.trimEnd().split('\r\n')).toHaveLength(2);
   });
 
@@ -261,13 +242,11 @@ describe('the export job', () => {
     const [queued] = await stack.sql<{ export_id: string }[]>`
       insert into private.exports (account_id, object_path) values (${accountId}, ${path}) returning export_id`;
     await stack.sql`select public.begin_export_build()`;
-    // A sign-out ends it mid-build; the sweep finds nothing stored yet.
     await stack.sql`select private.invalidate_exports(${accountId}::uuid, 'revocation')`;
     await vi.waitFor(async () => {
       const [row] = await stack.sql<{ object_pending: boolean }[]>`select object_pending from private.exports where export_id = ${queued!.export_id}`;
       expect(row!.object_pending).toBe(false);
     }, { timeout: 20_000, interval: 250 });
-    // Then the slow build's upload lands, and it finishes.
     const { error } = await stack.serviceClient().storage.from('account-exports').upload(path, new Blob(['late'], { type: 'application/zip' }), { contentType: 'application/zip' });
     expect(error).toBeNull();
     const [finished] = await stack.sql<{ answer: { status: string } }[]>`select public.finish_export_build(${queued!.export_id}::uuid, 4) as answer`;
@@ -354,7 +333,6 @@ describe('the local supplement', () => {
   const TYPE = testRevisionedItem.name;
   const value = (net: string): TestRevisionedValue => ({ game: 'blackjack', currency: 'USD', net });
 
-  /** A phone and tablet on one account, with item-1 in conflict: the phone's edit accepted as R2, the tablet's a proposal. */
   async function conflicted(label: string) {
     const { phone, email, accountId } = await signedInPhone(label);
     const tablet = device(`${label}-tablet`);
@@ -403,7 +381,6 @@ describe('the local supplement', () => {
         proposals: [expect.objectContaining({ installation, revision: 2, syncStatus: 'conflict', record: expect.objectContaining({ kind: 'edit', value: value('-30') }) })],
       }),
     ]);
-    // The unfinished session, without its hidden state.
     const unfinished = (await tablet.vault.store().findUnfinished())!;
     expect(supplement!.unfinished).toEqual([
       { activityId: unfinished.activityId, kind: 'practice-session', game: 'roulette', mode: 'free-play', startedAt: unfinished.createdAt, steps: unfinished.sequence, installation, syncStatus: 'unfinished' },
@@ -412,7 +389,6 @@ describe('the local supplement', () => {
     expect(text).not.toContain(unfinished.checkpoint);
     expect(text).not.toContain(JSON.stringify(unfinished.random));
 
-    // Nothing was sent, resolved or counted.
     expect(tablet.proxy.sent.length).toBe(before.sent);
     expect(await tablet.account.records.totals()).toEqual(before.totals);
     expect(await tablet.account.sync.countWaiting()).toBe(before.waiting);

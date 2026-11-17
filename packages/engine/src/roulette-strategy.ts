@@ -1,8 +1,3 @@
-// The roulette module's strategy vocabulary: the targets a roulette strategy
-// can bet (every placement on the declared wheels' layouts), its table
-// conditions (wheels and inside/outside limits), and the situation of one
-// betting decision. The interpreter itself is game-agnostic (strategy.ts).
-
 import type { RoulettePocket, RouletteWheel } from './draws';
 import { add, compare, decodeMoney, encodeMoney } from './money';
 import { isPocket, placementFor, pocketColor, type RouletteActivityState } from './roulette';
@@ -16,24 +11,19 @@ export interface RouletteLimits {
   readonly outside: { readonly min: string; readonly max: string };
 }
 
-/** A roulette strategy's declared table conditions: the wheels it is written for and their limits. */
 export interface RouletteStrategyTable {
   readonly wheels: readonly RouletteWheel[];
   readonly limits: RouletteLimits;
 }
 
-/** One roulette betting decision, as Explain prescription takes it. */
 export interface RouletteSituation {
   readonly game: 'roulette';
   readonly rules: { readonly wheel: RouletteWheel; readonly limits: RouletteLimits };
-  /** Funds the player can commit: the balance plus any stakes still removable. Canonical money. */
   readonly balance: string;
-  /** The previous spin's pocket, or null before the first spin. */
   readonly lastPocket: RoulettePocket | null;
 }
 
 const limitsProblems = (limits: unknown, path: string) => limitGroupProblems(limits, ['inside', 'outside'], path);
-
 
 function situationProblem(situation: unknown): string | undefined {
   if (!isRecord(situation) || Object.keys(situation).sort().join() !== 'balance,game,lastPocket,rules') return 'a roulette situation has game, rules, balance and lastPocket';
@@ -83,14 +73,12 @@ export const ROULETTE_VOCABULARY: StrategyVocabulary<RouletteSituation> = {
   subject: (situation, name) => (name === 'last-pocket-color' && situation.lastPocket !== null ? pocketColor(situation.lastPocket) : 'none'),
 };
 
-/** Roulette's part of guided practice: its vocabulary, its table conditions, and the betting situation of a state. */
 export const ROULETTE_STRATEGY: StrategyGame<RouletteActivityState> = {
   vocabulary: ROULETTE_VOCABULARY as StrategyVocabulary,
   tableForRules: (rules) => {
     const { wheel, limits } = rules as { wheel: RouletteWheel; limits: RouletteLimits };
     return { wheels: [wheel], limits };
   },
-  // Between spins every stake on the table is still removable, so all of it is available.
   situation: (state): RouletteSituation => ({
     game: 'roulette',
     rules: { wheel: state.rules.wheel, limits: state.rules.limits },

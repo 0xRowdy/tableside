@@ -1,7 +1,3 @@
-// What every area of the Account service shares: the one backend client, the
-// observable gate, the account-session generation, and the calls that act for
-// the signed-in player under the gate. Every server call goes through here.
-
 import { type SupabaseClient, createClient } from '@supabase/supabase-js';
 
 import { backendPost } from '../backend-request';
@@ -15,7 +11,6 @@ import { credentialsKey, namespacedCredentials, removeRetiredEnvironments } from
 import { type RememberedAccount, parseRemembered, rememberedAccountKey } from './remembered';
 import { type AccessPath, type AccountGate, type AccountServiceOptions, type CredentialStorage, opensOrdinaryAccess, opensRestrictedPaths } from './types';
 
-/** A function's answer for the player: its HTTP status, the body's `status`, and the body. */
 export interface PlayerAnswer {
   readonly code: number;
   readonly status: string | undefined;
@@ -26,58 +21,29 @@ export interface PlayerAnswer {
 export interface ServiceContext {
   readonly options: AccountServiceOptions;
   readonly registry: ReadonlyMap<string, RecordType>;
-  /** This environment's credentials: Auth's session, and the remembered account beside it. */
   readonly credentials: CredentialStorage;
   readonly retryAfter: RetryAfterWatch;
   readonly metrics: MetricsSender;
-  /**
-   * The backend client. Nothing restores credentials, opens an account
-   * database or sends anything until every retired environment's namespace is
-   * gone: the client is made only after that, since making it reads the
-   * stored credentials.
-   */
   connect(): Promise<SupabaseClient>;
-  /** A request to the backend outside the Supabase client, naming this environment like every other. */
   post(path: string, body: unknown, headers?: Record<string, string>): Promise<Response>;
-  /** A request straight to Auth (outside the Supabase client, so its stored session doesn't change). */
   authRequest(method: 'PUT' | 'POST', path: string, body: unknown, token?: string): Promise<{ readonly ok: boolean; readonly body: Record<string, unknown> | null }>;
-  /** Called when the Supabase client refreshes its token: the live connection re-subscribes with it. */
   onTokenRefreshed(listener: () => void): void;
 
   readonly gate: AccountGate;
   setGate(next: AccountGate): void;
   subscribe(listener: (gate: AccountGate) => void): () => void;
-  /**
-   * The account-session generation: it moves on at every sign-in, sign-out and
-   * account switch, and an answer that arrives after it moved touches nothing.
-   */
   readonly generation: number;
   nextGeneration(): void;
 
-  /** Whether the gate is open for ordinary access, or for the restricted paths (fresh authentication and export among them). */
   allows(path: AccessPath): boolean;
-  /** The signed-in session's access token, renewed first when it has expired; null when there is none. */
   bearer(): Promise<string | null>;
-  /**
-   * A request made with this session's token, when the gate allows `path`.
-   * Null when it doesn't, there is no token, the request failed, or the
-   * account session moved on before the response came (its body is discarded).
-   */
   withSessionToken(path: AccessPath, send: (token: string) => Promise<Response>): Promise<Response | null>;
-  /**
-   * Calls one of the functions that act for the signed-in player (fresh-auth,
-   * link-method, …) with this session's token. Null when the gate denies the
-   * path, or the account session moved on before it answered.
-   */
   actAsPlayer(name: string, body: unknown, path?: AccessPath): Promise<PlayerAnswer | null>;
-  /** The answer of a database operation the gate allows on `path`, or null. */
   operation(name: string, args?: Record<string, unknown>, path?: AccessPath): Promise<unknown>;
 
-  /** Writes to the credentials go one at a time, so a late renewal can't write its token back after a sign-out cleared it. */
   writeCredentials(write: () => Promise<void>): Promise<void>;
   remember(account: RememberedAccount): Promise<void>;
   readRemembered(): Promise<RememberedAccount | null>;
-  /** `count` random bytes as lowercase hex. */
   randomHex(count: number): string;
 }
 

@@ -1,8 +1,4 @@
-// Seam 2: the completed practice session record as the practice controller
-// writes it (durability step 5), with substitute adapters, and the post-result
-// hook that spec 5's ads use (Amendment 4 §D: only when leaving a result just
-// produced, after its record is durably saved). Spin outcomes come from the
-// Random123 "pi digits" stream: 27 (red), 0, 25, 31, 9.
+// Spec 1 Amendment 4 §D
 
 import { alwaysAllowed, type AccessSupervisor } from '@/practice/adapters';
 import { PracticeController, type PracticeSnapshot } from '@/practice/controller';
@@ -49,9 +45,9 @@ describe('the completed practice session record', () => {
     const { controller, store } = await started();
     await controller.placeWager('red', '10');
     await controller.placeWager('black', '10');
-    await controller.spin(); // 27, red: red wins 10, black loses 10
+    await controller.spin();
     await controller.placeWager('red', '10');
-    await controller.spin(); // 0: red loses 10
+    await controller.spin();
     await controller.endSession();
 
     const record = completed(controller.snapshot());
@@ -77,7 +73,6 @@ describe('the completed practice session record', () => {
         { turn: 2, target: 'red', result: 'loss', net: '-10' },
       ],
     });
-    // Ended after the paced automatic steps, on the controller's clock.
     expect(record.endedAt).toBeGreaterThan(record.startedAt);
     expect(await store.readOutgoing()).toEqual([{ id: 'completed/activity-1', kind: 'completed-practice-session', record }]);
   });
@@ -111,7 +106,6 @@ describe('the completed practice session record', () => {
   it('keeps the ending reason across a restart during final settlement', async () => {
     const first = await started({ clock: new FakeClock(START, false) });
     await first.controller.placeWager('red', '10');
-    // The stop path has started (the switch is committed); the app dies before final settlement finishes.
     void first.controller.endSession('switch');
     await waitFor(() => first.clock.pending === 1);
     const reopened = new PracticeController({ ...first.adapters, clock: new FakeClock(START, true), store: first.store.reopen() });

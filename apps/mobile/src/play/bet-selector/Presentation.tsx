@@ -1,7 +1,3 @@
-// Switching one table between its two presentations, the graphical table and
-// the bet list, and the draft bar the table shows while a bet-list draft is
-// unsubmitted. Both control the same session; switching never changes it.
-
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Button } from '@/components/Button';
@@ -12,7 +8,6 @@ export type Presentation = 'table' | 'selector';
 
 const OPTIONS: readonly { value: Presentation; label: string }[] = [
   { value: 'table', label: 'Table' },
-  // "Bet list" is the design's tab copy for the bet selector.
   { value: 'selector', label: 'Bet list' },
 ];
 
@@ -45,7 +40,6 @@ function Option({ label, selected, onPress }: { label: string; selected: boolean
   );
 }
 
-/** Shown on the table while the bet list holds an unsubmitted draft. */
 export function DraftBar({ name, amount, onEdit }: { name: string; amount: string; onEdit: () => void }) {
   return (
     <View style={styles.draft}>

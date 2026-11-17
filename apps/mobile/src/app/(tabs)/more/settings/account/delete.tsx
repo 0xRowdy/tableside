@@ -1,4 +1,4 @@
-// S2-22 Delete account, from More → Settings → Account.
+// Spec 2 S2-22
 
 import { router } from 'expo-router';
 

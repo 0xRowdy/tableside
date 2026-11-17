@@ -1,9 +1,3 @@
-// Seam 3: the craps free-play screens, rendered through the real routes on
-// the in-memory adapters and driven only through the accessibility tree.
-// Rolls come from the Random123 "pi digits" stream (engine craps cases, checked
-// against the Python reference): 5+3, 5+6, 4+2, 3+1, 6+6, 2+6, 1+5, 2+5,
-// that is 8 (point), 11, 6, 4, 12, 8 (point made), 6, 7.
-
 import { act, cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react-native';
 import { renderRouter } from 'expo-router/testing-library';
 import { AccessibilityInfo, Dimensions, StyleSheet } from 'react-native';
@@ -46,7 +40,6 @@ async function roll() {
   await waitFor(() => expect(screen.getByRole('button', { name: 'Roll' })).toBeEnabled());
 }
 
-/** Pass line 25 and the come-out roll of 8: the point is 8. */
 async function pointOfEight() {
   await startSession();
   await fireEvent.press(spot(/^Pass line, pays 1 to 1$/));
@@ -135,7 +128,6 @@ describe('craps free play', () => {
     await roll();
 
     announced('Rolled 5 and 3: 8.');
-    // Settling the roll moves the puck, with no tap.
     announced('The point is 8. Puck ON.');
     expect(screen.getByLabelText('Puck ON · point 8. Last roll: 5 and 3, total 8')).toBeOnTheScreen();
     expect(screen.getByLabelText(/^Box 8, puck ON, the point/)).toBeOnTheScreen();
@@ -175,7 +167,6 @@ describe('craps free play', () => {
     await fireEvent.press(screen.getByRole('button', { name: /^Set / }));
 
     expect(announcements).toContain('Pass line odds 125 on the table, ON. Balance 850.');
-    // The contract is committed in the bet list too, by name, and says why.
     const yours = within(screen.getByTestId('your-wagers'));
     expect(yours.getByLabelText('Pass line, 25, committed, Working')).toBeOnTheScreen();
     await fireEvent.press(yours.getByRole('button', { name: "Why can't I change Pass line?" }));
@@ -194,14 +185,14 @@ describe('craps free play', () => {
 
   it('moves a come bet to its number and turns its odds off for the come-out roll', async () => {
     await pointOfEight();
-    await roll(); // 11
+    await roll();
     await fireEvent.press(spot(/^Come,/));
-    await roll(); // 6: the come bet travels
+    await roll();
     announced('Come 25 moves to Come 6.');
     await fireEvent.press(within(screen.getByTestId('wager-come-6')).getByRole('button', { name: 'Add 25 odds behind Come 6' }));
-    await roll(); // 4
-    await roll(); // 12
-    await roll(); // 8: the point is made
+    await roll();
+    await roll();
+    await roll();
 
     announced('Pass line 25 wins 25.');
     announced('Puck OFF. The next roll is a come-out roll.');
@@ -213,18 +204,18 @@ describe('craps free play', () => {
 
   it('announces come odds working again once the next point is set', async () => {
     await pointOfEight();
-    await roll(); // 11
+    await roll();
     await fireEvent.press(spot(/^Come,/));
-    await roll(); // 6: to come 6
+    await roll();
     await fireEvent.press(spot(/^Come,/));
-    await roll(); // 4: to come 4
+    await roll();
     await fireEvent.press(within(screen.getByTestId('wager-come-4')).getByRole('button', { name: 'Add 25 odds behind Come 4' }));
-    await roll(); // 12
-    await roll(); // 8: the point is made and come odds go off
+    await roll();
+    await roll();
     expect(screen.getByLabelText('Come 4 odds 25, OFF, removable')).toBeOnTheScreen();
     announcements = [];
 
-    await roll(); // 6 on the come-out: come 6 wins and the puck goes on at 6
+    await roll();
 
     announced('The point is 6. Puck ON. Come odds are ON again.');
     expect(screen.getByLabelText('Come 4 odds 25, ON, removable')).toBeOnTheScreen();
@@ -233,7 +224,7 @@ describe('craps free play', () => {
   it("explains that an established don't pass can come down but can't change, without calling it a contract", async () => {
     await startSession();
     await fireEvent.press(spot(/^Don't pass,/));
-    await roll(); // 8: the point
+    await roll();
 
     expect(spot(/^Don't pass,/)).toBeDisabled();
     expect(spot(/^Don't pass,/)).toHaveProp('accessibilityHint', "Don't pass can't be raised now. You can remove it from your wagers.");
@@ -252,7 +243,6 @@ describe('craps free play', () => {
 
     expect(await screen.findByRole('header', { name: 'Session result' })).toBeOnTheScreen();
     announced('Pass line odds 25 returned to your balance.');
-    // 11, 6, 4 and 12 leave the pass line; 8 pays it.
     announced('Pass line 25 wins 25.');
     expect(announcements).toContain('Session result. Win, net result plus 25. Final cash-out 1,025. Max drawdown 0.');
     expect(screen.getByText('Craps · free play · standard craps · 3-4-5x odds')).toBeOnTheScreen();
@@ -261,7 +251,6 @@ describe('craps free play', () => {
 
   it('gives every table control a touch target of at least 48 points', async () => {
     await pointOfEight();
-    // The stake editor's working switch; the field spot and the way to numbers and center bets are always there.
     await fireEvent.press(screen.getByRole('tab', { name: 'Bet list' }));
     await fireEvent.press(screen.getByRole('button', { name: /^Place,/ }));
     await fireEvent.press(screen.getByRole('radio', { name: 'Place 8' }));
@@ -334,7 +323,6 @@ describe('craps free play', () => {
 
     expect(announcements).toContain('Place 6 24 on the table, OFF. Balance 976.');
     expect(screen.getByLabelText('Place 6 24, OFF, removable')).toBeOnTheScreen();
-    // The working option is part of the draft: nothing changes until it is set.
     await fireEvent.press(screen.getByRole('switch', { name: 'Working on the come-out' }));
     expect(screen.getByRole('switch', { name: 'Working on the come-out' })).toBeChecked();
     expect(screen.getByLabelText('Place 6 24, OFF, removable')).toBeOnTheScreen();
@@ -343,7 +331,6 @@ describe('craps free play', () => {
     await waitFor(() => expect(announcements).toContain('Place 6 24 now works on the come-out roll too.'));
     expect(screen.getByLabelText('Place 6 24, ON, removable')).toBeOnTheScreen();
     expect(screen.getByRole('switch', { name: 'Working on the come-out' })).toBeChecked();
-    // Your wagers show working status but offer no switch of their own.
     expect(within(screen.getByTestId('wager-place-6')).queryByRole('button', { name: /^Turn / })).toBeNull();
   });
 
@@ -372,12 +359,12 @@ describe('craps free play', () => {
     await fireEvent.press(screen.getByRole('button', { name: /^Set / }));
     expect(screen.getByLabelText('Place 6 12, ON, removable')).toBeOnTheScreen();
 
-    await roll(); // 11
-    await roll(); // 6: place 6 wins 14 and stays up
+    await roll();
+    await roll();
     announced('Place 6 12 wins 14. It stays up.');
-    await roll(); // 4
-    await roll(); // 12
-    await roll(); // 8: the point is made
+    await roll();
+    await roll();
+    await roll();
 
     announced('Place and buy bets are OFF for the come-out roll.');
     expect(screen.getByLabelText('Place 6 12, OFF, removable')).toBeOnTheScreen();
@@ -390,7 +377,7 @@ describe('craps free play', () => {
     await fireEvent.press(spot(/^Pass line,/));
     await fireEvent.press(spot(/^Field, pays 1 to 1, 2 pays double, 12 pays triple$/));
     expect(announcements).toContain('Field 25 on the table, ON. Balance 950.');
-    await roll(); // 8: the field loses
+    await roll();
     announced('Field 25 loses.');
 
     await fireEvent.press(screen.getByRole('tab', { name: 'Bet list' }));
@@ -401,7 +388,7 @@ describe('craps free play', () => {
     await fireEvent.press(screen.getByRole('button', { name: /^Set / }));
     announcements = [];
 
-    await roll(); // 11: the horn's 11 part pays 15:1, the other parts lose
+    await roll();
 
     announced('Horn 2 part 1 loses. Horn 3 part 1 loses. Horn 11 part 1 wins 15. Horn 12 part 1 loses.');
   });
@@ -415,8 +402,8 @@ describe('craps free play', () => {
     await fireEvent.press(screen.getByRole('button', { name: /^Set / }));
     expect(announcements).toContain('Buy 6 10 on the table, ON. Balance 965.');
 
-    await roll(); // 11
-    await roll(); // 6: 12 at 6:5, less 5% of 10 rounded up to 1
+    await roll();
+    await roll();
 
     announced('Buy 6 10 wins 11, after commission 1. It stays up.');
     expect(screen.getByLabelText('Session balance 976')).toBeOnTheScreen();

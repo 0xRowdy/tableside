@@ -1,15 +1,5 @@
-// The completed practice session record and the results summary functions
-// (seam 1). Expected values come from spec #51 (*Results*, *Completed practice
-// session record*) with Amendments 2 §A.4 and §B, 3 §1-§4 and 4 §C: wagers are
-// classified by net result after commission, split hands, insurance, odds,
-// horn components and placements each count separately, surrender is a loss,
-// a wager returned without an outcome is outside W/L/P, shares pool as
-// sum/sum (unavailable at zero), sessions are profitable, losing or
-// unchanged with no-bet sessions kept in session denominators, drawdown is
-// summarised as median and worst, and quarantine is derived from pinned
-// identities, never stored. Roulette spins come from the "pi digits" stream
-// (27 red, 0, 25 red, 31 black, 9 red); craps rolls from the same stream
-// (totals 8 11 6 4 12 8 6 7), as in craps.cases.
+// Spec 1 Results
+// Spec 1 Completed practice session record, Amendments 2 §A.4 §B, 3 §1-§4, 4 §C
 import type { TestCase } from '@tableside/harness';
 
 import {
@@ -48,7 +38,6 @@ const CONTEXT: RecordContext = { startedAt: 1000, endedAt: 2000, meteringBasis: 
 
 const outcome = (result: WagerOutcome['result'], net: string, target = 't'): WagerOutcome => ({ turn: 1, target, stake: '10', result, net, returned: '0' });
 
-/** A record with only the fields the summary functions read changed. */
 function record(fields: Partial<CompletedPracticeSessionRecord>): CompletedPracticeSessionRecord {
   const { state, facts } = run(createActivity(SPEC, STREAM), [STOP, FINAL]);
   return { ...completedPracticeRecord(state, facts, CONTEXT), ...fields };
@@ -60,7 +49,6 @@ export const recordCases: TestCase[] = [
   {
     name: 'record: a free-play roulette session carries identities, times, rules and limits, funding, turns, ending reason and per-wager outcomes with their turn',
     run: (t) => {
-      // Spin 1 is 27 (red): red 10 wins 10, black 10 loses. Spin 2 is 0: red 10 loses.
       const { state, facts } = run(createActivity(SPEC, STREAM), [
         place('red', '10'), place('black', '10'), BEGIN, SETTLE,
         place('red', '10'), BEGIN, SETTLE,
@@ -106,7 +94,6 @@ export const recordCases: TestCase[] = [
         ],
         guidance: null,
       });
-      // Plain data: it encodes canonically for sync and export.
       t.equal(typeof canonicalJson(result), 'string');
     },
   },
@@ -140,18 +127,15 @@ export const recordCases: TestCase[] = [
       const { state, facts } = run(createActivity(SPEC, STREAM), [place('red', '10'), STOP, FINAL]);
       const result = completedPracticeRecord(state, facts, CONTEXT);
       t.equal([result.noBet, result.turnsPlayed, result.wagers, result.netResult, classifySession(result)], [true, 0, counts(0, 0, 0), '0', 'unchanged']);
-      // The wager taken back by the stop path is a return, outside W/L/P.
       t.equal(result.outcomes, [{ turn: 0, target: 'red', stake: '10', result: 'returned', net: '0', returned: '10' }]);
     },
   },
   {
     name: 'record: a turn with nothing at stake is no bet, and final-settlement rolls are not turns played (as the standardized record derives them)',
     run: (t) => {
-      // Flat place 6 and 8 waits for a point: the first roll (8) has nothing at stake, then the player stops.
       const idle = run(guidedCraps(FLAT_PLACE, PI), [BEGIN, SETTLE, STOP, FINAL]);
       const idleRecord = completedPracticeRecord(idle.state, idle.facts, CONTEXT);
       t.equal([idleRecord.noBet, idleRecord.turnsPlayed], [true, 1]);
-      // A pass line set at 8, then the stop: the dice roll on (11 6 4 12 8) only to settle it; one turn was played.
       const ended = run(createActivity(CRAPS_SPEC, PI), [place('pass', '10'), BEGIN, SETTLE, STOP, FINAL, FINAL, FINAL, FINAL, FINAL]);
       t.equal(ended.state.phase, 'completed');
       const endedRecord = completedPracticeRecord(ended.state, ended.facts, CONTEXT);
@@ -162,14 +146,14 @@ export const recordCases: TestCase[] = [
     name: 'record: craps keeps the chosen odds cap and counts come odds that were off as returned, outside W/L/P',
     run: (t) => {
       const { state, facts } = run(createActivity({ ...CRAPS_SPEC, rules: { ...CRAPS_SPEC.rules, odds: '5x' } }, PI), [
-        place('pass', '10'), BEGIN, SETTLE, // 8: point
-        place('pass-odds', '50'), place('come', '10'), BEGIN, SETTLE, // 11: come wins
-        place('come', '10'), BEGIN, SETTLE, // 6: come travels
-        place('come-6-odds', '50'), place('come', '10'), BEGIN, SETTLE, // 4: come travels
-        place('come-4-odds', '30'), BEGIN, SETTLE, // 12: nothing acts
-        BEGIN, SETTLE, // 8: pass and its odds win
-        BEGIN, SETTLE, // 6 on the come-out: come 6 wins, its odds were off and come back
-        BEGIN, SETTLE, // 7: come 4 and its odds lose
+        place('pass', '10'), BEGIN, SETTLE,
+        place('pass-odds', '50'), place('come', '10'), BEGIN, SETTLE,
+        place('come', '10'), BEGIN, SETTLE,
+        place('come-6-odds', '50'), place('come', '10'), BEGIN, SETTLE,
+        place('come-4-odds', '30'), BEGIN, SETTLE,
+        BEGIN, SETTLE,
+        BEGIN, SETTLE,
+        BEGIN, SETTLE,
         STOP, FINAL,
       ]);
       const result = completedPracticeRecord(state, facts, CONTEXT);
@@ -189,8 +173,8 @@ export const recordCases: TestCase[] = [
     run: (t) => {
       const initial = createActivity({ ...SPEC, strategy: { definition: FLAT_EVEN_MONEY, parameters: { target: 'red' } } }, STREAM);
       const { state, facts } = run(initial, [
-        place('red', '50'), BEGIN, RETRY, BEGIN, SETTLE, // retried; spin 27 red: red 10 wins 10
-        place('black', '10'), BEGIN, OVERRIDE, SETTLE, // overridden; spin 0: black 10 loses
+        place('red', '50'), BEGIN, RETRY, BEGIN, SETTLE,
+        place('black', '10'), BEGIN, OVERRIDE, SETTLE,
         STOP, FINAL,
       ]);
       const result = completedPracticeRecord(state, facts, CONTEXT);
@@ -205,7 +189,6 @@ export const recordCases: TestCase[] = [
           ['activity-1/departure/6', 2, 'overridden', [{ target: 'black', amount: '10' }]],
         ],
       );
-      // The log is exactly the departures recorded, in the order they were recorded.
       const recorded = facts.flatMap((fact) => (fact.kind === 'departure-recorded' ? [fact.departure] : []));
       t.equal(result.guidance?.departures, recorded);
     },
@@ -217,22 +200,19 @@ export const recordCases: TestCase[] = [
       t.equal(throws(() => completedPracticeRecord(open, [], CONTEXT)), 'Error');
     },
   },
-
-  // ---- results summary functions -----------------------------------------
   {
     name: 'results: each resolved wager is classified by net result after commission; surrender is a loss; a return is outside W/L/P',
     run: (t) => {
       t.equal(
         [
-          classifyWager(outcome('win', '19/20')), // a commissioned win still nets more than 0
-          classifyWager(outcome('loss', '-5')), // a surrendered hand loses half
-          classifyWager(outcome('push', '0')), // a tie
-          classifyWager(outcome('returned', '0')), // odds that were off
-          classifyWager(outcome('win', '-1/20')), // net after commission decides, not the label
+          classifyWager(outcome('win', '19/20')),
+          classifyWager(outcome('loss', '-5')),
+          classifyWager(outcome('push', '0')),
+          classifyWager(outcome('returned', '0')),
+          classifyWager(outcome('win', '-1/20')),
         ],
         ['win', 'loss', 'push', null, 'loss'],
       );
-      // Split hands, insurance, odds, horn components and placements are separate wagers.
       t.equal(
         countWagers([
           outcome('win', '10', 'hand-1'),
@@ -288,8 +268,6 @@ export const recordCases: TestCase[] = [
       t.equal(summary.adherence, { betting: { count: 11, of: 15 }, playing: null, counting: null });
     },
   },
-
-  // ---- quarantine ----------------------------------------------------------
   {
     name: 'quarantine: status is derived by matching pinned identities against the shipped list, so an accepted session can become quarantined later',
     run: (t) => {
@@ -299,15 +277,11 @@ export const recordCases: TestCase[] = [
         entries: [{ id: 'q-1', match: { engine: '0.0.0', rules: { id: 'roulette-single-zero', version: 1 } }, explanation: 'A single-zero settlement defect in engine 0.0.0.' }],
       };
       t.equal(quarantineStatus(accepted, { version: 1, entries: [] }), { quarantined: false });
-      // An entry that names no identity quarantines nothing.
       t.equal(quarantineStatus(accepted, { version: 1, entries: [{ id: 'q-0', match: {}, explanation: 'none' }] }), { quarantined: false });
       t.equal(quarantineStatus(accepted, list), { quarantined: true, entry: 'q-1', explanation: 'A single-zero settlement defect in engine 0.0.0.' });
-      // Every identity an entry names must match: another rule set, or another engine, is untouched.
       t.equal(quarantineStatus({ ...accepted, identities: { ...accepted.identities, rules: { id: 'roulette-double-zero', version: 1 } } }, list), { quarantined: false });
       t.equal(quarantineStatus({ ...accepted, identities: { ...accepted.identities, engine: '0.0.1' } }, list), { quarantined: false });
-      // Nothing is stored: the record itself has no quarantine field.
       t.equal(Object.keys(accepted).filter((key) => key.toLowerCase().includes('quarantin')), []);
-      // Quarantined sessions are excluded from totals and adherence.
       const summary = summarizeResults([accepted, record({ identities: { ...accepted.identities, engine: '0.0.1' }, netResult: '5' })], list);
       t.equal([summary.sessions.count, summary.sessions.quarantined, summary.sessions.profitable], [1, 1, 1]);
     },

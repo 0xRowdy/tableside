@@ -1,16 +1,9 @@
-// Seam 3: the blackjack free-play screens, rendered through the real routes on
-// the in-memory adapters and driven only through the accessibility tree.
-// The shoe is the Random123 "pi digits" six-deck shuffle (engine draws.cases):
-// round 1 deals you the 10 of spades and Jack of diamonds against a dealer
-// 10 of spades up with the 6 of spades face down; the next card is the Ace of diamonds.
-
 import { act, cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react-native';
 import { renderRouter } from 'expo-router/testing-library';
 import { AccessibilityInfo, Dimensions, StyleSheet } from 'react-native';
 
 import type { substituteAdapters } from '@/practice/testing/substitutes';
 
-// The stream each render's app adapters draw from; null is the "pi digits" stream.
 const mockAdapters: { latest: ReturnType<typeof substituteAdapters> | null; words: readonly [number, number, number, number] | null } = {
   latest: null,
   words: null,
@@ -23,21 +16,8 @@ jest.mock('@/practice/app-adapters', () => {
   };
 });
 
-/**
- * Streams whose first shuffle (Python reference, test/reference/philox_reference.py)
- * deals: NATURAL — you Q♥ and A♦ against a 7♣ up, 2♠ face down;
- * ELEVEN — you 2♥ and 9♣ against a 4♥ up, Q♥ face down, then 8♥ and J♣.
- */
 const NATURAL = [40, 0x5441424c, 0x45534944, 0x45] as const;
 const ELEVEN = [47, 0x5441424c, 0x45534944, 0x45] as const;
-/**
- * Streams found by dealing their first round through the engine (the cards are
- * named here, not computed by the test): INSURANCE — you 2♥ J♦ against an
- * A♥ up, 2♠ face down, then 5♥; EVEN_MONEY — you K♣ A♣ against an A♥ up, 9♣
- * face down; NINES — you 9♣ 9♠ against a 2♠ up, 5♠ face down, then Q♠, Q♥,
- * 6♥, J♣; PLAYERS — with two other players ahead: seat 1 6♦ Q♦, seat 2 A♦ 6♥,
- * you 5♦ 5♦ against a 5♠ up, 3♣ face down, then 6♦ and J♣.
- */
 const INSURANCE = [3, 0x5441424c, 0x45534944, 0x45] as const;
 const EVEN_MONEY = [245, 0x5441424c, 0x45534944, 0x45] as const;
 const NINES = [29, 0x5441424c, 0x45534944, 0x45] as const;
@@ -77,7 +57,6 @@ async function betAndDeal(chip = '25', status = 'Your turn') {
   await screen.findByLabelText(`Status ${status}`);
 }
 
-/** Every label, hint, value and text in the rendered tree, plus every announcement. */
 function everythingSpoken(): string {
   return JSON.stringify(screen.toJSON()) + announcements.join(' ');
 }
@@ -152,10 +131,8 @@ describe('blackjack free play', () => {
     expect(screen.getByLabelText('Your hand: 10 of spades, Jack of diamonds. 20')).toBeOnTheScreen();
     expect(screen.getByLabelText('Face-down card')).toBeOnTheScreen();
     expect(screen.getByLabelText(/^Shoe: 308 cards/)).toBeOnTheScreen();
-    // Neither the hole card nor the next card appears in any label, text or announcement.
     expect(everythingSpoken()).not.toMatch(/6 of spades|Ace of diamonds/);
     for (const name of ['Hit', 'Stand', 'Double']) expect(screen.getByRole('button', { name })).toBeEnabled();
-    // The wager is committed: no betting or ending mid-hand.
     expect(screen.getByRole('button', { name: 'End session' })).toBeDisabled();
     expect(screen.queryByRole('button', { name: 'Deal' })).toBeNull();
   });
@@ -173,14 +150,12 @@ describe('blackjack free play', () => {
     expect(screen.getByLabelText('Session balance 1,025')).toBeOnTheScreen();
     expect(screen.getByLabelText('On table 0')).toBeOnTheScreen();
     expect(within(screen.getByTestId('phase-stepper')).getByLabelText('Step 4 of 4, Settle, current')).toBeOnTheScreen();
-    // The result is marked in words as well as colour.
     expect(screen.getByText('Win +25')).toBeOnTheScreen();
   });
 
   it('pays a natural 3:2 in exact half units with no decision, announcing it', async () => {
     mockAdapters.words = NATURAL;
     await startSession();
-    // A lone 5 is under the 10 minimum: refused and explained, nothing placed.
     await fireEvent.press(screen.getByRole('radio', { name: '5 chip' }));
     await fireEvent.press(betSpot());
     expect(announcements).toContain('The initial wager needs at least 10. Nothing was placed.');
@@ -190,13 +165,11 @@ describe('blackjack free play', () => {
 
     await fireEvent.press(screen.getByRole('button', { name: 'Deal' }));
 
-    // A 7 up is not peeked; the hole card is turned at once and the round settles on its own.
     await screen.findByLabelText('Status Settled automatically');
     expect(announcements).toContain(
       'A fresh shoe is shuffled. Wager 25 in play. You: Queen of hearts. Dealer: 7 of clubs. You: Ace of diamonds. Dealer: a face-down card. ' +
         'The dealer turns over the 2 of spades. You have blackjack; the dealer has 9.',
     );
-    // 25 x 3/2 = 37.5; 1,000 - 25 + 62.5 = 1,037.5.
     expect(announcements).toContain('Blackjack! You win 37.5. Balance 1,037.5.');
     expect(screen.getByLabelText('Session balance 1,037.5')).toBeOnTheScreen();
     expect(screen.getByText('Win +37.5')).toBeOnTheScreen();
@@ -236,7 +209,6 @@ describe('blackjack free play', () => {
     expect(betSpot()).toHaveAccessibilityValue({ text: '40 on it' });
     await fireEvent.press(screen.getByRole('button', { name: 'Deal' }));
     await screen.findByLabelText('Status Your turn');
-    // Mid-hand the only choices are the hand's own; the bet list returns between rounds.
     expect(screen.queryByRole('tab', { name: 'Bet list' })).toBeNull();
   });
 
@@ -267,7 +239,6 @@ describe('blackjack free play', () => {
 
     await fireEvent.press(screen.getByRole('button', { name: 'Hit' }));
 
-    // 20 + the Ace of diamonds = 21; the dealer's 16 then draws the next card.
     await screen.findByLabelText('Status Settled automatically');
     expect(announcements.some((text) => text.startsWith('You hit. You: Ace of diamonds. The dealer turns over the 6 of spades.'))).toBe(true);
     expect(screen.getByLabelText(/^Last hand: 10 of spades, Jack of diamonds, Ace of diamonds\. 21/)).toBeOnTheScreen();
@@ -308,7 +279,6 @@ describe('blackjack free play', () => {
     expect(screen.getByRole('header', { name: 'Insurance?' })).toBeOnTheScreen();
     expect(announcements.some((text) => text.includes('The dealer shows an ace: insurance up to 12.5 is offered before the dealer checks.'))).toBe(true);
     expect(screen.getByRole('button', { name: 'No insurance' })).toBeEnabled();
-    // No playing action before the insurance decision, and nothing names the hole card or the next card.
     expect(screen.queryByRole('button', { name: 'Hit' })).toBeNull();
     expect(everythingSpoken()).not.toMatch(/2 of spades|5 of hearts/);
 
@@ -353,7 +323,6 @@ describe('blackjack free play', () => {
     await fireEvent.press(screen.getByRole('button', { name: 'Take even money (25)' }));
 
     await screen.findByLabelText('Status Settled automatically');
-    // 12.5 insurance loses; the natural pays 37.5: +25 whatever the dealer had.
     expect(announcements).toContain('Blackjack! You win 37.5. Balance 1,025.');
     expect(screen.getByLabelText('Session balance 1,025')).toBeOnTheScreen();
   });
@@ -370,7 +339,6 @@ describe('blackjack free play', () => {
     expect(screen.getByLabelText('Hand 1 of 2: 9 of clubs, Queen of spades. 19, your turn')).toBeOnTheScreen();
     expect(screen.getByLabelText('Hand 2 of 2: 9 of spades. 9, waiting')).toBeOnTheScreen();
     expect(screen.getByLabelText('On table 50')).toBeOnTheScreen();
-    // The hand's state is in words as well as the highlight.
     expect(within(screen.getByTestId('split-hands')).getByText('Your turn')).toBeOnTheScreen();
     expect(screen.getByRole('button', { name: 'Surrender' })).toBeDisabled();
     expect(everythingSpoken()).not.toMatch(/Queen of hearts|5 of spades/);
@@ -418,7 +386,6 @@ describe('blackjack free play', () => {
       await screen.findByLabelText('Status Your turn · hand 1 of 2');
       for (const [w, h, scale] of [[844, 390, 1], [844, 390, 3.1], [320, 568, 3.1]] as const) {
         await setWindow(w, h, scale);
-        // The hands wrap onto more rows instead of overflowing, inside the scrolling table.
         expect(StyleSheet.flatten(screen.getByTestId('split-hands').props.style).flexWrap).toBe('wrap');
         expect(within(screen.getByTestId('table-scroll')).getByLabelText('Hand 2 of 2: 9 of spades. 9, waiting')).toBeOnTheScreen();
       }

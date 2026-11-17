@@ -1,9 +1,4 @@
-// The session result (design frame S1-10: duWab guided, hcQ2u free play,
-// cpZG1 largest text): net result, maximum drawdown and the funding lines,
-// with guided practice's adherence and Departures kept apart from the money.
-// It renders from the completed record alone, so spec 4 reopens the same
-// layout from Saved (S4-17) with its own actions. Quarantine is derived from
-// the shipped list on every render, never read from the record.
+// Spec 1 S1-10
 
 import { QUARANTINE_LIST } from '@tableside/definitions';
 import { isPlayCorrection, quarantineStatus, type QuarantineList, type StrategyDeparture } from '@tableside/engine';
@@ -21,12 +16,10 @@ import { moveText } from './blackjack-text';
 import { GAME_WORDS } from './game-words';
 import { formatSigned, formatUnits, speakSigned } from './units';
 
-/** How many departures show before "Show all". */
 const FIRST_DEPARTURES = 4;
 
 const outcomeWord = (net: string) => (net.startsWith('-') ? 'Loss' : net === '0' ? 'Even' : 'Win');
 
-/** "Roulette · guided · Flat even-money · single zero", from the record's pinned rules and strategy. */
 export function resultSubtitle(record: CompletedPracticeSession): string {
   const mode = record.strategy ? `guided · ${record.strategy.name}` : 'free play';
   const { content } = record.rules;
@@ -35,18 +28,15 @@ export function resultSubtitle(record: CompletedPracticeSession): string {
   return `Blackjack · ${mode} · ${content.dealer} · ${content.lateSurrender ? 'LS' : 'no LS'}`;
 }
 
-/** "10 on Red and 10 on 1st dozen", in the game's own target names. */
 function betsText(game: CompletedPracticeSession['game'], bets: readonly { readonly target: string; readonly amount: string }[]): string {
   if (bets.length === 0) return 'no new bets';
   const items = bets.map((bet) => `${formatUnits(bet.amount)} on ${GAME_WORDS[game].targetName(bet.target)}`);
   return items.length < 2 ? items.join('') : `${items.slice(0, -1).join(', ')} and ${items.at(-1)}`;
 }
 
-/** One departure's lines: what the strategy prescribed and what the player did. */
 function departureLines(game: CompletedPracticeSession['game'], departure: StrategyDeparture) {
   const resolution = departure.resolution === 'retried' ? 'Retried' : 'Overridden';
   if (isPlayCorrection(departure)) {
-    // A blackjack playing decision: the hand and up card, the strategy's play and the player's.
     const { situation, prescribed } = departure.explanation;
     return {
       title: `${GAME_WORDS[game].Turn} ${departure.turn} · ${situation.cards.map(cardShort).join(' ')} v ${cardShort(situation.up)}`,
@@ -56,7 +46,6 @@ function departureLines(game: CompletedPracticeSession['game'], departure: Strat
     };
   }
   const { prescription, situation } = departure.explanation;
-  // The situation the strategy read, where the game names one (roulette: the last pocket's colour).
   const color = situation.subjects['last-pocket-color'];
   const after = color !== undefined && color !== 'none' ? ` · after ${color}` : '';
   return {
@@ -73,9 +62,7 @@ export function SessionResult({
   quarantine = QUARANTINE_LIST,
 }: {
   record: CompletedPracticeSession;
-  /** The screen's buttons: New session and Back to Home after play; spec 4 passes its own when reopening from Saved. */
   actions: ReactNode;
-  /** The shipped quarantine list; tests may pass another. */
   quarantine?: QuarantineList;
 }) {
   useEffect(() => {
@@ -86,7 +73,6 @@ export function SessionResult({
 
   const status = quarantineStatus(record, quarantine);
 
-  // A training-bankroll session has its allocation instead of a buy-in, and never any rebuys.
   const funding =
     record.fundingSource === 'training-bankroll'
       ? [{ label: 'From training bankroll', value: formatUnits(record.buyIn) }]
@@ -180,7 +166,6 @@ const MEASURES = [
   { kind: 'betting', label: 'Betting decisions' },
 ] as const;
 
-/** Adherence (each kind on its own) and the departure log, shown apart from the money. */
 function Guidance({ record, guidance }: { record: CompletedPracticeSession; guidance: NonNullable<CompletedPracticeSession['guidance']> }) {
   const [showAll, setShowAll] = useState(false);
   const { departures } = guidance;

@@ -1,5 +1,4 @@
-// Spec 1 gate 9: every visual asset the app bundles has a provenance record
-// that matches it byte for byte. Sounds have their own register (cue-assets).
+// Spec 1 gate 9
 
 import { createHash } from 'node:crypto';
 import { readdirSync, readFileSync } from 'node:fs';
@@ -15,7 +14,6 @@ const register = JSON.parse(readFileSync(join(ASSETS, 'visual-provenance.json'),
 const sha256 = (file: string) => createHash('sha256').update(readFileSync(file)).digest('hex');
 const files = register.records.flatMap((record) => record.files);
 
-/** Files under assets/, as repo-relative paths, leaving out the sounds and the register itself. */
 function bundled(dir = ASSETS): string[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
     const path = join(dir, entry.name);
@@ -24,7 +22,6 @@ function bundled(dir = ASSETS): string[] {
   });
 }
 
-/** Font files the app imports from @expo-google-fonts, as register module ids. */
 function bundledFonts(dir = join(APP, 'src')): string[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
     const path = join(dir, entry.name);

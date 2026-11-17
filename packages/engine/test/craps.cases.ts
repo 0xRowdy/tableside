@@ -1,14 +1,4 @@
-// Standard craps, the line game, through the engine interface (seam 1).
-// Expected payouts and resolutions come from the launch rules (#3, spec #51
-// "Standard craps"): line bets 1:1, don'ts push on 12, true odds 2:1, 3:2,
-// 6:5 taken and 1:2, 2:3, 5:6 laid, odds caps 1x/2x/3-4-5x/5x/10x with the
-// don't cap as an amount to win, come odds off on the come-out. Dice come
-// from the protocol's Python reference (test/reference/philox_reference.py):
-//   "pi digits" stream totals: 8 11 6 4 12 8 6 7 3 6 4 8 11 7 8 7 4 7 4 11
-//   key [2, 0] totals:        12 5 12 9 9 8 10 4 5 5
-//   key [3, 0] totals:        7 7 6 6 9 10 6 7
-// and the first roll of key [k, 0] (session [0, 0]) is 2 for k = 9, 3 for 5,
-// 4 for 30, 5 for 6, 6 for 1, 7 for 3, 8 for 4, 9 for 7, 10 for 11, 11 for 31, 12 for 2.
+// Spec 1 Standard craps
 import type { TestCase } from '@tableside/harness';
 
 import {
@@ -46,8 +36,7 @@ export const CRAPS_SPEC: CrapsActivitySpecification = {
 };
 
 const keyed = (k: number): RandomStreamIdentity => ({ ...ZERO, key: [k, 0] });
-/** A stream whose first roll has this total. */
-const FIRST: Record<number, RandomStreamIdentity> = {
+const FIRST_ROLL: Record<number, RandomStreamIdentity> = {
   2: keyed(9), 3: keyed(5), 4: keyed(30), 5: keyed(6), 6: keyed(1), 7: keyed(3), 8: keyed(4), 9: keyed(7), 10: keyed(11), 11: keyed(31), 12: keyed(2),
 };
 
@@ -74,7 +63,6 @@ const total = (state: ActivityState) => {
 };
 
 export const crapsCases: TestCase[] = [
-  // ---- variant identity --------------------------------------------------
   {
     name: 'craps: standard craps is its own variant identity, pinned with the activity, with a versioned capability description',
     run: (t) => {
@@ -102,12 +90,11 @@ export const crapsCases: TestCase[] = [
     },
   },
 
-  // ---- line bets ---------------------------------------------------------
   {
     name: 'craps: a come-out 7 or 11 pays pass 1:1 and loses don\'t pass; the puck stays off',
     run: (t) => {
       for (const roll of [7, 11]) {
-        const { state, facts } = run(craps(FIRST[roll]), [place('pass', '10'), place('dont-pass', '25'), ROLL, SETTLE]);
+        const { state, facts } = run(craps(FIRST_ROLL[roll]), [place('pass', '10'), place('dont-pass', '25'), ROLL, SETTLE]);
         t.equal(total(state), roll);
         t.equal(settled(facts), [['pass', 'win', '10', '20'], ['dont-pass', 'loss', '-25', '0']]);
         t.equal([state.balance, state.wagers, point(state)], ['985', [], null]);
@@ -118,7 +105,7 @@ export const crapsCases: TestCase[] = [
     name: 'craps: a come-out 2 or 3 loses pass and pays don\'t pass 1:1',
     run: (t) => {
       for (const roll of [2, 3]) {
-        const { state, facts } = run(craps(FIRST[roll]), [place('pass', '10'), place('dont-pass', '25'), ROLL, SETTLE]);
+        const { state, facts } = run(craps(FIRST_ROLL[roll]), [place('pass', '10'), place('dont-pass', '25'), ROLL, SETTLE]);
         t.equal(total(state), roll);
         t.equal(settled(facts), [['pass', 'loss', '-10', '0'], ['dont-pass', 'win', '25', '50']]);
         t.equal(state.balance, '1015');
@@ -128,7 +115,7 @@ export const crapsCases: TestCase[] = [
   {
     name: 'craps: a come-out 12 loses pass while don\'t pass pushes and stays on the table',
     run: (t) => {
-      const { state, facts } = run(craps(FIRST[12]), [place('pass', '10'), place('dont-pass', '25'), ROLL, SETTLE]);
+      const { state, facts } = run(craps(FIRST_ROLL[12]), [place('pass', '10'), place('dont-pass', '25'), ROLL, SETTLE]);
       t.equal(settled(facts), [['pass', 'loss', '-10', '0']]);
       t.equal(facts.filter((fact) => fact.kind === 'wager-pushed'), [{ kind: 'wager-pushed', turn: 1, target: 'dont-pass', stake: '25' }]);
       t.equal([state.balance, state.wagers, point(state)], ['965', [{ target: 'dont-pass', amount: '25' }], null]);
@@ -137,7 +124,6 @@ export const crapsCases: TestCase[] = [
   {
     name: 'craps: a point number sets the puck; pass wins when the point repeats, don\'t pass when a 7 comes first',
     run: (t) => {
-      // Pi stream: 8 sets the point, then 11 6 4 12 leave it, then 8 makes it.
       let { state, facts } = run(craps(PI), [place('pass', '10'), ROLL, SETTLE]);
       t.equal(facts.filter((fact) => fact.kind === 'point-changed'), [{ kind: 'point-changed', turn: 1, point: 8 }]);
       t.equal([point(state), state.wagers], [8, [{ target: 'pass', amount: '10' }]]);
@@ -146,11 +132,9 @@ export const crapsCases: TestCase[] = [
       ({ state, facts } = run(state, [ROLL, SETTLE]));
       t.equal(settled(facts), [['pass', 'win', '10', '20']]);
       t.equal(facts.at(-1), { kind: 'point-changed', turn: 6, point: null });
-      // Key [3, 0]: 7 7 on the come-out, 6 sets the point, 6 makes it; don't pass then loses.
       const dont = run(craps(keyed(3)), [place('dont-pass', '10'), ROLL, SETTLE]).state;
       t.equal(dont.balance, '990');
       const made = run(dont, [place('dont-pass', '10'), ROLL, SETTLE, place('dont-pass', '10'), ROLL, SETTLE, ROLL, SETTLE]);
-      // The second come-out 7 loses again; 6 sets the point; 6 repeats and the don't loses.
       t.equal(settled(made.facts), [['dont-pass', 'loss', '-10', '0'], ['dont-pass', 'loss', '-10', '0']]);
       t.equal(made.state.balance, '970');
     },
@@ -166,14 +150,14 @@ export const crapsCases: TestCase[] = [
         turns.push(settled(next.facts));
         return next.facts;
       };
-      go([place('pass', '10'), ROLL, SETTLE]); // 8: point
-      go([place('pass-odds', '50'), place('come', '10'), ROLL, SETTLE]); // 11: come wins
-      go([place('come', '10'), ROLL, SETTLE]); // 6: come travels to 6
+      go([place('pass', '10'), ROLL, SETTLE]);
+      go([place('pass-odds', '50'), place('come', '10'), ROLL, SETTLE]);
+      go([place('come', '10'), ROLL, SETTLE]);
       t.equal(state.wagers, [{ target: 'pass', amount: '10' }, { target: 'pass-odds', amount: '50' }, { target: 'come-6', amount: '10' }]);
-      go([place('come-6-odds', '50'), place('come', '10'), ROLL, SETTLE]); // 4: come travels to 4
-      go([place('come-4-odds', '30'), ROLL, SETTLE]); // 12: nothing on the table acts
+      go([place('come-6-odds', '50'), place('come', '10'), ROLL, SETTLE]);
+      go([place('come-4-odds', '30'), ROLL, SETTLE]);
       t.equal(state.balance, '850');
-      go([ROLL, SETTLE]); // 8: point made
+      go([ROLL, SETTLE]);
       t.equal([point(state), state.balance], [null, '980']);
       t.equal(
         view(state).table.wagers,
@@ -184,8 +168,8 @@ export const crapsCases: TestCase[] = [
           { target: 'come-6-odds', working: false, instruction: null, switchable: true, removable: true },
         ],
       );
-      go([ROLL, SETTLE]); // 6 on the come-out: come 6 wins, its odds are off and come back
-      go([ROLL, SETTLE]); // 7: seven-out, come 4 and its working odds lose
+      go([ROLL, SETTLE]);
+      go([ROLL, SETTLE]);
       t.equal(turns, [
         [],
         [['come', 'win', '10', '20']],
@@ -198,13 +182,12 @@ export const crapsCases: TestCase[] = [
       ]);
       t.equal([state.balance, state.wagers, point(state)], ['1050', [], null]);
 
-      // The don't side on the same stream: 3 6 4 8 11 7.
-      go([place('dont-pass', '10'), ROLL, SETTLE]); // 3: don't pass wins
-      go([place('dont-pass', '10'), ROLL, SETTLE]); // 6: point
-      go([place('dont-pass-odds', '60'), place('dont-come', '10'), ROLL, SETTLE]); // 4: don't come travels to 4
-      go([place('dont-come-4-odds', '60'), ROLL, SETTLE, ROLL, SETTLE]); // 8, 11: nothing acts
+      go([place('dont-pass', '10'), ROLL, SETTLE]);
+      go([place('dont-pass', '10'), ROLL, SETTLE]);
+      go([place('dont-pass-odds', '60'), place('dont-come', '10'), ROLL, SETTLE]);
+      go([place('dont-come-4-odds', '60'), ROLL, SETTLE, ROLL, SETTLE]);
       t.equal(state.balance, '920');
-      go([ROLL, SETTLE]); // 7: every don't wins
+      go([ROLL, SETTLE]);
       t.equal(turns.slice(8), [
         [['dont-pass', 'win', '10', '20']],
         [],
@@ -223,7 +206,6 @@ export const crapsCases: TestCase[] = [
   {
     name: 'craps: a don\'t come bet pushes on 12 in the come area, travels to its number and loses when it repeats',
     run: (t) => {
-      // Key [2, 0]: 12 (bar), 5 point, 12 (bar for the don't come), 9 travels, 9 repeats.
       let { state, facts } = run(craps(keyed(2)), [place('dont-pass', '10'), ROLL, SETTLE, ROLL, SETTLE]);
       t.equal(point(state), 5);
       ({ state, facts } = run(state, [place('dont-come', '10'), ROLL, SETTLE]));
@@ -236,11 +218,9 @@ export const crapsCases: TestCase[] = [
     },
   },
 
-  // ---- odds --------------------------------------------------------------
   {
     name: 'craps: odds caps by rule, with don\'t caps as an amount to win (laid ≤ 6× base under 3-4-5x)',
     run: (t) => {
-      // Max odds behind a 10 pass and a 10 don't pass, per point 4, 5, 6, 8, 9, 10.
       const expected: Record<OddsCap, { take: string[]; lay: string[] }> = {
         '1x': { take: ['10', '10', '10', '10', '10', '10'], lay: ['20', '15', '12', '12', '15', '20'] },
         '2x': { take: ['20', '20', '20', '20', '20', '20'], lay: ['40', '30', '24', '24', '30', '40'] },
@@ -250,7 +230,7 @@ export const crapsCases: TestCase[] = [
       };
       for (const [cap, { take, lay }] of Object.entries(expected) as [OddsCap, { take: string[]; lay: string[] }][]) {
         const maxima = [4, 5, 6, 8, 9, 10].map((n) => {
-          const state = run(craps(FIRST[n], cap), [place('pass', '10'), place('dont-pass', '10'), ROLL, SETTLE]).state;
+          const state = run(craps(FIRST_ROLL[n], cap), [place('pass', '10'), place('dont-pass', '10'), ROLL, SETTLE]).state;
           const placements = view(state).table.placements;
           return ['pass-odds', 'dont-pass-odds'].map((target) => placements.find((p) => p.target === target)?.max);
         });
@@ -261,7 +241,6 @@ export const crapsCases: TestCase[] = [
   {
     name: 'craps: odds go in increments that pay whole units, up to the cap and no further',
     run: (t) => {
-      // Taking odds: 2:1 any whole stake, 3:2 even stakes, 6:5 multiples of 5. Laying: 1:2 even, 2:3 multiples of 3, 5:6 multiples of 6.
       const cases: [number, string, string, string][] = [
         [4, 'pass-odds', '1', 'legal'], [4, 'dont-pass-odds', '3', 'odds-increment'], [4, 'dont-pass-odds', '2', 'legal'],
         [5, 'pass-odds', '3', 'odds-increment'], [5, 'pass-odds', '4', 'legal'], [5, 'dont-pass-odds', '4', 'odds-increment'], [5, 'dont-pass-odds', '3', 'legal'],
@@ -271,12 +250,12 @@ export const crapsCases: TestCase[] = [
       ];
       t.equal(
         cases.map(([n, target, amount]) => {
-          const state = run(craps(FIRST[n]), [place('pass', '10'), place('dont-pass', '10'), ROLL, SETTLE]).state;
+          const state = run(craps(FIRST_ROLL[n]), [place('pass', '10'), place('dont-pass', '10'), ROLL, SETTLE]).state;
           return [n, target, amount, illegal(state, place(target, amount))];
         }),
         cases,
       );
-      const four = view(run(craps(FIRST[6]), [place('pass', '10'), place('dont-pass', '10'), ROLL, SETTLE]).state).table.placements;
+      const four = view(run(craps(FIRST_ROLL[6]), [place('pass', '10'), place('dont-pass', '10'), ROLL, SETTLE]).state).table.placements;
       t.equal(four.filter((p) => p.kind === 'odds'), [
         { target: 'pass-odds', kind: 'odds', min: '5', max: '50', increment: '5', payout: '6:5' },
         { target: 'dont-pass-odds', kind: 'odds', min: '6', max: '60', increment: '6', payout: '5:6' },
@@ -286,8 +265,7 @@ export const crapsCases: TestCase[] = [
   {
     name: 'craps: attached odds are commission-free: a winning odds bet returns stake plus exact true odds',
     run: (t) => {
-      // Point 5 (key [6, 0]); the stream's next totals decide. Pays 3:2 taken and 2:3 laid, nothing withheld.
-      const state = run(craps(FIRST[5]), [place('pass', '10'), ROLL, SETTLE, place('pass-odds', '40')]).state;
+      const state = run(craps(FIRST_ROLL[5]), [place('pass', '10'), ROLL, SETTLE, place('pass-odds', '40')]).state;
       let current = state;
       let facts: readonly DomainFact[] = [];
       while (point(current) === 5) ({ state: current, facts } = run(current, [ROLL, SETTLE]));
@@ -297,11 +275,10 @@ export const crapsCases: TestCase[] = [
     },
   },
 
-  // ---- availability and contracts ----------------------------------------
   {
     name: 'craps: pass bets are made on the come-out, come bets once a point is on, odds only behind an established base',
     run: (t) => {
-      const comeOut = craps(FIRST[6]);
+      const comeOut = craps(FIRST_ROLL[6]);
       t.equal(
         [place('come', '10'), place('dont-come', '10'), place('pass-odds', '10'), place('come-6', '10'), place('big-6', '10'), place('pass', '5'), place('pass', '1001')].map((command) => illegal(comeOut, command)),
         ['not-available-now', 'not-available-now', 'not-available-now', 'not-available-now', 'unknown-target', 'below-minimum', 'above-maximum'],
@@ -311,7 +288,6 @@ export const crapsCases: TestCase[] = [
         [place('pass', '10'), place('pass-odds', '10'), place('come', '10'), place('come-6-odds', '5')].map((command) => illegal(pointOn, command)),
         ['not-available-now', 'not-available-now', 'legal', 'not-available-now'],
       );
-      // Before the come-out roll a pass bet can still change or come down.
       const before = step(comeOut, place('pass', '10')).state;
       t.equal([illegal(before, place('pass', '20')), illegal(before, place('pass', '0'))], ['legal', 'legal']);
     },
@@ -319,7 +295,6 @@ export const crapsCases: TestCase[] = [
   {
     name: 'craps: committed pass and come bases can\'t be changed or removed; an established don\'t comes down with its odds',
     run: (t) => {
-      // Pi stream: 8 point, 11, 6 (come to 6).
       const state = run(craps(PI), [place('pass', '10'), place('dont-pass', '10'), ROLL, SETTLE, place('dont-pass-odds', '12'), ROLL, SETTLE, place('come', '10'), ROLL, SETTLE]).state;
       t.equal(state.wagers.map((wager) => wager.target), ['pass', 'dont-pass', 'dont-pass-odds', 'come-6']);
       t.equal(
@@ -341,7 +316,6 @@ export const crapsCases: TestCase[] = [
     },
   },
 
-  // ---- turns, stop and final settlement ----------------------------------
   {
     name: 'craps: one roll is one turn of two dice draws from the random protocol',
     run: (t) => {
@@ -354,7 +328,6 @@ export const crapsCases: TestCase[] = [
   {
     name: 'craps: stopping returns removable wagers and rolls on automatically to settle only the contracts',
     run: (t) => {
-      // Pi stream: 8 point; stop; then 11 6 4 12 leave the pass line and 8 pays it.
       const before = run(craps(PI), [place('pass', '10'), ROLL, SETTLE, place('pass-odds', '50'), place('come', '10')]).state;
       let { state, facts } = step(before, STOP);
       t.equal(facts, [
@@ -381,7 +354,7 @@ export const crapsCases: TestCase[] = [
       const idle = run(craps(PI), [place('dont-pass', '10'), ROLL, SETTLE, STOP, FINAL]);
       t.equal(idle.facts.filter((fact) => fact.kind === 'dice-rolled').length, 1);
       t.equal([idle.state.phase, idle.state.balance], ['completed', '1000']);
-      const mid = run(craps(FIRST[7]), [place('pass', '10'), ROLL, STOP]);
+      const mid = run(craps(FIRST_ROLL[7]), [place('pass', '10'), ROLL, STOP]);
       t.equal(settled(mid.facts), [['pass', 'win', '10', '20']]);
       t.equal([mid.state.phase, mid.state.wagers], ['final-settlement', []]);
       t.equal(step(mid.state, FINAL).facts, [{ kind: 'activity-completed', balance: '1010' }]);
@@ -414,10 +387,7 @@ export const crapsCases: TestCase[] = [
         for (const fact of next.facts) {
           if (fact.kind === 'turn-began') committed = new Map(fact.wagers.map((wager) => [wager.target, wager.amount]));
           if (fact.kind === 'dice-rolled') rolls++;
-          // A come bet that travels this roll can't also settle on it (its number was just rolled),
-          // so only the wagers committed when the turn began can settle.
           if (fact.kind === 'wager-settled') {
-            // A horn part settles a quarter of the committed horn.
             t.equal(committed.get(fact.target), fact.component === undefined ? fact.stake : String(BigInt(fact.stake) * 4n));
             net += BigInt(fact.net);
           }
@@ -432,7 +402,6 @@ export const crapsCases: TestCase[] = [
     },
   },
 
-  // ---- checkpoints -------------------------------------------------------
   {
     name: 'craps: checkpoints round-trip in every phase and continue exactly',
     run: (t) => {

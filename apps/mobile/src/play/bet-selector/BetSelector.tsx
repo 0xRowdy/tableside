@@ -1,8 +1,4 @@
-// The named bet selector (design frames "S1-03 Bet selector"): every wager on
-// the table as a readable list, a wager editor that sets a total stake, and the
-// wagers already placed. It is game-agnostic: a game hands it a catalog built
-// from the permitted view and the wagers on the table, and it sends the same
-// place-wager commands as the graphical table. The engine judges legality.
+// Spec 1 S1-03
 
 import { add, compare, decodeMoney, encodeMoney, money, mul, type DomainFact, type IllegalActionReason } from '@tableside/engine';
 import { useEffect, useRef, useState } from 'react';
@@ -32,40 +28,30 @@ import {
 export interface BetSelectorProps {
   readonly catalog: WagerCatalog;
   readonly wagers: readonly PlacedWager[];
-  /** The available balance (funds not on the table). */
   readonly balance: string;
-  /** Whether a rebuy is on offer now, so a stake the balance can't cover can point to it. */
   readonly canRebuy: boolean;
-  /** Facts of the latest committed transition and the view sequence after it. */
   readonly facts: readonly DomainFact[];
   readonly sequence: number;
-  /** False while the engine doesn't accept wagers or a command is in flight. */
   readonly canPlace: boolean;
   readonly draft: BetDraft;
   readonly onDraftChange: (draft: BetDraft) => void;
-  /** Sets the total stake on a target, with the choice's toggle value when it has one. */
   readonly onSet: (target: string, amount: string, toggled?: boolean) => void;
   readonly onRemove: (target: string) => void;
 }
 
 const DRAFT_NOTE = 'Draft · not placed yet. It stays if you rotate, resize or switch to the table.';
 
-/** Moves screen-reader focus to a control, for focus that must land somewhere meaningful. */
 const moveFocus = (ref: React.RefObject<HostInstance | null>) => {
   if (ref.current) AccessibilityInfo.sendAccessibilityEvent(ref.current, 'focus');
 };
 
-/** Shown for a committed wager whose game gave no reason of its own. */
 const COMMITTED = 'Committed until it settles.';
 
-/** Opens an editor on the player's request, so focus moves to its heading. */
 type OpenEditor = (draft: BetDraft) => void;
 
 export function BetSelector(props: BetSelectorProps) {
   const { catalog, draft } = props;
   const kind = findKind(catalog, draft.kind);
-  // Focus moves to an editor's heading only when the player opens it, not when
-  // the editor reappears after a presentation switch.
   const focusRequested = useRef(false);
   const openEditor: OpenEditor = (next) => {
     focusRequested.current = true;
@@ -76,7 +62,6 @@ export function BetSelector(props: BetSelectorProps) {
     focusRequested.current = false;
     return requested;
   };
-  // The finder is open (with a key chosen, or not yet) or closed.
   const [finding, setFinding] = useState<{ key: string | null } | null>(null);
   const finder = catalog.finder;
   return (
@@ -105,7 +90,6 @@ export function BetSelector(props: BetSelectorProps) {
 
 function WagerList({ catalog, wagers, draft, openEditor, onFind }: BetSelectorProps & { openEditor: OpenEditor; onFind: () => void }) {
   const staked = (kind: WagerKind) => sumUnits(...wagers.flatMap((wager) => (kind.choices.some((c) => c.target === wager.target) ? [wager.amount] : [])));
-  // The draft stays whatever kind is opened; it is replaced only when another wager is chosen.
   const open = (kind: WagerKind) => openEditor({ ...draft, kind: kind.id });
   return (
     <View style={styles.section}>
@@ -186,7 +170,6 @@ function WagerEditor(props: BetSelectorProps & { kind: WagerKind; takeFocusReque
   );
 }
 
-/** Finds wagers by a key (the design's bet loupe, "Wagers on 17"); choosing one opens its editor, placing nothing. */
 function Finder({
   catalog,
   wagers,
@@ -232,7 +215,6 @@ function Finder({
             return (
               <Row
                 key={target}
-                // Spoken "17 to 1": a screen reader may read "17:1" as a time.
                 label={`${choice.name}, pays ${choice.payout.replace(':', ' to ')}`}
                 value={placed ? `${formatUnits(placed.amount)} on the table` : 'no wager'}
                 hint="Opens its editor. Nothing is placed until you set a stake."
@@ -263,7 +245,6 @@ function StakeEditor(props: BetSelectorProps & { choice: WagerChoice }) {
   const edit = (text: string) => onDraftChange({ ...draft, text, submittedAt: null });
   const toggled = draftToggle(draft, choice, wagers);
   const submit = () => {
-    // The Return key reaches here too, so it waits for the table like the Set button does.
     if (!canPlace) return;
     onDraftChange({ ...draft, submittedAt: sequence });
     if (amount !== null && amount !== '0') onSet(choice.target, amount, toggled);
@@ -336,7 +317,7 @@ function YourWagers({ catalog, wagers, canPlace, onRemove, openEditor }: BetSele
   const removing = useRef<string | null>(null);
   const [explaining, setExplaining] = useState<string | null>(null);
 
-  // Once a removed wager is gone, focus lands on the list heading rather than nowhere.
+  // docs/decisions/mobile-device-support-accessibility.md
   useEffect(() => {
     if (removing.current !== null && !wagers.some((w) => w.target === removing.current)) {
       removing.current = null;
@@ -399,7 +380,6 @@ function YourWagers({ catalog, wagers, canPlace, onRemove, openEditor }: BetSele
   );
 }
 
-/** Why the latest submission of this draft didn't set the wager, or null. */
 function submissionProblem({ draft, choice, facts, sequence, ...funds }: BetSelectorProps & { choice: WagerChoice }): string | null {
   if (draft.submittedAt === null || draft.target !== choice.target) return null;
   const min = formatUnits(choice.min);
@@ -407,7 +387,6 @@ function submissionProblem({ draft, choice, facts, sequence, ...funds }: BetSele
   const amount = parseStake(draft.text);
   if (amount === null) return `Enter the total stake as a number of units, from ${min} to ${max}. Your draft is kept.`;
   if (amount === '0') return `Enter at least ${min}. To take ${choice.name} down, use Remove.`;
-  // Only the transition this submission produced explains it.
   if (sequence !== draft.submittedAt + 1) return null;
   const illegal = facts.find(
     (fact): fact is Extract<DomainFact, { kind: 'illegal-action' }> =>
@@ -416,7 +395,6 @@ function submissionProblem({ draft, choice, facts, sequence, ...funds }: BetSele
   return illegal ? illegalExplanation(illegal.reason, choice, funds) : null;
 }
 
-/** "whole units", "multiples of 6". */
 const increments = (choice: WagerChoice) => (choice.step === '1' ? 'whole units' : `multiples of ${formatUnits(choice.step)}`);
 
 
@@ -450,19 +428,15 @@ function illegalExplanation(reason: IllegalActionReason, choice: WagerChoice, { 
   }
 }
 
-/** The largest legal total for this target the balance covers: its own stake back plus the balance, capped and rounded down to the step. */
 function affordableCap(choice: WagerChoice, balance: string, wagers: readonly PlacedWager[]): string {
   const own = decodeMoney(wagers.find((w) => w.target === choice.target)?.amount ?? '0');
   const covered = add(decodeMoney(balance), own);
   const max = decodeMoney(choice.max);
   const limit = compare(covered, max) > 0 ? max : covered;
-  // Whole steps only, rounded down: floor(limit / step) x step.
   const step = decodeMoney(choice.step);
   const steps = (limit.n * step.d) / (limit.d * step.n);
   return encodeMoney(mul(money(steps), step));
 }
-
-// ---- controls -------------------------------------------------------------
 
 function Row({
   label,
@@ -495,7 +469,6 @@ function Row({
   );
 }
 
-/** A radio in a chooser: the short label shown, the full name spoken. */
 function ChoiceButton({ name, label, checked, onPress }: { name: string; label: string; checked: boolean; onPress: () => void }) {
   const { focused, focusProps } = useKeyboardFocus();
   return (

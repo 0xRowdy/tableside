@@ -4,7 +4,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { palette, space } from '@/theme/tokens';
 
-/** A tab screen's scrollable content area. Content reflows and scrolls rather than shrinking. */
 export function Screen({ children }: { children: ReactNode }) {
   const insets = useSafeAreaInsets();
   return (

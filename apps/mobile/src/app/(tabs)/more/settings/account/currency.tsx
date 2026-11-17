@@ -1,8 +1,5 @@
-// The account currency (spec 2 Amendment 4 §4): one real-money currency for
-// casino records, chosen here. It needs a connection, and it can't change while
-// any casino session exists, since amounts are never converted. Simulated
-// amounts never use it.
-// TODO(frames): unverified against S2-17, which has no currency screen; built from the spec's copy.
+// Spec 2 Amendment 4 §4
+// TODO(spec 2 S2-17)
 
 import { router } from 'expo-router';
 import { useState } from 'react';
@@ -32,7 +29,6 @@ export default function Currency() {
     if (result.status === 'changed') router.dismissTo('/more/settings/account');
     else setProblem(result.status);
   };
-  // A currency on record that isn't in the list still shows, selected.
   const choices = current && !CURRENCIES.some((currency) => currency.code === current) ? [current, ...CURRENCIES.map((c) => c.code)] : CURRENCIES.map((c) => c.code);
   return (
     <SettingsScreen title="Currency" back={{ label: 'Account', onPress: () => router.dismissTo('/more/settings/account') }}>

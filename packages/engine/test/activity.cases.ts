@@ -1,8 +1,4 @@
-// The engine interface (seam 1) through the single-zero roulette tracer:
-// create, advance, read permitted view, encode/decode checkpoint. Payouts and
-// colors come from the launch rules (#3) and the published single-zero
-// layout (red: 1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36);
-// spins come from the protocol's reference vectors (draws.cases).
+// #3
 import type { TestCase } from '@tableside/harness';
 
 import {
@@ -57,7 +53,6 @@ export const activityCases: TestCase[] = [
       });
       t.equal(state.schema, 7);
       t.equal([state.phase, state.turn, state.balance, state.wagers], ['open-decision', 0, '1000', []]);
-      // The state is plain data: it survives a JSON round trip unchanged.
       t.equal(JSON.parse(JSON.stringify(state)), state);
     },
   },
@@ -87,8 +82,6 @@ export const activityCases: TestCase[] = [
       t.equal(throws(() => createActivity(SPEC, { ...STREAM, key: [0, -1] } as never)), 'ActivitySpecificationError');
     },
   },
-
-  // ---- settlement -------------------------------------------------------
   {
     name: 'activity: straight-up pays 35:1 and red 1:1 on a red pocket (27)',
     run: (t) => {
@@ -115,14 +108,12 @@ export const activityCases: TestCase[] = [
         [2, 'red', 'loss', '-10', '0'],
         [2, 'black', 'loss', '-10', '0'],
       ]);
-      // 1,010 after turn 1; 23 staked; 72 returned.
       t.equal(state.balance, '1059');
     },
   },
   {
     name: 'activity: black loses on a red pocket and wins on a black one',
     run: (t) => {
-      // Spins 27, 0, 25, 31, 9: 31 is black.
       const spins = run(fresh(), [place('black', '10'), BEGIN, SETTLE, place('black', '10'), BEGIN, SETTLE, place('black', '10'), BEGIN, SETTLE, place('black', '10'), BEGIN, SETTLE]);
       t.equal(settled(spins.facts), [
         [1, 'black', 'loss', '-10', '0'],
@@ -142,7 +133,6 @@ export const activityCases: TestCase[] = [
       let netTotal = 0n;
       let committed = new Map<string, string>();
       let turns = 0;
-      // Random play, then a stop (in whichever phase play reached) and final settlement.
       for (let i = 0; state.phase !== 'completed'; i++) {
         const roll = uniformInt(driver, 10);
         const command: Command =
@@ -159,7 +149,6 @@ export const activityCases: TestCase[] = [
         for (const fact of facts) {
           if (fact.kind === 'turn-began') committed = new Map(fact.wagers.map((wager) => [wager.target, wager.amount]));
           if (fact.kind === 'wager-settled') {
-            // No settlement without a committed wager, at its committed stake.
             t.equal(committed.get(fact.target), fact.stake);
             const pocket = (next.outcome as { pocket: number }).pocket;
             const covered = fact.target === 'red' ? RED.includes(pocket) : fact.target === 'black' ? pocket !== 0 && !RED.includes(pocket) : fact.target === `straight-${pocket}`;
@@ -171,7 +160,6 @@ export const activityCases: TestCase[] = [
           if (fact.kind === 'turn-began') turns++;
         }
         state = next;
-        // Balance plus stakes on the table always equals funding plus net results.
         const staked = state.wagers.reduce((sum, wager) => sum + BigInt(wager.amount), 0n);
         t.equal(BigInt(state.balance) + staked, 5000n + netTotal);
       }
@@ -180,8 +168,6 @@ export const activityCases: TestCase[] = [
       t.record('final', { balance: state.balance, turns, hash: checkpointHash(state) });
     },
   },
-
-  // ---- legality ---------------------------------------------------------
   {
     name: 'activity: an illegal wager is a durable assessment with wagers and balance unchanged',
     run: (t) => {
@@ -192,7 +178,6 @@ export const activityCases: TestCase[] = [
         [place('red', '1001'), 'above-maximum'],
         [place('straight-7', '5/2'), 'not-whole-units'],
         [place('straight-37', '1'), 'unknown-target'],
-        // Equal coverage isn't enough: only the layout's placements are bets.
         [place('split-1-3', '1'), 'unknown-target'],
         [place('corner-1-2-3-4', '1'), 'unknown-target'],
         [place('straight-00', '1'), 'unknown-target'],
@@ -207,7 +192,6 @@ export const activityCases: TestCase[] = [
         t.equal(result.receipt, { commandId: 'c1', sequence: 1, command: JSON.stringify(command, Object.keys(command).sort()), disposition: 'assessed' });
         t.equal([result.state.sequence, result.state.balance, result.state.wagers, result.state.phase], [2, '10', [{ target: 'red', amount: '990' }], 'open-decision']);
       }
-      // Topping up to the exact remaining balance is legal.
       t.equal(step(base, place('straight-7', '10')).state.balance, '0');
     },
   },
@@ -261,8 +245,6 @@ export const activityCases: TestCase[] = [
       );
     },
   },
-
-  // ---- phases -----------------------------------------------------------
   {
     name: 'activity: each phase allows only its commands',
     run: (t) => {
@@ -319,8 +301,6 @@ export const activityCases: TestCase[] = [
       }
     },
   },
-
-  // ---- permitted view ---------------------------------------------------
   {
     name: 'activity: the permitted view holds no random state and is the same whatever the stream holds next',
     run: (t) => {
@@ -343,7 +323,6 @@ export const activityCases: TestCase[] = [
       t.equal(Object.keys(readPermittedView(a)).sort(), [
         'activityId', 'balance', 'funding', 'game', 'legalCommands', 'outcome', 'phase', 'sequence', 'strategy', 'table', 'turn', 'wagers', 'wagersCommitted',
       ]);
-      // readPermittedView takes the state alone: no caller flag can widen it.
       t.equal(readPermittedView.length, 1);
     },
   },
@@ -361,8 +340,6 @@ export const activityCases: TestCase[] = [
       });
     },
   },
-
-  // ---- determinism and retries -------------------------------------------
   {
     name: 'activity: retries and views consume no draws; a turn takes exactly one spin',
     run: (t) => {
@@ -375,13 +352,10 @@ export const activityCases: TestCase[] = [
       const twice = advanceActivity(ready, envelope(ready, BEGIN));
       t.equal(once, twice);
       if (once.status !== 'committed') throw new Error('expected a spin');
-      // Pocket 27 is the stream's first accepted draw (Python reference): block 0, lane 1.
       t.equal([once.state.random.block, once.state.random.lane], [[0, 0], 1]);
       t.equal(advanceActivity(once.state, envelope(ready, BEGIN)).status, 'duplicate');
     },
   },
-
-  // ---- checkpoints ------------------------------------------------------
   {
     name: 'activity: checkpoints round-trip exactly in every phase',
     run: (t) => {
@@ -396,7 +370,6 @@ export const activityCases: TestCase[] = [
         t.equal(decoded.state, state);
         t.equal(encodeCheckpoint(decoded.state), text);
       }
-      // A decoded checkpoint continues exactly as the original.
       const middle = states[1] as ActivityState;
       const resumed = decodeCheckpoint(encodeCheckpoint(middle));
       if (!resumed.ok) throw new Error('round trip failed');
@@ -427,10 +400,8 @@ export const activityCases: TestCase[] = [
         edit((v) => ((v.receipts as Record<string, unknown>[])[0]!.command = '{"kind":"shuffle"}')),
         edit((v) => ((v.receipts as Record<string, unknown>[])[0]!.command = '{ "kind": "begin-turn" }')),
         edit((v) => (v.outcome = { turn: 1, pocket: 37 })),
-        // 00 is no pocket of the single-zero wheel, nor a target on its layout.
         edit((v) => (v.outcome = { turn: 1, pocket: '00' })),
         edit((v) => (v.wagers = [{ target: 'straight-00', amount: '10' }])),
-        // Pinned rule content that disagrees with the recorded rule identity.
         edit((v) => ((v.rules as Record<string, unknown>).wheel = 'double-zero')),
         edit((v) => ((v.identities as Record<string, unknown>).rules = { id: 'roulette-double-zero', version: 1 })),
         edit((v) => ((v.random as Record<string, unknown>).lane = 4)),
@@ -477,8 +448,6 @@ export const activityCases: TestCase[] = [
       );
     },
   },
-
-  // ---- cross-runtime trace ----------------------------------------------
   {
     name: 'activity: a full transition trace with checkpoint hashes (compared across runtimes)',
     run: (t) => {

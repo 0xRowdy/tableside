@@ -54,7 +54,6 @@ describe('Hi-Lo playing deviations', () => {
           difference: { schlesinger: orNull(row['diff_vs_schlesinger']), bja: orNull(row['diff_vs_bja']) },
           costPerBet: { schlesinger: cost(row['cost_per_bet_at_schlesinger']), bja: cost(row['cost_per_bet_at_bja']) },
         });
-        // The basic action sits on the side the direction names.
         const basicSide = deviation?.direction === 'deviateAtOrAbove' ? deviation.below : deviation?.atOrAbove;
         const basic = row['basic_action'] ?? '';
         expect(basicSide).toBe(LETTER[basic] ?? (basic === 'basic' ? 'basicWithoutSurrender' : basic));
@@ -62,7 +61,7 @@ describe('Hi-Lo playing deviations', () => {
     });
   }
 
-  // The certified curriculum as written in spec #51 ("Blackjack reference (certified)").
+  // Spec 1 Game rules, Blackjack reference (certified)
   const S17: Record<string, number> = {
     '16 vs 10': 1, '15 vs 10': 4, 'T,T vs 5': 5, 'T,T vs 6': 5, '10 vs 10': 4, '12 vs 3': 2, '12 vs 2': 4, '11 vs A': 1,
     '9 vs 2': 1, '10 vs A': 4, '9 vs 7': 4, '16 vs 9': 5, '13 vs 2': 0, '12 vs 4': 1, '12 vs 5': -1, '12 vs 6': 0,
@@ -90,7 +89,7 @@ describe('Hi-Lo playing deviations', () => {
       if (!found) throw new Error(situation);
       return found;
     };
-    // Spec: "16 vs T stand ≥ 1"; "H17 … 11 vs A basic double, hit at ≤ −1"; "12 vs 5 stand ≥ −1"; insurance ≥ 3.
+    // Spec 1 Game rules, Blackjack reference (certified)
     expect([0, 1].map((tc) => deviationAction(find('S17_LS', '16 vs 10'), tc))).toEqual(['hit', 'stand']);
     expect([-1, 0].map((tc) => deviationAction(find('H17_LS', '11 vs A'), tc))).toEqual(['hit', 'double']);
     expect([-2, -1].map((tc) => deviationAction(find('S17_noLS', '12 vs 5'), tc))).toEqual(['hit', 'stand']);
@@ -100,7 +99,7 @@ describe('Hi-Lo playing deviations', () => {
 
   it('states the difference from the published index and its cost for corrections', () => {
     const tens = playingDeviations('S17_LS').find((d) => d.situation === 'T,T vs 6');
-    // Report: Schlesinger +4, generated +5; teaching +4 costs 0.0188 ± 0.0026 per bet in the +4 bin.
+    // #15
     expect(tens?.published.schlesinger).toBe('+4');
     expect(tens?.difference.schlesinger).toBe(1);
     expect(tens?.costPerBet.schlesinger).toEqual([{ trueCount: 4, perBet: 0.0188, standardError: 0.0026 }]);
@@ -109,8 +108,7 @@ describe('Hi-Lo playing deviations', () => {
     expect(agreeing?.costPerBet.schlesinger).toEqual([]);
   });
 
-  it('lists one cost bin per count of difference', () => {
-    // H17 12 vs 6: taught −3 against Schlesinger's −1, so the −3 and −2 bins both differ.
+  it("lists one cost bin per count of difference: H17 12 vs 6 is taught at −3 against Schlesinger's −1", () => {
     const twelveSix = playingDeviations('H17_LS').find((d) => d.situation === '12 vs 6');
     expect(twelveSix?.difference.schlesinger).toBe(-2);
     expect(twelveSix?.costPerBet.schlesinger.map((bin) => bin.trueCount)).toEqual([-3, -2]);
@@ -137,7 +135,6 @@ describe('continuation tables', () => {
   }
 
   it('teaches the later decisions of a hand, such as a three-card soft 18 vs 9', () => {
-    // Standard total-dependent play: soft 18 hits against 9, hard 21 stands.
     expect(continuation('S17', 'soft', 18, 9).action).toBe('hit');
     expect(continuation('H17', 'hard', 21, 1)).toEqual({ action: 'stand', fallback: 'stand' });
     expect(() => continuation('S17', 'soft', 11, 2)).toThrow(RangeError);
@@ -178,7 +175,6 @@ describe('basic strategy and legal fallbacks', () => {
   }
 
   it('reads the ace as up card 1 and pairs by card value', () => {
-    // Independently from the S17_LS grid (tables_S17_LS.md): A,A splits against an ace; 8,8 vs A splits.
     expect(basicStrategy('S17_LS', 'pair', 1, 1).action).toBe('split');
     expect(basicStrategy('S17_LS', 'hard', 16, 10).action).toBe('surrender');
     expect(basicStrategy('S17_noLS', 'hard', 16, 10).action).toBe('hit');

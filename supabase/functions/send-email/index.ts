@@ -1,17 +1,4 @@
-// Auth's send-email hook (config.toml [auth.hook.send_email]): the only
-// email Auth sends itself is Secure Email Change's pair of codes, one to the
-// current address and one to the new (spec 2, #100). Everything else Auth
-// would send (sign-in codes, magic links, reauthentication) is refused:
-// sign-in codes come only from request-code, under its limits.
-//
-// An email change goes out only when the account's freshly authenticated
-// session authorized that exact address first (authorize_email_change_v1);
-// otherwise nothing is sent and Auth's request fails. The database trigger on
-// auth.users refuses the change itself too.
-//
-// Auth signs every call (Standard Webhooks, with the hook secret), and the
-// hook URI names the backend environment, which every database call names in
-// turn. Nothing here logs an address or code.
+// #100
 
 import { codeMail, deliver } from '../_shared/mail.ts';
 import { serviceRpc } from '../_shared/service.ts';
@@ -22,7 +9,6 @@ declare const Deno: {
 };
 
 const HOOK_SECRET = Deno.env.get('TABLESIDE_SEND_EMAIL_HOOK_SECRET') ?? '';
-/** How far a signature's timestamp may be from now, as Standard Webhooks allows. */
 const TOLERANCE_SECONDS = 5 * 60;
 
 interface HookPayload {
@@ -52,7 +38,6 @@ Deno.serve(async (request) => {
     const authorized = await serviceRpc(environment, 'email_change_authorized', { auth_user: id, address: next });
     const allowed = authorized.ok ? (await authorized.json()) === true : (await authorized.body?.cancel(), false);
     if (!allowed) return refuse(403, 'fresh_authentication_required');
-    // Secure Email Change: the current address confirms with `token`, the new one with `token_new`.
     const sent = [
       await deliver(current, codeMail(token, 'Confirm your Tableside email change')),
       await deliver(next, codeMail(tokenNew, 'Confirm your new Tableside email')),
@@ -61,7 +46,6 @@ Deno.serve(async (request) => {
       const logged = await serviceRpc(environment, 'log_email_send', { type: 'email-change', pacing: 'immediate', outcome: ok ? 'sent' : 'failed' });
       await logged.body?.cancel();
     }
-    // Both or nothing: a change only one address heard of could never complete.
     return sent.every(Boolean) ? new Response('{}', { status: 200, headers: { 'content-type': 'application/json' } }) : refuse(502, 'email could not be delivered');
   } catch {
     console.error('send-email failed');
@@ -69,12 +53,10 @@ Deno.serve(async (request) => {
   }
 });
 
-/** Auth's hook error format: Auth answers its own caller with this status and message. */
 function refuse(status: number, message: string): Response {
   return new Response(JSON.stringify({ error: { http_code: status, message } }), { status, headers: { 'content-type': 'application/json' } });
 }
 
-/** Standard Webhooks: HMAC-SHA256 over "id.timestamp.body", keyed with the secret after "v1,whsec_", in base64. */
 async function signedByAuth(headers: Headers, body: string): Promise<boolean> {
   const id = headers.get('webhook-id');
   const timestamp = headers.get('webhook-timestamp');

@@ -11,15 +11,6 @@ import { TABS } from '@/navigation/tabs';
 import { PracticeProvider, usePractice } from '@/practice/PracticeProvider';
 import { palette } from '@/theme/tokens';
 
-/**
- * The signed-in app: the six tabs, with practice on the account's own store.
- * First run comes before it: welcome, age (Create only), sign-in, then the
- * offline game choice. While the account's age eligibility isn't established,
- * or its deletion is scheduled, the restricted screen replaces the tabs (no tab
- * bar), under the same practice controller: the session suspends (at once, or
- * once a turn in progress finishes and is seen for an unresolved age) before
- * the screen changes.
- */
 export default function TabsLayout() {
   const { gate, offlineGame } = useAccount();
   if (gate.state === 'recovery-needed' || gate.state === 'database-unavailable') return <Redirect href="/account-recovery" />;
@@ -33,14 +24,12 @@ export default function TabsLayout() {
     if (offlineGame === null) return <Redirect href="/offline-game" />;
   }
   return (
-    // A new account session gets its own practice controller; the restricted states keep it.
     <PracticeProvider key={gate.accountId}>
       <TabsOrRestricted restricted={restricted ? gate : null} />
     </PracticeProvider>
   );
 }
 
-/** The tabs, or the restricted screen once an unfinished practice session has reached its suspension. */
 function TabsOrRestricted({ restricted }: { restricted: AgeRestrictedGate | DeletionScheduledGate | null }) {
   const { snapshot } = usePractice();
   const turnFinishing = snapshot.status === 'active' && snapshot.suspension?.reached !== true;

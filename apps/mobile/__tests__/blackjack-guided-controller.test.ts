@@ -1,8 +1,3 @@
-// Seam 2 for guided blackjack: the practice controller with substitute
-// adapters. The shoe comes from the Random123 "pi digits" stream: round 1
-// deals the player T and J (hard 20) against a dealer ten up with a 6 in the
-// hole; the next card is an ace. Basic strategy stands on 20, so a hit departs.
-
 import { BLACKJACK_REFERENCE_IDENTITY, blackjackRules, blackjackStrategy } from '@tableside/definitions';
 import { isPlayCorrection, type BlackjackPermittedView } from '@tableside/engine';
 
@@ -11,7 +6,6 @@ import { FakeClock, substituteAdapters } from '@/practice/testing/substitutes';
 
 function setup() {
   const substitutes = substituteAdapters({ clock: new FakeClock(undefined, false) });
-  // A copy of the always-allow supervisor, so each test counts only its own questions.
   const adapters = { ...substitutes, access: { ...substitutes.access } };
   const beforeTurn = jest.spyOn(adapters.access, 'beforeTurn');
   const controller = new PracticeController(adapters);
@@ -28,7 +22,6 @@ async function waitFor(condition: () => boolean): Promise<void> {
   if (!condition()) throw new Error('condition never held');
 }
 
-/** Lets automatic steps (reveal, settle, final settlement) run to the end. */
 async function settleAll(controller: PracticeController, clock: FakeClock, until: () => boolean) {
   for (let i = 0; i < 6 && !until(); i++) {
     await waitFor(() => clock.pending === 1 || until());
@@ -63,7 +56,6 @@ describe('guided blackjack through the practice controller', () => {
     let current = view(controller.snapshot());
     const held = current.strategy?.correction;
     expect([current.phase, held && isPlayCorrection(held) && held.explanation.prescribed]).toEqual(['correction', { action: 'stand', amount: null }]);
-    // Nothing was dealt: still two cards; the correction is durable before it shows.
     expect(current.outcome?.hands[0]?.cards).toHaveLength(2);
     expect((await store.load(current.activityId))?.sequence).toBe(current.sequence);
 
@@ -71,7 +63,6 @@ describe('guided blackjack through the practice controller', () => {
     await settleAll(controller, clock, () => view(controller.snapshot()).phase === 'settled-outcome');
     await retried;
     current = view(controller.snapshot());
-    // Stood on 20: the dealer's 16 draws the ace for 17. 20 wins 10.
     expect([current.phase, current.balance, current.strategy?.adherence]).toEqual(['settled-outcome', '1010', { playing: { decisions: 1, followed: 0 }, betting: null, departures: 1 }]);
     expect(current.strategy?.departures.map((d) => d.resolution)).toEqual(['retried']);
     expect(beforeTurn).toHaveBeenCalledTimes(1);
@@ -100,7 +91,6 @@ describe('guided blackjack through the practice controller', () => {
     await controller.play('hit');
 
     await controller.endSession();
-    // The hand is still the player's to finish: the held move waits for retry or override.
     expect(view(controller.snapshot()).legalCommands).toEqual(['retry-correction', 'override-correction']);
 
     const overriding = controller.overrideCorrection();
@@ -108,7 +98,6 @@ describe('guided blackjack through the practice controller', () => {
     await overriding;
     const done = controller.snapshot();
     if (done.status !== 'completed') throw new Error('expected the session to complete');
-    // Hit 20: the ace makes 21; the dealer's 16 draws a ten and busts. 21 wins 10.
     expect([done.result.finalCashOut, done.result.netResult, done.result.blackjackMode]).toEqual(['1010', '10', 'basic']);
     expect(done.result.guidance?.adherence).toEqual({ playing: { decisions: 1, followed: 0 }, betting: null, counting: null });
     expect(done.result.guidance?.departures.map((d) => d.resolution)).toEqual(['overridden']);
@@ -117,7 +106,6 @@ describe('guided blackjack through the practice controller', () => {
   it('basic with deviations supplies the count from exposed cards only: the face-down 6 is not in it', async () => {
     const { controller } = setup();
     await guidedRound(controller, 'basic-with-deviations');
-    // T, T and J are exposed (-3); 308 cards are 6 decks to the half deck: -3 / 6 truncates to 0.
     expect(view(controller.snapshot()).count).toEqual({ running: -3, decks: '6', trueCount: 0 });
   });
 });

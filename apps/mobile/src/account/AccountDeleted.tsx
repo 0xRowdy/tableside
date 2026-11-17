@@ -1,12 +1,4 @@
-// Deleted (#104): the server confirmed the account's permanent deletion, so
-// this device erased it, and nothing of it is left here. What stays is the
-// deletion's status (spec 2, *Status and email*): processing or completed,
-// apart from any delay, with the analytics provider's erasure and backups
-// reported on their own and never as done before they are. The store
-// subscription isn't canceled by deleting, so its paths stay. Done leaves for
-// the welcome screen; signing up again later is a new account. No tab bar, so
-// the support and privacy links are here (Amendment 9 §1).
-// TODO(frames): unverified against S2-23's processing and completed states — the frame couldn't be read (Pencil unreachable). The copy and layout come from spec 2 *Deletion*, Amendments 1 C2–C3, 8 §3 and 9 §1, and #104.
+// TODO(spec 2 S2-23)
 
 import { BACKUPS_DETAIL, type DeletionProgress, type DeletionStatus, PROVIDER_GRANT_DETAIL, analyticsDetail, deletionDetail } from '@tableside/account';
 import { ChartBar, CalendarClock, Database, KeyRound, Trash2 } from 'lucide-react-native';
@@ -25,7 +17,6 @@ import { Actions, Body, FirstRunScreen, SupportLinks } from './FirstRunParts';
 const isProgress = (status: DeletionStatus | null | undefined): status is DeletionProgress =>
   status?.status === 'processing' || status?.status === 'completed';
 
-/** The lead paragraph: what happened, and when the erasure finishes. */
 export function deletedBody(progress: DeletionProgress | null): string {
   const here = 'Nothing of it is left on this device.';
   if (!progress) return `Its data is being erased from Tableside. ${here}`;
@@ -33,7 +24,6 @@ export function deletedBody(progress: DeletionProgress | null): string {
   return `Its data is being erased from Tableside, by ${dayText(progress.cleanupBy)}. ${here}`;
 }
 
-// The status rows' wording is shared with the web account page.
 export { analyticsDetail, deletionDetail };
 
 export function AccountDeleted() {

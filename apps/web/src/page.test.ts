@@ -1,9 +1,5 @@
 // @vitest-environment jsdom
-// The web account page (S2-24) through its document, as a keyboard or
-// screen-reader user meets it: headings, labelled fields, native controls,
-// focus that moves to each new step and is never lost, and messages in live
-// regions. The account is a fake that answers as the server would (seam 2's
-// web-account-page.test.ts drives the real one against the stack).
+// Spec 2 S2-24
 
 import type {
   CancelDeletionResult,
@@ -42,7 +38,6 @@ class FakeAccount implements WebAccount {
     return { status: this.signInAnswer };
   }
   providers: readonly WebProvider[] = [];
-  /** What the provider's flow came back as, when the page asks. */
   providerReturn: 'signed-in' | 'no-account' | 'confirmed' | 'not-a-method' = 'signed-in';
   async startProviderSignIn(provider: WebProvider) {
     this.calls.push(`provider:${provider}`);
@@ -113,7 +108,6 @@ beforeEach(() => {
   account = new FakeAccount();
 });
 
-/** Waits for the page to finish its step (it is busy while one runs). */
 async function settled() {
   for (let i = 0; i < 20; i++) {
     await new Promise((resolve) => setTimeout(resolve, 0));
@@ -165,7 +159,7 @@ describe('signing in', () => {
     expect(heading()).toBe('Enter your code');
     expect(document.activeElement).toBe(fieldLabelled('Code'));
     expect(fieldLabelled('Code').getAttribute('autocomplete')).toBe('one-time-code');
-    // The same words whether or not the address has an account (Amendment 1 B1).
+    // Spec 2 Amendment 1 B1
     expect(announced()).toBe("If an account exists for this address, we've sent a code.");
   });
 
@@ -258,21 +252,19 @@ describe('keyboard and screen-reader use', () => {
     ['scheduled', { state: 'signed-in', email: 'player@example.com', deletion: { status: 'scheduled', deadline: DEADLINE, scheduledAt: DEADLINE } }],
     ['status unknown', { state: 'signed-in', email: 'player@example.com', deletion: null }],
     ['deleted', { state: 'deleted', progress: null }],
-  ])('%s: one heading, native controls in document order, every field labelled, billing help and support links', async (_, view) => {
+  ])('%s: one heading, native controls in document order, every field labelled, billing help and support links, nothing to play', async (_, view) => {
     account.view = view;
     await mountAccountPage(main, account);
     expect(main.querySelectorAll('h1')).toHaveLength(1);
-    // No positive tabindex, no click handlers on non-controls: Tab reaches every control in order and nothing traps it.
     for (const node of main.querySelectorAll('[tabindex]')) expect(Number(node.getAttribute('tabindex'))).toBeLessThanOrEqual(0);
     for (const node of main.querySelectorAll('button')) expect(node.getAttribute('type')).toMatch(/^(button|submit)$/);
     for (const input of main.querySelectorAll('input')) expect(main.querySelector(`label[for="${input.id}"]`)).not.toBeNull();
     for (const link of main.querySelectorAll('a[target="_blank"]')) expect(link.textContent).toContain('(opens in a new tab)');
-    // Billing help stays visible whether or not anyone is signed in (Amendment 1 C2).
+    // Spec 2 Amendment 1 C2
     for (const store of ['App Store', 'Google Play']) expect(main.textContent).toContain(`Request a refund · ${store}`);
     const help = main.querySelector('nav[aria-label="Help"]');
     expect(help?.textContent).toContain('Contact support');
     expect(help?.textContent).toContain('Make a privacy request');
-    // Lifecycle only: nothing to play.
     expect(main.textContent).not.toMatch(/\b(Play now|Deal|Spin|Roll)\b/);
   });
 });
@@ -291,7 +283,6 @@ describe('Apple and Google sign-in', () => {
     await press('Sign in with Apple');
     expect(nav.went).toEqual(['https://provider.example/apple']);
     expect(buttonNamed('Sign in with Google')).toBeTruthy();
-    // With both providers on the page, the note about adding an email code in the app is gone.
     expect(main.textContent).not.toMatch(/Add an email code to your account in the app first/);
   });
 
@@ -327,7 +318,6 @@ describe('Apple and Google sign-in', () => {
     await press('Confirm with Apple');
     expect(nav.went).toEqual(['https://provider.example/confirm/apple']);
 
-    // The provider's return: confirmed, and the deletion choices open.
     account.providerReturn = 'confirmed';
     document.body.innerHTML = '<main id="page"></main>';
     main = document.getElementById('page')!;

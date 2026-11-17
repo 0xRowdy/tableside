@@ -1,13 +1,4 @@
-// The blackjack table (design frames "04a-04d Blackjack" and S1-04 "Table
-// chrome — Blackjack", incl. insurance, even money, four split hands and late
-// surrender): dealer area, shoe, other players' hands, the learner's hands and
-// bet spot, and the actions or insurance decision, with the bet selector over
-// the same session (S1-03). In guided practice (S1-04 "basic with deviations,
-// count supplied", S1-05 "BJ guided, before move") it adds the strategy strip,
-// the supplied count and the correction pause before a departing play. It
-// renders only the engine's permitted view and forwards taps to the practice
-// controller; it never advances the game or decides what is legal. A face-down
-// card is drawn as a card back and read as "Face-down card".
+// Spec 1 S1-04
 
 import { blackjackHouseEdge } from '@tableside/definitions';
 import {
@@ -66,7 +57,6 @@ import { capitalize, formatSigned, formatUnits, halfUnits, sumUnits, totalOnTabl
 
 type ActiveSnapshot = Active<BlackjackPermittedView>;
 
-/** Above this text scale, a wide window stacks the felt and the controls so text has room. */
 const SIDE_BY_SIDE_MAX_FONT_SCALE = 1.35;
 const HAND = 'hand-1';
 const SAVE_FAILED_ANNOUNCEMENT = "Couldn't save. Play is paused and will retry automatically.";
@@ -100,7 +90,7 @@ export function BlackjackTable({ snapshot }: { snapshot: ActiveSnapshot }) {
   const [confirming, setConfirming] = useState(false);
   const [rebuying, setRebuying] = useState(false);
   const [stoppingStrategy, setStoppingStrategy] = useState(false);
-  // Held here, above both presentations, so rotation, resizing and switching keep the draft.
+  // docs/decisions/mobile-device-support-accessibility.md
   const [presentation, setPresentation] = useState<Presentation>('table');
   const [draft, setDraft] = useState<BetDraft>(EMPTY_DRAFT);
   const { view, facts, busy, save } = snapshot;
@@ -113,19 +103,14 @@ export function BlackjackTable({ snapshot }: { snapshot: ActiveSnapshot }) {
   const message = useMemo(() => describeFacts(facts, view), [facts, view]);
   const wager = view.wagers.find((w) => w.target === HAND)?.amount;
   const playing = isPlaying(view);
-  // The insurance decision takes a wager, so the bet list stays open for a lower amount.
   const offer = view.insuranceOffer;
-  // The sheet shows only while a rebuy is offered (the table waits for input).
   const rebuyOpen = rebuying && view.legalCommands.includes('rebuy');
   const addRebuy = async (amount: string) => {
     await controller.rebuy(amount);
     const latest = controller.snapshot();
-    // Committed: close. Refused or not saved: keep the sheet and its draft.
     if (latest.status !== 'active' || latest.facts.some((fact) => fact.kind === 'funding-added')) setRebuying(false);
   };
 
-  // Announce every committed transition as it is published, including the
-  // automatic settle right after a reveal, and a save failure that pauses play.
   useEffect(() => {
     const initial = controller.snapshot();
     let announced = initial.status === 'active' ? initial.view.sequence : -1;
@@ -138,7 +123,6 @@ export function BlackjackTable({ snapshot }: { snapshot: ActiveSnapshot }) {
       failed = nowFailed;
       if (latest.view.sequence === announced) return;
       announced = latest.view.sequence;
-      // A state adopted from the store carries no facts of its own: restate where things stand.
       const text = describeFacts(latest.facts, latest.view) ?? `${statusText(latest.view)}. Balance ${formatUnits(latest.view.balance)}.`;
       AccessibilityInfo.announceForAccessibility(text);
     });
@@ -152,7 +136,6 @@ export function BlackjackTable({ snapshot }: { snapshot: ActiveSnapshot }) {
   const strategy = view.strategy;
   const correction = view.phase === 'correction' ? (strategy?.correction ?? null) : null;
   const held = correction && isPlayCorrection(correction) ? correction : null;
-  // A bet off the Hi-Lo bet schedule, held before the deal.
   const heldBet = correction && !isPlayCorrection(correction) ? correction : null;
   const betting = !correction && (!playing || offer !== null) && view.phase !== 'final-settlement';
   const rules = { dealer: view.table.dealer, lateSurrender: view.table.lateSurrender };
@@ -311,7 +294,6 @@ export function BlackjackTable({ snapshot }: { snapshot: ActiveSnapshot }) {
   );
 }
 
-/** The table restated as text for the full-screen correction: phase, cards, balance and outstanding wagers. */
 function tableNow(view: BlackjackPermittedView, handsText: string): TableNow {
   const round = view.outcome;
   const hands = round?.hands ?? [];
@@ -328,13 +310,7 @@ function tableNow(view: BlackjackPermittedView, handsText: string): TableNow {
   };
 }
 
-/**
- * The count Tableside supplies in "basic with deviations", recomputed before
- * every deal and decision. Between rounds it also names the deviation at this
- * count and the next index up; never during a decision, where that would be the answer.
- */
 function CountPanel({ view, count, betweenRounds }: { view: BlackjackPermittedView; count: BlackjackCount; betweenRounds: boolean }) {
-  // The pinned revision's indices, as the engine shows them beside the count.
   const { at, next } = deviationsAtCount(view.deviations, count.trueCount);
   return (
     <View
@@ -450,10 +426,6 @@ function Felt({
   );
 }
 
-/**
- * "Win +25", "Push 0", "Loss −25", or per hand after a split ("Hand 1 win +20 ·
- * Hand 2 loss −10"): the latest settled result, in words as well as colour.
- */
 function lastResult(view: BlackjackPermittedView, facts: ActiveSnapshot['facts']): string | null {
   if (view.phase !== 'settled-outcome') return null;
   const results = facts.flatMap((fact) => (fact.kind === 'wager-settled' && fact.target !== INSURANCE_TARGET ? [fact] : []));
@@ -463,10 +435,8 @@ function lastResult(view: BlackjackPermittedView, facts: ActiveSnapshot['facts']
   return results.length === 0 ? null : results.map((fact, i) => `Hand ${i + 1} ${word(fact.result).toLowerCase()} ${formatSigned(fact.net)}`).join(' · ');
 }
 
-/** " · doubled", " · surrendered": a hand's state beyond its total. */
 const handNote = (hand: BlackjackHandView) => (hand.surrendered ? ' · surrendered' : hand.doubled ? ' · doubled' : '');
 
-/** One of up to four split hands: its cards, "2 · soft 19 · 10" and its state in words. */
 function SplitHand({ view, hand, index, last }: { view: BlackjackPermittedView; hand: BlackjackHandView; index: number; last: boolean }) {
   const active = inHand(view) && view.outcome?.active === index;
   const stake = view.wagers.find((wager) => wager.target === hand.target)?.amount;
@@ -542,7 +512,6 @@ function BetSpot({ wager, chip, disabled, onPress, committed }: { wager: string 
 
 type TableAction = keyof typeof ACTION_LABEL;
 
-/** Why a playing action the table shows is unavailable, in words; null when it is offered. */
 function unavailable(action: TableAction, view: BlackjackPermittedView): string | null {
   if (view.playActions.includes(action)) return null;
   switch (action) {
@@ -559,7 +528,6 @@ function unavailable(action: TableAction, view: BlackjackPermittedView): string 
 
 function PlayActions({ view, enabled, onPlay }: { view: BlackjackPermittedView; enabled: boolean; onPlay: (action: BlackjackAction) => void }) {
   const offered = (action: BlackjackAction) => view.playActions.includes(action);
-  // Surrender shows only at tables that offer it.
   const rows: TableAction[][] = [['hit', 'stand', 'double'], view.table.lateSurrender ? ['split', 'surrender'] : ['split']];
   const reasons = rows.flat().flatMap((action) => unavailable(action, view) ?? []);
   const round = view.outcome;
@@ -592,7 +560,6 @@ function PlayActions({ view, enabled, onPlay }: { view: BlackjackPermittedView; 
   );
 }
 
-/** Insurance or even money, before the peek (design frames "insurance offered" and "even money offered"). */
 function InsurancePanel({
   view,
   enabled,

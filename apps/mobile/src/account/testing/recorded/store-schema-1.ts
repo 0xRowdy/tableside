@@ -1,4 +1,4 @@
-// Recorded by scripts/record-databases.ts with store schema 1 (engine 0.0.0, state schema 7). Never edit or remove.
+// docs/development.md Releases: recorded checkpoints and the quarantine list
 import type { RecordedStoreSchema } from './index';
 
 export const RECORDED_STORE_SCHEMA_1: RecordedStoreSchema = {

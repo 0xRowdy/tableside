@@ -1,31 +1,20 @@
-// Coaching prose for guided practice. Every line the coach (Marcus) says is
-// rendered here from the engine's structured explanation facts: the
-// situation, the matching instruction, the prescription and the fallback.
-// Nothing here judges or praises, and nothing is added that the facts don't hold.
-// A table passes its own words (wager names, and "spin" or "roll").
-
 import type { AdherenceMeasure, BetCorrection, CycleEnd, Explanation, PendingStrategyAction, StrategyView, Wager } from '@tableside/engine';
 
 import { GAME_WORDS, type GameWords } from './game-words';
 import { capitalize, formatUnits, totalStake } from './units';
 
-/** How a game words its wagers and its turns (game-words.ts). */
 export type CoachWords = Pick<GameWords, 'targetName' | 'turn' | 'Turn' | 'contracts'>;
 
 export const ROULETTE_WORDS: CoachWords = GAME_WORDS.roulette;
 export const CRAPS_WORDS: CoachWords = GAME_WORDS.craps;
-/** Blackjack's betting decision is the initial wager before a round. */
 export const BLACKJACK_WORDS: CoachWords = GAME_WORDS.blackjack;
 
-/** "a, b and c". */
 const listed = (items: readonly string[]) => (items.length < 2 ? items.join('') : `${items.slice(0, -1).join(', ')} and ${items.at(-1)}`);
 
-/** "10 on Red and 10 on 1st dozen". */
 export const betsText = (bets: readonly Wager[], words: CoachWords = ROULETTE_WORDS) =>
   listed(bets.map((bet) => `${formatUnits(bet.amount)} on ${words.targetName(bet.target)}`));
 
 
-/** The prescription in one sentence: what the strategy does now, or why it places nothing. */
 export function prescriptionLine(strategyName: string, explanation: Explanation, words: CoachWords = ROULETTE_WORDS): string {
   const prescription = explanation.prescription;
   const bets = (list: readonly Wager[]) => betsText(list, words);
@@ -50,7 +39,6 @@ export function prescriptionLine(strategyName: string, explanation: Explanation,
 
 const RESULT_WORDS = { win: 'won', loss: 'lost', push: 'broke even' } as const;
 
-/** The situation, the matching instruction and what the player submitted, as the correction's body. */
 export function correctionLines(correction: BetCorrection, words: CoachWords = ROULETTE_WORDS, countKept = false): string[] {
   const { explanation, actual } = correction;
   const lines: string[] = [];
@@ -59,8 +47,6 @@ export function correctionLines(correction: BetCorrection, words: CoachWords = R
   if (color !== undefined && color !== 'none') lines.push(`The last spin landed on ${color}.`);
   const point = subjects.point;
   if (point !== undefined) lines.push(point === 'none' ? 'The puck is off: the next roll is a come-out roll.' : `The point is ${point}.`);
-  // A bet schedule reads the true count. Where the player keeps it, the engine's view leaves it out and
-  // the correction names the band, never the count; where Tableside supplies it, the correction states it.
   const trueCount = explanation.situation.values['true-count'];
   if (countKept) lines.push('Checked against the actual true count, which you keep in this mode.');
   else if (trueCount !== undefined) lines.push(`The true count is ${Number(trueCount) > 0 ? '+' : ''}${trueCount}, supplied by Tableside in this mode.`);
@@ -73,29 +59,22 @@ export function correctionLines(correction: BetCorrection, words: CoachWords = R
   return lines;
 }
 
-/** The retry button: what taking the move back does. */
 export function retryLabel(correction: BetCorrection, words: CoachWords = ROULETTE_WORDS): string {
   const prescription = correction.explanation.prescription;
   return prescription.status === 'prescribed' ? `Take it back & bet ${betsText(prescription.bets, words)}` : 'Take my bets back';
 }
 
-/** What an override means, before the player chooses it. */
 export function overrideNote(progression: boolean, words: CoachWords = ROULETTE_WORDS): string {
   return progression
     ? `"Keep my bets" is an override, recorded once. The ${words.turn} goes ahead, the strategy cycle ends, and you restart the strategy yourself.`
     : `"Keep my bets" is an override, recorded once. The ${words.turn} goes ahead, and the strategy coaches your next ${words.turn}.`;
 }
 
-/** What a strategy decision is in each game: a spin, a roll, a blackjack playing decision, or a blackjack round's bet. */
 export type DecisionUnit = 'spin' | 'roll' | 'decision' | 'round';
 
 const measureText = (measure: AdherenceMeasure, unit: DecisionUnit) =>
   measure.decisions === 0 ? `no strategy ${unit}s yet` : `followed ${measure.followed} of ${measure.decisions} ${measure.decisions === 1 ? unit : `${unit}s`}`;
 
-/**
- * Adherence in words, kept apart from winnings. A strategy that assesses both
- * the play and the bets (blackjack with the bet schedule) keeps each apart.
- */
 export function adherenceText(adherence: StrategyView['adherence'], unit: DecisionUnit = 'spin'): string {
   const { betting, playing } = adherence;
   if (betting && playing) return `Playing: ${measureText(playing, 'decision')} · Betting: ${measureText(betting, 'round')}`;
@@ -103,25 +82,18 @@ export function adherenceText(adherence: StrategyView['adherence'], unit: Decisi
   return only ? capitalize(measureText(only, unit)) : 'Nothing assessed yet';
 }
 
-/** The words a correction pause shows, whatever the game. */
 export interface CorrectionCopy {
-  /** "Marcus · guided practice, basic strategy". */
   readonly coach: string;
-  /** "Before your spin", "Before your stand". */
   readonly kicker: string;
   readonly headline: string;
   readonly lines: readonly string[];
-  /** A short fallback line set apart: "If you can't double: hit." */
   readonly fallback: string | null;
   readonly retry: string;
   readonly override: string;
   readonly note: string;
-  /** Why the taught index differs from published charts, when it does. */
   readonly why: readonly string[];
 }
 
-/** A betting correction's copy (roulette, craps). */
-/** `countKept`: a blackjack counting mode, where the player keeps the count the bet schedule reads. */
 export function betCorrectionCopy(strategyName: string, correction: BetCorrection, overrideEndsCycle: boolean, words: CoachWords = ROULETTE_WORDS, countKept = false): CorrectionCopy {
   return {
     coach: `Marcus · guided practice, ${strategyName}`,
@@ -136,18 +108,14 @@ export function betCorrectionCopy(strategyName: string, correction: BetCorrectio
   };
 }
 
-/** The strategy's choices: "Black", "1st dozen and 2nd dozen". */
 export const parametersText = (strategy: Pick<StrategyView, 'parameters'>, words: CoachWords = ROULETTE_WORDS) =>
   listed(strategy.parameters.map((param) => words.targetName(param.value)));
 
-/** "Capped Martingale · cycle 2": a strategy with cycles names the one under way. */
 export const cycleBadge = (strategy: Pick<StrategyView, 'name' | 'cycle'>) => `${strategy.name} · cycle ${strategy.cycle.number}`;
 
-/** A pending strategy action: what the strategy waits to place. */
 export const pendingWaiting = (pending: PendingStrategyAction, words: CoachWords = ROULETTE_WORDS) =>
   pending.unavailable.length > 0 ? `Waiting: ${betsText(pending.unavailable, words)}` : 'Waiting: no strategy bet can be placed';
 
-/** Why a pending strategy action can't execute, against the funds available for it. */
 export function pendingBlocked(pending: PendingStrategyAction, available: string): string {
   switch (pending.reason) {
     case 'unfunded-group':
@@ -161,17 +129,14 @@ export function pendingBlocked(pending: PendingStrategyAction, available: string
   }
 }
 
-/** For a pending action that follows a settled outcome: that outcome stays as it was paid. */
 export const pendingPaidNote = (pending: PendingStrategyAction, words: CoachWords = ROULETTE_WORDS) =>
   pending.turn === undefined ? null : `${words.Turn} ${pending.turn} is settled and stays paid. Nothing is paid again.`;
 
-/** What an override from a pending strategy action means, before the player chooses it. */
 export const pendingOverrideNote = (progression: boolean, words: CoachWords = ROULETTE_WORDS) =>
   progression
     ? `An override ends this cycle: your ${words.turn} settles, and you restart the strategy yourself.`
     : `An override is recorded once, and the strategy coaches your next ${words.turn}.`;
 
-/** The cycle result's headline. */
 export const CYCLE_HEADLINE: Record<CycleEnd, string> = {
   completed: 'Cycle complete',
   cap: "This cycle ended at the strategy's cap",
@@ -181,7 +146,6 @@ export const CYCLE_HEADLINE: Record<CycleEnd, string> = {
   envelope: 'This cycle ended: its next stake is too large to compute',
 };
 
-/** Why a cycle ended, in one or two sentences from the engine's facts. */
 export function cycleEndText(strategy: Pick<StrategyView, 'name' | 'cycleEnd' | 'exhaustion'>, words: CoachWords = ROULETTE_WORDS): string {
   const exhaustion = strategy.exhaustion;
   switch (strategy.cycleEnd) {

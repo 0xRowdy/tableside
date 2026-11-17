@@ -1,7 +1,4 @@
-// The headless runner on Node (spec 6 contracts, Amendment 6): every
-// built-in strategy runs on every profile it fits, and the runner reproduces
-// the sessions the engine's cross-runtime suite records, so its traces are
-// the ones the app's runtimes produce.
+// Spec 6 Amendment 6
 import { BENCHMARK_PROFILES } from '@tableside/definitions';
 import { canonicalJson, canonicalStrategy, defaultSelection, STANDARDIZED_STOP_CAUSES, type BenchmarkProfile, type StandardizedSessionRecord, type Words2 } from '@tableside/engine';
 import { engineSuite } from '@tableside/engine/test-suite';
@@ -18,7 +15,6 @@ interface Traced {
   record: StandardizedSessionRecord;
 }
 
-/** The sessions the engine suite records in its built-in trace case, run on Node through the harness. */
 function tracedSessions(): Traced[] {
   const suite = { ...engineSuite, cases: engineSuite.cases.filter((c) => c.name.startsWith('standardized: built-in traces')) };
   const [result] = runSuite(suite, { jsEngine: 'node', platform: 'node', version: process.version }).cases;
@@ -32,17 +28,13 @@ describe('headless runner', () => {
     let replayed = 0;
     for (const traced of tracedSessions()) {
       const definition = builtIns.get(canonicalJson(traced.strategy));
-      // The engine's hand-written blackjack test tables aren't shipped; its copies of certified ones are.
       if (!definition) continue;
       const profile = BENCHMARK_PROFILES.find((p) => p.id === traced.profile.id);
       expect(profile).toEqual(traced.profile);
       expect(runStandardized({ profile: profile as BenchmarkProfile, strategy: defaultSelection(definition), key: traced.key, indices: [traced.index] })).toEqual([traced.record]);
       replayed++;
     }
-    // Every roulette and craps built-in on each profile it fits, and two certified blackjack ones, two sessions each.
     expect(replayed).toBe((5 * 2 + 5 + 2) * 2);
-    // A fixed amount of engine work (about a second alone): on a loaded machine the 5 s default timed
-    // it out though nothing was wrong, so it gets its sibling's budget. Its speed is no property here.
   }, 120_000);
 
   it('runs every built-in strategy on every profile it fits, with complete, bounded records', () => {
@@ -59,7 +51,6 @@ describe('headless runner', () => {
           expect(BigInt(record.net)).toBe(BigInt(record.finalBalance) - 1000n);
           expect(record.literalZero).toBe(record.finalBalance === '0');
         }
-        // Same key and index, same session; another index, another session.
         expect(runStandardized({ profile, strategy: defaultSelection(definition), key, indices: [1] })).toEqual([records[1]]);
         expect(records[0]).not.toEqual({ ...records[1], index: 0 });
       }

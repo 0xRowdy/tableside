@@ -1,7 +1,3 @@
-// WCAG 2.2 contrast ratio between two #RRGGBB or #RRGGBBAA colors.
-// A translucent background is composited over black and over white and the
-// lower ratio wins, because the backdrop (for example a photo) can be either.
-
 type Rgb = [number, number, number];
 
 function parse(hex: string): { rgb: Rgb; alpha: number } {

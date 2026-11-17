@@ -1,6 +1,4 @@
-// Age eligibility on the device (spec 2, *Age eligibility*): the Create
-// path's age step and its eligibility assertion, retrying an unresolved
-// account, and the refresh that applies what the platform says and reports it.
+// Spec 2 Age eligibility
 
 import {
   type EligibilityBand,
@@ -29,19 +27,11 @@ export function createAgeEligibility(ctx: ServiceContext, session: AccountSessio
   const { options } = ctx;
   const ageSignals = options.ageSignals ?? noPlatformAgeSignals;
   let assertion: Assertion | null = null;
-  /** The Create path's platform check found a required check in the way: the fallback answer can't decide. */
   let declarationBlocked = false;
-  /** The eligibility refresh in flight, for the session it belongs to. */
   let refreshing: { readonly session: OpenSession; readonly run: Promise<void> } | null = null;
-  /** Runs when the Create path ends without an account (under 13): nothing about the player is kept. */
   const forgotten = new Set<() => void>();
   const forgetPlayer = () => forgotten.forEach((forget) => forget());
 
-  /**
-   * The server's current record for the signed-in account and its deletion
-   * deadline (undefined unless deletion is scheduled), or null when it can't
-   * say (the gate denies, or the answer was lost).
-   */
   const serverRecord = async (): Promise<{ readonly record: EligibilityRecord; readonly deletionDeadline: number | undefined } | null> => {
     try {
       const supabase = await ctx.connect();
@@ -53,7 +43,6 @@ export function createAgeEligibility(ctx: ServiceContext, session: AccountSessio
     }
   };
 
-  /** Reports a decision; the server's answer becomes the account's record. False when it couldn't be sent. */
   const report = async (current: OpenSession, record: EligibilityRecord): Promise<boolean> => {
     try {
       const supabase = await ctx.connect();
@@ -69,11 +58,6 @@ export function createAgeEligibility(ctx: ServiceContext, session: AccountSessio
     }
   };
 
-  /**
-   * Tells the server the required check this installation owes (or that it
-   * owes none), when that changed: while one is owed, the server refuses a
-   * declaration for the account, from any caller.
-   */
   const reportCheck = async (current: OpenSession): Promise<void> => {
     const check = current.remembered.check ?? null;
     if (!current.registered || current.serverCheck === check) return;
@@ -81,14 +65,9 @@ export function createAgeEligibility(ctx: ServiceContext, session: AccountSessio
       const { data, error } = await (await ctx.connect()).rpc('record_age_check_v1', { age_check: check });
       if (!error && (data as { status?: unknown } | null)?.status === 'recorded' && session.opened === current) current.serverCheck = check;
     } catch {
-      // Offline: the next refresh tells it.
     }
   };
 
-  /**
-   * Sends what this device's platform says: the check it owes, then the range
-   * it established, once (not while deletion is scheduled: that is no restricted path).
-   */
   const reportSignal = async (current: OpenSession): Promise<void> => {
     await reportCheck(current);
     if (session.opened !== current) return;
@@ -97,12 +76,10 @@ export function createAgeEligibility(ctx: ServiceContext, session: AccountSessio
   };
 
   const refreshOnce = async (current: OpenSession) => {
-    // What became of the session first: a revoked one locks, and nothing else runs for it.
     await session.checkLifecycle(current);
     if (session.opened !== current) return;
     const signal = await ageSignals.check({ interactive: false }).catch(() => UNAVAILABLE);
     if (session.opened !== current) return;
-    // What the platform says applies at once, offline too: restrictions never wait for the server.
     await session.rememberEligibility(current, afterSignal(current.remembered, signal));
     if (!(await session.canAskServer(current, { renew: false }))) return;
     await session.registerDevice(current);
@@ -127,7 +104,6 @@ export function createAgeEligibility(ctx: ServiceContext, session: AccountSessio
   };
   session.setRefresh(refreshEligibility);
 
-  /** The Create path: a short-lived, single-use assertion for an established range, carrying the device locale's currency. */
   const obtainAssertion = async (range: EligibilityBand, source: EligibilitySource): Promise<AgeAnswerResult> => {
     try {
       const supabase = await ctx.connect();
@@ -141,7 +117,6 @@ export function createAgeEligibility(ctx: ServiceContext, session: AccountSessio
     }
   };
 
-  /** What an unresolved account's retry ended in. */
   const retryOutcome = (): AgeAnswerResult => {
     if (ctx.gate.state === 'age-ineligible') return { status: 'ineligible' };
     if (ctx.gate.state === 'age-unresolved') return { status: 'unresolved' };
@@ -162,7 +137,6 @@ export function createAgeEligibility(ctx: ServiceContext, session: AccountSessio
         }
         if (signal.kind !== 'range') return { status: 'question' };
         if (signal.range === 'under-13') {
-          // Under 13 ends here: nothing is sent, and nothing is kept, not even who a provider said they were.
           forgetPlayer();
           return { status: 'ineligible' };
         }
@@ -174,7 +148,6 @@ export function createAgeEligibility(ctx: ServiceContext, session: AccountSessio
       if (session.opened !== current) return { status: 'failed' };
       await session.rememberEligibility(current, afterSignal(current.remembered, signal));
       if (await session.canAskServer(current, { renew: true })) await reportSignal(current);
-      // The platform proved nothing: the record stands, and the question may decide only if nothing sufficient is on it.
       if (ctx.gate.state === 'age-unresolved' && declarationPermitted(current.remembered.eligibility, current.remembered.check ?? null)) return { status: 'question' };
       return retryOutcome();
     },
@@ -189,7 +162,6 @@ export function createAgeEligibility(ctx: ServiceContext, session: AccountSessio
       assertion = null;
       if (declarationBlocked) return { status: 'unresolved' };
       if (range === 'under-13') {
-        // Nothing about an under-13 player is kept, not even who a provider said they were.
         forgetPlayer();
         return { status: 'ineligible' };
       }
@@ -203,18 +175,14 @@ export function createAgeEligibility(ctx: ServiceContext, session: AccountSessio
     api,
     ageSignals,
     reportSignal,
-    /** The Create path's assertion, while it hasn't expired. */
     currentAssertion: () => (assertion && assertion.expiresAt > options.clock() ? assertion : null),
-    /** The server refused the assertion (expired, or used): the age step runs again. */
     dropAssertion() {
       assertion = null;
     },
-    /** A sign-in ends the Create path. */
     signedIn() {
       assertion = null;
       declarationBlocked = false;
     },
-    /** Called when the Create path ends without an account: forget who a provider said the player was. */
     onPlayerForgotten: (forget: () => void) => void forgotten.add(forget),
   };
 }

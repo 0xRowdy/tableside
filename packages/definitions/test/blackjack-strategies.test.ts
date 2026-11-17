@@ -1,9 +1,4 @@
-// The blackjack built-in strategies against the frozen research files (spec
-// #51, Blackjack reference; launch gate 2). The packed policy holds every
-// basic, fallback, continuation and index cell exactly as frozen, and through
-// the engine's Explain play (the same answer a guided activity assesses) every
-// reachable first decision, legal and funding fallback, later decision and
-// certified index plays as the files say.
+// docs/development.md Blackjack reference
 import { blackjackModeOf, explainPlay, explainPrescription, initialProgress, validateStrategy, type BlackjackPlayPolicy, type BlackjackPlaySituation, type Card, type PlayExplanation } from '@tableside/engine';
 import { describe, expect, it } from 'vitest';
 
@@ -14,11 +9,8 @@ const up = (value: string) => (value === 'A' ? 1 : Number(value));
 const letterAt = (rows: readonly string[], index: number, upCard: number) => rows[index]?.[upCard - 1];
 const card = (rank: number): Card => ({ deck: 0, suit: 'hearts', rank: rank as Card['rank'] });
 
-/** Two different cards totalling a hard `total` (5-19), or undefined. */
 const hardTwo = (total: number): number[] | undefined => (total >= 5 && total <= 11 ? [2, total - 2] : total >= 12 && total <= 19 ? [10, total - 10] : undefined);
-/** Three cards totalling a hard `total` (6-21). */
 const hardThree = (total: number): number[] | undefined => (total >= 6 && total <= 14 ? [2, 2, total - 4] : total >= 15 && total <= 21 ? [10, 2, total - 12] : undefined);
-/** Cards with an ace totalling a soft `total`: x,A on two cards (13-20; a split hand starts with x), A,2,x on three (15-21). */
 const softTwo = (total: number): number[] | undefined => (total >= 13 && total <= 20 ? [total - 11, 1] : undefined);
 const softThree = (total: number): number[] | undefined => (total >= 15 && total <= 21 ? [1, 2, total - 13] : undefined);
 
@@ -43,7 +35,7 @@ const prescribed = (explanation: PlayExplanation) => explanation.prescribed.acti
 
 describe('blackjack built-in strategies', () => {
   it('every preset has the four modes, runnable, with the bets left to the player; who keeps the count follows the mode table', () => {
-    // Spec #51 mode table: basic (no count), basic with deviations (Tableside supplies it), the counting modes (the player keeps it).
+    // Spec 1 Game rules, Counting (Hi-Lo)
     const expected = { basic: ['none', false], 'basic-with-deviations': ['supplied', true], 'counting-with-basic': ['player', false], 'counting-with-deviations': ['player', true] };
     expect(BLACKJACK_MODES).toEqual(Object.keys(expected));
     for (const preset of PRESETS) {
@@ -58,17 +50,16 @@ describe('blackjack built-in strategies', () => {
   });
 
   it('a counting mode may add the Hi-Lo bet schedule: 10 below +1, 20 at +1, 40 at +2, 60 at +3, 80 at +4 or more', () => {
-    // Spec #51, Counting (Hi-Lo): the schedule by integer true count; a base unit of 10.
+    // Spec 1 Game rules, Counting (Hi-Lo)
     const expected: [number, string][] = [[-3, '10'], [0, '10'], [1, '20'], [2, '40'], [3, '60'], [4, '80'], [9, '80']];
     for (const preset of PRESETS) {
       for (const mode of ['counting-with-basic', 'counting-with-deviations'] as const) {
         const definition = blackjackStrategy(preset, mode, true);
         expect(validateStrategy(definition)).toEqual({ diagnostics: [], runnable: true });
         expect(blackjackStrategy(preset, mode, true).id).not.toBe(blackjackStrategy(preset, mode).id);
-        // 260 cards is 5 decks: a running count of 5 x the true count gives that true count.
         const rules = { dealer: preset.startsWith('H17') ? 'H17' : 'S17', lateSurrender: preset.endsWith('_LS'), limits: { initial: { min: '10', max: '1000' } } };
         for (const [trueCount, amount] of expected) {
-          const result = explainPrescription(definition, {}, { game: 'blackjack', rules, balance: '1000', shoe: { running: 5 * trueCount, remaining: 260 } }, initialProgress(definition));
+          const result = explainPrescription(definition, {}, { game: 'blackjack', rules, balance: '1000', shoe: { running: 5 * trueCount, remaining: 5 * 52 } }, initialProgress(definition));
           expect(result.ok && result.explanation.prescription, `${preset} ${mode} ${trueCount}`).toEqual({ status: 'prescribed', bets: [{ target: 'hand-1', amount }], held: [] });
         }
       }
@@ -108,23 +99,20 @@ describe('blackjack built-in strategies', () => {
         const u = up(row['up'] ?? '');
         const action = LETTER[row['action'] ?? ''];
         const cards = kind === 'pair' ? [hand, hand] : kind === 'soft' ? softTwo(hand) : hardTwo(hand);
-        if (!cards) continue; // hard 4 and 20 and soft 12 are only ever pairs.
+        if (!cards) continue;
         const context = `${preset} ${kind} ${hand} v ${u}`;
         expect(prescribed(play(preset, 'basic', cards, u)), context).toBe(action);
         checked++;
         if (action === 'double') {
-          // Unaffordable on the original two cards.
           const fallback = ls ? row['fallback_double_ls_original'] : row['fallback_double'];
           expect(prescribed(play(preset, 'basic', cards, u, { balance: '5' })), `${context} short`).toBe(LETTER[fallback ?? '']);
           if (kind === 'pair') expect(prescribed(play(preset, 'basic', cards, u, { hands: 2, balance: '5' })), `${context} split short`).toBe(LETTER[row['fallback_double'] ?? '']);
         }
         if (action === 'split') {
-          // Unaffordable: the double is too; at four hands split is off by rule (a split hand, no surrender, double allowed).
           expect(prescribed(play(preset, 'basic', cards, u, { balance: '5' })), `${context} short`).toBe(LETTER[row['fallback_split_balance'] ?? '']);
           if (hand !== 1) expect(prescribed(play(preset, 'basic', cards, u, { hands: 4 })), `${context} four hands`).toBe(LETTER[row['fallback_split_rule'] ?? '']);
         }
         if (action === 'surrender' && kind === 'pair') {
-          // On a split hand surrender is off.
           expect(prescribed(play(preset, 'basic', cards, u, { hands: 2 })), `${context} split`).toBe(LETTER[row['fallback_surrender'] ?? '']);
         }
       }
@@ -146,8 +134,7 @@ describe('blackjack built-in strategies', () => {
         const action = row['action'] ?? '';
         expect(letterAt(policy.later[kind], index, u), JSON.stringify(row)).toBe(action);
         expect(letterAt(policy.laterWithoutDouble[kind], index, u)).toBe(action === 'D' ? row['fallback'] : action);
-        if (total === 21) continue; // 21 takes no decision.
-        // Three cards can't double: the fallback. A split hand's two cards can.
+        if (total === 21) continue;
         const three = kind === 'soft' ? softThree(total) : hardThree(total);
         if (three) {
           expect(prescribed(play(`${rule}_LS`, 'basic', three, u)), `${kind} ${total} v ${u} three cards`).toBe(LETTER[action === 'D' ? (row['fallback'] ?? '') : action]);
@@ -156,7 +143,6 @@ describe('blackjack built-in strategies', () => {
         const two = kind === 'soft' ? softTwo(total) : hardTwo(total);
         if (two) {
           expect(prescribed(play(`${rule}_LS`, 'basic', two, u, { hands: 2 })), `${kind} ${total} v ${u} split hand`).toBe(LETTER[action]);
-          // An unaffordable double on a split hand falls back too.
           if (action === 'D') expect(prescribed(play(`${rule}_LS`, 'basic', two, u, { hands: 2, balance: '5' }))).toBe(LETTER[row['fallback'] ?? '']);
         }
       }
@@ -182,7 +168,6 @@ describe('blackjack built-in strategies', () => {
           const set = row['set'];
           const atOrAbove = row['deviation_action'] ?? '';
           const below = row['alternative_action'] ?? '';
-          // 260 cards (5 decks), 208 (4), 156 (3): running = decks x true count gives that true count exactly.
           for (const remaining of [260, 208, 156]) {
             const decks = remaining / 52;
             const at = (count: number) => ({ shoe: { running: count * decks, remaining } });
@@ -200,14 +185,12 @@ describe('blackjack built-in strategies', () => {
             }
             const total = Number(row['hand']);
             if (set === 'F4') {
-              // On the original two cards, where surrender is offered; below, the basic play with surrender set aside.
               const cell = frozenRows(`basic_${preset}.csv`).find((c) => c['kind'] === 'hard' && Number(c['hand']) === total && up(c['up'] ?? '') === u);
               const basicPlay = cell?.['action'] === 'R' ? cell['fallback_surrender'] : cell?.['action'];
               expect(prescribed(play(preset, 'basic-with-deviations', hardTwo(total) as number[], u, at(threshold))), context).toBe('surrender');
               expect(prescribed(play(preset, 'basic-with-deviations', hardTwo(total) as number[], u, at(threshold - 1))), context).toBe(LETTER[basicPlay ?? '']);
               continue;
             }
-            // Doubles on a split hand's two cards (DAS); stand/hit on three cards, where surrender is never offered.
             const doubling = atOrAbove === 'double' || below === 'double';
             const cards = doubling ? (hardTwo(total) as number[]) : (hardThree(total) as number[]);
             const hands = doubling ? 2 : 1;

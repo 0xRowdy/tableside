@@ -3,10 +3,6 @@ import { StyleSheet, Text, View } from 'react-native';
 
 import { fonts, palette, radius, space, textScale } from '@/theme/tokens';
 
-/**
- * A card that tells the player something about their session (suspended, a
- * resume refused). The title is a header, or an alert when it reports a refusal.
- */
 export function Notice({
   title,
   role = 'header',
@@ -28,7 +24,6 @@ export function Notice({
   );
 }
 
-/** Body text inside a Notice. */
 export function NoticeText({ children }: { children: ReactNode }) {
   return (
     <Text maxFontSizeMultiplier={textScale.body} style={styles.text}>

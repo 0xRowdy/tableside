@@ -1,15 +1,5 @@
 #!/usr/bin/env node
-// Runs a Supabase CLI command against this checkout's local stack.
-//
-// TABLESIDE_STACK_SLOT (default 0) lets several worktrees each run a stack at
-// once. Slot 0 is the plain `supabase/` project on the default ports. Slot N
-// is a generated project in `.stacks/<N>/supabase/` whose config is this
-// checkout's with its own project id and every port moved up by N * 100; its
-// migrations and functions are symlinks, so they always match the checkout.
-//
-//   TABLESIDE_STACK_SLOT=2 pnpm stack start --exclude studio,imgproxy,vector,logflare
-//   TABLESIDE_STACK_SLOT=2 pnpm test:accounts
-//   TABLESIDE_STACK_SLOT=2 pnpm stack db reset
+// docs/development.md Commands
 
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, readdirSync, symlinkSync, writeFileSync } from 'node:fs';

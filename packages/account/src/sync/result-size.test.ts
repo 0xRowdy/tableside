@@ -1,10 +1,4 @@
-// The result-artifact encoding target (spec 2, *Chunked results*; #50): a
-// representative completed practice session serializes to 10–20 KB. It is a
-// target, never a cap: a longer session is chunked and sent whole.
-//
-// The representative session is an hour of free-play roulette at the app's
-// pace: 150 spins, each with an even-money wager and a straight-up number,
-// played through spec 1's practice controller on its own deterministic shoe.
+// Spec 2 Chunked results; #50
 
 import { canonicalJson } from '@tableside/engine';
 import { describe, expect, it } from 'vitest';
@@ -54,7 +48,6 @@ describe('the representative completed practice session', () => {
 
   it('is a target, not a cap: a session many times longer is chunked and keeps every outcome', async () => {
     const result = await rouletteSession(150);
-    // Twelve hours of the same play: every outcome repeated twelve times.
     const long = { ...result, outcomes: Array.from({ length: 12 }, () => result.outcomes).flat() };
     const chunks = chunksOf(upload(long), long);
     expect(chunks!.length).toBeGreaterThan(1);

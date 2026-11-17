@@ -1,9 +1,4 @@
-// Building blocks of the first-run screens (welcome, age, sign-in method,
-// email, code, offline game): a full-screen layout with no tab bar, a labeled
-// field, choice rows, sign-in method buttons, the welcome's intent switch and
-// inline messages. The method buttons, intent switch, header bar and
-// footnote follow S2-13's frames (#89); the rest is #88's.
-// TODO(frames): FirstRunScreen, Field, ChoiceRow and InlineMessage unverified against S2-14–S2-16 (#88).
+// TODO(spec 2 S2-14–S2-16)
 
 import { Check, ChevronLeft, CircleAlert, ExternalLink, type LucideProps } from 'lucide-react-native';
 import { forwardRef, type ComponentRef, type ReactNode } from 'react';
@@ -15,13 +10,8 @@ import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/th
 
 import { WEB_PAGES } from './web-pages';
 
-/** An icon: a lucide icon, or a glyph drawn with the same props. */
 type Glyph = (props: LucideProps) => ReactNode;
 
-/**
- * A pre-account screen: a title, optional Back (with the header bar's title
- * and step beside it), and content that reflows and scrolls at any text size.
- */
 export function FirstRunScreen({
   title,
   intro,
@@ -32,13 +22,10 @@ export function FirstRunScreen({
   children,
 }: {
   title: string;
-  /** Shown above the title, such as the welcome's hero image. */
   above?: ReactNode;
   intro?: ReactNode;
   back?: () => void;
-  /** The header bar beside Back: where the player is, such as "Create your account" and "Step 2 of 2". */
   bar?: { readonly title: string; readonly detail?: string };
-  /** Drawn above the title, such as a locked state's icon. */
   lead?: ReactNode;
   children?: ReactNode;
 }) {
@@ -98,7 +85,6 @@ export function Body({ children }: { children: ReactNode }) {
   );
 }
 
-/** A status line that screen readers announce when it appears. */
 export function Status({ children }: { children: ReactNode }) {
   return (
     <Text accessibilityLiveRegion="polite" maxFontSizeMultiplier={textScale.body} style={styles.body}>
@@ -107,7 +93,6 @@ export function Status({ children }: { children: ReactNode }) {
   );
 }
 
-/** A labeled text field. Its label is its accessible name. */
 export const Field = forwardRef<ComponentRef<typeof TextInput>, { label: string; problem?: boolean } & Omit<TextInputProps, 'accessibilityLabel' | 'style'>>(
   function Field({ label, problem = false, ...input }, ref) {
     const { focused, focusProps } = useKeyboardFocus(input);
@@ -130,13 +115,11 @@ export const Field = forwardRef<ComponentRef<typeof TextInput>, { label: string;
   },
 );
 
-/** The 6-digit code typed from an email, without spaces; null when it isn't one. */
 export function enteredCode(text: string): string | null {
   const code = text.replace(/\s/g, '');
   return /^\d{6}$/.test(code) ? code : null;
 }
 
-/** A field for a 6-digit emailed code, offering the one the system read from the email. */
 export function CodeField({
   label = 'Code',
   value,
@@ -166,7 +149,6 @@ export function CodeField({
   );
 }
 
-/** A problem or notice in words with an icon, so it isn't marked by color alone. Announced when it appears. */
 export function InlineMessage({ children, testID }: { children: ReactNode; testID?: string }) {
   return (
     <View style={styles.message} testID={testID}>
@@ -178,7 +160,6 @@ export function InlineMessage({ children, testID }: { children: ReactNode; testI
   );
 }
 
-/** One choice of a single-choice group (a radio button). */
 export function ChoiceRow({
   label,
   detail,
@@ -188,7 +169,6 @@ export function ChoiceRow({
 }: {
   label: string;
   detail?: string;
-  /** The detail as a screen reader should speak it. */
   spokenDetail?: string;
   selected: boolean;
   onPress: () => void;
@@ -218,7 +198,6 @@ export function ChoiceRow({
   );
 }
 
-/** A group of ChoiceRows, announced as a radio group with its question. */
 export function ChoiceGroup({ label, testID, children }: { label: string; testID?: string; children: ReactNode }) {
   return (
     <View accessibilityRole="radiogroup" accessibilityLabel={label} testID={testID} style={styles.choices}>
@@ -227,16 +206,11 @@ export function ChoiceGroup({ label, testID, children }: { label: string; testID
   );
 }
 
-/** Actions, stacked at the bottom of the content. */
 export function Actions({ children }: { children: ReactNode }) {
   return <View style={styles.actions}>{children}</View>;
 }
 
-/**
- * Contact support and Make a privacy request, on every locked and restricted
- * screen (spec 2 Amendment 9 §1): the tab bar is hidden there, so More isn't
- * reachable. Both open web pages that work without signing in.
- */
+// Spec 2 Amendment 9 §1
 export function SupportLinks() {
   return (
     <View style={styles.supportLinks}>
@@ -251,11 +225,7 @@ export function SupportLinks() {
   );
 }
 
-/**
- * A sign-in method or path (S2-13): an icon and label on a full-width
- * button. Secondary for each method, primary for Continue, ghost (no fill)
- * for a way back.
- */
+// Spec 2 S2-13
 export function MethodButton({
   label,
   icon: Icon,
@@ -296,7 +266,6 @@ export function MethodButton({
   );
 }
 
-/** Small print under a screen's actions. */
 export function Footnote({ icon: Icon, children }: { icon?: Glyph; children: ReactNode }) {
   return (
     <View style={styles.footnote}>
@@ -326,10 +295,7 @@ function WebLink({ label, url }: { label: string; url: string }) {
   );
 }
 
-/**
- * The welcome's two-part switch (S2-13): one choice of two, as a radio group.
- * At large text sizes it becomes a list of choices, one per row.
- */
+// Spec 2 S2-13
 export function IntentSwitch<T extends string>({
   label,
   options,
@@ -371,7 +337,6 @@ function IntentSegment({ label, selected, onPress }: { label: string; selected: 
   );
 }
 
-/** A text link-style button (for a secondary path such as "Create an account"). */
 export function LinkButton({ label, onPress }: { label: string; onPress: () => void }) {
   const { focused, focusProps } = useKeyboardFocus();
   return (

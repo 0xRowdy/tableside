@@ -1,8 +1,4 @@
-// Seam 2: sync failures and protocol versions (#92). Faults are injected at the
-// network (the fault proxy: an outage, throttling, a refused token), at the
-// server (a revoked session, a retired protocol) and in the data (a malformed
-// record); time is the device's clock. Nothing is stubbed inside the Account
-// service. Spec 2, *Retries* and *Protocol versions*.
+// Spec 2 Retries, Protocol versions; #92
 
 import { afterEach, describe, expect, it } from 'vitest';
 
@@ -20,7 +16,6 @@ function device(name: string, options: Omit<Parameters<typeof createDevice>[1], 
 
 afterEach(async () => {
   devices.splice(0).forEach((d) => d.dispose());
-  // Protocol 1 is served again, with no retirement scheduled.
   await localStack().sql`update private.sync_protocols set retires_at = null, urgent_reason = null where protocol = 1`;
 });
 
@@ -40,13 +35,11 @@ async function twoDevices() {
   return { phone, tablet, email };
 }
 
-/** Lets the device's work that is already due finish. */
 async function settle(d: SimulatedDevice) {
   await new Promise((resolve) => setTimeout(resolve, 0));
   await d.account.sync.idle();
 }
 
-/** Moves the device's clock on in steps, letting each step's work finish, as time passing with the app open. */
 async function timePasses(d: SimulatedDevice, milliseconds: number, step = 250) {
   for (let passed = 0; passed < milliseconds; passed += step) {
     d.clock.advance(step);
@@ -54,7 +47,6 @@ async function timePasses(d: SimulatedDevice, milliseconds: number, step = 250) 
   }
 }
 
-/** Requests to an operation, counted as the device sends them, with the device's time. */
 function watchRequests(d: SimulatedDevice, operation: string): number[] {
   const times: number[] = [];
   d.proxy.onRequest = (url) => {
@@ -69,15 +61,12 @@ async function sessionsOn(d: SimulatedDevice) {
   return (await d.vault.store().readAcceptedRecords(completedPracticeSession.name)).map(({ item }) => item);
 }
 
-/** The access token a device's Auth session holds. */
 function accessToken(d: SimulatedDevice): string {
   for (const value of d.credentials.items.values()) {
     try {
       const token = (JSON.parse(value) as { access_token?: unknown }).access_token;
       if (typeof token === 'string') return token;
-    } catch {
-      // Not the session.
-    }
+    } catch {}
   }
   throw new Error(`${d.name} holds no session`);
 }
@@ -93,19 +82,16 @@ describe('when the server can’t be reached', () => {
 
     await timePasses(phone, 20 * 60_000);
     const waits = gaps(attempts);
-    // Spec 2: about 1 s, doubling, up to 5 min. Each wait is half to all of its
-    // step (to within the clock's 250 ms steps).
+    // Spec 2 Retries
     const steps = [1, 2, 4, 8, 16, 32, 64, 128, 256, 300, 300, 300, 300, 300].map((seconds) => seconds * 1_000);
     for (const [index, wait] of waits.entries()) {
       expect(wait).toBeGreaterThanOrEqual(steps[index]! / 2);
       expect(wait).toBeLessThanOrEqual(steps[index]! + 250);
     }
     expect(Math.max(...waits)).toBeGreaterThan(150_000);
-    // 20 minutes of the 60 s cadence and saves would be 20 runs or more; the backoff makes far fewer.
     expect(attempts.length).toBeLessThan(16);
     expect(await phone.vault.store().readUploadQueue()).toHaveLength(1);
 
-    // Back up: a deliberate retry ("Retry now") goes at once.
     phone.proxy.serverDown = false;
     await phone.account.sync.reconcile();
     expect(phone.account.sync.status).toMatchObject({ error: null, uploads: [] });
@@ -153,13 +139,11 @@ describe('a malformed record among independent saves', () => {
     const bad = await phone.playPracticeSession({ activityId: MALFORMED });
     await settle(phone);
 
-    // Flagged on its fifth failure.
     await timePasses(phone, 2 * 60_000);
     expect(uploads).toHaveLength(5);
     const id = `completed/${bad.activityId}`;
     expect(phone.account.sync.status.uploads).toEqual([expect.objectContaining({ id, state: 'flagged' })]);
 
-    // An hour of the 60 s cadence, and a save: the flagged record isn't sent again; the save is.
     await timePasses(phone, 30 * 60_000, 5_000);
     const later = await phone.playPracticeSession();
     await settle(phone);
@@ -193,7 +177,6 @@ describe('a record the server refuses', () => {
     const { phone } = await signedIn();
     phone.proxy.online = false;
     const result = await phone.playPracticeSession();
-    // Another upload already holds this session's identity with different content.
     const altered = { ...result, netResult: '999', finalCashOut: '1999' };
     const raw = localStack().rawClient(accessToken(phone));
     const competing = prepareOperation({
@@ -236,7 +219,6 @@ describe('when the session isn’t accepted', () => {
   it('asks to sign in again when the session is gone, keeping every record, and signing in again uploads them', async () => {
     const { phone, email } = await signedIn();
     const authUser = await localStack().authUserId(email);
-    // The phone's session no longer exists on the server (its refresh token went with it).
     await localStack().sql`delete from auth.sessions where user_id = ${authUser!} and id = ${sessionId(accessToken(phone))}`;
     const attempts = watchRequests(phone, 'sync_protocol');
     const result = await phone.playPracticeSession();
@@ -255,7 +237,6 @@ describe('when the session isn’t accepted', () => {
   });
 });
 
-/** The session ID an access token names. */
 function sessionId(token: string): string {
   return (JSON.parse(Buffer.from(token.split('.')[1]!, 'base64url').toString()) as { session_id: string }).session_id;
 }
@@ -263,7 +244,6 @@ function sessionId(token: string): string {
 describe('protocol versions', () => {
   const { sql } = localStack();
 
-  /** Protocol 1's retirement, announced long ago and now passed. */
   async function retireProtocolOne() {
     await sql.begin(async (tx) => {
       await tx`alter table private.sync_protocols disable trigger stamp_announcement`;
@@ -274,7 +254,6 @@ describe('protocol versions', () => {
 
   it('a retirement is announced at least 30 days ahead, unless an urgent restriction explains why it can’t wait', async () => {
     await expect(sql`update private.sync_protocols set retires_at = now() + interval '29 days' where protocol = 1`).rejects.toThrow(/check constraint/);
-    // The notice runs from the server's own announcement time, which the operator can't backdate.
     await expect(
       sql`update private.sync_protocols set retires_at = now() + interval '2 days', announced_at = now() - interval '60 days' where protocol = 1`,
     ).rejects.toThrow(/check constraint/);
@@ -307,7 +286,6 @@ describe('protocol versions', () => {
     expect(await phone.vault.store().readUploadQueue()).toHaveLength(2);
     expect((await phone.vault.store().load(another.activityId))?.completion).toEqual(another);
 
-    // The server enforces it, whatever the client does.
     for (const [operation, args] of [
       ['sync_upload_v1', { request: '{}' }],
       ['sync_feed_v1', { after: 0 }],
@@ -340,12 +318,7 @@ describe('protocol versions', () => {
     expect(await phone.vault.store().readUploadQueue()).toHaveLength(2);
     phone.kill();
 
-    // The update: a later build with two more store migrations, installed over the
-    // phone. It speaks a protocol the server serves (here protocol 1 is served
-    // again, standing in for its successor).
     await sql`update private.sync_protocols set retires_at = null where protocol = 1`;
-    // Its vault opens the database only at the later build's schema, after
-    // migrating it, and sync starts only once the database is open.
     const updated = device('phone', { installedOver: phone, migrations: laterBuild() });
     expect(await updated.account.resume()).toEqual({ status: 'resumed' });
     await settle(updated);
@@ -355,7 +328,6 @@ describe('protocol versions', () => {
     tablet.clock.advance(RECONCILE_INTERVAL_MS);
     await settle(tablet);
     expect((await sessionsOn(tablet)).sort()).toEqual(waiting.map((result) => result.activityId).sort());
-    // Each counted once.
     expect(new Set((await tablet.vault.store().readAcceptedRecords(completedPracticeSession.name)).map((record) => record.sequence)).size).toBe(2);
   });
 });

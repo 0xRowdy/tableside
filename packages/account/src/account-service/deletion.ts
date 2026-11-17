@@ -1,8 +1,4 @@
-// Delete account (S2-22) and the deletion-scheduled restricted paths (S2-23):
-// schedule with a 30-day undo, cancel, delete permanently now (#104), status.
-// Every action needs Confirm it's you, and needs a connection: there is no
-// offline queue. A request with no answer is an unknown outcome: asking again
-// repeats its operation ID, and the server's lifecycle status decides.
+// Spec 2 S2-22, S2-23; #104
 
 import { parseDeletionStatus, parseProgress } from '../deletion-progress';
 import { cancelAnswer, retriedOperations, scheduleAnswer } from '../lifecycle-answers';
@@ -16,13 +12,10 @@ export function createDeletion(ctx: ServiceContext, session: AccountSession): Ac
   const { options } = ctx;
   const { backend } = options;
   const operations = retriedOperations(() => ctx.randomHex(16));
-  // A request is for the account as it was: when its deletion moves, a retry from here starts afresh.
   session.onDeletionMoved(() => operations.settle());
 
-  /** Whether the gate is Deleted now (read afresh after an await). */
   const isDeleted = () => ctx.gate.state === 'deleted';
 
-  /** The permanent deletion's progress, by the status credential the erase kept; null when it can't be asked. */
   const deletionProgress = async (): Promise<DeletionProgress | null> => {
     const token = (await session.readDeleted())?.token;
     if (!token || !options.device.online.current()) return null;
@@ -51,7 +44,6 @@ export function createDeletion(ctx: ServiceContext, session: AccountSession): Ac
       const scheduled = scheduleAnswer(answer?.code, answer?.body);
       if (scheduled?.status === 'fresh-authentication-required') return scheduled;
       if (!scheduled) {
-        // No answer, or a retry whose scheduling was canceled since: what the server says of the account decides.
         await session.checkLifecycle(current);
         return { status: 'failed' };
       }
@@ -69,11 +61,9 @@ export function createDeletion(ctx: ServiceContext, session: AccountSession): Ac
       const result = cancelAnswer(answer?.status);
       if (result?.status === 'fresh-authentication-required') return result;
       if (result?.status === 'canceled') {
-        // Either way the server says the account is active: the same account reopens.
         await session.rememberDeletion(current, undefined);
         return result;
       }
-      // Refused, or no answer: what the server says of the account decides what this device shows.
       await session.checkLifecycle(current);
       return result ?? { status: 'failed' };
     },
@@ -90,7 +80,6 @@ export function createDeletion(ctx: ServiceContext, session: AccountSession): Ac
       if (answer?.status === 'deleted') {
         await session.eraseDeleted(current, token);
       } else {
-        // Refused, or no answer: what the server says of the account decides.
         await session.checkLifecycle(current);
       }
       return isDeleted() ? { status: 'deleted' } : { status: 'failed' };

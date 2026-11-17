@@ -11,7 +11,6 @@ import { capitalize } from '@/play/units';
 import { usePractice } from '@/practice/PracticeProvider';
 import { fonts, palette, space, textScale } from '@/theme/tokens';
 
-/** Above this text scale, landscape also stacks the cards so their text has room. */
 const SIDE_BY_SIDE_MAX_FONT_SCALE = 1.35;
 const MIN_CARD_HEIGHT = 188;
 
@@ -32,7 +31,7 @@ export default function Home() {
         {!sideBySide && <Text maxFontSizeMultiplier={textScale.body} style={styles.subtitle}>Pick a table to practice.</Text>}
       </View>
       {suspended && words && (
-        // Design frame S1-01 "Home — session paused" (a suspension, in the glossary). Balances stay in the session (Amendment 1 A6).
+        // Spec 1 S1-01, Amendment 1 A6
         <View style={[styles.suspended, { marginLeft: insets.left + space[4], marginRight: insets.right + space[4] }]}>
           <Notice title={`${words.title} session suspended`} testID="session-suspended">
             <NoticeText>
@@ -48,7 +47,6 @@ export default function Home() {
             key={game.id}
             game={game}
             style={styles.card}
-            // Side by side, only the outer cards meet the screen edges.
             contentInset={{
               left: !sideBySide || i === 0 ? insets.left : 0,
               right: !sideBySide || i === LAUNCH_GAMES.length - 1 ? insets.right : 0,

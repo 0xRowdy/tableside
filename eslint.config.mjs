@@ -1,5 +1,3 @@
-// Lint for the shared packages and tooling. The app has its own config
-// (apps/mobile/eslint.config.js, from eslint-config-expo).
 import path from 'node:path';
 
 import { defineConfig } from 'eslint/config';
@@ -7,8 +5,6 @@ import tseslint from 'typescript-eslint';
 
 import comments from './scripts/eslint/reference-comments.mjs';
 
-// no-restricted-imports only sees the specifier, so it can't tell `../src/x`
-// (same package) from `../../harness/src/x` (another package's internals).
 const portability = {
   rules: {
     'no-relative-outside-package': {
@@ -89,9 +85,7 @@ export default defineConfig(
     rules: portabilityRules(['@tableside/engine']),
   },
   {
-    // Build-time checks and tests of the definitions package, and the engine's
-    // checkpoint recorder, run on Node and never ship; only src/ (and the
-    // engine's cross-runtime suite) must stay portable.
+    // docs/development.md Engine portability
     files: ['packages/definitions/scripts/**/*.ts', 'packages/definitions/test/**/*.ts', 'packages/engine/scripts/**/*.ts'],
     rules: {
       'no-restricted-imports': 'off',

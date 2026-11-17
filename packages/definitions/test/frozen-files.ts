@@ -1,12 +1,9 @@
-// Reads the frozen research files straight from disk for use as test fixtures.
-// Deliberately independent of the shipped parser in src/blackjack.
 import { readFileSync } from 'node:fs';
 
 export const REFERENCE_DIR = new URL('../reference/blackjack/', import.meta.url);
 
 export type Row = Record<string, string>;
 
-/** RFC 4180 rows (CRLF, double-quoted fields), keyed by the header line. */
 export function frozenRows(file: string): Row[] {
   const text = readFileSync(new URL(file, REFERENCE_DIR), 'utf8');
   const records: string[][] = [];
@@ -40,7 +37,6 @@ export function frozenRows(file: string): Row[] {
 export const PRESETS = ['S17_LS', 'S17_noLS', 'H17_LS', 'H17_noLS'] as const;
 export const RULES = ['S17', 'H17'] as const;
 
-/** The research files' single-letter actions. */
 export const LETTER: Record<string, string> = { H: 'hit', S: 'stand', D: 'double', P: 'split', R: 'surrender' };
 
 export const orNull = (value: string | undefined): number | null => (value ? Number(value) : null);

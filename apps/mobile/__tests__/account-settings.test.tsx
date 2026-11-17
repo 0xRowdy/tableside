@@ -1,6 +1,4 @@
-// Seam 3: More → Settings → Account and signing out of this device (#99,
-// S2-17), and the signed-out locked state (S2-23), through the real routes and
-// the accessibility tree, over Account-service fakes.
+// #99; spec 2 S2-17, S2-23
 
 import type { AccountGate } from '@tableside/account';
 import { act, cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react-native';
@@ -19,7 +17,6 @@ type Launch = { stored: AccountGate; offlineGame: GameId | null; latest: ReturnT
 const launch = jest.requireMock<Launch>('@/account/app-account');
 const service = () => launch.latest!.service;
 
-/** How the copy names this device. */
 const DEVICE = Platform.OS === 'ios' ? 'iPhone' : 'device';
 
 let announcements: string[] = [];
@@ -30,7 +27,6 @@ beforeAll(async () => {
   for (const method of ['log', 'info', 'warn', 'error', 'debug'] as const) {
     jest.spyOn(console, method).mockImplementation((...args: unknown[]) => void logged.push(args));
   }
-  // The first render transforms the route tree; pay that once.
   await renderRouter('./src/app', { initialUrl: '/' });
   await cleanup();
 }, 180_000);
@@ -77,7 +73,6 @@ describe('Settings → Account', () => {
     await openAccount();
 
     expect(button("Display name. Not set. You'll choose one the first time you publish or rate. Set")).toBeOnTheScreen();
-    // The sign-in email is information, not a control, and says it stays private.
     expect(screen.getByText('player@example.com · private, never shown to other players')).toBeOnTheScreen();
     expect(screen.queryByRole('button', { name: /Sign-in email/ })).toBeNull();
     expect(button('Currency. US dollar (USD) · used for casino records')).toBeOnTheScreen();
@@ -95,7 +90,6 @@ describe('Settings → Account', () => {
     await openAccount(() => {
       service().waitingCount = 4;
     });
-    // The count is read when the screen opens.
     expect(await screen.findByRole('button', { name: 'Sync status. 4 records waiting to sync' })).toBeOnTheScreen();
 
     for (const [entry, title] of [
@@ -111,7 +105,6 @@ describe('Settings → Account', () => {
       await fireEvent.press(button('Back to Account'));
       await header('Account');
     }
-    // Download all history started the download, which Sync status shows.
     expect(service().calls.filter((call) => call.method === 'downloadAllHistory')).toHaveLength(1);
   });
 
@@ -180,7 +173,6 @@ describe('Settings → Account', () => {
     ).toBeOnTheScreen();
     expect(screen.getByText("Someone signing in with a different account won't see these records.")).toBeOnTheScreen();
     expect(screen.queryByTestId('tab-bar')).toBeNull();
-    // The sign-out never claims more than it did.
     expect(announcements.join(' ')).not.toMatch(/server|every device|all devices/i);
 
     await fireEvent.press(screen.getByRole('link', { name: 'Contact support' }));
@@ -198,7 +190,6 @@ describe('Settings → Account', () => {
     await fireEvent.press(button('Sign out of this device'));
     await fireEvent.press(await screen.findByRole('button', { name: 'Sign out' }));
     await header("You're signed out");
-    // The app's practice provider's handler and this one both ran before the gate moved.
     expect(ending).toHaveBeenCalledTimes(1);
   });
 });
@@ -249,7 +240,6 @@ describe.each([
     await header("You're signed out");
     expect(screen.getByTestId('first-run-scroll')).toBeOnTheScreen();
     expect(screen.getByRole('link', { name: 'Contact support' })).toBeOnTheScreen();
-    // Nothing private reached a log.
     expect(JSON.stringify(logged)).not.toContain('player@example.com');
   });
 });

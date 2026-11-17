@@ -1,6 +1,3 @@
-// Application vectors for random protocol v1: shuffle, dice and roulette. The
-// expected draws come from an independent Python implementation of the
-// protocol (test/reference/philox_reference.py), itself checked against the Random123 known-answer vectors.
 import type { TestCase } from '@tableside/harness';
 
 import { canonicalShoe, rollDice, RandomStream, shuffle, spinRoulette, type Card } from '../src';
@@ -31,7 +28,6 @@ export const drawCases: TestCase[] = [
         '0D2', '0S2', '0S3', '0HA', '0D8', '0SJ', '0D4', '0H4', '0SA', '0CK', '0CJ', '0S8', '0ST',
         '0DQ', '0H8', '0C8', '0CQ', '0S5', '0S7', '0HJ', '0D7', '0H2', '0C2', '0HK', '0DJ', '0D6',
       ]);
-      // 51 bounded draws (i = 51 down to 1), no rejections: block 12, lane 3.
       t.equal([stream.state().block, stream.state().lane], [[12, 0], 3]);
       t.record('shuffled', shuffled);
     },
@@ -79,7 +75,6 @@ export const drawCases: TestCase[] = [
     run: (t) => {
       const stream = RandomStream.create(PI);
       const spins = Array.from({ length: 10 }, () => spinRoulette(stream, 'double-zero'));
-      // Reference indices into [0, 00, 1..36]: 4, 30, 0, 27, 19, 5, 30, 36, 25, 1.
       t.equal(spins, [3, 29, 0, 26, 18, 4, 29, 35, 24, '00']);
       t.record('spins', spins);
     },

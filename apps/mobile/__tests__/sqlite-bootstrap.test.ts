@@ -1,7 +1,4 @@
-// The SQLCipher account store's bootstrap staging (#96), at seam 1: a
-// snapshot's pages are staged durably, and installing makes them the
-// baseline and moves the feed cursor to the watermark in one transaction,
-// keeping the upload queue, later records and purged identities.
+// #96
 
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -13,7 +10,6 @@ import { nodeSqlCipherDriver } from '@/account/testing/node-sqlcipher';
 const KEY = 'ab'.repeat(32);
 const IDENTITY: StoreIdentity = { environment: 'test', accountId: 'local', installationId: 'test-device' };
 const TYPE = 'test-result';
-/** SHA-256("abc"), FIPS 180-2 appendix B.1. */
 const ABC_SHA256 = 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad';
 
 const directories: string[] = [];
@@ -68,7 +64,6 @@ describe('bootstrap staging', () => {
     await store.beginBootstrap(SNAPSHOT);
     expect(await store.stageBootstrapPage('snapshot-1', 0, [record('r-1', 3), record('r-2', 7)], 2)).toBe(true);
     expect(await store.readBootstrap()).toEqual({ installed: false, staging: { ...SNAPSHOT, staged: 2, after: 2 } });
-    // Staged is not accepted: nothing shows, and the feed hasn't moved.
     expect(await items(store)).toEqual([]);
     expect(await store.readFeedCursor()).toBe(0);
 
@@ -175,7 +170,6 @@ describe('a snapshot reset (#98: the feed after the cursor was pruned)', () => {
   it('removes only the results the snapshot names purged, never accepting them again, and moves the cursor forward', async () => {
     const { store } = await installed();
     await store.beginBootstrap(later);
-    // r-2 was purged while the device was away; r-1 is a summary now; r-4 is new. r-3 isn't in the snapshot at all (its type's summary rule left it out).
     expect(await store.stageBootstrapPage('snapshot-2', 0, [record('r-1', 3), record('r-4', 30)], 2, [{ recordType: TYPE, item: 'r-2' }])).toBe(true);
     expect(await store.installBootstrap('snapshot-2')).toBe(true);
     expect(await items(store)).toEqual([
@@ -222,7 +216,6 @@ describe('history detail (#97)', () => {
     sequence,
     payload: { version: 1, resultId: item, amount: '2', detail: `detail of ${item}` },
   });
-  /** A baseline of summaries `r-1` (newest) to `r-3`, installed. */
   async function withSummaries() {
     const made = await newStore();
     await made.store.beginBootstrap(SNAPSHOT);
@@ -247,13 +240,10 @@ describe('history detail (#97)', () => {
 
   it('replaces a summary with its detail only at the same sequence, in one transaction, and keeps it across reopening', async () => {
     const { store, path } = await withSummaries();
-    // r-2 at another sequence is not its detail; r-9 isn't held at all.
     expect(await store.applyDetails([whole('r-1', 5), whole('r-2', 99), whole('r-9', 1)])).toBe(1);
     expect(await store.readAcceptedRecord(TYPE, 'r-1')).toEqual(whole('r-1', 5));
     expect(await store.countSummaries()).toBe(2);
-    // A record held whole is never replaced again.
     expect(await store.applyDetails([whole('r-1', 5)])).toBe(0);
-    // A summary as a detail is refused, and nothing in its transaction applies.
     await expect(store.applyDetails([whole('r-2', 4), summary('r-3', 3, DAY)])).rejects.toThrow();
     expect(await store.countSummaries()).toBe(2);
 
@@ -274,7 +264,6 @@ describe('history detail (#97)', () => {
   it('records history progress once, durably: the first 90 days’ count, and Download all history’s request and count', async () => {
     const { store, path } = await newStore();
     expect(await store.readHistoryProgress()).toEqual({ recent: null, download: null });
-    // A count before the request isn't Download all history's.
     await store.recordHistoryProgress({ recent: 4, downloadTotal: 9 });
     expect(await store.readHistoryProgress()).toEqual({ recent: 4, download: null });
     await store.recordHistoryProgress({ downloadRequested: true });

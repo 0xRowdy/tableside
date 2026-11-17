@@ -1,7 +1,4 @@
-// Signing in and creating an account (spec 2, *Sign-in, linking and
-// recovery*): the email code, Apple and Google (native, or Apple's web flow
-// on Android), and app reviewers' credential. Sign-in never creates an
-// account; Create binds the age step's assertion to the new identity.
+// Spec 2 Sign-in, linking and recovery
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 
@@ -17,29 +14,20 @@ import { deletedKey, statusKey } from './credentials';
 import { codeRequestAnswer } from '../lifecycle-answers';
 import type { AccountService, CodeIntent, CodeRequestResult, IdentityProvider, ProviderSettings, SignInMethod, SignInMethodEntry } from './types';
 
-/**
- * Who the provider says the player is: an ID token minted for `nonce` (whose
- * hash is its nonce claim), and the authorization code the provider gave with
- * it, if any, from a native sheet or the browser. Memory only.
- */
 export interface ProviderCredential {
   readonly provider: IdentityProvider;
   readonly idToken: string;
   readonly nonce: string;
-  /** The code the provider gave, how, and for a browser flow the redirect URI it was issued for. */
   readonly code?: { readonly value: string; readonly flow: 'native' | 'web'; readonly redirectUri?: string };
 }
 
-/** How long a Sign in that found no account is held for Create: well inside an Apple ID token's ten minutes. */
 const HELD_CREDENTIAL_MS = 5 * 60_000;
-
 
 export type SignIn = ReturnType<typeof createSignIn>;
 
 export function createSignIn(ctx: ServiceContext, session: AccountSession, age: AgeEligibility) {
   const { options } = ctx;
   const { backend } = options;
-  /** A Sign in that found no account, kept in memory only so Create can use it without asking the provider again. */
   let heldCredential: (ProviderCredential & { readonly until: number }) | null = null;
   age.onPlayerForgotten(() => {
     heldCredential = null;
@@ -47,14 +35,12 @@ export function createSignIn(ctx: ServiceContext, session: AccountSession, age: 
 
   const authName = (provider: IdentityProvider): string => options.providers?.authName?.[provider] ?? provider;
 
-  /** Which of Apple, Google and the email code an Auth provider name is. */
   const methodOf = (provider: unknown): SignInMethod | null => {
     if (provider === 'email') return 'email';
     for (const candidate of ['apple', 'google'] as const) if (authName(candidate) === provider) return candidate;
     return null;
   };
 
-  /** The account's methods as the server lists them, or null. */
   const parseMethods = (data: unknown): SignInMethodEntry[] | null => {
     if (!Array.isArray(data)) return null;
     return (data as { id?: unknown; provider?: unknown; email?: unknown }[]).flatMap((identity) => {
@@ -63,11 +49,6 @@ export function createSignIn(ctx: ServiceContext, session: AccountSession, age: 
     });
   };
 
-  /**
-   * After Auth signed in: opens the account. Its server record governs its
-   * eligibility, and required platform checks still run on this device: the
-   * gate becomes Active, or Age unresolved or Age ineligible.
-   */
   const finishSignIn = async (supabase: SupabaseClient): Promise<boolean> => {
     const { data, error } = await supabase.rpc('current_account');
     const account = data as { account_id?: unknown; currency?: unknown; deletion_deadline?: unknown } | null;
@@ -79,7 +60,6 @@ export function createSignIn(ctx: ServiceContext, session: AccountSession, age: 
     age.signedIn();
     heldCredential = null;
     const signal = await age.ageSignals.check({ interactive: false }).catch(() => UNAVAILABLE);
-    // A deletion-scheduled account opens locked: signing in never cancels it.
     const deletionDeadline = instant(account.deletion_deadline);
     const remembered = withEligibility(
       {
@@ -92,7 +72,6 @@ export function createSignIn(ctx: ServiceContext, session: AccountSession, age: 
       afterSignal({ eligibility: record }, signal),
     );
     await ctx.writeCredentials(async () => {
-      // An earlier session's status credential (or a deleted account's): this session registers afresh.
       await ctx.credentials.removeItem(statusKey(backend.name));
       await ctx.credentials.removeItem(deletedKey(backend.name));
       await ctx.remember(remembered);
@@ -102,11 +81,6 @@ export function createSignIn(ctx: ServiceContext, session: AccountSession, age: 
     return true;
   };
 
-  /**
-   * Asks the provider who the player is, ending in an ID token minted for a
-   * fresh nonce: from the native sheet, or from Apple's web page in the
-   * system browser.
-   */
   const obtainCredential = async (provider: IdentityProvider, nonce = ctx.randomHex(32)): Promise<ProviderCredential | 'canceled' | 'failed'> => {
     const settings = options.providers;
     const route = settings?.ports.route[provider] ?? 'unavailable';
@@ -121,14 +95,6 @@ export function createSignIn(ctx: ServiceContext, session: AccountSession, age: 
     return browserCredential(provider, settings, nonce, hashedNonce);
   };
 
-  /**
-   * Apple's web flow, for Android. Apple posts its answer to the
-   * provider-callback function, which keeps the ID token under the flow's
-   * challenge and sends the browser back to this environment's callback URL
-   * with only the state. The token is redeemed with the verifier, which never
-   * leaves this device until then, so only the request that started the flow
-   * can collect it, and no token appears in any URL.
-   */
   const browserCredential = async (
     provider: IdentityProvider,
     { ports, appleWeb }: ProviderSettings,
@@ -152,7 +118,6 @@ export function createSignIn(ctx: ServiceContext, session: AccountSession, age: 
     await ctx.connect();
     const opened = await ports.openAuthSession(authorize, callbackUrl);
     if (opened.status === 'canceled') return 'canceled';
-    // Only this environment's callback, answering this flow.
     const [returnedTo, returnedQuery = ''] = opened.url.split('?', 2);
     const returned = parseQuery(returnedQuery);
     if (returnedTo !== callbackUrl || returned.state !== state) return 'failed';
@@ -164,12 +129,6 @@ export function createSignIn(ctx: ServiceContext, session: AccountSession, age: 
     return { provider, idToken: redeemed.idToken, nonce, ...(typeof redeemed.code === 'string' && redeemed.code ? { code: { value: redeemed.code, flow: 'web' as const, redirectUri } } : {}) };
   };
 
-  /**
-   * Hands the provider's authorization code, when it gave one, to the server,
-   * which keeps the revocable grant it is exchanged for so permanent deletion
-   * can revoke it. Best effort: nothing waits on it, and without it deletion
-   * reports a provider exception.
-   */
   const keepGrant = async (credential: ProviderCredential): Promise<void> => {
     if (!credential.code) return;
     await ctx
@@ -181,7 +140,6 @@ export function createSignIn(ctx: ServiceContext, session: AccountSession, age: 
       .catch(() => null);
   };
 
-  /** Binds the age step's assertion to the credential's identity (bind-provider-assertion). */
   const bindAssertion = async (
     credential: ProviderCredential,
     ageAssertion: { readonly token: string },
@@ -199,15 +157,12 @@ export function createSignIn(ctx: ServiceContext, session: AccountSession, age: 
     return 'failed';
   };
 
-  /** Signs in to Auth with a provider credential; Auth checks its issuer, audience, signature, expiry and nonce. */
   const signInWithIdToken = async (supabase: SupabaseClient, credential: ProviderCredential) => {
     const { error } = await supabase.auth.signInWithIdToken({ provider: authName(credential.provider), token: credential.idToken, nonce: credential.nonce });
     if (!error) return 'signed-in' as const;
-    // The before-user-created hook refused a new Auth user: nobody has this identity.
     return /eligibility_assertion_required/.test(error.message) ? ('no-account' as const) : ('failed' as const);
   };
 
-  /** Sends a code (request-code): Create needs a current eligibility assertion. */
   const sendCode = async ({ email, intent }: { readonly email: string; readonly intent: CodeIntent }): Promise<CodeRequestResult> => {
     const held = age.currentAssertion();
     if (intent === 'create' && !held) return { status: 'age-required' };
@@ -221,11 +176,6 @@ export function createSignIn(ctx: ServiceContext, session: AccountSession, age: 
     }
   };
 
-  /**
-   * An ID token for one of the provider's identities, for a function acting
-   * for the player: minted for a nonce the server issued to this session for
-   * this proof alone, so no earlier sign-in's token can stand in for it.
-   */
   const providerProof = async (provider: IdentityProvider) => {
     const nonce = await ctx.operation('issue_proof_nonce_v1', undefined, 'restricted');
     if (typeof nonce !== 'string') return 'failed' as const;
@@ -293,7 +243,6 @@ export function createSignIn(ctx: ServiceContext, session: AccountSession, age: 
         let credential = kept ?? (await obtainCredential(provider));
         if (typeof credential === 'string') return { status: credential };
         let bound = await bindAssertion(credential, ageAssertion);
-        // The token Sign in found has expired since: ask the provider again, once.
         if (bound === 'invalid-token' && kept) {
           credential = await obtainCredential(provider);
           if (typeof credential === 'string') return { status: credential };
@@ -307,13 +256,10 @@ export function createSignIn(ctx: ServiceContext, session: AccountSession, age: 
         const supabase = await ctx.connect();
         const signedIn = await signInWithIdToken(supabase, credential);
         if (signedIn === 'no-account') {
-          // The assertion ran out between binding and Auth creating the user.
           age.dropAssertion();
           return { status: 'age-required' };
         }
         if (signedIn === 'failed') return { status: 'failed' };
-        // Whether Auth made a user with this assertion, or returned one that already
-        // existed (verified same-email linking): the server knows, never an email comparison.
         const created = (await supabase.rpc('account_created_by', { assertion: ageAssertion.token })).data === true;
         if (!(await finishSignIn(supabase))) return { status: 'failed' };
         await keepGrant(credential);
@@ -327,7 +273,6 @@ export function createSignIn(ctx: ServiceContext, session: AccountSession, age: 
   return { api, sendCode, providerProof, keepGrant, parseMethods, methodOf };
 }
 
-/** A query string, without the leading "?". (Hermes has no full URL implementation, so URLs are built by hand.) */
 function queryString(params: Record<string, string>): string {
   return Object.entries(params)
     .map(([name, value]) => `${encodeURIComponent(name)}=${encodeURIComponent(value)}`)
@@ -342,7 +287,6 @@ function parseQuery(query: string): Record<string, string> {
     try {
       out[decodeURIComponent(name.replace(/\+/g, ' '))] = decodeURIComponent(value.replace(/\+/g, ' '));
     } catch {
-      // A malformed pair says nothing.
     }
   }
   return out;
