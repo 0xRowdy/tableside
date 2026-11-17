@@ -103,6 +103,8 @@ describe('a recorded database', () => {
     const { store } = session;
     expect(await store.readAttemptRecords()).toEqual(stored(database, 'challenge_attempt_records'));
     expect(await store.readPreference(LAST_SETUP)).toBe((database.rows.device_preferences ?? []).find((row) => row.key === LAST_SETUP)?.value);
+    // #143
+    expect(await store.readLessonEvents()).toEqual(stored(database, 'lesson_progress_events'));
 
     const base = substituteAdapters({ clock: new FakeClock(undefined, true) });
     const service = new TrainingService({ ...base, store, device: session.installationId, owner: session.accountId });

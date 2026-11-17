@@ -88,6 +88,7 @@ export class TrainingService {
   private readonly listeners = new Set<() => void>();
 
   private readonly lessons: readonly Lesson[];
+  private lessonChanges = 0;
 
   constructor(
     private readonly adapters: TrainingAdapters,
@@ -99,6 +100,8 @@ export class TrainingService {
   }
 
   snapshot = (): TrainingSnapshot => this.current;
+
+  lessonRevision = (): number => this.lessonChanges;
 
   subscribe = (listener: () => void): (() => void) => {
     this.listeners.add(listener);
@@ -228,6 +231,8 @@ export class TrainingService {
       event,
       recordedAt: this.adapters.clock.now(),
     });
+    this.lessonChanges++;
+    this.notify();
     const progress = await this.progressOf(lesson);
     return viewOf(lesson, progress, progress.bookmark ?? 1, null);
   }
@@ -240,6 +245,10 @@ export class TrainingService {
     } else {
       this.current = attempt;
     }
+    this.notify();
+  }
+
+  private notify(): void {
     for (const listener of this.listeners) listener();
   }
 }
