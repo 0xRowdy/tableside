@@ -1,4 +1,4 @@
-// Spec 3 Lessons and worked examples (#48), Content requirements (conversion), Amendment 1 B2, C11, Amendment 2 §3; #153
+// Spec 3 Lessons and worked examples (#48), Amendment 1 B2, C11, Amendment 2 §3; #153
 import { describe, expect, it } from 'vitest';
 
 import { CHALLENGE_LESSONS, LESSONS, lessonProblems, type Lesson } from '../src';
@@ -19,7 +19,6 @@ describe('counting lessons', () => {
       ['True-count conversion', 'blackjack', 1, 1],
       ['Table counting', 'blackjack', 1, 1],
     ]);
-    // Every worked example replays through the engine here.
     expect(lessonProblems(IDS.map(lesson))).toEqual([]);
     expect(lessonProblems(LESSONS)).toEqual([]);
     expect(LESSONS.filter((candidate) => candidate.content === null)).toEqual([]);
@@ -40,8 +39,9 @@ describe('counting lessons', () => {
     for (const fact of ['nearest half deck', 'go up', 'Never use less than half a deck', '+7 with 2 decks left is +3.5, which becomes +3', '−7 with 2 decks left is −3.5, which becomes −3, not −4']) {
       expect(conversion).toContain(fact);
     }
-    expect(conversion).toContain('Blackjack Apprenticeship’s example divides −7 by 2 decks and gets −3');
-    expect(conversion).toContain('Wizard of Odds’ example rounds 7 ÷ 4 = 1.75 up to 2');
+    expect(conversion).toContain('Blackjack Apprenticeship’s example divides −7 by 2 decks and gets −3, which matches Tableside, but the page doesn’t say how to round');
+    expect(conversion).not.toMatch(/Apprenticeship truncates/);
+    expect(conversion).toContain('its example rounds 7 ÷ 4 = 1.75 up to 2 to keep it simple; Tableside’s convention gives +1 there');
     expect(conversion).toContain('For hard 13 against a 2, Tableside teaches: stand at 0 or higher, and hit below that.');
     expect(conversion).toContain('tie rule and teaching-continuation rule');
     const example = lesson('true-count-conversion').content!.workedExample!;
@@ -51,7 +51,7 @@ describe('counting lessons', () => {
   it('explain in the table lesson that showing the count in Check marks the attempt assisted permanently', () => {
     const table = text('table-counting');
     expect(table).toContain('In Check, showing the count marks the whole attempt assisted, permanently, even if you hide it again.');
-    for (const fact of ['Observe', 'Play', 'N = 1', 'every 10 rounds', 'turned over', 'starts again at 0']) expect(table).toContain(fact);
+    for (const fact of ['Observe', 'Play option', 'coming in a later update', 'N = 1', 'every 10 rounds', 'turned over', 'starts again at 0']) expect(table).toContain(fact);
   });
 
   // Spec 3 gate 9; Amendment 1 C11

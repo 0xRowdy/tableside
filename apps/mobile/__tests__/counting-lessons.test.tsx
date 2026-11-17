@@ -1,4 +1,4 @@
-// Spec 3 Testing Decisions › Seam 3; Lessons and worked examples (#48), Handoff, Entry points; S3-12 l8pMS, aJV2y, hGHha; Amendment 2 §3; #153
+// Spec 3 Seam 3; Lessons › Handoff, Entry points; S3-12 aJV2y; Amendment 2 §3; #153
 
 import { cleanup, fireEvent, screen, within } from '@testing-library/react-native';
 import { renderRouter } from 'expo-router/testing-library';
@@ -39,7 +39,7 @@ const store = () => mockStore as MemoryTrainingStore;
 const header = (name: string | RegExp) => screen.findByRole('header', { name });
 const button = (name: string | RegExp) => screen.getByRole('button', { name });
 
-// Opens a lesson from its link on the Counting tab (PDCaD) and steps to the given step.
+// Spec 3 S3-01 PDCaD
 async function openLesson(link: string, title: string, step: number) {
   await renderRouter('./src/app', { initialUrl: '/counting' });
   await header('Counting');
@@ -61,7 +61,7 @@ describe('counting lessons', () => {
   }, 180_000);
 
   describe('worked examples', () => {
-    // S3-12 aJV2y; Amendment 2 §3
+    // Spec 3 S3-12 aJV2y; Amendment 2 §3
     it('conversion gives the running count and decks remaining, and answers "truncate toward zero"', async () => {
       await openExample('Lesson: true-count conversion', 'True-count conversion', 3);
       expect(screen.getByLabelText('Running count: +7')).toBeOnTheScreen();
@@ -151,7 +151,7 @@ describe('counting lessons', () => {
     expect([await store().findUnfinishedAttempt(), await store().readAttemptRecords()]).toEqual([null, []]);
   });
 
-  // #134, #135: the lesson opens from a Learn question, and leaving the Counting tab suspends the attempt
+  // #134, #135
   it('opens the conversion lesson from a Learn explanation and suspends the attempt until the learner returns', async () => {
     await renderRouter('./src/app', { initialUrl: '/counting' });
     await header('Counting');

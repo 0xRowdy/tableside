@@ -96,7 +96,6 @@ describe('lessons', () => {
   });
 
   it('list all 24 in their five groups, in any order, with App orientation open to start', async () => {
-    // A slot whose content isn't written yet stays listed, disabled.
     servedLessons().splice(0, Infinity, ...actualLessons().map((lesson) => (lesson.id === 'card-values' ? { ...lesson, content: null } : lesson)));
     await openCatalog();
     expect(screen.getByText('Open any lesson, in any order. Finishing one just marks it completed: no scores, badges or locks.')).toBeOnTheScreen();

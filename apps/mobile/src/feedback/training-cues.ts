@@ -17,7 +17,7 @@ export const EXAMPLE_CUES: Readonly<Record<WorkedExample['kind'], { readonly sho
   'card-value': { shown: CONTENT_SHOWN_CUE, answer: (correct) => [learnAnswerCue(correct)] },
   'running-count': { shown: CONTENT_SHOWN_CUE, answer: (correct) => [learnAnswerCue(correct)] },
   conversion: { shown: CONTENT_SHOWN_CUE, answer: (correct) => [learnAnswerCue(correct)] },
-  // A table running-count prompt plays the checkpoint cue (cue 11), as in a table Learn attempt.
+  // Spec 3 Audio and haptics (cue 11 at a table checkpoint)
   'table-count': { shown: 'checkpoint-due', answer: (correct) => [learnAnswerCue(correct)] },
   'strategy-step': {
     shown: null,

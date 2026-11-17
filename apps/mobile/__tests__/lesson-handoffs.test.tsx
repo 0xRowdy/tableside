@@ -198,7 +198,6 @@ describe('lesson handoffs', () => {
 
 describe('lesson entry points', () => {
   it('the Counting tab offers the lesson beside each category (PDCaD), opening it by identity', async () => {
-    // A lesson whose content isn't written yet is offered disabled.
     servedLessons().splice(0, Infinity, ...servedLessons().map((lesson) => (lesson.id === 'table-counting' ? { ...lesson, content: null } : lesson)));
     await renderRouter('./src/app', { initialUrl: '/counting' });
     await header('Counting');

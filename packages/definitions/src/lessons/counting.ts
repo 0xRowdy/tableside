@@ -1,4 +1,4 @@
-// Spec 3 Lessons and worked examples (#48), Content requirements (conversion), Amendment 1 B2, B3, C11, Amendment 2 §3; #153
+// Spec 3 Lessons and worked examples (#48), Amendment 1 B2, B3, C11, Amendment 2 §3; #153
 // docs/research/counting-lessons.md
 import type { ConversionExplanation, HiLoExplanation, RunningCountExplanation, TableRunningExplanation } from '@tableside/engine';
 
@@ -44,8 +44,6 @@ if (!THIRTEEN_V2 || THIRTEEN_V2.threshold !== 0) throw new Error('the conversion
 
 const [FIRST_CHECKPOINT, SECOND_CHECKPOINT, THIRD_CHECKPOINT, LAST_CHECKPOINT] = RUNNING_COUNT_CONTENT.checkpoints;
 
-// --- Card values ---
-
 const ACE: HiLoExplanation = { kind: 'hi-lo-value', rank: 1, value: -1 };
 export const CARD_VALUES_EXAMPLE: CardValueExample = {
   kind: 'card-value',
@@ -68,7 +66,7 @@ export const CARD_VALUES_LESSON = lesson('card-values', 'Card values', 'The Hi-L
       'Two cards catch people out. An ace counts −1, with the tens, even though it can be worth 1 or 11 in a hand. Jacks, queens and kings all count −1, the same as a 10.',
     ]),
     step('The card values challenge', [
-      `The challenge shows ${CARD_VALUES_CONTENT.length} cards, one at a time, with every rank appearing at least once. You answer +1, 0 or −1 for each.`,
+      `The challenge shows ${CARD_VALUES_CONTENT.length} cards, one at a time, with every rank appearing at least once, and you answer +1, 0 or −1 for each. The length is Tableside’s own practice setting.`,
       'Learn tells you straight away whether you were right and lets you try the card again; Check keeps every answer hidden until the results. In both, only your first answer to a card is scored.',
     ]),
   ],
@@ -76,8 +74,6 @@ export const CARD_VALUES_LESSON = lesson('card-values', 'Card values', 'The Hi-L
   handoffs: [{ kind: 'learn-challenge', category: 'card-values' }],
   sources: [SOURCE.hiLoValues, SOURCE.bjaValues],
 });
-
-// --- Running count ---
 
 const MINUS_TWO_THEN_THREE: RunningCountExplanation = { kind: 'running-count', rank: 3, value: 1, before: -2, count: -1 };
 export const RUNNING_COUNT_EXAMPLE: RunningCountExample = {
@@ -104,19 +100,17 @@ export const RUNNING_COUNT_LESSON = lesson('running-count', 'Running count', 'Ad
     step('The running count challenge', [
       `The challenge deals ${RUNNING_COUNT_CONTENT.length} cards, one at a time, from a shuffled ${RUNNING_COUNT_CONTENT.decks}-deck shoe, starting from 0.`,
       `In Learn you enter the count after every card and see right away whether it’s right. In Check you enter it only at four checkpoints, after cards ${FIRST_CHECKPOINT}, ${SECOND_CHECKPOINT}, ${THIRD_CHECKPOINT} and ${LAST_CHECKPOINT}, and see how you did when the results come up. Each checkpoint is graded against every card shown so far, so a slip early on carries forward until you correct it.`,
-      'You can go at your own pace, or have the next card appear automatically every 3, 2 or 1 seconds. These lengths, checkpoints and paces are Tableside’s own practice settings.',
+      'You can go at your own pace, or have the next card appear automatically every 3, 2 or 1 seconds. The length, checkpoints and paces are Tableside’s own practice settings.',
     ]),
     step('Show count and assisted attempts', [
-      'A Show count switch lets you see the count of the cards shown so far. It starts hidden. In Learn you can use it freely.',
-      'In Check, the switch tells you before you use it that showing the count marks the whole attempt assisted. That can’t be undone: hiding the count again changes nothing. An assisted attempt is recorded and compared only with other assisted attempts, and showing the count never uses an attempt.',
+      'The Show running count switch shows the count of the cards shown so far. It starts hidden. In Learn you can use it freely; Learn notes whether you did.',
+      'In Check, the switch tells you before you use it that showing the count marks the whole attempt assisted. That can’t be undone: hiding the count again changes nothing. An assisted attempt still gets full results, but it’s kept apart from unassisted records, and showing the count never uses another attempt. This assistance rule is Tableside’s own.',
     ]),
   ],
   workedExample: RUNNING_COUNT_EXAMPLE,
   handoffs: [{ kind: 'learn-challenge', category: 'running-count' }],
   sources: [SOURCE.bjaRunning],
 });
-
-// --- True-count conversion ---
 
 const SEVEN_OVER_TWO: ConversionExplanation = { kind: 'conversion', running: 7, decks: 2, trueCount: 3, exact: false };
 const NEGATIVE_TOO = 'Truncation goes toward zero for negatives too: −7 ÷ 2 = −3.5 becomes −3, not −4.';
@@ -135,23 +129,23 @@ export const CONVERSION_EXAMPLE: ConversionExample = {
 export const CONVERSION_LESSON = lesson('true-count-conversion', 'True-count conversion', 'Divide by decks remaining, then truncate toward zero', {
   steps: [
     step('Why convert', [
-      'The same running count means more when fewer cards are left. The true count divides the running count by the decks still in the shoe, so the number means the same thing early and late in a shoe. Tableside’s index plays and bet schedule use the true count.',
+      'The true count is the running count per deck still to be dealt: the running count divided by the decks remaining. Tableside’s index plays and its bet schedule use the true count, never the running count on its own.',
     ]),
     step('Estimate the decks remaining', [
       'Judge the cards still in the shoe, not the discard tray, to the nearest half deck. When it’s exactly between two half decks, go up. Never use less than half a deck.',
-      'So 130 cards left is 2½ decks, and with only a few cards left you still divide by ½. In challenges Tableside gives you this number, worked out the same way from the cards actually left.',
+      'So 130 cards left is 2½ decks, 117 cards (exactly between 2 and 2½) is 2½, and with only a few cards left you still divide by ½. At the table challenge Tableside shows you this number, worked out this way from the cards actually left; the conversion challenge gives it to you directly. This estimate is Tableside’s convention.',
     ]),
     step('Divide, then truncate toward zero', [
       'Divide the running count by the decks remaining and drop any fraction, toward zero. +7 with 2 decks left is +3.5, which becomes +3. −7 with 2 decks left is −3.5, which becomes −3, not −4.',
-      'Truncating is Tableside’s convention, not a rounding rule: +3.9 is still +3, and −0.5 is 0.',
+      'Truncating is Tableside’s convention, not rounding: −0.5 becomes 0, and +1.75 becomes +1.',
     ], { source: SOURCE.bjaTrue }),
     step('Other sources round differently', [
-      'Introductory examples elsewhere don’t always follow this convention, or don’t say what to do with a fraction. Blackjack Apprenticeship’s example divides −7 by 2 decks and gets −3, which matches truncation but doesn’t state a rule for fractions. Wizard of Odds’ example rounds 7 ÷ 4 = 1.75 up to 2 to keep things simple; Tableside’s convention gives +1 there.',
+      'Introductory examples elsewhere follow other conventions, or don’t say what to do with a fraction. Blackjack Apprenticeship’s example divides −7 by 2 decks and gets −3, which matches Tableside, but the page doesn’t say how to round a fraction or how finely to estimate the decks. Wizard of Odds says a rough estimate will do, and its example rounds 7 ÷ 4 = 1.75 up to 2 to keep it simple; Tableside’s convention gives +1 there.',
       'Tableside uses one convention everywhere, so the count you practice is the count you’re graded on.',
     ], { source: SOURCE.wizardTrue }),
     step('Why it matters at zero', [
       `Some index plays have an index of 0. For hard 13 against a 2, Tableside teaches: ${indexRule(THIRTEEN_V2)}. With a running count of −1 and 2 decks left, −0.5 truncates to 0, so you stand. Rounding −0.5 to −1 would have you hit.`,
-      'Tableside worked out its own index plays under this convention. Together with its tie rule and teaching-continuation rule, that is why some of its index numbers sit one count away from published charts. The differences come from how Tableside sets its own values, so they don’t make the published charts wrong; the Basic with deviations lesson lists them.',
+      'Tableside worked out its own index plays under this convention. Together with its tie rule and teaching-continuation rule, that is why some of its index numbers differ from published charts. The differences come from how Tableside sets its own values, so they don’t make the published charts wrong; the Basic with deviations lesson lists them.',
     ], { source: SOURCE.certified }),
     step('The conversion challenge', [
       `The challenge asks ${CONVERSION_CONTENT.length} questions. Each gives a running count from −${CONVERSION_CONTENT.maxRunningCount} to +${CONVERSION_CONTENT.maxRunningCount} and the decks remaining, in half decks from ½ to ${CONVERSION_CONTENT.maxDecks}. Every set includes a zero count, both signs, a division that comes out exact, and fractions that need truncating each way.`,
@@ -162,8 +156,6 @@ export const CONVERSION_LESSON = lesson('true-count-conversion', 'True-count con
   handoffs: [{ kind: 'learn-challenge', category: 'conversion' }],
   sources: [SOURCE.bjaTrue, SOURCE.wizardTrue, SOURCE.certified],
 });
-
-// --- Table counting ---
 
 // Spec 3 Count checkpoints (table): the hole card counts only once it is turned over
 const ROUND_ONE: TableRunningExplanation = {
@@ -203,19 +195,20 @@ export const TABLE_COUNTING_EXAMPLE: TableCountExample = {
 export const TABLE_COUNTING_LESSON = lesson('table-counting', 'Table counting', 'Count a live table: checkpoints, Observe and Play, assistance', {
   steps: [
     step('Counting at a table', [
-      `The table challenge deals ${TABLE_CONTENT.rounds} rounds of six-deck blackjack. You choose the rules, how deep into the shoe to deal, and up to four other players. Every card you can see counts, including the other players’ cards.`,
+      `The table challenge deals ${TABLE_CONTENT.rounds} rounds of six-deck blackjack from a fresh shoe, starting at 0. You choose the rules, how deep into the shoe to deal, and up to four other players. Every card you can see counts, including the other players’ cards.`,
       'The dealer’s face-down card counts only once it is turned over. A dealer who checks for blackjack and doesn’t have it tells you nothing about that card’s value.',
     ], { source: SOURCE.bjaRunning }),
-    step('Observe and Play', [
-      'In Observe, a simulated player plays your seat at the table minimum and you keep the count. In Play, you also make the playing decisions for your seat. Tableside suggests starting with Observe.',
+    step('Observe, and Play later', [
+      'In Observe, a simulated player plays your seat at the table minimum and you only keep the count. Tableside suggests starting table counting here.',
+      'A Play option, where you also make the playing decisions for your seat, is coming in a later update.',
     ]),
     step('Checkpoints and N', [
       'N sets how often you’re asked, from every round up to every 10 rounds. At N = 1 you enter the running and true count before each bet, and the running count after each round. Above 1, you enter both after every N rounds, and after the last rounds if they don’t make a full block.',
-      'For the true count, Tableside shows the decks remaining, estimated from the cards actually left in the shoe as in the conversion lesson. If the shoe is reshuffled, the round finishes first and the count starts again at 0.',
+      'For the true count, Tableside shows the decks remaining, estimated from the cards actually left in the shoe as in the conversion lesson. When the cut card is reached, the round finishes, the shoe is reshuffled and the count starts again at 0. This checkpoint schedule is Tableside’s own.',
     ]),
     step('Show count and assistance', [
-      'As in the running count challenge, a Show count switch shows the count of the cards exposed so far. It starts hidden.',
-      'In Check, showing the count marks the whole attempt assisted, permanently, even if you hide it again. Assisted attempts are recorded separately and compared only with other assisted attempts. In Learn, every attempt counts as assisted, because Learn shows you the answers.',
+      'As in the running count challenge, the Show running count switch shows the count of the cards exposed so far. It starts hidden.',
+      'In Check, showing the count marks the whole attempt assisted, permanently, even if you hide it again. An assisted attempt still gets full results, but it’s kept apart from unassisted records. A Learn attempt is always assisted, because Learn shows you the answers.',
     ]),
     step('Learn and Check', [
       'Learn shows whether each count is right and explains it, and you try again or show the answer before moving on. Check records your counts and shows them only in the results. In both, only your first answer at each checkpoint is scored, and the running and true counts are scored separately.',

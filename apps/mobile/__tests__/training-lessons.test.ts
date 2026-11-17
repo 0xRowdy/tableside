@@ -105,7 +105,6 @@ describe('the Training service lessons', () => {
     ]);
   });
 
-  // A lesson slot whose content isn't written yet stays listed but can't be opened.
   it('lists an unwritten lesson without steps and refuses to open it', async () => {
     const { service } = setup({ lessons: LESSONS.map((lesson) => (lesson.id === 'card-values' ? { ...lesson, content: null } : lesson)) });
     const catalog = await service.listLessons();

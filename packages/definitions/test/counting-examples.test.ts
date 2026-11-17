@@ -99,7 +99,6 @@ describe('counting worked examples', () => {
   });
 
   it('fail the build when the scripted round is not what the table deals', () => {
-    // A hard 16 against a 5 stands, so a third card for the seat is never dealt.
     const hit = { ...TABLE, seat: [...TABLE.seat, { rank: 2, suit: 'clubs' } as const] };
     expect(workedExampleProblems(hit, 1)[0]).toMatch(/^worked example: the table deals the seat 10♠ 6♥ and the dealer 5♣ K♦ /);
   });

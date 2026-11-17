@@ -21,7 +21,7 @@ import {
 import { CONVERSION_CONTENT, DEFAULT_TABLE_SETUP, observeSetup, RUNNING_COUNT_CONTENT, TABLE_CONTENT } from './challenges';
 import type { ScriptedChoice } from './worked-examples';
 
-// The frame's two given tiles (S3-12 aJV2y): the running count and the decks remaining.
+// Spec 3 S3-12 aJV2y; #144
 export interface ConversionExample {
   readonly kind: 'conversion';
   readonly step: number;
@@ -30,7 +30,7 @@ export interface ConversionExample {
   readonly choices: readonly ScriptedChoice<number, ConversionExplanation>[];
 }
 
-// The given tile is the running count before the card; the card is shown beside it.
+// Spec 3 Challenge content › Running count
 export interface RunningCountExample {
   readonly kind: 'running-count';
   readonly step: number;
@@ -39,12 +39,11 @@ export interface RunningCountExample {
   readonly choices: readonly ScriptedChoice<number, RunningCountExplanation>[];
 }
 
-// One round at the default Observe table with no other players, N = 1: the question is the running count after the round.
+// Spec 3 Challenge content › Table, Count checkpoints (table)
 export interface TableCountExample {
   readonly kind: 'table-count';
   readonly step: number;
   readonly seat: readonly ChallengeCard[];
-  // Up card, hole card, then the dealer's draws.
   readonly dealer: readonly ChallengeCard[];
   readonly choices: readonly ScriptedChoice<number, TableRunningExplanation>[];
 }
@@ -84,7 +83,6 @@ function feedbackOf(view: ChallengeView): LearnFeedback {
   return view.feedback;
 }
 
-// Answers a question the replay already knows the answer to, and moves on.
 function answerAndMove(state: ChallengeState, value: number): ChallengeState {
   const answered = commit(state, { kind: 'answer', value });
   if (!feedbackOf(readChallengeView(answered)).correct) throw new Error(`the replay's own answer ${answerText(value)} was marked wrong`);
@@ -97,7 +95,6 @@ function replayConversion(example: ConversionExample, answer: number): LearnFeed
   return feedbackOf(readChallengeView(commit(stacked, { kind: 'answer', value: answer })));
 }
 
-// The running count before the card comes from that many 2s (counting up) or kings (counting down).
 function replayRunningCount(example: RunningCountExample, answer: number): LearnFeedback {
   const begun = commit(start(RUNNING_COUNT_CONTENT), { kind: 'begin' });
   const step = Math.sign(example.before);
@@ -110,7 +107,7 @@ function replayRunningCount(example: RunningCountExample, answer: number): Learn
   return feedbackOf(readChallengeView(commit(state, { kind: 'answer', value: answer })));
 }
 
-// Spec 3 Challenge content › Table; the deal order is seat, dealer up, seat, dealer hole, then draws.
+// Spec 3 Challenge content › Table; #153
 function stackedTable(example: TableCountExample): ChallengeState {
   const [seatFirst, seatSecond, ...seatDraws] = example.seat;
   const [up, hole, ...dealerDraws] = example.dealer;
@@ -141,7 +138,6 @@ function replayTable(example: TableCountExample, answer: number): LearnFeedback 
       }
       return feedbackOf(readChallengeView(commit(state, { kind: 'answer', value: answer })));
     }
-    // Before round 1's bet the count is 0, and so is the true count.
     state = view.phase === 'question' ? answerAndMove(state, 0) : commit(state, { kind: 'next-item' });
   }
 }
@@ -172,7 +168,7 @@ const REPLAY = {
   'table-count': replayTable,
 } as const satisfies Record<CountingExample['kind'], (example: never, answer: number) => LearnFeedback>;
 
-// Spec 3 Testing Decisions › Build-time check: replay every choice through the engine with the scripted content stacked into state
+// Spec 3 Testing Decisions › Build-time check
 export function countingExampleProblems(example: CountingExample): readonly string[] {
   const problems: string[] = [];
   const seen = new Set<number>();
@@ -193,7 +189,6 @@ export function countingExampleProblems(example: CountingExample): readonly stri
       engine = replay(example, answer);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      // A script the table can't deal fails the same way for every choice: report it once.
       if (message.startsWith('the table deals')) return [`worked example: ${message}`];
       problems.push(`${label}: does not replay through the engine: ${message}`);
       continue;

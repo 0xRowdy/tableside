@@ -1,4 +1,4 @@
-// Spec 3 S3-12 aJV2y; Lessons › Structure (worked examples); Amendment 2 §3 ("truncate toward zero"); #153
+// Spec 3 S3-12 aJV2y; Lessons › Structure (worked examples); Amendment 2 §3; #153
 import type { ConversionExplanation, RunningCountExplanation } from '@tableside/engine';
 
 import { rankName, signed } from '@/play/blackjack-text';
@@ -14,10 +14,9 @@ export const SEAT_LABEL = 'Your seat (Observe)';
 export const DEALER_LABEL = 'Dealer';
 export const roundLead = (round: number, before: number) => `Round ${round} has just finished, with the dealer’s hole card turned over. The count was ${signed(before)} before the round.`;
 
-// The frame prints the division without a plus sign: "7 ÷ 2 = 3.5".
 const plain = (value: number) => (value < 0 ? `−${-value}` : String(value));
 
-// S3-12 aJV2y: "7 ÷ 2 = 3.5. Truncate toward zero: +3."
+// Spec 3 S3-12 aJV2y; Amendment 2 §3
 export function conversionExampleText({ running, decks, trueCount, exact }: ConversionExplanation): string {
   const division = `${plain(running)} ÷ ${decksText(decks)}`;
   if (exact) return `${division} = ${plain(trueCount)} exactly: ${signed(trueCount)}.`;

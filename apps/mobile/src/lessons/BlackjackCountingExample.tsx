@@ -134,7 +134,7 @@ export function BlackjackCountingExample(props: Props<CountingExample>) {
   return <TableCount {...props} example={example} />;
 }
 
-// The scripted response to a pick: the engine's explanation in the challenge's own words, plus the script's note.
+// Spec 3 Lessons › Structure (worked examples render engine-format explanation facts)
 export function countingAnswer(example: CountingExample, picked: number): ScriptedAnswer {
   const { note } = example.choices[picked]!.response;
   if (example.kind === 'conversion') return { headline: conversionExampleText(example.choices[picked]!.response.explanation), detail: null, note };
