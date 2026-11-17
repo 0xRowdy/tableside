@@ -32,7 +32,7 @@ import { CRAPS_SPEC } from '../test/craps.cases';
 import { PASS_WITH_ODDS } from '../test/craps-strategy.fixtures';
 import { PI, ZERO } from '../test/fixtures';
 import type { RecordedBuild, RecordedChallenge, RecordedCheckpoint } from '../test/recorded';
-import { LEARN, seed } from '../test/challenge.fixtures';
+import { CHECK, LEARN, seed } from '../test/challenge.fixtures';
 import { TEST_COUNTING_SCHEDULE } from '../test/blackjack-strategy.fixtures';
 import { DOUBLING, FLAT_EVEN_MONEY } from '../test/strategy.fixtures';
 
@@ -141,6 +141,8 @@ const CHALLENGE_SCENARIOS: ChallengeScenario[] = [
   { name: 'card values Learn, created and not yet begun', specification: LEARN, random: seed(1), commands: [] },
   { name: 'card values Learn, a card waiting for its answer', specification: LEARN, random: seed(1), commands: [{ kind: 'begin' }, { kind: 'answer', value: 1 }, { kind: 'next-item' }] },
   { name: 'card values Learn, a wrong answer explained', specification: LEARN, random: seed(1), commands: [{ kind: 'begin' }, { kind: 'answer', value: 1 }, { kind: 'next-item' }, { kind: 'answer', value: 1 }] },
+  // #132
+  { name: 'card values Check, an answer recorded', specification: CHECK, random: seed(1), commands: [{ kind: 'begin' }, { kind: 'answer', value: 1 }, { kind: 'next-item' }, { kind: 'answer', value: 1 }] },
 ];
 
 function advanceAttempt(state: ChallengeState, command: ChallengeCommand): { state: ChallengeState; facts: readonly ChallengeFact[] } {

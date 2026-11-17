@@ -331,6 +331,8 @@ export {
   type ChallengeState,
   type ChallengeVariant,
   type ChallengeView,
+  type CheckChallengeView,
+  type LearnChallengeView,
   type HiLoExplanation,
   type HiLoValue,
   type ItemAnswers,

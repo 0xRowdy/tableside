@@ -1,10 +1,11 @@
-// Spec 3 Challenge content, Learn, Check and assistance, Scoring and review; #158
+// Spec 3 Challenge content, Learn, Check and assistance, Scoring and review; #158, #132
 import type { TestCase } from '@tableside/harness';
 
 import { advanceChallenge, canonicalJson, challengeAttemptRecord, challengeResults, ENGINE_VERSION, createChallenge, decodeChallengeCheckpoint, encodeChallengeCheckpoint, readChallengeView, type ChallengeState } from '../src';
 
-import { ANSWER, begun, LEARN, NEXT, RETRY, run, seed, SKIP, step } from './challenge.fixtures';
+import { ANSWER, begun, CHECK, checkView, LEARN, learnView, NEXT, RETRY, run, seed, SKIP, step } from './challenge.fixtures';
 import { throws } from './fixtures';
+import { expectCheckViewHides, revealingFields } from './information-hiding';
 
 const SEED_1_CARDS = ['5d', '7d', '10c', '2c', '7h', '2s', '11h', '4s', '6h', '11c', '12d', '9h', '2d', '6h', '2s', '1c', '9s', '8d', '3c', '13s'];
 // Spec 1 Game rules, Counting (Hi-Lo)
@@ -55,10 +56,10 @@ export const challengeCases: TestCase[] = [
   {
     name: 'challenge: Learn shows no reference while a card waits, then correctness, the reference and an explanation after the answer',
     run: (t) => {
-      const waiting = readChallengeView(step(begun(), ANSWER(1)));
+      const waiting = learnView(step(begun(), ANSWER(1)));
       t.equal(waiting.feedback?.correct, true);
       const second = step(step(begun(), ANSWER(1)), NEXT);
-      const question = readChallengeView(second);
+      const question = learnView(second);
       t.equal([question.phase, question.position, question.item, question.feedback, question.choices, question.legalCommands], [
         'question',
         2,
@@ -67,13 +68,13 @@ export const challengeCases: TestCase[] = [
         [1, 0, -1],
         ['answer', 'skip', 'end'],
       ]);
-      const wrong = readChallengeView(step(second, ANSWER(1)));
+      const wrong = learnView(step(second, ANSWER(1)));
       t.equal([wrong.phase, wrong.feedback, wrong.legalCommands], [
         'explanation',
         { entered: 1, correct: false, reference: 0, scored: true, explanation: { kind: 'hi-lo-value', rank: 7, value: 0 } },
         ['retry-item', 'next-item', 'end'],
       ]);
-      const retried = readChallengeView(run(second, [ANSWER(1), RETRY, ANSWER(0)]));
+      const retried = learnView(run(second, [ANSWER(1), RETRY, ANSWER(0)]));
       t.equal([retried.feedback?.correct, retried.feedback?.scored, retried.legalCommands], [true, false, ['next-item', 'end']]);
       t.equal(wrong.assisted, true);
     },
@@ -211,6 +212,121 @@ export const challengeCases: TestCase[] = [
         bad.map((spec) => throws(() => createChallenge(spec as never, seed(1)))),
         bad.map(() => 'ChallengeSpecificationError'),
       );
+    },
+  },
+  {
+    name: 'challenge Check: every phase shows only the exercise, legal choices and the attempt’s own entry; the review arrives when it ends',
+    run: (t) => {
+      let state = createChallenge(CHECK, seed(1));
+      const phases: string[] = [];
+      const visit = (label: string) => {
+        const view = readChallengeView(state);
+        if (!phases.includes(view.phase)) phases.push(view.phase);
+        expectCheckViewHides(t, label, view);
+        t.equal([label, view.assisted], [label, false]);
+      };
+      visit('created');
+      state = step(state, { kind: 'begin' });
+      SEED_1_HI_LO.forEach((value, index) => {
+        visit(`card ${index + 1} waiting`);
+        state = step(state, index % 3 === 2 ? SKIP : ANSWER(index % 2 === 0 ? value : (-value as -1 | 0 | 1)));
+        visit(`card ${index + 1} recorded`);
+        state = step(state, NEXT);
+      });
+      visit('ended');
+      t.equal(phases, ['ready', 'question', 'recorded', 'ended']);
+    },
+  },
+  {
+    name: 'challenge Check: a recorded answer shows the entry and nothing else, and offers only the next card or ending',
+    run: (t) => {
+      const recorded = readChallengeView(step(begun(CHECK), ANSWER(-1)));
+      t.equal(recorded, {
+        attemptId: 'attempt-1',
+        category: 'card-values',
+        variant: 'check',
+        phase: 'recorded',
+        sequence: 2,
+        legalCommands: ['next-item', 'end'],
+        length: 20,
+        position: 1,
+        item: { card: { rank: 5, suit: 'diamonds' } },
+        choices: [1, 0, -1],
+        entered: -1,
+        assisted: false,
+        results: null,
+      });
+      t.equal(checkView(step(begun(CHECK), SKIP)).entered, 'skip');
+      t.equal(advanceChallenge(step(begun(CHECK), ANSWER(1)), { sequence: 2, commandId: 'r', command: RETRY }).status, 'rejected');
+    },
+  },
+  {
+    name: 'challenge Check: right and wrong answers give the same views, legal commands and facts, apart from the entry itself',
+    run: (t) => {
+      const right = SEED_1_HI_LO.map((value) => ANSWER(value));
+      const wrong = SEED_1_HI_LO.map((value) => ANSWER(value === 1 ? -1 : 1));
+      const trace = (answers: readonly ReturnType<typeof ANSWER>[]) => {
+        let state = begun(CHECK);
+        return answers.flatMap((answer) => {
+          const out = [];
+          for (const command of [answer, NEXT]) {
+            const result = advanceChallenge(state, { sequence: state.sequence, commandId: `c-${state.sequence}`, command });
+            if (result.status !== 'committed') throw new Error(result.status);
+            state = result.state;
+            const { entered: _entered, results: _results, ...view } = checkView(state);
+            out.push({ view, facts: result.facts });
+          }
+          return out;
+        });
+      };
+      t.equal(trace(wrong), trace(right));
+    },
+  },
+  {
+    name: 'challenge Check: scores first answers and reviews every card with its entry or skip, reference and position (hand-computed)',
+    run: (t) => {
+      const commands = SEED_1_HI_LO.flatMap((_, index) => [index === 0 ? SKIP : ANSWER(1), NEXT]);
+      const results = challengeResults(run(begun(CHECK), commands));
+      t.equal([results?.ending, results?.metrics['card-values'], results?.assisted, results?.assistanceStep], ['completed', { correct: 8, total: 20 }, false, null]);
+      t.equal(results?.review.slice(0, 3), [
+        { kind: 'card-value', position: 1, card: { rank: 5, suit: 'diamonds' }, entered: 'skip', reference: 1 },
+        { kind: 'card-value', position: 2, card: { rank: 7, suit: 'diamonds' }, entered: 1, reference: 0 },
+        { kind: 'card-value', position: 3, card: { rank: 10, suit: 'clubs' }, entered: 1, reference: -1 },
+      ]);
+      t.equal(results?.review.length, 20);
+      const record = challengeAttemptRecord(run(begun(CHECK), commands), {
+        installation: 'device-1',
+        startedAt: 0,
+        endedAt: 1,
+        interrupted: false,
+        performanceMs: null,
+        meteringBasis: 'challenge-attempt',
+        allowancePolicyVersion: null,
+      });
+      t.equal([record.groupKey.variant, record.groupKey.assistanceClass, record.groupKey.countRevealed], ['check', 'unassisted-check', false]);
+    },
+  },
+  {
+    name: 'challenge: cards not on display never change the current view, in Learn or Check (no future cards, no history)',
+    run: (t) => {
+      for (const spec of [LEARN, CHECK]) {
+        const states = [run(begun(spec), [ANSWER(1), NEXT]), run(begun(spec), [ANSWER(1), NEXT, ANSWER(0)])];
+        for (const state of states) {
+          const others: ChallengeState = {
+            ...state,
+            items: state.items.map((item, index) => (index === state.position ? item : { card: { rank: item.card.rank === 13 ? 1 : 13, suit: 'spades' } })),
+          };
+          t.equal([spec.variant, readChallengeView(others)], [spec.variant, readChallengeView(state)]);
+        }
+      }
+    },
+  },
+  {
+    name: 'challenge Learn: the view carries correctness, the reference and an explanation once a card is answered',
+    run: (t) => {
+      const explained = readChallengeView(step(begun(), ANSWER(-1)));
+      t.equal(revealingFields(explained), ['view.feedback']);
+      t.equal(revealingFields(readChallengeView(begun())), []);
     },
   },
 ];
