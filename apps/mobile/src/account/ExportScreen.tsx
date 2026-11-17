@@ -3,9 +3,10 @@
 import type { AccountGate, ServerExport, SignInMethodEntry } from '@tableside/account';
 import { useFocusEffect } from 'expo-router';
 import { Archive, Smartphone } from 'lucide-react-native';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 
 import { Button } from '@/components/Button';
+import { usePolling } from '@/hooks/use-polling';
 import { Group, GroupLabel, ListRow, Note, SettingsScreen } from '@/settings/SettingsParts';
 
 import { useAccount } from './AccountProvider';
@@ -84,11 +85,7 @@ export function ExportScreen({ back }: { back: { label: string; onPress: () => v
     }, [reload, service]),
   );
 
-  useEffect(() => {
-    if (latest?.state !== 'preparing') return;
-    const timer = setInterval(() => void reload(), PREPARING_POLL_MS);
-    return () => clearInterval(timer);
-  }, [latest?.state, reload]);
+  usePolling(() => void reload(), PREPARING_POLL_MS, latest?.state === 'preparing');
 
   const confirmFirst = async (then: 'request' | 'download') => {
     const methods = await service.freshAuthentication.methods();

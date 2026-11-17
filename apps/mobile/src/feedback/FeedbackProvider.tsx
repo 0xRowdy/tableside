@@ -1,5 +1,7 @@
-import { createContext, useContext, useEffect, useState, useSyncExternalStore, type ReactNode } from 'react';
+import { createContext, useContext, useState, useSyncExternalStore, type ReactNode } from 'react';
 
+import { useFollow } from '@/hooks/use-follow';
+import { useLoaded } from '@/hooks/use-loaded';
 import { usePractice } from '@/practice/PracticeProvider';
 
 import { createDevicePorts } from './device-ports';
@@ -15,10 +17,8 @@ export function FeedbackProvider({ children }: { children: ReactNode }) {
     const ports = createDevicePorts();
     return new FeedbackService(ports, new DeviceSettings(ports.storage));
   });
-  useEffect(() => {
-    void service.settings.load();
-  }, [service]);
-  useEffect(() => followPractice(controller, service), [controller, service]);
+  useLoaded((feedback) => feedback.settings.load(), service);
+  useFollow(followPractice, controller, service);
   return <FeedbackContext.Provider value={service}>{children}</FeedbackContext.Provider>;
 }
 

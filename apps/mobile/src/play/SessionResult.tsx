@@ -3,11 +3,12 @@
 import { QUARANTINE_LIST } from '@tableside/definitions';
 import { isPlayCorrection, quarantineStatus, type QuarantineList, type StrategyDeparture } from '@tableside/engine';
 import { CircleCheck, Info, TriangleAlert } from 'lucide-react-native';
-import { useEffect, useState, type ReactNode } from 'react';
-import { AccessibilityInfo, StyleSheet, Text, View } from 'react-native';
+import { useState, type ReactNode } from 'react';
+import { StyleSheet, Text, View } from 'react-native';
 
 import { Button } from '@/components/Button';
 import { Screen } from '@/components/Screen';
+import { useAnnouncement } from '@/hooks/use-accessibility';
 import type { CompletedPracticeSession } from '@/practice/store';
 import { fonts, palette, radius, space, textScale } from '@/theme/tokens';
 
@@ -65,11 +66,9 @@ export function SessionResult({
   actions: ReactNode;
   quarantine?: QuarantineList;
 }) {
-  useEffect(() => {
-    AccessibilityInfo.announceForAccessibility(
-      `Session result. ${outcomeWord(record.netResult)}, net result ${speakSigned(record.netResult)}. Final cash-out ${formatUnits(record.finalCashOut)}. Max drawdown ${formatUnits(record.maxDrawdown)}.`,
-    );
-  }, [record]);
+  useAnnouncement(
+    `Session result. ${outcomeWord(record.netResult)}, net result ${speakSigned(record.netResult)}. Final cash-out ${formatUnits(record.finalCashOut)}. Max drawdown ${formatUnits(record.maxDrawdown)}.`,
+  );
 
   const status = quarantineStatus(record, quarantine);
 

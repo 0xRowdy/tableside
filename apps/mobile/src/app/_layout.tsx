@@ -4,7 +4,7 @@ import { useFonts } from 'expo-font';
 import { DarkTheme, Slot, ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect } from 'react';
+import { StyleSheet, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { AccountProvider } from '@/account/AccountProvider';
@@ -12,6 +12,13 @@ import { SetupPreferencesProvider } from '@/play/setup/SetupPreferencesProvider'
 import { palette } from '@/theme/tokens';
 
 SplashScreen.preventAutoHideAsync();
+
+let splashHidden = false;
+const hideSplash = () => {
+  if (splashHidden) return;
+  splashHidden = true;
+  void SplashScreen.hideAsync();
+};
 
 const theme = {
   ...DarkTheme,
@@ -35,19 +42,15 @@ export default function RootLayout() {
       <ThemeProvider value={theme}>
         <StatusBar style="light" />
         <AccountProvider>
-          <HideSplash />
-          <SetupPreferencesProvider>
-            <Slot />
-          </SetupPreferencesProvider>
+          <View style={styles.root} onLayout={hideSplash}>
+            <SetupPreferencesProvider>
+              <Slot />
+            </SetupPreferencesProvider>
+          </View>
         </AccountProvider>
       </ThemeProvider>
     </SafeAreaProvider>
   );
 }
 
-function HideSplash() {
-  useEffect(() => {
-    void SplashScreen.hideAsync();
-  }, []);
-  return null;
-}
+const styles = StyleSheet.create({ root: { flex: 1 } });

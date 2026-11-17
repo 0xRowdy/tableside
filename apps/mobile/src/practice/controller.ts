@@ -1,4 +1,5 @@
 // Spec 1 Practice controller and session lifecycle
+// docs/development.md Game rules spec 1 leaves open
 
 import {
   advanceActivity,
@@ -499,6 +500,8 @@ export class PracticeController {
       this.working = null;
       this.busy = false;
       this.publish();
+      // Spec 1 S1-09
+      if (this.current.status === 'completed') this.notify();
       if (this.pending || this.unsavedTime) this.scheduleRetry();
       if (this.resumeQueued) {
         this.resumeQueued = false;

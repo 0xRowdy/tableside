@@ -15,8 +15,8 @@ import {
   type BlackjackPermittedView,
   type Card,
 } from '@tableside/engine';
-import { useEffect, useMemo, useState } from 'react';
-import { AccessibilityInfo, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { useMemo, useState } from 'react';
+import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/Button';
@@ -52,14 +52,14 @@ import {
 import { betCorrectionCopy, BLACKJACK_WORDS } from './coaching-text';
 import { CorrectionPanel, GuidedStrip, type TableNow } from './Guidance';
 import { RebuySheet } from './RebuySheet';
-import { AccessStopBanner, AllowanceLine, ChipRack, PhaseStepper, SaveFailedBanner, SessionStrip, TableDialogs, TableTopBar, TurnBoundaryBanner, type PhaseStep } from './TableChrome';
+import { AccessStopBanner, AllowanceLine, ChipRack, PhaseStepper, SaveFailedBanner, SessionStrip, TableDialogs, TableTopBar, TurnBoundaryBanner, useTableAnnouncements, type PhaseStep } from './TableChrome';
 import { capitalize, formatSigned, formatUnits, halfUnits, sumUnits, totalOnTable } from './units';
 
 type ActiveSnapshot = Active<BlackjackPermittedView>;
 
 const SIDE_BY_SIDE_MAX_FONT_SCALE = 1.35;
 const HAND = 'hand-1';
-const SAVE_FAILED_ANNOUNCEMENT = "Couldn't save. Play is paused and will retry automatically.";
+const announcement = ({ facts, view }: ActiveSnapshot) => describeFacts(facts, view) ?? `${statusText(view)}. Balance ${formatUnits(view.balance)}.`;
 
 
 const SUIT_TOKEN = { spades: 'suitSpade', hearts: 'suitHeart', diamonds: 'suitDiamond', clubs: 'suitClub' } as const;
@@ -111,22 +111,7 @@ export function BlackjackTable({ snapshot }: { snapshot: ActiveSnapshot }) {
     if (latest.status !== 'active' || latest.facts.some((fact) => fact.kind === 'funding-added')) setRebuying(false);
   };
 
-  useEffect(() => {
-    const initial = controller.snapshot();
-    let announced = initial.status === 'active' ? initial.view.sequence : -1;
-    let failed = initial.status === 'active' && initial.save === 'failed';
-    return controller.subscribe(() => {
-      const latest = controller.snapshot();
-      if (latest.status !== 'active' || latest.view.game !== 'blackjack') return;
-      const nowFailed = latest.save === 'failed';
-      if (nowFailed && !failed) AccessibilityInfo.announceForAccessibility(SAVE_FAILED_ANNOUNCEMENT);
-      failed = nowFailed;
-      if (latest.view.sequence === announced) return;
-      announced = latest.view.sequence;
-      const text = describeFacts(latest.facts, latest.view) ?? `${statusText(latest.view)}. Balance ${formatUnits(latest.view.balance)}.`;
-      AccessibilityInfo.announceForAccessibility(text);
-    });
-  }, [controller]);
+  useTableAnnouncements('blackjack', announcement);
 
   const addChip = () => void controller.placeWager(HAND, sumUnits(wager ?? '0', chip));
   const deal = () => {

@@ -1,13 +1,28 @@
-import { createContext, useContext, useEffect, useState, useSyncExternalStore, type ReactNode } from 'react';
+import type { AccountService } from '@tableside/account';
+import { createContext, useContext, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { AppState } from 'react-native';
 
 import { useAccount } from '@/account/AccountProvider';
 import { followAccountGate, withAccountGate } from '@/account/gate-access';
+import { useFollow } from '@/hooks/use-follow';
+import { useLoaded } from '@/hooks/use-loaded';
 
 import { createAppAdapters } from './app-adapters';
 import { PracticeController } from './controller';
 
 const PracticeContext = createContext<PracticeController | null>(null);
+
+function followAccountSessionEnding(service: AccountService, controller: PracticeController): () => void {
+  return service.onAccountSessionEnding(() => controller.accountSessionEnding());
+}
+
+function followAppLifecycle(controller: PracticeController): () => void {
+  const subscription = AppState.addEventListener('change', (state) => {
+    if (state === 'background') void controller.lifecycle('backgrounded');
+    if (state === 'active') void controller.lifecycle('foregrounded');
+  });
+  return () => subscription.remove();
+}
 
 // Spec 2 Amendment 1 B3
 export function PracticeProvider({ children }: { children: ReactNode }) {
@@ -17,18 +32,10 @@ export function PracticeProvider({ children }: { children: ReactNode }) {
     const adapters = account.practice(createAppAdapters());
     return new PracticeController({ ...adapters, access: withAccountGate(adapters.access, () => service.gate) });
   });
-  useEffect(() => {
-    void controller.load();
-  }, [controller]);
-  useEffect(() => account.service.onAccountSessionEnding(() => controller.accountSessionEnding()), [account, controller]);
-  useEffect(() => followAccountGate(service, controller), [service, controller]);
-  useEffect(() => {
-    const subscription = AppState.addEventListener('change', (state) => {
-      if (state === 'background') void controller.lifecycle('backgrounded');
-      if (state === 'active') void controller.lifecycle('foregrounded');
-    });
-    return () => subscription.remove();
-  }, [controller]);
+  useLoaded((practice) => practice.load(), controller);
+  useFollow(followAccountSessionEnding, service, controller);
+  useFollow(followAccountGate, service, controller);
+  useFollow(followAppLifecycle, controller);
   return <PracticeContext.Provider value={controller}>{children}</PracticeContext.Provider>;
 }
 

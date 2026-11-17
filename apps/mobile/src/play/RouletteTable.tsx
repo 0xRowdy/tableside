@@ -1,6 +1,6 @@
 import { isPlayCorrection, type CycleTurn, type RoulettePermittedView as PermittedView, type RoulettePocket } from '@tableside/engine';
-import { useEffect, useMemo, useState } from 'react';
-import { AccessibilityInfo, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { useMemo, useState } from 'react';
+import { ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/Button';
@@ -18,7 +18,7 @@ import { rouletteCatalog, roulettePlacedWagers } from './roulette-catalog';
 import { describeFacts, describePocket, POCKET_TOKEN, pocketColor, STATUS, targetName } from './roulette-text';
 import { capitalize, formatUnits, sumUnits, totalOnTable } from './units';
 import { RouletteFelt } from './RouletteFelt';
-import { AccessStopBanner, AllowanceLine, ChipRack, EndingSteps, PhaseStepper, SaveFailedBanner, SessionStrip, TableDialogs, TableTopBar, TurnBoundaryBanner, type PhaseStep } from './TableChrome';
+import { AccessStopBanner, AllowanceLine, ChipRack, EndingSteps, PhaseStepper, SaveFailedBanner, SessionStrip, TableDialogs, TableTopBar, TurnBoundaryBanner, useTableAnnouncements, type PhaseStep } from './TableChrome';
 
 type ActiveSnapshot = ActivePracticeSnapshot & { readonly view: PermittedView };
 
@@ -69,22 +69,7 @@ export function RouletteTable({ snapshot }: { snapshot: ActiveSnapshot }) {
   const legal = (kind: PermittedView['legalCommands'][number]) => ready && view.legalCommands.includes(kind);
   const message = useMemo(() => describeFacts(facts, view), [facts, view]);
 
-  useEffect(() => {
-    const initial = controller.snapshot();
-    let announced = initial.status === 'active' ? initial.view.sequence : -1;
-    let failed = initial.status === 'active' && initial.save === 'failed';
-    return controller.subscribe(() => {
-      const latest = controller.snapshot();
-      if (latest.status !== 'active' || latest.view.game !== 'roulette') return;
-      const nowFailed = latest.save === 'failed';
-      if (nowFailed && !failed) AccessibilityInfo.announceForAccessibility(SAVE_FAILED_ANNOUNCEMENT);
-      failed = nowFailed;
-      if (latest.view.sequence === announced) return;
-      announced = latest.view.sequence;
-      const text = describeFacts(latest.facts, latest.view) ?? `${STATUS[latest.view.phase]}. Balance ${formatUnits(latest.view.balance)}.`;
-      AccessibilityInfo.announceForAccessibility(text);
-    });
-  }, [controller]);
+  useTableAnnouncements('roulette', announcement);
 
   const wagerOn = (target: string) => view.wagers.find((wager) => wager.target === target)?.amount;
   const addChip = (target: string) => {
@@ -260,7 +245,7 @@ function describeTurn(turn: CycleTurn, index: number): TurnWords {
 
 const WHEEL_NAMES: Record<PermittedView['table']['wheel'], string> = { 'single-zero': 'Single zero', 'double-zero': 'Double zero' };
 
-const SAVE_FAILED_ANNOUNCEMENT = "Couldn't save. Play is paused and will retry automatically.";
+const announcement = ({ facts, view }: ActiveSnapshot) => describeFacts(facts, view) ?? `${STATUS[view.phase]}. Balance ${formatUnits(view.balance)}.`;
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: palette.background },

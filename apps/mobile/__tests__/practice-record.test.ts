@@ -86,6 +86,16 @@ describe('the completed practice session record', () => {
     expect(completed(switched.controller.snapshot())).toMatchObject({ endingReason: 'switch', noBet: true, turnsPlayed: 0 });
   });
 
+  // Spec 1 S1-09
+  it('tells its listeners when it settles on a result, so a listener can leave it at once', async () => {
+    const { controller } = await started();
+    controller.subscribe(() => {
+      if (controller.snapshot().status === 'completed') controller.dismissResult();
+    });
+    await controller.endSession('switch');
+    expect(controller.snapshot().status).toBe('none');
+  });
+
   it('records an access-ended stop, and the metering basis and allowance-policy version from the admission', async () => {
     const access: AccessSupervisor = {
       ...alwaysAllowed,

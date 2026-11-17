@@ -2,10 +2,11 @@
 
 import { BACKUPS_DETAIL, type DeletionProgress, type DeletionStatus, PROVIDER_GRANT_DETAIL, analyticsDetail, deletionDetail } from '@tableside/account';
 import { ChartBar, CalendarClock, Database, KeyRound, Trash2 } from 'lucide-react-native';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { Button } from '@/components/Button';
+import { useLoaded } from '@/hooks/use-loaded';
 import { Group, GroupLabel, ListRow } from '@/settings/SettingsParts';
 import { palette, radius } from '@/theme/tokens';
 
@@ -28,16 +29,8 @@ export { analyticsDetail, deletionDetail };
 
 export function AccountDeleted() {
   const { service } = useAccount();
-  const [status, setStatus] = useState<DeletionStatus | null | undefined>();
+  const status: DeletionStatus | null | undefined = useLoaded((accountService) => accountService.deletion.status(), service);
   const [busy, setBusy] = useState(false);
-
-  useEffect(() => {
-    let live = true;
-    void service.deletion.status().then((answer) => live && setStatus(answer));
-    return () => {
-      live = false;
-    };
-  }, [service]);
 
   const progress = isProgress(status) ? status : null;
   const done = async () => {

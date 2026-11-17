@@ -1,12 +1,14 @@
 import type { DomainFact, PermittedView } from '@tableside/engine';
 import { CircleStop } from 'lucide-react-native';
-import { useEffect, useState, type ReactNode } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import type { ReactNode } from 'react';
+import { AccessibilityInfo, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Button } from '@/components/Button';
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
+import { useFollow } from '@/hooks/use-follow';
+import { useLoaded } from '@/hooks/use-loaded';
 import type { SetupTerms } from '@/practice/adapters';
-import { SAVE_RETRY_MS, type AccessStop, type Suspension } from '@/practice/controller';
+import { SAVE_RETRY_MS, type AccessStop, type ActiveSnapshot, type PracticeController, type PracticeSnapshot, type Suspension } from '@/practice/controller';
 import { usePractice } from '@/practice/PracticeProvider';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale, type ColorToken } from '@/theme/tokens';
 
@@ -102,14 +104,7 @@ export function SessionStrip({ balance, onTable, status }: { balance: string; on
 // Spec 1 Amendment 4 D
 export function AllowanceLine({ game }: { game: string }) {
   const { controller } = usePractice();
-  const [allowance, setAllowance] = useState<SetupTerms['allowance']>(null);
-  useEffect(() => {
-    let current = true;
-    void controller.setupTerms(game).then((terms) => current && setAllowance(terms.allowance));
-    return () => {
-      current = false;
-    };
-  }, [controller, game]);
+  const allowance: SetupTerms['allowance'] = useLoaded((practice, id) => practice.setupTerms(id), controller, game)?.allowance ?? null;
   if (!allowance) return null;
   return (
     <View accessible accessibilityLabel={`${allowance.title}: ${allowance.text}`} style={styles.allowance} testID="allowance-line">
@@ -142,6 +137,33 @@ export function AccessStopBanner({ ending, detail }: { ending: AccessStop | null
   ) : (
     <TableBanner title={ACCESS_ENDED} text={detail} testID="access-ended" />
   );
+}
+
+const SAVE_FAILED_ANNOUNCEMENT = "Couldn't save. Play is paused and will retry automatically.";
+
+type GameView<G extends PermittedView['game']> = Extract<PermittedView, { readonly game: G }>;
+type Describe<G extends PermittedView['game']> = (snapshot: ActiveSnapshot<GameView<G>>) => string;
+
+function followTableAnnouncements<G extends PermittedView['game']>(controller: PracticeController, game: G, describe: Describe<G>): () => void {
+  const atTable = (snapshot: PracticeSnapshot): snapshot is ActiveSnapshot<GameView<G>> => snapshot.status === 'active' && snapshot.view.game === game;
+  const initial = controller.snapshot();
+  let announced = initial.status === 'active' ? initial.view.sequence : -1;
+  let failed = initial.status === 'active' && initial.save === 'failed';
+  return controller.subscribe(() => {
+    const latest = controller.snapshot();
+    if (!atTable(latest)) return;
+    const nowFailed = latest.save === 'failed';
+    if (nowFailed && !failed) AccessibilityInfo.announceForAccessibility(SAVE_FAILED_ANNOUNCEMENT);
+    failed = nowFailed;
+    if (latest.view.sequence === announced) return;
+    announced = latest.view.sequence;
+    AccessibilityInfo.announceForAccessibility(describe(latest));
+  });
+}
+
+export function useTableAnnouncements<G extends PermittedView['game']>(game: G, describe: Describe<G>): void {
+  const { controller } = usePractice();
+  useFollow(followTableAnnouncements<G>, controller, game, describe);
 }
 
 export function SaveFailedBanner({ busy, onRetry }: { busy: boolean; onRetry: () => void }) {

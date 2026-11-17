@@ -2,8 +2,8 @@
 
 import { crapsHouseEdge } from '@tableside/definitions';
 import { CRAPS_POINTS, isPlayCorrection, type CrapsPermittedView as PermittedView, type CycleTurn } from '@tableside/engine';
-import { useEffect, useMemo, useState } from 'react';
-import { AccessibilityInfo, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { useMemo, useState } from 'react';
+import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/Button';
@@ -22,13 +22,13 @@ import { CorrectionPanel, CycleResultPanel, GuidedStrip, PendingPanel, type Turn
 import { RebuySheet } from './RebuySheet';
 import { commitmentText, crapsStatus, crapsTargetName, describeCrapsFacts, puckText, workingText } from './craps-text';
 import { formatUnits, sumUnits, totalOnTable } from './units';
-import { AccessStopBanner, AllowanceLine, ChipRack, EndingSteps, PhaseStepper, SaveFailedBanner, SessionStrip, TableDialogs, TableTopBar, TurnBoundaryBanner, type PhaseStep } from './TableChrome';
+import { AccessStopBanner, AllowanceLine, ChipRack, EndingSteps, PhaseStepper, SaveFailedBanner, SessionStrip, TableDialogs, TableTopBar, TurnBoundaryBanner, useTableAnnouncements, type PhaseStep } from './TableChrome';
 
 type ActiveSnapshot = ActivePracticeSnapshot & { readonly view: PermittedView };
 
 const SIDE_BY_SIDE_MAX_FONT_SCALE = 1.35;
 
-const SAVE_FAILED_ANNOUNCEMENT = "Couldn't save. Play is paused and will retry automatically.";
+const announcement = ({ facts, view }: ActiveSnapshot) => describeCrapsFacts(facts, view) ?? `${crapsStatus(view)}. Balance ${formatUnits(view.balance)}.`;
 
 function phaseSteps(view: PermittedView): PhaseStep[] {
   const reached = { 'open-decision': 0, correction: 0, 'revealing-outcome': 1, 'settled-outcome': 2, 'cycle-completion': 2, 'strategy-settlement': 2, 'final-settlement': 2, completed: 3 }[view.phase];
@@ -84,22 +84,7 @@ export function CrapsTable({ snapshot }: { snapshot: ActiveSnapshot }) {
   const removable = view.wagers.filter((wager) => !contracts.includes(wager));
   const edge = (wager: 'pass' | 'dont-pass') => crapsHouseEdge(wager, { ...table.variant, odds: table.odds, field: table.field }).percent;
 
-  useEffect(() => {
-    const initial = controller.snapshot();
-    let announced = initial.status === 'active' ? initial.view.sequence : -1;
-    let failed = initial.status === 'active' && initial.save === 'failed';
-    return controller.subscribe(() => {
-      const latest = controller.snapshot();
-      if (latest.status !== 'active' || latest.view.game !== 'craps') return;
-      const nowFailed = latest.save === 'failed';
-      if (nowFailed && !failed) AccessibilityInfo.announceForAccessibility(SAVE_FAILED_ANNOUNCEMENT);
-      failed = nowFailed;
-      if (latest.view.sequence === announced) return;
-      announced = latest.view.sequence;
-      const text = describeCrapsFacts(latest.facts, latest.view) ?? `${crapsStatus(latest.view)}. Balance ${formatUnits(latest.view.balance)}.`;
-      AccessibilityInfo.announceForAccessibility(text);
-    });
-  }, [controller]);
+  useTableAnnouncements('craps', announcement);
 
   const stakeOn = (target: string) => view.wagers.find((wager) => wager.target === target)?.amount;
   const placeable = (target: string) => table.placements.some((placement) => placement.target === target);

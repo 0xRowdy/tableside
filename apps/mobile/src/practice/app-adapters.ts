@@ -4,6 +4,8 @@ import * as Crypto from 'expo-crypto';
 import { alwaysAllowed, withRequiredRemovals, type PracticeAdapters } from './adapters';
 import { MemoryActivityStore } from './memory-store';
 
+export const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+
 export function createAppAdapters(): PracticeAdapters {
   return {
     store: new MemoryActivityStore(),
@@ -11,7 +13,7 @@ export function createAppAdapters(): PracticeAdapters {
     access: withRequiredRemovals(alwaysAllowed, { removed: () => false }),
     clock: {
       now: () => Date.now(),
-      sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+      sleep,
     },
     entropy: { randomBytes: (length) => Crypto.getRandomValues(new Uint8Array(length)) },
     newId: () => Crypto.randomUUID(),

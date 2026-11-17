@@ -1,4 +1,5 @@
 // Spec 2 Modules
+// docs/account-service.md Credentials and the account vault
 
 import { ENVIRONMENT_NAMES, type EnvironmentName } from '@tableside/account/environment';
 import { hex } from '@tableside/account/values';

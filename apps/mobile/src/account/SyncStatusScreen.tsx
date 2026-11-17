@@ -16,7 +16,7 @@ import {
   RefreshCw,
   type LucideIcon,
 } from 'lucide-react-native';
-import { useEffect, useState } from 'react';
+import { useMemo, useSyncExternalStore } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { findGame } from '@/games';
@@ -162,10 +162,21 @@ function DownloadProgress({ download }: { download: HistoryDownload }) {
 
 const percentOf = (fraction: number): number => Math.round(Math.min(1, Math.max(0, fraction)) * 100);
 
+function statusStore(sync: AccountSync) {
+  let latest = sync.status;
+  return {
+    subscribe: (changed: () => void) =>
+      sync.subscribe((status) => {
+        latest = status;
+        changed();
+      }),
+    snapshot: () => latest,
+  };
+}
+
 function useSyncStatus(sync: AccountSync): SyncStatus {
-  const [latest, setLatest] = useState(() => ({ sync, status: sync.status }));
-  useEffect(() => sync.subscribe((status) => setLatest({ sync, status })), [sync]);
-  return latest.sync === sync ? latest.status : sync.status;
+  const store = useMemo(() => statusStore(sync), [sync]);
+  return useSyncExternalStore(store.subscribe, store.snapshot);
 }
 
 const DEVICE = Platform.OS === 'ios' ? (Platform.isPad ? 'iPad' : 'iPhone') : 'device';

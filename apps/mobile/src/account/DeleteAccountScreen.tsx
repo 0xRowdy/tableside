@@ -3,9 +3,10 @@
 
 import { DELETION_UNKNOWN, SCHEDULE_UNKNOWN, type SignInMethodEntry } from '@tableside/account';
 import { Archive, CloudOff, CreditCard, Download, EyeOff, Lock, Trash2, UserX } from 'lucide-react-native';
-import { useCallback, useEffect, useState } from 'react';
+import { useState } from 'react';
 
 import { Button } from '@/components/Button';
+import { useLoaded } from '@/hooks/use-loaded';
 import { Group, GroupLabel, ListRow, Note, SettingsScreen } from '@/settings/SettingsParts';
 
 import { useAccount } from './AccountProvider';
@@ -23,30 +24,24 @@ export function unsyncedDetail(waiting: number | null): string {
 
 export function DeleteAccountScreen({ back, onExport }: { back: { label: string; onPress: () => void }; onExport: () => void }) {
   const { service } = useAccount();
-  const [methods, setMethods] = useState<readonly SignInMethodEntry[] | null | undefined>();
-  const [confirming, setConfirming] = useState<'begin' | 'schedule' | 'delete' | null>(null);
+  const first = useLoaded((accountService) => accountService.freshAuthentication.methods(), service);
+  const [retried, setRetried] = useState<{ readonly methods: readonly SignInMethodEntry[] | null } | null>(null);
+  const methods = retried ? retried.methods : first;
+  const [confirming, setConfirming] = useState<'begin' | 'schedule' | 'delete' | null>('begin');
   const [permanent, setPermanent] = useState(false);
   const [waiting, setWaiting] = useState<number | null>(null);
   const [confirmed, setConfirmed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const store = STORES[deviceStore()];
+  const shownProblem = problem ?? (methods === null ? DELETION_NEEDS_CONNECTION : null);
 
-  const ask = useCallback((found: readonly SignInMethodEntry[] | null) => {
-    setMethods(found);
+  const begin = async () => {
+    const found = await service.freshAuthentication.methods();
+    setRetried({ methods: found });
     setConfirming(found ? 'begin' : null);
-    setProblem(found ? null : DELETION_NEEDS_CONNECTION);
-  }, []);
-
-  useEffect(() => {
-    let live = true;
-    void service.freshAuthentication.methods().then((found) => live && ask(found));
-    return () => {
-      live = false;
-    };
-  }, [ask, service]);
-
-  const begin = async () => ask(await service.freshAuthentication.methods());
+    setProblem(null);
+  };
 
   const schedule = async () => {
     setBusy(true);
@@ -134,7 +129,7 @@ export function DeleteAccountScreen({ back, onExport }: { back: { label: string;
           )}
         </>
       )}
-      {problem !== null && <InlineMessage>{problem}</InlineMessage>}
+      {shownProblem !== null && <InlineMessage>{shownProblem}</InlineMessage>}
       {confirming && methods && (
         <ConfirmItsYouSheet
           reason={confirmReason({ kind: 'delete-account' })}

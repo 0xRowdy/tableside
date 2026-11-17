@@ -2,10 +2,11 @@
 
 import { type AccountGate, CANCEL_FAILED, CANCEL_TOO_LATE, type DeletionStatus, type SignInMethodEntry, scheduledDetail } from '@tableside/account';
 import { CalendarClock } from 'lucide-react-native';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { Button } from '@/components/Button';
+import { useLoaded } from '@/hooks/use-loaded';
 import { Group, GroupLabel, ListRow } from '@/settings/SettingsParts';
 import { palette, radius } from '@/theme/tokens';
 
@@ -27,18 +28,10 @@ function statusDetail(gate: DeletionScheduledGate, status: DeletionStatus | null
 
 export function DeletionScheduled({ gate }: { gate: DeletionScheduledGate }) {
   const { service } = useAccount();
-  const [status, setStatus] = useState<DeletionStatus | null | undefined>();
+  const status: DeletionStatus | null | undefined = useLoaded((accountService) => accountService.deletion.status(), service);
   const [methods, setMethods] = useState<readonly SignInMethodEntry[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
-
-  useEffect(() => {
-    let live = true;
-    void service.deletion.status().then((answer) => live && setStatus(answer));
-    return () => {
-      live = false;
-    };
-  }, [service]);
 
   const cancel = async () => {
     setBusy(true);

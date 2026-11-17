@@ -1,4 +1,5 @@
 // Spec 2 Local storage › Migrations
+// docs/account-service.md Credentials and the account vault
 
 import { sha256Hex } from '@tableside/engine';
 

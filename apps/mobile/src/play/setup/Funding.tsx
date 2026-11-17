@@ -1,12 +1,13 @@
 // Spec 1 Amendment 4 B
 
 import { FUNDING_CEILING, type FundingSource } from '@tableside/engine';
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { Button } from '@/components/Button';
 import { useFeedback } from '@/feedback/FeedbackProvider';
 import type { GameId } from '@/games';
+import { useLoaded } from '@/hooks/use-loaded';
 import { PRACTICE_FUNDING_TERMS, type SetupTerms } from '@/practice/adapters';
 import { RECONNECT_TO_VERIFY, type StartProblem } from '@/practice/controller';
 import { usePractice } from '@/practice/PracticeProvider';
@@ -39,18 +40,10 @@ export function useFunding(game: GameId, opening: Opening | null) {
   const feedback = useFeedback();
   const { preferences, buyIns } = useSetupPreferences();
   const remembered = buyIns[game];
-  const [terms, setTerms] = useState<SetupTerms>(PRACTICE_FUNDING_TERMS);
+  const terms: SetupTerms = useLoaded((practice, id) => practice.setupTerms(id), controller, game) ?? PRACTICE_FUNDING_TERMS;
   const [draft, setDraft] = useState<string | null>(null);
   const [notWhole, setNotWhole] = useState(false);
   const input = useRef<AmountInput | null>(null);
-
-  useEffect(() => {
-    let current = true;
-    void controller.setupTerms(game).then((next) => current && setTerms(next));
-    return () => {
-      current = false;
-    };
-  }, [controller, game]);
 
   const text = draft ?? formatUnits(remembered ?? DEFAULT_BUY_IN);
   const training = terms.funding.source === 'training-bankroll' ? terms.funding : null;

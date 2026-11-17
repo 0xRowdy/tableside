@@ -1,11 +1,12 @@
 // Spec 1 S1-03
 
 import { add, compare, decodeMoney, encodeMoney, money, mul, type DomainFact, type IllegalActionReason } from '@tableside/engine';
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState, type RefObject } from 'react';
 import { AccessibilityInfo, Pressable, StyleSheet, Text, TextInput, View, type HostInstance } from 'react-native';
 
 import { Button } from '@/components/Button';
 import { SwitchRow } from '@/components/SwitchRow';
+import { useMoveFocus } from '@/hooks/use-accessibility';
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/theme/tokens';
 
@@ -41,10 +42,6 @@ export interface BetSelectorProps {
 
 const DRAFT_NOTE = 'Draft · not placed yet. It stays if you rotate, resize or switch to the table.';
 
-const moveFocus = (ref: React.RefObject<HostInstance | null>) => {
-  if (ref.current) AccessibilityInfo.sendAccessibilityEvent(ref.current, 'focus');
-};
-
 const COMMITTED = 'Committed until it settles.';
 
 type OpenEditor = (draft: BetDraft) => void;
@@ -52,22 +49,19 @@ type OpenEditor = (draft: BetDraft) => void;
 export function BetSelector(props: BetSelectorProps) {
   const { catalog, draft } = props;
   const kind = findKind(catalog, draft.kind);
-  const focusRequested = useRef(false);
+  const editorHeading = useRef<HostInstance>(null);
+  const [editorOpened, setEditorOpened] = useState(0);
+  useMoveFocus(editorHeading, editorOpened || null);
   const openEditor: OpenEditor = (next) => {
-    focusRequested.current = true;
+    setEditorOpened((count) => count + 1);
     props.onDraftChange(next);
-  };
-  const takeFocusRequest = () => {
-    const requested = focusRequested.current;
-    focusRequested.current = false;
-    return requested;
   };
   const [finding, setFinding] = useState<{ key: string | null } | null>(null);
   const finder = catalog.finder;
   return (
     <View testID="bet-selector" style={styles.selector}>
       {kind ? (
-        <WagerEditor {...props} kind={kind} takeFocusRequest={takeFocusRequest} />
+        <WagerEditor {...props} kind={kind} heading={editorHeading} />
       ) : finder && finding ? (
         <Finder
           {...props}
@@ -132,12 +126,8 @@ function WagerList({ catalog, wagers, draft, openEditor, onFind }: BetSelectorPr
   );
 }
 
-function WagerEditor(props: BetSelectorProps & { kind: WagerKind; takeFocusRequest: () => boolean }) {
-  const { kind, draft, wagers, onDraftChange, takeFocusRequest } = props;
-  const heading = useRef<HostInstance>(null);
-  useEffect(() => {
-    if (takeFocusRequest()) moveFocus(heading);
-  }, [kind.id, takeFocusRequest]);
+function WagerEditor(props: BetSelectorProps & { kind: WagerKind; heading: RefObject<HostInstance | null> }) {
+  const { kind, draft, wagers, onDraftChange, heading } = props;
 
   const choice = kind.choices.find((c) => c.target === draft.target);
   const placed = choice && wagers.find((w) => w.target === choice.target);
@@ -182,10 +172,8 @@ function Finder({
   const heading = useRef<HostInstance>(null);
   const results = useRef<HostInstance>(null);
   const entry = finder.keys.find((k) => k.id === selected);
-  useEffect(() => moveFocus(heading), []);
-  useEffect(() => {
-    if (selected !== null) moveFocus(results);
-  }, [selected]);
+  useMoveFocus(heading, true);
+  useMoveFocus(results, selected);
   return (
     <View style={styles.section}>
       <Row label="All wagers" hint="Back to the list of wagers. Your draft is kept." onPress={onBack} compact>
@@ -314,16 +302,11 @@ function CommittedStake({ wager, choice }: { wager: PlacedWager; choice: WagerCh
 
 function YourWagers({ catalog, wagers, canPlace, onRemove, openEditor }: BetSelectorProps & { openEditor: OpenEditor }) {
   const heading = useRef<HostInstance>(null);
-  const removing = useRef<string | null>(null);
+  const [removing, setRemoving] = useState<{ readonly target: string } | null>(null);
   const [explaining, setExplaining] = useState<string | null>(null);
 
   // docs/decisions/mobile-device-support-accessibility.md
-  useEffect(() => {
-    if (removing.current !== null && !wagers.some((w) => w.target === removing.current)) {
-      removing.current = null;
-      moveFocus(heading);
-    }
-  }, [wagers]);
+  useMoveFocus(heading, removing && !wagers.some((w) => w.target === removing.target) ? removing : null);
 
   return (
     <View testID="your-wagers" style={styles.group}>
@@ -367,7 +350,7 @@ function YourWagers({ catalog, wagers, canPlace, onRemove, openEditor }: BetSele
                   spoken={`Remove ${name}`}
                   disabled={!canPlace}
                   onPress={() => {
-                    removing.current = wager.target;
+                    setRemoving({ target: wager.target });
                     onRemove(wager.target);
                   }}
                 />

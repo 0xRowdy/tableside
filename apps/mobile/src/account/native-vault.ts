@@ -1,4 +1,5 @@
 // docs/decisions/local-persistence-account-synchronization.md Storage and ownership
+// docs/account-service.md Credentials and the account vault
 
 import type { EnvironmentName } from '@tableside/account/environment';
 import * as Crypto from 'expo-crypto';
