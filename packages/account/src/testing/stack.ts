@@ -1,4 +1,5 @@
 import { execFileSync } from 'node:child_process';
+import { existsSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -45,6 +46,10 @@ let stack: LocalStack | null = null;
 
 export function localStack(): LocalStack {
   if (stack) return stack;
+  const gitPath = join(repositoryRoot, '.git');
+  if (process.env.TABLESIDE_STACK_SLOT === undefined && existsSync(gitPath) && statSync(gitPath).isFile()) {
+    throw new Error('This checkout is a linked worktree: set TABLESIDE_STACK_SLOT to its own slot (1–9), e.g. `TABLESIDE_STACK_SLOT=2 pnpm test:accounts`.');
+  }
   let status: string;
   try {
     status = execFileSync('supabase', ['status', '-o', 'env', '--workdir', stackWorkdir], { cwd: repositoryRoot, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
