@@ -1,17 +1,16 @@
 // Spec 3 Screens › Exercise (table); S3-07 v82z3, AcmMa, bh8oE, xjtSW, heGUV, j4tjKT; #137
 
-import type { ChallengeCard, ChallengeEntry, ChallengeView, LearnFeedback, TableHandView, TableView } from '@tableside/engine';
+import type { ChallengeEntry, ChallengeView, LearnFeedback, TableHandView, TableView } from '@tableside/engine';
 import { ArrowRight, ChevronsRight, CircleDot, Hand, Info, Layers, Shuffle } from 'lucide-react-native';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/Button';
 import { PlayingCard } from '@/counting/CardChoices';
-import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
 import { signed } from '@/play/blackjack-text';
 import { FirstUseHint, HelpButton } from '@/lessons/FirstUseHints';
-import { PhaseStepper, SaveFailedBanner, StatStrip, type PhaseStep } from '@/play/TableChrome';
-import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/theme/tokens';
+import { BlackjackFeltRules, FaceDownCard, FeltBadge, PhaseStepper, SaveFailedBanner, StatStrip, type PhaseStep } from '@/play/TableChrome';
+import { fonts, palette, radius, space, textScale } from '@/theme/tokens';
 import { conversionText } from '@/training/blackjack-conversion-text';
 import {
   checkpointText,
@@ -19,7 +18,6 @@ import {
   CONTINUE,
   continueText,
   DEALER,
-  dealerRuleText,
   decksText,
   edgeText,
   enteredLine,
@@ -30,7 +28,6 @@ import {
   OBSERVE_KICKER,
   observeText,
   ONLY_FIRST_SCORED,
-  PAYS,
   PHASES,
   ROUND_LABEL,
   ROUND_SPOKEN,
@@ -58,6 +55,7 @@ import { COACH_NAME, CONVERSION_KICKER, NEXT_CARD } from '@/training/challenge-t
 import type { LearnerCommand } from '@/training/service';
 
 import { CountAid } from './CountAid';
+import { CoachButton } from './CoachButton';
 import { CountEntry } from './CountEntry';
 
 function status(view: ChallengeView, table: TableView): TableStatus {
@@ -194,7 +192,7 @@ function CheckpointPanel({
         <View style={styles.recorded} accessibilityLiveRegion="polite" testID="recorded-notice">
           <CircleDot color={palette.foreground} size={18} />
           <Text maxFontSizeMultiplier={textScale.body} style={styles.recordedText}>
-            {tableRecordedText(entered, prompt.count)}
+            {tableRecordedText(entered, prompt.count, prompt.count === 'running' && pairs)}
           </Text>
         </View>
       )}
@@ -298,17 +296,10 @@ function Felt({ table }: { table: TableView }) {
       </Text>
       <View style={styles.handRow}>
         {table.dealer.cards.map((card, index) => (
-          <TableCard key={index} card={card} />
+          card ? <PlayingCard key={index} card={card} /> : <FaceDownCard key={index} />
         ))}
       </View>
-      <View style={styles.rules}>
-        <Text maxFontSizeMultiplier={textScale.display} style={styles.pays}>
-          {PAYS}
-        </Text>
-        <Text maxFontSizeMultiplier={textScale.body} style={styles.dealerRule}>
-          {dealerRuleText(table.rules.dealer)}
-        </Text>
-      </View>
+      <BlackjackFeltRules dealer={table.rules.dealer} />
       {others.map((seat) =>
         seat.hands.map((hand, index) => (
           <View key={hand.target} style={styles.handRow}>
@@ -318,7 +309,7 @@ function Felt({ table }: { table: TableView }) {
             {hand.cards.map((card, i) => (
               <PlayingCard key={i} card={card} small />
             ))}
-            {hand.cards.length > 0 && <Badge text={handText(hand)} />}
+            {hand.cards.length > 0 && <FeltBadge text={handText(hand)} />}
           </View>
         )),
       )}
@@ -341,45 +332,8 @@ function SeatHand({ hand }: { hand: TableHandView }) {
       {hand.cards.map((card, index) => (
         <PlayingCard key={index} card={card} />
       ))}
-      {hand.cards.length > 0 && <Badge text={handText(hand)} />}
+      {hand.cards.length > 0 && <FeltBadge text={handText(hand)} />}
     </View>
-  );
-}
-
-function TableCard({ card }: { card: ChallengeCard | null }) {
-  if (card) return <PlayingCard card={card} />;
-  return (
-    <View accessible accessibilityLabel="Face-down card" style={styles.cardBack}>
-      <View style={styles.cardBackField} />
-    </View>
-  );
-}
-
-function Badge({ text }: { text: string }) {
-  return (
-    <View style={styles.badge}>
-      <Text maxFontSizeMultiplier={textScale.body} style={styles.badgeText}>
-        {text}
-      </Text>
-    </View>
-  );
-}
-
-function CoachButton({ label, primary = false, enabled, onPress }: { label: string; primary?: boolean; enabled: boolean; onPress: () => void }) {
-  const { focused, focusProps } = useKeyboardFocus();
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityState={{ disabled: !enabled }}
-      disabled={!enabled}
-      onPress={onPress}
-      {...focusProps}
-      style={({ pressed }) => [styles.coachButton, primary ? styles.coachPrimary : styles.coachSecondary, pressed && styles.pressed, focused && styles.coachFocused]}
-    >
-      <Text maxFontSizeMultiplier={textScale.body} style={[styles.coachButtonText, primary && styles.coachPrimaryText]}>
-        {label}
-      </Text>
-    </Pressable>
   );
 }
 
@@ -394,16 +348,9 @@ const styles = StyleSheet.create({
   decksText: { fontFamily: fonts.uiBold, fontSize: 14, color: palette.feltText },
   feltLabel: { fontFamily: fonts.uiBold, fontSize: 11, letterSpacing: 0.5, color: palette.feltText },
   handRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center', gap: space[2] },
-  rules: { alignItems: 'center', gap: 2 },
-  pays: { fontFamily: fonts.display, fontSize: 18, color: palette.feltText, textAlign: 'center' },
-  dealerRule: { fontFamily: fonts.uiMedium, fontSize: 10, letterSpacing: 0.5, color: palette.feltText, textAlign: 'center' },
   seatLabel: { fontFamily: fonts.uiBold, fontSize: 12, color: palette.feltText },
   action: { flexDirection: 'row', alignItems: 'center', gap: space[1], paddingVertical: space[1], paddingHorizontal: space[3], borderRadius: radius.pill, backgroundColor: palette.primary },
   actionText: { fontFamily: fonts.uiBold, fontSize: 14, color: palette.primaryForeground },
-  badge: { paddingHorizontal: space[2], paddingVertical: 3, borderRadius: radius.pill, backgroundColor: palette.feltDeep },
-  badgeText: { fontFamily: fonts.uiBold, fontSize: 13, color: palette.feltText },
-  cardBack: { width: 56, minHeight: 80, padding: 4, borderRadius: radius.sm, backgroundColor: palette.cardFace },
-  cardBackField: { flex: 1, borderRadius: 4, backgroundColor: palette.chip5 },
   panel: { gap: space[3], paddingHorizontal: space[4], paddingTop: space[4] },
   kicker: { fontFamily: fonts.uiBold, fontSize: 12, letterSpacing: 0.6, color: palette.mutedForeground },
   panelTitle: { fontFamily: fonts.display, fontSize: 22, color: palette.foreground },
@@ -419,11 +366,5 @@ const styles = StyleSheet.create({
   headline: { fontFamily: fonts.uiBold, fontSize: 17, color: palette.ink },
   detail: { fontFamily: fonts.ui, fontSize: 14, lineHeight: 20, color: palette.inkMuted },
   coachActions: { flexDirection: 'row', flexWrap: 'wrap', gap: space[2] },
-  coachButton: { minHeight: MIN_TOUCH_TARGET, justifyContent: 'center', paddingHorizontal: 14, borderRadius: radius.md, borderWidth: 2 },
-  coachPrimary: { backgroundColor: palette.ink, borderColor: palette.ink },
-  coachSecondary: { borderColor: palette.inkMuted },
-  coachButtonText: { fontFamily: fonts.uiBold, fontSize: 14, color: palette.ink },
-  coachPrimaryText: { color: palette.coach },
-  coachFocused: { borderColor: palette.coachAccent },
   pressed: { opacity: 0.8 },
 });

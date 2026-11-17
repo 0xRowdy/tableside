@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/Button';
 import { fonts, palette, radius, space, textScale } from '@/theme/tokens';
+import { resultsSubtitle } from '@/training/blackjack-table-text';
 import {
   ASSISTED_NOTE,
   CATEGORY_TEXT,
@@ -48,7 +49,7 @@ export function ChallengeResults({ record, allowance, onRetry, onReview }: { rec
           {RESULTS_TITLE}
         </Text>
         <Text maxFontSizeMultiplier={textScale.body} style={styles.subtitle}>
-          {`${CATEGORY_TEXT[groupKey.category].title} · ${variantLabel(groupKey.variant)} · ${PACING_LABEL}`}
+          {groupKey.table ? resultsSubtitle(groupKey.variant) : `${CATEGORY_TEXT[groupKey.category].title} · ${variantLabel(groupKey.variant)} · ${PACING_LABEL}`}
         </Text>
       </View>
       <View style={styles.body}>

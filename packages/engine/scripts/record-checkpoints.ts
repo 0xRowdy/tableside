@@ -191,7 +191,7 @@ const CHALLENGE_SCENARIOS: ChallengeScenario[] = [
   { name: 'table Observe Check N=1, created and not yet begun', specification: TABLE_CHECK, random: seed(3), commands: [] },
 ];
 
-// #137: the first seed whose shoe is reshuffled, stopped on the round after the reshuffle
+// #137
 function pastReshuffle(name: string, specification: ChallengeSpecification): ChallengeScenario {
   const shuffled = (state: ChallengeState) => state.items.some((item, index) => 'step' in item && item.step === 'shuffle' && index < state.position);
   for (let n = 1; n < 400; n++) {

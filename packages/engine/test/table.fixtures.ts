@@ -19,7 +19,7 @@ export const TABLE_LEARN = tableSpec('learn');
 
 export const TABLE_CHECK = tableSpec('check');
 
-// Spec 1 Game rules: extra simulated players sit to the learner's right at the table minimum
+// Spec 1 Game rules; Spec 3 Challenge content › Observe seats
 export const withExtraPlayers = (count: number, penetration = S17_LS.penetration): Partial<TableSetup> => ({
   rules: {
     ...S17_LS,

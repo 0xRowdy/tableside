@@ -360,6 +360,7 @@ export {
 export {
   MAX_CHECKPOINT_INTERVAL,
   MAX_TABLE_ROUNDS,
+  tableCheckpointRounds,
   type CheckpointTiming,
   type TableContent,
   type TableCount,

@@ -2,6 +2,7 @@
 
 import {
   BLACKJACK_PRESETS,
+  blackjackPreset,
   CATALOG_CATEGORIES,
   CHALLENGE_CONTENT,
   DEFAULT_TABLE_SETUP,
@@ -90,7 +91,7 @@ const withOptions = (setup: { readonly category: CatalogCategory; readonly varia
 export function retrySetup(groupKey: ChallengeGroupKey): ChallengeSetup {
   const { category, variant, table } = groupKey;
   if (!table) return { category, variant };
-  const preset = `${table.dealer}_${table.lateSurrender ? 'LS' : 'noLS'}` as const;
+  const preset = blackjackPreset(table.dealer, table.lateSurrender);
   return { category, variant, table: { seat: 'observe', preset, penetration: table.penetration, extraPlayers: table.extraPlayers, interval: table.checkpointInterval } };
 }
 

@@ -1,18 +1,22 @@
 // Spec 3 S3-07 v82z3, AcmMa, bh8oE, xjtSW, heGUV; S3-02 ZreSb; #137
 
-import { blackjackHouseEdge, type BlackjackPreset } from '@tableside/definitions';
-import type { BlackjackAction, ChallengeEntry, ChallengeVariant, TableCountReview, TableHandView, TableRunningExplanation, TableView } from '@tableside/engine';
+import { blackjackHouseEdge, blackjackPreset, type BlackjackPreset } from '@tableside/definitions';
+import { tableCheckpointRounds, type BlackjackAction, type ChallengeEntry, ChallengeVariant, TableCountReview, TableHandView, TableRunningExplanation, TableView } from '@tableside/engine';
 
 import { cardRank, signed, SUIT_GLYPH } from '@/play/blackjack-text';
 
 const presetText = (dealer: 'S17' | 'H17', lateSurrender: boolean) => `${dealer} ${lateSurrender ? 'LS' : 'no LS'}`;
-const presetOf = (rules: TableView['rules']): BlackjackPreset => `${rules.dealer}_${rules.lateSurrender ? 'LS' : 'noLS'}`;
 const players = (count: number) => `${count} ${count === 1 ? 'player' : 'players'}`;
+
+// Spec 3 S3-08 e5MASr
+export const resultsSubtitle = (variant: ChallengeVariant) => `Table counting · ${variant === 'learn' ? 'Learn' : 'Check'} · Observe`;
+export const TABLE_LEARN_DETAIL =
+  'Learn scores your first answer at each checkpoint, even when you corrected it afterwards. Learn attempts never count toward a readiness milestone.';
 
 export const tableSubtitle = (variant: ChallengeVariant, table: Pick<TableView, 'rules' | 'interval'>) =>
   [variant === 'learn' ? 'Learn' : 'Check', 'Observe', presetText(table.rules.dealer, table.rules.lateSurrender), `${table.rules.penetration}%`, ...(table.rules.extraPlayers > 0 ? [players(table.rules.extraPlayers)] : []), `N = ${table.interval}`].join(' · ');
 
-export const edgeText = (rules: TableView['rules']) => `Edge with basic strategy: ${blackjackHouseEdge(presetOf(rules)).percent}% (this preset)`;
+export const edgeText = (rules: TableView['rules']) => `Edge with basic strategy: ${blackjackHouseEdge(blackjackPreset(rules.dealer, rules.lateSurrender)).percent}% (this preset)`;
 
 export const YOUR_SEAT = 'YOUR SEAT';
 export const SIMULATED = 'Simulated';
@@ -27,8 +31,6 @@ export const STATUS_TEXT: Record<TableStatus, string> = { observing: 'Observing'
 
 export const decksText = (table: Pick<TableView, 'decks' | 'step'>) => (table.step === 'shuffle' ? `Decks remaining: ${table.decks}` : `${table.decks} decks left`);
 export const DEALER = 'DEALER';
-export const PAYS = 'BLACKJACK PAYS 3 TO 2';
-export const dealerRuleText = (dealer: 'S17' | 'H17') => (dealer === 'S17' ? 'DEALER STANDS ON ALL 17s' : 'DEALER HITS SOFT 17');
 export const seatName = (seat: number) => `Seat ${seat}`;
 
 const ACTION_TEXT: Record<BlackjackAction, string> = { hit: 'Hit', stand: 'Stand', double: 'Double', split: 'Split', surrender: 'Surrender', 'decline-insurance': 'No insurance' };
@@ -49,11 +51,6 @@ export const observeText = (table: Pick<TableView, 'rules' | 'interval' | 'nextC
 // Spec 3 Count checkpoints (table); S3-07 bh8oE, xjtSW
 const listText = (items: readonly string[]) => (items.length < 2 ? items.join('') : `${items.slice(0, -1).join(', ')} and ${items.at(-1)}`);
 
-export function blockRounds(interval: number, rounds: number): number[] {
-  const at = Array.from({ length: Math.floor(rounds / interval) }, (_, index) => (index + 1) * interval);
-  return at.at(-1) === rounds ? at : [...at, rounds];
-}
-
 export function checkpointTitle(prompt: NonNullable<TableView['prompt']>, round: number): string {
   if (prompt.timing === 'before-bet') return `Checkpoint before round ${round}’s bet`;
   return prompt.timing === 'after-round' ? `Checkpoint after round ${round}` : `Block checkpoint after round ${round}`;
@@ -63,15 +60,17 @@ export function checkpointText(table: Pick<TableView, 'prompt' | 'interval' | 'r
   const prompt = table.prompt as NonNullable<TableView['prompt']>;
   if (prompt.timing === 'before-bet') return 'Enter the running and true count before this round’s bet. The round waits until you submit or skip.';
   if (prompt.timing === 'after-round') return 'Enter the running count, including the dealer’s last card. The next round waits until you submit or skip.';
-  return `N = ${table.interval}: enter the running and true count after rounds ${listText(blockRounds(table.interval, table.rounds).map(String))}. Other count prompts are off. The next round waits until you submit or skip.`;
+  return `N = ${table.interval}: enter the running and true count after rounds ${listText(tableCheckpointRounds(table.interval, table.rounds).map(String))}. Other count prompts are off. The next round waits until you submit or skip.`;
 }
 
 export const RUNNING_COUNT = 'Running count';
 export const TRUE_COUNT = 'True count';
 export const NEXT_TRUE_COUNT = 'Next: true count';
 
-export const tableRecordedText = (entered: ChallengeEntry, count: 'running' | 'true') =>
-  entered === 'skip' ? 'Skip recorded. Next card in a moment.' : `${count === 'running' ? RUNNING_COUNT : TRUE_COUNT} ${signed(entered)} recorded. Next card in a moment.`;
+export function tableRecordedText(entered: ChallengeEntry, count: 'running' | 'true', trueCountNext: boolean): string {
+  const next = trueCountNext ? 'The true count is next.' : 'The table carries on in a moment.';
+  return entered === 'skip' ? `Skip recorded. ${next}` : `${count === 'running' ? RUNNING_COUNT : TRUE_COUNT} ${signed(entered)} recorded. ${next}`;
+}
 
 // Spec 3 S3-07 heGUV
 export const NEW_SHOE = 'NEW SHOE';
@@ -90,15 +89,12 @@ export const TRY_AGAIN = 'Try again';
 export const SHOW_ANSWER = 'Show answer';
 export const CONTINUE = 'Continue';
 
-const hiLo = (rank: number): number => (rank >= 2 && rank <= 6 ? 1 : rank >= 7 && rank <= 9 ? 0 : -1);
-
 export function tableRunningText(explanation: TableRunningExplanation, timing: NonNullable<TableView['prompt']>['timing']): string {
-  const { cards, before, count, shuffled, round } = explanation;
+  const { cards, values, before, count, shuffled, round } = explanation;
   const start = shuffled ? 'The shoe was reshuffled, so the count started again at 0' : `The count was ${signed(before)} before ${timing === 'after-round' ? 'the round' : 'that'}`;
   if (cards.length === 0) return `No cards have been exposed since then. ${start}, so it’s still ${signed(count)}.`;
   const which = timing === 'after-round' ? `Round ${round}’s exposed cards were` : 'The cards exposed since your last running count were';
-  const values = cards.map((card) => hiLo(card.rank));
-  const sum = values.reduce((total, value) => total + value, 0);
+  const sum = values.reduce((total: number, value) => total + value, 0);
   return `${which} ${listText(cards.map((card) => `${cardRank(card)}${SUIT_GLYPH[card.suit]}`))}: ${values.map(signed).join(', ')} adds up to ${signed(sum)}. ${start}, so it’s ${signed(count)} now.`;
 }
 

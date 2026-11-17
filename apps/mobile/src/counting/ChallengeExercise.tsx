@@ -3,17 +3,17 @@
 import type { HintId } from '@tableside/definitions';
 import type { ChallengeCategory, ChallengeEntry, ChallengeView, ConversionItem, CountRange, LearnFeedback } from '@tableside/engine';
 import { CircleCheck, CircleDot, CircleX, Info, SkipForward } from 'lucide-react-native';
-import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/Button';
 import { Choice, PlayingCard } from '@/counting/CardChoices';
-import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
 import { FirstUseHint, HelpButton } from '@/lessons/FirstUseHints';
 import { signed } from '@/play/blackjack-text';
 import { SaveFailedBanner } from '@/play/TableChrome';
-import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/theme/tokens';
+import { fonts, palette, radius, space, textScale } from '@/theme/tokens';
 import { CountAid } from './CountAid';
+import { CoachButton } from './CoachButton';
 import { CountEntry } from './CountEntry';
 import { TableExercise } from './TableExercise';
 import { decksText } from '@/training/blackjack-conversion-text';
@@ -378,24 +378,6 @@ function CoachNote({
   );
 }
 
-function CoachButton({ label, primary = false, enabled, onPress }: { label: string; primary?: boolean; enabled: boolean; onPress: () => void }) {
-  const { focused, focusProps } = useKeyboardFocus();
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityState={{ disabled: !enabled }}
-      disabled={!enabled}
-      onPress={onPress}
-      {...focusProps}
-      style={({ pressed }) => [styles.coachButton, primary ? styles.coachPrimary : styles.coachSecondary, pressed && styles.pressed, focused && styles.coachFocused]}
-    >
-      <Text maxFontSizeMultiplier={textScale.body} style={[styles.coachButtonText, primary && styles.coachPrimaryText]}>
-        {label}
-      </Text>
-    </Pressable>
-  );
-}
-
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: palette.background },
   header: { flexDirection: 'row', alignItems: 'center', gap: space[2], minHeight: 60, paddingLeft: space[4], paddingRight: space[2], paddingVertical: space[1] },
@@ -433,12 +415,6 @@ const styles = StyleSheet.create({
   headline: { fontFamily: fonts.uiBold, fontSize: 17, color: palette.ink },
   detail: { fontFamily: fonts.ui, fontSize: 14, lineHeight: 20, color: palette.inkMuted },
   coachActions: { flexDirection: 'row', flexWrap: 'wrap', gap: space[2] },
-  coachButton: { minHeight: MIN_TOUCH_TARGET, justifyContent: 'center', paddingHorizontal: 14, borderRadius: radius.md, borderWidth: 2 },
-  coachPrimary: { backgroundColor: palette.ink, borderColor: palette.ink },
-  coachSecondary: { borderColor: palette.inkMuted },
-  coachButtonText: { fontFamily: fonts.uiBold, fontSize: 14, color: palette.ink },
-  coachPrimaryText: { color: palette.coach },
-  coachFocused: { borderColor: palette.coachAccent },
   pressed: { opacity: 0.8 },
   focused: { borderColor: palette.ring, borderWidth: 2 },
 });

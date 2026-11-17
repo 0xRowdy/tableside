@@ -101,7 +101,7 @@ export function challengeGroupKey(state: ChallengeState): ChallengeGroupKey {
   };
 }
 
-// Spec 3 Comparison groups (table); Observe has no counting mode, bet schedule or funding
+// Spec 3 Comparison groups; Challenge content › Observe seats
 function tableGroupKey({ rules, seat, interval }: TableSetup): TableGroupKey {
   return {
     rules: { id: rules.id, version: rules.version },

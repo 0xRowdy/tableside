@@ -21,7 +21,7 @@ export {
   type PlayAction,
 } from './blackjack/reference';
 
-export { BLACKJACK_LIMITS, blackjackRules, DEFAULT_BLACKJACK_PRESET, DEFAULT_PENETRATION } from './blackjack/rules';
+export { BLACKJACK_LIMITS, blackjackPreset, blackjackRules, DEFAULT_BLACKJACK_PRESET, DEFAULT_PENETRATION } from './blackjack/rules';
 export { seatStrategy } from './blackjack/seats';
 export { BET_SCHEDULE, BLACKJACK_MODES, BLACKJACK_REFERENCE_IDENTITY, blackjackStrategy, countingMode, type BlackjackMode } from './blackjack/strategies';
 export {

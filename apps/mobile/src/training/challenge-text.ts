@@ -4,7 +4,7 @@ import { runningCountDrift, type AssistanceClass, type ChallengeCategory, type C
 
 import { cardName, rankName, signed } from '@/play/blackjack-text';
 import { conversionText, decksText } from '@/training/blackjack-conversion-text';
-import { completedRounds, RETRY_WITH_NEW_SHOE, runningHeadline, tableCheckpointTitle, tableRunningText } from '@/training/blackjack-table-text';
+import { completedRounds, RETRY_WITH_NEW_SHOE, runningHeadline, TABLE_LEARN_DETAIL, tableCheckpointTitle, tableRunningText } from '@/training/blackjack-table-text';
 import { GAME_WORDS } from '@/play/game-words';
 
 import type { ChallengeAllowance } from './allowance';
@@ -280,7 +280,7 @@ export function completedText(
   const rounds = (title: string) => (table ? title.replace('Completed · ', `Completed · ${completedRounds(groupKey.length as number)} · `) : title);
   if (groupKey.assistanceClass !== 'assisted-check') {
     const completed = COMPLETED[groupKey.variant];
-    return { ...completed, title: rounds(completed.title) };
+    return { ...completed, title: rounds(completed.title), detail: table && groupKey.variant === 'learn' ? TABLE_LEARN_DETAIL : completed.detail };
   }
   const when = assistanceStep === null || table ? '' : ` at card ${assistanceStep}`;
   return {

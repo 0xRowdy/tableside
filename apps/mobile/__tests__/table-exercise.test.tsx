@@ -34,8 +34,7 @@ function send(state: ChallengeState, command: ChallengeCommand): ChallengeState 
 
 const stepOf = (state: ChallengeState) => state.items[state.position] as TableStep;
 
-// Advances, skipping prompts, until `wanted` holds.
-function until(start: ChallengeState, wanted: (state: ChallengeState) => boolean): ChallengeState {
+function advanceUntil(start: ChallengeState, wanted: (state: ChallengeState) => boolean): ChallengeState {
   let state = start;
   for (let guard = 0; guard < 2000 && !wanted(state); guard++) {
     state = send(state, state.phase === 'question' ? { kind: 'skip' } : { kind: 'next-item' });
@@ -88,7 +87,7 @@ describe('the table counting exercise', () => {
   });
 
   it('reveals the round one card at a time with the hole card face down, while the simulated seat plays (S3-07 v82z3)', async () => {
-    const dealing = until(attempt('check', 1), (state) => stepOf(state).step === 'deal' && stepOf(state).round === 1 && (stepOf(state) as { to: string }).to === 'dealer' && (stepOf(state) as { face: unknown }).face === null);
+    const dealing = advanceUntil(attempt('check', 1), (state) => stepOf(state).step === 'deal' && stepOf(state).round === 1 && (stepOf(state) as { to: string }).to === 'dealer' && (stepOf(state) as { face: unknown }).face === null);
     await present(readChallengeView(dealing));
     expect(screen.getByText('Observing')).toBeOnTheScreen();
     expect(screen.getByText('OBSERVE · NO DECISIONS')).toBeOnTheScreen();
@@ -106,7 +105,7 @@ describe('the table counting exercise', () => {
   });
 
   it('asks the running count after the dealer’s last card with the settled round on the felt (S3-07 bh8oE)', async () => {
-    const after = until(attempt('check', 1), (state) => stepOf(state).step === 'prompt' && (stepOf(state) as { timing: string }).timing === 'after-round');
+    const after = advanceUntil(attempt('check', 1), (state) => stepOf(state).step === 'prompt' && (stepOf(state) as { timing: string }).timing === 'after-round');
     await present(readChallengeView(after));
     expect(screen.getByText('Checkpoint after round 1')).toBeOnTheScreen();
     expect(screen.getByText('Enter the running count, including the dealer’s last card. The next round waits until you submit or skip.')).toBeOnTheScreen();
@@ -118,7 +117,7 @@ describe('the table counting exercise', () => {
     const start = attempt('check', 1, { interval: 3 });
     await present(readChallengeView(start));
     expect(screen.getByText(/With N = 3 your next checkpoint is after round 3\./)).toBeOnTheScreen();
-    await present(readChallengeView(until(start, (state) => state.phase === 'question')));
+    await present(readChallengeView(advanceUntil(start, (state) => state.phase === 'question')));
     expect(screen.getByText('Block checkpoint after round 3')).toBeOnTheScreen();
     expect(screen.getByText('N = 3: enter the running and true count after rounds 3, 6, 9 and 10. Other count prompts are off. The next round waits until you submit or skip.')).toBeOnTheScreen();
   });
@@ -127,7 +126,7 @@ describe('the table counting exercise', () => {
     let shuffled: ChallengeState | null = null;
     for (let n = 1; n < 200 && !shuffled; n++) {
       try {
-        shuffled = until(attempt('check', n, { extraPlayers: 4, penetration: 50 }), (state) => state.phase !== 'ended' && stepOf(state).step === 'shuffle');
+        shuffled = advanceUntil(attempt('check', n, { extraPlayers: 4, penetration: 50 }), (state) => state.phase !== 'ended' && stepOf(state).step === 'shuffle');
       } catch {
         shuffled = null;
       }
@@ -145,7 +144,7 @@ describe('the table counting exercise', () => {
   });
 
   it('corrects a Learn running count before the next card, explaining the round’s exposed cards (S3-07 AcmMa)', async () => {
-    const after = until(attempt('learn', 1), (state) => stepOf(state).step === 'prompt' && (stepOf(state) as { timing: string }).timing === 'after-round');
+    const after = advanceUntil(attempt('learn', 1), (state) => stepOf(state).step === 'prompt' && (stepOf(state) as { timing: string }).timing === 'after-round');
     await present(readChallengeView(send(after, { kind: 'answer', value: 4 })));
     expect(screen.getByText('YOU ENTERED +4 · RUNNING COUNT IS +3')).toBeOnTheScreen();
     expect(screen.getByText('The running count is +3.')).toBeOnTheScreen();
@@ -157,9 +156,9 @@ describe('the table counting exercise', () => {
   });
 
   it('keeps a recorded Check checkpoint free of correctness: a right and a wrong count look the same apart from the cards (j4tjKT)', async () => {
-    const at = (n: number) => until(attempt('check', n), (state) => stepOf(state).step === 'prompt' && (stepOf(state) as { timing: string }).timing === 'after-round');
+    const at = (n: number) => advanceUntil(attempt('check', n), (state) => stepOf(state).step === 'prompt' && (stepOf(state) as { timing: string }).timing === 'after-round');
     const recorded = await present(readChallengeView(send(at(1), { kind: 'answer', value: 3 })));
-    expect(screen.getByText('Running count +3 recorded. Next card in a moment.')).toBeOnTheScreen();
+    expect(screen.getByText('Running count +3 recorded. The table carries on in a moment.')).toBeOnTheScreen();
     expectNoFeedbackColors(recorded);
     const other = await present(readChallengeView(send(at(2), { kind: 'answer', value: 3 })));
     expectIndistinguishable(other, recorded);

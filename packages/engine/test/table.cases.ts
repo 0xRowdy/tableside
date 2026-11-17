@@ -262,7 +262,7 @@ export const tableCases: TestCase[] = [
       t.equal([stepOf(before), running.feedback?.reference, running.feedback?.explanation], [
         { step: 'prompt', round, checkpoint: 2 * round - 1, timing: 'before-bet', count: 'running' },
         0,
-        { kind: 'table-running', round, cards: [], before: 0, shuffled: true, count: 0 },
+        { kind: 'table-running', round, cards: [], values: [], before: 0, shuffled: true, count: 0 },
       ]);
       const trueCount = learnView(step(step(step(before, ANSWER(0)), NEXT), ANSWER(0)));
       t.equal([trueCount.feedback?.reference, trueCount.table?.decks], [0, 6]);
@@ -295,6 +295,7 @@ export const tableCases: TestCase[] = [
           { rank: 4, suit: 'clubs' },
           { rank: 12, suit: 'clubs' },
         ],
+        values: [-1, 1, 1, 1, 1, 1, -1],
         before: 0,
         shuffled: false,
         count: 3,

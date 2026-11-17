@@ -2,6 +2,7 @@
 
 import type { DomainFact } from './activity';
 import {
+  BLACKJACK_RULES,
   blackjackTable,
   countOf,
   dealerFinished,
@@ -73,7 +74,7 @@ export const MAX_TABLE_ROUNDS = 20;
 export const MAX_CHECKPOINT_INTERVAL = 10;
 
 // Spec 3 Learn, Check and assistance › Malformed input
-const RUNNING_LIMIT = 6 * 20;
+const RUNNING_LIMIT = BLACKJACK_RULES.decks * 20;
 export const tableCountRange = (count: TableCount) => {
   const limit = count === 'running' ? RUNNING_LIMIT : 2 * RUNNING_LIMIT;
   return { min: -limit, max: limit };
@@ -131,6 +132,10 @@ function stepsOf(facts: readonly DomainFact[], round: number): TableStep[] {
   return steps;
 }
 
+// Spec 3 Count checkpoints (table)
+export const tableCheckpointRounds = (interval: number, rounds: number): number[] =>
+  Array.from({ length: rounds }, (_, index) => index + 1).filter((round) => round % interval === 0 || round === rounds);
+
 const lastCheckpoint = (steps: readonly TableStep[]) => steps.reduce((last, step) => (step.step === 'prompt' ? step.checkpoint : last), 0);
 
 // Spec 3 Count checkpoints (table), Reshuffle, Observe seats
@@ -160,7 +165,7 @@ export function dealTableRound(
   const simulated = simulateRound(rules, setup.strategy, shoe, round);
   dealt.push(...stepsOf(simulated.facts, round));
   if (setup.interval === 1) prompts('after-round', ['running']);
-  else if (round % setup.interval === 0 || round === content.rounds) prompts('block', ['running', 'true']);
+  else if (tableCheckpointRounds(setup.interval, content.rounds).includes(round)) prompts('block', ['running', 'true']);
   return { steps: dealt, progress: { ...progress, shoe: simulated.shoe, round }, random };
 }
 
@@ -184,13 +189,14 @@ export function tableCountAt(steps: readonly TableStep[], position: number): Tab
   return { running, decks: Number(count.decks), trueCount: count.trueCount };
 }
 
-const SHOE_CARDS = 6 * 52;
+const SHOE_CARDS = BLACKJACK_RULES.decks * 52;
 
 // Spec 3 Learn, Check and assistance › Learn; S3-07 AcmMa
 export interface TableRunningExplanation {
   readonly kind: 'table-running';
   readonly round: number;
   readonly cards: readonly TableCard[];
+  readonly values: readonly (-1 | 0 | 1)[];
   readonly before: number;
   readonly shuffled: boolean;
   readonly count: number;
@@ -210,6 +216,7 @@ export function tableRunningExplanation(steps: readonly TableStep[], position: n
     kind: 'table-running',
     round: (steps[position] as TableStep).round,
     cards,
+    values: cards.map((card) => hiLo(card) as -1 | 0 | 1),
     before: from === undefined || shuffled ? 0 : tableCountAt(steps, start).running,
     shuffled,
     count: tableCountAt(steps, position).running,
