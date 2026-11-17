@@ -12,7 +12,6 @@ export interface UnsequencedLessonEvent {
   readonly installation: string;
   readonly lesson: { readonly id: string; readonly version: number; readonly materialVersion: number };
   readonly event: LessonProgressChange;
-  // display only
   readonly recordedAt: number;
 }
 

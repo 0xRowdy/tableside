@@ -1,4 +1,4 @@
-// Settings › Learning NvGyZ; Spec 3 Amendment 1 D; #143
+// Spec 3 Amendment 1 D; Settings › Learning NvGyZ; #143
 import { router } from 'expo-router';
 import { Library } from 'lucide-react-native';
 
