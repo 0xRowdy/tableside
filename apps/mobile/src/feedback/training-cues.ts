@@ -12,9 +12,13 @@ import type { FeedbackService } from './service';
 export const CONTENT_SHOWN_CUE: CueName = 'card-dealt';
 export const learnAnswerCue = (correct: boolean): CueName => (correct ? 'correct' : 'incorrect');
 
-// Spec 3 Amendment 1 B4; #155, #152
+// Spec 3 Amendment 1 B4; #155, #152, #153
 export const EXAMPLE_CUES: Readonly<Record<WorkedExample['kind'], { readonly shown: CueName | null; answer(correct: boolean, asks: StrategyStepAnswer['kind'] | null): CueName[] }>> = {
   'card-value': { shown: CONTENT_SHOWN_CUE, answer: (correct) => [learnAnswerCue(correct)] },
+  'running-count': { shown: CONTENT_SHOWN_CUE, answer: (correct) => [learnAnswerCue(correct)] },
+  conversion: { shown: CONTENT_SHOWN_CUE, answer: (correct) => [learnAnswerCue(correct)] },
+  // A table running-count prompt plays the checkpoint cue (cue 11), as in a table Learn attempt.
+  'table-count': { shown: 'checkpoint-due', answer: (correct) => [learnAnswerCue(correct)] },
   'strategy-step': {
     shown: null,
     answer: (correct, asks) => {

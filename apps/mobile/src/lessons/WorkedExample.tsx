@@ -1,4 +1,4 @@
-// Spec 3 S3-12 aJV2y; Lessons › Structure (worked examples); Amendment 1 B4; #144, #152, #155
+// Spec 3 S3-12 aJV2y; Lessons › Structure (worked examples); Amendment 1 B4; #144, #152, #153, #155
 
 import type { CardValueExample, WorkedExample as Script, StrategyStepExample } from '@tableside/definitions';
 import { ArrowRight, RotateCcw, SkipForward } from 'lucide-react-native';
@@ -7,6 +7,7 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Choice, PlayingCard } from '@/counting/CardChoices';
+import { BlackjackCountingExample, countingAnswer } from '@/lessons/BlackjackCountingExample';
 import { useFeedback } from '@/feedback/FeedbackProvider';
 import { EXAMPLE_CUES } from '@/feedback/training-cues';
 import { NavButton } from '@/lessons/LessonParts';
@@ -39,12 +40,17 @@ interface Picking {
   readonly onPick: (index: number, correct: boolean) => void;
 }
 
-function Response({ headline, note }: { headline: string; note: string | null }) {
+function Response({ headline, detail = null, note }: { headline: string; detail?: string | null; note: string | null }) {
   return (
     <View style={styles.response} accessibilityLiveRegion="polite" testID="scripted-response">
       <Text maxFontSizeMultiplier={textScale.display} style={styles.headline}>
         {headline}
       </Text>
+      {detail && (
+        <Text maxFontSizeMultiplier={textScale.body} style={styles.detail}>
+          {detail}
+        </Text>
+      )}
       {note && (
         <Text maxFontSizeMultiplier={textScale.body} style={styles.detail}>
           {note}
@@ -83,7 +89,7 @@ export function WorkedExample({ example, lesson, busy, onBack, onDone }: { examp
         <Text maxFontSizeMultiplier={textScale.body} style={styles.note}>
           {EXAMPLE_NOTE}
         </Text>
-        {example.kind === 'card-value' ? <CardValue example={example} picked={picked} onPick={onPick} /> : <StrategyStep example={example} picked={picked} onPick={onPick} />}
+        <Body example={example} picked={picked} onPick={onPick} />
         <View style={styles.nav}>
           {picked === null ? (
             <NavButton icon={SkipForward} label={SKIP_EXAMPLE} disabled={busy} onPress={onDone} />
@@ -96,6 +102,17 @@ export function WorkedExample({ example, lesson, busy, onBack, onDone }: { examp
         </View>
       </View>
     </ScrollView>
+  );
+}
+
+function Body({ example, picked, onPick }: { example: Script } & Picking) {
+  if (example.kind === 'card-value') return <CardValue example={example} picked={picked} onPick={onPick} />;
+  if (example.kind === 'strategy-step') return <StrategyStep example={example} picked={picked} onPick={onPick} />;
+  return (
+    <>
+      <BlackjackCountingExample example={example} picked={picked} onPick={onPick} choiceState={scriptedChoiceState} />
+      {picked !== null && <Response {...countingAnswer(example, picked)} />}
+    </>
   );
 }
 
