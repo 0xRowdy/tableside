@@ -1,4 +1,4 @@
-// Spec 3 Screens; #158, #132
+// Spec 3 Screens; #158, #132, #133
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useState } from 'react';
 
@@ -8,6 +8,7 @@ import { ChallengeExercise } from '@/counting/ChallengeExercise';
 import { ChallengeResults } from '@/counting/ChallengeResults';
 import { ChallengeSetupScreen } from '@/counting/ChallengeSetupScreen';
 import { CountingHome } from '@/counting/CountingHome';
+import { useFeedback } from '@/feedback/FeedbackProvider';
 import { useLoaded } from '@/hooks/use-loaded';
 import { allowanceCopy, COUNTING_TITLE, FINDING_ATTEMPT } from '@/training/challenge-text';
 import { setupFor, type ChallengeSetup, type TrainingService, type TrainingSnapshot } from '@/training/service';
@@ -18,6 +19,7 @@ const allowanceOf = async (service: TrainingService, _reloadOnStatus: TrainingSn
 
 export default function Counting() {
   const { service, snapshot } = useTraining();
+  const feedback = useFeedback();
   const { category } = useLocalSearchParams<{ category?: string }>();
   const remembered = useLoaded(lastSetupOf, service);
   // Spec 3 Amendment 4 §2
@@ -40,6 +42,8 @@ export default function Counting() {
           busy={snapshot.busy}
           saveFailed={snapshot.save === 'failed'}
           onCommand={(command) => void service.submit(command)}
+          // Spec 3 Learn, Check and assistance › Malformed input: cue 9
+          onInputRejected={() => feedback.cue('input-rejected')}
           onRetrySave={() => void service.retrySave()}
         />
       );

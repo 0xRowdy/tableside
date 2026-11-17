@@ -1,6 +1,6 @@
-// Spec 3 S3-03 P4WjR, drVnR, BFdJT; #158, #132
+// Spec 3 S3-03 P4WjR, drVnR, BFdJT, S3-04 qdnQm, S3-05 EDnGd, S3-06 C53yTW; #158, #132, #133
 
-import type { ChallengeCard, ChallengeEntry, ChallengeView, HiLoValue, LearnFeedback } from '@tableside/engine';
+import type { ChallengeCard, ChallengeCategory, ChallengeEntry, ChallengeView, HiLoValue, LearnFeedback } from '@tableside/engine';
 import { Check, CircleCheck, CircleDot, CircleX, SkipForward, X } from 'lucide-react-native';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -10,16 +10,23 @@ import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
 import { cardName, cardRank, signed, SUIT_GLYPH } from '@/play/blackjack-text';
 import { SaveFailedBanner } from '@/play/TableChrome';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/theme/tokens';
+import { CountAid } from './CountAid';
+import { CountEntry } from './CountEntry';
 import {
   CARD_PROMPT,
   CATEGORY_TEXT,
+  checkpointKicker,
+  checkpointOf,
+  COUNT_LABEL,
+  countPrompt,
+  exerciseProgress,
+  keepCounting,
   CHOICE_TAG,
   choiceState,
   COACH_NAME,
   feedbackText,
   NEXT_CARD,
   PACING_LABEL,
-  progressText,
   recordedText,
   SKIP_LABEL,
   spokenValue,
@@ -36,18 +43,22 @@ export function ChallengeExercise({
   busy,
   saveFailed,
   onCommand,
+  onInputRejected,
   onRetrySave,
 }: {
   view: ChallengeView;
   busy: boolean;
   saveFailed: boolean;
   onCommand: (command: LearnerCommand) => void;
+  onInputRejected: () => void;
   onRetrySave: () => void;
 }) {
   const insets = useSafeAreaInsets();
-  const answering = view.legalCommands.includes('answer') && !busy && !saveFailed;
+  const ready = !busy && !saveFailed;
+  const answering = view.legalCommands.includes('answer') && ready;
   const feedback = view.variant === 'learn' ? view.feedback : null;
   const entered = view.variant === 'check' ? view.entered : null;
+  const checkpoint = checkpointOf(view);
   return (
     <ScrollView style={styles.screen} contentContainerStyle={{ paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right, paddingBottom: space[6] }}>
       <View style={styles.header}>
@@ -60,7 +71,7 @@ export function ChallengeExercise({
       </View>
       <View style={styles.progress}>
         <Text maxFontSizeMultiplier={textScale.body} style={styles.progressText}>
-          {progressText(view.position, view.length)}
+          {exerciseProgress(view)}
         </Text>
         <View style={styles.track}>
           <View style={[styles.fill, { width: `${(view.position / view.length) * 100}%` }]} />
@@ -69,19 +80,54 @@ export function ChallengeExercise({
       <View style={styles.body}>
         {saveFailed && <SaveFailedBanner busy={busy} onRetry={onRetrySave} />}
         {view.item && <PlayingCard card={view.item.card} />}
-        {view.item && !feedback && (
+        {view.item && !feedback && view.countRange === null && (
           <Text maxFontSizeMultiplier={textScale.display} style={styles.prompt}>
             {CARD_PROMPT}
           </Text>
         )}
-        <View style={styles.choices}>
-          {view.choices.map((value) => (
-            <Choice key={value} value={value} state={choiceState(value, feedback, entered)} enabled={answering} onPress={() => onCommand({ kind: 'answer', value })} />
-          ))}
-        </View>
-        {view.legalCommands.includes('skip') && <Button label={SKIP_LABEL} icon={SkipForward} variant="outline" stretch disabled={!answering} onPress={() => onCommand({ kind: 'skip' })} />}
-        {view.phase === 'recorded' && entered !== null && <RecordedNotice entered={entered} />}
-        {feedback && <CoachNote feedback={feedback} canRetry={view.legalCommands.includes('retry-item')} enabled={!busy && !saveFailed} onCommand={onCommand} />}
+        {view.phase === 'question' && view.countRange !== null && (
+          <View style={styles.countPrompt}>
+            {checkpoint && (
+              <Text maxFontSizeMultiplier={textScale.body} style={styles.checkpointKicker}>
+                {checkpointKicker(checkpoint)}
+              </Text>
+            )}
+            <Text maxFontSizeMultiplier={textScale.display} style={styles.prompt}>
+              {countPrompt(view.position)}
+            </Text>
+          </View>
+        )}
+        {view.phase === 'card' && checkpoint && (
+          <Text maxFontSizeMultiplier={textScale.body} style={styles.keep}>
+            {keepCounting(checkpoint)}
+          </Text>
+        )}
+        {view.countAid && <CountAid key={view.attemptId} variant={view.variant} aid={view.countAid} enabled={ready && view.legalCommands.includes('reveal-count')} onReveal={() => onCommand({ kind: 'reveal-count' })} />}
+        {view.countRange === null ? (
+          <>
+            <View style={styles.choices}>
+              {view.choices.map((value) => (
+                <Choice key={value} value={value} state={choiceState(value, feedback, entered)} enabled={answering} onPress={() => onCommand({ kind: 'answer', value })} />
+              ))}
+            </View>
+            {view.legalCommands.includes('skip') && <Button label={SKIP_LABEL} icon={SkipForward} variant="outline" stretch disabled={!answering} onPress={() => onCommand({ kind: 'skip' })} />}
+          </>
+        ) : (
+          view.phase === 'question' && (
+            <CountEntry
+              key={view.position}
+              label={COUNT_LABEL}
+              range={view.countRange}
+              enabled={answering}
+              onSubmit={(value) => onCommand({ kind: 'answer', value })}
+              onSkip={() => onCommand({ kind: 'skip' })}
+              onRejected={onInputRejected}
+            />
+          )
+        )}
+        {view.phase === 'card' && <Button label={NEXT_CARD} stretch disabled={!ready} onPress={() => onCommand({ kind: 'next-item' })} />}
+        {view.phase === 'recorded' && entered !== null && <RecordedNotice entered={entered} category={view.category} />}
+        {feedback && <CoachNote feedback={feedback} position={view.position} canRetry={view.legalCommands.includes('retry-item')} enabled={ready} onCommand={onCommand} />}
       </View>
     </ScrollView>
   );
@@ -141,19 +187,31 @@ function Choice({ value, state, enabled, onPress }: { value: HiLoValue; state: C
 }
 
 // Spec 3 Learn, Check and assistance › Answer accepted
-function RecordedNotice({ entered }: { entered: ChallengeEntry }) {
+function RecordedNotice({ entered, category }: { entered: ChallengeEntry; category: ChallengeCategory }) {
   return (
     <View style={styles.recorded} accessibilityLiveRegion="polite" testID="recorded-notice">
       <CircleDot color={palette.foreground} size={18} />
       <Text maxFontSizeMultiplier={textScale.body} style={styles.recordedText}>
-        {recordedText(entered)}
+        {recordedText(entered, category)}
       </Text>
     </View>
   );
 }
 
-function CoachNote({ feedback, canRetry, enabled, onCommand }: { feedback: LearnFeedback; canRetry: boolean; enabled: boolean; onCommand: (command: LearnerCommand) => void }) {
-  const text = feedbackText(feedback);
+function CoachNote({
+  feedback,
+  position,
+  canRetry,
+  enabled,
+  onCommand,
+}: {
+  feedback: LearnFeedback;
+  position: number;
+  canRetry: boolean;
+  enabled: boolean;
+  onCommand: (command: LearnerCommand) => void;
+}) {
+  const text = feedbackText(feedback, position);
   const KindIcon = feedback.correct ? CircleCheck : CircleX;
   const kindColor = feedback.correct ? palette.ink : palette.mistakeInk;
   return (
@@ -217,6 +275,9 @@ const styles = StyleSheet.create({
   cornerSuit: { fontSize: 28, lineHeight: 30 },
   pip: { alignSelf: 'flex-end', fontSize: 60, lineHeight: 64 },
   prompt: { fontFamily: fonts.uiBold, fontSize: 18, color: palette.foreground, textAlign: 'center' },
+  countPrompt: { gap: space[1] },
+  checkpointKicker: { fontFamily: fonts.uiBold, fontSize: 14, color: palette.mutedForeground, textAlign: 'center' },
+  keep: { fontFamily: fonts.ui, fontSize: 15, lineHeight: 21, color: palette.mutedForeground, textAlign: 'center' },
   choices: { flexDirection: 'row', gap: space[3] - 2 },
   choice: {
     flex: 1,

@@ -1,13 +1,25 @@
-// Spec 3 S3-09 h0MsKr, BjuKf; Scoring and review › Review facts; #132
+// Spec 3 S3-09 h0MsKr, BjuKf; Scoring and review › Review facts, Attribution; #132, #133
 
 import type { ChallengeAttemptRecord } from '@tableside/engine';
-import { CircleCheckBig, CircleX, SkipForward } from 'lucide-react-native';
+import { CircleCheckBig, CircleX, SkipForward, TrendingUp } from 'lucide-react-native';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { SetupHeader } from '@/play/setup/SetupParts';
 import { fonts, palette, radius, space, textScale } from '@/theme/tokens';
-import { CARD_REVIEW_TITLE, CATEGORY_TEXT, CORRECT_LABEL, RESULTS_TITLE, reviewText, scoreText, variantLabel, YOU_LABEL, type ReviewOutcome } from '@/training/challenge-text';
+import {
+  CATEGORY_TEXT,
+  CORRECT_LABEL,
+  driftText,
+  ERROR_LABEL,
+  RESULTS_TITLE,
+  REVIEW_TITLE,
+  reviewText,
+  scoreText,
+  variantLabel,
+  YOU_LABEL,
+  type ReviewOutcome,
+} from '@/training/challenge-text';
 
 const OUTCOME_ICON: Record<ReviewOutcome, { readonly Icon: typeof CircleX; readonly color: string }> = {
   match: { Icon: CircleCheckBig, color: palette.correct },
@@ -18,18 +30,19 @@ const OUTCOME_ICON: Record<ReviewOutcome, { readonly Icon: typeof CircleX; reado
 export function CardReview({ record, onBack }: { record: ChallengeAttemptRecord; onBack: () => void }) {
   const insets = useSafeAreaInsets();
   const { groupKey } = record;
+  const drift = driftText(record.review, groupKey.variant);
   return (
     <ScrollView style={styles.screen} contentContainerStyle={{ paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right, paddingBottom: space[6] }}>
       <SetupHeader
-        title={CARD_REVIEW_TITLE}
-        subtitle={`${CATEGORY_TEXT[groupKey.category].title} · ${variantLabel(groupKey.variant)} · ${scoreText(record.metrics['card-values'])}`}
+        title={REVIEW_TITLE[groupKey.category]}
+        subtitle={`${CATEGORY_TEXT[groupKey.category].title} · ${variantLabel(groupKey.variant)} · ${scoreText(record.metrics[groupKey.category])}`}
         backTo={RESULTS_TITLE}
         onBack={onBack}
       />
       <View style={styles.body}>
         <View style={styles.group}>
           {record.review.map((fact, index) => {
-            const text = reviewText(fact);
+            const text = reviewText(fact, groupKey.variant);
             const { Icon, color } = OUTCOME_ICON[text.outcome];
             return (
               <View key={fact.position} accessible accessibilityLabel={text.label} style={[styles.row, index > 0 && styles.rowDivider]}>
@@ -45,11 +58,20 @@ export function CardReview({ record, onBack }: { record: ChallengeAttemptRecord;
                 <View style={styles.values}>
                   <Value label={YOU_LABEL} value={text.entered} />
                   <Value label={CORRECT_LABEL} value={text.reference} />
+                  {text.error !== null && <Value label={ERROR_LABEL} value={text.error} />}
                 </View>
               </View>
             );
           })}
         </View>
+        {drift && (
+          <View style={styles.drift} testID="drift-note">
+            <TrendingUp color={palette.foreground} size={20} />
+            <Text maxFontSizeMultiplier={textScale.body} style={styles.driftText}>
+              {drift}
+            </Text>
+          </View>
+        )}
       </View>
     </ScrollView>
   );
@@ -70,7 +92,7 @@ function Value({ label, value }: { label: string; value: string }) {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: palette.background },
-  body: { paddingTop: space[2], paddingHorizontal: space[4] },
+  body: { gap: space[4], paddingTop: space[2], paddingHorizontal: space[4] },
   group: { borderRadius: radius.lg, borderWidth: 1, borderColor: palette.border, backgroundColor: palette.card, overflow: 'hidden' },
   row: { gap: space[2], paddingVertical: space[3], paddingHorizontal: space[4] },
   rowDivider: { borderTopWidth: 1, borderTopColor: palette.border },
@@ -81,4 +103,6 @@ const styles = StyleSheet.create({
   value: { flex: 1, gap: 2 },
   valueLabel: { fontFamily: fonts.ui, fontSize: 12, color: palette.mutedForeground },
   valueText: { fontFamily: fonts.uiBold, fontSize: 18, color: palette.foreground },
+  drift: { flexDirection: 'row', gap: space[3], padding: space[4], borderRadius: radius.lg, backgroundColor: palette.card },
+  driftText: { flex: 1, fontFamily: fonts.ui, fontSize: 15, lineHeight: 21, color: palette.foreground },
 });

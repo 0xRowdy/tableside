@@ -1,4 +1,4 @@
-// Spec 3 Testing Decisions › Seam 3; S3-01 PDCaD, S3-02 buD2R, S3-03 P4WjR, drVnR, BFdJT, S3-08 liAfT, CEb6T, S3-09 h0MsKr; #158, #132
+// Spec 3 Testing Decisions › Seam 3; S3-01 PDCaD, S3-02 buD2R, S3-03 P4WjR, drVnR, BFdJT, S3-04 qdnQm, S3-05 EDnGd, S3-06 C53yTW, S3-08 liAfT, CEb6T, cX5Gc, S3-09 h0MsKr; #158, #132, #133
 
 import { cleanup, fireEvent, screen, within } from '@testing-library/react-native';
 import { renderRouter } from 'expo-router/testing-library';
@@ -70,7 +70,8 @@ describe('the Counting tab', () => {
     expect(screen.getByText('20 cards covering every rank. Answer +1, 0 or −1 for each.')).toBeOnTheScreen();
     expect(screen.getByRole('button', { name: 'Learn: Card values' })).toBeEnabled();
     expect(screen.getByRole('button', { name: 'Check: Card values' })).toBeEnabled();
-    expect(screen.getByRole('button', { name: 'Learn: Running count' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Learn: Running count' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Check: Running count' })).toBeEnabled();
     expect(screen.getByText('Recommendations use your accuracy only, never speed or winnings. Nothing here is locked.')).toBeOnTheScreen();
   });
 
@@ -275,5 +276,106 @@ describe('the Counting tab', () => {
     await screen.findByRole('header', { name: 'Results' });
     expect(await screen.findByText("When you're ready, try Check: it holds every answer until the end. You've used today's 5 challenge attempts. They reset at 12:00 AM Mountain Time.")).toBeOnTheScreen();
     expect(screen.getByRole('button', { name: 'Retry with new cards' })).toBeDisabled();
+  });
+
+  describe('running count', () => {
+    const HI_LO_VALUE: Record<string, number> = { 'plus 1': 1, '0': 0, 'minus 1': -1 };
+    const valueOf = (card: string) => HI_LO_VALUE[answerFor(card)]!;
+    const typed = (count: number) => (count < 0 ? `−${-count}` : String(count));
+    const signedText = (count: number) => (count > 0 ? `+${count}` : count < 0 ? `−${-count}` : '0');
+
+    async function enterCount(count: number) {
+      await fireEvent.changeText(screen.getByLabelText('Running count'), typed(count));
+      await fireEvent.press(screen.getByRole('button', { name: 'Submit' }));
+    }
+
+    async function start(variant: 'Learn' | 'Check') {
+      await renderRouter('./src/app', { initialUrl: '/counting' });
+      await screen.findByRole('header', { name: 'Counting' });
+      await fireEvent.press(screen.getByRole('button', { name: `${variant}: Running count` }));
+      await screen.findByRole('header', { name: 'Running count' });
+      expect(screen.getByText(/Learn asks for the count after every card; Check asks after cards 13, 26, 39 and 52/)).toBeOnTheScreen();
+      await fireEvent.press(within(screen.getByLabelText('Variant')).getByRole('radio', { name: variant }));
+      await fireEvent.press(screen.getByRole('button', { name: `Start ${variant} attempt` }));
+      await screen.findByText(variant === 'Check' ? 'Card 1 of 52 · checkpoint 1 of 4' : 'Card 1 of 52');
+    }
+
+    it('runs a Check attempt: checkpoints after 13, 26, 39 and 52, a malformed count rejected with cue 9, the count revealed at card 21, and a review that notes drift', async () => {
+      await start('Check');
+      let count = 0;
+      for (let card = 1; card <= 52; card++) {
+        const checkpoint = Math.ceil(card / 13);
+        await screen.findByText(`Card ${card} of 52 · checkpoint ${checkpoint} of 4`);
+        count += valueOf(shownCard());
+        if (card === 21) {
+          const before = cues();
+          await fireEvent.press(screen.getByRole('switch', { name: 'Show running count' }));
+          await fireEvent.press(screen.getByRole('button', { name: 'Show count and mark assisted' }));
+          expect(await screen.findByTestId('count-aid')).toHaveTextContent(`Running count${signedText(count)}`);
+          expect(cues()).toEqual(before);
+          await fireEvent.press(screen.getByRole('switch', { name: 'Show running count' }));
+          expect(screen.queryByTestId('count-aid')).toBeNull();
+        }
+        if (card % 13 !== 0) {
+          expect(screen.queryByRole('button', { name: 'Submit' })).toBeNull();
+          await fireEvent.press(screen.getByRole('button', { name: 'Next card' }));
+          continue;
+        }
+        expect(screen.getByText(`Enter the running count after ${card} cards`)).toBeOnTheScreen();
+        if (card === 13) {
+          const before = cues().length;
+          await fireEvent.press(screen.getByRole('button', { name: 'Submit' }));
+          expect(screen.getByRole('alert')).toHaveTextContent('Enter a count first. Nothing was submitted, and it doesn’t count against you.');
+          expect(cues().slice(before)).toEqual(['input-rejected']);
+          expect(screen.getByText('Card 13 of 52 · checkpoint 1 of 4')).toBeOnTheScreen();
+          await enterCount(count);
+        } else if (card === 52) await fireEvent.press(screen.getByRole('button', { name: 'Skip' }));
+        else await enterCount(count + 2);
+        expect(screen.queryByText(/Correct|Off by|Match/)).toBeNull();
+      }
+
+      await screen.findByRole('header', { name: 'Results' });
+      expect(cues().filter((cue) => cue === 'answer-accepted')).toHaveLength(4);
+      expect(screen.getByText('Running count · Check · self-paced')).toBeOnTheScreen();
+      expect(screen.getByText('Completed · assisted')).toBeOnTheScreen();
+      expect(
+        screen.getByText("You showed the running count at card 21, which marks the whole attempt assisted. It's compared only with other assisted attempts at these settings."),
+      ).toBeOnTheScreen();
+      expect(screen.getByText('No milestone or personal best for unassisted Check')).toBeOnTheScreen();
+      expect(screen.getByLabelText('Running count, 4 checkpoints: 1 of 4')).toBeOnTheScreen();
+      expect(screen.getByLabelText('Card values, Not tested: N/A')).toBeOnTheScreen();
+      expect(screen.getByRole('button', { name: 'Retry with a new shuffle' })).toBeEnabled();
+
+      await fireEvent.press(screen.getByRole('button', { name: 'Review checkpoints' }));
+      await screen.findByRole('header', { name: 'Checkpoint review' });
+      expect(screen.getByText('Running count · Check · 1 / 4')).toBeOnTheScreen();
+      expect(screen.getAllByLabelText(/^Checkpoint \d, after card \d+: /)).toHaveLength(4);
+      expect(screen.getByLabelText(/^Checkpoint 1, after card 13: you entered .*, error 0, match$/)).toBeOnTheScreen();
+      expect(screen.getByLabelText(/^Checkpoint 2, after card 26: you entered .*, error plus 2, off by 2$/)).toBeOnTheScreen();
+      expect(screen.getByLabelText(`Checkpoint 4, after card 52: skipped, correct ${count > 0 ? `plus ${count}` : count < 0 ? `minus ${-count}` : '0'}, counts as incorrect`)).toBeOnTheScreen();
+      expect(screen.getByTestId('drift-note')).toHaveTextContent(
+        'From checkpoint 2 on, your count ran 2 above the reference. One early miss likely carried through. Each checkpoint still counts as its own error.',
+      );
+    });
+
+    it('runs a Learn attempt: the count is asked after every card and explained before the next card', async () => {
+      await start('Learn');
+      let count = 0;
+      for (let card = 1; card <= 52; card++) {
+        await screen.findByText(`Card ${card} of 52`);
+        count += valueOf(shownCard());
+        if (card === 1) {
+          await enterCount(count + 1);
+          expect(screen.getByText(`The count after card 1 is ${signedText(count)}.`)).toBeOnTheScreen();
+          await fireEvent.press(screen.getByRole('button', { name: 'Try this card again' }));
+        }
+        await enterCount(count);
+        await fireEvent.press(screen.getByRole('button', { name: 'Next card' }));
+      }
+      await screen.findByRole('header', { name: 'Results' });
+      expect(screen.getByText('Completed · Learn')).toBeOnTheScreen();
+      expect(screen.getByLabelText('Running count, 52 cards: 51 of 52')).toBeOnTheScreen();
+      expect(cues().filter((cue) => cue === 'input-rejected')).toEqual([]);
+    });
   });
 });
