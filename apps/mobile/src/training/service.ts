@@ -5,6 +5,7 @@ import {
   blackjackPreset,
   CATALOG_CATEGORIES,
   CHALLENGE_CONTENT,
+  CHECK_WITHHELD_LESSONS,
   DEFAULT_TABLE_SETUP,
   tableSetup,
   type TableOptions,
@@ -21,9 +22,9 @@ import {
   type LessonStep,
   type WorkedExample,
 } from '@tableside/definitions';
-import { CHALLENGE_PACINGS, CHALLENGE_VARIANTS, MAX_CHECKPOINT_INTERVAL, MAX_OTHER_PLAYERS, pacingApplies, PENETRATIONS, type ChallengeAttemptRecord, type ChallengeCategory, type ChallengeGroupKey, type ChallengePacing, type ChallengeVariant } from '@tableside/engine';
+import { CHALLENGE_PACINGS, CHALLENGE_VARIANTS, MAX_CHECKPOINT_INTERVAL, MAX_OTHER_PLAYERS, pacingApplies, PENETRATIONS, type ChallengeAttemptRecord, type ChallengeCategory, type ChallengeGroupKey, type ChallengePacing, type ChallengeVariant, type GameId } from '@tableside/engine';
 
-import type { LifecycleEvent } from '../practice/adapters';
+import type { GameAccess, LifecycleEvent } from '../practice/adapters';
 import type { TrainingAdapters } from './adapters';
 import type { ChallengeAllowance } from './allowance';
 import { ChallengeController, type AttemptSnapshot, type DirectSuspendCause, type LearnerCommand, type PauseCause, type StartProblem } from './controller';
@@ -115,17 +116,38 @@ export function setupFor(entry: CatalogEntry, preferred: readonly (ChallengeSetu
   return { ...chosen, table: remembered ?? DEFAULT_TABLE_SETUP };
 }
 
+// Spec 3 Lessons › Check protection; Amendment 1 A2; #149
+export interface InstructionWithheld {
+  readonly category: CatalogCategory;
+  readonly play: boolean;
+}
+
+export class LessonUnavailableError extends Error {
+  constructor(
+    readonly lesson: string,
+    readonly access: Exclude<LessonAccess, { readonly kind: 'available' }>,
+  ) {
+    super(access.kind === 'after-check' ? `lesson ${lesson} opens after the Check attempt ends` : `lesson ${lesson} needs a connection`);
+  }
+}
+
 // Spec 3 Training service interface › List catalog, Lesson progress; #143
 export interface LessonEntry {
   readonly id: string;
   readonly title: string;
   readonly summary: string | null;
   readonly section: LessonSection;
+  // null: not written in this version yet, whatever its access
   readonly steps: number | null;
-  // TODO(#149)
-  readonly access: 'available';
+  readonly access: LessonAccess;
   readonly status: LessonStatus;
 }
+
+// Spec 3 Lessons › Access, Check protection; Amendment 1 A2, Amendment 4 §5; #149
+export type LessonAccess =
+  | { readonly kind: 'available' }
+  | { readonly kind: 'after-check'; readonly attempt: InstructionWithheld }
+  | { readonly kind: 'needs-connection'; readonly game: GameId; readonly offlineGame: GameId | null };
 
 export interface LessonView {
   readonly id: string;
@@ -269,8 +291,10 @@ export class TrainingService {
     this.challenges.suspend(cause);
   }
 
-  lifecycle(event: LifecycleEvent): Promise<void> {
-    return this.challenges.lifecycle(event);
+  async lifecycle(event: LifecycleEvent): Promise<void> {
+    await this.challenges.lifecycle(event);
+    // Spec 3 Lessons › Access; #149: offline access may have changed
+    if (event === 'access-changed') this.reviseLessons();
   }
 
   // Spec 3 Amendment 4 §2–3
@@ -352,45 +376,73 @@ export class TrainingService {
     }
   }
 
+  // Spec 3 Lessons › Check protection; Amendment 1 A2, Amendments 3 and 5: spec 4's strategy content and spec 6's community content consult this too
+  async instructionWithheld(): Promise<InstructionWithheld | null> {
+    const unfinished = await this.adapters.store.findUnfinishedAttempt();
+    // Spec 3 Amendment 1 C6: an uncharged attempt has shown nothing
+    if (!unfinished || unfinished.sequence === 0 || unfinished.specification.variant !== 'check') return null;
+    const { content, table } = unfinished.specification;
+    return { category: content.category, play: table?.seat === 'play' };
+  }
+
   // Spec 3 Lessons › Access
   async listLessons(): Promise<readonly LessonEntry[]> {
-    const events = await this.adapters.store.readLessonEvents();
-    return this.lessons.map(({ id, title, summary, section, content }) => ({
-      id,
-      title,
-      summary,
-      section,
-      steps: content ? stepCount(content) : null,
-      access: 'available' as const,
-      status: content ? lessonProgress(events, progressKey(id, content)).status : { kind: 'not-started' as const },
+    const games = [...new Set(this.lessons.flatMap((lesson) => (lesson.game ? [lesson.game] : [])))];
+    const [events, withheld, answers] = await Promise.all([
+      this.adapters.store.readLessonEvents(),
+      this.instructionWithheld(),
+      Promise.all(games.map(async (game) => [game, await this.gameAccess(game)] as const)),
+    ]);
+    const access = new Map(answers);
+    return this.lessons.map((lesson) => ({
+      id: lesson.id,
+      title: lesson.title,
+      summary: lesson.summary,
+      section: lesson.section,
+      steps: lesson.content ? stepCount(lesson.content) : null,
+      access: accessOf(lesson, withheld, lesson.game && (access.get(lesson.game) ?? null)),
+      status: lesson.content ? lessonProgress(events, progressKey(lesson.id, lesson.content)).status : { kind: 'not-started' as const },
     }));
   }
 
+  // Spec 3 Lessons › Access, Check protection; #149
+  async lessonAccess(id: string): Promise<LessonAccess> {
+    const lesson = this.lessons.find((candidate) => candidate.id === id);
+    if (!lesson) throw new Error(`lesson ${id} is not in this version`);
+    const [withheld, game] = await Promise.all([this.instructionWithheld(), lesson.game && this.gameAccess(lesson.game)]);
+    return accessOf(lesson, withheld, game);
+  }
+
+  // Spec 3 Amendment 4 §5: an access service that can't answer leaves the game's lessons waiting for a connection
+  private gameAccess(game: GameId): Promise<GameAccess> {
+    return this.adapters.access.gameAccess({ game }).catch((): GameAccess => ({ status: 'needs-connection', offlineGame: null }));
+  }
+
   async openLesson(id: string): Promise<LessonView> {
-    const lesson = this.authored(id);
+    const lesson = await this.accessible(id);
     const progress = await this.progressOf(lesson);
     const resume = progress.bookmark !== null && progress.bookmark > 1 ? progress.bookmark : null;
     return viewOf(lesson, progress, resume ?? 1, resume === null ? null : { kind: 'resume-or-restart', step: resume });
   }
 
-  stepForward(id: string, from: number): Promise<LessonView> {
-    const lesson = this.authored(id);
+  async stepForward(id: string, from: number): Promise<LessonView> {
+    const lesson = await this.accessible(id);
     return this.record(lesson, { kind: 'bookmark', step: Math.min(from + 1, stepCount(lesson.content)) });
   }
 
-  stepBack(id: string, from: number): Promise<LessonView> {
-    return this.record(this.authored(id), { kind: 'bookmark', step: Math.max(from - 1, 1) });
+  async stepBack(id: string, from: number): Promise<LessonView> {
+    return this.record(await this.accessible(id), { kind: 'bookmark', step: Math.max(from - 1, 1) });
   }
 
   async restartLesson(id: string): Promise<LessonView> {
-    const lesson = this.authored(id);
+    const lesson = await this.accessible(id);
     const progress = await this.progressOf(lesson);
     if ((progress.bookmark ?? 1) === 1 && progress.changed === null) return viewOf(lesson, progress, 1, null);
     return this.record(lesson, { kind: 'restarted' });
   }
 
   async completeLesson(id: string): Promise<void> {
-    await this.record(this.authored(id), { kind: 'completed' });
+    await this.record(await this.accessible(id), { kind: 'completed' });
   }
 
   // Spec 3 Lessons › Entry points, Structure (First-use hints), Amendment 1 C7; #146
@@ -422,6 +474,14 @@ export class TrainingService {
     return lesson as AuthoredLesson;
   }
 
+  // Spec 3 Lessons › Access, Check protection: an inaccessible lesson's content never leaves the service, and its bookmark stays as it was
+  private async accessible(id: string): Promise<AuthoredLesson> {
+    const lesson = this.authored(id);
+    const access = await this.lessonAccess(id);
+    if (access.kind !== 'available') throw new LessonUnavailableError(id, access);
+    return lesson;
+  }
+
   private async progressOf(lesson: AuthoredLesson): Promise<LessonProgress> {
     return lessonProgress(await this.adapters.store.readLessonEvents(), progressKey(lesson.id, lesson.content));
   }
@@ -437,14 +497,20 @@ export class TrainingService {
       event,
       recordedAt: this.adapters.clock.now(),
     });
-    this.lessonChanges++;
-    this.notify();
+    this.reviseLessons();
     const progress = await this.progressOf(lesson);
     return viewOf(lesson, progress, progress.bookmark ?? 1, null);
   }
 
+  private reviseLessons(): void {
+    this.lessonChanges++;
+    this.notify();
+  }
+
   private refresh(): void {
     const attempt = this.challenges.snapshot();
+    // Spec 3 Lessons › Check protection; #149: an attempt starting or ending changes which lessons are withheld
+    if (attempt.status !== this.current.status) this.lessonChanges++;
     if (attempt.status === 'none') {
       const problem = this.diagnostics ? 'invalid-setup' : attempt.problem;
       this.current = { status: 'none', problem, diagnostics: this.diagnostics ?? [], busy: attempt.busy };
@@ -474,6 +540,16 @@ export const pacingOf = <T>(setup: { readonly pacing?: T }): T | 'self-paced' =>
 
 const pacingsOf = (category: CatalogCategory): readonly ChallengePacing[] =>
   CHALLENGE_PACINGS.filter((pacing) => pacingApplies(category, pacing));
+
+const AVAILABLE: LessonAccess = { kind: 'available' };
+
+// Spec 3 Lessons › Access, Check protection; Amendment 1 A2, Amendment 4 §5
+// App orientation and Builder have no game, so they are always available. Ending a Check attempt can't open a lesson that needs a connection, so that comes first.
+function accessOf({ id, game }: Lesson, withheld: InstructionWithheld | null, playable: GameAccess | null): LessonAccess {
+  if (game && playable?.status === 'needs-connection') return { kind: 'needs-connection', game, offlineGame: playable.offlineGame };
+  if (withheld && (CHECK_WITHHELD_LESSONS.anyCheck.includes(id) || (withheld.play && CHECK_WITHHELD_LESSONS.playCheck.includes(id)))) return { kind: 'after-check', attempt: withheld };
+  return AVAILABLE;
+}
 
 const progressKey = (id: string, content: LessonContent) => ({ id, materialVersion: content.materialVersion, steps: stepCount(content) });
 
