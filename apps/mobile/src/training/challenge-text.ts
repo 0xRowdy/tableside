@@ -1,8 +1,8 @@
-// Spec 3 S3-01 PDCaD, S3-02 buD2R, S3-03 P4WjR, S3-08 liAfT; #158
+// Spec 3 S3-01 PDCaD, S3-02 buD2R, S3-03 P4WjR, drVnR, BFdJT, S3-08, S3-09 h0MsKr; #158, #132
 
-import type { ChallengeEntry, ChallengeMetric, ChallengeVariant, HiLoValue, LearnFeedback, MetricResult } from '@tableside/engine';
+import type { CardValueReview, ChallengeEntry, ChallengeMetric, ChallengeVariant, HiLoValue, LearnFeedback, MetricResult } from '@tableside/engine';
 
-import { rankName, signed } from '@/play/blackjack-text';
+import { cardName, rankName, signed } from '@/play/blackjack-text';
 import { GAME_WORDS } from '@/play/game-words';
 
 import type { CatalogCategory, StartProblem } from './service';
@@ -63,25 +63,42 @@ export const COACH_NAME = 'Marcus · Learn';
 export const NEXT_CARD = 'Next card';
 export const TRY_AGAIN = 'Try this card again';
 
-export const choiceState = (value: HiLoValue, feedback: LearnFeedback | null): 'your-answer' | 'correct' | null => {
+export type ChoiceState = 'your-answer' | 'correct' | 'recorded' | null;
+
+export const choiceState = (value: HiLoValue, feedback: LearnFeedback | null, entered: ChallengeEntry | null): ChoiceState => {
+  if (entered !== null) return value === entered ? 'recorded' : null;
   if (!feedback) return null;
   if (value === feedback.reference) return 'correct';
   return value === feedback.entered ? 'your-answer' : null;
 };
 
-export const CHOICE_TAG = { 'your-answer': 'Your answer', correct: 'Correct' } as const;
+export const CHOICE_TAG = { 'your-answer': 'Your answer', correct: 'Correct', recorded: 'Recorded' } as const;
+
+export const CARD_PROMPT = "What's this card's Hi-Lo value?";
+export const SKIP_LABEL = 'Skip (counts as incorrect)';
+
+// Spec 3 Learn, Check and assistance › Answer accepted
+export const recordedText = (entered: ChallengeEntry) => `${entered === 'skip' ? 'Skip' : 'Answer'} recorded. Next card in a moment.`;
 
 export const enteredText = (entry: ChallengeEntry) => (entry === 'skip' ? 'skipped' : signed(entry));
 
 // Spec 3 S3-08 liAfT
 export const RESULTS_TITLE = 'Results';
-export const COMPLETED_LEARN = 'Completed · Learn';
-export const COMPLETED_LEARN_TEXT = 'Learn scores your first answer to each card, even when you corrected it afterwards. Learn attempts never count toward a readiness milestone.';
+export const COMPLETED: Record<ChallengeVariant, { readonly title: string; readonly detail: string }> = {
+  learn: {
+    title: 'Completed · Learn',
+    detail: 'Learn scores your first answer to each card, even when you corrected it afterwards. Learn attempts never count toward a readiness milestone.',
+  },
+  // Spec 3 S3-08 CEb6T
+  check: { title: 'Completed · unassisted', detail: 'Check held every answer until the end. Review each card to see your answer beside the correct value.' },
+};
 export const SCORES_LABEL = 'SKILL SCORES · FIRST ANSWERS';
+export const REVIEW_CARDS = 'Review cards';
 // TODO(#135)
 export const RETRY_LABEL = 'Retry with new cards';
 // TODO(#150)
 export const RETRY_NOTE = 'Retry uses 1 challenge attempt.';
+export const resultsNote = (variant: ChallengeVariant) => (variant === 'learn' ? `When you're ready, try Check: it holds every answer until the end. ${RETRY_NOTE}` : RETRY_NOTE);
 
 export const RESULT_ROWS: readonly { readonly metric: ChallengeMetric; readonly title: string; readonly tested: (length: number) => string }[] = [
   { metric: 'card-values', title: 'Card values', tested: (length) => `${length} cards` },
@@ -94,3 +111,31 @@ export const NOT_TESTED = 'Not tested';
 export const scoreText = (result: MetricResult | null) => (result ? `${result.correct} / ${result.total}` : 'N/A');
 
 export const spokenScore = (result: MetricResult | null) => (result ? `${result.correct} of ${result.total}` : 'N/A');
+
+// Spec 3 S3-09 h0MsKr, BjuKf; Scoring and review › Review facts
+export const CARD_REVIEW_TITLE = 'Card review';
+export const YOU_LABEL = 'You';
+export const CORRECT_LABEL = 'Correct';
+export const SKIPPED = 'Skipped';
+
+export type ReviewOutcome = 'match' | 'off' | 'skipped';
+
+export const reviewOutcome = (fact: CardValueReview): ReviewOutcome => (fact.entered === 'skip' ? 'skipped' : fact.entered === fact.reference ? 'match' : 'off');
+
+const offBy = (fact: CardValueReview) => (fact.entered === 'skip' ? 0 : Math.abs(fact.entered - fact.reference));
+
+export function reviewText(fact: CardValueReview) {
+  const outcome = reviewOutcome(fact);
+  const title = `Card ${fact.position} · ${cardName(fact.card)}`;
+  const status = outcome === 'match' ? 'Match' : outcome === 'skipped' ? 'Skipped · incorrect' : `Off by ${offBy(fact)}`;
+  const entered = fact.entered === 'skip' ? SKIPPED : signed(fact.entered);
+  const spokenStatus = outcome === 'match' ? 'match' : outcome === 'skipped' ? 'counts as incorrect' : `off by ${offBy(fact)}`;
+  const spokenEntry = fact.entered === 'skip' ? 'skipped' : `you entered ${spokenValue(fact.entered)}`;
+  return {
+    title,
+    status,
+    entered,
+    reference: signed(fact.reference),
+    label: `Card ${fact.position}, ${cardName(fact.card)}: ${spokenEntry}, correct ${spokenValue(fact.reference)}, ${spokenStatus}`,
+  };
+}

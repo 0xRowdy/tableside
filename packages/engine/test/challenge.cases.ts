@@ -273,7 +273,7 @@ export const challengeCases: TestCase[] = [
             const result = advanceChallenge(state, { sequence: state.sequence, commandId: `c-${state.sequence}`, command });
             if (result.status !== 'committed') throw new Error(result.status);
             state = result.state;
-            const { entered: _entered, results: _results, ...view } = checkView(state);
+            const view = { ...checkView(state), entered: null, results: null };
             out.push({ view, facts: result.facts });
           }
           return out;

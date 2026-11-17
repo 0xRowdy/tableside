@@ -46,6 +46,9 @@ export const palette = {
 
 export type ColorToken = keyof typeof palette;
 
+// Spec 3 Information hiding (end to end); Design conflicts › Frames consulted
+export const FEEDBACK_TOKENS: readonly ColorToken[] = ['coach', 'coachAccent', 'correct', 'mistake', 'mistakeInk'];
+
 // docs/development.md Accessibility notes for the shell
 export const essentialPairs: readonly {
   use: string;

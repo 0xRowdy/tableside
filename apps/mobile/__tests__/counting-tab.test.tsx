@@ -1,8 +1,9 @@
-// Spec 3 Testing Decisions › Seam 3; S3-01 PDCaD, S3-02 buD2R, S3-03 P4WjR, S3-08 liAfT; #158
+// Spec 3 Testing Decisions › Seam 3; S3-01 PDCaD, S3-02 buD2R, S3-03 P4WjR, drVnR, BFdJT, S3-08 liAfT, CEb6T, S3-09 h0MsKr; #158, #132
 
 import { cleanup, fireEvent, screen, within } from '@testing-library/react-native';
 import { renderRouter } from 'expo-router/testing-library';
 
+import type { SubstituteFeedbackPorts } from '@/feedback/testing/substitutes';
 import type { AdmissionDecision } from '@/practice/adapters';
 
 let mockAdmission: AdmissionDecision | null = null;
@@ -33,6 +34,8 @@ const HI_LO: Record<string, string> = { Ace: 'minus 1', '2': 'plus 1', '3': 'plu
 
 const shownCard = () => screen.getByTestId('challenge-card').props.accessibilityLabel as string;
 const answerFor = (card: string) => HI_LO[card.split(' of ')[0]!]!;
+const wrongFor = (card: string) => (answerFor(card) === 'plus 1' ? 'minus 1' : 'plus 1');
+const cues = () => (jest.requireMock('@/feedback/device-ports') as { latest: SubstituteFeedbackPorts }).latest.sound.played.map((play) => play.cue);
 
 async function openSetup() {
   await renderRouter('./src/app', { initialUrl: '/counting' });
@@ -58,7 +61,7 @@ describe('the Counting tab', () => {
     expect(screen.getAllByRole('header').map((header) => header.props.children)).toEqual(['Counting', 'Card values', 'Running count', 'True-count conversion', 'Table counting']);
     expect(screen.getByText('20 cards covering every rank. Answer +1, 0 or −1 for each.')).toBeOnTheScreen();
     expect(screen.getByRole('button', { name: 'Learn: Card values' })).toBeEnabled();
-    expect(screen.getByRole('button', { name: 'Check: Card values' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Check: Card values' })).toBeEnabled();
     expect(screen.getByRole('button', { name: 'Learn: Running count' })).toBeDisabled();
     expect(screen.getByText('Recommendations use your accuracy only, never speed or winnings. Nothing here is locked.')).toBeOnTheScreen();
   });
@@ -67,7 +70,7 @@ describe('the Counting tab', () => {
     await openSetup();
     const variant = within(screen.getByLabelText('Variant'));
     expect(variant.getByRole('radio', { name: 'Learn', checked: true })).toBeOnTheScreen();
-    expect(variant.getByRole('radio', { name: 'Check' })).toBeDisabled();
+    expect(variant.getByRole('radio', { name: 'Check' })).toBeEnabled();
     expect(screen.getByText(/Learn tells you after each answer whether it's right/)).toBeOnTheScreen();
     expect(screen.getByText('Starting uses 1 challenge attempt. Resuming doesn’t use another.')).toBeOnTheScreen();
     expect(mockStore && (await (mockStore as { findUnfinishedAttempt(): Promise<unknown> }).findUnfinishedAttempt())).toBeNull();
@@ -114,6 +117,45 @@ describe('the Counting tab', () => {
     expect(screen.getByLabelText('Running count, Not tested: N/A')).toBeOnTheScreen();
     expect(screen.getByLabelText('True count, Not tested: N/A')).toBeOnTheScreen();
     expect(screen.getByRole('button', { name: 'Retry with new cards' })).toBeEnabled();
+    expect(screen.getByText("When you're ready, try Check: it holds every answer until the end. Retry uses 1 challenge attempt.")).toBeOnTheScreen();
+  });
+
+  it('runs a Check attempt: every entry is recorded alike with cue 10, nothing is marked until results, and the review lists every card', async () => {
+    await openSetup();
+    await fireEvent.press(within(screen.getByLabelText('Variant')).getByRole('radio', { name: 'Check' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Start Check attempt' }));
+    await screen.findByText('Card 1 of 20');
+    expect(screen.getByText('Check · self-paced')).toBeOnTheScreen();
+
+    const cards: string[] = [];
+    for (let card = 1; card <= 20; card++) {
+      await screen.findByText(`Card ${card} of 20`);
+      const shown = shownCard();
+      cards.push(shown);
+      if (card === 3) await fireEvent.press(screen.getByRole('button', { name: 'Skip (counts as incorrect)' }));
+      else await fireEvent.press(screen.getByRole('button', { name: card === 2 ? wrongFor(shown) : answerFor(shown) }));
+      expect(screen.queryByTestId('coach-note')).toBeNull();
+      expect(screen.queryByText(/Correct|Your answer|NOT QUITE/)).toBeNull();
+    }
+
+    await screen.findByRole('header', { name: 'Results' });
+    expect(cues().filter((cue) => cue === 'answer-accepted')).toHaveLength(20);
+    expect(cues().filter((cue) => cue === 'correct' || cue === 'incorrect')).toEqual([]);
+    expect(screen.getByText('Card values · Check · self-paced')).toBeOnTheScreen();
+    expect(screen.getByText('Completed · unassisted')).toBeOnTheScreen();
+    expect(screen.getByLabelText('Card values, 20 cards: 18 of 20')).toBeOnTheScreen();
     expect(screen.getByText('Retry uses 1 challenge attempt.')).toBeOnTheScreen();
+
+    await fireEvent.press(screen.getByRole('button', { name: 'Review cards' }));
+    await screen.findByRole('header', { name: 'Card review' });
+    expect(screen.getByText('Card values · Check · 18 / 20')).toBeOnTheScreen();
+    expect(screen.getByLabelText(`Card 1, ${cards[0]}: you entered ${answerFor(cards[0]!)}, correct ${answerFor(cards[0]!)}, match`)).toBeOnTheScreen();
+    const off = answerFor(cards[1]!) === '0' ? 1 : 2;
+    expect(screen.getByLabelText(`Card 2, ${cards[1]}: you entered ${wrongFor(cards[1]!)}, correct ${answerFor(cards[1]!)}, off by ${off}`)).toBeOnTheScreen();
+    expect(screen.getByLabelText(`Card 3, ${cards[2]}: skipped, correct ${answerFor(cards[2]!)}, counts as incorrect`)).toBeOnTheScreen();
+    expect(screen.getAllByLabelText(/^Card \d+, /)).toHaveLength(20);
+
+    await fireEvent.press(screen.getByRole('button', { name: 'Back to Results' }));
+    await screen.findByRole('header', { name: 'Results' });
   });
 });

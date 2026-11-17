@@ -1,7 +1,7 @@
-// Spec 3 S3-08 liAfT; #158
+// Spec 3 S3-08 liAfT, CEb6T; #158, #132
 
 import type { ChallengeAttemptRecord } from '@tableside/engine';
-import { CircleCheckBig, Divide, Hash, RotateCcw, Square, type LucideIcon } from 'lucide-react-native';
+import { CircleCheckBig, Divide, Hash, ListChecks, RotateCcw, Square, type LucideIcon } from 'lucide-react-native';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -9,14 +9,14 @@ import { Button } from '@/components/Button';
 import { fonts, palette, radius, space, textScale } from '@/theme/tokens';
 import {
   CATEGORY_TEXT,
-  COMPLETED_LEARN,
-  COMPLETED_LEARN_TEXT,
+  COMPLETED,
   NOT_TESTED,
   PACING_LABEL,
   RESULT_ROWS,
   RESULTS_TITLE,
   RETRY_LABEL,
-  RETRY_NOTE,
+  resultsNote,
+  REVIEW_CARDS,
   SCORES_LABEL,
   scoreText,
   spokenScore,
@@ -31,9 +31,10 @@ const ROW_ICON: Record<(typeof RESULT_ROWS)[number]['metric'], LucideIcon> = {
   'betting-adherence': Square,
 };
 
-export function ChallengeResults({ record, onRetry }: { record: ChallengeAttemptRecord; onRetry: () => void }) {
+export function ChallengeResults({ record, onRetry, onReview }: { record: ChallengeAttemptRecord; onRetry: () => void; onReview: () => void }) {
   const insets = useSafeAreaInsets();
   const { groupKey } = record;
+  const completed = COMPLETED[groupKey.variant];
   return (
     <ScrollView style={styles.screen} contentContainerStyle={{ paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right, paddingBottom: space[6] }}>
       <View style={styles.header}>
@@ -49,10 +50,10 @@ export function ChallengeResults({ record, onRetry }: { record: ChallengeAttempt
           <CircleCheckBig color={palette.foreground} size={24} />
           <View style={styles.boxText}>
             <Text maxFontSizeMultiplier={textScale.body} style={styles.boxTitle}>
-              {COMPLETED_LEARN}
+              {completed.title}
             </Text>
             <Text maxFontSizeMultiplier={textScale.body} style={styles.boxDetail}>
-              {COMPLETED_LEARN_TEXT}
+              {completed.detail}
             </Text>
           </View>
         </View>
@@ -84,9 +85,10 @@ export function ChallengeResults({ record, onRetry }: { record: ChallengeAttempt
             );
           })}
         </View>
+        {record.review.length > 0 && <Button label={REVIEW_CARDS} icon={ListChecks} variant="outline" stretch onPress={onReview} />}
         <Button label={RETRY_LABEL} icon={RotateCcw} stretch onPress={onRetry} />
         <Text maxFontSizeMultiplier={textScale.body} style={styles.note}>
-          {RETRY_NOTE}
+          {resultsNote(groupKey.variant)}
         </Text>
       </View>
     </ScrollView>

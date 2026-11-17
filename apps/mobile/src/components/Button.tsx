@@ -16,7 +16,7 @@ export function Button({
 }: {
   label: string;
   onPress: () => void;
-  variant?: 'primary' | 'secondary' | 'ghost';
+  variant?: 'primary' | 'secondary' | 'ghost' | 'outline';
   disabled?: boolean;
   stretch?: boolean;
   hint?: string;
@@ -38,6 +38,7 @@ export function Button({
         styles.button,
         secondary && styles.secondary,
         variant === 'ghost' && styles.ghost,
+        variant === 'outline' && styles.outline,
         stretch && styles.stretch,
         pressed && styles.pressed,
         disabled && styles.disabled,
@@ -45,7 +46,7 @@ export function Button({
       ]}
     >
       {Icon && <Icon color={secondary ? palette.foreground : palette.primaryForeground} size={18} />}
-      <Text maxFontSizeMultiplier={textScale.body} style={[styles.label, secondary && styles.secondaryLabel]}>
+      <Text maxFontSizeMultiplier={textScale.body} style={[styles.label, secondary && styles.secondaryLabel, variant === 'outline' && styles.outlineLabel]}>
         {label}
       </Text>
     </Pressable>
@@ -69,10 +70,13 @@ const styles = StyleSheet.create({
   },
   secondary: { backgroundColor: palette.secondary, borderColor: palette.secondary },
   ghost: { backgroundColor: palette.transparent, borderColor: palette.transparent },
+  // Spec 3 S3-03 drVnR, S3-08 liAfT
+  outline: { minHeight: 52, paddingHorizontal: space[6] - space[1], borderRadius: radius.md, borderWidth: 1, borderColor: palette.controlBorder },
   stretch: { alignSelf: 'stretch' },
   pressed: { opacity: 0.8 },
   disabled: { opacity: 0.4 },
   focused: { borderColor: palette.foreground },
   label: { flexShrink: 1, fontFamily: fonts.uiBold, fontSize: 16, color: palette.primaryForeground, textAlign: 'center' },
   secondaryLabel: { color: palette.foreground },
+  outlineLabel: { fontSize: 15 },
 });

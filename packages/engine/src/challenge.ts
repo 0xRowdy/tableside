@@ -1,4 +1,4 @@
-// Spec 3 Modules › Engine; Challenge content (from #4); Learn, Check and assistance; Information hiding; #158, #132
+// Spec 3 Modules › Engine; Challenge content (from #4); Learn, Check and assistance; #158, #132
 
 import { STATE_SCHEMA_VERSION, type Receipt, type RejectionReason, type VersionedIdentity } from './activity';
 import { hiLoTag } from './blackjack';

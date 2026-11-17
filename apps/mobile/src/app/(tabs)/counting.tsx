@@ -1,8 +1,9 @@
-// Spec 3 Screens; #158
+// Spec 3 Screens; #158, #132
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useState } from 'react';
 
 import { Placeholder } from '@/components/Placeholder';
+import { CardReview } from '@/counting/CardReview';
 import { ChallengeExercise } from '@/counting/ChallengeExercise';
 import { ChallengeResults } from '@/counting/ChallengeResults';
 import { ChallengeSetupScreen } from '@/counting/ChallengeSetupScreen';
@@ -19,6 +20,7 @@ export default function Counting() {
   const { category } = useLocalSearchParams<{ category?: string }>();
   const remembered = useLoaded(lastSetupOf, service);
   const [chosen, setChosen] = useState<ChallengeSetup | null>(null);
+  const [reviewing, setReviewing] = useState<string | null>(null);
   const catalog = service.listCatalog();
   const entry = catalog.find((item) => item.category === category);
 
@@ -39,9 +41,11 @@ export default function Counting() {
         />
       );
     case 'ended':
+      if (reviewing === snapshot.record.attemptId) return <CardReview record={snapshot.record} onBack={() => setReviewing(null)} />;
       return (
         <ChallengeResults
           record={snapshot.record}
+          onReview={() => setReviewing(snapshot.record.attemptId)}
           onRetry={() => {
             const { category: retried, variant } = snapshot.record.groupKey;
             service.dismissResults();
