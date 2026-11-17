@@ -44,10 +44,14 @@ export function useLessons(): { readonly service: TrainingService; readonly less
 }
 
 // Spec 3 Lessons › Entry points, Amendment 1 C7; #146
-const learningOf = (service: TrainingService, _revision: number) => service.learning();
+const learningOf = (service: TrainingService, _revision: number) => service.learningPreferences();
+
+export function useLearningOf(service: TrainingService): LearningPreferences | undefined {
+  const revision = useSyncExternalStore(service.subscribe, service.learningRevision);
+  return useLoaded(learningOf, service, revision);
+}
 
 export function useLearning(): { readonly service: TrainingService; readonly learning: LearningPreferences | undefined } {
   const service = useTrainingService();
-  const revision = useSyncExternalStore(service.subscribe, service.learningRevision);
-  return { service, learning: useLoaded(learningOf, service, revision) };
+  return { service, learning: useLearningOf(service) };
 }

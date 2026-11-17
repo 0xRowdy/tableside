@@ -112,7 +112,7 @@ export class TrainingService {
   private readonly lessons: readonly Lesson[];
   private lessonChanges = 0;
   private readonly preferences: DeviceLearningPreferences;
-  private preferenceChanges = 0;
+  private learningChanges = 0;
 
   constructor(
     private readonly adapters: TrainingAdapters,
@@ -128,7 +128,7 @@ export class TrainingService {
 
   lessonRevision = (): number => this.lessonChanges;
 
-  learningRevision = (): number => this.preferenceChanges;
+  learningRevision = (): number => this.learningChanges;
 
   subscribe = (listener: () => void): (() => void) => {
     this.listeners.add(listener);
@@ -246,7 +246,7 @@ export class TrainingService {
   }
 
   // Spec 3 Lessons › Entry points, Structure (First-use hints), Amendment 1 C7; #146
-  learning(): Promise<LearningPreferences> {
+  learningPreferences(): Promise<LearningPreferences> {
     return this.preferences.read();
   }
 
@@ -264,7 +264,7 @@ export class TrainingService {
 
   private async changePreferences(change: Promise<void>): Promise<void> {
     await change;
-    this.preferenceChanges++;
+    this.learningChanges++;
     this.notify();
   }
 

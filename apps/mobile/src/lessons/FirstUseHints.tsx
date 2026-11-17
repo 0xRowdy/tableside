@@ -1,16 +1,17 @@
 // Spec 3 Lessons › Structure (First-use hints), Information hiding (hint content); S1-04 XjwQc; #146
 import { HINTS, type HintId } from '@tableside/definitions';
 import { CircleHelp } from 'lucide-react-native';
-import { createContext, useContext, useState, useSyncExternalStore, type ReactNode } from 'react';
+import { createContext, useContext, useState, type ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
-import { useLoaded } from '@/hooks/use-loaded';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/theme/tokens';
 import { gotItLabel, HELP_HINT, HELP_LABEL, hintKicker, GOT_IT, REREAD_FROM_HELP } from '@/training/lesson-text';
 import type { TrainingService } from '@/training/service';
+import { useLearningOf } from '@/training/TrainingProvider';
 
 interface ScreenHintState {
+  readonly any: boolean;
   shows(id: HintId): boolean;
   dismiss(id: HintId): void;
   reopen(): void;
@@ -18,14 +19,12 @@ interface ScreenHintState {
 
 const ScreenHintContext = createContext<ScreenHintState | null>(null);
 
-const learningOf = (service: TrainingService, _revision: number) => service.learning();
-
 export function ScreenHints({ service, ids, children }: { service: TrainingService; ids: readonly HintId[]; children: ReactNode }) {
-  const revision = useSyncExternalStore(service.subscribe, service.learningRevision);
-  const learning = useLoaded(learningOf, service, revision);
+  const learning = useLearningOf(service);
   const [reopened, setReopened] = useState<ReadonlySet<HintId>>(new Set());
   const [closed, setClosed] = useState<ReadonlySet<HintId>>(new Set());
   const state: ScreenHintState = {
+    any: ids.length > 0,
     shows: (id) => ids.includes(id) && (reopened.has(id) || (learning !== undefined && learning.unseenHints.includes(id) && !closed.has(id))),
     dismiss: (id) => {
       setReopened((open) => new Set([...open].filter((other) => other !== id)));
@@ -76,7 +75,7 @@ export function FirstUseHint({ id }: { id: HintId }) {
 export function HelpButton() {
   const hints = useContext(ScreenHintContext);
   const { focused, focusProps } = useKeyboardFocus();
-  if (!hints) return null;
+  if (!hints?.any) return null;
   return (
     <Pressable
       accessibilityRole="button"
@@ -84,9 +83,12 @@ export function HelpButton() {
       accessibilityHint={HELP_HINT}
       onPress={hints.reopen}
       {...focusProps}
-      style={[styles.help, focused && styles.focused]}
+      style={({ pressed }) => [styles.help, pressed && styles.pressed, focused && styles.focused]}
     >
       <CircleHelp color={palette.foreground} size={22} />
+      <Text maxFontSizeMultiplier={textScale.body} style={styles.helpText}>
+        {HELP_LABEL}
+      </Text>
     </Pressable>
   );
 }
@@ -99,7 +101,8 @@ const styles = StyleSheet.create({
   reread: { flexShrink: 1, fontFamily: fonts.ui, fontSize: 12, color: palette.mutedForeground },
   gotIt: { minHeight: MIN_TOUCH_TARGET, justifyContent: 'center', paddingHorizontal: space[4], borderRadius: radius.md, borderWidth: 2, borderColor: palette.transparent },
   gotItText: { fontFamily: fonts.uiBold, fontSize: 14, color: palette.foreground },
-  help: { width: MIN_TOUCH_TARGET, height: MIN_TOUCH_TARGET, alignItems: 'center', justifyContent: 'center', borderRadius: radius.md, borderWidth: 2, borderColor: palette.transparent },
+  help: { minWidth: 56, minHeight: 52, alignItems: 'center', justifyContent: 'center', gap: 2, paddingHorizontal: space[1], borderRadius: 10, borderWidth: 2, borderColor: palette.transparent },
+  helpText: { fontFamily: fonts.uiBold, fontSize: 11, color: palette.foreground },
   pressed: { opacity: 0.8 },
   focused: { borderColor: palette.ring },
 });

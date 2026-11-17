@@ -1,7 +1,7 @@
 // Spec 3 Amendment 1 D, C7; Lessons › Entry points; Settings › Learning NvGyZ; #143, #146
 import { router } from 'expo-router';
 import { Library, Lightbulb } from 'lucide-react-native';
-import { useState } from 'react';
+import { AccessibilityInfo } from 'react-native';
 
 import { SwitchRow } from '@/components/SwitchRow';
 import { Group, GroupLabel, ListRow, Note, SettingsScreen } from '@/settings/SettingsParts';
@@ -11,7 +11,8 @@ import {
   FINDING_LESSONS,
   HINTS_AGAIN,
   HINTS_LABEL,
-  hintsAgainDetail,
+  HINTS_AGAIN_DETAIL,
+  HINTS_RESET,
   LEARNING_NOTE,
   LEARNING_TITLE,
   LESSONS_LABEL,
@@ -23,7 +24,6 @@ import { useLearning, useLessons } from '@/training/TrainingProvider';
 export default function Learning() {
   const { lessons } = useLessons();
   const { service, learning } = useLearning();
-  const [hintsReset, setHintsReset] = useState(false);
   return (
     <SettingsScreen title={LEARNING_TITLE} back={{ label: 'Settings', onPress: () => router.dismissTo('/more/settings') }}>
       <GroupLabel>{LESSONS_LABEL}</GroupLabel>
@@ -49,11 +49,11 @@ export default function Learning() {
         <ListRow
           icon={Lightbulb}
           title={HINTS_AGAIN}
-          detail={hintsAgainDetail(hintsReset)}
+          detail={HINTS_AGAIN_DETAIL}
           chevron={false}
           onPress={() => {
-            setHintsReset(true);
             void service.resetHints();
+            AccessibilityInfo.announceForAccessibility(HINTS_RESET);
           }}
         />
       </Group>

@@ -88,11 +88,11 @@ describe('the Start here card (S1-01 olGG6)', () => {
     expect(screen.queryByText('Start here')).toBeNull();
     expect(announcements).toContain('Start here dismissed. Show it again from More, Settings, Learning.');
     expect(screen.getAllByRole('button', { name: /^(Blackjack|Craps|Roulette)\b/ })).toHaveLength(3);
-    expect((await onThisDevice().learning()).startHere).toBe(false);
+    expect((await onThisDevice().learningPreferences()).startHere).toBe(false);
 
     await cleanup();
     await openHome();
-    await act(() => onThisDevice().learning());
+    await act(() => onThisDevice().learningPreferences());
     expect(screen.queryByText('Start here')).toBeNull();
   });
 
@@ -105,7 +105,7 @@ describe('the Start here card (S1-01 olGG6)', () => {
 
     await fireEvent.press(toggle);
     expect(await screen.findByRole('switch', { name: 'Show Start here on Home', checked: true })).toBeOnTheScreen();
-    expect((await onThisDevice().learning()).startHere).toBe(true);
+    expect((await onThisDevice().learningPreferences()).startHere).toBe(true);
 
     await fireEvent.press(within(screen.getByTestId('tab-bar')).getByRole('tab', { name: 'Home' }));
     expect(await screen.findByText('Start here')).toBeOnTheScreen();
@@ -127,12 +127,8 @@ describe('Settings › Learning hints (NvGyZ)', () => {
     await fireEvent.press(
       button('Show first-use hints again. Bet selector, count entry and the show-count toggle hints reappear the next time you meet them.'),
     );
-    expect(
-      await screen.findByRole('button', {
-        name: 'Show first-use hints again. Done. Bet selector, count entry and the show-count toggle hints reappear the next time you meet them.',
-      }),
-    ).toBeOnTheScreen();
-    expect((await onThisDevice().learning()).unseenHints).toEqual(HINT_IDS);
+    expect(announcements).toContain('First-use hints will show again.');
+    expect((await onThisDevice().learningPreferences()).unseenHints).toEqual(HINT_IDS);
   });
 });
 
@@ -149,7 +145,7 @@ describe('a running-count Check from the Counting tab', () => {
     expect(await screen.findByTestId('first-use-hint-show-count')).toBeOnTheScreen();
     await fireEvent.press(button('Got it, hide the Show running count hint'));
     expect(screen.queryByTestId('first-use-hint-show-count')).toBeNull();
-    expect((await onThisDevice().learning()).unseenHints).toEqual(['bet-selector', 'count-entry']);
+    expect((await onThisDevice().learningPreferences()).unseenHints).toEqual(['bet-selector', 'count-entry']);
 
     await fireEvent.press(button('Help'));
     expect(screen.getByTestId('first-use-hint-show-count')).toBeOnTheScreen();

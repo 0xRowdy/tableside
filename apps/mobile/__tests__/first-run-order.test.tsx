@@ -2,11 +2,36 @@
 // Amendment 2 §1 (no Auth user): packages/account/test/provider-sign-in.test.ts
 
 import type { AccountGate } from '@tableside/account';
+import { HINT_IDS } from '@tableside/definitions';
 import { cleanup, fireEvent, screen } from '@testing-library/react-native';
 import { renderRouter } from 'expo-router/testing-library';
 
 import { FAKE_ACCOUNT_ID, SIGNED_IN, type fakeAppAccount } from '@/account/testing/fake-account';
 import type { GameId } from '@/games';
+import { alwaysAllowed } from '@/practice/adapters';
+import { FakeClock, entropyFromWords, PI_WORDS } from '@/practice/testing/substitutes';
+import { plentyAllowance } from '@/training/allowance';
+import { MemoryTrainingStore } from '@/training/memory-store';
+import { TrainingService } from '@/training/service';
+
+let mockStore: MemoryTrainingStore | null = null;
+
+jest.mock('@/training/app-adapters', () => {
+  const actual = jest.requireActual('@/training/app-adapters');
+  return { createTrainingAdapters: () => ({ ...actual.createTrainingAdapters(), ...(mockStore ? { store: mockStore } : {}) }) };
+});
+
+const onThisDevice = () =>
+  new TrainingService({
+    store: mockStore!.reopen(),
+    access: alwaysAllowed,
+    allowance: plentyAllowance(() => Date.now()),
+    clock: new FakeClock(undefined, true),
+    entropy: entropyFromWords(PI_WORDS),
+    newId: () => 'unused',
+    device: 'test-device',
+    owner: 'local',
+  });
 
 type Launch = { stored: AccountGate; offlineGame: GameId | null; latest: ReturnType<typeof fakeAppAccount> | null };
 const launch = jest.requireMock<Launch>('@/account/app-account');
@@ -26,6 +51,7 @@ beforeAll(async () => {
 beforeEach(() => {
   launch.stored = { state: 'no-account' };
   launch.offlineGame = null;
+  mockStore = new MemoryTrainingStore();
   requests = [];
   global.fetch = jest.fn(async (...args: unknown[]) => {
     requests.push(args);
@@ -131,6 +157,20 @@ describe('first-run order', () => {
     expect(calls()).toEqual(['resume', 'signInWithProvider', 'answerAgeQuestion', 'createWithProvider']);
   });
 
+  it('Sign in by email that finds no account creates nothing, and Create runs the age step', async () => {
+    await openWelcome();
+    await fireEvent.press(button('Sign in with an email code'));
+    await step('Sign in');
+    await fireEvent.changeText(screen.getByLabelText('Email address'), EMAIL);
+    await fireEvent.press(button('Send code'));
+    await step('Enter your code');
+    expect(account().service.gate).toEqual({ state: 'no-account' });
+    await fireEvent.press(button('Create an account'));
+    await step('How old are you?');
+    expect(calls()).toEqual(['resume', 'requestEmailCode']);
+    expect(account().service.gate).toEqual({ state: 'no-account' });
+  });
+
   it.each([
     ['on Create', async () => createAs('Under 13')],
     [
@@ -169,16 +209,20 @@ describe('teaching never bypasses the first run', () => {
     await step('Choose your offline game');
   });
 
-  it('dismissing Start here leaves the first run as it was: a reopened app still needs its steps after sign-out', async () => {
-    launch.stored = SIGNED_IN;
-    launch.offlineGame = 'blackjack';
-    await renderRouter('./src/app', { initialUrl: '/' });
-    await fireEvent.press(await screen.findByRole('button', { name: 'Dismiss Start here' }));
-    expect(screen.queryByTestId('start-here')).toBeNull();
+  it('a device with Start here dismissed and every hint seen still runs every step before Home', async () => {
+    const device = onThisDevice();
+    await device.setStartHere(false);
+    for (const id of HINT_IDS) await device.hintSeen(id);
 
-    await cleanup();
-    launch.stored = { state: 'no-account' };
-    launch.offlineGame = null;
     await openWelcome();
+    await createAs('18 or older');
+    await step('How do you want to sign in?');
+    await fireEvent.press(button('Continue with Google'));
+    await step('Choose your offline game');
+    await fireEvent.press(screen.getByRole('radio', { name: /^Blackjack\b/ }));
+    await fireEvent.press(button('Continue'));
+    expect(await screen.findByTestId('tab-bar')).toBeOnTheScreen();
+    expect(screen.queryByTestId('start-here')).toBeNull();
+    expect(calls()).toEqual(['resume', 'answerAgeQuestion', 'createWithProvider']);
   });
 });

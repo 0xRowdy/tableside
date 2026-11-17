@@ -1,3 +1,4 @@
+import type { HintId } from '@tableside/definitions';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Button } from '@/components/Button';
@@ -6,6 +7,9 @@ import { FirstUseHint } from '@/lessons/FirstUseHints';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/theme/tokens';
 
 export type Presentation = 'table' | 'selector';
+
+// Spec 3 Lessons › Structure (First-use hints); S1-04 XjwQc; #146
+export const TABLE_HINTS: readonly HintId[] = ['bet-selector'];
 
 const OPTIONS: readonly { value: Presentation; label: string }[] = [
   { value: 'table', label: 'Table' },

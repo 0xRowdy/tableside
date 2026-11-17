@@ -1,5 +1,6 @@
 // Spec 3 S3-03 P4WjR, drVnR, BFdJT, S3-04 qdnQm, S3-05 EDnGd, S3-06 C53yTW; #158, #132, #133, #146
 
+import type { HintId } from '@tableside/definitions';
 import type { ChallengeCategory, ChallengeEntry, ChallengeView, CountRange, LearnFeedback } from '@tableside/engine';
 import { CircleCheck, CircleDot, CircleX, SkipForward } from 'lucide-react-native';
 import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
@@ -35,6 +36,12 @@ import {
 import type { LearnerCommand } from '@/training/service';
 
 const SIDE_BY_SIDE_MAX_FONT_SCALE = 1.35;
+
+// Spec 3 Lessons › Structure (First-use hints); #146
+export function exerciseHints(view: ChallengeView): readonly HintId[] {
+  if (view.countRange === null) return [];
+  return view.countAid ? ['count-entry', 'show-count'] : ['count-entry'];
+}
 
 export function ChallengeExercise({
   view,

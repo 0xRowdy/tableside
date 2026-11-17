@@ -14,9 +14,9 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react-
 import type { ReactNode } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
-import { ChallengeExercise } from '@/counting/ChallengeExercise';
+import { ChallengeExercise, exerciseHints } from '@/counting/ChallengeExercise';
 import { ScreenHints } from '@/lessons/FirstUseHints';
-import { PresentationSwitch } from '@/play/bet-selector/Presentation';
+import { PresentationSwitch, TABLE_HINTS } from '@/play/bet-selector/Presentation';
 import { TableTopBar } from '@/play/TableChrome';
 import { alwaysAllowed } from '@/practice/adapters';
 import { FakeClock, entropyFromWords, PI_WORDS } from '@/practice/testing/substitutes';
@@ -89,7 +89,7 @@ async function mount(ids: readonly HintId[], children: ReactNode, service = newS
       </ScreenHints>
     </SafeAreaProvider>,
   );
-  await act(() => service.learning());
+  await act(() => service.learningPreferences());
   return service;
 }
 
@@ -145,6 +145,25 @@ describe('first-use hints on the running-count exercise', () => {
     expect(sent).toEqual([]);
   });
 
+  it('offer Help labelled as in the frame, and none on a card-values exercise, which has no hints', async () => {
+    const counting = readChallengeView(attempt(nexts(3)));
+    await mount(exerciseHints(counting), exercise(counting));
+    expect(screen.getByRole('button', { name: 'Help' })).toHaveTextContent('Help');
+
+    const cardValues = readChallengeView(
+      (() => {
+        const created = createChallenge({ attemptId: 'attempt-2', owner: 'local', device: 'test-device', variant: 'check', content: CHALLENGE_CONTENT['card-values'] }, seed(1));
+        const begun = advanceChallenge(created, { sequence: created.sequence, commandId: 'c-0', command: { kind: 'begin' } });
+        if (begun.status !== 'committed') throw new Error('refused begin');
+        return begun.state;
+      })(),
+    );
+    expect(exerciseHints(cardValues)).toEqual([]);
+    await mount(exerciseHints(cardValues), exercise(cardValues));
+    expect(screen.queryByRole('button', { name: 'Help' })).toBeNull();
+    expect(screen.queryAllByTestId(/^first-use-hint-/)).toEqual([]);
+  });
+
   it('show the count-entry hint only where a count is asked for', async () => {
     await mount(EXERCISE_HINTS, exercise(readChallengeView(attempt(nexts(3)))));
     expect(screen.queryByTestId('first-use-hint-count-entry')).toBeNull();
@@ -182,7 +201,7 @@ describe('the bet selector hint (S1-04 XjwQc)', () => {
   );
 
   it('shows under the Table / Bet list switch, in the frame’s words, until Got it', async () => {
-    await mount(['bet-selector'], table);
+    await mount(TABLE_HINTS, table);
     expect(screen.getByTestId('first-use-hint-bet-selector')).toHaveTextContent(
       'NEW HERE · BET LIST' + 'Every wager on this table, as a list you can read. Choosing one opens its editor; nothing is placed until you confirm.' + 'Reread from Help (?)Got it',
     );

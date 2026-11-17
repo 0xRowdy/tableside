@@ -13,6 +13,7 @@ import { BlackjackTable } from '@/play/BlackjackTable';
 import { CrapsSetup } from '@/play/CrapsSetup';
 import { CrapsTable } from '@/play/CrapsTable';
 import { EndSessionDialog } from '@/play/EndSessionDialog';
+import { TABLE_HINTS } from '@/play/bet-selector/Presentation';
 import { IncompleteSession } from '@/play/IncompleteSession';
 import { RouletteSetup } from '@/play/RouletteSetup';
 import { RouletteTable } from '@/play/RouletteTable';
@@ -21,8 +22,6 @@ import { SuspendedSession } from '@/play/SuspendedSession';
 import type { PracticeController, PracticeSnapshot } from '@/practice/controller';
 import { usePractice } from '@/practice/PracticeProvider';
 import { useTrainingService } from '@/training/TrainingProvider';
-
-const TABLE_HINTS = ['bet-selector'] as const;
 
 const isSwitched = (snapshot: PracticeSnapshot) =>
   snapshot.status === 'completed' && (snapshot.result.endingReason === 'switch' || snapshot.result.endingReason === 'reset');

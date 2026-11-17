@@ -6,7 +6,7 @@ import { useCallback, useState } from 'react';
 
 import { Placeholder } from '@/components/Placeholder';
 import { CardReview } from '@/counting/CardReview';
-import { ChallengeExercise } from '@/counting/ChallengeExercise';
+import { ChallengeExercise, exerciseHints } from '@/counting/ChallengeExercise';
 import { ChallengeResults } from '@/counting/ChallengeResults';
 import { ChallengeSetupScreen } from '@/counting/ChallengeSetupScreen';
 import { CountingHome } from '@/counting/CountingHome';
@@ -17,8 +17,6 @@ import { lessonHref } from '@/lessons/routes';
 import { allowanceCopy, COUNTING_TITLE, FINDING_ATTEMPT } from '@/training/challenge-text';
 import { setupFor, type ChallengeSetup, type TrainingService, type TrainingSnapshot } from '@/training/service';
 import { useLessons, useTraining } from '@/training/TrainingProvider';
-
-const EXERCISE_HINTS = ['count-entry', 'show-count'] as const;
 
 const lastSetupOf = (service: TrainingService) => service.lastSetup();
 const allowanceOf = async (service: TrainingService, _reloadOnStatus: TrainingSnapshot['status']) => allowanceCopy(await service.allowance());
@@ -47,7 +45,7 @@ export default function Counting() {
       return <Placeholder title={COUNTING_TITLE} message={FINDING_ATTEMPT} />;
     case 'active':
       return (
-        <ScreenHints service={service} ids={EXERCISE_HINTS}>
+        <ScreenHints service={service} ids={exerciseHints(snapshot.view)}>
           <ChallengeExercise
           view={snapshot.view}
           busy={snapshot.busy}

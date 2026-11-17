@@ -32,8 +32,8 @@ export const startHereDetail = (shown: boolean) =>
 // Spec 3 Lessons › Structure (First-use hints); S1-04 XjwQc, Learning NvGyZ; #146
 export const HINTS_LABEL = 'HINTS';
 export const HINTS_AGAIN = 'Show first-use hints again';
-export const hintsAgainDetail = (reset: boolean) =>
-  `${reset ? 'Done. ' : ''}Bet selector, count entry and the show-count toggle hints reappear the next time you meet them.`;
+export const HINTS_AGAIN_DETAIL = 'Bet selector, count entry and the show-count toggle hints reappear the next time you meet them.';
+export const HINTS_RESET = 'First-use hints will show again.';
 export const hintKicker = (name: string) => `NEW HERE · ${name.toUpperCase()}`;
 export const REREAD_FROM_HELP = 'Reread from Help (?)';
 export const GOT_IT = 'Got it';
