@@ -6,14 +6,18 @@ import type { TrainingService, TrainingSnapshot } from '@/training/service';
 import type { CueName } from './catalog';
 import type { FeedbackService } from './service';
 
+// Spec 3 Audio and haptics; Amendment 1 B4 (worked examples reuse these, #144)
+export const CONTENT_SHOWN_CUE: CueName = 'card-dealt';
+export const learnAnswerCue = (correct: boolean): CueName => (correct ? 'correct' : 'incorrect');
+
 function cuesForChallenge(view: ChallengeView, facts: readonly ChallengeFact[]): CueName[] {
   return facts.flatMap((fact): CueName[] => {
     switch (fact.kind) {
       case 'content-shown':
-        return ['card-dealt'];
+        return [CONTENT_SHOWN_CUE];
       case 'answer-accepted':
         if (view.variant === 'check') return ['answer-accepted'];
-        return [view.feedback?.correct ? 'correct' : 'incorrect'];
+        return [learnAnswerCue(view.feedback?.correct === true)];
       case 'attempt-ended':
         return [];
     }

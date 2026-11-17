@@ -1,6 +1,6 @@
 // Spec 3 S3-01 PDCaD, RqPCB, S3-02 buD2R, S3-03, S3-08, S3-09 h0MsKr; S5-17 j3UhJ; #158, #132, #150
 
-import type { CardValueReview, ChallengeEntry, ChallengeMetric, ChallengeVariant, HiLoValue, LearnFeedback, MetricResult } from '@tableside/engine';
+import type { CardValueReview, ChallengeEntry, ChallengeMetric, ChallengeVariant, HiLoExplanation, HiLoValue, LearnFeedback, MetricResult } from '@tableside/engine';
 
 import { cardName, rankName, signed } from '@/play/blackjack-text';
 import { GAME_WORDS } from '@/play/game-words';
@@ -120,13 +120,15 @@ export const progressText = (position: number, length: number) => `Card ${positi
 
 export const spokenValue = (value: HiLoValue) => (value > 0 ? `plus ${value}` : value < 0 ? `minus ${-value}` : '0');
 
-// Spec 3 Learn, Check and assistance
+// Spec 3 Learn, Check and assistance; Lessons › Structure (worked examples render the same fact, #144)
+export const hiLoText = (explanation: HiLoExplanation) => `${rankName(explanation.rank)} counts ${signed(explanation.value)} in Hi-Lo.`;
+
 export function feedbackText(feedback: LearnFeedback): { readonly kicker: string; readonly headline: string; readonly detail: string } {
   const { explanation } = feedback;
   const kicker = feedback.correct ? (feedback.scored ? 'CORRECT' : 'CORRECT ON RETRY · YOUR FIRST ANSWER IS SCORED') : 'NOT QUITE · YOUR FIRST ANSWER IS SCORED';
   return {
     kicker,
-    headline: `${rankName(explanation.rank)} counts ${signed(explanation.value)} in Hi-Lo.`,
+    headline: hiLoText(explanation),
     detail: 'Hi-Lo values: 2 to 6 are +1. 7, 8 and 9 are 0. 10, J, Q, K and A are −1.',
   };
 }
@@ -135,7 +137,7 @@ export const COACH_NAME = 'Marcus · Learn';
 export const NEXT_CARD = 'Next card';
 export const TRY_AGAIN = 'Try this card again';
 
-export type ChoiceState = 'your-answer' | 'correct' | 'recorded' | null;
+export type ChoiceState = 'your-answer' | 'your-pick' | 'correct' | 'recorded' | null;
 
 export const choiceState = (value: HiLoValue, feedback: LearnFeedback | null, entered: ChallengeEntry | null): ChoiceState => {
   if (entered !== null) return value === entered ? 'recorded' : null;
@@ -144,7 +146,7 @@ export const choiceState = (value: HiLoValue, feedback: LearnFeedback | null, en
   return value === feedback.entered ? 'your-answer' : null;
 };
 
-export const CHOICE_TAG = { 'your-answer': 'Your answer', correct: 'Correct', recorded: 'Recorded' } as const;
+export const CHOICE_TAG = { 'your-answer': 'Your answer', 'your-pick': 'Your pick', correct: 'Correct', recorded: 'Recorded' } as const;
 
 export const CARD_PROMPT = "What's this card's Hi-Lo value?";
 export const SKIP_LABEL = 'Skip (counts as incorrect)';
