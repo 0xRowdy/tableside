@@ -15,6 +15,7 @@ import {
 } from '@tableside/engine';
 
 import { CARD_VALUES_CONTENT } from './challenges';
+import { countingExampleProblems, isPlayingCard, type CountingExample } from './counting-examples';
 import { strategyStepProblems, type StrategyStepExample } from './strategy-examples';
 
 export interface ScriptedResponse<Explanation> {
@@ -35,10 +36,8 @@ export interface CardValueExample {
   readonly choices: readonly ScriptedChoice<HiLoValue, HiLoExplanation>[];
 }
 
-export type WorkedExample = CardValueExample | StrategyStepExample;
+export type WorkedExample = CardValueExample | StrategyStepExample | CountingExample;
 
-const SUITS: readonly string[] = ['clubs', 'diamonds', 'hearts', 'spades'];
-const isCard = (card: ChallengeCard) => Number.isInteger(card.rank) && card.rank >= 1 && card.rank <= 13 && SUITS.includes(card.suit);
 const answerText = (answer: HiLoValue) => (answer > 0 ? `+${answer}` : String(answer));
 
 // Spec 1 Testing Decisions (fixed-scenario fixtures); #144
@@ -64,7 +63,8 @@ export function workedExampleProblems(example: WorkedExample, steps: number): re
   if (!Number.isInteger(example.step) || example.step < 1 || example.step > steps) problems.push(`the worked example is on step ${example.step}, but the lesson has ${steps} steps`);
   if (example.choices.length < 2) problems.push('a worked example offers at least two choices');
   if (example.kind === 'strategy-step') return problems.length > 0 ? problems : strategyStepProblems(example);
-  return [...problems, ...cardValueProblems(example)];
+  if (example.kind === 'card-value') return [...problems, ...cardValueProblems(example)];
+  return problems.length > 0 ? problems : countingExampleProblems(example);
 }
 
 function cardValueProblems(example: CardValueExample): readonly string[] {
@@ -76,7 +76,7 @@ function cardValueProblems(example: CardValueExample): readonly string[] {
     seen.add(answer);
   }
   if (example.choices.filter((choice) => choice.response.correct).length !== 1) problems.push('a worked example has exactly one correct choice');
-  if (!isCard(example.card)) problems.push("the worked example's card is not a playing card");
+  if (!isPlayingCard(example.card)) problems.push("the worked example's card is not a playing card");
   if (problems.length > 0) return problems;
 
   for (const { answer, response } of example.choices) {
