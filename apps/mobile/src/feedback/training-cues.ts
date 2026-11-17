@@ -1,4 +1,5 @@
 // Spec 3 Audio and haptics; Learn, Check and assistance › Answer accepted; #132
+import type { WorkedExample } from '@tableside/definitions';
 import type { ChallengeFact, ChallengeView } from '@tableside/engine';
 
 import type { TrainingService, TrainingSnapshot } from '@/training/service';
@@ -9,6 +10,12 @@ import type { FeedbackService } from './service';
 // Spec 3 Audio and haptics; Amendment 1 B4; #144
 export const CONTENT_SHOWN_CUE: CueName = 'card-dealt';
 export const learnAnswerCue = (correct: boolean): CueName => (correct ? 'correct' : 'incorrect');
+
+// Spec 3 Amendment 1 B4; #155
+export const EXAMPLE_CUES: Readonly<Record<WorkedExample['kind'], { readonly shown: CueName | null; answer(correct: boolean): CueName[] }>> = {
+  'card-value': { shown: CONTENT_SHOWN_CUE, answer: (correct) => [learnAnswerCue(correct)] },
+  'strategy-step': { shown: null, answer: (correct) => (correct ? ['stake-set'] : ['stake-set', 'correction-offered']) },
+};
 
 function cuesForChallenge(view: ChallengeView, facts: readonly ChallengeFact[]): CueName[] {
   return facts.flatMap((fact): CueName[] => {

@@ -60,7 +60,7 @@ beforeEach(() => {
 });
 
 describe('the Training service lessons', () => {
-  it('lists all 24 lesson slots with completion, bookmark and access state; an unwritten lesson can’t be opened', async () => {
+  it('lists all 24 lesson slots with completion, bookmark and access state; only written lessons can be opened', async () => {
     const { service } = setup();
     const catalog = await service.listLessons();
     expect(catalog).toHaveLength(24);
@@ -73,7 +73,22 @@ describe('the Training service lessons', () => {
       access: 'available',
       status: { kind: 'not-started' },
     });
-    expect(catalog[1]).toMatchObject({ id: 'blackjack-basics', section: 'blackjack', steps: expect.any(Number), status: { kind: 'not-started' } });
+    expect(catalog.filter((entry) => entry.steps !== null).map((entry) => entry.id)).toEqual([
+      ORIENTATION,
+      'blackjack-basics',
+      'basic-strategy',
+      'basic-with-deviations',
+      'counting-with-basic',
+      'counting-with-deviations',
+      'bet-schedule',
+      'roulette-basics',
+      'flat-even-money',
+      'fixed-two-dozen-coverage',
+      'capped-martingale',
+      'three-win-parlay',
+      'bounded-labouchere',
+      'building-a-strategy',
+    ]);
     expect(catalog[6]).toMatchObject({ id: 'card-values', section: 'blackjack', steps: null, status: { kind: 'not-started' } });
     await expect(service.openLesson('card-values')).rejects.toThrow(/not available/);
   });

@@ -5,6 +5,8 @@ import { BLACKJACK_MODES } from './blackjack/strategies';
 import { BASIC_STRATEGY, BASIC_WITH_DEVIATIONS, BET_SCHEDULE_LESSON, BLACKJACK_BASICS, COUNTING_WITH_BASIC, COUNTING_WITH_DEVIATIONS } from './lessons/blackjack';
 import { CATALOG_CATEGORIES, type CatalogCategory } from './challenges';
 import { CRAPS_STRATEGIES } from './craps-strategies';
+import { APP_ORIENTATION, BUILDING_A_STRATEGY } from './lessons/app-and-builder';
+import { ROULETTE_LESSONS } from './lessons/roulette';
 import { ROULETTE_STRATEGIES } from './roulette-strategies';
 import { workedExampleProblems, type WorkedExample } from './worked-examples';
 
@@ -61,53 +63,9 @@ export interface Lesson {
 // Spec 3 Lessons › Access
 const sectionGame = (section: LessonSection): GameId | null => (section === 'app' || section === 'builder' ? null : section);
 
-const slot = (section: LessonSection, id: string, title: string): Lesson => ({ id, title, summary: null, section, game: sectionGame(section), content: null });
+export { APP_ORIENTATION };
 
-export const APP_ORIENTATION: Lesson = {
-  id: 'app-orientation',
-  title: 'App orientation',
-  summary: 'Tabs, help, practice vs casino records',
-  section: 'app',
-  game: null,
-  content: {
-    version: 1,
-    materialVersion: 1,
-    change: null,
-    steps: [
-      {
-        heading: 'Find your way around',
-        paragraphs: [
-          'Six tabs sit along the bottom of every screen. Home has the three games. Play is the practice table. Counting holds the four counting challenges. Community is for strategies other players share. Saved keeps what you record. More holds Settings.',
-          'Nothing is in a fixed order. Open any tab, any game or any lesson whenever you like.',
-        ],
-      },
-      {
-        heading: 'Help when you need it',
-        paragraphs: [
-          'The first time you meet an unfamiliar control, such as the bet selector or count entry, a short hint explains it. Dismiss it and it stays dismissed on this device.',
-          'Every lesson, this one included, stays in More › Settings › Learning, where you can also bring the hints back. During a Check attempt, help with entering answers, pausing and skipping stays open; teaching waits until the attempt ends.',
-        ],
-      },
-      {
-        heading: 'Practice records and casino records',
-        paragraphs: [
-          'Tableside keeps two kinds of records apart. A practice session is simulated play with practice funding, and its results add up to your practice totals. A casino session is real play you record yourself, in your own currency, with your buy-ins and cash-out. Casino sessions are private and describe only what you recorded.',
-          "Counting challenge results are kept apart again: they score your accuracy, never winnings. None of these records predicts how you'll do next time.",
-        ],
-      },
-      {
-        heading: 'Lessons at your own pace',
-        paragraphs: [
-          'A lesson keeps your place. Leave at any step, and next time you can resume there or restart from step 1.',
-          "Finishing a lesson just marks it completed. It never scores you, awards anything or unlocks anything, and there's no test at the end.",
-        ],
-      },
-    ],
-    workedExample: null,
-    handoffs: [],
-    sources: [],
-  },
-};
+const slot = (section: LessonSection, id: string, title: string): Lesson => ({ id, title, summary: null, section, game: sectionGame(section), content: null });
 
 // Spec 3 Lessons › Inventory, Amendment 1 B1
 export const LESSONS: readonly Lesson[] = [
@@ -128,13 +86,8 @@ export const LESSONS: readonly Lesson[] = [
   slot('craps', 'dont-pass-with-lay-odds', "Don't pass with lay odds"),
   slot('craps', 'three-point-molly', 'Three-point Molly (bounded)'),
   slot('craps', 'press-and-collect-6-8', 'Press-and-collect 6 and 8 (capped)'),
-  slot('roulette', 'roulette-basics', 'Roulette basics'),
-  slot('roulette', 'flat-even-money', 'Flat even-money'),
-  slot('roulette', 'fixed-two-dozen-coverage', 'Fixed two-dozen coverage'),
-  slot('roulette', 'capped-martingale', 'Capped Martingale'),
-  slot('roulette', 'three-win-parlay', 'Three-win parlay'),
-  slot('roulette', 'bounded-labouchere', 'Bounded Labouchere'),
-  slot('builder', 'building-a-strategy', 'Building a strategy'),
+  ...ROULETTE_LESSONS,
+  BUILDING_A_STRATEGY,
 ];
 
 // Spec 3 Lessons › Entry points

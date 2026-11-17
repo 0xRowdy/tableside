@@ -1,22 +1,24 @@
-// Spec 3 S3-08 liAfT, CEb6T; #158, #132, #150
+// Spec 3 S3-08 liAfT, CEb6T, cX5Gc; #158, #132, #150, #133
 
 import type { ChallengeAttemptRecord } from '@tableside/engine';
-import { CircleCheckBig, Divide, Hash, ListChecks, RotateCcw, Square, type LucideIcon } from 'lucide-react-native';
+import { CircleCheckBig, Divide, Hash, Info, ListChecks, RotateCcw, Square, type LucideIcon } from 'lucide-react-native';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/Button';
 import { fonts, palette, radius, space, textScale } from '@/theme/tokens';
 import {
+  ASSISTED_NOTE,
   CATEGORY_TEXT,
-  COMPLETED,
+  completedText,
   NOT_TESTED,
   PACING_LABEL,
   RESULT_ROWS,
+  resultRows,
   RESULTS_TITLE,
   RETRY_LABEL,
   resultsNote,
-  REVIEW_CARDS,
+  REVIEW_LABEL,
   SCORES_LABEL,
   scoreText,
   spokenScore,
@@ -36,7 +38,8 @@ const ROW_ICON: Record<(typeof RESULT_ROWS)[number]['metric'], LucideIcon> = {
 export function ChallengeResults({ record, allowance, onRetry, onReview }: { record: ChallengeAttemptRecord; allowance: AllowanceCopy | undefined; onRetry: () => void; onReview: () => void }) {
   const insets = useSafeAreaInsets();
   const { groupKey } = record;
-  const completed = COMPLETED[groupKey.variant];
+  const completed = completedText(groupKey, record.assistanceStep);
+  const assisted = groupKey.assistanceClass === 'assisted-check';
   const note = resultsNote(groupKey.variant, allowance);
   return (
     <ScrollView style={styles.screen} contentContainerStyle={{ paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right, paddingBottom: space[6] }}>
@@ -62,13 +65,26 @@ export function ChallengeResults({ record, allowance, onRetry, onReview }: { rec
             )}
           </View>
         </View>
+        {assisted && (
+          <View style={styles.box}>
+            <Info color={palette.foreground} size={24} />
+            <View style={styles.boxText}>
+              <Text maxFontSizeMultiplier={textScale.body} style={styles.boxTitle}>
+                {ASSISTED_NOTE.title}
+              </Text>
+              <Text maxFontSizeMultiplier={textScale.body} style={styles.boxDetail}>
+                {ASSISTED_NOTE.detail}
+              </Text>
+            </View>
+          </View>
+        )}
         <Text maxFontSizeMultiplier={textScale.body} style={styles.label}>
           {SCORES_LABEL}
         </Text>
         <View style={styles.group}>
-          {RESULT_ROWS.map((row, index) => {
+          {resultRows(record.metrics).map((row, index) => {
             const result = record.metrics[row.metric];
-            const detail = result ? row.tested(result.total) : NOT_TESTED;
+            const detail = result ? row.tested(result.total, groupKey.variant) : NOT_TESTED;
             const Icon = ROW_ICON[row.metric];
             return (
               <View key={row.metric} accessible accessibilityLabel={`${row.title}, ${detail}: ${spokenScore(result)}`} style={[styles.row, index > 0 && styles.rowDivider]}>
@@ -90,8 +106,8 @@ export function ChallengeResults({ record, allowance, onRetry, onReview }: { rec
             );
           })}
         </View>
-        {record.review.length > 0 && <Button label={REVIEW_CARDS} icon={ListChecks} variant="outline" stretch onPress={onReview} />}
-        <Button label={RETRY_LABEL} icon={RotateCcw} stretch disabled={startWaits(allowance)} onPress={onRetry} />
+        {record.review.length > 0 && <Button label={REVIEW_LABEL[groupKey.category]} icon={ListChecks} variant="outline" stretch onPress={onReview} />}
+        <Button label={RETRY_LABEL[groupKey.category]} icon={RotateCcw} stretch disabled={startWaits(allowance)} onPress={onRetry} />
         {note.length > 0 && (
           <Text maxFontSizeMultiplier={textScale.body} style={styles.note}>
             {note}
