@@ -357,7 +357,7 @@ describe('the Counting tab', () => {
       expect(screen.getByLabelText(/^Checkpoint 1, after card 13: you entered .*, error 0, match$/)).toBeOnTheScreen();
       expect(screen.getByLabelText(/^Checkpoint 2, after card 26: you entered .*, error plus 2, off by 2$/)).toBeOnTheScreen();
       expect(screen.getByLabelText(`Checkpoint 4, after card 52: skipped, correct ${count > 0 ? `plus ${count}` : count < 0 ? `minus ${-count}` : '0'}, counts as incorrect`)).toBeOnTheScreen();
-      expect(screen.getByRole('button', { name: 'Running count lesson. Suggested after this attempt' })).toBeDisabled();
+      expect(screen.getByRole('button', { name: 'Running count lesson. Suggested after this attempt' })).toBeEnabled();
       expect(screen.getByTestId('drift-note')).toHaveTextContent(
         'From checkpoint 2 on, your count ran 2 above the reference. One early miss likely carried through. Each checkpoint still counts as its own error.',
       );
@@ -464,7 +464,7 @@ describe('the Counting tab', () => {
         await enterTrueCount(trueCount);
         expect(screen.getByText(`${signedText(trueCount)} is right.`)).toBeOnTheScreen();
         expect(screen.getByLabelText('True count')).toHaveDisplayValue(typed(trueCount));
-        expect(screen.getByRole('button', { name: 'Read the conversion lesson' })).toBeDisabled();
+        expect(screen.getByRole('button', { name: 'Read the conversion lesson' })).toBeEnabled();
         await fireEvent.press(screen.getByRole('button', { name: 'Next question' }));
       }
       await screen.findByRole('header', { name: 'Results' });
