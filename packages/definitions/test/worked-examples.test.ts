@@ -1,10 +1,10 @@
 // Spec 3 Lessons › Structure (worked examples); Testing Decisions › Build-time check; #144
 import { describe, expect, it } from 'vitest';
 
-import { APP_ORIENTATION, lessonProblems, type Lesson, type WorkedExample } from '../src';
+import { APP_ORIENTATION, lessonProblems, type CardValueExample, type Lesson, type WorkedExample } from '../src';
 
 // Spec 1 Game rules, Counting (Hi-Lo)
-const FIVE_OF_HEARTS: WorkedExample = {
+const FIVE_OF_HEARTS: CardValueExample = {
   kind: 'card-value',
   step: 2,
   card: { rank: 5, suit: 'hearts' },
@@ -23,7 +23,7 @@ const withExample = (workedExample: WorkedExample, id = 'fixture-card-values'): 
 });
 
 const choice = (index: number) => FIVE_OF_HEARTS.choices[index]!;
-const replace = (index: number, next: WorkedExample['choices'][number]) => FIVE_OF_HEARTS.choices.map((c: WorkedExample['choices'][number], i: number) => (i === index ? next : c));
+const replace = (index: number, next: CardValueExample['choices'][number]) => FIVE_OF_HEARTS.choices.map((c: CardValueExample['choices'][number], i: number) => (i === index ? next : c));
 
 describe('worked examples', () => {
   it('pass the build-time check when every scripted response matches the engine replay', () => {

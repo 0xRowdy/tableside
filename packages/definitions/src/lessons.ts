@@ -6,6 +6,7 @@ import { CATALOG_CATEGORIES, type CatalogCategory } from './challenges';
 import { CRAPS_STRATEGIES } from './craps-strategies';
 import { APP_ORIENTATION, BUILDING_A_STRATEGY } from './lessons/app-and-builder';
 import { CRAPS_LESSONS } from './lessons/craps';
+import { ROULETTE_LESSONS } from './lessons/roulette';
 import { ROULETTE_STRATEGIES } from './roulette-strategies';
 import { workedExampleProblems, type WorkedExample } from './worked-examples';
 
@@ -70,12 +71,7 @@ export const LESSONS: readonly Lesson[] = [
   slot('blackjack', 'table-counting', 'Table counting'),
   slot('blackjack', 'bet-schedule', 'Bet schedule'),
   ...CRAPS_LESSONS,
-  slot('roulette', 'roulette-basics', 'Roulette basics'),
-  slot('roulette', 'flat-even-money', 'Flat even-money'),
-  slot('roulette', 'fixed-two-dozen-coverage', 'Fixed two-dozen coverage'),
-  slot('roulette', 'capped-martingale', 'Capped Martingale'),
-  slot('roulette', 'three-win-parlay', 'Three-win parlay'),
-  slot('roulette', 'bounded-labouchere', 'Bounded Labouchere'),
+  ...ROULETTE_LESSONS,
   BUILDING_A_STRATEGY,
 ];
 

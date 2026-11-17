@@ -81,6 +81,12 @@ describe('the Training service lessons', () => {
       'dont-pass-with-lay-odds',
       'three-point-molly',
       'press-and-collect-6-8',
+      'roulette-basics',
+      'flat-even-money',
+      'fixed-two-dozen-coverage',
+      'capped-martingale',
+      'three-win-parlay',
+      'bounded-labouchere',
       'building-a-strategy',
     ]);
     expect(catalog[1]).toMatchObject({ id: 'blackjack-basics', section: 'blackjack', steps: null, status: { kind: 'not-started' } });
