@@ -1,9 +1,12 @@
 const { defineConfig } = require('eslint/config');
 const expoConfig = require('eslint-config-expo/flat');
 
+const comments = require('../../scripts/eslint/reference-comments.mjs').default;
+
 module.exports = defineConfig([
   expoConfig,
   { ignores: ['dist/*', 'ios/*', 'android/*'] },
+  { plugins: { comments }, rules: { 'comments/reference-only': 'error' } },
   {
     files: ['src/**/*.{ts,tsx}'],
     ignores: ['src/play/units.ts'],

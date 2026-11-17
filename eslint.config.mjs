@@ -5,6 +5,8 @@ import path from 'node:path';
 import { defineConfig } from 'eslint/config';
 import tseslint from 'typescript-eslint';
 
+import comments from './scripts/eslint/reference-comments.mjs';
+
 // no-restricted-imports only sees the specifier, so it can't tell `../src/x`
 // (same package) from `../../harness/src/x` (another package's internals).
 const portability = {
@@ -72,6 +74,7 @@ const portabilityRules = (allowedImports) => ({
 export default defineConfig(
   { ignores: ['**/node_modules/**', '**/dist/**', 'apps/mobile/**', 'harness-reports/**', '.claude/**'] },
   ...tseslint.configs.recommended,
+  { plugins: { comments }, rules: { 'comments/reference-only': 'error' } },
   { files: ['packages/engine/**/*.ts', 'packages/definitions/**/*.ts'], plugins: { portability } },
   {
     files: ['packages/engine/**/*.ts'],
