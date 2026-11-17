@@ -2,6 +2,7 @@
 import type { GameId, StrategyDefinition } from '@tableside/engine';
 
 import { BLACKJACK_MODES } from './blackjack/strategies';
+import { BASIC_STRATEGY, BASIC_WITH_DEVIATIONS, BET_SCHEDULE_LESSON, BLACKJACK_BASICS, COUNTING_WITH_BASIC, COUNTING_WITH_DEVIATIONS } from './lessons/blackjack';
 import { CATALOG_CATEGORIES, type CatalogCategory } from './challenges';
 import { CRAPS_STRATEGIES } from './craps-strategies';
 import { ROULETTE_STRATEGIES } from './roulette-strategies';
@@ -105,16 +106,16 @@ export const APP_ORIENTATION: Lesson = {
 // Spec 3 Lessons › Inventory, Amendment 1 B1
 export const LESSONS: readonly Lesson[] = [
   APP_ORIENTATION,
-  slot('blackjack', 'blackjack-basics', 'Blackjack basics'),
-  slot('blackjack', 'basic-strategy', 'Basic strategy'),
-  slot('blackjack', 'basic-with-deviations', 'Basic with deviations'),
-  slot('blackjack', 'counting-with-basic', 'Counting with basic'),
-  slot('blackjack', 'counting-with-deviations', 'Counting with deviations'),
+  BLACKJACK_BASICS,
+  BASIC_STRATEGY,
+  BASIC_WITH_DEVIATIONS,
+  COUNTING_WITH_BASIC,
+  COUNTING_WITH_DEVIATIONS,
   slot('blackjack', 'card-values', 'Card values'),
   slot('blackjack', 'running-count', 'Running count'),
   slot('blackjack', 'true-count-conversion', 'True-count conversion'),
   slot('blackjack', 'table-counting', 'Table counting'),
-  slot('blackjack', 'bet-schedule', 'Bet schedule'),
+  BET_SCHEDULE_LESSON,
   slot('craps', 'craps-basics', 'Craps basics'),
   slot('craps', 'pass-with-odds', 'Pass with odds'),
   slot('craps', 'flat-place-6-8', 'Flat place 6 and 8'),

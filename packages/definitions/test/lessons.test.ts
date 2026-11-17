@@ -41,7 +41,7 @@ describe('lesson definitions', () => {
   });
 
   it('author App orientation at version 1 (navigation, help, practice vs casino records), with no material change yet', () => {
-    expect(LESSONS.filter(authored).map((lesson) => lesson.id)).toEqual(['app-orientation']);
+    expect(LESSONS.filter(authored).map((lesson) => lesson.id)).toEqual(['app-orientation', 'blackjack-basics', 'basic-strategy', 'basic-with-deviations', 'counting-with-basic', 'counting-with-deviations', 'bet-schedule']);
     const orientation = LESSONS[0]!;
     expect(orientation.summary).toBe('Tabs, help, practice vs casino records');
     expect(orientation.content).toMatchObject({ version: 1, materialVersion: 1, change: null, workedExample: null, handoffs: [], sources: [] });

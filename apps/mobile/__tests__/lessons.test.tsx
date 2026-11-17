@@ -105,8 +105,8 @@ describe('lessons', () => {
       'STRATEGY BUILDER · 1',
     ]);
     expect(button('App orientation. Not started · Tabs, help, practice vs casino records')).toBeEnabled();
-    expect(button('Blackjack basics. Not started')).toBeDisabled();
-    expect(button('Blackjack basics. Not started')).toHaveProp('accessibilityHint', 'Not available in this version yet.');
+    expect(button('Card values. Not started')).toBeDisabled();
+    expect(button('Card values. Not started')).toHaveProp('accessibilityHint', 'Not available in this version yet.');
     expect(button('Building a strategy. Not started')).toBeDisabled();
   });
 
@@ -211,6 +211,22 @@ describe('lessons', () => {
     await header('Practice records and casino records');
     expect(screen.queryByRole('link')).toBeNull();
     open.mockRestore();
+  });
+
+  // Spec 3 Lessons › Content requirements (deviation lessons); #152
+  it('open Basic with deviations at the step comparing our 16 vs 10 index with the published chart', async () => {
+    await openCatalog();
+    await fireEvent.press(button(/^Basic with deviations\. Not started/));
+    await header('Basic with deviations');
+    expect(screen.getByText('Lesson · Blackjack')).toBeOnTheScreen();
+    await fireEvent.press(button('Next'));
+    await header('The index plays');
+    await fireEvent.press(button('Next'));
+    expect(await header('When the count changes a decision')).toBeOnTheScreen();
+    expect(screen.getByText('Step 3 of 7')).toBeOnTheScreen();
+    expect(screen.getByRole('header', { name: 'Our index vs published charts' })).toBeOnTheScreen();
+    expect(screen.getByText(/^For hard 16 against a 10, Tableside teaches: stand at \+1 or higher, otherwise hit\./)).toBeOnTheScreen();
+    expect(screen.getByRole('link', { name: /^Source: / })).toBeOnTheScreen();
   });
 
   it('are silent: the Learning screen, catalog and lesson text play no cue or haptic', async () => {
