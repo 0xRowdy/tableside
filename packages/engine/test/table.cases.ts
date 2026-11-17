@@ -374,7 +374,7 @@ export const tableCases: TestCase[] = [
     name: 'table record: the group key carries the rule preset, penetration, extra players, Observe and N; length is the round count',
     run: (t) => {
       const ended = playThrough(begun(tableSpec('check', { ...withExtraPlayers(3, 60), interval: 4 }), seed(1)));
-      const record = challengeAttemptRecord(ended, { installation: 'i', startedAt: 1, endedAt: 2, interrupted: false, performanceMs: null, meteringBasis: 'challenge-attempt', allowancePolicyVersion: null });
+      const record = challengeAttemptRecord(ended, { installation: 'i', startedAt: 1, endedAt: 2, interrupted: false, performanceMs: null, meteringBasis: 'challenge-attempt', allowancePolicyVersion: null, pacing: 'self-paced' });
       t.equal([record.groupKey.category, record.groupKey.length, record.groupKey.reference, record.identities.reference], ['table', 10, TABLE_V1.reference, TABLE_V1.reference]);
       t.equal(record.groupKey.table, {
         rules: { id: 'blackjack-six-deck', version: 1 },

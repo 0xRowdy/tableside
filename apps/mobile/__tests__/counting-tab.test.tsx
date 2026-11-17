@@ -28,6 +28,7 @@ jest.mock('@/training/app-adapters', () => {
         device: 'test-device',
         owner: 'local',
         quarantine: { version: 0, entries: [] },
+        speech: jest.requireActual('@/training/speech').NO_SCREEN_READER,
       };
     },
   };

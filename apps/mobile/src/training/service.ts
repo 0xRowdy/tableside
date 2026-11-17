@@ -21,7 +21,7 @@ import {
   type LessonStep,
   type WorkedExample,
 } from '@tableside/definitions';
-import { CHALLENGE_VARIANTS, MAX_CHECKPOINT_INTERVAL, MAX_OTHER_PLAYERS, PENETRATIONS, type ChallengeAttemptRecord, type ChallengeCategory, type ChallengeGroupKey, type ChallengeVariant } from '@tableside/engine';
+import { CHALLENGE_PACINGS, CHALLENGE_VARIANTS, MAX_CHECKPOINT_INTERVAL, MAX_OTHER_PLAYERS, pacingApplies, PENETRATIONS, type ChallengeAttemptRecord, type ChallengeCategory, type ChallengeGroupKey, type ChallengePacing, type ChallengeVariant } from '@tableside/engine';
 
 import type { LifecycleEvent } from '../practice/adapters';
 import type { TrainingAdapters } from './adapters';
@@ -40,6 +40,8 @@ export interface CatalogEntry {
   readonly category: CatalogCategory;
   readonly available: true;
   readonly ready: readonly ChallengeVariant[];
+  // Spec 3 Attempt lifecycle › Automatic pacing; #136
+  readonly pacings: readonly ChallengePacing[];
 }
 
 export interface ChallengeSetup {
@@ -47,13 +49,15 @@ export interface ChallengeSetup {
   readonly variant: ChallengeVariant;
   // Spec 3 Attempt lifecycle › Performance timer; #135
   readonly timed?: boolean;
+  // Spec 3 Attempt lifecycle › Automatic pacing; #136
+  readonly pacing?: ChallengePacing;
   // Spec 3 User stories 27
   readonly table?: TableOptions;
 }
 
 export type { TableOptions };
 
-export type SetupDiagnostic = { readonly field: 'category' | 'variant'; readonly problem: 'unknown' | 'not-ready' } | { readonly field: 'table'; readonly problem: 'invalid' };
+export type SetupDiagnostic = { readonly field: 'category' | 'variant' | 'pacing'; readonly problem: 'unknown' | 'not-ready' } | { readonly field: 'table'; readonly problem: 'invalid' };
 
 export interface SetupValidation {
   readonly valid: boolean;
@@ -188,10 +192,10 @@ export class TrainingService {
   }
 
   listCatalog(): readonly CatalogEntry[] {
-    return SUGGESTED_ORDER.map((category) => ({ category, available: true, ready: READY[category] ?? [] }));
+    return SUGGESTED_ORDER.map((category) => ({ category, available: true, ready: READY[category] ?? [], pacings: pacingsOf(category) }));
   }
 
-  validateSetup(setup: { readonly category: unknown; readonly variant: unknown; readonly table?: unknown }): SetupValidation {
+  validateSetup(setup: { readonly category: unknown; readonly variant: unknown; readonly pacing?: unknown; readonly table?: unknown }): SetupValidation {
     const diagnostics: SetupDiagnostic[] = [];
     const known = isCatalogCategory(setup.category);
     if (!known) diagnostics.push({ field: 'category', problem: 'unknown' });
@@ -200,6 +204,10 @@ export class TrainingService {
     else if (known && diagnostics.length === 0 && !READY[setup.category as CatalogCategory]?.includes(setup.variant as ChallengeVariant)) {
       diagnostics.push({ field: 'variant', problem: 'not-ready' });
     }
+    // Spec 3 Attempt lifecycle › Automatic pacing; #136
+    const pacing = pacingOf(setup);
+    if (!CHALLENGE_PACINGS.includes(pacing as ChallengePacing)) diagnostics.push({ field: 'pacing', problem: 'unknown' });
+    else if (known && !pacingsOf(setup.category as CatalogCategory).includes(pacing as ChallengePacing)) diagnostics.push({ field: 'pacing', problem: 'not-ready' });
     if (setup.category === 'table' && !isTableOptions(setup.table)) diagnostics.push({ field: 'table', problem: 'invalid' });
     return { valid: diagnostics.length === 0, diagnostics };
   }
@@ -214,7 +222,7 @@ export class TrainingService {
     const remembered = rememberedSetup(setup);
     await this.adapters.store.writePreference(LAST_SETUP, JSON.stringify(remembered)).catch(() => undefined);
     const table = remembered.table ? observeSetup(remembered.table) : undefined;
-    await this.challenges.start(setup.variant, CHALLENGE_CONTENT[setup.category as ChallengeCategory], setup.timed === true, table);
+    await this.challenges.start(setup.variant, CHALLENGE_CONTENT[setup.category as ChallengeCategory], { timed: setup.timed === true, pacing: pacingOf(setup), ...(table ? { table } : {}) });
   }
 
   submit(command: LearnerCommand): Promise<void> {
@@ -248,7 +256,7 @@ export class TrainingService {
     if (snapshot.status !== 'ended') return;
     const { record } = snapshot;
     this.dismissResults();
-    await this.startAttempt({ ...retrySetup(record.groupKey), timed: record.performanceMs !== null });
+    await this.startAttempt({ ...retrySetup(record.groupKey), timed: record.performanceMs !== null, pacing: record.groupKey.pacing });
   }
 
   // Spec 3 Amendment 1 B5
@@ -300,9 +308,9 @@ export class TrainingService {
     if (text === null) return null;
     try {
       const value = JSON.parse(text) as Partial<ChallengeSetup>;
-      return isCatalogCategory(value.category) && CHALLENGE_VARIANTS.includes(value.variant as ChallengeVariant)
-        ? rememberedSetup({ category: value.category, variant: value.variant as ChallengeVariant, timed: value.timed === true, table: value.table })
-        : null;
+      if (!isCatalogCategory(value.category) || !CHALLENGE_VARIANTS.includes(value.variant as ChallengeVariant)) return null;
+      const pacing = pacingsOf(value.category).includes(value.pacing as ChallengePacing) ? (value.pacing as ChallengePacing) : 'self-paced';
+      return rememberedSetup({ category: value.category, variant: value.variant as ChallengeVariant, timed: value.timed === true, pacing, table: value.table });
     } catch {
       return null;
     }
@@ -415,10 +423,21 @@ export class TrainingService {
   }
 }
 
-function rememberedSetup({ category, variant, timed, table }: ChallengeSetup): ChallengeSetup {
-  const setup: ChallengeSetup = timed ? { category, variant, timed } : { category, variant };
-  return category === 'table' && isTableOptions(table) ? { ...setup, table } : setup;
+function rememberedSetup({ category, variant, timed, pacing, table }: ChallengeSetup): ChallengeSetup {
+  return {
+    category,
+    variant,
+    ...(timed ? { timed } : {}),
+    ...(pacing && pacing !== 'self-paced' ? { pacing } : {}),
+    ...(category === 'table' && isTableOptions(table) ? { table } : {}),
+  };
 }
+
+// Spec 3 Attempt lifecycle › Automatic pacing; #136
+export const pacingOf = <T>(setup: { readonly pacing?: T }): T | 'self-paced' => setup.pacing ?? 'self-paced';
+
+const pacingsOf = (category: CatalogCategory): readonly ChallengePacing[] =>
+  CHALLENGE_PACINGS.filter((pacing) => pacingApplies(category, pacing));
 
 const progressKey = (id: string, content: LessonContent) => ({ id, materialVersion: content.materialVersion, steps: stepCount(content) });
 

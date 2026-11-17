@@ -12,6 +12,7 @@ import { TrainingService, type TrainingSnapshot } from '@/training/service';
 import { CHALLENGE_CHARGE } from '@/training/store';
 import { newAttempt } from '@/training/testing/store-contract';
 import { cardOf, HI_LO_BY_RANK } from '@/training/testing/hi-lo';
+import { NO_SCREEN_READER } from '@/training/speech';
 
 const LEARN_CARD_VALUES = { category: 'card-values', variant: 'learn' } as const;
 const CHECK_CARD_VALUES = { category: 'card-values', variant: 'check' } as const;
@@ -29,7 +30,7 @@ function setup(options: { access?: Partial<AccessSupervisor>; store?: MemoryTrai
   };
   let next = 0;
   const clock = options.clock ?? new FakeClock(1_790_000_000_000, true);
-  const service = new TrainingService({ store, access, allowance: plentyAllowance(() => clock.now()), clock, entropy: entropyFromWords(PI_WORDS), newId: () => `attempt-${++next}`, device: 'test-device', owner: 'local', quarantine: EMPTY_QUARANTINE_LIST });
+  const service = new TrainingService({ store, access, allowance: plentyAllowance(() => clock.now()), clock, entropy: entropyFromWords(PI_WORDS), newId: () => `attempt-${++next}`, device: 'test-device', owner: 'local', quarantine: EMPTY_QUARANTINE_LIST, speech: NO_SCREEN_READER });
   return { service, store, admissions, clock };
 }
 
@@ -53,10 +54,10 @@ describe('the Training service', () => {
   it('lists the four challenge categories in the suggested order, all available, with no exercise content', () => {
     const { service } = setup();
     expect(service.listCatalog()).toEqual([
-      { category: 'card-values', available: true, ready: ['learn', 'check'] },
-      { category: 'running-count', available: true, ready: ['learn', 'check'] },
-      { category: 'conversion', available: true, ready: ['learn', 'check'] },
-      { category: 'table', available: true, ready: ['learn', 'check'] },
+      { category: 'card-values', available: true, ready: ['learn', 'check'], pacings: ['self-paced'] },
+      { category: 'running-count', available: true, ready: ['learn', 'check'], pacings: ['self-paced', '3s', '2s', '1s'] },
+      { category: 'conversion', available: true, ready: ['learn', 'check'], pacings: ['self-paced'] },
+      { category: 'table', available: true, ready: ['learn', 'check'], pacings: ['self-paced'] },
     ]);
   });
 

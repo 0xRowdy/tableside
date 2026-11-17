@@ -1,4 +1,5 @@
-// Spec 3 S3-02 buD2R, ZreSb, Amendment 4 §2–3; Lessons › Entry points; #158, #150, #145, #135, #140, #137
+// Spec 3 S3-02 buD2R, ZreSb, Amendment 4 §2–3; Lessons › Entry points
+// #158, #150, #145, #135, #136, #140, #137
 
 import { CHALLENGE_VARIANTS, type ChallengeVariant } from '@tableside/engine';
 import { BookOpen, CircleAlert, Play } from 'lucide-react-native';
@@ -14,6 +15,10 @@ import {
   CATEGORY_TEXT,
   COUNTING_TITLE,
   NOT_READY_HINT,
+  PACE_GROUP,
+  PACE_HELP,
+  PACE_LABEL,
+  paceOption,
   START_PROBLEM,
   startLabel,
   startWaits,
@@ -28,7 +33,7 @@ import {
   type AllowanceCopy,
 } from '@/training/challenge-text';
 import { LEARN_THIS_SKILL, learnThisSkillDetail } from '@/training/lesson-text';
-import type { CatalogEntry, ChallengeSetup, LessonEntry, StartProblem } from '@/training/service';
+import { pacingOf, type CatalogEntry, type ChallengeSetup, type LessonEntry, type StartProblem } from '@/training/service';
 
 import { AllowanceBanner } from './AllowanceBanner';
 import { TableSetupOptions } from './TableSetupOptions';
@@ -77,6 +82,24 @@ export function ChallengeSetupScreen({
         </Text>
       </View>
       {setup.table && <TableSetupOptions options={setup.table} onChange={(table) => onChange({ ...setup, table })} />}
+      {entry.pacings.length > 1 && (
+        <View style={styles.section}>
+          <Text maxFontSizeMultiplier={textScale.body} style={styles.label}>
+            {PACE_LABEL}
+          </Text>
+          <Segmented
+            label={PACE_GROUP}
+            options={entry.pacings.map((pacing) => ({ value: pacing, ...paceOption(pacing) }))}
+            selected={pacingOf(setup)}
+            onSelect={(pacing) => onChange({ ...setup, pacing })}
+          />
+          {pacingOf(setup) !== 'self-paced' && (
+            <Text maxFontSizeMultiplier={textScale.body} style={styles.help}>
+              {PACE_HELP}
+            </Text>
+          )}
+        </View>
+      )}
       <View style={styles.section}>
         <Text maxFontSizeMultiplier={textScale.body} style={styles.label}>
           {TIMING_LABEL}

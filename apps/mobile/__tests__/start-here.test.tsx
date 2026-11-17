@@ -10,6 +10,7 @@ import { FakeClock, entropyFromWords, PI_WORDS } from '@/practice/testing/substi
 import { plentyAllowance } from '@/training/allowance';
 import { MemoryTrainingStore } from '@/training/memory-store';
 import { TrainingService } from '@/training/service';
+import { NO_SCREEN_READER } from '@/training/speech';
 
 let mockStore: MemoryTrainingStore | null = null;
 
@@ -32,6 +33,7 @@ jest.mock('@/training/app-adapters', () => {
         device: 'test-device',
         owner: 'local',
         quarantine: { version: 0, entries: [] },
+        speech: jest.requireActual('@/training/speech').NO_SCREEN_READER,
       };
     },
   };
@@ -48,6 +50,7 @@ const onThisDevice = () =>
     device: 'test-device',
     owner: 'local',
     quarantine: { version: 0, entries: [] },
+    speech: NO_SCREEN_READER,
   });
 
 const START_HERE_TEXT = '24 short lessons on the three games, counting and the app. Open any, in any order.';

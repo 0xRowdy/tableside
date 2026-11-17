@@ -13,6 +13,7 @@ import { FakeClock, entropyFromWords, PI_WORDS } from '@/practice/testing/substi
 import { plentyAllowance } from '@/training/allowance';
 import { MemoryTrainingStore } from '@/training/memory-store';
 import { TrainingService } from '@/training/service';
+import { NO_SCREEN_READER } from '@/training/speech';
 
 let mockStore: MemoryTrainingStore | null = null;
 
@@ -32,6 +33,7 @@ const onThisDevice = () =>
     device: 'test-device',
     owner: 'local',
     quarantine: { version: 0, entries: [] },
+    speech: NO_SCREEN_READER,
   });
 
 type Launch = { stored: AccountGate; offlineGame: GameId | null; latest: ReturnType<typeof fakeAppAccount> | null };

@@ -12,6 +12,11 @@ export type AssistanceClass = 'learn' | 'assisted-check' | 'unassisted-check';
 
 export type ChallengePacing = 'self-paced' | '3s' | '2s' | '1s';
 
+export const CHALLENGE_PACINGS: readonly ChallengePacing[] = ['self-paced', '3s', '2s', '1s'];
+
+// Spec 3 Attempt lifecycle › Automatic pacing; #136
+export const pacingApplies = (category: string, pacing: ChallengePacing): boolean => pacing === 'self-paced' || category === 'running-count';
+
 // Spec 3 Comparison groups
 export interface TableGroupKey {
   readonly rules: VersionedIdentity;
@@ -85,9 +90,12 @@ export interface AttemptRecordContext {
   readonly performanceMs: number | null;
   readonly meteringBasis: MeteringBasis;
   readonly allowancePolicyVersion: string | null;
+  // Spec 3 Comparison groups; #136
+  readonly pacing: ChallengePacing;
 }
 
-export function challengeGroupKey(state: ChallengeState): ChallengeGroupKey {
+export function challengeGroupKey(state: ChallengeState, pacing: ChallengePacing): ChallengeGroupKey {
+  if (!pacingApplies(state.identities.category, pacing)) throw new Error(`${state.identities.category} has no ${pacing} pacing`);
   return {
     category: state.identities.category,
     variant: state.variant,
@@ -96,7 +104,7 @@ export function challengeGroupKey(state: ChallengeState): ChallengeGroupKey {
     content: { ...state.identities.content },
     reference: state.identities.reference && { ...state.identities.reference },
     length: state.content.category === 'table' ? state.content.rounds : state.content.length,
-    pacing: 'self-paced',
+    pacing,
     table: state.table && tableGroupKey(state.table.setup),
   };
 }
@@ -141,7 +149,7 @@ function recordOf(
     attemptId: state.attempt.id,
     owner: state.attempt.owner,
     installation: context.installation,
-    groupKey: challengeGroupKey(state),
+    groupKey: challengeGroupKey(state, context.pacing),
     identities: {
       engine: identities.engine,
       content: { ...identities.content },

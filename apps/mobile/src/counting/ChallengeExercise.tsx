@@ -1,11 +1,12 @@
 // Spec 3 S3-03 P4WjR, drVnR, BFdJT, S3-04 qdnQm, S3-05 EDnGd, r5pCx, T9sCI
-// Spec 3 S3-06 C53yTW, zAatf, Qv1An, S3-07; #158, #132, #133, #134, #135, #146, #137
+// Spec 3 S3-06 C53yTW, zAatf, Qv1An, S3-07; S3-04 qmDou; S3-05 qGARl
+// #158, #132, #133, #134, #135, #146, #136, #137
 
 import type { HintId } from '@tableside/definitions';
-import type { ChallengeCategory, ChallengeEntry, ChallengeView, ConversionItem, CountRange, LearnFeedback } from '@tableside/engine';
-import { CircleCheck, CircleDot, CircleHelp, CircleX, Info, Pause, SkipForward, Timer, type LucideIcon } from 'lucide-react-native';
+import type { ChallengeCategory, ChallengeEntry, ChallengePacing, ChallengeView, ConversionItem, CountRange, LearnFeedback } from '@tableside/engine';
+import { CircleCheck, CircleDot, CircleHelp, CirclePause, CircleX, Info, Pause, SkipForward, Timer, type LucideIcon } from 'lucide-react-native';
 import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Platform, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/Button';
@@ -46,8 +47,10 @@ import {
   exerciseSubtitle,
   feedbackText,
   NEXT_CARD,
+  PACE_WAITING,
   PAUSE_LABEL,
   recordedText,
+  screenReaderName,
   SKIP_LABEL,
   spokenTimer,
   timerText,
@@ -73,6 +76,7 @@ export function ChallengeExercise({
   saveFailed,
   hold,
   timer,
+  pacing,
   performanceMs,
   onCommand,
   onInputRejected,
@@ -89,6 +93,7 @@ export function ChallengeExercise({
   saveFailed: boolean;
   hold: AttemptHold | null;
   timer: PerformanceTimer | null;
+  pacing: ChallengePacing;
   performanceMs: () => number | null;
   onCommand: (command: LearnerCommand) => void;
   onInputRejected: () => void;
@@ -116,7 +121,7 @@ export function ChallengeExercise({
             {CATEGORY_TEXT[view.category].title}
           </Text>
           <Text maxFontSizeMultiplier={textScale.body} style={styles.subtitle}>
-            {view.table ? tableSubtitle(view.variant, view.table) : exerciseSubtitle(view.variant, timer !== null, hold)}
+            {view.table ? tableSubtitle(view.variant, view.table) : exerciseSubtitle(view.variant, pacing, timer !== null, hold)}
           </Text>
           {view.table && (
             <Text maxFontSizeMultiplier={textScale.body} style={styles.subtitle}>
@@ -184,10 +189,10 @@ export function ChallengeExercise({
             {feedback && <CoachNote feedback={feedback} position={view.position} canRetry={view.legalCommands.includes('retry-item')} enabled={ready} onCommand={onCommand} />}
           </>
         ) : (
-          <CountingBody view={view} range={view.countRange} ready={ready} answering={answering} onCommand={onCommand} onInputRejected={onInputRejected} />
+          <CountingBody view={view} range={view.countRange} automatic={pacing !== 'self-paced'} ready={ready} answering={answering} onCommand={onCommand} onInputRejected={onInputRejected} />
         )}
       </View>
-      {hold?.reached && !helping && <HoldSheet hold={hold} variant={view.variant} busy={busy} onResume={onResume} onEnd={onEnd} onClose={onLeave} />}
+      {hold?.reached && !helping && <HoldSheet hold={hold} context={{ variant: view.variant, position: view.position, pacing, reader: screenReaderName(Platform.OS) }} busy={busy} onResume={onResume} onEnd={onEnd} onClose={onLeave} />}
       {helping && <HelpSheet view={view} onClose={() => setHelping(false)} />}
     </ScrollView>
   );
@@ -233,6 +238,7 @@ function PerformanceTime({ timer, performanceMs }: { timer: PerformanceTimer; pe
 function CountingBody({
   view,
   range,
+  automatic,
   ready,
   answering,
   onCommand,
@@ -240,6 +246,7 @@ function CountingBody({
 }: {
   view: ChallengeView;
   range: CountRange;
+  automatic: boolean;
   ready: boolean;
   answering: boolean;
   onCommand: (command: LearnerCommand) => void;
@@ -250,6 +257,7 @@ function CountingBody({
   const feedback = view.variant === 'learn' ? view.feedback : null;
   const entered = view.variant === 'check' ? view.entered : null;
   const checkpoint = checkpointOf(view);
+  const waiting = automatic && (view.phase === 'question' || view.phase === 'explanation');
   return (
     <View testID="count-columns" style={[styles.columns, { flexDirection: sideBySide ? 'row' : 'column' }]}>
       <View style={[styles.column, sideBySide && styles.side]}>
@@ -273,6 +281,7 @@ function CountingBody({
             </Text>
           )}
         </View>
+        {waiting && <PaceWaiting />}
         {view.countAid && <FirstUseHint id="show-count" />}
         {view.countAid && <CountAid key={view.attemptId} variant={view.variant} aid={view.countAid} enabled={ready && view.legalCommands.includes('reveal-count')} onReveal={() => onCommand({ kind: 'reveal-count' })} />}
       </View>
@@ -289,10 +298,22 @@ function CountingBody({
             onRejected={onInputRejected}
           />
         )}
-        {view.phase === 'card' && <Button label={NEXT_CARD} stretch disabled={!ready} onPress={() => onCommand({ kind: 'next-item' })} />}
+        {view.phase === 'card' && !automatic && <Button label={NEXT_CARD} stretch disabled={!ready} onPress={() => onCommand({ kind: 'next-item' })} />}
         {view.phase === 'recorded' && entered !== null && <RecordedNotice entered={entered} category={view.category} />}
         {feedback && <CoachNote feedback={feedback} position={view.position} canRetry={view.legalCommands.includes('retry-item')} enabled={ready} onCommand={onCommand} />}
       </View>
+    </View>
+  );
+}
+
+// Spec 3 S3-04 qmDou; #136
+function PaceWaiting() {
+  return (
+    <View style={styles.pace}>
+      <CirclePause color={palette.foreground} size={14} />
+      <Text maxFontSizeMultiplier={textScale.body} style={styles.paceText}>
+        {PACE_WAITING}
+      </Text>
     </View>
   );
 }
@@ -496,6 +517,8 @@ const styles = StyleSheet.create({
   cardStack: { flexDirection: 'column' },
   promptBeside: { flex: 1 },
   start: { textAlign: 'left' },
+  pace: { flexDirection: 'row', alignSelf: 'flex-start', alignItems: 'center', gap: space[1] + 2, paddingVertical: space[1] + 2, paddingHorizontal: 10, borderRadius: radius.pill, backgroundColor: palette.muted },
+  paceText: { fontFamily: fonts.ui, fontSize: 13, color: palette.foreground },
   checkpointKicker: { fontFamily: fonts.uiBold, fontSize: 14, color: palette.mutedForeground, textAlign: 'center' },
   keep: { fontFamily: fonts.ui, fontSize: 15, lineHeight: 21, color: palette.mutedForeground, textAlign: 'center' },
   choices: { flexDirection: 'row', gap: space[3] - 2 },

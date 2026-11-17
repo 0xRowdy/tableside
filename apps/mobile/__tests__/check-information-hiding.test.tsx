@@ -52,7 +52,7 @@ beforeAll(() => {
   events = watchAccessibilityEvents();
 });
 
-const LIFECYCLE = { hold: null, timer: null, performanceMs: () => null, onPause: () => undefined, onResume: () => undefined, onEnd: () => undefined, onLeave: () => undefined };
+const LIFECYCLE = { hold: null, timer: null, pacing: 'self-paced' as const, performanceMs: () => null, onPause: () => undefined, onResume: () => undefined, onEnd: () => undefined, onLeave: () => undefined };
 
 async function present(view: ChallengeView) {
   await cleanup();

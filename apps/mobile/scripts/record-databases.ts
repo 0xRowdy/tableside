@@ -202,6 +202,7 @@ function challengeDatabase(): Promise<RecordedDatabase> {
         performanceMs: null,
         meteringBasis: 'challenge-attempt',
         allowancePolicyVersion: null,
+        pacing: 'self-paced',
       }),
     );
     await playAttempt(store, unfinished, recorded.random as RandomStreamIdentity, commands);

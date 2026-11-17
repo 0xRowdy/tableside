@@ -378,8 +378,10 @@ export {
   type TableView,
 } from './table-challenge';
 export {
+  CHALLENGE_PACINGS,
   CHALLENGE_RECORD_VERSION,
   challengeAttemptRecord,
+  pacingApplies,
   unusableAttemptRecord,
   challengeGroupKey,
   type AssistanceClass,

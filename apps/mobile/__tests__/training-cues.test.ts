@@ -11,6 +11,7 @@ import { plentyAllowance } from '@/training/allowance';
 import { MemoryTrainingStore } from '@/training/memory-store';
 import { TrainingService, type TrainingSnapshot } from '@/training/service';
 import { cardOf, HI_LO_BY_RANK } from '@/training/testing/hi-lo';
+import { NO_SCREEN_READER } from '@/training/speech';
 
 const reference = (view: ChallengeView) => HI_LO_BY_RANK[cardOf(view.item).rank]!;
 const wrongFor = (view: ChallengeView) => (reference(view) === 1 ? -1 : 1);
@@ -18,7 +19,7 @@ const wrongFor = (view: ChallengeView) => (reference(view) === 1 ? -1 : 1);
 async function setup(variant: ChallengeVariant, store = new MemoryTrainingStore(), quarantine: QuarantineList = EMPTY_QUARANTINE_LIST) {
   const clock = new FakeClock(1_790_000_000_000, true);
   let next = 0;
-  const service = new TrainingService({ store, access: alwaysAllowed, allowance: plentyAllowance(() => clock.now()), clock, entropy: entropyFromWords(PI_WORDS), newId: () => `attempt-${++next}`, device: 'test-device', owner: 'local', quarantine });
+  const service = new TrainingService({ store, access: alwaysAllowed, allowance: plentyAllowance(() => clock.now()), clock, entropy: entropyFromWords(PI_WORDS), newId: () => `attempt-${++next}`, device: 'test-device', owner: 'local', quarantine, speech: NO_SCREEN_READER });
   const ports = substituteFeedbackPorts(null);
   const settings = new DeviceSettings(ports.storage);
   await settings.load();

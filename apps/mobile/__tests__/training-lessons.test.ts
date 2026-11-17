@@ -7,6 +7,7 @@ import { FakeClock, entropyFromWords, PI_WORDS } from '@/practice/testing/substi
 import { MemoryTrainingStore } from '@/training/memory-store';
 import { TrainingService } from '@/training/service';
 import { FIVE_OF_HEARTS, withWorkedExample } from '@/training/testing/worked-example';
+import { NO_SCREEN_READER } from '@/training/speech';
 
 const ORIENTATION = 'app-orientation';
 
@@ -49,6 +50,7 @@ function setup(options: { store?: MemoryTrainingStore; lessons?: readonly Lesson
       device: 'test-device',
       owner: 'local',
       quarantine: EMPTY_QUARANTINE_LIST,
+      speech: NO_SCREEN_READER,
     },
     options.lessons ? { lessons: options.lessons } : {},
   );

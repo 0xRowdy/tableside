@@ -13,7 +13,7 @@ import {
   CATEGORY_TEXT,
   endingText,
   NOT_TESTED,
-  PACING_LABEL,
+  pacingLabel,
   RESULT_ROWS,
   resultRows,
   RESULTS_TITLE,
@@ -69,7 +69,7 @@ export function ChallengeResults({
           {RESULTS_TITLE}
         </Text>
         <Text maxFontSizeMultiplier={textScale.body} style={styles.subtitle}>
-          {groupKey.table ? resultsSubtitle(groupKey.variant) : `${CATEGORY_TEXT[groupKey.category].title} · ${variantLabel(groupKey.variant)} · ${PACING_LABEL}`}
+          {groupKey.table ? resultsSubtitle(groupKey.variant) : `${CATEGORY_TEXT[groupKey.category].title} · ${variantLabel(groupKey.variant)} · ${pacingLabel(groupKey.pacing)}`}
         </Text>
       </View>
       <View style={styles.body}>

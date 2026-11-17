@@ -1,12 +1,12 @@
-// Spec 3 S3-10 OVKkc (Amendment 2 §3), S3-01 PDCaD, S3-08 liAfT, CEb6T; Comparison groups; #140
+// Spec 3 S3-10 OVKkc (Amendment 2 §3), S3-01 PDCaD, S3-08 liAfT, CEb6T; Comparison groups; #140, #136
 
 import { CHALLENGE_CONTENT } from '@tableside/definitions';
-import type { AssistanceClass, AttemptEndingReason, ChallengeAttemptRecord, ChallengeCategory, ChallengeGroupKey, ChallengeMetric, ChallengePacing } from '@tableside/engine';
+import type { AssistanceClass, AttemptEndingReason, ChallengeAttemptRecord, ChallengeCategory, ChallengeGroupKey, ChallengeMetric } from '@tableside/engine';
 
 import { dayText } from '@/account/account-text';
 
 import { tableGroupTitle, tableSettingsText } from './blackjack-table-text';
-import { PACING_LABEL, spokenScore, scoreText, timerText, variantLabel } from './challenge-text';
+import { pacingLabel, spokenScore, scoreText, timerText, variantLabel } from './challenge-text';
 import { everyMetricPerfect, type AttemptEarned, type GroupProgress, type ProgressAttempt } from './progress';
 import type { CatalogCategory } from './service';
 
@@ -27,7 +27,6 @@ export const RECORDS_NOTE = 'Records only compare attempts with identical settin
 
 const RECORD_TITLE: Record<CatalogCategory, string> = { 'card-values': 'Card values', 'running-count': 'Running count', conversion: 'Conversion', table: 'Table counting' };
 const ITEMS: Record<Exclude<ChallengeCategory, 'table'>, string> = { 'card-values': 'cards', 'running-count': 'cards', conversion: 'questions' };
-const PACING: Record<ChallengePacing, string> = { 'self-paced': PACING_LABEL, '3s': '3 s pace', '2s': '2 s pace', '1s': '1 s pace' };
 const METRIC_TITLE: Record<ChallengeMetric, string> = {
   'card-values': 'card values',
   'running-count': 'running count',
@@ -49,7 +48,7 @@ function versionText(key: Pick<ChallengeGroupKey, 'category' | 'content' | 'refe
 
 // Spec 3 S3-10 OVKkc; #137
 export function settingsText(key: ChallengeGroupKey): string {
-  const settings = key.table ? tableSettingsText(key.table) : [`${key.length} ${ITEMS[key.category as Exclude<ChallengeCategory, 'table'>]}`, PACING[key.pacing]].join(' · ');
+  const settings = key.table ? tableSettingsText(key.table) : [`${key.length} ${ITEMS[key.category as Exclude<ChallengeCategory, 'table'>]}`, pacingLabel(key.pacing)].join(' · ');
   return [settings, key.variant === 'learn' && key.countRevealed ? 'count shown' : null, versionText(key)].filter(Boolean).join(' · ');
 }
 
@@ -108,7 +107,7 @@ export function historyText({ record, local }: ProgressAttempt, now: number): { 
   const completed = record.endingReason === 'completed';
   const detail = [
     whenText(record.endedAt, now),
-    key.pacing === 'self-paced' ? null : PACING[key.pacing],
+    key.pacing === 'self-paced' ? null : pacingLabel(key.pacing),
     completed ? (CHECK_ASSISTANCE[key.assistanceClass] ?? ENDING.completed) : ENDING[record.endingReason],
     versionText(key),
     local ? LOCAL_LABEL : null,

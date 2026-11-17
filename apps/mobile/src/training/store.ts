@@ -1,6 +1,6 @@
 // Spec 3 Attempt lifecycle › Durability; Amendment 1 C6, C7; #158
 
-import type { ChallengeAttemptRecord, ChallengeFact, ChallengeSpecification, RandomStreamIdentity, Receipt, UnsequencedAttemptRecord } from '@tableside/engine';
+import type { ChallengeAttemptRecord, ChallengeFact, ChallengePacing, ChallengeSpecification, RandomStreamIdentity, Receipt, UnsequencedAttemptRecord } from '@tableside/engine';
 
 import type { AllowanceEffect, MeteringBasis } from '../practice/store';
 import type { LessonProgressEvent, UnsequencedLessonEvent } from './lesson-progress';
@@ -16,14 +16,15 @@ export interface Admission {
   readonly allowancePolicyVersion?: string;
 }
 
-// Spec 3 Attempt lifecycle › Pause, Performance timer; Amendment 1 C1; #135
+// Spec 3 Attempt lifecycle › Pause, Performance timer, Automatic pacing; Amendment 1 C1; #135, #136
 export interface AttemptLifecycle {
   readonly timed: boolean;
   readonly performanceMs: number;
   readonly interrupted: boolean;
+  readonly pacing: ChallengePacing;
 }
 
-export const FRESH_LIFECYCLE: AttemptLifecycle = { timed: false, performanceMs: 0, interrupted: false };
+export const FRESH_LIFECYCLE: AttemptLifecycle = { timed: false, performanceMs: 0, interrupted: false, pacing: 'self-paced' };
 
 // #135
 export const withLifecycle = <T extends { readonly lifecycle?: AttemptLifecycle }>(body: T): T & { readonly lifecycle: AttemptLifecycle } => ({

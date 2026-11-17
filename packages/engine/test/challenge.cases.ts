@@ -165,6 +165,7 @@ export const challengeCases: TestCase[] = [
         performanceMs: null,
         meteringBasis: 'challenge-attempt',
         allowancePolicyVersion: 'policy-3',
+        pacing: 'self-paced',
       });
       t.equal(record, {
         recordVersion: 1,
@@ -195,7 +196,7 @@ export const challengeCases: TestCase[] = [
         startedAt: 1_000,
         endedAt: 61_000,
       });
-      t.equal(throws(() => challengeAttemptRecord(begun(), { installation: 'd', startedAt: 0, endedAt: 0, interrupted: false, performanceMs: null, meteringBasis: 'premium', allowancePolicyVersion: null })), 'Error');
+      t.equal(throws(() => challengeAttemptRecord(begun(), { installation: 'd', startedAt: 0, endedAt: 0, interrupted: false, performanceMs: null, meteringBasis: 'premium', allowancePolicyVersion: null, pacing: 'self-paced' })), 'Error');
     },
   },
   // Spec 3 Attempt lifecycle (unusable), Amendment 1 C3; #135
@@ -211,6 +212,7 @@ export const challengeCases: TestCase[] = [
         performanceMs: null,
         meteringBasis: 'challenge-attempt',
         allowancePolicyVersion: null,
+        pacing: 'self-paced',
       });
       t.equal(
         [record.endingReason, record.metrics, record.review, record.assistanceStep, record.groupKey.assistanceClass, record.attemptId, record.interrupted],
@@ -326,6 +328,7 @@ export const challengeCases: TestCase[] = [
         performanceMs: null,
         meteringBasis: 'challenge-attempt',
         allowancePolicyVersion: null,
+        pacing: 'self-paced',
       });
       t.equal([record.groupKey.variant, record.groupKey.assistanceClass, record.groupKey.countRevealed], ['check', 'unassisted-check', false]);
     },

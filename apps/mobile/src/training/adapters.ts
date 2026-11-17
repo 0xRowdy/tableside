@@ -3,6 +3,7 @@ import type { EntropySource, QuarantineList } from '@tableside/engine';
 
 import type { AccessSupervisor, Clock } from '../practice/adapters';
 import type { ChallengeAllowanceState } from './allowance';
+import type { ScreenReaderSpeech } from './speech';
 import type { TrainingStore } from './store';
 
 export interface TrainingAdapters {
@@ -17,4 +18,6 @@ export interface TrainingAdapters {
   readonly owner: string;
   // Spec 3 Attempt lifecycle (unusable); #135
   readonly quarantine: QuarantineList;
+  // Spec 3 Attempt lifecycle › Automatic pacing; #136
+  readonly speech: ScreenReaderSpeech;
 }
