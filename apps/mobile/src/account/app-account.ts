@@ -78,6 +78,7 @@ export function createAppAccount(): AppAccount {
     randomBytes: (count) => Crypto.getRandomValues(new Uint8Array(count)),
     localeCurrency: () => getLocales()[0].currencyCode,
     providers: providerSettings(),
+    // TODO(#129)
     ageSignals: noPlatformAgeSignals,
     freeStorage: () => {
       try {

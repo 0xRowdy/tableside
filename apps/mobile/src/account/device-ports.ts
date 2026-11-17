@@ -13,6 +13,7 @@ const foreground: DeviceSignal<boolean> = {
   },
 };
 
+// TODO(#128)
 const online: DeviceSignal<boolean> = {
   current: () => true,
   subscribe: () => () => undefined,

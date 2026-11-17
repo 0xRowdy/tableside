@@ -533,7 +533,7 @@ export class PracticeController {
     if (!suspension || !this.state) return;
     const betweenTurns = !turnInProgress(this.state);
     const reached = suspension.kind === 'immediate' || betweenTurns;
-    // Spec 1 Amendment 5 §3
+    // Spec 1 Amendment 9 §5
     const canEnd = reached && betweenTurns;
     const waitsForPlayer = reached && (!resumesOnReturn(suspension) || suspension.resumeBlocked !== null);
     if (reached !== suspension.reached || canEnd !== suspension.canEnd || waitsForPlayer !== suspension.waitsForPlayer) {
