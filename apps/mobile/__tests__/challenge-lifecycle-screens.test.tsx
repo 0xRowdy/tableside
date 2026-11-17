@@ -1,4 +1,4 @@
-// Spec 3 Testing Decisions › Seam 3; S3-01 Uq05w, S3-02 buD2R, S3-05 r5pCx, T9sCI, S3-08 UXrpw, CEb6T; Attempt lifecycle; #135
+// Spec 3 Testing Decisions › Seam 3; S3-01 Uq05w, S3-02 buD2R, S3-05 r5pCx, T9sCI, S3-08 UXrpw; #135
 
 import { cleanup, fireEvent, screen, within } from '@testing-library/react-native';
 import { renderRouter } from 'expo-router/testing-library';

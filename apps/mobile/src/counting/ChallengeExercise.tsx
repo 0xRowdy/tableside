@@ -1,4 +1,4 @@
-// Spec 3 S3-03 P4WjR, drVnR, BFdJT, S3-04 qdnQm, S3-05 EDnGd, r5pCx, T9sCI, S3-06 C53yTW; #158, #132, #133, #135, #146
+// Spec 3 S3-03 P4WjR, drVnR, BFdJT, S3-04 qdnQm, S3-05 EDnGd, r5pCx, T9sCI, S3-06 C53yTW; #135
 
 import type { HintId } from '@tableside/definitions';
 import type { ChallengeCategory, ChallengeEntry, ChallengeView, CountRange, LearnFeedback } from '@tableside/engine';
@@ -103,7 +103,6 @@ export function ChallengeExercise({
             {exerciseSubtitle(view.variant, timer !== null, hold)}
           </Text>
         </View>
-        {/* #146 */}
         <HeaderButton
           label={HELP_LABEL}
           hint={HELP_HINT}

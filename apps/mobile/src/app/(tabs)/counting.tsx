@@ -1,4 +1,4 @@
-// Spec 3 Screens; Lessons › Entry points, Structure; Attempt lifecycle; Amendment 1 B5; #158, #132, #145, #133, #135, #146
+// Spec 3 Screens; Lessons › Entry points, Structure; Attempt lifecycle; Amendment 1 B5; #135, #146
 import { CHALLENGE_LESSONS } from '@tableside/definitions';
 import { CHALLENGE_VARIANTS, type ChallengeVariant } from '@tableside/engine';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';

@@ -1,4 +1,4 @@
-// Spec 3 Testing Decisions › Seam 2 (Lifecycle, Pause/suspend, Timer, Failure injection); Attempt lifecycle; Amendment 1 B5, C1, C3, C6; #135
+// Spec 3 Testing Decisions › Seam 2; Attempt lifecycle; Amendment 1 B5, C1, C3, C6; #135
 import { EMPTY_QUARANTINE_LIST, ENGINE_VERSION, type ChallengeView, type QuarantineList } from '@tableside/engine';
 
 import { alwaysAllowed, type AccessDecision, type AccessSupervisor, type Disposition } from '@/practice/adapters';
@@ -259,7 +259,7 @@ describe('challenge attempt lifecycle', () => {
     });
   });
 
-  // Spec 3 Attempt lifecycle › Charge, One unfinished attempt; Testing Decisions › Seam 2 › Lifecycle
+  // Spec 3 Attempt lifecycle › Charge, One unfinished attempt; Testing Decisions › Seam 2
   describe('ending, retrying and the one unfinished attempt', () => {
     it('ending an attempt abandons it: it keeps its one charge and writes one record, with results from the answers given', async () => {
       const { service, store } = await started(CHECK_CARD_VALUES);
