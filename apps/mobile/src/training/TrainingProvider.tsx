@@ -6,7 +6,7 @@ import { withAccountGate } from '@/account/gate-access';
 import { useLoaded } from '@/hooks/use-loaded';
 
 import { createTrainingAdapters } from './app-adapters';
-import { TrainingService, type LessonEntry } from './service';
+import { TrainingService, type LearningPreferences, type LessonEntry } from './service';
 
 const TrainingContext = createContext<TrainingService | null>(null);
 
@@ -41,4 +41,17 @@ export function useLessons(): { readonly service: TrainingService; readonly less
   if (!service) throw new Error('useLessons needs a TrainingProvider');
   const revision = useSyncExternalStore(service.subscribe, service.lessonRevision);
   return { service, lessons: useLoaded(listLessonsOf, service, revision) };
+}
+
+// Spec 3 Lessons › Entry points, Amendment 1 C7; #146
+const learningOf = (service: TrainingService, _revision: number) => service.learningPreferences();
+
+export function useLearningOf(service: TrainingService): LearningPreferences | undefined {
+  const revision = useSyncExternalStore(service.subscribe, service.learningRevision);
+  return useLoaded(learningOf, service, revision);
+}
+
+export function useLearning(): { readonly service: TrainingService; readonly learning: LearningPreferences | undefined } {
+  const service = useTrainingService();
+  return { service, learning: useLearningOf(service) };
 }
