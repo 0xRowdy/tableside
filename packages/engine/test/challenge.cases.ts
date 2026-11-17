@@ -255,6 +255,7 @@ export const challengeCases: TestCase[] = [
         countRange: null,
         checkpoints: null,
         countAid: null,
+        table: null,
         entered: -1,
         assisted: false,
         results: null,

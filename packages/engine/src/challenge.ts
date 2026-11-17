@@ -1,4 +1,4 @@
-// Spec 3 Modules › Engine; Challenge content; Learn, Check and assistance; #158, #132, #133, #134
+// Spec 3 Modules › Engine; Challenge content; Learn, Check and assistance; #158, #132–#134, #137
 
 import { STATE_SCHEMA_VERSION, type Receipt, type RejectionReason, type VersionedIdentity } from './activity';
 import { hiLoTag, truncatedTrueCount } from './blackjack';
@@ -7,11 +7,29 @@ import { canonicalShoe, shuffle, type Rank, type Suit } from './draws';
 import { RANDOM_PROTOCOL_VERSION, RandomStream, uniformInt, type RandomStreamIdentity, type RandomStreamState } from './random';
 import { sha256Hex } from './sha256';
 import { hasExactKeys, isCount, isRecord, isText } from './shape';
+import {
+  copyTableSetup,
+  dealTableRound,
+  tableContentProblem,
+  tableCountAt,
+  tableCountRange,
+  tableRunningExplanation,
+  tableSetupProblem,
+  tableView,
+  type CheckpointTiming,
+  type TableContent,
+  type TableCount,
+  type TableProgress,
+  type TableRunningExplanation,
+  type TableSetup,
+  type TableStep,
+  type TableView,
+} from './table-challenge';
 import { ENGINE_VERSION } from './version';
 
-export type ChallengeCategory = 'card-values' | 'running-count' | 'conversion';
+export type ChallengeCategory = 'card-values' | 'running-count' | 'conversion' | 'table';
 
-export const CHALLENGE_CATEGORIES: readonly ChallengeCategory[] = ['card-values', 'running-count', 'conversion'];
+export const CHALLENGE_CATEGORIES: readonly ChallengeCategory[] = ['card-values', 'running-count', 'conversion', 'table'];
 
 export type ChallengeVariant = 'learn' | 'check';
 
@@ -47,7 +65,7 @@ export interface ConversionContent {
   readonly maxDecks: number;
 }
 
-export type ChallengeContent = CardValuesContent | RunningCountContent | ConversionContent;
+export type ChallengeContent = CardValuesContent | RunningCountContent | ConversionContent | TableContent;
 
 export interface ChallengeSpecification {
   readonly attemptId: string;
@@ -55,6 +73,8 @@ export interface ChallengeSpecification {
   readonly device: string;
   readonly variant: ChallengeVariant;
   readonly content: ChallengeContent;
+  // Spec 3 Challenge content › Table
+  readonly table?: TableSetup;
 }
 
 export type HiLoValue = -1 | 0 | 1;
@@ -76,7 +96,8 @@ export interface ConversionItem {
   readonly decks: number;
 }
 
-export type ChallengeItem = CardValueItem | ConversionItem;
+// Spec 3 Challenge content › Table
+export type ChallengeItem = CardValueItem | ConversionItem | TableStep;
 
 export type ChallengeEntry = number | 'skip';
 
@@ -113,6 +134,8 @@ export interface ChallengeState {
   readonly answers: readonly ItemAnswers[];
   // Spec 3 Learn, Check and assistance › Show/hide running count
   readonly revealedAt: number | null;
+  // Spec 3 Challenge content › Table
+  readonly table: TableProgress | null;
   readonly random: RandomStreamState;
   readonly receipts: readonly Receipt[];
 }
@@ -137,6 +160,10 @@ export interface ChallengeEnvelope {
 
 export type ChallengeFact =
   | { readonly kind: 'content-shown'; readonly position: number }
+  // Spec 3 Count checkpoints (table), Audio and haptics: cue 11
+  | { readonly kind: 'checkpoint-due'; readonly position: number }
+  // Spec 3 Challenge content › Reshuffle
+  | { readonly kind: 'shoe-shuffled'; readonly position: number }
   | { readonly kind: 'answer-accepted'; readonly position: number; readonly scored: boolean }
   | { readonly kind: 'attempt-ended'; readonly ending: ChallengeEnding };
 
@@ -158,7 +185,7 @@ export interface MetricResult {
 export type ChallengeMetrics = Readonly<Record<ChallengeMetric, MetricResult | null>>;
 
 // Spec 3 Scoring and review › Metrics
-export const CATEGORY_METRIC: Readonly<Record<ChallengeCategory, ChallengeMetric>> = { 'card-values': 'card-values', 'running-count': 'running-count', conversion: 'true-count' };
+export const CATEGORY_METRIC: Readonly<Record<ChallengeCategory, ChallengeMetric>> = { 'card-values': 'card-values', 'running-count': 'running-count', conversion: 'true-count', table: 'running-count' };
 
 export interface CountRange {
   readonly min: number;
@@ -177,7 +204,7 @@ export type RunningCountExplanation = { readonly kind: 'running-count'; readonly
 // Spec 3 Learn, Check and assistance › Learn; Lessons › Content requirements; #134
 export type ConversionExplanation = { readonly kind: 'conversion'; readonly running: number; readonly decks: number; readonly trueCount: number; readonly exact: boolean };
 
-export type ChallengeExplanation = HiLoExplanation | RunningCountExplanation | ConversionExplanation;
+export type ChallengeExplanation = HiLoExplanation | RunningCountExplanation | ConversionExplanation | TableRunningExplanation;
 
 export interface CardValueReview {
   readonly kind: 'card-value';
@@ -208,7 +235,20 @@ export interface ConversionReview {
   readonly error: number | null;
 }
 
-export type ReviewFact = CardValueReview | RunningCountReview | ConversionReview;
+// Spec 3 Scoring and review › Review facts (table); S3-09
+export interface TableCountReview {
+  readonly kind: 'table';
+  readonly checkpoint: number;
+  readonly round: number;
+  readonly timing: CheckpointTiming;
+  readonly count: TableCount;
+  readonly position: number;
+  readonly entered: ChallengeEntry;
+  readonly reference: number;
+  readonly error: number | null;
+}
+
+export type ReviewFact = CardValueReview | RunningCountReview | ConversionReview | TableCountReview;
 
 export interface ChallengeResults {
   readonly ending: ChallengeEnding;
@@ -240,6 +280,8 @@ interface ChallengeViewBase {
   readonly checkpoints: readonly number[] | null;
   // Spec 3 Learn, Check and assistance › Show/hide running count
   readonly countAid: RunningCountAid | null;
+  // Spec 3 Screens › Exercise (table)
+  readonly table: TableView | null;
   readonly assisted: boolean;
   readonly results: ChallengeResults | null;
 }
@@ -271,6 +313,7 @@ export function contentProblem(content: unknown): string | undefined {
   if (!isRecord(content)) return 'a content definition is an object';
   if (content.category === 'running-count') return runningCountProblem(content);
   if (content.category === 'conversion') return conversionProblem(content);
+  if (content.category === 'table') return tableContentProblem(content);
   if (!hasExactKeys(content, ['category', 'id', 'version', 'length', 'coverage'])) return 'a card-values content definition has a category, id, version, length and coverage';
   if (content.category !== 'card-values') return `unsupported challenge category ${String(content.category)}`;
   if (!isText(content.id) || !isCount(content.version) || content.version < 1) return 'the content definition needs an id and a version from 1';
@@ -315,10 +358,13 @@ export function createChallenge(spec: ChallengeSpecification, random: RandomStre
   const fail = (message: string): never => {
     throw new ChallengeSpecificationError(message);
   };
-  if (!hasExactKeys(spec, ['attemptId', 'owner', 'device', 'variant', 'content'])) fail('the specification has an attempt id, owner, device, variant and content');
+  const table = isRecord(spec) && isRecord(spec.content) && spec.content.category === 'table';
+  if (!hasExactKeys(spec, ['attemptId', 'owner', 'device', 'variant', 'content', ...(table ? ['table'] : [])])) {
+    fail(`the specification has an attempt id, owner, device, variant and content${table ? ' and a table setup' : ''}`);
+  }
   if (!isText(spec.attemptId) || !isText(spec.owner) || !isText(spec.device)) fail('attempt id, owner and device are required');
   if (!CHALLENGE_VARIANTS.includes(spec.variant)) fail(`unknown variant ${String(spec.variant)}`);
-  const problem = contentProblem(spec.content);
+  const problem = contentProblem(spec.content) ?? (table ? tableSetupProblem(spec.table) : undefined);
   if (problem) fail(problem);
   let stream: RandomStream;
   try {
@@ -335,7 +381,7 @@ export function createChallenge(spec: ChallengeSpecification, random: RandomStre
       engine: ENGINE_VERSION,
       category: content.category,
       content: { id: content.id, version: content.version },
-      reference: content.category === 'running-count' ? { id: content.reference.id, version: content.reference.version } : null,
+      reference: content.category === 'running-count' || content.category === 'table' ? { id: content.reference.id, version: content.reference.version } : null,
       random: { protocol: position.protocol, key: position.key, session: position.session },
     },
     variant: spec.variant,
@@ -348,13 +394,16 @@ export function createChallenge(spec: ChallengeSpecification, random: RandomStre
     rejected: 0,
     answers: [],
     revealedAt: null,
+    table: spec.table ? { setup: copyTableSetup(spec.table), shoe: null, round: 0 } : null,
     random: position,
     receipts: [],
   };
 }
 
-const copyContent = (content: ChallengeContent): ChallengeContent =>
-  content.category === 'running-count' ? { ...content, checkpoints: [...content.checkpoints], reference: { ...content.reference } } : { ...content };
+function copyContent(content: ChallengeContent): ChallengeContent {
+  if (content.category === 'running-count') return { ...content, checkpoints: [...content.checkpoints], reference: { ...content.reference } };
+  return content.category === 'table' ? { ...content, reference: { ...content.reference } } : { ...content };
+}
 
 // Spec 3 Challenge content › Conversion
 const halfDecks = (item: ConversionItem) => Math.round(item.decks * 2);
@@ -371,7 +420,7 @@ function coversConversion(items: readonly ConversionItem[]): boolean {
 }
 
 // Spec 3 Challenge content › Generation
-function generate(content: ChallengeContent, stream: RandomStream): { items: ChallengeItem[]; rejected: number } {
+function generate(content: Exclude<ChallengeContent, TableContent>, stream: RandomStream): { items: ChallengeItem[]; rejected: number } {
   if (content.category === 'conversion') {
     for (let rejected = 0; ; rejected++) {
       const items = Array.from({ length: content.length }, (): ConversionItem => {
@@ -402,16 +451,38 @@ const countThrough = (state: ChallengeState, position: number) => state.items.sl
 // Spec 3 Challenge content › Conversion
 export const conversionTrueCount = (item: ConversionItem): number => truncatedTrueCount(item.running, halfDecks(item));
 
+const tableSteps = (state: ChallengeState) => state.items as readonly TableStep[];
+
 function reference(state: ChallengeState, position: number): number {
   const item = state.items[position] as ChallengeItem;
+  if (state.content.category === 'table') {
+    const count = tableCountAt(tableSteps(state), position);
+    return (item as TableStep).step === 'prompt' && (item as Extract<TableStep, { step: 'prompt' }>).count === 'true' ? count.trueCount : count.running;
+  }
   if (state.content.category === 'running-count') return countThrough(state, position);
   return state.content.category === 'conversion' ? conversionTrueCount(item as ConversionItem) : hiLo(item);
 }
 
 const isCorrect = (state: ChallengeState, position: number, entry: ChallengeEntry) => entry !== 'skip' && entry === reference(state, position);
 
-const asks = (state: ChallengeState, position: number) =>
-  state.content.category !== 'running-count' || state.variant === 'learn' || state.content.checkpoints.includes(position + 1);
+function asks(state: ChallengeState, position: number): boolean {
+  if (state.content.category === 'table') return (state.items[position] as TableStep).step === 'prompt';
+  return state.content.category !== 'running-count' || state.variant === 'learn' || state.content.checkpoints.includes(position + 1);
+}
+
+const counting = (state: ChallengeState) => state.content.category === 'running-count' || state.content.category === 'table';
+
+// Spec 3 Audio and haptics; Count checkpoints (table); Challenge content › Reshuffle
+function shownFacts(state: ChallengeState, position: number): ChallengeFact[] {
+  if (state.content.category !== 'table') {
+    const checkpoint = state.content.category === 'running-count' && state.variant === 'check' && asks(state, position);
+    return [{ kind: 'content-shown', position }, ...(checkpoint ? [{ kind: 'checkpoint-due', position } as const] : [])];
+  }
+  const step = state.items[position] as TableStep;
+  if (step.step === 'shuffle') return [{ kind: 'shoe-shuffled', position }];
+  if (step.step === 'prompt') return step.count === 'running' ? [{ kind: 'checkpoint-due', position }] : [];
+  return [{ kind: 'content-shown', position }];
+}
 
 const showingPhase = (state: ChallengeState, position: number): ChallengePhase => (asks(state, position) ? 'question' : 'card');
 
@@ -431,7 +502,7 @@ const LEGAL: Record<ChallengePhase, readonly ChallengeCommandKind[]> = {
 
 const SHOWING: readonly ChallengePhase[] = ['card', 'question', 'explanation', 'recorded'];
 
-const canReveal = (state: ChallengeState) => state.content.category === 'running-count' && state.revealedAt === null && SHOWING.includes(state.phase);
+const canReveal = (state: ChallengeState) => counting(state) && state.revealedAt === null && SHOWING.includes(state.phase);
 
 function legalCommands(state: ChallengeState): readonly ChallengeCommandKind[] {
   let legal = LEGAL[state.phase];
@@ -439,17 +510,24 @@ function legalCommands(state: ChallengeState): readonly ChallengeCommandKind[] {
   return canReveal(state) ? [...legal.filter((kind) => kind !== 'end'), 'reveal-count', 'end'] : legal;
 }
 
+const promptCount = (state: ChallengeState): TableCount => {
+  const step = state.items[state.position] as TableStep | undefined;
+  return step?.step === 'prompt' ? step.count : 'running';
+};
+
 // Spec 3 Learn, Check and assistance › Malformed input
-function countRange(content: ChallengeContent): CountRange | null {
+function countRange(state: ChallengeState): CountRange | null {
+  const { content } = state;
   if (content.category === 'card-values') return null;
+  if (content.category === 'table') return tableCountRange(promptCount(state));
   const limit = content.category === 'conversion' ? 2 * content.maxRunningCount : content.length;
   return { min: -limit, max: limit };
 }
 
 function answerProblem(state: ChallengeState, value: number): string | undefined {
-  const range = countRange(state.content);
+  const range = countRange(state);
   if (!range) return HI_LO_VALUES.includes(value as HiLoValue) ? undefined : 'a card value is +1, 0 or −1';
-  const what = state.content.category === 'conversion' ? 'a true count' : 'a running count';
+  const what = state.content.category === 'conversion' || (state.content.category === 'table' && promptCount(state) === 'true') ? 'a true count' : 'a running count';
   return value >= range.min && value <= range.max ? undefined : `${what} is a whole number from −${range.max} to +${range.max}`;
 }
 
@@ -496,14 +574,27 @@ export function advanceChallenge(state: ChallengeState, envelope: ChallengeEnvel
   return { status: 'committed', state: { ...state, ...change, sequence: state.sequence + 1, receipts: [...state.receipts, receipt] }, facts, receipt };
 }
 
-type Change = Partial<Pick<ChallengeState, 'phase' | 'ending' | 'position' | 'items' | 'rejected' | 'answers' | 'revealedAt' | 'random'>>;
+type Change = Partial<Pick<ChallengeState, 'phase' | 'ending' | 'position' | 'items' | 'rejected' | 'answers' | 'revealedAt' | 'table' | 'random'>>;
+
+// Spec 3 Challenge content › Table, Reshuffle
+function dealNextRound(state: ChallengeState): Change {
+  const table = state.table as TableProgress;
+  const dealt = dealTableRound(table, state.content as TableContent, tableSteps(state), state.random);
+  return { items: [...state.items, ...dealt.steps], table: dealt.progress, random: dealt.random };
+}
+
+function show(state: ChallengeState, change: Change, position: number): { change: Change; facts: ChallengeFact[] } {
+  const next = { ...state, ...change };
+  return { change: { ...change, phase: showingPhase(next, position), position }, facts: shownFacts(next, position) };
+}
 
 function apply(state: ChallengeState, command: ChallengeCommand): { change: Change; facts: ChallengeFact[] } {
   switch (command.kind) {
     case 'begin': {
+      if (state.content.category === 'table') return show(state, dealNextRound(state), 0);
       const stream = RandomStream.restore(state.random);
       const { items, rejected } = generate(state.content, stream);
-      return { change: { phase: showingPhase(state, 0), items, rejected, random: stream.state() }, facts: [{ kind: 'content-shown', position: 0 }] };
+      return show(state, { items, rejected, random: stream.state() }, 0);
     }
     case 'answer':
     case 'skip': {
@@ -517,7 +608,9 @@ function apply(state: ChallengeState, command: ChallengeCommand): { change: Chan
       return { change: { phase: 'question' }, facts: [] };
     case 'next-item': {
       const position = state.position + 1;
-      if (position < state.items.length) return { change: { phase: showingPhase(state, position), position }, facts: [{ kind: 'content-shown', position }] };
+      const more = state.content.category === 'table' && position === state.items.length && (state.table as TableProgress).round < state.content.rounds;
+      const change = more ? dealNextRound(state) : {};
+      if (position < (change.items ?? state.items).length) return show(state, change, position);
       return { change: { phase: 'ended', ending: 'completed', position }, facts: [{ kind: 'attempt-ended', ending: 'completed' }] };
     }
     case 'reveal-count':
@@ -535,6 +628,10 @@ export function challengeResults(state: ChallengeState): ChallengeResults | null
     const correct = reference(state, answers.position);
     const error = entered === 'skip' ? null : entered - correct;
     if (state.content.category === 'running-count') return { kind: 'running-count', checkpoint: index + 1, position: answers.position + 1, entered, reference: correct, error };
+    if (state.content.category === 'table') {
+      const prompt = state.items[answers.position] as Extract<TableStep, { step: 'prompt' }>;
+      return { kind: 'table', checkpoint: prompt.checkpoint, round: prompt.round, timing: prompt.timing, count: prompt.count, position: answers.position + 1, entered, reference: correct, error };
+    }
     if (state.content.category === 'conversion') {
       const { running, decks } = state.items[answers.position] as ConversionItem;
       return { kind: 'conversion', position: answers.position + 1, running, decks, entered, reference: correct, error };
@@ -543,7 +640,11 @@ export function challengeResults(state: ChallengeState): ChallengeResults | null
     return { kind: 'card-value', position: answers.position + 1, card: item.card, entered, reference: correct as HiLoValue };
   });
   const metrics = Object.fromEntries(CHALLENGE_METRICS.map((metric) => [metric, null])) as Record<ChallengeMetric, MetricResult | null>;
-  metrics[CATEGORY_METRIC[state.content.category]] = review.length === 0 ? null : { correct: review.filter((fact) => fact.entered === fact.reference).length, total: review.length };
+  const score = (facts: readonly ReviewFact[]): MetricResult | null => (facts.length === 0 ? null : { correct: facts.filter((fact) => fact.entered === fact.reference).length, total: facts.length });
+  if (state.content.category === 'table') {
+    metrics['running-count'] = score(review.filter((fact) => fact.kind === 'table' && fact.count === 'running'));
+    metrics['true-count'] = score(review.filter((fact) => fact.kind === 'table' && fact.count === 'true'));
+  } else metrics[CATEGORY_METRIC[state.content.category]] = score(review);
   return { ending: state.ending, metrics, review, assisted: assisted(state), assistanceStep: state.revealedAt };
 }
 
@@ -571,32 +672,44 @@ export const conversionExplanation = (item: ConversionItem): ConversionExplanati
 
 function explain(state: ChallengeState, item: ChallengeItem): ChallengeExplanation {
   if (state.content.category === 'conversion') return conversionExplanation(item as ConversionItem);
+  if (state.content.category === 'table') {
+    if ((item as Extract<TableStep, { step: 'prompt' }>).count === 'running') return tableRunningExplanation(tableSteps(state), state.position);
+    const { running, decks } = tableCountAt(tableSteps(state), state.position);
+    return conversionExplanation({ running, decks });
+  }
   const { rank } = (item as CardValueItem).card;
   if (state.content.category === 'card-values') return { kind: 'hi-lo-value', rank, value: hiLo(item) };
   const count = countThrough(state, state.position);
   return { kind: 'running-count', rank, value: hiLo(item), before: count - hiLo(item), count };
 }
 
-const copyItem = (item: ChallengeItem): ChallengeItem => ('card' in item ? { card: { ...item.card } } : { ...item });
+const copyItem = (item: ChallengeItem): ChallengeItem => ('card' in item ? { card: { ...item.card } } : (JSON.parse(JSON.stringify(item)) as ChallengeItem));
+
+// Spec 3 Learn, Check and assistance › Show/hide running count
+function revealedCount(state: ChallengeState): number {
+  if (state.content.category === 'table') return tableCountAt(tableSteps(state), state.position).running;
+  return countThrough(state, state.position);
+}
 
 export function readChallengeView(state: ChallengeState): ChallengeView {
   const shown = SHOWING.includes(state.phase);
   const item = shown ? (state.items[state.position] as ChallengeItem) : null;
   const answered = state.phase === 'explanation' || state.phase === 'recorded' ? (currentAnswers(state) as ItemAnswers) : null;
-  const counting = state.content.category === 'running-count';
+  const table = state.content.category === 'table' ? state.content : null;
   const base: ChallengeViewBase = {
     attemptId: state.attempt.id,
     category: state.identities.category,
     phase: state.phase,
     sequence: state.sequence,
     legalCommands: [...legalCommands(state)],
-    length: state.content.length,
+    length: table ? table.rounds : (state.content as Exclude<ChallengeContent, TableContent>).length,
     position: item ? state.position + 1 : 0,
     item: item && copyItem(item),
     choices: item && state.content.category === 'card-values' ? HI_LO_VALUES : [],
-    countRange: countRange(state.content),
+    countRange: countRange(state),
     checkpoints: state.content.category === 'running-count' && state.variant === 'check' ? [...state.content.checkpoints] : null,
-    countAid: counting ? { revealed: state.revealedAt !== null, count: item && state.revealedAt !== null ? countThrough(state, state.position) : null } : null,
+    countAid: counting(state) ? { revealed: state.revealedAt !== null, count: item && state.revealedAt !== null ? revealedCount(state) : null } : null,
+    table: table && item ? tableView(state.table as TableProgress, table, tableSteps(state), state.position) : null,
     assisted: assisted(state),
     results: challengeResults(state),
   };
@@ -651,7 +764,14 @@ export function decodeChallengeCheckpoint(text: string): ChallengeCheckpointResu
   let state: ChallengeState;
   try {
     state = createChallenge(
-      { attemptId: attempt.id, owner: attempt.owner, device: attempt.device, variant: value.variant, content: value.content } as ChallengeSpecification,
+      {
+        attemptId: attempt.id,
+        owner: attempt.owner,
+        device: attempt.device,
+        variant: value.variant,
+        content: value.content,
+        ...(isRecord(value.table) ? { table: value.table.setup } : {}),
+      } as ChallengeSpecification,
       random as RandomStreamIdentity,
     );
     for (const receipt of value.receipts as unknown[]) {

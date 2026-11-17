@@ -70,7 +70,18 @@ export { QUARANTINE_LIST } from './quarantine';
 
 export { benchmarkProfile, BENCHMARK_PROFILES } from './benchmark-profiles';
 
-export { CARD_VALUES_CONTENT, CATALOG_CATEGORIES, CHALLENGE_CONTENT, CONVERSION_CONTENT, RUNNING_COUNT_CONTENT, type CatalogCategory } from './challenges';
+export {
+  CARD_VALUES_CONTENT,
+  CATALOG_CATEGORIES,
+  CHALLENGE_CONTENT,
+  CONVERSION_CONTENT,
+  DEFAULT_TABLE_SETUP,
+  observeSetup,
+  RUNNING_COUNT_CONTENT,
+  TABLE_CONTENT,
+  type CatalogCategory,
+  type TableOptions,
+} from './challenges';
 
 export {
   APP_ORIENTATION,

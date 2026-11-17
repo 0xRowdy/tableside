@@ -355,7 +355,23 @@ export {
   type RunningCountAid,
   type RunningCountExplanation,
   type RunningCountReview,
+  type TableCountReview,
 } from './challenge';
+export {
+  MAX_CHECKPOINT_INTERVAL,
+  MAX_TABLE_ROUNDS,
+  type CheckpointTiming,
+  type TableContent,
+  type TableCount,
+  type TableEvent,
+  type TableHandView,
+  type TablePrompt,
+  type TableRunningExplanation,
+  type TableSeatView,
+  type TableSetup,
+  type TableStep,
+  type TableView,
+} from './table-challenge';
 export {
   CHALLENGE_RECORD_VERSION,
   challengeAttemptRecord,
