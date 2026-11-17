@@ -1,7 +1,7 @@
-// Spec 3 S3-02 buD2R, ZreSb; #158
+// Spec 3 S3-02 buD2R, ZreSb, Amendment 4 §2–3; #158, #150
 
 import { CHALLENGE_VARIANTS, type ChallengeVariant } from '@tableside/engine';
-import { Check, CircleAlert, Play, Ticket } from 'lucide-react-native';
+import { Check, CircleAlert, Play } from 'lucide-react-native';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Button } from '@/components/Button';
@@ -10,22 +10,26 @@ import { SettingsScreen } from '@/settings/SettingsParts';
 import { fonts, palette, space, textScale } from '@/theme/tokens';
 import {
   CATEGORY_TEXT,
-  CHARGE_NOTICE,
   COUNTING_TITLE,
   NOT_READY_HINT,
   START_PROBLEM,
   startLabel,
+  startWaits,
   VARIANT_LABEL,
   VARIANT_HELP,
   variantLabel,
   WHAT_YOU_DO,
   WHAT_YOU_DO_LABEL,
+  type AllowanceCopy,
 } from '@/training/challenge-text';
 import type { CatalogEntry, ChallengeSetup, StartProblem } from '@/training/service';
+
+import { AllowanceBanner } from './AllowanceBanner';
 
 export function ChallengeSetupScreen({
   entry,
   setup,
+  allowance,
   problem,
   busy,
   onChange,
@@ -34,6 +38,7 @@ export function ChallengeSetupScreen({
 }: {
   entry: CatalogEntry;
   setup: ChallengeSetup;
+  allowance: AllowanceCopy | undefined;
   problem: StartProblem | null;
   busy: boolean;
   onChange: (setup: ChallengeSetup) => void;
@@ -72,12 +77,7 @@ export function ChallengeSetupScreen({
           </Text>
         </View>
       )}
-      <View style={styles.banner}>
-        <Ticket color={palette.foreground} size={20} />
-        <Text maxFontSizeMultiplier={textScale.body} style={styles.bannerText}>
-          {CHARGE_NOTICE}
-        </Text>
-      </View>
+      {allowance && <AllowanceBanner standing={allowance.standing} title={allowance.setup.text} action={allowance.setup.action} />}
       {problem && (
         <View style={[styles.banner, styles.problem]}>
           <CircleAlert color={palette.destructive} size={20} />
@@ -86,7 +86,7 @@ export function ChallengeSetupScreen({
           </Text>
         </View>
       )}
-      <Button label={startLabel(setup.variant)} icon={Play} stretch disabled={busy} onPress={onStart} />
+      <Button label={startLabel(setup.variant)} icon={Play} stretch disabled={busy || startWaits(allowance)} onPress={onStart} />
     </SettingsScreen>
   );
 }
