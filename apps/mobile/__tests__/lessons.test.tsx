@@ -89,7 +89,7 @@ describe('lessons', () => {
     expect(button('Back to Settings')).toBeOnTheScreen();
     expect(screen.getByRole('header', { name: 'LESSONS' })).toBeOnTheScreen();
     expect(await screen.findByRole('button', { name: 'Lesson catalog. 24 lessons · 0 completed · 0 in progress' })).toBeOnTheScreen();
-    expect(screen.getByText("Lessons never score you, award anything or lock anything. They're available to every account, including when today's challenge attempts are used up.")).toBeOnTheScreen();
+    expect(screen.getByText("Lessons never score you, award anything or lock anything. They're available to every account, including when today's challenge attempts are used up. Start here and hint settings stay on this device.")).toBeOnTheScreen();
     expect(within(screen.getByTestId('tab-bar')).getByRole('tab', { name: 'More', selected: true })).toBeOnTheScreen();
   });
 
