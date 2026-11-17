@@ -91,7 +91,7 @@ export interface LessonView {
   readonly sources: readonly LessonSource[];
 }
 
-// Spec 3 S3-12 hGHha: credits close the lesson as a Sources step after the authored ones; #154
+// Spec 3 S3-12 hGHha; #154
 export const stepCount = (lesson: Pick<LessonContent, 'steps' | 'sources'>): number => lesson.steps.length + (lesson.sources.length > 0 ? 1 : 0);
 
 export interface TrainingOptions {

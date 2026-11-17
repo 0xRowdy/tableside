@@ -72,7 +72,10 @@ export function LessonPlayer({
 }) {
   const insets = useSafeAreaInsets();
   const steps = stepCount(view);
-  const step = view.steps[view.step - 1];
+  const authored = view.steps[view.step - 1];
+  const page = authored
+    ? { label: stepText(view.step, steps), heading: authored.heading, paragraphs: authored.paragraphs }
+    : { label: sourcesStepText(view.step, steps), heading: SOURCES_HEADING, paragraphs: [SOURCES_INTRO] };
   const last = view.step === steps;
   return (
     <>
@@ -97,7 +100,7 @@ export function LessonPlayer({
           {view.notice && <ChangeNotice notice={view.notice} />}
           <View style={styles.progress}>
             <Text maxFontSizeMultiplier={textScale.body} style={styles.stepText}>
-              {step ? stepText(view.step, steps) : sourcesStepText(view.step)}
+              {page.label}
             </Text>
             <View style={styles.segments} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
               {Array.from({ length: steps }, (_, index) => (
@@ -106,14 +109,14 @@ export function LessonPlayer({
             </View>
           </View>
           <Text accessibilityRole="header" maxFontSizeMultiplier={textScale.display} style={styles.heading}>
-            {step ? step.heading : SOURCES_HEADING}
+            {page.heading}
           </Text>
-          {(step ? step.paragraphs : [SOURCES_INTRO]).map((paragraph, index) => (
+          {page.paragraphs.map((paragraph, index) => (
             <Text key={index} maxFontSizeMultiplier={textScale.body} style={styles.paragraph}>
               {paragraph}
             </Text>
           ))}
-          {!step && <Credits sources={view.sources} />}
+          {!authored && <Credits sources={view.sources} />}
           {view.example?.step === view.step && <ExampleLink disabled={busy} onPress={actions.onExample} />}
           {view.step === view.steps.length &&
             view.handoffs.map((handoff) => (
@@ -232,7 +235,7 @@ function ExampleLink({ disabled, onPress }: { disabled: boolean; onPress: () => 
   );
 }
 
-// Spec 3 S3-12 hGHha; Amendment 1 C11: text links only, bundled for offline reading
+// Spec 3 S3-12 hGHha; Amendment 1 C11
 function Credits({ sources }: { sources: readonly LessonSource[] }) {
   return (
     <View style={styles.credits}>

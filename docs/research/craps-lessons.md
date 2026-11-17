@@ -299,7 +299,8 @@ Table (`apps/mobile/src/play/CrapsTable.tsx`):
   - Each kind shows its payout, increments, come-out behavior and engine edge. For example, Place says "Pays 9:5, 7:5, 7:6 · 6 and 8 in multiples of 6, others in 5s · off on the come-out unless you turn it on".
   - Odds say "Behind an established bet · true odds, no commission · edge 0%".
   - −/+ steps by the bet's increment, "Set <bet> to N", and a working toggle where it is switchable.
-  - "Your wagers" offers Edit, or Inspect for committed bets.
+  - "Your wagers" offers Edit, or Inspect for committed bets, with a "Why locked?" button on committed ones (`BetSelector.tsx`, `SmallButton label="Why locked?"`).
+  - A drafted bet is labelled "Draft · not placed yet." until it is set (`CrapsTable.tsx`, `DRAFT_NOTE`).
 - **Messages after a roll** (`describeCrapsFacts`):
   - "Rolled a and b: N."
   - "The point is N. Puck ON." / "Puck OFF. The next roll is a come-out roll."
@@ -534,6 +535,7 @@ Facts the copy may use:
   - the felt spots and a chip rack of 1, 5, 25, 100, 500 and 1K;
   - "Numbers and center bets" opens the bet selector, which lists each bet's payout, increments, come-out behavior and edge, with −/+ steps and a working toggle;
   - "Table" / "Bet list" switch; "Roll" [§3.2].
+  - a drafted bet isn't placed until it is set; committed bets offer "Why locked?" [§3.2].
 - Turn phases: Come-out (or Betting) → Roll → Settle. Messages state each roll, point change, move, push and payout, then the balance [§3.2].
 - Funding: a fresh buy-in per session (default 1,000 units, whole units). Rebuys add funding, not winnings. Training-bankroll sessions have no buy-in and no rebuys [§3.2].
 - Ending: removable bets come back, and contract bets settle by automatic rolls [§3.1, §3.2].

@@ -5,8 +5,6 @@ import type { StrategyDefinition } from '@tableside/engine';
 import { DONT_PASS_WITH_LAY_ODDS, FLAT_PLACE_6_8, PASS_WITH_ODDS, PRESS_AND_COLLECT_6_8, THREE_POINT_MOLLY } from '../craps-strategies';
 import type { Lesson, LessonContent, LessonHandoff, LessonSource, LessonStep } from '../lessons';
 
-type CrapsLesson = Pick<Lesson, 'summary' | 'content'>;
-
 const FREE_PLAY: LessonHandoff = { kind: 'free-play', game: 'craps' };
 
 // Spec 3 S3-12 pX6CV ("Practice it"); Lessons › Structure (Handoff); #145
@@ -16,12 +14,13 @@ interface Practice {
 }
 const NOTHING_STARTS = 'The setup screen shows whether starting uses your allowance. Nothing starts until you press Start.';
 const FREE_PLAY_ONLY: Practice = { handoffs: [FREE_PLAY], text: `Practice it: open craps free play. ${NOTHING_STARTS}` };
-const practise = (strategy: StrategyDefinition): Practice => ({
+const guidedPractice = (strategy: StrategyDefinition): Practice => ({
   handoffs: [{ kind: 'guided-practice', game: 'craps', strategy: strategy.id }, FREE_PLAY],
   text: `Practice it: open guided practice with ${strategy.name.charAt(0).toLowerCase()}${strategy.name.slice(1)} prefilled, or free play. ${NOTHING_STARTS}`,
 });
 
-const lesson = (summary: string, steps: readonly LessonStep[], practice: Practice, sources: readonly LessonSource[]): CrapsLesson => {
+// Spec 3 S3-12 pX6CV
+const crapsLesson = (id: string, title: string, summary: string, steps: readonly LessonStep[], practice: Practice, sources: readonly LessonSource[]): Lesson => {
   const last = steps[steps.length - 1]!;
   const content: LessonContent = {
     version: 1,
@@ -32,10 +31,10 @@ const lesson = (summary: string, steps: readonly LessonStep[], practice: Practic
     handoffs: practice.handoffs,
     sources,
   };
-  return { summary, content };
+  return { id, title, summary, section: 'craps', game: 'craps', content };
 };
 
-// Spec 3 Amendment 1 C11: exact sections, text links
+// Spec 3 Amendment 1 C11
 const WOO_BASICS = 'https://wizardofodds.com/games/craps/basics/';
 const WOO_DERIVED = 'https://wizardofodds.com/games/craps/appendix/1/';
 const WOO_EDGES = 'https://wizardofodds.com/games/craps/appendix/2/';
@@ -46,19 +45,23 @@ const BELLAGIO = 'https://static.mgmresorts.com/content/dam/MGM/bellagio/casino/
 const wizard = (title: string, sections: string, url: string): LessonSource => ({ citation: `Michael Shackleford, Wizard of Odds, “${title}”, ${sections}`, url });
 const njDge = (sections: string): LessonSource => ({ citation: `New Jersey Division of Gaming Enforcement, craps rules, N.J.A.C. ${sections}`, url: NJ_DGE });
 const bellagio = (pages: string): LessonSource => ({ citation: `Bellagio, Gaming Guide 2016, Craps, ${pages}`, url: BELLAGIO });
+// Spec 3 S3-12 hGHha
+const own = (what: string): LessonSource => ({ citation: `Tableside's own, not the sources': ${what}.`, url: null });
 const EDGE_TABLE = wizard('Craps Odds: House Edge of Every Bet', 'table “Craps House Edge”', WOO_EDGES);
 const NO_SYSTEM_BEATS_THE_EDGE = wizard('The Truth about Betting Systems', 'sections “Introduction” and “The Martingale”', WOO_SYSTEMS);
 
 const HOUSE_EDGE_STAYS = "Changing stakes doesn't remove the house edge.";
 
-export const CRAPS_LESSONS: Readonly<Record<string, CrapsLesson>> = {
-  'craps-basics': lesson(
+export const CRAPS_LESSONS: readonly Lesson[] = [
+  crapsLesson(
+    'craps-basics',
+    'Craps basics',
     'The puck, bets, rolls, settlement and funding',
     [
       {
         heading: 'Come-out roll and point',
         paragraphs: [
-          'The puck tells you where the round stands. With the puck OFF, the next roll is a come-out roll. A pass line bet wins on 7 or 11 and loses on 2, 3 or 12. Any other total (4, 5, 6, 8, 9 or 10) becomes the point, and the puck turns ON.',
+          'The puck tells you where play stands. With the puck OFF, the next roll is a come-out roll. A pass line bet wins on 7 or 11 and loses on 2, 3 or 12. Any other total (4, 5, 6, 8, 9 or 10) becomes the point, and the puck turns ON.',
           "With a point on, the pass line wins if the point is rolled again before a 7, and loses if a 7 comes first. That 7 is the seven-out, and the next roll is a new come-out. Don't pass is the other side: it wins on 2 or 3 and on a 7 before the point, loses on 7 or 11 and when the point repeats, and a 12 on the come-out is a tie that leaves the bet on the table (bar 12).",
           "Come and don't come work the same way, but you make them while a point is on, and each one moves to the next number rolled.",
         ],
@@ -81,7 +84,7 @@ export const CRAPS_LESSONS: Readonly<Record<string, CrapsLesson>> = {
         heading: 'Rolling and settlement',
         paragraphs: [
           'Each turn runs Come-out (or Betting, once a point is on), then Roll, then Settle. Press Roll when your bets are set. The roll settles every bet it decides, and the table lists what happened: the roll, any new point, what won and how much, what lost, what pushed and what was off and came back, then your balance. A place bet that wins is paid and stays up.',
-          "Bets the roll doesn't decide stay for the next roll. When you end a session, bets that can come down come back, and contracts settle by automatic rolls.",
+          "Bets the roll doesn't decide stay for the next roll. When you end a practice session, bets that can come down come back, and contracts settle by automatic rolls.",
         ],
       },
       {
@@ -94,8 +97,8 @@ export const CRAPS_LESSONS: Readonly<Record<string, CrapsLesson>> = {
       {
         heading: 'The house edge',
         paragraphs: [
-          "Every craps bet except odds carries a house edge, set by how it pays against the chance of the roll. On this table the pass line is 1.41%, don't pass 1.36%, place 6 and 8 1.52%, and the field 2.78% when 12 pays 3:1. Odds pay true odds, so their edge is 0%. The setup screen shows the edge for the rules you choose.",
-          "Practising helps you place bets correctly and follow what happens. It doesn't change those numbers.",
+          "Each bet carries a house edge, set by how it pays against the chance of the roll. On this table the pass line is 1.41%, don't pass 1.36%, place 6 and 8 1.52% per bet decided, and the field 2.78% when 12 pays 3:1. Odds pay true odds, so their edge is 0%. The setup screen shows the edge for the rules you choose.",
+          "Practice helps you place bets correctly and follow what happens. It doesn't change those numbers.",
         ],
       },
     ],
@@ -105,10 +108,13 @@ export const CRAPS_LESSONS: Readonly<Record<string, CrapsLesson>> = {
       EDGE_TABLE,
       njDge('13:69F-1.2(a), 1.3(c)–(e) and 1.4(b)'),
       bellagio('printed pp. 13–14'),
+      own('the default table conditions and practice funding'),
     ],
   ),
 
-  'pass-with-odds': lesson(
+  crapsLesson(
+    'pass-with-odds',
+    'Pass with odds',
     'Pass 10, then 10 odds once a point is set',
     [
       {
@@ -143,15 +149,18 @@ export const CRAPS_LESSONS: Readonly<Record<string, CrapsLesson>> = {
         ],
       },
     ],
-    practise(PASS_WITH_ODDS),
+    guidedPractice(PASS_WITH_ODDS),
     [
       wizard('How to Play Craps', 'sections “Pass”, “The Odds” and “Strategy”', WOO_BASICS),
       wizard('How the House Edge for Each Bet is Derived', 'section “Pass/Come”', WOO_DERIVED),
       njDge('13:69F-1.6(a)'),
+      own('the 10-unit pass bet and 10 odds at every odds setting'),
     ],
   ),
 
-  'flat-place-6-8': lesson(
+  crapsLesson(
+    'flat-place-6-8',
+    'Flat place 6 and 8',
     '12 on each of 6 and 8 after the point; collect every win',
     [
       {
@@ -183,16 +192,19 @@ export const CRAPS_LESSONS: Readonly<Record<string, CrapsLesson>> = {
         paragraphs: ["Place 6 and 8 each carry a 1.52% house edge on every bet that's decided. Flat stakes keep the amount at risk steady; they don't change the edge."],
       },
     ],
-    practise(FLAT_PLACE_6_8),
+    guidedPractice(FLAT_PLACE_6_8),
     [
       wizard('How to Play Craps', 'sections “Place” and “Turning Bets On and Off”', WOO_BASICS),
       EDGE_TABLE,
       njDge('13:69F-1.2(a)5 and 1.4(b)'),
       bellagio('printed p. 14, “Place Bets”'),
+      own('12 on each of 6 and 8 with no line bet, kept up but off through the come-out'),
     ],
   ),
 
-  'dont-pass-with-lay-odds': lesson(
+  crapsLesson(
+    'dont-pass-with-lay-odds',
+    "Don't pass with lay odds",
     "Don't pass 10, then lay odds to win 10",
     [
       {
@@ -204,7 +216,7 @@ export const CRAPS_LESSONS: Readonly<Record<string, CrapsLesson>> = {
       {
         heading: 'Lay odds to win 10',
         paragraphs: [
-          "When a point is set, lay odds behind don't pass so that a win pays 10: lay 20 against 4 or 10, 15 against 5 or 9, and 12 against 6 or 8. Laid odds pay true odds the other way round, 1:2, 2:3 and 5:6.",
+          "When a point is set, lay odds behind don't pass so that a win pays 10: lay 20 against 4 or 10, 15 against 5 or 9, and 12 against 6 or 8. Laid odds pay true odds the other way around, 1:2, 2:3 and 5:6.",
         ],
       },
       {
@@ -228,16 +240,19 @@ export const CRAPS_LESSONS: Readonly<Record<string, CrapsLesson>> = {
         ],
       },
     ],
-    practise(DONT_PASS_WITH_LAY_ODDS),
+    guidedPractice(DONT_PASS_WITH_LAY_ODDS),
     [
       wizard('How to Play Craps', 'sections “Don’t Pass”, “Laying the Odds” and “Strategy”', WOO_BASICS),
       wizard('How the House Edge for Each Bet is Derived', 'section “Don’t Pass/Don’t Come”', WOO_DERIVED),
       njDge('13:69F-1.2(a)2, 1.3(d) and 1.6(b)'),
       bellagio('printed pp. 13–14, “Don’t Pass Line” and “Odds”'),
+      own('the 10-unit bet and laying odds to win 10'),
     ],
   ),
 
-  'three-point-molly': lesson(
+  crapsLesson(
+    'three-point-molly',
+    'Three-point Molly (bounded)',
     'Pass plus up to two come bets, 10 odds on each',
     [
       {
@@ -254,7 +269,7 @@ export const CRAPS_LESSONS: Readonly<Record<string, CrapsLesson>> = {
       {
         heading: 'When numbers hit',
         paragraphs: [
-          "When a come bet's number is rolled again, it and its odds win and come down. With room again, make another come bet. When the point is made, the pass line and its odds win; bet 10 on the pass line for the next come-out.",
+          "When a come bet's number is rolled again with a point on, it and its odds win and come down. On a come-out roll its odds are off, so the come bet wins alone and its odds come back. With room again, make another come bet. When the point is made, the pass line and its odds win; bet 10 on the pass line for the next come-out.",
           'On the come-out roll, come bets already on numbers still work, but their odds are off: a come-out 7 loses those come bets and returns their odds. No new come bets are made until a point is set.',
         ],
       },
@@ -274,21 +289,24 @@ export const CRAPS_LESSONS: Readonly<Record<string, CrapsLesson>> = {
         ],
       },
     ],
-    practise(THREE_POINT_MOLLY),
+    guidedPractice(THREE_POINT_MOLLY),
     [
       wizard('Three Point Molly', 'sections “Rules” and “Analysis”', 'https://wizardofodds.com/gambling/three-point-molly/'),
       NO_SYSTEM_BEATS_THE_EDGE,
       wizard('How to Play Craps', 'sections “Come, Don’t Come” and “Turning Bets On and Off”', WOO_BASICS),
       njDge('13:69F-1.2(a)3, 1.3(e) and 1.6(c)'),
+      own('at most two come bets, 10 odds on each, and carrying on after a seven-out'),
     ],
   ),
 
-  'press-and-collect-6-8': lesson(
+  crapsLesson(
+    'press-and-collect-6-8',
+    'Press-and-collect 6 and 8 (capped)',
     'Collect the first hit, then alternate press and collect up to 48',
     [
       {
         heading: 'Start at 12 on each',
-        paragraphs: ['Once a point is set, place 12 on the 6 and 12 on the 8. Each number keeps its own count of hits from here.'],
+        paragraphs: ['Once a point is set, place 12 on the 6 and 12 on the 8. Each number keeps its own stake and its own turn to press or collect from here.'],
       },
       {
         heading: 'Collect, then press',
@@ -313,12 +331,11 @@ export const CRAPS_LESSONS: Readonly<Record<string, CrapsLesson>> = {
       {
         heading: "Stakes change. The house edge doesn't.",
         paragraphs: [
-          'Place 6 and 8 carry a 1.52% house edge on every bet, at 12 or at 48. Pressing changes how much is at risk after a run of hits; a seven-out at 48 loses more than one at 12. ' + HOUSE_EDGE_STAYS,
+          'Place 6 and 8 carry a 1.52% house edge on every bet decided, at 12 or at 48. Pressing changes how much is at risk after a run of hits; a seven-out at 48 loses more than one at 12. ' + HOUSE_EDGE_STAYS,
         ],
       },
     ],
-    practise(PRESS_AND_COLLECT_6_8),
-    [EDGE_TABLE, NO_SYSTEM_BEATS_THE_EDGE, njDge('13:69F-1.2(a)5 and 1.4(b)')],
+    guidedPractice(PRESS_AND_COLLECT_6_8),
+    [EDGE_TABLE, NO_SYSTEM_BEATS_THE_EDGE, njDge('13:69F-1.2(a)5 and 1.4(b)'), own('the whole routine, from collecting first to the 48 cap and the reset on a seven-out')],
   ),
-};
-
+];
