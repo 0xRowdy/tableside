@@ -4,7 +4,7 @@ import type { ChallengeAttemptRecord, UnsequencedAttemptRecord } from '@tablesid
 import { StoreWriteError } from '../practice/memory-store';
 import type { LessonProgressEvent, UnsequencedLessonEvent } from './lesson-progress';
 import { milestoneSlot, type ReadinessMilestoneRecord } from './readiness-milestone';
-import { withLifecycle, type AttemptLifecycle, type AttemptCommitOutcome, type AttemptTransitionCommit, type CommittedAttemptTransition, type NewAttempt, type StoredAttempt, type TrainingStore } from './store';
+import { withLifecycle, type AcceptedAttempt, type AttemptLifecycle, type AttemptCommitOutcome, type AttemptTransitionCommit, type CommittedAttemptTransition, type NewAttempt, type StoredAttempt, type TrainingStore } from './store';
 
 type Operation = 'createAttempt' | 'commitAttemptTransition' | 'saveAttemptLifecycle' | 'recordAttempt' | 'readAttemptReceipt' | 'writePreference' | 'recordLessonEvent' | 'recordMilestone';
 
@@ -19,6 +19,8 @@ export class MemoryTrainingDisk {
   lastDeviceSequence = 0;
   readonly lessonEvents: string[] = [];
   readonly milestones: string[] = [];
+  // #142
+  readonly accepted: string[] = [];
 }
 
 export class MemoryTrainingStore implements TrainingStore {
@@ -110,6 +112,18 @@ export class MemoryTrainingStore implements TrainingStore {
         .flatMap((row) => parse<StoredAttempt>(row.attempt).record ?? [])
         .sort((a, b) => a.deviceSequence - b.deviceSequence),
     );
+  }
+
+  // #142
+  readAcceptedAttempts(): Promise<readonly AcceptedAttempt[]> {
+    return this.enqueue(() => this.disk.accepted.map((text) => parse<AcceptedAttempt>(text)));
+  }
+
+  // #142
+  acceptAttempts(attempts: readonly AcceptedAttempt[]): Promise<void> {
+    return this.enqueue(() => {
+      this.disk.accepted.push(...attempts.map((attempt) => JSON.stringify(attempt)));
+    });
   }
 
   readPreference(key: string): Promise<string | null> {

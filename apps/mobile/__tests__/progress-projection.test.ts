@@ -1,8 +1,8 @@
 // Spec 3 Comparison groups, records and progression; Testing Decisions › Seam 2 (Projection); Amendment 1 C2, C3; #140
 import type { ChallengeGroupKey } from '@tableside/engine';
 
-import { attemptEarned, baseConfiguration, progressProjection } from '@/training/progress';
-import { attempt, RUNNING_COUNT_CHECK, TABLE_PLAY_CHECK, type AttemptFixture } from '@/training/testing/attempt-records';
+import { attemptEarned, baseConfiguration, offersReview, progressProjection } from '@/training/progress';
+import { attempt, attemptRecord, RUNNING_COUNT_CHECK, TABLE_PLAY_CHECK, type AttemptFixture } from '@/training/testing/attempt-records';
 
 const groupsOf = (...keys: ChallengeGroupKey[]) => progressProjection(keys.map((key, index) => attempt({ id: `attempt-${index}`, key }))).groups.length;
 
@@ -216,3 +216,23 @@ function onlyGroup(fixtures: readonly AttemptFixture[]) {
   expect(groups).toHaveLength(1);
   return groups[0]!;
 }
+
+// Spec 3 Amendment 1 C8; #142
+describe('which attempts offer a review', () => {
+  const summaryOf = (fixture: AttemptFixture) => {
+    const summary = Object.fromEntries(Object.entries(attemptRecord(fixture)).filter(([key]) => key !== 'review'));
+    return summary as unknown as Parameters<typeof offersReview>[0];
+  };
+
+  it('offers a whole record’s review only when it has review facts', () => {
+    const record = attemptRecord({ id: 'a' });
+    expect(offersReview(record)).toBe(false);
+    expect(offersReview({ ...record, review: [{ kind: 'running-count', checkpoint: 1, position: 13, entered: 1, reference: 1, error: 0 }] })).toBe(true);
+  });
+
+  it('offers a summary’s review when the attempt answered anything', () => {
+    expect(offersReview(summaryOf({ id: 'answered', scores: { 'running-count': [2, 3] } }))).toBe(true);
+    expect(offersReview(summaryOf({ id: 'unanswered', ending: 'abandoned', scores: { 'running-count': [0, 0] } }))).toBe(false);
+    expect(offersReview(summaryOf({ id: 'unusable', ending: 'unusable', scores: { 'running-count': null } }))).toBe(false);
+  });
+});

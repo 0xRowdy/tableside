@@ -11,7 +11,7 @@ import { useLoaded } from '@/hooks/use-loaded';
 import { Group, GroupLabel, ListRow, Note, SettingsScreen } from '@/settings/SettingsParts';
 import { fonts, palette, radius, space, textScale } from '@/theme/tokens';
 import { COUNTING_TITLE } from '@/training/challenge-text';
-import { attemptIdentity, type GroupProgress, type Progress } from '@/training/progress';
+import { attemptIdentity, offersReview, type GroupProgress, type Progress } from '@/training/progress';
 import { earningAttempts, milestoneLine } from '@/training/readiness-text';
 import {
   bestsLabel,
@@ -27,6 +27,7 @@ import {
   RECORD_CLASSES,
   RECORDS_NOTE,
   RECORDS_TITLE,
+  REVIEW_UNAVAILABLE,
   settingsText,
   type StatText,
 } from '@/training/records-text';
@@ -52,6 +53,13 @@ export function RecordsScreen({
   const records = useLoaded(recordsOf, service);
   const [assistance, setAssistance] = useState<AssistanceClass>('unassisted-check');
   const [reviewing, setReviewing] = useState<ChallengeAttemptRecord | null>(null);
+  const [unavailable, setUnavailable] = useState(false);
+  // Spec 3 Amendment 1 C8; #142
+  const openReview = async (attemptId: string) => {
+    const record = await service.attemptReview(attemptId);
+    setUnavailable(!record || record.review.length === 0);
+    if (record && record.review.length > 0) setReviewing(record);
+  };
 
   if (reviewing) {
     return (
@@ -76,6 +84,7 @@ export function RecordsScreen({
         <GroupCard key={group.id} group={group} />
       ))}
       <GroupLabel>{HISTORY_LABEL}</GroupLabel>
+      {unavailable && <Note>{REVIEW_UNAVAILABLE}</Note>}
       {records && records.progress.history.length === 0 ? (
         <Note>{NO_HISTORY}</Note>
       ) : (
@@ -90,7 +99,7 @@ export function RecordsScreen({
                 title={text.title}
                 detail={text.detail}
                 value={text.value}
-                onPress={record.review.length > 0 ? () => setReviewing(record) : undefined}
+                onPress={offersReview(record) ? () => void openReview(record.attemptId) : undefined}
               />
             );
           })}

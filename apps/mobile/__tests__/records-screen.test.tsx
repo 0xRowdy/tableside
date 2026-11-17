@@ -13,6 +13,8 @@ const DAY = 24 * 60 * 60 * 1000;
 
 let mockStore: MemoryTrainingStore | null = null;
 let mockSeed: readonly ChallengeAttemptRecord[] = [];
+let mockAccepted: readonly ChallengeAttemptRecord[] = [];
+let mockDetail: (attemptId: string) => Promise<ChallengeAttemptRecord | null> = async () => null;
 
 jest.mock('@/training/app-adapters', () => {
   const { FakeClock, entropyFromWords, PI_WORDS } = jest.requireActual('@/practice/testing/substitutes');
@@ -25,6 +27,7 @@ jest.mock('@/training/app-adapters', () => {
       if (!mockStore) {
         mockStore = new MemoryTrainingStore();
         void storeAttempts(mockStore, mockSeed);
+        void mockStore!.acceptAttempts(mockAccepted.map(({ review: _detail, ...summary }) => summary));
       }
       const clock = new FakeClock(MOCK_NOW, true);
       let next = 0;
@@ -39,6 +42,7 @@ jest.mock('@/training/app-adapters', () => {
         owner: 'local',
         quarantine: { version: 0, entries: [] },
         speech: jest.requireActual('@/training/speech').NO_SCREEN_READER,
+        attemptDetail: (attemptId: string) => mockDetail(attemptId),
       };
     },
   };
@@ -65,6 +69,8 @@ async function openRecords() {
 beforeEach(() => {
   mockStore = null;
   mockSeed = [];
+  mockAccepted = [];
+  mockDetail = async () => null;
 });
 
 describe('Records & history', () => {
@@ -169,6 +175,42 @@ describe('Records & history', () => {
     expect(await screen.findByRole('header', { name: 'Records & history' })).toBeOnTheScreen();
     // Spec 3 Comparison groups › Milestones (never on history views)
     expect(cues()).not.toContain('milestone');
+  });
+
+  // Spec 3 Amendment 1 C8; #142
+  it('shows another device’s synced attempt from its summary, fetching its review only when opened', async () => {
+    const { attemptRecord } = jest.requireActual('@/training/testing/attempt-records') as typeof import('@/training/testing/attempt-records');
+    const theirs: ChallengeAttemptRecord = {
+      ...attemptRecord({ id: 'theirs', installation: 'device-b', endedAt: MOCK_NOW - 60_000 }),
+      review: [
+        { kind: 'running-count', checkpoint: 1, position: 13, entered: 2, reference: 2, error: 0 },
+        { kind: 'running-count', checkpoint: 2, position: 26, entered: -1, reference: -1, error: 0 },
+        { kind: 'running-count', checkpoint: 3, position: 39, entered: 0, reference: 0, error: 0 },
+        { kind: 'running-count', checkpoint: 4, position: 52, entered: 1, reference: 1, error: 0 },
+      ],
+    };
+    mockAccepted = [theirs];
+    const asked: string[] = [];
+    mockDetail = async (attemptId) => {
+      asked.push(attemptId);
+      return theirs;
+    };
+    await openRecords();
+
+    const row = await screen.findByRole('button', { name: 'Running count · Check. Today · unassisted. 4 / 4' });
+    expect(asked).toEqual([]);
+    await fireEvent.press(row);
+    expect(await screen.findByRole('header', { name: 'Checkpoint review' })).toBeOnTheScreen();
+    expect(asked).toEqual(['theirs']);
+  });
+
+  it('says when a synced attempt’s review can’t be fetched yet', async () => {
+    const { attemptRecord } = jest.requireActual('@/training/testing/attempt-records') as typeof import('@/training/testing/attempt-records');
+    mockAccepted = [attemptRecord({ id: 'theirs', installation: 'device-b', endedAt: MOCK_NOW - 60_000 })];
+    await openRecords();
+    await fireEvent.press(await screen.findByRole('button', { name: 'Running count · Check. Today · unassisted. 4 / 4' }));
+    expect(await screen.findByText("This attempt's review isn't on this device yet. Try again when you're online.")).toBeOnTheScreen();
+    expect(screen.getByRole('header', { name: 'Records & history' })).toBeOnTheScreen();
   });
 
   it('has nothing to show before any attempt', async () => {

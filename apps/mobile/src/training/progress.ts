@@ -1,13 +1,15 @@
 // Spec 3 Modules › Training service (Progress projection); Comparison groups; Amendment 1 C2; #140
 
 import { CATALOG_CATEGORIES, type CatalogCategory } from '@tableside/definitions';
-import { canonicalJson, CHALLENGE_METRICS, type ChallengeAttemptRecord, type ChallengeGroupKey, type ChallengeMetric, type MetricResult } from '@tableside/engine';
+import { canonicalJson, CHALLENGE_METRICS, type ChallengeAttemptSummary, type ChallengeGroupKey, type ChallengeMetric, type MetricResult } from '@tableside/engine';
 
+import type { AcceptedAttempt } from './store';
 import { milestoneSlot, READINESS_MILESTONE_RECORD_VERSION, type ReadinessMilestoneRecord } from './readiness-milestone';
 
 // Spec 3 Comparison groups (local and accepted attempts)
 export interface ProgressAttempt {
-  readonly record: ChallengeAttemptRecord;
+  // Spec 3 Amendment 1 C8; #142
+  readonly record: AcceptedAttempt;
   readonly local: boolean;
 }
 
@@ -20,7 +22,7 @@ export interface ProgressMilestone {
 export interface PersonalBest {
   readonly metric: ChallengeMetric;
   readonly result: MetricResult;
-  readonly attempt: ChallengeAttemptRecord;
+  readonly attempt: AcceptedAttempt;
 }
 
 export interface GroupProgress {
@@ -42,7 +44,7 @@ export interface EarnedMilestone {
 
 export interface Fastest {
   readonly performanceMs: number;
-  readonly attempt: ChallengeAttemptRecord;
+  readonly attempt: AcceptedAttempt;
 }
 
 export interface Progress {
@@ -182,7 +184,7 @@ export function milestoneCandidates(attempts: readonly ProgressAttempt[], instal
     .filter((record) => record.installation === installation)
     .sort((a, b) => a.deviceSequence - b.deviceSequence);
   // Spec 3 Amendment 1 C2
-  const streaks = new Map<string, ChallengeAttemptRecord | null>();
+  const streaks = new Map<string, AcceptedAttempt | null>();
   const earned = new Map<string, ReadinessMilestoneRecord>();
   for (const record of own) {
     const effect = streakEffect(record);
@@ -212,16 +214,16 @@ const COUNTING_METRICS: readonly ChallengeMetric[] = ['card-values', 'running-co
 const READINESS_THRESHOLD = 0.95;
 
 // Spec 3 Comparison groups (Readiness streak)
-export const belowReadinessThreshold = (record: ChallengeAttemptRecord) =>
+export const belowReadinessThreshold = (record: AcceptedAttempt) =>
   record.endingReason === 'completed' && record.groupKey.assistanceClass === 'unassisted-check' && !meetsReadinessThreshold(record);
 
-function meetsReadinessThreshold(record: ChallengeAttemptRecord): boolean {
+function meetsReadinessThreshold(record: AcceptedAttempt): boolean {
   const tested = COUNTING_METRICS.flatMap((metric) => record.metrics[metric] ?? []).filter((result) => result.total > 0);
   return tested.length > 0 && tested.every((result) => result.correct >= READINESS_THRESHOLD * result.total);
 }
 
 // Spec 3 Comparison groups (Readiness streak); Amendment 1 C2, C3
-function streakEffect(record: ChallengeAttemptRecord): 'advances' | 'breaks' | 'neutral' {
+function streakEffect(record: AcceptedAttempt): 'advances' | 'breaks' | 'neutral' {
   const { variant, assistanceClass } = record.groupKey;
   if (variant !== 'check') return 'neutral';
   switch (record.endingReason) {
@@ -237,7 +239,7 @@ function streakEffect(record: ChallengeAttemptRecord): 'advances' | 'breaks' | '
 }
 
 // Spec 3 Synchronized record types › Challenge attempt
-export const attemptIdentity = (record: Pick<ChallengeAttemptRecord, 'installation' | 'attemptId'>) => `${record.installation}/${record.attemptId}`;
+export const attemptIdentity = (record: Pick<ChallengeAttemptSummary, 'installation' | 'attemptId'>) => `${record.installation}/${record.attemptId}`;
 
 // Spec 3 Comparison groups (local and accepted attempts); Synchronized record types
 function distinct(attempts: readonly ProgressAttempt[]): ProgressAttempt[] {
@@ -267,17 +269,21 @@ function groupProgress(id: string, attempts: readonly ProgressAttempt[], milesto
 }
 
 // Spec 3 Comparison groups › Personal bests (Fastest)
-export function everyMetricPerfect(record: ChallengeAttemptRecord): boolean {
+// Spec 3 Amendment 1 C8; #142
+export const offersReview = (record: AcceptedAttempt): boolean =>
+  record.review ? record.review.length > 0 : Object.values(record.metrics).some((result) => result !== null && result.total > 0);
+
+export function everyMetricPerfect(record: AcceptedAttempt): boolean {
   const tested = CHALLENGE_METRICS.flatMap((metric) => record.metrics[metric] ?? []);
   return tested.length > 0 && tested.every((result) => result.correct === result.total);
 }
 
 // Spec 3 Comparison groups › Personal bests (Fastest); Attempt lifecycle › Pause
-function fastestEligible(record: ChallengeAttemptRecord): record is ChallengeAttemptRecord & { readonly performanceMs: number } {
+function fastestEligible(record: AcceptedAttempt): record is AcceptedAttempt & { readonly performanceMs: number } {
   return record.endingReason === 'completed' && record.groupKey.assistanceClass === 'unassisted-check' && !record.interrupted && record.performanceMs !== null && everyMetricPerfect(record);
 }
 
-function fastestOf(records: readonly ChallengeAttemptRecord[]): Fastest | null {
+function fastestOf(records: readonly AcceptedAttempt[]): Fastest | null {
   let fastest: Fastest | null = null;
   for (const attempt of records) {
     if (!fastestEligible(attempt)) continue;
@@ -288,7 +294,7 @@ function fastestOf(records: readonly ChallengeAttemptRecord[]): Fastest | null {
 }
 
 // Spec 3 Comparison groups › Personal bests
-function bestOf(records: readonly ChallengeAttemptRecord[], metric: ChallengeMetric): PersonalBest | null {
+function bestOf(records: readonly AcceptedAttempt[], metric: ChallengeMetric): PersonalBest | null {
   let best: PersonalBest | null = null;
   for (const attempt of records) {
     const result = attempt.metrics[metric];
@@ -305,5 +311,5 @@ const beats = (a: PersonalBest, b: PersonalBest) => {
 const rank = (a: MetricResult, b: MetricResult) => Math.sign(a.correct * b.total - b.correct * a.total) || Math.sign(a.total - b.total);
 
 // Spec 3 Synchronized record types › Challenge attempt (identity)
-const lowerIdentity = (a: ChallengeAttemptRecord, b: ChallengeAttemptRecord) =>
+const lowerIdentity = (a: AcceptedAttempt, b: AcceptedAttempt) =>
   a.attemptId !== b.attemptId ? a.attemptId < b.attemptId : a.installation !== b.installation ? a.installation < b.installation : a.deviceSequence < b.deviceSequence;

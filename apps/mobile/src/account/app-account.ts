@@ -18,6 +18,7 @@ import { buildBackend } from './backend';
 import { appDevicePorts } from './device-ports';
 import { createNativeVault, KEYCHAIN_OPTIONS } from './native-vault';
 import { forAccountSession } from './practice';
+import { attemptDetailFrom } from './training';
 import type { RestrictedPaths } from './RestrictedPaths';
 import { providerSettings } from './provider-ports';
 import type { AccountSession } from './vault';
@@ -103,7 +104,7 @@ export function createAppAccount(): AppAccount {
     },
     training(base) {
       if (!session) throw new Error('no open account session');
-      return forAccountSession(base, session);
+      return { ...forAccountSession(base, session), attemptDetail: attemptDetailFrom(service.records) };
     },
     offlineGame: {
       async get(accountId) {

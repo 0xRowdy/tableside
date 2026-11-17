@@ -378,6 +378,7 @@ export {
   type TableView,
 } from './table-challenge';
 export {
+  ATTEMPT_ENDING_REASONS,
   CHALLENGE_PACINGS,
   CHALLENGE_RECORD_VERSION,
   challengeAttemptRecord,
@@ -388,6 +389,7 @@ export {
   type AttemptEndingReason,
   type AttemptRecordContext,
   type ChallengeAttemptRecord,
+  type ChallengeAttemptSummary,
   type ChallengeFinances,
   type ChallengeGroupKey,
   type ChallengePacing,

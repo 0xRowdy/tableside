@@ -310,9 +310,22 @@ export class TrainingService {
     return (await this.adapters.store.readMilestones()).map((record) => ({ record, local: true }));
   }
 
-  // TODO(#142)
+  // Spec 3 Comparison groups (local and accepted attempts); #142
   private async attempts(): Promise<readonly ProgressAttempt[]> {
-    return (await this.adapters.store.readAttemptRecords()).map((record) => ({ record, local: true }));
+    const { store } = this.adapters;
+    const [local, accepted] = await Promise.all([store.readAttemptRecords(), store.readAcceptedAttempts()]);
+    return [...accepted.map((record) => ({ record, local: false })), ...local.map((record) => ({ record, local: true }))];
+  }
+
+  // Spec 3 Amendment 1 C8; #142
+  async attemptReview(attemptId: string): Promise<ChallengeAttemptRecord | null> {
+    const { store, attemptDetail } = this.adapters;
+    const local = (await store.readAttemptRecords()).find((record) => record.attemptId === attemptId);
+    if (local) return local;
+    const accepted = (await store.readAcceptedAttempts()).find((record) => record.attemptId === attemptId);
+    if (!accepted) return null;
+    if (accepted.review) return { ...accepted, review: accepted.review };
+    return attemptDetail ? attemptDetail(attemptId) : null;
   }
 
   dismissResults(): void {
@@ -331,7 +344,7 @@ export class TrainingService {
       const value = JSON.parse(text) as Partial<ChallengeSetup>;
       if (!isCatalogCategory(value.category) || !CHALLENGE_VARIANTS.includes(value.variant as ChallengeVariant)) return null;
       const pacing = pacingsOf(value.category).includes(value.pacing as ChallengePacing) ? (value.pacing as ChallengePacing) : 'self-paced';
-      return rememberedSetup({ category: value.category, variant: value.variant as ChallengeVariant, timed: value.timed === true, pacing, table: value.table });
+      return rememberedSetup({ category: value.category, variant: value.variant as ChallengeVariant, timed: value.timed === true, pacing, ...(value.table === undefined ? {} : { table: value.table }) });
     } catch {
       return null;
     }

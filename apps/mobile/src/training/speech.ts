@@ -3,12 +3,9 @@ import { cardName } from '@/play/blackjack-text';
 
 import type { TrainingService } from './service';
 
-export interface ScreenReaderSpeech {
-  announce(message: string): void;
-  speaking(): boolean;
-}
+import { NO_SCREEN_READER, type ScreenReaderSpeech } from './screen-reader-port';
 
-export const NO_SCREEN_READER: ScreenReaderSpeech = { announce: () => undefined, speaking: () => false };
+export { NO_SCREEN_READER, type ScreenReaderSpeech };
 
 export function followSpokenCards(training: TrainingService, speech: ScreenReaderSpeech): () => void {
   let last = training.snapshot();
