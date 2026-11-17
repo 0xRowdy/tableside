@@ -2,9 +2,10 @@
 import type { ChallengeAttemptRecord, UnsequencedAttemptRecord } from '@tableside/engine';
 
 import { StoreWriteError } from '../practice/memory-store';
+import type { LessonProgressEvent, UnsequencedLessonEvent } from './lesson-progress';
 import type { AttemptCommitOutcome, AttemptTransitionCommit, CommittedAttemptTransition, NewAttempt, StoredAttempt, TrainingStore } from './store';
 
-type Operation = 'createAttempt' | 'commitAttemptTransition' | 'recordAttempt' | 'readAttemptReceipt' | 'writePreference';
+type Operation = 'createAttempt' | 'commitAttemptTransition' | 'recordAttempt' | 'readAttemptReceipt' | 'writePreference' | 'recordLessonEvent';
 
 interface Row {
   attempt: string;
@@ -15,6 +16,7 @@ export class MemoryTrainingDisk {
   readonly attempts = new Map<string, Row>();
   readonly preferences = new Map<string, string>();
   lastDeviceSequence = 0;
+  readonly lessonEvents: string[] = [];
 }
 
 export class MemoryTrainingStore implements TrainingStore {
@@ -108,6 +110,22 @@ export class MemoryTrainingStore implements TrainingStore {
     return this.injectable('writePreference', () => {
       this.disk.preferences.set(key, value);
     });
+  }
+
+  // #143
+  recordLessonEvent(event: UnsequencedLessonEvent): Promise<LessonProgressEvent> {
+    return this.injectable('recordLessonEvent', () => {
+      const events = this.disk.lessonEvents.map((text) => parse<LessonProgressEvent>(text));
+      const existing = events.find((earlier) => earlier.eventId === event.eventId);
+      if (existing) return existing;
+      const sequenced: LessonProgressEvent = { ...event, deviceSequence: events.length + 1 };
+      this.disk.lessonEvents.push(JSON.stringify(sequenced));
+      return clone(sequenced);
+    });
+  }
+
+  readLessonEvents(): Promise<readonly LessonProgressEvent[]> {
+    return this.enqueue(() => this.disk.lessonEvents.map((text) => parse<LessonProgressEvent>(text)));
   }
 
   private unfinished(): StoredAttempt | null {

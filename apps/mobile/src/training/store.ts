@@ -3,6 +3,7 @@
 import type { ChallengeAttemptRecord, ChallengeFact, ChallengeSpecification, RandomStreamIdentity, Receipt, UnsequencedAttemptRecord } from '@tableside/engine';
 
 import type { AllowanceEffect, MeteringBasis } from '../practice/store';
+import type { LessonProgressEvent, UnsequencedLessonEvent } from './lesson-progress';
 
 export const CHALLENGE_ATTEMPT_RECORD_TYPE = 'challenge-attempt';
 
@@ -76,4 +77,10 @@ export interface DevicePreferences {
   writePreference(key: string, value: string): Promise<void>;
 }
 
-export type TrainingStore = ChallengeStore & DevicePreferences;
+// Spec 3 Synchronized record types › Lesson-progress event; #143
+export interface LessonProgressStore {
+  recordLessonEvent(event: UnsequencedLessonEvent): Promise<LessonProgressEvent>;
+  readLessonEvents(): Promise<readonly LessonProgressEvent[]>;
+}
+
+export type TrainingStore = ChallengeStore & DevicePreferences & LessonProgressStore;

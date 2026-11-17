@@ -205,6 +205,11 @@ function challengeDatabase(): Promise<RecordedDatabase> {
     );
     await playAttempt(store, unfinished, recorded.random as RandomStreamIdentity, commands);
     await store.writePreference(LAST_SETUP, JSON.stringify({ category: 'card-values', variant: 'learn' }));
+    // #143
+    const lesson = { id: 'app-orientation', version: 1, materialVersion: 1 };
+    const progress = { recordVersion: 1, owner: IDENTITY.accountId, installation: IDENTITY.installationId, lesson, recordedAt: CREATED_AT } as const;
+    await store.recordLessonEvent({ ...progress, eventId: 'lesson-event-1', event: { kind: 'completed' } });
+    await store.recordLessonEvent({ ...progress, eventId: 'lesson-event-2', event: { kind: 'bookmark', step: 2 } });
   }).then((database) => ({ ...database, unfinishedAttempt: { attemptId: unfinished.attemptId, phase: 'question', position: readChallengeView(createAndReplay(unfinished, recorded.random as RandomStreamIdentity, commands)).position } }));
 }
 
