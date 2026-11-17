@@ -9,13 +9,13 @@ import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/th
 
 import type { LimitDraft, LimitEnd, LimitGroup, LimitProblem } from './limit-drafts';
 
-export function SetupHeader({ title, subtitle, onBack }: { title: string; subtitle: string; onBack: () => void }) {
+export function SetupHeader({ title, subtitle, onBack, backTo = 'Home' }: { title: string; subtitle: string; onBack: () => void; backTo?: string }) {
   const { focused, focusProps } = useKeyboardFocus();
   return (
     <View style={styles.header}>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel="Back to Home"
+        accessibilityLabel={`Back to ${backTo}`}
         onPress={onBack}
         {...focusProps}
         style={[styles.iconButton, focused && styles.focused]}

@@ -8,12 +8,10 @@ import { RECORDED_MS } from '@/training/controller';
 import { TrainingService, type TrainingSnapshot } from '@/training/service';
 import { CHALLENGE_CHARGE } from '@/training/store';
 import { newAttempt } from '@/training/testing/store-contract';
+import { HI_LO_BY_RANK } from '@/training/testing/hi-lo';
 
 const LEARN_CARD_VALUES = { category: 'card-values', variant: 'learn' } as const;
 const CHECK_CARD_VALUES = { category: 'card-values', variant: 'check' } as const;
-
-// Spec 1 Game rules, Counting (Hi-Lo)
-const HI_LO: Record<number, -1 | 0 | 1> = { 1: -1, 2: 1, 3: 1, 4: 1, 5: 1, 6: 1, 7: 0, 8: 0, 9: 0, 10: -1, 11: -1, 12: -1, 13: -1 };
 
 function setup(options: { access?: Partial<AccessSupervisor>; store?: MemoryTrainingStore; clock?: FakeClock } = {}) {
   const store = options.store ?? new MemoryTrainingStore();
@@ -44,7 +42,7 @@ async function answerEveryCard(service: TrainingService, choose: (view: Challeng
   }
 }
 
-const reference = (view: ChallengeView) => HI_LO[view.item!.card.rank]!;
+const reference = (view: ChallengeView) => HI_LO_BY_RANK[view.item!.card.rank]!;
 
 const feedbackOf = (view: ChallengeView) => (view.variant === 'learn' ? view.feedback : undefined);
 

@@ -6,7 +6,7 @@ import type { TrainingService, TrainingSnapshot } from '@/training/service';
 import type { CueName } from './catalog';
 import type { FeedbackService } from './service';
 
-export function cuesForChallenge(view: ChallengeView, facts: readonly ChallengeFact[]): CueName[] {
+function cuesForChallenge(view: ChallengeView, facts: readonly ChallengeFact[]): CueName[] {
   return facts.flatMap((fact): CueName[] => {
     switch (fact.kind) {
       case 'content-shown':

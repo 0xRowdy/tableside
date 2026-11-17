@@ -25,9 +25,7 @@ import {
   watchAccessibilityEvents,
   type AccessibilityEvents,
 } from '@/training/testing/information-hiding';
-
-// Spec 1 Game rules, Counting (Hi-Lo)
-const HI_LO: Record<number, -1 | 0 | 1> = { 1: -1, 2: 1, 3: 1, 4: 1, 5: 1, 6: 1, 7: 0, 8: 0, 9: 0, 10: -1, 11: -1, 12: -1, 13: -1 };
+import { HI_LO_BY_RANK } from '@/training/testing/hi-lo';
 
 const seed = (n: number) => ({ protocol: RANDOM_PROTOCOL_VERSION, key: [n, 0x9e3779b9], session: [n * 7 + 1, 0] }) as const;
 
@@ -66,9 +64,9 @@ async function present(view: ChallengeView) {
 }
 
 describe('Check information hiding on the card-values exercise', () => {
-  it('presents a right and a wrong answer identically — labels, hints, values, order, colours, announcements and focus — apart from the card itself', async () => {
-    const plusCard = seedWhere((n) => HI_LO[shown(attempt('check', n)).rank] === 1);
-    const minusCard = seedWhere((n) => HI_LO[shown(attempt('check', n)).rank] === -1);
+  it('presents a right and a wrong answer identically — labels, hints, values, order, colors, announcements and focus — apart from the card itself', async () => {
+    const plusCard = seedWhere((n) => HI_LO_BY_RANK[shown(attempt('check', n)).rank] === 1);
+    const minusCard = seedWhere((n) => HI_LO_BY_RANK[shown(attempt('check', n)).rank] === -1);
     const right = attempt('check', plusCard);
     const wrong = attempt('check', minusCard);
     expectIndistinguishable(await present(readChallengeView(wrong)), await present(readChallengeView(right)));
@@ -97,7 +95,7 @@ describe('Check information hiding on the card-values exercise', () => {
     expect(screen.queryByText('Recorded')).toBeNull();
   });
 
-  it('renders no Coach & feedback colour while a Check attempt is unfinished; a Learn explanation does', async () => {
+  it('renders no Coach & feedback color while a Check attempt is unfinished; a Learn explanation does', async () => {
     expectNoFeedbackColors(await present(readChallengeView(attempt('check', 1))));
     expectNoFeedbackColors(await present(readChallengeView(attempt('check', 1, [{ kind: 'answer', value: -1 }]))));
     expectNoFeedbackColors(await present(readChallengeView(attempt('check', 1, [{ kind: 'skip' }]))));

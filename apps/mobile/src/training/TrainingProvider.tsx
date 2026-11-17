@@ -23,7 +23,7 @@ export function TrainingProvider({ children }: { children: ReactNode }) {
 
 export function useTrainingService(): TrainingService {
   const service = useContext(TrainingContext);
-  if (!service) throw new Error('useTraining needs a TrainingProvider');
+  if (!service) throw new Error('useTrainingService needs a TrainingProvider');
   return service;
 }
 

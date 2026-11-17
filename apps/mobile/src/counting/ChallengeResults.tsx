@@ -52,9 +52,11 @@ export function ChallengeResults({ record, onRetry, onReview }: { record: Challe
             <Text maxFontSizeMultiplier={textScale.body} style={styles.boxTitle}>
               {completed.title}
             </Text>
-            <Text maxFontSizeMultiplier={textScale.body} style={styles.boxDetail}>
-              {completed.detail}
-            </Text>
+            {completed.detail && (
+              <Text maxFontSizeMultiplier={textScale.body} style={styles.boxDetail}>
+                {completed.detail}
+              </Text>
+            )}
           </View>
         </View>
         <Text maxFontSizeMultiplier={textScale.body} style={styles.label}>

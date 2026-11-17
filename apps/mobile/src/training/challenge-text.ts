@@ -84,13 +84,13 @@ export const enteredText = (entry: ChallengeEntry) => (entry === 'skip' ? 'skipp
 
 // Spec 3 S3-08 liAfT
 export const RESULTS_TITLE = 'Results';
-export const COMPLETED: Record<ChallengeVariant, { readonly title: string; readonly detail: string }> = {
+export const COMPLETED: Record<ChallengeVariant, { readonly title: string; readonly detail: string | null }> = {
   learn: {
     title: 'Completed · Learn',
     detail: 'Learn scores your first answer to each card, even when you corrected it afterwards. Learn attempts never count toward a readiness milestone.',
   },
-  // Spec 3 S3-08 CEb6T
-  check: { title: 'Completed · unassisted', detail: 'Check held every answer until the end. Review each card to see your answer beside the correct value.' },
+  // Spec 3 S3-08 CEb6T; TODO(#135)
+  check: { title: 'Completed · unassisted', detail: null },
 };
 export const SCORES_LABEL = 'SKILL SCORES · FIRST ANSWERS';
 export const REVIEW_CARDS = 'Review cards';
@@ -120,22 +120,24 @@ export const SKIPPED = 'Skipped';
 
 export type ReviewOutcome = 'match' | 'off' | 'skipped';
 
-export const reviewOutcome = (fact: CardValueReview): ReviewOutcome => (fact.entered === 'skip' ? 'skipped' : fact.entered === fact.reference ? 'match' : 'off');
-
-const offBy = (fact: CardValueReview) => (fact.entered === 'skip' ? 0 : Math.abs(fact.entered - fact.reference));
+const REVIEW_OUTCOME: Record<ReviewOutcome, { readonly status: (off: number) => string; readonly spoken: (off: number) => string }> = {
+  match: { status: () => 'Match', spoken: () => 'match' },
+  off: { status: (off) => `Off by ${off}`, spoken: (off) => `off by ${off}` },
+  skipped: { status: () => 'Skipped · incorrect', spoken: () => 'counts as incorrect' },
+};
 
 export function reviewText(fact: CardValueReview) {
-  const outcome = reviewOutcome(fact);
-  const title = `Card ${fact.position} · ${cardName(fact.card)}`;
-  const status = outcome === 'match' ? 'Match' : outcome === 'skipped' ? 'Skipped · incorrect' : `Off by ${offBy(fact)}`;
-  const entered = fact.entered === 'skip' ? SKIPPED : signed(fact.entered);
-  const spokenStatus = outcome === 'match' ? 'match' : outcome === 'skipped' ? 'counts as incorrect' : `off by ${offBy(fact)}`;
-  const spokenEntry = fact.entered === 'skip' ? 'skipped' : `you entered ${spokenValue(fact.entered)}`;
+  const { entered, reference } = fact;
+  const outcome: ReviewOutcome = entered === 'skip' ? 'skipped' : entered === reference ? 'match' : 'off';
+  const off = entered === 'skip' ? 0 : Math.abs(entered - reference);
+  const { status, spoken } = REVIEW_OUTCOME[outcome];
+  const spokenEntry = entered === 'skip' ? 'skipped' : `you entered ${spokenValue(entered)}`;
   return {
-    title,
-    status,
-    entered,
-    reference: signed(fact.reference),
-    label: `Card ${fact.position}, ${cardName(fact.card)}: ${spokenEntry}, correct ${spokenValue(fact.reference)}, ${spokenStatus}`,
+    outcome,
+    title: `Card ${fact.position} · ${cardName(fact.card)}`,
+    status: status(off),
+    entered: entered === 'skip' ? SKIPPED : signed(entered),
+    reference: signed(reference),
+    label: `Card ${fact.position}, ${cardName(fact.card)}: ${spokenEntry}, correct ${spokenValue(reference)}, ${spoken(off)}`,
   };
 }

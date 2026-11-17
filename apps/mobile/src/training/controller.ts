@@ -36,6 +36,8 @@ export type AttemptSnapshot =
   | { readonly status: 'active'; readonly view: ChallengeView; readonly facts: readonly ChallengeFact[]; readonly busy: boolean; readonly save: 'saved' | 'failed' }
   | { readonly status: 'ended'; readonly record: ChallengeAttemptRecord };
 
+type Committed = { readonly state: ChallengeState; readonly facts: readonly ChallengeFact[] };
+
 type Pending = { readonly kind: 'transition'; readonly command: LearnerCommand } | { readonly kind: 'record' };
 
 const UNANSWERED: AccessDenial = { status: 'uncertain', provenance: 'unanswered', disposition: 'stop' };
@@ -180,7 +182,7 @@ export class ChallengeController {
   }
 
   // Spec 1 Durability steps 2–4
-  private async commit(state: ChallengeState, command: ChallengeCommand, charge: AttemptCharge | null): Promise<{ state: ChallengeState; facts: readonly ChallengeFact[] } | null> {
+  private async commit(state: ChallengeState, command: ChallengeCommand, charge: AttemptCharge | null): Promise<Committed | null> {
     const commandId = `${state.attempt.id}/${state.sequence}`;
     const result = advanceChallenge(state, { sequence: state.sequence, commandId, command });
     if (result.status !== 'committed') return { state, facts: [] };

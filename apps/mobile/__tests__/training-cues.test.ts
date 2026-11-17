@@ -9,11 +9,9 @@ import { alwaysAllowed } from '@/practice/adapters';
 import { FakeClock, entropyFromWords, PI_WORDS } from '@/practice/testing/substitutes';
 import { MemoryTrainingStore } from '@/training/memory-store';
 import { TrainingService, type TrainingSnapshot } from '@/training/service';
+import { HI_LO_BY_RANK } from '@/training/testing/hi-lo';
 
-// Spec 1 Game rules, Counting (Hi-Lo)
-const HI_LO: Record<number, -1 | 0 | 1> = { 1: -1, 2: 1, 3: 1, 4: 1, 5: 1, 6: 1, 7: 0, 8: 0, 9: 0, 10: -1, 11: -1, 12: -1, 13: -1 };
-
-const reference = (view: ChallengeView) => HI_LO[view.item!.card.rank]!;
+const reference = (view: ChallengeView) => HI_LO_BY_RANK[view.item!.card.rank]!;
 const wrongFor = (view: ChallengeView) => (reference(view) === 1 ? -1 : 1);
 
 async function setup(variant: ChallengeVariant, store = new MemoryTrainingStore()) {
