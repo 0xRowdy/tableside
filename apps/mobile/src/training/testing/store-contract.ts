@@ -109,10 +109,10 @@ export function describeTrainingStoreContract(name: string, open: () => Promise<
       expect(await reopened.loadAttempt('missing')).toBeNull();
     });
 
-    // Spec 3 Attempt lifecycle › Performance timer; #135
+    // Spec 3 Attempt lifecycle › Performance timer, Automatic pacing; #135, #136
     it('keeps the attempt lifecycle it was created with, then the one of each transition or save, across a reopen', async () => {
       const subject = await open();
-      const timed = { timed: true, performanceMs: 0, interrupted: false };
+      const timed = { timed: true, performanceMs: 0, interrupted: false, pacing: '2s' } as const;
       await subject.store.createAttempt(newAttempt('a-1', { lifecycle: timed }));
       expect((await subject.store.loadAttempt('a-1'))?.lifecycle).toEqual(timed);
       await subject.store.commitAttemptTransition(attemptTransition('a-1', 0, { charge: chargeFor('a-1'), lifecycle: { ...timed, performanceMs: 4_250 } }));

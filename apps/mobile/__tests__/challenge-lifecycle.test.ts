@@ -9,6 +9,7 @@ import { MemoryTrainingStore } from '@/training/memory-store';
 import { TrainingService, type ChallengeSetup, type TrainingSnapshot } from '@/training/service';
 import { cardOf, HI_LO_BY_RANK } from '@/training/testing/hi-lo';
 import { attemptTransition, chargeFor, newAttempt } from '@/training/testing/store-contract';
+import { NO_SCREEN_READER } from '@/training/speech';
 
 const LEARN_CARD_VALUES = { category: 'card-values', variant: 'learn' } as const;
 const CHECK_CARD_VALUES = { category: 'card-values', variant: 'check' } as const;
@@ -28,7 +29,7 @@ function setup(options: { access?: Partial<AccessSupervisor>; store?: MemoryTrai
   let draws = 0;
   const entropy = { randomBytes: (length: 16) => entropyFromWords([PI_WORDS[0] + draws++, PI_WORDS[1], PI_WORDS[2], PI_WORDS[3]]).randomBytes(length) };
   const clock = options.clock ?? new FakeClock(1_790_000_000_000, true);
-  const service = new TrainingService({ store, access, allowance: plentyAllowance(() => clock.now()), clock, entropy, newId: () => `attempt-${++next}`, device: 'test-device', owner: 'local', quarantine: options.quarantine ?? EMPTY_QUARANTINE_LIST });
+  const service = new TrainingService({ store, access, allowance: plentyAllowance(() => clock.now()), clock, entropy, newId: () => `attempt-${++next}`, device: 'test-device', owner: 'local', quarantine: options.quarantine ?? EMPTY_QUARANTINE_LIST, speech: NO_SCREEN_READER });
   return { service, store, admissions, clock };
 }
 

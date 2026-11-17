@@ -358,8 +358,10 @@ export {
   type RunningCountReview,
 } from './challenge';
 export {
+  CHALLENGE_PACINGS,
   CHALLENGE_RECORD_VERSION,
   challengeAttemptRecord,
+  pacingApplies,
   unusableAttemptRecord,
   challengeGroupKey,
   type AssistanceClass,

@@ -104,6 +104,7 @@ export default function Counting() {
           saveFailed={snapshot.save === 'failed'}
           hold={hold}
           timer={snapshot.timer}
+          pacing={snapshot.pacing}
           performanceMs={service.performanceMs}
           onCommand={(command) => void service.submit(command)}
           // Spec 3 Learn, Check and assistance › Malformed input: cue 9

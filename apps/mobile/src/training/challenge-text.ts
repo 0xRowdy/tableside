@@ -1,6 +1,6 @@
-// Spec 3 S3-01 to S3-09; S5-17 j3UhJ; #158, #132, #150, #133, #134
+// Spec 3 S3-01 to S3-09; S5-17 j3UhJ; #158, #132, #150, #133, #134, #136
 
-import { runningCountDrift, type AssistanceClass, type ChallengeAttemptRecord, type ChallengeCategory, type ChallengeEntry, type ChallengeMetric, type ChallengeVariant, type ChallengeView, type ConversionReview, type CountRange, type HiLoExplanation, type HiLoValue, type LearnFeedback, type MetricResult, type ReviewFact, type RunningCountReview } from '@tableside/engine';
+import { runningCountDrift, type AssistanceClass, type ChallengeAttemptRecord, type ChallengeCategory, type ChallengeEntry, type ChallengeMetric, type ChallengePacing, type ChallengeVariant, type ChallengeView, type ConversionReview, type CountRange, type HiLoExplanation, type HiLoValue, type LearnFeedback, type MetricResult, type ReviewFact, type RunningCountReview } from '@tableside/engine';
 
 import { cardName, rankName, signed } from '@/play/blackjack-text';
 import { conversionText, decksText } from '@/training/blackjack-conversion-text';
@@ -118,8 +118,19 @@ export const START_PROBLEM: Record<StartProblem, string> = {
 
 export const variantLabel = (variant: ChallengeVariant) => (variant === 'learn' ? 'Learn' : 'Check');
 
-// TODO(#136)
-export const PACING_LABEL = 'self-paced';
+// Spec 3 S3-02 buD2R, S3-04 qmDou, S3-05 qGARl; Attempt lifecycle › Automatic pacing; #136
+export const PACE_LABEL = 'CARD PACE';
+export const PACE_OPTION: Record<ChallengePacing, { readonly label: string; readonly spoken: string }> = {
+  'self-paced': { label: 'Self-paced', spoken: 'Self-paced' },
+  '3s': { label: '3 s', spoken: '3 seconds' },
+  '2s': { label: '2 s', spoken: '2 seconds' },
+  '1s': { label: '1 s', spoken: '1 second' },
+};
+export const PACE_HELP = "Cards advance on their own and pause whenever a count is due. There's no answer deadline.";
+export const pacingLabel = (pacing: ChallengePacing) => (pacing === 'self-paced' ? 'self-paced' : `${PACE_OPTION[pacing].label} pace`);
+export const PACE_WAITING = 'Paused for your answer · no deadline';
+export const screenReaderName = (platform: string) => (platform === 'ios' ? 'VoiceOver' : 'TalkBack');
+const paceSeconds = (pacing: ChallengePacing) => PACE_OPTION[pacing].label.replace(' s', '');
 
 export const progressText = (position: number, length: number) => `Card ${position} of ${length}`;
 
@@ -380,8 +391,8 @@ export const TIME_THIS_DETAIL = 'Optional. Only perfect, unassisted, uninterrupt
 // Spec 3 S3-04 qdnQm, S3-05 r5pCx, qGARl
 export const PAUSE_LABEL = 'Pause';
 
-export const exerciseSubtitle = (variant: ChallengeVariant, timed: boolean, hold: AttemptHold | null) =>
-  [variantLabel(variant), PACING_LABEL, timed ? 'timed' : null, hold?.reached ? holdState(hold) : null].filter(Boolean).join(' · ');
+export const exerciseSubtitle = (variant: ChallengeVariant, pacing: ChallengePacing, timed: boolean, hold: AttemptHold | null) =>
+  [variantLabel(variant), pacingLabel(pacing), timed ? 'timed' : null, hold?.reached ? holdState(hold) : null].filter(Boolean).join(' · ');
 
 // Spec 3 S3-05 r5pCx ("Switching apps or tabs pauses an attempt too"); CONTEXT.md Suspension
 const SHOWN_AS_PAUSED: ReadonlySet<AttemptHold['cause']> = new Set(['learner', 'navigation', 'app-lifecycle']);
@@ -405,19 +416,26 @@ const SAVED_PLACE = "Your answers and place are saved. Switching apps or tabs pa
 export const RESUME_LABEL = 'Resume';
 export const END_ATTEMPT = 'End attempt';
 
-export function holdText(hold: AttemptHold, variant: ChallengeVariant): { readonly title: string; readonly lead: string; readonly end: string | null; readonly lessons: string | null } {
-  // Spec 3 S3-05 qGARl
+export interface HoldContext {
+  readonly variant: ChallengeVariant;
+  readonly position: number;
+  readonly pacing: ChallengePacing;
+  readonly reader: string;
+}
+
+export function holdText(hold: AttemptHold, { variant, position, pacing, reader }: HoldContext): { readonly title: string; readonly lead: string; readonly notes: readonly string[] } {
+  // Spec 3 S3-05 qGARl; #136
   if (hold.kind === 'auto-paused') {
+    const pace = pacing === 'self-paced' ? 'pace' : `${paceSeconds(pacing)}-second pace`;
     return {
       title: "Paused so you don't miss a card",
-      lead: "This counts as an interruption: accuracy still counts, but the attempt can't set a fastest time. Self-paced mode never pauses like this.",
-      end: null,
-      lessons: null,
+      lead: `${reader} was still reading card ${position} when card ${position + 1} was due, so the attempt paused. No card was skipped, and the ${pace} won't change.`,
+      notes: ["This counts as an interruption: accuracy still counts, but the attempt can't set a fastest time. Self-paced mode never pauses like this.", `Resume when you're ready. Card ${position + 1} appears first.`],
     };
   }
   const end = variant === 'check' ? "Ending keeps today's attempt used, earns no record and restarts progress toward the readiness milestone for these settings." : "Ending keeps today's attempt used and earns no record.";
-  const lessons = variant === 'check' ? 'The four counting lessons are available after this attempt. Other lessons are open now.' : null;
-  const shared = { end, lessons };
+  const lessons = variant === 'check' ? ['The four counting lessons are available after this attempt. Other lessons are open now.'] : [];
+  const shared = { notes: [end, ...lessons] };
   if (hold.cause === 'access' || hold.cause === 'sign-out') {
     return { ...shared, title: 'Attempt suspended', lead: `${hold.reason ?? CANT_CONTINUE} Your answers and place are saved, and nothing was shown or scored since.` };
   }

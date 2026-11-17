@@ -1,4 +1,4 @@
-// Spec 3 S3-02 buD2R, ZreSb, Amendment 4 §2–3; Lessons › Entry points; #158, #150, #145, #135
+// Spec 3 S3-02 buD2R, ZreSb, Amendment 4 §2–3; Lessons › Entry points; #158, #150, #145, #135, #136
 
 import { CHALLENGE_VARIANTS, type ChallengeVariant } from '@tableside/engine';
 import { BookOpen, Check, CircleAlert, Play } from 'lucide-react-native';
@@ -14,6 +14,9 @@ import {
   CATEGORY_TEXT,
   COUNTING_TITLE,
   NOT_READY_HINT,
+  PACE_HELP,
+  PACE_LABEL,
+  PACE_OPTION,
   START_PROBLEM,
   startLabel,
   startWaits,
@@ -77,6 +80,30 @@ export function ChallengeSetupScreen({
           {VARIANT_HELP}
         </Text>
       </View>
+      {entry.pacings.length > 1 && (
+        <View style={styles.section}>
+          <Text maxFontSizeMultiplier={textScale.body} style={styles.label}>
+            {PACE_LABEL}
+          </Text>
+          <View accessibilityRole="radiogroup" accessibilityLabel="Card pace" style={styles.segmented}>
+            {entry.pacings.map((pacing) => (
+              <Segment
+                key={pacing}
+                label={PACE_OPTION[pacing].label}
+                spoken={PACE_OPTION[pacing].spoken}
+                selected={(setup.pacing ?? 'self-paced') === pacing}
+                disabled={false}
+                onPress={() => onChange({ ...setup, pacing })}
+              />
+            ))}
+          </View>
+          {(setup.pacing ?? 'self-paced') !== 'self-paced' && (
+            <Text maxFontSizeMultiplier={textScale.body} style={styles.help}>
+              {PACE_HELP}
+            </Text>
+          )}
+        </View>
+      )}
       <View style={styles.section}>
         <Text maxFontSizeMultiplier={textScale.body} style={styles.label}>
           {TIMING_LABEL}
@@ -110,12 +137,12 @@ export function ChallengeSetupScreen({
   );
 }
 
-function Segment({ label, selected, disabled, onPress }: { label: string; selected: boolean; disabled: boolean; onPress: () => void }) {
+function Segment({ label, spoken = label, selected, disabled, onPress }: { label: string; spoken?: string; selected: boolean; disabled: boolean; onPress: () => void }) {
   const { focused, focusProps } = useKeyboardFocus();
   return (
     <Pressable
       accessibilityRole="radio"
-      accessibilityLabel={label}
+      accessibilityLabel={spoken}
       accessibilityHint={disabled ? NOT_READY_HINT : undefined}
       accessibilityState={{ checked: selected, disabled }}
       disabled={disabled}
