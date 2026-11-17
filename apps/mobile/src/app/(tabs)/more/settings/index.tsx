@@ -1,13 +1,13 @@
 import { router } from 'expo-router';
-import { CircleUser, Volume2 } from 'lucide-react-native';
+import { CircleUser, GraduationCap, Volume2 } from 'lucide-react-native';
 
 import { methodsSummary } from '@/account/account-text';
 import { useAccountOverview } from '@/account/use-account-overview';
 import { useFeedbackSettings } from '@/feedback/FeedbackProvider';
 import { Group, ListRow, SettingsScreen } from '@/settings/SettingsParts';
 import { soundAndHapticsSummary } from '@/settings/summary';
+import { LEARNING_DETAIL, LEARNING_TITLE } from '@/training/lesson-text';
 
-// TODO(spec 3)
 // TODO(spec 5)
 export default function SettingsIndex() {
   const { current } = useFeedbackSettings();
@@ -27,6 +27,8 @@ export default function SettingsIndex() {
           detail={soundAndHapticsSummary(current)}
           onPress={() => router.navigate('/more/settings/sound-and-haptics')}
         />
+        {/* Spec 3 Amendment 1 D; #143 */}
+        <ListRow icon={GraduationCap} title={LEARNING_TITLE} detail={LEARNING_DETAIL} onPress={() => router.navigate('/more/settings/learning')} />
       </Group>
     </SettingsScreen>
   );

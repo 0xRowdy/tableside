@@ -1,8 +1,8 @@
 // docs/development.md Releases: recorded checkpoints and the quarantine list
 import type { RecordedStoreSchema } from './index';
 
-export const RECORDED_STORE_SCHEMA_2: RecordedStoreSchema = {
-  "storeSchema": 2,
+export const RECORDED_STORE_SCHEMA_3: RecordedStoreSchema = {
+  "storeSchema": 3,
   "engine": "0.0.0",
   "stateSchema": 8,
   "databases": [
@@ -41,7 +41,8 @@ export const RECORDED_STORE_SCHEMA_2: RecordedStoreSchema = {
         "CREATE TABLE challenge_transitions (\n        attempt_id TEXT NOT NULL REFERENCES challenge_attempts (attempt_id),\n        command_id TEXT NOT NULL,\n        sequence INTEGER NOT NULL,\n        body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n        PRIMARY KEY (attempt_id, command_id),\n        UNIQUE (attempt_id, sequence)\n      ) STRICT",
         "CREATE TABLE challenge_charges (\n        attempt_id TEXT PRIMARY KEY REFERENCES challenge_attempts (attempt_id),\n        body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL\n      ) STRICT",
         "CREATE TABLE challenge_attempt_records (\n        attempt_id TEXT PRIMARY KEY REFERENCES challenge_attempts (attempt_id),\n        device_sequence INTEGER NOT NULL UNIQUE,\n        body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL\n      ) STRICT",
-        "CREATE TABLE device_preferences (key TEXT PRIMARY KEY, value TEXT NOT NULL) STRICT"
+        "CREATE TABLE device_preferences (key TEXT PRIMARY KEY, value TEXT NOT NULL) STRICT",
+        "CREATE TABLE lesson_progress_events (\n      event_id TEXT PRIMARY KEY,\n      device_sequence INTEGER NOT NULL UNIQUE,\n      body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL\n    ) STRICT"
       ],
       "rows": {
         "meta": [
@@ -59,7 +60,7 @@ export const RECORDED_STORE_SCHEMA_2: RecordedStoreSchema = {
           },
           {
             "name": "schema_version",
-            "value": "2"
+            "value": "3"
           }
         ],
         "activities": [
@@ -139,7 +140,8 @@ export const RECORDED_STORE_SCHEMA_2: RecordedStoreSchema = {
         "challenge_transitions": [],
         "challenge_charges": [],
         "challenge_attempt_records": [],
-        "device_preferences": []
+        "device_preferences": [],
+        "lesson_progress_events": []
       }
     },
     {
@@ -177,7 +179,8 @@ export const RECORDED_STORE_SCHEMA_2: RecordedStoreSchema = {
         "CREATE TABLE challenge_transitions (\n        attempt_id TEXT NOT NULL REFERENCES challenge_attempts (attempt_id),\n        command_id TEXT NOT NULL,\n        sequence INTEGER NOT NULL,\n        body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n        PRIMARY KEY (attempt_id, command_id),\n        UNIQUE (attempt_id, sequence)\n      ) STRICT",
         "CREATE TABLE challenge_charges (\n        attempt_id TEXT PRIMARY KEY REFERENCES challenge_attempts (attempt_id),\n        body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL\n      ) STRICT",
         "CREATE TABLE challenge_attempt_records (\n        attempt_id TEXT PRIMARY KEY REFERENCES challenge_attempts (attempt_id),\n        device_sequence INTEGER NOT NULL UNIQUE,\n        body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL\n      ) STRICT",
-        "CREATE TABLE device_preferences (key TEXT PRIMARY KEY, value TEXT NOT NULL) STRICT"
+        "CREATE TABLE device_preferences (key TEXT PRIMARY KEY, value TEXT NOT NULL) STRICT",
+        "CREATE TABLE lesson_progress_events (\n      event_id TEXT PRIMARY KEY,\n      device_sequence INTEGER NOT NULL UNIQUE,\n      body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL\n    ) STRICT"
       ],
       "rows": {
         "meta": [
@@ -195,7 +198,7 @@ export const RECORDED_STORE_SCHEMA_2: RecordedStoreSchema = {
           },
           {
             "name": "schema_version",
-            "value": "2"
+            "value": "3"
           }
         ],
         "activities": [
@@ -275,7 +278,8 @@ export const RECORDED_STORE_SCHEMA_2: RecordedStoreSchema = {
         "challenge_transitions": [],
         "challenge_charges": [],
         "challenge_attempt_records": [],
-        "device_preferences": []
+        "device_preferences": [],
+        "lesson_progress_events": []
       }
     },
     {
@@ -313,7 +317,8 @@ export const RECORDED_STORE_SCHEMA_2: RecordedStoreSchema = {
         "CREATE TABLE challenge_transitions (\n        attempt_id TEXT NOT NULL REFERENCES challenge_attempts (attempt_id),\n        command_id TEXT NOT NULL,\n        sequence INTEGER NOT NULL,\n        body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n        PRIMARY KEY (attempt_id, command_id),\n        UNIQUE (attempt_id, sequence)\n      ) STRICT",
         "CREATE TABLE challenge_charges (\n        attempt_id TEXT PRIMARY KEY REFERENCES challenge_attempts (attempt_id),\n        body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL\n      ) STRICT",
         "CREATE TABLE challenge_attempt_records (\n        attempt_id TEXT PRIMARY KEY REFERENCES challenge_attempts (attempt_id),\n        device_sequence INTEGER NOT NULL UNIQUE,\n        body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL\n      ) STRICT",
-        "CREATE TABLE device_preferences (key TEXT PRIMARY KEY, value TEXT NOT NULL) STRICT"
+        "CREATE TABLE device_preferences (key TEXT PRIMARY KEY, value TEXT NOT NULL) STRICT",
+        "CREATE TABLE lesson_progress_events (\n      event_id TEXT PRIMARY KEY,\n      device_sequence INTEGER NOT NULL UNIQUE,\n      body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL\n    ) STRICT"
       ],
       "rows": {
         "meta": [
@@ -331,7 +336,7 @@ export const RECORDED_STORE_SCHEMA_2: RecordedStoreSchema = {
           },
           {
             "name": "schema_version",
-            "value": "2"
+            "value": "3"
           }
         ],
         "activities": [
@@ -429,7 +434,8 @@ export const RECORDED_STORE_SCHEMA_2: RecordedStoreSchema = {
         "challenge_transitions": [],
         "challenge_charges": [],
         "challenge_attempt_records": [],
-        "device_preferences": []
+        "device_preferences": [],
+        "lesson_progress_events": []
       }
     },
     {
@@ -467,7 +473,8 @@ export const RECORDED_STORE_SCHEMA_2: RecordedStoreSchema = {
         "CREATE TABLE challenge_transitions (\n        attempt_id TEXT NOT NULL REFERENCES challenge_attempts (attempt_id),\n        command_id TEXT NOT NULL,\n        sequence INTEGER NOT NULL,\n        body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n        PRIMARY KEY (attempt_id, command_id),\n        UNIQUE (attempt_id, sequence)\n      ) STRICT",
         "CREATE TABLE challenge_charges (\n        attempt_id TEXT PRIMARY KEY REFERENCES challenge_attempts (attempt_id),\n        body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL\n      ) STRICT",
         "CREATE TABLE challenge_attempt_records (\n        attempt_id TEXT PRIMARY KEY REFERENCES challenge_attempts (attempt_id),\n        device_sequence INTEGER NOT NULL UNIQUE,\n        body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL\n      ) STRICT",
-        "CREATE TABLE device_preferences (key TEXT PRIMARY KEY, value TEXT NOT NULL) STRICT"
+        "CREATE TABLE device_preferences (key TEXT PRIMARY KEY, value TEXT NOT NULL) STRICT",
+        "CREATE TABLE lesson_progress_events (\n      event_id TEXT PRIMARY KEY,\n      device_sequence INTEGER NOT NULL UNIQUE,\n      body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL\n    ) STRICT"
       ],
       "rows": {
         "meta": [
@@ -485,7 +492,7 @@ export const RECORDED_STORE_SCHEMA_2: RecordedStoreSchema = {
           },
           {
             "name": "schema_version",
-            "value": "2"
+            "value": "3"
           }
         ],
         "activities": [
@@ -592,7 +599,8 @@ export const RECORDED_STORE_SCHEMA_2: RecordedStoreSchema = {
         "challenge_transitions": [],
         "challenge_charges": [],
         "challenge_attempt_records": [],
-        "device_preferences": []
+        "device_preferences": [],
+        "lesson_progress_events": []
       }
     },
     {
@@ -630,7 +638,8 @@ export const RECORDED_STORE_SCHEMA_2: RecordedStoreSchema = {
         "CREATE TABLE challenge_transitions (\n        attempt_id TEXT NOT NULL REFERENCES challenge_attempts (attempt_id),\n        command_id TEXT NOT NULL,\n        sequence INTEGER NOT NULL,\n        body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n        PRIMARY KEY (attempt_id, command_id),\n        UNIQUE (attempt_id, sequence)\n      ) STRICT",
         "CREATE TABLE challenge_charges (\n        attempt_id TEXT PRIMARY KEY REFERENCES challenge_attempts (attempt_id),\n        body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL\n      ) STRICT",
         "CREATE TABLE challenge_attempt_records (\n        attempt_id TEXT PRIMARY KEY REFERENCES challenge_attempts (attempt_id),\n        device_sequence INTEGER NOT NULL UNIQUE,\n        body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL\n      ) STRICT",
-        "CREATE TABLE device_preferences (key TEXT PRIMARY KEY, value TEXT NOT NULL) STRICT"
+        "CREATE TABLE device_preferences (key TEXT PRIMARY KEY, value TEXT NOT NULL) STRICT",
+        "CREATE TABLE lesson_progress_events (\n      event_id TEXT PRIMARY KEY,\n      device_sequence INTEGER NOT NULL UNIQUE,\n      body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL\n    ) STRICT"
       ],
       "rows": {
         "meta": [
@@ -648,7 +657,7 @@ export const RECORDED_STORE_SCHEMA_2: RecordedStoreSchema = {
           },
           {
             "name": "schema_version",
-            "value": "2"
+            "value": "3"
           }
         ],
         "activities": [
@@ -728,7 +737,8 @@ export const RECORDED_STORE_SCHEMA_2: RecordedStoreSchema = {
         "challenge_transitions": [],
         "challenge_charges": [],
         "challenge_attempt_records": [],
-        "device_preferences": []
+        "device_preferences": [],
+        "lesson_progress_events": []
       }
     },
     {
@@ -766,7 +776,8 @@ export const RECORDED_STORE_SCHEMA_2: RecordedStoreSchema = {
         "CREATE TABLE challenge_transitions (\n        attempt_id TEXT NOT NULL REFERENCES challenge_attempts (attempt_id),\n        command_id TEXT NOT NULL,\n        sequence INTEGER NOT NULL,\n        body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n        PRIMARY KEY (attempt_id, command_id),\n        UNIQUE (attempt_id, sequence)\n      ) STRICT",
         "CREATE TABLE challenge_charges (\n        attempt_id TEXT PRIMARY KEY REFERENCES challenge_attempts (attempt_id),\n        body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL\n      ) STRICT",
         "CREATE TABLE challenge_attempt_records (\n        attempt_id TEXT PRIMARY KEY REFERENCES challenge_attempts (attempt_id),\n        device_sequence INTEGER NOT NULL UNIQUE,\n        body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL\n      ) STRICT",
-        "CREATE TABLE device_preferences (key TEXT PRIMARY KEY, value TEXT NOT NULL) STRICT"
+        "CREATE TABLE device_preferences (key TEXT PRIMARY KEY, value TEXT NOT NULL) STRICT",
+        "CREATE TABLE lesson_progress_events (\n      event_id TEXT PRIMARY KEY,\n      device_sequence INTEGER NOT NULL UNIQUE,\n      body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL\n    ) STRICT"
       ],
       "rows": {
         "meta": [
@@ -784,7 +795,7 @@ export const RECORDED_STORE_SCHEMA_2: RecordedStoreSchema = {
           },
           {
             "name": "schema_version",
-            "value": "2"
+            "value": "3"
           }
         ],
         "activities": [
@@ -882,7 +893,8 @@ export const RECORDED_STORE_SCHEMA_2: RecordedStoreSchema = {
         "challenge_transitions": [],
         "challenge_charges": [],
         "challenge_attempt_records": [],
-        "device_preferences": []
+        "device_preferences": [],
+        "lesson_progress_events": []
       }
     },
     {
@@ -920,7 +932,8 @@ export const RECORDED_STORE_SCHEMA_2: RecordedStoreSchema = {
         "CREATE TABLE challenge_transitions (\n        attempt_id TEXT NOT NULL REFERENCES challenge_attempts (attempt_id),\n        command_id TEXT NOT NULL,\n        sequence INTEGER NOT NULL,\n        body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n        PRIMARY KEY (attempt_id, command_id),\n        UNIQUE (attempt_id, sequence)\n      ) STRICT",
         "CREATE TABLE challenge_charges (\n        attempt_id TEXT PRIMARY KEY REFERENCES challenge_attempts (attempt_id),\n        body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL\n      ) STRICT",
         "CREATE TABLE challenge_attempt_records (\n        attempt_id TEXT PRIMARY KEY REFERENCES challenge_attempts (attempt_id),\n        device_sequence INTEGER NOT NULL UNIQUE,\n        body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL\n      ) STRICT",
-        "CREATE TABLE device_preferences (key TEXT PRIMARY KEY, value TEXT NOT NULL) STRICT"
+        "CREATE TABLE device_preferences (key TEXT PRIMARY KEY, value TEXT NOT NULL) STRICT",
+        "CREATE TABLE lesson_progress_events (\n      event_id TEXT PRIMARY KEY,\n      device_sequence INTEGER NOT NULL UNIQUE,\n      body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL\n    ) STRICT"
       ],
       "rows": {
         "meta": [
@@ -938,7 +951,7 @@ export const RECORDED_STORE_SCHEMA_2: RecordedStoreSchema = {
           },
           {
             "name": "schema_version",
-            "value": "2"
+            "value": "3"
           }
         ],
         "activities": [
@@ -1036,7 +1049,8 @@ export const RECORDED_STORE_SCHEMA_2: RecordedStoreSchema = {
         "challenge_transitions": [],
         "challenge_charges": [],
         "challenge_attempt_records": [],
-        "device_preferences": []
+        "device_preferences": [],
+        "lesson_progress_events": []
       }
     },
     {
@@ -1074,7 +1088,8 @@ export const RECORDED_STORE_SCHEMA_2: RecordedStoreSchema = {
         "CREATE TABLE challenge_transitions (\n        attempt_id TEXT NOT NULL REFERENCES challenge_attempts (attempt_id),\n        command_id TEXT NOT NULL,\n        sequence INTEGER NOT NULL,\n        body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n        PRIMARY KEY (attempt_id, command_id),\n        UNIQUE (attempt_id, sequence)\n      ) STRICT",
         "CREATE TABLE challenge_charges (\n        attempt_id TEXT PRIMARY KEY REFERENCES challenge_attempts (attempt_id),\n        body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL\n      ) STRICT",
         "CREATE TABLE challenge_attempt_records (\n        attempt_id TEXT PRIMARY KEY REFERENCES challenge_attempts (attempt_id),\n        device_sequence INTEGER NOT NULL UNIQUE,\n        body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL\n      ) STRICT",
-        "CREATE TABLE device_preferences (key TEXT PRIMARY KEY, value TEXT NOT NULL) STRICT"
+        "CREATE TABLE device_preferences (key TEXT PRIMARY KEY, value TEXT NOT NULL) STRICT",
+        "CREATE TABLE lesson_progress_events (\n      event_id TEXT PRIMARY KEY,\n      device_sequence INTEGER NOT NULL UNIQUE,\n      body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL\n    ) STRICT"
       ],
       "rows": {
         "meta": [
@@ -1092,7 +1107,7 @@ export const RECORDED_STORE_SCHEMA_2: RecordedStoreSchema = {
           },
           {
             "name": "schema_version",
-            "value": "2"
+            "value": "3"
           }
         ],
         "activities": [
@@ -1190,7 +1205,8 @@ export const RECORDED_STORE_SCHEMA_2: RecordedStoreSchema = {
         "challenge_transitions": [],
         "challenge_charges": [],
         "challenge_attempt_records": [],
-        "device_preferences": []
+        "device_preferences": [],
+        "lesson_progress_events": []
       }
     },
     {
@@ -1228,7 +1244,8 @@ export const RECORDED_STORE_SCHEMA_2: RecordedStoreSchema = {
         "CREATE TABLE challenge_transitions (\n        attempt_id TEXT NOT NULL REFERENCES challenge_attempts (attempt_id),\n        command_id TEXT NOT NULL,\n        sequence INTEGER NOT NULL,\n        body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n        PRIMARY KEY (attempt_id, command_id),\n        UNIQUE (attempt_id, sequence)\n      ) STRICT",
         "CREATE TABLE challenge_charges (\n        attempt_id TEXT PRIMARY KEY REFERENCES challenge_attempts (attempt_id),\n        body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL\n      ) STRICT",
         "CREATE TABLE challenge_attempt_records (\n        attempt_id TEXT PRIMARY KEY REFERENCES challenge_attempts (attempt_id),\n        device_sequence INTEGER NOT NULL UNIQUE,\n        body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL\n      ) STRICT",
-        "CREATE TABLE device_preferences (key TEXT PRIMARY KEY, value TEXT NOT NULL) STRICT"
+        "CREATE TABLE device_preferences (key TEXT PRIMARY KEY, value TEXT NOT NULL) STRICT",
+        "CREATE TABLE lesson_progress_events (\n      event_id TEXT PRIMARY KEY,\n      device_sequence INTEGER NOT NULL UNIQUE,\n      body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL\n    ) STRICT"
       ],
       "rows": {
         "meta": [
@@ -1246,7 +1263,7 @@ export const RECORDED_STORE_SCHEMA_2: RecordedStoreSchema = {
           },
           {
             "name": "schema_version",
-            "value": "2"
+            "value": "3"
           }
         ],
         "activities": [
@@ -1326,7 +1343,8 @@ export const RECORDED_STORE_SCHEMA_2: RecordedStoreSchema = {
         "challenge_transitions": [],
         "challenge_charges": [],
         "challenge_attempt_records": [],
-        "device_preferences": []
+        "device_preferences": [],
+        "lesson_progress_events": []
       }
     },
     {
@@ -1364,7 +1382,8 @@ export const RECORDED_STORE_SCHEMA_2: RecordedStoreSchema = {
         "CREATE TABLE challenge_transitions (\n        attempt_id TEXT NOT NULL REFERENCES challenge_attempts (attempt_id),\n        command_id TEXT NOT NULL,\n        sequence INTEGER NOT NULL,\n        body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n        PRIMARY KEY (attempt_id, command_id),\n        UNIQUE (attempt_id, sequence)\n      ) STRICT",
         "CREATE TABLE challenge_charges (\n        attempt_id TEXT PRIMARY KEY REFERENCES challenge_attempts (attempt_id),\n        body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL\n      ) STRICT",
         "CREATE TABLE challenge_attempt_records (\n        attempt_id TEXT PRIMARY KEY REFERENCES challenge_attempts (attempt_id),\n        device_sequence INTEGER NOT NULL UNIQUE,\n        body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL\n      ) STRICT",
-        "CREATE TABLE device_preferences (key TEXT PRIMARY KEY, value TEXT NOT NULL) STRICT"
+        "CREATE TABLE device_preferences (key TEXT PRIMARY KEY, value TEXT NOT NULL) STRICT",
+        "CREATE TABLE lesson_progress_events (\n      event_id TEXT PRIMARY KEY,\n      device_sequence INTEGER NOT NULL UNIQUE,\n      body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL\n    ) STRICT"
       ],
       "rows": {
         "meta": [
@@ -1382,7 +1401,7 @@ export const RECORDED_STORE_SCHEMA_2: RecordedStoreSchema = {
           },
           {
             "name": "schema_version",
-            "value": "2"
+            "value": "3"
           }
         ],
         "activities": [
@@ -1462,7 +1481,8 @@ export const RECORDED_STORE_SCHEMA_2: RecordedStoreSchema = {
         "challenge_transitions": [],
         "challenge_charges": [],
         "challenge_attempt_records": [],
-        "device_preferences": []
+        "device_preferences": [],
+        "lesson_progress_events": []
       }
     },
     {
@@ -1495,7 +1515,8 @@ export const RECORDED_STORE_SCHEMA_2: RecordedStoreSchema = {
         "CREATE TABLE challenge_transitions (\n        attempt_id TEXT NOT NULL REFERENCES challenge_attempts (attempt_id),\n        command_id TEXT NOT NULL,\n        sequence INTEGER NOT NULL,\n        body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n        PRIMARY KEY (attempt_id, command_id),\n        UNIQUE (attempt_id, sequence)\n      ) STRICT",
         "CREATE TABLE challenge_charges (\n        attempt_id TEXT PRIMARY KEY REFERENCES challenge_attempts (attempt_id),\n        body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL\n      ) STRICT",
         "CREATE TABLE challenge_attempt_records (\n        attempt_id TEXT PRIMARY KEY REFERENCES challenge_attempts (attempt_id),\n        device_sequence INTEGER NOT NULL UNIQUE,\n        body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL\n      ) STRICT",
-        "CREATE TABLE device_preferences (key TEXT PRIMARY KEY, value TEXT NOT NULL) STRICT"
+        "CREATE TABLE device_preferences (key TEXT PRIMARY KEY, value TEXT NOT NULL) STRICT",
+        "CREATE TABLE lesson_progress_events (\n      event_id TEXT PRIMARY KEY,\n      device_sequence INTEGER NOT NULL UNIQUE,\n      body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL\n    ) STRICT"
       ],
       "rows": {
         "meta": [
@@ -1513,7 +1534,7 @@ export const RECORDED_STORE_SCHEMA_2: RecordedStoreSchema = {
           },
           {
             "name": "schema_version",
-            "value": "2"
+            "value": "3"
           }
         ],
         "activities": [
@@ -1834,7 +1855,8 @@ export const RECORDED_STORE_SCHEMA_2: RecordedStoreSchema = {
         "challenge_transitions": [],
         "challenge_charges": [],
         "challenge_attempt_records": [],
-        "device_preferences": []
+        "device_preferences": [],
+        "lesson_progress_events": []
       }
     },
     {
@@ -1867,7 +1889,8 @@ export const RECORDED_STORE_SCHEMA_2: RecordedStoreSchema = {
         "CREATE TABLE challenge_transitions (\n        attempt_id TEXT NOT NULL REFERENCES challenge_attempts (attempt_id),\n        command_id TEXT NOT NULL,\n        sequence INTEGER NOT NULL,\n        body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n        PRIMARY KEY (attempt_id, command_id),\n        UNIQUE (attempt_id, sequence)\n      ) STRICT",
         "CREATE TABLE challenge_charges (\n        attempt_id TEXT PRIMARY KEY REFERENCES challenge_attempts (attempt_id),\n        body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL\n      ) STRICT",
         "CREATE TABLE challenge_attempt_records (\n        attempt_id TEXT PRIMARY KEY REFERENCES challenge_attempts (attempt_id),\n        device_sequence INTEGER NOT NULL UNIQUE,\n        body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL\n      ) STRICT",
-        "CREATE TABLE device_preferences (key TEXT PRIMARY KEY, value TEXT NOT NULL) STRICT"
+        "CREATE TABLE device_preferences (key TEXT PRIMARY KEY, value TEXT NOT NULL) STRICT",
+        "CREATE TABLE lesson_progress_events (\n      event_id TEXT PRIMARY KEY,\n      device_sequence INTEGER NOT NULL UNIQUE,\n      body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL\n    ) STRICT"
       ],
       "rows": {
         "meta": [
@@ -1885,7 +1908,7 @@ export const RECORDED_STORE_SCHEMA_2: RecordedStoreSchema = {
           },
           {
             "name": "schema_version",
-            "value": "2"
+            "value": "3"
           }
         ],
         "activities": [],
@@ -1904,6 +1927,10 @@ export const RECORDED_STORE_SCHEMA_2: RecordedStoreSchema = {
           {
             "record_type": "challenge-attempt",
             "last": 1
+          },
+          {
+            "record_type": "lesson-progress",
+            "last": 2
           }
         ],
         "purged_records": [],
@@ -2386,6 +2413,24 @@ export const RECORDED_STORE_SCHEMA_2: RecordedStoreSchema = {
           {
             "key": "challenge.last-setup",
             "value": "{\"category\":\"card-values\",\"variant\":\"learn\"}"
+          }
+        ],
+        "lesson_progress_events": [
+          {
+            "event_id": "lesson-event-1",
+            "device_sequence": 1,
+            "body": "{\"deviceSequence\":1,\"event\":{\"kind\":\"completed\"},\"eventId\":\"lesson-event-1\",\"installation\":\"recorded-installation\",\"lesson\":{\"id\":\"app-orientation\",\"materialVersion\":1,\"version\":1},\"owner\":\"recorded-account\",\"recordVersion\":1,\"recordedAt\":1790000000000}",
+            "body_format": 1,
+            "body_length": 253,
+            "body_sha256": "bac00a878f8d6ebf9dca9af8d2b4387605bdb8ff7a0d07b690581c7adb7148d6"
+          },
+          {
+            "event_id": "lesson-event-2",
+            "device_sequence": 2,
+            "body": "{\"deviceSequence\":2,\"event\":{\"kind\":\"bookmark\",\"step\":2},\"eventId\":\"lesson-event-2\",\"installation\":\"recorded-installation\",\"lesson\":{\"id\":\"app-orientation\",\"materialVersion\":1,\"version\":1},\"owner\":\"recorded-account\",\"recordVersion\":1,\"recordedAt\":1790000000000}",
+            "body_format": 1,
+            "body_length": 261,
+            "body_sha256": "68ef3fb9eaefae2ace36362efe80fff5e6e924447f909687d1c4d56dc0bbb26f"
           }
         ]
       },

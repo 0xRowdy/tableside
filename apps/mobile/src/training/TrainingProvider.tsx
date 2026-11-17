@@ -6,7 +6,7 @@ import { withAccountGate } from '@/account/gate-access';
 import { useLoaded } from '@/hooks/use-loaded';
 
 import { createTrainingAdapters } from './app-adapters';
-import { TrainingService } from './service';
+import { TrainingService, type LessonEntry } from './service';
 
 const TrainingContext = createContext<TrainingService | null>(null);
 
@@ -31,4 +31,14 @@ export function useTraining() {
   const service = useTrainingService();
   const snapshot = useSyncExternalStore(service.subscribe, service.snapshot);
   return { service, snapshot };
+}
+
+// #143
+const listLessonsOf = (service: TrainingService, _revision: number) => service.listLessons();
+
+export function useLessons(): { readonly service: TrainingService; readonly lessons: readonly LessonEntry[] | undefined } {
+  const service = useContext(TrainingContext);
+  if (!service) throw new Error('useLessons needs a TrainingProvider');
+  const revision = useSyncExternalStore(service.subscribe, service.lessonRevision);
+  return { service, lessons: useLoaded(listLessonsOf, service, revision) };
 }

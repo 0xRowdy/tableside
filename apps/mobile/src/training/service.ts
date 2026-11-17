@@ -1,11 +1,12 @@
 // Spec 3 Modules › Training service; Training service interface; #158, #132
 
-import { CHALLENGE_CONTENT } from '@tableside/definitions';
+import { CHALLENGE_CONTENT, LESSONS, type Lesson, type LessonContent, type LessonSection, type LessonStep } from '@tableside/definitions';
 import { CHALLENGE_VARIANTS, type ChallengeAttemptRecord, type ChallengeCategory, type ChallengeVariant } from '@tableside/engine';
 
 import type { TrainingAdapters } from './adapters';
 import type { ChallengeAllowance } from './allowance';
 import { ChallengeController, type AttemptSnapshot, type LearnerCommand, type StartProblem } from './controller';
+import { lessonProgress, type LessonChange, type LessonProgress, type LessonProgressChange, type LessonStatus } from './lesson-progress';
 
 // Spec 3 Recommendations
 export const SUGGESTED_ORDER = ['card-values', 'running-count', 'conversion', 'table'] as const;
@@ -50,6 +51,35 @@ export function setupFor(entry: CatalogEntry, preferred: readonly (ChallengeSetu
   return fits ?? { category: entry.category, variant: entry.ready[0] ?? 'learn' };
 }
 
+// Spec 3 Training service interface › List catalog, Lesson progress; #143
+export interface LessonEntry {
+  readonly id: string;
+  readonly title: string;
+  readonly summary: string | null;
+  readonly section: LessonSection;
+  readonly steps: number | null;
+  // TODO(#149)
+  readonly access: 'available';
+  readonly status: LessonStatus;
+}
+
+export interface LessonView {
+  readonly id: string;
+  readonly title: string;
+  readonly section: LessonSection;
+  readonly step: number;
+  readonly steps: readonly LessonStep[];
+  readonly prompt: { readonly kind: 'resume-or-restart'; readonly step: number } | null;
+  // Spec 3 Lessons › Progress, Amendment 1 C10
+  readonly notice: { readonly kind: LessonChange; readonly change: string } | null;
+}
+
+export interface TrainingOptions {
+  readonly lessons?: readonly Lesson[];
+}
+
+type AuthoredLesson = Lesson & { readonly content: LessonContent };
+
 const isCatalogCategory = (value: unknown): value is CatalogCategory => SUGGESTED_ORDER.includes(value as CatalogCategory);
 
 export class TrainingService {
@@ -58,12 +88,21 @@ export class TrainingService {
   private current: TrainingSnapshot = { status: 'loading' };
   private readonly listeners = new Set<() => void>();
 
-  constructor(private readonly adapters: TrainingAdapters) {
+  private readonly lessons: readonly Lesson[];
+  private lessonChanges = 0;
+
+  constructor(
+    private readonly adapters: TrainingAdapters,
+    options: TrainingOptions = {},
+  ) {
+    this.lessons = options.lessons ?? LESSONS;
     this.challenges = new ChallengeController(adapters);
     this.challenges.subscribe(() => this.refresh());
   }
 
   snapshot = (): TrainingSnapshot => this.current;
+
+  lessonRevision = (): number => this.lessonChanges;
 
   subscribe = (listener: () => void): (() => void) => {
     this.listeners.add(listener);
@@ -139,6 +178,74 @@ export class TrainingService {
     }
   }
 
+  // Spec 3 Lessons › Access
+  async listLessons(): Promise<readonly LessonEntry[]> {
+    const events = await this.adapters.store.readLessonEvents();
+    return this.lessons.map(({ id, title, summary, section, content }) => ({
+      id,
+      title,
+      summary,
+      section,
+      steps: content ? content.steps.length : null,
+      access: 'available' as const,
+      status: content ? lessonProgress(events, progressKey(id, content)).status : { kind: 'not-started' as const },
+    }));
+  }
+
+  async openLesson(id: string): Promise<LessonView> {
+    const lesson = this.authored(id);
+    const progress = await this.progressOf(lesson);
+    const resume = progress.bookmark !== null && progress.bookmark > 1 ? progress.bookmark : null;
+    return viewOf(lesson, progress, resume ?? 1, resume === null ? null : { kind: 'resume-or-restart', step: resume });
+  }
+
+  stepForward(id: string, from: number): Promise<LessonView> {
+    const lesson = this.authored(id);
+    return this.record(lesson, { kind: 'bookmark', step: Math.min(from + 1, lesson.content.steps.length) });
+  }
+
+  stepBack(id: string, from: number): Promise<LessonView> {
+    return this.record(this.authored(id), { kind: 'bookmark', step: Math.max(from - 1, 1) });
+  }
+
+  async restartLesson(id: string): Promise<LessonView> {
+    const lesson = this.authored(id);
+    const progress = await this.progressOf(lesson);
+    if ((progress.bookmark ?? 1) === 1 && progress.changed === null) return viewOf(lesson, progress, 1, null);
+    return this.record(lesson, { kind: 'restarted' });
+  }
+
+  async completeLesson(id: string): Promise<void> {
+    await this.record(this.authored(id), { kind: 'completed' });
+  }
+
+  private authored(id: string): AuthoredLesson {
+    const lesson = this.lessons.find((candidate) => candidate.id === id);
+    if (!lesson?.content) throw new Error(`lesson ${id} is not available in this version`);
+    return lesson as AuthoredLesson;
+  }
+
+  private async progressOf(lesson: AuthoredLesson): Promise<LessonProgress> {
+    return lessonProgress(await this.adapters.store.readLessonEvents(), progressKey(lesson.id, lesson.content));
+  }
+
+  private async record(lesson: AuthoredLesson, event: LessonProgressChange): Promise<LessonView> {
+    const { version, materialVersion } = lesson.content;
+    await this.adapters.store.recordLessonEvent({
+      recordVersion: 1,
+      eventId: this.adapters.newId(),
+      owner: this.adapters.owner,
+      installation: this.adapters.device,
+      lesson: { id: lesson.id, version, materialVersion },
+      event,
+      recordedAt: this.adapters.clock.now(),
+    });
+    this.lessonChanges++;
+    this.notify();
+    const progress = await this.progressOf(lesson);
+    return viewOf(lesson, progress, progress.bookmark ?? 1, null);
+  }
+
   private refresh(): void {
     const attempt = this.challenges.snapshot();
     if (attempt.status === 'none') {
@@ -147,6 +254,25 @@ export class TrainingService {
     } else {
       this.current = attempt;
     }
+    this.notify();
+  }
+
+  private notify(): void {
     for (const listener of this.listeners) listener();
   }
+}
+
+const progressKey = (id: string, content: LessonContent) => ({ id, materialVersion: content.materialVersion, steps: content.steps.length });
+
+function viewOf(lesson: AuthoredLesson, progress: LessonProgress, step: number, prompt: LessonView['prompt']): LessonView {
+  const { change } = lesson.content;
+  return {
+    id: lesson.id,
+    title: lesson.title,
+    section: lesson.section,
+    step,
+    steps: lesson.content.steps,
+    prompt,
+    notice: progress.changed && change ? { kind: progress.changed, change } : null,
+  };
 }

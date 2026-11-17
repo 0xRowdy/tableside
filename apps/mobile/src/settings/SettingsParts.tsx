@@ -33,7 +33,7 @@ export function SettingsScreen({ title, back, children }: { title: string; back?
   );
 }
 
-function BackButton({ label, onPress }: { label: string; onPress: () => void }) {
+export function BackButton({ label, onPress }: { label: string; onPress: () => void }) {
   const { focused, focusProps } = useKeyboardFocus();
   return (
     <Pressable

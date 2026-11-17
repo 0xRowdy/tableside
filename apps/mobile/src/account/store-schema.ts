@@ -46,7 +46,19 @@ const CHALLENGE_ATTEMPTS: StoreMigration = {
   },
 };
 
-export const STORE_MIGRATIONS: readonly StoreMigration[] = [CHALLENGE_ATTEMPTS];
+// Spec 3 Synchronized record types › Lesson-progress event; #143
+const LESSON_PROGRESS: StoreMigration = {
+  to: 3,
+  async migrate(tx) {
+    await tx.run(`CREATE TABLE lesson_progress_events (
+      event_id TEXT PRIMARY KEY,
+      device_sequence INTEGER NOT NULL UNIQUE,
+      body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL
+    ) STRICT`);
+  },
+};
+
+export const STORE_MIGRATIONS: readonly StoreMigration[] = [CHALLENGE_ATTEMPTS, LESSON_PROGRESS];
 
 export const schemaVersionOf = (migrations: readonly StoreMigration[]): number => BASE_SCHEMA_VERSION + migrations.length;
 
