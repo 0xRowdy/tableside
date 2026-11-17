@@ -11,8 +11,6 @@ import { CHANGE_SIGN, COUNT_SKIP, COUNT_SKIP_HINT, countProblemText, DELETE_DIGI
 
 const DIGITS = ['1', '2', '3', '4', '5', '6', '7', '8', '9'];
 
-// Signed whole-number entry: an on-screen keypad for touch and switch access, and a text field for hardware keyboards.
-// Malformed entries never leave this component: they show a neutral message and call onRejected (cue 9).
 export function CountEntry({
   label,
   range,

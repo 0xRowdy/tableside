@@ -12,8 +12,6 @@ import { signed } from '@/play/blackjack-text';
 import { fonts, palette, radius, space, textScale } from '@/theme/tokens';
 import { COUNT_LABEL, countAidDetail, REVEAL_WARNING, SHOW_COUNT, spokenValue } from '@/training/challenge-text';
 
-// Hidden by default. The first reveal is the engine's reveal-count command (in Check after a warning); after that,
-// showing and hiding are local and send nothing. No cue plays on toggling.
 export function CountAid({
   variant,
   aid,

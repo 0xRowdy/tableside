@@ -33,7 +33,6 @@ export interface RunningCountContent {
   readonly version: number;
   readonly length: number;
   readonly decks: number;
-  // Check asks after these cards; Learn asks after every card.
   readonly checkpoints: readonly number[];
   readonly reference: VersionedIdentity;
 }
@@ -61,7 +60,6 @@ export interface CardValueItem {
   readonly card: ChallengeCard;
 }
 
-// A Hi-Lo value for card values, a signed running count for running count.
 export type ChallengeEntry = number | 'skip';
 
 export interface ItemAnswers {
@@ -71,7 +69,7 @@ export interface ItemAnswers {
   readonly tries: number;
 }
 
-// 'card' shows a card with no prompt (running count Check between checkpoints).
+// Spec 3 Challenge content › Running count: Check shows cards between checkpoints ('card')
 export type ChallengePhase = 'ready' | 'card' | 'question' | 'explanation' | 'recorded' | 'ended';
 
 export type ChallengeEnding = 'completed' | 'abandoned';
@@ -95,7 +93,7 @@ export interface ChallengeState {
   readonly items: readonly CardValueItem[];
   readonly rejected: number;
   readonly answers: readonly ItemAnswers[];
-  // Spec 3 Learn, Check and assistance › Show/hide running count: the card shown when the count was first revealed.
+  // Spec 3 Learn, Check and assistance › Show/hide running count
   readonly revealedAt: number | null;
   readonly random: RandomStreamState;
   readonly receipts: readonly Receipt[];
@@ -153,7 +151,7 @@ export interface CardValueReview {
   readonly reference: HiLoValue;
 }
 
-// Spec 3 Scoring and review › Review facts: per checkpoint, the entry or skip, the reference, the signed error and the position.
+// Spec 3 Scoring and review › Review facts
 export interface RunningCountReview {
   readonly kind: 'running-count';
   readonly checkpoint: number;
@@ -192,9 +190,8 @@ interface ChallengeViewBase {
   readonly item: CardValueItem | null;
   readonly choices: readonly HiLoValue[];
   readonly countRange: { readonly min: number; readonly max: number } | null;
-  // Running count Check's checkpoint cards; null when every card is asked or there are no counts.
   readonly checkpoints: readonly number[] | null;
-  // The show/hide running count aid: null where it isn't offered; count only once revealed, of exposed cards only.
+  // Spec 3 Learn, Check and assistance › Show/hide running count
   readonly countAid: { readonly revealed: boolean; readonly count: number | null } | null;
   readonly assisted: boolean;
   readonly results: ChallengeResults | null;
@@ -446,8 +443,7 @@ export function challengeResults(state: ChallengeState): ChallengeResults | null
   return { ending: state.ending, metrics, review, assisted: assisted(state), assistanceStep: state.revealedAt };
 }
 
-// Spec 3 Scoring and review › Attribution: each wrong checkpoint is its own error; the review may note persistent drift.
-// Drift is a run of at least two answered checkpoints off by the same amount, up to the last answered one. Skips are passed over.
+// Spec 3 Scoring and review › Attribution; S3-09 h0MsKr
 export function runningCountDrift(review: readonly ReviewFact[]): { readonly from: number; readonly error: number } | null {
   const answered = review.filter((fact): fact is RunningCountReview & { error: number } => fact.kind === 'running-count' && fact.error !== null);
   const last = answered.at(-1);

@@ -1,4 +1,4 @@
-// Spec 3 Challenge content › Running count; Learn, Check and assistance; Scoring and review; Testing Decisions › Seam 1; #133
+// Spec 3 Challenge content, Learn, Check and assistance, Scoring and review, Seam 1; #133
 import type { TestCase } from '@tableside/harness';
 
 import {
@@ -18,33 +18,31 @@ import { ANSWER, begun, COUNT_CHECK, COUNT_LEARN, checkView, learnView, NEXT, RE
 import { throws } from './fixtures';
 import { expectCheckViewHides } from './information-hiding';
 
-// Seed 1: the first 52 cards of a six-deck shoe shuffled with spec 1's random protocol.
-const SEED_1_SHOE = [
+const SEED_1_SIX_DECK_SHOE_FIRST_52 = [
   '13d', '3h', '4c', '3d', '3c', '4c', '12c', '11d', '13c', '7s', '11d', '12h', '1s',
   '6s', '8h', '2h', '10h', '13c', '5c', '13h', '7s', '9h', '5h', '1h', '5h', '4s',
   '9h', '6c', '3s', '7c', '11d', '1c', '9h', '12s', '3c', '5h', '12c', '12d', '7d',
   '4c', '11c', '13d', '10s', '9s', '9s', '1s', '12s', '10c', '10c', '8s', '7d', '7d',
 ];
 
-// Hand-computed Hi-Lo running counts after cards 13, 26, 39 and 52 of SEED_1_SHOE.
+// Spec 3 Testing Decisions › Seam 1: hand-computed running-count checkpoints
 const SEED_1_CHECKPOINTS = [-2, 0, -1, -7];
-// Hand-computed running count after card 21 (13 cards at −2, then 6s +1, 8h 0, 2h +1, 10h −1, Kc −1, 5c +1, Kh −1, 7s 0).
-const SEED_1_AFTER_21 = -2;
+const HI_LO_OF_CARDS_14_TO_21 = { '6s': 1, '8h': 0, '2h': 1, '10h': -1, '13c': -1, '5c': 1, '13h': -1, '7s': 0 };
+const SEED_1_AFTER_21 = -2 + Object.values(HI_LO_OF_CARDS_14_TO_21).reduce((sum, value) => sum + value, 0);
 
 const cards = (state: ChallengeState) => state.items.map((item) => `${item.card.rank}${item.card.suit[0]}`);
 
 const nexts = (count: number): ChallengeCommand[] => Array.from({ length: count }, () => NEXT);
 
-// Check: twelve cards pass, then each checkpoint is answered and the next block of twelve passes.
-const checkRun = (entries: readonly ChallengeCommand[]) => [...nexts(12), ...entries.flatMap((entry, index) => [entry, ...(index < 3 ? [NEXT, ...nexts(12)] : [NEXT])])];
+const answeringEachCheckpoint = (entries: readonly ChallengeCommand[]) => [...nexts(12), ...entries.flatMap((entry, index) => [entry, ...(index < 3 ? [NEXT, ...nexts(12)] : [NEXT])])];
 
 export const runningCountCases: TestCase[] = [
   {
     name: 'running count: 52 cards exposed from index 0 of a shuffled six-deck shoe, starting at zero',
     run: (t) => {
       const state = begun(COUNT_CHECK, seed(1));
-      t.equal(cards(state), SEED_1_SHOE);
-      t.equal(cards(begun(COUNT_LEARN, seed(1))), SEED_1_SHOE);
+      t.equal(cards(state), SEED_1_SIX_DECK_SHOE_FIRST_52);
+      t.equal(cards(begun(COUNT_LEARN, seed(1))), SEED_1_SIX_DECK_SHOE_FIRST_52);
       for (let n = 0; n < 50; n++) {
         const copies = new Map<string, number>();
         for (const card of cards(begun(COUNT_CHECK, seed(n)))) copies.set(card, (copies.get(card) ?? 0) + 1);
@@ -81,8 +79,8 @@ export const runningCountCases: TestCase[] = [
   {
     name: 'running count Check: hand-computed checkpoints with drift carried across checkpoints, each wrong checkpoint its own error',
     run: (t) => {
-      // One early miss after checkpoint 1 (the 6 of spades at card 14 counted as 0) carries through to the end.
-      const ended = run(begun(COUNT_CHECK, seed(1)), checkRun([ANSWER(-2), ANSWER(-1), ANSWER(-2), ANSWER(-8)]));
+      const missedSixAtCard14 = [ANSWER(-2), ANSWER(-1), ANSWER(-2), ANSWER(-8)];
+      const ended = run(begun(COUNT_CHECK, seed(1)), answeringEachCheckpoint(missedSixAtCard14));
       const results = challengeResults(ended);
       t.equal([results?.ending, results?.metrics['running-count'], results?.metrics['card-values'], results?.assisted], ['completed', { correct: 1, total: 4 }, null, false]);
       t.equal(results?.review, [
@@ -92,7 +90,7 @@ export const runningCountCases: TestCase[] = [
         { kind: 'running-count', checkpoint: 4, position: 52, entered: -8, reference: SEED_1_CHECKPOINTS[3], error: -1 },
       ]);
       t.equal(runningCountDrift(results?.review ?? []), { from: 2, error: -1 });
-      const perfect = challengeResults(run(begun(COUNT_CHECK, seed(1)), checkRun(SEED_1_CHECKPOINTS.map(ANSWER))));
+      const perfect = challengeResults(run(begun(COUNT_CHECK, seed(1)), answeringEachCheckpoint(SEED_1_CHECKPOINTS.map(ANSWER))));
       t.equal([perfect?.metrics['running-count'], runningCountDrift(perfect?.review ?? [])], [{ correct: 4, total: 4 }, null]);
     },
   },
@@ -122,7 +120,7 @@ export const runningCountCases: TestCase[] = [
   {
     name: 'running count Check: Skip at a checkpoint is a submission scored incorrect, with no error magnitude',
     run: (t) => {
-      const results = challengeResults(run(begun(COUNT_CHECK, seed(1)), checkRun([ANSWER(-2), ANSWER(0), ANSWER(-1), SKIP])));
+      const results = challengeResults(run(begun(COUNT_CHECK, seed(1)), answeringEachCheckpoint([ANSWER(-2), ANSWER(0), ANSWER(-1), SKIP])));
       t.equal(results?.metrics['running-count'], { correct: 3, total: 4 });
       t.equal(results?.review[3], { kind: 'running-count', checkpoint: 4, position: 52, entered: 'skip', reference: -7, error: null });
       const recorded = checkView(run(begun(COUNT_CHECK, seed(1)), [...nexts(12), SKIP]));
@@ -211,7 +209,7 @@ export const runningCountCases: TestCase[] = [
       const visitAll = (entries: readonly ChallengeCommand[]) => {
         let state = createChallenge(COUNT_CHECK, seed(1));
         const trace: unknown[] = [];
-        for (const command of [{ kind: 'begin' } as const, ...checkRun(entries)]) {
+        for (const command of [{ kind: 'begin' } as const, ...answeringEachCheckpoint(entries)]) {
           const result = advanceChallenge(state, { sequence: state.sequence, commandId: `c-${state.sequence}`, command });
           if (result.status !== 'committed') throw new Error(result.status);
           state = result.state;

@@ -1,6 +1,6 @@
-// Spec 3 S3-01 PDCaD, RqPCB, S3-02 buD2R, S3-03, S3-04 qdnQm, S3-05 EDnGd, S3-06 C53yTW, S3-08, S3-09 h0MsKr; S5-17 j3UhJ; #158, #132, #150, #133
+// Spec 3 S3-01 to S3-09 (PDCaD, RqPCB, buD2R, qdnQm, EDnGd, C53yTW, h0MsKr); S5-17 j3UhJ; #158, #133
 
-import { runningCountDrift, type CardValueReview, type ChallengeCategory, type ChallengeEntry, type ChallengeMetric, type ChallengeVariant, type ChallengeView, type HiLoValue, type LearnFeedback, type MetricResult, type ReviewFact, type RunningCountReview } from '@tableside/engine';
+import { runningCountDrift, type ChallengeCategory, type ChallengeEntry, type ChallengeMetric, type ChallengeVariant, type ChallengeView, type HiLoValue, type LearnFeedback, type MetricResult, type ReviewFact, type RunningCountReview } from '@tableside/engine';
 
 import { cardName, rankName, signed } from '@/play/blackjack-text';
 import { GAME_WORDS } from '@/play/game-words';
@@ -206,7 +206,6 @@ export const countProblemText = (problem: CountProblem, range: { readonly min: n
     'out-of-range': `Enter a count from ${signed(range.min)} to ${signed(range.max)}. ${NOTHING_SUBMITTED}`,
   })[problem];
 
-// The keypad's sign key: − then + then none.
 export const toggleSign = (text: string) => (text.startsWith('−') ? `+${text.slice(1)}` : text.startsWith('+') ? text.slice(1) : `−${text}`);
 
 // Spec 3 Learn, Check and assistance › Show/hide running count; S3-04 qdnQm, S3-05 EDnGd
@@ -327,7 +326,7 @@ function checkpointText(fact: RunningCountReview, variant: ChallengeVariant, sha
   return { ...shared, title, error, label: `${spokenTitle}: ${said}${spokenError}, ${outcome}` };
 }
 
-// Spec 3 Scoring and review › Attribution: persistent drift, noted only in Check, where counts carry between checkpoints.
+// Spec 3 Scoring and review › Attribution
 export function driftText(review: readonly ReviewFact[], variant: ChallengeVariant): string | null {
   const drift = variant === 'check' ? runningCountDrift(review) : null;
   if (!drift) return null;
