@@ -73,3 +73,5 @@ export { benchmarkProfile, BENCHMARK_PROFILES } from './benchmark-profiles';
 export { CARD_VALUES_CONTENT, CHALLENGE_CONTENT } from './challenges';
 
 export { APP_ORIENTATION, LESSONS, lessonProblems, type Lesson, type LessonContent, type LessonSection, type LessonSource, type LessonStep } from './lessons';
+
+export { workedExampleProblems, type CardValueExample, type ScriptedChoice, type ScriptedResponse, type WorkedExample } from './worked-examples';

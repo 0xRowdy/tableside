@@ -72,3 +72,11 @@ export function noticeText(notice: NonNullable<LessonView['notice']>): { readonl
       }
     : { title: 'Lesson updated', text: `This lesson changed since you were last here: ${notice.change}. It starts again from step 1.` };
 }
+
+// Spec 3 S3-12 l8pMS and aJV2y; Lessons › Structure (worked examples); #144
+export const TRY_EXAMPLE = 'Try the worked example (optional)';
+export const WORKED_EXAMPLE = 'Worked example';
+export const EXAMPLE_NOTE = "Practice here is scripted. It never uses an attempt and isn't recorded.";
+export const TRY_IT_AGAIN = 'Try it again';
+export const CONTINUE = 'Continue';
+export const SKIP_EXAMPLE = 'Skip example';
