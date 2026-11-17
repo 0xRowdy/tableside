@@ -1,8 +1,8 @@
-// Spec 3 S3-12 l8pMS, pX6CV, S3-13 JJl51, Fvlgc, ZBpF3; Amendment 1 B4, C10; #143, #144, #145
+// Spec 3 S3-12 l8pMS, pX6CV, hGHha, S3-13 JJl51, Fvlgc, ZBpF3; Amendment 1 B4, C10; #143, #144, #145, #154
 
-import type { LessonHandoff } from '@tableside/definitions';
+import type { LessonHandoff, LessonSource } from '@tableside/definitions';
 import { ArrowLeft, ArrowRight, ChevronRight, GraduationCap, Play, RefreshCcw, RotateCcw, Shuffle, Spade, SquarePlay, type LucideIcon } from 'lucide-react-native';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Sheet, SheetText } from '@/components/Sheet';
@@ -15,6 +15,8 @@ import type { AllowanceCopy } from '@/training/challenge-text';
 import {
   BACK,
   BACK_TO_LESSONS,
+  CREDITS_HEADING,
+  CREDITS_NOTE,
   FINISH,
   HANDOFF_INTRO,
   HANDOFF_TITLE,
@@ -28,11 +30,14 @@ import {
   RESTART_NOTE,
   resumeAt,
   SAVE_FAILED,
+  SOURCES_HEADING,
+  SOURCES_INTRO,
+  sourcesStepText,
   stepText,
   stoppedAt,
   TRY_EXAMPLE,
 } from '@/training/lesson-text';
-import type { LessonView } from '@/training/service';
+import { stepCount, type LessonView } from '@/training/service';
 
 export interface LessonActions {
   readonly onLeave: () => void;
@@ -66,8 +71,9 @@ export function LessonPlayer({
   actions: LessonActions;
 }) {
   const insets = useSafeAreaInsets();
-  const step = view.steps[view.step - 1]!;
-  const last = view.step === view.steps.length;
+  const steps = stepCount(view);
+  const step = view.steps[view.step - 1];
+  const last = view.step === steps;
   return (
     <>
       <ScrollView
@@ -91,24 +97,25 @@ export function LessonPlayer({
           {view.notice && <ChangeNotice notice={view.notice} />}
           <View style={styles.progress}>
             <Text maxFontSizeMultiplier={textScale.body} style={styles.stepText}>
-              {stepText(view.step, view.steps.length)}
+              {step ? stepText(view.step, steps) : sourcesStepText(view.step)}
             </Text>
             <View style={styles.segments} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
-              {view.steps.map((_, index) => (
+              {Array.from({ length: steps }, (_, index) => (
                 <View key={index} style={[styles.segment, index < view.step && styles.segmentDone]} />
               ))}
             </View>
           </View>
           <Text accessibilityRole="header" maxFontSizeMultiplier={textScale.display} style={styles.heading}>
-            {step.heading}
+            {step ? step.heading : SOURCES_HEADING}
           </Text>
-          {step.paragraphs.map((paragraph, index) => (
+          {(step ? step.paragraphs : [SOURCES_INTRO]).map((paragraph, index) => (
             <Text key={index} maxFontSizeMultiplier={textScale.body} style={styles.paragraph}>
               {paragraph}
             </Text>
           ))}
+          {!step && <Credits sources={view.sources} />}
           {view.example?.step === view.step && <ExampleLink disabled={busy} onPress={actions.onExample} />}
-          {last &&
+          {view.step === view.steps.length &&
             view.handoffs.map((handoff) => (
               <HandoffLink key={handoffLabel(handoff)} handoff={handoff} disabled={busy} onPress={() => actions.onHandoff(handoff)} />
             ))}
@@ -129,7 +136,7 @@ export function LessonPlayer({
       </ScrollView>
       {view.prompt && (
         <Sheet title={view.title} onClose={actions.onLeave} testID="lesson-resume-scroll">
-          <SheetText>{stoppedAt(view.prompt.step, view.steps.length)}</SheetText>
+          <SheetText>{stoppedAt(view.prompt.step, steps)}</SheetText>
           <NavButton icon={Play} label={resumeAt(view.prompt.step)} primary block disabled={false} onPress={actions.onResume} />
           <NavButton icon={RotateCcw} label={RESTART_FROM_START} block disabled={busy} onPress={actions.onRestart} />
           <SheetText small>{RESTART_NOTE}</SheetText>
@@ -225,6 +232,46 @@ function ExampleLink({ disabled, onPress }: { disabled: boolean; onPress: () => 
   );
 }
 
+// Spec 3 S3-12 hGHha; Amendment 1 C11: text links only, bundled for offline reading
+function Credits({ sources }: { sources: readonly LessonSource[] }) {
+  return (
+    <View style={styles.credits}>
+      <Text accessibilityRole="header" maxFontSizeMultiplier={textScale.body} style={styles.creditsHeading}>
+        {CREDITS_HEADING}
+      </Text>
+      {sources.map(({ citation, url }) =>
+        url ? (
+          <CreditLink key={citation} citation={citation} url={url} />
+        ) : (
+          <Text key={citation} maxFontSizeMultiplier={textScale.body} style={styles.credit}>
+            {citation}
+          </Text>
+        ),
+      )}
+      <Text maxFontSizeMultiplier={textScale.body} style={styles.creditsNote}>
+        {CREDITS_NOTE}
+      </Text>
+    </View>
+  );
+}
+
+function CreditLink({ citation, url }: { citation: string; url: string }) {
+  const { focused, focusProps } = useKeyboardFocus();
+  return (
+    <Pressable
+      accessibilityRole="link"
+      accessibilityLabel={citation}
+      onPress={() => void Linking.openURL(url)}
+      {...focusProps}
+      style={({ pressed }) => [styles.creditLink, pressed && styles.pressed, focused && styles.focused]}
+    >
+      <Text maxFontSizeMultiplier={textScale.body} style={[styles.credit, styles.creditLinked]}>
+        {citation}
+      </Text>
+    </Pressable>
+  );
+}
+
 function IconButton({ icon: Icon, label, disabled, onPress }: { icon: LucideIcon; label: string; disabled: boolean; onPress: () => void }) {
   const { focused, focusProps } = useKeyboardFocus();
   return (
@@ -293,6 +340,12 @@ const styles = StyleSheet.create({
   optionText: { flex: 1, gap: 2 },
   optionTitle: { fontFamily: fonts.uiBold, fontSize: 16, lineHeight: 24, color: palette.foreground },
   optionDetail: { fontFamily: fonts.ui, fontSize: 13, lineHeight: 18, color: palette.mutedForeground },
+  credits: { gap: space[2] - 2, padding: 14, borderRadius: 14, borderWidth: 1, borderColor: palette.controlBorder, backgroundColor: palette.card },
+  creditsHeading: { fontFamily: fonts.uiBold, fontSize: 14, lineHeight: 22, color: palette.foreground },
+  creditLink: { justifyContent: 'center', minHeight: MIN_TOUCH_TARGET, borderRadius: radius.md, borderWidth: 2, borderColor: palette.transparent },
+  credit: { fontFamily: fonts.ui, fontSize: 14, lineHeight: 20, color: palette.foreground },
+  creditLinked: { color: palette.primary, textDecorationLine: 'underline' },
+  creditsNote: { fontFamily: fonts.ui, fontSize: 12.5, lineHeight: 18, color: palette.mutedForeground },
   exampleLabel: { flexShrink: 1, fontFamily: fonts.uiBold, fontSize: 15, color: palette.primary },
   alert: { fontFamily: fonts.ui, fontSize: 14, lineHeight: 20, color: palette.destructive },
   nav: { flexDirection: 'row', flexWrap: 'wrap', gap: space[2] + 2, paddingTop: space[2] },

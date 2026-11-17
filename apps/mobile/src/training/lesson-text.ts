@@ -135,3 +135,10 @@ export const LEARN_THIS_GAME_DETAIL: Record<GameId, string> = {
   craps: 'Craps basics and the five strategy lessons. Optional, and lessons never use allowance.',
   roulette: 'Roulette basics and the five strategy lessons. Optional, and lessons never use allowance.',
 };
+
+// Spec 3 S3-12 hGHha; Amendment 1 C11; #154
+export const SOURCES_HEADING = 'Sources';
+export const sourcesStepText = (step: number) => `Step ${step} of ${step} · ${SOURCES_HEADING}`;
+export const SOURCES_INTRO = "Tableside wrote this lesson. Where it draws on other work, the exact page, section or video time is linked below. Those authors didn't write or approve it.";
+export const CREDITS_HEADING = 'Credits';
+export const CREDITS_NOTE = 'Links open in your browser; these credits are bundled for offline reading.';
