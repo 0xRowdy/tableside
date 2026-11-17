@@ -69,3 +69,5 @@ export {
 export { QUARANTINE_LIST } from './quarantine';
 
 export { benchmarkProfile, BENCHMARK_PROFILES } from './benchmark-profiles';
+
+export { CARD_VALUES_CONTENT, CHALLENGE_CONTENT } from './challenges';

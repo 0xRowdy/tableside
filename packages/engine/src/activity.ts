@@ -57,7 +57,7 @@ import { ENGINE_VERSION } from './version';
 
 export type { Limit, VersionedIdentity } from './shape';
 
-export const STATE_SCHEMA_VERSION = 7 as const;
+export const STATE_SCHEMA_VERSION = 8 as const;
 
 interface SpecificationBase {
   readonly activityId: string;

@@ -2,7 +2,19 @@
 // docs/development.md Releases: recorded checkpoints and the quarantine list
 import type { TestCase } from '@tableside/harness';
 
-import { advanceActivity, canonicalJson, decodeCheckpoint, quarantineStatus, type ActivityState, type DomainFact, type QuarantineList } from '../src';
+import {
+  advanceActivity,
+  advanceChallenge,
+  canonicalJson,
+  challengeResults,
+  decodeChallengeCheckpoint,
+  decodeCheckpoint,
+  quarantineStatus,
+  type ActivityState,
+  type ChallengeFact,
+  type DomainFact,
+  type QuarantineList,
+} from '../src';
 
 import { RECORDED_BUILDS } from './recorded';
 
@@ -45,6 +57,30 @@ export const compatibilityCases: TestCase[] = [
           t.equal([recorded.name, canonicalJson(facts), state.phase, state.balance], [recorded.name, recorded.facts, 'completed', recorded.finalBalance]);
         }
       }
+    },
+  },
+  // #158
+  {
+    name: 'compatibility: this build resumes every unfinished challenge attempt an earlier build recorded, with the recorded results',
+    run: (t) => {
+      const phases = new Set<string>();
+      for (const build of RECORDED_BUILDS) {
+        for (const recorded of build.challenges ?? []) {
+          const decoded = decodeChallengeCheckpoint(recorded.checkpoint);
+          if (!decoded.ok) throw new Error(`${build.engine} ${recorded.name}: ${decoded.error.kind}: ${decoded.error.message}`);
+          phases.add(recorded.phase);
+          let state = decoded.state;
+          const facts: ChallengeFact[] = [];
+          for (const command of recorded.continuation) {
+            const result = advanceChallenge(state, { sequence: state.sequence, commandId: `continue-${state.sequence}`, command: command as never });
+            if (result.status !== 'committed') throw new Error(`${recorded.name}: the recorded continuation was refused`);
+            state = result.state;
+            facts.push(...result.facts);
+          }
+          t.equal([recorded.name, canonicalJson(facts), canonicalJson(challengeResults(state))], [recorded.name, recorded.facts, recorded.results]);
+        }
+      }
+      t.equal([...phases].sort(), ['explanation', 'question', 'ready']);
     },
   },
   {
