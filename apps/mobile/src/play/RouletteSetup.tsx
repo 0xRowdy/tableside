@@ -17,6 +17,8 @@ import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { Button } from '@/components/Button';
+import { LearnThisGame } from '@/lessons/LessonEntries';
+import type { PracticePrefill } from '@/lessons/routes';
 import { Screen } from '@/components/Screen';
 import type { StartProblem } from '@/practice/controller';
 import { usePractice } from '@/practice/PracticeProvider';
@@ -58,16 +60,19 @@ export function RouletteSetup({
   problemReason = null,
   busy,
   myStrategies = [],
+  prefill = null,
 }: {
   problem: StartProblem | null;
   problemReason?: string | null;
   busy: boolean;
   myStrategies?: readonly StrategyDefinition[];
+  // Spec 3 Lessons › Structure (Handoff)
+  prefill?: PracticePrefill | null;
 }) {
   const { controller } = usePractice();
   const [wheel, setWheel] = useState<RouletteWheel>('single-zero');
-  const [mode, setMode] = useState<Mode>('free-play');
-  const [strategy, setStrategy] = useState<StrategyDefinition>(ROULETTE_STRATEGIES[0] as StrategyDefinition);
+  const [mode, setMode] = useState<Mode>(prefill?.guided ? 'guided' : 'free-play');
+  const [strategy, setStrategy] = useState<StrategyDefinition>(() => ROULETTE_STRATEGIES.find((option) => option.id === prefill?.strategy) ?? (ROULETTE_STRATEGIES[0] as StrategyDefinition));
   const [choices, setChoices] = useState<Record<string, string>>(strategyDefaults(strategy));
   const limits = useLimits(GROUPS, ROULETTE_LIMITS);
   const accepted = limits.accepted;
@@ -109,6 +114,7 @@ export function RouletteSetup({
   return (
     <Screen>
       <SetupHeader title="Roulette" subtitle={`New session · ${guided ? 'guided practice' : 'free play'}`} onBack={() => router.navigate('/')} />
+      <LearnThisGame game="roulette" />
 
       <Section label="HOW DO YOU WANT TO PLAY?">
         <ChoiceGroup

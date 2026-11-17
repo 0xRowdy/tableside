@@ -1,6 +1,6 @@
 // Spec 3 Modules › Training service; Training service interface; #158, #132
 
-import { CHALLENGE_CONTENT, LESSONS, type Lesson, type LessonContent, type LessonSection, type LessonStep } from '@tableside/definitions';
+import { CHALLENGE_CATEGORIES, CHALLENGE_CONTENT, LESSONS, type Lesson, type LessonContent, type LessonHandoff, type LessonSection, type LessonStep } from '@tableside/definitions';
 import { CHALLENGE_VARIANTS, type ChallengeAttemptRecord, type ChallengeCategory, type ChallengeVariant } from '@tableside/engine';
 
 import type { TrainingAdapters } from './adapters';
@@ -9,7 +9,7 @@ import { ChallengeController, type AttemptSnapshot, type LearnerCommand, type St
 import { lessonProgress, type LessonChange, type LessonProgress, type LessonProgressChange, type LessonStatus } from './lesson-progress';
 
 // Spec 3 Recommendations
-export const SUGGESTED_ORDER = ['card-values', 'running-count', 'conversion', 'table'] as const;
+export const SUGGESTED_ORDER = CHALLENGE_CATEGORIES;
 
 export type CatalogCategory = (typeof SUGGESTED_ORDER)[number];
 
@@ -72,6 +72,8 @@ export interface LessonView {
   readonly prompt: { readonly kind: 'resume-or-restart'; readonly step: number } | null;
   // Spec 3 Lessons › Progress, Amendment 1 C10
   readonly notice: { readonly kind: LessonChange; readonly change: string } | null;
+  // Spec 3 Lessons › Structure (Handoff): offered on the final step; each opens a setup, nothing more
+  readonly handoffs: readonly LessonHandoff[];
 }
 
 export interface TrainingOptions {
@@ -274,5 +276,6 @@ function viewOf(lesson: AuthoredLesson, progress: LessonProgress, step: number, 
     steps: lesson.content.steps,
     prompt,
     notice: progress.changed && change ? { kind: progress.changed, change } : null,
+    handoffs: lesson.content.handoffs,
   };
 }

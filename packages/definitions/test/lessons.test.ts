@@ -1,7 +1,7 @@
 // Spec 3 Lessons and worked examples (#48), Amendment 1 B1; Testing Decisions › Build-time check; #143
 import { describe, expect, it } from 'vitest';
 
-import { LESSONS, lessonProblems, type Lesson } from '../src';
+import { APP_ORIENTATION, CHALLENGE_CATEGORIES, CHALLENGE_LESSONS, LESSONS, lessonProblems, type Lesson, type LessonHandoff } from '../src';
 
 const authored = (lesson: Lesson) => lesson.content !== null;
 
@@ -52,6 +52,17 @@ describe('lesson definitions', () => {
     expect(lessonProblems(LESSONS)).toEqual([]);
   });
 
+  // Spec 3 Lessons › Entry points; #145
+  it('name the blackjack lesson beside each counting challenge category on the Counting tab', () => {
+    expect(CHALLENGE_CATEGORIES).toEqual(['card-values', 'running-count', 'conversion', 'table']);
+    expect(CHALLENGE_CATEGORIES.map((category) => LESSONS.find((lesson) => lesson.id === CHALLENGE_LESSONS[category])?.title)).toEqual([
+      'Card values',
+      'Running count',
+      'True-count conversion',
+      'Table counting',
+    ]);
+  });
+
   describe('validation reports', () => {
     const orientation = LESSONS[0]!;
     const content = orientation.content!;
@@ -92,6 +103,71 @@ describe('lesson definitions', () => {
           { ...orientation, id: 'b', content: { ...content, version: 2, materialVersion: 1, change: 'the tabs changed' } },
         ]),
       ).toEqual(['app-orientation: a material change needs its explanation', 'b: only a material change has an explanation']);
+    });
+
+    // Spec 3 Lessons › Structure (Handoff); Testing Decisions › Build-time check; #145
+    describe('handoff targets that do not resolve to a real setup', () => {
+      const cardValues: Lesson = { ...LESSONS[6]!, content };
+      const roulette: Lesson = { ...LESSONS[20]!, content };
+      const withHandoffs = (lesson: Lesson, handoffs: readonly unknown[]): Lesson => ({ ...lesson, content: { ...content, handoffs: handoffs as LessonHandoff[] } });
+
+      it('accept free play, guided practice with or without a mode or strategy, and a Learn challenge', () => {
+        expect(
+          lessonProblems([
+            withHandoffs(cardValues, [
+              { kind: 'learn-challenge', category: 'conversion' },
+              { kind: 'guided-practice', game: 'blackjack', strategy: 'counting-with-deviations' },
+              { kind: 'guided-practice', game: 'blackjack', strategy: null },
+              { kind: 'free-play', game: 'blackjack' },
+            ]),
+            withHandoffs(roulette, [
+              { kind: 'guided-practice', game: 'roulette', strategy: 'builtin-roulette-capped-martingale' },
+              { kind: 'free-play', game: 'roulette' },
+            ]),
+          ]),
+        ).toEqual([]);
+      });
+
+      it('an unknown kind, game, mode, strategy or challenge category', () => {
+        expect(
+          lessonProblems([
+            withHandoffs(cardValues, [
+              { kind: 'quiz', game: 'blackjack' },
+              { kind: 'guided-practice', game: 'blackjack', strategy: 'wonging' },
+              { kind: 'learn-challenge', category: 'shuffle-tracking' },
+            ]),
+            withHandoffs({ ...APP_ORIENTATION, content }, [{ kind: 'free-play', game: 'baccarat' }]),
+            withHandoffs(roulette, [
+              { kind: 'guided-practice', game: 'roulette', strategy: 'builtin-craps-pass-with-odds' },
+              { kind: 'guided-practice', game: 'roulette', strategy: 'reverse-martingale' },
+            ]),
+          ]),
+        ).toEqual([
+          'card-values: handoff 1 is not free play, guided practice or a Learn challenge',
+          'card-values: handoff 2 names no built-in blackjack strategy: wonging',
+          'card-values: handoff 3 names no counting challenge: shuffle-tracking',
+          'app-orientation: handoff 1 opens no game setup: baccarat',
+          'capped-martingale: handoff 1 names no built-in roulette strategy: builtin-craps-pass-with-odds',
+          'capped-martingale: handoff 2 names no built-in roulette strategy: reverse-martingale',
+        ]);
+      });
+
+      it("a target in another game than the lesson's, or one offered twice", () => {
+        expect(
+          lessonProblems([
+            withHandoffs(roulette, [
+              { kind: 'free-play', game: 'craps' },
+              { kind: 'learn-challenge', category: 'card-values' },
+              { kind: 'free-play', game: 'roulette' },
+              { kind: 'free-play', game: 'roulette' },
+            ]),
+          ]),
+        ).toEqual([
+          'capped-martingale: handoff 1 opens craps setup from a roulette lesson',
+          'capped-martingale: handoff 2 opens blackjack setup from a roulette lesson',
+          'capped-martingale: handoff 4 repeats an earlier one',
+        ]);
+      });
     });
 
     it('a lesson with no steps or an empty step', () => {

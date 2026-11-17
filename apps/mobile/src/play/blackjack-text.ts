@@ -1,3 +1,4 @@
+import type { BlackjackMode } from '@tableside/definitions';
 import {
   FUNDING_CEILING,
   INSURANCE_TARGET,
@@ -14,6 +15,14 @@ import {
 } from '@tableside/engine';
 
 import { capitalize, formatUnits } from './units';
+
+// Spec 1 S1-02
+export const BLACKJACK_MODE_TEXT: Record<BlackjackMode, { readonly label: string; readonly help: string }> = {
+  basic: { label: 'Basic strategy', help: 'Coaches every decision for these table rules.' },
+  'basic-with-deviations': { label: 'Basic with deviations', help: 'Adds index plays. Tableside shows you the count.' },
+  'counting-with-basic': { label: 'Counting with basic', help: 'You keep the Hi-Lo count. Play is checked against the real count.' },
+  'counting-with-deviations': { label: 'Counting with deviations', help: 'You keep the count. Basic plus index plays.' },
+};
 
 export const signed = (value: number) => (value > 0 ? `+${value}` : value < 0 ? `−${-value}` : '0');
 

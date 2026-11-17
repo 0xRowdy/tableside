@@ -6,6 +6,7 @@ import { Button } from '@/components/Button';
 import { Placeholder } from '@/components/Placeholder';
 import { findGame } from '@/games';
 import { useFollow } from '@/hooks/use-follow';
+import { practicePrefill } from '@/lessons/routes';
 import { BlackjackSetup } from '@/play/BlackjackSetup';
 import { BlackjackTable } from '@/play/BlackjackTable';
 import { CrapsSetup } from '@/play/CrapsSetup';
@@ -32,7 +33,11 @@ function leaveSwitchedResults(controller: PracticeController): () => void {
 }
 
 export default function Play() {
-  const game = findGame(useLocalSearchParams<{ game?: string }>().game);
+  const params = useLocalSearchParams<{ game?: string; practice?: string; strategy?: string }>();
+  const game = findGame(params.game);
+  // Spec 3 Lessons › Structure (Handoff)
+  const prefill = practicePrefill(params);
+  const setupKey = `${params.game}:${params.practice ?? ''}:${params.strategy ?? ''}`;
   const { controller, snapshot } = usePractice();
   const [switchingFrom, setSwitchingFrom] = useState<string | null>(null);
   const activeGame = snapshot.status === 'active' ? snapshot.view.game : null;
@@ -131,9 +136,10 @@ export default function Play() {
       break;
   }
 
-  if (game?.id === 'roulette') return <RouletteSetup problem={snapshot.problem} problemReason={snapshot.problemReason} busy={snapshot.busy} />;
-  if (game?.id === 'blackjack') return <BlackjackSetup problem={snapshot.problem} problemReason={snapshot.problemReason} busy={snapshot.busy} />;
-  if (game?.id === 'craps') return <CrapsSetup problem={snapshot.problem} problemReason={snapshot.problemReason} busy={snapshot.busy} />;
+  const setup = { problem: snapshot.problem, problemReason: snapshot.problemReason, busy: snapshot.busy, prefill };
+  if (game?.id === 'roulette') return <RouletteSetup key={setupKey} {...setup} />;
+  if (game?.id === 'blackjack') return <BlackjackSetup key={setupKey} {...setup} />;
+  if (game?.id === 'craps') return <CrapsSetup key={setupKey} {...setup} />;
   if (game) {
     return <Placeholder title={`${game.title} setup`} message="Rule presets, table limits and your buy-in come next." />;
   }

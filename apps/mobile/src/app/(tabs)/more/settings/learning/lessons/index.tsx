@@ -1,17 +1,20 @@
-// Spec 3 S3-11 sVqX1; #143
-import { router } from 'expo-router';
+// Spec 3 S3-11 sVqX1; Lessons › Entry points (S1-02 FxxAj); #143, #145
+import { router, useLocalSearchParams } from 'expo-router';
 
 import { LessonCatalog } from '@/lessons/LessonCatalog';
+import { lessonHref } from '@/lessons/routes';
 import { LEARNING_TITLE } from '@/training/lesson-text';
 import { useLessons } from '@/training/TrainingProvider';
 
 export default function Lessons() {
+  const { section } = useLocalSearchParams<{ section?: string }>();
   const { lessons } = useLessons();
+  const shown = section && lessons?.some((lesson) => lesson.section === section) ? lessons.filter((lesson) => lesson.section === section) : lessons;
   return (
     <LessonCatalog
-      lessons={lessons}
+      lessons={shown}
       back={{ label: LEARNING_TITLE, onPress: () => router.dismissTo('/more/settings/learning') }}
-      onOpen={(lesson) => router.navigate({ pathname: '/more/settings/learning/lessons/[lesson]', params: { lesson } })}
+      onOpen={(lesson) => router.navigate(lessonHref(lesson))}
     />
   );
 }

@@ -19,6 +19,8 @@ import { router } from 'expo-router';
 import { useState } from 'react';
 
 import { Button } from '@/components/Button';
+import { LearnThisGame } from '@/lessons/LessonEntries';
+import type { PracticePrefill } from '@/lessons/routes';
 import { Screen } from '@/components/Screen';
 import type { StartProblem } from '@/practice/controller';
 import { usePractice } from '@/practice/PracticeProvider';
@@ -76,15 +78,18 @@ export function CrapsSetup({
   problemReason = null,
   busy,
   myStrategies = [],
+  prefill = null,
 }: {
   problem: StartProblem | null;
   problemReason?: string | null;
   busy: boolean;
   myStrategies?: readonly StrategyDefinition[];
+  // Spec 3 Lessons › Structure (Handoff)
+  prefill?: PracticePrefill | null;
 }) {
   const { controller } = usePractice();
-  const [mode, setMode] = useState<Mode>('free-play');
-  const [strategy, setStrategy] = useState<StrategyDefinition>(CRAPS_STRATEGIES[0] as StrategyDefinition);
+  const [mode, setMode] = useState<Mode>(prefill?.guided ? 'guided' : 'free-play');
+  const [strategy, setStrategy] = useState<StrategyDefinition>(() => CRAPS_STRATEGIES.find((option) => option.id === prefill?.strategy) ?? (CRAPS_STRATEGIES[0] as StrategyDefinition));
   const guided = mode === 'guided';
   const [odds, setOdds] = useState<OddsCap>(STANDARD_CRAPS.defaults.odds);
   const [field, setField] = useState<FieldPayout>(STANDARD_CRAPS.defaults.field);
@@ -110,6 +115,7 @@ export function CrapsSetup({
   return (
     <Screen>
       <SetupHeader title="Craps" subtitle={`New session · ${guided ? 'guided practice' : 'free play'} · standard craps`} onBack={() => router.navigate('/')} />
+      <LearnThisGame game="craps" />
 
       <Section label="HOW DO YOU WANT TO PLAY?">
         <ChoiceGroup

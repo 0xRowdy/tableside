@@ -1,9 +1,14 @@
-// Spec 3 S3-11 sVqX1, S3-12 l8pMS, S3-13 JJl51 and Fvlgc, Settings › Learning NvGyZ; #143
+// Spec 3 S3-11 sVqX1, S3-12 l8pMS, pX6CV, S3-13 JJl51, Fvlgc, ZBpF3, Learning NvGyZ; #143, #145
 
-import type { LessonSection } from '@tableside/definitions';
+import { BLACKJACK_MODES, CRAPS_STRATEGIES, ROULETTE_STRATEGIES, type LessonHandoff, type LessonSection } from '@tableside/definitions';
+import type { GameId } from '@tableside/engine';
 
+import { findGame } from '@/games';
+import { BLACKJACK_MODE_TEXT } from '@/play/blackjack-text';
+
+import { CATEGORY_TEXT, NOT_READY_HINT, type AllowanceCopy } from './challenge-text';
 import type { LessonStatus } from './lesson-progress';
-import type { LessonEntry, LessonView } from './service';
+import type { CatalogCategory, LessonEntry, LessonView } from './service';
 
 export const LEARNING_TITLE = 'Learning';
 export const LEARNING_DETAIL = 'Lessons';
@@ -72,3 +77,52 @@ export function noticeText(notice: NonNullable<LessonView['notice']>): { readonl
       }
     : { title: 'Lesson updated', text: `This lesson changed since you were last here: ${notice.change}. It starts again from step 1.` };
 }
+
+// Spec 3 Lessons › Structure (Handoff); S3-12 pX6CV, S3-13 ZBpF3; #145
+const lowerFirst = (text: string) => text.charAt(0).toLowerCase() + text.slice(1);
+const gameTitle = (game: GameId) => findGame(game)?.title ?? game;
+const STRATEGY_NAMES: ReadonlyMap<string, string> = new Map([
+  ...BLACKJACK_MODES.map((mode) => [mode, BLACKJACK_MODE_TEXT[mode].label] as const),
+  ...[...CRAPS_STRATEGIES, ...ROULETTE_STRATEGIES].map((strategy) => [strategy.id, strategy.name] as const),
+]);
+
+export function handoffLabel(handoff: LessonHandoff): string {
+  switch (handoff.kind) {
+    case 'learn-challenge':
+      return `Learn challenge · ${CATEGORY_TEXT[handoff.category].title}`;
+    case 'free-play':
+      return `Free play · ${gameTitle(handoff.game)}`;
+    case 'guided-practice': {
+      const strategy = handoff.strategy && STRATEGY_NAMES.get(handoff.strategy);
+      return `Guided practice · ${gameTitle(handoff.game)}${strategy ? `, ${lowerFirst(strategy)}` : ''}`;
+    }
+  }
+}
+
+export const HANDOFF_TITLE = 'Practice what you learned';
+export const HANDOFF_INTRO = 'Each option opens its normal setup screen with this filled in. Nothing starts, and no allowance is used, until you press Start there.';
+export const BACK_TO_LESSONS = 'Back to lessons';
+const opensSetup = (game: GameId) => `Opens ${gameTitle(game).toLowerCase()} setup.`;
+
+// Spec 3 Amendment 4 §2 (challenge wording); spec 5 owns the guided-practice allowance
+export function handoffDetail(handoff: LessonHandoff, allowance: AllowanceCopy | undefined): string {
+  switch (handoff.kind) {
+    case 'learn-challenge':
+      return allowance?.setup.text ?? '';
+    case 'free-play':
+      return opensSetup(handoff.game);
+    case 'guided-practice':
+      return allowance?.standing === 'premium' ? opensSetup(handoff.game) : 'Uses guided-practice allowance once you start.';
+  }
+}
+
+// Spec 3 Lessons › Entry points; S3-01 PDCaD, S3-02 buD2R, S1-02 FxxAj
+export const lessonLinkLabel = (category: CatalogCategory) => `Lesson: ${lowerFirst(CATEGORY_TEXT[category].title)}`;
+export const LEARN_THIS_SKILL = 'Learn this skill';
+export const learnThisSkillDetail = (lesson: LessonEntry) => `${lesson.title} lesson · ${lesson.steps === null ? NOT_READY_HINT : `${lesson.steps} short steps`}`;
+export const LEARN_THIS_GAME = 'Learn this game';
+export const LEARN_THIS_GAME_DETAIL: Record<GameId, string> = {
+  blackjack: 'Blackjack basics, the four strategy modes, counting and the bet schedule. Optional, and lessons never use allowance.',
+  craps: 'Craps basics and the five strategy lessons. Optional, and lessons never use allowance.',
+  roulette: 'Roulette basics and the five strategy lessons. Optional, and lessons never use allowance.',
+};
