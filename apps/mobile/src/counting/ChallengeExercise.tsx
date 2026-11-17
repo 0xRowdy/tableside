@@ -1,6 +1,6 @@
 // Spec 3 S3-03 P4WjR, drVnR, BFdJT, S3-04 qdnQm, S3-05 EDnGd, r5pCx, T9sCI
-// Spec 3 S3-06 C53yTW, zAatf, Qv1An; S3-04 qmDou; S3-05 qGARl
-// #158, #132, #133, #134, #135, #146, #136
+// Spec 3 S3-06 C53yTW, zAatf, Qv1An, S3-07; S3-04 qmDou; S3-05 qGARl
+// #158, #132, #133, #134, #135, #146, #136, #137
 
 import type { HintId } from '@tableside/definitions';
 import type { ChallengeCategory, ChallengeEntry, ChallengePacing, ChallengeView, ConversionItem, CountRange, LearnFeedback } from '@tableside/engine';
@@ -19,7 +19,10 @@ import { SaveFailedBanner } from '@/play/TableChrome';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/theme/tokens';
 import { HelpSheet, HoldSheet, WarningNote } from './AttemptSheets';
 import { CountAid } from './CountAid';
+import { CoachButton } from './CoachButton';
 import { CountEntry } from './CountEntry';
+import { TableBody, TableProgress } from './TableExercise';
+import { edgeText, tableSubtitle } from '@/training/blackjack-table-text';
 import { decksText } from '@/training/blackjack-conversion-text';
 import {
   CARD_PROMPT,
@@ -118,8 +121,13 @@ export function ChallengeExercise({
             {CATEGORY_TEXT[view.category].title}
           </Text>
           <Text maxFontSizeMultiplier={textScale.body} style={styles.subtitle}>
-            {exerciseSubtitle(view.variant, pacing, timer !== null, hold)}
+            {view.table ? tableSubtitle(view.variant, view.table) : exerciseSubtitle(view.variant, pacing, timer !== null, hold)}
           </Text>
+          {view.table && (
+            <Text maxFontSizeMultiplier={textScale.body} style={styles.subtitle}>
+              {edgeText(view.table.rules)}
+            </Text>
+          )}
         </View>
         <HeaderButton
           label={HELP_LABEL}
@@ -133,6 +141,9 @@ export function ChallengeExercise({
         />
         <HeaderButton label={PAUSE_LABEL} icon={Pause} enabled={!held} onPress={onPause} />
       </View>
+      {view.table ? (
+        <TableProgress view={view} table={view.table} timer={timer && <PerformanceTime timer={timer} performanceMs={performanceMs} />} />
+      ) : (
       <View style={styles.progress}>
         <View style={styles.progressRow}>
           <Text maxFontSizeMultiplier={textScale.body} style={styles.progressText}>
@@ -144,10 +155,13 @@ export function ChallengeExercise({
           <View style={[styles.fill, { width: `${(view.position / view.length) * 100}%` }]} />
         </View>
       </View>
+      )}
       <View style={styles.body}>
         {saveFailed && <SaveFailedBanner busy={busy} onRetry={onRetrySave} />}
         {hold && !hold.reached && <WarningNote text={turnBoundaryText(hold)} />}
-        {view.category === 'conversion' && view.countRange ? (
+        {view.table ? (
+          <TableBody view={view} table={view.table} ready={ready} onCommand={onCommand} onInputRejected={onInputRejected} />
+        ) : view.category === 'conversion' && view.countRange ? (
           <ConversionBody
             view={view}
             range={view.countRange}
@@ -477,24 +491,6 @@ function CoachNote({
   );
 }
 
-function CoachButton({ label, primary = false, enabled, onPress }: { label: string; primary?: boolean; enabled: boolean; onPress: () => void }) {
-  const { focused, focusProps } = useKeyboardFocus();
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityState={{ disabled: !enabled }}
-      disabled={!enabled}
-      onPress={onPress}
-      {...focusProps}
-      style={({ pressed }) => [styles.coachButton, primary ? styles.coachPrimary : styles.coachSecondary, pressed && styles.pressed, focused && styles.coachFocused]}
-    >
-      <Text maxFontSizeMultiplier={textScale.body} style={[styles.coachButtonText, primary && styles.coachPrimaryText]}>
-        {label}
-      </Text>
-    </Pressable>
-  );
-}
-
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: palette.background },
   header: { flexDirection: 'row', alignItems: 'center', gap: space[2], minHeight: 60, paddingHorizontal: space[4], paddingVertical: space[1] },
@@ -540,12 +536,6 @@ const styles = StyleSheet.create({
   headline: { fontFamily: fonts.uiBold, fontSize: 17, color: palette.ink },
   detail: { fontFamily: fonts.ui, fontSize: 14, lineHeight: 20, color: palette.inkMuted },
   coachActions: { flexDirection: 'row', flexWrap: 'wrap', gap: space[2] },
-  coachButton: { minHeight: MIN_TOUCH_TARGET, justifyContent: 'center', paddingHorizontal: 14, borderRadius: radius.md, borderWidth: 2 },
-  coachPrimary: { backgroundColor: palette.ink, borderColor: palette.ink },
-  coachSecondary: { borderColor: palette.inkMuted },
-  coachButtonText: { fontFamily: fonts.uiBold, fontSize: 14, color: palette.ink },
-  coachPrimaryText: { color: palette.coach },
-  coachFocused: { borderColor: palette.coachAccent },
   pressed: { opacity: 0.8 },
   focused: { borderColor: palette.ring, borderWidth: 2 },
 });

@@ -1,4 +1,4 @@
-// Spec 3 Challenge content, Learn, Check and assistance, Scoring and review, Seam 1; #133
+// Spec 3 Challenge content, Learn, Check and assistance, Scoring, Audio and haptics; #133, #137
 import type { TestCase } from '@tableside/harness';
 
 import {
@@ -37,6 +37,21 @@ const nexts = (count: number): ChallengeCommand[] => Array.from({ length: count 
 const answeringEachCheckpoint = (entries: readonly ChallengeCommand[]) => [...nexts(12), ...entries.flatMap((entry, index) => [entry, ...(index < 3 ? [NEXT, ...nexts(12)] : [NEXT])])];
 
 export const runningCountCases: TestCase[] = [
+  {
+    name: 'running count Check: cue 11 is due as each checkpoint prompt appears, and never in Learn, where every card is asked',
+    run: (t) => {
+      const facts = (state: ChallengeState, command: ChallengeCommand) => {
+        const result = advanceChallenge(state, { sequence: state.sequence, commandId: `f-${state.sequence}`, command });
+        if (result.status !== 'committed') throw new Error(JSON.stringify(result));
+        return result.facts;
+      };
+      const beforeCheckpoint = run(begun(COUNT_CHECK, seed(1)), nexts(11));
+      t.equal(facts(beforeCheckpoint, NEXT), [{ kind: 'content-shown', position: 12 }, { kind: 'checkpoint-due', position: 12 }]);
+      t.equal(facts(run(begun(COUNT_CHECK, seed(1)), nexts(10)), NEXT), [{ kind: 'content-shown', position: 11 }]);
+      const learn = run(begun(COUNT_LEARN, seed(1)), [ANSWER(-1)]);
+      t.equal(facts(learn, NEXT), [{ kind: 'content-shown', position: 1 }]);
+    },
+  },
   {
     name: 'running count: 52 cards exposed from index 0 of a shuffled six-deck shoe, starting at zero',
     run: (t) => {

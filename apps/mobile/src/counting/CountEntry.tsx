@@ -1,4 +1,4 @@
-// Spec 3 S3-04 qdnQm, S3-06 C53yTW, Qv1An; Learn, Check and assistance › Malformed input; #133, #134
+// Spec 3 S3-04 qdnQm, S3-06 C53yTW, Qv1An, S3-07 xjtSW; Malformed input; #133, #134, #137
 
 import { CornerDownLeft, Delete, Info, SkipForward } from 'lucide-react-native';
 import type { CountRange } from '@tableside/engine';
@@ -20,6 +20,7 @@ export function CountEntry({
   onSkip,
   onRejected,
   next,
+  submitLabel = SUBMIT,
 }: {
   label: string;
   range: CountRange;
@@ -28,6 +29,7 @@ export function CountEntry({
   onSkip: () => void;
   onRejected: () => void;
   next?: { readonly label: string; readonly enabled: boolean; readonly onPress: () => void };
+  submitLabel?: string;
 }) {
   const [text, setText] = useState('');
   const [problem, setProblem] = useState<CountProblem | null>(null);
@@ -89,7 +91,7 @@ export function CountEntry({
           {next ? (
             <Button label={next.label} icon={CornerDownLeft} stretch disabled={!next.enabled} onPress={next.onPress} />
           ) : (
-            <Button label={SUBMIT} icon={CornerDownLeft} stretch disabled={!enabled} onPress={submit} />
+            <Button label={submitLabel} icon={CornerDownLeft} stretch disabled={!enabled} onPress={submit} />
           )}
         </View>
       </View>

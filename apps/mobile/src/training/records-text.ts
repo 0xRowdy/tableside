@@ -5,6 +5,7 @@ import type { AssistanceClass, AttemptEndingReason, ChallengeAttemptRecord, Chal
 
 import { dayText } from '@/account/account-text';
 
+import { tableGroupTitle, tableSettingsText } from './blackjack-table-text';
 import { pacingLabel, spokenScore, scoreText, timerText, variantLabel } from './challenge-text';
 import { everyMetricPerfect, type AttemptEarned, type GroupProgress, type ProgressAttempt } from './progress';
 import type { CatalogCategory } from './service';
@@ -25,7 +26,7 @@ export const NO_HISTORY = 'No attempts yet.';
 export const RECORDS_NOTE = 'Records only compare attempts with identical settings. Speed counts only for perfect, unassisted, uninterrupted, timed Check attempts.';
 
 const RECORD_TITLE: Record<CatalogCategory, string> = { 'card-values': 'Card values', 'running-count': 'Running count', conversion: 'Conversion', table: 'Table counting' };
-const ITEMS: Record<ChallengeCategory, string> = { 'card-values': 'cards', 'running-count': 'cards', conversion: 'questions' };
+const ITEMS: Record<Exclude<ChallengeCategory, 'table'>, string> = { 'card-values': 'cards', 'running-count': 'cards', conversion: 'questions' };
 const METRIC_TITLE: Record<ChallengeMetric, string> = {
   'card-values': 'card values',
   'running-count': 'running count',
@@ -45,11 +46,13 @@ function versionText(key: Pick<ChallengeGroupKey, 'category' | 'content' | 'refe
   return parts.length > 0 ? parts.join(' · ') : null;
 }
 
-// TODO(#137)
-export const settingsText = (key: ChallengeGroupKey) =>
-  [`${key.length} ${ITEMS[key.category]}`, pacingLabel(key.pacing), key.variant === 'learn' && key.countRevealed ? 'count shown' : null, versionText(key)].filter(Boolean).join(' · ');
+// Spec 3 S3-10 OVKkc; #137
+export function settingsText(key: ChallengeGroupKey): string {
+  const settings = key.table ? tableSettingsText(key.table) : [`${key.length} ${ITEMS[key.category as Exclude<ChallengeCategory, 'table'>]}`, pacingLabel(key.pacing)].join(' · ');
+  return [settings, key.variant === 'learn' && key.countRevealed ? 'count shown' : null, versionText(key)].filter(Boolean).join(' · ');
+}
 
-export const groupTitle = (key: ChallengeGroupKey) => RECORD_TITLE[key.category];
+export const groupTitle = (key: ChallengeGroupKey) => (key.table ? tableGroupTitle(key.table) : RECORD_TITLE[key.category]);
 
 export interface StatText {
   readonly label: string;

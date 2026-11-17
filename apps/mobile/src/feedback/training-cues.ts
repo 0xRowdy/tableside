@@ -1,4 +1,4 @@
-// Spec 3 Audio and haptics; Learn, Check and assistance › Answer accepted; #132, #140
+// Spec 3 Audio and haptics; Learn, Check and assistance › Answer accepted; #132, #140, #137
 import type { StrategyStepAnswer, WorkedExample } from '@tableside/definitions';
 import type { ChallengeFact, ChallengeView } from '@tableside/engine';
 
@@ -32,6 +32,9 @@ function cuesForChallenge(view: ChallengeView, facts: readonly ChallengeFact[]):
       case 'answer-accepted':
         if (view.variant === 'check') return ['answer-accepted'];
         return [learnAnswerCue(view.feedback?.correct === true)];
+      case 'checkpoint-due':
+        return ['checkpoint-due'];
+      case 'shoe-shuffled':
       case 'attempt-ended':
         return [];
     }

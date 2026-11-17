@@ -15,6 +15,9 @@ const PRESETS: Readonly<Record<BlackjackPreset, Pick<BlackjackRuleSet, 'dealer' 
   H17_noLS: { dealer: 'H17', lateSurrender: false },
 };
 
+// Spec 1 Game rules
+export const blackjackPreset = (dealer: 'S17' | 'H17', lateSurrender: boolean): BlackjackPreset => `${dealer}_${lateSurrender ? 'LS' : 'noLS'}`;
+
 export const BLACKJACK_LIMITS: BlackjackRuleSet['limits'] = { initial: { min: '10', max: '1000' } };
 
 export function blackjackRules(

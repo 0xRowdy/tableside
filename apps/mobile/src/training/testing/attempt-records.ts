@@ -17,9 +17,9 @@ export const RUNNING_COUNT_CHECK: ChallengeGroupKey = {
   table: null,
 };
 
-// TODO(#137)
+// Spec 3 Comparison groups; #137
 export const TABLE_PLAY_CHECK: ChallengeGroupKey = {
-  category: 'running-count',
+  category: 'table',
   variant: 'check',
   assistanceClass: 'unassisted-check',
   countRevealed: false,
@@ -28,7 +28,9 @@ export const TABLE_PLAY_CHECK: ChallengeGroupKey = {
   length: 10,
   pacing: 'self-paced',
   table: {
-    rules: { id: 'blackjack-s17-ls', version: 1 },
+    rules: { id: 'blackjack-six-deck', version: 1 },
+    dealer: 'S17',
+    lateSurrender: true,
     penetration: 75,
     extraPlayers: 0,
     seat: 'play',
@@ -38,6 +40,11 @@ export const TABLE_PLAY_CHECK: ChallengeGroupKey = {
     startingBalance: '1000',
     checkpointInterval: 1,
   },
+};
+
+export const TABLE_OBSERVE_CHECK: ChallengeGroupKey = {
+  ...TABLE_PLAY_CHECK,
+  table: { ...(TABLE_PLAY_CHECK.table as NonNullable<ChallengeGroupKey['table']>), seat: 'observe', countingMode: null, baseWager: null, startingBalance: null },
 };
 
 type Scores = Partial<Record<ChallengeMetric, readonly [correct: number, total: number] | null>>;

@@ -1,4 +1,4 @@
-import type { BlackjackMode } from '@tableside/definitions';
+import { blackjackPreset, type BlackjackMode } from '@tableside/definitions';
 import {
   FUNDING_CEILING,
   INSURANCE_TARGET,
@@ -74,7 +74,7 @@ export function rulesText(view: BlackjackPermittedView): string {
   return `${table.decks} decks · ${table.dealer} · ${table.lateSurrender ? 'LS' : 'no LS'} · ${formatUnits(table.initial.min)}–${formatUnits(table.initial.max)}`;
 }
 
-export const presetOf = (view: BlackjackPermittedView) => `${view.table.dealer}_${view.table.lateSurrender ? 'LS' : 'noLS'}` as const;
+export const presetOf = (view: BlackjackPermittedView) => blackjackPreset(view.table.dealer, view.table.lateSurrender);
 
 export const isPlaying = (view: BlackjackPermittedView) => view.playActions.length > 0;
 

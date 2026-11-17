@@ -1,5 +1,5 @@
 // Spec 3 S3-02 buD2R, ZreSb, Amendment 4 §2–3; Lessons › Entry points
-// #158, #150, #145, #135, #136, #140
+// #158, #150, #145, #135, #136, #140, #137
 
 import { CHALLENGE_VARIANTS, type ChallengeVariant } from '@tableside/engine';
 import { BookOpen, CircleAlert, Play } from 'lucide-react-native';
@@ -36,6 +36,7 @@ import { LEARN_THIS_SKILL, learnThisSkillDetail } from '@/training/lesson-text';
 import { pacingOf, type CatalogEntry, type ChallengeSetup, type LessonEntry, type StartProblem } from '@/training/service';
 
 import { AllowanceBanner } from './AllowanceBanner';
+import { TableSetupOptions } from './TableSetupOptions';
 
 export function ChallengeSetupScreen({
   entry,
@@ -80,6 +81,7 @@ export function ChallengeSetupScreen({
           {VARIANT_HELP}
         </Text>
       </View>
+      {setup.table && <TableSetupOptions options={setup.table} onChange={(table) => onChange({ ...setup, table })} />}
       {entry.pacings.length > 1 && (
         <View style={styles.section}>
           <Text maxFontSizeMultiplier={textScale.body} style={styles.label}>
