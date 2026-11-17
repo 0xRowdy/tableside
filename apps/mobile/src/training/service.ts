@@ -14,6 +14,7 @@ import {
 } from '@tableside/definitions';
 import { CHALLENGE_VARIANTS, type ChallengeAttemptRecord, type ChallengeCategory, type ChallengeVariant } from '@tableside/engine';
 
+import type { LifecycleEvent } from '../practice/adapters';
 import type { TrainingAdapters } from './adapters';
 import type { ChallengeAllowance } from './allowance';
 import { ChallengeController, type AttemptSnapshot, type LearnerCommand, type StartProblem } from './controller';
@@ -160,6 +161,24 @@ export class TrainingService {
 
   retrySave(): Promise<void> {
     return this.challenges.retrySave();
+  }
+
+  // Spec 3 Training service interface › Resume / suspend / pause / end; #135
+  pause(cause?: 'learner' | 'speech-backlog'): void {
+    this.challenges.pause(cause);
+  }
+
+  resume(): Promise<void> {
+    return this.challenges.resume();
+  }
+
+  // Spec 3 Amendment 1 B5
+  suspend(cause?: 'navigation' | 'app-lifecycle' | 'sign-out'): void {
+    this.challenges.suspend(cause);
+  }
+
+  lifecycle(event: LifecycleEvent): Promise<void> {
+    return this.challenges.lifecycle(event);
   }
 
   // Spec 3 Amendment 4 §2–3

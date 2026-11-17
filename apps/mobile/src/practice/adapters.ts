@@ -1,4 +1,4 @@
-import type { EntropySource, Phase, QuarantineList, VersionedIdentity } from '@tableside/engine';
+import type { ChallengePhase, EntropySource, Phase, QuarantineList, VersionedIdentity } from '@tableside/engine';
 
 import type { ActivityStore, CompletedPracticeSession, MeteringBasis } from './store';
 
@@ -58,7 +58,8 @@ export interface AccessSupervisor {
   // Spec 3 Training service interface › Start attempt; #158
   beforeChallenge(context: { readonly category: string; readonly variant: string }): Promise<AdmissionDecision>;
   beforeTurn(context: { readonly activityId: string; readonly turn: number; readonly strategy: VersionedIdentity | null }): Promise<TurnDecision>;
-  beforeResume(context: { readonly activityId: string; readonly phase: Phase }): Promise<AccessDecision>;
+  // Spec 3 Training service interface › Resume; #135
+  beforeResume(context: { readonly activityId: string; readonly phase: Phase | ChallengePhase }): Promise<AccessDecision>;
   onLifecycle(context: { readonly activityId: string; readonly event: LifecycleEvent }): Promise<AccessDecision>;
   // Spec 1 Amendment 4 A2
   beforeEndWhileSuspended(context: { readonly activityId: string }): Promise<{ readonly status: 'allowed' } | { readonly status: 'blocked'; readonly reason: string }>;

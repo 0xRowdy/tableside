@@ -13,13 +13,14 @@ import {
   type ChallengeCommand,
   type ChallengeContent,
   type ChallengeFact,
+  type ChallengePhase,
   type ChallengeState,
   type ChallengeVariant,
   type ChallengeView,
 } from '@tableside/engine';
 
-import type { AccessDenial } from '../practice/adapters';
-import { SAVE_RETRY_MS } from '../practice/controller';
+import type { AccessDecision, AccessDenial, LifecycleEvent } from '../practice/adapters';
+import { RECONNECT_TO_VERIFY, SAVE_RETRY_MS } from '../practice/controller';
 import type { TrainingAdapters } from './adapters';
 import { CHALLENGE_CHARGE, type Admission, type AttemptCharge, type CommittedAttemptTransition, type StoredAttempt } from './store';
 
@@ -30,10 +31,43 @@ export const RECORDED_MS = 800;
 
 export type LearnerCommand = Extract<ChallengeCommand, { readonly kind: 'answer' | 'skip' | 'retry-item' | 'next-item' | 'reveal-count' }>;
 
+// Spec 3 Attempt lifecycle › Phases, Pause; Amendment 1 B5, C1
+export type HoldCause = 'learner' | 'speech-backlog' | 'navigation' | 'app-lifecycle' | 'sign-out' | 'recovered' | 'access';
+
+export interface AttemptHold {
+  readonly kind: 'paused' | 'auto-paused' | 'suspended';
+  readonly cause: HoldCause;
+  readonly reached: boolean;
+  readonly reason: string | null;
+  readonly resumeBlocked: string | null;
+}
+
+// Spec 3 Amendment 1 C6
+const HOLD_RANK: Record<HoldCause, number> = { learner: 0, 'speech-backlog': 0, navigation: 1, 'app-lifecycle': 1, recovered: 1, 'sign-out': 2, access: 2 };
+
+const ITEM_FINISHED: ReadonlySet<ChallengePhase> = new Set(['ready', 'card', 'recorded', 'ended']);
+
+const HOLD_KIND: Record<HoldCause, AttemptHold['kind']> = {
+  learner: 'paused',
+  'speech-backlog': 'auto-paused',
+  navigation: 'suspended',
+  'app-lifecycle': 'suspended',
+  'sign-out': 'suspended',
+  recovered: 'suspended',
+  access: 'suspended',
+};
+
 export type AttemptSnapshot =
   | { readonly status: 'loading' }
   | { readonly status: 'none'; readonly problem: Exclude<StartProblem, 'invalid-setup'> | null; readonly busy: boolean }
-  | { readonly status: 'active'; readonly view: ChallengeView; readonly facts: readonly ChallengeFact[]; readonly busy: boolean; readonly save: 'saved' | 'failed' }
+  | {
+      readonly status: 'active';
+      readonly view: ChallengeView;
+      readonly facts: readonly ChallengeFact[];
+      readonly busy: boolean;
+      readonly save: 'saved' | 'failed';
+      readonly hold: AttemptHold | null;
+    }
   | { readonly status: 'ended'; readonly record: ChallengeAttemptRecord };
 
 type Committed = { readonly state: ChallengeState; readonly facts: readonly ChallengeFact[] };
@@ -41,6 +75,8 @@ type Committed = { readonly state: ChallengeState; readonly facts: readonly Chal
 type Pending = { readonly kind: 'transition'; readonly command: LearnerCommand } | { readonly kind: 'record' };
 
 const UNANSWERED: AccessDenial = { status: 'uncertain', provenance: 'unanswered', disposition: 'stop' };
+
+const CANT_RESUME = "This attempt can't resume right now.";
 
 export class ChallengeController {
   private current: AttemptSnapshot = { status: 'loading' };
@@ -51,6 +87,9 @@ export class ChallengeController {
   private busy = false;
   private pending: Pending | null = null;
   private retryFor: Pending | null = null;
+  private hold: AttemptHold | null = null;
+  private interrupted = false;
+  private resumeQueued = false;
 
   constructor(private readonly adapters: TrainingAdapters) {}
 
@@ -70,6 +109,8 @@ export class ChallengeController {
       if (state.phase === 'ready') return this.showNone(null);
       this.adopt(stored, state);
       if (state.phase === 'ended') await this.record();
+      // Spec 3 Amendment 1 C1
+      else this.holdNow('recovered', null);
       await this.drive();
     });
   }
@@ -85,7 +126,10 @@ export class ChallengeController {
       }
       if (stored) {
         const leftover = this.decode(stored);
-        if (leftover.phase !== 'ready') return this.adopt(stored, leftover);
+        if (leftover.phase !== 'ready') {
+          this.adopt(stored, leftover);
+          return this.holdNow('recovered', null);
+        }
         // Spec 3 Amendment 1 C6
         const discarded = await this.adapters.store.discardUnchargedAttempt(stored.attemptId).then(
           () => true,
@@ -136,10 +180,78 @@ export class ChallengeController {
 
   async submit(command: LearnerCommand): Promise<void> {
     await this.exclusive(async () => {
-      if (!this.state || this.pending) return;
+      if (!this.state || this.pending || this.hold?.reached) return;
+      // Spec 3 Amendment 1 C6
+      if (this.hold && command.kind === 'next-item') {
+        this.hold = { ...this.hold, reached: true };
+        return this.publish();
+      }
       await this.send(command);
       await this.drive();
     });
+  }
+
+  // Spec 3 Attempt lifecycle › Pause; Amendment 1 C1
+  pause(cause: 'learner' | 'speech-backlog' = 'learner'): void {
+    this.holdNow(cause, null);
+  }
+
+  // Spec 3 Training service interface › Resume
+  async resume(): Promise<void> {
+    if (!this.hold) return;
+    if (this.busy) {
+      this.resumeQueued = true;
+      return;
+    }
+    await this.exclusive(async () => {
+      const hold = this.hold;
+      const state = this.state;
+      if (!hold || !state) return;
+      const decision = await this.adapters.access.beforeResume({ activityId: state.attempt.id, phase: state.phase }).catch((): AccessDecision => UNANSWERED);
+      if (this.hold !== hold) return;
+      // Spec 3 Amendment 1 C6
+      if (decision.status !== 'allowed' && decision.disposition !== 'stop') {
+        this.hold = { ...hold, resumeBlocked: decision.status === 'uncertain' ? RECONNECT_TO_VERIFY : (decision.reason ?? CANT_RESUME) };
+        return this.publish();
+      }
+      this.hold = null;
+      this.publish();
+      await this.drive();
+    });
+  }
+
+  // Spec 3 Amendment 1 B5
+  suspend(cause: 'navigation' | 'app-lifecycle' | 'sign-out' = 'navigation'): void {
+    this.holdNow(cause, null);
+  }
+
+  async lifecycle(event: LifecycleEvent): Promise<void> {
+    const state = this.state;
+    if (!state || this.current.status !== 'active') return;
+    if (event === 'backgrounded') this.suspend('app-lifecycle');
+    if (event === 'signed-out') this.suspend('sign-out');
+    const attemptId = state.attempt.id;
+    const decision = await this.adapters.access.onLifecycle({ activityId: attemptId, event }).catch((): AccessDecision => ({ status: 'allowed', provenance: 'unanswered' }));
+    if (decision.status === 'allowed' || this.state?.attempt.id !== attemptId) return;
+    this.applyDenial(decision);
+  }
+
+  // Spec 3 Attempt lifecycle › Suspend dispositions; Amendment 1 C6
+  private applyDenial(denial: AccessDenial): void {
+    if (denial.disposition === 'stop') return;
+    this.holdNow('access', denial.reason ?? null, denial.disposition === 'suspend-at-turn-boundary');
+  }
+
+  private holdNow(cause: HoldCause, reason: string | null, atBoundary = false): void {
+    const state = this.state;
+    if (!state || this.current.status !== 'active') return;
+    const previous = this.hold;
+    if (previous && HOLD_RANK[previous.cause] > HOLD_RANK[cause]) return;
+    this.resumeQueued = false;
+    this.interrupted = true;
+    const reached = !atBoundary || (previous?.reached ?? false) || ITEM_FINISHED.has(state.phase);
+    this.hold = { kind: HOLD_KIND[cause], cause, reached, reason, resumeBlocked: null };
+    this.publish();
   }
 
   async retrySave(): Promise<void> {
@@ -169,14 +281,16 @@ export class ChallengeController {
     }
     this.state = next.state;
     this.facts = next.facts;
+    if (this.hold && !this.hold.reached && ITEM_FINISHED.has(next.state.phase)) this.hold = { ...this.hold, reached: true };
     this.publish();
     if (next.state.phase === 'ended') await this.record();
   }
 
   // Spec 3 Learn, Check and assistance › Answer accepted; S3-03 BFdJT
   private async drive(): Promise<void> {
-    while (this.state?.phase === 'recorded' && !this.pending) {
+    while (this.state?.phase === 'recorded' && !this.pending && !this.hold?.reached) {
       await this.adapters.clock.sleep(RECORDED_MS);
+      if (this.hold?.reached) return;
       await this.send({ kind: 'next-item' });
     }
   }
@@ -216,8 +330,7 @@ export class ChallengeController {
       installation: this.adapters.device,
       startedAt: attempt.charge?.chargedAt ?? attempt.createdAt,
       endedAt: this.adapters.clock.now(),
-      // TODO(#135)
-      interrupted: false,
+      interrupted: this.interrupted,
       performanceMs: null,
       meteringBasis: attempt.admission.meteringBasis,
       allowancePolicyVersion: attempt.admission.allowancePolicyVersion ?? null,
@@ -244,6 +357,10 @@ export class ChallengeController {
   }
 
   private adopt(stored: StoredAttempt, state: ChallengeState, facts: readonly ChallengeFact[] = []): void {
+    if (this.attempt?.attemptId !== stored.attemptId) {
+      this.hold = null;
+      this.interrupted = false;
+    }
     this.attempt = stored;
     this.state = state;
     this.facts = facts;
@@ -266,6 +383,10 @@ export class ChallengeController {
       this.busy = false;
       this.publish();
       if (this.pending) this.scheduleRetry();
+      if (this.resumeQueued) {
+        this.resumeQueued = false;
+        void this.resume();
+      }
     }
   }
 
@@ -294,7 +415,7 @@ export class ChallengeController {
       if (this.current.status === 'none') this.showNone(this.current.problem);
       return;
     }
-    this.current = { status: 'active', view: readChallengeView(this.state), facts: this.facts, busy: this.busy, save: this.pending ? 'failed' : 'saved' };
+    this.current = { status: 'active', view: readChallengeView(this.state), facts: this.facts, busy: this.busy, save: this.pending ? 'failed' : 'saved', hold: this.hold };
     this.notify();
   }
 
