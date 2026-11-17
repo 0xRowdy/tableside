@@ -1,8 +1,7 @@
 // #158
 import type { ChallengeFact, Receipt, UnsequencedAttemptRecord } from '@tableside/engine';
 
-import type { AllowanceEffect } from '../../practice/store';
-import { CHALLENGE_CHARGE, type AttemptTransitionCommit, type NewAttempt, type TrainingStore } from '../store';
+import { CHALLENGE_CHARGE, type AttemptCharge, type AttemptTransitionCommit, type NewAttempt, type TrainingStore } from '../store';
 
 export interface TrainingStoreUnderTest {
   readonly store: TrainingStore;
@@ -29,11 +28,14 @@ export function newAttempt(attemptId: string, overrides: Partial<NewAttempt> = {
   };
 }
 
-export const chargeFor = (attemptId: string): AllowanceEffect => ({ effectId: { grant: 'grant-1', activity: attemptId, sequence: 0 }, kind: CHALLENGE_CHARGE, amount: '1' });
+export const chargeFor = (attemptId: string, chargedAt = 1_790_000_001_000): AttemptCharge => ({
+  effect: { effectId: { grant: 'grant-1', activity: attemptId, sequence: 0 }, kind: CHALLENGE_CHARGE, amount: '1' },
+  chargedAt,
+});
 
 const receipt = (sequence: number, command: string): Receipt => ({ commandId: `cmd-${sequence}`, sequence, command, disposition: 'applied' });
 
-export function attemptTransition(attemptId: string, priorSequence: number, options: { charge?: AllowanceEffect | null; command?: string; facts?: ChallengeFact[] } = {}): AttemptTransitionCommit {
+export function attemptTransition(attemptId: string, priorSequence: number, options: { charge?: AttemptCharge | null; command?: string; facts?: ChallengeFact[] } = {}): AttemptTransitionCommit {
   return {
     attemptId,
     priorSequence,
@@ -110,7 +112,7 @@ export function describeTrainingStoreContract(name: string, open: () => Promise<
         status: 'sequence-conflict',
         sequence: 1,
       });
-      await store.commitAttemptTransition(attemptTransition('a-1', 1, { charge: { ...chargeFor('a-1'), amount: '2' }, command: '{"kind":"answer","value":1}' }));
+      await store.commitAttemptTransition(attemptTransition('a-1', 1, { charge: chargeFor('a-1', 5), command: '{"kind":"answer","value":1}' }));
       const reopened = await subject.reopen();
       expect(await reopened.loadAttempt('a-1')).toMatchObject({ sequence: 2, checkpoint: attemptTransition('a-1', 1).checkpoint, charge: chargeFor('a-1') });
       expect(await reopened.readAttemptReceipt('a-1', 'cmd-1')).toEqual({
@@ -119,6 +121,20 @@ export function describeTrainingStoreContract(name: string, open: () => Promise<
         facts: attemptTransition('a-1', 1).facts,
       });
       expect(await reopened.readAttemptReceipt('a-1', 'cmd-9')).toBeNull();
+    });
+
+    it('discards an attempt only while nothing has been committed for it', async () => {
+      const { store } = await open();
+      await store.createAttempt(newAttempt('a-1'));
+      await store.commitAttemptTransition(attemptTransition('a-1', 0, { charge: chargeFor('a-1') }));
+      await store.discardUnchargedAttempt('a-1');
+      expect((await store.loadAttempt('a-1'))?.charge).toEqual(chargeFor('a-1'));
+      await store.recordAttempt(attemptRecord('a-1'));
+      await store.createAttempt(newAttempt('a-2'));
+      await store.discardUnchargedAttempt('a-2');
+      expect([await store.loadAttempt('a-2'), await store.findUnfinishedAttempt()]).toEqual([null, null]);
+      await store.createAttempt(newAttempt('a-3'));
+      expect((await store.findUnfinishedAttempt())?.attemptId).toBe('a-3');
     });
 
     it('writes each ended attempt one record, numbered in the device sequence, and frees the device for the next attempt', async () => {

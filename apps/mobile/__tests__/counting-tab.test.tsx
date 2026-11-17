@@ -113,5 +113,7 @@ describe('the Counting tab', () => {
     expect(screen.getByLabelText('Card values, 20 cards: 19 of 20')).toBeOnTheScreen();
     expect(screen.getByLabelText('Running count, Not tested: N/A')).toBeOnTheScreen();
     expect(screen.getByLabelText('True count, Not tested: N/A')).toBeOnTheScreen();
+    expect(screen.getByRole('button', { name: 'Retry with new cards' })).toBeEnabled();
+    expect(screen.getByText('Retry uses 1 challenge attempt.')).toBeOnTheScreen();
   });
 });

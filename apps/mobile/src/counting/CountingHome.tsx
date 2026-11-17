@@ -1,5 +1,6 @@
 // Spec 3 S3-01 PDCaD; #158
 
+import { CHALLENGE_VARIANTS, type ChallengeVariant } from '@tableside/engine';
 import { ClipboardCheck, GraduationCap, type LucideIcon } from 'lucide-react-native';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
@@ -8,6 +9,8 @@ import { Note, SettingsScreen } from '@/settings/SettingsParts';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/theme/tokens';
 import { CATEGORY_TEXT, COUNTING_TITLE, NOT_READY_HINT, RECOMMENDATIONS_NOTE, SUGGESTED_ORDER_LABEL, variantLabel } from '@/training/challenge-text';
 import type { CatalogCategory, CatalogEntry, ChallengeSetup } from '@/training/service';
+
+const VARIANT_ICON: Record<ChallengeVariant, LucideIcon> = { learn: GraduationCap, check: ClipboardCheck };
 
 export function CountingHome({ catalog, onChoose }: { catalog: readonly CatalogEntry[]; onChoose: (setup: ChallengeSetup) => void }) {
   return (
@@ -41,8 +44,9 @@ function CategoryCard({ step, entry, onChoose }: { step: number; entry: CatalogE
         {text.description}
       </Text>
       <View style={styles.actions}>
-        <VariantButton category={entry.category} variant="learn" icon={GraduationCap} ready={entry.ready.includes('learn')} onChoose={onChoose} />
-        <VariantButton category={entry.category} variant="check" icon={ClipboardCheck} ready={entry.ready.includes('check')} onChoose={onChoose} />
+        {CHALLENGE_VARIANTS.map((variant) => (
+          <VariantButton key={variant} category={entry.category} variant={variant} icon={VARIANT_ICON[variant]} ready={entry.ready.includes(variant)} onChoose={onChoose} />
+        ))}
       </View>
     </View>
   );

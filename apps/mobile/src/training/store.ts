@@ -6,7 +6,7 @@ import type { AllowanceEffect, MeteringBasis } from '../practice/store';
 
 export const CHALLENGE_ATTEMPT_RECORD_TYPE = 'challenge-attempt';
 
-// Spec 3 Attempt lifecycle › Charge: kind of the one allowance effect an attempt commits.
+// Spec 3 Attempt lifecycle › Charge
 export const CHALLENGE_CHARGE = 'challenge-attempt';
 
 export interface Admission {
@@ -24,9 +24,15 @@ export interface NewAttempt {
   readonly createdAt: number;
 }
 
+// Spec 3 Amendment 1 C6
+export interface AttemptCharge {
+  readonly effect: AllowanceEffect;
+  readonly chargedAt: number;
+}
+
 export interface StoredAttempt extends NewAttempt {
   readonly sequence: number;
-  readonly charge: AllowanceEffect | null;
+  readonly charge: AttemptCharge | null;
   readonly record: ChallengeAttemptRecord | null;
 }
 
@@ -37,7 +43,7 @@ export interface AttemptTransitionCommit {
   readonly receipt: Receipt;
   readonly facts: readonly ChallengeFact[];
   // Spec 3 Amendment 1 C6
-  readonly charge: AllowanceEffect | null;
+  readonly charge: AttemptCharge | null;
 }
 
 export interface CommittedAttemptTransition {
@@ -57,6 +63,8 @@ export interface ChallengeStore {
   findUnfinishedAttempt(): Promise<StoredAttempt | null>;
   commitAttemptTransition(commit: AttemptTransitionCommit): Promise<AttemptCommitOutcome>;
   readAttemptReceipt(attemptId: string, commandId: string): Promise<CommittedAttemptTransition | null>;
+  // Spec 3 Amendment 1 C6
+  discardUnchargedAttempt(attemptId: string): Promise<void>;
   // Spec 3 Synchronized record types › Challenge attempt
   recordAttempt(record: UnsequencedAttemptRecord): Promise<ChallengeAttemptRecord>;
   readAttemptRecords(): Promise<readonly ChallengeAttemptRecord[]>;

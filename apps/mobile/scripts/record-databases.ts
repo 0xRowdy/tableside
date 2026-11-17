@@ -168,7 +168,7 @@ async function playAttempt(store: SqliteActivityStore, specification: ChallengeS
   for (const [index, command] of commands.entries()) {
     const result = advanceChallenge(state, { sequence: state.sequence, commandId: `${specification.attemptId}/${state.sequence}`, command });
     if (result.status !== 'committed') throw new Error(`${specification.attemptId}: refused ${JSON.stringify(command)}`);
-    const charge = index === 0 ? { effectId: { grant: 'recorded', activity: specification.attemptId, sequence: 0 }, kind: CHALLENGE_CHARGE, amount: '1' } : null;
+    const charge = index === 0 ? { effect: { effectId: { grant: 'recorded', activity: specification.attemptId, sequence: 0 }, kind: CHALLENGE_CHARGE, amount: '1' }, chargedAt: CREATED_AT } : null;
     const outcome = await store.commitAttemptTransition({
       attemptId: specification.attemptId,
       priorSequence: state.sequence,

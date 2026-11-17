@@ -1,5 +1,6 @@
-// Spec 3 S3-02 buD2R, ZreSb (pattern for the card-values setup); #158
+// Spec 3 S3-02 buD2R, ZreSb; #158
 
+import { CHALLENGE_VARIANTS, type ChallengeVariant } from '@tableside/engine';
 import { Check, CircleAlert, Play, Ticket } from 'lucide-react-native';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
@@ -13,9 +14,12 @@ import {
   COUNTING_TITLE,
   NOT_READY_HINT,
   START_PROBLEM,
+  startLabel,
+  VARIANT_LABEL,
   VARIANT_HELP,
   variantLabel,
   WHAT_YOU_DO,
+  WHAT_YOU_DO_LABEL,
 } from '@/training/challenge-text';
 import type { CatalogEntry, ChallengeSetup, StartProblem } from '@/training/service';
 
@@ -37,15 +41,14 @@ export function ChallengeSetupScreen({
   onBack: () => void;
 }) {
   const text = CATEGORY_TEXT[entry.category];
-  const label = variantLabel(setup.variant);
   return (
     <SettingsScreen title={text.title} back={{ label: COUNTING_TITLE, onPress: onBack }}>
       <View style={styles.section}>
         <Text maxFontSizeMultiplier={textScale.body} style={styles.label}>
-          VARIANT
+          {VARIANT_LABEL}
         </Text>
         <View accessibilityRole="radiogroup" accessibilityLabel="Variant" style={styles.segmented}>
-          {(['learn', 'check'] as const).map((variant) => (
+          {CHALLENGE_VARIANTS.map((variant: ChallengeVariant) => (
             <Segment
               key={variant}
               label={variantLabel(variant)}
@@ -62,7 +65,7 @@ export function ChallengeSetupScreen({
       {WHAT_YOU_DO[entry.category] && (
         <View style={styles.section}>
           <Text maxFontSizeMultiplier={textScale.body} style={styles.label}>
-            WHAT YOU’LL DO
+            {WHAT_YOU_DO_LABEL}
           </Text>
           <Text maxFontSizeMultiplier={textScale.body} style={styles.help}>
             {WHAT_YOU_DO[entry.category]}
@@ -83,7 +86,7 @@ export function ChallengeSetupScreen({
           </Text>
         </View>
       )}
-      <Button label={`Start ${label} attempt`} icon={Play} stretch disabled={busy} onPress={onStart} />
+      <Button label={startLabel(setup.variant)} icon={Play} stretch disabled={busy} onPress={onStart} />
     </SettingsScreen>
   );
 }

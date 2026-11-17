@@ -138,6 +138,8 @@ Versioned identities are bumped by hand:
 | --- | --- |
 | `STANDARD_CRAPS.version` (`packages/engine/src/craps.ts`) | a new wager family or rule option; strategies and presets are checked against it |
 | `RECORD_VERSION` (`src/record.ts`) | any change to a completed record's fields |
+| `CHALLENGE_RECORD_VERSION` (`src/challenge-record.ts`) | any change to a challenge-attempt record's fields |
+| a challenge content definition's `version` (`CHALLENGE_CONTENT`, definitions) | any change to its length or coverage, or to how the engine generates its content; a new version starts fresh comparison groups |
 | `CANONICAL_ENCODING` (`src/fingerprint.ts`) | any change to the instruction schema or its normalization, which changes every fingerprint |
 | `CRAPS_HOUSE_EDGE_VERSION`, `ROULETTE_HOUSE_EDGE_VERSION` (definitions) | any change to a value or its derivation |
 | a benchmark profile's `version` (`benchmark-profiles.ts`) | any change to that profile |

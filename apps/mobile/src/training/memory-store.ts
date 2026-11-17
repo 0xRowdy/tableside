@@ -74,6 +74,13 @@ export class MemoryTrainingStore implements TrainingStore {
     });
   }
 
+  discardUnchargedAttempt(attemptId: string): Promise<void> {
+    return this.enqueue(() => {
+      const row = this.disk.attempts.get(attemptId);
+      if (row && parse<StoredAttempt>(row.attempt).sequence === 0) this.disk.attempts.delete(attemptId);
+    });
+  }
+
   recordAttempt(record: UnsequencedAttemptRecord): Promise<ChallengeAttemptRecord> {
     return this.injectable('recordAttempt', () => {
       const row = this.require(record.attemptId);

@@ -1,11 +1,12 @@
-// Spec 3 Testing Decisions › Seam 2 (Training service facade); Amendment 1 C6; #158
-import type { ChallengeView } from '@tableside/engine';
+// Spec 3 Testing Decisions › Seam 2, Amendment 1 C6; #158
+import { createChallenge, encodeChallengeCheckpoint, type ChallengeView } from '@tableside/engine';
 
 import { alwaysAllowed, type AccessSupervisor } from '@/practice/adapters';
 import { FakeClock, entropyFromWords, PI_WORDS } from '@/practice/testing/substitutes';
 import { MemoryTrainingStore } from '@/training/memory-store';
 import { TrainingService, type TrainingSnapshot } from '@/training/service';
 import { CHALLENGE_CHARGE } from '@/training/store';
+import { newAttempt } from '@/training/testing/store-contract';
 
 const LEARN_CARD_VALUES = { category: 'card-values', variant: 'learn' } as const;
 
@@ -78,7 +79,7 @@ describe('the Training service', () => {
     expect([view.phase, view.position, view.length, view.feedback]).toEqual(['question', 1, 20, null]);
     expect(admissions).toEqual([LEARN_CARD_VALUES]);
     const stored = await store.loadAttempt(view.attemptId);
-    expect(stored?.charge).toEqual({ effectId: { grant: 'spec-1-stub', activity: view.attemptId, sequence: 0 }, kind: CHALLENGE_CHARGE, amount: '1' });
+    expect(stored?.charge).toEqual({ effect: { effectId: { grant: 'spec-1-stub', activity: view.attemptId, sequence: 0 }, kind: CHALLENGE_CHARGE, amount: '1' }, chargedAt: 1_790_000_000_000 });
     expect(stored?.sequence).toBe(1);
     expect(await store.readAttemptReceipt(view.attemptId, `${view.attemptId}/0`)).toMatchObject({ receipt: { command: '{"kind":"begin"}' } });
   });
@@ -107,10 +108,10 @@ describe('the Training service', () => {
     await service.startAttempt(LEARN_CARD_VALUES);
     const view = active(service.snapshot());
     expect(view.position).toBe(1);
-    expect((await store.loadAttempt(view.attemptId))?.charge?.kind).toBe(CHALLENGE_CHARGE);
+    expect((await store.loadAttempt(view.attemptId))?.charge?.effect.kind).toBe(CHALLENGE_CHARGE);
   });
 
-  it('shows no content when the first-content commit fails, and starting again rechecks admission and charges once', async () => {
+  it('shows no content when the first-content commit fails; starting again asks admission again, replaces the uncharged attempt and charges once', async () => {
     const store = new MemoryTrainingStore();
     store.failNext('commitAttemptTransition', 'before');
     const { service, admissions } = setup({ store });
@@ -122,9 +123,35 @@ describe('the Training service', () => {
 
     await service.startAttempt(LEARN_CARD_VALUES);
     const view = active(service.snapshot());
-    expect(view.attemptId).toBe(uncharged?.attemptId);
     expect(admissions).toHaveLength(2);
     expect((await store.loadAttempt(view.attemptId))?.charge).not.toBeNull();
+    expect(await store.loadAttempt(uncharged!.attemptId)).toBeNull();
+  });
+
+  it('replaces a leftover uncharged attempt for another setup with the setup the learner chose', async () => {
+    const store = new MemoryTrainingStore();
+    const leftover = newAttempt('leftover', {
+      specification: { ...newAttempt('leftover').specification, content: { category: 'card-values', id: 'card-values', version: 1, length: 13, coverage: 'every-rank' } },
+    });
+    await store.createAttempt({ ...leftover, checkpoint: encodeChallengeCheckpoint(createChallenge(leftover.specification, leftover.random)) });
+    const { service } = setup({ store });
+    await service.load();
+    await service.startAttempt(LEARN_CARD_VALUES);
+    const view = active(service.snapshot());
+    expect(view.length).toBe(20);
+    expect(await store.loadAttempt('leftover')).toBeNull();
+  });
+
+  it('records the attempt as started when it was charged, not when it was created', async () => {
+    const store = new MemoryTrainingStore();
+    store.failNext('commitAttemptTransition', 'before');
+    const { service, clock } = setup({ store });
+    await service.load();
+    await service.startAttempt(LEARN_CARD_VALUES);
+    clock.advance(60_000);
+    await service.startAttempt(LEARN_CARD_VALUES);
+    await answerEveryCard(service, reference);
+    expect(service.snapshot()).toMatchObject({ status: 'ended', record: { startedAt: 1_790_000_060_000 } });
   });
 
   it('runs a Learn attempt to results: only first answers are scored, and completion writes one attempt record', async () => {

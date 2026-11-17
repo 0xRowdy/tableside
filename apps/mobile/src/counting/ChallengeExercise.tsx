@@ -1,4 +1,4 @@
-// Spec 3 S3-03 P4WjR (Learn, first answer wrong); #158
+// Spec 3 S3-03 P4WjR; #158
 
 import type { ChallengeCard, ChallengeView, HiLoValue, LearnFeedback } from '@tableside/engine';
 import { Check, CircleCheck, CircleX, X } from 'lucide-react-native';
@@ -6,20 +6,20 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
-import { cardRank, SUIT_GLYPH } from '@/play/blackjack-text';
+import { cardName, cardRank, signed, SUIT_GLYPH } from '@/play/blackjack-text';
 import { SaveFailedBanner } from '@/play/TableChrome';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/theme/tokens';
 import {
   CATEGORY_TEXT,
   CHOICE_TAG,
   choiceState,
-  challengeCardName,
   COACH_NAME,
   feedbackText,
+  NEXT_CARD,
   PACING_LABEL,
   progressText,
   spokenValue,
-  valueText,
+  TRY_AGAIN,
   variantLabel,
 } from '@/training/challenge-text';
 import type { LearnerCommand } from '@/training/service';
@@ -77,7 +77,7 @@ function PlayingCard({ card }: { card: ChallengeCard }) {
   const color = palette[SUIT_TOKEN[card.suit]];
   const glyph = SUIT_GLYPH[card.suit];
   return (
-    <View accessible accessibilityLabel={challengeCardName(card)} testID="challenge-card" style={styles.card}>
+    <View accessible accessibilityLabel={cardName(card)} testID="challenge-card" style={styles.card}>
       <View style={styles.corner}>
         <Text maxFontSizeMultiplier={1} style={[styles.rank, { color }]}>
           {cardRank(card)}
@@ -110,7 +110,7 @@ function Choice({ value, feedback, enabled, onPress }: { value: HiLoValue; feedb
       style={({ pressed }) => [styles.choice, { borderColor: tone }, state !== null && styles.choiceMarked, pressed && styles.pressed, focused && styles.focused]}
     >
       <Text maxFontSizeMultiplier={textScale.body} style={styles.choiceValue}>
-        {valueText(value)}
+        {signed(value)}
       </Text>
       {state && (
         <View style={styles.tag}>
@@ -148,8 +148,8 @@ function CoachNote({ feedback, canRetry, enabled, onCommand }: { feedback: Learn
         {text.detail}
       </Text>
       <View style={styles.coachActions}>
-        <CoachButton label="Next card" primary enabled={enabled} onPress={() => onCommand({ kind: 'next-item' })} />
-        {canRetry && <CoachButton label="Try this card again" enabled={enabled} onPress={() => onCommand({ kind: 'retry-item' })} />}
+        <CoachButton label={NEXT_CARD} primary enabled={enabled} onPress={() => onCommand({ kind: 'next-item' })} />
+        {canRetry && <CoachButton label={TRY_AGAIN} enabled={enabled} onPress={() => onCommand({ kind: 'retry-item' })} />}
       </View>
     </View>
   );

@@ -1,4 +1,4 @@
-// Spec 3 S3-08 liAfT (Results, Learn, completed); #158
+// Spec 3 S3-08 liAfT; #158
 
 import type { ChallengeAttemptRecord } from '@tableside/engine';
 import { CircleCheckBig, Divide, Hash, RotateCcw, Square, type LucideIcon } from 'lucide-react-native';
@@ -16,6 +16,7 @@ import {
   RESULT_ROWS,
   RESULTS_TITLE,
   RETRY_LABEL,
+  RETRY_NOTE,
   SCORES_LABEL,
   scoreText,
   spokenScore,
@@ -30,7 +31,7 @@ const ROW_ICON: Record<(typeof RESULT_ROWS)[number]['metric'], LucideIcon> = {
   'betting-adherence': Square,
 };
 
-export function ChallengeResults({ record, busy, onRetry }: { record: ChallengeAttemptRecord; busy: boolean; onRetry: () => void }) {
+export function ChallengeResults({ record, onRetry }: { record: ChallengeAttemptRecord; onRetry: () => void }) {
   const insets = useSafeAreaInsets();
   const { groupKey } = record;
   return (
@@ -83,7 +84,10 @@ export function ChallengeResults({ record, busy, onRetry }: { record: ChallengeA
             );
           })}
         </View>
-        <Button label={RETRY_LABEL} icon={RotateCcw} stretch disabled={busy} onPress={onRetry} />
+        <Button label={RETRY_LABEL} icon={RotateCcw} stretch onPress={onRetry} />
+        <Text maxFontSizeMultiplier={textScale.body} style={styles.note}>
+          {RETRY_NOTE}
+        </Text>
       </View>
     </ScrollView>
   );
@@ -108,4 +112,5 @@ const styles = StyleSheet.create({
   rowTitle: { fontFamily: fonts.uiBold, fontSize: 15, color: palette.foreground },
   rowDetail: { fontFamily: fonts.ui, fontSize: 13, color: palette.mutedForeground },
   score: { fontFamily: fonts.uiBold, fontSize: 14, color: palette.mutedForeground },
+  note: { fontFamily: fonts.ui, fontSize: 13, lineHeight: 19, color: palette.mutedForeground },
 });

@@ -20,9 +20,8 @@ import {
 
 import type { AccessDenial } from '../practice/adapters';
 import { SAVE_RETRY_MS } from '../practice/controller';
-import type { AllowanceEffect } from '../practice/store';
 import type { TrainingAdapters } from './adapters';
-import { CHALLENGE_CHARGE, type Admission, type CommittedAttemptTransition, type StoredAttempt } from './store';
+import { CHALLENGE_CHARGE, type Admission, type AttemptCharge, type CommittedAttemptTransition, type StoredAttempt } from './store';
 
 export type StartProblem = 'invalid-setup' | 'access-denied' | 'access-uncertain' | 'save-failed';
 
@@ -77,9 +76,17 @@ export class ChallengeController {
       } catch {
         return this.showNone('save-failed');
       }
-      if (stored && this.decode(stored).phase !== 'ready') return this.adopt(stored, this.decode(stored));
+      if (stored) {
+        const leftover = this.decode(stored);
+        if (leftover.phase !== 'ready') return this.adopt(stored, leftover);
+        // Spec 3 Amendment 1 C6
+        const discarded = await this.adapters.store.discardUnchargedAttempt(stored.attemptId).then(
+          () => true,
+          () => false,
+        );
+        if (!discarded) return this.showNone('save-failed');
+      }
 
-      // Spec 3 Amendment 1 C6
       const access = await this.adapters.access.beforeChallenge({ category: content.category, variant }).catch((): AccessDenial => UNANSWERED);
       if (access.status !== 'allowed') return this.showNone(access.status === 'uncertain' ? 'access-uncertain' : 'access-denied');
       const admission: Admission = {
@@ -88,33 +95,36 @@ export class ChallengeController {
         ...(access.allowancePolicyVersion === undefined ? {} : { allowancePolicyVersion: access.allowancePolicyVersion }),
       };
 
-      if (!stored) {
-        const attemptId = this.adapters.newId();
-        const random = streamIdentityFromEntropy(this.adapters.entropy);
-        const specification = { attemptId, owner: this.adapters.owner, device: this.adapters.device, variant, content };
-        const initial = createChallenge(specification, random);
-        const created = { attemptId, admission, specification, random, checkpoint: encodeChallengeCheckpoint(initial), createdAt: this.adapters.clock.now() };
-        try {
-          stored = await this.adapters.store.createAttempt(created);
-        } catch {
-          stored = await this.adapters.store.loadAttempt(attemptId).catch(() => null);
-        }
-        if (!stored) return this.showNone('save-failed');
+      const attemptId = this.adapters.newId();
+      const random = streamIdentityFromEntropy(this.adapters.entropy);
+      const specification = { attemptId, owner: this.adapters.owner, device: this.adapters.device, variant, content };
+      const initial = createChallenge(specification, random);
+      const created = { attemptId, admission, specification, random, checkpoint: encodeChallengeCheckpoint(initial), createdAt: this.adapters.clock.now() };
+      let attempt: StoredAttempt | null;
+      try {
+        attempt = await this.adapters.store.createAttempt(created);
+      } catch {
+        attempt = await this.adapters.store.loadAttempt(attemptId).catch(() => null);
       }
-      await this.beginCharged({ ...stored, admission }, this.decode(stored));
+      if (!attempt) return this.showNone('save-failed');
+      await this.beginCharged(attempt, initial);
     });
   }
 
   // Spec 3 Amendment 1 C6
   private async beginCharged(stored: StoredAttempt, state: ChallengeState): Promise<void> {
-    const charge: AllowanceEffect = { effectId: { grant: stored.admission.provenance, activity: stored.attemptId, sequence: 0 }, kind: CHALLENGE_CHARGE, amount: '1' };
+    const charge: AttemptCharge = {
+      effect: { effectId: { grant: stored.admission.provenance, activity: stored.attemptId, sequence: 0 }, kind: CHALLENGE_CHARGE, amount: '1' },
+      chargedAt: this.adapters.clock.now(),
+    };
     const committed = await this.commit(state, { kind: 'begin' }, charge);
     if (!committed) {
       this.state = null;
       this.attempt = null;
       return this.showNone('save-failed');
     }
-    this.adopt(stored, committed);
+    const charged = await this.adapters.store.loadAttempt(stored.attemptId).catch(() => null);
+    this.adopt(charged ?? { ...stored, charge }, committed);
   }
 
   async submit(command: LearnerCommand): Promise<void> {
@@ -154,7 +164,7 @@ export class ChallengeController {
   }
 
   // Spec 1 Durability steps 2–4
-  private async commit(state: ChallengeState, command: ChallengeCommand, charge: AllowanceEffect | null): Promise<ChallengeState | null> {
+  private async commit(state: ChallengeState, command: ChallengeCommand, charge: AttemptCharge | null): Promise<ChallengeState | null> {
     const commandId = `${state.attempt.id}/${state.sequence}`;
     const result = advanceChallenge(state, { sequence: state.sequence, commandId, command });
     if (result.status !== 'committed') return state;
@@ -180,13 +190,13 @@ export class ChallengeController {
     return decoded.state;
   }
 
-  // Spec 3 Attempt lifecycle › Durability: completion writes one attempt record.
+  // Spec 3 Attempt lifecycle › Durability
   private async record(): Promise<void> {
     const state = this.requireState();
     const attempt = this.attempt as StoredAttempt;
     const unsequenced = challengeAttemptRecord(state, {
       installation: this.adapters.device,
-      startedAt: attempt.createdAt,
+      startedAt: attempt.charge?.chargedAt ?? attempt.createdAt,
       endedAt: this.adapters.clock.now(),
       // TODO(#135)
       interrupted: false,

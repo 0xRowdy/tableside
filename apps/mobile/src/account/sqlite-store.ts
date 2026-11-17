@@ -16,6 +16,7 @@ import type {
 } from '../practice/store';
 import {
   CHALLENGE_ATTEMPT_RECORD_TYPE,
+  type AttemptCharge,
   type AttemptCommitOutcome,
   type AttemptTransitionCommit,
   type CommittedAttemptTransition,
@@ -448,6 +449,12 @@ export class SqliteActivityStore implements ActivityStore, TrainingStore {
     return this.transaction((tx) => readAttemptTransition(tx, attemptId, commandId));
   }
 
+  discardUnchargedAttempt(attemptId: string): Promise<void> {
+    return this.transaction(async (tx) => {
+      await tx.run(`DELETE FROM challenge_attempts WHERE attempt_id = ? AND sequence = 0 AND status = 'unfinished'`, [attemptId]);
+    });
+  }
+
   recordAttempt(record: UnsequencedAttemptRecord): Promise<ChallengeAttemptRecord> {
     return this.transaction(async (tx) => {
       if (record.owner !== this.identity.accountId || record.installation !== this.identity.installationId) {
@@ -456,7 +463,7 @@ export class SqliteActivityStore implements ActivityStore, TrainingStore {
       const attempt = await readAttempt(tx, record.attemptId);
       if (!attempt) throw new StoreError(`no attempt ${record.attemptId}`);
       if (attempt.record) return attempt.record;
-      // Spec 3 Synchronized record types: the installation's per-device sequence (spec 2).
+      // Spec 3 Synchronized record types
       const last = await tx.get<{ last: number }>('SELECT last FROM device_positions WHERE record_type = ?', [CHALLENGE_ATTEMPT_RECORD_TYPE]);
       const deviceSequence = (last?.last ?? 0) + 1;
       await tx.run('INSERT INTO device_positions (record_type, last) VALUES (?, ?) ON CONFLICT (record_type) DO UPDATE SET last = excluded.last', [
@@ -1136,7 +1143,7 @@ async function readAttempt(tx: SqlExecutor, attemptId: string): Promise<StoredAt
   if (!row) return null;
   const charge = await tx.get<BodyRow>(`SELECT ${BODY} FROM challenge_charges WHERE attempt_id = ?`, [attemptId]);
   const record = await tx.get<BodyRow>(`SELECT ${BODY} FROM challenge_attempt_records WHERE attempt_id = ?`, [attemptId]);
-  return { ...decode<NewAttempt>(row), sequence: row.sequence, charge: charge ? decode<AllowanceEffect>(charge) : null, record: record ? decode<ChallengeAttemptRecord>(record) : null };
+  return { ...decode<NewAttempt>(row), sequence: row.sequence, charge: charge ? decode<AttemptCharge>(charge) : null, record: record ? decode<ChallengeAttemptRecord>(record) : null };
 }
 
 async function readAttemptTransition(tx: SqlExecutor, attemptId: string, commandId: string): Promise<CommittedAttemptTransition | null> {

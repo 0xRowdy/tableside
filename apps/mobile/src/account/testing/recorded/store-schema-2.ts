@@ -2359,17 +2359,17 @@ export const RECORDED_STORE_SCHEMA_2: RecordedStoreSchema = {
         "challenge_charges": [
           {
             "attempt_id": "attempt-1",
-            "body": "{\"amount\":\"1\",\"effectId\":{\"activity\":\"attempt-1\",\"grant\":\"recorded\",\"sequence\":0},\"kind\":\"challenge-attempt\"}",
+            "body": "{\"chargedAt\":1790000000000,\"effect\":{\"amount\":\"1\",\"effectId\":{\"activity\":\"attempt-1\",\"grant\":\"recorded\",\"sequence\":0},\"kind\":\"challenge-attempt\"}}",
             "body_format": 1,
-            "body_length": 109,
-            "body_sha256": "9ca2d4f67bcc71d506555281b6d5fce3090cb284e6b4b0333d593099f827bfb4"
+            "body_length": 146,
+            "body_sha256": "712c679a40e2d6b53f08f0a29314d3d8e2dd5d3eacaf577bf38cca51d8b4c690"
           },
           {
             "attempt_id": "attempt-2",
-            "body": "{\"amount\":\"1\",\"effectId\":{\"activity\":\"attempt-2\",\"grant\":\"recorded\",\"sequence\":0},\"kind\":\"challenge-attempt\"}",
+            "body": "{\"chargedAt\":1790000000000,\"effect\":{\"amount\":\"1\",\"effectId\":{\"activity\":\"attempt-2\",\"grant\":\"recorded\",\"sequence\":0},\"kind\":\"challenge-attempt\"}}",
             "body_format": 1,
-            "body_length": 109,
-            "body_sha256": "330109b85586cec3d73608d35bfa1e2c943d70027188afb104aac9c91b7b0b86"
+            "body_length": 146,
+            "body_sha256": "1f0f7939f6ee176733b50390633f62f31002392fff894ed06cd62fdec1f4a2ec"
           }
         ],
         "challenge_attempt_records": [

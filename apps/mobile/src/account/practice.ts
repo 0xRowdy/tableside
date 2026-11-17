@@ -1,12 +1,6 @@
-import type { PracticeAdapters } from '../practice/adapters';
-import type { TrainingAdapters } from '../training/adapters';
 import type { AccountSession } from './vault';
 
-export function forAccountSession(adapters: PracticeAdapters, session: AccountSession): PracticeAdapters {
-  return { ...adapters, store: session.store, owner: session.accountId, device: session.installationId };
-}
-
 // #158
-export function trainingForAccountSession(adapters: TrainingAdapters, session: AccountSession): TrainingAdapters {
+export function forAccountSession<A extends { readonly store: object; readonly owner: string; readonly device: string }>(adapters: A, session: AccountSession): A {
   return { ...adapters, store: session.store, owner: session.accountId, device: session.installationId };
 }

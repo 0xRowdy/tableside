@@ -1,8 +1,8 @@
 // Spec 3 S3-01 PDCaD, S3-02 buD2R, S3-03 P4WjR, S3-08 liAfT; #158
 
-import type { ChallengeCard, ChallengeEntry, ChallengeMetric, HiLoValue, LearnFeedback, MetricResult } from '@tableside/engine';
+import type { ChallengeEntry, ChallengeMetric, ChallengeVariant, HiLoValue, LearnFeedback, MetricResult } from '@tableside/engine';
 
-import { cardName, signed } from '@/play/blackjack-text';
+import { rankName, signed } from '@/play/blackjack-text';
 import { GAME_WORDS } from '@/play/game-words';
 
 import type { CatalogCategory, StartProblem } from './service';
@@ -19,6 +19,11 @@ export const SUGGESTED_ORDER_LABEL = 'SUGGESTED ORDER · ALL FOUR AVAILABLE NOW'
 export const RECOMMENDATIONS_NOTE = 'Recommendations use your accuracy only, never speed or winnings. Nothing here is locked.';
 export const NOT_READY_HINT = 'Not available in this version yet.';
 
+export const VARIANT_LABEL = 'VARIANT';
+export const WHAT_YOU_DO_LABEL = 'WHAT YOU’LL DO';
+export const startLabel = (variant: ChallengeVariant) => `Start ${variantLabel(variant)} attempt`;
+export const FINDING_ATTEMPT = 'Finding your counting attempt…';
+
 export const VARIANT_HELP = "Check holds all feedback until the end. Learn tells you after each answer whether it's right, explains it and lets you retry.";
 export const WHAT_YOU_DO: Partial<Record<CatalogCategory, string>> = {
   'card-values': '20 cards covering every rank, one at a time. Choose +1, 0 or −1 for each. Only your first answer to each card is scored.',
@@ -34,33 +39,29 @@ export const START_PROBLEM: Record<StartProblem, string> = {
   'save-failed': 'Couldn’t save the attempt, so it didn’t start. Nothing was used. Try again.',
 };
 
-export const variantLabel = (variant: 'learn' | 'check') => (variant === 'learn' ? 'Learn' : 'Check');
+export const variantLabel = (variant: ChallengeVariant) => (variant === 'learn' ? 'Learn' : 'Check');
 
 // TODO(#136)
 export const PACING_LABEL = 'self-paced';
 
 export const progressText = (position: number, length: number) => `Card ${position} of ${length}`;
 
-export const valueText = (value: HiLoValue) => signed(value);
-
 export const spokenValue = (value: HiLoValue) => (value > 0 ? `plus ${value}` : value < 0 ? `minus ${-value}` : '0');
 
-export const challengeCardName = (card: ChallengeCard) => cardName(card);
-
-const RANK_WORD = ['Ace', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'Jack', 'Queen', 'King'];
-
-// Spec 3 Learn, Check and assistance: the explanation facts, rendered as prose.
+// Spec 3 Learn, Check and assistance
 export function feedbackText(feedback: LearnFeedback): { readonly kicker: string; readonly headline: string; readonly detail: string } {
   const { explanation } = feedback;
   const kicker = feedback.correct ? (feedback.scored ? 'CORRECT' : 'CORRECT ON RETRY · YOUR FIRST ANSWER IS SCORED') : 'NOT QUITE · YOUR FIRST ANSWER IS SCORED';
   return {
     kicker,
-    headline: `${RANK_WORD[explanation.rank - 1]} counts ${signed(explanation.value)} in Hi-Lo.`,
+    headline: `${rankName(explanation.rank)} counts ${signed(explanation.value)} in Hi-Lo.`,
     detail: 'Hi-Lo values: 2 to 6 are +1. 7, 8 and 9 are 0. 10, J, Q, K and A are −1.',
   };
 }
 
 export const COACH_NAME = 'Marcus · Learn';
+export const NEXT_CARD = 'Next card';
+export const TRY_AGAIN = 'Try this card again';
 
 export const choiceState = (value: HiLoValue, feedback: LearnFeedback | null): 'your-answer' | 'correct' | null => {
   if (!feedback) return null;
@@ -79,6 +80,8 @@ export const COMPLETED_LEARN_TEXT = 'Learn scores your first answer to each card
 export const SCORES_LABEL = 'SKILL SCORES · FIRST ANSWERS';
 // TODO(#135)
 export const RETRY_LABEL = 'Retry with new cards';
+// TODO(#150)
+export const RETRY_NOTE = 'Retry uses 1 challenge attempt.';
 
 export const RESULT_ROWS: readonly { readonly metric: ChallengeMetric; readonly title: string; readonly tested: (length: number) => string }[] = [
   { metric: 'card-values', title: 'Card values', tested: (length) => `${length} cards` },

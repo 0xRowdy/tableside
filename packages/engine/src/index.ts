@@ -299,6 +299,7 @@ export {
   advanceChallenge,
   CHALLENGE_CATEGORIES,
   CHALLENGE_METRICS,
+  CHALLENGE_VARIANTS,
   challengeCheckpointHash,
   challengeResults,
   ChallengeSpecificationError,

@@ -15,7 +15,9 @@ export const CHALLENGE_CATEGORIES: readonly ChallengeCategory[] = ['card-values'
 
 export type ChallengeVariant = 'learn' | 'check';
 
-// Spec 3 Modules › Definitions package: a versioned challenge content definition.
+export const CHALLENGE_VARIANTS: readonly ChallengeVariant[] = ['learn', 'check'];
+
+// Spec 3 Modules › Definitions package
 export interface CardValuesContent {
   readonly category: 'card-values';
   readonly id: string;
@@ -108,7 +110,7 @@ export type ChallengeAdvance =
   | { readonly status: 'duplicate'; readonly receipt: Receipt }
   | { readonly status: 'rejected'; readonly reason: RejectionReason; readonly message: string };
 
-// Spec 3 Scoring and review: a metric with zero opportunities is N/A (null), never 100%.
+// Spec 3 Scoring and review
 export type ChallengeMetric = 'card-values' | 'running-count' | 'true-count' | 'playing-adherence' | 'betting-adherence';
 
 export const CHALLENGE_METRICS: readonly ChallengeMetric[] = ['card-values', 'running-count', 'true-count', 'playing-adherence', 'betting-adherence'];
@@ -173,7 +175,6 @@ export class ChallengeSpecificationError extends Error {
 
 const SUITS: readonly Suit[] = ['clubs', 'diamonds', 'hearts', 'spades'];
 const RANK_COUNT = 13;
-const VARIANTS: readonly ChallengeVariant[] = ['learn', 'check'];
 
 export function contentProblem(content: unknown): string | undefined {
   if (!hasExactKeys(content, ['category', 'id', 'version', 'length', 'coverage'])) return 'a card-values content definition has a category, id, version, length and coverage';
@@ -190,7 +191,7 @@ export function createChallenge(spec: ChallengeSpecification, random: RandomStre
   };
   if (!hasExactKeys(spec, ['attemptId', 'owner', 'device', 'variant', 'content'])) fail('the specification has an attempt id, owner, device, variant and content');
   if (!isText(spec.attemptId) || !isText(spec.owner) || !isText(spec.device)) fail('attempt id, owner and device are required');
-  if (!VARIANTS.includes(spec.variant)) fail(`unknown variant ${String(spec.variant)}`);
+  if (!CHALLENGE_VARIANTS.includes(spec.variant)) fail(`unknown variant ${String(spec.variant)}`);
   // TODO(#132)
   if (spec.variant !== 'learn') fail('only the Learn variant is built');
   const problem = contentProblem(spec.content);
@@ -323,7 +324,7 @@ function apply(state: ChallengeState, command: ChallengeCommand): { change: Chan
   }
 }
 
-// Spec 3 Scoring and review: exact first-answer correct/total.
+// Spec 3 Scoring and review
 export function challengeResults(state: ChallengeState): ChallengeResults | null {
   if (state.phase !== 'ended' || state.ending === null) return null;
   const review: CardValueReview[] = state.answers.map((answers, index) => {
@@ -335,7 +336,7 @@ export function challengeResults(state: ChallengeState): ChallengeResults | null
   return { ending: state.ending, metrics, review, assisted: assisted(state), assistanceStep: null };
 }
 
-// Spec 3 Learn, Check and assistance: Learn attempts are inherently assisted.
+// Spec 3 Learn, Check and assistance
 const assisted = (state: ChallengeState) => state.variant === 'learn';
 
 export function readChallengeView(state: ChallengeState): ChallengeView {
@@ -375,9 +376,10 @@ export type ChallengeCheckpointResult =
   | { readonly ok: true; readonly state: ChallengeState }
   | { readonly ok: false; readonly error: { readonly kind: 'damaged' | 'unsupported'; readonly message: string } };
 
-// Spec 3 Challenge content › Generation
+// Spec 3 Attempt lifecycle › Durability
 export function decodeChallengeCheckpoint(text: string): ChallengeCheckpointResult {
   const damaged = (message: string) => ({ ok: false, error: { kind: 'damaged', message } }) as const;
+  const unsupported = (message: string) => ({ ok: false, error: { kind: 'unsupported', message } }) as const;
   let value: unknown;
   try {
     value = JSON.parse(text);
@@ -386,14 +388,14 @@ export function decodeChallengeCheckpoint(text: string): ChallengeCheckpointResu
   }
   if (!isRecord(value) || !isRecord(value.identities)) return damaged('damaged identities');
   const { identities } = value;
-  if (typeof value.schema === 'number' && value.schema !== STATE_SCHEMA_VERSION) return { ok: false, error: { kind: 'unsupported', message: `unsupported state schema ${value.schema}` } };
-  if (typeof identities.engine === 'string' && identities.engine !== ENGINE_VERSION) return { ok: false, error: { kind: 'unsupported', message: `unsupported engine ${identities.engine}` } };
+  if (typeof value.schema === 'number' && value.schema !== STATE_SCHEMA_VERSION) return unsupported(`unsupported state schema ${value.schema}`);
+  if (typeof identities.engine === 'string' && identities.engine !== ENGINE_VERSION) return unsupported(`unsupported engine ${identities.engine}`);
   if (typeof identities.category === 'string' && !CHALLENGE_CATEGORIES.includes(identities.category as ChallengeCategory)) {
-    return { ok: false, error: { kind: 'unsupported', message: `unsupported challenge category ${identities.category}` } };
+    return unsupported(`unsupported challenge category ${identities.category}`);
   }
   const random = identities.random;
   if (isRecord(random) && typeof random.protocol === 'number' && random.protocol !== RANDOM_PROTOCOL_VERSION) {
-    return { ok: false, error: { kind: 'unsupported', message: `unsupported random protocol ${random.protocol}` } };
+    return unsupported(`unsupported random protocol ${random.protocol}`);
   }
   const attempt = value.attempt;
   if (!isRecord(attempt) || !Array.isArray(value.receipts)) return damaged('damaged attempt');

@@ -11,7 +11,7 @@ export type AssistanceClass = 'learn' | 'assisted-check' | 'unassisted-check';
 
 export type ChallengePacing = 'self-paced' | '3s' | '2s' | '1s';
 
-// Spec 3 Comparison groups: the table fields of the group key.
+// Spec 3 Comparison groups
 export interface TableGroupKey {
   readonly rules: VersionedIdentity;
   readonly penetration: number;
@@ -36,7 +36,7 @@ export interface ChallengeGroupKey {
   readonly table: TableGroupKey | null;
 }
 
-// Spec 3 Attempt lifecycle: ending reasons.
+// Spec 3 Attempt lifecycle
 export type AttemptEndingReason = 'completed' | 'abandoned' | 'insufficient-funds' | 'unusable';
 
 export interface ChallengeFinances {
