@@ -16,8 +16,6 @@ export interface ChallengeAllowanceState {
   challengeAllowance(): Promise<ChallengeAllowance>;
 }
 
-export const canStartChallenge = (allowance: ChallengeAllowance) => allowance.kind === 'premium' || (allowance.allowanceDevice.here && allowance.left > 0);
-
 // Spec 5 Summary (launch policy)
 const STUB_POLICY = { challengeAttempts: 5 } as const;
 

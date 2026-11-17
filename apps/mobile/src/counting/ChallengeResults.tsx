@@ -7,7 +7,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/Button';
 import { fonts, palette, radius, space, textScale } from '@/theme/tokens';
-import { canStartChallenge, type ChallengeAllowance } from '@/training/allowance';
 import {
   CATEGORY_TEXT,
   COMPLETED_LEARN,
@@ -16,12 +15,13 @@ import {
   PACING_LABEL,
   RESULT_ROWS,
   RESULTS_TITLE,
-  resultsAllowanceText,
   RETRY_LABEL,
   SCORES_LABEL,
   scoreText,
   spokenScore,
+  startWaits,
   variantLabel,
+  type AllowanceCopy,
 } from '@/training/challenge-text';
 
 const ROW_ICON: Record<(typeof RESULT_ROWS)[number]['metric'], LucideIcon> = {
@@ -32,7 +32,7 @@ const ROW_ICON: Record<(typeof RESULT_ROWS)[number]['metric'], LucideIcon> = {
   'betting-adherence': Square,
 };
 
-export function ChallengeResults({ record, allowance, onRetry }: { record: ChallengeAttemptRecord; allowance: ChallengeAllowance | undefined; onRetry: () => void }) {
+export function ChallengeResults({ record, allowance, onRetry }: { record: ChallengeAttemptRecord; allowance: AllowanceCopy | undefined; onRetry: () => void }) {
   const insets = useSafeAreaInsets();
   const { groupKey } = record;
   return (
@@ -85,10 +85,10 @@ export function ChallengeResults({ record, allowance, onRetry }: { record: Chall
             );
           })}
         </View>
-        <Button label={RETRY_LABEL} icon={RotateCcw} stretch disabled={!allowance || !canStartChallenge(allowance)} onPress={onRetry} />
+        <Button label={RETRY_LABEL} icon={RotateCcw} stretch disabled={startWaits(allowance)} onPress={onRetry} />
         {allowance && (
           <Text maxFontSizeMultiplier={textScale.body} style={styles.note}>
-            {resultsAllowanceText(allowance)}
+            {allowance.results}
           </Text>
         )}
       </View>

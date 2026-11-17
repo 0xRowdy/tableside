@@ -31,8 +31,9 @@ jest.mock('@/training/app-adapters', () => {
   };
 });
 
-// 2026-11-18T07:00:00Z is midnight in Denver (MST, UTC−7)
-const MOUNTAIN_FREE: ChallengeAllowance = { kind: 'free', amount: 5, left: 4, resetsAt: Date.UTC(2026, 10, 18, 7), timeZone: 'America/Denver', allowanceDevice: { here: true } };
+const MIDNIGHT_IN_DENVER_MST = Date.UTC(2026, 10, 18, 7);
+const MIDNIGHT_IN_LOS_ANGELES_PST = Date.UTC(2026, 10, 18, 8);
+const MOUNTAIN_FREE: ChallengeAllowance = { kind: 'free', amount: 5, left: 4, resetsAt: MIDNIGHT_IN_DENVER_MST, timeZone: 'America/Denver', allowanceDevice: { here: true } };
 
 // Spec 1 Game rules, Counting (Hi-Lo)
 const HI_LO: Record<string, string> = { Ace: 'minus 1', '2': 'plus 1', '3': 'plus 1', '4': 'plus 1', '5': 'plus 1', '6': 'plus 1', '7': '0', '8': '0', '9': '0', '10': 'minus 1', Jack: 'minus 1', Queen: 'minus 1', King: 'minus 1' };
@@ -86,8 +87,7 @@ describe('the Counting tab', () => {
     });
 
     it('takes the amounts and timezone from the policy, not a fixed 5', async () => {
-      // 2026-11-18T08:00:00Z is midnight in Los Angeles (PST, UTC−8)
-      await openTab({ ...MOUNTAIN_FREE, amount: 10, left: 7, resetsAt: Date.UTC(2026, 10, 18, 8), timeZone: 'America/Los_Angeles' });
+      await openTab({ ...MOUNTAIN_FREE, amount: 10, left: 7, resetsAt: MIDNIGHT_IN_LOS_ANGELES_PST, timeZone: 'America/Los_Angeles' });
       expect(await screen.findByText('7 of 10 challenge attempts left today · resets at 12:00 AM Pacific Time')).toBeOnTheScreen();
     });
 

@@ -1,28 +1,16 @@
 // Spec 3 S3-01 PDCaD, RqPCB; spec 5 S5-17 j3UhJ; #158, #150
 
 import { CHALLENGE_VARIANTS, type ChallengeVariant } from '@tableside/engine';
-import { CircleSlash, ClipboardCheck, GraduationCap, Smartphone, Ticket, type LucideIcon } from 'lucide-react-native';
-import { useState } from 'react';
+import { ClipboardCheck, GraduationCap, type LucideIcon } from 'lucide-react-native';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
-import { LinkButton } from '@/play/setup/SetupParts';
 import { Note, SettingsScreen } from '@/settings/SettingsParts';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/theme/tokens';
-import type { ChallengeAllowance } from '@/training/allowance';
-import {
-  ALLOWANCE_ACTION_LABEL,
-  ARRIVES_LATER,
-  CATEGORY_TEXT,
-  COUNTING_TITLE,
-  countingAllowanceBanner,
-  elsewhereStartText,
-  NOT_READY_HINT,
-  RECOMMENDATIONS_NOTE,
-  SUGGESTED_ORDER_LABEL,
-  variantLabel,
-} from '@/training/challenge-text';
+import { CATEGORY_TEXT, COUNTING_TITLE, NOT_READY_HINT, RECOMMENDATIONS_NOTE, SUGGESTED_ORDER_LABEL, variantLabel, type AllowanceCopy } from '@/training/challenge-text';
 import type { CatalogCategory, CatalogEntry, ChallengeSetup } from '@/training/service';
+
+import { AllowanceBanner } from './AllowanceBanner';
 
 const VARIANT_ICON: Record<ChallengeVariant, LucideIcon> = { learn: GraduationCap, check: ClipboardCheck };
 
@@ -32,47 +20,22 @@ export function CountingHome({
   onChoose,
 }: {
   catalog: readonly CatalogEntry[];
-  allowance: ChallengeAllowance | undefined;
+  allowance: AllowanceCopy | undefined;
   onChoose: (setup: ChallengeSetup) => void;
 }) {
+  // Spec 5 S5-17 j3UhJ
+  const elsewhere = allowance?.standing === 'elsewhere' ? allowance.setup.text : null;
   return (
     <SettingsScreen title={COUNTING_TITLE}>
-      {allowance && <AllowanceBanner allowance={allowance} />}
+      {allowance && <AllowanceBanner standing={allowance.standing} {...allowance.banner} />}
       <Text maxFontSizeMultiplier={textScale.body} style={styles.label}>
         {SUGGESTED_ORDER_LABEL}
       </Text>
       {catalog.map((entry, index) => (
-        <CategoryCard key={entry.category} step={index + 1} entry={entry} elsewhere={elsewhereStartText(allowance)} onChoose={onChoose} />
+        <CategoryCard key={entry.category} step={index + 1} entry={entry} elsewhere={elsewhere} onChoose={onChoose} />
       ))}
       <Note>{RECOMMENDATIONS_NOTE}</Note>
     </SettingsScreen>
-  );
-}
-
-function AllowanceBanner({ allowance }: { allowance: ChallengeAllowance }) {
-  const banner = countingAllowanceBanner(allowance);
-  const [later, setLater] = useState(false);
-  const Icon = banner.used ? CircleSlash : banner.action === 'offline-and-allowance' ? Smartphone : Ticket;
-  return (
-    <View testID="allowance-banner" style={[styles.banner, banner.used && styles.bannerUsed]}>
-      <Icon color={banner.used ? palette.warning : palette.foreground} size={20} />
-      <View style={styles.bannerText}>
-        <Text maxFontSizeMultiplier={textScale.body} style={styles.bannerTitle}>
-          {banner.title}
-        </Text>
-        {banner.detail && (
-          <Text maxFontSizeMultiplier={textScale.body} style={styles.bannerDetail}>
-            {banner.detail}
-          </Text>
-        )}
-        {banner.action && <LinkButton label={ALLOWANCE_ACTION_LABEL[banner.action]} onPress={() => setLater(true)} />}
-        {banner.action && later && (
-          <Text accessibilityRole="alert" maxFontSizeMultiplier={textScale.body} style={styles.bannerDetail}>
-            {ARRIVES_LATER[banner.action]}
-          </Text>
-        )}
-      </View>
-    </View>
   );
 }
 
@@ -166,11 +129,6 @@ function VariantButton({
 }
 
 const styles = StyleSheet.create({
-  banner: { flexDirection: 'row', gap: space[3], padding: 14, borderRadius: 12, borderWidth: 1, borderColor: palette.controlBorder, backgroundColor: palette.card },
-  bannerUsed: { borderColor: palette.warning },
-  bannerText: { flex: 1, gap: space[1] },
-  bannerTitle: { fontFamily: fonts.uiBold, fontSize: 14, lineHeight: 20, color: palette.foreground },
-  bannerDetail: { fontFamily: fonts.ui, fontSize: 13, lineHeight: 18, color: palette.mutedForeground },
   label: { fontFamily: fonts.uiBold, fontSize: 12, letterSpacing: 0.6, color: palette.mutedForeground },
   card: { gap: space[3] - 2, padding: space[4], borderRadius: radius.lg, borderWidth: 1, borderColor: palette.border, backgroundColor: palette.card },
   head: { flexDirection: 'row', alignItems: 'center', gap: space[3] },

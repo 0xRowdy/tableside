@@ -1,4 +1,4 @@
-// Spec 3 S3-01 PDCaD, S3-02 buD2R, S3-03 P4WjR, S3-08 liAfT; #158
+// Spec 3 S3-01 PDCaD, RqPCB, S3-02 buD2R, S3-03 P4WjR, S3-08 liAfT, CEb6T; S5-17 j3UhJ; #150
 
 import type { ChallengeEntry, ChallengeMetric, ChallengeVariant, HiLoValue, LearnFeedback, MetricResult } from '@tableside/engine';
 
@@ -30,15 +30,18 @@ export const WHAT_YOU_DO: Partial<Record<CatalogCategory, string>> = {
   'card-values': '20 cards covering every rank, one at a time. Choose +1, 0 or −1 for each. Only your first answer to each card is scored.',
 };
 
-// Spec 3 Amendment 4 §2–3; spec 5 Amendment 7 §4; S3-01 PDCaD, RqPCB, S5-17 j3UhJ
+// Spec 3 Amendment 4 §2–3; spec 5 Amendment 1 E, Amendment 7 §4
 export type AllowanceAction = 'see-premium' | 'offline-and-allowance';
 
-export interface AllowanceBanner {
-  readonly title: string;
-  readonly detail: string | null;
-  readonly action: AllowanceAction | null;
-  readonly used: boolean;
+export interface AllowanceCopy {
+  readonly standing: 'premium' | 'available' | 'used-up' | 'elsewhere';
+  readonly banner: { readonly title: string; readonly detail: string | null; readonly action: AllowanceAction | null };
+  readonly setup: { readonly text: string; readonly action: AllowanceAction | null };
+  readonly results: string;
 }
+
+// Spec 3 Training service interface › Start attempt
+export const startWaits = (copy: AllowanceCopy | undefined) => copy?.standing === 'used-up' || copy?.standing === 'elsewhere';
 
 export const ALLOWANCE_ACTION_LABEL: Record<AllowanceAction, string> = { 'see-premium': 'See premium', 'offline-and-allowance': 'Offline & allowance' };
 export const ARRIVES_LATER: Record<AllowanceAction, string> = {
@@ -47,11 +50,8 @@ export const ARRIVES_LATER: Record<AllowanceAction, string> = {
 };
 
 const UNLIMITED = 'Unlimited challenges (premium)';
-const MOVE_HERE = 'Move them here in More › Settings › Offline & allowance.';
+const RETRY_STARTS_FRESH = 'Retry starts a fresh attempt.';
 const attempts = (count: number) => (count === 1 ? 'attempt' : 'attempts');
-const elsewhere = (name: string) => `Today's challenge attempts are on ${name}.`;
-const usedUp = (amount: number, resetsAt: number, timeZone: string) =>
-  `You've used today's ${amount} challenge ${attempts(amount)}. They reset at ${resetTimeText(resetsAt, timeZone)}.`;
 
 // Spec 5 Allowance device, transfer, replacement and timezone
 export function resetTimeText(instant: number, timeZone: string): string {
@@ -61,52 +61,47 @@ export function resetTimeText(instant: number, timeZone: string): string {
   try {
     found = parts('longGeneric');
   } catch {
-    found = parts('long');
+    found = parts('long').map((item) => (item.type === 'timeZoneName' ? { ...item, value: item.value.replace(/ (Standard|Daylight) Time$/, ' Time') } : item));
   }
   const part = (type: Intl.DateTimeFormatPartTypes) => found.find((item) => item.type === type)?.value ?? '';
   return `${part('hour')}:${part('minute')} ${part('dayPeriod')} ${part('timeZoneName')}`;
 }
 
-export function countingAllowanceBanner(allowance: ChallengeAllowance): AllowanceBanner {
-  if (allowance.kind === 'premium') return { title: UNLIMITED, detail: null, action: null, used: false };
+export function allowanceCopy(allowance: ChallengeAllowance): AllowanceCopy {
+  if (allowance.kind === 'premium') {
+    return { standing: 'premium', banner: { title: UNLIMITED, detail: null, action: null }, setup: { text: UNLIMITED, action: null }, results: `${UNLIMITED}. ${RETRY_STARTS_FRESH}` };
+  }
   const { amount, left, resetsAt, timeZone, allowanceDevice } = allowance;
-  if (!allowanceDevice.here) return { title: elsewhere(allowanceDevice.name), detail: MOVE_HERE, action: 'offline-and-allowance', used: false };
-  if (left === 0) {
+  if (!allowanceDevice.here) {
+    const where = `Today's challenge attempts are on ${allowanceDevice.name}.`;
+    const moveHere = 'Move them here in More › Settings › Offline & allowance.';
     return {
-      title: 'No challenge attempts left today',
-      detail: `${usedUp(amount, resetsAt, timeZone)} Lessons, worked examples and your records stay open.`,
-      action: 'see-premium',
-      used: true,
+      standing: 'elsewhere',
+      banner: { title: where, detail: moveHere, action: 'offline-and-allowance' },
+      setup: { text: `${where} ${moveHere}`, action: null },
+      results: `${where} ${moveHere}`,
+    };
+  }
+  const reset = resetTimeText(resetsAt, timeZone);
+  if (left === 0) {
+    const usedUp = `You've used today's ${amount} challenge ${attempts(amount)}. They reset at ${reset}.`;
+    return {
+      standing: 'used-up',
+      banner: { title: 'No challenge attempts left today', detail: `${usedUp} Lessons, worked examples and your records stay open.`, action: 'see-premium' },
+      setup: { text: usedUp, action: 'see-premium' },
+      results: usedUp,
     };
   }
   return {
-    title: `${left} of ${amount} challenge ${attempts(amount)} left today · resets at ${resetTimeText(resetsAt, timeZone)}`,
-    detail: "Starting an attempt uses one. Resuming one, showing the count and lessons don't.",
-    action: 'see-premium',
-    used: false,
+    standing: 'available',
+    banner: {
+      title: `${left} of ${amount} challenge ${attempts(amount)} left today · resets at ${reset}`,
+      detail: "Starting an attempt uses one. Resuming one, showing the count and lessons don't.",
+      action: 'see-premium',
+    },
+    setup: { text: `Starting uses 1 of your ${left} ${attempts(left)} left today. Resuming doesn't use another.`, action: null },
+    results: `${left} ${attempts(left)} left today. ${RETRY_STARTS_FRESH}`,
   };
-}
-
-// Spec 5 S5-17 j3UhJ
-export const elsewhereStartText = (allowance: ChallengeAllowance | undefined) =>
-  allowance?.kind === 'free' && !allowance.allowanceDevice.here ? `${elsewhere(allowance.allowanceDevice.name)} ${MOVE_HERE}` : null;
-
-// Spec 3 S3-02 buD2R
-export function setupAllowanceText(allowance: ChallengeAllowance): string {
-  if (allowance.kind === 'premium') return UNLIMITED;
-  const { amount, left, resetsAt, timeZone, allowanceDevice } = allowance;
-  if (!allowanceDevice.here) return `${elsewhere(allowanceDevice.name)} ${MOVE_HERE}`;
-  if (left === 0) return usedUp(amount, resetsAt, timeZone);
-  return `Starting uses 1 of your ${left} ${attempts(left)} left today. Resuming doesn't use another.`;
-}
-
-// Spec 3 S3-08 CEb6T; spec 5 Amendment 1 E
-export function resultsAllowanceText(allowance: ChallengeAllowance): string {
-  if (allowance.kind === 'premium') return `${UNLIMITED}. Retry starts a fresh attempt.`;
-  const { amount, left, resetsAt, timeZone, allowanceDevice } = allowance;
-  if (!allowanceDevice.here) return `${elsewhere(allowanceDevice.name)} ${MOVE_HERE}`;
-  if (left === 0) return usedUp(amount, resetsAt, timeZone);
-  return `${left} ${attempts(left)} left today. Retry starts a fresh attempt.`;
 }
 
 export const START_PROBLEM: Record<StartProblem, string> = {

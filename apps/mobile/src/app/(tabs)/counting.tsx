@@ -8,12 +8,12 @@ import { ChallengeResults } from '@/counting/ChallengeResults';
 import { ChallengeSetupScreen } from '@/counting/ChallengeSetupScreen';
 import { CountingHome } from '@/counting/CountingHome';
 import { useLoaded } from '@/hooks/use-loaded';
-import { COUNTING_TITLE, FINDING_ATTEMPT } from '@/training/challenge-text';
-import { setupFor, type ChallengeSetup, type TrainingService } from '@/training/service';
+import { allowanceCopy, COUNTING_TITLE, FINDING_ATTEMPT } from '@/training/challenge-text';
+import { setupFor, type ChallengeSetup, type TrainingService, type TrainingSnapshot } from '@/training/service';
 import { useTraining } from '@/training/TrainingProvider';
 
 const lastSetupOf = (service: TrainingService) => service.lastSetup();
-const allowanceOf = (service: TrainingService, _status: string) => service.allowance();
+const allowanceOf = async (service: TrainingService, _reloadOnStatus: TrainingSnapshot['status']) => allowanceCopy(await service.allowance());
 
 export default function Counting() {
   const { service, snapshot } = useTraining();

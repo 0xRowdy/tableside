@@ -1,32 +1,30 @@
 // Spec 3 S3-02 buD2R, ZreSb, Amendment 4 §2–3; #158, #150
 
 import { CHALLENGE_VARIANTS, type ChallengeVariant } from '@tableside/engine';
-import { Check, CircleAlert, Play, Ticket } from 'lucide-react-native';
-import { useState } from 'react';
+import { Check, CircleAlert, Play } from 'lucide-react-native';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Button } from '@/components/Button';
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
-import { LinkButton } from '@/play/setup/SetupParts';
 import { SettingsScreen } from '@/settings/SettingsParts';
 import { fonts, palette, space, textScale } from '@/theme/tokens';
-import { canStartChallenge, type ChallengeAllowance } from '@/training/allowance';
 import {
-  ALLOWANCE_ACTION_LABEL,
-  ARRIVES_LATER,
   CATEGORY_TEXT,
   COUNTING_TITLE,
   NOT_READY_HINT,
-  setupAllowanceText,
   START_PROBLEM,
   startLabel,
+  startWaits,
   VARIANT_LABEL,
   VARIANT_HELP,
   variantLabel,
   WHAT_YOU_DO,
   WHAT_YOU_DO_LABEL,
+  type AllowanceCopy,
 } from '@/training/challenge-text';
 import type { CatalogEntry, ChallengeSetup, StartProblem } from '@/training/service';
+
+import { AllowanceBanner } from './AllowanceBanner';
 
 export function ChallengeSetupScreen({
   entry,
@@ -40,7 +38,7 @@ export function ChallengeSetupScreen({
 }: {
   entry: CatalogEntry;
   setup: ChallengeSetup;
-  allowance: ChallengeAllowance | undefined;
+  allowance: AllowanceCopy | undefined;
   problem: StartProblem | null;
   busy: boolean;
   onChange: (setup: ChallengeSetup) => void;
@@ -79,7 +77,7 @@ export function ChallengeSetupScreen({
           </Text>
         </View>
       )}
-      {allowance && <AllowanceLine allowance={allowance} />}
+      {allowance && <AllowanceBanner standing={allowance.standing} title={allowance.setup.text} action={allowance.setup.action} />}
       {problem && (
         <View style={[styles.banner, styles.problem]}>
           <CircleAlert color={palette.destructive} size={20} />
@@ -88,29 +86,8 @@ export function ChallengeSetupScreen({
           </Text>
         </View>
       )}
-      <Button label={startLabel(setup.variant)} icon={Play} stretch disabled={busy || !allowance || !canStartChallenge(allowance)} onPress={onStart} />
+      <Button label={startLabel(setup.variant)} icon={Play} stretch disabled={busy || startWaits(allowance)} onPress={onStart} />
     </SettingsScreen>
-  );
-}
-
-function AllowanceLine({ allowance }: { allowance: ChallengeAllowance }) {
-  const [later, setLater] = useState(false);
-  const usedUp = allowance.kind === 'free' && allowance.allowanceDevice.here && allowance.left === 0;
-  return (
-    <View testID="allowance-line" style={styles.banner}>
-      <Ticket color={palette.foreground} size={20} />
-      <View style={styles.bannerBody}>
-        <Text maxFontSizeMultiplier={textScale.body} style={styles.bannerText}>
-          {setupAllowanceText(allowance)}
-        </Text>
-        {usedUp && <LinkButton label={ALLOWANCE_ACTION_LABEL['see-premium']} onPress={() => setLater(true)} />}
-        {later && (
-          <Text accessibilityRole="alert" maxFontSizeMultiplier={textScale.body} style={styles.help}>
-            {ARRIVES_LATER['see-premium']}
-          </Text>
-        )}
-      </View>
-    </View>
   );
 }
 
@@ -157,7 +134,6 @@ const styles = StyleSheet.create({
   segmentTextSelected: { color: palette.primaryForeground },
   banner: { flexDirection: 'row', gap: space[3], padding: 14, borderRadius: 12, borderWidth: 1, borderColor: palette.controlBorder, backgroundColor: palette.card },
   problem: { borderColor: palette.destructive },
-  bannerBody: { flex: 1, gap: space[1] },
   bannerText: { flex: 1, fontFamily: fonts.uiBold, fontSize: 14, lineHeight: 20, color: palette.foreground },
   disabled: { opacity: 0.4 },
   focused: { borderColor: palette.ring },
