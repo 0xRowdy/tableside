@@ -9,7 +9,7 @@ import type { Lesson } from '@tableside/definitions';
 import type { substituteFeedbackPorts } from '@/feedback/testing/substitutes';
 import type { ChallengeAllowanceState } from '@/training/allowance';
 import type { MemoryTrainingStore } from '@/training/memory-store';
-import { withWorkedExample } from '@/training/testing/worked-example';
+import { MARTINGALE_AFTER_TWO_LOSSES, withWorkedExample } from '@/training/testing/worked-example';
 
 let mockStore: unknown = null;
 let mockAllowance: ChallengeAllowanceState | null = null;
@@ -252,6 +252,34 @@ describe('lessons', () => {
         { kind: 'bookmark', step: 2 },
         { kind: 'bookmark', step: 3 },
       ]);
+    });
+
+    // Spec 3 Lessons › Structure (worked examples); #155
+    it('a strategy step shows the scripted spins, offers the next bets, and answers with the prescription and play cues', async () => {
+      servedLessons().splice(0, Infinity, ...withWorkedExample(actualLessons(), MARTINGALE_AFTER_TWO_LOSSES));
+      await openOrientation();
+      await fireEvent.press(button('Next'));
+      await header('Help when you need it');
+      await fireEvent.press(button('Try the worked example (optional)'));
+      await header('Worked example');
+      expect(screen.getByText('Spin 1: 10 on Red. The ball lands on 2 black.')).toBeOnTheScreen();
+      expect(screen.getByText('Spin 2: 20 on Red. The ball lands on 0 green.')).toBeOnTheScreen();
+      expect(screen.getByText('What does Capped Martingale bet next?')).toBeOnTheScreen();
+      expect(cues()).toEqual([]);
+
+      await fireEvent.press(button('10 on Red'));
+      expect(button('10 on Red')).toHaveProp('accessibilityValue', { text: 'Your pick' });
+      expect(button('40 on Red')).toHaveProp('accessibilityValue', { text: 'Correct' });
+      expect(screen.getByText('Capped Martingale bets 40 on Red.')).toBeOnTheScreen();
+      expect(screen.getByText('Only a win starts the next cycle at 10.')).toBeOnTheScreen();
+      expect(cues()).toEqual(['stake-set', 'correction-offered']);
+
+      await fireEvent.press(button('Try it again'));
+      await fireEvent.press(button('40 on Red'));
+      expect(cues()).toEqual(['stake-set', 'correction-offered', 'stake-set']);
+      await fireEvent.press(button('Continue'));
+      expect(await header('Practice records and casino records')).toBeOnTheScreen();
+      expect(await store().readAttemptRecords()).toEqual([]);
     });
 
     it('can be skipped from the step that has one, and Back returns to that step without moving on', async () => {
