@@ -9,12 +9,13 @@ import { useLessons } from '@/training/TrainingProvider';
 export default function Lessons() {
   const { section } = useLocalSearchParams<{ section?: string }>();
   const { lessons } = useLessons();
-  const shown = section && lessons?.some((lesson) => lesson.section === section) ? lessons.filter((lesson) => lesson.section === section) : lessons;
+  const filtered = section && lessons?.some((lesson) => lesson.section === section) ? section : undefined;
+  const shown = filtered ? lessons?.filter((lesson) => lesson.section === filtered) : lessons;
   return (
     <LessonCatalog
       lessons={shown}
       back={{ label: LEARNING_TITLE, onPress: () => router.dismissTo('/more/settings/learning') }}
-      onOpen={(lesson) => router.navigate(lessonHref(lesson))}
+      onOpen={(lesson) => router.navigate(lessonHref(lesson, filtered))}
     />
   );
 }

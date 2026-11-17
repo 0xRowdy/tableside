@@ -18,7 +18,7 @@ import { StyleSheet, View } from 'react-native';
 
 import { Button } from '@/components/Button';
 import { LearnThisGame } from '@/lessons/LessonEntries';
-import type { PracticePrefill } from '@/lessons/routes';
+import { prefilledStrategy, type PracticePrefill } from '@/lessons/routes';
 import { Screen } from '@/components/Screen';
 import type { StartProblem } from '@/practice/controller';
 import { usePractice } from '@/practice/PracticeProvider';
@@ -72,7 +72,7 @@ export function RouletteSetup({
   const { controller } = usePractice();
   const [wheel, setWheel] = useState<RouletteWheel>('single-zero');
   const [mode, setMode] = useState<Mode>(prefill?.guided ? 'guided' : 'free-play');
-  const [strategy, setStrategy] = useState<StrategyDefinition>(() => ROULETTE_STRATEGIES.find((option) => option.id === prefill?.strategy) ?? (ROULETTE_STRATEGIES[0] as StrategyDefinition));
+  const [strategy, setStrategy] = useState(() => prefilledStrategy(ROULETTE_STRATEGIES, prefill));
   const [choices, setChoices] = useState<Record<string, string>>(strategyDefaults(strategy));
   const limits = useLimits(GROUPS, ROULETTE_LIMITS);
   const accepted = limits.accepted;

@@ -157,7 +157,7 @@ describe('lesson handoffs', () => {
     expect(within(screen.getByTestId('tab-bar')).getByRole('tab', { name: 'Counting', selected: true })).toBeOnTheScreen();
   });
 
-  // Spec 3 Amendment 1 C12: explanation time stays out of guided-practice time because the session begins only at Start
+  // Spec 3 Amendment 1 C12
   it('guided practice opens blackjack setup with the mode prefilled, and the session begins only when the learner starts it', async () => {
     await finalStep('card-values', 'Card values');
     await fireEvent.press(button('Finish'));
@@ -219,15 +219,26 @@ describe('lesson entry points', () => {
   });
 
   it.each([
-    ['blackjack', 'Blackjack', 'Blackjack basics, the four strategy modes, counting and the bet schedule. Optional, and lessons never use allowance.', 'BLACKJACK · 10'],
-    ['craps', 'Craps', 'Craps basics and the five strategy lessons. Optional, and lessons never use allowance.', 'STANDARD CRAPS · 6'],
-    ['roulette', 'Roulette', 'Roulette basics and the five strategy lessons. Optional, and lessons never use allowance.', 'ROULETTE · 6'],
+    ['blackjack', 'Blackjack', 'Blackjack basics, the four strategy modes, counting and the bet schedule. Optional, and lessons never use allowance. 10 lessons', 'BLACKJACK · 10'],
+    ['craps', 'Craps', 'Craps basics and the five strategy lessons. Optional, and lessons never use allowance. 6 lessons', 'STANDARD CRAPS · 6'],
+    ['roulette', 'Roulette', 'Roulette basics and the five strategy lessons. Optional, and lessons never use allowance. 6 lessons', 'ROULETTE · 6'],
   ])('%s setup offers Learn this game (FxxAj), opening that game’s lessons', async (game, title, detail, section) => {
     await renderRouter('./src/app', { initialUrl: `/play?game=${game}` });
     await header(title);
-    await fireEvent.press(button(`Learn this game. ${detail}`));
+    await fireEvent.press(await screen.findByRole('button', { name: `Learn this game. ${detail}` }));
     await header('Lessons');
     expect(screen.getAllByRole('header').map((item) => item.props.children)).toEqual(['Lessons', section]);
     expect(button('Back to Learning')).toBeOnTheScreen();
+  });
+
+  it("a lesson opened from a game's lessons returns to them", async () => {
+    await renderRouter('./src/app', { initialUrl: '/play?game=blackjack' });
+    await header('Blackjack');
+    await fireEvent.press(await screen.findByRole('button', { name: /^Learn this game\./ }));
+    await fireEvent.press(await screen.findByRole('button', { name: /^Card values\. Not started/ }));
+    await header('Card values');
+    await fireEvent.press(button('Back to Lessons'));
+    await header('Lessons');
+    expect(screen.getAllByRole('header').map((item) => item.props.children)).toEqual(['Lessons', 'BLACKJACK · 10']);
   });
 });

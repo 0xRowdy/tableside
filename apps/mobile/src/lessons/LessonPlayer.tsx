@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Sheet, SheetText } from '@/components/Sheet';
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
+import { TextLink } from '@/lessons/LessonEntries';
 import { BackButton } from '@/settings/SettingsParts';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/theme/tokens';
 import type { AllowanceCopy } from '@/training/challenge-text';
@@ -41,7 +42,7 @@ export interface LessonActions {
   readonly onHandoff: (handoff: LessonHandoff) => void;
 }
 
-// Spec 3 S3-13 ZBpF3: shown after Finish when the lesson offers handoffs
+// Spec 3 S3-13 ZBpF3
 export interface HandoffSheet {
   readonly allowance: AllowanceCopy | undefined;
 }
@@ -147,26 +148,8 @@ const SHEET_ICON: Record<LessonHandoff['kind'], LucideIcon> = { 'learn-challenge
 
 // Spec 3 S3-12 pX6CV
 function HandoffLink({ handoff, disabled, onPress }: { handoff: LessonHandoff; disabled: boolean; onPress: () => void }) {
-  const { focused, focusProps } = useKeyboardFocus();
-  const label = handoffLabel(handoff);
   const accent = handoff.kind !== 'free-play';
-  const Icon = accent ? GraduationCap : Play;
-  return (
-    <Pressable
-      accessibilityRole="link"
-      accessibilityLabel={label}
-      accessibilityState={{ disabled }}
-      disabled={disabled}
-      onPress={onPress}
-      {...focusProps}
-      style={({ pressed }) => [styles.link, pressed && styles.pressed, disabled && styles.disabled, focused && styles.focused]}
-    >
-      <Icon color={accent ? palette.primary : palette.foreground} size={18} />
-      <Text maxFontSizeMultiplier={textScale.body} style={[styles.linkText, accent && styles.linkAccent]}>
-        {label}
-      </Text>
-    </Pressable>
-  );
+  return <TextLink icon={accent ? GraduationCap : Play} label={handoffLabel(handoff)} accent={accent} disabled={disabled} onPress={onPress} />;
 }
 
 // Spec 3 S3-13 ZBpF3
@@ -319,9 +302,6 @@ const styles = StyleSheet.create({
   navLabel: { flexShrink: 1, fontFamily: fonts.uiBold, fontSize: 15, color: palette.foreground, textAlign: 'center' },
   navPrimaryLabel: { color: palette.primaryForeground },
   navQuiet: { borderColor: palette.transparent, backgroundColor: palette.transparent },
-  link: { flexDirection: 'row', alignItems: 'center', gap: space[3], minHeight: 48, paddingHorizontal: space[1], borderRadius: radius.md, borderWidth: 2, borderColor: palette.transparent },
-  linkText: { flexShrink: 1, fontFamily: fonts.uiBold, fontSize: 15, color: palette.foreground },
-  linkAccent: { color: palette.primary },
   option: {
     flexDirection: 'row',
     alignItems: 'center',

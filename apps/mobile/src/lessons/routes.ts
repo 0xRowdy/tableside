@@ -1,12 +1,16 @@
 // Spec 3 Lessons › Entry points, Structure (Handoff); #145
 
-import type { LessonHandoff, LessonSection } from '@tableside/definitions';
+import type { LessonHandoff } from '@tableside/definitions';
+import type { StrategyDefinition } from '@tableside/engine';
 import type { Href } from 'expo-router';
 
-// Spec 3 Lessons › Entry points (by identity, for spec 4's builder help too)
-export const lessonHref = (lesson: string): Href => ({ pathname: '/more/settings/learning/lessons/[lesson]', params: { lesson } });
+// Spec 3 Lessons › Entry points
+export const lessonHref = (lesson: string, section?: string): Href => ({
+  pathname: '/more/settings/learning/lessons/[lesson]',
+  params: section ? { lesson, section } : { lesson },
+});
 
-export const lessonsHref = (section?: LessonSection): Href => ({ pathname: '/more/settings/learning/lessons', params: section ? { section } : {} });
+export const lessonsHref = (section?: string): Href => ({ pathname: '/more/settings/learning/lessons', params: section ? { section } : {} });
 
 // Spec 3 Lessons › Structure (Handoff)
 export function handoffHref(handoff: LessonHandoff): Href {
@@ -29,3 +33,6 @@ export function practicePrefill(params: { readonly practice?: string; readonly s
   if (params.practice !== 'guided' && params.practice !== 'free-play') return null;
   return { guided: params.practice === 'guided', strategy: params.practice === 'guided' ? (params.strategy ?? null) : null };
 }
+
+export const prefilledStrategy = (builtIns: readonly StrategyDefinition[], prefill: PracticePrefill | null): StrategyDefinition =>
+  builtIns.find((option) => option.id === prefill?.strategy) ?? (builtIns[0] as StrategyDefinition);

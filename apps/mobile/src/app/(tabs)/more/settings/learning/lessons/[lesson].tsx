@@ -14,12 +14,12 @@ import { useTraining } from '@/training/TrainingProvider';
 
 const openOf = (service: TrainingService, lesson: string): Promise<LessonView | null> => service.openLesson(lesson).catch(() => null);
 
-// Spec 3 Amendment 4 §2: the sheet says what starting each option uses; read only once it opens
+// Spec 3 Amendment 4 §2
 const allowanceOf = async (service: TrainingService, sheet: boolean): Promise<AllowanceCopy | undefined> =>
   sheet ? service.allowance().then(allowanceCopy, () => undefined) : undefined;
 
 export default function LessonScreen() {
-  const { lesson = '' } = useLocalSearchParams<{ lesson: string }>();
+  const { lesson = '', section } = useLocalSearchParams<{ lesson: string; section?: string }>();
   const { service } = useTraining();
   const opened = useLoaded(openOf, service, lesson);
   const [latest, setLatest] = useState<LessonView | null>(null);
@@ -33,7 +33,7 @@ export default function LessonScreen() {
   if (opened === null) return <Placeholder title={LESSONS_TITLE} message={NOT_READY_HINT} />;
   if (!view) return <Placeholder title={LESSONS_TITLE} message={OPENING_LESSON} />;
 
-  const leave = () => router.dismissTo(lessonsHref());
+  const leave = () => router.dismissTo(lessonsHref(section));
   const save = (operation: () => Promise<LessonView | void>, then: () => void = leave) => {
     setBusy(true);
     void operation()
@@ -50,7 +50,7 @@ export default function LessonScreen() {
   // Spec 3 Lessons › Structure (Handoff)
   const handOff = (handoff: LessonHandoff) => {
     const open = () => {
-      router.dismissTo(lessonsHref());
+      leave();
       router.navigate(handoffHref(handoff));
     };
     if (sheet) open();

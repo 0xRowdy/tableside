@@ -30,7 +30,7 @@ export default function Counting() {
   const [reviewing, setReviewing] = useState<string | null>(null);
   const catalog = service.listCatalog();
   const entry = catalog.find((item) => item.category === category);
-  // Spec 3 Lessons › Structure (Handoff): a lesson's Learn challenge handoff prefills the variant
+  // Spec 3 Lessons › Structure (Handoff)
   const handedOff = entry && CHALLENGE_VARIANTS.includes(variant as ChallengeVariant) ? { category: entry.category, variant: variant as ChallengeVariant } : null;
   const openLesson = (lesson: string) => router.navigate(lessonHref(lesson));
 

@@ -8,20 +8,45 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/theme/tokens';
 import { NOT_READY_HINT } from '@/training/challenge-text';
-import { LEARN_THIS_GAME, LEARN_THIS_GAME_DETAIL } from '@/training/lesson-text';
+import { LEARN_THIS_GAME, LEARN_THIS_GAME_DETAIL, lessonCount } from '@/training/lesson-text';
+import { useLessons } from '@/training/TrainingProvider';
 
 import { lessonsHref } from './routes';
 
 export function LearnThisGame({ game }: { game: GameId }) {
-  return <LearnRow icon={GraduationCap} title={LEARN_THIS_GAME} detail={LEARN_THIS_GAME_DETAIL[game]} onPress={() => router.navigate(lessonsHref(game))} />;
+  const { lessons } = useLessons();
+  const count = lessons?.filter((lesson) => lesson.section === game).length;
+  return (
+    <LearnRow
+      icon={GraduationCap}
+      title={LEARN_THIS_GAME}
+      detail={LEARN_THIS_GAME_DETAIL[game]}
+      count={count}
+      onPress={() => router.navigate(lessonsHref(game))}
+    />
+  );
 }
 
-export function LearnRow({ icon: Icon, title, detail, disabled = false, onPress }: { icon: LucideIcon; title: string; detail: string; disabled?: boolean; onPress: () => void }) {
+export function LearnRow({
+  icon: Icon,
+  title,
+  detail,
+  count,
+  disabled = false,
+  onPress,
+}: {
+  icon: LucideIcon;
+  title: string;
+  detail: string;
+  count?: number;
+  disabled?: boolean;
+  onPress: () => void;
+}) {
   const { focused, focusProps } = useKeyboardFocus();
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`${title}. ${detail}`}
+      accessibilityLabel={`${title}. ${detail}${count === undefined ? '' : ` ${lessonCount(count)}`}`}
       accessibilityHint={disabled ? NOT_READY_HINT : undefined}
       accessibilityState={{ disabled }}
       disabled={disabled}
@@ -40,26 +65,49 @@ export function LearnRow({ icon: Icon, title, detail, disabled = false, onPress 
           {detail}
         </Text>
       </View>
+      {count !== undefined && (
+        <Text maxFontSizeMultiplier={textScale.body} style={styles.count}>
+          {count}
+        </Text>
+      )}
       {!disabled && <ChevronRight color={palette.mutedForeground} size={18} />}
     </Pressable>
   );
 }
 
 export function LessonLink({ label, ready, onPress }: { label: string; ready: boolean; onPress: () => void }) {
+  return <TextLink icon={BookOpen} label={label} disabled={!ready} hint={ready ? undefined : NOT_READY_HINT} onPress={onPress} />;
+}
+
+export function TextLink({
+  icon: Icon,
+  label,
+  accent = true,
+  disabled = false,
+  hint,
+  onPress,
+}: {
+  icon: LucideIcon;
+  label: string;
+  accent?: boolean;
+  disabled?: boolean;
+  hint?: string;
+  onPress: () => void;
+}) {
   const { focused, focusProps } = useKeyboardFocus();
   return (
     <Pressable
       accessibilityRole="link"
       accessibilityLabel={label}
-      accessibilityHint={ready ? undefined : NOT_READY_HINT}
-      accessibilityState={{ disabled: !ready }}
-      disabled={!ready}
+      accessibilityHint={hint}
+      accessibilityState={{ disabled }}
+      disabled={disabled}
       onPress={onPress}
       {...focusProps}
-      style={({ pressed }) => [styles.link, pressed && styles.pressed, !ready && styles.disabled, focused && styles.focused]}
+      style={({ pressed }) => [styles.link, pressed && styles.pressed, disabled && styles.disabled, focused && styles.focused]}
     >
-      <BookOpen color={palette.primary} size={18} />
-      <Text maxFontSizeMultiplier={textScale.body} style={styles.linkText}>
+      <Icon color={accent ? palette.primary : palette.foreground} size={18} />
+      <Text maxFontSizeMultiplier={textScale.body} style={[styles.linkText, !accent && styles.linkPlain]}>
         {label}
       </Text>
     </Pressable>
@@ -85,6 +133,8 @@ const styles = StyleSheet.create({
   detail: { fontFamily: fonts.ui, fontSize: 13, lineHeight: 18, color: palette.mutedForeground },
   link: { flexDirection: 'row', alignItems: 'center', gap: space[2] + 2, minHeight: MIN_TOUCH_TARGET, borderRadius: radius.md, borderWidth: 2, borderColor: palette.transparent },
   linkText: { flexShrink: 1, fontFamily: fonts.uiBold, fontSize: 15, color: palette.primary },
+  linkPlain: { color: palette.foreground },
+  count: { fontFamily: fonts.ui, fontSize: 14, color: palette.mutedForeground },
   pressed: { opacity: 0.8 },
   disabled: { opacity: 0.4 },
   focused: { borderColor: palette.ring, borderWidth: 2 },

@@ -104,7 +104,7 @@ export const HANDOFF_INTRO = 'Each option opens its normal setup screen with thi
 export const BACK_TO_LESSONS = 'Back to lessons';
 const opensSetup = (game: GameId) => `Opens ${gameTitle(game).toLowerCase()} setup.`;
 
-// Spec 3 Amendment 4 §2 (challenge wording); spec 5 owns the guided-practice allowance
+// Spec 3 Amendment 4 §2
 export function handoffDetail(handoff: LessonHandoff, allowance: AllowanceCopy | undefined): string {
   switch (handoff.kind) {
     case 'learn-challenge':
@@ -121,6 +121,7 @@ export const lessonLinkLabel = (category: CatalogCategory) => `Lesson: ${lowerFi
 export const LEARN_THIS_SKILL = 'Learn this skill';
 export const learnThisSkillDetail = (lesson: LessonEntry) => `${lesson.title} lesson · ${lesson.steps === null ? NOT_READY_HINT : `${lesson.steps} short steps`}`;
 export const LEARN_THIS_GAME = 'Learn this game';
+export const lessonCount = (count: number) => `${count} ${count === 1 ? 'lesson' : 'lessons'}`;
 export const LEARN_THIS_GAME_DETAIL: Record<GameId, string> = {
   blackjack: 'Blackjack basics, the four strategy modes, counting and the bet schedule. Optional, and lessons never use allowance.',
   craps: 'Craps basics and the five strategy lessons. Optional, and lessons never use allowance.',

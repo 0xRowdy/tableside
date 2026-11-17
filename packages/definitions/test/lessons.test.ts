@@ -1,7 +1,7 @@
 // Spec 3 Lessons and worked examples (#48), Amendment 1 B1; Testing Decisions › Build-time check; #143
 import { describe, expect, it } from 'vitest';
 
-import { APP_ORIENTATION, CHALLENGE_CATEGORIES, CHALLENGE_LESSONS, LESSONS, lessonProblems, type Lesson, type LessonHandoff } from '../src';
+import { APP_ORIENTATION, CATALOG_CATEGORIES, CHALLENGE_LESSONS, LESSONS, lessonProblems, type Lesson, type LessonHandoff } from '../src';
 
 const authored = (lesson: Lesson) => lesson.content !== null;
 
@@ -54,8 +54,8 @@ describe('lesson definitions', () => {
 
   // Spec 3 Lessons › Entry points; #145
   it('name the blackjack lesson beside each counting challenge category on the Counting tab', () => {
-    expect(CHALLENGE_CATEGORIES).toEqual(['card-values', 'running-count', 'conversion', 'table']);
-    expect(CHALLENGE_CATEGORIES.map((category) => LESSONS.find((lesson) => lesson.id === CHALLENGE_LESSONS[category])?.title)).toEqual([
+    expect(CATALOG_CATEGORIES).toEqual(['card-values', 'running-count', 'conversion', 'table']);
+    expect(CATALOG_CATEGORIES.map((category) => LESSONS.find((lesson) => lesson.id === CHALLENGE_LESSONS[category])?.title)).toEqual([
       'Card values',
       'Running count',
       'True-count conversion',
