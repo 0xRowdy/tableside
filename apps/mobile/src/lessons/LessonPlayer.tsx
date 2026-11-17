@@ -1,4 +1,4 @@
-// Spec 3 S3-12 l8pMS, pX6CV, hGHha, S3-13 JJl51, Fvlgc, ZBpF3; Amendment 1 B4, C10; #143, #144, #145, #154
+// Spec 3 S3-12 l8pMS, pX6CV, hGHha, S3-13 JJl51, Fvlgc, ZBpF3; Amendment 1 B4, C10, C11; #143
 
 import type { LessonHandoff, LessonSource } from '@tableside/definitions';
 import { ArrowLeft, ArrowRight, ChevronRight, GraduationCap, Play, RefreshCcw, RotateCcw, Shuffle, Spade, SquarePlay, type LucideIcon } from 'lucide-react-native';
