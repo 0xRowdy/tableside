@@ -8,16 +8,19 @@ import { ChallengeResults } from '@/counting/ChallengeResults';
 import { ChallengeSetupScreen } from '@/counting/ChallengeSetupScreen';
 import { CountingHome } from '@/counting/CountingHome';
 import { useLoaded } from '@/hooks/use-loaded';
-import { COUNTING_TITLE, FINDING_ATTEMPT } from '@/training/challenge-text';
-import { setupFor, type ChallengeSetup, type TrainingService } from '@/training/service';
+import { allowanceCopy, COUNTING_TITLE, FINDING_ATTEMPT } from '@/training/challenge-text';
+import { setupFor, type ChallengeSetup, type TrainingService, type TrainingSnapshot } from '@/training/service';
 import { useTraining } from '@/training/TrainingProvider';
 
 const lastSetupOf = (service: TrainingService) => service.lastSetup();
+const allowanceOf = async (service: TrainingService, _reloadOnStatus: TrainingSnapshot['status']) => allowanceCopy(await service.allowance());
 
 export default function Counting() {
   const { service, snapshot } = useTraining();
   const { category } = useLocalSearchParams<{ category?: string }>();
   const remembered = useLoaded(lastSetupOf, service);
+  // Spec 3 Amendment 4 §2
+  const allowance = useLoaded(allowanceOf, service, snapshot.status);
   const [chosen, setChosen] = useState<ChallengeSetup | null>(null);
   const catalog = service.listCatalog();
   const entry = catalog.find((item) => item.category === category);
@@ -42,6 +45,7 @@ export default function Counting() {
       return (
         <ChallengeResults
           record={snapshot.record}
+          allowance={allowance}
           onRetry={() => {
             const { category: retried, variant } = snapshot.record.groupKey;
             service.dismissResults();
@@ -54,6 +58,7 @@ export default function Counting() {
         return (
           <CountingHome
             catalog={catalog}
+            allowance={allowance}
             onChoose={(setup) => {
               service.clearProblem();
               setChosen(setup);
@@ -67,6 +72,7 @@ export default function Counting() {
         <ChallengeSetupScreen
           entry={entry}
           setup={setup}
+          allowance={allowance}
           problem={snapshot.problem}
           busy={snapshot.busy}
           onChange={setChosen}

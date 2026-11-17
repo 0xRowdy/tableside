@@ -4,6 +4,7 @@ import { CHALLENGE_CONTENT, LESSONS, type Lesson, type LessonContent, type Lesso
 import { CHALLENGE_VARIANTS, type ChallengeAttemptRecord, type ChallengeCategory, type ChallengeVariant } from '@tableside/engine';
 
 import type { TrainingAdapters } from './adapters';
+import type { ChallengeAllowance } from './allowance';
 import { ChallengeController, type AttemptSnapshot, type LearnerCommand, type StartProblem } from './controller';
 import { lessonProgress, type LessonChange, type LessonProgress, type LessonProgressChange, type LessonStatus } from './lesson-progress';
 
@@ -145,6 +146,11 @@ export class TrainingService {
 
   retrySave(): Promise<void> {
     return this.challenges.retrySave();
+  }
+
+  // Spec 3 Amendment 4 §2–3
+  allowance(): Promise<ChallengeAllowance> {
+    return this.adapters.allowance.challengeAllowance();
   }
 
   // Spec 3 Training service interface › Results

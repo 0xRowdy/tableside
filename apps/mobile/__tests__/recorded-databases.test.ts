@@ -16,6 +16,7 @@ import type { StoreMigration } from '@/account/store-schema';
 import type { AccountSession } from '@/account/vault';
 import { PracticeController } from '@/practice/controller';
 import { FakeClock, substituteAdapters } from '@/practice/testing/substitutes';
+import { plentyAllowance } from '@/training/allowance';
 import { LAST_SETUP, TrainingService } from '@/training/service';
 
 const devices: TestDevice[] = [];
@@ -107,7 +108,7 @@ describe('a recorded database', () => {
     expect(await store.readLessonEvents()).toEqual(stored(database, 'lesson_progress_events'));
 
     const base = substituteAdapters({ clock: new FakeClock(undefined, true) });
-    const service = new TrainingService({ ...base, store, device: session.installationId, owner: session.accountId });
+    const service = new TrainingService({ ...base, store, allowance: plentyAllowance(() => base.clock.now()), device: session.installationId, owner: session.accountId });
     await service.load();
     const snapshot = service.snapshot();
     expect(snapshot).toMatchObject({ status: 'active', view: { attemptId: database.unfinishedAttempt?.attemptId, phase: database.unfinishedAttempt?.phase, position: database.unfinishedAttempt?.position } });
