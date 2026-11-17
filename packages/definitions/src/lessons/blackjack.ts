@@ -1,11 +1,11 @@
-// Spec 3 Lessons and worked examples (#48): blackjack basics, the four modes and the bet schedule; Amendment 1 B2, C11; Amendment 2 §3; #152
-// Facts: docs/research/blackjack-lessons.md
-import type { Lesson, LessonContent, LessonHandoff, LessonSource, LessonStep } from '../lessons';
+// Spec 3 Lessons and worked examples (#48), Amendment 1 B2, C11, Amendment 2 §3; #152
+// docs/research/blackjack-lessons.md
+import type { Lesson, LessonContent, LessonHandoff, LessonSource, LessonStep, PublishedNote } from '../lessons';
 import { BET_SCHEDULE } from '../blackjack/strategies';
-import { basicStrategy, blackjackHouseEdge, playingDeviations, type BlackjackPreset, type DeviationAction, type PlayingDeviation } from '../blackjack/reference';
+import { basicStrategy, blackjackHouseEdge, playingDeviations, type BlackjackPreset, type DeviationAction, type PlayingDeviation, type PublishedCost } from '../blackjack/reference';
 
-// Spec 3 Amendment 1 C11
-export const BLACKJACK_SOURCES = {
+// Spec 3 Amendment 1 C11; docs/research/blackjack-lessons.md Citable sources
+const SOURCE = {
   schlesinger: {
     citation:
       'Michael Shackleford, Wizard of Odds, “Introduction to the High-Low Card Counting Strategy”, section “How it Works”, tables “Illustrious 18” and “Fab 4 Surrenders” (from Don Schlesinger, Blackjack Attack, 2004 ed., p. 62, republished with permission)',
@@ -37,39 +37,56 @@ export const BLACKJACK_SOURCES = {
   certified: { citation: 'Tableside certified blackjack coaching reference, indices_S17_final.csv and indices_H17_final.csv (frozen 2026-09-14, manifest 9892826d)', url: null },
 } as const satisfies Record<string, LessonSource>;
 
-const S = BLACKJACK_SOURCES;
-
 // Spec 1 Game rules (Blackjack)
 const DEFAULT: BlackjackPreset = 'S17_LS';
 
 const signed = (value: number) => (value > 0 ? `+${value}` : value < 0 ? `−${-value}` : '0');
 
-// Spec 3 Amendment 1 B2; #15 Q21 (tolerance)
-const TIE_MARGIN = 0.001;
+export type Publisher = 'schlesinger' | 'bja';
+
+// docs/research/blackjack-lessons.md Reading the numbers
 export interface PublishedGap {
   readonly deviation: PlayingDeviation;
-  readonly published: number;
-  readonly trueCount: number;
-  readonly perBet: number;
-  readonly standardError: number;
+  readonly publisher: Publisher;
+  readonly printed: string;
+  readonly difference: number;
+  readonly costs: readonly PublishedCost[];
   readonly tieOnly: boolean;
+  readonly dealerRuleMoved: boolean;
 }
 
-export function publishedGaps(preset: BlackjackPreset): readonly PublishedGap[] {
+// #15 Q21
+const TIE_MARGIN = 0.001;
+const withinTie = (cost: PublishedCost) => Math.abs(cost.perBet) <= Math.max(TIE_MARGIN, 2 * cost.standardError);
+const printedValue = (deviation: PlayingDeviation, publisher: Publisher) =>
+  publisher === 'schlesinger' ? signed(Number(deviation.published.schlesinger)) : (deviation.dealerRule === 'S17' ? deviation.published.bjaS17 : deviation.published.bjaH17).replaceAll('-', '−');
+
+export function publishedGaps(preset: BlackjackPreset, publisher: Publisher = 'schlesinger'): readonly PublishedGap[] {
+  const s17 = playingDeviations('S17_LS');
   return playingDeviations(preset).flatMap((deviation) => {
-    const difference = deviation.difference.schlesinger;
-    const [bin] = deviation.costPerBet.schlesinger;
-    if (difference === null || difference === 0 || bin === undefined) return [];
-    const tieOnly = Math.abs(bin.perBet) <= Math.max(TIE_MARGIN, 2 * bin.standardError);
-    return [{ deviation, published: Number(deviation.published.schlesinger), trueCount: bin.trueCount, perBet: bin.perBet, standardError: bin.standardError, tieOnly }];
+    const difference = deviation.difference[publisher];
+    const costs = deviation.costPerBet[publisher];
+    if (difference === null || difference === 0 || costs.length === 0) return [];
+    const standing = s17.find((candidate) => candidate.situation === deviation.situation);
+    return [
+      {
+        deviation,
+        publisher,
+        printed: printedValue(deviation, publisher),
+        difference,
+        costs,
+        tieOnly: costs.every(withinTie),
+        dealerRuleMoved: publisher === 'schlesinger' && deviation.dealerRule === 'H17' && standing !== undefined && standing.threshold !== deviation.threshold,
+      },
+    ];
   });
 }
 
-const UP = (up: number) => (up === 1 ? 'an ace' : up === 8 ? 'an 8' : `a ${up}`);
-export function situationName(d: PlayingDeviation): string {
-  if (d.handKind === 'insurance') return 'insurance';
-  if (d.handKind === 'pair') return `a pair of tens against ${UP(d.up)}`;
-  return `hard ${d.hand} against ${UP(d.up)}${d.set === 'fab4' ? ' (surrender)' : ''}`;
+const upCardName = (up: number) => (up === 1 ? 'an ace' : up === 8 ? 'an 8' : `a ${up}`);
+export function situationName(deviation: PlayingDeviation): string {
+  if (deviation.handKind === 'insurance') return 'insurance';
+  if (deviation.handKind === 'pair') return `a pair of tens against ${upCardName(deviation.up)}`;
+  return `hard ${deviation.hand} against ${upCardName(deviation.up)}${deviation.set === 'fab4' ? ' (surrender)' : ''}`;
 }
 
 const VERB: Readonly<Record<DeviationAction, string>> = {
@@ -83,82 +100,108 @@ const VERB: Readonly<Record<DeviationAction, string>> = {
   basicWithoutSurrender: 'play the hand by basic strategy',
 };
 
-// Spec 1 Counting; the certified index files' direction column
-export function indexRule(d: PlayingDeviation): string {
-  return d.direction === 'deviateAtOrAbove'
-    ? `${VERB[d.atOrAbove]} at ${signed(d.threshold)} or higher, otherwise ${VERB[d.below]}`
-    : `${VERB[d.atOrAbove]} at ${signed(d.threshold)} or higher, and ${VERB[d.below]} below that`;
+// Spec 1 Counting; docs/research/blackjack-lessons.md Reading the numbers
+export function indexRule(deviation: PlayingDeviation): string {
+  return deviation.direction === 'deviateAtOrAbove'
+    ? `${VERB[deviation.atOrAbove]} at ${signed(deviation.threshold)} or higher, otherwise ${VERB[deviation.below]}`
+    : `${VERB[deviation.atOrAbove]} at ${signed(deviation.threshold)} or higher, and ${VERB[deviation.below]} below that`;
 }
 
 const fraction = (value: number) => Math.abs(value).toFixed(4);
+const costText = (cost: PublishedCost) => `${fraction(cost.perBet)} ± ${fraction(cost.standardError)}`;
 const SET_NAME: Readonly<Record<PlayingDeviation['set'], string>> = { illustrious18: 'Illustrious 18', fab4: 'Fab 4', insurance: 'Illustrious 18' };
+const publishedName = (gap: PublishedGap) => (gap.publisher === 'schlesinger' ? `Schlesinger’s published ${SET_NAME[gap.deviation.set]} value` : 'Blackjack Apprenticeship’s chart');
 
-// Spec 3 Lessons › Content requirements (deviation lessons), Amendment 1 B2; #15 Q19–Q22
-export function publishedNote(gap: PublishedGap): readonly string[] {
-  const { deviation: d } = gap;
-  const lower = gap.published < d.threshold;
-  const lead = `For ${situationName(d)}, Tableside teaches: ${indexRule(d)}. Schlesinger’s published ${SET_NAME[d.set]} value is ${signed(gap.published)}, one count ${lower ? 'lower' : 'higher'}.`;
-  const why = gap.tieOnly
-    ? `At ${signed(gap.trueCount)} the two plays differ by ${fraction(gap.perBet)} ± ${fraction(gap.standardError)} of a unit bet, inside the margin Tableside treats as a tie. Its tie rule then keeps the play that adds no extra wager, so following the published value here costs nothing measurable.`
-    : `Tableside values each play assuming you finish the hand by the taught chart (its teaching-continuation rule), over the hands its own six-deck game deals. On that basis, following the published value at ${signed(gap.trueCount)} gives up ${fraction(gap.perBet)} ± ${fraction(gap.standardError)} of a unit bet each time the hand comes up, so Tableside waits one more count.`;
-  return [lead, why, 'The difference comes from how Tableside sets its own values, so it doesn’t make the published chart wrong.'];
+// Spec 3 Amendment 1 B2; #15 Q19, Q20
+function reason(gap: PublishedGap): string {
+  const where = gap.costs.map((cost) => `at ${signed(cost.trueCount)}`).join(' and ');
+  if (gap.tieOnly) {
+    return `${capitalized(where)} the two plays differ by ${gap.costs.map(costText).join(' and ')} of the original bet, inside the margin Tableside treats as a tie. Its tie rule then keeps the basic play, the one that adds no extra wager, so following the published value here costs nothing measurable.`;
+  }
+  const basis = gap.dealerRuleMoved
+    ? 'Tableside works its values out separately for a dealer who hits soft 17, and this one moved from its S17 value.'
+    : 'Tableside values each play assuming you finish the hand by the taught chart (its teaching-continuation rule), over the hands its own six-deck game deals.';
+  return `${basis} On that basis, following the published value ${where} gives up ${gap.costs.map(costText).join(' and ')} of the original bet each time the hand comes up.`;
 }
 
-const gapFor = (preset: BlackjackPreset, situation: string): PublishedGap => {
-  const gap = publishedGaps(preset).find((candidate) => candidate.deviation.situation === situation);
-  if (!gap) throw new Error(`no published difference for ${situation} under ${preset}`);
-  return gap;
-};
+const countsAway = (difference: number) => `${words(Math.abs(difference))} ${Math.abs(difference) === 1 ? 'count' : 'counts'} ${difference > 0 ? 'lower' : 'higher'}`;
 
-const deviationFor = (preset: BlackjackPreset, situation: string): PlayingDeviation => {
-  const deviation = playingDeviations(preset).find((candidate) => candidate.situation === situation);
-  if (!deviation) throw new Error(`no ${preset} deviation for ${situation}`);
-  return deviation;
-};
+// Spec 3 Lessons › Content requirements (deviation lessons), Amendment 1 B2, Amendment 2 §3
+export function publishedNote(gap: PublishedGap): PublishedNote {
+  const lead = `For ${situationName(gap.deviation)}, Tableside teaches: ${indexRule(gap.deviation)}. ${publishedName(gap)} is ${gap.printed}, ${countsAway(gap.difference)}.`;
+  return {
+    paragraphs: [lead, reason(gap), 'The difference comes from how Tableside sets its own values, so it doesn’t make the published chart wrong.'],
+    source: gap.publisher === 'schlesinger' ? SOURCE.schlesinger : gap.deviation.dealerRule === 'S17' ? SOURCE.bjaS17 : SOURCE.bjaH17,
+  };
+}
+
+function find<T>(items: readonly T[], match: (item: T) => boolean, missing: string): T {
+  const found = items.find(match);
+  if (found === undefined) throw new Error(missing);
+  return found;
+}
+const gapFor = (preset: BlackjackPreset, situation: string) => find(publishedGaps(preset), (gap) => gap.deviation.situation === situation, `no published difference for ${situation} under ${preset}`);
+const deviationFor = (preset: BlackjackPreset, situation: string) => find(playingDeviations(preset), (deviation) => deviation.situation === situation, `no ${preset} deviation for ${situation}`);
 
 const list = (items: readonly string[]) => {
   const separator = items.some((item) => item.includes(',')) ? '; ' : ', ';
   return items.length < 2 ? items.join('') : `${items.slice(0, -1).join(separator)}${separator === '; ' ? '; and ' : ' and '}${items.at(-1)}`;
 };
-const WORDS = ['no', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve'];
-const words = (count: number) => WORDS[count] ?? String(count);
+const NUMBER_WORDS = ['no', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve'];
+const words = (count: number) => NUMBER_WORDS[count] ?? String(count);
 const capitalized = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
 
-// Spec 3 Lessons › Content requirements; #15 resolution "Relation to published values and teaching policy"
+// #15 Q19–Q21; docs/research/blackjack-lessons.md Reading the numbers
+function gapLine(gap: PublishedGap): string {
+  const values = `${situationName(gap.deviation)}: Tableside ${signed(gap.deviation.threshold)}, published ${gap.printed}`;
+  if (gap.tieOnly) return `${values}, a tie at ${gap.costs.map((cost) => signed(cost.trueCount)).join(' and ')} that costs nothing measurable`;
+  const costs = gap.costs.map((cost) => `${fraction(cost.perBet)} at ${signed(cost.trueCount)}`).join(' and ');
+  return `${values}, following the published value costs ${costs} (${gap.dealerRuleMoved ? 'the dealer rule' : 'the teaching-continuation rule'})`;
+}
+
+// #15 resolution
 function differenceSummary(): readonly string[] {
   const all = playingDeviations(DEFAULT);
-  const matching = all.filter((d) => d.difference.schlesinger === 0);
+  const matching = all.filter((deviation) => deviation.difference.schlesinger === 0);
   const gaps = publishedGaps(DEFAULT);
   const ties = gaps.filter((gap) => gap.tieOnly);
-  const measured = gaps.filter((gap) => !gap.tieOnly).sort((a, b) => b.perBet - a.perBet);
-  const cost = (gap: PublishedGap) => `${situationName(gap.deviation)}, ${fraction(gap.perBet)} at ${signed(gap.trueCount)}`;
+  const measured = gaps.filter((gap) => !gap.tieOnly).sort((a, b) => b.costs[0]!.perBet - a.costs[0]!.perBet);
+  const cost = (gap: PublishedGap) => `${situationName(gap.deviation)}, ${fraction(gap.costs[0]!.perBet)} at ${signed(gap.costs[0]!.trueCount)}`;
+  const [largest, second] = measured.map((gap) => situationName(gap.deviation));
   return [
     `With the dealer standing on soft 17, ${words(matching.length)} of Tableside’s ${all.length} index plays match Schlesinger’s published values and ${words(gaps.length)} sit one count higher.`,
     `${capitalized(words(ties.length))} of those ${words(gaps.length)} come only from the tie rule and cost nothing measurable: ${list(ties.map((gap) => situationName(gap.deviation)))}.`,
-    `The other ${words(measured.length)} are measurable at Tableside’s table. Per unit bet, at the published count: ${list(measured.map(cost))}. Only the first two, a pair of tens against a 6 and hard 12 against a 5, are large enough to matter much; the rest are a few thousandths of a bet.`,
+    `The other ${words(measured.length)} come from the teaching-continuation rule and are measurable at Tableside’s table. Per original bet, at the published count: ${list(measured.map(cost))}. Only the first two, ${largest} and ${second}, are large enough to matter much; the rest are a few thousandths of a bet.`,
   ];
 }
 
 function h17Summary(): readonly string[] {
   const s17 = playingDeviations('S17_LS');
-  const changed = playingDeviations('H17_LS').filter((h) => {
-    const s = s17.find((candidate) => candidate.situation === h.situation);
-    return s !== undefined && (s.threshold !== h.threshold || s.direction !== h.direction);
+  const moved = playingDeviations('H17_LS').filter((h17) => {
+    const standing = s17.find((candidate) => candidate.situation === h17.situation);
+    return standing !== undefined && (standing.threshold !== h17.threshold || standing.direction !== h17.direction);
   });
-  const gaps = playingDeviations('H17_LS').filter((d) => d.difference.schlesinger !== null && d.difference.schlesinger !== 0);
-  const twoCounts = gaps.filter((d) => Math.abs(d.difference.schlesinger ?? 0) > 1);
-  const ties = publishedGaps('H17_LS').filter((gap) => gap.tieOnly);
+  const gaps = publishedGaps('H17_LS');
   return [
-    `Tableside’s values change with the dealer rule. When the dealer hits soft 17, ${words(changed.length)} plays move: ${list(changed.map((d) => `${situationName(d)}, ${indexRule(d)}`))}.`,
-    `At that table ${words(gaps.length)} of Tableside’s values differ from the published Illustrious 18 and Fab 4, ${list(twoCounts.map((d) => `${situationName(d)} by two counts (${signed(d.threshold)} against ${signed(Number(d.published.schlesinger))})`))} and the rest by one. ${capitalized(words(ties.length))} of them come only from the tie rule: ${list(ties.map((gap) => situationName(gap.deviation)))}.`,
+    `Tableside works its values out separately for each dealer rule. When the dealer hits soft 17, ${words(moved.length)} plays move: ${list(moved.map((deviation) => `${situationName(deviation)}, ${indexRule(deviation)}`))}.`,
+    `At that table ${words(gaps.length)} of Tableside’s values differ from the published Illustrious 18 and Fab 4. Per original bet: ${list(gaps.map(gapLine))}.`,
   ];
 }
 
-const cellPlay = (preset: BlackjackPreset, kind: 'hard' | 'soft' | 'pair', hand: number, up: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10) => basicStrategy(preset, kind, hand, up);
+function chartSummary(preset: BlackjackPreset): readonly string[] {
+  const gaps = publishedGaps(preset, 'bja');
+  const rule = preset.startsWith('S17') ? 'stands on' : 'hits';
+  return [
+    `Blackjack Apprenticeship’s chart for a dealer who ${rule} soft 17 differs from Tableside’s values in ${words(gaps.length)} plays. Per original bet: ${list(gaps.map(gapLine))}.`,
+    'Its other entries match Tableside or can’t be compared as a number: a few depend on whether the running count is above or below zero, some cells carry no index, and the chart has more index plays than Tableside teaches. Tableside uses the true count only.',
+  ];
+}
+
 const edge = (preset: BlackjackPreset) => `${blackjackHouseEdge(preset).percent}%`;
 
 // Spec 1 Game rules, Counting (Hi-Lo), Amendment 9 §7; #3
-const scheduleLine = ({ from, amount }: (typeof BET_SCHEDULE)[number]) => `${from === null ? 'Below +1' : from === 4 ? `+${from} or higher` : `+${from}`}: bet ${amount}`;
+const scheduleLine = ({ from, amount }: (typeof BET_SCHEDULE)[number], index: number) =>
+  `${from === null ? 'Below +1' : index === BET_SCHEDULE.length - 1 ? `+${from} or higher` : `+${from}`}: bet ${amount}`;
 
 const lesson = (id: string, title: string, summary: string, content: Omit<LessonContent, 'version' | 'materialVersion' | 'change' | 'workedExample'>): Lesson => ({
   id,
@@ -174,9 +217,9 @@ const FREE_PLAY: LessonHandoff = { kind: 'free-play', game: 'blackjack' };
 
 const step = (heading: string, paragraphs: readonly string[], extra: Pick<LessonStep, 'publishedNote' | 'source'> = {}): LessonStep => ({ heading, paragraphs, ...extra });
 
-const sixteen = cellPlay(DEFAULT, 'hard', 16, 10);
-const elevenVsSix = cellPlay(DEFAULT, 'hard', 11, 6);
-const softEighteen = cellPlay(DEFAULT, 'soft', 18, 3);
+const SIXTEEN_V10 = basicStrategy(DEFAULT, 'hard', 16, 10);
+const ELEVEN_V6 = basicStrategy(DEFAULT, 'hard', 11, 6);
+const SOFT_EIGHTEEN_V3 = basicStrategy(DEFAULT, 'soft', 18, 3);
 
 export const BLACKJACK_BASICS = lesson('blackjack-basics', 'Blackjack basics', 'Hands, the table, betting, turn order and settlement', {
   steps: [
@@ -199,25 +242,25 @@ export const BLACKJACK_BASICS = lesson('blackjack-basics', 'Blackjack basics', '
     ]),
     step('Settlement and your chips', [
       'Tableside settles every bet for you: a win pays 1 to 1, a blackjack 3 to 2, a push returns your bet, a surrender returns half, and insurance settles on its own.',
-      'Practice play uses simulated chips, never real money. Each session starts fresh: you choose the buy-in in setup (1,000 unless you change it), and Rebuy adds more during the session. A session that runs on your daily training bankroll has no buy-in and no rebuys.',
+      'Practice play uses simulated chips, never real money. Each practice session starts fresh: you choose the buy-in in setup (1,000 unless you change it), and Rebuy adds more during the practice session. A practice session that runs on your daily training bankroll has no buy-in and no rebuys.',
     ]),
   ],
   handoffs: [FREE_PLAY, guided('basic')],
-  sources: [S.wizardBasic, S.bjaOrder],
+  sources: [SOURCE.wizardBasic, SOURCE.bjaOrder],
 });
 
 export const BASIC_STRATEGY = lesson('basic-strategy', 'Basic strategy', 'The best play for every hand, with no count', {
   steps: [
     step('One right play for every hand', [
       'Basic strategy is the play with the highest average return for your two cards against the dealer’s up card. Nobody keeps a count in this mode; the right play depends only on the cards and the table rules.',
-      'Tableside’s charts are worked out for its own six-deck rules, with separate charts for each dealer rule and for surrender on or off. They match Wizard of Odds’ published charts for four to eight decks in every cell.',
-    ], { source: S.wizardBasic }),
+      'Tableside’s charts are worked out for its own six-deck rules, with separate charts for each dealer rule and for surrender on or off. They agree with Wizard of Odds’ published six-deck instructions in every cell compared.',
+    ], { source: SOURCE.wizardBasic }),
     step('The order of decisions', [
-      `Insurance comes first, and basic strategy always declines it. Surrender comes next where offered: at the default table, hard 16 against a 10 is a ${sixteen.action}. Then split, double, hit or stand.`,
+      `Insurance comes first, and basic strategy always declines it. Surrender comes next where offered: at the default table, hard 16 against a 10 is a ${SIXTEEN_V10.action}. Then split, double, hit or stand.`,
       'After a split or a hit, later decisions follow the chart for your new total.',
-    ], { source: S.bjaOrder }),
+    ], { source: SOURCE.bjaOrder }),
     step('When the best play isn’t allowed', [
-      `Sometimes the chart’s play isn’t available: you can’t double a three-card hand, or your chips can’t cover the extra bet. Each cell has a fallback for this. Hard 11 against a 6 is a ${elevenVsSix.action}, and the fallback is to ${elevenVsSix.fallbacks.double}; soft 18 against a 3 is a ${softEighteen.action}, falling back to ${softEighteen.fallbacks.double}.`,
+      `Sometimes the chart’s play isn’t available: you can’t double a three-card hand, or your chips can’t cover the extra bet. Each cell has a fallback for this. Hard 11 against a 6 is a ${ELEVEN_V6.action}, and the fallback is to ${ELEVEN_V6.fallbacks.double}; soft 18 against a 3 is a ${SOFT_EIGHTEEN_V3.action}, falling back to ${SOFT_EIGHTEEN_V3.fallbacks.double}.`,
       'Coaching always shows the fallback as the right play when the first choice isn’t possible, so you’re never marked wrong for a play you couldn’t make.',
     ]),
     step('What basic strategy can and can’t do', [
@@ -225,12 +268,12 @@ export const BASIC_STRATEGY = lesson('basic-strategy', 'Basic strategy', 'The be
     ]),
   ],
   handoffs: [guided('basic'), FREE_PLAY],
-  sources: [S.wizardBasic, S.bjaOrder],
+  sources: [SOURCE.wizardBasic, SOURCE.bjaOrder],
 });
 
-const T16 = gapFor(DEFAULT, '16 vs 10');
-const T12V5 = gapFor(DEFAULT, '12 vs 5');
-const TENS = gapFor(DEFAULT, 'T,T vs 6');
+const SIXTEEN_GAP = gapFor(DEFAULT, '16 vs 10');
+const TWELVE_V5_GAP = gapFor(DEFAULT, '12 vs 5');
+const TENS_GAP = gapFor(DEFAULT, 'T,T vs 6');
 const INSURANCE = deviationFor(DEFAULT, 'Insurance');
 
 export const BASIC_WITH_DEVIATIONS = lesson('basic-with-deviations', 'Basic with deviations', 'Index plays, with the count supplied', {
@@ -241,25 +284,24 @@ export const BASIC_WITH_DEVIATIONS = lesson('basic-with-deviations', 'Basic with
     ]),
     step('The index plays', [
       `Tableside’s list follows the situations of the Illustrious 18, plus the four Fab 4 surrender plays at tables that offer late surrender, ${playingDeviations(DEFAULT).length} plays in all at the default table. The thresholds are Tableside’s own, worked out for its six-deck rules.`,
-      'Each index is a true count. At or above it you make the index play; below it you play basic strategy.',
-    ], { source: S.schlesinger }),
+      'Each index is a true count. For most plays you make the index play at or above it and play basic strategy below it. A few work the other way: you keep the basic play at or above the index and change it below.',
+    ], { source: SOURCE.schlesinger }),
     step('When the count changes a decision', [
-      `A deviation is a planned change to basic strategy that applies only at a certain true count. Hard 16 against a dealer 10 is the best-known one: basic strategy hits (with late surrender, a two-card 16 surrenders instead), but at a true count of ${signed(T16.deviation.threshold)} or higher you stand.`,
-    ], { publishedNote: publishedNote(T16), source: S.schlesinger }),
+      `A deviation is a planned change to basic strategy that applies only at a certain true count. Hard 16 against a dealer 10 is the best-known one: basic strategy hits (with late surrender, a two-card 16 surrenders instead), but at a true count of ${signed(SIXTEEN_GAP.deviation.threshold)} or higher you stand.`,
+    ], { publishedNote: publishedNote(SIXTEEN_GAP) }),
     step('Plays that kick in when the count drops', [
-      `Some plays work the other way. Basic strategy stands on hard 12 against a 5, but when the count falls low you hit instead: ${indexRule(T12V5.deviation)}.`,
-    ], { publishedNote: publishedNote(T12V5), source: S.schlesinger }),
+      `Some plays work the other way. Basic strategy stands on hard 12 against a 5, but when the count falls low you hit instead: ${indexRule(TWELVE_V5_GAP.deviation)}.`,
+    ], { publishedNote: publishedNote(TWELVE_V5_GAP) }),
     step('Insurance', [
       `Basic strategy never insures. With the count, insurance has an index too: ${indexRule(INSURANCE)}. This matches the published value.`,
-    ], { source: S.schlesinger }),
-    step('Where our numbers differ', differenceSummary(), { publishedNote: publishedNote(TENS), source: S.schlesinger }),
-    step('When the dealer hits soft 17', [
-      ...h17Summary(),
-      'Blackjack Apprenticeship publishes separate S17 and H17 deviation charts with more index plays than Tableside teaches. A few of their entries depend on whether the running count is above or below zero; Tableside uses the true count only.',
-    ], { source: S.bjaH17 }),
+    ], { source: SOURCE.schlesinger }),
+    step('Where our numbers differ', differenceSummary(), { publishedNote: publishedNote(TENS_GAP) }),
+    step('When the dealer hits soft 17', h17Summary(), { source: SOURCE.schlesinger }),
+    step('Blackjack Apprenticeship’s S17 chart', chartSummary('S17_LS'), { source: SOURCE.bjaS17 }),
+    step('Blackjack Apprenticeship’s H17 chart', chartSummary('H17_LS'), { source: SOURCE.bjaH17 }),
   ],
   handoffs: [guided('basic-with-deviations')],
-  sources: [S.schlesinger, S.bjaS17, S.bjaH17, S.certified],
+  sources: [SOURCE.schlesinger, SOURCE.bjaS17, SOURCE.bjaH17, SOURCE.certified],
 });
 
 export const COUNTING_WITH_BASIC = lesson('counting-with-basic', 'Counting with basic', 'Keep the Hi-Lo count while you play basic strategy', {
@@ -269,17 +311,17 @@ export const COUNTING_WITH_BASIC = lesson('counting-with-basic', 'Counting with 
     ]),
     step('The Hi-Lo values', [
       'Count 2 to 6 as +1, 7 to 9 as 0, and tens, faces and aces as −1. Add each card as it is shown, yours, the other players’ and the dealer’s. The dealer’s face-down card counts only once it is turned over.',
-    ], { source: S.bjaCounting }),
+    ], { source: SOURCE.bjaCounting }),
     step('From running count to true count', [
-      'Divide the running count by the decks still in the shoe, estimated to the nearest half deck (round halves up, never below half a deck), and drop the fraction toward zero. +7 with 2 decks left is +3; −7 with 2 decks left is −3.',
+      'Tableside’s conversion: divide the running count by the decks still in the shoe, estimated to the nearest half deck (round halves up, never below half a deck), and drop the fraction toward zero. +7 with 2 decks left is +3; −7 with 2 decks left is −3.',
       'The True-count conversion lesson covers this in detail.',
     ]),
     step('Why keep a count here', [
-      'Counting with basic is where you add the optional bet schedule, which sizes each bet from the true count before the deal. The count still never changes a play in this mode.',
+      'In either counting mode you can add the optional bet schedule, which sets each bet from the true count before the deal. Here the count still never changes a play.',
     ]),
   ],
   handoffs: [guided('counting-with-basic'), { kind: 'learn-challenge', category: 'running-count' }],
-  sources: [S.bjaCounting, S.hiLoValues],
+  sources: [SOURCE.bjaCounting, SOURCE.hiLoValues],
 });
 
 const THIRTEEN_V2 = deviationFor(DEFAULT, '13 vs 2');
@@ -288,20 +330,20 @@ export const COUNTING_WITH_DEVIATIONS = lesson('counting-with-deviations', 'Coun
   steps: [
     step('Your count, your index plays', [
       'This mode puts it all together: you keep the Hi-Lo count and use your own true count for the index plays from Basic with deviations. Plays are checked against the actual true count, so a miss can come from the count or from the play.',
-      'Corrections don’t show the count while you play; they name the play. When the session ends, its result lists the actual count beside each departure.',
+      'Corrections don’t show the count while you play; they name the play. When the practice session ends, its result lists the actual count beside each departure.',
     ]),
     step('Recount at the decision', [
       'Cards keep arriving after you bet, so work out the true count again when you reach a decision, including every card dealt so far. The count you bet with is often not the count you play with.',
-    ], { source: S.bjaDeviations }),
+    ], { source: SOURCE.bjaDeviations }),
     step('Zero and the truncated count', [
       `Tableside truncates the true count toward zero, so a running count of −1 with 2 decks left is a true count of 0, not −1. That matters for plays with an index of 0: for hard 13 against a 2, ${indexRule(THIRTEEN_V2)}, so here you stand.`,
     ]),
     step('The same index plays', [
-      `The thresholds are the same as in Basic with deviations, including insurance at ${signed(INSURANCE.threshold)}. Where they differ from published charts, that lesson explains the difference and why; for example, a pair of tens against a 6 splits at ${signed(TENS.deviation.threshold)} or higher here.`,
-    ], { publishedNote: publishedNote(TENS), source: S.schlesinger }),
+      `The thresholds are the same as in Basic with deviations, including insurance at ${signed(INSURANCE.threshold)}. Where they differ from published charts, that lesson explains the difference and why; for example, a pair of tens against a 6 splits at ${signed(TENS_GAP.deviation.threshold)} or higher here.`,
+    ], { publishedNote: publishedNote(TENS_GAP) }),
   ],
   handoffs: [guided('counting-with-deviations'), { kind: 'learn-challenge', category: 'table' }],
-  sources: [S.bjaDeviations, S.schlesinger, S.certified],
+  sources: [SOURCE.bjaDeviations, SOURCE.schlesinger, SOURCE.certified],
 });
 
 export const BET_SCHEDULE_LESSON = lesson('bet-schedule', 'Bet schedule', 'Tableside’s practice schedule: 10 to 80 by true count', {
@@ -317,9 +359,9 @@ export const BET_SCHEDULE_LESSON = lesson('bet-schedule', 'Bet schedule', 'Table
       'Bets are checked on their own, apart from your plays and your count: a right bet with a wrong play, or the other way round, shows up as one of each. In a counting challenge, betting adherence is a separate score from playing adherence and counting accuracy, and a different legal bet is allowed but counts as a betting miss.',
     ]),
     step('A practice schedule, not a promise', [
-      'This schedule is Tableside’s own, a simple ramp to practice following. Published counting guides say to raise your bet as the true count rises, but they don’t give this ramp. It isn’t a recommendation for real play, and it doesn’t change the house edge on any single bet.',
-    ], { source: S.bjaBetting }),
+      'This schedule is Tableside’s own, a simple ramp to practice following. Published counting guides say to raise your bet as the true count rises, but they don’t give this ramp. It isn’t a recommendation for real play.',
+    ], { source: SOURCE.bjaBetting }),
   ],
   handoffs: [guided('counting-with-basic'), guided('counting-with-deviations')],
-  sources: [S.bjaBetting],
+  sources: [SOURCE.bjaBetting],
 });

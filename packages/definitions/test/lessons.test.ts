@@ -178,22 +178,28 @@ describe('lesson definitions', () => {
       it('accept a step citing a listed source, with or without a note on the published value', () => {
         expect(
           lessonProblems([
-            { ...orientation, content: { ...content, steps: [{ ...step, source: chart, publishedNote: ['Tableside teaches +1; the chart uses 0.'] }, { ...step, source: chart }], sources: [chart] } },
+            { ...orientation, content: { ...content, steps: [{ ...step, publishedNote: { paragraphs: ['Tableside teaches +1; the chart uses 0.'], source: chart } }, { ...step, source: chart }], sources: [chart] } },
           ]),
         ).toEqual([]);
       });
 
-      it('a note on the published value with no source, or a cited source missing from the lesson’s sources', () => {
+      it('a step citing its source twice, or a cited source missing from the lesson’s sources', () => {
         expect(
-          lessonProblems([{ ...orientation, content: { ...content, steps: [{ ...step, publishedNote: ['Tableside teaches +1.'] }, { ...step, source: chart }], sources: [] } }]),
-        ).toEqual(['app-orientation: step 1 compares with a published value but cites no source', 'app-orientation: step 2 cites a source missing from the lesson’s sources']);
+          lessonProblems([
+            { ...orientation, content: { ...content, steps: [{ ...step, publishedNote: { paragraphs: ['Tableside teaches +1.'], source: chart }, source: chart }, { ...step, source: chart }], sources: [] } },
+          ]),
+        ).toEqual([
+          "app-orientation: step 1 cites its source twice: a note on the published value carries the step's source",
+          'app-orientation: step 1 cites a source missing from the lesson’s sources',
+          'app-orientation: step 2 cites a source missing from the lesson’s sources',
+        ]);
       });
 
       it('an empty note, an empty citation, a source that is not an https link, or a source listed twice', () => {
         const blank = { citation: ' ', url: null };
         const insecure = { citation: 'Wizard of Odds, Hi-Lo', url: 'http://wizardofodds.com/' };
         expect(
-          lessonProblems([{ ...orientation, content: { ...content, steps: [{ ...step, source: chart, publishedNote: [''] }], sources: [chart, blank, insecure, chart] } }]),
+          lessonProblems([{ ...orientation, content: { ...content, steps: [{ ...step, publishedNote: { paragraphs: [''], source: chart } }], sources: [chart, blank, insecure, chart] } }]),
         ).toEqual([
           'app-orientation: step 1 has an empty note on the published value',
           'app-orientation: source 2 has no citation',

@@ -61,6 +61,17 @@ Order of the player's own decision, as BJA teaches it: surrender first, then spl
 
 Source: `HOUSE_EDGE_PERCENT` in [`reference.ts:228`](../../packages/definitions/src/blackjack/reference.ts). Each value is the edge of the preset's certified basic strategy off the top of a fresh six-deck shoe. The test derives it from the certified `basic_<preset>.csv` values with exact six-deck card-removal probabilities ([`house-edge.test.ts`](../../packages/definitions/test/house-edge.test.ts); commit `1e350bc`, "Versioned house edge per preset, tested against a derivation from the certified basic tables and exact six-deck card removal"). The display rule: "shown as a property of the rules, never as a prediction of results" ([spec 1 Amendment 1 §B](https://github.com/0xRowdy/tableside/issues/51#issuecomment-6256569082)). The method is [Amendment 9 §1](https://github.com/0xRowdy/tableside/issues/51#issuecomment-6307750191). No amendment comment states the four numbers; see Not confirmed.
 
+### App behaviour the lessons describe
+
+Recorded by the #152 implementer from the shipped code and the decisions above, 2026-11-17:
+
+- **Placing a bet:** the table has chip buttons, a betting spot, **Clear**, **Rebet <amount>** (the last bet, once one exists) and **Deal** (`BettingActions` and `Felt` in [`BlackjackTable.tsx`](../../apps/mobile/src/play/BlackjackTable.tsx)). It also has the bet selector, labelled "bet list" (above).
+- **Setup shows the house edge:** "House edge with basic strategy: N%" in setup ([`BlackjackSetup.tsx:190`](../../apps/mobile/src/play/BlackjackSetup.tsx)), and "Edge with basic strategy: N% (this preset)" on the table ([`BlackjackTable.tsx:141`](../../apps/mobile/src/play/BlackjackTable.tsx)).
+- **Basic strategy against Wizard, all four presets:** "Total-dependent basic strategy for all four presets: 0 of 330 cells differ from Wizard's six-deck S17/H17 instructions" ([#15 progress, 2026-09-14](https://github.com/0xRowdy/tableside/issues/15#issuecomment-5673250904)), accepted as validated in the [#15 resolution](https://github.com/0xRowdy/tableside/issues/15#issuecomment-5675619578) ("0 of 330 cells differ from Wizard of Odds six-deck instructions").
+- **Fallbacks are graded as the right play:** the accepted fallback policy "uses a strategy's explicit legal alternative, or the built-in reference's validated alternative when none is specified, and assesses adherence against the applicable fallback", including actions unavailable because of balance ([#15, quoting #5's resolution](https://github.com/0xRowdy/tableside/issues/15#issuecomment-5556796074)). Spec 3 grades "including legal fallbacks for unaffordable or unavailable actions" (*Scoring and review*, Reference bullet). The certified cells used as examples: `basic_S17_LS.csv` hard 16 vs 10 is R; hard 11 vs 6 is D with `fallback_double` H; soft 18 vs 3 is D with `fallback_double` S.
+- **Insurance under basic strategy:** declined ([coverage research](blackjack-coaching-coverage.md), "For basic mode, insurance/even money is declined under the published basic policy").
+- **Bet schedule check timing:** "Tableside checks each bet against the schedule before the deal" (setup help, [`BlackjackSetup.tsx:137`](../../apps/mobile/src/play/BlackjackSetup.tsx)).
+
 ## Four modes
 
 ### Who supplies the count (#3)

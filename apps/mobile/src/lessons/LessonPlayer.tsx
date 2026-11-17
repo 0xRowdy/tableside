@@ -1,6 +1,6 @@
 // Spec 3 S3-12 l8pMS, pX6CV, S3-13 JJl51, Fvlgc, ZBpF3; Amendment 1 B2, B4, C10, C11; Amendment 2 §3; #143, #144, #145, #152
 
-import type { LessonHandoff, LessonSource } from '@tableside/definitions';
+import type { LessonHandoff, LessonSource, PublishedNote } from '@tableside/definitions';
 import { ArrowLeft, ArrowRight, ChevronRight, GraduationCap, Play, RefreshCcw, RotateCcw, Shuffle, Spade, SquarePlay, type LucideIcon } from 'lucide-react-native';
 import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -109,7 +109,7 @@ export function LessonPlayer({
               {paragraph}
             </Text>
           ))}
-          {step.publishedNote ? <PublishedNote paragraphs={step.publishedNote} source={step.source} /> : step.source && <StepSource source={step.source} />}
+          {step.publishedNote ? <PublishedNoteBox note={step.publishedNote} /> : step.source && <StepSource source={step.source} />}
           {view.example?.step === view.step && <ExampleLink disabled={busy} onPress={actions.onExample} />}
           {last &&
             view.handoffs.map((handoff) => (
@@ -208,23 +208,23 @@ function ChangeNotice({ notice }: { notice: NonNullable<LessonView['notice']> })
 }
 
 // Spec 3 S3-12 l8pMS; Amendment 1 B2; Amendment 2 §3 (lesson player); #152
-function PublishedNote({ paragraphs, source }: { paragraphs: readonly string[]; source: LessonSource | undefined }) {
+function PublishedNoteBox({ note }: { note: PublishedNote }) {
   return (
     <View style={styles.publishedNote}>
       <Text accessibilityRole="header" maxFontSizeMultiplier={textScale.body} style={styles.publishedTitle}>
         {PUBLISHED_NOTE_TITLE}
       </Text>
-      {paragraphs.map((paragraph, index) => (
+      {note.paragraphs.map((paragraph, index) => (
         <Text key={index} maxFontSizeMultiplier={textScale.body} style={styles.publishedText}>
           {paragraph}
         </Text>
       ))}
-      {source && <StepSource source={source} />}
+      <StepSource source={note.source} />
     </View>
   );
 }
 
-// Spec 3 Amendment 1 C11: text links only, opened on request
+// Spec 3 Amendment 1 C11
 function StepSource({ source }: { source: LessonSource }) {
   const { focused, focusProps } = useKeyboardFocus();
   const label = sourceText(source.citation);

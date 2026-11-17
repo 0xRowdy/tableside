@@ -193,7 +193,7 @@ describe('lessons', () => {
     const [first, ...rest] = orientation.content!.steps;
     servedLessons()[0] = {
       ...orientation,
-      content: { ...orientation.content!, steps: [{ ...first!, publishedNote: ['Tableside teaches standing at +1; the published chart uses 0.'], source }, { ...rest[0]!, source }, ...rest.slice(1)], sources: [source] },
+      content: { ...orientation.content!, steps: [{ ...first!, publishedNote: { paragraphs: ['Tableside teaches standing at +1; the published chart uses 0.'], source } }, { ...rest[0]!, source }, ...rest.slice(1)], sources: [source] },
     };
     await openOrientation();
     expect(screen.getByRole('header', { name: 'Our index vs published charts' })).toBeOnTheScreen();
