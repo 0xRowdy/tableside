@@ -23,6 +23,7 @@ import type { TrainingAdapters } from './adapters';
 import type { ChallengeAllowance } from './allowance';
 import { ChallengeController, type AttemptSnapshot, type DirectSuspendCause, type LearnerCommand, type PauseCause, type StartProblem } from './controller';
 import { DeviceLearningPreferences, type LearningPreferences } from './learning-preferences';
+import { attemptEarned, progressProjection, type AttemptEarned, type Progress, type ProgressAttempt } from './progress';
 import { lessonProgress, type LessonChange, type LessonProgress, type LessonProgressChange, type LessonStatus } from './lesson-progress';
 
 // Spec 3 Recommendations
@@ -133,7 +134,7 @@ export class TrainingService {
   ) {
     this.lessons = options.lessons ?? LESSONS;
     this.preferences = new DeviceLearningPreferences(adapters.store, options.hints ?? HINTS);
-    this.challenges = new ChallengeController(adapters);
+    this.challenges = new ChallengeController(adapters, (record) => this.earned(record));
     this.challenges.subscribe(() => this.refresh());
   }
 
@@ -231,6 +232,20 @@ export class TrainingService {
   // Spec 3 Training service interface › Results
   async results(attemptId: string): Promise<ChallengeAttemptRecord | null> {
     return (await this.adapters.store.loadAttempt(attemptId))?.record ?? null;
+  }
+
+  // Spec 3 Comparison groups, records and progression; S3-10 OVKkc; #140
+  async progress(): Promise<Progress> {
+    return progressProjection(await this.attempts());
+  }
+
+  private async earned(record: ChallengeAttemptRecord): Promise<AttemptEarned> {
+    return attemptEarned(await this.attempts(), record.attemptId);
+  }
+
+  // TODO(#142): add accepted attempts and mark the accepted local ones
+  private async attempts(): Promise<readonly ProgressAttempt[]> {
+    return (await this.adapters.store.readAttemptRecords()).map((record) => ({ record, local: true }));
   }
 
   dismissResults(): void {
