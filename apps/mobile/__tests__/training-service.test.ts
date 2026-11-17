@@ -53,7 +53,7 @@ describe('the Training service', () => {
     const { service } = setup();
     expect(service.listCatalog()).toEqual([
       { category: 'card-values', available: true, ready: ['learn', 'check'] },
-      { category: 'running-count', available: true, ready: [] },
+      { category: 'running-count', available: true, ready: ['learn', 'check'] },
       { category: 'conversion', available: true, ready: [] },
       { category: 'table', available: true, ready: [] },
     ]);
@@ -63,7 +63,8 @@ describe('the Training service', () => {
     const { service, store } = setup();
     expect(service.validateSetup(LEARN_CARD_VALUES)).toEqual({ valid: true, diagnostics: [] });
     expect(service.validateSetup(CHECK_CARD_VALUES)).toEqual({ valid: true, diagnostics: [] });
-    expect(service.validateSetup({ category: 'running-count', variant: 'learn' })).toEqual({ valid: false, diagnostics: [{ field: 'category', problem: 'not-ready' }] });
+    expect(service.validateSetup({ category: 'running-count', variant: 'check' })).toEqual({ valid: true, diagnostics: [] });
+    expect(service.validateSetup({ category: 'conversion', variant: 'learn' })).toEqual({ valid: false, diagnostics: [{ field: 'category', problem: 'not-ready' }] });
     expect(service.validateSetup({ category: 'baccarat', variant: 'quiz' })).toEqual({
       valid: false,
       diagnostics: [
@@ -91,9 +92,25 @@ describe('the Training service', () => {
   it('shows no content and charges nothing for an invalid setup', async () => {
     const { service, store, admissions } = setup();
     await service.load();
-    await service.startAttempt({ category: 'running-count', variant: 'check' });
+    await service.startAttempt({ category: 'conversion', variant: 'check' });
     expect(service.snapshot()).toEqual({ status: 'none', problem: 'invalid-setup', diagnostics: [{ field: 'category', problem: 'not-ready' }], busy: false });
     expect([admissions, await store.findUnfinishedAttempt(), await store.readAttemptRecords()]).toEqual([[], null, []]);
+  });
+
+  // Spec 3 Learn, Check and assistance › Show/hide running count; Attempt lifecycle › Charge; #133
+  it('revealing the running count in Check is a free, durable step that marks the attempt assisted, with no cue facts', async () => {
+    const { service, store } = setup();
+    await service.load();
+    await service.startAttempt({ category: 'running-count', variant: 'check' });
+    const shown = active(service.snapshot());
+    expect([shown.phase, shown.countAid]).toEqual(['card', { revealed: false, count: null }]);
+    await service.submit({ kind: 'reveal-count' });
+    const snapshot = service.snapshot();
+    if (snapshot.status !== 'active') throw new Error(snapshot.status);
+    expect([snapshot.view.assisted, snapshot.view.countAid?.revealed, snapshot.facts]).toEqual([true, true, []]);
+    const stored = await store.loadAttempt(shown.attemptId);
+    expect([stored?.sequence, stored?.charge?.effect.amount]).toEqual([2, '1']);
+    expect(await store.readAttemptReceipt(shown.attemptId, `${shown.attemptId}/1`)).toMatchObject({ receipt: { command: '{"kind":"reveal-count"}' } });
   });
 
   it('shows no content and charges nothing when admission is denied', async () => {

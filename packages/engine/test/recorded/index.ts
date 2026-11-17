@@ -1,5 +1,5 @@
 // docs/development.md Releases: recorded checkpoints and the quarantine list
-import { RECORDED_ENGINE_0_0_0_SCHEMA_8 } from './engine-0.0.0-schema-8';
+import { RECORDED_ENGINE_0_0_0_SCHEMA_9 } from './engine-0.0.0-schema-9';
 
 export interface RecordedCheckpoint {
   readonly name: string;
@@ -33,4 +33,4 @@ export interface RecordedBuild {
   readonly challenges?: readonly RecordedChallenge[];
 }
 
-export const RECORDED_BUILDS: readonly RecordedBuild[] = [RECORDED_ENGINE_0_0_0_SCHEMA_8];
+export const RECORDED_BUILDS: readonly RecordedBuild[] = [RECORDED_ENGINE_0_0_0_SCHEMA_9];

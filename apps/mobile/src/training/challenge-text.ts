@@ -1,6 +1,6 @@
-// Spec 3 S3-01 PDCaD, RqPCB, S3-02 buD2R, S3-03, S3-08, S3-09 h0MsKr; S5-17 j3UhJ; #158, #132, #150
+// Spec 3 S3-01 to S3-09; S5-17 j3UhJ; #158, #132, #150, #133
 
-import type { CardValueReview, ChallengeEntry, ChallengeMetric, ChallengeVariant, HiLoExplanation, HiLoValue, LearnFeedback, MetricResult } from '@tableside/engine';
+import { runningCountDrift, type AssistanceClass, type ChallengeCategory, type ChallengeEntry, type ChallengeMetric, type ChallengeVariant, type ChallengeView, type CountRange, type HiLoExplanation, type HiLoValue, type LearnFeedback, type MetricResult, type ReviewFact, type RunningCountReview } from '@tableside/engine';
 
 import { cardName, rankName, signed } from '@/play/blackjack-text';
 import { GAME_WORDS } from '@/play/game-words';
@@ -28,6 +28,8 @@ export const FINDING_ATTEMPT = 'Finding your counting attempt…';
 export const VARIANT_HELP = "Check holds all feedback until the end. Learn tells you after each answer whether it's right, explains it and lets you retry.";
 export const WHAT_YOU_DO: Partial<Record<CatalogCategory, string>> = {
   'card-values': '20 cards covering every rank, one at a time. Choose +1, 0 or −1 for each. Only your first answer to each card is scored.',
+  'running-count':
+    '52 cards from a shuffled six-deck shoe, starting at zero. Learn asks for the count after every card; Check asks after cards 13, 26, 39 and 52. Only your first answer at each point is scored.',
 };
 
 // Spec 3 Amendment 4 §2–3; spec 5 Amendment 1 E, Amendment 7 §4
@@ -118,14 +120,33 @@ export const PACING_LABEL = 'self-paced';
 
 export const progressText = (position: number, length: number) => `Card ${position} of ${length}`;
 
-export const spokenValue = (value: HiLoValue) => (value > 0 ? `plus ${value}` : value < 0 ? `minus ${-value}` : '0');
+// Spec 3 S3-04 qdnQm
+export const checkpointOf = (view: Pick<ChallengeView, 'checkpoints' | 'position'>) => {
+  const index = view.checkpoints?.findIndex((card) => card >= view.position) ?? -1;
+  return view.checkpoints && index >= 0 ? { number: index + 1, of: view.checkpoints.length, card: view.checkpoints[index] as number } : null;
+};
+
+export function exerciseProgress(view: ChallengeView): string {
+  const checkpoint = checkpointOf(view);
+  const cards = progressText(view.position, view.length);
+  return checkpoint && view.position > 0 ? `${cards} · checkpoint ${checkpoint.number} of ${checkpoint.of}` : cards;
+}
+
+export const spokenValue = (value: number) => (value > 0 ? `plus ${value}` : value < 0 ? `minus ${-value}` : '0');
 
 // Spec 3 Learn, Check and assistance; Lessons › Structure (worked examples); #144
-export const hiLoText = (explanation: HiLoExplanation) => `${rankName(explanation.rank)} counts ${signed(explanation.value)} in Hi-Lo.`;
+export const hiLoText = (explanation: Pick<HiLoExplanation, 'rank' | 'value'>) => `${rankName(explanation.rank)} counts ${signed(explanation.value)} in Hi-Lo.`;
 
-export function feedbackText(feedback: LearnFeedback): { readonly kicker: string; readonly headline: string; readonly detail: string } {
+export function feedbackText(feedback: LearnFeedback, position: number): { readonly kicker: string; readonly headline: string; readonly detail: string } {
   const { explanation } = feedback;
   const kicker = feedback.correct ? (feedback.scored ? 'CORRECT' : 'CORRECT ON RETRY · YOUR FIRST ANSWER IS SCORED') : 'NOT QUITE · YOUR FIRST ANSWER IS SCORED';
+  if (explanation.kind === 'running-count') {
+    return {
+      kicker,
+      headline: `The count after card ${position} is ${signed(explanation.count)}.`,
+      detail: `It was ${signed(explanation.before)}, and ${hiLoText(explanation)}`,
+    };
+  }
   return {
     kicker,
     headline: hiLoText(explanation),
@@ -151,8 +172,65 @@ export const CHOICE_TAG = { 'your-answer': 'Your answer', 'your-pick': 'Your pic
 export const CARD_PROMPT = "What's this card's Hi-Lo value?";
 export const SKIP_LABEL = 'Skip (counts as incorrect)';
 
+// Spec 3 S3-04 qdnQm
+export const COUNT_LABEL = 'Running count';
+export const COUNT_SKIP = 'Skip';
+export const COUNT_SKIP_HINT = 'Counts as incorrect';
+export const SUBMIT = 'Submit';
+export const CHANGE_SIGN = 'Change sign';
+export const DELETE_DIGIT = 'Delete';
+export const countPrompt = (position: number) => `Enter the running count after ${position} ${position === 1 ? 'card' : 'cards'}`;
+export const checkpointKicker = (checkpoint: { readonly number: number; readonly of: number }) => `Checkpoint ${checkpoint.number} of ${checkpoint.of}`;
+export const keepCounting = (checkpoint: { readonly number: number; readonly card: number }) => `Keep the count. Checkpoint ${checkpoint.number} comes after card ${checkpoint.card}.`;
+
+// Spec 3 Learn, Check and assistance › Malformed input; S3-06 C53yTW
+export type CountProblem = 'empty' | 'sign-only' | 'not-whole' | 'out-of-range';
+
+export type ParsedCount = { readonly ok: true; readonly value: number } | { readonly ok: false; readonly problem: CountProblem };
+
+export function parseCount(text: string, range: CountRange): ParsedCount {
+  const trimmed = text.trim().replace(/[−–]/g, '-');
+  if (trimmed === '') return { ok: false, problem: 'empty' };
+  if (trimmed === '-' || trimmed === '+') return { ok: false, problem: 'sign-only' };
+  if (!/^[+-]?\d+$/.test(trimmed)) return { ok: false, problem: 'not-whole' };
+  const value = Number(trimmed);
+  if (value < range.min || value > range.max) return { ok: false, problem: 'out-of-range' };
+  return { ok: true, value: value === 0 ? 0 : value };
+}
+
+const NOTHING_SUBMITTED = "Nothing was submitted, and it doesn't count against you.";
+
+export const countProblemText = (problem: CountProblem, range: CountRange) =>
+  ({
+    empty: `Enter a count first. ${NOTHING_SUBMITTED}`,
+    'sign-only': `Add a number after the sign. ${NOTHING_SUBMITTED}`,
+    'not-whole': `Enter a whole number. ${NOTHING_SUBMITTED}`,
+    'out-of-range': `Enter a count from ${signed(range.min)} to ${signed(range.max)}. ${NOTHING_SUBMITTED}`,
+  })[problem];
+
+export const toggleSign = (text: string) => (text.startsWith('−') ? `+${text.slice(1)}` : text.startsWith('+') ? text.slice(1) : `−${text}`);
+
+// Spec 3 Learn, Check and assistance › Show/hide running count; S3-04 qdnQm, S3-05 EDnGd
+export const SHOW_COUNT = 'Show running count';
+export function countAidDetail(variant: ChallengeVariant, revealed: boolean, showing: boolean): string {
+  if (showing) return variant === 'check' ? 'Showing. This attempt is marked assisted.' : 'Showing. Learn notes that you showed it.';
+  if (variant === 'learn') return 'Hidden. Learn notes whether you showed it.';
+  return revealed ? 'Hidden. This attempt is already marked assisted; showing it again changes nothing.' : 'Hidden. Showing it marks this whole attempt assisted, permanently.';
+}
+export const REVEAL_WARNING = {
+  title: 'Show the running count?',
+  lead: "Showing it marks this whole attempt as assisted, permanently. Hiding it again won't undo that.",
+  detail:
+    "Assisted attempts still get full results, but they're kept apart from unassisted records and can't count toward a readiness milestone. Showing the count doesn't use another attempt.",
+  keep: 'Keep it hidden',
+  show: 'Show count and mark assisted',
+} as const;
+
 // Spec 3 Learn, Check and assistance › Answer accepted
-export const recordedText = (entered: ChallengeEntry) => `${entered === 'skip' ? 'Skip' : 'Answer'} recorded. Next card in a moment.`;
+export const recordedText = (entered: ChallengeEntry, category: ChallengeCategory) => {
+  if (entered === 'skip') return 'Skip recorded. Next card in a moment.';
+  return category === 'running-count' ? `Count ${signed(entered)} recorded. Next card in a moment.` : 'Answer recorded. Next card in a moment.';
+};
 
 export const enteredText = (entry: ChallengeEntry) => (entry === 'skip' ? 'skipped' : signed(entry));
 
@@ -168,17 +246,35 @@ export const COMPLETED: Record<ChallengeVariant, { readonly title: string; reado
   check: { title: 'Completed · unassisted', detail: null, note: null },
 };
 
+// Spec 3 S3-08 cX5Gc
+export function completedText(groupKey: { readonly variant: ChallengeVariant; readonly assistanceClass: AssistanceClass }, assistanceStep: number | null) {
+  if (groupKey.assistanceClass !== 'assisted-check') return COMPLETED[groupKey.variant];
+  return {
+    title: 'Completed · assisted',
+    detail: `You showed the running count${assistanceStep === null ? '' : ` at card ${assistanceStep}`}, which marks the whole attempt assisted. It's compared only with other assisted attempts at these settings.`,
+    note: null,
+  };
+}
+
+export const ASSISTED_NOTE = {
+  title: 'No milestone or personal best for unassisted Check',
+  detail: "Assisted attempts don't advance the readiness streak, and they don't break it either.",
+} as const;
+
 export const resultsNote = (variant: ChallengeVariant, allowance: AllowanceCopy | undefined) => [COMPLETED[variant].note, allowance?.results].filter(Boolean).join(' ');
 export const SCORES_LABEL = 'SKILL SCORES · FIRST ANSWERS';
-export const REVIEW_CARDS = 'Review cards';
+export const REVIEW_LABEL: Record<ChallengeCategory, string> = { 'card-values': 'Review cards', 'running-count': 'Review checkpoints' };
 // TODO(#135)
-export const RETRY_LABEL = 'Retry with new cards';
+export const RETRY_LABEL: Record<ChallengeCategory, string> = { 'card-values': 'Retry with new cards', 'running-count': 'Retry with a new shuffle' };
 
-export const RESULT_ROWS: readonly { readonly metric: ChallengeMetric; readonly title: string; readonly tested: (length: number) => string }[] = [
-  { metric: 'card-values', title: 'Card values', tested: (length) => `${length} cards` },
-  { metric: 'running-count', title: 'Running count', tested: (length) => `${length} cards` },
-  { metric: 'true-count', title: 'True count', tested: (length) => `${length} questions` },
+export const RESULT_ROWS: readonly { readonly metric: ChallengeMetric; readonly title: string; readonly tested: (total: number, variant: ChallengeVariant) => string }[] = [
+  { metric: 'card-values', title: 'Card values', tested: (total) => `${total} cards` },
+  { metric: 'running-count', title: 'Running count', tested: (total, variant) => (variant === 'check' ? `${total} ${total === 1 ? 'checkpoint' : 'checkpoints'}` : `${total} cards`) },
+  { metric: 'true-count', title: 'True count', tested: (total) => `${total} questions` },
 ];
+
+// Spec 3 S3-08 cX5Gc
+export const resultRows = (metrics: Readonly<Record<ChallengeMetric, MetricResult | null>>) => [...RESULT_ROWS].sort((a, b) => Number(metrics[b.metric] !== null) - Number(metrics[a.metric] !== null));
 
 export const NOT_TESTED = 'Not tested';
 
@@ -187,9 +283,11 @@ export const scoreText = (result: MetricResult | null) => (result ? `${result.co
 export const spokenScore = (result: MetricResult | null) => (result ? `${result.correct} of ${result.total}` : 'N/A');
 
 // Spec 3 S3-09 h0MsKr, BjuKf; Scoring and review › Review facts
-export const CARD_REVIEW_TITLE = 'Card review';
+export const REVIEW_TITLE: Record<ChallengeCategory, string> = { 'card-values': 'Card review', 'running-count': 'Checkpoint review' };
 export const YOU_LABEL = 'You';
 export const CORRECT_LABEL = 'Correct';
+export const ERROR_LABEL = 'Error';
+export const SUGGESTED_LESSON = 'Suggested after this attempt';
 export const SKIPPED = 'Skipped';
 
 export type ReviewOutcome = 'match' | 'off' | 'skipped';
@@ -200,18 +298,41 @@ const REVIEW_OUTCOME: Record<ReviewOutcome, { readonly status: (off: number) => 
   skipped: { status: () => 'Skipped · incorrect', spoken: () => 'counts as incorrect' },
 };
 
-export function reviewText(fact: CardValueReview) {
+export interface ReviewRowText {
+  readonly outcome: ReviewOutcome;
+  readonly title: string;
+  readonly status: string;
+  readonly entered: string;
+  readonly reference: string;
+  readonly error: string | null;
+  readonly label: string;
+}
+
+export function reviewText(fact: ReviewFact, variant: ChallengeVariant): ReviewRowText {
   const { entered, reference } = fact;
   const outcome: ReviewOutcome = entered === 'skip' ? 'skipped' : entered === reference ? 'match' : 'off';
   const off = entered === 'skip' ? 0 : Math.abs(entered - reference);
   const { status, spoken } = REVIEW_OUTCOME[outcome];
   const spokenEntry = entered === 'skip' ? 'skipped' : `you entered ${spokenValue(entered)}`;
-  return {
-    outcome,
-    title: `Card ${fact.position} · ${cardName(fact.card)}`,
-    status: status(off),
-    entered: entered === 'skip' ? SKIPPED : signed(entered),
-    reference: signed(reference),
-    label: `Card ${fact.position}, ${cardName(fact.card)}: ${spokenEntry}, correct ${spokenValue(reference)}, ${spoken(off)}`,
-  };
+  const shared = { outcome, status: status(off), entered: entered === 'skip' ? SKIPPED : signed(entered), reference: signed(reference) };
+  if (fact.kind === 'card-value') {
+    return { ...shared, title: `Card ${fact.position} · ${cardName(fact.card)}`, error: null, label: `Card ${fact.position}, ${cardName(fact.card)}: ${spokenEntry}, correct ${spokenValue(reference)}, ${spoken(off)}` };
+  }
+  return checkpointText(fact, variant, shared, `${spokenEntry}, correct ${spokenValue(reference)}`, spoken(off));
+}
+
+function checkpointText(fact: RunningCountReview, variant: ChallengeVariant, shared: Omit<ReviewRowText, 'title' | 'error' | 'label'>, said: string, outcome: string): ReviewRowText {
+  const title = variant === 'check' ? `Checkpoint ${fact.checkpoint} · after card ${fact.position}` : `After card ${fact.position}`;
+  const spokenTitle = variant === 'check' ? `Checkpoint ${fact.checkpoint}, after card ${fact.position}` : `After card ${fact.position}`;
+  const error = fact.error === null ? '—' : signed(fact.error);
+  const spokenError = fact.error === null ? '' : `, error ${spokenValue(fact.error)}`;
+  return { ...shared, title, error, label: `${spokenTitle}: ${said}${spokenError}, ${outcome}` };
+}
+
+// Spec 3 Scoring and review › Attribution
+export function driftText(review: readonly ReviewFact[], variant: ChallengeVariant): string | null {
+  const drift = variant === 'check' ? runningCountDrift(review) : null;
+  if (!drift) return null;
+  const amount = Math.abs(drift.error);
+  return `From checkpoint ${drift.from} on, your count ran ${amount} ${drift.error > 0 ? 'above' : 'below'} the reference. One early miss likely carried through. Each checkpoint still counts as its own error.`;
 }
