@@ -308,10 +308,13 @@ export function shoeCount(state: Pick<BlackjackActivityState, 'shoe' | 'outcome'
 
 const halfDecksLeft = (remaining: number) => Math.max(1, Math.floor((remaining + 13) / 26));
 
-export function trueCount(running: number, remaining: number): number {
-  const quotient = Math.floor(Math.abs(2 * running) / halfDecksLeft(remaining));
+// Spec 3 Lessons › Content requirements (conversion): running count ÷ half decks, truncated toward zero
+export function truncatedTrueCount(running: number, halfDecks: number): number {
+  const quotient = Math.floor(Math.abs(2 * running) / halfDecks);
   return running < 0 && quotient > 0 ? -quotient : quotient;
 }
+
+export const trueCount = (running: number, remaining: number): number => truncatedTrueCount(running, halfDecksLeft(remaining));
 
 export interface BlackjackCount {
   readonly running: number;
