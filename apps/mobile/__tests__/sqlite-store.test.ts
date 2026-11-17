@@ -7,6 +7,7 @@ import { FLAT_EVEN_MONEY } from '@tableside/definitions';
 
 import { openVerifiedConnection, SqlError, type RawSqlConnection } from '@/account/sql';
 import { SqliteActivityStore, StaleSessionError, StoreIntegrityError, StoreMismatchError, UnsupportedSchemaError, type StoreIdentity } from '@/account/sqlite-store';
+import { STORE_SCHEMA_VERSION } from '@/account/store-schema';
 import { nodeSqlCipherDriver } from '@/account/testing/node-sqlcipher';
 import { PracticeController, type PracticeSnapshot } from '@/practice/controller';
 import { completedRecord, describeActivityStoreContract, newActivity, transition } from '@/practice/testing/store-contract';
@@ -163,7 +164,7 @@ describe('the SQLCipher store', () => {
     const path = databasePath();
     await (await openStore(path)).close();
     const outside = raw(path);
-    outside.prepare(`UPDATE meta SET value = '2' WHERE name = 'schema_version'`).run();
+    outside.prepare(`UPDATE meta SET value = ? WHERE name = 'schema_version'`).run(String(STORE_SCHEMA_VERSION + 1));
     outside.close();
 
     await expect(openStore(path)).rejects.toBeInstanceOf(UnsupportedSchemaError);

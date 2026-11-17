@@ -16,6 +16,7 @@ import type { StoreMigration } from '@/account/store-schema';
 import type { AccountSession } from '@/account/vault';
 import { PracticeController } from '@/practice/controller';
 import { FakeClock, substituteAdapters } from '@/practice/testing/substitutes';
+import { LAST_SETUP, TrainingService } from '@/training/service';
 
 const devices: TestDevice[] = [];
 afterAll(() => devices.forEach((device) => device.remove()));
@@ -94,6 +95,22 @@ describe('a recorded database', () => {
     if (snapshot.status !== 'completed') throw new Error('not completed');
     expect(snapshot.result.finalCashOut).toBe(database.unfinished?.finalCashOut);
     expect(snapshot.result.identities.engine).toBe(recording.engine);
+  });
+
+  // #158
+  it.each(cases.filter(([, , database]) => database.unfinishedAttempt))('keeps its challenge attempts and preferences through the upgrade and resumes the unfinished attempt (%s)', async (_, __, database, migrations) => {
+    const session = await onDevice(database, migrations);
+    const { store } = session;
+    expect(await store.readAttemptRecords()).toEqual(stored(database, 'challenge_attempt_records'));
+    expect(await store.readPreference(LAST_SETUP)).toBe((database.rows.device_preferences ?? []).find((row) => row.key === LAST_SETUP)?.value);
+
+    const base = substituteAdapters({ clock: new FakeClock(undefined, true) });
+    const service = new TrainingService({ ...base, store, device: session.installationId, owner: session.accountId });
+    await service.load();
+    const snapshot = service.snapshot();
+    expect(snapshot).toMatchObject({ status: 'active', view: { attemptId: database.unfinishedAttempt?.attemptId, phase: database.unfinishedAttempt?.phase, position: database.unfinishedAttempt?.position } });
+    await service.submit({ kind: 'skip' });
+    expect(service.snapshot()).toMatchObject({ status: 'active', view: { phase: 'explanation', feedback: { entered: 'skip' } } });
   });
 });
 
