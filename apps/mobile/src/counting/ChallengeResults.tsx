@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/Button';
 import { fonts, palette, radius, space, textScale } from '@/theme/tokens';
+import { resultsSubtitle } from '@/training/blackjack-table-text';
 import {
   ASSISTED_NOTE,
   CATEGORY_TEXT,
@@ -96,7 +97,7 @@ export function ChallengeResults({
           {RESULTS_TITLE}
         </Text>
         <Text maxFontSizeMultiplier={textScale.body} style={styles.subtitle}>
-          {`${CATEGORY_TEXT[groupKey.category].title} · ${variantLabel(groupKey.variant)} · ${pacingLabel(groupKey.pacing)}`}
+          {groupKey.table ? resultsSubtitle(groupKey.variant) : `${CATEGORY_TEXT[groupKey.category].title} · ${variantLabel(groupKey.variant)} · ${pacingLabel(groupKey.pacing)}`}
         </Text>
       </View>
       <View style={styles.body}>
@@ -138,7 +139,7 @@ export function ChallengeResults({
         <View style={styles.group}>
           {resultRows(record.metrics).map((row, index) => {
             const result = record.metrics[row.metric];
-            const detail = result ? row.tested(result.total, groupKey.variant) : NOT_TESTED;
+            const detail = result ? row.tested(result.total, groupKey.variant, groupKey.category) : NOT_TESTED;
             const Icon = ROW_ICON[row.metric];
             return (
               <View key={row.metric} accessible accessibilityLabel={`${row.title}, ${detail}: ${spokenScore(result)}`} style={[styles.row, index > 0 && styles.rowDivider]}>

@@ -1,8 +1,10 @@
 // Spec 3 Modules › Training service › Challenge controller
-// Spec 3 Attempt lifecycle; Amendment 1 C6; #158, #132, #133
+// Spec 3 Attempt lifecycle; Amendment 1 C6; #158, #132, #133, #135, #137
 
 import {
   advanceChallenge,
+  challengeReached,
+  lastAnswerGiven,
   challengeAttemptRecord,
   createChallenge,
   decodeChallengeCheckpoint,
@@ -20,6 +22,7 @@ import {
   type ChallengeState,
   type ChallengeVariant,
   type ChallengeView,
+  type TableSetup,
 } from '@tableside/engine';
 
 import type { AccessDecision, AccessDenial, LifecycleEvent } from '../practice/adapters';
@@ -69,7 +72,7 @@ const ITEM_FINISHED: ReadonlySet<ChallengePhase> = new Set(['ready', 'card', 're
 // Spec 3 Attempt lifecycle › Performance timer
 const TIMED_PHASES: ReadonlySet<ChallengePhase> = new Set(['card', 'question', 'recorded']);
 
-const answeredLast = (state: ChallengeState) => state.phase === 'ended' || (state.position + 1 >= state.content.length && (state.phase === 'recorded' || state.phase === 'explanation'));
+const answeredLast = (state: ChallengeState) => lastAnswerGiven(state);
 
 export interface PerformanceTimer {
   readonly ms: number;
@@ -157,7 +160,7 @@ export class ChallengeController {
   }
 
   // Spec 3 Training service interface › Start attempt
-  async start(variant: ChallengeVariant, content: ChallengeContent, options: { readonly timed: boolean; readonly pacing: ChallengePacing }): Promise<void> {
+  async start(variant: ChallengeVariant, content: ChallengeContent, options: { readonly timed: boolean; readonly pacing: ChallengePacing; readonly table?: TableSetup }): Promise<void> {
     await this.exclusive(async () => {
       // Spec 3 Attempt lifecycle › One unfinished attempt
       if (this.state && this.current.status === 'active') return;
@@ -188,9 +191,9 @@ export class ChallengeController {
 
       const attemptId = this.adapters.newId();
       const random = streamIdentityFromEntropy(this.adapters.entropy);
-      const specification = { attemptId, owner: this.adapters.owner, device: this.adapters.device, variant, content };
+      const specification = { attemptId, owner: this.adapters.owner, device: this.adapters.device, variant, content, ...(options.table ? { table: options.table } : {}) };
       const initial = createChallenge(specification, random);
-      const created = { attemptId, admission, specification, random, checkpoint: encodeChallengeCheckpoint(initial), createdAt: this.adapters.clock.now(), lifecycle: { ...FRESH_LIFECYCLE, ...options } };
+      const created = { attemptId, admission, specification, random, checkpoint: encodeChallengeCheckpoint(initial), createdAt: this.adapters.clock.now(), lifecycle: { ...FRESH_LIFECYCLE, timed: options.timed, pacing: options.pacing } };
       let attempt: StoredAttempt | null;
       try {
         attempt = await this.adapters.store.createAttempt(created);
@@ -453,7 +456,7 @@ export class ChallengeController {
       return this.showNone(null);
     }
     const earned = await this.earnedBy(record).catch(() => NOTHING_EARNED);
-    this.current = { status: 'ended', record, position: Math.min(state.position + 1, state.content.length), explanation: unusable?.explanation ?? null, earned };
+    this.current = { status: 'ended', record, position: challengeReached(state), explanation: unusable?.explanation ?? null, earned };
     this.notify();
   }
 

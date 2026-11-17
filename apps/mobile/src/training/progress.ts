@@ -117,7 +117,7 @@ export function readinessOutcome(attempts: readonly ProgressAttempt[], milestone
   const records = milestones.map((milestone) => milestone.record);
   if (records.some((milestone) => milestone.installation === record.installation && milestone.attempts[1] === record.attemptId)) {
     const next = recommendation(records).category;
-    return { kind: 'earned', next: next === catalogCategory(record.groupKey) ? null : next };
+    return { kind: 'earned', next: next === record.groupKey.category ? null : next };
   }
   const kept = earliestMilestones(milestones).get(comparisonGroup(record.groupKey));
   return kept && belowReadinessThreshold(record) ? { kind: 'kept', earnedAt: kept.earnedAt } : null;
@@ -125,7 +125,7 @@ export function readinessOutcome(attempts: readonly ProgressAttempt[], milestone
 
 // Spec 3 Comparison groups (Recommendations)
 export function recommendation(milestones: readonly ReadinessMilestoneRecord[]): Recommendation {
-  const earned = new Set(milestones.map((milestone) => catalogCategory(milestone.groupKey)));
+  const earned = new Set(milestones.map((milestone) => milestone.groupKey.category));
   const furthest = Math.max(...CATALOG_CATEGORIES.map((category, index) => (earned.has(category) ? index : -1)));
   if (furthest < 0) return { category: CATALOG_CATEGORIES[0]!, reason: { kind: 'start' }, enter: null };
   const after = CATALOG_CATEGORIES[furthest]!;
@@ -141,9 +141,6 @@ export function recommendation(milestones: readonly ReadinessMilestoneRecord[]):
   ];
   return { category: after, reason: { kind: 'beyond', suggestions }, enter: null };
 }
-
-// Spec 3 Comparison groups
-export const catalogCategory = (key: Pick<ChallengeGroupKey, 'category' | 'table'>): CatalogCategory => (key.table ? 'table' : key.category);
 
 function earliestMilestones(milestones: readonly ProgressMilestone[]): Map<string, EarnedMilestone> {
   const byIdentity = new Map<string, ProgressMilestone>();

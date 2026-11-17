@@ -1,5 +1,5 @@
 // Spec 3 Screens; Lessons › Entry points, Structure; Attempt lifecycle; Amendment 1 B5
-// #158, #132, #145, #133, #134, #135, #146, #140, #141
+// #158, #132, #145, #133, #134, #135, #146, #140, #137, #141
 import { CHALLENGE_LESSONS } from '@tableside/definitions';
 import { CHALLENGE_VARIANTS, type ChallengeVariant } from '@tableside/engine';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
@@ -18,7 +18,6 @@ import { useLoaded } from '@/hooks/use-loaded';
 import { ScreenHints } from '@/lessons/FirstUseHints';
 import { lessonHref } from '@/lessons/routes';
 import { allowanceCopy, COUNTING_TITLE, FINDING_ATTEMPT, NEEDS_UPDATE } from '@/training/challenge-text';
-import { catalogCategory } from '@/training/progress';
 import { setupFor, type ChallengeSetup, type TrainingService, type TrainingSnapshot } from '@/training/service';
 import { useLessons, useTraining } from '@/training/TrainingProvider';
 
@@ -149,11 +148,11 @@ export default function Counting() {
           allowance={allowance}
           onRetry={() => void service.retry()}
           // Spec 3 S3-08 nXGFk; #141
-          lesson={lessons?.find((lesson) => lesson.id === CHALLENGE_LESSONS[catalogCategory(snapshot.record.groupKey)])}
+          lesson={lessons?.find((lesson) => lesson.id === CHALLENGE_LESSONS[snapshot.record.groupKey.category])}
           onOpenLesson={openLesson}
           onPracticeLearn={() => {
             service.dismissResults();
-            chooseSetup({ category: catalogCategory(snapshot.record.groupKey), variant: 'learn' });
+            chooseSetup({ category: snapshot.record.groupKey.category, variant: 'learn' });
           }}
         />
       );

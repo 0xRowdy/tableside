@@ -1,4 +1,4 @@
-// Spec 3 Testing Decisions › Seam 3; S3-10 OVKkc (Amendment 2 §3), S3-01 PDCaD, S3-08 liAfT; #140
+// Spec 3 Testing Decisions › Seam 3; S3-10 OVKkc (Amendment 2 §3), S3-01 PDCaD, S3-08 liAfT; #140, #137
 
 import { cleanup, fireEvent, screen, within } from '@testing-library/react-native';
 import type { ChallengeAttemptRecord } from '@tableside/engine';
@@ -72,6 +72,15 @@ describe('Records & history', () => {
     await renderRouter('./src/app', { initialUrl: '/' });
     await cleanup();
   }, 180_000);
+
+  it('shows a table group by its seat and settings, with a best for each count it tests (S3-10 OVKkc)', async () => {
+    const { TABLE_OBSERVE_CHECK } = jest.requireActual('@/training/testing/attempt-records') as typeof import('@/training/testing/attempt-records');
+    const table = TABLE_OBSERVE_CHECK.table as NonNullable<typeof TABLE_OBSERVE_CHECK.table>;
+    seed({ id: 'observe', key: { ...TABLE_OBSERVE_CHECK, table: { ...table, dealer: 'H17', lateSurrender: false, penetration: 60, extraPlayers: 2, checkpointInterval: 3 } }, scores: { 'running-count': [3, 4], 'true-count': [4, 4] }, endedAt: MOCK_NOW - 60_000 });
+    await openRecords();
+    expect(await screen.findByText('Table counting · Observe')).toBeOnTheScreen();
+    expect(screen.getByText('H17 no LS · 60% · 2 players · N = 3')).toBeOnTheScreen();
+  });
 
   it('shows unassisted Check bests and fastest by settings, with no personal best from an insufficient-funds attempt', async () => {
     const { RUNNING_COUNT_CHECK } = jest.requireActual('@/training/testing/attempt-records') as typeof import('@/training/testing/attempt-records');

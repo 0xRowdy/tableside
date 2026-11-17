@@ -6,7 +6,7 @@ import { dayText } from '@/account/account-text';
 import { GAME_WORDS } from '@/play/game-words';
 
 import { CATEGORY_TEXT, pacingLabel, scoreText, timerText, variantLabel, type AllowanceCopy } from './challenge-text';
-import { attemptIdentity, catalogCategory, setsPersonalBest, type AttemptEarned, type GroupProgress, type Progress, type Recommendation, type TableStretch } from './progress';
+import { attemptIdentity, setsPersonalBest, type AttemptEarned, type GroupProgress, type Progress, type Recommendation, type TableStretch } from './progress';
 import type { CatalogCategory } from './service';
 
 const lowerFirst = (text: string) => text.charAt(0).toLowerCase() + text.slice(1);
@@ -57,10 +57,8 @@ export interface CategoryStatus {
   readonly text: string;
 }
 
-const categoryOf = (group: GroupProgress) => catalogCategory(group.key);
-
 export function categoryStatus(category: CatalogCategory, progress: Progress | undefined): CategoryStatus {
-  const groups = progress?.groups.filter((group) => categoryOf(group) === category) ?? [];
+  const groups = progress?.groups.filter((group) => group.key.category === category) ?? [];
   const earned = groups.find((group) => group.milestone !== null);
   if (earned) return { earned: true, text: `Readiness milestone earned · ${variantLabel('check')}, ${pacingLabel(earned.key.pacing)}` };
   const check = groups.find((group) => group.key.assistanceClass === 'unassisted-check' && group.completed);
@@ -78,8 +76,8 @@ export const BELOW_THRESHOLD = 'Below 95% this time. That restarts the streak fo
 
 export const MILESTONE_EARNED = 'Readiness milestone earned';
 
-export const milestoneDetail = (key: Pick<ChallengeGroupKey, 'category' | 'table'>) =>
-  `Two unassisted Check attempts in a row at 95% or better, at these settings, on this device. It describes your ${READINESS_WORDS[catalogCategory(key)].accuracy} accuracy at these settings only.`;
+export const milestoneDetail = (key: Pick<ChallengeGroupKey, 'category'>) =>
+  `Two unassisted Check attempts in a row at 95% or better, at these settings, on this device. It describes your ${READINESS_WORDS[key.category].accuracy} accuracy at these settings only.`;
 
 // Spec 3 S3-08 CEb6T
 export function milestonePill(earned: AttemptEarned): string | null {
@@ -90,10 +88,10 @@ export function milestonePill(earned: AttemptEarned): string | null {
 export const MILESTONE_KEPT = 'Your milestone stays earned';
 
 
-export const keptDetail = (key: Pick<ChallengeGroupKey, 'category' | 'table'>, earnedAt: number) =>
-  `You earned the ${READINESS_WORDS[catalogCategory(key)].accuracy} readiness milestone at these settings on ${dayText(earnedAt)}. A slip never takes it away. To brush up: a Learn ${GAME_WORDS.blackjack.turn}, or the ${READINESS_WORDS[catalogCategory(key)].lesson} lesson.`;
+export const keptDetail = (key: Pick<ChallengeGroupKey, 'category'>, earnedAt: number) =>
+  `You earned the ${READINESS_WORDS[key.category].accuracy} readiness milestone at these settings on ${dayText(earnedAt)}. A slip never takes it away. To brush up: a Learn ${GAME_WORDS.blackjack.turn}, or the ${READINESS_WORDS[key.category].lesson} lesson.`;
 
-export const openLessonLabel = (key: Pick<ChallengeGroupKey, 'category' | 'table'>) => `Open the ${READINESS_WORDS[catalogCategory(key)].lesson} lesson`;
+export const openLessonLabel = (key: Pick<ChallengeGroupKey, 'category'>) => `Open the ${READINESS_WORDS[key.category].lesson} lesson`;
 export const PRACTICE_IN_LEARN = 'Practice in Learn';
 
 export const nextOnPath = (next: CatalogCategory) => `Next on the suggested path: ${lowerFirst(CATEGORY_TEXT[next].title)}.`;
