@@ -1,4 +1,4 @@
-// Spec 3 S3-08 liAfT; #158
+// Spec 3 S3-08 liAfT, CEb6T; #158, #150
 
 import type { ChallengeAttemptRecord } from '@tableside/engine';
 import { CircleCheckBig, Divide, Hash, RotateCcw, Square, type LucideIcon } from 'lucide-react-native';
@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/Button';
 import { fonts, palette, radius, space, textScale } from '@/theme/tokens';
+import { canStartChallenge, type ChallengeAllowance } from '@/training/allowance';
 import {
   CATEGORY_TEXT,
   COMPLETED_LEARN,
@@ -15,8 +16,8 @@ import {
   PACING_LABEL,
   RESULT_ROWS,
   RESULTS_TITLE,
+  resultsAllowanceText,
   RETRY_LABEL,
-  RETRY_NOTE,
   SCORES_LABEL,
   scoreText,
   spokenScore,
@@ -31,7 +32,7 @@ const ROW_ICON: Record<(typeof RESULT_ROWS)[number]['metric'], LucideIcon> = {
   'betting-adherence': Square,
 };
 
-export function ChallengeResults({ record, onRetry }: { record: ChallengeAttemptRecord; onRetry: () => void }) {
+export function ChallengeResults({ record, allowance, onRetry }: { record: ChallengeAttemptRecord; allowance: ChallengeAllowance | undefined; onRetry: () => void }) {
   const insets = useSafeAreaInsets();
   const { groupKey } = record;
   return (
@@ -84,10 +85,12 @@ export function ChallengeResults({ record, onRetry }: { record: ChallengeAttempt
             );
           })}
         </View>
-        <Button label={RETRY_LABEL} icon={RotateCcw} stretch onPress={onRetry} />
-        <Text maxFontSizeMultiplier={textScale.body} style={styles.note}>
-          {RETRY_NOTE}
-        </Text>
+        <Button label={RETRY_LABEL} icon={RotateCcw} stretch disabled={!allowance || !canStartChallenge(allowance)} onPress={onRetry} />
+        {allowance && (
+          <Text maxFontSizeMultiplier={textScale.body} style={styles.note}>
+            {resultsAllowanceText(allowance)}
+          </Text>
+        )}
       </View>
     </ScrollView>
   );

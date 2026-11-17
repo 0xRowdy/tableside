@@ -13,11 +13,14 @@ import { setupFor, type ChallengeSetup, type TrainingService } from '@/training/
 import { useTraining } from '@/training/TrainingProvider';
 
 const lastSetupOf = (service: TrainingService) => service.lastSetup();
+const allowanceOf = (service: TrainingService, _status: string) => service.allowance();
 
 export default function Counting() {
   const { service, snapshot } = useTraining();
   const { category } = useLocalSearchParams<{ category?: string }>();
   const remembered = useLoaded(lastSetupOf, service);
+  // Spec 3 Amendment 4 §2
+  const allowance = useLoaded(allowanceOf, service, snapshot.status);
   const [chosen, setChosen] = useState<ChallengeSetup | null>(null);
   const catalog = service.listCatalog();
   const entry = catalog.find((item) => item.category === category);
@@ -42,6 +45,7 @@ export default function Counting() {
       return (
         <ChallengeResults
           record={snapshot.record}
+          allowance={allowance}
           onRetry={() => {
             const { category: retried, variant } = snapshot.record.groupKey;
             service.dismissResults();
@@ -54,6 +58,7 @@ export default function Counting() {
         return (
           <CountingHome
             catalog={catalog}
+            allowance={allowance}
             onChoose={(setup) => {
               service.clearProblem();
               setChosen(setup);
@@ -67,6 +72,7 @@ export default function Counting() {
         <ChallengeSetupScreen
           entry={entry}
           setup={setup}
+          allowance={allowance}
           problem={snapshot.problem}
           busy={snapshot.busy}
           onChange={setChosen}
