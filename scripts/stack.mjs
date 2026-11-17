@@ -2,11 +2,16 @@
 // docs/development.md Commands
 
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, readdirSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
+const gitPath = join(root, '.git');
+if (process.env.TABLESIDE_STACK_SLOT === undefined && existsSync(gitPath) && statSync(gitPath).isFile()) {
+  console.error('This checkout is a linked worktree: set TABLESIDE_STACK_SLOT to its own slot (1–9), e.g. `TABLESIDE_STACK_SLOT=2 pnpm stack start`.');
+  process.exit(2);
+}
 const raw = process.env.TABLESIDE_STACK_SLOT ?? '0';
 if (!/^[0-9]$/.test(raw)) {
   console.error(`TABLESIDE_STACK_SLOT must be a single digit, got "${raw}".`);
