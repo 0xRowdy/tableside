@@ -6,11 +6,12 @@ import { CircleAlert, CircleCheckBig, CircleStop, CloudOff, type LucideIcon } fr
 import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
+import { Segmented } from '@/components/Segmented';
 import { useLoaded } from '@/hooks/use-loaded';
 import { Group, GroupLabel, ListRow, Note, SettingsScreen } from '@/settings/SettingsParts';
 import { fonts, palette, radius, space, textScale } from '@/theme/tokens';
 import { COUNTING_TITLE } from '@/training/challenge-text';
-import type { GroupProgress, Progress } from '@/training/progress';
+import { attemptIdentity, type GroupProgress, type Progress } from '@/training/progress';
 import {
   bestsLabel,
   bestText,
@@ -31,7 +32,6 @@ import {
 import type { LessonEntry, TrainingService } from '@/training/service';
 
 import { CardReview } from './CardReview';
-import { Segmented } from './Segmented';
 
 const ENDING_ICON: Record<AttemptEndingReason, LucideIcon> = { completed: CircleCheckBig, abandoned: CircleStop, 'insufficient-funds': CircleAlert, unusable: CircleAlert };
 
@@ -83,7 +83,7 @@ export function RecordsScreen({
             const { record } = entry;
             return (
               <ListRow
-                key={`${record.installation}/${record.attemptId}`}
+                key={attemptIdentity(record)}
                 icon={entry.local ? CloudOff : ENDING_ICON[record.endingReason]}
                 title={text.title}
                 detail={text.detail}

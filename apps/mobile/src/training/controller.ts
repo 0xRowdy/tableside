@@ -128,7 +128,7 @@ export class ChallengeController {
   constructor(
     private readonly adapters: TrainingAdapters,
     // Spec 3 Modules › Training service (Progress projection); #140
-    private readonly earnedBy: (record: ChallengeAttemptRecord) => Promise<AttemptEarned> = async () => NOTHING_EARNED,
+    private readonly earnedBy: (record: ChallengeAttemptRecord) => Promise<AttemptEarned>,
   ) {}
 
   snapshot = (): AttemptSnapshot => this.current;

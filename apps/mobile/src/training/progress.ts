@@ -33,7 +33,7 @@ export interface Progress {
   readonly history: readonly ProgressAttempt[];
 }
 
-// Spec 3 Comparison groups › Milestones (cue 16 on the results that set a personal best)
+// Spec 3 Comparison groups › Milestones; Audio and haptics (cue 16)
 export interface AttemptEarned {
   readonly bests: readonly ChallengeMetric[];
   readonly fastest: number | null;
@@ -78,11 +78,14 @@ export function attemptEarned(attempts: readonly ProgressAttempt[], attemptId: s
   return { bests, fastest: fastest?.attempt === record && (!previous || fastest.performanceMs < previous.performanceMs) ? fastest.performanceMs : null };
 }
 
+// Spec 3 Synchronized record types › Challenge attempt
+export const attemptIdentity = (record: Pick<ChallengeAttemptRecord, 'installation' | 'attemptId'>) => `${record.installation}/${record.attemptId}`;
+
 // Spec 3 Comparison groups (local and accepted attempts); Synchronized record types
 function distinct(attempts: readonly ProgressAttempt[]): ProgressAttempt[] {
   const byIdentity = new Map<string, ProgressAttempt>();
   for (const entry of attempts) {
-    const identity = `${entry.record.installation}/${entry.record.attemptId}`;
+    const identity = attemptIdentity(entry.record);
     const known = byIdentity.get(identity);
     if (!known || (known.local && !entry.local)) byIdentity.set(identity, entry);
   }
@@ -104,17 +107,15 @@ function groupProgress(id: string, attempts: readonly ProgressAttempt[]): GroupP
   };
 }
 
-// Spec 3 Comparison groups › Personal bests (Fastest); Attempt lifecycle › Pause
-export function fastestEligible(record: ChallengeAttemptRecord): record is ChallengeAttemptRecord & { readonly performanceMs: number } {
+// Spec 3 Comparison groups › Personal bests (Fastest)
+export function everyMetricPerfect(record: ChallengeAttemptRecord): boolean {
   const tested = CHALLENGE_METRICS.flatMap((metric) => record.metrics[metric] ?? []);
-  return (
-    record.endingReason === 'completed' &&
-    record.groupKey.assistanceClass === 'unassisted-check' &&
-    !record.interrupted &&
-    record.performanceMs !== null &&
-    tested.length > 0 &&
-    tested.every((result) => result.correct === result.total)
-  );
+  return tested.length > 0 && tested.every((result) => result.correct === result.total);
+}
+
+// Spec 3 Comparison groups › Personal bests (Fastest); Attempt lifecycle › Pause
+function fastestEligible(record: ChallengeAttemptRecord): record is ChallengeAttemptRecord & { readonly performanceMs: number } {
+  return record.endingReason === 'completed' && record.groupKey.assistanceClass === 'unassisted-check' && !record.interrupted && record.performanceMs !== null && everyMetricPerfect(record);
 }
 
 function fastestOf(records: readonly ChallengeAttemptRecord[]): Fastest | null {

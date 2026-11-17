@@ -4,6 +4,7 @@ import { cleanup, fireEvent, screen, within } from '@testing-library/react-nativ
 import type { ChallengeAttemptRecord } from '@tableside/engine';
 import { renderRouter } from 'expo-router/testing-library';
 
+import type { SubstituteFeedbackPorts } from '@/feedback/testing/substitutes';
 import type { MemoryTrainingStore } from '@/training/memory-store';
 import type { AttemptFixture } from '@/training/testing/attempt-records';
 
@@ -45,6 +46,7 @@ jest.mock('@/training/app-adapters', () => {
 // Spec 1 Game rules, Counting (Hi-Lo)
 const HI_LO: Record<string, string> = { Ace: 'minus 1', '2': 'plus 1', '3': 'plus 1', '4': 'plus 1', '5': 'plus 1', '6': 'plus 1', '7': '0', '8': '0', '9': '0', '10': 'minus 1', Jack: 'minus 1', Queen: 'minus 1', King: 'minus 1' };
 const answerFor = (card: string) => HI_LO[card.split(' of ')[0]!]!;
+const cues = () => (jest.requireMock('@/feedback/device-ports') as { latest: SubstituteFeedbackPorts }).latest.sound.played.map((play) => play.cue);
 const shownCard = () => screen.getByTestId('challenge-card').props.accessibilityLabel as string;
 
 function seed(...fixtures: AttemptFixture[]) {
@@ -119,7 +121,7 @@ describe('Records & history', () => {
     expect(rows).toEqual([
       'Running count · Check. Today · 2 s pace · ended early — insufficient funds · Local, not synced yet. Partial',
       'Conversion · Check. Yesterday · abandoned · Local, not synced yet. —',
-      `Running count · Check. 17 Oct 2026 · unassisted · completed · Local, not synced yet. 4 / 4`,
+      'Running count · Check. 17 Oct 2026 · unassisted · Local, not synced yet. 4 / 4',
     ]);
   });
 
@@ -127,8 +129,8 @@ describe('Records & history', () => {
     const { RUNNING_COUNT_CHECK } = jest.requireActual('@/training/testing/attempt-records') as typeof import('@/training/testing/attempt-records');
     seed({ id: 'old', key: { ...RUNNING_COUNT_CHECK, content: { id: 'running-count', version: 0 } }, performanceMs: null, endedAt: MOCK_NOW - 60_000 });
     await openRecords();
-    expect(await screen.findByLabelText('Running count, 52 cards · self-paced · content version 0. Best 4 of 4. Fastest — (needs a perfect run)')).toBeOnTheScreen();
-    expect(screen.getByLabelText('Running count · Check. Today · unassisted · completed · content version 0 · Local, not synced yet. 4 / 4')).toBeOnTheScreen();
+    expect(await screen.findByLabelText('Running count, 52 cards · self-paced · content version 0. Best 4 of 4. Fastest — (needs a timed, uninterrupted run)')).toBeOnTheScreen();
+    expect(screen.getByLabelText('Running count · Check. Today · unassisted · content version 0 · Local, not synced yet. 4 / 4')).toBeOnTheScreen();
   });
 
   it('shows a new Learn personal best on results, then the attempt in Records, opening its review from history', async () => {
@@ -145,6 +147,7 @@ describe('Records & history', () => {
     const best = screen.getByLabelText('New Learn personal best. Compared only with Learn attempts at these settings.');
     expect(within(best).getByText('New Learn personal best')).toBeOnTheScreen();
     expect(screen.getByText('Completed · Learn')).toBeOnTheScreen();
+    expect(cues().slice(-2)).toEqual(['attempt-ended', 'milestone']);
     await cleanup();
 
     await openRecords();
@@ -154,6 +157,8 @@ describe('Records & history', () => {
     await screen.findByRole('header', { name: 'Card review' });
     await fireEvent.press(screen.getByRole('button', { name: 'Back to Records & history' }));
     expect(await screen.findByRole('header', { name: 'Records & history' })).toBeOnTheScreen();
+    // Spec 3 Comparison groups › Milestones (never on history views)
+    expect(cues()).not.toContain('milestone');
   });
 
   it('has nothing to show before any attempt', async () => {

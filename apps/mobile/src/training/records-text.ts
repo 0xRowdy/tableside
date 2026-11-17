@@ -5,8 +5,8 @@ import type { AssistanceClass, AttemptEndingReason, ChallengeAttemptRecord, Chal
 
 import { dayText } from '@/account/account-text';
 
-import { spokenScore, scoreText, timerText, variantLabel } from './challenge-text';
-import type { AttemptEarned, GroupProgress, ProgressAttempt } from './progress';
+import { PACING_LABEL, spokenScore, scoreText, timerText, variantLabel } from './challenge-text';
+import { everyMetricPerfect, type AttemptEarned, type GroupProgress, type ProgressAttempt } from './progress';
 import type { CatalogCategory } from './service';
 
 export const RECORDS_TITLE = 'Records & history';
@@ -15,6 +15,8 @@ export const RECORDS_ROW = { title: RECORDS_TITLE, detail: 'Personal bests, fast
 export const RECORD_CLASSES: readonly AssistanceClass[] = ['unassisted-check', 'assisted-check', 'learn'];
 export const CLASS_LABEL: Record<AssistanceClass, string> = { 'unassisted-check': 'Check', 'assisted-check': 'Assisted Check', learn: 'Learn' };
 const CLASS_NAME: Record<AssistanceClass, string> = { 'unassisted-check': 'unassisted Check', 'assisted-check': 'assisted Check', learn: 'Learn' };
+const CHECK_ASSISTANCE: Record<AssistanceClass, string | null> = { 'unassisted-check': 'unassisted', 'assisted-check': 'assisted', learn: null };
+const NEW_BEST: Record<AssistanceClass, string> = { 'unassisted-check': 'New personal best', 'assisted-check': 'New assisted Check personal best', learn: 'New Learn personal best' };
 
 export const bestsLabel = (assistance: AssistanceClass) => `PERSONAL BESTS · ${CLASS_NAME[assistance].toUpperCase()}, BY SETTINGS`;
 export const noGroups = (assistance: AssistanceClass) => `No ${CLASS_NAME[assistance]} attempts yet.`;
@@ -24,7 +26,7 @@ export const RECORDS_NOTE = 'Records only compare attempts with identical settin
 
 const RECORD_TITLE: Record<CatalogCategory, string> = { 'card-values': 'Card values', 'running-count': 'Running count', conversion: 'Conversion', table: 'Table counting' };
 const ITEMS: Record<ChallengeCategory, string> = { 'card-values': 'cards', 'running-count': 'cards', conversion: 'questions' };
-const PACING: Record<ChallengePacing, string> = { 'self-paced': 'self-paced', '3s': '3 s pace', '2s': '2 s pace', '1s': '1 s pace' };
+const PACING: Record<ChallengePacing, string> = { 'self-paced': PACING_LABEL, '3s': '3 s pace', '2s': '2 s pace', '1s': '1 s pace' };
 const METRIC_TITLE: Record<ChallengeMetric, string> = {
   'card-values': 'card values',
   'running-count': 'running count',
@@ -67,7 +69,13 @@ export function bestText(group: GroupProgress): readonly StatText[] {
 }
 
 export function fastestText(group: GroupProgress): StatText {
-  const value = group.fastest ? timerText(group.fastest.performanceMs) : group.completed ? '— (needs a perfect run)' : '—';
+  const value = group.fastest
+    ? timerText(group.fastest.performanceMs)
+    : !group.completed
+      ? '—'
+      : group.attempts.some((entry) => entry.record.endingReason === 'completed' && everyMetricPerfect(entry.record))
+        ? '— (needs a timed, uninterrupted run)'
+        : '— (needs a perfect run)';
   return { label: 'Fastest', value, spoken: value };
 }
 
@@ -81,9 +89,9 @@ const ENDING: Record<AttemptEndingReason, string> = {
   unusable: "ended · couldn't continue",
 };
 
-export const LOCAL_LABEL = 'Local, not synced yet';
+const LOCAL_LABEL = 'Local, not synced yet';
 
-export function whenText(at: number, now: number): string {
+function whenText(at: number, now: number): string {
   const day = new Date(at).toDateString();
   if (day === new Date(now).toDateString()) return 'Today';
   const yesterday = new Date(now);
@@ -98,8 +106,7 @@ export function historyText({ record, local }: ProgressAttempt, now: number): { 
   const detail = [
     whenText(record.endedAt, now),
     key.pacing === 'self-paced' ? null : PACING[key.pacing],
-    completed && key.variant === 'check' ? (key.assistanceClass === 'assisted-check' ? 'assisted' : 'unassisted') : null,
-    ENDING[record.endingReason],
+    completed ? (CHECK_ASSISTANCE[key.assistanceClass] ?? ENDING.completed) : ENDING[record.endingReason],
     versionText(key),
     local ? LOCAL_LABEL : null,
   ].filter(Boolean);
@@ -115,9 +122,8 @@ function historyValue(record: ChallengeAttemptRecord): string {
 
 // Spec 3 S3-08 liAfT, CEb6T
 export function personalBestText(key: Pick<ChallengeGroupKey, 'assistanceClass'>, earned: AttemptEarned): { readonly title: string; readonly detail: string; readonly fastest: string | null } {
-  const title = key.assistanceClass === 'learn' ? 'New Learn personal best' : key.assistanceClass === 'assisted-check' ? 'New assisted Check personal best' : 'New personal best';
   return {
-    title,
+    title: NEW_BEST[key.assistanceClass],
     detail: `Compared only with ${CLASS_NAME[key.assistanceClass]} attempts at these settings.`,
     fastest: earned.fastest === null ? null : `Fastest ${timerText(earned.fastest)}`,
   };

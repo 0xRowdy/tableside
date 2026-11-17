@@ -5,6 +5,7 @@ import { BookOpen, CircleAlert, Play } from 'lucide-react-native';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { Button } from '@/components/Button';
+import { Segmented } from '@/components/Segmented';
 import { SwitchRow } from '@/components/SwitchRow';
 import { LearnRow } from '@/lessons/LessonEntries';
 import { SettingsScreen } from '@/settings/SettingsParts';
@@ -30,7 +31,6 @@ import { LEARN_THIS_SKILL, learnThisSkillDetail } from '@/training/lesson-text';
 import type { CatalogEntry, ChallengeSetup, LessonEntry, StartProblem } from '@/training/service';
 
 import { AllowanceBanner } from './AllowanceBanner';
-import { Segmented } from './Segmented';
 
 export function ChallengeSetupScreen({
   entry,
@@ -64,7 +64,10 @@ export function ChallengeSetupScreen({
         </Text>
         <Segmented
           label="Variant"
-          options={CHALLENGE_VARIANTS.map((variant: ChallengeVariant) => ({ value: variant, label: variantLabel(variant), disabled: !entry.ready.includes(variant), hint: entry.ready.includes(variant) ? undefined : NOT_READY_HINT }))}
+          options={CHALLENGE_VARIANTS.map((variant: ChallengeVariant) => {
+            const ready = entry.ready.includes(variant);
+            return { value: variant, label: variantLabel(variant), disabled: !ready, hint: ready ? undefined : NOT_READY_HINT };
+          })}
           selected={setup.variant}
           onSelect={(variant) => onChange({ ...setup, variant })}
         />
