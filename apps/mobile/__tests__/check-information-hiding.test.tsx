@@ -52,12 +52,14 @@ beforeAll(() => {
   events = watchAccessibilityEvents();
 });
 
+const LIFECYCLE = { hold: null, timer: null, performanceMs: () => null, onPause: () => undefined, onResume: () => undefined, onEnd: () => undefined, onLeave: () => undefined };
+
 async function present(view: ChallengeView) {
   await cleanup();
   events.clear();
   await render(
     <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 0, left: 0, right: 0, bottom: 0 } }}>
-      <ChallengeExercise view={view} busy={view.phase === 'recorded'} saveFailed={false} onCommand={() => undefined} onInputRejected={() => undefined} onRetrySave={() => undefined} />
+      <ChallengeExercise view={view} busy={view.phase === 'recorded'} saveFailed={false} {...LIFECYCLE} onCommand={() => undefined} onInputRejected={() => undefined} onRetrySave={() => undefined} />
     </SafeAreaProvider>,
   );
   return presentedScreen(screen.toJSON() as never, events, { mask: ['challenge-card'] });

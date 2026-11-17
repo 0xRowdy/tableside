@@ -174,6 +174,9 @@ export class TrainingService {
     return this.challenges.resume();
   }
 
+  // Spec 3 Attempt lifecycle › Performance timer
+  performanceMs = (): number | null => this.challenges.performanceMs();
+
   // Spec 3 Training service interface › End
   end(options?: { readonly showResults?: boolean }): Promise<void> {
     return this.challenges.end(options);

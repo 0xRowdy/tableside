@@ -40,6 +40,7 @@ jest.mock('@/training/app-adapters', () => {
         newId: () => `event-${++next}`,
         device: 'test-device',
         owner: 'local',
+        quarantine: { version: 0, entries: [] },
       };
     },
   };

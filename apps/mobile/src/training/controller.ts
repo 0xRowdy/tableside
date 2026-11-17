@@ -482,6 +482,8 @@ export class ChallengeController {
   }
 
   // Spec 3 Attempt lifecycle › Performance timer
+  performanceMs = (): number | null => (this.state && this.timing.timed ? this.timingNow().performanceMs : null);
+
   private retime(): void {
     const state = this.state;
     const running = this.timing.timed && state !== null && TIMED_PHASES.has(state.phase) && !answeredLast(state) && !this.hold?.reached;
