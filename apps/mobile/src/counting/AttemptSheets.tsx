@@ -1,7 +1,7 @@
 // Spec 3 S3-05 r5pCx, T9sCI, qGARl; S3-01 Uq05w; Attempt lifecycle; #135, #136
 
 import type { ChallengeView } from '@tableside/engine';
-import { BookOpen, CircleAlert, CircleStop, Eye, Keyboard, Pause, Play, SkipForward, type LucideIcon } from 'lucide-react-native';
+import { BookOpen, CircleAlert, CircleStop, Eye, Hand, Keyboard, Pause, Play, SkipForward, type LucideIcon } from 'lucide-react-native';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { Button } from '@/components/Button';
@@ -55,10 +55,10 @@ export function WarningNote({ text }: { text: string }) {
   );
 }
 
-const HELP_ICON: Record<'enter' | 'skip' | 'pause' | 'count', LucideIcon> = { enter: Keyboard, skip: SkipForward, pause: Pause, count: Eye };
+const HELP_ICON: Record<'enter' | 'skip' | 'pause' | 'count' | 'moves', LucideIcon> = { enter: Keyboard, skip: SkipForward, pause: Pause, count: Eye, moves: Hand };
 
 // Spec 3 Learn, Check and assistance (operational help only)
-export function HelpSheet({ view, onClose }: { view: Pick<ChallengeView, 'variant' | 'countRange' | 'countAid'>; onClose: () => void }) {
+export function HelpSheet({ view, onClose }: { view: Pick<ChallengeView, 'variant' | 'countRange' | 'countAid' | 'table'>; onClose: () => void }) {
   const text = helpText(view);
   return (
     <Sheet title={text.title} onClose={onClose} testID="attempt-help">

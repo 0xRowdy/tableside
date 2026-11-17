@@ -688,7 +688,7 @@ function apply(state: ChallengeState, command: ChallengeCommand): { change: Chan
   }
 }
 
-// Spec 3 User stories 37, 38; Learn, Check and assistance; Scoring and review › Attribution (legality keeps the attempt); #138
+// Spec 3 User stories 37, 38; Scoring and review › Attribution; #138
 function play(state: ChallengeState, action: PlayChoice): { change: Change; facts: ChallengeFact[] } {
   const table = state.table as TableProgress;
   const seat = table.seat as NonNullable<TableProgress['seat']>;
@@ -767,7 +767,7 @@ export function challengeResults(state: ChallengeState): ChallengeResults | null
 
 const cardOf = (card: Card): ChallengeCard => ({ rank: card.rank, suit: card.suit });
 
-// Spec 3 Scoring and review › Reference (the actual count), Attribution (the entered count changes no score); #138
+// Spec 3 Scoring and review › Reference, Attribution; #138
 function decisionReviews(state: ChallengeState): TableDecisionReview[] {
   const table = state.table as TableProgress;
   if (table.seat === null) return [];
@@ -805,8 +805,8 @@ function decisionReviews(state: ChallengeState): TableDecisionReview[] {
   });
 }
 
-// A six-deck shoe with every card left: the true count is the running count over six, so 6t gives exactly t.
-const FULL_SHOE = 312;
+const UNDEALT_SHOE = 312;
+const shoeAtTrueCount = (trueCount: number) => ({ running: 6 * trueCount, remaining: UNDEALT_SHOE });
 
 function policyAt(setup: PlaySetup, decision: PlayDecision, trueCount: number): PlayChoice {
   const { situation } = decision.explanation;
@@ -819,7 +819,7 @@ function policyAt(setup: PlaySetup, decision: PlayDecision, trueCount: number): 
     up: situation.up,
     balance: situation.available,
     stake: situation.stake,
-    shoe: { running: 6 * trueCount, remaining: FULL_SHOE },
+    shoe: shoeAtTrueCount(trueCount),
   }).prescribed.action;
 }
 

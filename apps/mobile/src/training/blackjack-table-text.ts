@@ -1,7 +1,23 @@
-// Spec 3 S3-07 v82z3, AcmMa, bh8oE, xjtSW, heGUV; S3-02 ZreSb; #137
+// Spec 3 S3-07, S3-02 ZreSb, FkMDw, S3-09 VToCp; #137, #138
 
 import { blackjackHouseEdge, blackjackPreset, type BlackjackPreset } from '@tableside/definitions';
-import { tableCheckpointRounds, type BlackjackAction, type ChallengeEntry, type TableGroupKey, ChallengeVariant, TableCountReview, TableHandView, TableRunningExplanation, TableView } from '@tableside/engine';
+import {
+  tableCheckpointRounds,
+  type BlackjackAction,
+  type ChallengeEntry,
+  type ChallengeVariant,
+  type PlayChoice,
+  type PlayCorrection,
+  type TableCountReview,
+  type TableDecisionReview,
+  type TableGroupKey,
+  type TableHandView,
+  type TableRunningExplanation,
+  type TableView,
+} from '@tableside/engine';
+
+import { playAdvice, playCorrectionCopy } from '@/play/blackjack-coaching';
+import type { CorrectionCopy } from '@/play/coaching-text';
 
 import { cardRank, signed, SUIT_GLYPH } from '@/play/blackjack-text';
 
@@ -11,35 +27,53 @@ const players = (count: number) => `${count} ${count === 1 ? 'player' : 'players
 // Spec 3 S3-10 OVKkc
 export const tableGroupTitle = (table: TableGroupKey) => `Table counting · ${table.seat === 'observe' ? 'Observe' : 'Play'}`;
 export const tableSettingsText = (table: TableGroupKey) =>
-  [presetText(table.dealer, table.lateSurrender), `${table.penetration}%`, players(table.extraPlayers), `N = ${table.checkpointInterval}`].join(' · ');
+  [...(table.countingMode ? [MODE_TEXT[table.countingMode]] : []), presetText(table.dealer, table.lateSurrender), `${table.penetration}%`, players(table.extraPlayers), `N = ${table.checkpointInterval}`].join(' · ');
+
+// Spec 3 S3-02 FkMDw, S3-07 qRHlC
+const MODE_TEXT = { basic: 'with basic', deviations: 'with deviations' } as const;
+const SEAT_TEXT = { observe: 'Observe', play: 'Play' } as const;
 
 // Spec 3 S3-08 e5MASr
-export const resultsSubtitle = (variant: ChallengeVariant) => `Table counting · ${variant === 'learn' ? 'Learn' : 'Check'} · Observe`;
+export const resultsSubtitle = (variant: ChallengeVariant, seat: TableGroupKey['seat'] = 'observe') => `Table counting · ${variant === 'learn' ? 'Learn' : 'Check'} · ${SEAT_TEXT[seat]}`;
 export const TABLE_LEARN_DETAIL =
   'Learn scores your first answer at each checkpoint, even when you corrected it afterwards. Learn attempts never count toward a readiness milestone.';
 
-export const tableSubtitle = (variant: ChallengeVariant, table: Pick<TableView, 'rules' | 'interval'>) =>
-  [variant === 'learn' ? 'Learn' : 'Check', 'Observe', presetText(table.rules.dealer, table.rules.lateSurrender), `${table.rules.penetration}%`, ...(table.rules.extraPlayers > 0 ? [players(table.rules.extraPlayers)] : []), `N = ${table.interval}`].join(' · ');
+export function tableSubtitle(variant: ChallengeVariant, table: Pick<TableView, 'rules' | 'interval' | 'seat' | 'countingMode'>): string {
+  const variantText = variant === 'learn' ? 'Learn' : 'Check';
+  // Spec 3 S3-07 qRHlC
+  if (table.countingMode === 'deviations') return [variantText, SEAT_TEXT[table.seat], MODE_TEXT.deviations, `N = ${table.interval}`].join(' · ');
+  return [variantText, SEAT_TEXT[table.seat], presetText(table.rules.dealer, table.rules.lateSurrender), `${table.rules.penetration}%`, ...(table.rules.extraPlayers > 0 ? [players(table.rules.extraPlayers)] : []), `N = ${table.interval}`].join(' · ');
+}
 
 export const edgeText = (rules: TableView['rules']) => `Edge with basic strategy: ${blackjackHouseEdge(blackjackPreset(rules.dealer, rules.lateSurrender)).percent}% (this preset)`;
 
 export const YOUR_SEAT = 'YOUR SEAT';
 export const SIMULATED = 'Simulated';
+export const YOU_PLAY = 'You';
 export const ROUND_LABEL = 'ROUND';
 export const ROUND_SPOKEN = 'Round';
 export const YOUR_SEAT_SPOKEN = 'Your seat';
 export const roundOf = (table: Pick<TableView, 'round' | 'rounds'>) => `${table.round} of ${table.rounds}`;
 export const PHASES = ['Bet', 'Deal', 'Play', 'Settle'] as const;
 
-export type TableStatus = 'observing' | 'checkpoint' | 'shuffled' | 'feedback';
-export const STATUS_TEXT: Record<TableStatus, string> = { observing: 'Observing', checkpoint: 'Count checkpoint', shuffled: 'Shoe reshuffled', feedback: 'Learn feedback' };
+export type TableStatus = 'observing' | 'checkpoint' | 'shuffled' | 'feedback' | 'dealing' | 'deciding' | 'count-first' | 'correction';
+export const STATUS_TEXT: Record<TableStatus, string> = {
+  observing: 'Observing',
+  checkpoint: 'Count checkpoint',
+  shuffled: 'Shoe reshuffled',
+  feedback: 'Learn feedback',
+  dealing: 'Dealing',
+  deciding: 'Your move',
+  'count-first': 'Count before your move',
+  correction: 'Correction',
+};
 
 export const decksText = (table: Pick<TableView, 'decks' | 'step'>) => (table.step === 'shuffle' ? `Decks remaining: ${table.decks}` : `${table.decks} decks left`);
 export const DEALER = 'DEALER';
 export const seatName = (seat: number) => `Seat ${seat}`;
 
-const ACTION_TEXT: Record<BlackjackAction, string> = { hit: 'Hit', stand: 'Stand', double: 'Double', split: 'Split', surrender: 'Surrender', 'decline-insurance': 'No insurance' };
-export const seatActionText = (action: BlackjackAction) => `Seat: ${ACTION_TEXT[action]}`;
+const ACTION_TEXT: Record<BlackjackAction | 'insure', string> = { hit: 'Hit', stand: 'Stand', double: 'Double', split: 'Split', surrender: 'Surrender', 'decline-insurance': 'No insurance', insure: 'Insured' };
+export const seatActionText = (action: BlackjackAction | 'insure', seat: TableView['seat'] = 'observe') => `${seat === 'play' ? 'You' : 'Seat'}: ${ACTION_TEXT[action]}`;
 
 const RESULT_TEXT = { win: 'won', loss: 'lost', push: 'push' } as const;
 export function handText(hand: TableHandView): string {
@@ -57,12 +91,14 @@ export const observeText = (table: Pick<TableView, 'rules' | 'interval' | 'nextC
 const listText = (items: readonly string[]) => (items.length < 2 ? items.join('') : `${items.slice(0, -1).join(', ')} and ${items.at(-1)}`);
 
 export function checkpointTitle(prompt: NonNullable<TableView['prompt']>, round: number): string {
+  if (prompt.timing === 'decision') return 'Before your decision: true count';
   if (prompt.timing === 'before-bet') return `Checkpoint before round ${round}’s bet`;
   return prompt.timing === 'after-round' ? `Checkpoint after round ${round}` : `Block checkpoint after round ${round}`;
 }
 
 export function checkpointText(table: Pick<TableView, 'prompt' | 'interval' | 'rounds'>): string {
   const prompt = table.prompt as NonNullable<TableView['prompt']>;
+  if (prompt.timing === 'decision') return 'Enter the true count, then choose your move.';
   if (prompt.timing === 'before-bet') return 'Enter the running and true count before this round’s bet. The round waits until you submit or skip.';
   if (prompt.timing === 'after-round') return 'Enter the running count, including the dealer’s last card. The next round waits until you submit or skip.';
   return `N = ${table.interval}: enter the running and true count after rounds ${listText(tableCheckpointRounds(table.interval, table.rounds).map(String))}. Other count prompts are off. The next round waits until you submit or skip.`;
@@ -72,8 +108,11 @@ export const RUNNING_COUNT = 'Running count';
 export const TRUE_COUNT = 'True count';
 export const NEXT_TRUE_COUNT = 'Next: true count';
 
-export function tableRecordedText(entered: ChallengeEntry, count: 'running' | 'true', trueCountNext: boolean): string {
-  const next = trueCountNext ? 'The true count is next.' : 'The table carries on in a moment.';
+// Spec 3 S3-07 qRHlC; Amendment 1 A3
+export const DECISION_PROMPT_NOTE = 'This prompt means the decision depends on the count. It never shows the right move, the index or the reference count.';
+
+export function tableRecordedText(entered: ChallengeEntry, count: 'running' | 'true', trueCountNext: boolean, moveNext = false): string {
+  const next = trueCountNext ? 'The true count is next.' : moveNext ? 'Your move is next.' : 'The table carries on in a moment.';
   return entered === 'skip' ? `Skip recorded. ${next}` : `${count === 'running' ? RUNNING_COUNT : TRUE_COUNT} ${signed(entered)} recorded. ${next}`;
 }
 
@@ -104,12 +143,119 @@ export function tableRunningText(explanation: TableRunningExplanation, timing: N
 }
 
 // Spec 3 Scoring and review › Review facts (table); S3-09
-const TIMING_TEXT = { 'before-bet': (round: number) => `before round ${round}’s bet`, 'after-round': (round: number) => `after round ${round}`, block: (round: number) => `after round ${round}` } as const;
+const TIMING_TEXT = {
+  'before-bet': (round: number) => `before round ${round}’s bet`,
+  'after-round': (round: number) => `after round ${round}`,
+  block: (round: number) => `after round ${round}`,
+  decision: (round: number) => `round ${round}, before the decision`,
+} as const;
 export const tableCheckpointTitle = (fact: TableCountReview) => `Checkpoint ${fact.checkpoint} · ${TIMING_TEXT[fact.timing](fact.round)} · ${fact.count === 'running' ? 'running' : 'true'} count`;
 export const RETRY_WITH_NEW_SHOE = 'Retry with a new shoe';
 
 // Spec 3 S3-08 e5MASr
 export const completedRounds = (rounds: number) => `${rounds} of ${rounds} rounds`;
+
+// Spec 3 S3-02 FkMDw; #138
+export const COUNTING_MODE = 'COUNTING MODE';
+export const WITH_BASIC = 'With basic';
+export const WITH_DEVIATIONS = 'With deviations';
+export const MODE_HELP = 'With deviations also asks for the true count at each count-dependent decision.';
+export const CHECK_PLAY_HELP = 'Check holds all feedback until the end. Illegal moves are still refused straight away.';
+export const PLAY_NOTICE = {
+  title: 'You bet the table minimum',
+  detail: 'Every round you bet the table minimum from a balance that always covers it, and you make every playing decision. Your scores are counting and playing accuracy; winnings never count.',
+} as const;
+
+// Spec 3 S3-07 E3Gbeh
+export const PLAY_DEAL_KICKER = 'PLAY · DEALING';
+export const PLAY_DEAL_TEXT = 'Cards appear one at a time in dealing order; the next waits for you. Keep the count as they land.';
+
+// Spec 3 S3-07 E3Gbeh, kLgWV; User stories 37, 38
+export const PLAY_KICKER = 'PLAY · YOUR MOVE';
+export const YOUR_MOVE = 'Your move';
+const upWord = (card: { rank: number }) => (card.rank === 1 ? 'an ace' : card.rank >= 10 ? 'a 10' : card.rank === 8 ? 'an 8' : `a ${card.rank}`);
+export function moveText(table: TableView): string {
+  const decision = table.decision as NonNullable<TableView['decision']>;
+  const up = table.dealer.cards[0];
+  const hands = table.seats.find((seat) => seat.learner)?.hands ?? [];
+  const index = hands.findIndex((hand) => hand.target === decision.target);
+  const hand = hands[index];
+  const which = hands.length > 1 ? `Hand ${index + 1} of ${hands.length}: ` : 'You have ';
+  const against = up ? ` against ${upWord(up)}` : '';
+  if (decision.kind === 'insurance') return `The dealer shows an ace. Insurance costs half your bet and pays 2:1 if the dealer has blackjack. Decide before anything else.`;
+  return `${which}${hand ? `${hand.total.soft ? 'soft' : 'hard'} ${hand.total.value}` : 'your hand'}${against}. Choose a move; the next card waits for you.`;
+}
+export const MOVE_LABEL: Record<PlayChoice, string> = { hit: 'Hit', stand: 'Stand', double: 'Double', split: 'Split', surrender: 'Surrender', insure: 'Insure', 'decline-insurance': 'No insurance' };
+export const insureLabel = (minimum: string) => `Insure ${Number(minimum) / 2}`;
+export const HAND_MOVES: readonly PlayChoice[] = ['hit', 'stand', 'double', 'split', 'surrender'];
+export const INSURANCE_MOVES: readonly PlayChoice[] = ['insure', 'decline-insurance'];
+
+// Spec 3 S3-07 kLgWV: legality only, never correctness
+export const REFUSED_KICKER = 'THAT MOVE ISN’T AVAILABLE';
+export const CHOOSE_AGAIN = 'Choose again';
+export function refusedText(table: TableView, move: PlayChoice, variant: ChallengeVariant): { readonly title: string; readonly detail: string } {
+  const decision = table.decision as NonNullable<TableView['decision']>;
+  const hands = table.seats.find((seat) => seat.learner)?.hands ?? [];
+  const hand = hands.find((candidate) => candidate.target === decision.target);
+  const cards = hand?.cards.map((card) => `${cardRank(card)}${SUIT_GLYPH[card.suit]}`).join(' ') ?? '';
+  const name = MOVE_LABEL[move];
+  const check = variant === 'check' ? ' During a Check attempt Tableside only tells you what’s allowed. It won’t say which move is right, before or after you choose.' : '';
+  if (decision.kind === 'insurance') return { title: 'Decide on insurance first.', detail: `The dealer shows an ace, so insurance comes before any other move.${check}` };
+  if (move === 'insure' || move === 'decline-insurance') return { title: 'Insurance is only offered when the dealer shows an ace.', detail: `${name} isn’t a legal move here.${check}` };
+  if (move === 'split') {
+    if (hands.length >= 4) return { title: 'Four hands is the maximum.', detail: `You already have four hands, so Split isn’t a legal move.${check}` };
+    return { title: 'You can only split two cards of the same value.', detail: `${cards} isn’t a pair, so Split isn’t a legal move.${check}` };
+  }
+  if (move === 'double') return { title: 'You can only double on your first two cards.', detail: `${cards} has ${hand?.cards.length ?? 0} cards, so Double isn’t a legal move.${check}` };
+  if (!table.rules.lateSurrender) return { title: 'This table doesn’t offer surrender.', detail: `The rules are ${presetText(table.rules.dealer, false)}, so Surrender isn’t a legal move.${check}` };
+  return { title: 'Surrender is only on your first two cards, before any split.', detail: `Surrender isn’t a legal move on this hand.${check}` };
+}
+
+// Spec 3 S3-07 j4X6V; Learn, Check and assistance › Learn; Amendment 1 B2, B4
+const MODE_NAME = { basic: 'Counting with basic', deviations: 'Counting with deviations' } as const;
+export function tableCorrectionCopy(correction: PlayCorrection, table: TableView): CorrectionCopy {
+  const mode = table.countingMode ?? 'basic';
+  const copy = playCorrectionCopy(MODE_NAME[mode], correction, { dealer: table.rules.dealer, lateSurrender: table.rules.lateSurrender }, 'kept-shown');
+  return {
+    ...copy,
+    coach: `Marcus · Learn, ${MODE_NAME[mode].toLowerCase()}`,
+    headline: playAdvice(correction.explanation),
+    note: `“${copy.override}” is recorded once as an override and scored as a playing miss.`,
+  };
+}
+
+// Spec 3 S3-09 VToCp, aEdMd: every row says match, miss or fallback in words
+export const DECISION_REVIEW_TITLE = 'Decision review';
+export const REFERENCE_LABEL = 'Reference';
+export const AT_LABEL = 'At';
+export const RESULT_LABEL = 'Result';
+const handName = (fact: TableDecisionReview) => {
+  if (fact.decision === 'insurance') return 'insurance';
+  const total = `${fact.pair ? 'pair of ' : fact.total.soft ? 'soft ' : 'hard '}${fact.pair ? `${fact.cards[0]?.rank === 1 ? 'aces' : fact.cards[0] && fact.cards[0].rank >= 10 ? '10s' : `${fact.cards[0]?.rank}s`}` : fact.total.value}`;
+  return `${total} vs ${fact.up.rank === 1 ? 'A' : Math.min(fact.up.rank, 10)}`;
+};
+export function decisionReviewText(fact: TableDecisionReview): { readonly outcome: 'match' | 'miss' | 'fallback'; readonly title: string; readonly status: string; readonly values: readonly { readonly label: string; readonly value: string }[]; readonly label: string } {
+  const match = fact.chosen === fact.prescribed;
+  const outcome = !match ? 'miss' : fact.fallback ? 'fallback' : 'match';
+  const status = outcome === 'miss' ? 'Playing miss' : outcome === 'fallback' ? 'Fallback applied' : 'Match';
+  const title = `Round ${fact.round} · ${handName(fact)}${fact.hands > 1 ? ` · hand ${fact.hand + 1}` : ''}${fact.fallback ? ' · fallback' : ''}`;
+  const you = MOVE_LABEL[fact.chosen] + (fact.refused.length > 0 ? ' (refused)' : '');
+  const values = [
+    { label: 'You', value: you },
+    { label: REFERENCE_LABEL, value: MOVE_LABEL[fact.prescribed] },
+    fact.fallback ? { label: RESULT_LABEL, value: match ? 'Match' : 'Miss' } : { label: AT_LABEL, value: `TC ${signed(fact.trueCount)}` },
+  ];
+  const label = `${title}: you chose ${MOVE_LABEL[fact.chosen].toLowerCase()}${fact.refused.length > 0 ? ', which was refused as not allowed' : ''}, reference ${MOVE_LABEL[fact.prescribed].toLowerCase()}, ${status.toLowerCase()}`;
+  return { outcome, title, status, values, label };
+}
+
+// Spec 3 Scoring and review › Attribution; S3-09 VToCp: never excuses the error
+export function attributionText(fact: TableDecisionReview): string | null {
+  if (typeof fact.entered !== 'number' || fact.atEntered === null || fact.chosen === fact.prescribed || fact.chosen !== fact.atEntered) return null;
+  const doing = { hit: 'hitting', stand: 'standing on', double: 'doubling', split: 'splitting', surrender: 'surrendering', insure: 'taking insurance', 'decline-insurance': 'declining insurance' }[fact.chosen];
+  const what = fact.decision === 'insurance' ? doing : `${doing} ${handName(fact).replace(' vs ', ' against ').replace(/^hard /, '')}`;
+  return `Right policy, wrong count: in round ${fact.round} you entered a true count of ${signed(fact.entered)}, and at ${signed(fact.entered)} ${what} is the right play. The miss came from the count, not the strategy. Both still count as errors.`;
+}
 
 // Spec 3 S3-02 ZreSb
 export const WHO_PLAYS = 'WHO PLAYS YOUR SEAT';

@@ -37,6 +37,7 @@ import { pacingOf, type CatalogEntry, type ChallengeSetup, type LessonEntry, typ
 
 import { AllowanceBanner } from './AllowanceBanner';
 import { TableSetupOptions } from './TableSetupOptions';
+import { CHECK_PLAY_HELP } from '@/training/blackjack-table-text';
 
 export function ChallengeSetupScreen({
   entry,
@@ -78,7 +79,7 @@ export function ChallengeSetupScreen({
           onSelect={(variant) => onChange({ ...setup, variant })}
         />
         <Text maxFontSizeMultiplier={textScale.body} style={styles.help}>
-          {VARIANT_HELP}
+          {setup.table?.seat === 'play' && setup.variant === 'check' ? CHECK_PLAY_HELP : VARIANT_HELP}
         </Text>
       </View>
       {setup.table && <TableSetupOptions options={setup.table} onChange={(table) => onChange({ ...setup, table })} />}

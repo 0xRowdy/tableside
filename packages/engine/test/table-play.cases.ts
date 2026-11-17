@@ -1,4 +1,4 @@
-// Spec 3 Count checkpoints (table), Learn, Check and assistance, Scoring and review; Amendment 1 A3, C4; Testing Decisions › Seam 1; #138
+// Spec 3 Count checkpoints (table), Scoring and review; Amendment 1 A3, C4; #138
 import type { TestCase } from '@tableside/harness';
 
 import {
@@ -23,7 +23,6 @@ import { playSpec } from './table.fixtures';
 
 const stepOf = (state: ChallengeState) => state.items[state.position] as TableStep;
 
-// Pages through cards and skips every count prompt until the learner has a decision to make.
 function toDecision(start: ChallengeState): ChallengeState {
   let state = start;
   while (state.phase !== 'decision' && state.phase !== 'ended') state = step(state, state.phase === 'question' ? SKIP : NEXT);
@@ -34,7 +33,6 @@ const PLAY = (action: PlayChoice): ChallengeCommand => ({ kind: 'play', action }
 const RETRY_MOVE: ChallengeCommand = { kind: 'retry-correction' };
 const OVERRIDE: ChallengeCommand = { kind: 'override-correction' };
 
-// Stands on every hand and declines insurance: a fixed choice that knows nothing of the reference.
 const standing = (state: ChallengeState): ChallengeCommand => PLAY(readChallengeView(state).table?.decision?.kind === 'insurance' ? 'decline-insurance' : 'stand');
 
 function playAll(
@@ -61,7 +59,7 @@ const decisionsOf = (state: ChallengeState) => (challengeResults(state)?.review 
 
 const value = (card: { rank: number }) => (card.rank >= 10 ? 10 : card.rank);
 
-// Independent of the engine: the TEST_DEVIATIONS rows, read straight off the fixture (hard hands, T,T and insurance).
+// Spec 3 Testing Decisions › Seam 1 (independent fixtures: TEST_DEVIATIONS)
 function dependsOnCount(step: Extract<TableStep, { step: 'decision' }>, cards: readonly { rank: number }[], up: { rank: number }, hands: number): boolean | null {
   if (step.decision === 'insurance') return true;
   const total = cards.reduce((sum, card) => sum + value(card), 0);
@@ -72,8 +70,8 @@ function dependsOnCount(step: Extract<TableStep, { step: 'decision' }>, cards: r
   if (soft) return false;
   const two = cards.length === 2;
   const surrender = two && hands === 1;
-  // 16 v 10 surrenders by basic strategy when surrender is offered, and no Fab 4 row covers it.
-  return (total === 16 && u === 10 && !surrender) || (total === 12 && u === 3) || (total === 13 && u === 2) || (two && total === 10 && u === 10) || (surrender && u === 10 && (total === 14 || total === 15));
+  const basicSurrenders16v10 = surrender;
+  return (total === 16 && u === 10 && !basicSurrenders16v10) || (total === 12 && u === 3) || (total === 13 && u === 2) || (two && total === 10 && u === 10) || (surrender && u === 10 && (total === 14 || total === 15));
 }
 
 function findSeed(spec: ChallengeSpecification, wanted: (ended: ChallengeState) => boolean, decide = standing): number {
@@ -87,7 +85,7 @@ export const tablePlayCases: TestCase[] = [
     run: (t) => {
       const state = toDecision(begun(playSpec('check', 'basic'), seed(1)));
       const view = checkView(state);
-      t.equal([view.phase, view.legalCommands, view.table?.seat], ['decision', ['play', 'reveal-count', 'end'], 'play']);
+      t.equal([view.phase, view.legalCommands, view.table?.seat, view.table?.countingMode], ['decision', ['play', 'reveal-count', 'end'], 'play', 'basic']);
       t.equal(stepOf(state), { step: 'decision', round: 1, target: 'hand-1', decision: 'hand', actions: ['hit', 'stand', 'double', 'surrender'], events: [] });
       t.equal(view.table?.decision, { target: 'hand-1', kind: 'hand', actions: ['hit', 'stand', 'double', 'surrender'], refused: null });
       t.equal(view.table?.seats.find((seat) => seat.learner)?.hands[0]?.cards, [
@@ -266,7 +264,6 @@ export const tablePlayCases: TestCase[] = [
   {
     name: 'table Play review: where the learner entered a count, the review names the play at that count; right policy on a wrong count changes no score',
     run: (t) => {
-      // A 16 against a 10 after a hit can't surrender, so the index decides it: stand at +1 or more, hit below.
       const spec = playSpec('check', 'deviations');
       const hitting = (state: ChallengeState) => (readChallengeView(state).table?.decision?.kind === 'insurance' ? PLAY('decline-insurance') : PLAY('hit'));
       const lowCount = (state: ChallengeState) => ((stepOf(state) as { timing?: string }).timing === 'decision' ? ANSWER(-5) : SKIP);

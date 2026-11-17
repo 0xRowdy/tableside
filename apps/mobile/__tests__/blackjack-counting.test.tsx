@@ -172,7 +172,7 @@ describe('blackjack counting modes', () => {
     const correction: PlayCorrection = { id: 'd1', turn: 1, decision: 0, explanation: result.explanation, actual: { action: 'hit', amount: null } };
     await render(
       <CorrectionPanel
-        copy={playCorrectionCopy(definition.name, correction, { dealer: 'S17', lateSurrender: true }, false)}
+        copy={playCorrectionCopy(definition.name, correction, { dealer: 'S17', lateSurrender: true }, 'kept')}
         table={{ phase: 'Play', balance: '975', wagers: '25' }}
         fullScreen={false}
         busy={false}

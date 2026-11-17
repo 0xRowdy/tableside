@@ -1,6 +1,6 @@
 // Spec 3 S3-01 to S3-09; S5-17 j3UhJ; #158, #132, #150, #133, #134, #136, #137
 
-import { runningCountDrift, type AssistanceClass, type ChallengeAttemptRecord, type ChallengeCategory, type ChallengeEntry, type ChallengeMetric, type ChallengePacing, type ChallengeVariant, type ChallengeView, type ConversionReview, type CountRange, type HiLoExplanation, type HiLoValue, type LearnFeedback, type MetricResult, type ReviewFact, type RunningCountReview } from '@tableside/engine';
+import { runningCountDrift, type AssistanceClass, type ChallengeAttemptRecord, type ChallengeCategory, type ChallengeEntry, type ChallengeMetric, type ChallengePacing, type ChallengeVariant, type ChallengeView, type ConversionReview, type CountRange, type HiLoExplanation, type HiLoValue, type LearnFeedback, type MetricResult, type ReviewFact, type RunningCountReview, type TableDecisionReview } from '@tableside/engine';
 
 import { cardName, rankName, signed } from '@/play/blackjack-text';
 import { conversionText, decksText } from '@/training/blackjack-conversion-text';
@@ -311,6 +311,8 @@ export const ASSISTED_NOTE = {
 
 export const resultsNote = (variant: ChallengeVariant, allowance: AllowanceCopy | undefined) => [COMPLETED[variant].note, allowance?.results].filter(Boolean).join(' ');
 export const SCORES_LABEL = 'SKILL SCORES · FIRST ANSWERS';
+// Spec 3 S3-08 e5MASr; #138
+export const REVIEW_DECISIONS_LABEL = 'Review checkpoints and decisions';
 export const REVIEW_LABEL: Record<ChallengeCategory, string> = { 'card-values': 'Review cards', 'running-count': 'Review checkpoints', conversion: 'Review questions', table: 'Review checkpoints' };
 export const RETRY_LABEL: Record<ChallengeCategory, string> = {
   'card-values': 'Retry with new cards',
@@ -326,6 +328,8 @@ export const RESULT_ROWS: readonly { readonly metric: ChallengeMetric; readonly 
   { metric: 'running-count', title: 'Running count', tested: (total, variant, category) => (variant === 'check' || category === 'table' ? checkpoints(total) : `${total} cards`) },
   // Spec 3 S3-08 e5MASr, Amendment 2 §3
   { metric: 'true-count', title: 'True count', tested: (total, _variant, category) => (category === 'table' ? checkpoints(total) : `${total} questions`) },
+  // Spec 3 S3-08 e5MASr; #138
+  { metric: 'playing-adherence', title: 'Playing adherence', tested: (total) => `${total} ${total === 1 ? 'decision' : 'decisions'}` },
 ];
 
 // Spec 3 S3-08 cX5Gc
@@ -363,7 +367,10 @@ export interface ReviewRowText {
   readonly label: string;
 }
 
-export function reviewText(fact: ReviewFact, variant: ChallengeVariant): ReviewRowText {
+// Spec 3 Scoring and review › Review facts; #138
+export type CountReviewFact = Exclude<ReviewFact, TableDecisionReview>;
+
+export function reviewText(fact: CountReviewFact, variant: ChallengeVariant): ReviewRowText {
   const { entered, reference } = fact;
   const outcome: ReviewOutcome = entered === 'skip' ? 'skipped' : entered === reference ? 'match' : 'off';
   const off = entered === 'skip' ? 0 : Math.abs(entered - reference);
@@ -442,12 +449,14 @@ export const END_ATTEMPT = 'End attempt';
 
 export interface HoldContext {
   readonly variant: ChallengeVariant;
+  // Spec 3 Amendment 1 A2: a Play Check also withholds the mode and bet-schedule lessons; #138
+  readonly play?: boolean;
   readonly position: number;
   readonly pacing: ChallengePacing;
   readonly reader: string;
 }
 
-export function holdText(hold: AttemptHold, { variant, position, pacing, reader }: HoldContext): { readonly title: string; readonly lead: string; readonly notes: readonly string[] } {
+export function holdText(hold: AttemptHold, { variant, position, pacing, reader, play = false }: HoldContext): { readonly title: string; readonly lead: string; readonly notes: readonly string[] } {
   // Spec 3 S3-05 qGARl; #136
   if (hold.kind === 'auto-paused') {
     const seconds = PACE_SECONDS[pacing];
@@ -459,7 +468,7 @@ export function holdText(hold: AttemptHold, { variant, position, pacing, reader 
     };
   }
   const end = variant === 'check' ? "Ending keeps today's attempt used, earns no record and restarts progress toward the readiness milestone for these settings." : "Ending keeps today's attempt used and earns no record.";
-  const lessons = variant === 'check' ? ['The four counting lessons are available after this attempt. Other lessons are open now.'] : [];
+  const lessons = variant === 'check' ? [`${withheldLessons(play)} available after this attempt. Other lessons are open now.`] : [];
   const shared = { notes: [end, ...lessons] };
   if (hold.cause === 'access' || hold.cause === 'sign-out') {
     return { ...shared, title: 'Attempt suspended', lead: `${hold.reason ?? CANT_CONTINUE} Your answers and place are saved, and nothing was shown or scored since.` };
@@ -473,10 +482,13 @@ export function holdText(hold: AttemptHold, { variant, position, pacing, reader 
 // Spec 3 Amendment 1 C6
 export const turnBoundaryText = (hold: AttemptHold) => `${hold.reason ?? CANT_CONTINUE} Finish this card; the attempt is suspended before the next one.`;
 
+// Spec 3 Amendment 1 A2; #138
+const withheldLessons = (play: boolean) => (play ? 'The four counting lessons, the four blackjack mode lessons and the bet-schedule lesson are' : 'The four counting lessons are');
+
 // Spec 3 S3-05 T9sCI; Learn, Check and assistance (operational help)
-export function helpText(view: Pick<ChallengeView, 'variant' | 'countRange' | 'countAid'>): {
+export function helpText(view: Pick<ChallengeView, 'variant' | 'countRange' | 'countAid' | 'table'>): {
   readonly title: string;
-  readonly rows: readonly { readonly key: 'enter' | 'skip' | 'pause' | 'count'; readonly title: string; readonly detail: string }[];
+  readonly rows: readonly { readonly key: 'enter' | 'skip' | 'pause' | 'count' | 'moves'; readonly title: string; readonly detail: string }[];
   readonly lessons: string | null;
   readonly back: string;
 } {
@@ -489,12 +501,16 @@ export function helpText(view: Pick<ChallengeView, 'variant' | 'countRange' | 'c
     enter,
     { key: 'skip' as const, title: 'Skip', detail: 'Moves on and counts as incorrect.' },
     { key: 'pause' as const, title: PAUSE_LABEL, detail: 'Tap Pause, or leave the tab or app. Your answers and place are kept.' },
+    // Spec 3 User stories 38: legality only; #138
+    ...(view.table?.seat === 'play'
+      ? [{ key: 'moves' as const, title: 'Moves', detail: check ? "Tap a move. A move that isn't allowed is refused straight away; nothing says whether an allowed move is right." : 'Tap a move. A move that departs from the strategy pauses so you can take it back or keep it.' }]
+      : []),
     ...(view.countAid ? [{ key: 'count' as const, title: SHOW_COUNT, detail: check ? 'Marks the whole attempt assisted, permanently.' : 'Learn notes whether you showed it.' }] : []),
   ];
   return {
     title: check ? 'How this check works' : 'How this attempt works',
     rows,
-    lessons: check ? 'The four counting lessons wait until this attempt ends, so help never gives away an answer. Every other lesson stays open.' : null,
+    lessons: check ? `${view.table?.seat === 'play' ? 'The counting lessons, the blackjack mode lessons and the bet-schedule lesson wait' : 'The four counting lessons wait'} until this attempt ends, so help never gives away an answer. Every other lesson stays open.` : null,
     back: check ? 'Back to the check' : 'Back to the attempt',
   };
 }

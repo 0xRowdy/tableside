@@ -76,11 +76,12 @@ export {
   CHALLENGE_CONTENT,
   CONVERSION_CONTENT,
   DEFAULT_TABLE_SETUP,
-  observeSetup,
+  tableSetup,
   RUNNING_COUNT_CONTENT,
   TABLE_CONTENT,
   type CatalogCategory,
   type TableOptions,
+  type TableCountingMode,
 } from './challenges';
 
 export {

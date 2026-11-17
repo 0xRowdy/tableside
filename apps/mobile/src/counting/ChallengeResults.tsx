@@ -20,6 +20,7 @@ import {
   RETRY_LABEL,
   resultsNote,
   REVIEW_LABEL,
+  REVIEW_DECISIONS_LABEL,
   SCORES_LABEL,
   scoreText,
   spokenScore,
@@ -69,7 +70,7 @@ export function ChallengeResults({
           {RESULTS_TITLE}
         </Text>
         <Text maxFontSizeMultiplier={textScale.body} style={styles.subtitle}>
-          {groupKey.table ? resultsSubtitle(groupKey.variant) : `${CATEGORY_TEXT[groupKey.category].title} · ${variantLabel(groupKey.variant)} · ${pacingLabel(groupKey.pacing)}`}
+          {groupKey.table ? resultsSubtitle(groupKey.variant, groupKey.table.seat) : `${CATEGORY_TEXT[groupKey.category].title} · ${variantLabel(groupKey.variant)} · ${pacingLabel(groupKey.pacing)}`}
         </Text>
       </View>
       <View style={styles.body}>
@@ -133,7 +134,7 @@ export function ChallengeResults({
             {ending.note}
           </Text>
         )}
-        {record.review.length > 0 && <Button label={REVIEW_LABEL[groupKey.category]} icon={ListChecks} variant="outline" stretch onPress={onReview} />}
+        {record.review.length > 0 && <Button label={groupKey.table?.seat === 'play' ? REVIEW_DECISIONS_LABEL : REVIEW_LABEL[groupKey.category]} icon={ListChecks} variant="outline" stretch onPress={onReview} />}
         <Button label={RETRY_LABEL[groupKey.category]} icon={RotateCcw} stretch disabled={startWaits(allowance)} onPress={onRetry} />
         {note.length > 0 && (
           <Text maxFontSizeMultiplier={textScale.body} style={styles.note}>

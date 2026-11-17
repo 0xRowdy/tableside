@@ -1,4 +1,4 @@
-// Spec 3 Challenge content › Table, Reshuffle, Observe seats, Information; Count checkpoints; #137, #138
+// Spec 3 Challenge content › Table, Reshuffle, Observe seats; Count checkpoints; #137, #138
 
 import { advanceActivity, createActivity, readPermittedView, type Command, type DomainFact, type PlayCorrection } from './activity';
 import {
@@ -401,6 +401,7 @@ export interface TableDecisionView {
 
 export interface TableView {
   readonly seat: TableSetup['seat'];
+  readonly countingMode: 'basic' | 'deviations' | null;
   readonly round: number;
   readonly rounds: number;
   readonly interval: number;
@@ -471,6 +472,7 @@ export function tableView(progress: TableProgress, content: TableContent, steps:
   const decision = current.step === 'decision' ? { target: current.target, kind: current.decision, actions: [...current.actions], refused: last && !last.legal ? last.action : null } : null;
   return {
     seat: setup.seat,
+    countingMode: playingMode(setup),
     round,
     rounds: content.rounds,
     interval: setup.interval,
@@ -500,5 +502,8 @@ export function tableView(progress: TableProgress, content: TableContent, steps:
     settled,
   };
 }
+
+// Spec 3 Comparison groups: counting mode
+export const playingMode = (setup: TableSetup): TableView['countingMode'] => (setup.seat === 'play' ? (setup.policy.deviations.length > 0 ? 'deviations' : 'basic') : null);
 
 export const copyTableSetup = (setup: TableSetup): TableSetup => JSON.parse(JSON.stringify(setup)) as TableSetup;

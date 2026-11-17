@@ -1,8 +1,8 @@
-// Spec 3 Challenge content (from #4); #158, #133, #134, #137
+// Spec 3 Challenge content (from #4); #158, #133, #134, #137, #138
 import { contentProblem, createChallenge, advanceChallenge, RANDOM_PROTOCOL_VERSION } from '@tableside/engine';
 import { describe, expect, it } from 'vitest';
 
-import { BLACKJACK_REFERENCE_IDENTITY, blackjackRules, CHALLENGE_CONTENT, DEFAULT_TABLE_SETUP, observeSetup, seatStrategy, TABLE_CONTENT } from '../src';
+import { BLACKJACK_REFERENCE_IDENTITY, blackjackRules, blackjackStrategy, CHALLENGE_CONTENT, DEFAULT_TABLE_SETUP, seatStrategy, TABLE_CONTENT, tableSetup } from '../src';
 
 describe('challenge content definitions', () => {
   it('start with card values: 20 questions covering every rank, version 1', () => {
@@ -31,21 +31,33 @@ describe('challenge content definitions', () => {
   });
 
   it('default table counting to Observe, S17 with late surrender, 75% penetration, no extra players and N = 1', () => {
-    expect(DEFAULT_TABLE_SETUP).toEqual({ seat: 'observe', preset: 'S17_LS', penetration: 75, extraPlayers: 0, interval: 1 });
-    expect(observeSetup(DEFAULT_TABLE_SETUP)).toEqual({ seat: 'observe', rules: blackjackRules('S17_LS', 75, 0), strategy: seatStrategy('S17_LS'), interval: 1 });
+    expect(DEFAULT_TABLE_SETUP).toEqual({ seat: 'observe', preset: 'S17_LS', penetration: 75, extraPlayers: 0, interval: 1, countingMode: 'basic' });
+    expect(tableSetup(DEFAULT_TABLE_SETUP)).toEqual({ seat: 'observe', rules: blackjackRules('S17_LS', 75, 0), strategy: seatStrategy('S17_LS'), interval: 1 });
   });
 
   it("seat the simulated player with the preset's basic strategy and extra players at the table minimum", () => {
-    const setup = observeSetup({ seat: 'observe', preset: 'H17_noLS', penetration: 50, extraPlayers: 4, interval: 3 });
-    expect(setup.strategy).toEqual(seatStrategy('H17_noLS'));
+    const setup = tableSetup({ seat: 'observe', preset: 'H17_noLS', penetration: 50, extraPlayers: 4, interval: 3, countingMode: 'basic' });
+    expect(setup.seat === 'observe' && setup.strategy).toEqual(seatStrategy('H17_noLS'));
     expect(setup.rules.players).toEqual({ learnerSeat: 4, otherWagers: ['10', '10', '10', '10'], strategy: seatStrategy('H17_noLS') });
     expect([setup.rules.dealer, setup.rules.lateSurrender, setup.rules.penetration, setup.interval]).toEqual(['H17', false, 50, 3]);
+  });
+
+  it("seat the learner in Play with the certified counting policy for the preset and mode, the count kept by the learner", () => {
+    const basic = tableSetup({ ...DEFAULT_TABLE_SETUP, seat: 'play', preset: 'H17_LS', countingMode: 'basic' });
+    const deviations = tableSetup({ ...DEFAULT_TABLE_SETUP, seat: 'play', countingMode: 'deviations', extraPlayers: 2 });
+    expect(basic).toEqual({ seat: 'play', rules: blackjackRules('H17_LS', 75, 0), policy: blackjackStrategy('H17_LS', 'counting-with-basic').play, interval: 1 });
+    expect(deviations.seat === 'play' && [deviations.policy.count, deviations.policy.deviations.length > 0]).toEqual(['player', true]);
+    expect(deviations.rules.players.strategy).toEqual(seatStrategy('S17_LS'));
+    for (const table of [basic, deviations]) {
+      const created = createChallenge({ attemptId: 'a', owner: 'o', device: 'd', variant: 'check', content: TABLE_CONTENT, table }, { protocol: RANDOM_PROTOCOL_VERSION, key: [1, 2], session: [3, 4] });
+      expect(advanceChallenge(created, { sequence: 0, commandId: 'begin', command: { kind: 'begin' } }).status).toBe('committed');
+    }
   });
 
   it('are each accepted by the engine and generate their length', () => {
     for (const content of Object.values(CHALLENGE_CONTENT)) {
       expect(contentProblem(content)).toBeUndefined();
-      const table = content.category === 'table' ? { table: observeSetup(DEFAULT_TABLE_SETUP) } : {};
+      const table = content.category === 'table' ? { table: tableSetup(DEFAULT_TABLE_SETUP) } : {};
       const created = createChallenge({ attemptId: 'a', owner: 'o', device: 'd', variant: 'learn', content, ...table }, { protocol: RANDOM_PROTOCOL_VERSION, key: [1, 2], session: [3, 4] });
       const begun = advanceChallenge(created, { sequence: 0, commandId: 'begin', command: { kind: 'begin' } });
       expect(begun.status === 'committed' && (content.category === 'table' ? begun.state.table?.round : begun.state.items.length)).toBe(content.category === 'table' ? 1 : content.length);

@@ -100,14 +100,15 @@ function CorrectionBody({ copy, busy, onRetry, onOverride }: { copy: CorrectionC
 
 export function CorrectionPanel(props: {
   copy: CorrectionCopy;
-  table: TableNow;
+  // Spec 3 Amendment 2 §3 (no practice balance in a challenge); #138
+  table: TableNow | null;
   fullScreen: boolean;
   busy: boolean;
   onRetry: () => void;
   onOverride: () => void;
 }) {
   const { table, fullScreen } = props;
-  if (!fullScreen) {
+  if (!fullScreen || table === null) {
     return (
       <View style={styles.panel} testID="correction-panel">
         <CorrectionBody {...props} />

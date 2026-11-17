@@ -487,7 +487,8 @@ describe('the Counting tab', () => {
       expect(screen.getByText('WHO PLAYS YOUR SEAT')).toBeOnTheScreen();
       const seat = within(screen.getByLabelText('Who plays your seat'));
       expect(seat.getByRole('radio', { name: 'Observe' })).toBeChecked();
-      expect(seat.getByRole('radio', { name: 'Play' })).toBeDisabled();
+      expect(seat.getByRole('radio', { name: 'Play' })).toBeEnabled();
+      expect(screen.queryByText('COUNTING MODE')).toBeNull();
       expect(within(screen.getByLabelText('Rule preset')).getByRole('radio', { name: /S17 · late surrender/ })).toBeChecked();
       expect(screen.getByText('75%')).toBeOnTheScreen();
       expect(screen.getByText('0 players')).toBeOnTheScreen();
@@ -534,6 +535,56 @@ describe('the Counting tab', () => {
       await fireEvent.press(screen.getByRole('button', { name: 'Back to Results' }));
       await fireEvent.press(await screen.findByRole('button', { name: 'Retry with a new shoe' }));
       expect(await screen.findByText('Check · Observe · S17 LS · 75% · N = 10')).toBeOnTheScreen();
+    });
+
+    // Spec 3 User stories 28, 37, 38; S3-02 FkMDw, S3-07 kLgWV, S3-08 e5MASr, S3-09 VToCp; #138
+    it('sets up Play with deviations and runs a Check attempt: illegal moves refused with cue 9, no feedback, playing adherence on the results, decisions in the review', async () => {
+      await openTable('Check');
+      await fireEvent.press(within(screen.getByLabelText('Who plays your seat')).getByRole('radio', { name: 'Play' }));
+      expect(screen.getByText('Check holds all feedback until the end. Illegal moves are still refused straight away.')).toBeOnTheScreen();
+      expect(screen.getByText('COUNTING MODE')).toBeOnTheScreen();
+      await fireEvent.press(within(screen.getByLabelText('Counting mode')).getByRole('radio', { name: 'With deviations' }));
+      await fireEvent.press(screen.getByRole('button', { name: 'Start Check attempt' }));
+      expect(await screen.findByText('Check · Play · with deviations · N = 1')).toBeOnTheScreen();
+      let refused = false;
+      for (let guard = 0; guard < 1500 && !screen.queryByRole('header', { name: 'Results' }); guard++) {
+        const again = screen.queryByRole('button', { name: 'Choose again' });
+        if (again) {
+          await fireEvent.press(again);
+          continue;
+        }
+        const move = screen.queryByRole('button', { name: /^(Stand|No insurance)$/ });
+        if (move && !move.props.accessibilityState?.disabled) {
+          if (!refused && screen.queryByRole('button', { name: 'Split' })) {
+            await fireEvent.press(screen.getByRole('button', { name: 'Split' }));
+            refused = (await screen.findByText('THAT MOVE ISN’T AVAILABLE').catch(() => null)) !== null;
+            continue;
+          }
+          await fireEvent.press(move);
+          continue;
+        }
+        const next = screen.queryByRole('button', { name: 'Next card' });
+        if (next && !next.props.accessibilityState?.disabled) {
+          await fireEvent.press(next);
+          continue;
+        }
+        const field = screen.queryByLabelText(/^(Running|True) count$/);
+        if (field) {
+          await fireEvent.changeText(field, '0');
+          await fireEvent.press(screen.getByRole('button', { name: /^(Submit|Next: true count)$/ }));
+          continue;
+        }
+        await screen.findByRole('button', { name: /Next card|Submit|Next: true count|Stand|No insurance|Choose again/ }).catch(() => undefined);
+      }
+      await screen.findByRole('header', { name: 'Results' });
+      expect(refused).toBe(true);
+      expect(cues()).toContain('input-rejected');
+      expect(cues().filter((cue) => cue === 'correct' || cue === 'incorrect' || cue === 'correction-offered')).toEqual([]);
+      expect(screen.getByText('Table counting · Check · Play')).toBeOnTheScreen();
+      expect(screen.getByLabelText(/^Playing adherence, \d+ decisions?: \d+ of \d+$/)).toBeOnTheScreen();
+      await fireEvent.press(screen.getByRole('button', { name: 'Review checkpoints and decisions' }));
+      expect(await screen.findByRole('header', { name: 'Decision review' })).toBeOnTheScreen();
+      expect(screen.getAllByText(/^Round \d+ · /).length).toBeGreaterThan(0);
     });
   });
 });

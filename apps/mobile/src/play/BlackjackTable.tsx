@@ -199,7 +199,7 @@ export function BlackjackTable({ snapshot }: { snapshot: ActiveSnapshot }) {
             )}
             {held && strategy ? (
               <CorrectionPanel
-                copy={playCorrectionCopy(strategy.name, held, rules, view.count !== null)}
+                copy={playCorrectionCopy(strategy.name, held, rules, view.count !== null ? 'supplied' : 'kept')}
                 table={tableNow(view, handsText)}
                 fullScreen={fontScale > SIDE_BY_SIDE_MAX_FONT_SCALE}
                 busy={!ready}

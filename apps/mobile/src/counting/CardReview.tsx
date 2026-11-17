@@ -1,7 +1,7 @@
-// Spec 3 S3-09 h0MsKr, BjuKf, S3-10 OVKkc; Scoring and review › Review facts; #132, #133, #134, #140
+// Spec 3 S3-09 h0MsKr, VToCp, S3-10 OVKkc; Scoring and review; #132, #133, #134, #140, #138
 
 import { CATEGORY_METRIC, type ChallengeAttemptRecord } from '@tableside/engine';
-import { BookOpen, CircleCheckBig, CircleX, SkipForward, TrendingUp } from 'lucide-react-native';
+import { BookOpen, CircleCheckBig, CircleX, Lightbulb, Shuffle, SkipForward, TrendingUp } from 'lucide-react-native';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -22,13 +22,31 @@ import {
   SUGGESTED_LESSON,
   type ReviewOutcome,
 } from '@/training/challenge-text';
+import { attributionText, decisionReviewText, DECISION_REVIEW_TITLE } from '@/training/blackjack-table-text';
 import type { LessonEntry } from '@/training/service';
 
-const OUTCOME_ICON: Record<ReviewOutcome, { readonly Icon: typeof CircleX; readonly color: string }> = {
+const OUTCOME_ICON: Record<ReviewOutcome | 'miss' | 'fallback', { readonly Icon: typeof CircleX; readonly color: string }> = {
   match: { Icon: CircleCheckBig, color: palette.correct },
   off: { Icon: CircleX, color: palette.mistake },
   skipped: { Icon: SkipForward, color: palette.mistake },
+  miss: { Icon: CircleX, color: palette.mistake },
+  fallback: { Icon: Shuffle, color: palette.foreground },
 };
+
+interface Row {
+  readonly outcome: keyof typeof OUTCOME_ICON;
+  readonly title: string;
+  readonly status: string;
+  readonly values: readonly { readonly label: string; readonly value: string }[];
+  readonly label: string;
+}
+
+function rowOf(fact: ChallengeAttemptRecord['review'][number], variant: ChallengeAttemptRecord['groupKey']['variant']): Row {
+  if (fact.kind === 'table-decision') return decisionReviewText(fact);
+  const text = reviewText(fact, variant);
+  const values = [{ label: YOU_LABEL, value: text.entered }, { label: CORRECT_LABEL, value: text.reference }, ...(text.error !== null ? [{ label: ERROR_LABEL, value: text.error }] : [])];
+  return { outcome: text.outcome, title: text.title, status: text.status, values, label: text.label };
+}
 
 export function CardReview({
   record,
@@ -46,18 +64,20 @@ export function CardReview({
   const insets = useSafeAreaInsets();
   const { groupKey } = record;
   const drift = driftText(record.review, groupKey.variant);
+  const attributions = record.review.flatMap((fact) => (fact.kind === 'table-decision' ? (attributionText(fact) ?? []) : []));
+  const play = groupKey.table?.seat === 'play';
   return (
     <ScrollView style={styles.screen} contentContainerStyle={{ paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right, paddingBottom: space[6] }}>
       <SetupHeader
-        title={REVIEW_TITLE[groupKey.category]}
-        subtitle={`${CATEGORY_TEXT[groupKey.category].title} · ${variantLabel(groupKey.variant)} · ${scoreText(record.metrics[CATEGORY_METRIC[groupKey.category]])}`}
+        title={play ? DECISION_REVIEW_TITLE : REVIEW_TITLE[groupKey.category]}
+        subtitle={play ? `${CATEGORY_TEXT[groupKey.category].title} · ${variantLabel(groupKey.variant)} · Play` : `${CATEGORY_TEXT[groupKey.category].title} · ${variantLabel(groupKey.variant)} · ${scoreText(record.metrics[CATEGORY_METRIC[groupKey.category]])}`}
         backTo={backTo}
         onBack={onBack}
       />
       <View style={styles.body}>
         <View style={styles.group}>
           {record.review.map((fact, index) => {
-            const text = reviewText(fact, groupKey.variant);
+            const text = rowOf(fact, groupKey.variant);
             const { Icon, color } = OUTCOME_ICON[text.outcome];
             return (
               <View key={fact.position} accessible accessibilityLabel={text.label} style={[styles.row, index > 0 && styles.rowDivider]}>
@@ -71,9 +91,9 @@ export function CardReview({
                   </Text>
                 </View>
                 <View style={styles.values}>
-                  <Value label={YOU_LABEL} value={text.entered} />
-                  <Value label={CORRECT_LABEL} value={text.reference} />
-                  {text.error !== null && <Value label={ERROR_LABEL} value={text.error} />}
+                  {text.values.map((value) => (
+                    <Value key={value.label} label={value.label} value={value.value} />
+                  ))}
                 </View>
               </View>
             );
@@ -87,6 +107,14 @@ export function CardReview({
             </Text>
           </View>
         )}
+        {attributions.map((line) => (
+          <View key={line} style={styles.drift} testID="attribution-note">
+            <Lightbulb color={palette.foreground} size={20} />
+            <Text maxFontSizeMultiplier={textScale.body} style={styles.driftText}>
+              {line}
+            </Text>
+          </View>
+        ))}
         {lesson && <LearnRow icon={BookOpen} title={`${lesson.title} lesson`} detail={SUGGESTED_LESSON} disabled={lesson.steps === null} onPress={() => onOpenLesson(lesson.id)} />}
       </View>
     </ScrollView>
