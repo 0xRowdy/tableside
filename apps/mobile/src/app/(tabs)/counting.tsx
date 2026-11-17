@@ -1,4 +1,4 @@
-// Spec 3 Screens; Lessons › Entry points, Structure; #158, #132, #145, #133, #146
+// Spec 3 Screens; Lessons › Entry points, Structure; #158, #132, #145, #133, #134, #146
 import { CHALLENGE_LESSONS } from '@tableside/definitions';
 import { CHALLENGE_VARIANTS, type ChallengeVariant } from '@tableside/engine';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
@@ -47,13 +47,15 @@ export default function Counting() {
       return (
         <ScreenHints service={service} ids={exerciseHints(snapshot.view)}>
           <ChallengeExercise
-          view={snapshot.view}
-          busy={snapshot.busy}
-          saveFailed={snapshot.save === 'failed'}
-          onCommand={(command) => void service.submit(command)}
-          // Spec 3 Learn, Check and assistance › Malformed input: cue 9
-          onInputRejected={() => feedback.cue('input-rejected')}
-          onRetrySave={() => void service.retrySave()}
+            view={snapshot.view}
+            busy={snapshot.busy}
+            saveFailed={snapshot.save === 'failed'}
+            onCommand={(command) => void service.submit(command)}
+            // Spec 3 Learn, Check and assistance › Malformed input: cue 9
+            onInputRejected={() => feedback.cue('input-rejected')}
+            onRetrySave={() => void service.retrySave()}
+            lesson={lessons?.find((lesson) => lesson.id === CHALLENGE_LESSONS[snapshot.view.category])}
+            onOpenLesson={openLesson}
           />
         </ScreenHints>
       );

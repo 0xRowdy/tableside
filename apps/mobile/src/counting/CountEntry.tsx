@@ -1,4 +1,4 @@
-// Spec 3 S3-04 qdnQm, S3-06 C53yTW; Learn, Check and assistance › Malformed input; #133
+// Spec 3 S3-04 qdnQm, S3-06 C53yTW, Qv1An; Learn, Check and assistance › Malformed input; #133, #134
 
 import { CornerDownLeft, Delete, Info, SkipForward } from 'lucide-react-native';
 import type { CountRange } from '@tableside/engine';
@@ -19,6 +19,7 @@ export function CountEntry({
   onSubmit,
   onSkip,
   onRejected,
+  next,
 }: {
   label: string;
   range: CountRange;
@@ -26,6 +27,7 @@ export function CountEntry({
   onSubmit: (value: number) => void;
   onSkip: () => void;
   onRejected: () => void;
+  next?: { readonly label: string; readonly enabled: boolean; readonly onPress: () => void };
 }) {
   const [text, setText] = useState('');
   const [problem, setProblem] = useState<CountProblem | null>(null);
@@ -84,7 +86,11 @@ export function CountEntry({
           <Button label={COUNT_SKIP} hint={COUNT_SKIP_HINT} icon={SkipForward} variant="outline" stretch disabled={!enabled} onPress={onSkip} />
         </View>
         <View style={styles.action}>
-          <Button label={SUBMIT} icon={CornerDownLeft} stretch disabled={!enabled} onPress={submit} />
+          {next ? (
+            <Button label={next.label} icon={CornerDownLeft} stretch disabled={!next.enabled} onPress={next.onPress} />
+          ) : (
+            <Button label={SUBMIT} icon={CornerDownLeft} stretch disabled={!enabled} onPress={submit} />
+          )}
         </View>
       </View>
     </View>

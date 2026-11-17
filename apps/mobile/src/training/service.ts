@@ -1,4 +1,4 @@
-// Spec 3 Modules › Training service; Training service interface; #158, #132, #133
+// Spec 3 Modules › Training service; Training service interface; #158, #132, #133, #134
 
 import {
   CATALOG_CATEGORIES,
@@ -55,7 +55,11 @@ export type TrainingSnapshot =
 
 export type { LearnerCommand, StartProblem };
 
-const READY: Readonly<Partial<Record<CatalogCategory, readonly ChallengeVariant[]>>> = { 'card-values': ['learn', 'check'], 'running-count': ['learn', 'check'] };
+const READY: Readonly<Partial<Record<CatalogCategory, readonly ChallengeVariant[]>>> = {
+  'card-values': ['learn', 'check'],
+  'running-count': ['learn', 'check'],
+  conversion: ['learn', 'check'],
+};
 
 // Spec 3 Amendment 1 C7
 export const LAST_SETUP = 'challenge.last-setup';

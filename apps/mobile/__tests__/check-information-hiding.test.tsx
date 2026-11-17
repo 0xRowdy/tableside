@@ -25,7 +25,7 @@ import {
   watchAccessibilityEvents,
   type AccessibilityEvents,
 } from '@/training/testing/information-hiding';
-import { HI_LO_BY_RANK } from '@/training/testing/hi-lo';
+import { cardOf, HI_LO_BY_RANK } from '@/training/testing/hi-lo';
 
 const seed = (n: number) => ({ protocol: RANDOM_PROTOCOL_VERSION, key: [n, 0x9e3779b9], session: [n * 7 + 1, 0] }) as const;
 
@@ -39,7 +39,7 @@ function attempt(variant: ChallengeVariant, n: number, commands: readonly Challe
   return state;
 }
 
-const shown = (state: ChallengeState) => readChallengeView(state).item!.card;
+const shown = (state: ChallengeState) => cardOf(readChallengeView(state).item);
 
 function seedWhere(test: (n: number) => boolean): number {
   for (let n = 1; n < 500; n++) if (test(n)) return n;
