@@ -1,9 +1,4 @@
-// Store migrations at seam 1 (#86): an update opens an account database an
-// earlier build left. Each test is one device (a fake keychain, real files and
-// real SQLCipher on Node) whose vault stands in for a later build by carrying
-// that build's migrations. Kills are injected at the device boundary: from the
-// chosen file or database operation on, the device does nothing more, as a
-// killed process leaves its files.
+// #86
 
 import { closeSync, existsSync, openSync, readFileSync, writeFileSync, writeSync } from 'node:fs';
 
@@ -28,7 +23,6 @@ function opened(opening: VaultOpening): AccountSession {
   return opening.session;
 }
 
-/** A build two releases later: a device that updates straight to it skips both. */
 const LATER_BUILD = laterBuild();
 const LATER_SCHEMA = schemaVersionOf(LATER_BUILD);
 
@@ -38,15 +32,12 @@ const practiceIn = (session: AccountSession, activityId: string) => {
 };
 const resultIn = (session: AccountSession, activityId: string) => completedRecord(activityId, { owner: session.accountId, device: session.installationId });
 
-/** Every file under the device's vault with its bytes. */
 function snapshot(phone: TestDevice): Record<string, string> {
   return Object.fromEntries(phone.files.written().map((path) => [path, existsSync(path) ? readFileSync(path).toString('base64') : '(absent)']));
 }
 
-/** Files under the vault other than the installation ID and account databases (with their logs): what a migration left behind. */
 const strays = (phone: TestDevice) => phone.files.written().filter((path) => !/\/installation$|\.db(-wal|-shm)?$/.test(path));
 
-/** Overwrites the start of the account's database file, as a damaged disk might: it can no longer be read. */
 function damage(phone: TestDevice, accountId = 'account-a'): void {
   const path = phone.files.written().find((file) => file.endsWith(`/${accountId}.db`))!;
   const descriptor = openSync(path, 'r+');
@@ -56,7 +47,6 @@ function damage(phone: TestDevice, accountId = 'account-a'): void {
 
 const IDS = ['done', 'unfinished'];
 
-/** What the account's store reads back: every activity, its transitions and effects, and the outgoing records. */
 async function contents(session: AccountSession, activityIds: readonly string[]) {
   const { store } = session;
   return {
@@ -68,7 +58,6 @@ async function contents(session: AccountSession, activityIds: readonly string[])
   };
 }
 
-/** An account database as the schema-1 build leaves it: a finished practice session with its outgoing record, and an unfinished one. */
 async function leftBySchema1(phone: TestDevice, accountId = 'account-a') {
   const vault = phone.vault();
   const session = opened(await vault.open(accountId));
@@ -92,7 +81,6 @@ describe('an update', () => {
     const session = opened(await phone.vault('production', undefined, LATER_BUILD).open('account-a'));
 
     expect(await contents(session, ['done', 'unfinished'])).toEqual(before);
-    // Play carries on: the unfinished practice session commits its next transition.
     expect(await session.store.commitTransition(transition('unfinished', 2))).toEqual({ status: 'committed' });
   });
 });
@@ -122,7 +110,6 @@ describe('a failed migration', () => {
     await session.store.commitTransition(transition('unfinished', 2));
     const before = await contents(session, IDS);
     await earlier.close();
-    // The copy is an earlier state of the same database: it opens and passes an integrity check.
     phone.files = { ...phone.files, copy: async (_, to) => writeFileSync(to, older) };
 
     const failed = await phone.vault('production', undefined, LATER_BUILD).open('account-a');
@@ -147,13 +134,11 @@ describe('a kill during the migration', () => {
       const died = phone.killed;
       phone.revive();
       if (!died) {
-        // Past the last operation: the migration finished.
         expect(await contents(opened(killed as VaultOpening), IDS)).toEqual(before);
         break;
       }
       expect(killed).not.toMatchObject({ status: 'open' });
 
-      // The build that wrote it sees exactly one generation: its own, or a later one it can't read.
       const earlier = await phone.vault().open('account-a');
       if (earlier.status === 'open') {
         expect(await contents(earlier.session, IDS)).toEqual(before);
@@ -227,7 +212,6 @@ describe('a rollback', () => {
 
     expect(rolledBack).toMatchObject({ status: 'needs-update', accountId: 'account-a', schema: LATER_SCHEMA });
     expect(snapshot(phone)).toEqual(files);
-    // Updating again finds everything the later build kept.
     expect(await contents(opened(await phone.vault('production', undefined, LATER_BUILD).open('account-a')), ['done', 'unfinished'])).toEqual(before);
   });
 
@@ -235,7 +219,6 @@ describe('a rollback', () => {
     for (const damaged of [false, true]) {
       const phone = device();
       const before = await leftBySchema1(phone);
-      // Kill the later build at each point until its migration is under way: its manifest is on disk.
       for (let at = 0; !phone.files.written().some((path) => path.endsWith('.db.migration')); at++) {
         phone.killAt(at);
         await phone
@@ -249,7 +232,6 @@ describe('a rollback', () => {
 
       expect(await phone.vault().open('account-a')).toMatchObject({ status: 'needs-update', accountId: 'account-a' });
       expect(snapshot(phone)).toEqual(files);
-      // The later build finishes its own migration.
       expect(await contents(opened(await phone.vault('production', undefined, LATER_BUILD).open('account-a')), IDS)).toEqual(before);
     }
   });
@@ -263,7 +245,6 @@ describe('the backup', () => {
     const session = opened(await earlier.open('account-a'));
     await session.store.commitTransition(transition('unfinished', 2));
     const before = await contents(session, IDS);
-    // The app is killed now: the last commit is only in the write-ahead log, not yet in the database file.
     const database = phone.files.written().find((file) => file.endsWith('/account-a.db'))!;
     const killed = { database: readFileSync(database), log: readFileSync(`${database}-wal`) };
     await earlier.close();

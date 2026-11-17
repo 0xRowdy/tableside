@@ -1,19 +1,10 @@
-// The store-port contract: the behaviour every ActivityStore implementation
-// must have. The in-memory store runs it in __tests__/memory-store.test.ts;
-// spec 2's SQLite store must run the same suite:
-//
-//   describeActivityStoreContract('SQLite store', async () => { … return { store, reopen } });
-//
-// It uses Jest's globals, so call it from a Jest test file.
 
 import type { DomainFact, Receipt } from '@tableside/engine';
 
 import type { ActivityStore, AllowanceEffect, CompletedPracticeSession, IncompleteReason, NewActivity, TransitionCommit } from '../store';
 
 export interface StoreUnderTest {
-  /** A store over fresh, empty durable storage. */
   readonly store: ActivityStore;
-  /** Simulates an app restart: a new store instance over the same durable storage. */
   reopen(): Promise<ActivityStore>;
 }
 
@@ -40,7 +31,6 @@ export function newActivity(activityId: string, overrides: Partial<NewActivity> 
       funding: '1000',
     },
     random: { ...RANDOM, key: [...RANDOM.key], session: [...RANDOM.session] } as NewActivity['random'],
-    // Checkpoints are opaque canonical text to the store; it must keep them byte for byte.
     checkpoint: `{"activity":"${activityId}","sequence":0}`,
     createdAt: 1_790_000_000_000,
     ...overrides,
@@ -167,7 +157,6 @@ export function describeActivityStoreContract(name: string, open: () => Promise<
         const first = transition('a1', 0, { facts: [{ kind: 'turn-began', turn: 1, wagers: [] }] });
         const second = transition('a1', 1, { facts: [{ kind: 'outcome-generated', turn: 1, pocket: 0 }] });
         await store.commitTransition(first);
-        // A second delivery and a stale commit add nothing.
         await store.commitTransition(first);
         const stale = transition('a1', 0);
         await store.commitTransition({ ...stale, receipt: { ...stale.receipt, commandId: 'stale' } });
@@ -253,7 +242,6 @@ export function describeActivityStoreContract(name: string, open: () => Promise<
         await store.createActivity(newActivity('a1'));
 
         await store.commitTransition(transition('a1', 0, { effects: [turnCharge('a1', 0)] }));
-        // A later transition that carries an already-recorded effect id (a replay) doesn't charge again.
         await store.commitTransition(transition('a1', 1, { effects: [turnCharge('a1', 0), turnCharge('a1', 1)] }));
 
         expect(await store.readEffects('a1')).toEqual([turnCharge('a1', 0), turnCharge('a1', 1)]);
@@ -377,7 +365,6 @@ export function describeActivityStoreContract(name: string, open: () => Promise<
         expect(await reopened.readEffects('a1')).toEqual([turnCharge('a1', 0)]);
         expect((await reopened.load('a2'))?.completion).toEqual(completedRecord('a2'));
         expect(await reopened.readOutgoing()).toHaveLength(1);
-        // And it carries on from there: the next commit is conditioned on the restored sequence.
         expect(await reopened.commitTransition(transition('a1', 0))).toMatchObject({ status: 'already-committed' });
         expect(await reopened.commitTransition(transition('a1', 1, { command: '{"kind":"settle-turn"}' }))).toEqual({ status: 'committed' });
       });

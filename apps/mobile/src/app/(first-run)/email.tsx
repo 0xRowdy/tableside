@@ -1,5 +1,4 @@
-// The email step: where the code goes, for Sign in or Create.
-// TODO(frames): unverified against S2-13/S2-14 (Pencil couldn't open Tableside.pen for #88).
+// TODO(spec 2 S2-13–S2-14)
 
 import { router } from 'expo-router';
 import { useState } from 'react';
@@ -53,7 +52,7 @@ export default function Email() {
       <Actions>
         <Button label="Send code" stretch disabled={busy} onPress={() => void send()} />
       </Actions>
-      {/* App reviewers sign in to a reviewer account without an email code (#107). */}
+      {/* #107 */}
       {!create && <LinkButton label="Signing in for app review?" onPress={() => router.push('/review-sign-in')} />}
     </FirstRunScreen>
   );

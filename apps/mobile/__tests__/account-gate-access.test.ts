@@ -1,9 +1,4 @@
-// The account gate composed into spec 1's access supervisor (#90; spec 2
-// Amendment 1 B3), driven through the practice controller with substitute
-// adapters. Newly learned ineligibility suspends at once; eligibility becoming
-// unresolved (a required check expiring or pending) suspends at the turn
-// boundary; a move between eligible bands doesn't pause.
-// Spin outcomes come from the Random123 "pi digits" stream: 27 (red) first.
+// #90; spec 2 Amendment 1 B3
 
 import type { AccountGate } from '@tableside/account';
 
@@ -13,7 +8,6 @@ import { FakeClock, substituteAdapters } from '@/practice/testing/substitutes';
 
 const ADULT: AccountGate = { state: 'active', accountId: 'account-1', eligibility: '18+' };
 
-/** A gate the test moves, as the Account service does when it learns something. */
 function gateSource(initial: AccountGate) {
   let gate = initial;
   const listeners = new Set<(gate: AccountGate) => void>();
@@ -54,7 +48,6 @@ async function waitFor(condition: () => boolean): Promise<void> {
   if (!condition()) throw new Error('condition never held');
 }
 
-/** Lets the gate's lifecycle event reach the controller. */
 const settle = () => new Promise((resolve) => setImmediate(resolve));
 
 describe('newly learned ineligibility', () => {
@@ -92,7 +85,6 @@ describe('eligibility becoming unresolved', () => {
     const snapshot = active(controller.snapshot());
     expect(snapshot.view).toMatchObject({ phase: 'settled-outcome', balance: '1010' });
     expect(snapshot.suspension).toMatchObject({ cause: 'access', kind: 'turn-boundary', reached: true });
-    // No new turn starts, and ending waits for eligibility: no final settlement.
     await controller.spin();
     expect(active(controller.snapshot()).view).toMatchObject({ phase: 'settled-outcome', balance: '1010' });
     await controller.endSession();

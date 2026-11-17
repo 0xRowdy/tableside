@@ -1,17 +1,11 @@
-// Update compatibility at the engine interface (#80). Every release keeps
-// behaviour for every valid unfinished activity an earlier supported build can
-// leave: the checkpoints in test/recorded/ were written by earlier builds (one
-// module per build, never edited or removed), and this build must decode each
-// one directly, whichever releases in between were skipped, and play it on to
-// exactly the outcomes that build recorded. Rollback is the other direction: a
-// checkpoint this build can't run is refused as unsupported, never reinterpreted.
+// #80
+// docs/development.md Releases: recorded checkpoints and the quarantine list
 import type { TestCase } from '@tableside/harness';
 
 import { advanceActivity, canonicalJson, decodeCheckpoint, quarantineStatus, type ActivityState, type DomainFact, type QuarantineList } from '../src';
 
 import { RECORDED_BUILDS } from './recorded';
 
-/** Plays a recorded continuation from a decoded checkpoint, collecting every fact. */
 function continueFrom(state: ActivityState, commands: readonly unknown[]): { state: ActivityState; facts: DomainFact[] } {
   const facts: DomainFact[] = [];
   for (const command of commands) {
@@ -46,7 +40,6 @@ export const compatibilityCases: TestCase[] = [
         for (const recorded of build.checkpoints) {
           const decoded = decodeCheckpoint(recorded.checkpoint);
           if (!decoded.ok) throw new Error(`${build.engine} ${recorded.name}: ${decoded.error.kind}: ${decoded.error.message}`);
-          // The pinned identities are kept as recorded, never replaced by this build's.
           t.equal([recorded.name, decoded.state.identities.engine, decoded.state.phase], [recorded.name, build.engine, recorded.phase]);
           const { state, facts } = continueFrom(decoded.state, recorded.continuation);
           t.equal([recorded.name, canonicalJson(facts), state.phase, state.balance], [recorded.name, recorded.facts, 'completed', recorded.finalBalance]);
@@ -79,7 +72,6 @@ export const compatibilityCases: TestCase[] = [
       if (!build || !recorded) throw new Error('no recorded craps checkpoint');
       const decoded = decodeCheckpoint(recorded.checkpoint);
       if (!decoded.ok) throw new Error(decoded.error.message);
-      // The combination as a defect report would name it: the recording build and the rule preset it was given.
       const preset = (recorded.specification as { rules: { id: string; version: number } }).rules;
       const rules = { id: preset.id, version: preset.version };
       const list: QuarantineList = {

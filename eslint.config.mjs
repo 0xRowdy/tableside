@@ -1,12 +1,13 @@
-// Lint for the shared packages and tooling. The app has its own config
-// (apps/mobile/eslint.config.js, from eslint-config-expo).
 import path from 'node:path';
 
 import { defineConfig } from 'eslint/config';
 import tseslint from 'typescript-eslint';
 
-// no-restricted-imports only sees the specifier, so it can't tell `../src/x`
-// (same package) from `../../harness/src/x` (another package's internals).
+import games, { PER_GAME_FILES } from './scripts/eslint/game-branches.mjs';
+import comments from './scripts/eslint/reference-comments.mjs';
+
+const GAME_BRANCHES_TO_MOVE = ['packages/engine/src/record.ts'];
+
 const portability = {
   rules: {
     'no-relative-outside-package': {
@@ -72,6 +73,13 @@ const portabilityRules = (allowedImports) => ({
 export default defineConfig(
   { ignores: ['**/node_modules/**', '**/dist/**', 'apps/mobile/**', 'harness-reports/**', '.claude/**'] },
   ...tseslint.configs.recommended,
+  { plugins: { comments }, rules: { 'comments/reference-only': 'error' } },
+  {
+    files: ['packages/engine/src/**/*.ts', 'packages/definitions/src/**/*.ts'],
+    ignores: [...PER_GAME_FILES, ...GAME_BRANCHES_TO_MOVE],
+    plugins: { games },
+    rules: { 'games/no-game-branch': 'error' },
+  },
   { files: ['packages/engine/**/*.ts', 'packages/definitions/**/*.ts'], plugins: { portability } },
   {
     files: ['packages/engine/**/*.ts'],
@@ -86,9 +94,7 @@ export default defineConfig(
     rules: portabilityRules(['@tableside/engine']),
   },
   {
-    // Build-time checks and tests of the definitions package, and the engine's
-    // checkpoint recorder, run on Node and never ship; only src/ (and the
-    // engine's cross-runtime suite) must stay portable.
+    // docs/development.md Engine portability
     files: ['packages/definitions/scripts/**/*.ts', 'packages/definitions/test/**/*.ts', 'packages/engine/scripts/**/*.ts'],
     rules: {
       'no-restricted-imports': 'off',

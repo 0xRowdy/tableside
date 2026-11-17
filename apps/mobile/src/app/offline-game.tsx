@@ -1,7 +1,5 @@
-// The offline game selection, the last first-run step before Home: every
-// account, even one that has Premium, picks the game it can practice offline
-// (spec 2 Amendment 3 §4). Spec 5 owns the selection's rules and syncs it.
-// TODO(frames): unverified against S2-16 (Pencil couldn't open Tableside.pen for #88).
+// Spec 2 Amendment 3 §4
+// TODO(spec 2 S2-16)
 
 import { Redirect } from 'expo-router';
 import { useState } from 'react';
@@ -25,7 +23,6 @@ export default function OfflineGame() {
   const select = async () => {
     if (!game) return;
     setFailed(false);
-    // Once selected, the layout moves on to Home.
     await selectOfflineGame(game).catch(() => setFailed(true));
   };
 

@@ -1,11 +1,10 @@
+// docs/development.md House-edge sources
 import { oneSpinOutcomeTable, rouletteLayout, type PlacementKind, type RouletteWheel } from '@tableside/engine';
 import { describe, expect, it } from 'vitest';
 
 import { DOUBLE_ZERO_ROULETTE, ROULETTE_HOUSE_EDGE_VERSION, rouletteHouseEdge, SINGLE_ZERO_ROULETTE } from '../src/index';
 
-// Coverage and net payout of each wager kind, from the launch rules (#3) and
-// the Wizard of Odds payout table; first four is single-zero only and the
-// five-number basket double-zero only.
+// #3
 const KINDS: Record<PlacementKind, { covers: number; payout: number }> = {
   straight: { covers: 1, payout: 35 },
   split: { covers: 2, payout: 17 },
@@ -30,7 +29,6 @@ const WHEELS: Record<RouletteWheel, { pockets: number; kinds: PlacementKind[] }>
 };
 
 const gcd = (a: number, b: number): number => (b === 0 ? a : gcd(b, a % b));
-/** The exact edge per unit staked: 1 - P(win) × (payout + 1), as a reduced fraction. */
 function exactEdge(wheel: RouletteWheel, kind: PlacementKind): [number, number] {
   const { covers, payout } = KINDS[kind];
   const { pockets } = WHEELS[wheel];
@@ -39,7 +37,6 @@ function exactEdge(wheel: RouletteWheel, kind: PlacementKind): [number, number] 
   return [n / g, pockets / g];
 }
 
-/** The same edge from the engine's one-spin outcome table for one unit on a placement of that kind. */
 function tableEdge(wheel: RouletteWheel, kind: PlacementKind): string {
   const placement = rouletteLayout(wheel).find((p) => p.kind === kind);
   if (!placement) throw new Error(`no ${kind} on ${wheel}`);
@@ -47,7 +44,6 @@ function tableEdge(wheel: RouletteWheel, kind: PlacementKind): string {
   let denominator = 1n;
   for (const group of oneSpinOutcomeTable([{ target: placement.target, amount: '1' }], wheel)) {
     const [pn, pd = '1'] = group.probability.split('/');
-    // expected += probability × net, kept as a fraction over a common denominator
     numerator = numerator * BigInt(pd) + BigInt(pn as string) * BigInt(group.net) * denominator;
     denominator *= BigInt(pd);
   }

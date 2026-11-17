@@ -1,11 +1,4 @@
-// Seam 2: operational metrics and the privacy boundary (#108; spec 2,
-// *Observability and privacy boundaries*, Amendment 1 C4, gate 11). Real
-// devices on the local stack report their sync health through the metrics
-// port, and the backend's snapshot measures receipts, staging, storage and
-// email; neither carries a record body, token, email code, age data, clock
-// anchor, address, account or casino session. Faults come from the network
-// (the fault proxy) and the data (a competing upload), never from inside the
-// Account service.
+// Spec 2 Observability and privacy boundaries, Amendment 1 C4, gate 11; #108
 
 import { afterEach, describe, expect, it } from 'vitest';
 
@@ -27,7 +20,6 @@ const stack = localStack();
 const devices: SimulatedDevice[] = [];
 afterEach(() => devices.splice(0).forEach((d) => d.dispose()));
 
-/** A device whose operational metrics land in `events`. */
 function device(name: string) {
   const events: MetricEvent[] = [];
   const created = createDevice(stack, { name, metrics: { send: (event) => void events.push(event) } });
@@ -35,7 +27,6 @@ function device(name: string) {
   return { device: created, events };
 }
 
-/** Creates an account by email code, step by step, keeping the code and what was sent before eligibility was established. */
 async function createAccount(name: string, band: EligibilityBand) {
   const { device: d, events } = device(name);
   const email = uniqueEmail('privacy');
@@ -48,7 +39,6 @@ async function createAccount(name: string, band: EligibilityBand) {
   return { d, events, email, code, beforeEligibility };
 }
 
-/** Everything private the scenario's account produced, which no event, snapshot or crash report may hold. */
 function privateValues(d: SimulatedDevice, email: string, code: string): string[] {
   const tokens = [...d.credentials.items.values()].flatMap((value) => {
     try {
@@ -69,11 +59,9 @@ function privateValues(d: SimulatedDevice, email: string, code: string): string[
   ].filter((value) => value.length > 0);
 }
 
-/** A casino-session-shaped revisioned item, saved and uploaded. */
 const CASINO = { game: 'blackjack', currency: 'USD', net: '-1005/4' };
 const CASINO_ITEM = 'casino-at-the-bellagio';
 
-/** Makes the server refuse the device's upload of a practice result: another upload already holds its identity with other content. */
 async function refusedUpload(d: SimulatedDevice) {
   d.proxy.online = false;
   const result = await d.playPracticeSession();
@@ -101,7 +89,6 @@ describe("a device's operational metrics", () => {
     expect(beforeEligibility).toEqual([]);
     await d.account.records.save(testRevisionedItem.name, CASINO_ITEM, CASINO);
     const result = await refusedUpload(d);
-    // Offline: the run can't reach the server, and the result waits.
     await d.account.sync.reconcile();
     d.clock.advance(30_000);
     await d.account.sync.reconcile();
@@ -139,11 +126,9 @@ describe("the backend's operational metrics", () => {
     const result = await refusedUpload(d);
     d.proxy.online = true;
     await d.account.sync.reconcile();
-    // A failed send, a bounce and a complaint, as the request-code function and the provider's webhook record them.
     await stack.sql`select public.log_email_send('code', 'immediate', 'failed')`;
     await stack.sql`select public.record_email_delivery_problem('code', 'bounced')`;
     await stack.sql`select public.record_email_delivery_problem('no-account', 'complained')`;
-    // Every other type counts too: the security notices, export ready and both deletion emails.
     for (const type of EMAIL_TYPES.filter((type) => type !== 'code' && type !== 'no-account')) {
       await stack.sql`select public.log_email_send(${type}, 'immediate', 'failed')`;
       await stack.sql`select public.record_email_delivery_problem(${type}, 'bounced')`;
@@ -163,7 +148,6 @@ describe("the backend's operational metrics", () => {
       expect(serverMetricEvents(measured)).toContainEqual(expect.objectContaining({ name: 'email_sends_failed', properties: { type: metricEmailType(type) } }));
     }
     expect(measured.storage_bytes.database).toBeGreaterThan(0);
-    // Cumulative across the database since its statistics were reset; aborted transactions are counted in it.
     expect(measured.transactions_rolled_back).toBeGreaterThanOrEqual(0);
     expect(serverMetricEvents(measured)).toContainEqual({ name: 'sync_receipts_refused', value: 1, properties: {} });
 

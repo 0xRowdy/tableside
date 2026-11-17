@@ -1,12 +1,4 @@
-// Seam 2: history detail and Download all history (#97; spec 2, *History*,
-// Amendments 1 A6 and C5, 2 §4, 4 §3). A new device gets summaries from its
-// snapshot, then the newest 90 days of detail; older detail arrives when a
-// record is opened, by the accepted revision the device holds, with the feed
-// applied first when that revision changed; and Download all history keeps
-// everything on the device, resumably. Storage running short stops a download
-// without evicting anything; a budget alert throttles bulk downloads only and
-// deletes nothing. Proven with seam 2's test results (src/testing/record-types.ts),
-// whose summaries leave out their detail, and spec 1's practice sessions.
+// Spec 2 History, Amendments 1 A6 and C5, 2 §4, 4 §3; #97
 
 import { afterEach, describe, expect, it } from 'vitest';
 
@@ -45,12 +37,10 @@ const accountOf = (d: SimulatedDevice): string => {
   if (gate.state !== 'active') throw new Error(`${d.name} is not signed in`);
   return gate.accountId;
 };
-/** Each test result on a device: whole (with its detail) or a summary. */
 async function resultsOn(d: SimulatedDevice): Promise<Record<string, 'whole' | 'summary'>> {
   const records = await d.vault.store().readAcceptedRecords(testResult.name);
   return Object.fromEntries(records.map((record) => [record.item, record.summaryAt === undefined ? 'whole' : 'summary']));
 }
-/** The detail calls a device sent: the items each named, and whether it was bulk. */
 const detailCalls = (d: SimulatedDevice) =>
   d.proxy.sent.flatMap(({ url, body }) => {
     if (!url.includes('sync_details_v1')) return [];
@@ -58,12 +48,6 @@ const detailCalls = (d: SimulatedDevice) =>
     return [{ bulk, items: requests.map((request) => request.item) }];
   });
 
-/**
- * Accepts `count` old test results (from a year back, a day apart) straight
- * into the server's rows, as that many uploads would have, each detail
- * `detailBytes` long: the results, their feed entries and the head, in one
- * transaction under the head.
- */
 async function seedOldResults(accountId: string, count: number, now: number, detailBytes = 16, prefix = 'old') {
   const since = now - 365 * DAY;
   await stack.sql.begin(async (tx) => {
@@ -85,7 +69,6 @@ async function seedOldResults(accountId: string, count: number, now: number, det
   });
 }
 
-/** A phone with an account holding a recent result, an old one, and a practice session. */
 async function accountWithHistory() {
   const email = uniqueEmail('history');
   const phone = device('phone');
@@ -107,7 +90,7 @@ describe('a new device', () => {
     expect(await signInByEmail(tablet, email)).toEqual({ status: 'signed-in' });
     await tablet.account.sync.idle();
 
-    // The snapshot itself holds summaries only (Amendment 1 A6).
+    // Spec 2 Amendment 1 A6
     const rows = await stack.sql<{ change: { record: Record<string, unknown> } }[]>`
       select change from private.bootstrap_rows where account_id = ${accountOf(tablet)}`;
     expect(rows.length).toBeGreaterThan(0);
@@ -115,7 +98,6 @@ describe('a new device', () => {
       expect(change.record).not.toHaveProperty('detail');
       expect(change.record).not.toHaveProperty('outcomes');
     }
-    // Then the newest 90 days' detail, never as a bulk download; the old result stays a summary.
     expect(await resultsOn(tablet)).toEqual({ recent: 'whole', old: 'summary' });
     const [session] = await tablet.vault.store().readAcceptedRecords('completed-practice-session');
     expect(session?.payload).toEqual(practice);
@@ -123,7 +105,6 @@ describe('a new device', () => {
     expect(tablet.account.sync.status.history).toEqual({ state: 'complete' });
     expect(tablet.account.sync.status.download).toEqual({ state: 'not-requested' });
 
-    // Opening the old one fetches its detail by the revision held here, and keeps it.
     const opened = await tablet.account.records.detail(testResult.name, 'old');
     expect(opened).toMatchObject({ status: 'detail', record: { item: 'old', payload: { resultId: 'old', detail: 'detail of old' } } });
     expect(await resultsOn(tablet)).toEqual({ recent: 'whole', old: 'whole' });
@@ -134,7 +115,6 @@ describe('a new device', () => {
   it('marks the first download incomplete until the 90 days’ detail is here, carrying on after a restart', async () => {
     const { email } = await accountWithHistory();
     const tablet = device('tablet');
-    // The network goes as the device first asks for detail: summaries are installed, detail isn't.
     tablet.proxy.onRequest = (url) => {
       if (url.includes('sync_details_v1')) tablet.proxy.online = false;
     };
@@ -154,18 +134,15 @@ describe('a new device', () => {
   it('opening a record whose revision changed applies the feed first: a purged result leaves the device and reports gone', async () => {
     const { email, phone } = await accountWithHistory();
     const tablet = device('tablet');
-    // No live hint reaches the tablet: it learns of the purge only by reconciling.
     tablet.proxy.refuseLive = true;
     expect(await signInByEmail(tablet, email)).toEqual({ status: 'signed-in' });
     await expect.poll(async () => (await resultsOn(tablet)).recent).toBe('whole');
     await tablet.account.sync.idle();
-    // The phone deletes the old result after the tablet's snapshot.
     await queue(phone, testResultPurge.name, { version: 1, target: 'old' });
     await phone.account.sync.reconcile();
 
     expect(await tablet.account.records.detail(testResult.name, 'old')).toEqual({ status: 'gone' });
     expect(await resultsOn(tablet)).toEqual({ recent: 'whole' });
-    // Asked for by the revision it held, before the feed brought the purge.
     expect(detailCalls(tablet).filter((call) => call.items.includes('old'))).toEqual([{ bulk: false, items: ['old'] }]);
   });
 
@@ -173,7 +150,6 @@ describe('a new device', () => {
     const { email, phone } = await accountWithHistory();
     phone.proxy.online = false;
     await queue(phone, testResult.name, result('device-only', phone.clock.now()));
-    // The app is deleted with the record unsynced, and installed again: a new installation.
     phone.dispose();
     const reinstalled = device('phone, reinstalled');
     expect(await signInByEmail(reinstalled, email)).toEqual({ status: 'signed-in' });
@@ -195,7 +171,6 @@ describe('Download all history', () => {
     await tablet.account.sync.idle();
     expect(await summaries(tablet)).toBe(250);
 
-    // The app is killed as it asks for the second bulk page.
     let bulk = 0;
     tablet.proxy.onRequest = (url) => {
       if (url.includes('sync_details_v1') && ++bulk === 2) tablet.kill();
@@ -209,7 +184,6 @@ describe('Download all history', () => {
     expect(tablet.account.sync.status.download).toEqual({ state: 'complete' });
     expect(await summaries(tablet)).toBe(0);
     const asked = detailCalls(tablet).flatMap((call) => call.items);
-    // Only the page lost with the process is asked again; no request names more than 100.
     expect(asked.length - new Set(asked).size).toBeLessThanOrEqual(100);
     expect(detailCalls(tablet).every((call) => call.bulk && call.items.length <= 100)).toBe(true);
   });
@@ -233,10 +207,8 @@ describe('Download all history', () => {
     expect(tablet.account.sync.status.download).toEqual({ state: 'stopped', progress: 0, reason: 'storage' });
     expect(await summaries(tablet)).toBe(20);
     expect(await tablet.vault.store().findUnfinished()).not.toBeNull();
-    // The unsynced record went up meanwhile: only downloads stop.
     expect(await tablet.account.sync.countWaiting()).toBe(0);
 
-    // Room again, and the player resumes it.
     tablet.freeStorage = 4 * 1024 * 1024 * 1024;
     await tablet.account.sync.downloadAllHistory();
     expect(tablet.account.sync.status.download).toEqual({ state: 'complete' });
@@ -264,7 +236,6 @@ describe('Download all history', () => {
       expect(await summaries(tablet)).toBe(4);
       expect(await serverDetails()).toBe(6);
 
-      // Cleared, and the wait over: it carries on by itself.
       await stack.sql`update private.budget_alert set active = false`;
       tablet.clock.advance(600_000);
       await tablet.account.sync.reconcile();
@@ -281,10 +252,8 @@ describe('pages', () => {
     const phone = device('phone');
     expect(await createAccountByEmail(phone, email)).toEqual({ status: 'signed-in' });
     const accountId = accountOf(phone);
-    // Twelve 60 KB details, then one of 400 KB.
     await seedOldResults(accountId, 12, phone.clock.now(), 60_000, 'mid');
     await seedOldResults(accountId, 1, phone.clock.now(), 400_000, 'big');
-    // The server's bound is the client's.
     expect((await stack.sql<{ bytes: number }[]>`select private.page_bytes() as bytes`)[0]?.bytes).toBe(PAGE_BYTES);
     const client = stack.rawClient(accessToken(phone));
     const sizes = (entries: readonly unknown[]) => entries.map((entry) => Buffer.byteLength(JSON.stringify(entry)));

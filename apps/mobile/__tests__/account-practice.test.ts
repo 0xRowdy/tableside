@@ -1,9 +1,3 @@
-// Practice on an account's encrypted store: the practice controller runs on
-// the adapters for an open account session, so the account is the owner, the
-// installation the originating device, and every transition and result is
-// committed to that account's database before it is shown. Spins come from the
-// Random123 "pi digits" stream: 27 (red), then 0.
-
 import { forAccountSession } from '@/account/practice';
 import { TestDevice } from '@/account/testing/vault-substitutes';
 import type { AccountSession, VaultOpening } from '@/account/vault';

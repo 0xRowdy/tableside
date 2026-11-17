@@ -1,7 +1,4 @@
-// Seam 2: Apple and Google sign-in (#89), with the test identity provider
-// standing in for both. Sign in never creates an account: when it finds none,
-// it says so and leaves no Auth user, and Create runs the age step and then
-// creates the account with the eligibility assertion bound to that identity.
+// #89
 
 import { createHash } from 'node:crypto';
 
@@ -24,13 +21,11 @@ function device(name: string, platform: 'ios' | 'android' = 'ios'): SimulatedDev
 }
 
 let counter = 0;
-/** A person at the provider no earlier run has seen. */
 function person(label: string, email = `${label}-${Date.now().toString(36)}-${counter}@example.com`): ProviderIdentity {
   counter += 1;
   return { subject: `${label}-${Date.now().toString(36)}-${counter}`, email };
 }
 
-/** Creates an account for `identity` on a fresh device, the way a new player does: age step, then Create with the provider. */
 async function createWith(provider: 'apple' | 'google', identity: ProviderIdentity, band: '13-15' | '16-17' | '18+' = '18+') {
   const setup = device('setup');
   setup.providers!.accounts[provider] = identity;
@@ -191,7 +186,6 @@ describe('Create for an identity that already has an account', () => {
     tablet.providers!.accounts.apple = someone;
     await tablet.account.answerAgeQuestion('13-15');
     expect(await tablet.account.createWithProvider('apple')).toEqual({ status: 'signed-in' });
-    // The account's own record governs; this device's answer is discarded.
     expect(tablet.account.gate).toEqual({ state: 'active', accountId, eligibility: '18+' });
   });
 });
@@ -289,7 +283,6 @@ describe('the browser callback', () => {
   });
 });
 
-/** An ID token for the identity signed by a key the provider never published. */
 function forgedToken(identity: ProviderIdentity): string {
   const forger = new TestIdentityProvider();
   return forger.idToken(identity);
@@ -323,7 +316,6 @@ describe('binding an assertion, as a raw client', () => {
     expect((await signUp(first)).error).toBeNull();
     expect(await authUsersFor(first)).toBe(1);
     expect(await authUsersFor(second)).toBe(0);
-    // Used up: binding it again, even to a new identity, is refused.
     const third = person('bind-third');
     expect((await bind({ provider: idp.provider, idToken: idp.idToken(third, { nonce: hashed }), nonce, assertion: token })).status).toBe(403);
   });
@@ -396,7 +388,7 @@ describe('ownership', () => {
     const phone = device('phone');
     phone.providers!.accounts.google = person('linked-google', email);
     await phone.account.answerAgeQuestion('18+');
-    // Supabase's verified same-email linking returns the existing account (spec 2, *Ownership*); the app never compares emails.
+    // Spec 2 Ownership
     expect(await phone.account.createWithProvider('google')).toEqual({ status: 'signed-in' });
     expect(phone.account.gate).toMatchObject({ state: 'active', accountId: existing });
     expect(await stack.accountCount(email)).toBe(1);
@@ -414,7 +406,6 @@ describe('credentials', () => {
     const stored = [...phone.credentials.items.values()].join('\n');
     expect(stored).toMatch(/refresh_token/);
     const jwtLike = /eyJ[\w-]+\.eyJ[\w-]+\.[\w-]+/g;
-    // The only tokens stored are Auth's own session, never the provider's ID token.
     for (const token of stored.match(jwtLike) ?? []) expect(JSON.parse(Buffer.from(token.split('.')[1]!, 'base64url').toString()).iss).toMatch(/\/auth\/v1$/);
     for (const { url } of phone.proxy.sent) expect(url).not.toMatch(jwtLike);
     for (const url of [...phone.providers!.returned, ...phone.providers!.opened.map((open) => open.url ?? '')]) {

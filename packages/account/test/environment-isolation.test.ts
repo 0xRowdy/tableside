@@ -1,8 +1,4 @@
-// Seam 2: environment isolation (#87, spec 2 Amendment 1 A2). Beta and
-// production are separate projects; one local stack plays each in turn
-// (`asEnvironment`), which is how a scenario shows production refusing what
-// beta made. Every request names its environment, every token carries the
-// environment that issued it, and every account the environment it was made in.
+// Spec 2 Amendment 1 A2; #87
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -28,7 +24,6 @@ async function createAccount(d: SimulatedDevice, email: string) {
   return gate.accountId;
 }
 
-/** A raw client signed in to an existing account by email code, naming `environment` on its requests. */
 async function rawSignIn(email: string, environment: EnvironmentName): Promise<{ client: SupabaseClient; accessToken: string }> {
   const client = stack.rawClient(undefined, environment);
   const previous = await mailbox.latestCode(email);
@@ -102,7 +97,6 @@ describe('every request names its environment', () => {
     expect(await beta.account.requestEmailCode({ email, intent: 'create' })).toEqual({ status: 'age-required' });
     expect(await stack.authUserId(email)).toBeNull();
 
-    // request-code refuses it: no code goes out, and the last code the address had doesn't sign it in.
     const before = (await beta.mailbox.messages(known)).length;
     expect(await beta.account.requestEmailCode({ email: known, intent: 'sign-in' })).toEqual({ status: 'failed' });
     expect(await beta.mailbox.messages(known)).toHaveLength(before);
@@ -138,7 +132,6 @@ describe('production rejects beta accounts and uploads', () => {
     });
   });
 
-  // Each scenario makes its own beta account: Auth sends at most two codes an hour to an address.
   const betaAccount = async (label: string) => {
     const email = uniqueEmail(label);
     await stack.asEnvironment('beta', () => createAccount(device('tester', { environment: 'beta' }), email));
@@ -150,7 +143,6 @@ describe('production rejects beta accounts and uploads', () => {
 
     await stack.asEnvironment('production', async () => {
       const phone = device('production-phone', { environment: 'production' });
-      // To production the address has no account: it gets the "No account" email, never a code.
       expect(await phone.account.requestEmailCode({ email, intent: 'sign-in' })).toEqual({ status: 'sent' });
       expect((await phone.mailbox.messages(email))[0]).toMatch(/no Tableside account for it/);
       expect(phone.account.gate).toEqual({ state: 'no-account' });
@@ -180,7 +172,6 @@ describe('a production build installed over a beta build', () => {
     });
     const betaAccount = tester.vault.openAccount;
     await tester.vault.close();
-    // The beta build stops before the production build is installed over it; its last answers land first.
     tester.kill();
     await tester.account.sync.idle();
     const betaCredentials = () => [...tester.credentials.items.keys()].filter((key) => key.startsWith('tableside.beta.'));
@@ -199,14 +190,12 @@ describe('a production build installed over a beta build', () => {
       expect(production.vault.removed).toEqual(['beta']);
       expect(atEachRequest.length).toBeGreaterThan(0);
       expect(atEachRequest.every(({ betaData, betaCredentials }) => !betaData && betaCredentials.length === 0)).toBe(true);
-      // Credentials: every beta entry is removed before production's are first read, and no beta credential is ever restored.
       const log = tester.credentials.log.slice(logBefore);
       const lastBetaRemoval = log.map((entry) => entry.startsWith('remove tableside.beta.')).lastIndexOf(true);
       const firstProductionRead = log.findIndex((entry) => entry.startsWith('get tableside.production.'));
       expect(lastBetaRemoval).toBeGreaterThanOrEqual(0);
       expect(firstProductionRead).toBeGreaterThan(lastBetaRemoval);
       expect(log.filter((entry) => entry.startsWith('get tableside.beta.auth'))).toEqual([]);
-      // Production starts fresh: a new account, never the beta one.
       expect(accountId).not.toBe(betaAccount);
       expect(production.vault.openAccount).toBe(accountId);
     });

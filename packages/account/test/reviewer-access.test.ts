@@ -1,8 +1,4 @@
-// Seam 2: reviewer access (#107; spec 2 *App-review access*, Amendment 1 C4,
-// Amendment 8 §6). A privileged, per-environment operation makes designated
-// synthetic reviewer accounts with an established adult eligibility record;
-// each one's reviewer credential signs in to that account alone, with no email
-// code, and the session it gets is an ordinary one.
+// Spec 2 App-review access, Amendment 1 C4, Amendment 8 §6; #107
 
 import { afterEach, describe, expect, it } from 'vitest';
 
@@ -19,7 +15,6 @@ afterEach(() => devices.splice(0).forEach((d) => d.dispose()));
 
 const CREDENTIAL_FORMAT = /^[0-9A-HJKMNP-TV-Z]{5}(-[0-9A-HJKMNP-TV-Z]{5}){3}$/;
 
-/** Provisions a reviewer account as an operator does, returning its address and credential. */
 async function reviewerAccount(label = 'reviewer'): Promise<{ email: string; credential: string }> {
   const email = uniqueEmail(label);
   const { status, body } = await stack.provisionReviewer(email);
@@ -61,7 +56,6 @@ describe('provisioning reviewer accounts', () => {
     expect(await stack.columns('private.reviewer_accounts')).toEqual(['account_id', 'credential_hash', 'credential_issued_at']);
     const [kept] = await stack.sql<{ credential_hash: Buffer }[]>`select credential_hash from private.reviewer_accounts where account_id = ${accountId!}`;
     expect(kept!.credential_hash.toString('utf8')).not.toContain(credential.slice(0, 5));
-    // Nobody had to answer an email.
     expect(await device('mail').mailbox.messages(email)).toEqual([]);
   });
 
@@ -94,7 +88,6 @@ describe('provisioning reviewer accounts', () => {
       expect(await stack.provisionReviewer(email)).toEqual({ status: 409, body: { status: 'not-designated' } });
       expect(await isReviewerAccount(email)).toBe(false);
     }
-    // The Create finishes as an ordinary account.
     expect(await creating.account.verifyEmailCode({ email: pending, code: await creating.mailbox.latestCode(pending) })).toEqual({ status: 'signed-in' });
     expect(await isReviewerAccount(pending)).toBe(false);
   });
@@ -106,7 +99,6 @@ describe('provisioning reviewer accounts', () => {
     expect(answers.map((answer) => answer.status)).toEqual([200, 200]);
     expect(await stack.accountCount(email)).toBe(1);
     expect(await isReviewerAccount(email)).toBe(true);
-    // Whichever credential was issued last is the account's one.
     const results = await Promise.all(answers.map((answer) => device('phone').account.signInAsReviewer({ email, credential: answer.body!.credential! })));
     expect(results.filter((result) => result.status === 'signed-in')).toHaveLength(1);
   });
@@ -130,7 +122,6 @@ describe('signing in with a reviewer credential', () => {
     const accountId = await stack.accountId(email);
     const reviewers = [device('iphone'), device('ipad'), device('android')];
 
-    // All at once, as a review team may test on several devices together.
     expect(await Promise.all(reviewers.map((d) => d.account.signInAsReviewer({ email, credential })))).toEqual(
       reviewers.map(() => ({ status: 'signed-in' })),
     );
@@ -185,9 +176,7 @@ describe('signing in with a reviewer credential', () => {
   it('works only in the environment that issued it', async () => {
     const { email, credential } = await reviewerAccount();
 
-    // The same server serving as another environment's project: the account, and so its credential, isn't that environment's.
     expect(await stack.asEnvironment('beta', () => stack.reviewerSignIn({ email, credential }, 'beta'))).toEqual({ status: 401, body: { status: 'refused' } });
-    // A request naming another environment, or none, is refused before the credential is looked at.
     for (const environment of ['beta', null] as const) {
       expect((await stack.reviewerSignIn({ email, credential }, environment)).status).toBe(502);
     }
@@ -203,11 +192,9 @@ describe('a reviewer account', () => {
     expect(await phone.account.signInAsReviewer({ email, credential })).toEqual({ status: 'signed-in' });
     const raw = stack.rawClient(accessToken(phone));
 
-    // Nothing privileged: not the reviewer operations, not the code-request functions.
     expect((await raw.rpc('issue_reviewer_credential', { address: email })).error).not.toBeNull();
     expect((await raw.rpc('reviewer_credential_valid', { address: email, credential })).error).not.toBeNull();
     expect((await raw.rpc('email_code_recipient', { address: ordinary })).error).not.toBeNull();
-    // Only its own rows.
     const { data: accounts } = await raw.from('accounts').select('account_id');
     expect(accounts).toEqual([{ account_id: await stack.accountId(email) }]);
     expect(await stack.provisionReviewer(uniqueEmail('escalate'), { key: accessToken(phone) })).toEqual({ status: 403, body: { status: 'forbidden' } });
@@ -216,7 +203,6 @@ describe('a reviewer account', () => {
   it('passes the same eligibility protections as any account', async () => {
     const { email, credential } = await reviewerAccount();
     const accountId = await stack.accountId(email);
-    // A platform answer replaces the provisioned declaration, as for any account.
     const phone = device('phone');
     phone.ageSignals.signal = { kind: 'range', range: '16-17' };
     expect(await phone.account.signInAsReviewer({ email, credential })).toEqual({ status: 'signed-in' });
@@ -224,7 +210,6 @@ describe('a reviewer account', () => {
     const [record] = await stack.sql`select band, source from public.eligibility where account_id = ${accountId!}`;
     expect(record).toEqual({ band: '16-17', source: 'platform-signal' });
 
-    // Under 13 on record (support review): only the restricted paths, as for any account.
     await stack.sql`update public.eligibility set band = 'under-13' where account_id = ${accountId!}`;
     const tablet = device('tablet');
     expect(await tablet.account.signInAsReviewer({ email, credential })).toEqual({ status: 'signed-in' });

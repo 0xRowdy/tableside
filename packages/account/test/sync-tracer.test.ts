@@ -1,9 +1,4 @@
-// Seam 2 sync tracer (#91): a completed practice session saved on one device
-// uploads by itself and appears on the same account's other device, counted
-// exactly once whatever is killed, lost or duplicated on the way. Each device
-// runs the app's own SQLCipher store and spec 1's practice controller; faults
-// are injected at the network (fault proxy), the disk (failing writes) and the
-// app process (kill and restart), never inside the Account service.
+// #91
 
 import { afterEach, describe, expect, it } from 'vitest';
 
@@ -18,7 +13,6 @@ function device(name: string): SimulatedDevice {
 }
 afterEach(() => devices.splice(0).forEach((d) => d.dispose()));
 
-/** A phone that created an account and a tablet signed in to it. */
 async function twoDevices(options: { readonly tabletRefusesLive?: boolean } = {}) {
   const phone = device('phone');
   const tablet = device('tablet');
@@ -30,19 +24,16 @@ async function twoDevices(options: { readonly tabletRefusesLive?: boolean } = {}
   return { phone, tablet, email };
 }
 
-/** The practice sessions a device holds as accepted by the account: item and sequence. */
 async function sessionsOn(d: SimulatedDevice) {
   return (await d.vault.store().readAcceptedRecords(completedPracticeSession.name)).map(({ item, sequence }) => ({ item, sequence }));
 }
 
-/** The 60 s reconciliation falls due on a device; resolves when it has run. */
 async function minutePasses(d: SimulatedDevice) {
   d.clock.advance(RECONCILE_INTERVAL_MS);
   await new Promise((resolve) => setTimeout(resolve, 0));
   await d.account.sync.idle();
 }
 
-/** Polls until `check` passes (real time; for Realtime, which the scenario can't step). */
 async function eventually(check: () => Promise<void> | void, milliseconds = 10_000) {
   const deadline = Date.now() + milliseconds;
   for (;;) {
@@ -73,7 +64,6 @@ describe('a completed practice session reaches the account’s other device', ()
   it('counts each session once on both devices when both play, at the same moment', async () => {
     const { phone, tablet } = await twoDevices();
 
-    // One practice session at a time per device; the devices race each other.
     const [onPhone, onTablet] = await Promise.all([
       phone.playPracticeSession().then(async (first) => [first, await phone.playPracticeSession()]),
       tablet.playPracticeSession(),
@@ -86,7 +76,6 @@ describe('a completed practice session reaches the account’s other device', ()
     for (const d of [phone, tablet]) {
       const sessions = await sessionsOn(d);
       expect(sessions.map((session) => session.item).sort()).toEqual(ids);
-      // Sequences are the account's commit order: gap-free, each once.
       expect(sessions.map((session) => session.sequence)).toEqual([1, 2, 3]);
     }
   });
@@ -208,7 +197,6 @@ describe('kills, lost answers and duplicates count each session exactly once', (
     expect(queued?.operation).not.toBeNull();
     expect(phone.account.sync.status.error).toBe('offline');
 
-    // The resend is the identical request: the server answers from the operation's receipt.
     const raw = localStack().rawClient(accessToken(phone));
     expect((await raw.rpc('sync_upload_v1', { request: queued!.operation!.request })).data).toMatchObject({ status: 'accepted', sequence: 1 });
     await countedOnce(phone, tablet, result.activityId);
@@ -225,7 +213,6 @@ describe('kills, lost answers and duplicates count each session exactly once', (
 
   it('killed while the other device applied a feed page: the page applies once after the restart', async () => {
     const { phone, tablet } = await twoDevices();
-    // In the background, so no live hint fetches the page before the disk fails.
     tablet.foreground = false;
     const result = await phone.playPracticeSession();
     await phone.account.sync.idle();
@@ -254,10 +241,8 @@ describe('kills, lost answers and duplicates count each session exactly once', (
     held.release();
     await pending;
     await tablet.account.sync.idle();
-    // The first account's page reached the device after the switch: none of it is in the next account's store.
     expect(await sessionsOn(tablet)).toEqual([]);
     expect(await tablet.vault.store().readFeedCursor()).toBe(0);
-    // The first account's sessions are still there for it (its own device sees them).
     await phone.account.sync.reconcile();
     expect(await sessionsOn(phone)).toEqual([{ item: result.activityId, sequence: 1 }]);
   });
@@ -273,7 +258,6 @@ describe('the synchronization head', () => {
     const released = new Promise<void>((resolve) => (release = resolve));
     let locked!: () => void;
     const isLocked = new Promise<void>((resolve) => (locked = resolve));
-    // Another authoritative change (a job, another device) holding the head.
     const contender = sql.begin(async (tx) => {
       await tx`insert into private.sync_heads (account_id) values (${gate.accountId}) on conflict do nothing`;
       await tx`select 1 from private.sync_heads where account_id = ${gate.accountId} for update`;
@@ -351,7 +335,6 @@ describe('live updates', () => {
 });
 
 describe('the operation API, called directly', () => {
-  /** The phone's own installation: the server takes uploads only from the caller's registered installation. */
   let installation = '';
   async function signedIn() {
     const { phone, tablet } = await twoDevices();
@@ -363,10 +346,8 @@ describe('the operation API, called directly', () => {
     return { phone, tablet, accountId: gate.accountId, raw };
   }
 
-  /** The commands of the phone's installation, which the direct calls upload as. */
   let commands: DirectCommands;
 
-  /** A canonical upload request for a practice result, as the next command. */
   function request(fields: { operation: string; owner: string; activityId?: string; device?: string; protocol?: number; payload?: object }) {
     const activityId = fields.activityId ?? 'activity-1';
     const device = fields.device ?? installation;
@@ -381,7 +362,6 @@ describe('the operation API, called directly', () => {
       netResult: '10',
       finalCashOut: '1010',
     };
-    // Canonical JSON written out by hand: keys sorted, no spaces.
     return JSON.stringify(
       Object.fromEntries(
         Object.entries({

@@ -1,14 +1,13 @@
-// Runs the engine's cross-runtime suite on this device's Hermes and posts the
-// report to the harness on the development machine. See
-// docs/cross-runtime-harness.md.
+// docs/cross-runtime-harness.md
 import { runSuite, type Report, type Runtime } from '@tableside/harness';
 import { engineSuite } from '@tableside/engine/test-suite';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Platform, StyleSheet, Text, View } from 'react-native';
 
+import { useLoaded } from '@/hooks/use-loaded';
+import { sleep } from '@/practice/app-adapters';
 import { palette } from '@/theme/tokens';
 
-// Set by the harness (packages/harness/src/devices.ts) when it builds the app.
 const REPORT_URL = process.env.EXPO_PUBLIC_ENGINE_HARNESS_URL;
 
 declare const HermesInternal: { getRuntimeProperties?: () => Record<string, string | undefined> } | undefined;
@@ -38,26 +37,24 @@ async function send(report: Report): Promise<void> {
     } catch (error) {
       lastError = error;
     }
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+    await sleep(1000);
   }
   throw lastError;
 }
 
+const deliver = (report: Report): Promise<string> =>
+  send(report).then(
+    () => 'Report sent.',
+    (error: unknown) => `Could not send report to ${REPORT_URL}: ${String(error)}`,
+  );
+
 export function HarnessApp() {
-  // The suite is synchronous, so it runs once, during the first render.
   const [{ report, summary }] = useState(() => {
     const result = runSuite(engineSuite, currentRuntime());
     const failed = result.cases.filter((c) => c.status === 'fail').length;
     return { report: result, summary: `${result.cases.length - failed}/${result.cases.length} cases passed on ${result.runtime.version}` };
   });
-  const [delivery, setDelivery] = useState('Sending report…');
-
-  useEffect(() => {
-    send(report).then(
-      () => setDelivery('Report sent.'),
-      (error: unknown) => setDelivery(`Could not send report to ${REPORT_URL}: ${String(error)}`),
-    );
-  }, [report]);
+  const delivery = useLoaded(deliver, report) ?? 'Sending report…';
 
   const status = `${summary}\n${delivery}`;
   return (

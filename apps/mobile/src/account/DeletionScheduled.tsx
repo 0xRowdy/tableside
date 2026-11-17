@@ -1,18 +1,12 @@
-// S2-23 Locked — deletion scheduled: the server confirmed the account's
-// deletion is scheduled. Ordinary access is closed and the tab bar hidden,
-// but the session and the records stay (the database stays open for export),
-// until the deadline. Cancel deletion (Confirm it's you again) reopens the
-// same account; signing in again never does. The restricted paths stay:
-// deletion status, export, billing help, Contact support and Make a privacy
-// request (spec 2 Amendments 1 A1, B2, 8 §7 and 9 §1).
-// TODO(frames): unverified against S2-23's deletion-scheduled variant — the frame couldn't be read (Pencil unreachable). The copy and layout come from spec 2 *Deletion*, Amendments 1 A1, B2, 3 §4 and 9 §1, and #103.
+// TODO(spec 2 S2-23)
 
 import { type AccountGate, CANCEL_FAILED, CANCEL_TOO_LATE, type DeletionStatus, type SignInMethodEntry, scheduledDetail } from '@tableside/account';
 import { CalendarClock } from 'lucide-react-native';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { Button } from '@/components/Button';
+import { useLoaded } from '@/hooks/use-loaded';
 import { Group, GroupLabel, ListRow } from '@/settings/SettingsParts';
 import { palette, radius } from '@/theme/tokens';
 
@@ -27,7 +21,6 @@ export type DeletionScheduledGate = Extract<AccountGate, { state: 'deletion-sche
 
 const CANCEL_NEEDS_CONNECTION = 'Canceling deletion needs a connection. Connect, then try again.';
 
-/** What Deletion status says: the server's answer when it came, else what the gate knows. */
 function statusDetail(gate: DeletionScheduledGate, status: DeletionStatus | null | undefined): string {
   const deadline = status?.status === 'scheduled' ? status.deadline : gate.deadline;
   return scheduledDetail(deadline);
@@ -35,25 +28,16 @@ function statusDetail(gate: DeletionScheduledGate, status: DeletionStatus | null
 
 export function DeletionScheduled({ gate }: { gate: DeletionScheduledGate }) {
   const { service } = useAccount();
-  const [status, setStatus] = useState<DeletionStatus | null | undefined>();
+  const status: DeletionStatus | null | undefined = useLoaded((accountService) => accountService.deletion.status(), service);
   const [methods, setMethods] = useState<readonly SignInMethodEntry[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
-
-  useEffect(() => {
-    let live = true;
-    void service.deletion.status().then((answer) => live && setStatus(answer));
-    return () => {
-      live = false;
-    };
-  }, [service]);
 
   const cancel = async () => {
     setBusy(true);
     setProblem(null);
     try {
       const result = await service.deletion.cancel();
-      // 'canceled': the gate reopens the account, and the tabs replace this screen.
       if (result.status === 'fresh-authentication-required') {
         const found = await service.freshAuthentication.methods();
         if (found) setMethods(found);

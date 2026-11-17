@@ -1,23 +1,4 @@
-// Standard craps beyond the line game, through the engine interface (seam 1):
-// place, buy, standalone lay, field, hardways, the one-roll propositions and
-// the horn, with per-bet working instructions. Expected payouts come from the
-// launch rules (#3, spec #51 "Standard craps" payout table), not from the
-// module: place 9:5, 7:5, 7:6; buy at true odds 2:1, 3:2, 6:5 less 5% of the
-// stake; lay at 1:2, 2:3, 5:6 less 5% of the gross win (commission only on a
-// win, rounded up to a whole unit, minimum 1); field 1:1 with 2 double and 12
-// triple or double; hard 4·10 7:1, 6·8 9:1; 2·12 30:1, 3·11 15:1; any craps
-// 7:1; any seven 4:1; horn = four equal parts. A winning place, buy, lay or
-// hardway bet is paid and stays up. Dice come from the protocol's Python
-// reference (test/reference/philox_reference.py), streams keyed [k, 0] with
-// session [0, 0]:
-//   k = 4:  (6,2) (4,2) (4,6) (3,6) (2,5)          totals 8 6 10 9 7
-//   k = 9:  (1,1) (5,4) (5,1) (4,3)                totals 2 9 6 7
-//   k = 2:  (6,6) ...                              12 first
-//   k = 3:  (2,5) ...                              7 first
-//   k = 40: (5,6) ...                              11 first
-//   k = 51: (2,2) (2,2) (4,4) (1,1) (3,1) (1,2) (3,3)
-//   k = 44: (1,3) (5,3) ...
-//   k = 93: (3,3) (5,2) ...
+// Spec 1 Standard craps payout table
 import type { TestCase } from '@tableside/harness';
 
 import {
@@ -49,7 +30,6 @@ const roll = (times = 1): Command[] => Array.from({ length: times }, () => [ROLL
 const craps = (k: number, field: FieldPayout = 'triple-12', funding = '1000') =>
   createActivity({ ...CRAPS_SPEC, funding, rules: { ...CRAPS_SPEC.rules, field } }, keyed(k)) as CrapsActivityState;
 const view = (state: ActivityState) => readPermittedView(state) as CrapsPermittedView;
-/** [target, result, net, returned] plus the commission and horn part when present. */
 const settled = (facts: readonly DomainFact[]) =>
   facts
     .filter((fact) => fact.kind === 'wager-settled')
@@ -63,7 +43,6 @@ const illegal = (state: ActivityState, command: Command) => {
 const targets = (state: ActivityState) => state.wagers.map((wager) => `${wager.target} ${wager.amount}`);
 
 export const crapsMenuCases: TestCase[] = [
-  // ---- the menu ------------------------------------------------------------
   {
     name: 'craps menu: the table offers every launch wager with its limits, increments and payouts',
     run: (t) => {
@@ -105,7 +84,6 @@ export const crapsMenuCases: TestCase[] = [
           ['horn', '4', '400', '4', '30:1/15:1', 'no commission'],
         ],
       );
-      // Wagers that take a working instruction say how they usually stand on a come-out roll.
       t.equal(
         placements.filter((p) => p.usualOnComeOut !== undefined).map((p) => `${p.target} ${p.usualOnComeOut ? 'works' : 'off'}`),
         [
@@ -115,7 +93,6 @@ export const crapsMenuCases: TestCase[] = [
           'hard-4 works', 'hard-6 works', 'hard-8 works', 'hard-10 works',
         ],
       );
-      // Once a point is on, come bets replace pass bets and every other wager stays open.
       const pointOn = view(run(craps(4), [place('pass', '10'), ...roll()]).state).table.placements.map((p) => p.target);
       t.equal([pointOn.slice(0, 3), pointOn.length], [['pass-odds', 'come', 'dont-come'], 33]);
     },
@@ -133,12 +110,11 @@ export const crapsMenuCases: TestCase[] = [
     },
   },
 
-  // ---- place -----------------------------------------------------------------
   {
     name: 'craps menu: place bets pay 9:5, 7:5 and 7:6, are off on the come-out, stay up when they win and lose on 7',
     run: (t) => {
       const bets = [place('place-4', '10'), place('place-5', '10'), place('place-6', '12'), place('place-8', '12'), place('place-9', '10'), place('place-10', '10')];
-      let { state, facts } = run(craps(4), [...bets, ...roll()]); // 8 on the come-out: place 8 is off
+      let { state, facts } = run(craps(4), [...bets, ...roll()]);
       t.equal([settled(facts), state.balance, view(state).table.point], [[], '936', 8]);
       const turns: unknown[] = [];
       for (let i = 0; i < 4; i++) {
@@ -173,11 +149,9 @@ export const crapsMenuCases: TestCase[] = [
     },
   },
 
-  // ---- buy and lay -------------------------------------------------------------
   {
     name: 'craps menu: buy pays true odds less 5% of the stake and lay pays true odds less 5% of the win, rounded up, minimum 1, only on wins',
     run: (t) => {
-      // Buys are off on the come-out 8; lays work. Then 6, 10, 9 and 7.
       const bets = [place('buy-6', '10'), place('buy-9', '20'), place('buy-10', '25'), place('lay-4', '40'), place('lay-5', '30'), place('lay-6', '12')];
       let { state, facts } = run(craps(4), [...bets, ...roll()]);
       t.equal([settled(facts), state.balance], [[], '863']);
@@ -187,13 +161,9 @@ export const crapsMenuCases: TestCase[] = [
         turns.push(settled(facts));
       }
       t.equal(turns, [
-        // 12 at 6:5, commission 5% of 10 = 0.5, rounded up to the minimum 1.
         [['buy-6', 'win', '11', '11', 'commission 1'], ['lay-6', 'loss', '-12', '0']],
-        // 50 at 2:1, commission 5% of 25 = 1.25, rounded up to 2.
         [['buy-10', 'win', '48', '48', 'commission 2']],
-        // 30 at 3:2, commission exactly 1.
         [['buy-9', 'win', '29', '29', 'commission 1']],
-        // Losing buys pay no commission. Lay 4 wins 20 (1:2), lay 5 wins 20 (2:3): commission 5% of 20 = 1 each.
         [
           ['buy-6', 'loss', '-10', '0'],
           ['buy-9', 'loss', '-20', '0'],
@@ -213,20 +183,15 @@ export const crapsMenuCases: TestCase[] = [
         [place('buy-6', '12'), place('buy-5', '11'), place('buy-4', '11'), place('lay-4', '11'), place('lay-9', '20'), place('lay-8', '32'), place('lay-8', '36')].map((c) => illegal(table, c)),
         ['stake-increment', 'stake-increment', 'legal', 'stake-increment', 'stake-increment', 'stake-increment', 'legal'],
       );
-      // 30 units: buy 6 of 30 would leave nothing for its commission of 2; 25 leaves 5.
       const poor = craps(4, 'triple-12', '30');
       t.equal(
         [place('buy-6', '30'), place('buy-6', '25'), place('lay-4', '30'), place('lay-4', '28'), place('place-6', '30')].map((c) => illegal(poor, c)),
         ['commission-unfunded', 'legal', 'commission-unfunded', 'legal', 'legal'],
       );
-      // Commissions are funded across every buy and lay on the table: with 41, buy 4 of 20 leaves 21; buy 10 of 20
-      // would leave 1 for two commissions of 1 each, while 19 leaves 2.
       const buy4 = step(craps(4, 'triple-12', '41'), place('buy-4', '20')).state;
       t.equal([illegal(buy4, place('buy-10', '20')), illegal(buy4, place('buy-10', '19'))], ['commission-unfunded', 'legal']);
-      // With 44, buy 4 of 20 leaves 24: a place 6 of 24 would leave nothing for its commission; 18 leaves 6.
       const buy4of44 = step(craps(4, 'triple-12', '44'), place('buy-4', '20')).state;
       t.equal([illegal(buy4of44, place('place-6', '24')), illegal(buy4of44, place('place-6', '18'))], ['commission-unfunded', 'legal']);
-      // Nothing changes on a refusal.
       const refused = step(poor, place('buy-6', '30'));
       t.equal([refused.state.balance, refused.state.wagers], ['30', []]);
     },
@@ -234,41 +199,33 @@ export const crapsMenuCases: TestCase[] = [
   {
     name: 'craps menu: there is no automatic place-to-buy: a place 4 pays 9:5 where a buy 4 would pay 2:1',
     run: (t) => {
-      // k = 4 rolls 8 (point), 6, then 10: the place 10 pays 18 on 10, never 20 less commission.
       const { facts } = run(craps(4), [place('place-10', '10'), ...roll(3)]);
       t.equal(settled(facts), [['place-10', 'win', '18', '18']]);
     },
   },
 
-  // ---- field ----------------------------------------------------------------
   {
     name: 'craps menu: the field is one roll: 2 pays double, 12 triple or double by rule, 3 4 9 10 11 even money, 5 6 7 8 lose',
     run: (t) => {
-      // k = 9: 2, 9, 6.
       let { state, facts } = run(craps(9), [place('field', '10'), ...roll()]);
       t.equal([settled(facts), state.wagers], [[['field', 'win', '20', '30']], []]);
       ({ state, facts } = run(state, [place('field', '10'), ...roll(), place('field', '10'), ...roll()]));
       t.equal(settled(facts), [['field', 'win', '10', '20'], ['field', 'loss', '-10', '0']]);
-      // k = 2 rolls 12 first.
       t.equal(settled(run(craps(2), [place('field', '10'), ...roll()]).facts), [['field', 'win', '30', '40']]);
       t.equal(settled(run(craps(2, 'double-12'), [place('field', '10'), ...roll()]).facts), [['field', 'win', '20', '30']]);
       t.equal([illegal(craps(9), place('field', '9')), illegal(craps(9), place('field', '1001'))], ['below-minimum', 'above-maximum']);
     },
   },
 
-  // ---- hardways ---------------------------------------------------------------
   {
     name: 'craps menu: hardways pay 7:1 on 4 and 10 and 9:1 on 6 and 8, work on the come-out, stay up when they win and lose on 7 or easy',
     run: (t) => {
-      // k = 51: (2,2) (2,2) (4,4) (1,1) (3,1).
       let { state, facts } = run(craps(51), [place('hard-4', '10'), place('hard-8', '5'), ...roll()]);
       t.equal(settled(facts), [['hard-4', 'win', '70', '70']]);
       ({ state, facts } = run(state, roll(4)));
       t.equal(settled(facts), [['hard-4', 'win', '70', '70'], ['hard-8', 'win', '45', '45'], ['hard-4', 'loss', '-10', '0']]);
       t.equal(targets(state), ['hard-8 5']);
-      // k = 44: easy 4 (1,3), then easy 8 (5,3).
       t.equal(settled(run(craps(44), [place('hard-4', '1'), place('hard-8', '1'), ...roll(2)]).facts), [['hard-4', 'loss', '-1', '0'], ['hard-8', 'loss', '-1', '0']]);
-      // k = 93: hard 6 (3,3), then 7.
       t.equal(settled(run(craps(93), [place('hard-6', '2'), place('hard-10', '3'), ...roll(2)]).facts), [
         ['hard-6', 'win', '18', '18'],
         ['hard-6', 'loss', '-2', '0'],
@@ -278,12 +235,10 @@ export const crapsMenuCases: TestCase[] = [
     },
   },
 
-  // ---- propositions and the horn ----------------------------------------------
   {
     name: 'craps menu: one-roll propositions pay 30:1, 15:1, 7:1 and 4:1, and the horn settles as four parts',
     run: (t) => {
       const props = [place('any-seven', '5'), place('any-craps', '2'), place('prop-2', '1'), place('prop-3', '1'), place('prop-11', '1'), place('prop-12', '1'), place('horn', '4')];
-      // k = 9 rolls 2.
       const { state, facts: first } = run(craps(9), [...props, ...roll()]);
       t.equal(settled(first), [
         ['any-seven', 'loss', '-5', '0'],
@@ -298,7 +253,6 @@ export const crapsMenuCases: TestCase[] = [
         ['horn', 'loss', '-1', '0', 'part 12'],
       ]);
       t.equal([state.wagers, state.balance], [[], '1063']);
-      // k = 40 rolls 11: the horn's 11 part pays 15 and the others lose, net 12.
       const { facts } = run(craps(40), [place('horn', '4'), place('prop-11', '2'), ...roll()]);
       t.equal(settled(facts), [
         ['prop-11', 'win', '30', '32'],
@@ -307,7 +261,6 @@ export const crapsMenuCases: TestCase[] = [
         ['horn', 'win', '15', '16', 'part 11'],
         ['horn', 'loss', '-1', '0', 'part 12'],
       ]);
-      // k = 3 rolls 7.
       t.equal(settled(run(craps(3), [place('any-seven', '5'), ...roll()]).facts), [['any-seven', 'win', '20', '25']]);
       t.equal(
         [place('horn', '5'), place('horn', '400'), place('horn', '404'), place('prop-12', '101')].map((c) => illegal(craps(3), c)),
@@ -316,11 +269,9 @@ export const crapsMenuCases: TestCase[] = [
     },
   },
 
-  // ---- working instructions -----------------------------------------------------
   {
     name: 'craps menu: place, buy, lay, hardways and come odds take legal per-bet working instructions; line bets and one-roll bets always work',
     run: (t) => {
-      // k = 93 rolls 6 (3,3) on the come-out.
       const table = run(craps(93), [place('place-6', '12'), place('hard-6', '1'), place('lay-4', '20')]).state;
       t.equal(view(table).table.wagers, [
         { target: 'place-6', working: false, instruction: null, switchable: true, removable: true },
@@ -333,19 +284,16 @@ export const crapsMenuCases: TestCase[] = [
         { kind: 'working-changed', target: 'hard-6', working: false },
       ]);
       t.equal(view(told.state).table.wagers.map((w) => [w.target, w.working, w.instruction]), [['place-6', true, true], ['lay-4', true, null], ['hard-6', false, false]]);
-      // Without instructions the come-out 6 pays the hard 6 and leaves place 6 alone; with them, the reverse.
       t.equal(settled(run(table, roll()).facts), [['hard-6', 'win', '9', '9']]);
       t.equal(settled(run(told.state, roll()).facts), [['place-6', 'win', '14', '14']]);
       t.equal(
         [working('pass', false), working('field', false), working('place-8', true), working('big-8', true)].map((c) => illegal(run(table, [place('pass', '10'), place('field', '10')]).state, c)),
         ['working-fixed', 'working-fixed', 'not-available-now', 'unknown-target'],
       );
-      // An instruction holds through the puck moving; giving the usual come-out status clears it, and taking the wager down drops it.
-      const held = run(told.state, [place('pass', '10'), ...roll()]).state; // 6 sets the point: place 6 is on either way
+      const held = run(told.state, [place('pass', '10'), ...roll()]).state;
       t.equal(view(held).table.wagers.find((w) => w.target === 'place-6'), { target: 'place-6', working: true, instruction: true, switchable: true, removable: true });
       const cleared = run(told.state, [working('place-6', false), place('hard-6', '0')]).state;
       t.equal([(cleared as CrapsActivityState).instructions, targets(cleared)], [[], ['place-6 12', 'lay-4 20']]);
-      // During a point a place bet already works, so "on" still means working on the come-out too.
       const pointOn = run(table, [place('pass', '10'), ...roll()]).state;
       t.equal((run(pointOn, [working('place-6', true)]).state as CrapsActivityState).instructions, [{ target: 'place-6', working: true }]);
     },
@@ -353,13 +301,11 @@ export const crapsMenuCases: TestCase[] = [
   {
     name: 'craps menu: a place bet told "off" while the point is on is off: it takes no action until told otherwise',
     run: (t) => {
-      // k = 93 rolls 6 (3,3): with a pass line it sets the point at 6; the next rolls are a point roll.
       const pointOn = run(craps(93), [place('pass', '10'), ...roll(), place('place-8', '12')]).state;
       t.equal(view(pointOn).table.wagers.find((w) => w.target === 'place-8')?.working, true);
       const off = run(pointOn, [working('place-8', false)]);
       t.equal(off.facts, [{ kind: 'working-changed', target: 'place-8', working: false }]);
       t.equal(view(off.state).table.wagers.find((w) => w.target === 'place-8'), { target: 'place-8', working: false, instruction: false, switchable: true, removable: true });
-      // Off holds on the come-out too, until the player says otherwise; "on" then clears nothing it shouldn't.
       const on = run(off.state, [working('place-8', true)]);
       t.equal([on.facts, view(on.state).table.wagers.find((w) => w.target === 'place-8')?.working], [[{ kind: 'working-changed', target: 'place-8', working: true }], true]);
     },
@@ -367,7 +313,6 @@ export const crapsMenuCases: TestCase[] = [
   {
     name: 'craps menu: come odds told to work on the come-out win with their base instead of coming back',
     run: (t) => {
-      // Pi digits stream: 8 (point), 11, 6 (come to 6), 4, 12, 8 (point made), then 6 on the come-out.
       const pi = createActivity(CRAPS_SPEC, { ...ZERO, key: [0xa4093822, 0x299f31d0], session: [0x13198a2e, 0x03707344] });
       const before = run(pi, [place('pass', '10'), ...roll(), place('come', '10'), ...roll(), place('come', '10'), ...roll(), place('come-6-odds', '50'), ...roll(3)]).state;
       t.equal(view(before).table.wagers.map((w) => [w.target, w.working]), [['come-6', true], ['come-6-odds', false]]);
@@ -384,7 +329,6 @@ export const crapsMenuCases: TestCase[] = [
     },
   },
 
-  // ---- stop and checkpoints -------------------------------------------------------
   {
     name: 'craps menu: stopping returns every place, buy, lay, field, hardway and proposition wager',
     run: (t) => {

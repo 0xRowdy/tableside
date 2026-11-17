@@ -1,10 +1,4 @@
-// Guided practice on any table (design frames S1-05 Correction pause, S1-07
-// Cycle, S1-09 Stop strategy): the strategy strip with adherence kept apart
-// from winnings, the correction pause before a departing move, the cycle
-// result and the Stop strategy confirmation. Every coaching line comes from
-// the engine's explanation facts (coaching-text.ts). Game-agnostic: a table
-// passes what it shows of itself ("the table right now"), including cards for
-// blackjack, so the full-screen correction can restate it.
+// Spec 1 S1-05
 
 import type { CycleTurn, PendingStrategyAction, StrategyView } from '@tableside/engine';
 import { Modal, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -29,17 +23,13 @@ import {
 } from './coaching-text';
 import { formatSigned, formatUnits, speakSigned } from './units';
 
-/** What the table shows right now, restated as text by the full-screen correction. */
 export interface TableNow {
   readonly phase: string;
   readonly balance: string;
-  /** Outstanding wagers, in words. */
   readonly wagers: string;
-  /** Exposed cards, for card games (blackjack). */
   readonly cards?: readonly string[];
 }
 
-/** The strategy, its choices and adherence; separate from the session balance. */
 export function GuidedStrip({
   strategy,
   canStop,
@@ -50,7 +40,6 @@ export function GuidedStrip({
   strategy: StrategyView;
   canStop: boolean;
   onStop: () => void;
-  /** What the strategy is set to (its chosen targets); null where it has no choices (blackjack). */
   detail?: string | null;
   unit?: DecisionUnit;
 }) {
@@ -109,10 +98,6 @@ function CorrectionBody({ copy, busy, onRetry, onOverride }: { copy: CorrectionC
   );
 }
 
-/**
- * The correction pause, before the move executes. At the largest text sizes it
- * opens as a full-screen panel that restates the table as text first.
- */
 export function CorrectionPanel(props: {
   copy: CorrectionCopy;
   table: TableNow;
@@ -147,7 +132,6 @@ export function CorrectionPanel(props: {
   );
 }
 
-/** A cycle turn as the table words it: "Spin 1 · 10 on Black" and "Lost · 0 green". */
 export interface TurnWords {
   readonly title: string;
   readonly detail: string;
@@ -155,11 +139,7 @@ export interface TurnWords {
 
 const outcomeWord = (net: string) => (net.startsWith('-') ? 'Loss' : net === '0' ? 'Even' : 'Win');
 
-/**
- * The cycle result (S1-07), once a cycle completes or is exhausted: its net
- * result, the balance it leaves (never refilled), and its turns. Another cycle
- * starts only from here, explicitly, or the session ends.
- */
+// Spec 1 S1-07
 export function CycleResultPanel({
   strategy,
   balance,
@@ -174,14 +154,12 @@ export function CycleResultPanel({
 }: {
   strategy: StrategyView;
   balance: string;
-  /** True when the session has had a rebuy, so "no chips added" would mislead. */
   rebought: boolean;
   describeTurn: (turn: CycleTurn, index: number) => TurnWords;
   canRestart: boolean;
   canEnd: boolean;
   onRestart: () => void;
   onEnd: () => void;
-  /** Where committed wagers stay after the cycle (craps), playing on without the strategy lets the dice settle them. */
   onPlayOn?: () => void;
   words?: CoachWords;
 }) {
@@ -230,11 +208,7 @@ export function CycleResultPanel({
   );
 }
 
-/**
- * A pending strategy action (S1-06): the strategy's next bets can't be placed,
- * so it places none. The player resolves it by rebuying (practice funding
- * only), by an override, or by stopping the strategy; Tableside never resizes it.
- */
+// Spec 1 S1-06
 export function PendingPanel({
   strategy,
   pending,
@@ -251,18 +225,13 @@ export function PendingPanel({
 }: {
   strategy: StrategyView;
   pending: PendingStrategyAction;
-  /** Funds available for the strategy's bets. */
   available: string;
-  /** Null when no rebuy is offered (a training bankroll); otherwise whether one can be made now. */
   canRebuy: boolean | null;
   canOverride: boolean;
-  /** Null when the table doesn't offer Collect instead; otherwise whether it can be chosen now. */
   canCollect?: boolean | null;
   canStop: boolean;
   onRebuy: () => void;
-  /** Opens the bets, so the player can place their own instead (an override, judged when they spin). */
   onOverride: () => void;
-  /** Keeps what was paid and ends the cycle instead of the pending step. */
   onCollect?: () => void;
   onStop: () => void;
   words?: CoachWords;
@@ -295,7 +264,6 @@ export function PendingPanel({
   );
 }
 
-/** Stop strategy, confirmed in three steps. It doesn't end the practice session. */
 export function StopStrategyDialog({
   visible,
   removable,

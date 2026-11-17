@@ -1,6 +1,4 @@
-// Seam 2, reopening (#88): connectivity is needed only for first sign-in. The
-// app reopens into the account offline, and an expired token is Renewal
-// pending, keeping access and records until it renews.
+// #88
 
 import { afterEach, describe, expect, it } from 'vitest';
 
@@ -22,7 +20,6 @@ async function signedInPhone(label: string) {
   return { phone, accountId: gate.accountId };
 }
 
-/** Lets the token's hour run out on the device's clock, offline, so nothing syncs meanwhile. */
 function expireToken(phone: SimulatedDevice) {
   phone.proxy.online = false;
   phone.clock.advance(2 * 60 * 60_000);
@@ -57,12 +54,10 @@ describe('reopening the app', () => {
     expect(phone.vault.openAccount).toBe(accountId);
     expect(await phone.vault.store().load(saved.activityId)).not.toBeNull();
 
-    // Renewal fails while offline and nothing changes.
     await phone.account.renew();
     expect(phone.account.gate.state).toBe('renewal-pending');
     expect(phone.vault.openAccount).toBe(accountId);
 
-    // A lost renewal response changes nothing either.
     phone.proxy.online = true;
     phone.proxy.dropNextResponse('/auth/v1/token');
     await phone.account.renew();

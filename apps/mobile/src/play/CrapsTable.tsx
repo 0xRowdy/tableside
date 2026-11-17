@@ -1,16 +1,9 @@
-// The standard craps table (design frames "06 Craps — Roll result", S1-04
-// "Craps come-out", "Craps, table + bet list", "Horn settled as four parts"
-// and "Buy/lay commission on win only"). It renders only the engine's
-// permitted view and forwards taps to the practice controller; it never
-// advances the game or decides what is legal. Every wager states its working
-// status in text, the stake editor gives working instructions, and committed
-// contracts explain why they stay. The felt carries the line bets and the
-// field; place, buy, lay, hardways and propositions are in the bet list.
+// Spec 1 S1-04
 
 import { crapsHouseEdge } from '@tableside/definitions';
 import { CRAPS_POINTS, isPlayCorrection, type CrapsPermittedView as PermittedView, type CycleTurn } from '@tableside/engine';
-import { useEffect, useMemo, useState } from 'react';
-import { AccessibilityInfo, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { useMemo, useState } from 'react';
+import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/Button';
@@ -29,14 +22,13 @@ import { CorrectionPanel, CycleResultPanel, GuidedStrip, PendingPanel, type Turn
 import { RebuySheet } from './RebuySheet';
 import { commitmentText, crapsStatus, crapsTargetName, describeCrapsFacts, puckText, workingText } from './craps-text';
 import { formatUnits, sumUnits, totalOnTable } from './units';
-import { AccessStopBanner, AllowanceLine, ChipRack, EndingSteps, PhaseStepper, SaveFailedBanner, SessionStrip, TableDialogs, TableTopBar, TurnBoundaryBanner, type PhaseStep } from './TableChrome';
+import { AccessStopBanner, AllowanceLine, ChipRack, EndingSteps, PhaseStepper, SaveFailedBanner, SessionStrip, TableDialogs, TableTopBar, TurnBoundaryBanner, useTableAnnouncements, type PhaseStep } from './TableChrome';
 
 type ActiveSnapshot = ActivePracticeSnapshot & { readonly view: PermittedView };
 
-/** Above this text scale, a wide window stacks the felt and the controls so text has room. */
 const SIDE_BY_SIDE_MAX_FONT_SCALE = 1.35;
 
-const SAVE_FAILED_ANNOUNCEMENT = "Couldn't save. Play is paused and will retry automatically.";
+const announcement = ({ facts, view }: ActiveSnapshot) => describeCrapsFacts(facts, view) ?? `${crapsStatus(view)}. Balance ${formatUnits(view.balance)}.`;
 
 function phaseSteps(view: PermittedView): PhaseStep[] {
   const reached = { 'open-decision': 0, correction: 0, 'revealing-outcome': 1, 'settled-outcome': 2, 'cycle-completion': 2, 'strategy-settlement': 2, 'final-settlement': 2, completed: 3 }[view.phase];
@@ -48,7 +40,6 @@ function phaseSteps(view: PermittedView): PhaseStep[] {
 
 const rollText = (dice: readonly [number, number]) => `${dice[0]} and ${dice[1]}, total ${dice[0] + dice[1]}`;
 
-/** A cycle's roll for the cycle result: "Roll 3 · 12 on Place 6 and 12 on Place 8", "Rolled 4 and 2". */
 function describeTurn(turn: CycleTurn, index: number): TurnWords {
   const [a, b] = turn.outcome.split('+');
   const result = turn.net.startsWith('-') ? 'Lost' : turn.net === '0' ? 'Even' : 'Won';
@@ -68,7 +59,7 @@ export function CrapsTable({ snapshot }: { snapshot: ActiveSnapshot }) {
   const [confirming, setConfirming] = useState(false);
   const [rebuying, setRebuying] = useState(false);
   const [stoppingStrategy, setStoppingStrategy] = useState(false);
-  // Held here, above both presentations, so rotation, resizing and switching keep the draft.
+  // docs/decisions/mobile-device-support-accessibility.md
   const [presentation, setPresentation] = useState<Presentation>('table');
   const [draft, setDraft] = useState<BetDraft>(EMPTY_DRAFT);
   const { view, facts, busy, save } = snapshot;
@@ -76,12 +67,10 @@ export function CrapsTable({ snapshot }: { snapshot: ActiveSnapshot }) {
   const catalog = useMemo(() => crapsCatalog(view), [view]);
   const placed = useMemo(() => crapsPlacedWagers(view), [view]);
   const drafted = isDraftPending(draft, placed) ? findChoice(catalog, draft.target) : undefined;
-  // The sheet shows only while a rebuy is offered (the table waits for input).
   const rebuyOpen = rebuying && view.legalCommands.includes('rebuy');
   const addRebuy = async (amount: string) => {
     await controller.rebuy(amount);
     const latest = controller.snapshot();
-    // Committed: close. Refused or not saved: keep the sheet and the draft.
     if (latest.status !== 'active' || latest.facts.some((fact) => fact.kind === 'funding-added')) setRebuying(false);
   };
 
@@ -95,25 +84,7 @@ export function CrapsTable({ snapshot }: { snapshot: ActiveSnapshot }) {
   const removable = view.wagers.filter((wager) => !contracts.includes(wager));
   const edge = (wager: 'pass' | 'dont-pass') => crapsHouseEdge(wager, { ...table.variant, odds: table.odds, field: table.field }).percent;
 
-  // Announce every committed transition as it is published, including ones
-  // that pass before the next render, and a save failure that pauses play.
-  useEffect(() => {
-    const initial = controller.snapshot();
-    let announced = initial.status === 'active' ? initial.view.sequence : -1;
-    let failed = initial.status === 'active' && initial.save === 'failed';
-    return controller.subscribe(() => {
-      const latest = controller.snapshot();
-      if (latest.status !== 'active' || latest.view.game !== 'craps') return;
-      const nowFailed = latest.save === 'failed';
-      if (nowFailed && !failed) AccessibilityInfo.announceForAccessibility(SAVE_FAILED_ANNOUNCEMENT);
-      failed = nowFailed;
-      if (latest.view.sequence === announced) return;
-      announced = latest.view.sequence;
-      // A state adopted from the store carries no facts of its own: restate where things stand.
-      const text = describeCrapsFacts(latest.facts, latest.view) ?? `${crapsStatus(latest.view)}. Balance ${formatUnits(latest.view.balance)}.`;
-      AccessibilityInfo.announceForAccessibility(text);
-    });
-  }, [controller]);
+  useTableAnnouncements('craps', announcement);
 
   const stakeOn = (target: string) => view.wagers.find((wager) => wager.target === target)?.amount;
   const placeable = (target: string) => table.placements.some((placement) => placement.target === target);
@@ -121,8 +92,6 @@ export function CrapsTable({ snapshot }: { snapshot: ActiveSnapshot }) {
     void controller.placeWager(target, sumUnits(stakeOn(target) ?? '0', chip));
   };
   const canPlace = legal('place-wager');
-  // The stake editor sets the stake, then the working option (design frame
-  // "Craps stake editor"); the option is given only once the stake is on the table.
   const setWager = async (target: string, amount: string, toggled: boolean | undefined) => {
     if (stakeOn(target) !== amount) {
       await controller.placeWager(target, amount);
@@ -206,6 +175,7 @@ export function CrapsTable({ snapshot }: { snapshot: ActiveSnapshot }) {
                 </View>
               ) : (
                 <BetSelector
+                  game="craps"
                   catalog={catalog}
                   wagers={placed}
                   balance={view.balance}
@@ -321,7 +291,6 @@ export function CrapsTable({ snapshot }: { snapshot: ActiveSnapshot }) {
   );
 }
 
-/** The table spots, in felt order. Line spots open and close with the puck. */
 const LINE_SPOTS: readonly { target: string; label: string; closed: string }[] = [
   { target: 'come', label: 'COME', closed: 'Come bets open once a point is set.' },
   { target: 'dont-come', label: "DON'T COME · BAR 12", closed: "Don't come bets open once a point is set." },
@@ -332,10 +301,8 @@ const LINE_SPOTS: readonly { target: string; label: string; closed: string }[] =
   { target: 'field', label: 'FIELD · 2 3 4 9 10 11 12', closed: 'The field opens between rolls.' },
 ];
 
-/** Every wager acting on box number n: come and don't come bets with their odds, place, buy and lay. */
 const onNumber = (target: string, n: number) => new RegExp(`^((dont-)?come-${n}(-odds)?|(place|buy|lay)-${n})$`).test(target);
 
-/** The short felt label of a wager in a number box: "come", "odds", "don't", "place". */
 function boxLabel(target: string): string {
   if (target.endsWith('-odds')) return 'odds';
   if (target.startsWith('dont')) return "don't";
@@ -403,7 +370,6 @@ function Felt({
       {LINE_SPOTS.map((spot) => {
         const open = placeable(spot.target);
         const stake = stakeOn(spot.target);
-        // An odds spot shows only once it can be used or holds a wager.
         if (spot.target.endsWith('-odds') && !open && stake === undefined) return null;
         const pays = spot.target === 'field' ? `1 to 1, 2 pays double, 12 pays ${view.table.field === 'triple-12' ? 'triple' : 'double'}` : (payout(spot.target) ?? '1 to 1');
         return (
@@ -422,7 +388,6 @@ function Felt({
   );
 }
 
-/** Why a spot holding a wager takes no more: a contract can't change; anything else can still come down. */
 function heldHint(view: PermittedView, target: string): string {
   const removable = view.table.wagers.find((wager) => wager.target === target)?.removable !== false;
   if (!removable) return commitmentText(target, view.table.point);
@@ -467,7 +432,6 @@ function Spot({
   );
 }
 
-/** The bet list: every wager with its working status and what can be done with it. */
 function WagerList({
   view,
   canPlace,

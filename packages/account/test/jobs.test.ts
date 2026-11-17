@@ -1,4 +1,4 @@
-// The stack's scheduled jobs (#84).
+// #84
 
 import { describe, expect, it } from 'vitest';
 

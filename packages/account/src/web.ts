@@ -1,6 +1,4 @@
-// What the web account page (#106) imports: its client, the backend it was
-// built for, and the wording it shares with the app. Nothing here pulls in
-// the Supabase client or the app's sync, so the page's bundle stays small.
+// #106
 
 export { type BackendEnvironment, backendEnvironment } from './environment';
 export * from './lifecycle-text';

@@ -1,5 +1,3 @@
-// Platforms without a Large Content Viewer render plain views. Android's
-// equivalent is drawn by the tab bar itself.
 import { View } from 'react-native';
 
 import type { LargeContentContainerProps, LargeContentItemProps } from './types';

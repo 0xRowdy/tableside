@@ -1,8 +1,4 @@
-// A suspended practice session that waits for the player (design frame S1-11
-// "Resume an interrupted session"): where it stopped, Resume session, and End
-// session when the session is between turns. Nothing here advances the game;
-// a blocked resume changes nothing and End session stays available.
-// Copy says "suspended", not "paused": a pause is the player's own (CONTEXT.md).
+// Spec 1 S1-11
 
 import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';

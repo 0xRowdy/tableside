@@ -1,18 +1,5 @@
-// The canonical encoding and fingerprint of a standardized evaluation (spec 6,
-// Amendment 6 §3): a pure, versioned function of seam 1. It encodes what a
-// validated strategy executes, under the instruction schema and this
-// normalization's versions, joined with the full benchmark profile and the
-// identities of the engine, rules, reference assets, random protocol and
-// analysis. The fingerprint is SHA-256 over that manifest.
-//
-// Normalization keeps everything that can change execution (instruction
-// order, conditions, priorities, exceptions, fallbacks, caps, stops, the
-// playing policy) and drops what can't: the title, labels, notes, ids and
-// revision, and teaching-only published values. Identifiers are renamed by
-// position, parameters are replaced by the values chosen (defaults resolved),
-// numbers are rewritten canonically and literal-only arithmetic is folded, so
-// renaming, rewording or rewriting a number as an equal one gives the same
-// fingerprint.
+// Spec 1 Amendment 6 §3
+// docs/development.md Releases: recorded checkpoints and the quarantine list
 
 import { canonicalJson } from './canonical';
 import { add, decodeMoney, encodeMoney, money, mul, sub, compare, type Money } from './money';
@@ -33,7 +20,6 @@ import {
 import type { BenchmarkProfile } from './standardized';
 import { ENGINE_VERSION } from './version';
 
-/** The encoding's versions: a change to any of them changes every fingerprint. */
 export const CANONICAL_ENCODING = { version: 1, instructionSchema: STRATEGY_FORMAT, normalization: 1 } as const;
 
 export class FingerprintIntegrityError extends Error {
@@ -43,13 +29,11 @@ export class FingerprintIntegrityError extends Error {
   }
 }
 
-/** A canonical specification: the manifest kept for audit, and its SHA-256 fingerprint. */
 export interface CanonicalSpecification {
   readonly manifest: string;
   readonly fingerprint: string;
 }
 
-/** A number in any plain spelling ("10", "10.0", "+10", "20/2", "0.5") as canonical money, or undefined. */
 function number(text: string): Money | undefined {
   const match = /^([+-]?)([0-9]+)(?:\.([0-9]+))?(?:\/([0-9]+))?$/.exec(text);
   if (!match) return undefined;
@@ -66,7 +50,6 @@ const canonicalNumber = (text: string): string => {
   return value === undefined ? text : encodeMoney(value);
 };
 
-/** Table conditions: amounts canonical; every other value (a wheel, an odds cap) as declared. */
 function table(value: unknown): unknown {
   if (typeof value === 'string') return canonicalNumber(value);
   if (Array.isArray(value)) return value.map(table);
@@ -101,7 +84,6 @@ function expression(value: StrategyExpression, names: Names): StrategyExpression
       return folded ? { lit: encodeMoney(FOLD[op](folded[0] as Money, folded[1] as Money)) } : ({ [op]: items } as unknown as StrategyExpression);
     }
   }
-  // A validated definition holds no other node; anything else is an integrity error, never encoded as something it isn't.
   if (!('min' in value) && !('max' in value)) throw new FingerprintIntegrityError('unknown expression node');
   const op = 'min' in value ? 'min' : 'max';
   const items = (value as Record<typeof op, readonly StrategyExpression[]>)[op].map((item) => expression(item, names));
@@ -140,7 +122,6 @@ function adjustment(value: StrategyAdjustment, names: Names) {
   return { ...base, list: renamed(names.lists, value.list), drop: value.drop };
 }
 
-/** A playing policy without its teaching-only parts: each deviation's id, situation name and published values. */
 function play(value: unknown): unknown {
   if (!isRecord(value) || !Array.isArray(value.deviations)) return value ?? null;
   const teaching = new Set(['id', 'situation', 'published']);
@@ -148,11 +129,6 @@ function play(value: unknown): unknown {
   return { ...value, deviations };
 }
 
-/**
- * The canonical form of what a validated strategy executes with the chosen
- * parameters (defaultSelection gives the defaults). Throws when the strategy
- * isn't runnable or the parameters don't fit it.
- */
 export function canonicalStrategy({ definition, parameters: chosen }: StrategySelection): unknown {
   const validation = validateStrategy(definition);
   if (!validation.runnable) throw new FingerprintIntegrityError(`the strategy is not runnable: ${validation.diagnostics.map((d) => `${d.category} ${d.path}`).join('; ')}`);
@@ -179,13 +155,6 @@ export function canonicalStrategy({ definition, parameters: chosen }: StrategySe
   };
 }
 
-/**
- * The canonical specification of a standardized evaluation: the strategy's
- * canonical form joined with the full benchmark profile and the content
- * identities of the engine, rules, reference assets, random protocol and
- * analysis. Pure: the same inputs give the same manifest and fingerprint on
- * every runtime.
- */
 export function canonicalSpecification(input: {
   readonly strategy: StrategySelection;
   readonly profile: BenchmarkProfile;
@@ -207,7 +176,6 @@ export function canonicalSpecification(input: {
   return { manifest, fingerprint: sha256Hex(manifest) };
 }
 
-/** Checks a stored specification: a digest that doesn't match its manifest is an integrity error. */
 export function verifySpecification(specification: CanonicalSpecification): void {
   if (sha256Hex(specification.manifest) !== specification.fingerprint) {
     throw new FingerprintIntegrityError('the fingerprint does not match its manifest');

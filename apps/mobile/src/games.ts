@@ -3,15 +3,11 @@ export type GameId = 'blackjack' | 'craps' | 'roulette';
 export interface LaunchGame {
   id: GameId;
   title: string;
-  /** Short rules summary shown above the title. */
   summary: string;
-  /** The summary as a screen reader should speak it. */
   spokenSummary: string;
-  /** A bundled image (the result of `require`). */
   image: number;
 }
 
-/** The three launch games, in Home order. */
 export const LAUNCH_GAMES: readonly LaunchGame[] = [
   {
     id: 'blackjack',

@@ -1,10 +1,4 @@
-// Craps session setup (design frame S1-02 GAXET): free play or guided
-// practice with one of the five craps built-ins (or, from spec 4, one of My
-// strategies), standard craps with a choice of maximum odds and field payout,
-// editable limits for flat wagers and for hardways and propositions, the
-// house edge of every wager under these rules, and a fresh buy-in. The engine
-// judges whether the strategy fits the table as edited; an incompatible
-// pairing is refused naming the requirement, never adjusted.
+// Spec 1 S1-02
 
 import { CRAPS_LIMITS, CRAPS_STRATEGIES, crapsHouseEdge, standardCraps, type CrapsWager } from '@tableside/definitions';
 import {
@@ -39,11 +33,6 @@ import { formatUnits, smallerUnits, totalStake } from './units';
 
 type Mode = 'free-play' | 'guided';
 
-/**
- * What the strategy's come-out roll bets at this table, from the engine's
- * Explain prescription, with funds to spare so the whole opening shows. Null
- * when it bets nothing until a point is set.
- */
 function strategyOpening(strategy: StrategyDefinition, rules: CrapsRuleSet): Opening | null {
   const explained = explainPrescription(
     strategy,
@@ -69,7 +58,6 @@ const GROUPS: readonly LimitGroup<Group>[] = [
 
 const FIELD_LABELS: Record<FieldPayout, string> = { 'triple-12': '2 double, 12 triple', 'double-12': '2 and 12 double' };
 
-/** The plain-language requirement a table fails. */
 function requirementText(strategy: StrategyDefinition, requirement: TableRequirement): string {
   const limit = limitRequirementText(strategy, requirement, CRAPS_WORDS);
   if (limit) return limit;
@@ -92,7 +80,6 @@ export function CrapsSetup({
   problem: StartProblem | null;
   problemReason?: string | null;
   busy: boolean;
-  /** The latest saved revision of each runnable private craps strategy (spec 4). */
   myStrategies?: readonly StrategyDefinition[];
 }) {
   const { controller } = usePractice();
@@ -105,7 +92,6 @@ export function CrapsSetup({
   const accepted = limits.accepted;
   const rules = standardCraps(odds, field, accepted ?? CRAPS_LIMITS);
   const smallest = accepted ? smallerUnits(accepted.flat.min, accepted.props.min) : null;
-  // Compatibility is judged at the table as edited, once its limits are good.
   const fit = guided && accepted ? strategyTableCompatibility(strategy, {}, rules) : null;
   let opening: Opening | null = !guided && smallest ? { kind: 'table', amount: smallest } : null;
   if (fit?.compatible) opening = strategyOpening(strategy, rules);

@@ -1,7 +1,4 @@
-// S2-13 Welcome: "I'm new here" and "I have an account" are separate paths,
-// and the screen says why a connection is needed. Sign in offers Apple,
-// Google and an email code, and never asks for age; I'm new continues to the
-// age step, then the sign-in method.
+// Spec 2 S2-13
 
 import type { CodeIntent } from '@tableside/account';
 import { Image } from 'expo-image';
@@ -21,7 +18,6 @@ const INTENTS: readonly { value: CodeIntent; label: string }[] = [
   { value: 'sign-in', label: 'I have an account' },
 ];
 
-/** S2-13's hero is the blackjack table image Home's card uses (design/Tableside-assets/generated-5.png). */
 const HERO = findGame('blackjack')!.image;
 
 export default function Welcome() {

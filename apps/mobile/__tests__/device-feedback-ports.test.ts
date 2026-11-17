@@ -1,7 +1,3 @@
-// The device ports' platform configuration, with the native audio, haptics and
-// file modules replaced by recorders. What the platforms then do (the silent
-// switch, mixing, system haptics) is checked on physical devices (gate 8).
-
 import { AppState, Platform, type AppStateStatus } from 'react-native';
 
 jest.unmock('@/feedback/device-ports');

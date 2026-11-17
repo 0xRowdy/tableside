@@ -1,12 +1,9 @@
-// Summing contributions into totals. Expected figures are worked by hand.
-
 import { describe, expect, it } from 'vitest';
 
 import { sumContributions } from './totals';
 
 describe('totals', () => {
   it('add exact fractions without rounding', () => {
-    // 1/3 + 1/6 = 2/6 + 1/6 = 3/6 = 1/2; then 1/2 - 1/2 = 0.
     expect(
       sumContributions([
         { total: 'casino', game: 'blackjack', currency: 'USD', amount: '1/3' },

@@ -1,8 +1,4 @@
-// Roulette's wager catalog for the bet selector, built from the engine's
-// permitted view: every placement the layout offers, grouped by kind under the
-// inside and outside limits (design frame "S1-03 Bet selector — Roulette ·
-// choose a wager"), plus "Find by number", which lists every inside bet
-// covering a number (the design's bet loupe, "Wagers on 17").
+// Spec 1 S1-03
 
 import type { PlacementKind, RoulettePermittedView as PermittedView, RoulettePocket } from '@tableside/engine';
 
@@ -16,7 +12,6 @@ type Wheel = PermittedView['table']['wheel'];
 interface KindDescriptor {
   readonly name: string;
   readonly choiceLabel: string;
-  /** The line under the name, given the payout text ("pays 35:1"). */
   readonly detail: (pays: string, wheel: Wheel) => string;
 }
 
@@ -25,7 +20,6 @@ const losesOnZero = (pays: string, wheel: Wheel) => `${capitalize(pays)} · lose
 type Paired = 'red' | 'black' | 'odd' | 'even' | 'low' | 'high';
 type KindId = Exclude<PlacementKind, Paired> | 'red-black' | 'odd-even' | 'low-high';
 
-/** The selector's kinds; paired outside bets share one ("Red or black"). Order follows the design. */
 const KINDS: Readonly<Record<KindId, KindDescriptor>> = {
   straight: { name: 'Straight up', choiceLabel: 'Number', detail: (pays) => `1 number · ${pays}` },
   split: { name: 'Split', choiceLabel: 'Two neighbors', detail: (pays) => `2 neighbors · ${pays}` },
@@ -60,7 +54,6 @@ const kindId = (kind: PlacementKind): KindId => (isPaired(kind) ? PAIRED[kind] :
 
 const OUTSIDE_LABELS: Partial<Record<string, string>> = { low: '1–18', high: '19–36' };
 
-/** A choice's short label: "17", "16 | 17", "16 · 17 · 18", "13–18", "1st 12". */
 function choiceLabel(placement: Placement): string {
   const { kind, covers, target } = placement;
   switch (kind) {
@@ -137,7 +130,6 @@ function choiceFor(placement: Placement): WagerChoice {
     name: targetName(placement.target),
     min: placement.min,
     max: placement.max,
-    // Roulette stakes are whole units.
     step: '1',
     payout: placement.payout,
   };
@@ -145,7 +137,6 @@ function choiceFor(placement: Placement): WagerChoice {
 
 const COMMITTED_REASON = 'Committed to this spin until it settles. It can’t be changed or taken down.';
 
-/** The wagers on the table, for the selector: all removable between spins, all committed during one. */
 export function roulettePlacedWagers(view: PermittedView): PlacedWager[] {
   return view.wagers.map((wager) =>
     view.wagersCommitted

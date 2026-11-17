@@ -1,20 +1,4 @@
-// The five craps built-in strategies for the craps strategy cases, written
-// from spec #51's built-in strategy table on the default 10-minimum table
-// (independent of the definitions package's shipped copies):
-//   Pass with odds: "Pass 10; add 10 odds after point; repeat."
-//   Flat place 6 and 8: "Place 12 each after point (including when 6/8 is the
-//     point); collect every win, stakes unchanged."
-//   Don't pass with lay odds: "Don't pass 10; after point lay to win 10 (20 vs
-//     4/10, 15 vs 5/9, 12 vs 6/8); keep base through bar-12 push."
-//   Bounded Three-point Molly: "Pass 10 + at most two concurrent 10 come bases
-//     (pending come-area bet counts); 10 odds on each established contract;
-//     before a point-on roll add one come base if room; settle the whole roll
-//     before replacing."
-//   Capped press-and-collect 6 and 8: "Start 12 each; per number
-//     independently: collect first hit, press +12 from second payout, alternate
-//     collect/press to a 48 cap; collect all hits once capped."
-// Place amounts and press counters persist through a made point (off on the
-// come-out) and reset after a seven-out.
+// Spec 1 Built-in strategies
 import type { StrategyAdjustment, StrategyCondition, StrategyDefinition, StrategyInstruction } from '../src';
 
 export const CRAPS_TABLE = {
@@ -49,8 +33,7 @@ export const PASS_WITH_ODDS: StrategyDefinition = {
   stopWhen: null,
 };
 
-/** Place bets stay up through a made point: the "up" counter is 1 from their first roll until a seven-out takes them. */
-const UP: StrategyAdjustment[] = [
+const UP_UNTIL_SEVEN_OUT: StrategyAdjustment[] = [
   { id: 'up-6', on: 'any', wager: 'place-6', counter: 'up', to: lit('1') },
   { id: 'up-8', on: 'any', wager: 'place-8', counter: 'up', to: lit('1') },
   { id: 'down-6', on: 'loss', wager: 'place-6', counter: 'up', to: lit('0') },
@@ -77,7 +60,7 @@ export const FLAT_PLACE: StrategyDefinition = {
     placeBoth('place', 'Place 6 and 8, 12 each, once a point is on', is('puck', 'on')),
     placeBoth('keep', 'Keep them up, off, on the come-out', { all: [is('puck', 'off'), { compare: { counter: 'up' }, op: 'eq', to: lit('1') }] }),
   ],
-  adjustments: UP,
+  adjustments: UP_UNTIL_SEVEN_OUT,
   stopWhen: null,
 };
 
@@ -139,7 +122,6 @@ export const THREE_POINT_MOLLY: StrategyDefinition = {
   stopWhen: null,
 };
 
-/** Per number: a win presses 12 every other payout (the toggle), to 48; a seven-out resets both. */
 const pressing = (n: 6 | 8): StrategyAdjustment[] => [
   { id: `press-${n}`, on: 'win' as const, wager: `place-${n}`, counter: `stake-${n}`, to: { min: [lit('48'), { add: [{ counter: `stake-${n}` }, { mul: [lit('12'), { counter: `press-${n}` }] }] }] } },
   { id: `toggle-${n}`, on: 'win' as const, wager: `place-${n}`, counter: `press-${n}`, to: { sub: [lit('1'), { counter: `press-${n}` }] } },
@@ -173,7 +155,7 @@ export const PRESS_AND_COLLECT: StrategyDefinition = {
       bets: [pressBet(n as 6 | 8)],
     },
   ]),
-  adjustments: [...UP, ...pressing(6), ...pressing(8)],
+  adjustments: [...UP_UNTIL_SEVEN_OUT, ...pressing(6), ...pressing(8)],
   stopWhen: null,
 };
 

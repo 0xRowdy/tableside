@@ -1,11 +1,4 @@
-// Routine logs carry no private data (spec 2, *Observability and privacy
-// boundaries*, gate 11; #108): no record body, token, email code, raw age
-// data, clock anchor, account email or casino session. Every log line in
-// shipped code is checked here: a `console` call in the app, the shared
-// packages or an edge function may log only fixed text, a step name or an
-// HTTP status, and a database function may raise only a fixed message.
-// Events go through the metrics catalog and crash reports through
-// crashReport() (packages/account/src); their checks sit beside them.
+// Spec 2 Observability and privacy boundaries; #108
 
 import { readFile, readdir } from 'node:fs/promises';
 import { join, relative } from 'node:path';
@@ -16,19 +9,16 @@ import { describe, expect, it } from 'vitest';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 
-/** What a log call may pass besides fixed text: names of steps and statuses, never values. */
 const LOGGABLE_PROPERTIES = new Set(['status', 'step']);
 
 function loggable(node: ts.Expression): boolean {
   if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node) || ts.isNumericLiteral(node)) return true;
   if (ts.isParenthesizedExpression(node)) return loggable(node.expression);
   if (ts.isPropertyAccessExpression(node)) return LOGGABLE_PROPERTIES.has(node.name.text);
-  // Either branch is logged, whatever decides between them.
   if (ts.isConditionalExpression(node)) return loggable(node.whenTrue) && loggable(node.whenFalse);
   return false;
 }
 
-/** Each `console` call whose arguments aren't all loggable, as its source text. */
 function unsafeLogCalls(source: string, fileName = 'example.ts'): string[] {
   const file = ts.createSourceFile(fileName, source, ts.ScriptTarget.Latest, true, fileName.endsWith('x') ? ts.ScriptKind.TSX : ts.ScriptKind.TS);
   const found: string[] = [];
@@ -39,7 +29,6 @@ function unsafeLogCalls(source: string, fileName = 'example.ts'): string[] {
         (ts.isPropertyAccessExpression(callee) || ts.isElementAccessExpression(callee)) && ts.isIdentifier(callee.expression) && callee.expression.text === 'console';
       if (isConsole && !node.arguments.every(loggable)) found.push(node.getText(file));
     }
-    // `console` handed on (console.log as a callback, `const log = console`) logs whatever it is given.
     if (ts.isIdentifier(node) && node.text === 'console' && !(ts.isPropertyAccessExpression(node.parent) || ts.isElementAccessExpression(node.parent))) {
       found.push(node.parent.getText(file));
     }
@@ -53,7 +42,6 @@ function unsafeLogCalls(source: string, fileName = 'example.ts'): string[] {
   return found;
 }
 
-/** Each `raise` in SQL that could put a value in the database log: anything but an exception with a fixed message. */
 function unsafeRaises(sql: string): string[] {
   const statements = sql.match(/\braise\b[^;]*;/gi) ?? [];
   return statements.filter((statement) => !/^raise\s+exception\s+'[^'%]*'(\s+using\s+(errcode|hint)\s*=\s*'[^'%]*'(\s*,\s*(errcode|hint)\s*=\s*'[^'%]*')*)?\s*;$/i.test(statement.replace(/\s+/g, ' ')));
@@ -67,7 +55,6 @@ async function filesUnder(directory: string, accept: (path: string) => boolean):
     .filter((path) => !path.includes('node_modules') && accept(path));
 }
 
-/** Shipped source: not tests, test harnesses, scripts or generated native projects. */
 const shipped = (path: string) =>
   /\.(ts|tsx)$/.test(path) &&
   !/\.test\.tsx?$|\.cases\.ts$|\.d\.ts$/.test(path) &&
@@ -103,7 +90,6 @@ describe('routine logs in shipped code', () => {
     const files = [
       ...(await filesUnder('apps/mobile/src', shipped)),
       ...(await filesUnder('apps/web/src', shipped)),
-      // The packages the app and backend ship. The harness and the runner are developer tools that print their own reports.
       ...(await filesUnder('packages', (path) => /^packages\/(account|engine|definitions)\/src\//.test(path) && shipped(path))),
       ...(await filesUnder('supabase/functions', shipped)),
     ];

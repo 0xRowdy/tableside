@@ -1,8 +1,4 @@
-// Seam 2: revisioned items, conflicts, tombstones and totals (#94), proven with
-// seam 2's test-only revisioned type (supabase/seed/test-record-types.sql) so
-// spec 4's casino sessions and private strategies inherit the behavior. Each
-// device runs the app's own SQLCipher store; faults are injected at the
-// network (fault proxy), never inside the Account service.
+// #94
 
 import { afterEach, describe, expect, it } from 'vitest';
 
@@ -29,7 +25,6 @@ function device(name: string): SimulatedDevice {
 }
 afterEach(() => devices.splice(0).forEach((d) => d.dispose()));
 
-/** A phone that created an account, and a tablet (and, if asked, a laptop) signed in to it. */
 async function devicesOnOneAccount(count: 2 | 3 = 2) {
   const email = uniqueEmail('revisioned');
   const phone = device('phone');
@@ -38,7 +33,6 @@ async function devicesOnOneAccount(count: 2 | 3 = 2) {
   expect(await signInByEmail(tablet, email)).toEqual({ status: 'signed-in' });
   let laptop: SimulatedDevice | null = null;
   if (count === 3) {
-    // A third code request for the address, beyond the two #88 admits at once.
     await localStack().resetCodeRequests();
     laptop = device('laptop');
     expect(await signInByEmail(laptop, email)).toEqual({ status: 'signed-in' });
@@ -55,13 +49,11 @@ const view = async (d: SimulatedDevice, item = 'item-1'): Promise<RevisionedItem
 const accepted = async (d: SimulatedDevice, item = 'item-1') => (await view(d, item))?.accepted;
 const installation = (d: SimulatedDevice) => d.vault.store().identity.installationId;
 
-/** Brings every device current: each uploads, then each fetches what the others uploaded. */
 async function syncAll(all: readonly SimulatedDevice[]) {
   for (const d of all) await d.account.sync.reconcile();
   for (const d of all) await d.account.sync.reconcile();
 }
 
-/** An item every device holds at revision 1. */
 async function sharedItem(all: readonly SimulatedDevice[], value = session('10')) {
   await all[0]!.account.records.save(TYPE, 'item-1', value);
   await syncAll(all);
@@ -73,21 +65,17 @@ function accessToken(d: SimulatedDevice): string {
     try {
       const token = (JSON.parse(value) as { access_token?: unknown }).access_token;
       if (typeof token === 'string') return token;
-    } catch {
-      // Not the session.
-    }
+    } catch {}
   }
   throw new Error(`${d.name} holds no session`);
 }
 
-/** The account's totals as the server keeps them. */
 async function serverTotals(d: SimulatedDevice): Promise<TotalsRow[]> {
   const { data, error } = await localStack().rawClient(accessToken(d)).rpc('account_totals_v1');
   if (error) throw new Error(error.message);
   return (data as { totals: TotalsRow[] }).totals;
 }
 
-/** The whole feed, as a device's own credentials read it. */
 async function rawFeed(d: SimulatedDevice): Promise<unknown[]> {
   const { data } = await localStack().rawClient(accessToken(d)).rpc('sync_feed_v1', { after: 0, page_size: 100 });
   return (data as { entries: unknown[] }).entries;
@@ -111,7 +99,6 @@ describe('an edit names its base revision', () => {
         accepted: { revision: 2, deleted: false, value: session('-5/2'), conflict: null },
       });
     }
-    // The edit replaced the item's contribution: one record, the new amount, exactly.
     expect(await serverTotals(phone)).toEqual([casino('-5/2')]);
   });
 
@@ -122,7 +109,6 @@ describe('an edit names its base revision', () => {
     phone.proxy.dropNextResponse('sync_upload_v1');
     await phone.account.records.save(TYPE, 'item-1', session('20'));
     await phone.account.sync.idle();
-    // Sent, answer lost: the next edit follows it.
     await phone.account.records.save(TYPE, 'item-1', session('30'));
     await syncAll(all);
 
@@ -140,19 +126,15 @@ describe('a stale competing edit', () => {
     await tablet.account.records.save(TYPE, 'item-1', session('-30'));
     await laptop.account.records.save(TYPE, 'item-1', session('45'));
 
-    // The phone reaches the account first: R1 to R2.
     phone.proxy.online = true;
     await phone.account.sync.idle();
     expect(await accepted(phone)).toEqual({ revision: 2, deleted: false, value: session('20'), conflict: null });
 
-    // The tablet's edit from R1 is stale: a proposal, with R2 frozen as the baseline.
     tablet.proxy.online = true;
     await tablet.account.sync.idle();
-    // The laptop's acknowledgement comes later still (its clock far ahead): one more proposal, the same baseline.
     laptop.clock.advance(7 * 24 * 60 * 60 * 1000);
     laptop.proxy.online = true;
     await laptop.account.sync.idle();
-    // Even an edit made from R2 itself waits while the conflict is open.
     await phone.account.sync.reconcile();
     await phone.account.records.save(TYPE, 'item-1', session('25'));
     await syncAll(all);
@@ -166,14 +148,12 @@ describe('a stale competing edit', () => {
         { id: expect.any(String), kind: 'edit', installation: installation(phone), value: session('25') },
       ]);
     }
-    // The baseline counts exactly once; no proposal counts.
     for (const d of all) expect((await d.account.records.totals()).account).toEqual([casino('20')]);
     expect(await serverTotals(phone)).toEqual([casino('20')]);
   });
 });
 
 describe('resolving a conflict', () => {
-  /** A phone holding a conflict on item-1: baseline R2 (the phone's), the tablet's proposal; the laptop's edit still offline. */
   async function conflicted() {
     const devicesHere = await devicesOnOneAccount(3);
     const { phone, tablet, laptop, all } = devicesHere;
@@ -208,7 +188,6 @@ describe('resolving a conflict', () => {
     const reviewed = (await accepted(phone))!.conflict!;
     expect(reviewed.proposals.map((p) => p.value)).toEqual([session('-778/3')]);
 
-    // The laptop's proposal arrives while the phone is deciding.
     laptop.proxy.online = true;
     await laptop.account.sync.idle();
     const stale = await phone.account.records.resolve(TYPE, 'item-1', { generation: reviewed.generation, reviewed: reviewed.proposals.map((p) => p.id), value: session('20') });
@@ -218,7 +197,6 @@ describe('resolving a conflict', () => {
     expect(changed?.generation).toBeGreaterThan(reviewed.generation);
     expect((await accepted(phone))?.revision).toBe(2);
 
-    // Reviewed again: the phone keeps its own value, with a correction.
     const resolved = await phone.account.records.resolve(TYPE, 'item-1', {
       generation: changed!.generation,
       reviewed: changed!.proposals.map((p) => p.id),
@@ -229,7 +207,6 @@ describe('resolving a conflict', () => {
     for (const d of all) expect(await accepted(d)).toEqual({ revision: 3, deleted: false, value: session('21/2'), conflict: null });
     expect(await serverTotals(tablet)).toEqual([casino('21/2')]);
 
-    // The rejected payloads are gone from the account's feed: only their receipts remain.
     const feed = JSON.stringify(await rawFeed(phone));
     expect(feed).not.toContain('-778/3');
     expect(feed).not.toContain('-888/5');
@@ -254,7 +231,6 @@ describe('resolving a conflict', () => {
     await phone.account.records.save(TYPE, 'item-1', session('20'));
     await tablet.account.records.save(TYPE, 'item-1', session('-778/3'));
     await phone.account.sync.idle();
-    // The tablet's proposal reaches the account, but its answer is lost: keep the exact request it sent.
     tablet.proxy.online = true;
     tablet.proxy.dropNextResponse('sync_upload_v1');
     await tablet.account.sync.idle();
@@ -286,7 +262,6 @@ describe('deletion', () => {
     expect(await accepted(phone)).toEqual({ revision: 2, deleted: true, value: null, conflict: null });
     expect(await serverTotals(phone)).toEqual([]);
 
-    // The tablet edited before it learned of the deletion.
     await tablet.account.records.save(TYPE, 'item-1', session('15'));
     tablet.proxy.online = true;
     await syncAll(all);
@@ -298,7 +273,6 @@ describe('deletion', () => {
     }
     expect(await serverTotals(phone)).toEqual([]);
 
-    // Explicit recovery, after review.
     const { conflict } = (await accepted(phone))!;
     expect(await phone.account.records.resolve(TYPE, 'item-1', { generation: conflict!.generation, reviewed: conflict!.proposals.map((p) => p.id), value: session('15') })).toEqual({
       status: 'resolved',
@@ -376,7 +350,6 @@ describe('conflicts apply only to revisioned items', () => {
     const raw = localStack().rawClient(accessToken(phone));
     const gate = phone.account.gate;
     if (gate.state !== 'active') throw new Error('unreachable');
-    // The phone's own installation: the server takes uploads only from the caller's registered installation.
     const installation = phone.vault.store().identity.installationId;
     const commands = await directCommands(raw, installation);
     const request = (operation: string, netResult: string) =>

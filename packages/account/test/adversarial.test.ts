@@ -1,5 +1,4 @@
-// Seam 2 adversarial cases (#84): a raw client calls the stack directly, with
-// no Account service in between, and is denied wherever the contract says.
+// #84
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
@@ -32,7 +31,6 @@ async function issueAssertion(client: SupabaseClient, range = '18+'): Promise<st
 const devices: SimulatedDevice[] = [];
 afterEach(() => devices.splice(0).forEach((d) => d.dispose()));
 
-/** An active account, and a raw client signed in to it by email code. */
 async function signedInAccount(label: string) {
   const email = uniqueEmail(label);
   const device = createDevice(stack, { name: label });
@@ -128,9 +126,7 @@ describe('creating an Auth user', () => {
     expect(await mailbox.messages(email)).toHaveLength(before);
   });
 
-  // GoTrue v2.188 answers `otp_disabled` for an unknown address before any hook
-  // runs, and a refused send for a known one, so a raw caller can still tell
-  // them apart (no email is sent either way). Handed to launch gate 3 (#109).
+  // #109
   it.todo('Auth’s own code endpoint answers the same for an address with an account and one without');
 
   it('is refused for a password sign-up without an assertion', async () => {
@@ -174,12 +170,10 @@ describe('reading accounts', () => {
 
   it('a client cannot write account state, currency or eligibility', async () => {
     await a.client.from('accounts').update({ state: 'deleted' }).eq('account_id', a.accountId);
-    // The currency changes only through set_account_currency_v1, which checks for casino sessions.
     await a.client.from('accounts').update({ currency: 'EUR' }).eq('account_id', a.accountId);
     await a.client.from('eligibility').update({ band: '13-15' }).eq('account_id', a.accountId);
     expect((await a.client.from('eligibility').insert({ account_id: b.accountId, band: '18+', source: 'declaration', checked_at: new Date().toISOString(), policy_version: 1 })).error).not.toBeNull();
     expect((await a.client.rpc('current_account')).data).toEqual({ account_id: a.accountId, eligibility: '18+', source: 'declaration', currency: 'USD' });
-    // The operation changes only the caller's own account.
     expect((await a.client.rpc('set_account_currency_v1', { new_currency: 'JPY' })).data).toEqual({ status: 'changed' });
     expect((await b.client.rpc('current_account')).data).toMatchObject({ currency: 'USD' });
   });
@@ -205,15 +199,13 @@ describe('the authorization gate', () => {
     await stack.sql`update public.accounts set state = 'deletion_scheduled', deletion_deadline = now() + interval '30 days', deletion_scheduled_at = now() where account_id = ${a.accountId}`;
     expect((await a.client.from('accounts').select('account_id')).data).toEqual([]);
     expect((await a.client.from('eligibility').select('account_id')).data).toEqual([]);
-    // Its restricted paths stay (#103): the current account answers, with the deadline, and grants no records.
+    // #103
     expect((await a.client.rpc('current_account')).data).toMatchObject({ account_id: a.accountId, deletion_deadline: expect.any(String) });
     expect((await bucket.download(`${a.accountId}/before.txt`)).error).not.toBeNull();
     expect((await bucket.upload(`${a.accountId}/after.txt`, 'denied')).error).not.toBeNull();
   });
 
-  // #101: signed out from another device. Export delivery (#102), grant
-  // issuance (spec 5) and publication (spec 6) don't exist yet; they go
-  // through the same gate (private.active_account / signed_in_account).
+  // #101; #102
   it('denies a device signed out from another device on every path, while its access token is unexpired', async () => {
     const email = uniqueEmail('revoked-device');
     const phone = createDevice(stack, { name: 'revoked-phone' });
@@ -239,13 +231,11 @@ describe('the authorization gate', () => {
     await phone.account.freshAuthentication.withCode(await mailbox.latestCode(email, { after: before }));
     expect(await phone.account.devices.signOutOthers()).toMatchObject({ status: 'signed-out', devices: 1 });
 
-    // RLS tables and storage.
     expect((await stale.from('accounts').select('account_id')).data).toEqual([]);
     expect((await stale.from('eligibility').select('account_id')).data).toEqual([]);
     expect((await bucket.download(`${accountId}/before.txt`)).error).not.toBeNull();
     expect((await bucket.upload(`${accountId}/after.txt`, 'denied')).error).not.toBeNull();
     expect((await bucket.list(accountId)).data ?? []).toEqual([]);
-    // Sync: uploads, staged chunks, the feed, the live connection's claim, totals.
     const payload = { activityId: 'activity-1', device: installation, endedAt: 2, finalCashOut: '1010', game: 'roulette', netResult: '10', owner: accountId, recordVersion: 1, startedAt: 1 };
     const request = JSON.stringify({ installation, item: 'activity-1', operation: '8'.repeat(32), payload, payloadVersion: 1, protocol: 1, recordType: 'completed-practice-session' });
     expect((await stale.rpc('sync_upload_v1', { request })).error).not.toBeNull();
@@ -253,7 +243,6 @@ describe('the authorization gate', () => {
     expect((await stale.rpc('sync_feed_v1', { after: 0 })).error).not.toBeNull();
     expect((await stale.rpc('realtime_claim_v1')).error).not.toBeNull();
     expect((await stale.rpc('account_totals_v1')).data ?? null).toBeNull();
-    // Account operations, the restricted paths among them.
     expect((await stale.rpc('current_account')).data).toBeNull();
     expect((await stale.rpc('account_summary_v1')).data).toBeNull();
     expect((await stale.rpc('devices_v1')).data).toBeNull();
@@ -263,7 +252,6 @@ describe('the authorization gate', () => {
     expect((await stale.rpc('record_eligibility_v1', { band: '18+', source: 'declaration' })).error).not.toBeNull();
     expect((await stale.rpc('set_account_currency_v1', { new_currency: 'EUR' })).error).not.toBeNull();
     expect((await stale.rpc('register_device_v1', { installation, secret: null, platform: 'ios', label: 'again' })).error).not.toBeNull();
-    // The functions acting for a player.
     for (const name of ['fresh-auth', 'link-method', 'revoke-devices']) {
       const response = await fetch(`${stack.url}/functions/v1/${name}`, {
         method: 'POST',
@@ -273,7 +261,6 @@ describe('the authorization gate', () => {
       await response.body?.cancel();
       expect(response.status).toBe(401);
     }
-    // Its refresh token was revoked with it.
     const stored = JSON.parse(tablet.credentials.items.get(`tableside.${tablet.environment}.auth`)!) as { refresh_token: string };
     expect((await rawClient().auth.refreshSession({ refresh_token: stored.refresh_token })).error).not.toBeNull();
   });
@@ -289,7 +276,6 @@ describe('the authorization gate', () => {
 });
 
 describe('privacy choices (#105)', () => {
-  /** A device signed in to a new account of an age band, and a raw client holding its session. */
   async function rawAccount(label: string, band: '18+' | '16-17' | '13-15' = '18+') {
     const device = createDevice(stack, { name: label });
     devices.push(device);
@@ -298,12 +284,10 @@ describe('privacy choices (#105)', () => {
     if (gate.state !== 'active') throw new Error('account setup failed');
     const raw = rawClient(accessToken(device));
     const installation = device.vault.store().identity.installationId;
-    // While the account has ordinary access: a later change to its eligibility denies the scope operation too.
     return { accountId: gate.accountId, raw, installation, commands: await directCommands(raw, installation) };
   }
 
   let next = 0;
-  /** Sends one privacy change directly, as a modified client could. */
   async function send(account: Awaited<ReturnType<typeof rawAccount>>, payload: Record<string, unknown>) {
     const choiceId = (payload.choiceId as string | undefined) ?? (++next).toString(16).padStart(32, 'e');
     const { request } = prepareOperation({
@@ -339,7 +323,6 @@ describe('privacy choices (#105)', () => {
     const owing = await rawAccount('owes-check');
     expect((await owing.raw.rpc('record_age_check_v1', { age_check: 'pending' })).data).toEqual({ status: 'recorded' });
     await stack.sql`update public.eligibility set band = 'unresolved', source = 'declaration' where account_id = ${owing.accountId}`;
-    // Another session on the account: a raw client signed in by email code.
     const email = (await stack.sql<{ email: string }[]>`select u.email from auth.users u join public.accounts a on a.auth_user_id = u.id where a.account_id = ${owing.accountId}`)[0]!.email;
     const previous = await mailbox.latestCode(email);
     await stack.requestCode({ email, intent: 'sign-in' });
@@ -348,10 +331,8 @@ describe('privacy choices (#105)', () => {
     for (const source of ['declaration', 'platform-signal']) {
       expect((await second.rpc('record_eligibility_v1', { band: '18+', source })).data).toMatchObject({ accepted: false, eligibility: 'unresolved' });
     }
-    // Its own record_age_check_v1 clears nothing but its own (it has none: it never registered).
     expect((await second.rpc('record_age_check_v1', { age_check: null })).data).toEqual({ status: 'not-registered' });
     expect((await second.rpc('record_eligibility_v1', { band: '18+', source: 'declaration' })).data).toMatchObject({ accepted: false });
-    // The installation that owes the check resolves it with its own platform's range.
     expect((await owing.raw.rpc('record_eligibility_v1', { band: '16-17', source: 'platform-signal' })).data).toMatchObject({ accepted: true, eligibility: '16-17' });
     expect(await stack.sql`select age_check from private.installations where account_id = ${owing.accountId} and age_check is not null`).toHaveLength(0);
   });
@@ -396,7 +377,6 @@ describe('privacy choices (#105)', () => {
     expect((await send(adult, { change: 'grant-analytics', basis: 0 })).data).toMatchObject({ status: 'accepted' });
     expect((await send(adult, { change: 'withdraw-analytics' })).data).toMatchObject({ status: 'accepted' });
     expect((await send(adult, { change: 'limit-ad-data', source: 'in-app' })).data).toMatchObject({ status: 'accepted' });
-    // Replayed from before withdrawing consent and limiting ad data: the basis is the grant's own starting point.
     expect((await send(adult, { change: 'grant-analytics', basis: 0 })).data).toMatchObject({ status: 'rejected', code: 'stale' });
     expect((await send(adult, { change: 'allow-ad-data', basis: 0 })).data).toMatchObject({ status: 'rejected', code: 'stale' });
     expect(await stack.sql`select analytics_consent, ad_data_opt_out_source from private.privacy_choices where account_id = ${adult.accountId}`).toEqual([

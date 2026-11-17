@@ -1,6 +1,5 @@
-// A minimal zip writer for the export archive: each file deflated (the
-// runtime's CompressionStream), with CRC-32 and sizes in the local headers,
-// one central directory and no zip64, so archives stay under 4 GiB. UTF-8 names.
+const UTF8_NAMES_FLAG = 0x0800;
+const DEFLATE_METHOD = 8;
 
 const CRC_TABLE = (() => {
   const table = new Uint32Array(256);
@@ -23,7 +22,6 @@ async function deflate(bytes: Uint8Array<ArrayBuffer>): Promise<Uint8Array> {
   return new Uint8Array(await new Response(stream).arrayBuffer());
 }
 
-/** DOS date and time of `at`, UTC. */
 function dosTime(at: Date): { readonly time: number; readonly date: number } {
   return {
     time: (at.getUTCHours() << 11) | (at.getUTCMinutes() << 5) | Math.floor(at.getUTCSeconds() / 2),
@@ -51,8 +49,8 @@ export async function zip(entries: readonly ZipEntry[], at: Date): Promise<Uint8
     const l = new DataView(local.buffer);
     l.setUint32(0, 0x04034b50, true);
     l.setUint16(4, 20, true);
-    l.setUint16(6, 0x0800, true); // UTF-8 names
-    l.setUint16(8, 8, true); // deflate
+    l.setUint16(6, UTF8_NAMES_FLAG, true);
+    l.setUint16(8, DEFLATE_METHOD, true);
     l.setUint16(10, time, true);
     l.setUint16(12, date, true);
     l.setUint32(14, crc, true);
@@ -65,8 +63,8 @@ export async function zip(entries: readonly ZipEntry[], at: Date): Promise<Uint8
     c.setUint32(0, 0x02014b50, true);
     c.setUint16(4, 20, true);
     c.setUint16(6, 20, true);
-    c.setUint16(8, 0x0800, true);
-    c.setUint16(10, 8, true);
+    c.setUint16(8, UTF8_NAMES_FLAG, true);
+    c.setUint16(10, DEFLATE_METHOD, true);
     c.setUint16(12, time, true);
     c.setUint16(14, date, true);
     c.setUint32(16, crc, true);

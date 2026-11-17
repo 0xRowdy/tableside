@@ -1,8 +1,3 @@
-// Substitutes for the account vault's device ports in tests: a keychain that
-// can be locked, real files under a temporary root that remember which
-// directories were excluded from backup, and a test device putting them
-// together with real SQLCipher (Node).
-
 import { randomBytes, randomUUID } from 'node:crypto';
 import { closeSync, copyFileSync, existsSync, fsyncSync, mkdirSync, mkdtempSync, openSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -15,7 +10,6 @@ import type { SqlConnection, SqlDriver, SqlExecutor } from '../sql';
 import type { StoreMigration } from '../store-schema';
 import { nodeSqlCipherDriver } from './node-sqlcipher';
 
-/** A device keychain. While `locked`, it answers nothing, as iOS does for a device-only entry on a locked device. */
 export class FakeKeychain implements VaultKeyStore {
   locked = false;
   private readonly values = new Map<string, string>();
@@ -50,16 +44,13 @@ export class FakeKeychain implements VaultKeyStore {
     this.values.set(name, value);
   }
 
-  /** Removes an entry behind the vault's back (a lost key). */
   forget(name: string): void {
     this.values.delete(name);
   }
 }
 
 export interface NodeVaultFiles extends VaultFiles {
-  /** Every file under the root, including the ones SQLite writes beside a database. */
   written(): string[];
-  /** The directories the vault asked to exclude from backup and device transfer. */
   excluded(): string[];
 }
 
@@ -107,7 +98,6 @@ export function nodeVaultFiles(root: string): NodeVaultFiles {
   };
 }
 
-/** The device died: the process was killed, and this operation never reached the disk. */
 export class DeviceKilled extends Error {
   constructor() {
     super('the device was killed');
@@ -115,11 +105,6 @@ export class DeviceKilled extends Error {
   }
 }
 
-/**
- * One device: its keychain and files survive across vault instances (app
- * restarts). Every file operation and database statement it makes counts as
- * one operation, so a test can kill it at any of them (`killAt`).
- */
 export class TestDevice {
   readonly root = mkdtempSync(join(tmpdir(), 'tableside-vault-'));
   keychain = new FakeKeychain();
@@ -129,23 +114,15 @@ export class TestDevice {
   private death: number | null = null;
   private refused = false;
 
-  /**
-   * The device dies at its `count`-th operation from now: that one and every
-   * later one fail with DeviceKilled, as nothing more of a killed process
-   * reaches the disk. An open transaction is rolled back, as a kill leaves it.
-   * The files stay for the next "restart" once `revive` is called.
-   */
   killAt(count: number): void {
     this.death = this.operations + count;
     this.refused = false;
   }
 
-  /** Whether the device died: an operation was refused since `killAt`. */
   get killed(): boolean {
     return this.refused;
   }
 
-  /** The device restarts: operations reach the disk again. */
   revive(): void {
     this.death = null;
     this.refused = false;
@@ -179,7 +156,6 @@ export class TestDevice {
     };
   }
 
-  /** The driver as this device runs it: opening, each statement, a WAL checkpoint and each commit are operations. */
   private dyingDriver(driver: SqlDriver): SqlDriver {
     const statements = (tx: SqlExecutor): SqlExecutor => ({
       run: (sql, params) => Promise.resolve().then(() => this.operation()).then(() => tx.run(sql, params)),
@@ -194,7 +170,6 @@ export class TestDevice {
           transaction: (work) =>
             connection.transaction(async (tx) => {
               const result = await work(statements(tx));
-              // The commit: a kill before it rolls the transaction back.
               this.operation();
               return result;
             }),
@@ -209,7 +184,6 @@ export class TestDevice {
     };
   }
 
-  /** The device's vault, as a build carrying `migrations` (this build's when absent) opens it. */
   vault(environment: EnvironmentName = 'production', driver: SqlDriver = nodeSqlCipherDriver(), migrations?: readonly StoreMigration[]): AccountVault {
     return new AccountVault({
       ...(migrations ? { migrations } : {}),
@@ -223,7 +197,6 @@ export class TestDevice {
     });
   }
 
-  /** The device unlocks: the keychain answers again and the vault hears about it. */
   unlock(): void {
     this.keychain.locked = false;
     const waiters = this.unlockWaiters;
@@ -235,11 +208,6 @@ export class TestDevice {
     return this.unlockWaiters.length;
   }
 
-  /**
-   * Leaves an account database as an earlier build of this installation did:
-   * the installation's identity, the account's key (its database made) and the
-   * database file, which `fill` writes through a keyed connection.
-   */
   async leaveDatabase(
     identity: { readonly environment: string; readonly accountId: string; readonly installationId: string },
     fill: (connection: SqlConnection) => Promise<void>,
@@ -260,7 +228,6 @@ export class TestDevice {
     }
   }
 
-  /** Deletes the device's files. */
   remove(): void {
     rmSync(this.root, { recursive: true, force: true });
   }

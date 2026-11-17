@@ -1,6 +1,3 @@
-// The completed practice session's registration and the upload envelope.
-// Expected hashes come from Node's own SHA-256, not the engine's.
-
 import { createHash } from 'node:crypto';
 
 import type { CompletedPracticeSessionRecord } from '@tableside/engine';

@@ -7,7 +7,6 @@ import type { LaunchGame } from '@/games';
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
 import { fonts, palette, space, textScale } from '@/theme/tokens';
 
-/** `contentInset` keeps the text clear of notches and rounded corners while the photo runs edge to edge. */
 export function GameCard({
   game,
   onPress,
@@ -30,7 +29,7 @@ export function GameCard({
       style={({ pressed }) => [styles.card, style, pressed && styles.pressed]}
     >
       <Image source={game.image} contentFit="cover" accessible={false} style={StyleSheet.absoluteFill} />
-      {/* Text sits on a solid scrim band, so it meets text contrast over any photo at any text size. */}
+      {/* docs/decisions/mobile-device-support-accessibility.md Q1–Q9 */}
       <View style={[styles.content, { paddingLeft: CONTENT_PADDING + contentInset.left, paddingRight: CONTENT_PADDING + contentInset.right }]}>
         <LinearGradient colors={[palette.transparent, palette.scrim]} style={styles.fade} />
         <Text maxFontSizeMultiplier={textScale.body} style={styles.summary}>{game.summary}</Text>

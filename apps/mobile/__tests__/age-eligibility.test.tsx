@@ -1,7 +1,4 @@
-// Seam 3: every age state (#90, S2-15) as the player meets it, through the real
-// routes and the accessibility tree, over Account-service fakes: the platform
-// age check and its fallback on Create, unresolved before any account exists,
-// and the gate's restricted states with their paths and retry.
+// #90; spec 2 S2-15
 
 import type { AccountGate } from '@tableside/account';
 import { act, cleanup, fireEvent, screen, waitFor } from '@testing-library/react-native';
@@ -27,7 +24,6 @@ beforeAll(async () => {
   for (const method of ['log', 'info', 'warn', 'error', 'debug'] as const) {
     jest.spyOn(console, method).mockImplementation((...args: unknown[]) => void logged.push(args));
   }
-  // The first render transforms the route tree; pay that once.
   await renderRouter('./src/app', { initialUrl: '/' });
   await cleanup();
 }, 180_000);
@@ -54,7 +50,6 @@ const header = (name: string | RegExp) => screen.findByRole('header', { name });
 const button = (name: string | RegExp) => screen.getByRole('button', { name });
 const noTabBar = () => expect(screen.queryByTestId('tab-bar')).toBeNull();
 
-/** Every accessibility label and text on screen, for checking what a screen reader could read out. */
 function everythingSpoken(): string[] {
   const out: string[] = [];
   type Node = typeof screen.root;
@@ -74,7 +69,6 @@ async function startCreate(platformAgeCheck: boolean) {
   await openApp();
   await header('Tableside');
   service().platformAgeCheck = platformAgeCheck;
-  // Welcome → I'm new here → Continue: the age step.
   await fireEvent.press(screen.getByRole('radio', { name: "I'm new here" }));
   await fireEvent.press(button('Continue'));
 }
@@ -126,7 +120,7 @@ describe('the Create path’s age step', () => {
     expect(screen.getByText(/No account was created and nothing was kept/)).toBeOnTheScreen();
     noTabBar();
     await fireEvent.press(button('Contact support. Ask about confirming your age'));
-    // Amendment 9 §1: every restricted screen links to both support paths.
+    // Spec 2 Amendment 9 §1
     await fireEvent.press(button('Make a privacy request. See, correct, delete or get a copy of your data'));
     expect(account().opened).toEqual(['contact-support', 'privacy-request']);
     expect(screen.queryByRole('button', { name: /Delete account|Export my data/ })).toBeNull();
@@ -160,7 +154,6 @@ describe('an account whose age is unresolved', () => {
     ];
     for (const path of paths) await fireEvent.press(button(path));
     expect(account().opened).toEqual(['contact-support', 'billing-help', 'export', 'delete-account', 'privacy-request']);
-    // Billing help, never a purchase.
     expect(screen.queryByText(/Premium|Subscribe|Buy|Upgrade/)).toBeNull();
   });
 
@@ -176,7 +169,6 @@ describe('an account whose age is unresolved', () => {
     await fireEvent.press(button('Continue'));
 
     await waitFor(() => expect(screen.getByTestId('tab-bar')).toBeOnTheScreen());
-    // A restricted account renews its token first, for its restricted paths.
     expect(service().calls.map((call) => call.method).filter((method) => method !== 'renew')).toEqual(['resume', 'checkAge', 'answerAgeQuestion']);
     expect(service().calls[1]).toEqual({ method: 'renew' });
   });

@@ -4,7 +4,6 @@ import { StyleSheet, Text } from 'react-native';
 import { Screen } from './Screen';
 import { fonts, palette, textScale } from '@/theme/tokens';
 
-/** Stands in for a destination that a later part of the app builds. */
 export function Placeholder({ title, message, children }: { title: string; message: string; children?: ReactNode }) {
   return (
     <Screen>

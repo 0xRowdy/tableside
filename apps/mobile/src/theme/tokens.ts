@@ -1,7 +1,3 @@
-// Tableside design tokens, from the "Design System — Tableside" variables in
-// design/Tableside.pen. The app is dark-only for launch; every color is named
-// here so a light theme can be added later by supplying another palette.
-
 export const palette = {
   background: '#0E1311',
   foreground: '#F3EFE6',
@@ -32,11 +28,9 @@ export const palette = {
   chip100: '#1D1F22',
   chip500: '#6A3FA0',
   chip1k: '#D99A2B',
-  // Wheel pockets share the chip hues in the design, but are their own tokens.
   pocketRed: '#B83A33',
   pocketBlack: '#1D1F22',
   pocketGreen: '#2E7D4F',
-  // Playing cards: a light face with four-colour suits, so suits differ by glyph and colour.
   cardFace: '#FBF8F1',
   suitSpade: '#15171A',
   suitHeart: '#C8312F',
@@ -47,12 +41,7 @@ export const palette = {
 
 export type ColorToken = keyof typeof palette;
 
-/**
- * Foreground/background pairs that carry essential information, with the
- * contrast each must meet: 4.5:1 for text, 3:1 for graphics and control
- * boundaries. The contrast test checks every pair; add a pair when a component
- * starts relying on one.
- */
+// docs/development.md Accessibility notes for the shell
 export const essentialPairs: readonly {
   use: string;
   kind: 'text' | 'graphic';
@@ -150,7 +139,6 @@ export const essentialPairs: readonly {
 export const space = { 1: 4, 2: 8, 3: 12, 4: 16, 6: 24, 8: 32, 12: 48, 16: 64 } as const;
 export const radius = { sm: 6, md: 10, lg: 16, card: 20, pill: 999 } as const;
 
-/** Font family names as loaded in the root layout. */
 export const fonts = {
   display: 'Fraunces_400Regular',
   ui: 'Inter_400Regular',
@@ -158,12 +146,7 @@ export const fonts = {
   uiBold: 'Inter_700Bold',
 } as const;
 
-/**
- * How far text may grow with system text size, from the design's largest-text
- * frames. Display headings stop at 1.5× so words don't break; body text reaches
- * 2× and reflows. Tab labels don't scale at all (see TabBar).
- */
 export const textScale = { display: 1.5, body: 2 } as const;
 
-/** Minimum touch target: 44 pt on iOS, 48 dp on Android. The larger serves both. */
+// docs/decisions/mobile-device-support-accessibility.md Q1–Q9
 export const MIN_TOUCH_TARGET = 48;

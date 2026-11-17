@@ -1,7 +1,3 @@
-// Seam 3: suspending, resuming and the access-ended stop as the player sees
-// them, through the real routes on the in-memory adapters and the
-// accessibility tree. Spins come from the Random123 "pi digits" stream: 27 (red), 0.
-
 import { act, cleanup, fireEvent, screen, waitFor } from '@testing-library/react-native';
 import { renderRouter } from 'expo-router/testing-library';
 import { AccessibilityInfo } from 'react-native';
@@ -12,11 +8,6 @@ import type { FakeClock, substituteAdapters } from '@/practice/testing/substitut
 
 type Adapters = ReturnType<typeof substituteAdapters>;
 
-/**
- * The app runs on the substitute adapters over one durable in-memory disk, so a
- * second render is the app relaunching. A test may script the supervisor or
- * hold the clock.
- */
 const mockApp: {
   latest: Adapters | null;
   disk: unknown;
@@ -69,7 +60,6 @@ async function betRed25() {
   await screen.findByLabelText('Session balance 975');
 }
 
-/** The app closes and opens again on the same durable data, landing on Home. */
 async function relaunch() {
   await cleanup();
   await renderRouter('./src/app', { initialUrl: '/' });
@@ -220,7 +210,6 @@ describe('the account gate closing mid-turn (#90)', () => {
     await waitFor(() => expect(clock.pending).toBeGreaterThan(0));
 
     await act(() => account().service.setGate({ state: 'age-unresolved', accountId: 'account-1', reason: 'check-pending' }));
-    // The turn in progress is still on screen.
     expect(screen.queryByRole('header', { name: "We couldn't confirm your age" })).toBeNull();
     expect(screen.getByLabelText(/^Session balance/)).toBeOnTheScreen();
 

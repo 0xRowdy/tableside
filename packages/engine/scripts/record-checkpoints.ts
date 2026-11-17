@@ -1,13 +1,4 @@
-// Records this build's unfinished-activity checkpoints for update-compatibility
-// testing (#80):
-//
-//   pnpm --filter @tableside/engine record-checkpoints [--replace]
-//
-// It writes test/recorded/engine-<ENGINE_VERSION>-schema-<STATE_SCHEMA_VERSION>.ts.
-// While that build is unreleased, --replace re-records it (its behaviour may
-// still change). When the build is released, its recording's SHA-256 goes in
-// test/recorded/released.json; from then on it is never regenerated, edited or
-// removed. A new recording must be added to test/recorded/index.ts.
+// #80 docs/development.md Releases: recorded checkpoints and the quarantine list
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -43,7 +34,6 @@ interface Scenario {
   readonly name: string;
   readonly specification: ActivitySpecification;
   readonly random: RandomStreamIdentity;
-  /** Commands that leave the activity unfinished in the phase under test. */
   readonly commands: readonly Command[];
 }
 
@@ -64,7 +54,6 @@ const SCENARIOS: Scenario[] = [
     random: PI,
     commands: [place('red', '50'), BEGIN, { kind: 'override-correction' }, SETTLE],
   },
-  // Key [1, 0] rolls a six first: the point is on, the pass line is committed.
   { name: 'craps, a point established', specification: CRAPS_SPEC, random: { ...ZERO, key: [1, 0] }, commands: [place('pass', '10'), place('field', '5'), BEGIN, SETTLE] },
   {
     name: 'craps guided, Stop strategy with the pass line contract settling',
@@ -81,7 +70,6 @@ const SCENARIOS: Scenario[] = [
   },
 ];
 
-/** The next command toward completion: settle what is revealed or a strategy left, resolve guidance, then stop and settle finally. */
 function nextCommand(state: ActivityState): Command {
   const view = readPermittedView(state);
   const legal = view.legalCommands;
@@ -140,7 +128,7 @@ if (existsSync(target) && !process.argv.includes('--replace')) throw new Error(`
 const build: RecordedBuild = { engine: ENGINE_VERSION, schema: STATE_SCHEMA_VERSION, checkpoints: SCENARIOS.map(record) };
 writeFileSync(
   target,
-  `// Recorded by scripts/record-checkpoints.ts with engine ${ENGINE_VERSION}, state schema ${STATE_SCHEMA_VERSION}. Never edit or remove.\n` +
+  '// docs/development.md Releases: recorded checkpoints and the quarantine list\n' +
     `import type { RecordedBuild } from './index';\n\n` +
     `export const ${exportName}: RecordedBuild = ${JSON.stringify(build, null, 2)};\n`,
 );

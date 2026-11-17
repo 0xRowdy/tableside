@@ -1,8 +1,3 @@
-// Seam 2, durability: "saved before shown" under failure injection, with the
-// practice controller on substitute adapters. A restart is a new controller
-// over a reopened in-memory store (same durable data, nothing in flight).
-// Spin outcomes come from the Random123 "pi digits" stream: 27 (red), then 0.
-
 import { createActivity, encodeCheckpoint, readPermittedView, decodeCheckpoint, type DomainFact, type RoulettePermittedView } from '@tableside/engine';
 import { SINGLE_ZERO_ROULETTE } from '@tableside/definitions';
 
@@ -13,7 +8,6 @@ import { FakeClock, PI_WORDS, substituteAdapters } from '@/practice/testing/subs
 
 type Adapters = ReturnType<typeof setup>['adapters'];
 
-/** A supervisor that charges one turn of allowance for every turn, as spec 5's turn metering will. */
 const chargingAccess: AccessSupervisor = {
   ...alwaysAllowed,
   beforeActivity: async () => ({ status: 'allowed', provenance: 'test', meteringBasis: 'turns' }),
@@ -26,13 +20,11 @@ function setup(clock = new FakeClock(undefined, true)) {
   return { adapters, store: adapters.store, clock, controller };
 }
 
-/** The app restarts: a new controller over the same durable data. */
 function restarted(adapters: Adapters, clock = new FakeClock(undefined, true)) {
   const store = adapters.store.reopen();
   return { controller: new PracticeController({ ...adapters, store, clock }), store };
 }
 
-/** Restarts, then resumes the session the launch found suspended, and waits for it to settle down. */
 async function restart(adapters: Adapters) {
   const next = restarted(adapters);
   await next.controller.load();
@@ -51,7 +43,6 @@ async function waitFor(condition: () => boolean): Promise<void> {
   if (!condition()) throw new Error('condition never held');
 }
 
-/** Every fact the store committed for an activity, in sequence order. */
 async function committedFacts(store: ActivityStore, activityId: string): Promise<DomainFact[]> {
   const stored = await store.load(activityId);
   const facts: DomainFact[] = [];
@@ -65,14 +56,12 @@ async function committedFacts(store: ActivityStore, activityId: string): Promise
 
 const settlements = (facts: DomainFact[]) => facts.filter((fact) => fact.kind === 'wager-settled');
 
-// Red 10 on 27 (red) wins 10.
 const TURN_1_CHARGE = { effectId: { grant: 'grant-1', activity: 'activity-1', sequence: 1 }, kind: 'turn-charge', amount: '1' };
 const RED_WINS = { kind: 'wager-settled', turn: 1, target: 'red', stake: '10', result: 'win', net: '10', returned: '20' };
 
 describe('a command delivered twice', () => {
   it('takes effect once, charges once, and the controller shows the committed result', async () => {
     const { adapters, store } = setup();
-    // A store link that delivers every commit twice, answering with the second delivery.
     const twice: ActivityStore = new Proxy(store, {
       get(target, property, receiver) {
         if (property === 'commitTransition') {
@@ -142,7 +131,6 @@ describe('a save failure', () => {
       await waitFor(() => attempts === retry + 1 && clock.pending === 1);
       expect(active(controller.snapshot())).toMatchObject({ save: 'failed', view: { phase: 'open-decision', outcome: null } });
     }
-    // Input waits too: nothing is accepted while the last move isn't saved.
     await controller.placeWager('black', '20');
     expect(active(controller.snapshot()).view.wagers).toEqual([{ target: 'red', amount: '10' }]);
 
@@ -168,13 +156,6 @@ describe('a save failure', () => {
 });
 
 describe('failure injection before and after each commit and acknowledgement', () => {
-  // The script: place red 10 (commit 1), spin (2), settle (3), end session (4),
-  // final settlement (5), then complete. A failure before writing pauses at its
-  // commit and the remaining script steps are ignored while paused; a lost
-  // acknowledgement is resolved from the receipt and the script carries on.
-  // Recovery is then a retry or a restart, and the session is ended if it is
-  // still open. Each case must show one settlement effect for the spin if it
-  // happened, and one final result.
   const cases = [1, 2, 3, 4, 5].flatMap((commit) =>
     (['before', 'after', 'after-unread'] as const).flatMap((when) => (['retry', 'restart'] as const).map((recovery) => ({ commit, when, recovery }))),
   );
@@ -188,7 +169,6 @@ describe('failure injection before and after each commit and acknowledgement', (
     store.commitTransition = (transition) => {
       if (++commits === commit) {
         store.failNext('commitTransition', when === 'before' ? 'before' : 'after');
-        // The acknowledgement is lost and so is the receipt read: whether it committed is unknown.
         if (when === 'after-unread') store.failNext('readReceipt', 'before');
       }
       return original(transition);
@@ -207,8 +187,6 @@ describe('failure injection before and after each commit and acknowledgement', (
     }
     if (recovered.snapshot().status === 'active') await recovered.endSession();
 
-    // The spin happened unless play paused before it (at place-wager), or its
-    // commit never reached the store and the app restarted.
     const spun = when === 'after' || commit > 2 || (commit === 2 && (when === 'after-unread' || recovery === 'retry'));
     const outgoing = await durable.readOutgoing();
     expect(outgoing).toHaveLength(1);
@@ -232,7 +210,6 @@ describe('failure injection before and after each commit and acknowledgement', (
     store.failNext('complete', when);
 
     await controller.endSession();
-    // A lost acknowledgement is resolved by reading the result back; a failed write pauses.
     expect(controller.snapshot().status === 'completed').toBe(when === 'after');
     let durable: ActivityStore = store;
     if (recovery === 'retry') {
@@ -241,7 +218,6 @@ describe('failure injection before and after each commit and acknowledgement', (
     } else {
       const restarted = await restart(adapters);
       durable = restarted.store;
-      // A completed session isn't resumed; one that wasn't recorded yet completes on launch.
       expect(restarted.controller.snapshot().status).toBe(when === 'after' ? 'none' : 'completed');
     }
 
@@ -260,7 +236,6 @@ describe('restarts', () => {
     await controller.spin();
     expect(active(controller.snapshot()).view.outcome).toBeNull();
 
-    // The reveal animation never ran; the committed reveal is what resumes.
     const clock = new FakeClock(undefined, false);
     const { controller: relaunched, store } = restarted(adapters, clock);
     await relaunched.load();
@@ -305,7 +280,7 @@ describe('restarts', () => {
 
     expect(active(restarted.snapshot()).view).toMatchObject({ phase: 'settled-outcome', balance: '1010', wagers: [] });
     await restarted.placeWager('red', '10');
-    await restarted.spin(); // 0: red loses
+    await restarted.spin();
     expect(active(restarted.snapshot()).view.balance).toBe('1000');
     expect(settlements(await committedFacts(store, 'activity-1'))).toEqual([
       RED_WINS,
@@ -319,7 +294,6 @@ describe('restarts', () => {
     controller.subscribe(() => {
       const snapshot = controller.snapshot();
       if (snapshot.status !== 'active') return;
-      // Queued behind every write issued before this publish, and ahead of every later one.
       checks.push(
         store.load(snapshot.view.activityId).then((stored) => {
           const decoded = stored && decodeCheckpoint(stored.checkpoint);
@@ -343,7 +317,6 @@ describe('restarts', () => {
 describe('snapshots', () => {
   it('pin the rule content the session started with, not the current definitions', async () => {
     const { adapters } = setup();
-    // A session saved under rules whose outside minimum was 50, unlike today's 10.
     const rules = { ...SINGLE_ZERO_ROULETTE, limits: { ...SINGLE_ZERO_ROULETTE.limits, outside: { min: '50', max: '1000' } } };
     const random = { protocol: 1, key: [PI_WORDS[0], PI_WORDS[1]], session: [PI_WORDS[2], PI_WORDS[3]] } as const;
     const specification = { activityId: 'old', owner: 'local', device: 'test-device', game: 'roulette', rules, strategy: null, reference: null, fundingSource: 'practice-funding', funding: '1000' } as const;

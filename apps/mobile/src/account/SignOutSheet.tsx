@@ -1,7 +1,4 @@
-// S2-17 "Sign out of this device — unsynced records stay here": the sheet that
-// confirms signing out of this device only. An open practice session saves and
-// pauses, and unsynced records stay here, locked, for the same account.
-// TODO(frames): the copy with nothing waiting to sync is unverified against S2-17, which draws only the waiting case.
+// TODO(spec 2 S2-17)
 
 import { LogOut } from 'lucide-react-native';
 import { useState } from 'react';
@@ -17,7 +14,6 @@ export function SignOutSheet({ waiting, onClose }: { waiting: number; onClose: (
   const [signingOut, setSigningOut] = useState(false);
   const signOut = () => {
     setSigningOut(true);
-    // The gate moves to Signed out, and the app leaves for the locked screen.
     void service.signOut();
   };
   return (

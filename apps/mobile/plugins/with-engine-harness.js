@@ -1,9 +1,4 @@
-// Harness builds only (ENGINE_HARNESS=1 at prebuild). Ordinary builds are unchanged.
-// - Android: let the release app post its report to the development machine
-//   over cleartext HTTP on localhost, which `adb reverse` forwards.
-// - iOS: drop the Sign in with Apple entitlement an earlier ordinary prebuild
-//   left in the project, since Expo won't build a simulator app carrying it
-//   without a signing certificate (app.config.ts leaves it out for the harness).
+// docs/cross-runtime-harness.md How it works
 const { withAndroidManifest, withEntitlementsPlist } = require('expo/config-plugins');
 
 module.exports = function withEngineHarness(config) {

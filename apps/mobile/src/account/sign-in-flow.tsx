@@ -8,22 +8,16 @@ import { PROVIDERS } from './providers';
 
 interface SignInFlow {
   readonly intent: CodeIntent;
-  /** The address the code goes to. Held in memory only, never in a route or log. */
   readonly email: string;
-  /** The provider whose Sign in found no account, when Create continues from there. */
   readonly provider: IdentityProvider | null;
-  /** Sign in by email code: straight to the email step, never the age step. */
   startSignIn(): void;
-  /** Create: the age step first, then a sign-in method. */
   startCreate(): void;
-  /** Create from "No account for this Apple ID / Google account": the age step, then that identity's account. */
   createWith(provider: IdentityProvider): void;
   setEmail(email: string): void;
 }
 
 const SignInFlowContext = createContext<SignInFlow | null>(null);
 
-/** The first run's choices so far, shared by its screens. */
 export function SignInFlowProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<{ intent: CodeIntent; email: string; provider: IdentityProvider | null }>({
     intent: 'sign-in',
@@ -55,11 +49,6 @@ export function useSignInFlow(): SignInFlow {
   return flow;
 }
 
-/**
- * Asks for a code for the flow's address and intent. True when it was sent.
- * When the age answer has expired it goes back to the age step; otherwise it
- * hands `onProblem` what to tell the player.
- */
 export function useCodeRequest(onProblem: (problem: string) => void): (email: string) => Promise<boolean> {
   const { service } = useAccount();
   const flow = useSignInFlow();
@@ -75,7 +64,6 @@ export function useCodeRequest(onProblem: (problem: string) => void): (email: st
 const providerProblem = (provider: IdentityProvider) =>
   `Couldn't continue with ${PROVIDERS[provider].name}. Check your connection and try again, or use another way to sign in.`;
 
-/** A provider step a screen runs: busy while it runs, and what to tell the player if it failed. */
 export interface ProviderStep {
   run(provider: IdentityProvider): Promise<void>;
   readonly busy: boolean;
@@ -98,11 +86,6 @@ function useProviderStep(step: (provider: IdentityProvider) => Promise<'failed' 
   };
 }
 
-/**
- * Sign in with Apple or Google. Signed in: the layout moves on as the account
- * gate changes. No account: "No account for this Apple ID / Google account".
- * A closed sheet changes nothing.
- */
 export function useProviderSignIn(): ProviderStep {
   const { service } = useAccount();
   return useProviderStep(async (provider) => {
@@ -112,12 +95,6 @@ export function useProviderSignIn(): ProviderStep {
   });
 }
 
-/**
- * Create with Apple or Google, once the age step has passed: for the identity
- * a Sign in just found without an account, when this Create began there.
- * Created, or the identity's existing account: the layout moves on. An
- * expired age answer goes back to the age step.
- */
 export function useProviderCreate(): ProviderStep {
   const { service } = useAccount();
   const flow = useSignInFlow();

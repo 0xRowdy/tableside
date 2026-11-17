@@ -1,12 +1,3 @@
-// Fails when player copy in apps/mobile/src uses a term CONTEXT.md lists
-// under "Avoid". Copy is all JSX text, and string literals that read as words
-// (a space or a capital letter), so identifiers like 'alert' pass. Phrases in
-// glossary-copy-allowlist.json are final-frame copy and pass, matched exactly.
-//
-// Checked: avoided terms with no qualifier, or qualified "(as a term)". A
-// qualifier like "(unqualified)" or "(for craps or roulette)" needs the
-// sentence's context, so reviewers judge those (CODING_STANDARDS.md).
-
 import { readdirSync, readFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -16,16 +7,12 @@ import ts from 'typescript';
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const SOURCE = join(ROOT, 'apps/mobile/src');
 
-// Avoided only as the name of something the glossary names otherwise, so a
-// string can't tell: "Choose a game" is fine, a practice session called a game is not.
 const CONTEXTUAL = new Set(['game']);
 
 const glossary = readFileSync(join(ROOT, 'CONTEXT.md'), 'utf8');
 const escape = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-// A capitalised term is a name ("Plus"), matched by case; others match any case.
 const pattern = (term) => new RegExp(`\\b${escape(term)}\\b`, /^[A-Z]/.test(term) ? 'g' : 'gi');
 
-// Words inside a defined term ("training bankroll", "Pause") are that term, not the avoided word.
 const defined = [...glossary.matchAll(/^\*\*(.+?)\*\*:$/gm)].map(([, term]) => term);
 const avoided = [...glossary.matchAll(/^_Avoid_: (.+)$/gm)]
   .flatMap(([, list]) => list.split(/,(?![^(]*\))/))
@@ -34,7 +21,6 @@ const avoided = [...glossary.matchAll(/^_Avoid_: (.+)$/gm)]
   .map((match) => match[1]);
 
 const allowed = JSON.parse(readFileSync(join(ROOT, 'scripts/glossary-copy-allowlist.json'), 'utf8')).copy;
-// Allowlisted copy matches exactly; defined terms in any case.
 const passing = [...allowed.map((phrase) => [phrase, 'g']), ...defined.map((term) => [term, 'gi'])]
   .sort(([a], [b]) => b.length - a.length)
   .map(([phrase, flags]) => new RegExp(escape(phrase), flags));

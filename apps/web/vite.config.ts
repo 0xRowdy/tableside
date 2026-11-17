@@ -1,9 +1,4 @@
-// The web account page's build (#106). One backend per build, as for the app:
-// TABLESIDE_WEB_ENVIRONMENT, TABLESIDE_WEB_SUPABASE_URL (HTTPS outside local)
-// and TABLESIDE_WEB_SUPABASE_PUBLISHABLE_KEY are written into the page and its
-// Content Security Policy when it is built, and nothing at run time changes
-// them. `pnpm --filter @tableside/web dev` with none of them set uses this
-// checkout's local stack (TABLESIDE_STACK_SLOT picks the slot).
+// docs/development.md The web account page
 
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
@@ -14,7 +9,6 @@ import { defineConfig } from 'vite';
 
 const root = fileURLToPath(new URL('../..', import.meta.url));
 
-/** The running local stack's API URL and publishable key, from `supabase status`. */
 function localStack(): { url: string; publishableKey: string } {
   const slot = process.env.TABLESIDE_STACK_SLOT ?? '0';
   const workdir = slot === '0' ? root : join(root, '.stacks', slot);
@@ -36,7 +30,6 @@ export default defineConfig(({ command }) => {
     env.TABLESIDE_WEB_SUPABASE_URL = stack.url;
     env.TABLESIDE_WEB_SUPABASE_PUBLISHABLE_KEY = stack.publishableKey;
   }
-  // Refuses an incomplete backend, or plain HTTP outside local, before anything is built.
   const backend = backendEnvironment({
     name: env.TABLESIDE_WEB_ENVIRONMENT,
     url: env.TABLESIDE_WEB_SUPABASE_URL,

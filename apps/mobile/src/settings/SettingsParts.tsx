@@ -1,7 +1,3 @@
-// Building blocks of the More and Settings screens (design frames "More",
-// "Settings" and S1-12): the screen header with Back, list rows and the Sound
-// effects slider. The Haptics switch row is the shared SwitchRow component.
-
 import { ChevronLeft, ChevronRight, Volume1, Volume2, type LucideIcon } from 'lucide-react-native';
 import { useState, type ReactNode } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View, type GestureResponderEvent } from 'react-native';
@@ -11,7 +7,6 @@ import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
 import { volumeText } from '@/settings/summary';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/theme/tokens';
 
-/** A settings screen: header, then content that reflows and scrolls at any text size. */
 export function SettingsScreen({ title, back, children }: { title: string; back?: { label: string; onPress: () => void }; children: ReactNode }) {
   const insets = useSafeAreaInsets();
   return (
@@ -53,15 +48,10 @@ function BackButton({ label, onPress }: { label: string; onPress: () => void }) 
   );
 }
 
-/** A card holding rows or controls. */
 export function Group({ children }: { children: ReactNode }) {
   return <View style={styles.group}>{children}</View>;
 }
 
-/**
- * A row that opens a screen; without `onPress` it is information only. A
- * destructive row (Delete account) draws its icon and title in the destructive color.
- */
 export function ListRow({
   icon: Icon,
   title,
@@ -73,7 +63,6 @@ export function ListRow({
   icon: LucideIcon;
   title: string;
   detail?: string;
-  /** A short value before the chevron, such as a count. */
   value?: string;
   destructive?: boolean;
   onPress?: () => void;
@@ -116,13 +105,11 @@ export function ListRow({
   );
 }
 
-/** A row's parts as one spoken label: "Title. Detail. Value", with no doubled stop after a sentence. */
 function spoken(parts: readonly (string | undefined)[]): string {
   const present = parts.filter((part): part is string => part !== undefined);
   return present.map((part, index) => (index < present.length - 1 && !/[.?!]$/.test(part) ? `${part}.` : part)).join(' ');
 }
 
-/** A small capitalized heading over a group. */
 export function GroupLabel({ children }: { children: string }) {
   return (
     <Text accessibilityRole="header" maxFontSizeMultiplier={textScale.body} style={styles.groupLabel}>
@@ -141,12 +128,10 @@ export function Note({ children }: { children: string }) {
 
 const STEP = 10;
 
-/** A 0–100 volume slider where 0 is off: drag or tap the track, use the buttons, or the screen reader's adjust actions. */
 export function VolumeSlider({ label, value, onChange, help }: { label: string; value: number; onChange: (value: number) => void; help: string }) {
   const [trackWidth, setTrackWidth] = useState(0);
   const { focused, focusProps } = useKeyboardFocus();
   const valueText = volumeText(value);
-  // The settings store keeps the volume within 0–100.
   const step = (direction: 1 | -1) => onChange(value + direction * STEP);
   const fromTouch = (event: GestureResponderEvent) => {
     if (trackWidth > 0) onChange((event.nativeEvent.locationX / trackWidth) * 100);
@@ -174,7 +159,6 @@ export function VolumeSlider({ label, value, onChange, help }: { label: string; 
           onMoveShouldSetResponder={() => true}
           onResponderGrant={fromTouch}
           onResponderMove={fromTouch}
-          // Keep a horizontal drag on the track rather than handing it to the scroll view.
           onResponderTerminationRequest={() => false}
           style={[styles.track, focused && styles.focused]}
         >

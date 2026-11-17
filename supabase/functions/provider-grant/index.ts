@@ -1,23 +1,4 @@
-// Keep a revocable Apple or Google grant (spec 2, *Deletion*; #52 review):
-// after a sign-in, Create or link with a provider that gave the app an
-// authorization code, the app sends it here. It is exchanged for the
-// provider's refresh token, sealed (provider-grants.ts) and kept for the
-// identity, so permanent deletion can revoke it. Best effort: an account
-// works the same without one, and deletion then reports a provider exception.
-//
-// POST, with the caller's own access token as the bearer and naming its
-// backend environment in x-tableside-environment like every request:
-//   { provider, code, flow: 'native' | 'web', redirectUri? }
-// where a browser flow's redirectUri is the one its code was issued for: this
-// project's provider-callback for that provider (the exchange repeats it).
-// Answers:
-//   200 { status: 'held' }
-//   422 { status: 'unavailable' }      no grant settings for this provider here, or the provider refused the code
-//   403 { status: 'not-a-method' }     the code is for an identity that isn't one of this account's
-//   401 { status: 'not-signed-in' }
-//   400 { status: 'invalid' } | 502 { status: 'failed' }
-//
-// Nothing here logs a code, token or claim.
+// Spec 2 Deletion; #52
 
 import { callerOf } from '../_shared/caller.ts';
 import { withCors } from '../_shared/cors.ts';
@@ -35,7 +16,6 @@ Deno.serve(withCors(async (request) => {
     || (flow !== 'native' && flow !== 'web')) {
     return reply(400, { status: 'invalid' });
   }
-  // Only provider-callback, for this provider, ever receives a browser flow's code.
   const callback = typeof redirectUri === 'string' && new RegExp(`^https?://[^/?#]+/functions/v1/provider-callback\\?provider=${provider}$`).test(redirectUri) ? redirectUri : null;
   if (flow === 'web' && !callback) return reply(400, { status: 'invalid' });
   try {

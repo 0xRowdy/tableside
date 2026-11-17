@@ -1,7 +1,3 @@
-// The SQLCipher account store at seam 1: spec 1's store contract suite runs
-// unchanged against it (on Node SQLCipher here; on device the native test host
-// runs it), plus the additions spec 2 makes at the same seam.
-
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -17,7 +13,6 @@ import { completedRecord, describeActivityStoreContract, newActivity, transition
 import { FakeClock, substituteAdapters } from '@/practice/testing/substitutes';
 
 const KEY = 'ab'.repeat(32);
-/** The contract suite's activities name owner "local" on "test-device". */
 const CONTRACT_IDENTITY: StoreIdentity = { environment: 'test', accountId: 'local', installationId: 'test-device' };
 
 const directories: string[] = [];
@@ -41,11 +36,9 @@ async function openStore(path: string, identity = CONTRACT_IDENTITY, driver = no
 
 describeActivityStoreContract('the SQLCipher store', async () => {
   const path = databasePath();
-  // A restart is a second connection over the same file; the suite may keep using the first.
   return { store: await openStore(path), reopen: () => openStore(path) };
 });
 
-/** A second, raw connection to the file, as an outside party (or a damaged disk) would touch it. */
 function raw(path: string, key = KEY): Database.Database {
   const db = new Database(path);
   db.pragma(`cipher = 'sqlcipher'`);
@@ -97,9 +90,7 @@ describe('the SQLCipher store', () => {
     expect(outside.pragma('journal_mode', { simple: true })).toBe('wal');
     outside.close();
 
-    // A connection that can't use WAL (an in-memory database), or that ignores synchronous=FULL, is refused rather than used.
     await expect(openVerifiedConnection(rawOver(new Database(':memory:')))).rejects.toMatchObject({ kind: 'not-durable' });
-    // Some platform builds default to synchronous=NORMAL; this connection stays there.
     const normal = raw(databasePath());
     normal.pragma('synchronous = NORMAL');
     const ignoresFull = rawOver(normal);
@@ -187,7 +178,6 @@ describe('the SQLCipher store', () => {
     await controller.start({ game: 'roulette', buyIn: '1000', strategy: { definition: FLAT_EVEN_MONEY, parameters: { target: 'red' } } });
     const pinned = (await store.findUnfinished())?.specification;
     expect(pinned?.strategy).not.toBeNull();
-    // Other practice comes and goes around it.
     await store.createActivity(newActivity('other'));
     await store.complete(completedRecord('other'));
 

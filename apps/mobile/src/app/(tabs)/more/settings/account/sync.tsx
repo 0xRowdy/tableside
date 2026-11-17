@@ -1,4 +1,4 @@
-// S2-20 Sync status, opened from Settings → Account, over the Account service's sync.
+// Spec 2 S2-20
 
 import { router } from 'expo-router';
 
@@ -11,7 +11,7 @@ export default function SyncStatus() {
     <SyncStatusScreen
       sync={service.sync}
       onBack={() => router.dismissTo('/more/settings/account')}
-      // The store link arrives with the store listings (spec 7).
+      // TODO(spec 7)
       onUpdate={() => undefined}
     />
   );

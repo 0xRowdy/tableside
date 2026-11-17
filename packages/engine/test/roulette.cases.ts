@@ -1,17 +1,4 @@
-// The roulette game module: both wheels' layouts and the one-spin outcome
-// table. Expected values come from independent sources, not the module:
-// - placements and payouts: the launch rules (#3) and the Wizard of Odds
-//   payout table (straight 35, split 17, street/trio 11, corner/first four 8,
-//   six line 5, dozen/column 2, even money 1, five-number basket 6);
-// - zero-adjacent placements: Wikipedia "Roulette", inside bets (trio 0-1-2 on
-//   either layout, 0-2-3 single-zero only, 0-00-2 and 00-2-3 double-zero only;
-//   first four 0-1-2-3 single-zero only; top line 0-00-1-2-3 double-zero only),
-//   with zero splits to each number the zero pocket borders (0 spans 1-2-3 on
-//   the single-zero layout; 0 borders 1-2 and 00 borders 2-3 on the double-zero
-//   layout, with the 0-00 split between them);
-// - the published placement counts of the 36-number grid: 57 number splits,
-//   12 streets, 22 corners, 11 six lines;
-// - the red numbers of the standard layout.
+// #3
 import type { TestCase } from '@tableside/harness';
 
 import {
@@ -51,8 +38,6 @@ const inside = (kind: string, covers: readonly Pocket[], payout: string): Expect
 });
 const outside = (target: string, covers: readonly number[], payout: string): Expected => ({ target, covers, payout, limitClass: 'outside' });
 
-// The 36-number grid's placements, written out from the standard layout
-// (three columns, 1-2-3 in the first row, 34-35-36 in the last).
 const literal = (text: string) => text.split(' ').map((set) => set.split(/[-,]/).map(Number));
 const NUMBER_SPLITS = literal(
   '1-2 1-4 2-3 2-5 3-6 4-5 4-7 5-6 5-8 6-9 7-8 7-10 8-9 8-11 9-12 10-11 10-13 11-12 11-14 12-15 13-14 13-16 14-15 ' +
@@ -72,7 +57,6 @@ const SIX_LINES = literal(
 const DOZENS = literal('1,2,3,4,5,6,7,8,9,10,11,12 13,14,15,16,17,18,19,20,21,22,23,24 25,26,27,28,29,30,31,32,33,34,35,36');
 const COLUMNS = literal('1,4,7,10,13,16,19,22,25,28,31,34 2,5,8,11,14,17,20,23,26,29,32,35 3,6,9,12,15,18,21,24,27,30,33,36');
 
-/** Each layout's legal placements, from the literal grid above and the zero rules in the header. */
 function expectedLayout(wheel: RouletteWheel): Expected[] {
   const zeros: Pocket[] = wheel === 'single-zero' ? [0] : [0, '00'];
   const zeroSplits: Pocket[][] = wheel === 'single-zero' ? [[0, 1], [0, 2], [0, 3]] : [[0, '00'], [0, 1], [0, 2], ['00', 2], ['00', 3]];
@@ -159,7 +143,6 @@ export const rouletteCases: TestCase[] = [
           const losers = pockets.filter((pocket) => !expected.covers.includes(pocket));
           t.equal(
             table.map((group) => [group.net, group.pockets]),
-            // Groups are ordered by their first pocket in wheel order.
             pockets.indexOf(expected.covers[0] as Pocket) < pockets.indexOf(losers[0] as Pocket)
               ? [[payout, expected.covers], ['-1', losers]]
               : [['-1', losers], [payout, expected.covers]],
@@ -185,8 +168,6 @@ export const rouletteCases: TestCase[] = [
     name: 'roulette: the one-spin outcome table for a single-zero layout (red 10, straight 17 5) gives exact probabilities and nets',
     run: (t) => {
       const table = oneSpinOutcomeTable([{ target: 'red', amount: '10' }, { target: 'straight-17', amount: '5' }], 'single-zero');
-      // Worked by hand: 17 is black. Red wins on its 18 pockets (+10 - 5 = +5);
-      // 17 wins the straight and loses red (+175 - 10 = +165); the other 18 pockets lose both (-15).
       const black = NUMBERS.filter((n) => !RED.includes(n));
       t.equal(table, [
         { pockets: [0, ...black.filter((n) => n !== 17)], probability: '18/37', net: '-15' },
@@ -202,9 +183,6 @@ export const rouletteCases: TestCase[] = [
         [{ target: 'basket-0-00-1-2-3', amount: '10' }, { target: 'dozen-1', amount: '10' }, { target: 'straight-00', amount: '1' }],
         'double-zero',
       );
-      // Worked by hand over 38 pockets:
-      // 0: basket +60, dozen -10, 00 -1 = +49.   00: +60 - 10 + 35 = +85.
-      // 1-3: +60 + 20 - 1 = +79.   4-12: -10 + 20 - 1 = +9.   13-36: -21.
       t.equal(table, [
         { pockets: [0], probability: '1/38', net: '49' },
         { pockets: ['00'], probability: '1/38', net: '85' },
@@ -240,7 +218,6 @@ export const rouletteCases: TestCase[] = [
     },
   },
 
-  // ---- through the engine interface --------------------------------------
   {
     name: 'roulette: an activity runs either wheel, and refuses rules whose id, version and wheel disagree',
     run: (t) => {
@@ -256,7 +233,6 @@ export const rouletteCases: TestCase[] = [
       const outcomes: Record<string, number> = { win: 0, loss: 0 };
       for (const wheel of ['single-zero', 'double-zero'] as const) {
         for (const [index, expected] of expectedLayout(wheel).entries()) {
-          // A different stream per placement, so the spun pockets vary.
           const stream = { ...STREAM, session: [index, wheel === 'single-zero' ? 1 : 2] as [number, number] };
           const stake = expected.limitClass === 'inside' ? 3n : 10n;
           const { state, facts } = run(createActivity({ ...SPEC, rules: RULES[wheel], funding: '100' }, stream), [
@@ -272,7 +248,6 @@ export const rouletteCases: TestCase[] = [
           outcomes[won ? 'win' : 'loss'] = (outcomes[won ? 'win' : 'loss'] ?? 0) + 1;
         }
       }
-      // Both branches are exercised across the layouts.
       t.equal([(outcomes.win ?? 0) > 20, (outcomes.loss ?? 0) > 20], [true, true]);
       t.record('outcomes', outcomes);
     },
@@ -280,7 +255,6 @@ export const rouletteCases: TestCase[] = [
   {
     name: 'roulette: on a double-zero spin of 00, the 00 straight and the basket win and even-money bets lose in full',
     run: (t) => {
-      // The pi-digits stream's double-zero spins are 3, 29, 0, 26, 18, 4, 29, 35, 24, 00 (draws.cases).
       let state = createActivity({ ...SPEC, rules: DOUBLE_ZERO }, STREAM);
       for (let turn = 1; turn <= 9; turn++) state = run(state, [place('red', '10'), BEGIN, SETTLE]).state;
       const { facts } = run(state, [

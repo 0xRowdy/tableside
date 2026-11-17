@@ -1,7 +1,4 @@
-// The SQLCipher account store's upload queue and feed (#91), at seam 1: the
-// sync engine's store port on the same database and writer as spec 1's port.
-// Faults are injected at the driver: a failed write rolls its transaction
-// back, as a kill before the commit would.
+// #91
 
 import { createHash } from 'node:crypto';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -16,7 +13,6 @@ import Database from 'better-sqlite3-multiple-ciphers';
 
 const KEY = 'cd'.repeat(32);
 const IDENTITY: StoreIdentity = { environment: 'test', accountId: 'local', installationId: 'test-device' };
-/** SHA-256("abc"), FIPS 180-2 appendix B.1. */
 const ABC_SHA256 = 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad';
 const OPERATION = { operationId: '0123456789abcdef0123456789abcdef', request: 'abc', requestHash: ABC_SHA256 };
 
@@ -27,7 +23,6 @@ afterAll(async () => {
   directories.forEach((directory) => rmSync(directory, { recursive: true, force: true }));
 });
 
-/** A device's database file, with a disk that can be made to fail writes. */
 function newDisk() {
   const directory = mkdtempSync(join(tmpdir(), 'tableside-queue-'));
   directories.push(directory);
@@ -38,7 +33,6 @@ function newDisk() {
       IDENTITY,
     );
     opened.push(store);
-    // As the sync engine does before it prepares anything: the server's generation for this installation.
     await store.adoptCommandScope(1);
     return store;
   };
@@ -118,7 +112,6 @@ describe('the upload queue', () => {
 
     const disposition = { status: 'accepted', operation: OPERATION.operationId, requestHash: ABC_SHA256, sequence: 7 } as const;
     await store.acknowledgeUpload('completed/a1', disposition, { recordType: 'completed-practice-session', item: 'a1', sequence: 7, payload: record });
-    // A repeated answer (a duplicated response) changes nothing more.
     await store.acknowledgeUpload('completed/a1', disposition, { recordType: 'completed-practice-session', item: 'a1', sequence: 7, payload: record });
 
     expect(await store.readUploadQueue()).toEqual([]);
@@ -305,7 +298,6 @@ describe('entries other than completions (#95)', () => {
     expect((await store.queueUpload(operation('w-1'))).position).toBeUndefined();
     expect((await store.queueUpload(operation('a-2', { positioned: true }))).position).toBe(2);
 
-    // Acknowledged entries leave the queue; their positions stay taken.
     await store.prepareUpload('a-2', () => OPERATION);
     await store.acknowledgeUpload('a-2', { status: 'accepted', operation: OPERATION.operationId, requestHash: ABC_SHA256, sequence: 1 }, null);
     await store.close();
@@ -382,7 +374,6 @@ describe('command scopes (#98)', () => {
     positioned: false,
     purges: null,
   });
-  /** An operation for the command it is given: what the engine's envelope does. */
   const asCommand = (digit: string) => (command: { generation: number; position: number }) => {
     const request = `${digit}:${command.generation}:${command.position}`;
     return { operationId: digit.repeat(32), request, requestHash: createHash('sha256').update(request).digest('hex') };
@@ -397,7 +388,6 @@ describe('command scopes (#98)', () => {
     await store.queueUpload(entry('w-1'));
     await store.queueUpload(entry('w-2'));
     await store.queueUpload(entry('w-3'));
-    // Queued, not prepared: no position yet, so an entry replaced or removed before sending leaves no gap.
     expect(await commands(store)).toEqual([
       ['w-1', undefined],
       ['w-2', undefined],
@@ -405,7 +395,6 @@ describe('command scopes (#98)', () => {
     ]);
     await store.prepareUpload('w-2', asCommand('2'));
     await store.prepareUpload('w-1', asCommand('1'));
-    // A preparation that fails uses no position.
     await expect(store.prepareUpload('w-3', () => { throw new Error('too large'); })).rejects.toThrow('too large');
     await store.close();
     const restarted = await open();
@@ -439,17 +428,14 @@ describe('command scopes (#98)', () => {
     for (const id of ['w-1', 'w-2', 'w-3']) await store.queueUpload(entry(id));
     await store.queueUpload(entry('c-1', ['w-3']));
     for (const [id, digit] of [['w-1', '1'], ['w-2', '2'], ['w-3', '3']] as const) await store.prepareUpload(id, asCommand(digit));
-    // Positions 1 and 3 acknowledged, 2 still waiting: the gap holds the marker at 1.
     await accept(store, 'w-1', '1', '1:1:1', 1);
     await accept(store, 'w-3', '3', '3:1:3', 2);
     expect(await store.readCommandScope()).toEqual({ generation: 1, last: 3, settled: 1 });
-    // 2 acknowledged: 3 is still named by c-1, which hasn't been sent.
     await accept(store, 'w-2', '2', '2:1:2', 3);
     expect(await store.readCommandScope()).toEqual({ generation: 1, last: 3, settled: 2 });
     await store.prepareUpload('c-1', asCommand('4'));
     expect(await store.readCommandScope()).toEqual({ generation: 1, last: 4, settled: 2 });
     await accept(store, 'c-1', '4', '4:1:4', 4);
-    // A position given but never sent (a resolution whose answer never came) is settled once nothing pending is below it.
     await store.allocateCommand();
     expect(await store.readCommandScope()).toEqual({ generation: 1, last: 5, settled: 5 });
   });
@@ -461,7 +447,6 @@ describe('command scopes (#98)', () => {
     await store.prepareUpload('w-1', asCommand('1'));
     await accept(store, 'w-1', '1', '1:1:1', 1);
     expect((await store.readUploadQueue())[0]?.after).toEqual(['1'.repeat(32)]);
-    // The server refuses every earlier generation's command, and has dropped its receipts.
     await store.adoptCommandScope(2);
     expect((await store.readUploadQueue())[0]?.after).toBeUndefined();
   });
@@ -493,10 +478,8 @@ describe('command scopes (#98)', () => {
         unconfirmed: true,
       },
     ]);
-    // The entry sent anew is a new operation, at a new position.
     await store.adoptCommandScope(2);
     expect(await store.prepareUpload('unsent', asCommand('5'))).toMatchObject({ operationId: '5'.repeat(32), request: '5:2:1' });
-    // Setting aside keeps it, with the refused ones; only an unconfirmed entry can be.
     await expect(store.reconcileUpload('unsent', { kind: 'set-aside' })).rejects.toThrow(StoreError);
     await store.reconcileUpload('unknown', { kind: 'set-aside' });
     expect(await store.readRejectedUploads()).toEqual([{ id: 'unknown', recordType: 'sharing-withdrawal', payload: { id: 'unknown' }, code: 'set-aside' }]);
@@ -504,7 +487,6 @@ describe('command scopes (#98)', () => {
   });
 });
 
-/** A device's database with no command generation adopted yet: a new database, before the engine asks for one. */
 function newDiskWithoutScope() {
   const directory = mkdtempSync(join(tmpdir(), 'tableside-queue-'));
   directories.push(directory);

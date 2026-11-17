@@ -1,10 +1,4 @@
-// Roulette session setup (design frame S1-02 XQukd): free play or guided
-// practice, either wheel, editable inside and outside limits, the house edge
-// of the wheel's rules and a fresh buy-in. Guided practice picks a built-in
-// strategy (or, from spec 4, one of My strategies) and fixes its targets
-// before the start. The engine judges whether the strategy fits the table as
-// edited; an incompatible pairing is refused naming the requirement, never
-// adjusted (S4-13), and opening bets the funds can't cover are explained (tUFpp).
+// Spec 1 S1-02
 
 import {
   explainPrescription,
@@ -50,11 +44,6 @@ const WHEELS: readonly { wheel: RouletteWheel; label: string }[] = [
   { wheel: 'double-zero', label: 'Double zero (0, 00)' },
 ];
 
-/**
- * What the strategy's first spin bets at this table, with funds to spare so
- * the whole opening shows, from the engine's Explain prescription. Null when
- * it opens with no bet.
- */
 function strategyOpening(strategy: StrategyDefinition, parameters: Record<string, string>, rules: RouletteSituation['rules']): Opening | null {
   const situation: RouletteSituation = { game: 'roulette', rules, balance: FUNDING_CEILING.toString(), lastPocket: null };
   const explained = explainPrescription(strategy, parameters, situation, initialProgress(strategy));
@@ -73,7 +62,6 @@ export function RouletteSetup({
   problem: StartProblem | null;
   problemReason?: string | null;
   busy: boolean;
-  /** The latest saved revision of each runnable private roulette strategy (spec 4). */
   myStrategies?: readonly StrategyDefinition[];
 }) {
   const { controller } = usePractice();
@@ -85,7 +73,6 @@ export function RouletteSetup({
   const accepted = limits.accepted;
   const rules = accepted ? rouletteRules(wheel, accepted) : null;
   const guided = mode === 'guided';
-  // Compatibility is judged at the table as edited, once its limits are good.
   const fit = guided && rules ? strategyTableCompatibility(strategy, choices, rules) : null;
   let opening: Opening | null = null;
   if (rules && !guided) opening = { kind: 'table', amount: smallerUnits(rules.limits.inside.min, rules.limits.outside.min) };
@@ -96,7 +83,7 @@ export function RouletteSetup({
     setChoices(strategyDefaults(next));
   };
 
-  // Under a limit the strategy's bets fall outside (S4-13 YwrCf).
+  // Spec 4 S4-13
   const limitNote = (group: Group): string | null => {
     const layout = rouletteLayout(wheel);
     const failed = fit?.requirements.find(
@@ -186,7 +173,6 @@ export function RouletteSetup({
   );
 }
 
-/** The plain-language requirement a table fails. */
 function requirementText(strategy: StrategyDefinition, requirement: TableRequirement): string {
   const limit = limitRequirementText(strategy, requirement, ROULETTE_WORDS);
   if (limit) return limit;
@@ -202,10 +188,6 @@ function requirementText(strategy: StrategyDefinition, requirement: TableRequire
   }
 }
 
-/**
- * The strategy's targets, fixed for the cycle once play starts. A parameter
- * that must differ from another can't take that one's choice.
- */
 function StrategyParameters({
   definition,
   choices,

@@ -1,37 +1,23 @@
-// Blackjack strategy definitions for the engine-interface cases, written by
-// hand from the published six-deck S17, double-after-split, late-surrender
-// basic strategy (Wizard of Odds, "4-8 decks" instructions) and from the
-// certified S17 curriculum as spec #51 states it (16 vs 10 stand at +1; T,T vs
-// 5 and 6 split at +5; 12 vs 3 stand at +2; 10 vs 10 double at +4; 13 vs 2
-// stand at 0 and hit below; 14 vs 10 surrender at +4; 15 vs 10 surrender at 0;
-// insurance at +3). The certified tables themselves are checked against the
-// engine in the definitions package. Rows: one letter per up card A, 2..9, 10.
+// Spec 1 Game rules
+// docs/development.md Blackjack reference
 import type { BlackjackDeviation, BlackjackPlayPolicy, StrategyDefinition, StrategyInstruction } from '../src';
 
 const H = 'HHHHHHHHHH';
 const S = 'SSSSSSSSSS';
 const P = 'PPPPPPPPPP';
 
-/** Hard 4-20 on the original two cards. */
 const HARD = [H, H, H, H, H, 'HHDDDDHHHH', 'HDDDDDDDDH', 'HDDDDDDDDD', 'HHHSSSHHHH', 'HSSSSSHHHH', 'HSSSSSHHHH', 'HSSSSSHHHR', 'RSSSSSHHRR', S, S, S, S];
-/** Soft 12-20 (A,A to A,9). */
 const SOFT = [H, 'HHHHDDHHHH', 'HHHHDDHHHH', 'HHHDDDHHHH', 'HHHDDDHHHH', 'HHDDDDHHHH', 'HSDDDDSSHH', S, S];
-/** Pairs A,A to T,T. */
 const PAIR = [P, 'HPPPPPPHHH', 'HPPPPPPHHH', 'HHHHPPHHHH', 'HDDDDDDDDH', 'HPPPPPHHHH', 'HPPPPPPHHH', P, 'SPPPPPSPPS', S];
 
-/** A row with each letter replaced as `map` says. */
 const swap = (row: string, map: Record<string, string>) => [...row].map((c) => map[c] ?? c).join('');
 const rows = (list: readonly string[], map: Record<string, string>) => list.map((row) => swap(row, map));
 
-/** Soft 18 (A,7) doubles else stands; every other double falls back to a hit. */
 const withoutDouble = (list: readonly string[], soft18?: number) => list.map((row, i) => swap(row, i === soft18 ? { D: 'S' } : { D: 'H', P: 'H', R: 'H' }));
 
-/** Split unavailable by rule: aces stand, eights play hard 16 (stand against 2-6), other pairs as their hard total. */
 const SPLIT_BY_RULE = ['SSSSSSSSSS', H, H, H, 'HDDDDDDDDH', 'HSSSSSHHHH', 'HSSSSSHHHH', 'HSSSSSHHHH', 'SSSSSSSSSS', S];
-/** Split unaffordable (so is the double): aces hit soft 12, eights surrender against 9, 10 and A. */
 const SPLIT_BY_BALANCE = [H, H, H, H, H, 'HSSSSSHHHH', 'HSSSSSHHHH', 'RSSSSSHHRR', 'SSSSSSSSSS', S];
 
-/** Later decisions: hard 4-21, soft 12-21, with no surrender. */
 const LATER_HARD = [...rows(HARD, { R: 'H' }), S];
 const LATER_SOFT = [...SOFT, S];
 
@@ -117,20 +103,12 @@ const definition = (id: string, name: string, play: BlackjackPlayPolicy, instruc
   play,
 });
 
-/** Basic strategy: the play is assessed, the initial wager is the player's. */
 export const TEST_BASIC = definition('test-blackjack-basic', 'Basic strategy', TEST_POLICY);
-/** Basic with deviations: Tableside supplies the count. */
 export const TEST_DEVIATING = definition('test-blackjack-deviations', 'Basic with deviations', { ...TEST_POLICY, count: 'supplied', deviations: TEST_DEVIATIONS });
-/** Counting with basic: the player keeps the count; basic strategy doesn't depend on it. */
 export const TEST_COUNTING_BASIC = definition('test-blackjack-counting-basic', 'Counting with basic', { ...TEST_POLICY, count: 'player' });
-/** Counting with deviations: the player keeps the count; play is assessed against the actual count. */
 export const TEST_COUNTING_DEVIATING = definition('test-blackjack-counting-deviations', 'Counting with deviations', { ...TEST_POLICY, count: 'player', deviations: TEST_DEVIATIONS });
 
-/**
- * The Hi-Lo bet schedule as spec #51 states it, with a 10-unit base: below +1
- * one unit, +1 two, +2 four, +3 six, +4 or more eight. The highest band that
- * the integer true count reaches wins by priority.
- */
+// Spec 1 Game rules
 const band = (from: number | null, units: number): StrategyInstruction => ({
   id: from === null ? 'below-1' : `from-${from}`,
   label: from === null ? `Below +1: ${units} unit` : `+${from}${from === 4 ? ' or more' : ''}: ${units} units`,

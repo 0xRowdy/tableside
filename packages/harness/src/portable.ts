@@ -1,19 +1,13 @@
-// The portable half of the cross-runtime harness. It runs unchanged on Node and
-// inside the app on iOS and Android Hermes, so it uses only standard JavaScript:
-// no Node, React Native or timer APIs.
+// docs/cross-runtime-harness.md How it works
 
 export interface Runtime {
-  /** The JavaScript engine that ran the suite (not the game engine). */
   jsEngine: 'node' | 'hermes' | 'other';
   platform: 'node' | 'ios' | 'android' | 'other';
-  /** Engine version, with the OS version where one applies. */
   version: string;
 }
 
 export interface TestContext {
-  /** Fails the case unless both values have the same canonical encoding. */
   equal(actual: unknown, expected: unknown): void;
-  /** Adds an output that every runtime must reproduce exactly. */
   record(label: string, value: unknown): void;
 }
 
@@ -31,7 +25,6 @@ export interface CaseResult {
   name: string;
   status: 'pass' | 'fail';
   error?: string;
-  /** `label=canonical JSON`, in recording order. */
   outputs: string[];
 }
 
@@ -79,11 +72,6 @@ function describeError(error: unknown): string {
   return String(error);
 }
 
-/**
- * Serializes a value with sorted object keys and tagged BigInts. Values whose
- * encoding could differ between runtimes (non-finite numbers, undefined,
- * functions, symbols, class instances) are rejected rather than coerced.
- */
 export function canonicalJson(value: unknown): string {
   switch (typeof value) {
     case 'string':

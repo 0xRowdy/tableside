@@ -1,6 +1,4 @@
-// Chunked results on the client (spec 2, *Chunked results*, #93): an upload
-// too large for one request is sent as a manifest of bounded, content-hashed
-// chunks, and every request body stays within the request limit.
+// Spec 2 Chunked results; #93
 
 import { createHash } from 'node:crypto';
 
@@ -25,7 +23,6 @@ function envelope(payload: unknown) {
   };
 }
 
-/** A payload whose canonical text is at least `size` bytes, of the given characters. */
 const payloadOf = (size: number, unit = 'x') => ({ detail: unit.repeat(Math.ceil(size / bytes(unit))) });
 
 describe('an upload that fits in one request', () => {
@@ -49,7 +46,6 @@ describe('an upload too large for one request', () => {
   });
 
   it('splits the payload’s exact text into bounded chunks that rejoin to it, truncating nothing', () => {
-    // ASCII text: one byte per character, so the chunks are its 48 KiB slices.
     expect(chunks.map((chunk) => chunk.data)).toEqual([0, 1, 2, 3].map((index) => text.slice(index * CHUNK_BYTES, (index + 1) * CHUNK_BYTES)));
     expect(chunks.map((chunk) => chunk.data).join('')).toBe(text);
     for (const chunk of chunks) {
@@ -79,9 +75,6 @@ describe('an upload too large for one request', () => {
 
 describe('the request limit', () => {
   it('bounds every request body, even for text that doubles when escaped', () => {
-    // Quotes and backslashes escape to two bytes inside a JSON string: the worst case; multi-byte
-    // text is the other. Sizes: one request when escaping doubles it to just under the limit, just
-    // past the limit, and several chunks. (Plain ASCII is the easy case, covered above.)
     for (const unit of ['"', '\\', 'é', '🂡']) {
       for (const size of [REQUEST_LIMIT_BYTES / 2 - 200, REQUEST_LIMIT_BYTES, 2 * REQUEST_LIMIT_BYTES + 1]) {
         const payload = payloadOf(size, unit);

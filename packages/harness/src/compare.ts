@@ -2,7 +2,6 @@ import type { Report, Runtime } from './portable';
 
 export type Leg = Pick<Runtime, 'jsEngine' | 'platform'>;
 
-/** The three runtimes the engine ships on: the Node runner and the app's bundled Hermes. */
 export const LAUNCH_LEGS: readonly Leg[] = [
   { jsEngine: 'node', platform: 'node' },
   { jsEngine: 'hermes', platform: 'ios' },
@@ -16,10 +15,6 @@ export interface Verdict {
 
 const legName = (leg: Leg) => `${leg.jsEngine}/${leg.platform}`;
 
-/**
- * Compares reports of the same suite from different runtimes. The first report
- * is the reference. Any failed case, missing case or differing output fails.
- */
 export function compareReports(reports: readonly Report[], options: { requiredLegs?: readonly Leg[] } = {}): Verdict {
   const problems: string[] = [];
 

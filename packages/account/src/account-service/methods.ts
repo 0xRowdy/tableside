@@ -1,6 +1,5 @@
-// Confirm it's you and sign-in methods (S2-18): adding Apple, Google or the
-// email code, removing one, and Secure Email Change. Every change needs Confirm
-// it's you first, and the account always keeps a method.
+// Spec 2 S2-18
+// docs/account-service.md Supabase Auth
 
 import { freshCodeAnswer, freshProviderAnswer } from '../lifecycle-answers';
 
@@ -19,10 +18,8 @@ const linkAnswer = (answer: PlayerAnswer | null): LinkAnswer | null => {
 };
 
 export function createMethods(ctx: ServiceContext, signIn: SignIn): { readonly freshAuthentication: FreshAuthentication; readonly signInMethods: SignInMethods } {
-  /** An email change under way: its two addresses, and which of them has confirmed. Memory only. */
   let emailChange: { readonly current: string; readonly new: string; currentConfirmed: boolean; newConfirmed: boolean } | null = null;
 
-  // On the restricted paths too: an age-restricted account confirms before it exports.
   const freshAuthentication: FreshAuthentication = {
     async methods() {
       return signIn.parseMethods(await ctx.operation('fresh_authentication_methods_v1', undefined, 'restricted'));
@@ -58,7 +55,6 @@ export function createMethods(ctx: ServiceContext, signIn: SignIn): { readonly f
         const proven = await signIn.providerProof(provider);
         if (typeof proven === 'string') return { status: proven };
         const linked = linkAnswer(await ctx.actAsPlayer('link-method', { method: 'provider', ...proven.proof }));
-        // A method added: its grant is kept too, for permanent deletion to revoke.
         if (linked?.status === 'linked' || linked?.status === 'already-linked') await signIn.keepGrant(proven.credential);
         return linked ?? { status: 'failed' };
       } catch {
@@ -93,7 +89,6 @@ export function createMethods(ctx: ServiceContext, signIn: SignIn): { readonly f
       try {
         const token = await ctx.bearer();
         if (!token) return { status: 'failed' };
-        // Auth emails both addresses through the send-email hook.
         const { ok, body } = await ctx.authRequest('PUT', '/user', { email: address }, token);
         if (at !== ctx.generation) return { status: 'failed' };
         if (!ok) return { status: body?.error_code === 'email_exists' ? 'in-use' : 'failed' };
@@ -118,7 +113,6 @@ export function createMethods(ctx: ServiceContext, signIn: SignIn): { readonly f
           const { ok, body } = await ctx.authRequest('POST', '/verify', { type: 'email_change', email, token: code.trim() });
           if (!ok) return body?.error_code === 'otp_expired' ? { status: 'invalid-code', address } : { status: 'failed' };
           change[confirmed] = true;
-          // Confirming the second address signs in as well: that session is ended at once, so only this device's own stays.
           if (typeof body?.access_token === 'string') await ctx.authRequest('POST', '/logout?scope=local', {}, body.access_token);
         }
         emailChange = null;

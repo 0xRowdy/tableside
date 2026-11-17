@@ -1,5 +1,3 @@
-// The setup preferences file, in the app's document directory on this device.
-
 import { File, Paths } from 'expo-file-system';
 
 import type { SetupPreferencesStorage } from './preferences';

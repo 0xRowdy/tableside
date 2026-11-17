@@ -1,13 +1,5 @@
-// The completed practice session record and the results summary functions.
-// The record is the contract specs 2 (sync, export), 4 (records, ledgers,
-// session detail), 5 (metering) and 6 (standardized runs) consume. It is built
-// once, purely, from a completed activity and every fact its committed
-// transitions produced, so a recovered completion rebuilds the same record.
-// It is plain JSON-safe data; money is canonical text.
-//
-// Quarantine is never stored here (Amendment 3 §1): it is derived by comparing
-// the record's pinned identities with a shipped quarantine list, so an
-// accepted, immutable record can become quarantined later.
+// Spec 1 Amendment 2 §B
+// docs/development.md Releases: recorded checkpoints and the quarantine list
 
 import { readPermittedView, stopCause, type ActivityState, type AdherenceMeasure, type GameId, type StopCause, type StrategyDeparture, type VersionedIdentity } from './activity';
 import { summarizeFunding, type FundingSource } from './funding';
@@ -16,37 +8,26 @@ import type { DomainFact } from './activity';
 import { blackjackModeOf, policyOf, type BlackjackMode } from './blackjack-strategy';
 import type { StrategyDefinition } from './strategy';
 
-/** The record format's version; a field change bumps it. */
 export const RECORD_VERSION = 1 as const;
 
-/** How spec 5 meters an activity, as its admission said (Amendment 4 A3). */
+// Spec 1 Amendment 4 A3
 export type MeteringBasis = 'free-play' | 'premium' | 'time' | 'turns' | 'training-bankroll' | 'challenge-attempt';
 
-/**
- * How the practice session ended (Amendment 2 §B). "quarantined" is for an activity
- * that a proven defect made unusable, ended by #80's path, not the stop path.
- */
+// Spec 1 Amendment 2 §B, #80
 export type EndingReason = StopCause | 'quarantined';
 
-/** One wager's outcome, with the turn (round, roll or spin) it belongs to (Amendment 3 §2). */
+// Spec 1 Amendment 3 §2
 export interface WagerOutcome {
-  /** The turn the wager settled in; for a return between turns, the latest turn begun (0 before any). */
   readonly turn: number;
   readonly target: string;
   readonly stake: string;
-  /** "returned": the stake came back without an outcome (a stop-path return, craps odds that were off). */
   readonly result: 'win' | 'loss' | 'push' | 'returned';
-  /** Net result after commission: payout on a win, minus the lost amount, 0 on a push or a return. */
   readonly net: string;
-  /** Paid back to the balance. */
   readonly returned: string;
-  /** A craps horn part (2, 3, 11 or 12): each part counts as its own wager. */
   readonly component?: number;
-  /** Commission withheld from a winning craps buy or lay, already taken out of net. */
   readonly commission?: string;
 }
 
-/** Win, loss and push counts; resolved is their sum (returns are outside it). */
 export interface WagerCounts {
   readonly wins: number;
   readonly losses: number;
@@ -56,7 +37,6 @@ export interface WagerCounts {
 
 export type { AdherenceMeasure } from './activity';
 
-/** Playing, counting and betting adherence, kept apart; null where the session didn't assess that kind. */
 export interface Adherence {
   readonly playing: AdherenceMeasure | null;
   readonly counting: AdherenceMeasure | null;
@@ -69,7 +49,6 @@ export interface CompletedPracticeSessionRecord {
   readonly owner: string;
   readonly device: string;
   readonly game: GameId;
-  /** The pinned identities, which quarantine is judged on. */
   readonly identities: {
     readonly engine: string;
     readonly rules: VersionedIdentity;
@@ -77,55 +56,40 @@ export interface CompletedPracticeSessionRecord {
     readonly reference: VersionedIdentity | null;
     readonly randomProtocol: number;
   };
-  /** Display and list order only: never sync or progression logic. Milliseconds since the epoch. */
   readonly startedAt: number;
   readonly endedAt: number;
   readonly mode: 'free-play' | 'guided';
-  /** The guided blackjack mode; null in free play and for other games. */
   readonly blackjackMode: BlackjackMode | null;
-  /** Whether a blackjack strategy assessed the bets (the Hi-Lo bet schedule); false in blackjack free play, null for other games. */
   readonly betSchedule: boolean | null;
-  /** The strategy revision run (a built-in or a private revision), with the choices made at setup. Null in free play. */
   readonly strategy: {
     readonly id: string;
     readonly revision: number;
     readonly name: string;
     readonly parameters: Readonly<Record<string, string>>;
   } | null;
-  /** The rule preset with its pinned content: limits, wheel, odds cap, blackjack table rules. */
   readonly rules: VersionedIdentity & { readonly content: ActivityState['rules'] };
   readonly fundingSource: FundingSource;
   readonly meteringBasis: MeteringBasis;
-  /** The allowance-policy version in force (Amendment 3 §4); null when the supervisor named none. */
+  // Spec 1 Amendment 3 §4
   readonly allowancePolicyVersion: string | null;
-  /** The initial buy-in, or the training-bankroll allocation. */
   readonly buyIn: string;
-  /** Each rebuy, in order. */
   readonly rebuys: readonly string[];
   readonly cumulativeFunding: string;
   readonly finalCashOut: string;
-  /** Final cash-out minus cumulative funding. */
   readonly netResult: string;
-  /** Largest buy-in-adjusted fall of the game result from a previous peak, including final settlement. */
   readonly maxDrawdown: string;
   readonly turnsPlayed: number;
   readonly endingReason: EndingReason;
-  /** Any explicit override in the session; a cycle restart doesn't clear it. */
   readonly overrideAffected: boolean;
-  /** This session's W/L/P and resolved-wager counts. */
   readonly wagers: WagerCounts;
-  /** No turn began with a stake: nothing was ever at risk. Such practice sessions stay in session denominators. */
   readonly noBet: boolean;
-  /** Detail: every wager outcome and return, in order. */
   readonly outcomes: readonly WagerOutcome[];
-  /** Detail, guided practice only: adherence and the append-only departure log, in order. */
   readonly guidance: {
     readonly adherence: Adherence;
     readonly departures: readonly StrategyDeparture[];
   } | null;
 }
 
-/** What the record needs from outside the engine: the clock's times and the admission. */
 export interface RecordContext {
   readonly startedAt: number;
   readonly endedAt: number;
@@ -133,7 +97,6 @@ export interface RecordContext {
   readonly allowancePolicyVersion: string | null;
 }
 
-/** Every wager outcome and return in the facts, each with its turn. */
 function wagerOutcomes(facts: readonly DomainFact[]): WagerOutcome[] {
   const outcomes: WagerOutcome[] = [];
   let turn = 0;
@@ -157,12 +120,6 @@ function wagerOutcomes(facts: readonly DomainFact[]): WagerOutcome[] {
   return outcomes;
 }
 
-/**
- * Turns played and whether any staked anything, derived as the standardized
- * record derives them: a turn that began with nothing at stake (a craps roll
- * while the strategy waits for a point) is no bet, and the rolls of final
- * settlement, after the stop was requested, only settle what was already there.
- */
 function turnsOf(facts: readonly DomainFact[]): { played: number; staked: boolean } {
   let played = 0;
   let staked = false;
@@ -175,20 +132,13 @@ function turnsOf(facts: readonly DomainFact[]): { played: number; staked: boolea
   return { played, staked };
 }
 
-/** A guided blackjack strategy's mode, read from its playing policy; null for other games. */
 function blackjackMode(definition: StrategyDefinition): BlackjackMode | null {
   const play = policyOf(definition);
   return definition.game === 'blackjack' && play ? blackjackModeOf(play) : null;
 }
 
-/**
- * The completed practice session record for a completed activity and every
- * fact its committed transitions produced, in commit order. Throws unless the
- * activity is completed.
- */
 export function completedPracticeRecord(state: ActivityState, facts: readonly DomainFact[], context: RecordContext): CompletedPracticeSessionRecord {
   if (state.phase !== 'completed') throw new Error(`activity ${state.activity.id} is not completed`);
-  // Completed: nothing is left on the table, so the balance is the final cash-out.
   const funding = summarizeFunding(state.funding, decodeMoney(state.balance));
   const strategy = readPermittedView(state).strategy;
   const run = state.strategy;
@@ -211,7 +161,6 @@ export function completedPracticeRecord(state: ActivityState, facts: readonly Do
     endedAt: context.endedAt,
     mode: run ? 'guided' : 'free-play',
     blackjackMode: run ? blackjackMode(run.definition) : null,
-    // Blackjack's betting instructions are its bet schedule; without them the bets are the player's own.
     betSchedule: state.identities.game === 'blackjack' ? run !== null && run.definition.instructions.length > 0 : null,
     strategy: run && { id: run.definition.id, revision: run.definition.revision, name: run.definition.name, parameters: { ...run.parameters } },
     rules: { ...state.identities.rules, content: state.rules },
@@ -231,24 +180,22 @@ export function completedPracticeRecord(state: ActivityState, facts: readonly Do
     noBet: !turns.staked,
     outcomes,
     guidance: strategy && {
-      // Each kind on its own. Counting adherence needs a learner-entered count, which spec 3's count checkpoints add.
+      // TODO(spec 3 count checkpoints)
       adherence: { betting: strategy.adherence.betting, playing: strategy.adherence.playing, counting: null },
       departures: strategy.departures,
     },
   };
 }
 
-// ---- results summary functions (Amendment 2 §A.4) ------------------------
+// Spec 1 Amendment 2 §A.4
 
 const ZERO = money(0n);
 
-/** A wager by net result after commission; null for one returned without an outcome. */
 export function classifyWager(outcome: Pick<WagerOutcome, 'result' | 'net'>): 'win' | 'loss' | 'push' | null {
   if (outcome.result === 'returned') return null;
   return ({ 1: 'win', [-1]: 'loss', 0: 'push' } as const)[compare(decodeMoney(outcome.net), ZERO)];
 }
 
-/** W/L/P counts over separate wagers (each split hand, insurance, odds bet, horn component and placement is one). */
 export function countWagers(outcomes: readonly Pick<WagerOutcome, 'result' | 'net'>[]): WagerCounts {
   let wins = 0;
   let losses = 0;
@@ -268,28 +215,23 @@ export function classifySession(record: Pick<CompletedPracticeSessionRecord, 'ne
   return ({ 1: 'profitable', [-1]: 'losing', 0: 'unchanged' } as const)[compare(decodeMoney(record.netResult), ZERO)];
 }
 
-/** count of `of`, pooled sum over sum; null when there is nothing to divide by. */
 export type Share = { readonly count: number; readonly of: number } | null;
 
 const share = (count: number, of: number): Share => (of === 0 ? null : { count, of });
 
 export interface ResultsSummary {
   readonly sessions: {
-    /** Sessions in the totals (no-bet sessions included, quarantined ones not). */
     readonly count: number;
     readonly profitable: number;
     readonly losing: number;
     readonly unchanged: number;
     readonly noBet: number;
-    /** Sessions left out because they are quarantined. */
     readonly quarantined: number;
   };
   readonly sessionShares: Record<SessionClass, Share>;
   readonly wagers: WagerCounts;
   readonly wagerShares: { readonly win: Share; readonly loss: Share; readonly push: Share };
-  /** The median and the worst of the sessions' maximum drawdowns; null with no sessions. */
   readonly drawdown: { readonly median: string | null; readonly worst: string | null };
-  /** Followed over assessed decisions, pooled per kind; null where no session assessed that kind. */
   readonly adherence: Record<keyof Adherence, Share>;
 }
 
@@ -301,11 +243,6 @@ function median(values: Money[]): Money | null {
   return div(add(sorted[middle - 1] as Money, sorted[middle] as Money), money(2n));
 }
 
-/**
- * Totals over completed records (personal totals in spec 4, standardized runs
- * in spec 6). Quarantined records, judged against `quarantine`, are left out
- * of every total and of adherence.
- */
 export function summarizeResults(records: readonly CompletedPracticeSessionRecord[], quarantine: QuarantineList = EMPTY_QUARANTINE_LIST): ResultsSummary {
   const included = records.filter((record) => !quarantineStatus(record, quarantine).quarantined);
   const classes = { profitable: 0, losing: 0, unchanged: 0 };
@@ -343,9 +280,8 @@ export function summarizeResults(records: readonly CompletedPracticeSessionRecor
   };
 }
 
-// ---- quarantine (Amendment 3 §1) -----------------------------------------
+// Spec 1 Amendment 3 §1
 
-/** One quarantined combination: every identity it names must match. */
 export interface QuarantineEntry {
   readonly id: string;
   readonly match: {
@@ -354,11 +290,10 @@ export interface QuarantineEntry {
     readonly strategy?: VersionedIdentity;
     readonly reference?: VersionedIdentity;
   };
-  /** Shown with the quarantined session. */
   readonly explanation: string;
 }
 
-/** The versioned list shipped with the app (and mirrored on the server, Amendment 6 §6). Plain data. */
+// Spec 1 Amendment 6 §6
 export interface QuarantineList {
   readonly version: number;
   readonly entries: readonly QuarantineEntry[];
@@ -370,7 +305,6 @@ export type QuarantineStatus = { readonly quarantined: false } | { readonly quar
 
 const sameIdentity = (a: VersionedIdentity | null, b: VersionedIdentity) => a !== null && a.id === b.id && a.version === b.version;
 
-/** The pinned identities quarantine is judged on: a completed record's, or an unfinished activity's. */
 export interface QuarantinableIdentities {
   readonly engine: string;
   readonly rules: VersionedIdentity;
@@ -378,16 +312,10 @@ export interface QuarantinableIdentities {
   readonly reference: VersionedIdentity | null;
 }
 
-/**
- * Whether a completed record's, or an unfinished activity's, pinned identities
- * fall under the list; derived on every read, never stored. An unfinished
- * activity that does is unusable: it is marked incomplete, never given a result.
- */
 export function quarantineStatus(record: { readonly identities: QuarantinableIdentities }, list: QuarantineList): QuarantineStatus {
   const { identities } = record;
   for (const entry of list.entries) {
     const { engine, rules, strategy, reference } = entry.match;
-    // An entry naming no identity quarantines nothing.
     if (engine === undefined && !rules && !strategy && !reference) continue;
     if (engine !== undefined && engine !== identities.engine) continue;
     if (rules && !sameIdentity(identities.rules, rules)) continue;

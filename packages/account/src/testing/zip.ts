@@ -1,10 +1,5 @@
-// Reads a zip as the export job writes it (stored or deflated entries, no
-// zip64), through its central directory, checking each entry's CRC-32 and
-// size: what a player's unzip tool would see.
-
 import { crc32, inflateRawSync } from 'node:zlib';
 
-/** Each entry's path and UTF-8 text, in archive order. */
 export function readZip(bytes: Uint8Array): Map<string, string> {
   const buffer = Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const end = buffer.lastIndexOf(Buffer.from([0x50, 0x4b, 0x05, 0x06]));

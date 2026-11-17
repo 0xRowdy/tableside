@@ -1,7 +1,3 @@
-// Seam 2: the access supervisor port, the controller's direct suspend, the
-// suspend dispositions and the stop path, with substitute adapters.
-// Spin outcomes come from the Random123 "pi digits" stream: 27, 0, 25, 31, 9.
-
 import { CAPPED_MARTINGALE, FLAT_EVEN_MONEY } from '@tableside/definitions';
 import type { DomainFact } from '@tableside/engine';
 
@@ -12,7 +8,6 @@ import { FakeClock, substituteAdapters } from '@/practice/testing/substitutes';
 
 type Answer = AccessDecision | Promise<AccessDecision>;
 
-/** A scriptable supervisor: allowed unless a test sets an answer, and it records what it was asked. */
 function scriptedAccess() {
   const asked: string[] = [];
   const reports: PhaseReport[] = [];
@@ -57,7 +52,6 @@ async function started(options: { autoClock?: boolean } = {}) {
   return context;
 }
 
-/** Every transition the store was asked to commit: the trace, without wall-clock values. */
 function recordCommits(store: ActivityStore) {
   const commits: { command: string; facts: readonly DomainFact[]; checkpoint: string }[] = [];
   const commit = store.commitTransition.bind(store);
@@ -120,7 +114,6 @@ describe('admission', () => {
 });
 
 describe('the direct suspend', () => {
-  /** Plays: red 10, spin (27 wins), black 10 left removable, spin (0 loses), end. */
   async function play(controller: PracticeController, clock: FakeClock, pauseAt: (step: string) => Promise<void>) {
     await controller.placeWager('red', '10');
     await pauseAt('open decision with a wager');
@@ -155,7 +148,6 @@ describe('the direct suspend', () => {
       const phase = active(paused.controller.snapshot()).view.phase;
       paused.controller.suspend('navigation');
       expect(active(paused.controller.snapshot()).suspension).toMatchObject({ cause: 'navigation', kind: 'immediate', reached: true });
-      // Time passes while away: nothing reveals, settles or charges.
       paused.clock.advance(REVEAL_MS * 10);
       await new Promise((resolve) => setImmediate(resolve));
       expect({ step, commits: paused.commits.length, phase: active(paused.controller.snapshot()).view.phase }).toEqual({ step, commits: before, phase });
@@ -186,7 +178,6 @@ describe('the direct suspend', () => {
   it('lets a commit already in flight finish, then starts no automatic step until resumed', async () => {
     const { controller, clock, commits, store } = await started({ autoClock: false });
     await controller.placeWager('red', '10');
-    // Hold the spin's commit in the store until the player has left the table.
     let release = () => undefined as void;
     const held = new Promise<void>((resolve) => (release = resolve));
     const commit = store.commitTransition;
@@ -445,7 +436,6 @@ describe('dispositions', () => {
     expect(immediate.kinds).toEqual(['place-wager', 'begin-turn']);
     expect(immediate.snapshot).toMatchObject({ view: { phase: 'revealing-outcome' }, suspension: { kind: 'immediate', canEnd: false } });
 
-    // The turn in progress finishes normally, then the session suspends without settlement.
     const boundary = await run('suspend-at-turn-boundary');
     expect(boundary.kinds).toEqual(['place-wager', 'begin-turn', 'settle-turn']);
     expect(boundary.snapshot).toMatchObject({ view: { phase: 'settled-outcome' }, suspension: { kind: 'turn-boundary', reached: true, canEnd: true } });
@@ -475,7 +465,6 @@ describe('dispositions', () => {
 
     clock.advance(REVEAL_MS);
     await waitFor(() => clock.pending === 1 && active(controller.snapshot()).view.phase === 'final-settlement');
-    // No new play once the stop path starts.
     expect(active(controller.snapshot()).view.legalCommands).not.toContain('begin-turn');
     clock.advance(REVEAL_MS);
     await spinning;
@@ -483,12 +472,10 @@ describe('dispositions', () => {
 
     expect(kinds(commits)).toEqual(['place-wager', 'begin-turn', 'settle-turn', 'request-stop', 'advance-final-settlement']);
     expect(commits.flatMap((commit) => commit.facts).filter((fact) => fact.kind === 'wager-settled')).toEqual([RED_WINS]);
-    // Only the turn begun before the stop was charged; settlement never is.
     expect((await store.readEffects('activity-1')).map((effect) => effect.effectId.sequence)).toEqual([1]);
   });
 
   it('"stop" in craps returns removable wagers, then further rolls resolve only the contracts, never asking or charging', async () => {
-    // Pi stream rolls: 8 (point), then 11, 6, 4, 12 leave the pass line and 8 pays it.
     const { controller, next, commits, store, asked } = setup();
     await controller.load();
     await controller.start({ game: 'craps', odds: '3-4-5x', buyIn: '1000' });
@@ -505,10 +492,8 @@ describe('dispositions', () => {
     ]);
     const facts = commits.flatMap((commit) => commit.facts);
     expect(facts.filter((fact) => fact.kind === 'wager-returned')).toEqual([{ kind: 'wager-returned', target: 'pass-odds', amount: '50' }]);
-    // No new bets, odds or presses once the stop path starts: only the pass line settles.
     expect(facts.filter((fact) => fact.kind === 'wager-settled').map((fact) => [fact.target, fact.result])).toEqual([['pass', 'win']]);
     expect(controller.snapshot()).toMatchObject({ status: 'completed', result: { game: 'craps', finalCashOut: '1010' } });
-    // Only the roll begun before the stop was asked about and charged; the settling rolls never are.
     expect(asked.filter((q) => q.startsWith('turn'))).toEqual(['turn 1', 'turn 2']);
     expect((await store.readEffects('activity-1')).map((effect) => effect.effectId.sequence)).toEqual([1]);
   });
@@ -538,7 +523,6 @@ describe('dispositions', () => {
     const relaunched = new PracticeController({ ...adapters, store: adapters.store.reopen(), clock: new FakeClock(undefined, true) });
     await relaunched.load();
     expect(active(relaunched.snapshot()).view.legalCommands).toEqual(['advance-final-settlement']);
-    // The banner reads the cause the stop recorded, not the player's own stop.
     expect(active(relaunched.snapshot()).ending).toBe('access-ended');
     await relaunched.resume();
 
@@ -567,7 +551,6 @@ describe('the timed-metering hook', () => {
   });
 
   it('excludes a pending strategy action and a cycle result, even in an open decision', async () => {
-    // Capped Martingale on black, from 50: 27 and 0 lose 10 and 20, leaving 20 against a stake of 40.
     const { controller, reports } = setup();
     await controller.load();
     await controller.start({ game: 'roulette', buyIn: '50', strategy: { definition: CAPPED_MARTINGALE, parameters: { target: 'black' } } });
@@ -578,10 +561,8 @@ describe('the timed-metering hook', () => {
     }
     expect(active(controller.snapshot()).view.strategy?.pending?.reason).toBe('unfunded-group');
     expect(reports.at(-1)).toMatchObject({ phase: 'settled-outcome', timed: false });
-    // A rebuy covers the stake: the pending action clears and time counts again.
     await controller.rebuy('100');
     expect(timedNow()).toBe(true);
-    // 25 loses the 40; 31 wins the 80, completing the cycle: its result isn't timed.
     for (const stake of ['40', '80']) {
       await controller.placeWager('black', stake);
       await controller.spin();
@@ -592,7 +573,6 @@ describe('the timed-metering hook', () => {
 
 describe('cycle restarts in practice (Amendment 6 §2)', () => {
   it('a completed cycle waits for the player: practice never restarts it automatically', async () => {
-    // Capped Martingale on black from 1,000: 27 loses 10, 0 loses 20, 25 loses 40, 31 wins 80 and completes the cycle.
     const { controller, commits } = setup();
     await controller.load();
     await controller.start({ game: 'roulette', buyIn: '1000', strategy: { definition: CAPPED_MARTINGALE, parameters: { target: 'black' } } });
@@ -626,17 +606,14 @@ describe('required content removal (Amendment 6 §5)', () => {
 
     await controller.placeWager('red', '10');
     await controller.spin();
-    // The removal arrives (spec 6 syncs it) between turns: the next turn never begins.
     removed.add(`${FLAT_EVEN_MONEY.id}@${FLAT_EVEN_MONEY.revision}`);
     await controller.placeWager('red', '10');
     await controller.spin();
 
     expect(kinds(commits)).toEqual(['place-wager', 'begin-turn', 'settle-turn', 'place-wager', 'request-stop', 'advance-final-settlement']);
-    // Recorded and announced as a content removal, never as access or allowance ending.
     expect(shown).toContain('content-removed');
     expect(shown).not.toContain('access-ended');
     expect(controller.snapshot()).toMatchObject({ status: 'completed', result: { endingReason: 'content-removed' } });
-    // The supervisor behind it is never asked about the turn the removal stopped.
     expect(script.asked.filter((q) => q.startsWith('turn'))).toEqual(['turn 1']);
   });
 
@@ -699,7 +676,6 @@ describe('time-usage checkpoints (Amendment 4 A4)', () => {
     return context;
   }
 
-  /** Lets the clock's sleepers and the store's writes run. */
   const settle = async () => {
     for (let i = 0; i < 20; i++) await new Promise((resolve) => setImmediate(resolve));
   };
@@ -713,7 +689,6 @@ describe('time-usage checkpoints (Amendment 4 A4)', () => {
     await settle();
     expect(await store.readEffects('activity-1')).toEqual([usage(0, '1000'), usage(1, '1000')]);
 
-    // An action commits the time since the last checkpoint with its transition.
     clock.advance(400);
     await controller.placeWager('red', '10');
     expect(await store.readEffects('activity-1')).toEqual([usage(0, '1000'), usage(1, '1000'), usage(2, '400')]);

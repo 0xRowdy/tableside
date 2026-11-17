@@ -1,10 +1,4 @@
-// The account gate's age states (S2-15 "unresolved, existing account paused"):
-// ordinary access is closed and the tab bar hidden, the records are kept, and
-// the restricted paths stay. Unresolved may retry the age check; when the
-// platform proves nothing and a declaration may decide, the fallback question follows.
-// TODO(frames): the under-13 variant (an existing account found under 13), the
-// "can't be met" conflict line and the "still couldn't be confirmed" retry
-// status have no frame; they reuse S2-15's unresolved layout and type.
+// TODO(spec 2 S2-15)
 
 import { useState } from 'react';
 
@@ -37,7 +31,6 @@ export function AgeRestricted({ gate }: { gate: AgeRestrictedGate }) {
     );
   }
 
-  // An answer that leaves it unresolved (or ineligible) shows the gate's own screen again.
   const answered = () => setAsking(false);
   if (asking) return <AgeQuestionScreen bar={PAUSED} back={() => setAsking(false)} onAnswered={answered} />;
 

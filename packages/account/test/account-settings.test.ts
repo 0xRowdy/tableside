@@ -1,6 +1,4 @@
-// Seam 2, Settings → Account (#99): what the account area shows (the private
-// sign-in email, sign-in methods, signed-in devices) and the account currency,
-// which defaults from the device locale at creation (spec 2 Amendment 4 §4).
+// Spec 2 Amendment 4 §4; #99
 
 import { afterEach, describe, expect, it } from 'vitest';
 
@@ -28,7 +26,6 @@ describe('the account summary', () => {
 
     expect(await phone.account.accountSummary()).toEqual({ email, methods: ['email'], currency: 'CAD', currencyChangeable: true, devices: 1 });
 
-    // A tablet with another locale signs in: the currency stays the account's.
     const tablet = device('summary-tablet', { localeCurrency: 'EUR' });
     expect(await signInByEmail(tablet, email)).toEqual({ status: 'signed-in' });
     expect(await tablet.account.accountSummary()).toMatchObject({ currency: 'CAD', devices: 2 });
@@ -73,7 +70,6 @@ describe('the account currency', () => {
     expect(await phone.account.setAccountCurrency('EUR')).toEqual({ status: 'changed' });
     expect(await tablet.account.accountSummary()).toMatchObject({ currency: 'EUR' });
 
-    // The phone remembers it for offline use.
     phone.proxy.online = false;
     expect(await phone.account.accountSummary()).toMatchObject({ currency: 'EUR' });
   });

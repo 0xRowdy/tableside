@@ -1,7 +1,3 @@
-// How each game is worded, in one place: its name, its turn (CONTEXT.md: one
-// blackjack round, one craps roll, one roulette spin), its wagers' names and
-// its status line. Every screen that words a game reads it from here.
-
 import { INSURANCE_TARGET, type BlackjackPermittedView, type CrapsPermittedView, type GameId, type PermittedView, type RoulettePermittedView, type StrategyView } from '@tableside/engine';
 
 import { statusText } from './blackjack-text';
@@ -10,27 +6,17 @@ import { STATUS, targetName } from './roulette-text';
 import type { TurnWord } from './strategy-text';
 
 export interface GameWords {
-  /** The game's name as a title: "Roulette". */
   readonly title: string;
-  /** The game's name in a sentence: "roulette". */
   readonly name: GameId;
-  /** One turn: "spin", "roll", "round". */
   readonly turn: TurnWord;
-  /** The turn as a title: "Spin", "Roll", "Round". */
   readonly Turn: string;
-  /** What a turn does to the game's random content: "spun", "rolled", "dealt". */
   readonly drawn: string;
-  /** What resuming keeps, for the resume screen. */
   readonly same: string;
-  /** A wager's target inside a sentence: "10 on Red", "10 on your hand". */
   readonly targetName: (target: string) => string;
-  /** A wager's name heading a list entry: "Red 10", "Initial wager 25". */
   readonly wagerName: (target: string) => string;
-  /** True where some wagers are contracts that stay until the game settles them (craps line bets). */
   readonly contracts: boolean;
-  /** The committed wagers between turns when there are none. */
   readonly noneCommitted: string;
-  /** Where the table is, in a few words: "Betting", "Come-out roll", "Your turn". */
+  readonly noWagers: string;
   readonly status: (view: PermittedView) => string;
 }
 
@@ -48,6 +34,7 @@ export const GAME_WORDS: Readonly<Record<GameId, GameWords>> = {
     wagerName: targetName,
     contracts: false,
     noneCommitted: 'None between spins',
+    noWagers: 'No wagers yet. Choose one above, set its stake, then spin.',
     status: (view) => STATUS[(view as RoulettePermittedView).phase],
   },
   craps: {
@@ -61,6 +48,8 @@ export const GAME_WORDS: Readonly<Record<GameId, GameWords>> = {
     wagerName: crapsTargetName,
     contracts: true,
     noneCommitted: 'No contracts on the table',
+    // TODO(spec 1 craps bet selector frame copy)
+    noWagers: 'No wagers yet. Choose one above, set its stake, then roll.',
     status: (view) => crapsStatus(view as CrapsPermittedView),
   },
   blackjack: {
@@ -74,9 +63,9 @@ export const GAME_WORDS: Readonly<Record<GameId, GameWords>> = {
     wagerName: (target) => (target === INSURANCE_TARGET ? 'Insurance' : 'Initial wager'),
     contracts: false,
     noneCommitted: 'None between rounds',
+    noWagers: 'No wagers yet. Set a stake above, then deal.',
     status: (view) => statusText(view as BlackjackPermittedView),
   },
 };
 
-/** "free play", or "guided · Pass with odds": how a practice session is being played. */
 export const modeText = (strategy: Pick<StrategyView, 'name'> | null): string => (strategy ? `guided · ${strategy.name}` : 'free play');

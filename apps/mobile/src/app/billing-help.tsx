@@ -1,7 +1,5 @@
-// Billing help on the restricted paths (spec 2 Amendment 5 §4): the store's
-// subscription management and refund request pages, never a purchase. The
-// restricted screens have no tab bar, so it opens here. Spec 5 owns billing.
-// TODO(frames): no frame draws this screen; it reuses the Settings layout with S2-22's billing rows.
+// Spec 2 Amendment 5 §4
+// TODO(spec 2 S2-22)
 
 import { Redirect, router } from 'expo-router';
 

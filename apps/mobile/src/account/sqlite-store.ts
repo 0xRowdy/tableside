@@ -1,23 +1,4 @@
-// The SQLite account store: spec 1's durable activity store port over one
-// account's encrypted database (spec 2, *Local storage*). The account vault
-// opens it; the practice controller is its only caller.
-//
-// - Every operation is one exclusive transaction on the database's one
-//   serialized writer (sql.ts), so a resolved promise means committed.
-// - Values are stored as spec 1's canonical JSON text, with a format version,
-//   UTF-8 length and SHA-256 that every read checks. Tables are STRICT and hold
-//   only TEXT and INTEGER columns: money stays exact canonical text and nothing
-//   is ever a floating-point column.
-// - The store belongs to one (environment, account, installation): the account
-//   ID is the activity owner and the installation ID its originating device, and
-//   it refuses activities and results for anyone else.
-// - Pinned definitions (rule content, strategy revision) travel inside the
-//   activity's specification, so they live exactly as long as the activity row.
-// - The schema is store-schema.ts's. This store creates it in an empty
-//   database and opens only the version its migrations reach: an existing
-//   database is brought there by the migration runner (migration-runner.ts)
-//   before the store opens it, and any other version is refused
-//   (UnsupportedSchemaError).
+// Spec 2 Local storage
 
 import { canonicalJson, sha256Hex } from '@tableside/engine';
 
@@ -36,10 +17,6 @@ import type {
 import type { SqlConnection, SqlExecutor } from './sql';
 import { createSchema, readSchemaVersion, schemaVersionOf, STORE_MIGRATIONS, STORE_SCHEMA_VERSION, type StoreMigration } from './store-schema';
 
-// The sync engine's store port (packages/account/src/sync/store.ts), matched
-// structurally: the app doesn't depend on the Account service's package for it.
-
-/** An unfinished activity as the local supplement shows it (packages/account/src/export.ts), without hidden state. */
 export interface UnfinishedActivity {
   readonly activityId: string;
   readonly kind: 'practice-session';
@@ -49,19 +26,16 @@ export interface UnfinishedActivity {
   readonly steps: number;
 }
 
-/** An operation fixed for sending: the request every retry repeats, and its SHA-256. */
 export interface PreparedOperation {
   readonly operationId: string;
   readonly request: string;
   readonly requestHash: string;
 }
 
-/** A receipt's disposition. */
 export type Disposition =
   | { readonly status: 'accepted'; readonly operation: string; readonly requestHash: string; readonly sequence: number }
   | { readonly status: 'rejected'; readonly operation: string; readonly requestHash: string; readonly code: string };
 
-/** A command's scope generation and its position there. */
 export interface Command {
   readonly generation: number;
   readonly position: number;
@@ -75,24 +49,18 @@ export interface QueuedUpload {
   readonly operation: PreparedOperation | null;
   readonly failures: number;
   readonly flagged: boolean;
-  /** The operations its acknowledged dependencies were sent as, under the current generation; absent when none. */
   readonly after?: readonly string[];
-  /** Its originating-device position, for a per-device type. */
   readonly position?: number;
-  /** The command it was prepared as. */
   readonly command?: Command;
-  /** Its scope went stale and the refreshed account doesn't show what became of it: it waits for the player. */
   readonly unconfirmed?: true;
 }
 
-/** The installation's command scope: its generation (null before one), the last position given, and the positions settled here. */
 export interface CommandScope {
   readonly generation: number | null;
   readonly last: number;
   readonly settled: number;
 }
 
-/** What became of an entry whose command scope went stale, or the player's decision on an unconfirmed one. */
 export type ReconcileOutcome =
   | { readonly kind: 'accepted'; readonly sequence: number | null }
   | { readonly kind: 'unsent' }
@@ -116,19 +84,16 @@ export interface AcceptedRecord {
   readonly item: string;
   readonly sequence: number;
   readonly payload: unknown;
-  /** A per-device record's originating installation and position. */
   readonly origin?: { readonly installation: string; readonly position: number };
-  /** A snapshot's summary whose detail hasn't arrived: when the record happened. */
   readonly summaryAt?: number;
 }
 
-/** An accepted record held as a summary. */
 export interface SummaryOnly extends RecordRef {
   readonly sequence: number;
   readonly at: number;
 }
 
-/** How far the history detail has come (#97). */
+// #97
 export interface HistoryProgress {
   readonly recent: number | null;
   readonly download: { readonly total: number | null } | null;
@@ -137,24 +102,18 @@ export interface HistoryProgress {
 export interface NewUpload {
   readonly id: string;
   readonly recordType: string;
-  /** The item's identity under its record type's scheme. */
   readonly item: string;
   readonly payload: unknown;
   readonly dependencies: readonly string[];
-  /** Allocates the type's next originating-device position on this installation. */
   readonly positioned: boolean;
-  /** An accepted result the operation purges: removed here at once, and never accepted here again. */
   readonly purges: RecordRef | null;
 }
 
 export interface FeedPageEffects {
-  /** Sequences whose entries carry nothing to apply. */
   readonly redacted?: readonly number[];
-  /** Results the page purges. */
   readonly purged?: readonly RecordRef[];
 }
 
-/** A lifetime total at a snapshot's watermark, in exact money text. */
 export interface TotalsRow {
   readonly total: 'practice' | 'casino';
   readonly game: string;
@@ -163,7 +122,6 @@ export interface TotalsRow {
   readonly net: string;
 }
 
-/** A bootstrap snapshot: its ID, the account sequence it describes, its row count and the account's totals there. */
 export interface BootstrapSnapshot {
   readonly snapshot: string;
   readonly watermark: number;
@@ -171,7 +129,6 @@ export interface BootstrapSnapshot {
   readonly totals: readonly TotalsRow[];
 }
 
-/** A snapshot being staged: how many of its rows are staged, and the last ordinal staged. */
 export interface BootstrapStaging extends BootstrapSnapshot {
   readonly staged: number;
   readonly after: number;
@@ -186,10 +143,8 @@ export interface LocalRevisionedItem {
   readonly onAccount: boolean;
 }
 
-/** The base a revisioned upload names: an accepted revision (0: new), or the installation's own earlier operation on the item. */
 type RevisionBase = number | { readonly operation: string };
 
-/** A queued save or deletion of a revisioned item (the sync engine's registry checks the value). */
 interface RevisionedChange {
   readonly item: string;
   readonly action: 'save' | 'delete';
@@ -197,14 +152,12 @@ interface RevisionedChange {
   readonly value: unknown;
 }
 
-/** An upload queue entry's stored body: the record type and what is sent. */
 interface QueuedBody {
   readonly id: string;
   readonly kind: string;
   readonly record: unknown;
 }
 
-/** Whose database this is. */
 export interface StoreIdentity {
   readonly environment: string;
   readonly accountId: string;
@@ -212,12 +165,7 @@ export interface StoreIdentity {
 }
 
 export interface StoreOptions {
-  /**
-   * Whether the account session that opened the store is still the current
-   * one. Checked inside every transaction: a stale session reads and writes nothing.
-   */
   readonly isCurrent?: () => boolean;
-  /** This build's migrations (store-schema.ts); tests stand in later builds' with their own. */
   readonly migrations?: readonly StoreMigration[];
 }
 const BODY_FORMAT = 1;
@@ -229,7 +177,6 @@ export class StoreError extends Error {
   }
 }
 
-/** A stored value failed its version, length or hash check: the bytes aren't what was written. */
 export class StoreIntegrityError extends StoreError {
   constructor(message: string) {
     super(message);
@@ -237,7 +184,6 @@ export class StoreIntegrityError extends StoreError {
   }
 }
 
-/** The account session that opened the store has ended (sign-out, sign-in or account switch). */
 export class StaleSessionError extends StoreError {
   constructor() {
     super('the account session that opened this store has ended');
@@ -245,7 +191,6 @@ export class StaleSessionError extends StoreError {
   }
 }
 
-/** The database, activity or result belongs to another environment, account or installation. */
 export class StoreMismatchError extends StoreError {
   constructor(message: string) {
     super(message);
@@ -253,11 +198,6 @@ export class StoreMismatchError extends StoreError {
   }
 }
 
-/**
- * The database has a schema version this build doesn't open: an older one the
- * migration runner hasn't brought up to date, or a newer one (a rollback).
- * Either way the data is left as it is; it is not Recovery needed.
- */
 export class UnsupportedSchemaError extends StoreError {
   constructor(
     readonly version: string,
@@ -268,7 +208,6 @@ export class UnsupportedSchemaError extends StoreError {
   }
 }
 
-/** The columns every stored value carries: its text, and the format, length and hash its reads check. */
 const BODY = 'body, body_format, body_length, body_sha256';
 
 interface BodyRow {
@@ -287,11 +226,6 @@ export class SqliteActivityStore implements ActivityStore {
     private readonly isCurrent: () => boolean,
   ) {}
 
-  /**
-   * Opens the store on a verified connection: creates the schema in an empty
-   * database, or checks an existing one belongs to `identity` and has this
-   * build's schema. Closes the connection when it refuses.
-   */
   static async open(connection: SqlConnection, identity: StoreIdentity, options: StoreOptions = {}): Promise<SqliteActivityStore> {
     const migrations = options.migrations ?? STORE_MIGRATIONS;
     const version = schemaVersionOf(migrations);
@@ -318,7 +252,6 @@ export class SqliteActivityStore implements ActivityStore {
     return new SqliteActivityStore(connection, identity, options.isCurrent ?? (() => true));
   }
 
-  /** Closes the database after the operations already queued. */
   close(): Promise<void> {
     return this.connection.close();
   }
@@ -354,11 +287,7 @@ export class SqliteActivityStore implements ActivityStore {
     });
   }
 
-  /**
-   * The local supplement's view of the unfinished activity (spec 2, *Export*):
-   * what it is and how far it got, never its checkpoint or random stream, so
-   * no hidden state (a shuffled shoe; a Check attempt's answers, Amendment 2 §5) leaves.
-   */
+  // Spec 2 Export, Amendment 2 §5
   async readUnfinishedActivities(): Promise<readonly UnfinishedActivity[]> {
     const activity = await this.findUnfinished();
     if (!activity) return [];
@@ -436,7 +365,6 @@ export class SqliteActivityStore implements ActivityStore {
       queued = true;
       return decodeText<CompletedPracticeSession>(encode(record)[0]);
     }).then((result) => {
-      // After the commit: the upload queue gained an entry.
       if (queued) this.notifyQueued();
       return result;
     });
@@ -452,7 +380,6 @@ export class SqliteActivityStore implements ActivityStore {
     });
   }
 
-  /** Spec 1's outgoing synchronization records: one per completion. Other queue entries are the sync engine's. */
   readOutgoing(): Promise<readonly OutgoingSyncRecord[]> {
     return this.transaction(async (tx) =>
       (await tx.all<BodyRow>(`SELECT ${BODY} FROM outgoing WHERE activity_id IS NOT NULL ORDER BY position`)).map((row) =>
@@ -461,11 +388,6 @@ export class SqliteActivityStore implements ActivityStore {
     );
   }
 
-  // -------------------------------------------------------------------------
-  // The sync engine's store port
-  // -------------------------------------------------------------------------
-
-  /** Unacknowledged upload queue entries, in queue order. */
   readUploadQueue(): Promise<readonly QueuedUpload[]> {
     return this.transaction(async (tx) => {
       const { generation } = await readScopeRow(tx);
@@ -489,7 +411,6 @@ export class SqliteActivityStore implements ActivityStore {
       for (const row of rows) {
         const outgoing = decode<QueuedBody>(row);
         const dependencies = JSON.parse(row.dependencies) as string[];
-        // Only the current generation's: the server refuses every earlier one, and their receipts are gone.
         const after =
           dependencies.length === 0
             ? []
@@ -519,11 +440,6 @@ export class SqliteActivityStore implements ActivityStore {
     });
   }
 
-  /**
-   * Adds an entry to the upload queue, with its originating-device position
-   * (allocated here, never reused) and its purge's local removal, in one
-   * transaction; announces it after the commit.
-   */
   queueUpload(entry: NewUpload): Promise<QueuedUpload> {
     return this.transaction(async (tx): Promise<QueuedUpload> => {
       let position: number | null = null;
@@ -558,7 +474,6 @@ export class SqliteActivityStore implements ActivityStore {
     });
   }
 
-  /** Counts a failed attempt for a pending entry with its current count, flagging it when the count reaches `flagAt`. */
   recordUploadFailure(id: string, flagAt: number): Promise<{ readonly failures: number; readonly flagged: boolean }> {
     return this.transaction(async (tx) => {
       const row = await tx.get<{ failures: number; flagged: number }>(`SELECT failures, flagged FROM outgoing WHERE id = ? AND status = 'pending'`, [id]);
@@ -570,14 +485,12 @@ export class SqliteActivityStore implements ActivityStore {
     });
   }
 
-  /** A deliberate retry: the entry's failures are forgotten and it is no longer flagged. */
   clearUploadFailures(id: string): Promise<void> {
     return this.transaction(async (tx) => {
       await tx.run(`UPDATE outgoing SET failures = 0, flagged = 0 WHERE id = ? AND status = 'pending'`, [id]);
     });
   }
 
-  /** Entries whose receipts refused them, in queue order: kept for review. */
   readRejectedUploads(): Promise<readonly RejectedUpload[]> {
     return this.transaction(async (tx) =>
       (
@@ -601,11 +514,6 @@ export class SqliteActivityStore implements ActivityStore {
     });
   }
 
-  /**
-   * Fixes the operation an entry is sent as, with the next command position
-   * under the current generation, in one transaction; once stored it never
-   * changes, and the stored one is returned.
-   */
   prepareUpload(id: string, prepare: (command: Command) => PreparedOperation): Promise<PreparedOperation> {
     return this.transaction(async (tx) => {
       const row = await tx.get<QueueRow>('SELECT id, dependencies, operation_id, request, request_sha256 FROM outgoing WHERE id = ?', [id]);
@@ -627,11 +535,6 @@ export class SqliteActivityStore implements ActivityStore {
     });
   }
 
-  /**
-   * The command scope, with the positions settled here: every position below
-   * the lowest one still live (a pending prepared entry's, or an acknowledged
-   * dependency's that a pending entry names), or the last given when none is.
-   */
   readCommandScope(): Promise<CommandScope> {
     return this.transaction(async (tx) => {
       const { generation, last } = await readScopeRow(tx);
@@ -653,7 +556,6 @@ export class SqliteActivityStore implements ActivityStore {
     });
   }
 
-  /** Adopts a generation the server issued; a new one starts its positions again from 1. */
   adoptCommandScope(generation: number): Promise<void> {
     return this.transaction(async (tx) => {
       if (!Number.isSafeInteger(generation) || generation < 1) throw new StoreError(`invalid command generation ${generation}`);
@@ -661,12 +563,10 @@ export class SqliteActivityStore implements ActivityStore {
     });
   }
 
-  /** The next command position, durably, for an operation sent at once and never queued. */
   allocateCommand(): Promise<Command> {
     return this.transaction(nextCommand);
   }
 
-  /** Settles a pending entry whose scope went stale, or applies the player's decision on an unconfirmed one. */
   reconcileUpload(id: string, outcome: ReconcileOutcome): Promise<void> {
     let requeued = false;
     return this.transaction(async (tx) => {
@@ -680,7 +580,6 @@ export class SqliteActivityStore implements ActivityStore {
             outcome.sequence,
             id,
           ]);
-          // As a receipt would: a revisioned upload the accepted state reflects goes.
           await tx.run(
             `DELETE FROM outgoing WHERE id = ? AND revisioned = 1 AND receipt_sequence <=
                (SELECT sequence FROM accepted_records WHERE record_type = outgoing.record_type AND item_id = outgoing.item_id)`,
@@ -717,7 +616,6 @@ export class SqliteActivityStore implements ActivityStore {
     );
   }
 
-  /** Records the receipt's disposition and acknowledges the entry, with the record an acceptance makes, in one transaction. */
   acknowledgeUpload(id: string, disposition: Disposition, accepted: AcceptedRecord | null): Promise<void> {
     return this.transaction(async (tx) => {
       const row = await tx.get<{ status: string; operation_id: string | null }>('SELECT status, operation_id FROM outgoing WHERE id = ?', [id]);
@@ -733,7 +631,6 @@ export class SqliteActivityStore implements ActivityStore {
         id,
       ]);
       if (accepted) await putAccepted(tx, accepted);
-      // A revisioned upload the accepted state already reflects ("already accepted" at an applied sequence) goes now.
       await tx.run(
         `DELETE FROM outgoing WHERE id = ? AND revisioned = 1 AND status = 'accepted' AND receipt_sequence <=
            (SELECT sequence FROM accepted_records WHERE record_type = outgoing.record_type AND item_id = outgoing.item_id)`,
@@ -746,11 +643,6 @@ export class SqliteActivityStore implements ActivityStore {
     return this.transaction(readCursor);
   }
 
-  /**
-   * Applies entries that follow `from` without a gap (records and redacted
-   * sequences together), with the results they purge, and moves the cursor to
-   * the last, in one transaction; false when the cursor moved.
-   */
   applyFeedPage(from: number, records: readonly AcceptedRecord[], effects: FeedPageEffects = {}): Promise<boolean> {
     return this.transaction(async (tx) => {
       if ((await readCursor(tx)) !== from) return false;
@@ -760,7 +652,6 @@ export class SqliteActivityStore implements ActivityStore {
       }
       for (const record of records) {
         await putAccepted(tx, record);
-        // The item's accepted state now reflects these of its acknowledged uploads: they, and their payloads, go.
         await tx.run(
           `DELETE FROM outgoing WHERE revisioned = 1 AND record_type = ? AND item_id = ? AND status = 'accepted' AND receipt_sequence <= ?`,
           [record.recordType, record.item, record.sequence],
@@ -785,7 +676,6 @@ export class SqliteActivityStore implements ActivityStore {
     });
   }
 
-  /** Records held as summaries, newest first: those from `since` on when given, at most `limit`. */
   readSummaries({ since, limit }: { readonly since?: number; readonly limit: number }): Promise<readonly SummaryOnly[]> {
     return this.transaction(async (tx) =>
       (
@@ -809,7 +699,6 @@ export class SqliteActivityStore implements ActivityStore {
     );
   }
 
-  /** Replaces summaries with the whole records, only where each is still a summary at the same sequence; returns how many. */
   applyDetails(records: readonly AcceptedRecord[]): Promise<number> {
     return this.transaction(async (tx) => {
       let applied = 0;
@@ -829,7 +718,6 @@ export class SqliteActivityStore implements ActivityStore {
     return this.transaction(readHistory);
   }
 
-  /** Records the first download's 90-day count and Download all history's request and starting count; recorded ones stay. */
   recordHistoryProgress(progress: { readonly recent?: number; readonly downloadRequested?: true; readonly downloadTotal?: number }): Promise<void> {
     return this.transaction(async (tx) => {
       if (progress.recent !== undefined) await tx.run('UPDATE history SET recent = coalesce(recent, ?) WHERE singleton = 1', [progress.recent]);
@@ -840,14 +728,6 @@ export class SqliteActivityStore implements ActivityStore {
     });
   }
 
-  /**
-   * Saves (a value) or deletes (null) a revisioned item, queuing its upload in
-   * the same transaction. The upload's base is the accepted revision, or the
-   * item's own latest upload when that one was sent and isn't reflected in the
-   * accepted state yet (it then waits for that one's receipt). A change to an
-   * upload not yet sent replaces it; deleting an item that never left the
-   * installation removes it.
-   */
   writeRevisionedItem(recordType: string, item: string, value: unknown): Promise<void> {
     let queued = false;
     return this.transaction(async (tx) => {
@@ -882,7 +762,6 @@ export class SqliteActivityStore implements ActivityStore {
     });
   }
 
-  /** Every revisioned item of a type this installation holds: the accepted state, and the latest change not reflected in it. */
   readRevisionedItems(recordType: string): Promise<readonly LocalRevisionedItem[]> {
     return this.transaction(async (tx) => {
       const accepted = new Map(
@@ -917,11 +796,6 @@ export class SqliteActivityStore implements ActivityStore {
     return this.transaction(readBootstrapProgress);
   }
 
-  /**
-   * Starts staging a snapshot, discarding any staged before; the queue and
-   * records stay. With the baseline installed, a reset: there is none until
-   * the new one installs, and the cursor stays until then.
-   */
   beginBootstrap(snapshot: BootstrapSnapshot): Promise<void> {
     return this.transaction(async (tx) => {
       await tx.run('DELETE FROM bootstrap_rows');
@@ -934,7 +808,6 @@ export class SqliteActivityStore implements ActivityStore {
     });
   }
 
-  /** Stages a page of the snapshot, with the results it names purged, and moves its progress to `through`; false when the staging moved on. */
   stageBootstrapPage(snapshot: string, after: number, records: readonly AcceptedRecord[], through: number, purged: readonly RecordRef[] = []): Promise<boolean> {
     return this.transaction(async (tx) => {
       const progress = await readBootstrapProgress(tx);
@@ -959,18 +832,11 @@ export class SqliteActivityStore implements ActivityStore {
     });
   }
 
-  /**
-   * Installs the staged snapshot as the baseline and moves the feed cursor to
-   * its watermark, in one transaction. A record held here at a later sequence
-   * stays, nothing else local is removed except the results it names purged,
-   * and a purged result is never accepted again.
-   */
   installBootstrap(snapshot: string): Promise<boolean> {
     return this.transaction(async (tx) => {
       const progress = await readBootstrapProgress(tx);
       if (progress.installed || progress.staging?.snapshot !== snapshot) return false;
       const cursor = await readCursor(tx);
-      // A snapshot is made at the account's head, which is never behind what this installation applied.
       if (cursor > progress.staging.watermark) {
         throw new StoreIntegrityError(`the feed cursor is at ${cursor}, past the snapshot's watermark ${progress.staging.watermark}`);
       }
@@ -987,7 +853,6 @@ export class SqliteActivityStore implements ActivityStore {
            installation_id = excluded.installation_id, device_position = excluded.device_position, summary_at = excluded.summary_at
          WHERE excluded.sequence > accepted_records.sequence`,
       );
-      // Revisioned uploads the baseline already reflects go, as when a feed page reflects them.
       await tx.run(
         `DELETE FROM outgoing WHERE revisioned = 1 AND status = 'accepted' AND receipt_sequence <=
            (SELECT sequence FROM accepted_records WHERE record_type = outgoing.record_type AND item_id = outgoing.item_id)`,
@@ -1002,7 +867,6 @@ export class SqliteActivityStore implements ActivityStore {
     });
   }
 
-  /** Called after a commit adds an entry to the upload queue. */
   onUploadQueued(listener: () => void): () => void {
     this.queuedListeners.add(listener);
     return () => this.queuedListeners.delete(listener);
@@ -1013,19 +877,16 @@ export class SqliteActivityStore implements ActivityStore {
   }
 
   private transaction<T>(work: (tx: SqlExecutor) => Promise<T>): Promise<T> {
-    // Checked before queuing (the session's connection may be closed already), when the transaction starts, and before it commits.
     if (!this.isCurrent()) return Promise.reject(new StaleSessionError());
     return this.connection.transaction(async (tx) => {
       if (!this.isCurrent()) throw new StaleSessionError();
       const result = await work(tx);
-      // The session may have ended while the work ran: then nothing commits.
       if (!this.isCurrent()) throw new StaleSessionError();
       return result;
     });
   }
 }
 
-/** A queue entry's stored body: spec 1's outgoing synchronization record, or another record type's entry in the same shape. */
 interface QueuedBody {
   readonly id: string;
   readonly kind: string;
@@ -1040,7 +901,6 @@ interface QueueRow {
   readonly request_sha256: string | null;
 }
 
-/** The stored operation, checked against its hash like every stored value. */
 function preparedOf(row: QueueRow): PreparedOperation | null {
   if (row.operation_id === null || row.request === null || row.request_sha256 === null) return null;
   if (sha256Hex(row.request) !== row.request_sha256) throw new StoreIntegrityError('a stored upload request fails its hash');
@@ -1062,7 +922,6 @@ async function readAcceptedRow(tx: SqlExecutor, recordType: string, item: string
   ]);
 }
 
-/** The item's latest upload not reflected in its accepted state (at `acceptedSequence`): pending, or acknowledged after it. */
 async function latestChange(tx: SqlExecutor, recordType: string, item: string, acceptedSequence: number): Promise<ChangeRow | null> {
   return (
     (await tx.get<ChangeRow>(
@@ -1075,7 +934,6 @@ async function latestChange(tx: SqlExecutor, recordType: string, item: string, a
   );
 }
 
-/** An accepted record's columns: its value, its origin and whether it is a summary. */
 const ACCEPTED = `${BODY}, record_type, item_id, sequence, installation_id, device_position, summary_at`;
 
 interface AcceptedRow extends BodyRow {
@@ -1124,7 +982,6 @@ async function readScopeRow(tx: SqlExecutor): Promise<{ readonly generation: num
   return row;
 }
 
-/** Gives the next command position under the current generation; refuses before one is adopted. */
 async function nextCommand(tx: SqlExecutor): Promise<Command> {
   const { generation, last } = await readScopeRow(tx);
   if (generation === null) throw new StoreError('no command generation has been adopted');
@@ -1138,7 +995,6 @@ async function readCursor(tx: SqlExecutor): Promise<number> {
   return row.sequence;
 }
 
-/** Records what the account accepted for an item, unless a later sequence is already held for it or the item was purged: a purged result never comes back. */
 async function putAccepted(tx: SqlExecutor, record: AcceptedRecord): Promise<void> {
   if (await tx.get('SELECT 1 FROM purged_records WHERE record_type = ? AND item_id = ?', [record.recordType, record.item])) return;
   await tx.run(
@@ -1159,7 +1015,6 @@ async function putAccepted(tx: SqlExecutor, record: AcceptedRecord): Promise<voi
   );
 }
 
-/** Removes a purged result and keeps only its identity, so nothing accepts it here again. */
 async function purgeRecord(tx: SqlExecutor, ref: RecordRef): Promise<void> {
   await tx.run('DELETE FROM accepted_records WHERE record_type = ? AND item_id = ?', [ref.recordType, ref.item]);
   await tx.run('INSERT OR IGNORE INTO purged_records (record_type, item_id) VALUES (?, ?)', [ref.recordType, ref.item]);
@@ -1193,7 +1048,6 @@ async function readTransition(tx: SqlExecutor, activityId: string, commandId: st
   return row ? decode<CommittedTransition>(row) : null;
 }
 
-/** Records each effect once, by its effect id, in the order first recorded. */
 async function addEffects(tx: SqlExecutor, activityId: string, effects: readonly AllowanceEffect[]): Promise<void> {
   for (const effect of effects) {
     const { grant, activity, sequence } = effect.effectId;
@@ -1205,7 +1059,6 @@ async function addEffects(tx: SqlExecutor, activityId: string, effects: readonly
   }
 }
 
-/** The stored text of a value, and the format, length and hash its reads check. */
 function encode(value: unknown): [body: string, format: number, length: number, sha256: string] {
   const body = canonicalJson(withoutUndefined(value));
   return [body, BODY_FORMAT, utf8Length(body), sha256Hex(body)];
@@ -1222,7 +1075,6 @@ const decodeText = <T>(text: string): T => JSON.parse(text) as T;
 
 const utf8Length = (text: string): number => new TextEncoder().encode(text).length;
 
-/** Optional fields left undefined are absent from the stored text, as JSON leaves them. */
 function withoutUndefined(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(withoutUndefined);
   if (value === null || typeof value !== 'object') return value;

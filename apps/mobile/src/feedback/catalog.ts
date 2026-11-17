@@ -1,9 +1,5 @@
-// The launch sound and haptic catalog (docs/decisions/launch-audio-catalog-controls.md,
-// spec #51 "Audio and haptics"). Sixteen functional cues, all bundled with the
-// app. Event cues mark that something happened; feedback cues judge the
-// learner and are withheld while a Check attempt is active.
+// Spec 1 Audio and haptics
 
-/** Standard platform haptic patterns. */
 export type HapticPattern = 'selection' | 'impact-light' | 'impact-medium' | 'impact-heavy' | 'success' | 'warning' | 'error';
 
 export type CueName =
@@ -25,17 +21,12 @@ export type CueName =
   | 'milestone';
 
 export interface Cue {
-  /** The catalog number, 1–16. */
   readonly number: number;
   readonly name: CueName;
   readonly kind: 'event' | 'feedback';
-  /** The paired haptic, or null (card dealt fires too often to pair one). */
   readonly haptic: HapticPattern | null;
-  /** The longest the sound may run: under a second, or two for the wheel. */
   readonly maxMs: number;
-  /** The existing visible change or announcement the cue mirrors. A cue never carries anything else. */
   readonly visibleEquivalent: string;
-  /** The spec whose activities first fire it; spec 1 wires every cue. */
   readonly firstExercisedBy: 'spec 1' | 'spec 3';
 }
 

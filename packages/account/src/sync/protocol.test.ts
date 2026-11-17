@@ -1,10 +1,4 @@
-// The release check's encoding half (spec 2 Amendment 1 C5): protocol 1's
-// envelope encoding is fixed. A durable receipt matches a retry only by its
-// request hash, so a build that encoded the same operation differently would
-// be refused as "operation reused" for every upload queued by an earlier
-// build. Changing the encoding needs a new protocol version, with its own
-// operations, and this file gains that version's fixture beside this one.
-// Seam 2's test/compatibility.test.ts checks the server hashes the same bytes.
+// Spec 2 Amendment 1 C5
 
 import { createHash } from 'node:crypto';
 
@@ -25,7 +19,6 @@ describe('protocol 1’s encoding', () => {
       item: 'activity-1',
       payload: { recordVersion: 1, netResult: '-12.5', activityId: 'activity-1', turnsPlayed: 3 },
     });
-    // Written out by hand, not by the encoder.
     const text =
       '{"command":{"generation":2,"position":41},"installation":"installation-1","item":"activity-1","operation":"0123456789abcdef0123456789abcdef",' +
       '"payload":{"activityId":"activity-1","netResult":"-12.5","recordVersion":1,"turnsPlayed":3},' +

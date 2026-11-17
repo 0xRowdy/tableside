@@ -1,10 +1,3 @@
-// Seam 3: guided blackjack, basic strategy and basic with deviations, rendered
-// through the real routes on the in-memory adapters and driven only through
-// the accessibility tree. The shoe is the Random123 "pi digits" shuffle: round
-// 1 deals you the 10 of spades and Jack of diamonds (20) against a dealer 10
-// of spades up with the 6 of spades face down; the next card is the Ace of
-// diamonds. Basic strategy stands on 20 against a 10, so a hit departs.
-
 import { blackjackStrategy } from '@tableside/definitions';
 import { explainPlay, type Card, type PlayCorrection } from '@tableside/engine';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
@@ -52,7 +45,6 @@ async function betAndDeal() {
   await screen.findByLabelText('Status Your turn');
 }
 
-/** Every label, hint, value and text in the rendered tree, plus every announcement. */
 function everythingSpoken(): string {
   return JSON.stringify(screen.toJSON()) + announcements.join(' ');
 }
@@ -74,7 +66,6 @@ describe('guided blackjack', () => {
     expect(screen.queryByTestId('count-panel')).toBeNull();
 
     await betAndDeal();
-    // The prescription is the reference answer: nothing names it before the player acts.
     expect(everythingSpoken()).not.toMatch(/stands on|Take it back|6 of spades|6♠|Ace of diamonds/);
     for (const name of ['Hit', 'Stand', 'Double']) expect(screen.getByRole('button', { name })).toBeEnabled();
   });
@@ -92,12 +83,10 @@ describe('guided blackjack', () => {
     expect(panel.getByText('Basic strategy (S17, LS) stands on a pair of tens (20) against 10.')).toBeOnTheScreen();
     expect(panel.getByText("Your hit hasn't been played yet.")).toBeOnTheScreen();
     expect(announcements.join(' ')).toContain('Paused before your hit: nothing has been played yet.');
-    // Nothing was dealt: the hole card is still face down, and the hand still has two cards.
     expect(screen.getByLabelText('Face-down card')).toBeOnTheScreen();
     expect(everythingSpoken()).not.toMatch(/6 of spades|Ace of diamonds/);
     expect(screen.getByLabelText('Status Paused · your move')).toBeOnTheScreen();
     expect(within(screen.getByTestId('phase-stepper')).getByLabelText('Step 3 of 4, Play, current')).toBeOnTheScreen();
-    // Touch targets: 48 at least.
     for (const name of ['Take it back & stand', 'Keep my hit']) {
       expect(StyleSheet.flatten(panel.getByRole('button', { name }).props.style).minHeight).toBeGreaterThanOrEqual(48);
     }
@@ -119,7 +108,6 @@ describe('guided blackjack', () => {
 
     await fireEvent.press(panel.getByRole('button', { name: 'Keep my hit' }));
 
-    // The ace makes 21, and the round settles.
     await waitFor(() => expect(screen.getByLabelText('Status Settled automatically')).toBeOnTheScreen());
     expect(screen.getByText('Guided · Basic strategy')).toBeOnTheScreen();
     expect(screen.getByLabelText('Strategy adherence: Followed 0 of 1 decision. Departures 1.')).toBeOnTheScreen();
@@ -145,21 +133,17 @@ describe('guided blackjack', () => {
     const before = within(screen.getByTestId('count-panel'));
     expect(before.getByText('True count 0')).toBeOnTheScreen();
     expect(before.getByText('Running 0 · 6 decks left · 0 ÷ 6 = 0')).toBeOnTheScreen();
-    // Between rounds it names the deviation at this count and the next index up.
     expect(before.getByText(/^Deviation at this count: /)).toBeOnTheScreen();
     expect(before.getByText(/^Next: /)).toBeOnTheScreen();
 
     await betAndDeal();
-    // Exposed: 10♠, 10♠ and J♦ (−3); the face-down 6♠ (+1) is not counted.
     const during = within(screen.getByTestId('count-panel'));
     expect(during.getByText('Running −3 · 6 decks left · −3 ÷ 6 = 0')).toBeOnTheScreen();
-    // During a decision no deviation is named: that would be the answer.
     expect(during.queryByText(/^Deviation at this count/)).toBeNull();
     expect(screen.getByTestId('count-panel')).toHaveProp('accessibilityLabel', 'Count supplied in this mode: true count 0. Running count −3, 6 decks left.');
   });
 
   it('a correction decided by an index states how the taught index differs from the published ones, and why', async () => {
-    // 16 (10, 2, 4) against a 10 at a true count of +1: Tableside stands; Schlesinger publishes +0.
     const card = (rank: number): Card => ({ deck: 0, suit: 'clubs', rank: rank as Card['rank'] });
     const definition = blackjackStrategy('S17_LS', 'basic-with-deviations');
     const result = explainPlay(definition, {

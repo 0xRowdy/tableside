@@ -1,6 +1,3 @@
-// A minimal RFC 4180 reader for the embedded reference files: CRLF records,
-// double-quoted fields that may hold commas. Rows are keyed by the header.
-
 export type CsvRow = Readonly<Record<string, string>>;
 
 export function parseCsv(text: string): CsvRow[] {
@@ -20,14 +17,12 @@ export function parseCsv(text: string): CsvRow[] {
     else if (c === ',') {
       record.push(field);
       field = '';
-    } else if (c === '\r' && text.charAt(i + 1) === '\n') {
-      // the record ends at the \n
     } else if (c === '\n') {
       record.push(field);
       records.push(record);
       record = [];
       field = '';
-    } else field += c;
+    } else if (c !== '\r' || text.charAt(i + 1) !== '\n') field += c;
   }
   if (field !== '' || record.length > 0) {
     record.push(field);

@@ -1,15 +1,9 @@
-// Seam 3: the roulette free-play screens, rendered through the real routes on
-// the in-memory adapters and driven only through the accessibility tree.
-// Spins come from the Random123 "pi digits" stream: 27 (red), then 0, 25 on the
-// single-zero wheel; 3, then 29, 0 on the double-zero wheel.
-
 import { act, cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react-native';
 import { renderRouter } from 'expo-router/testing-library';
 import { AccessibilityInfo, Dimensions, StyleSheet } from 'react-native';
 
 import type { substituteAdapters } from '@/practice/testing/substitutes';
 
-// The app runs on the substitute adapters; the latest set is kept for failure injection.
 const mockAdapters: { latest: ReturnType<typeof substituteAdapters> | null } = { latest: null };
 jest.mock('@/practice/app-adapters', () => {
   const { FakeClock, substituteAdapters: create } = jest.requireActual('@/practice/testing/substitutes');
@@ -43,7 +37,6 @@ async function startSession(wheel: 'Single zero (0)' | 'Double zero (0, 00)' = '
 const spot = (name: RegExp) => screen.getByRole('button', { name });
 const chip = (value: string) => screen.getByRole('radio', { name: `${value} chip` });
 
-/** Opens the bet selector's Find by number and picks a number. */
 async function openFinder(pocket: string) {
   await fireEvent.press(screen.getByRole('tab', { name: 'Bet list' }));
   await fireEvent.press(screen.getByRole('button', { name: /^Find by number,/ }));
@@ -119,7 +112,6 @@ describe('roulette free play', () => {
     expect(spot(/^Straight 17,/)).toHaveAccessibilityValue({ text: '5 on it' });
     expect(screen.getByLabelText('Session balance 970')).toBeOnTheScreen();
     expect(screen.getByLabelText('On table 30')).toBeOnTheScreen();
-    // A wagered spot is marked by its stake text, not only by its outline color.
     expect(within(spot(/^Red,/)).getByText('25')).toBeOnTheScreen();
   });
 
@@ -137,7 +129,6 @@ describe('roulette free play', () => {
     await startSession();
     await chooseChipAndTap('25', /^Red,/);
     await chooseChipAndTap('5', /^Straight 17,/);
-    // Nothing about the coming spin is exposed before it is committed.
     expect(screen.queryByLabelText(/^Last spin/)).toBeNull();
     expect(announcements.join(' ')).not.toMatch(/landed/);
 
@@ -235,7 +226,6 @@ describe('roulette free play', () => {
 
     const results = within(screen.getByTestId('finder-results'));
     expect(results.getByRole('header', { name: 'Wagers on 17' })).toBeOnTheScreen();
-    // Every inside bet covering 17, per the standard layout: 1 straight, 4 splits, 1 street, 4 corners, 2 six lines.
     expect(results.getAllByRole('button').map((row) => row.props.accessibilityLabel)).toEqual([
       'Straight 17, pays 35 to 1',
       'Split 14 and 17, pays 17 to 1',
@@ -250,7 +240,6 @@ describe('roulette free play', () => {
       'Six line 13 to 18, pays 5 to 1',
       'Six line 16 to 21, pays 5 to 1',
     ]);
-    // Payouts are labelled on screen too, not only for screen readers.
     expect(results.getAllByText(/^Split 17:1$/)).toHaveLength(4);
     expect(results.getByText('16 | 17')).toBeOnTheScreen();
     expect(screen.getByLabelText('On table 0')).toBeOnTheScreen();
@@ -297,19 +286,16 @@ describe('roulette free play', () => {
     ['Double zero (0, 00)', 161, ['0', '00'], 'Five-number basket 0, 00, 1, 2 and 3, pays 6 to 1'],
   ] as const)('reaches every placement of the %s layout from the table and the bet selector', async (wheel, count, zeros, zeroBet) => {
     await startSession(wheel);
-    // One tap on the felt: the numbers straight up and every outside bet.
     const names = new Set(
       within(screen.getByTestId('felt'))
         .getAllByRole('button')
         .map((control) => (control.props.accessibilityLabel as string).replace(/, (red|black|green)(?=, pays)/, '')),
     );
-    // Find by number: every inside bet covering each pocket.
     await openFinder(zeros[0]);
     for (const pocket of [...zeros, ...Array.from({ length: 36 }, (_, i) => String(i + 1))]) {
       await fireEvent.press(screen.getByRole('radio', { name: pocket }));
       for (const row of within(screen.getByTestId('finder-results')).getAllByRole('button')) names.add(row.props.accessibilityLabel);
     }
-    // 12 outside placements plus every inside placement, each reached once by name.
     expect(names.size).toBe(count);
     expect(names).toContain(zeroBet);
     expect(names).toContain('Trio 0, 1 and 2, pays 11 to 1');

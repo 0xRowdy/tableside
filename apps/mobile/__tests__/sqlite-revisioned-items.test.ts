@@ -1,7 +1,4 @@
-// The SQLCipher account store's revisioned items (#94), at seam 1: local saves
-// and deletions queue their uploads in the same transaction, name the base
-// they were made from, and show as local changes until the account's accepted
-// state reflects them.
+// #94
 
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -14,7 +11,6 @@ import { completedRecord, newActivity, transition } from '@/practice/testing/sto
 const KEY = 'ef'.repeat(32);
 const IDENTITY: StoreIdentity = { environment: 'test', accountId: 'local', installationId: 'test-device' };
 const TYPE = 'test-revisioned-item';
-/** SHA-256("abc"), FIPS 180-2 appendix B.1. */
 const ABC_SHA256 = 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad';
 const OPERATION = { operationId: 'a'.repeat(32), request: 'abc', requestHash: ABC_SHA256 };
 
@@ -42,10 +38,8 @@ const state = (revision: number, net: string | null) => ({
   conflict: null,
 });
 
-/** The account accepted the item at `sequence` (as a feed page brings it). */
 async function acceptedAt(store: SqliteActivityStore, item: string, sequence: number, payload: unknown) {
   const cursor = await store.readFeedCursor();
-  // Earlier sequences belong to other items here.
   const filler = Array.from({ length: sequence - cursor - 1 }, (_, index) => ({
     recordType: TYPE,
     item: `other-${cursor + index + 1}`,
@@ -104,7 +98,6 @@ describe('a revisioned item saved on this installation', () => {
     const [first] = await store.readUploadQueue();
     await store.prepareUpload(first!.id, () => OPERATION);
 
-    // Sent, no receipt yet: the next edit waits for it and follows whatever revision it made.
     await store.writeRevisionedItem(TYPE, 'item-1', value('30'));
     const [, second] = await uploads(store);
     expect(second).toEqual({
@@ -113,7 +106,6 @@ describe('a revisioned item saved on this installation', () => {
       dependencies: [first!.id],
     });
 
-    // Acknowledged, but the feed hasn't brought the item yet: still the local change, still following the operation.
     await store.acknowledgeUpload(first!.id, { status: 'accepted', operation: OPERATION.operationId, requestHash: ABC_SHA256, sequence: 1 }, null);
     expect(await item(store, 'item-1')).toEqual({ item: 'item-1', accepted: null, change: { value: value('30') }, onAccount: true });
   });
@@ -128,7 +120,6 @@ describe('a revisioned item saved on this installation', () => {
     await acceptedAt(store, 'item-1', 1, state(1, '25'));
     expect(await store.readRevisionedItems(TYPE)).toEqual([{ item: 'item-1', accepted: state(1, '25'), change: null, onAccount: true }]);
 
-    // The next edit is made from the accepted revision again.
     await store.writeRevisionedItem(TYPE, 'item-1', value('5'));
     expect((await uploads(store)).map((upload) => upload.payload)).toEqual([{ item: 'item-1', action: 'save', base: 1, value: value('5') }]);
   });
@@ -136,7 +127,6 @@ describe('a revisioned item saved on this installation', () => {
   it('leaves the queue at once when its receipt names a sequence the accepted state already reflects', async () => {
     const store = await newStore();
     await acceptedAt(store, 'item-1', 3, state(2, '10'));
-    // A stale save of the value the account already holds: the server answers "already accepted" at 3.
     await store.writeRevisionedItem(TYPE, 'item-1', value('10'));
     const [upload] = await store.readUploadQueue();
     await store.prepareUpload(upload!.id, () => OPERATION);
@@ -150,7 +140,6 @@ describe('a revisioned item saved on this installation', () => {
   it('never moves an item back to an earlier accepted state', async () => {
     const store = await newStore();
     await acceptedAt(store, 'item-1', 2, state(2, '20'));
-    // A page that repeats an older state for the item (a resolution rewrote earlier entries) leaves the later one.
     expect(await store.applyFeedPage(2, [{ recordType: TYPE, item: 'item-1', sequence: 3, payload: state(3, '30') }])).toBe(true);
     expect((await item(store, 'item-1'))?.accepted).toEqual(state(3, '30'));
   });

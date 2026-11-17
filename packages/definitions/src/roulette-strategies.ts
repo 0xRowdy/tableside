@@ -1,14 +1,8 @@
-// Built-in roulette strategies (spec #51, Built-in strategies): executable
-// data in the roulette strategy vocabulary, with no special-cased code, so a
-// builder-authored equivalent runs identically. Amounts are on the default
-// 10-minimum table: the spec's 1-unit stake is 10. Targets are chosen before the
-// session starts and stay fixed for every cycle. The progressions (capped
-// Martingale, three-win parlay, bounded Labouchere) declare caps and a
-// completion rule, so each cycle ends on completion or at its cap.
+// Spec 1 Built-in strategies
 
 import type { StrategyDefinition } from '@tableside/engine';
 
-/** Written for both launch wheels at the launch default limits (#3). */
+// #3
 const LAUNCH_TABLE = {
   wheels: ['single-zero', 'double-zero'],
   limits: { inside: { min: '1', max: '100' }, outside: { min: '10', max: '1000' } },
@@ -64,7 +58,6 @@ export const FIXED_TWO_DOZENS: StrategyDefinition = {
   note: '10 on each of two dozens you choose.',
 };
 
-/** An even-money target chosen before the session, fixed for every cycle. */
 const EVEN_MONEY_TARGET = { id: 'target', label: 'Target', choices: ['red', 'black', 'odd', 'even', 'low', 'high'], default: 'red' };
 
 export const CAPPED_MARTINGALE: StrategyDefinition = {
@@ -81,7 +74,6 @@ export const CAPPED_MARTINGALE: StrategyDefinition = {
       id: 'stake',
       label: 'The current stake on your even-money target',
       when: { always: true },
-      // 320 is the cap: a loss at 320 ends the cycle rather than betting 640.
       bets: [{ target: { param: 'target' }, amount: { counter: 'stake' }, cap: '320' }],
     },
   ],
@@ -147,9 +139,7 @@ export const BOUNDED_LABOUCHERE: StrategyDefinition = {
   note: 'Line 10, 20, 30: bet first plus last. A win crosses them off, a loss adds the stake. An empty line completes the cycle; a stake over 320 ends it at the cap.',
 };
 
-/** The built-in roulette strategies, in picker order. */
 export const ROULETTE_STRATEGIES: readonly StrategyDefinition[] = [FLAT_EVEN_MONEY, FIXED_TWO_DOZENS, CAPPED_MARTINGALE, THREE_WIN_PARLAY, BOUNDED_LABOUCHERE];
 
-/** Each parameter's default choice. */
 export const strategyDefaults = (definition: StrategyDefinition): Record<string, string> =>
   Object.fromEntries(definition.parameters.map((param) => [param.id, param.default]));

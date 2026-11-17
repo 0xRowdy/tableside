@@ -1,8 +1,3 @@
-// A later build's store migrations, for tests: this build's, then two more
-// releases' (both skipped by a device that updates straight to it). One adds a
-// column and the next rebuilds a table; the store's own statements work
-// unchanged over either.
-
 import { schemaVersionOf, STORE_MIGRATIONS, type StoreMigration } from '../store-schema';
 
 export function laterBuild(migrations: readonly StoreMigration[] = STORE_MIGRATIONS): readonly StoreMigration[] {

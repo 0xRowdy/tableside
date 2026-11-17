@@ -1,11 +1,4 @@
-// S2-15 Age step, on Create only. Where the device offers a platform age check
-// (Apple's age range on iOS 26+, Google Play's age signals), it comes first
-// (S2-15 "platform age check"); otherwise, or when the platform can't or won't
-// share a range, the fallback question (S2-15 "fallback question"). Under 13
-// ends the flow with nothing sent or kept; a required check that stands in the
-// way ends at "unresolved before any account exists". Then the sign-in method
-// (S2-13 Create account), or, when this Create began from a Sign in with Apple
-// or Google that found no account, that identity's account.
+// Spec 2 S2-15
 
 import type { AgeCheckResult } from '@tableside/account';
 import { router } from 'expo-router';

@@ -1,22 +1,14 @@
-// The roulette game module: each wheel's layout of legal placements (which
-// pockets each covers, its payout and limit class), settlement of one
-// placement, and the one-spin outcome table. A layout enumerates its
-// placements explicitly, zero-adjacent ones included; a number set that isn't
-// on the layout is not a bet, however many pockets it covers.
-
 import type { ActivityStateBase, DomainFact, GameCommand, GameModule, RoulettePermittedView, Step } from './activity';
 import { roulettePockets, spinRoulette, type RoulettePocket, type RouletteWheel } from './draws';
 import { add, compare, decodeMoney, encodeMoney, money, mul, neg, sub, type Money } from './money';
 import { RandomStream } from './random';
 import { BASE_WAGER_CEILING, hasExactKeys, isCount, isIdentity, isLimit, isWagerList, type Limit, type VersionedIdentity } from './shape';
 
-/** The rule sets this engine can run, one per wheel. Rules are pinned by id and version. */
 export const ROULETTE_RULE_SETS = {
   'single-zero': { id: 'roulette-single-zero', version: 1, wheel: 'single-zero' },
   'double-zero': { id: 'roulette-double-zero', version: 1, wheel: 'double-zero' },
 } as const satisfies Record<RouletteWheel, { id: string; version: number; wheel: RouletteWheel }>;
 
-/** Inside placements use the inside limits; outside placements the outside limits. */
 export type LimitClass = 'inside' | 'outside';
 
 export type PlacementKind =
@@ -38,17 +30,10 @@ export type PlacementKind =
   | 'column';
 
 export interface RoulettePlacement {
-  /**
-   * Stable target id. Inside bets name their kind and pockets in wheel order
-   * ("straight-17", "split-0-00", "corner-1-2-4-5", "basket-0-00-1-2-3");
-   * outside bets name the area ("red", "low", "dozen-2", "column-3").
-   */
   readonly target: string;
   readonly kind: PlacementKind;
   readonly limitClass: LimitClass;
-  /** Covered pockets in wheel order. */
   readonly covers: readonly RoulettePocket[];
-  /** Net payout per unit staked (35 for 35:1); the stake is returned separately. */
   readonly payout: bigint;
 }
 
@@ -73,18 +58,11 @@ const PAYOUT: Record<PlacementKind, bigint> = {
 
 const RED: ReadonlySet<number> = new Set([1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36]);
 
-/** A pocket's colour on the layout: the zeros are green. */
 export const pocketColor = (pocket: RoulettePocket): 'red' | 'black' | 'green' =>
   typeof pocket !== 'number' || pocket === 0 ? 'green' : RED.has(pocket) ? 'red' : 'black';
 const NUMBERS = Array.from({ length: 36 }, (_, i) => i + 1);
-/** The layout column (1-3) of a number. */
 const columnOf = (n: number) => ((n - 1) % 3) + 1;
 
-/**
- * Where the zero pockets meet the grid. On the single-zero layout 0 spans the
- * top of all three columns; on the double-zero layout 0 sits over 1 and 2, 00
- * over 2 and 3, with the 0-00 split between them.
- */
 const ZERO_PLACEMENTS: Record<RouletteWheel, readonly (readonly [PlacementKind, readonly RoulettePocket[]])[]> = {
   'single-zero': [
     ['split', [0, 1]],
@@ -107,7 +85,6 @@ const ZERO_PLACEMENTS: Record<RouletteWheel, readonly (readonly [PlacementKind, 
   ],
 };
 
-/** Kinds in canonical layout order. */
 const KIND_ORDER: readonly PlacementKind[] = [
   'straight', 'split', 'street', 'trio', 'corner', 'first-four', 'six-line', 'basket',
   'red', 'black', 'odd', 'even', 'low', 'high', 'dozen', 'column',
@@ -151,7 +128,6 @@ function buildLayout(wheel: RouletteWheel): RoulettePlacement[] {
       payout: PAYOUT[kind],
     };
   });
-  // Canonical order: by kind, then inside bets by their pockets in wheel order.
   const compareCovers = (a: readonly RoulettePocket[], b: readonly RoulettePocket[]) => {
     const [x, y] = [rank(a), rank(b)];
     for (let i = 0; i < Math.min(x.length, y.length); i++) if (x[i] !== y[i]) return (x[i] as number) - (y[i] as number);
@@ -175,16 +151,13 @@ const LAYOUTS: Record<RouletteWheel, Layout> = (() => {
   return { 'single-zero': layout('single-zero'), 'double-zero': layout('double-zero') };
 })();
 
-/** Every legal placement on the wheel's layout, in canonical order. */
 export const rouletteLayout = (wheel: RouletteWheel): readonly RoulettePlacement[] => LAYOUTS[wheel].placements;
 
 export const placementFor = (wheel: RouletteWheel, target: string): RoulettePlacement | undefined =>
   LAYOUTS[wheel].byTarget.get(target)?.placement;
 
-/** Canonical layout order, for keeping wagers sorted; -1 for a target not on the layout. */
 export const placementOrder = (wheel: RouletteWheel, target: string): number => LAYOUTS[wheel].byTarget.get(target)?.index ?? -1;
 
-/** A placement's net result for one pocket: stake × payout when it covers the pocket, else minus the stake. */
 export const netResult = (placement: RoulettePlacement, stake: Money, pocket: RoulettePocket): Money =>
   placement.covers.includes(pocket) ? mul(stake, money(placement.payout)) : neg(stake);
 
@@ -192,21 +165,11 @@ export const isPocket = (wheel: RouletteWheel, value: unknown): value is Roulett
   (typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= 36) || (wheel === 'double-zero' && value === '00');
 
 export interface OneSpinOutcome {
-  /** The pockets giving this net result, in wheel order. */
   readonly pockets: readonly RoulettePocket[];
-  /** Exact probability of landing in one of them, canonical money encoding ("18/37"). */
   readonly probability: string;
-  /** The layout's net result for the spin, canonical money. */
   readonly net: string;
 }
 
-/**
- * The one-spin outcome table for a fixed layout of wagers on a wheel: every
- * pocket grouped by the layout's net result, with each group's exact
- * probability. Groups are ordered by their first pocket in wheel order. Pure:
- * it makes no draws. Throws RangeError for a target not on the wheel's
- * layout, a repeated target, or a stake that isn't positive canonical money.
- */
 export function oneSpinOutcomeTable(wagers: readonly { readonly target: string; readonly amount: string }[], wheel: RouletteWheel): OneSpinOutcome[] {
   const seen = new Set<string>();
   const placed = wagers.map(({ target, amount }) => {
@@ -238,23 +201,18 @@ export function oneSpinOutcomeTable(wagers: readonly { readonly target: string; 
   }));
 }
 
-// ---- the game module ----------------------------------------------------
-
 export interface RouletteRuleSet extends VersionedIdentity {
   readonly wheel: RouletteWheel;
   readonly limits: { readonly inside: Limit; readonly outside: Limit };
 }
 
 export interface RouletteActivityState extends ActivityStateBase<'roulette'> {
-  /** The pinned rule content, not a pointer to current definitions. */
   readonly rules: Pick<RouletteRuleSet, 'wheel' | 'limits'>;
-  /** The latest turn's generated outcome. */
   readonly outcome: { readonly turn: number; readonly pocket: RoulettePocket } | null;
 }
 
 export interface RouletteTable {
   readonly wheel: RouletteWheel;
-  /** Every legal placement on the layout, in canonical order. */
   readonly placements: readonly {
     target: string;
     kind: PlacementKind;
@@ -268,7 +226,6 @@ export interface RouletteTable {
 
 const isWheel = (value: unknown): value is RouletteWheel => value === 'single-zero' || value === 'double-zero';
 
-/** True when the id, version and wheel name one of the rule sets this engine runs. */
 const isRuleSet = (value: Record<string, unknown>): boolean =>
   isWheel(value.wheel) && value.id === ROULETTE_RULE_SETS[value.wheel].id && value.version === ROULETTE_RULE_SETS[value.wheel].version;
 
@@ -290,8 +247,6 @@ function apply(state: State, command: GameCommand): Step<State> {
     }
     case 'request-stop': {
       const facts: DomainFact[] = [{ kind: 'stop-requested', phase: state.phase }];
-      // A spin in progress keeps its committed wagers for final settlement;
-      // otherwise every wager is still removable and goes back.
       if (state.phase === 'revealing-outcome') return { change: { phase: 'final-settlement' }, facts };
       let balance = decodeMoney(state.balance);
       for (const wager of state.wagers) {
@@ -332,15 +287,12 @@ function placeWager(state: State, target: string, amount: Money): Step<State> {
   };
 }
 
-/** Settles every committed wager against the latest outcome. With no wagers, nothing is settled. */
 function settle(state: State): { balance: string; facts: DomainFact[] } {
   let balance = decodeMoney(state.balance);
   const facts: DomainFact[] = [];
   if (state.wagers.length === 0) return { balance: state.balance, facts };
-  // Wagers exist outside a decision only once a turn has generated its outcome.
   const outcome = state.outcome as NonNullable<State['outcome']>;
   for (const wager of state.wagers) {
-    // Every stored target is a layout placement (placeWager and decode both check).
     const placement = placementFor(state.rules.wheel, wager.target) as RoulettePlacement;
     const stake = decodeMoney(wager.amount);
     const net = netResult(placement, stake, outcome.pocket);
@@ -373,14 +325,12 @@ function damage(value: Record<string, unknown>): string | undefined {
     return 'damaged outcome';
   }
   const committed = phase === 'revealing-outcome' || (phase === 'final-settlement' && wagers.length > 0 && outcome !== null);
-  // Only guided practice takes a waiting spin, with nothing at stake.
   if (phase === 'revealing-outcome' && wagers.length === 0 && strategy === null) return 'a revealing turn has no committed wagers';
   if ((phase === 'settled-outcome' || phase === 'completed') && wagers.length > 0) return 'wagers remain after settlement';
   if (phase === 'final-settlement' && wagers.length > 0 && !committed) return 'damaged final settlement';
   return undefined;
 }
 
-/** A spin: the wheel draws a pocket and the turn's wagers (none, for a waiting spin) are committed to it. */
 function spin(state: State): Step<State> {
   const stream = RandomStream.restore(state.random);
   const pocket = spinRoulette(stream, state.rules.wheel);
@@ -394,7 +344,6 @@ function spin(state: State): Step<State> {
   };
 }
 
-/** Single- and double-zero roulette behind the session protocol. */
 export const ROULETTE: GameModule<RouletteActivityState, RoulettePermittedView> = {
   ruleSets: Object.values(ROULETTE_RULE_SETS).map(({ id, version }) => ({ id, version })),
   extra: {},
@@ -405,9 +354,7 @@ export const ROULETTE: GameModule<RouletteActivityState, RoulettePermittedView> 
     return { wheel: rules.wheel as RouletteWheel, limits: { inside: { min: inside.min, max: inside.max }, outside: { min: outside.min, max: outside.max } } };
   },
   apply,
-  // A waiting spin: guided practice spins on while the strategy places nothing yet (it waits for a pattern).
   idleTurn: spin,
-  // Every placement at its own maximum: chips on one target never pass its limit, and there is no aggregate cap.
   turnExposure: (rules) => {
     const placements = rouletteLayout(rules.wheel);
     const stake = placements.reduce((sum, placement) => add(sum, decodeMoney(rules.limits[placement.limitClass].max)), money(0n));

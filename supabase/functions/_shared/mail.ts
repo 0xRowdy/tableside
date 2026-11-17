@@ -1,13 +1,9 @@
-// The mail sender: every email Tableside sends goes out here, synchronously,
-// with no retry queue (spec 2, *Transactional email*). Locally it delivers to
-// the stack's mail catcher; production sending (Resend) is #122's. Nothing
-// here logs an address, code or body.
+// Spec 2 Transactional email; #122
 
 import { serviceRpc } from './service.ts';
 
 declare const Deno: { env: { get(name: string): string | undefined } };
 
-/** The local stack's mail catcher (config.toml [edge_runtime.secrets]). */
 const MAILPIT_URL = Deno.env.get('TABLESIDE_MAILPIT_URL');
 
 export interface Mail {
@@ -16,7 +12,6 @@ export interface Mail {
   readonly html: string;
 }
 
-/** Sends one email synchronously; false when it wasn't accepted. */
 export async function deliver(to: string, mail: Mail, from: 'codes' | 'security' = 'codes'): Promise<boolean> {
   if (!MAILPIT_URL) return false;
   try {
@@ -38,7 +33,6 @@ export async function deliver(to: string, mail: Mail, from: 'codes' | 'security'
   }
 }
 
-/** A sign-in or confirmation code. */
 export function codeMail(code: string, purpose = 'Your Tableside code'): Mail {
   return {
     subject: purpose,
@@ -47,12 +41,6 @@ export function codeMail(code: string, purpose = 'Your Tableside code'): Mail {
   };
 }
 
-/**
- * Sends a security notice for a change that already happened, then logs the
- * send. The change stands either way: a notice that couldn't go is logged as
- * a failed send and never retried, and a send log that couldn't be written
- * doesn't turn the change into a failure.
- */
 export async function sendSecurityNotice(environment: string, to: string | null | undefined, mail: Mail, type: string): Promise<void> {
   const delivered = to ? await deliver(to, mail, 'security') : false;
   try {
@@ -63,12 +51,6 @@ export async function sendSecurityNotice(environment: string, to: string | null 
   }
 }
 
-/**
- * The "devices signed out" security notice: after the player signed devices
- * out, or after a provider withdrew a sign-in method (`method`, its name).
- * It names no device: labels are what each device called itself, so they
- * never vouch for which device it was.
- */
 export function devicesSignedOutMail(devices: number, method?: string): Mail {
   const what = devices === 1 ? 'A device was' : `${devices} devices were`;
   const why = method ? `${method} stopped vouching for your Tableside account, so it was removed as a way to sign in. ` : '';
@@ -90,11 +72,7 @@ export function devicesSignedOutMail(devices: number, method?: string): Mail {
   };
 }
 
-/**
- * "Deletion scheduled" (#103): the date the account is deleted permanently, and
- * how to undo it until then. It never says a subscription was canceled: billing
- * continues until the player cancels it with the store (Amendment 1 C2).
- */
+// Spec 2 Amendment 1 C2; #103
 export function deletionScheduledMail(deadline: string): Mail {
   const on = new Date(deadline).toUTCString().replace(/ \d\d:\d\d:\d\d GMT$/, '');
   const text =
@@ -113,12 +91,7 @@ export function deletionScheduledMail(deadline: string): Mail {
   };
 }
 
-/**
- * "Permanent deletion accepted" (#104): the account is being erased and can't
- * come back. It never says a subscription was canceled or refunded (Amendment
- * 1 C2): the store's subscription and refund paths are where the player does
- * that. Sent before the address itself is erased.
- */
+// Spec 2 Amendment 1 C2; #104
 export function deletionAcceptedMail(cleanupBy: string): Mail {
   const by = new Date(cleanupBy).toUTCString().replace(/ \d\d:\d\d:\d\d GMT$/, '');
   const text =
@@ -136,11 +109,6 @@ export function deletionAcceptedMail(cleanupBy: string): Mail {
   };
 }
 
-/**
- * "Export ready": where to find the account archive and until when. It carries no
- * link: the archive downloads only in the app, for a session that confirms
- * it's the player.
- */
 export function exportReadyMail(expiresAt: string): Mail {
   const until = new Date(expiresAt).toUTCString().replace(/:\d\d GMT$/, ' UTC');
   const text =

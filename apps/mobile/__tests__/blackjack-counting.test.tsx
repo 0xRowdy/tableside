@@ -1,9 +1,4 @@
-// Seam 3: the blackjack counting modes and the Hi-Lo bet schedule (#78),
-// rendered through the real routes on the in-memory adapters and driven only
-// through the accessibility tree. The shoe is the Random123 "pi digits"
-// shuffle: round 1 deals you the 10 of spades and Jack of diamonds (20)
-// against a dealer 10 of spades with the 6 of spades face down. A fresh shoe's
-// true count is 0, where the schedule bets 10.
+// #78
 
 import { blackjackStrategy } from '@tableside/definitions';
 import { explainPlay, type Card, type PlayCorrection } from '@tableside/engine';
@@ -58,7 +53,6 @@ async function bet25AndDeal() {
   await fireEvent.press(screen.getByRole('button', { name: 'Deal' }));
 }
 
-/** Every label, hint, value and text in the rendered tree, plus every announcement. */
 const everythingSpoken = () => JSON.stringify(screen.toJSON()) + announcements.join(' ');
 
 describe('blackjack counting modes', () => {
@@ -121,20 +115,17 @@ describe('blackjack counting modes', () => {
     await start('Counting with deviations', true);
     expect(screen.getByText('Guided · Counting with deviations · bet schedule')).toBeOnTheScreen();
     expect(screen.getByLabelText('Strategy adherence: Playing: no strategy decisions yet · Betting: no strategy rounds yet. Departures 0.')).toBeOnTheScreen();
-    // Before the player bets, nothing names the scheduled bet or the count.
     expect(everythingSpoken()).not.toMatch(/[Tt]rue count|bet schedule bets|Take it back/);
 
     await bet25AndDeal();
     const panel = within(await screen.findByTestId('correction-panel'));
     expect(panel.getByRole('header', { name: 'Before your round' })).toBeOnTheScreen();
     expect(panel.getByText('Counting with deviations · bet schedule bets 10 on your hand.')).toBeOnTheScreen();
-    // The count is the player's to keep: the correction names the band, never the count.
     expect(panel.getByText('Checked against the actual true count, which you keep in this mode.')).toBeOnTheScreen();
     expect(JSON.stringify(screen.toJSON())).not.toMatch(/[Tt]rue count (is|for)|Running/);
     expect(panel.getByText('Matching instruction: "True count below +1: 10".')).toBeOnTheScreen();
     expect(panel.getByText("You've set 25 on your hand. Nothing has been placed yet.")).toBeOnTheScreen();
     expect(announcements.join(' ')).toContain('Paused before the deal: nothing has been dealt yet.');
-    // Nothing was dealt.
     expect(screen.queryByLabelText('Face-down card')).toBeNull();
 
     await act(() => fireEvent.press(panel.getByRole('button', { name: 'Take it back & bet 10 on your hand' })));
@@ -164,7 +155,6 @@ describe('blackjack counting modes', () => {
   });
 
   it('a counting-with-deviations play correction states the index, never the count the player keeps', async () => {
-    // 16 (10, 2, 4) against a 10 at an actual true count of +1: the index stands.
     const card = (rank: number): Card => ({ deck: 0, suit: 'clubs', rank: rank as Card['rank'] });
     const definition = blackjackStrategy('S17_LS', 'counting-with-deviations');
     const result = explainPlay(definition, {

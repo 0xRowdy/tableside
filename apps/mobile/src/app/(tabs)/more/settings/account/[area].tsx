@@ -1,5 +1,4 @@
-// The Account entries later tickets build: Display name (spec 6). Each holds
-// its place here until its own route replaces it.
+// TODO(spec 6)
 
 import { Redirect, router, useLocalSearchParams } from 'expo-router';
 

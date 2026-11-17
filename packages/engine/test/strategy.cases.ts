@@ -1,8 +1,4 @@
-// The strategy interpreter at the engine interface: Validate (five diagnostic
-// categories with instruction paths, conservative conflicts, "runnable" per
-// Amendment 7), the strategy envelope, and table compatibility at setup.
-// Expected diagnostics follow spec #51 Amendments 2 and 7; limits are the launch
-// defaults (#3: inside 1-100, outside 10-1,000).
+// Spec 1 Amendments 2 and 7, Game rules
 import type { TestCase } from '@tableside/harness';
 
 import {
@@ -16,7 +12,6 @@ import {
 
 import { DOUBLING, FLAT_EVEN_MONEY, TWO_DOZENS } from './strategy.fixtures';
 
-/** "category path" for each diagnostic, in order. */
 const found = (definition: unknown) => validateStrategy(definition).diagnostics.map((d) => `${d.category} ${d.path}`);
 const found2 = (definition: unknown, parameters: unknown) => validateStrategy(definition, parameters).diagnostics.map((d) => `${d.category} ${d.path}`);
 
@@ -76,9 +71,7 @@ export const strategyCases: TestCase[] = [
     run: (t) => {
       const both = [instruction('a'), instruction('b', { bets: [{ target: { target: 'red' }, amount: { lit: '20' } }] })];
       t.equal(found(withInstructions(both)), ['conflict /instructions/1']);
-      // Reversing the order still conflicts: neither wins by position.
       t.equal(found(withInstructions([...both].reverse())), ['conflict /instructions/1']);
-      // Equal priorities decide nothing either.
       t.equal(found(withInstructions(both.map((i) => ({ ...i, priority: 1 })))), ['conflict /instructions/1']);
       t.equal(validateStrategy(withInstructions(both)).runnable, false);
     },
@@ -88,8 +81,6 @@ export const strategyCases: TestCase[] = [
     run: (t) => {
       t.equal(found(withInstructions([instruction('a', { priority: 2 }), instruction('b', { priority: 1 })])), []);
       t.equal(found(withInstructions([instruction('a'), instruction('b', { overrides: ['a'] })])), []);
-      // An explicit priority ranks over an instruction with none.
-      // A subject the vocabulary doesn't declare is incomplete, inherited object properties included.
       t.equal(found(withInstructions([instruction('a', { when: { subject: 'constructor', is: 'x' } })])), ['incomplete /instructions/0/when']);
       t.equal(found(withInstructions([instruction('a'), instruction('b', { priority: 0 })])), []);
       t.equal(found(withInstructions([instruction('a'), instruction('b', { overrides: ['missing'] })])), [
@@ -105,11 +96,9 @@ export const strategyCases: TestCase[] = [
       const afterWin = { subject: 'last-result', is: 'win' };
       t.equal(found(withInstructions([instruction('a', { when: afterLoss }), instruction('b', { when: afterWin })])), []);
       t.equal(found(withInstructions([instruction('a', { when: { all: [afterLoss] } }), instruction('b', { when: { all: [{ always: true }, afterWin] } })])), []);
-      // "any" of a disjoint and an overlapping clause can still overlap.
       t.equal(found(withInstructions([instruction('a', { when: afterLoss }), instruction('b', { when: { any: [afterWin, { always: true }] } })])), [
         'conflict /instructions/1',
       ]);
-      // A numeric comparison is never treated as provably disjoint.
       const cheap = { compare: { counter: 'n' }, op: 'lt', to: { lit: '5' } };
       const dear = { compare: { counter: 'n' }, op: 'ge', to: { lit: '5' } };
       const counted = { ...FLAT_EVEN_MONEY, counters: [{ id: 'n', initial: '0', cap: '10' }] };
@@ -121,10 +110,8 @@ export const strategyCases: TestCase[] = [
     run: (t) => {
       const black = instruction('b', { bets: [{ target: { target: 'black' }, amount: { lit: '10' } }] });
       t.equal(found(withInstructions([instruction('a'), black])), []);
-      // The target parameter may be red, so it may meet the fixed red bet.
       const param = instruction('b', { bets: [{ target: { param: 'target' }, amount: { lit: '10' } }] });
       t.equal(found(withInstructions([instruction('a'), param])), ['conflict /instructions/1']);
-      // Two parameters on one instruction need a declared "distinct from" to be two bets.
       const sameDozen = { ...TWO_DOZENS, parameters: TWO_DOZENS.parameters.map(({ id, label, choices, default: d }) => ({ id, label, choices, default: d })) };
       t.equal(found(sameDozen), ['conflict /instructions/0/bets/1']);
     },
@@ -141,7 +128,6 @@ export const strategyCases: TestCase[] = [
       t.equal(found(withInstructions([instruction('a', { bets: [{ target: { target: 'red' }, amount: { lit: '21/2' } }] })])), [
         'incompatible /instructions/0/bets/0/amount',
       ]);
-      // The basket is a double-zero bet; a strategy declared for both wheels can't use it.
       t.equal(found(withInstructions([instruction('a', { bets: [{ target: { target: 'basket-0-00-1-2-3' }, amount: { lit: '10' } }] })])), [
         'incompatible /instructions/0/bets/0/target',
       ]);
@@ -159,7 +145,6 @@ export const strategyCases: TestCase[] = [
       const unbounded = { ...DOUBLING, counters: [uncapped] };
       t.equal(found(unbounded), ['unbounded /counters/0']);
       t.equal(validateStrategy(unbounded).runnable, false);
-      // A declared stop bounds it.
       t.equal(found({ ...unbounded, stopWhen: { compare: { counter: 'stake' }, op: 'gt', to: { lit: '320' } } }), []);
     },
   },
@@ -168,14 +153,12 @@ export const strategyCases: TestCase[] = [
     run: (t) => {
       const { cap: _cap, ...uncapped } = DOUBLING.counters[0] as { id: string; initial: string; cap: string };
       void _cap;
-      // stake := staked × 2, where the bet is the stake: it doubles each loss as surely as stake × 2.
       const throughStaked = {
         ...DOUBLING,
         counters: [uncapped],
         adjustments: [{ id: 'double', on: 'loss', counter: 'stake', to: { mul: [{ staked: true }, { lit: '2' }] } }, DOUBLING.adjustments[1]],
       };
       t.equal(found(throughStaked), ['unbounded /counters/0']);
-      // Two counters that double each other, both sizing the bet.
       const mutual = {
         ...DOUBLING,
         counters: [{ id: 'a', initial: '10' }, { id: 'b', initial: '10' }],
@@ -186,7 +169,6 @@ export const strategyCases: TestCase[] = [
         ],
       };
       t.equal(found(mutual), ['unbounded /counters/0', 'unbounded /counters/1']);
-      // A counter set from what a flat bet staked never grows.
       const flat = { ...throughStaked, instructions: [{ ...DOUBLING.instructions[0], bets: [{ target: { target: 'red' }, amount: { lit: '10' } }] }] };
       t.equal(found(flat), []);
     },
@@ -197,7 +179,6 @@ export const strategyCases: TestCase[] = [
       const mutual = withInstructions([instruction('a', { overrides: ['b'] }), instruction('b', { overrides: ['a'] })]);
       t.equal(found(mutual), ['conflict /instructions/1']);
       t.equal(validateStrategy(mutual).runnable, false);
-      // A longer cycle of exceptions is the same contradiction.
       const cycle = withInstructions([instruction('a', { overrides: ['c'] }), instruction('b', { overrides: ['a'] }), instruction('c', { overrides: ['b'] })]);
       t.equal(found(cycle).every((d) => d.startsWith('conflict ')) && found(cycle).length > 0, true);
     },
@@ -225,9 +206,8 @@ export const strategyCases: TestCase[] = [
   {
     name: 'strategy: a definition over 1 MiB of UTF-8 is an envelope diagnostic, counted in bytes rather than characters',
     run: (t) => {
-      // 349,526 three-byte characters are just over 1 MiB as UTF-8 but far under it in UTF-16 code units.
-      const note = '€'.repeat(349_526);
-      t.equal(found({ ...FLAT_EVEN_MONEY, note }), ['envelope /']);
+      const justOverOneMibAsUtf8 = '€'.repeat(349_526);
+      t.equal(found({ ...FLAT_EVEN_MONEY, note: justOverOneMibAsUtf8 }), ['envelope /']);
       t.equal(found({ ...FLAT_EVEN_MONEY, note: '€'.repeat(1000) }), []);
     },
   },
@@ -244,7 +224,6 @@ export const strategyCases: TestCase[] = [
         requirements: [{ path: '/instructions/0/bets/0/amount', target: 'black', amount: '10', requirement: 'below-minimum', limit: '25' }],
       });
       t.equal(strategyTableCompatibility(TWO_DOZENS, { first: 'dozen-1', second: 'dozen-3' }, rules('25')).requirements.map((r) => r.target), ['dozen-1', 'dozen-3']);
-      // Parameters must be chosen from the declared choices, and distinct where declared.
       t.equal(strategyTableCompatibility(TWO_DOZENS, { first: 'dozen-2', second: 'dozen-2' }, rules('10')).requirements.map((r) => r.requirement), ['invalid-parameter']);
       t.equal(strategyTableCompatibility(FLAT_EVEN_MONEY, {}, rules('10')).requirements.map((r) => r.requirement), ['invalid-parameter']);
       const strict: StrategyDefinition = { ...FLAT_EVEN_MONEY, table: { ...(FLAT_EVEN_MONEY.table as object), wheels: ['double-zero'] } };
@@ -269,7 +248,6 @@ export const strategyCases: TestCase[] = [
     run: (t) => {
       const both = [{ target: 'dozen-1', amount: '10' }, { target: 'dozen-3', amount: '10' }];
       t.equal(explained(TWO_DOZENS, { first: 'dozen-3', second: 'dozen-1' }, situation('20'), START).prescription, { status: 'prescribed', bets: both , held: []});
-      // 15 covers one dozen but not both: neither is placed, and nothing is resized.
       const short = explained(TWO_DOZENS, { first: 'dozen-3', second: 'dozen-1' }, situation('15'), START);
       t.equal([short.prescription, short.fallback], [{ status: 'paused', reason: 'unfunded-group', unavailable: both }, 'no-new-bets']);
     },

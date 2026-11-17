@@ -1,8 +1,3 @@
-// The practice controller with substitute adapters, followed by the feedback
-// service on recording ports: which cues a roulette session fires, and that
-// play is identical with sound and haptics off.
-// Spins come from the Random123 "pi digits" stream: 27 (red), 0, 25 (red).
-
 import { blackjackRules, FLAT_EVEN_MONEY } from '@tableside/definitions';
 
 import { followPractice } from '@/feedback/practice-cues';
@@ -20,7 +15,6 @@ async function setup(stored: string | null = null) {
   await settings.load();
   const service = new FeedbackService(ports, settings);
   const stop = followPractice(controller, service);
-  // Every published state with the time it was published at.
   const timeline: unknown[] = [];
   controller.subscribe(() => {
     const snapshot = controller.snapshot();
@@ -31,21 +25,20 @@ async function setup(stored: string | null = null) {
   return { controller, ports, service, stop, timeline };
 }
 
-/** A session that wins, loses and breaks even, with a removed wager and a rejected stake. */
 async function playScript(controller: PracticeController) {
   await controller.placeWager('red', '10');
   await controller.placeWager('red', '0');
   await controller.placeWager('red', '10');
   await controller.placeWager('straight-27', '5');
-  await controller.placeWager('black', '5'); // below the outside minimum of 10
-  await controller.spin(); // 27: red and straight 27 win
+  await controller.placeWager('black', '5');
+  await controller.spin();
   await controller.placeWager('red', '10');
-  await controller.spin(); // 0: red loses
+  await controller.spin();
   await controller.placeWager('red', '10');
   await controller.placeWager('black', '10');
-  await controller.spin(); // 25: red wins 10, black loses 10
+  await controller.spin();
   await controller.placeWager('red', '10');
-  await controller.endSession(); // the red wager comes back, then the result
+  await controller.endSession();
 }
 
 describe('cues during roulette play', () => {
@@ -98,12 +91,10 @@ describe('cues during roulette play', () => {
     await first.load();
     await first.start({ game: 'roulette', buyIn: '1000' });
     await first.placeWager('red', '10');
-    // The next launch resumes the session from the same store.
     const resumed = new PracticeController(adapters);
     const ports = substituteFeedbackPorts();
     followPractice(resumed, new FeedbackService(ports, new DeviceSettings(ports.storage)));
 
-    // The launch finds it suspended; the player resumes it.
     await resumed.load();
     await resumed.resume();
     expect(resumed.snapshot().status).toBe('active');
@@ -124,7 +115,6 @@ describe('cues during roulette play', () => {
 });
 
 describe('cues during blackjack play', () => {
-  // The "pi digits" shoe: you 10 and Jack against a dealer 10 up and 6 down; standing, the dealer draws an Ace to 17.
   it('fires one card cue per dealing transition, no haptic for cards, and one net-result cue per round', async () => {
     const adapters = substituteAdapters({ clock: new FakeClock(undefined, true) });
     const controller = new PracticeController(adapters);
@@ -143,7 +133,6 @@ describe('cues during blackjack play', () => {
     expect(ports.haptics.fired).toEqual(['selection', 'success']);
   });
 
-  // A stream whose first round deals 2♥ J♦ against an A♥ up with a 2♠ in the hole, then 5♥.
   it('gives one net-result cue for a round with insurance: the insurance settled at the peek joins the round', async () => {
     const adapters = substituteAdapters({ clock: new FakeClock(undefined, true), words: [3, 0x5441424c, 0x45534944, 0x45] });
     const controller = new PracticeController(adapters);
@@ -156,8 +145,8 @@ describe('cues during blackjack play', () => {
 
     await controller.placeWager('hand-1', '10');
     await controller.beginTurn();
-    await controller.insure('5'); // no dealer blackjack: the insurance loses 5 at the peek
-    await controller.play('stand'); // the dealer's A,2 draws the 5♥ to 18 over 12: the hand loses 10
+    await controller.insure('5');
+    await controller.play('stand');
 
     expect(ports.sound.played.map((play) => play.cue)).toEqual(['stake-set', 'card-dealt', 'stake-set', 'card-dealt', 'net-loss']);
   });
@@ -172,7 +161,6 @@ describe('cues during craps play', () => {
     ports.haptics.fired.length = 0;
     await controller.start({ game: 'craps', odds: '3-4-5x', buyIn: '1000' });
 
-    // Pi stream rolls: 8 sets the point; 11 wins the come bet; then the 6 sends a come bet to 6.
     await controller.placeWager('pass', '10');
     await controller.beginTurn();
     await controller.placeWager('pass-odds', '10');
@@ -182,13 +170,12 @@ describe('cues during craps play', () => {
     expect(ports.sound.played.map((play) => play.cue)).toEqual([
       'stake-set',
       'dice-thrown',
-      'net-even', // the point is set: nothing settles
+      'net-even',
       'stake-set',
       'stake-set',
       'dice-thrown',
       'net-win',
     ]);
-    // "No change" has no haptic.
     expect(ports.haptics.fired).toEqual(['selection', 'impact-medium', 'selection', 'selection', 'impact-medium', 'success']);
   });
 
@@ -197,7 +184,6 @@ describe('cues during craps play', () => {
     await controller.endSession();
     controller.dismissResult();
     await controller.start({ game: 'craps', odds: '3-4-5x', buyIn: '1000' });
-    // Pi stream rolls: 8 sets the point. Ending keeps the pass contract, which rolls on: 11, 6, 4 and 12 settle nothing, then 8 wins.
     await controller.placeWager('pass', '10');
     await controller.beginTurn();
     ports.sound.played.length = 0;

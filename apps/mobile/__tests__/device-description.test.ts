@@ -1,4 +1,4 @@
-// How this device describes itself on Devices (S2-19): model, OS and its major version, as the frames write them.
+// Spec 2 S2-19
 
 import { describeDevice, lastActiveText } from '@/account/account-text';
 

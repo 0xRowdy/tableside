@@ -1,10 +1,5 @@
-// Practice funding through the engine interface: buy-in, explicit rebuys, the
-// funding ceiling, net result and buy-in-adjusted drawdown. Expected values come
-// from spec #51 (Session funding, Rebuys, Ending, Results; the worked example
-// 1,000 → 600 → rebuy 1,000 → win 100 gives current drawdown 300, max 400),
-// Amendment 4 §B (training bankroll: no rebuys, the allocation is the funding)
-// and CONTEXT.md "Session drawdown" (the fall from the previous peak). Spins come
-// from the "pi digits" stream: 27, 0, 25, 31, 9 (draws.cases).
+// Spec 1 Session funding, Rebuys, Ending, Results
+// Spec 1 Amendment 4 §B
 import type { TestCase } from '@tableside/harness';
 
 import {
@@ -31,7 +26,6 @@ const STOP: Command = { kind: 'request-stop' };
 const FINAL: Command = { kind: 'advance-final-settlement' };
 const fresh = (funding = '1000') => createActivity({ ...SPEC, funding }, STREAM);
 const training = (funding = '1000') => createActivity({ ...SPEC, fundingSource: 'training-bankroll', funding }, STREAM);
-/** Funds off the table plus stakes at their original value (all whole units here). */
 const sessionValue = (state: ActivityState) =>
   decodeMoney(String(state.wagers.reduce((sum, wager) => sum + BigInt(wager.amount), BigInt(state.balance))));
 const result = (state: ActivityState) => summarizeFunding(state.funding, sessionValue(state));
@@ -43,12 +37,10 @@ export const fundingCases: TestCase[] = [
   {
     name: 'funding: the worked example 1,000 → 600 → rebuy 1,000 → win 100 gives current drawdown 300 and max 400',
     run: (t) => {
-      // Spin 1 is 27 (red): black 400 loses.
       const lost = run(fresh(), [place('black', '400'), BEGIN, SETTLE]).state;
       t.equal([lost.balance, ...drawdown(lost)], ['600', '400', '400']);
       const rebought = step(lost, rebuy('1000')).state;
       t.equal([rebought.balance, ...drawdown(rebought)], ['1600', '400', '400']);
-      // Spin 2 is 0: straight 0 (3) wins 105 and straight 1 (5) loses 5, so the turn wins 100.
       const won = run(rebought, [place('straight-0', '3'), place('straight-1', '5'), BEGIN, SETTLE]).state;
       t.equal([won.balance, ...drawdown(won)], ['1700', '300', '400']);
       const ended = run(won, [STOP, FINAL]).state;
@@ -67,16 +59,12 @@ export const fundingCases: TestCase[] = [
   {
     name: 'funding: drawdown is the fall from the previous peak of the game result, and stakes count at their original value',
     run: (t) => {
-      // Spin 1 (27): straight 27 (10) wins 350, so the game result peaks at +350.
       const peaked = run(fresh(), [place('straight-27', '10'), BEGIN, SETTLE]).state;
       t.equal([peaked.balance, ...drawdown(peaked)], ['1350', '0', '0']);
-      // Staking 100 on red moves it from balance to the table: no drawdown yet.
       const staked = step(peaked, place('red', '100')).state;
       t.equal(drawdown(staked), ['0', '0']);
-      // The outcome is generated but the stake keeps its original value until settlement.
       const revealing = step(staked, BEGIN).state;
       t.equal(drawdown(revealing), ['0', '0']);
-      // Spin 2 is 0: red loses 100, a fall of 100 from the +350 peak.
       const settled = step(revealing, SETTLE).state;
       t.equal([settled.balance, ...drawdown(settled)], ['1250', '100', '100']);
     },
@@ -84,8 +72,6 @@ export const fundingCases: TestCase[] = [
   {
     name: 'funding: simultaneous settlement updates drawdown once, after every wager in the turn settles',
     run: (t) => {
-      // Spin 1 (27): straight 27 (1) wins 35 and black (30) loses 30, settled in layout order.
-      // Settled one by one, the result would reach +35 then fall 30; settled together it is +5.
       const state = run(fresh(), [place('straight-27', '1'), place('black', '30'), BEGIN, SETTLE]).state;
       t.equal([state.balance, ...drawdown(state)], ['1005', '0', '0']);
     },
@@ -121,13 +107,11 @@ export const fundingCases: TestCase[] = [
     name: 'funding: a rebuy before an unaffordable wager adds funds only: no payout, no departure, the wager is not placed for you',
     run: (t) => {
       const short = run(fresh(), [place('black', '400'), BEGIN, SETTLE]).state;
-      // 600 can't cover 1,000 on red: assessed, nothing placed.
       const refused = step(short, place('red', '1000'));
       t.equal(refused.facts, [{ kind: 'illegal-action', command: place('red', '1000'), reason: 'insufficient-funds' }]);
       const { state, facts } = step(refused.state, rebuy('1000'));
       t.equal(facts, [{ kind: 'funding-added', amount: '1000', cumulative: '2000', balance: '1600' }]);
       t.equal([state.phase, state.balance, state.wagers, state.random], ['settled-outcome', '1600', [], short.random]);
-      // The player places it again, explicitly.
       const placed = step(state, place('red', '1000')).state;
       t.equal([placed.balance, placed.wagers], ['600', [{ target: 'red', amount: '1000' }]]);
       t.equal(kinds(run(fresh(), [rebuy('500'), rebuy('250')]).facts), ['funding-added', 'funding-added']);
@@ -148,7 +132,6 @@ export const fundingCases: TestCase[] = [
         { source: 'practice-funding', buyIn: '999997000', rebuys: ['3000'], cumulative: '1000000000', headroom: '0' },
       ]);
       t.equal(step(full, rebuy('1')).facts, [{ kind: 'illegal-action', command: rebuy('1'), reason: 'over-funding-ceiling' }]);
-      // Zero, negative or fractional amounts are malformed or assessed, never rounded.
       t.equal(status(advanceActivity(near, envelope(near, rebuy('0')))), 'rejected:malformed');
       t.equal(status(advanceActivity(near, envelope(near, rebuy('-5')))), 'rejected:malformed');
       t.equal(step(near, rebuy('5/2')).facts, [{ kind: 'illegal-action', command: rebuy('5/2'), reason: 'not-whole-units' }]);
@@ -157,7 +140,6 @@ export const fundingCases: TestCase[] = [
   {
     name: 'funding: payouts and balances are never clipped at the funding ceiling',
     run: (t) => {
-      // Spin 1 (27): red 1,000 wins 1,000 on a balance already at the ceiling.
       const state = run(fresh('1000000000'), [place('red', '1000'), BEGIN, SETTLE, STOP, FINAL]).state;
       t.equal([state.balance, result(state).netResult], ['1000001000', '1000']);
     },

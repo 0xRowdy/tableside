@@ -8,8 +8,6 @@ async function renderApp(initialUrl = '/') {
   await renderRouter('./src/app', { initialUrl });
 }
 
-// The tab bar is a tablist container, not an accessibility element itself, so
-// screen readers announce each tab's position ("tab, 1 of 6").
 function tabBar() {
   const bar = screen.getByTestId('tab-bar');
   expect(bar).toHaveProp('accessibilityRole', 'tablist');
@@ -17,8 +15,6 @@ function tabBar() {
 }
 
 describe('app shell', () => {
-  // The first render transforms the whole route tree, which takes most of a
-  // minute on a cold cache (as in CI). Pay that once here, not inside a test.
   beforeAll(async () => {
     await renderApp();
     await cleanup();
@@ -86,14 +82,13 @@ describe('app shell', () => {
     }
   });
 
-  // Each platform's large-content path runs in its own Jest project; the other is skipped.
   const onIos = Platform.OS === 'ios' ? it : it.skip;
   const onAndroid = Platform.OS === 'android' ? it : it.skip;
 
   onIos('gives the Large Content Viewer each tab label and symbol, and selects the tab the finger lifts on', async () => {
     await renderApp();
 
-    // The native interaction itself is checked by hand (docs/development.md); this covers what the tab bar hands it.
+    // docs/development.md Accessibility notes for the shell
     const items = screen.getAllByTestId('large-content-item');
     expect(items.map((item) => item.props.title)).toEqual(TAB_LABELS);
     expect(items.every((item) => typeof item.props.systemImage === 'string')).toBe(true);
@@ -108,13 +103,11 @@ describe('app shell', () => {
     await renderApp();
     const { Dimensions } = require('react-native') as typeof import('react-native');
     const window = Dimensions.get('window');
-    // Android 10's largest font scale, as a device reports it: 1.3 stored as a 32-bit float.
-    const fontScale = Math.fround(1.3);
-    await act(() => Dimensions.set({ window: { ...window, fontScale }, screen: { ...window, fontScale } }));
+    const android10LargestFontScale = Math.fround(1.3);
+    await act(() => Dimensions.set({ window: { ...window, fontScale: android10LargestFontScale }, screen: { ...window, fontScale: android10LargestFontScale } }));
 
     const saved = tabBar().getByRole('tab', { name: 'Saved' });
     await fireEvent(saved, 'longPress');
-    // A visual aid only: screen readers already hear the full label.
     const preview = screen.getByTestId('large-content-preview', { includeHiddenElements: true });
     expect(preview).toHaveTextContent('Saved');
     expect(preview).not.toBeVisible();

@@ -1,9 +1,3 @@
-// The account vault at seam 1: per (environment, account, installation) keys
-// and encrypted databases, the account-session generation, locked versus lost
-// keys, recovery that keeps the original bytes, and backup exclusion. Each test
-// is one device: a fake keychain, real files in a temporary directory and real
-// SQLCipher (Node).
-
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 
 import type { AccountSession, VaultOpening } from '@/account/vault';
@@ -27,7 +21,6 @@ function opened(opening: VaultOpening): AccountSession {
   return opening.session;
 }
 
-/** The activity the session's practice controller would create: owned by the account, from this installation. */
 function practiceIn(session: AccountSession, activityId: string) {
   const base = newActivity(activityId);
   return newActivity(activityId, { specification: { ...base.specification, owner: session.accountId, device: session.installationId } });
@@ -39,7 +32,6 @@ function resultIn(session: AccountSession, activityId: string) {
 
 const settle = () => new Promise((resolve) => setImmediate(resolve));
 
-/** Every file under the vault's root with its bytes, to show recovery changes nothing. */
 function snapshot(files: NodeVaultFiles): Record<string, string> {
   return Object.fromEntries(files.written().map((path) => [path, existsSync(path) ? readFileSync(path).toString('base64') : '(absent)']));
 }
@@ -115,7 +107,6 @@ describe('the account vault', () => {
 
       const signIn = vault.open('account-a');
       await settle();
-      // The generation moves on at once; the sign-out's close waits for the open in flight.
       const signOut = vault.close();
       release();
       await signOut;
@@ -151,9 +142,7 @@ describe('the account vault', () => {
     expect(await b.store.findUnfinished()).toBeNull();
     expect(await b.store.load('a-done')).toBeNull();
     expect(await b.store.readOutgoing()).toEqual([]);
-    // B's store refuses A's practice outright.
     await expect(b.store.createActivity(practiceIn(a, 'a-open'))).rejects.toThrow();
-    // And B's key can't read A's file.
     const aKey = (JSON.parse(device.keychain.get(`tableside.production.${a.installationId}.account-a.key`) ?? '{}') as { key: string }).key;
     const bKey = (JSON.parse(device.keychain.get(`tableside.production.${b.installationId}.account-b.key`) ?? '{}') as { key: string }).key;
     const aFile = device.files.written().find((path) => path.endsWith('account-a.db')) ?? '';
@@ -173,14 +162,12 @@ describe('the account vault', () => {
       await b.store.createActivity(practiceIn(b, 'b-open'));
       const a = opened(await vault.open('account-a'));
       await a.store.createActivity(practiceIn(a, 'a-open'));
-      // A migration's backup and manifest are the account's too.
       const aFile = device.files.written().find((path) => path.endsWith('account-a.db'))!;
       writeFileSync(`${aFile}.migration-backup`, 'backup');
       writeFileSync(`${aFile}.migration`, '{}');
 
       await vault.erase('account-a');
 
-      // The open session ends: its store refuses to write.
       await expect(a.store.createActivity(practiceIn(a, 'a-late'))).rejects.toThrow();
       for (const suffix of ['', '-wal', '-shm', '.migration-backup', '.migration']) expect(existsSync(`${aFile}${suffix}`)).toBe(false);
       const names = device.keychain.entries().map(([name]) => name);
@@ -188,11 +175,9 @@ describe('the account vault', () => {
       expect(names).toContain(`tableside.production.${a.installationId}.account-b.key`);
       expect(names).toContain('tableside.production.installation');
 
-      // Account B is untouched; the same installation opens it.
       const again = opened(await device.vault().open('account-b'));
       expect(again.installationId).toBe(a.installationId);
       expect((await again.store.findUnfinished())?.activityId).toBe('b-open');
-      // A later sign-in to A's ID would find nothing to recover: a fresh, empty database.
       const fresh = opened(await device.vault().open('account-a'));
       expect(await fresh.store.findUnfinished()).toBeNull();
     });
@@ -221,7 +206,6 @@ describe('the account vault', () => {
   });
 
   describe('removing another environment’s namespace', () => {
-    /** A device that ran a beta build: two beta accounts with practice saved, one database left mid-write. */
     async function betaDevice() {
       const device = new Device();
       const beta = device.vault('beta');
@@ -303,11 +287,9 @@ describe('the account vault', () => {
 
     it('removes keys whose files are gone: a database never created, and an earlier installation’s', async () => {
       const { device, installationId } = await betaDevice();
-      // The app died after saving account C's key, before its database existed.
       const killed = device.vault('beta', { open: () => Promise.reject(new Error('killed')) });
       await expect(killed.open('account-c')).rejects.toThrow('killed');
       expect(device.keychain.get(`tableside.beta.${installationId}.account-c.key`)).toBeDefined();
-      // An earlier beta installation whose files went with an uninstall; the keychain outlived it.
       const earlier = new Device();
       earlier.keychain = device.keychain;
       const old = opened(await earlier.vault('beta').open('account-d'));
@@ -322,7 +304,6 @@ describe('the account vault', () => {
 
     it('finishes a removal that was interrupted part way', async () => {
       const { device, installationId } = await betaDevice();
-      // The app died after removing account A's key and its database.
       device.keychain.forget(`tableside.beta.${installationId}.account-a.key`);
       for (const path of betaFiles(device).filter((file) => file.includes('account-a.db'))) rmSync(path);
 
@@ -406,11 +387,9 @@ describe('the account vault', () => {
       expect(fresh.installationId).toBe(installationId);
       expect(fresh.installationId).not.toBe(original.installationId);
       expect(await fresh.store.load('a1')).toBeNull();
-      // Nothing the original left was changed, moved or deleted.
       for (const [path, bytes] of Object.entries(before)) expect(snapshot(device.files)[path]).toBe(bytes);
       await fresh.store.close();
 
-      // A relaunch opens the fresh one again; another account keeps the device's installation and its data.
       const relaunched = device.vault();
       expect(opened(await relaunched.open('account-a')).installationId).toBe(installationId);
       const b = opened(await relaunched.open('account-b'));
@@ -418,7 +397,6 @@ describe('the account vault', () => {
       expect(await b.store.load('b1')).not.toBeNull();
       await relaunched.close();
 
-      // Erasing the account removes the fresh database, the kept original and the recovery's record alike.
       await relaunched.erase('account-a');
       expect(device.files.written().filter((path) => path.includes('account-a.db') && existsSync(path))).toEqual([]);
       expect(device.keychain.entries().filter(([name]) => name.includes('account-a'))).toEqual([]);
@@ -467,7 +445,6 @@ describe('the account vault', () => {
       const device = new Device();
       const vault = device.vault();
       const installation = opened(await vault.open('account-a')).installationId;
-      // The key was saved, then the app died before the database existed.
       device.keychain.set(`tableside.production.${installation}.account-b.key`, JSON.stringify({ v: 1, key: 'cd'.repeat(32), created: false }));
 
       const session = opened(await device.vault().open('account-b'));
@@ -483,7 +460,6 @@ describe('the account vault', () => {
       await old.store.createActivity(practiceIn(old, 'a1'));
       await old.store.close();
 
-      // Files that came back without their device-only keychain entries (a restore, were they ever backed up, or a lost keychain).
       const restored = new Device();
       restored.files = original.files;
       const before = snapshot(original.files);
@@ -495,7 +471,6 @@ describe('the account vault', () => {
       expect(other.installationId).not.toBe(old.installationId);
       expect(outcome).toMatchObject({ status: 'recovery-needed', reason: 'key-missing' });
       expect(afterRestart).toMatchObject({ status: 'recovery-needed', reason: 'key-missing' });
-      // The earlier installation's databases are left exactly as they were, and no empty one is made for account A.
       const earlier = Object.entries(before).filter(([path]) => path.includes(`/${old.installationId}/`));
       expect(earlier.length).toBeGreaterThan(0);
       expect(earlier.every(([path, bytes]) => snapshot(original.files)[path] === bytes)).toBe(true);
@@ -507,7 +482,6 @@ describe('the account vault', () => {
       const old = opened(await device.vault().open('account-a'));
       await old.store.close();
 
-      // Uninstall removes the app's files; on iOS the keychain survives.
       rmSync(device.root, { recursive: true, force: true });
       device.files = nodeVaultFiles(device.root);
       const session = opened(await device.vault().open('account-a'));

@@ -1,9 +1,4 @@
-// Seam 3: when this installation can't open the account's data (spec 2,
-// *Account gate*: Recovery needed, a later build's database, a failed
-// migration), through the real routes and the accessibility tree over
-// Account-service fakes. Every variant explains itself, links to Contact
-// support and Make a privacy request (Amendment 9 §1) and can sign out;
-// Recovery needed restores synced history through a new sign-in.
+// Spec 2 Account gate, Amendment 9 §1
 
 import type { AccountGate } from '@tableside/account';
 import { cleanup, fireEvent, screen } from '@testing-library/react-native';
@@ -17,7 +12,6 @@ const launch = jest.requireMock<Launch>('@/account/app-account');
 const service = () => launch.latest!.service;
 
 beforeAll(async () => {
-  // The first render transforms the route tree; pay that once.
   await renderRouter('./src/app', { initialUrl: '/' });
   await cleanup();
 }, 180_000);
@@ -54,7 +48,6 @@ describe('Recovery needed', () => {
 
     await fireEvent.press(button('Restore synced history'));
     expect(service().calls).toContainEqual({ method: 'recover' });
-    // Signed out, for the sign-in that downloads the synced history into the fresh copy.
     expect(await header("You're signed out")).toBeOnTheScreen();
     expect(button('Sign in')).toBeOnTheScreen();
   });

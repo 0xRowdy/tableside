@@ -1,9 +1,4 @@
-// The paths a restricted account keeps (spec 2, *Age eligibility*; Amendment 5
-// §4, Amendment 9 §1): Contact support, Make a privacy request, billing help
-// (Manage subscription and refund requests, never a purchase), authenticated
-// export and deletion. Their screens belong to other work (support and privacy
-// requests: web pages for now, spec 7 later; billing help: spec 5; export and
-// deletion: spec 2's own tickets). Each opens through the app account's port.
+// Spec 2 Amendment 5 §4, Amendment 9 §1
 
 import { CreditCard, Download, LifeBuoy, ShieldCheck, Trash2 } from 'lucide-react-native';
 
@@ -13,15 +8,10 @@ import { useAccount } from './AccountProvider';
 
 export type RestrictedPath = 'contact-support' | 'billing-help' | 'export' | 'delete-account' | 'privacy-request';
 
-/** Opens a restricted path's screen. */
 export interface RestrictedPaths {
   open(path: RestrictedPath): void;
 }
 
-/**
- * The rows of a restricted screen; `only` limits them (before any account
- * exists, only support), and `supportDetail` says what support helps with there.
- */
 export function RestrictedPathRows({ only, supportDetail = 'Ask about confirming your age' }: { only?: readonly RestrictedPath[]; supportDetail?: string }) {
   const { account } = useAccount();
   const shown = (path: RestrictedPath) => !only || only.includes(path);

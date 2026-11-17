@@ -1,9 +1,4 @@
-// S2-23 Locked — this device was signed out: the server confirmed this
-// installation's session was revoked (from another device, or by the
-// provider). The account's records stay on this device, closed and locked;
-// a fresh sign-in to the same account opens them. No tab bar, so the support
-// and privacy links are here (spec 2 Amendment 9 §1).
-// TODO(frames): where "I didn't do this" leads, and the copy when a sign-in method's provider (Apple, Google) withdrew it, are unverified against S2-23, which draws only the other-device case; it opens Contact support.
+// TODO(spec 2 S2-23)
 
 import { Redirect } from 'expo-router';
 import { LogIn, Smartphone } from 'lucide-react-native';

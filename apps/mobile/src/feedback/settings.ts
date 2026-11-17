@@ -1,15 +1,12 @@
-// The two Sound & haptics preferences. They are device-local: kept in a file on
-// this device only, never synced, exported or touched by account deletion.
+// Spec 1 Audio and haptics
 
 export interface FeedbackSettings {
-  /** Sound effects volume as a whole percentage; 0 is off. */
   readonly soundVolume: number;
   readonly haptics: boolean;
 }
 
 export const DEFAULT_SETTINGS: FeedbackSettings = { soundVolume: 100, haptics: true };
 
-/** Where the preferences live on this device. */
 export interface SettingsStorage {
   read(): Promise<string | null>;
   write(text: string): Promise<void>;
@@ -47,7 +44,6 @@ export class DeviceSettings {
     return () => this.listeners.delete(listener);
   };
 
-  /** Reads the stored preferences; a change made before the read finishes wins. */
   async load(): Promise<void> {
     const text = await this.storage.read().catch(() => null);
     if (!this.changed) this.set(parse(text));
@@ -64,7 +60,6 @@ export class DeviceSettings {
   private async change(next: FeedbackSettings): Promise<void> {
     this.changed = true;
     this.set(next);
-    // A failed write keeps the change for this launch; the next change writes again.
     await this.storage.write(JSON.stringify(next)).catch(() => undefined);
   }
 

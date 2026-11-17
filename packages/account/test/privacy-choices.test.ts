@@ -1,9 +1,4 @@
-// Seam 2 (#105): the privacy-choices record (spec 2 Amendment 8 §1) through
-// the Account service, on devices against the local stack. Consent
-// withdrawals and ad-data opt-outs apply at once and work offline; granting
-// consent is online only, starts a
-// new generation and can't be replayed by a stale device. The raw-client
-// cases are in adversarial.test.ts.
+// Spec 2 Amendment 8 §1; #105
 
 import { afterEach, describe, expect, it } from 'vitest';
 
@@ -19,7 +14,6 @@ function device(name: string): SimulatedDevice {
 }
 afterEach(() => devices.splice(0).forEach((d) => d.dispose()));
 
-/** The privacy changes a device sent, in order, by their change. */
 function changesSent(d: SimulatedDevice): string[] {
   return d.proxy.sent.flatMap(({ url, body }) => {
     if (!url.includes('sync_upload_v1') || !body) return [];
@@ -28,7 +22,6 @@ function changesSent(d: SimulatedDevice): string[] {
   });
 }
 
-/** The account's choices as the server holds them. */
 async function serverChoices(accountId: string) {
   const [row] = await stack.sql<{ analytics_consent: string; analytics_generation: number; ad_data_opt_out_source: string | null }[]>`
     select analytics_consent, analytics_generation, ad_data_opt_out_source from private.privacy_choices where account_id = ${accountId}`;
@@ -83,10 +76,8 @@ describe('a new device', () => {
       pending: false,
       basis: expect.any(Number),
     });
-    // Only the current generation's ID reaches the device; earlier ones stay on the server for export and deletion.
     expect(JSON.stringify(await tablet.vault.store().readAcceptedRecords('privacy-choice'))).not.toContain(first);
 
-    // Made from the bootstrapped basis, the tablet's enabling changes are current.
     expect(await tablet.account.privacy.allowAdData()).toEqual({ status: 'changed' });
     expect(await tablet.account.privacy.withdrawAnalytics()).toEqual({ status: 'applied' });
     expect(await tablet.account.privacy.grantAnalytics()).toEqual({ status: 'changed' });
@@ -111,7 +102,6 @@ describe('granting analytics consent again after a lost answer', () => {
     expect(await phone.account.privacy.grantAnalytics()).toEqual({ status: 'offline' });
     expect(await serverChoices(accountId)).toMatchObject({ analytics_consent: 'granted', analytics_generation: 1 });
 
-    // The retry can't read the account first either, so it is made from the same state.
     phone.proxy.dropNextResponse('sync_feed_v1');
     expect(await phone.account.privacy.grantAnalytics()).toEqual({ status: 'changed' });
     expect(await serverChoices(accountId)).toMatchObject({ analytics_consent: 'granted', analytics_generation: 1 });
@@ -192,7 +182,6 @@ describe('withdrawing analytics consent', () => {
     await phone.account.privacy.withdrawAnalytics();
     await held.arrived;
 
-    // The consent withdrawal is on the server and its answer on the way: the grant isn't sent.
     const granting = phone.account.privacy.grantAnalytics();
     await new Promise((resolve) => setTimeout(resolve, 200));
     expect(changesSent(phone)).toEqual(['grant-analytics', 'withdraw-analytics']);
@@ -221,12 +210,10 @@ describe('a stale device', () => {
     await phone.account.privacy.withdrawAnalytics();
     const tablet = await signedInTablet(email);
     tablet.foreground = false;
-    // The phone grants and withdraws again; the tablet, in the background, hears of neither.
     expect(await phone.account.privacy.grantAnalytics()).toEqual({ status: 'changed' });
     expect(await phone.account.privacy.withdrawAnalytics()).toEqual({ status: 'applied' });
     await phone.account.sync.idle();
 
-    // The tablet's look at the account is lost, so it grants from what it last heard.
     tablet.proxy.dropNextResponse('sync_feed_v1');
     expect(await tablet.account.privacy.grantAnalytics()).toEqual({ status: 'stale' });
     expect(await serverChoices(accountId)).toMatchObject({ analytics_consent: 'withdrawn', analytics_generation: 2 });
@@ -274,7 +261,6 @@ describe('limiting ad data', () => {
     await phone.account.privacy.limitAdData();
     await phone.account.sync.idle();
     phone.foreground = false;
-    // The web page records GPC; the phone's look at the account is lost, so it clears from what it last heard.
     await stack.sql`select private.record_ad_data_opt_out(${accountId}, 'gpc')`;
     phone.proxy.dropNextResponse('sync_feed_v1');
     expect(await phone.account.privacy.allowAdData()).toEqual({ status: 'stale' });

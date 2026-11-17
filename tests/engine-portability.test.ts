@@ -4,8 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { ESLint } from 'eslint';
 import { describe, expect, it } from 'vitest';
 
-// The engine and definitions packages run unchanged on Hermes and Node, so the
-// lint config forbids anything that ties them to a platform or the outside world.
+// docs/development.md Engine portability
 const eslint = new ESLint({ cwd: fileURLToPath(new URL('..', import.meta.url)) });
 
 async function problems(code: string, file = 'packages/engine/src/example.ts'): Promise<string[]> {

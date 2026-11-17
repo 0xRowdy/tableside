@@ -1,17 +1,14 @@
-// Table chrome shared by every game table: the top bar, the Phase Stepper,
-// the session strip (balance, outstanding wagers and status, always visible),
-// the allowance line, the banners every table shows above play, the chip
-// rack, the ending steps and the Stop strategy / End session dialogs.
-
 import type { DomainFact, PermittedView } from '@tableside/engine';
 import { CircleStop } from 'lucide-react-native';
-import { useEffect, useState, type ReactNode } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import type { ReactNode } from 'react';
+import { AccessibilityInfo, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Button } from '@/components/Button';
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
+import { useFollow } from '@/hooks/use-follow';
+import { useLoaded } from '@/hooks/use-loaded';
 import type { SetupTerms } from '@/practice/adapters';
-import { SAVE_RETRY_MS, type AccessStop, type Suspension } from '@/practice/controller';
+import { SAVE_RETRY_MS, type AccessStop, type ActiveSnapshot, type PracticeController, type PracticeSnapshot, type Suspension } from '@/practice/controller';
 import { usePractice } from '@/practice/PracticeProvider';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale, type ColorToken } from '@/theme/tokens';
 
@@ -63,7 +60,6 @@ export interface PhaseStep {
   state: 'done' | 'current' | 'upcoming';
 }
 
-/** The turn's steps. Automatic steps (Settle) show here too; none of them waits for a tap. */
 export function PhaseStepper({ steps }: { steps: readonly PhaseStep[] }) {
   return (
     <View style={styles.stepper} testID="phase-stepper">
@@ -105,21 +101,10 @@ export function SessionStrip({ balance, onTable, status }: { balance: string; on
   );
 }
 
-/**
- * The allowance line for the active metering method (Amendment 4 D), as the
- * supervisor words it for this game; nothing when the policy has none (the
- * spec 1 stub). Asking never charges, and nothing here promotes premium.
- */
+// Spec 1 Amendment 4 D
 export function AllowanceLine({ game }: { game: string }) {
   const { controller } = usePractice();
-  const [allowance, setAllowance] = useState<SetupTerms['allowance']>(null);
-  useEffect(() => {
-    let current = true;
-    void controller.setupTerms(game).then((terms) => current && setAllowance(terms.allowance));
-    return () => {
-      current = false;
-    };
-  }, [controller, game]);
+  const allowance: SetupTerms['allowance'] = useLoaded((practice, id) => practice.setupTerms(id), controller, game)?.allowance ?? null;
   if (!allowance) return null;
   return (
     <View accessible accessibilityLabel={`${allowance.title}: ${allowance.text}`} style={styles.allowance} testID="allowance-line">
@@ -129,13 +114,12 @@ export function AllowanceLine({ game }: { game: string }) {
   );
 }
 
-/** The access-ended stop (spec 5, Amendment 4 D). */
+// Spec 1 Amendment 4 D
 export const ACCESS_ENDED = 'Training ended — settling existing bets; no further allowance used';
-/** The content-removal stop (Amendment 6 §5): the pinned strategy revision was removed. */
+// Spec 1 Amendment 6 §5
 export const CONTENT_REMOVED = 'Strategy removed — settling existing bets';
 const CONTENT_REMOVED_REASON = 'Removed after a validated legal or privacy request.';
 
-/** A notice above play: its title is announced as an alert. */
 export function TableBanner({ title, text, testID, children }: { title: string; text: string; testID?: string; children?: ReactNode }) {
   return (
     <View style={styles.banner} testID={testID}>
@@ -146,10 +130,6 @@ export function TableBanner({ title, text, testID, children }: { title: string; 
   );
 }
 
-/**
- * The stop path the supervisor imposed, and why: access or allowance ended, or a
- * required removal covers the strategy. `detail` says how this table settles.
- */
 export function AccessStopBanner({ ending, detail }: { ending: AccessStop | null; detail: string }) {
   if (ending === null) return null;
   return ending === 'content-removed' ? (
@@ -159,7 +139,33 @@ export function AccessStopBanner({ ending, detail }: { ending: AccessStop | null
   );
 }
 
-/** A save that failed pauses play until a retry, automatic or by hand, succeeds. */
+const SAVE_FAILED_ANNOUNCEMENT = "Couldn't save. Play is paused and will retry automatically.";
+
+type GameView<G extends PermittedView['game']> = Extract<PermittedView, { readonly game: G }>;
+type Describe<G extends PermittedView['game']> = (snapshot: ActiveSnapshot<GameView<G>>) => string;
+
+function followTableAnnouncements<G extends PermittedView['game']>(controller: PracticeController, game: G, describe: Describe<G>): () => void {
+  const atTable = (snapshot: PracticeSnapshot): snapshot is ActiveSnapshot<GameView<G>> => snapshot.status === 'active' && snapshot.view.game === game;
+  const initial = controller.snapshot();
+  let announced = initial.status === 'active' ? initial.view.sequence : -1;
+  let failed = initial.status === 'active' && initial.save === 'failed';
+  return controller.subscribe(() => {
+    const latest = controller.snapshot();
+    if (!atTable(latest)) return;
+    const nowFailed = latest.save === 'failed';
+    if (nowFailed && !failed) AccessibilityInfo.announceForAccessibility(SAVE_FAILED_ANNOUNCEMENT);
+    failed = nowFailed;
+    if (latest.view.sequence === announced) return;
+    announced = latest.view.sequence;
+    AccessibilityInfo.announceForAccessibility(describe(latest));
+  });
+}
+
+export function useTableAnnouncements<G extends PermittedView['game']>(game: G, describe: Describe<G>): void {
+  const { controller } = usePractice();
+  useFollow(followTableAnnouncements<G>, controller, game, describe);
+}
+
 export function SaveFailedBanner({ busy, onRetry }: { busy: boolean; onRetry: () => void }) {
   return (
     <TableBanner
@@ -171,7 +177,6 @@ export function SaveFailedBanner({ busy, onRetry }: { busy: boolean; onRetry: ()
   );
 }
 
-/** A turn-boundary suspension still waiting for the turn in progress to finish. */
 export function TurnBoundaryBanner({ suspension, turn }: { suspension: Suspension | null; turn: TurnWord }) {
   if (suspension?.kind !== 'turn-boundary' || suspension.reached) return null;
   return (
@@ -179,7 +184,6 @@ export function TurnBoundaryBanner({ suspension, turn }: { suspension: Suspensio
   );
 }
 
-/** Chip values, smallest first; a table may offer only some of them. */
 export const CHIPS: readonly { value: string; label: string; color: ColorToken; ink: ColorToken }[] = [
   { value: '1', label: '1', color: 'chip1', ink: 'ink' },
   { value: '5', label: '5', color: 'chip5', ink: 'onImage' },
@@ -189,7 +193,6 @@ export const CHIPS: readonly { value: string; label: string; color: ColorToken; 
   { value: '1000', label: '1K', color: 'chip1k', ink: 'ink' },
 ];
 
-/** The chip rack: one chip value chosen at a time; `spot` says where a tap adds it. */
 export function ChipRack({ chip, onChoose, from = '1', spot = 'a spot' }: { chip: string; onChoose: (value: string) => void; from?: string; spot?: string }) {
   const chips = CHIPS.slice(CHIPS.findIndex((option) => option.value === from));
   return (
@@ -225,10 +228,6 @@ function Chip({ option, selected, onPress }: { option: (typeof CHIPS)[number]; s
   );
 }
 
-/**
- * The ending steps while final settlement runs: what came back, what settles
- * on its own (the table's words), then the result. Nothing waits for a tap.
- */
 export function EndingSteps({
   facts,
   noneReturned,
@@ -267,10 +266,6 @@ export function EndingSteps({
   );
 }
 
-/**
- * The Stop strategy and End session confirmations every table offers. The
- * table says, in its own words, what Stop strategy returns and what settles.
- */
 export function TableDialogs({
   view,
   ending,

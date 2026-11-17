@@ -1,9 +1,4 @@
-// Exact money: normalized rationals with a canonical "numerator[/denominator]"
-// decimal encoding. Worked examples come from the launch rules (#3): blackjack
-// 3:2, craps 6:5 and 2:3, buy commission 5% of stake and standalone lay
-// commission 5% of the potential gross win, rounded up to a whole unit with a
-// minimum of 1. Property cases draw operands from a fixed Philox stream, so
-// every runtime checks the same values.
+// #3
 import type { TestCase } from '@tableside/harness';
 
 import {
@@ -29,7 +24,6 @@ import { throws, ZERO } from './fixtures';
 const decode = decodeMoney;
 const encode = encodeMoney;
 
-/** Random rationals: numerators up to ~200 bits either sign, denominators up to ~100 bits. */
 function operands(count: number): Money[] {
   const stream = RandomStream.create({ ...ZERO, key: [0x6d6f6e65, 0x79000001] });
   const big = (words: number) => {
@@ -44,7 +38,6 @@ function operands(count: number): Money[] {
   });
 }
 
-/** Stein's binary GCD: a different algorithm from the engine's, so normalization is checked independently. */
 function binaryGcd(a: bigint, b: bigint): bigint {
   let [x, y] = [a < 0n ? -a : a, b < 0n ? -b : b];
   if (x === 0n) return y;
@@ -64,9 +57,9 @@ export const moneyCases: TestCase[] = [
   {
     name: 'money: worked payouts are exact fractions',
     run: (t) => {
-      t.equal(encode(mul(decode('15'), decode('3/2'))), '45/2'); // blackjack 3:2 on 15
-      t.equal(encode(mul(decode('7'), decode('6/5'))), '42/5'); // taking odds 6:5 on 7
-      t.equal(encode(mul(decode('10'), decode('2/3'))), '20/3'); // laying 10 against 5 or 9 at 2:3
+      t.equal(encode(mul(decode('15'), decode('3/2'))), '45/2');
+      t.equal(encode(mul(decode('7'), decode('6/5'))), '42/5');
+      t.equal(encode(mul(decode('10'), decode('2/3'))), '20/3');
       t.equal(encode(add(decode('1/3'), decode('1/6'))), '1/2');
       t.equal(encode(sub(decode('1/2'), decode('1/2'))), '0');
       t.equal(encode(div(decode('-7'), decode('2'))), '-7/2');
@@ -108,7 +101,6 @@ export const moneyCases: TestCase[] = [
           positiveDenominator: true,
         });
         t.equal(decodeMoney(encodeMoney(value)), value);
-        // Scaling numerator and denominator by any factor, of either sign, normalizes back.
         t.equal(money(value.n * -97n, value.d * -97n), value);
       }
       t.record('sample', values.slice(0, 5).map(encodeMoney));
@@ -130,7 +122,6 @@ export const moneyCases: TestCase[] = [
         t.equal(add(a, neg(a)), zero);
         t.equal(sub(add(a, b), b), a);
         if (b.n !== 0n) t.equal(mul(div(a, b), b), a);
-        // Ordering agrees with the sign of the difference and is antisymmetric.
         const difference = sub(a, b);
         t.equal(compare(a, b), difference.n > 0n ? 1 : difference.n < 0n ? -1 : 0);
         t.equal(compare(b, a), -compare(a, b));
@@ -150,8 +141,9 @@ export const moneyCases: TestCase[] = [
     name: 'money: commission rounds up to a whole unit with a minimum of 1',
     run: (t) => {
       const five = decode('1/20');
-      // Buy: 5% of the stake.
-      t.equal(['20', '25', '100', '101', '10', '1'].map((stake) => encode(commission(decode(stake), five))), [
+      const buyCommission = (stake: string) => encode(commission(decode(stake), five));
+      const layAgainstFourOrTenCommission = (lay: string) => encode(commission(mul(decode(lay), decode('1/2')), five));
+      t.equal(['20', '25', '100', '101', '10', '1'].map(buyCommission), [
         '1',
         '2',
         '5',
@@ -159,8 +151,7 @@ export const moneyCases: TestCase[] = [
         '1',
         '1',
       ]);
-      // Standalone lay against 4/10: 5% of the potential gross win (1:2).
-      t.equal(['40', '41', '200', '205'].map((lay) => encode(commission(mul(decode(lay), decode('1/2')), five))), [
+      t.equal(['40', '41', '200', '205'].map(layAgainstFourOrTenCommission), [
         '1',
         '2',
         '5',

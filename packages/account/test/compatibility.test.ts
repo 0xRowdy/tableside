@@ -1,10 +1,4 @@
-// Seam 2: the release check's server/client compatibility test (spec 2
-// Amendment 1 C5, #92). It runs against the migrations in source control, in
-// CI's accounts job, before every release: this build's protocol must be
-// served, every operation it calls must exist under that protocol's version,
-// every versioned operation the server has must belong to a protocol it
-// knows, and the server must hash this build's encoding of a request exactly
-// as the build does. (The record-type registry's half is in sync-tracer.test.ts.)
+// Spec 2 Amendment 1 C5; #92
 
 import { describe, expect, it } from 'vitest';
 
@@ -60,7 +54,6 @@ describe('the release check: server and client agree', () => {
         }
       }).find((value) => typeof value === 'string');
       const raw = localStack().rawClient(token);
-      // Non-ASCII text too: the hash is over the UTF-8 bytes on both sides.
       const prepared = prepareOperation({
         protocol: PROTOCOL_VERSION,
         operation: 'c'.repeat(32),

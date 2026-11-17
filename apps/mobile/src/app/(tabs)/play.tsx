@@ -1,10 +1,11 @@
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { AppState } from 'react-native';
 
 import { Button } from '@/components/Button';
 import { Placeholder } from '@/components/Placeholder';
 import { findGame } from '@/games';
+import { useFollow } from '@/hooks/use-follow';
 import { BlackjackSetup } from '@/play/BlackjackSetup';
 import { BlackjackTable } from '@/play/BlackjackTable';
 import { CrapsSetup } from '@/play/CrapsSetup';
@@ -15,24 +16,30 @@ import { RouletteSetup } from '@/play/RouletteSetup';
 import { RouletteTable } from '@/play/RouletteTable';
 import { SessionResult } from '@/play/SessionResult';
 import { SuspendedSession } from '@/play/SuspendedSession';
+import type { PracticeController, PracticeSnapshot } from '@/practice/controller';
 import { usePractice } from '@/practice/PracticeProvider';
 
-/** Play shows the active practice session's table (or its result), or setup when there is none. */
+const isSwitched = (snapshot: PracticeSnapshot) =>
+  snapshot.status === 'completed' && (snapshot.result.endingReason === 'switch' || snapshot.result.endingReason === 'reset');
+
+// Spec 1 S1-09
+function leaveSwitchedResults(controller: PracticeController): () => void {
+  const leave = () => {
+    if (isSwitched(controller.snapshot())) controller.dismissResult();
+  };
+  leave();
+  return controller.subscribe(leave);
+}
+
 export default function Play() {
   const game = findGame(useLocalSearchParams<{ game?: string }>().game);
   const { controller, snapshot } = usePractice();
-  // The session whose switch the player confirmed; its stop path is then under way.
   const [switchingFrom, setSwitchingFrom] = useState<string | null>(null);
   const activeGame = snapshot.status === 'active' ? snapshot.view.game : null;
   const switchTo = game && activeGame && game.id !== activeGame ? game.id : null;
-  const switched = snapshot.status === 'completed' && (snapshot.result.endingReason === 'switch' || snapshot.result.endingReason === 'reset');
+  const switched = isSwitched(snapshot);
+  useFollow(leaveSwitchedResults, controller);
 
-  // A switch (or reset) saves the old session's result, then opens setup instead of showing it (S1-09 egZUB).
-  useEffect(() => {
-    if (switched) controller.dismissResult();
-  }, [controller, switched]);
-
-  // Leaving the table suspends the session in its committed phase; coming back resumes it.
   useFocusEffect(
     useCallback(() => {
       void controller.resumeOnReturn();
@@ -51,7 +58,6 @@ export default function Play() {
       return <Placeholder title="Play" message="Finding your practice session…" />;
     case 'active': {
       const { suspension } = snapshot;
-      // A suspension that coming back lifts shows the table while it resumes; any other waits for the player.
       if (suspension?.waitsForPlayer) {
         return <SuspendedSession snapshot={snapshot} suspension={suspension} />;
       }
@@ -63,7 +69,6 @@ export default function Play() {
         ) : (
           <RouletteTable snapshot={{ ...snapshot, view: snapshot.view }} />
         );
-      // Another game picked on Home while this session is open: ending it comes first.
       return (
         <>
           {table}

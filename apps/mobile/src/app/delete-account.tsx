@@ -1,7 +1,4 @@
-// S2-22 Delete account on the restricted paths: an account whose age isn't
-// established reaches it from its paused screen, where the tab bar is hidden
-// (spec 2 *Age eligibility*). Once deletion is scheduled, the locked screen
-// (S2-23) takes over.
+// Spec 2 S2-22
 
 import { Redirect, router } from 'expo-router';
 

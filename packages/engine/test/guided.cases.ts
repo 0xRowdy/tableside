@@ -1,9 +1,4 @@
-// Guided practice at the engine interface: a roulette activity pinned to a
-// strategy revision. Before a departing spin executes, the activity pauses in
-// a correction; retry or override records one strategy departure; an override
-// ends the cycle until an explicit restart; Stop strategy ends the strategy's
-// bets but not the practice session. Spins come from the Random123 "pi
-// digits" stream: 27 (red), 0, 25 (red), 31 (black), 9 (red) on single zero.
+// Spec 1 Strategy execution semantics
 import type { TestCase } from '@tableside/harness';
 
 import {
@@ -84,7 +79,6 @@ export const guidedCases: TestCase[] = [
       t.equal(throws(() => createActivity(guided(TWO_DOZENS, { first: 'dozen-1', second: 'dozen-1' }), STREAM)), 'StrategySpecificationError');
       const strict = { ...SPEC.rules, limits: { inside: { min: '1', max: '100' }, outside: { min: '25', max: '1000' } } };
       t.equal(throws(() => createActivity(guided(FLAT_EVEN_MONEY, { target: 'red' }, { rules: strict }), STREAM)), 'StrategySpecificationError');
-      // A StrategySpecificationError is still an ActivitySpecificationError.
       t.equal(new StrategySpecificationError('x') instanceof ActivitySpecificationError, true);
     },
   },
@@ -120,7 +114,6 @@ export const guidedCases: TestCase[] = [
       ]);
       t.equal(readPermittedView(after).legalCommands, ['retry-correction', 'override-correction', 'request-stop']);
       t.equal(strategyOf(after)?.correction?.id, 'activity-1/departure/1');
-      // Resending the tap is the same command: no second attempt, no second departure.
       t.equal(status(advanceActivity(after, { sequence: before.sequence, commandId: 'spin', command: BEGIN })), 'duplicate');
     },
   },
@@ -142,7 +135,6 @@ export const guidedCases: TestCase[] = [
         'retried',
         [{ target: 'straight-17', amount: '5' }, { target: 'red', amount: '50' }],
       ]);
-      // Then the spin follows the strategy; the decision counts once and is not "followed".
       const spun = run(state, [BEGIN, SETTLE]).state;
       t.equal(strategyOf(spun)?.adherence, { betting: { decisions: 1, followed: 0 }, playing: null, departures: 1 });
       t.equal(strategyOf(spun)?.overrideAffected, false);
@@ -158,7 +150,6 @@ export const guidedCases: TestCase[] = [
       const settled = step(overridden.state, SETTLE).state;
       t.equal([settled.phase, settled.balance, strategyOf(settled)?.status, strategyOf(settled)?.overrideAffected], ['settled-outcome', '1050', 'active', true]);
       t.equal(strategyOf(settled)?.adherence, { betting: { decisions: 1, followed: 0 }, playing: null, departures: 1 });
-      // The next spin is coached again.
       t.equal(step(run(settled, [place('red', '20')]).state, BEGIN).state.phase, 'correction');
     },
   },
@@ -172,7 +163,6 @@ export const guidedCases: TestCase[] = [
       t.equal([settled.phase, settled.balance], ['cycle-completion', '1050']);
       t.equal(readPermittedView(settled).legalCommands, ['restart-cycle', 'stop-strategy', 'request-stop', 'rebuy']);
       t.equal([strategyOf(settled)?.status, strategyOf(settled)?.cycleEnd, strategyOf(settled)?.overrideAffected], ['cycle-ended', 'override', true]);
-      // The overridden spin adjusts nothing.
       t.equal(settled.strategy?.progress, { counters: { stake: '10' }, lists: {}, lastResult: 'none', cycleTurn: 0 });
       const restarted = step(settled, RESTART);
       t.equal(kinds(restarted.facts), ['cycle-restarted']);
@@ -192,11 +182,9 @@ export const guidedCases: TestCase[] = [
   {
     name: 'guided: a pending strategy action is announced when it begins, and not again while it holds',
     run: (t) => {
-      // 25 covers two dozens once: after a losing spin (27 is in the 3rd dozen) only 5 is left.
       const poor = createActivity(guided(TWO_DOZENS, { first: 'dozen-1', second: 'dozen-2' }, { funding: '25' }), STREAM);
       const spun = run(poor, [place('dozen-1', '10'), place('dozen-2', '10'), BEGIN]).state;
       const settled = step(spun, SETTLE);
-      // Tied to the outcome of turn 1, already settled.
       t.equal(settled.facts.at(-1), { kind: 'strategy-paused', reason: 'unfunded-group', unavailable: [{ target: 'dozen-1', amount: '10' }, { target: 'dozen-2', amount: '10' }], turn: 1 });
       t.equal(kinds(step(settled.state, { kind: 'rebuy', amount: '5' }).facts), ['funding-added']);
       t.equal(strategyOf(step(settled.state, { kind: 'rebuy', amount: '15' }).state)?.pending, null);
@@ -209,7 +197,6 @@ export const guidedCases: TestCase[] = [
       t.equal(kinds(facts), ['wager-changed', 'strategy-stopped', 'wager-returned']);
       t.equal([state.phase, state.balance, state.wagers], ['open-decision', '1000', []]);
       t.equal(strategyOf(state)?.status, 'stopped');
-      // Play continues on the player's own: no further assessment, and no Stop strategy offered again.
       const free = run(state, [place('black', '100'), BEGIN]).state;
       t.equal(free.phase, 'revealing-outcome');
       t.equal(readPermittedView(state).legalCommands.includes('stop-strategy'), false);
@@ -228,7 +215,6 @@ export const guidedCases: TestCase[] = [
     name: 'guided: outcome adjustments move the counters after each coached spin (doubling after a loss)',
     run: (t) => {
       let state = createActivity(guided(DOUBLING, {}), STREAM);
-      // 27 red wins (stake back to 10); 0 loses (stake 20); 25 red wins with 20 (stake 10).
       state = run(state, [place('red', '10'), BEGIN, SETTLE, place('red', '10'), BEGIN, SETTLE]).state;
       t.equal(state.strategy?.progress, { counters: { stake: '20' }, lists: {}, lastResult: 'loss', cycleTurn: 2 });
       const wrong = step(run(state, [place('red', '10')]).state, BEGIN);
@@ -273,7 +259,6 @@ export const guidedCases: TestCase[] = [
       tampered.strategy.correction.actual = [{ target: 'red', amount: '10' }];
       const result = decodeCheckpoint(encodeCheckpoint(tampered));
       t.equal(result.ok ? 'ok' : result.error.kind, 'damaged');
-      // The recorded identity must name the pinned revision.
       const swapped = JSON.parse(encodeCheckpoint(flat()));
       swapped.identities.strategy.version = 2;
       const mismatch = decodeCheckpoint(encodeCheckpoint(swapped));
@@ -283,8 +268,6 @@ export const guidedCases: TestCase[] = [
   {
     name: 'guided (property): Explain prescription matches what Advance prescribes for the same situation and state',
     run: (t) => {
-      // A seeded walk through guided sessions: at every decision the player either follows
-      // what Explain prescribes or bets something else, then retries, overrides, restarts or stops.
       const chooser = RandomStream.create(ZERO);
       const pick = (n: number) => uniformInt(chooser, n);
       const strategies: [StrategyDefinition, Record<string, string>][] = [
@@ -314,7 +297,6 @@ export const guidedCases: TestCase[] = [
           } else if (view.strategy?.status !== 'active' || view.balance === '0' && view.wagers.length === 0) {
             break;
           } else {
-            // Clear the table, then decide what to bet.
             for (const wager of view.wagers) state = step(state, place(wager.target, '0')).state;
             const situation = {
               game: 'roulette' as const,
@@ -322,13 +304,11 @@ export const guidedCases: TestCase[] = [
               balance: readPermittedView(state).balance,
               lastPocket: (view as RoulettePermittedView).outcome?.pocket ?? null,
             };
-            // The strategy state includes an outcome's adjustment still waiting to execute.
             const run = state.strategy as NonNullable<ActivityState['strategy']>;
             const explained = explainPrescription(definition, parameters, situation, run.deferred?.progress ?? run.progress);
             if (!explained.ok) throw new Error(explained.error);
             const prescription = explained.explanation.prescription;
             const follow = prescription.status === 'prescribed' && pick(3) > 0;
-            // A departing bet is on a target the prescription doesn't name, so it can't follow it by chance.
             const named = prescription.status === 'prescribed' ? prescription.bets.map((b) => b.target) : [];
             const elsewhere = others.filter((target) => !named.includes(target));
             const bets = follow ? prescription.bets : [{ target: elsewhere[pick(elsewhere.length)] as string, amount: String(10 + 10 * pick(3)) }];
@@ -357,7 +337,6 @@ export const guidedCases: TestCase[] = [
       t.equal(mismatches, 0);
       t.record('decisions checked', checked);
       t.record('corrections', corrections);
-      // The whole walk's checkpoints, compared across runtimes by the harness.
       t.record('final checkpoint hashes', hashes);
       t.equal(checked > 100 && corrections > 20, true);
     },

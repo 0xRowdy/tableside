@@ -1,12 +1,8 @@
 import type { ExpoConfig } from 'expo/config';
 
-// Expo loads this file without transpiling its TypeScript imports, so the
-// background token (BACKGROUND in src/theme/tokens.ts) is repeated here.
 const BACKGROUND = '#0E1311';
 
-// Engine harness builds (ENGINE_HARNESS=1 at prebuild, docs/cross-runtime-harness.md)
-// leave out Sign in with Apple: Expo requires code signing for any simulator
-// build with that entitlement, and the harness never signs in.
+// docs/cross-runtime-harness.md How it works
 const ENGINE_HARNESS = process.env.ENGINE_HARNESS === '1';
 
 const config: ExpoConfig = {
@@ -14,9 +10,7 @@ const config: ExpoConfig = {
   slug: 'tableside',
   version: '0.1.0',
   scheme: 'tableside',
-  // Portrait and landscape everywhere, on phones and tablets.
   orientation: 'default',
-  // Dark theme only at launch; colors are tokens so a light theme can follow.
   userInterfaceStyle: 'dark',
   backgroundColor: BACKGROUND,
   icon: './assets/images/icon.png',
@@ -24,9 +18,8 @@ const config: ExpoConfig = {
     bundleIdentifier: 'com.tableside.app',
     icon: './assets/expo.icon',
     supportsTablet: true,
-    // Allow iPad multitasking: resizable windows rather than full screen only.
     requireFullScreen: false,
-    // Sign in with Apple, native on iOS (spec 2 #89).
+    // Spec 2 #89
     usesAppleSignIn: !ENGINE_HARNESS,
   },
   android: {
@@ -46,18 +39,15 @@ const config: ExpoConfig = {
     [
       'expo-build-properties',
       {
-        // Product floors: iOS/iPadOS 16.4+, Android 10 (API 29)+.
+        // docs/development.md Toolchain
         ios: { deploymentTarget: '16.4' },
         android: { minSdkVersion: 29 },
       },
     ],
-    // Cues only: nothing plays in the background and nothing records.
     ['expo-audio', { microphonePermission: false, recordAudioAndroid: false, enableBackgroundPlayback: false, enableBackgroundRecording: false }],
-    // Account databases are SQLCipher: never stored unencrypted (src/account/native-vault.ts checks it at open).
     ['expo-sqlite', { useSQLCipher: true }],
-    // Backup rules come from with-backup-exclusion, which also excludes SecureStore.
+    // Spec 2 Backup exclusion
     ['expo-secure-store', { configureAndroidBackup: false }],
-    // The device locale: a new account's default currency.
     'expo-localization',
     ...(ENGINE_HARNESS ? [] : ['expo-apple-authentication']),
     'expo-web-browser',

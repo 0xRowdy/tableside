@@ -1,11 +1,7 @@
-// Live updates over a scripted channel: who holds the connection, and when it
-// is left or joined again. Seam 2 covers the same rules against Realtime.
-
 import { describe, expect, it } from 'vitest';
 
 import { type LiveChannel, type LiveChannelStatus, LiveUpdates } from './live';
 
-/** A channel the test drives: it reports joins, claims and announcements when told. */
 class ScriptedChannel implements LiveChannel {
   handlers: Parameters<LiveChannel['join']>[0] | null = null;
   left = false;

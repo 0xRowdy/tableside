@@ -1,10 +1,4 @@
-// Seam 2: strategy settlement through the practice controller. When a craps
-// strategy's cycle ends, or the strategy stops, with a contract on the table,
-// the controller rolls on by itself, one committed step per roll, until the
-// contract settles (spec #51 user stories 51 and 52); like final settlement,
-// those rolls are never asked about, charged or timed. Pass with odds on the
-// "pi digits" stream: 8 sets the point, then 11, 6, 4 and 12 leave the pass
-// line and the next 8 pays it.
+// #51 user stories 51 and 52
 
 import { PASS_WITH_ODDS } from '@tableside/definitions';
 import type { CrapsPermittedView, DomainFact } from '@tableside/engine';
@@ -59,10 +53,10 @@ describe('strategy settlement', () => {
     await controller.load();
     await controller.start({ game: 'craps', odds: '3-4-5x', buyIn: '1000', strategy: { definition: PASS_WITH_ODDS, parameters: {} } });
     await controller.placeWager('pass', '10');
-    await controller.beginTurn(); // 8: the point
-    await controller.placeWager('pass-odds', '30'); // the strategy says 10
     await controller.beginTurn();
-    await controller.overrideCorrection(); // 11: the cycle ends, the 30 odds come back
+    await controller.placeWager('pass-odds', '30');
+    await controller.beginTurn();
+    await controller.overrideCorrection();
 
     const after = view(controller.snapshot());
     expect(after).toMatchObject({ phase: 'cycle-completion', balance: '1010', wagers: [], turn: 6, strategy: { cycleEnd: 'override', overrideAffected: true } });
@@ -71,7 +65,6 @@ describe('strategy settlement', () => {
       'advance-strategy-settlement', 'advance-strategy-settlement', 'advance-strategy-settlement', 'advance-strategy-settlement',
     ]);
     expect(settledPass(commits)).toMatchObject([{ turn: 6, result: 'win', net: '10' }]);
-    // Only the two rolls the player began were put to the supervisor (and could be charged).
     expect(asked).toEqual([1, 2]);
     expect(reports.filter((report) => report.phase === 'strategy-settlement').every((report) => !report.timed)).toBe(true);
     expect(reports.some((report) => report.phase === 'strategy-settlement')).toBe(true);

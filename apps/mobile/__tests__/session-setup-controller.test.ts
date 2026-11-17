@@ -1,7 +1,4 @@
-// Seam 2: what session setup asks of the practice controller, with substitute
-// adapters. Edited limits are pinned by the activity as chosen (spec #51 Game
-// rules: limits editable before a session); the supervisor port tells setup
-// the funding source and allowance line (Amendment 4 §B, §D).
+// #51 Game rules; spec 1 Amendment 4 §B, §D
 
 import { blackjackRules } from '@tableside/definitions';
 

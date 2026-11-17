@@ -1,7 +1,4 @@
-// S2-23 Locked — signed out: after Sign out of this device, the account's
-// records stay on this device, closed and locked. Only an online sign-in to
-// the same account opens them; another account sees none of them. No tab bar,
-// so the support and privacy links are here (spec 2 Amendment 9 §1).
+// Spec 2 S2-23
 
 import { Redirect, router } from 'expo-router';
 import { LogIn, LogOut } from 'lucide-react-native';

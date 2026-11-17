@@ -1,5 +1,4 @@
-// Devices (S2-19): the account's signed-in devices, and signing one or every
-// other device out (revoke-devices), after Confirm it's you.
+// Spec 2 S2-19
 
 import { instant } from '../values';
 

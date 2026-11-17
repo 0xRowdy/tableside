@@ -1,6 +1,4 @@
-// iOS: UILargeContentViewerInteraction. At accessibility text sizes, touching
-// and holding an item shows its title and symbol enlarged in the system HUD;
-// lifting the finger selects the item the finger is on.
+// docs/development.md Accessibility notes for the shell
 import { requireNativeView } from 'expo';
 import type { ComponentType } from 'react';
 

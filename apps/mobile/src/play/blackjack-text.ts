@@ -1,7 +1,3 @@
-// How blackjack sessions read on screen and aloud. Built only from committed
-// facts and the permitted view, so a face-down card is only ever "face down".
-// Amounts are plain units; formatting never changes a ledger value.
-
 import {
   FUNDING_CEILING,
   INSURANCE_TARGET,
@@ -19,10 +15,8 @@ import {
 
 import { capitalize, formatUnits } from './units';
 
-/** "+2", "0", "−1": a count as a signed whole number. */
 export const signed = (value: number) => (value > 0 ? `+${value}` : value < 0 ? `−${-value}` : '0');
 
-/** The noun for each playing move: "Before your stand", "Keep my stand". */
 export const PLAY_NOUN: Record<PlayChoice, string> = {
   hit: 'hit',
   stand: 'stand',
@@ -33,7 +27,6 @@ export const PLAY_NOUN: Record<PlayChoice, string> = {
   'decline-insurance': 'no-insurance',
 };
 
-/** A playing move as an instruction: "stand", "insure 5", "decline insurance". */
 export const moveText = (move: PlayMove) =>
   move.action === 'insure' && move.amount ? `insure ${formatUnits(move.amount)}` : move.action === 'decline-insurance' ? 'decline insurance' : move.action;
 
@@ -41,18 +34,13 @@ const RANK_NAMES = ['Ace', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'Jack',
 const RANK_SHORT = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
 export const SUIT_GLYPH: Record<Suit, string> = { spades: '♠', hearts: '♥', diamonds: '♦', clubs: '♣' };
 
-/** "Ace of hearts", "10 of spades". */
 export const cardName = (card: Card) => `${RANK_NAMES[card.rank - 1]} of ${card.suit}`;
-/** "A", "10", "K": the card corner. */
 export const cardRank = (card: Card) => RANK_SHORT[card.rank - 1] as string;
 
-/** "soft 17", "20", "bust 24". */
 export const totalText = (total: HandTotal) => (total.value > 21 ? `bust ${total.value}` : total.soft ? `soft ${total.value}` : String(total.value));
 
-/** A hand's total, with a natural read as "blackjack" rather than "soft 21". */
 export const handTotalText = (hand: { readonly total: HandTotal; readonly natural: boolean }) => (hand.natural ? 'blackjack' : totalText(hand.total));
 
-/** The learner's own actions, as "You …". */
 const ACTION_WORD: Record<BlackjackAction, string> = {
   hit: 'hit',
   stand: 'stand',
@@ -61,7 +49,6 @@ const ACTION_WORD: Record<BlackjackAction, string> = {
   surrender: 'surrender',
   'decline-insurance': 'decline insurance',
 };
-/** A simulated player's actions, as "Seat 1 …". */
 const ACTION_VERB: Record<BlackjackAction, string> = {
   hit: 'hits',
   stand: 'stands',
@@ -71,24 +58,19 @@ const ACTION_VERB: Record<BlackjackAction, string> = {
   'decline-insurance': 'declines insurance',
 };
 
-/** The table's rules line: "6 decks · S17 · LS · 10–1,000". */
 export function rulesText(view: BlackjackPermittedView): string {
   const { table } = view;
   return `${table.decks} decks · ${table.dealer} · ${table.lateSurrender ? 'LS' : 'no LS'} · ${formatUnits(table.initial.min)}–${formatUnits(table.initial.max)}`;
 }
 
-/** The definitions preset name for the table's rules. */
 export const presetOf = (view: BlackjackPermittedView) => `${view.table.dealer}_${view.table.lateSurrender ? 'LS' : 'noLS'}` as const;
 
 export const isPlaying = (view: BlackjackPermittedView) => view.playActions.length > 0;
 
-/** A hand is in play: awaiting the player's action, or a held move waiting in a correction. */
 export const inHand = (view: BlackjackPermittedView) => isPlaying(view) || (view.phase === 'correction' && view.outcome?.active != null);
 
-/** "2 other players", "No other players". */
 export const otherPlayersText = (count: number) => (count === 0 ? 'No other players' : `${count} other player${count === 1 ? '' : 's'}`);
 
-/** The status tag: what the table is waiting for. */
 export function statusText(view: BlackjackPermittedView): string {
   switch (view.phase) {
     case 'open-decision': {
@@ -115,7 +97,6 @@ export function statusText(view: BlackjackPermittedView): string {
   }
 }
 
-/** The dealer's cards for screen readers: "Dealer: 5 of spades and a face-down card, showing 5". */
 export function dealerSummary(view: BlackjackPermittedView): string {
   const dealer = view.outcome?.dealer;
   if (!dealer) return 'Dealer: no cards yet';
@@ -124,11 +105,9 @@ export function dealerSummary(view: BlackjackPermittedView): string {
   return `Dealer: ${names.join(' and ')}, ${faceDown ? 'showing' : 'total'} ${totalText(dealer.total)}`;
 }
 
-/** True while the table shows the previous round's cards: between rounds, before the next deal. */
 export const showingLastRound = (view: BlackjackPermittedView) =>
   view.outcome !== null && (view.phase === 'settled-outcome' || (view.phase === 'open-decision' && !isPlaying(view)));
 
-/** A finished or waiting hand in words: "surrendered", "bust", "blackjack", "doubled", "waiting" or `done`. */
 function settledState(hand: BlackjackHandView, done: string): string {
   if (hand.surrendered) return 'surrendered';
   if (hand.busted) return 'bust';
@@ -137,15 +116,10 @@ function settledState(hand: BlackjackHandView, done: string): string {
   return hand.done ? done : 'waiting';
 }
 
-/** Where one of the learner's hands stands, in words: "your turn", "waiting", "stood", "doubled", "surrendered", "bust", "blackjack". */
 export function handState(hand: BlackjackHandView, index: number, view: BlackjackPermittedView): string {
   return inHand(view) && view.outcome?.active === index ? 'your turn' : settledState(hand, 'stood');
 }
 
-/**
- * One of the learner's hands: "Your hand: Ace of hearts, 6 of clubs. Soft 17, doubled",
- * or with split hands "Hand 2 of 3: 8 of hearts. 8, waiting".
- */
 export function handSummary(view: BlackjackPermittedView, index = 0): string {
   const round = view.outcome;
   const hand = round?.hands[index];
@@ -156,26 +130,21 @@ export function handSummary(view: BlackjackPermittedView, index = 0): string {
   return `${last ? 'Last hand' : 'Hand'} ${index + 1} of ${round.hands.length}: ${cards}, ${handState(hand, index, view)}`;
 }
 
-/** A simulated player's hand: "Seat 1 hand: 10 of spades, 6 of hearts. 16, waiting". */
 export function seatSummary(seat: number, hand: BlackjackHandView, index: number, count: number, view: BlackjackPermittedView): string {
   const name = count > 1 ? `Seat ${seat}, hand ${index + 1} of ${count}` : `Seat ${seat}`;
-  // Between rounds every hand is done.
   const state = settledState(inHand(view) ? hand : { ...hand, done: true }, 'done');
   return `${name}: ${hand.cards.map(cardName).join(', ')}. ${capitalize(handTotalText(hand))}, ${state}`;
 }
 
 
-/** "Seat 3" for a simulated player's hand target ("seat-3-hand-1"), or null for one of the learner's. */
 const seatOf = (target: string) => /^seat-(\d+)-/.exec(target)?.[1] ?? null;
 
-/** The learner's hand by its place in play order: "hand 2", or "your hand" when there is only one. */
 function handName(target: string, view: BlackjackPermittedView): string {
   const hands = view.outcome?.hands ?? [];
   const index = hands.findIndex((hand) => hand.target === target);
   return hands.length > 1 && index >= 0 ? `hand ${index + 1}` : 'your hand';
 }
 
-/** Who a card goes to or an action is by: "Dealer", "You", "Hand 2", "Seat 1". */
 function who(target: string, view: BlackjackPermittedView): string {
   if (target === 'dealer') return 'Dealer';
   const seat = seatOf(target);
@@ -212,7 +181,6 @@ function illegalMessage(reason: IllegalActionReason, fact: DomainFact & { kind: 
       if (action === 'split') return 'You can split only two cards of the same value, up to four hands. Nothing changed.';
       if (action === 'surrender') return 'Late surrender is only on your first two cards, after the dealer checks for blackjack. Nothing changed.';
       return 'You can double only on your first two cards. Nothing changed.';
-    // no-wager-to-remove, unknown-target, and reasons only other games produce.
     default:
       return "That wager can't be changed. Nothing was placed.";
   }
@@ -234,11 +202,6 @@ function settledMessage(fact: DomainFact & { kind: 'wager-settled' }, view: Blac
   return fact.result === 'push' ? `Push: your ${formatUnits(fact.stake)} comes back.` : `You lose ${formatUnits(fact.stake)}.`;
 }
 
-/**
- * What the latest committed transition changed, in one message for the screen
- * and for screen readers: every new wager, card (other players' included),
- * result and balance.
- */
 export function describeFacts(facts: readonly DomainFact[], view: BlackjackPermittedView): string | null {
   const parts: string[] = [];
   let balanceChanged = false;
@@ -305,7 +268,6 @@ export function describeFacts(facts: readonly DomainFact[], view: BlackjackPermi
         balanceChanged = true;
         break;
       case 'turn-began':
-        // Working status: the stake is committed to the round and can't be taken down.
         for (const wager of fact.wagers) parts.push(`Wager ${formatUnits(wager.amount)} in play.`);
         break;
       case 'correction-offered':
@@ -330,7 +292,6 @@ export function describeFacts(facts: readonly DomainFact[], view: BlackjackPermi
     const yours = totals.length > 1 ? `Your hands have ${totals.slice(0, -1).join(', ')} and ${totals.at(-1)}` : `You have ${totals[0]}`;
     parts.push(`${yours}; the dealer ${round.dealer.cards.includes(null) ? 'shows' : 'has'} ${totalText(round.dealer.total)}.`);
   }
-  // The supplied count, recomputed before every decision and, once a round settles, for the next deal.
   if (view.count && (dealt || facts.some((fact) => fact.kind === 'played' || fact.kind === 'wager-settled'))) {
     parts.push(`${isPlaying(view) ? 'True count' : 'True count for the next deal'} ${signed(view.count.trueCount)}.`);
   }

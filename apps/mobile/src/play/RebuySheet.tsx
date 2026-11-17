@@ -1,7 +1,4 @@
-// The rebuy sheet (design frames S1-08), for any game table: it reads only the view's funding lines. Prefilled
-// with the original buy-in and editable; the engine judges the amount, and a
-// refusal keeps the draft and explains the room left instead of resizing it.
-// At large text sizes it fills the screen and scrolls (frame U517q0).
+// Spec 1 S1-08
 
 import { FUNDING_CEILING, type DomainFact, type PermittedView } from '@tableside/engine';
 import { X } from 'lucide-react-native';
@@ -14,12 +11,9 @@ import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/th
 
 import { formatUnits, sumUnits, wholeUnits } from './units';
 
-/** Above this text scale the sheet becomes a full-screen page. */
 const FULL_SCREEN_FONT_SCALE = 1.35;
-/** Longest amount text read before the engine judges it (the ceiling has 10 digits). */
 const MAX_DIGITS = 13;
 
-/** The draft as canonical whole units, or null when it isn't a positive whole number. */
 function parseDraft(draft: string): string | null {
   const digits = draft.replace(/[,\s]/g, '');
   if (!/^\d+$/.test(digits) || digits.length > MAX_DIGITS) return null;
@@ -27,7 +21,6 @@ function parseDraft(draft: string): string | null {
   return amount !== '0' ? amount : null;
 }
 
-/** True when the latest committed transition refused a rebuy of exactly this amount. */
 function wasRefused(facts: readonly DomainFact[], amount: string | null) {
   return facts.some((fact) => fact.kind === 'illegal-action' && fact.command.kind === 'rebuy' && fact.command.amount === amount);
 }
@@ -41,9 +34,7 @@ export function RebuySheet({
   onClose,
 }: {
   funding: PermittedView['funding'];
-  /** The committed sequence; facts committed before the sheet opened are ignored. */
   sequence: number;
-  /** Facts of the latest committed transition. */
   facts: readonly DomainFact[];
   busy: boolean;
   onAdd: (amount: string) => void;

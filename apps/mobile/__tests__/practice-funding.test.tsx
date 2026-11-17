@@ -1,7 +1,4 @@
-// Seam 3: rebuys and the funding lines of the session result (design frames
-// S1-08 Rebuy and S1-10 Result), through the real routes on the in-memory
-// adapters, driven only through the accessibility tree. Spins come from the
-// Random123 "pi digits" stream: 27 (red), then 0, 25.
+// Spec 1 S1-08, S1-10
 
 import { act, cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react-native';
 import { renderRouter } from 'expo-router/testing-library';
@@ -122,7 +119,7 @@ describe('practice funding', () => {
   });
 
   it('shows buy-in, each rebuy, final cash-out, net result and maximum drawdown on the result', async () => {
-    // The worked example: 1,000 → 600 → rebuy 1,000 → win 100.
+    // #51 Results
     await startSession();
     await tap('100', /^Black,/, 4);
     await spin('600');

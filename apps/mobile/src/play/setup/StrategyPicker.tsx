@@ -1,7 +1,4 @@
-// The strategy picker of guided-practice setup (S1-02 XQukd and GAXET, with
-// "My strategies" and S4-13's "Customize a copy for this table"), shared by
-// every game that runs strategies. A table passes its built-ins, how it words
-// a requirement its table fails, and any choices the strategy takes.
+// Spec 1 S1-02, Spec 4 S4-13
 
 import type { StrategyDefinition, TableCompatibility, TableRequirement } from '@tableside/engine';
 import { useState, type ReactNode } from 'react';
@@ -14,7 +11,6 @@ import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/th
 import { betsText, type CoachWords } from '../coaching-text';
 import { formatUnits } from '../units';
 
-/** A table limit the strategy's bet falls outside, in words every game shares; null for any other requirement. */
 export function limitRequirementText(strategy: StrategyDefinition, requirement: TableRequirement, words: CoachWords): string | null {
   const bet = requirement.target && requirement.amount ? betsText([{ target: requirement.target, amount: requirement.amount }], words) : '';
   switch (requirement.requirement) {
@@ -38,16 +34,12 @@ export function StrategyPicker({
   children,
 }: {
   builtIns: readonly StrategyDefinition[];
-  /** The latest saved revision of each runnable private strategy for this game (spec 4). */
   myStrategies: readonly StrategyDefinition[];
   selected: StrategyDefinition;
   onChoose: (next: StrategyDefinition) => void;
-  /** The engine's judgement of the strategy at the table as edited; null until the limits are good. */
   fit: TableCompatibility | null;
   describe: (requirement: TableRequirement) => string;
-  /** What of the table can be changed to fit: "the wheel or limits". */
   tableParts: string;
-  /** The strategy's own choices, under the list. */
   children?: ReactNode;
 }) {
   const [customizeNote, setCustomizeNote] = useState<string | null>(null);
@@ -79,7 +71,6 @@ export function StrategyPicker({
           <Text accessibilityRole="alert" maxFontSizeMultiplier={textScale.body} style={styles.value}>
             This strategy doesn&apos;t fit your table
           </Text>
-          {/* One line per requirement, however many instructions share the bet. */}
           {[...new Set(fit.requirements.map(describe))].map((text) => (
             <Text key={text} maxFontSizeMultiplier={textScale.body} style={styles.help}>
               {text}

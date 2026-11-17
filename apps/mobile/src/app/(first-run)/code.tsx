@@ -1,6 +1,4 @@
-// S2-14 Code entry. The copy never says whether the address has an account:
-// "If an account exists for this address, we've sent a code."
-// TODO(frames): unverified against S2-14 (Pencil couldn't open Tableside.pen for #88).
+// TODO(spec 2 S2-14)
 
 import { INVALID_CODE } from '@tableside/account';
 import { router } from 'expo-router';
@@ -31,7 +29,6 @@ export default function Code() {
     setProblem(null);
     const result = await service.verifyEmailCode({ email: flow.email, code: entered });
     setBusy(false);
-    // Signed in: the layout moves on as the account gate changes.
     if (result.status === 'invalid-code') setProblem(INVALID_CODE);
     else if (result.status === 'failed') setProblem("Couldn't sign in. Check your connection and try again.");
   };

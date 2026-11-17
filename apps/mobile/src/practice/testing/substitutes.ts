@@ -1,7 +1,3 @@
-// Substitute adapters for controller and screen tests: a fake clock,
-// deterministic entropy and sequential ids, over the in-memory store and the
-// always-allowed access supervisor.
-
 import { QUARANTINE_LIST } from '@tableside/definitions';
 import { canonicalJson, type EntropySource } from '@tableside/engine';
 import type { RecordedCheckpoint } from '@tableside/engine/recorded-checkpoints';
@@ -11,12 +7,6 @@ import { SAVE_RETRY_MS } from '../controller';
 import { MemoryActivityStore, MemoryDisk } from '../memory-store';
 import type { StoredActivity } from '../store';
 
-/**
- * A clock that only moves when told. With `auto`, every sleep shorter than
- * `autoLimitMs` (by default, the pacing of automatic steps) resolves at once and
- * moves time forward by its length; the save retry's wait and longer ones wait
- * for `advance`, so a failing save never retries in a tight loop.
- */
 export class FakeClock implements Clock {
   private time: number;
   private waiting: { until: number; resolve: () => void }[] = [];
@@ -41,12 +31,10 @@ export class FakeClock implements Clock {
     return new Promise((resolve) => this.waiting.push({ until: this.time + ms, resolve }));
   }
 
-  /** Waits currently pending. */
   get pending(): number {
     return this.waiting.length;
   }
 
-  /** Moves time forward, waking every sleep that is due. */
   advance(ms: number): void {
     this.time += ms;
     const due = this.waiting.filter((wait) => wait.until <= this.time);
@@ -55,7 +43,6 @@ export class FakeClock implements Clock {
   }
 }
 
-/** Little-endian bytes of four u32 words, as the secure entropy adapter supplies them. */
 export function entropyFromWords(words: readonly [number, number, number, number]): EntropySource {
   return {
     randomBytes: () => {
@@ -67,10 +54,6 @@ export function entropyFromWords(words: readonly [number, number, number, number
   };
 }
 
-/**
- * The Random123 "pi digits" key and session words. Its first single-zero spins
- * are 27, 0, 25, 31, 9 (engine draws.cases, checked against the Python reference).
- */
 export const PI_WORDS = [0xa4093822, 0x299f31d0, 0x13198a2e, 0x03707344] as const;
 
 export function substituteAdapters(options: { clock?: FakeClock; words?: readonly [number, number, number, number] } = {}): PracticeAdapters & {
@@ -90,7 +73,7 @@ export function substituteAdapters(options: { clock?: FakeClock; words?: readonl
   };
 }
 
-/** A store holding activities exactly as an earlier build left them in durable storage (#80). */
+// #80
 export function storeHolding(...activities: StoredActivity[]): MemoryActivityStore {
   const disk = new MemoryDisk();
   for (const activity of activities) {
@@ -99,7 +82,6 @@ export function storeHolding(...activities: StoredActivity[]): MemoryActivitySto
   return new MemoryActivityStore(disk);
 }
 
-/** The store row an earlier build left beside one of its recorded checkpoints (or another checkpoint text). */
 export function leftBy(recorded: RecordedCheckpoint, checkpoint = recorded.checkpoint): StoredActivity {
   const specification = recorded.specification as StoredActivity['specification'];
   return {
@@ -115,7 +97,6 @@ export function leftBy(recorded: RecordedCheckpoint, checkpoint = recorded.check
   };
 }
 
-/** A recorded checkpoint as a later build would write it, with a newer state schema: what a rollback finds. */
 export function fromLaterBuild(recorded: RecordedCheckpoint): string {
   const value = JSON.parse(recorded.checkpoint) as { schema: number };
   return canonicalJson({ ...value, schema: value.schema + 1 });

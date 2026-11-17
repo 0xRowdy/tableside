@@ -1,6 +1,4 @@
-// S2-21 Export my data on the restricted paths: an account whose age isn't
-// established reaches it from its paused screen, where the tab bar is hidden
-// (spec 2 *Age eligibility*). Other gate states have no export here.
+// Spec 2 S2-21
 
 import { Redirect, router } from 'expo-router';
 

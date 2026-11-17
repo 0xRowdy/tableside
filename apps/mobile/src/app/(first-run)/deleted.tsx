@@ -1,4 +1,4 @@
-// Deleted (#104): the account was deleted permanently and this device erased it.
+// #104
 
 import { Redirect } from 'expo-router';
 

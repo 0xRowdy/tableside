@@ -1,13 +1,5 @@
-// The standard craps game module: the launch menu. Pass/come and don't
-// pass/don't come with attached odds; place, buy and standalone lay bets on
-// the box numbers; the field; hardways; and the one-roll propositions,
-// including the horn. It owns the point puck, working status and per-bet
-// working instructions, which wagers are contracts, commissions, and how one
-// roll (one turn) settles.
-//
-// Standard craps is its own variant identity. Crapless craps (later) gets its
-// own module; a strategy compatible with this one is not automatically
-// compatible with it. Rules: #3 (Launch game rules) and spec #51.
+// Spec 1 Game rules, Standard craps
+// docs/development.md Releases: recorded checkpoints and the quarantine list
 
 import type { ActivityStateBase, Change, Command, CommandKind, CrapsPermittedView, DomainFact, GameCommand, GameModule, Step, Wager } from './activity';
 import { rollDice } from './draws';
@@ -18,7 +10,6 @@ import type { BetRequirement } from './strategy';
 
 export type OddsCap = '1x' | '2x' | '3-4-5x' | '5x' | '10x';
 export type CrapsPoint = 4 | 5 | 6 | 8 | 9 | 10;
-/** What a field 12 pays: triple (3:1, the default) or double (2:1). A field 2 always pays double. */
 export type FieldPayout = 'triple-12' | 'double-12';
 export type Hardway = 4 | 6 | 8 | 10;
 
@@ -26,16 +17,9 @@ export const ODDS_CAPS: readonly OddsCap[] = ['1x', '2x', '3-4-5x', '5x', '10x']
 export const CRAPS_POINTS: readonly CrapsPoint[] = [4, 5, 6, 8, 9, 10];
 export const FIELD_PAYOUTS: readonly FieldPayout[] = ['triple-12', 'double-12'];
 export const HARDWAYS: readonly Hardway[] = [4, 6, 8, 10];
-/** The one-roll propositions besides the horn, in table order. */
 export const PROPOSITIONS = ['any-seven', 'any-craps', 'prop-2', 'prop-3', 'prop-11', 'prop-12'] as const;
-/** The horn's four parts: an equal share of its stake on each of these totals. */
 export const HORN_PARTS = [2, 3, 11, 12] as const;
 
-/**
- * The versioned capability description of the standard craps variant: what a
- * table of this variant offers, so strategies and presets can be checked
- * against it. A new wager family or rule option bumps the version.
- */
 export const STANDARD_CRAPS = {
   id: 'standard-craps',
   version: 2,
@@ -46,13 +30,9 @@ export const STANDARD_CRAPS = {
   oddsCaps: ODDS_CAPS,
   fieldPayouts: FIELD_PAYOUTS,
   defaults: { odds: '3-4-5x', field: 'triple-12', comeOddsOnComeOut: 'off', placeAndBuyOnComeOut: 'off' },
-  /** Don't bets push on this come-out total ("bar 12"). */
   dontBar: 12,
-  /** Contracts: once their number is set, these bases can't be lowered or taken down. */
   contracts: ['pass', 'come'],
-  /** Wagers that take a per-bet working instruction ("on" or "off"). Everything else always works. */
   switchable: ['place', 'buy', 'lay', 'hardway', 'come-odds', 'dont-come-odds'],
-  /** Buy: 5% of the stake; standalone lay: 5% of the potential gross win. Only on a win, per bet, rounded up to a whole unit, minimum 1. Attached odds pay none. */
   commission: { rate: '1/20', buy: 'stake', lay: 'win', rounding: 'up', minimum: '1' },
 } as const;
 
@@ -60,9 +40,7 @@ export interface CrapsRuleSet extends VersionedIdentity {
   readonly odds: OddsCap;
   readonly field: FieldPayout;
   readonly limits: {
-    /** Per wager or number: pass, don't pass, come, don't come, place, buy, lay and field. */
     readonly flat: Limit;
-    /** Per component: hardways and propositions (each horn part). */
     readonly props: Limit;
   };
 }
@@ -72,59 +50,39 @@ export interface CrapsOutcome {
   readonly dice: readonly [number, number];
 }
 
-/** A per-bet working instruction: overrides the wager's default working status until it changes or the wager leaves the table. */
 export interface WorkingInstruction {
   readonly target: string;
   readonly working: boolean;
 }
 
 export interface CrapsActivityState extends ActivityStateBase<'craps'> {
-  /** The pinned rule content, not a pointer to current definitions. */
   readonly rules: Pick<CrapsRuleSet, 'odds' | 'field' | 'limits'>;
-  /** The latest roll. */
   readonly outcome: CrapsOutcome | null;
-  /** The point puck: null while it is off (the next roll is a come-out roll). */
   readonly point: CrapsPoint | null;
-  /** Working instructions for wagers on the table, in table order. */
   readonly instructions: readonly WorkingInstruction[];
 }
 
 export type CrapsIllegalActionReason =
-  /** A contract base (pass or come with its number set) can't be lowered or taken down; an established don't can only come down. */
   | 'committed-wager'
-  /** The wager can't be made in this state of the game (pass after the point is set, come before, odds without a base). */
   | 'not-available-now'
-  /** More odds than the table's odds cap allows behind this base. */
   | 'above-odds-cap'
-  /** Odds must be a multiple that pays whole units. */
   | 'odds-increment'
-  /** Place, buy, lay and horn stakes go in their own multiples (place 6 and 8 in 6s, other place numbers in 5s, the horn in 4s). */
   | 'stake-increment'
-  /** The balance left after the stake can't cover the commission a win would charge. */
   | 'commission-unfunded'
-  /** This wager takes no working instruction: it always works. */
   | 'working-fixed';
 
 export type CrapsDomainFact =
   | { readonly kind: 'dice-rolled'; readonly turn: number; readonly dice: readonly [number, number] }
-  /** The puck moved: on at a point, or off (null). */
   | { readonly kind: 'point-changed'; readonly turn: number; readonly point: CrapsPoint | null }
-  /** A come or don't come bet traveled to its number. */
   | { readonly kind: 'wager-moved'; readonly turn: number; readonly from: string; readonly to: string; readonly amount: string }
-  /** A don't bet's bar-12 standoff: no money moves and the wager stays on the table. */
   | { readonly kind: 'wager-pushed'; readonly turn: number; readonly target: string; readonly stake: string }
-  /** A working instruction was given or cleared: the wager works, or is off, from now on (a cleared one: its usual status). */
   | { readonly kind: 'working-changed'; readonly target: string; readonly working: boolean };
 
 export interface CrapsWagerStatus {
   readonly target: string;
-  /** Whether the wager acts on the next roll ("ON") or is off. */
   readonly working: boolean;
-  /** The player's working instruction, or null when the default applies. */
   readonly instruction: boolean | null;
-  /** Whether it takes a working instruction. */
   readonly switchable: boolean;
-  /** False for a contract: pass or come with its number set. */
   readonly removable: boolean;
 }
 
@@ -135,16 +93,9 @@ export interface CrapsPlacement {
   readonly kind: CrapsPlacementKind;
   readonly min: string;
   readonly max: string;
-  /** Stakes go in multiples of this. */
   readonly increment: string;
-  /** Net payout ratio, profit to stake: "1:1", "6:5", "5:6". The field gives "1:1" (2 and 12 pay more); the horn gives its parts' "30:1/15:1". */
   readonly payout: string;
-  /** What a win's commission is charged on: the stake (buy) or the gross win (lay). Absent when no commission applies. */
   readonly commission?: 'stake' | 'win';
-  /**
-   * For a wager that takes a working instruction: whether it works on a
-   * come-out roll without one. The instruction it takes is the opposite.
-   */
   readonly usualOnComeOut?: boolean;
 }
 
@@ -154,30 +105,22 @@ export interface CrapsTable {
   readonly field: FieldPayout;
   readonly point: CrapsPoint | null;
   readonly limits: CrapsRuleSet['limits'];
-  /** Working status and removability of every wager on the table, in table order. */
   readonly wagers: readonly CrapsWagerStatus[];
-  /** What can be placed or raised in the current state of the game. */
   readonly placements: readonly CrapsPlacement[];
 }
 
-// ---- targets ----------------------------------------------------------
-
 type Line = 'pass' | 'come';
 
-/** A line base or its attached odds. */
 interface LineTarget {
   readonly family: 'line';
   readonly target: string;
-  /** The base a wager belongs to (itself for a base). */
   readonly base: string;
   readonly odds: boolean;
   readonly dont: boolean;
   readonly line: Line;
-  /** The fixed number of a come or don't come bet that has traveled; null for pass, don't pass and the come areas. */
   readonly number: CrapsPoint | null;
 }
 
-/** A place, buy or standalone lay bet on a box number. */
 interface BoxTarget {
   readonly family: 'place' | 'buy' | 'lay';
   readonly target: string;
@@ -190,11 +133,9 @@ interface HardTarget {
   readonly number: Hardway;
 }
 
-/** A one-roll bet: the field, a proposition or the horn. */
 interface OneRollTarget {
   readonly family: 'field' | 'proposition' | 'horn';
   readonly target: string;
-  /** Totals that win (the horn's parts each win on one of them). */
   readonly totals: readonly number[];
 }
 
@@ -212,7 +153,6 @@ const info = (target: string, line: Line, dont: boolean, number: CrapsPoint | nu
 
 type Proposition = (typeof PROPOSITIONS)[number];
 
-/** Each one-roll proposition: the totals it wins on and what it pays per unit. */
 const PROPOSITION_TERMS: Record<Proposition, { readonly totals: readonly number[]; readonly pays: Money }> = {
   'any-seven': { totals: [7], pays: money(4n) },
   'any-craps': { totals: [2, 3, 12], pays: money(7n) },
@@ -222,7 +162,6 @@ const PROPOSITION_TERMS: Record<Proposition, { readonly totals: readonly number[
   'prop-12': { totals: [12], pays: money(30n) },
 };
 
-/** Every target in table order. */
 const TARGETS: readonly TargetInfo[] = [
   info('pass', 'pass', false, null, false),
   info('pass-odds', 'pass', false, null, true),
@@ -246,28 +185,19 @@ const TARGETS: readonly TargetInfo[] = [
 const BY_TARGET = new Map(TARGETS.map((target, index) => [target.target, { target, index }]));
 const targetInfo = (target: string) => BY_TARGET.get(target)?.target;
 const targetOrder = (target: string): number => BY_TARGET.get(target)?.index ?? -1;
-/** Every stored target is known (placeWager and decode both check). */
 const known = (target: string) => targetInfo(target) as TargetInfo;
 const lineInfo = (target: string) => targetInfo(target) as LineTarget;
 
-/** The number a base or its odds acts on: a traveled bet's own number, or the point for the pass line. */
 const numberOf = (target: LineTarget, point: CrapsPoint | null): CrapsPoint | null =>
   target.line === 'pass' ? point : target.number;
 
-/** A base whose number is set: it can carry odds. */
 const established = (target: LineTarget, point: CrapsPoint | null) => !target.odds && numberOf(target, point) !== null;
 
-/** Contracts can't be lowered or taken down once their number is set. */
 const isContract = (target: TargetInfo, point: CrapsPoint | null) => target.family === 'line' && !target.dont && established(target, point);
 
-/** Whether a wager takes a working instruction: place, buy, lay, hardways and the odds on traveled come and don't come bets. */
 const isSwitchable = (target: TargetInfo) =>
   target.family === 'line' ? target.odds && target.number !== null : target.family !== 'field' && target.family !== 'proposition' && target.family !== 'horn';
 
-/**
- * Working status without an instruction. Come odds, place and buy bets are off
- * on the come-out roll; everything else works on every roll.
- */
 function worksByDefault(target: TargetInfo, point: CrapsPoint | null): boolean {
   if (target.family === 'line') return !(target.odds && target.line === 'come' && !target.dont && point === null);
   if (target.family === 'place' || target.family === 'buy') return point !== null;
@@ -279,52 +209,32 @@ const instructionOf = (state: Pick<State, 'instructions'>, target: string) => st
 const isWorking = (state: Pick<State, 'instructions' | 'point'>, target: TargetInfo) =>
   instructionOf(state, target.target) ?? worksByDefault(target, state.point);
 
-// ---- payouts ----------------------------------------------------------
-
-/** True odds when taking odds: profit per unit staked (2:1, 3:2, 6:5). Laying pays the inverse. */
 const TRUE_ODDS: Record<CrapsPoint, Money> = { 4: money(2n), 10: money(2n), 5: money(3n, 2n), 9: money(3n, 2n), 6: money(6n, 5n), 8: money(6n, 5n) };
 const PLACE_PAYS: Record<CrapsPoint, Money> = { 4: money(9n, 5n), 10: money(9n, 5n), 5: money(7n, 5n), 9: money(7n, 5n), 6: money(7n, 6n), 8: money(7n, 6n) };
 const HARD_PAYS: Record<Hardway, Money> = { 4: money(7n), 10: money(7n), 6: money(9n), 8: money(9n) };
-/** Each horn part pays as the individual proposition on its total. */
 const hornPartPays = (total: (typeof HORN_PARTS)[number]) => PROPOSITION_TERMS[`prop-${total}`].pays;
 const fieldPays = (total: number, field: FieldPayout) => (total === 2 ? money(2n) : total === 12 ? money(field === 'triple-12' ? 3n : 2n) : money(1n));
 
 const COMMISSION_RATE = decodeMoney(STANDARD_CRAPS.commission.rate);
 
-/** Taking-odds multiple of the base. Under 3-4-5x it depends on the number. */
 function oddsMultiple(cap: OddsCap, n: CrapsPoint): bigint {
   if (cap === '3-4-5x') return n === 4 || n === 10 ? 3n : n === 5 || n === 9 ? 4n : 5n;
   return BigInt(cap.slice(0, -1));
 }
 
-/** Profit per unit of odds stake (or of a buy or lay stake): true odds, inverted when laying. */
 const trueOddsPayout = (dont: boolean, n: CrapsPoint): Money => (dont ? money(TRUE_ODDS[n].d, TRUE_ODDS[n].n) : TRUE_ODDS[n]);
 
-/** The smallest stake that pays whole units: the payout ratio's denominator. */
 const wholeIncrement = (ratio: Money): bigint => ratio.d;
 
-/**
- * The largest odds stake behind a base. Taking: the multiple times the base.
- * Laying: the cap is the amount to win, so the laid stake is that win at true
- * odds (6× the base on every number under 3-4-5x).
- */
 function oddsCap(cap: OddsCap, dont: boolean, n: CrapsPoint, base: Money): Money {
   const take = mul(base, money(oddsMultiple(cap, n)));
   return dont ? mul(take, TRUE_ODDS[n]) : take;
 }
 
-/**
- * An upper bound on one roll under these rules: every flat target (line
- * bases, traveled come and don't come bases, place, buy, lay, field) at the
- * flat maximum, the largest odds every base allows, and every hardway,
- * proposition and horn part at the component maximum; and the largest profit
- * any of them pays per unit (a 2 or 12 proposition at 30:1).
- */
 export function crapsTurnExposure(rules: Pick<CrapsRuleSet, 'odds' | 'limits'>): { readonly stake: Money; readonly payout: Money } {
   const flat = decodeMoney(rules.limits.flat.max);
   const props = decodeMoney(rules.limits.props.max);
   const points = CRAPS_POINTS.length;
-  // pass, don't pass, come, don't come; a traveled come and don't come base and a place, buy and lay bet per number; the field.
   const flatTargets = 4 + points * 5 + 1;
   const bases = 2 + points * 2;
   const odds = CRAPS_POINTS.reduce((most, n) => {
@@ -339,7 +249,6 @@ export function crapsTurnExposure(rules: Pick<CrapsRuleSet, 'odds' | 'limits'>):
 
 const ratioText = (ratio: Money) => `${ratio.n.toString()}:${ratio.d.toString()}`;
 
-/** Profit per unit staked on a place, buy, lay or hardway bet. */
 function standingPayout(target: BoxTarget | HardTarget): Money {
   switch (target.family) {
     case 'place':
@@ -353,7 +262,6 @@ function standingPayout(target: BoxTarget | HardTarget): Money {
   }
 }
 
-/** The payout a placement states: a standing bet's ratio, a proposition's, or the field's even money (2 and 12 pay more). */
 function statedPayout(target: Exclude<TargetInfo, LineTarget>): string {
   if (!('totals' in target)) return ratioText(standingPayout(target));
   if (target.family === 'horn') return '30:1/15:1';
@@ -361,7 +269,6 @@ function statedPayout(target: Exclude<TargetInfo, LineTarget>): string {
   return ratioText(PROPOSITION_TERMS[target.target as Proposition].pays);
 }
 
-/** Stakes on a non-line wager go in multiples of this. */
 function stakeIncrement(target: Exclude<TargetInfo, LineTarget>): bigint {
   switch (target.family) {
     case 'place':
@@ -376,33 +283,27 @@ function stakeIncrement(target: Exclude<TargetInfo, LineTarget>): bigint {
   }
 }
 
-/** The commissions every buy and lay on the table would charge on a win, together. */
 const commissionsDue = (wagers: readonly Wager[]): Money =>
   wagers.reduce((sum, wager) => {
     const target = targetInfo(wager.target);
     return target ? add(sum, commissionFor(target, decodeMoney(wager.amount))) : sum;
   }, money(0n));
 
-/** The commission a winning buy or lay with this stake would charge; zero for every other wager. */
 function commissionFor(target: TargetInfo, stake: Money): Money {
   if (target.family === 'buy') return commission(stake, COMMISSION_RATE);
   if (target.family === 'lay') return commission(mul(stake, standingPayout(target)), COMMISSION_RATE);
   return money(0n);
 }
 
-/** Limits on a non-line wager's stake: whole multiples of its increment within the table limit (per part for the horn). */
 function stakeLimits(target: Exclude<TargetInfo, LineTarget>, rules: State['rules']): { min: bigint; max: bigint; increment: bigint } {
   const props = target.family === 'hardway' || target.family === 'proposition' || target.family === 'horn';
   const limit = props ? rules.limits.props : rules.limits.flat;
   const increment = stakeIncrement(target);
-  // The horn's limit is per part, so its stake limits are the part limits times its four parts.
   const parts = target.family === 'horn' ? BigInt(HORN_PARTS.length) : 1n;
   const low = BigInt(limit.min) * parts;
   const high = BigInt(limit.max) * parts;
   return { min: ((low + increment - 1n) / increment) * increment, max: (high / increment) * increment, increment };
 }
-
-// ---- module -----------------------------------------------------------
 
 type State = CrapsActivityState;
 
@@ -413,14 +314,11 @@ const stakeOf = (wagers: readonly Wager[], target: string) => {
 
 const sorted = <T extends { target: string }>(items: T[]) => items.sort((a, b) => targetOrder(a.target) - targetOrder(b.target));
 
-/** Instructions belong to wagers on the table: they leave with them. */
 const keptInstructions = (instructions: readonly WorkingInstruction[], wagers: readonly Wager[]) =>
   instructions.filter((item) => wagers.some((wager) => wager.target === item.target));
 
-/** Craps adds per-bet working instructions to the common commands. */
 type CrapsCommand = GameCommand | Extract<Command, { readonly kind: 'set-working' }>;
 
-/** The common commands, plus working instructions whenever bets are open. */
 const legal = (_state: State, common: readonly CommandKind[]): readonly CommandKind[] =>
   common.flatMap((kind): CommandKind[] => (kind === 'place-wager' ? ['place-wager', 'set-working'] : [kind]));
 
@@ -450,14 +348,12 @@ function apply(state: State, command: CrapsCommand): Step<State> {
   }
 }
 
-/** A roll with only contracts on the table (final or strategy settlement): it resolves what it can, and nothing new is bet. */
 function settleContracts(state: State): { change: Change<State> & Settled['change']; facts: DomainFact[] } {
   const rolled = roll(state) as Extract<Step<State>, { change: unknown }>;
   const settled = settle({ ...state, ...rolled.change } as State);
   return { change: { ...rolled.change, ...settled.change }, facts: [...rolled.facts, ...settled.facts] };
 }
 
-/** One roll of the dice from the random protocol: one turn. */
 function roll(state: State): Step<State> {
   const stream = RandomStream.restore(state.random);
   const dice = rollDice(stream);
@@ -468,14 +364,6 @@ function roll(state: State): Step<State> {
   };
 }
 
-/**
- * A legal per-bet working instruction. Each switchable wager has one usual
- * come-out status: place, buy and come odds are off, lays, hardways and don't
- * come odds work. An instruction makes the wager work, or be off, on every roll
- * ("working on the come-out", or "off", including a place bet turned off while
- * the point is on), and holds until it changes or the wager leaves the table.
- * Giving the status the wager has anyway, now and on the come-out, clears it.
- */
 function setWorking(state: State, target: string, working: boolean): Step<State> {
   const placed = targetInfo(target);
   if (!placed) return { illegal: 'unknown-target' };
@@ -505,14 +393,11 @@ function placeWager(state: State, target: string, amount: Money): Step<State> {
     }
   } else if (!placed.odds) {
     if (established(placed, point)) {
-      // Pass and come are contracts once their number is set. An established
-      // don't bet may come down (with its odds) but can't be raised or lowered.
       if (!existing) return { illegal: 'not-available-now' };
       if (!placed.dont || amount.n !== 0n) return { illegal: 'committed-wager' };
       const odds = stakeOf(state.wagers, `${target}-odds`);
       if (odds) changes.push({ target: `${target}-odds`, amount: money(0n) });
     } else {
-      // Pass and don't pass are made before a come-out roll; come and don't come once a point is on.
       const open = placed.line === 'pass' ? point === null : point !== null;
       if (!open) return { illegal: 'not-available-now' };
       if (amount.n !== 0n) {
@@ -541,7 +426,6 @@ function placeWager(state: State, target: string, amount: Money): Step<State> {
     facts.push({ kind: 'wager-changed', target: change.target, amount: encodeMoney(change.amount), previous: encodeMoney(previous) });
   }
   if (balance.n < 0n) return { illegal: 'insufficient-funds' };
-  // Every buy and lay on the table must be able to pay its commission on top of the stakes.
   if (amount.n !== 0n && compare(balance, commissionsDue(wagers)) < 0) return { illegal: 'commission-unfunded' };
   return {
     change: { phase: 'open-decision', balance: encodeMoney(balance), wagers: sorted(wagers), instructions: keptInstructions(state.instructions, wagers) },
@@ -551,7 +435,6 @@ function placeWager(state: State, target: string, amount: Money): Step<State> {
 
 type Resolution = 'win' | 'loss' | 'stay' | 'bar' | { move: CrapsPoint };
 
-/** What one roll total does to a base, given the puck before the roll. */
 function resolveBase(target: LineTarget, total: number, point: CrapsPoint | null): Resolution {
   const n = numberOf(target, point);
   if (n !== null) {
@@ -559,14 +442,12 @@ function resolveBase(target: LineTarget, total: number, point: CrapsPoint | null
     if (total === n) return target.dont ? 'loss' : 'win';
     return 'stay';
   }
-  // A come-out roll for this bet: pass/don't pass with the puck off, or a bet in the come area.
   if (total === 7 || total === 11) return target.dont ? 'loss' : 'win';
   if (total === 2 || total === 3) return target.dont ? 'win' : 'loss';
   if (total === 12) return target.dont ? 'bar' : 'loss';
   return target.line === 'come' ? { move: total as CrapsPoint } : 'stay';
 }
 
-/** What one roll does to a box or hardway bet that is working. */
 function resolveStanding(target: BoxTarget | HardTarget, dice: readonly [number, number]): 'win' | 'loss' | 'stay' {
   const total = dice[0] + dice[1];
   if (target.family === 'hardway') {
@@ -584,9 +465,7 @@ interface Settled {
   facts: DomainFact[];
 }
 
-/** Settles the latest roll against every wager on the table and moves the puck. */
 function settle(state: State): Settled {
-  // Wagers are settled only after a roll, so an outcome exists.
   const { turn, dice } = state.outcome as CrapsOutcome;
   const total = dice[0] + dice[1];
   const { point } = state;
@@ -602,7 +481,6 @@ function settle(state: State): Settled {
   ) => {
     const fee = extra.fee ?? money(0n);
     const net = result === 'loss' ? neg(stake) : sub(gross, fee);
-    // A standing bet that wins stays up: only the win comes back.
     const returned = result === 'loss' ? money(0n) : extra.staysUp ? net : add(stake, net);
     balance = add(balance, returned);
     facts.push({
@@ -638,7 +516,6 @@ function settle(state: State): Settled {
           }
           break;
         }
-        // Odds act on their base's number and resolve with it; odds that are off come back.
         const n = numberOf(target, point) as CrapsPoint;
         const wins = target.dont ? total === 7 : total === n;
         const loses = target.dont ? total === n : total === 7;
@@ -652,8 +529,6 @@ function settle(state: State): Settled {
       case 'buy':
       case 'lay':
       case 'hardway': {
-        // A wager that is off takes no action and stays on the table. A win is
-        // paid and the bet stays up, as at the table; the player takes it down.
         const resolution = isWorking(state, target) ? resolveStanding(target, dice) : 'stay';
         if (resolution === 'loss') pay(wager.target, stake, 'loss', money(0n));
         else wagers.push(wager);
@@ -669,7 +544,6 @@ function settle(state: State): Settled {
         else pay(wager.target, stake, 'loss', money(0n));
         break;
       case 'horn': {
-        // Four equal parts, each settled as its own bet.
         const part = mul(stake, money(1n, BigInt(HORN_PARTS.length)));
         for (const component of HORN_PARTS) {
           if (total === component) pay(wager.target, part, 'win', mul(part, hornPartPays(component)), { component });
@@ -690,10 +564,6 @@ function settle(state: State): Settled {
   };
 }
 
-/**
- * Stopping finishes a roll already revealed, returns every removable wager
- * and leaves only contracts, which further rolls settle automatically.
- */
 function requestStop(state: State): Step<State> {
   const facts: DomainFact[] = [{ kind: 'stop-requested', phase: state.phase }];
   let current = state;
@@ -727,7 +597,6 @@ function placements(state: State): CrapsPlacement[] {
     const ratio = trueOddsPayout(base.dont, n);
     const increment = wholeIncrement(ratio);
     const cap = oddsCap(rules.odds, base.dont, n, decodeMoney(wager.amount));
-    // The largest whole multiple of the increment within the cap.
     const max = (cap.n / cap.d / increment) * increment;
     if (max < increment) continue;
     const odds = lineInfo(`${wager.target}-odds`);
@@ -741,7 +610,6 @@ function placements(state: State): CrapsPlacement[] {
       ...(isSwitchable(odds) ? { usualOnComeOut: worksByDefault(odds, null) } : {}),
     });
   }
-  // Every other wager can be made, changed or taken down whenever bets are open.
   for (const target of TARGETS) {
     if (target.family === 'line') continue;
     const limits = stakeLimits(target, rules);
@@ -808,21 +676,16 @@ function damage(value: Record<string, unknown>): string | undefined {
   }
   const instructionProblem = instructionDamage(instructions, wagers);
   if (instructionProblem) return instructionProblem;
-  // Only guided practice rolls with nothing at stake (the strategy waits for a point).
   if (phase === 'revealing-outcome' && wagers.length === 0 && value.strategy === null) return 'a revealing roll has no committed wagers';
   if (phase === 'completed' && wagers.length > 0) return 'wagers remain after settlement';
   return undefined;
 }
 
-// ---- strategy support ---------------------------------------------------
-
-/** A line base established on the table: what a craps strategy situation states of the table. */
 export interface CrapsBase {
   readonly target: string;
   readonly amount: string;
 }
 
-/** Pass and don't pass once a point is on, and every come and don't come bet that has traveled, in table order. */
 export function establishedBases(state: Pick<State, 'wagers' | 'point'>): CrapsBase[] {
   return state.wagers
     .filter((wager) => {
@@ -832,19 +695,11 @@ export function establishedBases(state: Pick<State, 'wagers' | 'point'>): CrapsB
     .map((wager) => ({ target: wager.target, amount: wager.amount }));
 }
 
-/** True for a target that is an established base when its number is set: pass, don't pass, or a traveled come or don't come bet. */
 export const isBaseTarget = (target: string, point: CrapsPoint | null): boolean => {
   const placed = targetInfo(target);
   return placed?.family === 'line' && !placed.odds && (placed.line === 'pass' ? point !== null : placed.number !== null);
 };
 
-/**
- * Why a strategy's bet of this amount can't be made under these rules, if it
- * can't. With the table's state (the puck and the established bases), it is
- * judged as a bet for the next roll: contracts and established bases stay as
- * they are, line bets follow the puck, and odds need their base and fit its cap.
- * Without it (a strategy's declared table), only what holds on every roll is judged.
- */
 export function crapsBetProblem(
   rules: Pick<CrapsRuleSet, 'odds' | 'limits'>,
   target: string,
@@ -868,7 +723,6 @@ export function crapsBetProblem(
   if (!now) return undefined;
   const base = now.bases.find((item) => item.target === placed.base);
   if (!placed.odds) {
-    // An established base stays exactly as it is; anything else is a new line bet the puck must allow.
     if (base) return compare(amount, decodeMoney(base.amount)) === 0 ? undefined : 'committed-wager';
     if (placed.number !== null) return 'not-available-now';
     return (placed.line === 'pass') === (now.point === null) ? undefined : 'not-available-now';
@@ -880,7 +734,6 @@ export function crapsBetProblem(
   return undefined;
 }
 
-/** Standard craps behind the session protocol. */
 export const CRAPS: GameModule<CrapsActivityState, CrapsPermittedView, CrapsCommand> = {
   ruleSets: [{ id: STANDARD_CRAPS.id, version: STANDARD_CRAPS.version }],
   turnExposure: crapsTurnExposure,

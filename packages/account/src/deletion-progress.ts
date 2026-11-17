@@ -1,10 +1,6 @@
-// Reading the server's deletion status answers: shared by the Account
-// service and the web account page, with no platform imports.
-
 import type { DeletionProgress, DeletionStatus } from './account-service/types';
 import { instant } from './values';
 
-/** The server's deletion progress (deletion_progress_v1), or null when it isn't one. */
 export function parseProgress(data: unknown): DeletionProgress | null {
   const value = data as {
     status?: unknown; deletedAt?: unknown; cleanupBy?: unknown; completedAt?: unknown; delayed?: unknown;
@@ -25,10 +21,8 @@ export function parseProgress(data: unknown): DeletionProgress | null {
   };
 }
 
-/** A deletion that hasn't crossed the boundary: none, or scheduled with its deadline. */
 export type PendingDeletion = Exclude<DeletionStatus, DeletionProgress>;
 
-/** The signed-in session's deletion status (deletion_status_v1), or null when it isn't one. */
 export function parseDeletionStatus(data: unknown): PendingDeletion | null {
   const value = data as { status?: unknown; deadline?: unknown; scheduledAt?: unknown } | null;
   if (value?.status === 'none') return { status: 'none' };

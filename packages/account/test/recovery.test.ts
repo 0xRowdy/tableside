@@ -1,8 +1,4 @@
-// Seam 2: Recovery needed (spec 2, *Account gate*, *Key states*; user story
-// 23). A device whose account database can't be opened keeps the original
-// bytes, restores the account's synced history into a fresh database under a
-// new installation (so its per-device positions and command scope never
-// collide with the original's, #98), and can sign out instead.
+// Spec 2 Account gate, Key states; #98
 
 import { afterEach, describe, expect, it } from 'vitest';
 
@@ -18,7 +14,6 @@ function device(name: string): SimulatedDevice {
 }
 afterEach(() => devices.splice(0).forEach((d) => d.dispose()));
 
-/** A phone whose account has a synced practice session, then lost the database's key: it reopens in Recovery needed. */
 async function lostKey() {
   const email = uniqueEmail('recovery');
   const phone = device('phone');
@@ -33,7 +28,6 @@ async function lostKey() {
   phone.vault.loseKey(accountId);
   await phone.restart();
   expect(phone.account.gate).toEqual({ state: 'recovery-needed', accountId });
-  // What the vault found and kept, once the killed process's connection had closed.
   const kept = phone.vault.accountFiles(accountId);
   return { email, phone, played, accountId, installation, kept };
 }
@@ -55,15 +49,12 @@ describe('Recovery needed', () => {
     expect((await restored.readAcceptedRecords(completedPracticeSession.name)).map((record) => record.item)).toEqual([played.activityId]);
     expect(phone.account.sync.status.history).toEqual({ state: 'complete' });
 
-    // The original's files are exactly as they were.
     const now = phone.vault.accountFiles(accountId);
     for (const [path, hash] of Object.entries(kept)) expect(now[path]).toBe(hash);
-    // The server knows the fresh database as an installation of its own.
     const installations = await stack.sql<{ installation_id: string }[]>`
       select installation_id from private.installations where account_id = ${accountId} order by registered_at`;
     expect(installations.map((row) => row.installation_id)).toEqual([installation, restored.identity.installationId]);
 
-    // A relaunch opens the fresh database again.
     await phone.restart();
     expect(phone.account.gate).toMatchObject({ state: 'active', accountId });
     expect(phone.vault.store().identity.installationId).toBe(restored.identity.installationId);

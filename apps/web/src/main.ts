@@ -1,6 +1,4 @@
-// The web account page's entry (#106): the backend this build was made for,
-// and the browser's own network, storage, randomness and Global Privacy
-// Control signal.
+// #106
 
 import { PROVIDER_AUTHORIZE_URLS, type WebProvider, type WebProviderSettings, backendEnvironment, createWebAccount } from '@tableside/account/web';
 
@@ -12,7 +10,6 @@ const backend = backendEnvironment({
   publishableKey: import.meta.env.TABLESIDE_WEB_SUPABASE_PUBLISHABLE_KEY,
 });
 
-/** Web Storage, or memory when the browser refuses it (a private window, blocked site data). */
 function storage(area: () => Storage): Pick<Storage, 'getItem' | 'setItem' | 'removeItem'> {
   try {
     const store = area();
@@ -26,7 +23,6 @@ function storage(area: () => Storage): Pick<Storage, 'getItem' | 'setItem' | 're
   }
 }
 
-/** Each provider this build has a client ID for: Apple and Google sign-in through their web pages. */
 const clientIds: Record<WebProvider, string | undefined> = {
   apple: import.meta.env.TABLESIDE_WEB_APPLE_CLIENT_ID,
   google: import.meta.env.TABLESIDE_WEB_GOOGLE_CLIENT_ID,
@@ -52,7 +48,6 @@ if (main) {
   void mountAccountPage(main, account, {
     query: () => window.location.search,
     go: (url) => window.location.assign(url),
-    // The page is one document at the root of its site: a provider's return leaves no query behind.
     clearQuery: () => window.history.replaceState(null, '', window.location.pathname),
   });
 }

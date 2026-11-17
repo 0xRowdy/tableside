@@ -1,8 +1,4 @@
-// The pieces every session setup screen (design frames S1-02, S5-10) is built
-// from: the screen header, choice groups, steppers, the min/max limit fields,
-// the buy-in or training-bankroll funding, the allowance line and the banners
-// that explain what must change before play. Selection is marked by a check as
-// well as the outline, and errors by an icon and text as well as colour.
+// Spec 1 S1-02, Spec 5 S5-10
 
 import { CircleAlert, ChevronLeft, Minus, Plus } from 'lucide-react-native';
 import { forwardRef, useState, type ComponentRef, type ReactNode } from 'react';
@@ -66,9 +62,7 @@ export function Help({ children }: { children: ReactNode }) {
 }
 
 export interface ChoiceOption {
-  /** The accessible name. */
   readonly label: string;
-  /** The visible text, when shorter than the name. */
   readonly short?: string;
   readonly detail?: string;
   readonly selected: boolean;
@@ -77,7 +71,6 @@ export interface ChoiceOption {
   readonly onPress: () => void;
 }
 
-/** A radio group: a segmented row or chips that wrap, becoming a list when the text is large. */
 export function ChoiceGroup({ label, options, stacked = false }: { label: string; options: readonly ChoiceOption[]; stacked?: boolean }) {
   return (
     <View accessibilityRole="radiogroup" accessibilityLabel={label} style={stacked ? styles.stack : styles.choices}>
@@ -111,10 +104,6 @@ function Choice({ option }: { option: ChoiceOption }) {
   );
 }
 
-/**
- * A value stepped between ends: − and + buttons for touch, keyboard and switch
- * control, and an adjustable value screen readers swipe.
- */
 export function Stepper({
   label,
   value,
@@ -127,14 +116,11 @@ export function Stepper({
 }: {
   label: string;
   value: string;
-  /** The value as read aloud, when it differs from the text shown. */
   spoken?: string;
   detail: string;
   decrementLabel: string;
   incrementLabel: string;
-  /** Null at the lower end. */
   onDecrement: (() => void) | null;
-  /** Null at the upper end. */
   onIncrement: (() => void) | null;
 }) {
   const act = (event: AccessibilityActionEvent) => {
@@ -184,10 +170,8 @@ function StepButton({ label, onPress, icon }: { label: string; onPress: (() => v
   );
 }
 
-/** The text input behind an amount field, for moving focus to it. */
 export type AmountInput = ComponentRef<typeof TextInput>;
 
-/** A whole-units amount field with its label, inline problem (or help) and "units" suffix. */
 export const AmountField = forwardRef<
   AmountInput,
   { label: string; accessibilityLabel: string; value: string; onChange: (text: string) => void; problem?: string | null; help?: string }
@@ -215,7 +199,6 @@ export const AmountField = forwardRef<
   );
 });
 
-/** A problem in words with an icon, so it isn't marked by colour alone. An alert is announced when it appears. */
 export function InlineProblem({ children, alert = false }: { children: ReactNode; alert?: boolean }) {
   return (
     <View style={styles.inlineProblem}>
@@ -227,10 +210,8 @@ export function InlineProblem({ children, alert = false }: { children: ReactNode
   );
 }
 
-/** Refs to every limit field, so a banner's "Go to" can move focus there. */
 export type LimitRefs<K extends string> = Partial<Record<`${K}-${LimitEnd}`, AmountInput | null>>;
 
-/** One group's minimum and maximum, side by side (stacked at large text). */
 export function LimitFields<K extends string>({
   group,
   draft,
@@ -246,7 +227,6 @@ export function LimitFields<K extends string>({
   onChange: (next: LimitDraft) => void;
   refs: LimitRefs<K>;
   stacked: boolean;
-  /** False when the section shows the group's help itself. */
   showHelp?: boolean;
 }) {
   const problemAt = (end: LimitEnd) => problems.find((p) => p.group === group.key && p.end === end)?.inline ?? null;
@@ -273,7 +253,6 @@ export function LimitFields<K extends string>({
   );
 }
 
-/** The problems that keep Start disabled, each with a way to reach it. */
 export function ProblemBanner({ title, items, testID, children }: { title: string; items: readonly { text: string; action?: { label: string; onPress: () => void } }[]; testID: string; children?: ReactNode }) {
   return (
     <View style={styles.banner} testID={testID}>
@@ -307,7 +286,6 @@ export function LinkButton({ label, onPress }: { label: string; onPress: () => v
   );
 }
 
-/** Spec 5's allowance line (or the training bankroll that funds the session), with the optional See premium link. */
 export function AllowanceCard({ title, text, detail, seePremium }: { title: string; text: string; detail?: string; seePremium: boolean }) {
   const [premiumNote, setPremiumNote] = useState(false);
   return (

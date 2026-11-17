@@ -1,9 +1,4 @@
-// Strategy definitions for the strategy cases, written from spec #51's
-// built-in strategy table ("Flat even-money: 1 unit on the selected even-money
-// target (default red)"; "Fixed two-dozen coverage: 1 unit on each selected
-// dozen (default 1-12 and 13-24)"), with amounts on the default 10-minimum
-// table, where 1 strategy unit is 10. They are independent of the definitions
-// package's shipped copies.
+// Spec 1 Built-in strategies
 import type { StrategyDefinition } from '../src';
 
 const LAUNCH_TABLE = {
@@ -54,10 +49,6 @@ export const TWO_DOZENS: StrategyDefinition = {
   stopWhen: null,
 };
 
-/**
- * A doubling stake after each loss, reset by a win, capped at 320 (the spec's
- * capped Martingale, 1/2/4/8/16/32 units): exercises counters, adjustments and caps.
- */
 export const DOUBLING: StrategyDefinition = {
   format: 1,
   id: 'test-doubling',
@@ -75,12 +66,8 @@ export const DOUBLING: StrategyDefinition = {
   stopWhen: null,
 };
 
-// The three roulette progressions, from spec #51's built-in strategy table, in
-// units of 10 on the default 10-minimum table.
-
 const EVEN_MONEY = { id: 'target', label: 'Target', choices: ['red', 'black', 'odd', 'even', 'low', 'high'], default: 'red' };
 
-/** "Capped Martingale: 1/2/4/8/16/32 after successive losses; a win completes and resets; a loss at 32 terminates at cap." */
 export const MARTINGALE: StrategyDefinition = {
   format: 1,
   id: 'test-martingale',
@@ -98,7 +85,6 @@ export const MARTINGALE: StrategyDefinition = {
   completeWhen: { subject: 'last-result', is: 'win' },
 };
 
-/** "Three-win parlay: 1/2/4 after consecutive wins; a loss or third win completes and resets." */
 export const PARLAY: StrategyDefinition = {
   format: 1,
   id: 'test-parlay',
@@ -120,10 +106,6 @@ export const PARLAY: StrategyDefinition = {
   completeWhen: { any: [{ subject: 'last-result', is: 'loss' }, { compare: { counter: 'wins' }, op: 'ge', to: { lit: '3' } }] },
 };
 
-/**
- * "Bounded Labouchere: start [1,2,3]; bet first+last (or sole); win removes
- * endpoints; loss appends stake; empty completes; max required stake 32 units."
- */
 export const LABOUCHERE: StrategyDefinition = {
   format: 1,
   id: 'test-labouchere',

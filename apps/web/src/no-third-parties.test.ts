@@ -1,9 +1,4 @@
-// The web account page loads no analytics, ads, trackers or third-party
-// fonts (spec 2 Amendment 8 §5; spec 7 D13): its document and stylesheet
-// reference only the page's own files, its Content Security Policy lets
-// nothing else load, and its scripts name no other origin than the links a
-// player follows (the stores' billing pages, support, Apple's and Google's
-// sign-in pages).
+// Spec 2 Amendment 8 §5; spec 7 D13
 
 import { readFile, readdir } from 'node:fs/promises';
 import { join } from 'node:path';

@@ -1,4 +1,4 @@
-// S2-15 Age — under 13 (end, nothing kept): no account, and nothing further asked.
+// Spec 2 S2-15
 
 import { router } from 'expo-router';
 

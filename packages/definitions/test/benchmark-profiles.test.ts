@@ -1,6 +1,4 @@
-// The seven benchmark profiles (spec 6, Amendment 6 §1): the shared
-// protocol, the launch presets and default limits, the blackjack benchmark
-// seat, a validated exposure bound each, and compatibility through Validate.
+// Spec 1 Amendment 6 §1
 import { exposureBoundProblems, strategyTableCompatibility, type BenchmarkProfile, type StrategyDefinition } from '@tableside/engine';
 import { describe, expect, it } from 'vitest';
 
@@ -71,8 +69,7 @@ describe('benchmark profiles', () => {
     const passWithOdds = CRAPS_STRATEGIES[0] as StrategyDefinition;
     expect(strategyTableCompatibility(passWithOdds, {}, craps.rules).compatible).toBe(true);
     expect(strategyTableCompatibility(passWithOdds, {}, standardCraps('1x')).compatible).toBe(true);
-    // Declared for 10x tables only, it doesn't fit the 3-4-5x profile.
-    const tenX = { ...passWithOdds, table: { ...(passWithOdds.table as Record<string, unknown>), odds: ['10x'] } } as StrategyDefinition;
-    expect(strategyTableCompatibility(tenX, {}, craps.rules).compatible).toBe(false);
+    const tenXOnly = { ...passWithOdds, table: { ...(passWithOdds.table as Record<string, unknown>), odds: ['10x'] } } as StrategyDefinition;
+    expect(strategyTableCompatibility(tenXOnly, {}, craps.rules).compatible).toBe(false);
   });
 });

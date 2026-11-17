@@ -1,10 +1,3 @@
-// The in-memory activity store: the store port's substitute until spec 2's
-// SQLite store. Values are kept as JSON text so callers never share objects
-// with it, and one queue serializes every operation (the single writer). The
-// stored rows live in a MemoryDisk, so `reopen()` can simulate an app restart:
-// a new store instance, with no queued work or injected failures, over the
-// same durable data.
-
 import type {
   ActivityStore,
   AllowanceEffect,
@@ -30,11 +23,9 @@ export class StoreWriteError extends Error {
 interface Row {
   activity: string;
   transitions: Map<string, string>;
-  /** Effect text keyed by its effect id, in the order first recorded. */
   effects: Map<string, string>;
 }
 
-/** The durable part of the in-memory store. */
 export class MemoryDisk {
   readonly rows = new Map<string, Row>();
   readonly outgoing: string[] = [];
@@ -55,20 +46,14 @@ export class MemoryActivityStore implements ActivityStore {
     return this.disk.outgoing;
   }
 
-  /** A new store over the same durable data, as after an app restart. */
   reopen(): MemoryActivityStore {
     return new MemoryActivityStore(this.disk);
   }
 
-  /**
-   * Failure injection: the next call of `operation` fails. "before" writes
-   * nothing (a write or read failure); "after" writes, then fails the acknowledgement.
-   */
   failNext(operation: Operation, when: 'before' | 'after'): void {
     this.failures.push({ operation, when });
   }
 
-  /** Failure injection: while full, every write fails before writing (a full disk). */
   setFull(full: boolean): void {
     this.full = full;
   }
@@ -94,7 +79,6 @@ export class MemoryActivityStore implements ActivityStore {
     return this.read(() => {
       for (const row of this.rows.values()) {
         const activity = parse<StoredActivity>(row.activity);
-        // A row written before the incomplete mark existed has no such field.
         if (!activity.completion && !activity.incomplete) return activity;
       }
       return null;
@@ -125,7 +109,6 @@ export class MemoryActivityStore implements ActivityStore {
   }
 
   readTransitions(activityId: string): Promise<readonly CommittedTransition[]> {
-    // Transitions are kept in commit order (a Map keeps insertion order).
     return this.injectable('readTransitions', () => [...(this.rows.get(activityId)?.transitions.values() ?? [])].map((text) => parse<CommittedTransition>(text)));
   }
 
@@ -173,7 +156,6 @@ export class MemoryActivityStore implements ActivityStore {
     return this.enqueue(run);
   }
 
-  /** Runs an operation that failure injection can target. */
   private injectable<T>(operation: Operation, run: () => T): Promise<T> {
     return this.enqueue(() => {
       if (this.full && operation !== 'readReceipt' && operation !== 'readTransitions') throw new StoreWriteError(`${operation} failed: the disk is full`);

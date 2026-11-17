@@ -1,7 +1,4 @@
-// SHA-256 (FIPS 180-4) over the UTF-8 bytes of a string, for checkpoint
-// hashes that must agree on Node and Hermes. Plain 32-bit integer arithmetic
-// only: no TextEncoder, crypto or platform APIs.
-
+// docs/development.md Engine portability
 const K = [
   0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5, 0xd807aa98,
   0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174, 0xe49b69c1, 0xefbe4786,
@@ -13,7 +10,6 @@ const K = [
   0xc67178f2,
 ];
 
-/** UTF-8 bytes of a string; a lone surrogate encodes as U+FFFD. */
 function utf8(text: string): number[] {
   const bytes: number[] = [];
   for (const char of text) {
@@ -29,7 +25,6 @@ function utf8(text: string): number[] {
 
 const rotr = (x: number, n: number) => (x >>> n) | (x << (32 - n));
 
-/** The SHA-256 digest of the string's UTF-8 bytes, as 64 lowercase hex digits. */
 export function sha256Hex(text: string): string {
   const bytes = utf8(text);
   const bitLength = bytes.length * 8;

@@ -1,8 +1,4 @@
-// App review sign-in (#107; spec 2 *App-review access*): app reviewers sign in
-// to a reviewer account with the address and reviewer credential from the
-// review notes, without an email code. It works for reviewer accounts only;
-// every other address is refused in the same words.
-// TODO(frames): no frame for this screen; it follows the email step's layout.
+// TODO(spec 2 App-review access)
 
 import { router } from 'expo-router';
 import { useState } from 'react';
@@ -28,7 +24,6 @@ export default function ReviewSignIn() {
     setProblem(null);
     const result = await service.signInAsReviewer({ email: address, credential });
     setBusy(false);
-    // Signed in: the layout moves on as the account gate changes.
     if (result.status === 'refused') setProblem("That address and reviewer credential don't match. Check both and try again.");
     else if (result.status === 'failed') setProblem("Couldn't sign in. Check your connection and try again.");
   };

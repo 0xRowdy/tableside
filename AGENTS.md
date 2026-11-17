@@ -20,9 +20,9 @@ Single-context: `CONTEXT.md` at the repo root, ADRs under `docs/adr/`. See `docs
 
 Reading, matching or editing screens: see `docs/agents/design-frames.md`.
 
-### Code review
+### Coding standards
 
-Reviewing code: apply `CODING_STANDARDS.md`.
+Writing or reviewing code: apply `CODING_STANDARDS.md`.
 
 ### Spec tickets
 

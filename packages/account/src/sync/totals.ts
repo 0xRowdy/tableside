@@ -1,6 +1,4 @@
-// Lifetime totals from contributions (spec 2, *Totals*): exact money, one
-// figure per total, game and currency. The server keeps the account's own
-// in `private.account_totals`, by the same rule.
+// Spec 2 Totals
 
 import { add, decodeMoney, encodeMoney, money } from '@tableside/engine';
 
@@ -10,16 +8,10 @@ export interface TotalsRow {
   readonly total: Contribution['total'];
   readonly game: string;
   readonly currency: string;
-  /** How many records it counts. */
   readonly records: number;
-  /** Their net result, as exact money text. */
   readonly net: string;
 }
 
-/**
- * Sums contributions, onto `base` when given (totals already summed),
- * ordered by total, game and currency. Throws on an amount that isn't canonical money.
- */
 export function sumContributions(contributions: readonly Contribution[], base: readonly TotalsRow[] = []): TotalsRow[] {
   const rows = new Map<string, { total: Contribution['total']; game: string; currency: string; records: number; net: ReturnType<typeof money> }>();
   for (const { total, game, currency, records, net } of base) rows.set(JSON.stringify([total, game, currency]), { total, game, currency, records, net: decodeMoney(net) });

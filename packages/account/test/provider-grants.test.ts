@@ -1,10 +1,4 @@
-// Seam 2: Apple and Google grant revocation at permanent deletion (spec 2,
-// *Deletion*; #52 review), with the test identity provider standing in for
-// both, its token and revocation endpoints included. The authorization code a
-// provider gives at sign-in, Create or linking is exchanged on the server for
-// a grant kept sealed; permanent deletion revokes it with the provider before
-// the Auth identity goes. A flow that gives no code holds no grant: deletion
-// reports a provider exception, never a revocation.
+// Spec 2 Deletion; #52
 
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
@@ -43,7 +37,6 @@ function person(label: string): ProviderIdentity {
   return { subject: id, email: `${id}@example.com` };
 }
 
-/** A phone that created an account with a provider. */
 async function createdWith(provider: 'apple' | 'google', options: { readonly withoutCode?: boolean } = {}) {
   const phone = device('phone');
   const someone = person(`${provider}-grant`);
@@ -59,7 +52,6 @@ async function createdWith(provider: 'apple' | 'google', options: { readonly wit
 const grantsOf = (accountId: string) =>
   sql<{ provider: string; subject: string; sealed: string }[]>`select provider, subject, sealed from private.provider_grants where account_id = ${accountId}`;
 
-/** Confirm it's you with the provider, then Delete permanently now; resolves once active cleanup finished. */
 async function deleteNow(phone: SimulatedDevice, provider: 'apple' | 'google', accountId: string): Promise<Record<string, unknown>> {
   expect(await phone.account.freshAuthentication.withProvider(provider)).toEqual({ status: 'confirmed' });
   const token = (JSON.parse(phone.credentials.items.get('tableside.local.status')!) as { token: string }).token;
@@ -79,7 +71,6 @@ describe('a provider grant', () => {
     const { phone, someone, accountId } = await createdWith('apple');
     const [grant] = await grantsOf(accountId);
     expect(grant).toMatchObject({ provider: idp.provider, subject: someone.subject });
-    // Sealed by the functions' key: never the provider's token in the clear.
     expect(grant!.sealed).toMatch(/^v1\./);
     expect(grant!.sealed).not.toMatch(/refresh-/);
     expect(idp.grantsFor(someone.subject)).toEqual([{ revoked: false }]);
@@ -132,7 +123,6 @@ describe('Apple’s web flow on Android', () => {
     const gate = phone.account.gate;
     if (gate.state !== 'active') throw new Error('account setup failed');
     expect(await grantsOf(gate.accountId)).toMatchObject([{ subject: someone.subject }]);
-    // The code never appears in a URL the app saw.
     for (const url of phone.providers!.returned) expect(url).not.toMatch(/code=/);
   });
 });

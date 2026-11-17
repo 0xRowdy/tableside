@@ -1,6 +1,4 @@
-// Runs the engine suite inside the app on an iOS simulator or Android emulator.
-// The app is built in Release, so the suite runs on the same bundled Hermes
-// bytecode a store build ships, and posts its report back over HTTP.
+// docs/cross-runtime-harness.md How it works
 import { spawn, execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { mkdirSync, openSync, rmSync } from 'node:fs';
@@ -14,19 +12,14 @@ const PORT = 8099;
 const BUILD_TIMEOUT_MS = 45 * 60_000;
 const REPORT_TIMEOUT_AFTER_LAUNCH_MS = 3 * 60_000;
 
-// Each run bundles its own report path, so a harness app left running from an
-// earlier run can't deliver a report for this one.
 const RUN_ID = randomUUID();
 const REPORT_PATH = `/report/${RUN_ID}`;
 
 const harnessEnv = {
   ...process.env,
-  // Bundle the harness entry instead of the app (inlined at bundle time).
   EXPO_PUBLIC_ENGINE_HARNESS: '1',
   EXPO_PUBLIC_ENGINE_HARNESS_URL: `http://127.0.0.1:${PORT}${REPORT_PATH}`,
-  // Prebuild applies the harness-only config plugin.
   ENGINE_HARNESS: '1',
-  // Non-interactive Expo CLI.
   CI: '1',
 };
 
@@ -46,8 +39,6 @@ export async function runDeviceLeg(platform: 'ios' | 'android'): Promise<Report>
       log('Android: generating native project with the harness plugin');
       await run('pnpm', ['exec', 'expo', 'prebuild', '--platform', 'android', '--no-install']);
       log('Android: building Release harness');
-      // Gradle's bundle task ignores environment variables, so it would reuse an
-      // app bundle here, and later reuse this harness bundle in an app build.
       discardAndroidJsBundle();
       try {
         await run('pnpm', ['exec', 'expo', 'run:android', '--variant', 'release', '--no-bundler', '--device', serial]);
@@ -101,12 +92,6 @@ function bootedIosSimulator(): string {
   return iphone.udid;
 }
 
-/**
- * The Android device the leg runs on: `ANDROID_SERIAL` when set, otherwise a
- * running emulator, otherwise the first AVD, booted here. A phone or network
- * device (a TV box on adb over Wi-Fi, say) is used only when ANDROID_SERIAL
- * names it, so the harness never installs onto someone's own device.
- */
 async function androidTarget(): Promise<string> {
   const attached = androidSerials();
   const requested = process.env.ANDROID_SERIAL;
@@ -148,7 +133,6 @@ function isBooted(serial: string): boolean {
 
 export const isEmulatorSerial = (serial: string): boolean => serial.startsWith('emulator-');
 
-/** Serials of attached devices that are ready (`adb devices` state "device"). */
 export function parseAdbDevices(output: string): string[] {
   return output
     .split('\n')
@@ -184,11 +168,6 @@ function log(message: string): void {
   console.log(`[harness] ${message}`);
 }
 
-/**
- * The AVD names in `emulator -list-avds` output. Newer emulators print log
- * lines (`INFO    | Storing crashdata in: …`) on the same stream; AVD names
- * never contain spaces or `|`, so those lines are dropped.
- */
 export function parseAvdList(output: string): string[] {
   return output
     .split('\n')

@@ -1,7 +1,3 @@
-// Seam 3: guided roulette practice, rendered through the real routes on the
-// in-memory adapters and driven only through the accessibility tree. Spins
-// come from the Random123 "pi digits" stream: 27 (red), then 0, 25 (red).
-
 import { act, cleanup, fireEvent, screen, within } from '@testing-library/react-native';
 import { renderRouter } from 'expo-router/testing-library';
 import { AccessibilityInfo, Dimensions } from 'react-native';
@@ -45,7 +41,6 @@ async function bet(value: string, target: RegExp) {
   await fireEvent.press(spot(target));
 }
 
-/** Every label, hint and text on screen, for information-hiding checks. */
 function everything(): string {
   const texts: string[] = [];
   const visit = (node: unknown) => {
@@ -78,7 +73,6 @@ describe('guided roulette practice', () => {
     expect(screen.getByRole('header', { name: 'MY STRATEGIES' })).toBeOnTheScreen();
     expect(screen.getByText('Strategies you save in the builder appear here.')).toBeOnTheScreen();
 
-    // Two dozens: two different dozens, 1st and 2nd by default; the taken one can't be chosen twice.
     await fireEvent.press(screen.getByRole('radio', { name: 'Fixed two-dozen coverage' }));
     expect(within(screen.getByLabelText('First dozen')).getByRole('radio', { name: '1st dozen', checked: true })).toBeOnTheScreen();
     const second = within(screen.getByLabelText('Second dozen'));
@@ -108,11 +102,9 @@ describe('guided roulette practice', () => {
     expect(panel.getByText("You've set 25 on Red. Nothing has been placed yet.")).toBeOnTheScreen();
     expect(panel.getByText('Available for this spin: 1,000.')).toBeOnTheScreen();
     expect(announcements).toContain('Strategy check before your spin. Nothing has been placed yet.');
-    // Nothing spun: no outcome was announced, and the stake is still the player's.
     expect(announcements.join(' ')).not.toMatch(/ball landed/);
     expect(screen.getByLabelText('Status Strategy check')).toBeOnTheScreen();
     expect(screen.getByRole('button', { name: 'Spin' })).toBeDisabled();
-    // Rotating keeps the held correction: it lives in the committed state, not the layout.
     await setWindow(844, 390);
     expect(within(screen.getByTestId('correction-panel')).getByText('Flat even-money bets 10 on Black.')).toBeOnTheScreen();
 
@@ -182,5 +174,3 @@ describe('guided roulette practice', () => {
     expect(screen.getByLabelText('Net result plus 10, Win')).toBeOnTheScreen();
   });
 });
-
-// The incompatible strategy and table case lives with session setup (session-setup.test.tsx), at edited limits.

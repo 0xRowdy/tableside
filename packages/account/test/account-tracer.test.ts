@@ -1,5 +1,4 @@
-// Seam 2 tracer (#84): a simulated device creates an account by email code
-// against the local Supabase stack, and its account gate reaches Active.
+// #84
 
 import { afterEach, describe, expect, it } from 'vitest';
 

@@ -1,7 +1,4 @@
-// Seam 3: an unfinished session an update can't resume, as the player sees it
-// (#80; design frame S1-11 "Quarantined session — explained"), through the real
-// routes and the accessibility tree. The app launches over a durable store that
-// already holds a craps session an earlier build left, recorded by that build.
+// #80; spec 1 S1-11
 
 import type { QuarantineList } from '@tableside/engine';
 import { RECORDED_BUILDS } from '@tableside/engine/recorded-checkpoints';

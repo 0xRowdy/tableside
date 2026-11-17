@@ -1,11 +1,4 @@
-// Direct upgrades from recorded databases (#86, launch gate 2): every
-// database recorded by every store schema (one per unfinished phase of every
-// game, and one of finished practice) is put on a device as its build left it,
-// then opened by this build and by a build two releases later (both skipped).
-// Each time every stored value reads back exactly as recorded, and the
-// unfinished practice session resumes and ends with the engine recording's
-// final cash-out, and the sync state (upload queue, receipts, accepted
-// records, feed cursor) is as it was.
+// #86
 
 import { createHash } from 'node:crypto';
 import { readdirSync, readFileSync } from 'node:fs';
@@ -36,7 +29,6 @@ const cases = RECORDED_STORE_SCHEMAS.flatMap((recording) =>
   recording.databases.flatMap((database) => BUILDS.map(([build, migrations]) => [`schema ${recording.storeSchema}: ${database.name}, on ${build}`, recording, database, migrations] as const)),
 );
 
-/** The stored values a table's rows hold, decoded: what the recording build's store would read back. */
 const stored = (database: RecordedDatabase, table: string, where: (row: Readonly<Record<string, unknown>>) => boolean = () => true) =>
   (database.rows[table] ?? []).filter(where).map((row) => JSON.parse(row.body as string) as unknown);
 
@@ -66,14 +58,12 @@ describe('a recorded database', () => {
       expect(await store.load(id)).toEqual(activity);
       expect(await store.readTransitions(id)).toEqual(stored(database, 'transitions', (row) => row.activity_id === id));
       expect(await store.readEffects(id)).toEqual(stored(database, 'effects', (row) => row.activity_id === id));
-      // Version identities stay distinct: the store schema moved on, the checkpoint's own engine and state schema didn't.
       expect(JSON.parse(activity.checkpoint)).toMatchObject({ schema: recording.stateSchema, identities: { engine: recording.engine } });
     }
     expect(await store.readOutgoing()).toEqual(stored(database, 'outgoing'));
     expect((await store.findUnfinished())?.activityId ?? null).toBe(database.unfinished?.activityId ?? null);
 
-    // Sync state (#91): uploads still awaiting a receipt keep the exact operation they were sent as, and the
-    // accepted records and feed cursor are as they were, so nothing is resent differently or fetched twice.
+    // #91
     const rows = (table: string) => database.rows[table] ?? [];
     expect((await store.readUploadQueue()).map(({ id, operation }) => ({ id, operation }))).toEqual(
       rows('outgoing')
@@ -96,7 +86,6 @@ describe('a recorded database', () => {
     await controller.load();
     expect(controller.snapshot()).toMatchObject({ status: 'active', suspension: { cause: 'interrupted' } });
     await controller.resume();
-    // A blackjack round under way finishes first; ending stops the session between turns.
     if (database.unfinished?.game === 'blackjack') await controller.play('stand');
     await controller.endSession();
     await waitFor(() => controller.snapshot().status === 'completed');
@@ -108,9 +97,7 @@ describe('a recorded database', () => {
   });
 });
 
-// Every released store schema's recording stays exactly as that build wrote it
-// (its SHA-256 is in released.json, added when the build ships). The schema
-// under development keeps its own recording, re-recorded while it changes.
+// docs/development.md Releases: recorded checkpoints and the quarantine list
 const RECORDED = join(__dirname, '../src/account/testing/recorded');
 const CURRENT = `store-schema-${STORE_SCHEMA_VERSION}.ts`;
 const released = () => JSON.parse(readFileSync(join(RECORDED, 'released.json'), 'utf8')) as Record<string, string>;
@@ -122,7 +109,6 @@ const FIX = `To fix:
   3. In apps/mobile/src/account/testing/recorded/index.ts, import the new recording and drop the deleted one.
 Never edit, regenerate or remove a released recording.`;
 
-/** Fails with how to fix it, when `problem` names one. */
 function check(problem: string | null): void {
   if (problem) throw new Error(`${problem}\n${FIX}`);
 }

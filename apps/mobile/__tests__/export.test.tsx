@@ -1,10 +1,4 @@
-// Seam 3: Export my data (#102, S2-21), through the real routes and the
-// accessibility tree, over Account-service fakes: the account archive asked
-// for after Confirm it's you, its preparing, ready, expired and canceled
-// states, downloading it to the share sheet, the local supplement made on
-// this device, and the note that records on other devices aren't included,
-// which is there in every state. An account whose age isn't established
-// reaches it from its paused screen.
+// #102; spec 2 S2-21
 
 import type { AccountGate, ServerExport } from '@tableside/account';
 import { act, cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react-native';
@@ -55,7 +49,6 @@ const archiveRow = () => screen.getByLabelText(/^Account archive\./);
 const HOUR = 3_600_000;
 const ready = (): ServerExport => ({ state: 'ready', requestedAt: Date.now() - HOUR, readyAt: Date.now() - HOUR, expiresAt: Date.now() + 23 * HOUR, bytes: 1_234_567 });
 
-/** Opens Export my data from Account, after `prepare` scripts the fake. */
 async function openExport(prepare?: () => void) {
   await renderRouter('./src/app', { initialUrl: '/more/settings/account' });
   prepare?.();
@@ -118,7 +111,6 @@ describe('Export my data', () => {
       format: 'tableside-local-supplement',
       unsynced: [{ recordType: 'completed-practice-session', syncStatus: 'waiting', installation: 'installation-1' }],
     });
-    // Nothing was asked of the server for it.
     expect(service().exportCalls).toEqual(['supplement', 'supplement']);
   });
 

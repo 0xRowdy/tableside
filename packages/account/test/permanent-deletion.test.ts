@@ -1,11 +1,4 @@
-// Seam 2, permanent deletion (#104; spec 2 *Deletion*, Amendments 1 A1, A5,
-// C1–C3, 3 §3–4, 5 §2, 7 §5, 8 §3–4). Delete permanently now (after Confirm
-// it's you), the deadline of a scheduled deletion, or a verified rights
-// request crosses the irreversible boundary in one transaction: the account
-// is deleted for good, its sessions are revoked, its exports end, and its
-// devices wipe it once they hear. The deletion job then erases everything the
-// account owned, keeping only the minimal deletion control, and nothing can
-// bring the account back.
+// Spec 2 Deletion, Amendments 1 A1 A5 C1–C3, 3 §3–4, 5 §2, 7 §5, 8 §3–4; #104
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -21,7 +14,6 @@ import {
   uniqueEmail,
 } from '../src/testing';
 
-// Each scenario waits for the deletion job, which may share the stack with other files' jobs.
 vi.setConfig({ testTimeout: 120_000 });
 
 const stack = localStack();
@@ -46,7 +38,6 @@ async function signedInPhone(label: string) {
   return { phone, email, accountId: gate.accountId };
 }
 
-/** Confirm it's you with an emailed code (as if the code-request backoff had passed since the last code). */
 async function confirmByEmail(phone: SimulatedDevice, email: string) {
   await stack.ageCodeRequests(email, 3600);
   const previous = await phone.mailbox.latestCode(email);
@@ -54,7 +45,6 @@ async function confirmByEmail(phone: SimulatedDevice, email: string) {
   expect(await phone.account.freshAuthentication.withCode(await phone.mailbox.latestCode(email, { after: previous }))).toEqual({ status: 'confirmed' });
 }
 
-/** Signs a further device in, as if the code-request backoff had passed since the last code. */
 async function signInAlso(other: SimulatedDevice, email: string) {
   await stack.ageCodeRequests(email, 3600);
   expect(await signInByEmail(other, email)).toEqual({ status: 'signed-in' });
@@ -70,7 +60,6 @@ async function synced(d: SimulatedDevice) {
   await d.account.sync.idle();
 }
 
-/** Waits for the deletion job to finish active cleanup. */
 const cleanedUp = (accountId: string) =>
   vi.waitFor(
     async () => {
@@ -83,7 +72,6 @@ const cleanedUp = (accountId: string) =>
 const accountRow = async (accountId: string) =>
   (await sql<{ state: string; auth_user_id: string | null }[]>`select state, auth_user_id from public.accounts where account_id = ${accountId}`)[0]!;
 
-/** Every account-keyed row left, by table: what survives the deletion. */
 async function rowsLeft(accountId: string): Promise<Record<string, number>> {
   const tables = await sql<{ name: string }[]>`
     select c.table_schema || '.' || c.table_name as name
@@ -99,7 +87,6 @@ async function rowsLeft(accountId: string): Promise<Record<string, number>> {
   return left;
 }
 
-/** Every Auth row of a user, by table. */
 async function authRowsLeft(authUser: string): Promise<Record<string, number>> {
   const tables = await sql<{ name: string; column: string }[]>`
     select table_schema || '.' || table_name as name, column_name as column from information_schema.columns
@@ -112,7 +99,6 @@ async function authRowsLeft(authUser: string): Promise<Record<string, number>> {
   return left;
 }
 
-/** Waits for the export job to finish the latest export. */
 const exportReady = (phone: SimulatedDevice) =>
   vi.waitFor(
     async () => {
@@ -141,14 +127,12 @@ describe('Delete permanently now', () => {
     expect(await phone.account.deletion.deletePermanently()).toEqual({ status: 'deleted' });
     expect(phone.account.gate).toEqual({ state: 'deleted' });
 
-    // The server: deleted at once, every session revoked, no sign-in or renewal while the cleanup runs.
     expect((await accountRow(accountId)).state).toBe('deleted');
     expect(await sql`select 1 from auth.sessions where user_id = ${authUser}`).toHaveLength(0);
     const [banned] = await sql<{ banned: boolean }[]>`select banned_until > now() as banned from auth.users where id = ${authUser}`;
     expect(banned?.banned ?? true).toBe(true);
     expect((await stack.rawClient(token).rpc('sync_scope_v1', { installation: 'any' })).error).not.toBeNull();
 
-    // This device: the database and key, credentials and the app's copies are gone; only the status credential stays.
     expect(phone.vault.openAccount).toBeNull();
     expect(phone.vault.holdsAccount(accountId)).toBe(false);
     expect(phone.vault.erasedAppData).toEqual([accountId]);
@@ -156,7 +140,6 @@ describe('Delete permanently now', () => {
     expect([...phone.credentials.items.keys()].sort()).toEqual(expect.not.arrayContaining(['tableside.local.account', 'tableside.local.status']));
     for (const value of phone.credentials.items.values()) expect(value).not.toContain(accountId);
 
-    // Its status: processing, then completed, apart from the boundary.
     const progress = await phone.account.deletion.status();
     expect(progress).toMatchObject({ status: expect.stringMatching(/^(processing|completed)$/), delayed: false });
     if (!progress || !('cleanupBy' in progress)) throw new Error('no progress');
@@ -164,7 +147,6 @@ describe('Delete permanently now', () => {
     await cleanedUp(accountId);
     expect(await phone.account.deletion.status()).toMatchObject({ status: 'completed', delayed: false, completedAt: expect.any(Number) });
 
-    // A restart keeps Deleted, until the player is done with it.
     await phone.restart();
     expect(await phone.account.resume()).toEqual({ status: 'deleted' });
     expect(phone.account.gate).toEqual({ state: 'deleted' });
@@ -178,7 +160,6 @@ describe('Delete permanently now', () => {
     await confirmByEmail(phone, email);
     expect(await phone.account.deletion.schedule()).toMatchObject({ status: 'scheduled' });
 
-    // Both the answer and the status check are lost: nothing proves the deletion, so nothing is wiped.
     phone.proxy.dropNextResponse('delete_permanently_v1');
     phone.proxy.dropNextResponse('lifecycle_status_v1');
     expect(await phone.account.deletion.deletePermanently()).toEqual({ status: 'failed' });
@@ -186,7 +167,6 @@ describe('Delete permanently now', () => {
     expect(phone.vault.holdsAccount(accountId)).toBe(true);
     expect((await accountRow(accountId)).state).toBe('deleted');
 
-    // Asking again: the session is gone, and the server's lifecycle status says deleted. It happened once.
     expect(await phone.account.deletion.deletePermanently()).toEqual({ status: 'deleted' });
     expect(phone.vault.holdsAccount(accountId)).toBe(false);
     expect(await sql`select origin, deadline from private.deletions where account_id = ${accountId}`).toEqual([{ origin: 'player', deadline: expect.any(Date) }]);
@@ -217,7 +197,6 @@ describe('other installations', () => {
   it('erase the account when the server says it is deleted, even after the cleanup, and keep another account’s data', async () => {
     const { phone, email, accountId } = await signedInPhone('others');
     const tablet = device('others-tablet');
-    // The tablet holds another account's database too, from before.
     const otherEmail = uniqueEmail('others-b');
     expect(await createAccountByEmail(tablet, otherEmail)).toEqual({ status: 'signed-in' });
     const other = (tablet.account.gate as { accountId: string }).accountId;
@@ -229,7 +208,6 @@ describe('other installations', () => {
 
     await confirmByEmail(phone, email);
     expect(await phone.account.deletion.deletePermanently()).toEqual({ status: 'deleted' });
-    // The initiating device never waits for the tablet, which was away for the whole cleanup.
     await cleanedUp(accountId);
     expect(tablet.vault.holdsAccount(accountId)).toBe(true);
 
@@ -280,7 +258,6 @@ describe('the deadline', () => {
       { origin: 'player', requested_at: scheduledAt, had_deadline: true },
     ]);
 
-    // The stale cancel changes nothing, and the device learns the account is deleted.
     expect(await phone.account.deletion.cancel()).toEqual({ status: 'failed' });
     expect(phone.account.gate).toEqual({ state: 'deleted' });
     expect((await accountRow(accountId)).state).toBe('deleted');
@@ -301,7 +278,6 @@ describe('cleanup', () => {
     const { phone, email, accountId } = await signedInPhone('complete');
     const tablet = device('complete-tablet');
     await signInAlso(tablet, email);
-    // A bit of everything: practice, test results and attempts, privacy choices with an analytics ID, a server export.
     await phone.playPracticeSession();
     await queue(phone, testResult.name, { version: 1, resultId: 'r-1', amount: '1', detail: 'detail of r-1' });
     await queue(phone, testAttempt.name, { version: 1, attemptId: 'a-1', passed: true, at: phone.clock.now() });
@@ -314,7 +290,6 @@ describe('cleanup', () => {
     const [exported] = await sql<{ object_path: string }[]>`select object_path from private.exports where account_id = ${accountId}`;
     const archive = exported!.object_path;
     const authUser = (await accountRow(accountId)).auth_user_id!;
-    // The account's own objects, in its folder of the private bucket.
     const bucket = stack.rawClient(accessToken(phone)).storage.from('account-private');
     for (const name of ['notes.txt', 'nested/more.txt']) expect((await bucket.upload(`${accountId}/${name}`, 'mine')).error).toBeNull();
     expect(Object.keys(await rowsLeft(accountId)).length).toBeGreaterThan(10);
@@ -323,7 +298,6 @@ describe('cleanup', () => {
     expect(await phone.account.deletion.deletePermanently()).toEqual({ status: 'deleted' });
     await cleanedUp(accountId);
 
-    // What stays: the account row with no Auth user, its deletion record, the status credentials' hashes, and the deletion's journal entry.
     expect(await rowsLeft(accountId)).toEqual({
       'private.control_journal': 1,
       'private.deleted_sessions': 2,
@@ -338,10 +312,8 @@ describe('cleanup', () => {
     expect(await sql`select 1 from storage.objects where bucket_id = 'account-exports' and name = ${archive}`).toHaveLength(0);
     expect(await sql`select 1 from storage.objects where name like ${`${accountId}%`}`).toHaveLength(0);
     expect(await sql`select 1 from storage.objects where bucket_id = 'account-private' and name like ${`${accountId}/%`}`).toHaveLength(0);
-    // The analytics provider was asked; its completion is its own, and never assumed.
     expect(await sql`select analytics_ids, analytics_requested_at is not null as requested, analytics_completed_at is null as pending
       from private.deletions where account_id = ${accountId}`).toEqual([{ analytics_ids: 1, requested: true, pending: true }]);
-    // The deletion record holds no history, prose or purchase evidence: only times and outcomes.
     expect(await stack.columns('private.deletions')).toEqual(
       expect.not.arrayContaining(['email', 'payload', 'purchase', 'receipt', 'entitlement', 'forfeited']),
     );
@@ -352,7 +324,6 @@ describe('cleanup', () => {
     expect(await phone.account.privacy.grantAnalytics()).toEqual({ status: 'changed' });
     await synced(phone);
     const token = statusToken(phone);
-    // A rights request (the operator's path) whose first step failed: the job waits for its retry.
     await sql.begin(async (tx) => {
       await tx`select public.begin_rights_request_deletion(${accountId}, now(), false)`;
       await tx`select public.deletion_step_failed(${accountId})`;
@@ -361,12 +332,10 @@ describe('cleanup', () => {
     const progress = (await stack.rawClient().rpc('deletion_progress_v1', { token })).data as Record<string, unknown>;
     expect(progress).toMatchObject({ status: 'processing', delayed: true, completedAt: null, analytics: { requestedAt: null, completedAt: null }, backups: 'separate' });
     expect((await accountRow(accountId)).state).toBe('deleted');
-    // Nothing reopens it meanwhile: its sessions are gone and Auth refuses the banned user a new one.
     expect(await sql`select 1 from auth.sessions s join public.accounts a on a.auth_user_id = s.user_id where a.account_id = ${accountId}`).toHaveLength(0);
     expect(await phone.account.deletion.cancel()).toEqual({ status: 'failed' });
     expect((await accountRow(accountId)).state).toBe('deleted');
 
-    // The retry's time comes: active cleanup completes; the provider's erasure is still its own.
     await sql`update private.deletions set retry_at = null where account_id = ${accountId}`;
     await sql`select private.wake_deletion_job()`;
     await cleanedUp(accountId);
@@ -398,7 +367,6 @@ describe('cleanup', () => {
     for (let i = 0; i < 5; i++) await sql`select private.wake_deletion_job()`;
     await cleanedUp(accountId);
     expect((await phone.mailbox.messages(email)).filter((message) => message.includes('being deleted permanently'))).toHaveLength(1);
-    // A late report for a step that is done changes nothing.
     await stack.serviceClient().rpc('deletion_step_done', { account: accountId, step: 'mail', outcome: {} });
     expect(await sql`select completed_at is not null as done from private.deletions where account_id = ${accountId}`).toEqual([{ done: true }]);
   });
@@ -415,7 +383,6 @@ describe('a verified rights request (the operator’s operation)', () => {
     await phone.account.refreshEligibility();
     expect(phone.account.gate).toEqual({ state: 'deleted' });
     await cleanedUp(accountId);
-    // Asked again: it stays as it is.
     expect((await stack.serviceClient().rpc('begin_rights_request_deletion', { account: accountId, requested_at: new Date().toISOString() })).data).toMatchObject({
       status: 'completed',
       origin: 'rights-request',
@@ -435,7 +402,6 @@ describe('a verified rights request (the operator’s operation)', () => {
     await phone.account.refreshEligibility();
     expect(phone.account.gate).toMatchObject({ state: 'deletion-scheduled', deadline: requestedAt.getTime() + 30 * DAY_MS });
 
-    // The deadline comes: the boundary keeps who asked, and when.
     await sql`update public.accounts set deletion_deadline = now() - interval '1 second' where account_id = ${accountId}`;
     await sql`select private.finalize_deletion(${accountId})`;
     const [row] = await sql<{ origin: string; requested_at: Date }[]>`select origin, requested_at from private.deletions where account_id = ${accountId}`;
@@ -466,17 +432,14 @@ describe('no resurrection', () => {
     await cleanedUp(accountId);
     const left = await rowsLeft(accountId);
 
-    // A stale upload with the old, unexpired token: refused, and nothing is written.
     const raw = stack.rawClient(token);
     expect((await raw.rpc('sync_scope_v1', { installation })).error).not.toBeNull();
     expect((await raw.rpc('sync_upload_v1', { request: '{}' })).error).not.toBeNull();
     expect((await raw.rpc('request_export_v1')).error).not.toBeNull();
     expect((await raw.rpc('current_account')).data).toBeNull();
     expect(await rowsLeft(accountId)).toEqual(left);
-    // The old status credential still answers, and only that.
     expect((await stack.rawClient().rpc('lifecycle_status_v1', { token: status })).data).toEqual({ status: 'deleted' });
 
-    // A later sign-up with the same address is a new account, with a new ID.
     const again = device('resurrect-again');
     await stack.ageCodeRequests(email, 3600);
     expect(await createAccountByEmail(again, email)).toEqual({ status: 'signed-in' });

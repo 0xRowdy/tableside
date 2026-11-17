@@ -1,7 +1,4 @@
-// Seam 2, updates and quarantine (#80): the practice controller on substitute
-// adapters, over a store holding what an earlier build left behind. Recorded
-// checkpoints come from the engine's recordings of earlier builds; a "later
-// build" checkpoint is a recorded one with a newer schema, as a rollback finds it.
+// #80
 
 import type { QuarantineList } from '@tableside/engine';
 import { RECORDED_BUILDS } from '@tableside/engine/recorded-checkpoints';
@@ -34,7 +31,6 @@ describe('an update', () => {
     expect(controller.snapshot()).toMatchObject({ status: 'active', suspension: { cause: 'interrupted' } });
 
     await controller.resume();
-    // A blackjack round under way finishes first; ending stops the session between turns.
     if (recorded.game === 'blackjack') await controller.play('stand');
     await controller.endSession();
     await waitFor(() => status(controller.snapshot()) === 'completed');
@@ -53,7 +49,6 @@ describe('a rollback', () => {
 
     await controller.load();
     expect(controller.snapshot()).toEqual({ status: 'needs-update', game: 'craps' });
-    // Starting another session finds the same one, and still doesn't reopen it.
     await controller.start({ game: 'roulette', buyIn: '1000' });
     expect(controller.snapshot()).toEqual({ status: 'needs-update', game: 'craps' });
 

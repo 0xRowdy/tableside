@@ -1,8 +1,4 @@
-// An unfinished practice session found unusable (#80; design frame S1-11
-// "Quarantined session — explained", j8O6k): a proven engine defect named by
-// the shipped quarantine list, or a checkpoint that can't be read. It was
-// marked incomplete, so it has no result; this screen says why and what was
-// recorded. The frame's "View recorded rolls" is spec 4's Saved detail.
+// Spec 1 S1-11, #80
 
 import { router } from 'expo-router';
 import { TriangleAlert } from 'lucide-react-native';
@@ -22,7 +18,6 @@ import { formatUnits } from './units';
 
 const SET_ASIDE = "We won't invent a result, so it's set aside and doesn't count toward your totals or adherence.";
 
-/** What each reason says: the banner, and how the engine identity reads. */
 const COPY = {
   quarantined: { title: 'This session is quarantined', text: `We found a defect in the game engine that affected this session. ${SET_ASIDE}`, engine: (engine: string) => `${engine} (affected)` },
   damaged: { title: "This session can't be recovered", text: `Its saved state is damaged. ${SET_ASIDE}`, engine: (engine: string) => engine },
@@ -35,7 +30,7 @@ export function IncompleteSession({ session }: { session: IncompleteSessionSumma
   const copy = COPY[session.reason.kind];
   const rows = [
     { label: 'Game', value: gameTitle },
-    // A training-bankroll session was allocated its funds, never bought in (Amendment 4 B).
+    // Spec 1 Amendment 4 B
     { label: session.fundingSource === 'training-bankroll' ? 'From training bankroll' : 'Buy-in', value: formatUnits(session.buyIn) },
     ...(session.turnsRecorded === null ? [] : [{ label: `${GAME_WORDS[session.game].Turn}s recorded`, value: `${session.turnsRecorded}` }]),
     { label: 'Result', value: 'Not available' },

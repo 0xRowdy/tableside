@@ -1,10 +1,4 @@
-// S2-17 Account (More → Settings → Account): identity with the sign-in email
-// kept private, sign-in methods and devices, the account's data, Delete
-// account, and Sign out of this device. The entries open their own screens
-// (S2-18 to S2-22), which later spec 2 tickets build. Download all history
-// starts the download and opens Sync status (S2-20), where its progress is.
-// TODO(frames): what the Download all history row does is unverified: S2-17 draws only the row.
-// TODO(frames): the Currency row is unverified against S2-17, which has none (spec 2 Amendment 4 §4 adds it).
+// TODO(spec 2 S2-17)
 
 import { router } from 'expo-router';
 import { Banknote, Download, HardDriveDownload, KeyRound, Lock, LogOut, RefreshCw, Smartphone, Trash2, User } from 'lucide-react-native';

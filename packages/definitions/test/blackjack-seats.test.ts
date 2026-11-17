@@ -1,7 +1,4 @@
-// Simulated players use the rule-specific basic strategy (spec #51): the
-// packed rows match the frozen research files cell by cell, and through the
-// engine a player seated ahead of the learner makes the reference play on
-// every reachable first decision of every preset.
+// Spec 1 Game rules
 import {
   advanceActivity,
   canonicalShoe,
@@ -63,7 +60,6 @@ describe('simulated players: packed basic strategy', () => {
 
 const rankOf = (label: string) => (label === 'A' ? 1 : Number(label));
 
-/** A blackjack activity with one simulated player ahead of the learner, the shoe stacked with `ranks` on top. */
 function stacked(preset: (typeof PRESETS)[number], ranks: string[]): BlackjackActivityState {
   const shoe = canonicalShoe(6);
   const used = new Set<number>();
@@ -103,7 +99,6 @@ function run(state: BlackjackActivityState, commands: Command[]): DomainFact[] {
   return facts;
 }
 
-/** Two cards making a first-decision cell: hard totals as two different values, soft as an ace and a card, pairs as two of a value. */
 function composition(kind: string, hand: number): [string, string] | null {
   if (kind === 'pair') return hand === 1 ? ['A', 'A'] : [String(hand), String(hand)];
   if (kind === 'soft') return hand === 12 ? null : ['A', String(hand - 11)];
@@ -120,8 +115,9 @@ describe('simulated players: through the engine', () => {
         const cards = composition(row['kind'] ?? '', Number(row['hand']));
         if (cards === null) continue;
         const upCard = UP[up(row['up'] ?? '') - 1] as string;
-        // Seat 1, the learner (2 then 3), the up card, seat 1, the learner, hole 2 (never a dealer blackjack).
-        const facts = run(stacked(preset, [cards[0], '2', upCard, cards[1], '3', '2']), [
+        const [seatFirst, seatSecond] = cards;
+        const [learnerFirst, learnerSecond, holeNeverBlackjack] = ['2', '3', '2'];
+        const facts = run(stacked(preset, [seatFirst, learnerFirst, upCard, seatSecond, learnerSecond, holeNeverBlackjack]), [
           { kind: 'place-wager', target: 'hand-1', amount: '10' },
           { kind: 'begin-turn' },
           ...(upCard === 'A' ? [{ kind: 'play', action: 'decline-insurance' } as const] : []),
@@ -130,8 +126,8 @@ describe('simulated players: through the engine', () => {
         expect(first?.kind === 'played' && first.action, `${row['kind']} ${row['hand']} v ${row['up']}`).toBe(LETTER[row['action'] ?? '']);
         checked++;
       }
-      // Every cell but hard 4 and 20 and soft 12 (only pairs make them), against ten up cards.
-      expect(checked).toBe(360 - 30);
+      const pairOnlyCells = 3 * 10;
+      expect(checked).toBe(360 - pairOnlyCells);
     });
   }
 

@@ -1,18 +1,10 @@
-// The Node SQL driver for tests and CI: real SQLCipher (SQLCipher 4 format)
-// through better-sqlite3-multiple-ciphers, behind the same verified connection
-// the app's Expo SQLite driver uses. It never replaces native evidence (spec 2,
-// Testing Decisions). Tests only: the app bundle never imports it.
+// Spec 2 Testing Decisions
 
 import Database from 'better-sqlite3-multiple-ciphers';
 
 import { classifySqlError, isDatabaseKey, openVerifiedConnection, SqlError, type RawSqlConnection, type SqlDriver, type SqlValue } from '../sql';
 
 export interface NodeSqlCipherOptions {
-  /**
-   * Fault injection at the driver boundary: while it returns a fault, every
-   * write statement fails with the error SQLite raises for it (a full disk, or
-   * an I/O error), so its transaction rolls back. Reads still work.
-   */
   readonly fault?: () => 'full' | 'io' | undefined;
 }
 

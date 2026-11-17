@@ -1,7 +1,4 @@
-// Seam 3: Sign-in methods (#100, S2-18) through the real routes and the
-// accessibility tree, over Account-service fakes: the methods and what to
-// add, Confirm it's you before every change, a method another account uses,
-// the last method, and Change email with both addresses' codes.
+// #100; spec 2 S2-18
 
 import type { AccountGate } from '@tableside/account';
 import { act, cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react-native';
@@ -47,7 +44,6 @@ const header = (name: string | RegExp) => screen.findByRole('header', { name });
 const button = (name: string | RegExp) => screen.getByRole('button', { name });
 const sheet = () => within(screen.getByTestId('confirm-its-you'));
 
-/** Opens Sign-in methods from Account, after `prepare` scripts the fake. */
 async function openMethods(prepare?: () => void) {
   await renderRouter('./src/app', { initialUrl: '/more/settings/account' });
   prepare?.();
@@ -56,7 +52,6 @@ async function openMethods(prepare?: () => void) {
   await screen.findByLabelText(/^Apple\./);
 }
 
-/** Confirms it's you in the open sheet with the email code. */
 async function confirmWithCode(code = '123456') {
   await fireEvent.press(sheet().getByRole('button', { name: 'Send a code to player@example.com' }));
   await fireEvent.changeText(await sheet().findByLabelText('Code'), code);
@@ -76,7 +71,6 @@ describe('Sign-in methods', () => {
     expect(button('Add Google. A backup way in if you lose access to Apple')).toBeOnTheScreen();
     expect(button('Add Email code. A backup way in if you lose access to Apple')).toBeOnTheScreen();
     expect(screen.getByText("Changes ask you to confirm it's you. We email you when a method is added or a device is signed out.")).toBeOnTheScreen();
-    // Nothing asks for a second method before going back.
     await fireEvent.press(button('Back to Account'));
     expect(await header('Account')).toBeOnTheScreen();
   });
@@ -116,7 +110,6 @@ describe('adding a method', () => {
     await fireEvent.press(sheet().getByRole('button', { name: 'Confirm' }));
     expect(await screen.findByText("Google added. We've emailed you about it.")).toBeOnTheScreen();
     expect(service().methodCalls).toEqual(['fresh code-request', 'fresh code 000000', 'fresh code 123456', 'link google']);
-    // No code reaches a label or a log.
     expect(JSON.stringify(logged)).not.toContain('123456');
   });
 
@@ -192,7 +185,6 @@ describe('removing a method', () => {
     expect(
       await sheet().findByText("Removing Apple changes how you sign in, so sign in again first with a method you're keeping. Being signed in already isn't enough for this."),
     ).toBeOnTheScreen();
-    // Apple is the one going, so only the email code can confirm.
     expect(sheet().queryByRole('button', { name: 'Continue with Apple' })).toBeNull();
     await confirmWithCode();
 
@@ -207,7 +199,6 @@ describe('removing a method', () => {
     });
     await fireEvent.press(button('Remove Apple'));
     await confirmWithCode();
-    // The removal answered that the confirmation ran out: the sheet opens again, from the start.
     await waitFor(() => expect(service().methodCalls).toContain('remove method-apple'));
     expect(await sheet().findByRole('button', { name: 'Send a code to player@example.com' })).toBeOnTheScreen();
     await confirmWithCode();

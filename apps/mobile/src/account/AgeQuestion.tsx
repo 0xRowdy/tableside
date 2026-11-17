@@ -1,6 +1,4 @@
-// S2-15 Age — fallback question: a neutral age-range question, never a birth
-// date or ID. The Create path's age step asks it when the platform can't share
-// a range; an unresolved account's retry asks it when a declaration may decide.
+// Spec 2 S2-15
 
 import type { AgeAnswerResult, AgeRange } from '@tableside/account';
 import { useState } from 'react';
@@ -30,11 +28,8 @@ export function AgeQuestionScreen({
 }: {
   bar?: { readonly title: string; readonly detail?: string };
   back?: () => void;
-  /** The answer's outcome; a failure is shown here. */
   onAnswered: (result: Exclude<AgeAnswerResult, { status: 'failed' }>) => void | Promise<void>;
-  /** A problem with what the answer led to (creating the account with Apple or Google), shown under the question. */
   problem?: string | null;
-  /** What the answer led to is still under way. */
   working?: boolean;
 }) {
   const { service } = useAccount();

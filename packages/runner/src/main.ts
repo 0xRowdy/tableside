@@ -1,6 +1,3 @@
-// tsx src/main.ts                       versions only
-// tsx src/main.ts --strategy <id> --profile <id> --key <16 hex> [--from 0] [--count 1]
-//                                        runs sessions from..from+count-1, one JSON record per line
 import { parseArgs } from 'node:util';
 
 import { benchmarkProfile } from '@tableside/definitions';

@@ -1,6 +1,4 @@
-// Building blocks of Devices (S2-19): a device's card (what it calls itself,
-// when it was last active, "This device", and Sign out this device), the
-// sheet confirming a sign-out, and the banner once devices are signed out.
+// Spec 2 S2-19
 
 import type { DeviceEntry } from '@tableside/account';
 import { Check, CircleCheck, LogOut, Monitor, Smartphone, Tablet } from 'lucide-react-native';
@@ -13,7 +11,6 @@ import { fonts, palette, radius, space, textScale } from '@/theme/tokens';
 import { deviceShortName, lastActiveText, namesList } from './account-text';
 import { MethodButton } from './FirstRunParts';
 
-/** One device: an iPad (by its own account of itself) gets the tablet glyph, a web account page's browser the monitor's, anything else the phone's. */
 export function DeviceCard({ entry, now, disabled, onSignOut }: { entry: DeviceEntry; now: number; disabled: boolean; onSignOut?: () => void }) {
   const label = entry.label ?? 'Unknown device';
   const active = lastActiveText(entry.lastActiveAt, now);
@@ -56,7 +53,6 @@ export function DeviceCard({ entry, now, disabled, onSignOut }: { entry: DeviceE
   );
 }
 
-/** "Sign out Pixel 8?" or "Sign out 2 other devices?": what it does, then the fresh sign-in and the email. */
 export function SignOutDevicesSheet({
   names,
   all,
@@ -66,9 +62,7 @@ export function SignOutDevicesSheet({
   onClose,
 }: {
   names: readonly string[];
-  /** Every other device, rather than one. */
   all: boolean;
-  /** What the copy calls this device ("iPhone"). */
   thisDevice: string;
   busy: boolean;
   onConfirm: () => void;
@@ -89,7 +83,6 @@ export function SignOutDevicesSheet({
   );
 }
 
-/** "Signed out 2 other devices": they can't open the account, and the security email went out. */
 export function DoneBanner({ names, email }: { names: readonly string[]; email: string | null }) {
   const title = names.length === 1 ? `Signed out ${names[0]}` : `Signed out ${names.length} other devices`;
   const emailed = email ? ` We've sent a security email to ${email}.` : " We've sent a security email.";
