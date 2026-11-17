@@ -6,7 +6,7 @@ A spec is a GitHub issue; its tickets are sub-issues. Tickets merge into the spe
 
 - The ticket's acceptance criteria (`gh issue view <ticket> --comments`) are the contract.
 - The spec (`gh issue view <n> --comments`) carries the body and its amendments in comments; later amendments win. Read the sections the ticket cites and every amendment.
-- Screens: [design-frames.md](design-frames.md). Vocabulary: `CONTEXT.md`. Review rules: `CODING_STANDARDS.md`.
+- Screens: [design-frames.md](design-frames.md). Vocabulary: `CONTEXT.md`. Coding standards: `CODING_STANDARDS.md`.
 - Background: `docs/decisions/` (specs supersede them), `docs/development.md`, `docs/cross-runtime-harness.md`.
 - Work a later spec owns stays a stub behind its port (for example an in-memory store, an always-allow access supervisor) until that spec replaces it.
 

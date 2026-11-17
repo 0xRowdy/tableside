@@ -1,11 +1,13 @@
 # Coding standards
 
-Judgement calls a reviewer checks; lint, types and tests enforce the rest.
+Nuance leads to slop. Each correction becomes a lint rule, a type, a test or an API that leaves one way to write the code; this file keeps the judgement calls none of those can express. A new check lands with its existing violations fixed or on its allowlist. Each rule says how it is enforced: _(review)_ is a reviewer's call, _(partly enforced: …)_ names the check and leaves the rest to the reviewer.
 
-- **UI matches its final frame.** A departure from the frame is a finding unless a spec amendment allows it; read frames per `docs/agents/design-frames.md`. Why: the frames are the reviewed design.
-- **Per-game player wording comes from `apps/mobile/src/play/game-words.ts`.** Why: one place says "spin", "roll" or "round", so a shared screen reads right for every game.
-- **Game-specific rules live behind the engine's `GameModule`** (`packages/engine/src/activity.ts`), not in per-game branches in shared code. Why: adding or changing a game touches one module.
-- **Money goes through the engine's Money helpers** (`packages/engine/src/money.ts`), **and in the app through `apps/mobile/src/play/units.ts`.** Why: amounts stay exact fractions with one canonical text form.
-- **Table UI shared across games lives in `apps/mobile/src/play/TableChrome.tsx`.** Why: the chrome frames are shared, so a fix lands at every table.
-- **Test expectations come from independent sources:** rules tables, published vectors, hand-worked examples (`docs/cross-runtime-harness.md`). Why: an expectation computed the way the code computes it only repeats the code.
-- **Names and copy use `CONTEXT.md` vocabulary, in US English.** Why: one word per concept, in code and on screen.
+- **Nuance sits behind an API.** When the right code takes judgement to write (an effect, a timer, a per-game branch), write or extend an API that makes it the only code that fits, and keep the judgement inside it. Why: agents copy the pattern they see, so the codebase teaches the next change. _(review)_
+- **Comments are references.** A comment cites a spec section, an ADR or an issue and stops there: `// Spec 2 Deletion, Amendment 9 §3`, `// ADR 0001`, `// #104`. The reasoning lives where it points; knowledge that needs words goes into the spec, an ADR or `docs/`, or into a name or a test. Unfinished work is `// TODO(#123)` or `// TODO(spec 7 D9)`, and a known limit is `// shortcut: #123`, with the limit and the upgrade trigger written in the issue. Tooling directives (`eslint-…`, `@ts-…`, `@vitest-…`) stay as they are. A change writes only reference comments; older comments go in the package sweep. Why: comments go stale, no check enforces them, and they become where a workaround justifies itself. _(review)_
+- **UI matches its final frame.** A departure from the frame is a finding unless a spec amendment allows it; read frames per `docs/agents/design-frames.md`. Why: the frames are the reviewed design. _(review)_
+- **Per-game player wording comes from `apps/mobile/src/play/game-words.ts`.** Why: one place says "spin", "roll" or "round", so a shared screen reads right for every game. _(review)_
+- **Game-specific rules live behind the engine's `GameModule`** (`packages/engine/src/activity.ts`), not in per-game branches in shared code. Why: adding or changing a game touches one module. _(review)_
+- **Money goes through the engine's Money helpers** (`packages/engine/src/money.ts`), **and in the app through `apps/mobile/src/play/units.ts`.** Why: amounts stay exact fractions with one canonical text form. _(partly enforced: `apps/mobile/eslint.config.js` keeps `BigInt` in `units.ts`)_
+- **Table UI shared across games lives in `apps/mobile/src/play/TableChrome.tsx`.** Why: the chrome frames are shared, so a fix lands at every table. _(review)_
+- **Test expectations come from independent sources:** rules tables, published vectors, hand-worked examples (`docs/cross-runtime-harness.md`). Why: an expectation computed the way the code computes it only repeats the code. _(review)_
+- **Names and copy use `CONTEXT.md` vocabulary, in US English.** Why: one word per concept, in code and on screen. _(partly enforced: `scripts/check-glossary-copy.mjs` catches avoided terms; reviewers judge the qualified ones, such as "(for craps or roulette)")_
