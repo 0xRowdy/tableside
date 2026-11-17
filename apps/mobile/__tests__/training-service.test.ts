@@ -1,5 +1,5 @@
 // Spec 3 Testing Decisions › Seam 2, Amendment 1 C6; #158, #132
-import { createChallenge, encodeChallengeCheckpoint, type ChallengeView } from '@tableside/engine';
+import { createChallenge, EMPTY_QUARANTINE_LIST, encodeChallengeCheckpoint, type ChallengeView } from '@tableside/engine';
 
 import { alwaysAllowed, type AccessSupervisor } from '@/practice/adapters';
 import { FakeClock, entropyFromWords, PI_WORDS } from '@/practice/testing/substitutes';
@@ -28,7 +28,7 @@ function setup(options: { access?: Partial<AccessSupervisor>; store?: MemoryTrai
   };
   let next = 0;
   const clock = options.clock ?? new FakeClock(1_790_000_000_000, true);
-  const service = new TrainingService({ store, access, allowance: plentyAllowance(() => clock.now()), clock, entropy: entropyFromWords(PI_WORDS), newId: () => `attempt-${++next}`, device: 'test-device', owner: 'local' });
+  const service = new TrainingService({ store, access, allowance: plentyAllowance(() => clock.now()), clock, entropy: entropyFromWords(PI_WORDS), newId: () => `attempt-${++next}`, device: 'test-device', owner: 'local', quarantine: EMPTY_QUARANTINE_LIST });
   return { service, store, admissions, clock };
 }
 
@@ -320,7 +320,8 @@ describe('the Training service', () => {
     expect(await store.readAttemptRecords()).toHaveLength(1);
   });
 
-  it('moves on to the next card when it picks up a Check attempt whose answer was recorded', async () => {
+  // Spec 3 Amendment 1 C1; #135
+  it('moves on to the next card when it resumes a recovered Check attempt whose answer was recorded', async () => {
     const store = new MemoryTrainingStore();
     const first = setup({ store, clock: new FakeClock(1_790_000_000_000, false) });
     await first.service.load();
@@ -331,6 +332,8 @@ describe('the Training service', () => {
 
     const later = setup({ store: store.reopen() });
     await later.service.load();
+    expect(later.service.snapshot()).toMatchObject({ view: { phase: 'recorded', position: 1 }, hold: { cause: 'recovered' } });
+    await later.service.resume();
     expect(active(later.service.snapshot())).toMatchObject({ phase: 'question', position: 2 });
     expect(later.admissions).toEqual([]);
   });

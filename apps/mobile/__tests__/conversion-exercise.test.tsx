@@ -79,6 +79,13 @@ async function present(view: ChallengeView) {
         view={view}
         busy={view.phase === 'recorded'}
         saveFailed={false}
+        hold={null}
+        timer={null}
+        performanceMs={() => null}
+        onPause={() => undefined}
+        onResume={() => undefined}
+        onEnd={() => undefined}
+        onLeave={() => undefined}
         onCommand={(command) => void sent.push(command)}
         onInputRejected={() => void rejected++}
         onRetrySave={() => undefined}
@@ -157,6 +164,13 @@ describe('the true-count conversion exercise', () => {
           view={readChallengeView(atQuestion4('learn', [{ kind: 'answer', value: -3 }]))}
           busy={false}
           saveFailed={false}
+          hold={null}
+          timer={null}
+          performanceMs={() => null}
+          onPause={() => undefined}
+          onResume={() => undefined}
+          onEnd={() => undefined}
+          onLeave={() => undefined}
           onCommand={() => undefined}
           onInputRejected={() => undefined}
           onRetrySave={() => undefined}

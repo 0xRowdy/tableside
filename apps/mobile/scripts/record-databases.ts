@@ -34,7 +34,7 @@ import { dumpDatabase } from '../src/account/testing/database-dump';
 import { nodeSqlCipherDriver } from '../src/account/testing/node-sqlcipher';
 import type { RecordedDatabase, RecordedStoreSchema } from '../src/account/testing/recorded';
 import { LAST_SETUP } from '../src/training/service';
-import { CHALLENGE_CHARGE } from '../src/training/store';
+import { CHALLENGE_CHARGE, FRESH_LIFECYCLE } from '../src/training/store';
 
 const IDENTITY: StoreIdentity = { environment: 'production', accountId: 'recorded-account', installationId: 'recorded-installation' };
 const KEY = '5e'.repeat(32);
@@ -164,7 +164,7 @@ function historyDatabase(): Promise<RecordedDatabase> {
 async function playAttempt(store: SqliteActivityStore, specification: ChallengeSpecification, random: RandomStreamIdentity, commands: readonly ChallengeCommand[]): Promise<ChallengeState> {
   let state = createChallenge(specification, random);
   const admission = { provenance: 'recorded', meteringBasis: 'challenge-attempt' } as const;
-  await store.createAttempt({ attemptId: specification.attemptId, admission, specification, random, checkpoint: encodeChallengeCheckpoint(state), createdAt: CREATED_AT });
+  await store.createAttempt({ attemptId: specification.attemptId, admission, specification, random, checkpoint: encodeChallengeCheckpoint(state), createdAt: CREATED_AT, lifecycle: FRESH_LIFECYCLE });
   for (const [index, command] of commands.entries()) {
     const result = advanceChallenge(state, { sequence: state.sequence, commandId: `${specification.attemptId}/${state.sequence}`, command });
     if (result.status !== 'committed') throw new Error(`${specification.attemptId}: refused ${JSON.stringify(command)}`);
@@ -176,6 +176,7 @@ async function playAttempt(store: SqliteActivityStore, specification: ChallengeS
       receipt: result.receipt,
       facts: result.facts,
       charge,
+      lifecycle: FRESH_LIFECYCLE,
     });
     if (outcome.status !== 'committed') throw new Error(`${specification.attemptId}: ${outcome.status}`);
     state = result.state;

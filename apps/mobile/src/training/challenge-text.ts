@@ -1,12 +1,13 @@
 // Spec 3 S3-01 to S3-09; S5-17 j3UhJ; #158, #132, #150, #133, #134
 
-import { runningCountDrift, type AssistanceClass, type ChallengeCategory, type ChallengeEntry, type ChallengeMetric, type ChallengeVariant, type ChallengeView, type ConversionReview, type CountRange, type HiLoExplanation, type HiLoValue, type LearnFeedback, type MetricResult, type ReviewFact, type RunningCountReview } from '@tableside/engine';
+import { runningCountDrift, type AssistanceClass, type ChallengeAttemptRecord, type ChallengeCategory, type ChallengeEntry, type ChallengeMetric, type ChallengeVariant, type ChallengeView, type ConversionReview, type CountRange, type HiLoExplanation, type HiLoValue, type LearnFeedback, type MetricResult, type ReviewFact, type RunningCountReview } from '@tableside/engine';
 
 import { cardName, rankName, signed } from '@/play/blackjack-text';
 import { conversionText, decksText } from '@/training/blackjack-conversion-text';
 import { GAME_WORDS } from '@/play/game-words';
 
 import type { ChallengeAllowance } from './allowance';
+import type { AttemptHold } from './controller';
 import type { CatalogCategory, StartProblem } from './service';
 
 export const CATEGORY_TEXT: Record<CatalogCategory, { readonly title: string; readonly description: string }> = {
@@ -130,6 +131,9 @@ export const checkpointOf = (view: Pick<ChallengeView, 'checkpoints' | 'position
   const index = view.checkpoints?.findIndex((card) => card >= view.position) ?? -1;
   return view.checkpoints && index >= 0 ? { number: index + 1, of: view.checkpoints.length, card: view.checkpoints[index] as number } : null;
 };
+
+// Spec 3 S3-01 Uq05w, S3-08 UXrpw
+const itemWord = (category: ChallengeCategory) => (category === 'conversion' ? 'question' : 'card');
 
 export function exerciseProgress(view: ChallengeView): string {
   if (view.category === 'conversion') return questionProgress(view.position, view.length);
@@ -264,7 +268,7 @@ export const COMPLETED: Record<ChallengeVariant, { readonly title: string; reado
     detail: 'Learn scores your first answer to each card, even when you corrected it afterwards. Learn attempts never count toward a readiness milestone.',
     note: "When you're ready, try Check: it holds every answer until the end.",
   },
-  // Spec 3 S3-08 CEb6T; TODO(#135)
+  // Spec 3 S3-08 CEb6T
   check: { title: 'Completed · unassisted', detail: null, note: null },
 };
 
@@ -286,7 +290,6 @@ export const ASSISTED_NOTE = {
 export const resultsNote = (variant: ChallengeVariant, allowance: AllowanceCopy | undefined) => [COMPLETED[variant].note, allowance?.results].filter(Boolean).join(' ');
 export const SCORES_LABEL = 'SKILL SCORES · FIRST ANSWERS';
 export const REVIEW_LABEL: Record<ChallengeCategory, string> = { 'card-values': 'Review cards', 'running-count': 'Review checkpoints', conversion: 'Review questions' };
-// TODO(#135)
 export const RETRY_LABEL: Record<ChallengeCategory, string> = { 'card-values': 'Retry with new cards', 'running-count': 'Retry with a new shuffle', conversion: 'Retry with new questions' };
 
 export const RESULT_ROWS: readonly { readonly metric: ChallengeMetric; readonly title: string; readonly tested: (total: number, variant: ChallengeVariant) => string }[] = [
@@ -368,3 +371,141 @@ export function driftText(review: readonly ReviewFact[], variant: ChallengeVaria
   const amount = Math.abs(drift.error);
   return `From checkpoint ${drift.from} on, your count ran ${amount} ${drift.error > 0 ? 'above' : 'below'} the reference. One early miss likely carried through. Each checkpoint still counts as its own error.`;
 }
+
+// Spec 3 S3-02 buD2R; Attempt lifecycle › Performance timer; #135
+export const TIMING_LABEL = 'TIMING';
+export const TIME_THIS = 'Time this attempt';
+export const TIME_THIS_DETAIL = 'Optional. Only perfect, unassisted, uninterrupted timed Check attempts set a fastest time.';
+
+// Spec 3 S3-04 qdnQm, S3-05 r5pCx, qGARl
+export const PAUSE_LABEL = 'Pause';
+
+export const exerciseSubtitle = (variant: ChallengeVariant, timed: boolean, hold: AttemptHold | null) =>
+  [variantLabel(variant), PACING_LABEL, timed ? 'timed' : null, hold?.reached ? holdState(hold) : null].filter(Boolean).join(' · ');
+
+// Spec 3 S3-05 r5pCx ("Switching apps or tabs pauses an attempt too"); CONTEXT.md Suspension
+const SHOWN_AS_PAUSED: ReadonlySet<AttemptHold['cause']> = new Set(['learner', 'navigation', 'app-lifecycle']);
+const holdState = (hold: AttemptHold) => (hold.kind === 'auto-paused' ? 'auto-paused' : SHOWN_AS_PAUSED.has(hold.cause) ? 'paused' : 'suspended');
+
+const CANT_CONTINUE = "This attempt can't continue right now.";
+
+const pad = (value: number) => String(value).padStart(2, '0');
+export function timerText(ms: number): string {
+  const seconds = Math.floor(ms / 1000);
+  return `${pad(Math.floor(seconds / 60))}:${pad(seconds % 60)}`;
+}
+export const spokenTimer = (ms: number) => {
+  const seconds = Math.floor(ms / 1000);
+  const minutes = Math.floor(seconds / 60);
+  return `Timed: ${minutes} ${minutes === 1 ? 'minute' : 'minutes'} ${seconds % 60} ${seconds % 60 === 1 ? 'second' : 'seconds'}`;
+};
+
+// Spec 3 S3-05 r5pCx, qGARl; Attempt lifecycle › Suspend dispositions
+const SAVED_PLACE = "Your answers and place are saved. Switching apps or tabs pauses an attempt too. Paused time isn't timed, and a paused attempt can't set a fastest time.";
+export const RESUME_LABEL = 'Resume';
+export const END_ATTEMPT = 'End attempt';
+
+export function holdText(hold: AttemptHold, variant: ChallengeVariant): { readonly title: string; readonly lead: string; readonly end: string | null; readonly lessons: string | null } {
+  // Spec 3 S3-05 qGARl
+  if (hold.kind === 'auto-paused') {
+    return {
+      title: "Paused so you don't miss a card",
+      lead: "This counts as an interruption: accuracy still counts, but the attempt can't set a fastest time. Self-paced mode never pauses like this.",
+      end: null,
+      lessons: null,
+    };
+  }
+  const end = variant === 'check' ? "Ending keeps today's attempt used, earns no record and restarts progress toward the readiness milestone for these settings." : "Ending keeps today's attempt used and earns no record.";
+  const lessons = variant === 'check' ? 'The four counting lessons are available after this attempt. Other lessons are open now.' : null;
+  const shared = { end, lessons };
+  if (hold.cause === 'access' || hold.cause === 'sign-out') {
+    return { ...shared, title: 'Attempt suspended', lead: `${hold.reason ?? CANT_CONTINUE} Your answers and place are saved, and nothing was shown or scored since.` };
+  }
+  if (hold.cause === 'recovered') {
+    return { ...shared, title: 'Attempt suspended', lead: "Tableside closed during this attempt. Your answers and place are saved, and the attempt can't set a fastest time." };
+  }
+  return { ...shared, title: 'Attempt paused', lead: SAVED_PLACE };
+}
+
+// Spec 3 Amendment 1 C6
+export const turnBoundaryText = (hold: AttemptHold) => `${hold.reason ?? CANT_CONTINUE} Finish this card; the attempt is suspended before the next one.`;
+
+// Spec 3 S3-05 T9sCI; Learn, Check and assistance (operational help)
+export function helpText(view: Pick<ChallengeView, 'variant' | 'countRange' | 'countAid'>): {
+  readonly title: string;
+  readonly rows: readonly { readonly key: 'enter' | 'skip' | 'pause' | 'count'; readonly title: string; readonly detail: string }[];
+  readonly lessons: string | null;
+  readonly back: string;
+} {
+  const check = view.variant === 'check';
+  const enter =
+    view.countRange === null
+      ? { key: 'enter' as const, title: 'Choosing a value', detail: "Tap your answer. There's no deadline." }
+      : { key: 'enter' as const, title: 'Entering a count', detail: "Type the digits. + / − switches the sign. ⌫ deletes. Submit when you're ready; there's no deadline." };
+  const rows = [
+    enter,
+    { key: 'skip' as const, title: 'Skip', detail: 'Moves on and counts as incorrect.' },
+    { key: 'pause' as const, title: PAUSE_LABEL, detail: 'Tap Pause, or leave the tab or app. Your answers and place are kept.' },
+    ...(view.countAid ? [{ key: 'count' as const, title: SHOW_COUNT, detail: check ? 'Marks the whole attempt assisted, permanently.' : 'Learn notes whether you showed it.' }] : []),
+  ];
+  return {
+    title: check ? 'How this check works' : 'How this attempt works',
+    rows,
+    lessons: check ? 'The four counting lessons wait until this attempt ends, so help never gives away an answer. Every other lesson stays open.' : null,
+    back: check ? 'Back to the check' : 'Back to the attempt',
+  };
+}
+
+// Spec 3 S3-01 Uq05w; Attempt lifecycle › One unfinished attempt
+export function unfinishedText(view: Pick<ChallengeView, 'category' | 'variant' | 'position' | 'length'>, next: CatalogCategory) {
+  const title = CATEGORY_TEXT[view.category].title;
+  const nextTitle = CATEGORY_TEXT[next].title;
+  return {
+    title: 'You have an unfinished attempt',
+    lead: `${title} · ${variantLabel(view.variant)} is paused at ${itemWord(view.category)} ${view.position} of ${view.length}. This device keeps one unfinished attempt at a time, so resume it or end it before starting ${nextTitle}.`,
+    resume: `Resume ${title.toLowerCase()}`,
+    end: `End it, then set up ${nextTitle}`,
+    endNote:
+      view.variant === 'check'
+        ? "Ending counts as abandoned: today's attempt stays used, it earns no record, and progress toward that setting's readiness milestone restarts."
+        : "Ending counts as abandoned: today's attempt stays used and it earns no record.",
+    free: "Resuming doesn't use another attempt.",
+  };
+}
+
+// Spec 3 S3-08 UXrpw, CEb6T; Attempt lifecycle › Phases (ending reasons), Amendment 1 C3
+export function endingText(
+  record: Pick<ChallengeAttemptRecord, 'endingReason' | 'groupKey' | 'assistanceStep' | 'interrupted' | 'performanceMs'>,
+  position: number,
+  explanation: string | null,
+): { readonly kind: 'done' | 'alert'; readonly title: string; readonly detail: string | null; readonly note: string | null } {
+  const { groupKey } = record;
+  if (record.endingReason === 'abandoned') {
+    return {
+      kind: 'alert',
+      title: `Abandoned after ${itemWord(groupKey.category)} ${position} of ${groupKey.length}`,
+      detail: "You ended this attempt. It keeps today's attempt used and earns no record. Answers you gave before ending are shown, but they can't set a personal best.",
+      note: groupKey.variant === 'check' ? "Abandoning a Check restarts progress toward the readiness milestone for these settings. It's only labeled abandoned, never as a failed skill." : null,
+    };
+  }
+  if (record.endingReason === 'unusable') {
+    return {
+      kind: 'alert',
+      title: "Ended · couldn't continue",
+      detail: [explanation, "A problem in this version of Tableside affected this attempt, so it ended. It keeps today's attempt used, earns nothing and leaves your readiness progress as it was."].filter(Boolean).join(' '),
+      note: null,
+    };
+  }
+  const completed = completedText(groupKey, record.assistanceStep);
+  const timing = groupKey.variant === 'check' ? timingText(record) : null;
+  return { kind: 'done', title: completed.title, detail: [completed.detail, timing].filter(Boolean).join(' ') || null, note: null };
+}
+
+function timingText({ interrupted, performanceMs }: Pick<ChallengeAttemptRecord, 'interrupted' | 'performanceMs'>): string | null {
+  if (performanceMs === null) return null;
+  const time = timerText(performanceMs);
+  return interrupted ? `Timed: ${time}, not counting pauses. It was interrupted, so it can't set a fastest time.` : `Uninterrupted and timed: ${time}, not counting pauses.`;
+}
+
+// docs/development.md Releases
+export const NEEDS_UPDATE = 'Update Tableside to continue your counting attempt. It was saved by a newer version, and it stays exactly as it was.';

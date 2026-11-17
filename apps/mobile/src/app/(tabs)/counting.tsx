@@ -1,10 +1,12 @@
-// Spec 3 Screens; Lessons › Entry points, Structure; #158, #132, #145, #133, #134, #146
+// Spec 3 Screens; Lessons › Entry points, Structure; Attempt lifecycle; Amendment 1 B5
+// #158, #132, #145, #133, #134, #135, #146
 import { CHALLENGE_LESSONS } from '@tableside/definitions';
 import { CHALLENGE_VARIANTS, type ChallengeVariant } from '@tableside/engine';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useState } from 'react';
 
 import { Placeholder } from '@/components/Placeholder';
+import { UnfinishedSheet } from '@/counting/AttemptSheets';
 import { CardReview } from '@/counting/CardReview';
 import { ChallengeExercise, exerciseHints } from '@/counting/ChallengeExercise';
 import { ChallengeResults } from '@/counting/ChallengeResults';
@@ -14,7 +16,7 @@ import { useFeedback } from '@/feedback/FeedbackProvider';
 import { useLoaded } from '@/hooks/use-loaded';
 import { ScreenHints } from '@/lessons/FirstUseHints';
 import { lessonHref } from '@/lessons/routes';
-import { allowanceCopy, COUNTING_TITLE, FINDING_ATTEMPT } from '@/training/challenge-text';
+import { allowanceCopy, COUNTING_TITLE, FINDING_ATTEMPT, NEEDS_UPDATE } from '@/training/challenge-text';
 import { setupFor, type ChallengeSetup, type TrainingService, type TrainingSnapshot } from '@/training/service';
 import { useLessons, useTraining } from '@/training/TrainingProvider';
 
@@ -31,34 +33,95 @@ export default function Counting() {
   const allowance = useLoaded(allowanceOf, service, snapshot.status);
   const [chosen, setChosen] = useState<ChallengeSetup | null>(null);
   const [reviewing, setReviewing] = useState<string | null>(null);
+  // Spec 3 S3-01 Uq05w
+  const [browsing, setBrowsing] = useState(false);
+  const [next, setNext] = useState<ChallengeSetup | null>(null);
   const catalog = service.listCatalog();
   const entry = catalog.find((item) => item.category === category);
   // Spec 3 Lessons › Structure (Handoff)
   const handedOff = entry && CHALLENGE_VARIANTS.includes(variant as ChallengeVariant) ? { category: entry.category, variant: variant as ChallengeVariant } : null;
   const openLesson = (lesson: string) => router.navigate(lessonHref(lesson));
 
-  // Spec 3 Amendment 4 §6
-  useFocusEffect(useCallback(() => () => service.dismissResults(), [service]));
+  // Spec 3 Amendment 4 §6; Amendment 1 B5
+  useFocusEffect(
+    useCallback(
+      () => () => {
+        service.suspend('navigation');
+        service.dismissResults();
+      },
+      [service],
+    ),
+  );
+
+  const chooseSetup = (setup: ChallengeSetup) => {
+    service.clearProblem();
+    setChosen(setup);
+    router.setParams({ category: setup.category, variant: undefined });
+  };
 
   switch (snapshot.status) {
     case 'loading':
       return <Placeholder title={COUNTING_TITLE} message={FINDING_ATTEMPT} />;
-    case 'active':
+    // docs/development.md Releases
+    case 'needs-update':
+      return <Placeholder title={COUNTING_TITLE} message={NEEDS_UPDATE} />;
+    case 'active': {
+      const { view, hold } = snapshot;
+      // Spec 3 Attempt lifecycle › One unfinished attempt; S3-01 Uq05w
+      if (browsing && hold?.reached) {
+        return (
+          <>
+            <CountingHome catalog={catalog} allowance={allowance} lessons={lessons} onOpenLesson={openLesson} onChoose={setNext} />
+            {next && (
+              <UnfinishedSheet
+                view={view}
+                next={next.category}
+                busy={snapshot.busy}
+                onClose={() => setNext(null)}
+                onResume={() => {
+                  setNext(null);
+                  setBrowsing(false);
+                  void service.resume();
+                }}
+                onEnd={() => {
+                  const target = next;
+                  setNext(null);
+                  setBrowsing(false);
+                  void service.end({ showResults: false }).then(() => {
+                    if (service.snapshot().status === 'none') chooseSetup(target);
+                  });
+                }}
+              />
+            )}
+          </>
+        );
+      }
       return (
-        <ScreenHints service={service} ids={exerciseHints(snapshot.view)}>
+        <ScreenHints service={service} ids={exerciseHints(view)}>
           <ChallengeExercise
-            view={snapshot.view}
-            busy={snapshot.busy}
-            saveFailed={snapshot.save === 'failed'}
-            onCommand={(command) => void service.submit(command)}
-            // Spec 3 Learn, Check and assistance › Malformed input: cue 9
-            onInputRejected={() => feedback.cue('input-rejected')}
-            onRetrySave={() => void service.retrySave()}
-            lesson={lessons?.find((lesson) => lesson.id === CHALLENGE_LESSONS[snapshot.view.category])}
-            onOpenLesson={openLesson}
+          view={view}
+          busy={snapshot.busy}
+          saveFailed={snapshot.save === 'failed'}
+          hold={hold}
+          timer={snapshot.timer}
+          performanceMs={service.performanceMs}
+          onCommand={(command) => void service.submit(command)}
+          // Spec 3 Learn, Check and assistance › Malformed input: cue 9
+          onInputRejected={() => feedback.cue('input-rejected')}
+          onRetrySave={() => void service.retrySave()}
+          onPause={() => service.pause()}
+          onResume={() => void service.resume()}
+          onEnd={() => void service.end()}
+          onLeave={() => {
+            setBrowsing(true);
+            router.setParams({ category: undefined, variant: undefined });
+          }}
+          lesson={lessons?.find((lesson) => lesson.id === CHALLENGE_LESSONS[view.category])}
+          onOpenLesson={openLesson}
           />
         </ScreenHints>
       );
+    }
     case 'ended':
       if (reviewing === snapshot.record.attemptId) return <CardReview
             record={snapshot.record}
@@ -69,13 +132,11 @@ export default function Counting() {
       return (
         <ChallengeResults
           record={snapshot.record}
+          position={snapshot.position}
+          explanation={snapshot.explanation}
           onReview={() => setReviewing(snapshot.record.attemptId)}
           allowance={allowance}
-          onRetry={() => {
-            const { category: retried, variant } = snapshot.record.groupKey;
-            service.dismissResults();
-            void service.startAttempt({ category: retried, variant });
-          }}
+          onRetry={() => void service.retry()}
         />
       );
     case 'none': {
@@ -86,11 +147,7 @@ export default function Counting() {
             allowance={allowance}
             lessons={lessons}
             onOpenLesson={openLesson}
-            onChoose={(setup) => {
-              service.clearProblem();
-              setChosen(setup);
-              router.setParams({ category: setup.category, variant: undefined });
-            }}
+            onChoose={chooseSetup}
           />
         );
       }

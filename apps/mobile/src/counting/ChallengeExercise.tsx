@@ -1,18 +1,22 @@
-// Spec 3 S3-04 qdnQm, S3-05 EDnGd, S3-06 C53yTW, zAatf, Qv1An; #132, #133, #134, #146
+// Spec 3 S3-03 P4WjR, drVnR, BFdJT, S3-04 qdnQm, S3-05 EDnGd, r5pCx, T9sCI
+// Spec 3 S3-06 C53yTW, zAatf, Qv1An; #158, #132, #133, #134, #135, #146
 
 import type { HintId } from '@tableside/definitions';
 import type { ChallengeCategory, ChallengeEntry, ChallengeView, ConversionItem, CountRange, LearnFeedback } from '@tableside/engine';
-import { CircleCheck, CircleDot, CircleX, Info, SkipForward } from 'lucide-react-native';
+import { CircleCheck, CircleDot, CircleHelp, CircleX, Info, Pause, SkipForward, Timer, type LucideIcon } from 'lucide-react-native';
+import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/Button';
 import { Choice, PlayingCard } from '@/counting/CardChoices';
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
-import { FirstUseHint, HelpButton } from '@/lessons/FirstUseHints';
+import { usePolling } from '@/hooks/use-polling';
+import { FirstUseHint, useReopenHints } from '@/lessons/FirstUseHints';
 import { signed } from '@/play/blackjack-text';
 import { SaveFailedBanner } from '@/play/TableChrome';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/theme/tokens';
+import { HelpSheet, HoldSheet, WarningNote } from './AttemptSheets';
 import { CountAid } from './CountAid';
 import { CountEntry } from './CountEntry';
 import { decksText } from '@/training/blackjack-conversion-text';
@@ -36,14 +40,21 @@ import {
   choiceState,
   COACH_NAME,
   CONVERSION_LESSON_ACTION,
+  exerciseSubtitle,
   feedbackText,
   NEXT_CARD,
-  PACING_LABEL,
+  PAUSE_LABEL,
   recordedText,
   SKIP_LABEL,
-  variantLabel,
+  spokenTimer,
+  timerText,
+  turnBoundaryText,
 } from '@/training/challenge-text';
+import type { AttemptHold, PerformanceTimer } from '@/training/controller';
+import { HELP_HINT, HELP_LABEL } from '@/training/lesson-text';
 import type { LearnerCommand, LessonEntry } from '@/training/service';
+
+const TIMER_TICK_MS = 1000;
 
 const SIDE_BY_SIDE_MAX_FONT_SCALE = 1.35;
 
@@ -57,23 +68,40 @@ export function ChallengeExercise({
   view,
   busy,
   saveFailed,
+  hold,
+  timer,
+  performanceMs,
   onCommand,
   onInputRejected,
   onRetrySave,
+  onPause,
+  onResume,
+  onEnd,
+  onLeave,
   lesson,
   onOpenLesson,
 }: {
   view: ChallengeView;
   busy: boolean;
   saveFailed: boolean;
+  hold: AttemptHold | null;
+  timer: PerformanceTimer | null;
+  performanceMs: () => number | null;
   onCommand: (command: LearnerCommand) => void;
   onInputRejected: () => void;
   onRetrySave: () => void;
+  onPause: () => void;
+  onResume: () => void;
+  onEnd: () => void;
+  onLeave: () => void;
   lesson?: LessonEntry;
   onOpenLesson?: (id: string) => void;
 }) {
   const insets = useSafeAreaInsets();
-  const ready = !busy && !saveFailed;
+  const [helping, setHelping] = useState(false);
+  const reopenHints = useReopenHints();
+  const held = hold?.reached ?? false;
+  const ready = !busy && !saveFailed && !held;
   const answering = view.legalCommands.includes('answer') && ready;
   const feedback = view.variant === 'learn' ? view.feedback : null;
   const entered = view.variant === 'check' ? view.entered : null;
@@ -85,21 +113,35 @@ export function ChallengeExercise({
             {CATEGORY_TEXT[view.category].title}
           </Text>
           <Text maxFontSizeMultiplier={textScale.body} style={styles.subtitle}>
-            {`${variantLabel(view.variant)} · ${PACING_LABEL}`}
+            {exerciseSubtitle(view.variant, timer !== null, hold)}
           </Text>
         </View>
-        <HelpButton />
+        <HeaderButton
+          label={HELP_LABEL}
+          hint={HELP_HINT}
+          icon={CircleHelp}
+          enabled
+          onPress={() => {
+            reopenHints();
+            setHelping(true);
+          }}
+        />
+        <HeaderButton label={PAUSE_LABEL} icon={Pause} enabled={!held} onPress={onPause} />
       </View>
       <View style={styles.progress}>
-        <Text maxFontSizeMultiplier={textScale.body} style={styles.progressText}>
-          {exerciseProgress(view)}
-        </Text>
+        <View style={styles.progressRow}>
+          <Text maxFontSizeMultiplier={textScale.body} style={styles.progressText}>
+            {exerciseProgress(view)}
+          </Text>
+          {timer && <PerformanceTime timer={timer} performanceMs={performanceMs} />}
+        </View>
         <View style={styles.track}>
           <View style={[styles.fill, { width: `${(view.position / view.length) * 100}%` }]} />
         </View>
       </View>
       <View style={styles.body}>
         {saveFailed && <SaveFailedBanner busy={busy} onRetry={onRetrySave} />}
+        {hold && !hold.reached && <WarningNote text={turnBoundaryText(hold)} />}
         {view.category === 'conversion' && view.countRange ? (
           <ConversionBody
             view={view}
@@ -131,7 +173,45 @@ export function ChallengeExercise({
           <CountingBody view={view} range={view.countRange} ready={ready} answering={answering} onCommand={onCommand} onInputRejected={onInputRejected} />
         )}
       </View>
+      {hold?.reached && !helping && <HoldSheet hold={hold} variant={view.variant} busy={busy} onResume={onResume} onEnd={onEnd} onClose={onLeave} />}
+      {helping && <HelpSheet view={view} onClose={() => setHelping(false)} />}
     </ScrollView>
+  );
+}
+
+function HeaderButton({ label, hint, icon: Icon, enabled, onPress }: { label: string; hint?: string; icon: LucideIcon; enabled: boolean; onPress: () => void }) {
+  const { focused, focusProps } = useKeyboardFocus();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityHint={hint}
+      accessibilityState={{ disabled: !enabled }}
+      disabled={!enabled}
+      onPress={onPress}
+      {...focusProps}
+      style={({ pressed }) => [styles.headerButton, pressed && styles.pressed, focused && styles.focused, !enabled && styles.disabled]}
+    >
+      <Icon color={palette.foreground} size={24} />
+      <Text maxFontSizeMultiplier={textScale.body} style={styles.headerButtonText}>
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
+// Spec 3 Attempt lifecycle › Performance timer; S3-04 qdnQm
+function PerformanceTime({ timer, performanceMs }: { timer: PerformanceTimer; performanceMs: () => number | null }) {
+  const [, setTick] = useState(0);
+  usePolling(() => setTick((tick) => tick + 1), TIMER_TICK_MS, timer.since !== null);
+  const ms = performanceMs() ?? timer.ms;
+  return (
+    <View accessible accessibilityLabel={spokenTimer(ms)} style={styles.timer}>
+      <Timer color={palette.mutedForeground} size={16} />
+      <Text maxFontSizeMultiplier={textScale.body} style={styles.timerText}>
+        {timerText(ms)}
+      </Text>
+    </View>
   );
 }
 
@@ -396,8 +476,14 @@ function CoachButton({ label, primary = false, enabled, onPress }: { label: stri
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: palette.background },
-  header: { flexDirection: 'row', alignItems: 'center', gap: space[2], minHeight: 60, paddingLeft: space[4], paddingRight: space[2], paddingVertical: space[1] },
+  header: { flexDirection: 'row', alignItems: 'center', gap: space[2], minHeight: 60, paddingHorizontal: space[4], paddingVertical: space[1] },
   titles: { flex: 1, gap: 2 },
+  headerButton: { minWidth: MIN_TOUCH_TARGET, minHeight: MIN_TOUCH_TARGET, alignItems: 'center', justifyContent: 'center', gap: 2, paddingHorizontal: space[1], borderRadius: radius.md, borderWidth: 2, borderColor: palette.transparent },
+  headerButtonText: { fontFamily: fonts.uiBold, fontSize: 11, color: palette.mutedForeground },
+  disabled: { opacity: 0.4 },
+  progressRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space[2] },
+  timer: { flexDirection: 'row', alignItems: 'center', gap: space[1] },
+  timerText: { fontFamily: fonts.uiBold, fontSize: 13, color: palette.mutedForeground, fontVariant: ['tabular-nums'] },
   title: { fontFamily: fonts.uiBold, fontSize: 17, color: palette.foreground },
   subtitle: { fontFamily: fonts.ui, fontSize: 13, color: palette.mutedForeground },
   progress: { gap: space[1] + 2, paddingHorizontal: space[4], paddingTop: space[1] + 2, paddingBottom: space[3] - 2 },

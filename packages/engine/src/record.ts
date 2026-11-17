@@ -307,7 +307,8 @@ const sameIdentity = (a: VersionedIdentity | null, b: VersionedIdentity) => a !=
 
 export interface QuarantinableIdentities {
   readonly engine: string;
-  readonly rules: VersionedIdentity;
+  // Spec 3 Attempt lifecycle (unusable); #135
+  readonly rules: VersionedIdentity | null;
   readonly strategy: VersionedIdentity | null;
   readonly reference: VersionedIdentity | null;
 }

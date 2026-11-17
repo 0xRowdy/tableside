@@ -360,6 +360,7 @@ export {
 export {
   CHALLENGE_RECORD_VERSION,
   challengeAttemptRecord,
+  unusableAttemptRecord,
   challengeGroupKey,
   type AssistanceClass,
   type AttemptEndingReason,
