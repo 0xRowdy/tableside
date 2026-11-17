@@ -16,7 +16,7 @@ export const RUNNING_COUNT_CONTENT: RunningCountContent = {
   reference: BLACKJACK_REFERENCE_IDENTITY,
 };
 
-// Spec 3 Challenge content › Conversion: running count −20..+20, decks remaining 0.5..6.0 in half decks
+// Spec 3 Challenge content › Conversion
 export const CONVERSION_CONTENT: ConversionContent = { category: 'conversion', id: 'conversion', version: 1, length: 10, maxRunningCount: 20, maxDecks: 6 };
 
 export const CHALLENGE_CONTENT: Readonly<Record<ChallengeCategory, ChallengeContent>> = {

@@ -1,6 +1,6 @@
-// Spec 3 S3-03 P4WjR, drVnR, BFdJT, S3-04 qdnQm, S3-05 EDnGd, S3-06 C53yTW; #158, #132, #133
+// Spec 3 S3-03 P4WjR, S3-04 qdnQm, S3-05 EDnGd, S3-06 C53yTW, zAatf, Qv1An; #132, #133, #134
 
-import type { ChallengeCategory, ChallengeEntry, ChallengeView, CountRange, LearnFeedback } from '@tableside/engine';
+import type { ChallengeCategory, ChallengeEntry, ChallengeView, ConversionItem, CountRange, LearnFeedback } from '@tableside/engine';
 import { CircleCheck, CircleDot, CircleX, SkipForward } from 'lucide-react-native';
 import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -9,9 +9,11 @@ import { Button } from '@/components/Button';
 import { Choice, PlayingCard } from '@/counting/CardChoices';
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
 import { SaveFailedBanner } from '@/play/TableChrome';
+import { signed } from '@/play/blackjack-text';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/theme/tokens';
 import { CountAid } from './CountAid';
 import { CountEntry } from './CountEntry';
+import { decksText } from '@/training/blackjack-conversion-text';
 import {
   CARD_PROMPT,
   CATEGORY_TEXT,
@@ -19,6 +21,13 @@ import {
   checkpointOf,
   COUNT_LABEL,
   countPrompt,
+  GIVEN_DECKS,
+  GIVEN_RUNNING_COUNT,
+  NEXT_LABEL,
+  spokenValue,
+  TRUE_COUNT_LABEL,
+  TRUE_COUNT_PROMPT,
+  TRY_AGAIN_LABEL,
   exerciseProgress,
   keepCounting,
   choiceState,
@@ -28,7 +37,6 @@ import {
   PACING_LABEL,
   recordedText,
   SKIP_LABEL,
-  TRY_AGAIN,
   variantLabel,
 } from '@/training/challenge-text';
 import type { LearnerCommand } from '@/training/service';
@@ -75,9 +83,11 @@ export function ChallengeExercise({
       </View>
       <View style={styles.body}>
         {saveFailed && <SaveFailedBanner busy={busy} onRetry={onRetrySave} />}
-        {view.countRange === null ? (
+        {view.category === 'conversion' && view.countRange ? (
+          <ConversionBody view={view} range={view.countRange} ready={ready} answering={answering} onCommand={onCommand} onInputRejected={onInputRejected} />
+        ) : view.countRange === null ? (
           <>
-            {view.item && <PlayingCard card={view.item.card} />}
+            {view.item && 'card' in view.item && <PlayingCard card={view.item.card} />}
             {view.item && !feedback && (
               <Text maxFontSizeMultiplier={textScale.display} style={styles.prompt}>
                 {CARD_PROMPT}
@@ -90,7 +100,7 @@ export function ChallengeExercise({
             </View>
             {view.legalCommands.includes('skip') && <Button label={SKIP_LABEL} icon={SkipForward} variant="outline" stretch disabled={!answering} onPress={() => onCommand({ kind: 'skip' })} />}
             {view.phase === 'recorded' && entered !== null && <RecordedNotice entered={entered} category={view.category} />}
-            {feedback && <CoachNote feedback={feedback} position={view.position} canRetry={view.legalCommands.includes('retry-item')} enabled={ready} onCommand={onCommand} />}
+            {feedback && <CoachNote feedback={feedback} category={view.category} position={view.position} canRetry={view.legalCommands.includes('retry-item')} enabled={ready} onCommand={onCommand} />}
           </>
         ) : (
           <CountingBody view={view} range={view.countRange} ready={ready} answering={answering} onCommand={onCommand} onInputRejected={onInputRejected} />
@@ -125,7 +135,7 @@ function CountingBody({
     <View testID="count-columns" style={[styles.columns, { flexDirection: sideBySide ? 'row' : 'column' }]}>
       <View style={[styles.column, sideBySide && styles.side]}>
         <View style={[styles.cardRow, sideBySide && styles.cardStack]}>
-          {view.item && <PlayingCard card={view.item.card} small={!sideBySide} />}
+          {view.item && 'card' in view.item && <PlayingCard card={view.item.card} small={!sideBySide} />}
           {view.phase === 'question' && (
             <View style={[styles.countPrompt, !sideBySide && styles.promptBeside]}>
               {checkpoint && (
@@ -160,8 +170,80 @@ function CountingBody({
         )}
         {view.phase === 'card' && <Button label={NEXT_CARD} stretch disabled={!ready} onPress={() => onCommand({ kind: 'next-item' })} />}
         {view.phase === 'recorded' && entered !== null && <RecordedNotice entered={entered} category={view.category} />}
-        {feedback && <CoachNote feedback={feedback} position={view.position} canRetry={view.legalCommands.includes('retry-item')} enabled={ready} onCommand={onCommand} />}
+        {feedback && <CoachNote feedback={feedback} category={view.category} position={view.position} canRetry={view.legalCommands.includes('retry-item')} enabled={ready} onCommand={onCommand} />}
       </View>
+    </View>
+  );
+}
+
+// Spec 3 Challenge content › Conversion; S3-06 zAatf, BFM4l, Qv1An
+function ConversionBody({
+  view,
+  range,
+  ready,
+  answering,
+  onCommand,
+  onInputRejected,
+}: {
+  view: ChallengeView;
+  range: CountRange;
+  ready: boolean;
+  answering: boolean;
+  onCommand: (command: LearnerCommand) => void;
+  onInputRejected: () => void;
+}) {
+  const { width, height, fontScale } = useWindowDimensions();
+  const sideBySide = width > height && fontScale <= SIDE_BY_SIDE_MAX_FONT_SCALE;
+  const feedback = view.variant === 'learn' ? view.feedback : null;
+  const entered = view.variant === 'check' ? view.entered : null;
+  const question = view.item && 'running' in view.item ? view.item : null;
+  return (
+    <View testID="count-columns" style={[styles.columns, { flexDirection: sideBySide ? 'row' : 'column' }]}>
+      <View style={[styles.column, sideBySide && styles.side]}>
+        {question && <GivenValues question={question} />}
+        {feedback && <CoachNote feedback={feedback} category={view.category} position={view.position} canRetry={view.legalCommands.includes('retry-item')} enabled={ready} onCommand={onCommand} />}
+      </View>
+      <View style={[styles.column, sideBySide && styles.side]}>
+        {view.phase === 'question' && (
+          <>
+            <Text maxFontSizeMultiplier={textScale.display} style={[styles.prompt, styles.start]}>
+              {TRUE_COUNT_PROMPT}
+            </Text>
+            <CountEntry
+              key={view.position}
+              label={TRUE_COUNT_LABEL}
+              range={range}
+              enabled={answering}
+              onSubmit={(value) => onCommand({ kind: 'answer', value })}
+              onSkip={() => onCommand({ kind: 'skip' })}
+              onRejected={onInputRejected}
+            />
+          </>
+        )}
+        {view.phase === 'recorded' && entered !== null && <RecordedNotice entered={entered} category={view.category} />}
+      </View>
+    </View>
+  );
+}
+
+function GivenValues({ question }: { question: ConversionItem }) {
+  return (
+    <View style={styles.given} testID="given-values">
+      <Given label={GIVEN_RUNNING_COUNT} value={signed(question.running)} spoken={spokenValue(question.running)} />
+      <Given label={GIVEN_DECKS} value={decksText(question.decks)} spoken={decksText(question.decks)} />
+    </View>
+  );
+}
+
+function Given({ label, value, spoken }: { label: string; value: string; spoken: string }) {
+  return (
+    <View accessible accessibilityLabel={`${label}, ${spoken}`} style={styles.givenTile}>
+      <Text maxFontSizeMultiplier={textScale.body} style={styles.givenLabel}>
+        {label}
+      </Text>
+      <Text maxFontSizeMultiplier={textScale.display} style={styles.givenValue}>
+        {value}
+      </Text>
     </View>
   );
 }
@@ -180,12 +262,14 @@ function RecordedNotice({ entered, category }: { entered: ChallengeEntry; catego
 
 function CoachNote({
   feedback,
+  category,
   position,
   canRetry,
   enabled,
   onCommand,
 }: {
   feedback: LearnFeedback;
+  category: ChallengeCategory;
   position: number;
   canRetry: boolean;
   enabled: boolean;
@@ -214,8 +298,8 @@ function CoachNote({
         {text.detail}
       </Text>
       <View style={styles.coachActions}>
-        <CoachButton label={NEXT_CARD} primary enabled={enabled} onPress={() => onCommand({ kind: 'next-item' })} />
-        {canRetry && <CoachButton label={TRY_AGAIN} enabled={enabled} onPress={() => onCommand({ kind: 'retry-item' })} />}
+        <CoachButton label={NEXT_LABEL[category]} primary enabled={enabled} onPress={() => onCommand({ kind: 'next-item' })} />
+        {canRetry && <CoachButton label={TRY_AGAIN_LABEL[category]} enabled={enabled} onPress={() => onCommand({ kind: 'retry-item' })} />}
       </View>
     </View>
   );
@@ -261,6 +345,10 @@ const styles = StyleSheet.create({
   checkpointKicker: { fontFamily: fonts.uiBold, fontSize: 14, color: palette.mutedForeground, textAlign: 'center' },
   keep: { fontFamily: fonts.ui, fontSize: 15, lineHeight: 21, color: palette.mutedForeground, textAlign: 'center' },
   choices: { flexDirection: 'row', gap: space[3] - 2 },
+  given: { flexDirection: 'row', gap: space[3] - 2 },
+  givenTile: { flex: 1, gap: space[1], paddingVertical: 14, paddingHorizontal: space[4], borderRadius: radius.lg, borderWidth: 1, borderColor: palette.border, backgroundColor: palette.card },
+  givenLabel: { fontFamily: fonts.ui, fontSize: 13, color: palette.mutedForeground },
+  givenValue: { fontFamily: fonts.uiBold, fontSize: 34, color: palette.foreground },
   recorded: { flexDirection: 'row', alignItems: 'center', gap: space[2], paddingVertical: space[3], paddingHorizontal: 14, borderRadius: 12, borderWidth: 1, borderColor: palette.controlBorder, backgroundColor: palette.card },
   recordedText: { flex: 1, fontFamily: fonts.ui, fontSize: 14, color: palette.foreground },
   coach: { gap: space[3] - 2, paddingTop: 14, paddingHorizontal: space[4], paddingBottom: space[4], borderRadius: radius.lg, borderWidth: 1, borderColor: palette.coachAccent, backgroundColor: palette.coach },

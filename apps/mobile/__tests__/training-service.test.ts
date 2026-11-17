@@ -10,7 +10,7 @@ import { RECORDED_MS } from '@/training/controller';
 import { TrainingService, type TrainingSnapshot } from '@/training/service';
 import { CHALLENGE_CHARGE } from '@/training/store';
 import { newAttempt } from '@/training/testing/store-contract';
-import { HI_LO_BY_RANK } from '@/training/testing/hi-lo';
+import { cardOf, HI_LO_BY_RANK } from '@/training/testing/hi-lo';
 
 const LEARN_CARD_VALUES = { category: 'card-values', variant: 'learn' } as const;
 const CHECK_CARD_VALUES = { category: 'card-values', variant: 'check' } as const;
@@ -44,7 +44,7 @@ async function answerEveryCard(service: TrainingService, choose: (view: Challeng
   }
 }
 
-const reference = (view: ChallengeView) => HI_LO_BY_RANK[view.item!.card.rank]!;
+const reference = (view: ChallengeView) => HI_LO_BY_RANK[cardOf(view.item).rank]!;
 
 const feedbackOf = (view: ChallengeView) => (view.variant === 'learn' ? view.feedback : undefined);
 
@@ -54,7 +54,7 @@ describe('the Training service', () => {
     expect(service.listCatalog()).toEqual([
       { category: 'card-values', available: true, ready: ['learn', 'check'] },
       { category: 'running-count', available: true, ready: ['learn', 'check'] },
-      { category: 'conversion', available: true, ready: [] },
+      { category: 'conversion', available: true, ready: ['learn', 'check'] },
       { category: 'table', available: true, ready: [] },
     ]);
   });
@@ -64,7 +64,8 @@ describe('the Training service', () => {
     expect(service.validateSetup(LEARN_CARD_VALUES)).toEqual({ valid: true, diagnostics: [] });
     expect(service.validateSetup(CHECK_CARD_VALUES)).toEqual({ valid: true, diagnostics: [] });
     expect(service.validateSetup({ category: 'running-count', variant: 'check' })).toEqual({ valid: true, diagnostics: [] });
-    expect(service.validateSetup({ category: 'conversion', variant: 'learn' })).toEqual({ valid: false, diagnostics: [{ field: 'category', problem: 'not-ready' }] });
+    expect(service.validateSetup({ category: 'conversion', variant: 'learn' })).toEqual({ valid: true, diagnostics: [] });
+    expect(service.validateSetup({ category: 'table', variant: 'learn' })).toEqual({ valid: false, diagnostics: [{ field: 'category', problem: 'not-ready' }] });
     expect(service.validateSetup({ category: 'baccarat', variant: 'quiz' })).toEqual({
       valid: false,
       diagnostics: [
@@ -92,7 +93,7 @@ describe('the Training service', () => {
   it('shows no content and charges nothing for an invalid setup', async () => {
     const { service, store, admissions } = setup();
     await service.load();
-    await service.startAttempt({ category: 'conversion', variant: 'check' });
+    await service.startAttempt({ category: 'table', variant: 'check' });
     expect(service.snapshot()).toEqual({ status: 'none', problem: 'invalid-setup', diagnostics: [{ field: 'category', problem: 'not-ready' }], busy: false });
     expect([admissions, await store.findUnfinishedAttempt(), await store.readAttemptRecords()]).toEqual([[], null, []]);
   });

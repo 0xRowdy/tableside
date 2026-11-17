@@ -17,16 +17,16 @@ import { ANSWER, begun, checkView, CONVERSION_CHECK, CONVERSION_LEARN, learnView
 import { throws } from './fixtures';
 import { expectCheckViewHides } from './information-hiding';
 
-// Recorded from seed 1; the true counts are hand-computed (−15 ÷ 5.5 = −2.7 → −2, 11 ÷ 3.5 = 3.1 → 3, −19 ÷ 3.5 = −5.4 → −5, 19 ÷ 3 = 6.3 → 6)
+// docs/cross-runtime-harness.md Adding cases
 const SEED_1_QUESTIONS = [[-15, 5.5], [12, 0.5], [11, 3.5], [18, 5], [-19, 3.5], [0, 1.5], [14, 4.5], [0, 5], [19, 3], [9, 0.5]];
-const SEED_1_TRUE_COUNTS = [-2, 24, 3, 3, -5, 0, 3, 0, 6, 18];
+const SEED_1_TRUE_COUNTS_BY_HAND = [-2, 24, 3, 3, -5, 0, 3, 0, 6, 18];
 
 const questions = (state: ChallengeState) => state.items.map((item) => ('running' in item ? [item.running, item.decks] : null));
 
 // Spec 3 Challenge content › Conversion: hand-checked coverage of one question
 const isExact = ([running, decks]: readonly number[]) => (2 * (running as number)) % (2 * (decks as number)) === 0;
 
-// Spec 3 Testing Decisions › Seam 1: conversion boundaries, hand-computed (running ÷ decks, truncated toward zero)
+// Spec 3 Testing Decisions › Seam 1
 const BOUNDARIES = [
   { running: 0, decks: 3, trueCount: 0, rounded: 0 },
   { running: 8, decks: 2, trueCount: 4, rounded: 4 },
@@ -68,7 +68,7 @@ export const conversionCases: TestCase[] = [
     run: (t) => {
       t.equal(questions(begun(CONVERSION_LEARN, seed(3))), questions(begun(CONVERSION_CHECK, seed(3))));
       t.equal([questions(begun(CONVERSION_CHECK, seed(1))), begun(CONVERSION_CHECK, seed(1)).rejected], [SEED_1_QUESTIONS, 1]);
-      t.equal(challengeResults(run(begun(CONVERSION_CHECK, seed(1)), answering(SEED_1_TRUE_COUNTS.map(ANSWER))))?.metrics['true-count'], { correct: 10, total: 10 });
+      t.equal(challengeResults(run(begun(CONVERSION_CHECK, seed(1)), answering(SEED_1_TRUE_COUNTS_BY_HAND.map(ANSWER))))?.metrics['true-count'], { correct: 10, total: 10 });
       t.equal(JSON.stringify(questions(begun(CONVERSION_CHECK, seed(3)))) === JSON.stringify(questions(begun(CONVERSION_CHECK, seed(4)))), false);
     },
   },

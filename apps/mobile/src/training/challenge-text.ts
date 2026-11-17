@@ -1,8 +1,9 @@
-// Spec 3 S3-01 to S3-09; S5-17 j3UhJ; #158, #132, #150, #133
+// Spec 3 S3-01 to S3-09; S5-17 j3UhJ; #158, #132, #150, #133, #134
 
-import { runningCountDrift, type AssistanceClass, type ChallengeCategory, type ChallengeEntry, type ChallengeMetric, type ChallengeVariant, type ChallengeView, type CountRange, type HiLoExplanation, type HiLoValue, type LearnFeedback, type MetricResult, type ReviewFact, type RunningCountReview } from '@tableside/engine';
+import { runningCountDrift, type AssistanceClass, type ChallengeCategory, type ChallengeEntry, type ChallengeMetric, type ChallengeVariant, type ChallengeView, type ConversionReview, type CountRange, type HiLoExplanation, type HiLoValue, type LearnFeedback, type MetricResult, type ReviewFact, type RunningCountReview } from '@tableside/engine';
 
 import { cardName, rankName, signed } from '@/play/blackjack-text';
+import { conversionText, decksText } from '@/training/blackjack-conversion-text';
 import { GAME_WORDS } from '@/play/game-words';
 
 import type { ChallengeAllowance } from './allowance';
@@ -30,6 +31,7 @@ export const WHAT_YOU_DO: Partial<Record<CatalogCategory, string>> = {
   'card-values': '20 cards covering every rank, one at a time. Choose +1, 0 or −1 for each. Only your first answer to each card is scored.',
   'running-count':
     '52 cards from a shuffled six-deck shoe, starting at zero. Learn asks for the count after every card; Check asks after cards 13, 26, 39 and 52. Only your first answer at each point is scored.',
+  conversion: '10 questions. Each gives a running count and the decks remaining; enter the true count. Only your first answer to each question is scored.',
 };
 
 // Spec 3 Amendment 4 §2–3; spec 5 Amendment 1 E, Amendment 7 §4
@@ -120,6 +122,9 @@ export const PACING_LABEL = 'self-paced';
 
 export const progressText = (position: number, length: number) => `Card ${position} of ${length}`;
 
+// Spec 3 S3-06 zAatf
+export const questionProgress = (position: number, length: number) => `Question ${position} of ${length}`;
+
 // Spec 3 S3-04 qdnQm
 export const checkpointOf = (view: Pick<ChallengeView, 'checkpoints' | 'position'>) => {
   const index = view.checkpoints?.findIndex((card) => card >= view.position) ?? -1;
@@ -127,6 +132,7 @@ export const checkpointOf = (view: Pick<ChallengeView, 'checkpoints' | 'position
 };
 
 export function exerciseProgress(view: ChallengeView): string {
+  if (view.category === 'conversion') return questionProgress(view.position, view.length);
   const checkpoint = checkpointOf(view);
   const cards = progressText(view.position, view.length);
   return checkpoint && view.position > 0 ? `${cards} · checkpoint ${checkpoint.number} of ${checkpoint.of}` : cards;
@@ -140,6 +146,10 @@ export const hiLoText = (explanation: Pick<HiLoExplanation, 'rank' | 'value'>) =
 export function feedbackText(feedback: LearnFeedback, position: number): { readonly kicker: string; readonly headline: string; readonly detail: string } {
   const { explanation } = feedback;
   const kicker = feedback.correct ? (feedback.scored ? 'CORRECT' : 'CORRECT ON RETRY · YOUR FIRST ANSWER IS SCORED') : 'NOT QUITE · YOUR FIRST ANSWER IS SCORED';
+  if (explanation.kind === 'conversion') {
+    const answer = signed(explanation.trueCount);
+    return { kicker, headline: feedback.correct ? `${answer} is right.` : `The true count is ${answer}.`, detail: conversionText(explanation) };
+  }
   if (explanation.kind === 'running-count') {
     return {
       kicker,
@@ -157,6 +167,9 @@ export function feedbackText(feedback: LearnFeedback, position: number): { reado
 export const COACH_NAME = 'Marcus · Learn';
 export const NEXT_CARD = 'Next card';
 export const TRY_AGAIN = 'Try this card again';
+// Spec 3 S3-06 Qv1An
+export const NEXT_LABEL: Record<ChallengeCategory, string> = { 'card-values': NEXT_CARD, 'running-count': NEXT_CARD, conversion: 'Next question' };
+export const TRY_AGAIN_LABEL: Record<ChallengeCategory, string> = { 'card-values': TRY_AGAIN, 'running-count': TRY_AGAIN, conversion: 'Try this question again' };
 
 export type ChoiceState = 'your-answer' | 'your-pick' | 'correct' | 'recorded' | null;
 
@@ -181,6 +194,11 @@ export const CHANGE_SIGN = 'Change sign';
 export const DELETE_DIGIT = 'Delete';
 export const countPrompt = (position: number) => `Enter the running count after ${position} ${position === 1 ? 'card' : 'cards'}`;
 export const checkpointKicker = (checkpoint: { readonly number: number; readonly of: number }) => `Checkpoint ${checkpoint.number} of ${checkpoint.of}`;
+// Spec 3 S3-06 zAatf
+export const GIVEN_RUNNING_COUNT = 'Running count';
+export const GIVEN_DECKS = 'Decks remaining';
+export const TRUE_COUNT_LABEL = 'True count';
+export const TRUE_COUNT_PROMPT = 'Enter the true count';
 export const keepCounting = (checkpoint: { readonly number: number; readonly card: number }) => `Keep the count. Checkpoint ${checkpoint.number} comes after card ${checkpoint.card}.`;
 
 // Spec 3 Learn, Check and assistance › Malformed input; S3-06 C53yTW
@@ -228,8 +246,10 @@ export const REVEAL_WARNING = {
 
 // Spec 3 Learn, Check and assistance › Answer accepted
 export const recordedText = (entered: ChallengeEntry, category: ChallengeCategory) => {
-  if (entered === 'skip') return 'Skip recorded. Next card in a moment.';
-  return category === 'running-count' ? `Count ${signed(entered)} recorded. Next card in a moment.` : 'Answer recorded. Next card in a moment.';
+  const next = category === 'conversion' ? 'Next question in a moment.' : 'Next card in a moment.';
+  if (entered === 'skip') return `Skip recorded. ${next}`;
+  if (category === 'conversion') return `True count ${signed(entered)} recorded. ${next}`;
+  return category === 'running-count' ? `Count ${signed(entered)} recorded. ${next}` : `Answer recorded. ${next}`;
 };
 
 export const enteredText = (entry: ChallengeEntry) => (entry === 'skip' ? 'skipped' : signed(entry));
@@ -263,9 +283,9 @@ export const ASSISTED_NOTE = {
 
 export const resultsNote = (variant: ChallengeVariant, allowance: AllowanceCopy | undefined) => [COMPLETED[variant].note, allowance?.results].filter(Boolean).join(' ');
 export const SCORES_LABEL = 'SKILL SCORES · FIRST ANSWERS';
-export const REVIEW_LABEL: Record<ChallengeCategory, string> = { 'card-values': 'Review cards', 'running-count': 'Review checkpoints' };
+export const REVIEW_LABEL: Record<ChallengeCategory, string> = { 'card-values': 'Review cards', 'running-count': 'Review checkpoints', conversion: 'Review questions' };
 // TODO(#135)
-export const RETRY_LABEL: Record<ChallengeCategory, string> = { 'card-values': 'Retry with new cards', 'running-count': 'Retry with a new shuffle' };
+export const RETRY_LABEL: Record<ChallengeCategory, string> = { 'card-values': 'Retry with new cards', 'running-count': 'Retry with a new shuffle', conversion: 'Retry with new questions' };
 
 export const RESULT_ROWS: readonly { readonly metric: ChallengeMetric; readonly title: string; readonly tested: (total: number, variant: ChallengeVariant) => string }[] = [
   { metric: 'card-values', title: 'Card values', tested: (total) => `${total} cards` },
@@ -283,7 +303,7 @@ export const scoreText = (result: MetricResult | null) => (result ? `${result.co
 export const spokenScore = (result: MetricResult | null) => (result ? `${result.correct} of ${result.total}` : 'N/A');
 
 // Spec 3 S3-09 h0MsKr, BjuKf; Scoring and review › Review facts
-export const REVIEW_TITLE: Record<ChallengeCategory, string> = { 'card-values': 'Card review', 'running-count': 'Checkpoint review' };
+export const REVIEW_TITLE: Record<ChallengeCategory, string> = { 'card-values': 'Card review', 'running-count': 'Checkpoint review', conversion: 'Question review' };
 export const YOU_LABEL = 'You';
 export const CORRECT_LABEL = 'Correct';
 export const ERROR_LABEL = 'Error';
@@ -318,7 +338,17 @@ export function reviewText(fact: ReviewFact, variant: ChallengeVariant): ReviewR
   if (fact.kind === 'card-value') {
     return { ...shared, title: `Card ${fact.position} · ${cardName(fact.card)}`, error: null, label: `Card ${fact.position}, ${cardName(fact.card)}: ${spokenEntry}, correct ${spokenValue(reference)}, ${spoken(off)}` };
   }
+  if (fact.kind === 'conversion') return questionText(fact, shared, `${spokenEntry}, correct ${spokenValue(reference)}`, spoken(off));
   return checkpointText(fact, variant, shared, `${spokenEntry}, correct ${spokenValue(reference)}`, spoken(off));
+}
+
+// Spec 3 Scoring and review › Review facts (conversion)
+function questionText(fact: ConversionReview, shared: Omit<ReviewRowText, 'title' | 'error' | 'label'>, said: string, outcome: string): ReviewRowText {
+  const title = `Question ${fact.position} · ${signed(fact.running)} ÷ ${decksText(fact.decks)}`;
+  const spokenTitle = `Question ${fact.position}, ${spokenValue(fact.running)} divided by ${decksText(fact.decks)}`;
+  const error = fact.error === null ? '—' : signed(fact.error);
+  const spokenError = fact.error === null ? '' : `, error ${spokenValue(fact.error)}`;
+  return { ...shared, title, error, label: `${spokenTitle}: ${said}${spokenError}, ${outcome}` };
 }
 
 function checkpointText(fact: RunningCountReview, variant: ChallengeVariant, shared: Omit<ReviewRowText, 'title' | 'error' | 'label'>, said: string, outcome: string): ReviewRowText {

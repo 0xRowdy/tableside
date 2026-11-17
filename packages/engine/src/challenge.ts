@@ -1,4 +1,4 @@
-// Spec 3 Modules › Engine; Challenge content (from #4); Learn, Check and assistance; #158, #132, #133, #134
+// Spec 3 Modules › Engine; Challenge content; Learn, Check and assistance; #158, #132, #133, #134
 
 import { STATE_SCHEMA_VERSION, type Receipt, type RejectionReason, type VersionedIdentity } from './activity';
 import { hiLoTag, truncatedTrueCount } from './blackjack';
@@ -37,7 +37,7 @@ export interface RunningCountContent {
   readonly reference: VersionedIdentity;
 }
 
-// Spec 3 Challenge content › Conversion: the running count is a whole number in ±maxRunningCount, the divisor a half-deck value from 0.5 to maxDecks
+// Spec 3 Challenge content › Conversion
 export interface ConversionContent {
   readonly category: 'conversion';
   readonly id: string;
@@ -70,7 +70,7 @@ export interface CardValueItem {
   readonly card: ChallengeCard;
 }
 
-// Spec 3 Challenge content › Conversion: a supplied running count and decks remaining (a multiple of 0.5)
+// Spec 3 Challenge content › Conversion
 export interface ConversionItem {
   readonly running: number;
   readonly decks: number;
@@ -174,8 +174,7 @@ export type HiLoExplanation = { readonly kind: 'hi-lo-value'; readonly rank: Ran
 
 export type RunningCountExplanation = { readonly kind: 'running-count'; readonly rank: Rank; readonly value: HiLoValue; readonly before: number; readonly count: number };
 
-// Spec 3 Learn, Check and assistance › Learn; Lessons › Content requirements (conversion). The arithmetic of one conversion:
-// trueCount is running ÷ decks truncated toward zero, and exact says the quotient needed no truncation.
+// Spec 3 Learn, Check and assistance › Learn; Lessons › Content requirements; #134
 export type ConversionExplanation = { readonly kind: 'conversion'; readonly running: number; readonly decks: number; readonly trueCount: number; readonly exact: boolean };
 
 export type ChallengeExplanation = HiLoExplanation | RunningCountExplanation | ConversionExplanation;
@@ -198,7 +197,7 @@ export interface RunningCountReview {
   readonly error: number | null;
 }
 
-// Spec 3 Scoring and review › Review facts: the given running count and decks remaining, and the signed error of the first answer
+// Spec 3 Scoring and review › Review facts
 export interface ConversionReview {
   readonly kind: 'conversion';
   readonly position: number;
@@ -296,7 +295,7 @@ function runningCountProblem(content: Record<string, unknown>): string | undefin
   return undefined;
 }
 
-// Spec 3 Challenge content › Conversion. Covering every case takes four questions (zero, exact, and a truncation of each sign), and a truncation needs at least 1.5 decks.
+// Spec 3 Challenge content › Conversion
 const MIN_CONVERSION_LENGTH = 4;
 const MAX_CONVERSION_LENGTH = 40;
 
@@ -400,7 +399,7 @@ const hiLo = (item: ChallengeItem): HiLoValue => hiLoTag({ deck: 0, ...(item as 
 // Spec 3 Scoring and review › Reference
 const countThrough = (state: ChallengeState, position: number) => state.items.slice(0, position + 1).reduce((count, item) => count + hiLo(item), 0);
 
-// Spec 3 Challenge content › Conversion: running count ÷ decks remaining, truncated toward zero (+7/2 → +3, −7/2 → −3)
+// Spec 3 Challenge content › Conversion
 export const conversionTrueCount = (item: ConversionItem): number => truncatedTrueCount(item.running, halfDecks(item));
 
 function reference(state: ChallengeState, position: number): number {
