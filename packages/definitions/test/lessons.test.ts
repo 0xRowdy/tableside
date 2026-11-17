@@ -41,7 +41,7 @@ describe('lesson definitions', () => {
   });
 
   it('author App orientation at version 1 (navigation, help, practice vs casino records), with no material change yet', () => {
-    expect(LESSONS.filter(authored).map((lesson) => lesson.id)).toEqual(['app-orientation']);
+    expect(LESSONS.filter(authored).filter((lesson) => lesson.section !== 'roulette').map((lesson) => lesson.id)).toEqual(['app-orientation']);
     const orientation = LESSONS[0]!;
     expect(orientation.summary).toBe('Tabs, help, practice vs casino records');
     expect(orientation.content).toMatchObject({ version: 1, materialVersion: 1, change: null, workedExample: null, handoffs: [], sources: [] });

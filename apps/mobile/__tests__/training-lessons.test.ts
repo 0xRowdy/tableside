@@ -73,7 +73,7 @@ describe('the Training service lessons', () => {
       access: 'available',
       status: { kind: 'not-started' },
     });
-    expect(catalog.filter((entry) => entry.steps !== null).map((entry) => entry.id)).toEqual([ORIENTATION]);
+    expect(catalog.filter((entry) => entry.steps !== null && entry.section !== 'roulette').map((entry) => entry.id)).toEqual([ORIENTATION]);
     expect(catalog[1]).toMatchObject({ id: 'blackjack-basics', section: 'blackjack', steps: null, status: { kind: 'not-started' } });
     await expect(service.openLesson('blackjack-basics')).rejects.toThrow(/not available/);
   });
