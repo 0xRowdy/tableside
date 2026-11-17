@@ -58,7 +58,23 @@ const LESSON_PROGRESS: StoreMigration = {
   },
 };
 
-export const STORE_MIGRATIONS: readonly StoreMigration[] = [CHALLENGE_ATTEMPTS, LESSON_PROGRESS];
+// Spec 3 Synchronized record types › Readiness milestone; #141
+const READINESS_MILESTONES: StoreMigration = {
+  to: 4,
+  async migrate(tx) {
+    await tx.run(`CREATE TABLE readiness_milestones (
+      installation_id TEXT NOT NULL,
+      group_key TEXT NOT NULL,
+      first_attempt_id TEXT NOT NULL,
+      second_attempt_id TEXT NOT NULL,
+      earned_at INTEGER NOT NULL,
+      body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,
+      PRIMARY KEY (installation_id, group_key)
+    ) STRICT`);
+  },
+};
+
+export const STORE_MIGRATIONS: readonly StoreMigration[] = [CHALLENGE_ATTEMPTS, LESSON_PROGRESS, READINESS_MILESTONES];
 
 export const schemaVersionOf = (migrations: readonly StoreMigration[]): number => BASE_SCHEMA_VERSION + migrations.length;
 

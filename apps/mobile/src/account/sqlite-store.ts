@@ -27,6 +27,7 @@ import {
   type TrainingStore,
 } from '../training/store';
 import { LESSON_PROGRESS_RECORD_TYPE, type LessonProgressEvent, type UnsequencedLessonEvent } from '../training/lesson-progress';
+import type { ReadinessMilestoneRecord } from '../training/readiness-milestone';
 import type { SqlConnection, SqlExecutor } from './sql';
 import { createSchema, readSchemaVersion, schemaVersionOf, STORE_MIGRATIONS, STORE_SCHEMA_VERSION, type StoreMigration } from './store-schema';
 
@@ -517,6 +518,28 @@ export class SqliteActivityStore implements ActivityStore, TrainingStore {
     return this.transaction(async (tx) =>
       (await tx.all<BodyRow>(`SELECT ${BODY} FROM lesson_progress_events ORDER BY device_sequence`)).map((row) => decode<LessonProgressEvent>(row)),
     );
+  }
+
+  // Spec 3 Synchronized record types › Readiness milestone; #141
+  recordMilestone(milestone: ReadinessMilestoneRecord): Promise<ReadinessMilestoneRecord> {
+    return this.transaction(async (tx) => {
+      if (milestone.owner !== this.identity.accountId || milestone.installation !== this.identity.installationId) {
+        throw new StoreMismatchError('a readiness milestone belongs to another account or installation');
+      }
+      const group = canonicalJson(milestone.groupKey);
+      const existing = await tx.get<BodyRow>(`SELECT ${BODY} FROM readiness_milestones WHERE installation_id = ? AND group_key = ?`, [milestone.installation, group]);
+      if (existing) return decode<ReadinessMilestoneRecord>(existing);
+      const [first, second] = milestone.attempts;
+      await tx.run(
+        `INSERT INTO readiness_milestones (installation_id, group_key, first_attempt_id, second_attempt_id, earned_at, ${BODY}) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [milestone.installation, group, first, second, milestone.earnedAt, ...encode(milestone)],
+      );
+      return decodeText<ReadinessMilestoneRecord>(encode(milestone)[0]);
+    });
+  }
+
+  readMilestones(): Promise<readonly ReadinessMilestoneRecord[]> {
+    return this.transaction(async (tx) => (await tx.all<BodyRow>(`SELECT ${BODY} FROM readiness_milestones ORDER BY rowid`)).map((row) => decode<ReadinessMilestoneRecord>(row)));
   }
 
   // Spec 3 Amendment 1 C7

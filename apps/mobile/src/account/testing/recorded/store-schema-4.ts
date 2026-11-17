@@ -1,8 +1,8 @@
 // docs/development.md Releases: recorded checkpoints and the quarantine list
 import type { RecordedStoreSchema } from './index';
 
-export const RECORDED_STORE_SCHEMA_3: RecordedStoreSchema = {
-  "storeSchema": 3,
+export const RECORDED_STORE_SCHEMA_4: RecordedStoreSchema = {
+  "storeSchema": 4,
   "engine": "0.0.0",
   "stateSchema": 11,
   "databases": [
@@ -42,7 +42,8 @@ export const RECORDED_STORE_SCHEMA_3: RecordedStoreSchema = {
         "CREATE TABLE challenge_charges (\n        attempt_id TEXT PRIMARY KEY REFERENCES challenge_attempts (attempt_id),\n        body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL\n      ) STRICT",
         "CREATE TABLE challenge_attempt_records (\n        attempt_id TEXT PRIMARY KEY REFERENCES challenge_attempts (attempt_id),\n        device_sequence INTEGER NOT NULL UNIQUE,\n        body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL\n      ) STRICT",
         "CREATE TABLE device_preferences (key TEXT PRIMARY KEY, value TEXT NOT NULL) STRICT",
-        "CREATE TABLE lesson_progress_events (\n      event_id TEXT PRIMARY KEY,\n      device_sequence INTEGER NOT NULL UNIQUE,\n      body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL\n    ) STRICT"
+        "CREATE TABLE lesson_progress_events (\n      event_id TEXT PRIMARY KEY,\n      device_sequence INTEGER NOT NULL UNIQUE,\n      body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL\n    ) STRICT",
+        "CREATE TABLE readiness_milestones (\n      installation_id TEXT NOT NULL,\n      group_key TEXT NOT NULL,\n      first_attempt_id TEXT NOT NULL,\n      second_attempt_id TEXT NOT NULL,\n      earned_at INTEGER NOT NULL,\n      body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n      PRIMARY KEY (installation_id, group_key)\n    ) STRICT"
       ],
       "rows": {
         "meta": [
@@ -60,7 +61,7 @@ export const RECORDED_STORE_SCHEMA_3: RecordedStoreSchema = {
           },
           {
             "name": "schema_version",
-            "value": "3"
+            "value": "4"
           }
         ],
         "activities": [
@@ -141,7 +142,8 @@ export const RECORDED_STORE_SCHEMA_3: RecordedStoreSchema = {
         "challenge_charges": [],
         "challenge_attempt_records": [],
         "device_preferences": [],
-        "lesson_progress_events": []
+        "lesson_progress_events": [],
+        "readiness_milestones": []
       }
     },
     {
@@ -180,7 +182,8 @@ export const RECORDED_STORE_SCHEMA_3: RecordedStoreSchema = {
         "CREATE TABLE challenge_charges (\n        attempt_id TEXT PRIMARY KEY REFERENCES challenge_attempts (attempt_id),\n        body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL\n      ) STRICT",
         "CREATE TABLE challenge_attempt_records (\n        attempt_id TEXT PRIMARY KEY REFERENCES challenge_attempts (attempt_id),\n        device_sequence INTEGER NOT NULL UNIQUE,\n        body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL\n      ) STRICT",
         "CREATE TABLE device_preferences (key TEXT PRIMARY KEY, value TEXT NOT NULL) STRICT",
-        "CREATE TABLE lesson_progress_events (\n      event_id TEXT PRIMARY KEY,\n      device_sequence INTEGER NOT NULL UNIQUE,\n      body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL\n    ) STRICT"
+        "CREATE TABLE lesson_progress_events (\n      event_id TEXT PRIMARY KEY,\n      device_sequence INTEGER NOT NULL UNIQUE,\n      body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL\n    ) STRICT",
+        "CREATE TABLE readiness_milestones (\n      installation_id TEXT NOT NULL,\n      group_key TEXT NOT NULL,\n      first_attempt_id TEXT NOT NULL,\n      second_attempt_id TEXT NOT NULL,\n      earned_at INTEGER NOT NULL,\n      body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n      PRIMARY KEY (installation_id, group_key)\n    ) STRICT"
       ],
       "rows": {
         "meta": [
@@ -198,7 +201,7 @@ export const RECORDED_STORE_SCHEMA_3: RecordedStoreSchema = {
           },
           {
             "name": "schema_version",
-            "value": "3"
+            "value": "4"
           }
         ],
         "activities": [
@@ -279,7 +282,8 @@ export const RECORDED_STORE_SCHEMA_3: RecordedStoreSchema = {
         "challenge_charges": [],
         "challenge_attempt_records": [],
         "device_preferences": [],
-        "lesson_progress_events": []
+        "lesson_progress_events": [],
+        "readiness_milestones": []
       }
     },
     {
@@ -318,7 +322,8 @@ export const RECORDED_STORE_SCHEMA_3: RecordedStoreSchema = {
         "CREATE TABLE challenge_charges (\n        attempt_id TEXT PRIMARY KEY REFERENCES challenge_attempts (attempt_id),\n        body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL\n      ) STRICT",
         "CREATE TABLE challenge_attempt_records (\n        attempt_id TEXT PRIMARY KEY REFERENCES challenge_attempts (attempt_id),\n        device_sequence INTEGER NOT NULL UNIQUE,\n        body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL\n      ) STRICT",
         "CREATE TABLE device_preferences (key TEXT PRIMARY KEY, value TEXT NOT NULL) STRICT",
-        "CREATE TABLE lesson_progress_events (\n      event_id TEXT PRIMARY KEY,\n      device_sequence INTEGER NOT NULL UNIQUE,\n      body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL\n    ) STRICT"
+        "CREATE TABLE lesson_progress_events (\n      event_id TEXT PRIMARY KEY,\n      device_sequence INTEGER NOT NULL UNIQUE,\n      body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL\n    ) STRICT",
+        "CREATE TABLE readiness_milestones (\n      installation_id TEXT NOT NULL,\n      group_key TEXT NOT NULL,\n      first_attempt_id TEXT NOT NULL,\n      second_attempt_id TEXT NOT NULL,\n      earned_at INTEGER NOT NULL,\n      body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n      PRIMARY KEY (installation_id, group_key)\n    ) STRICT"
       ],
       "rows": {
         "meta": [
@@ -336,7 +341,7 @@ export const RECORDED_STORE_SCHEMA_3: RecordedStoreSchema = {
           },
           {
             "name": "schema_version",
-            "value": "3"
+            "value": "4"
           }
         ],
         "activities": [
@@ -435,7 +440,8 @@ export const RECORDED_STORE_SCHEMA_3: RecordedStoreSchema = {
         "challenge_charges": [],
         "challenge_attempt_records": [],
         "device_preferences": [],
-        "lesson_progress_events": []
+        "lesson_progress_events": [],
+        "readiness_milestones": []
       }
     },
     {
@@ -474,7 +480,8 @@ export const RECORDED_STORE_SCHEMA_3: RecordedStoreSchema = {
         "CREATE TABLE challenge_charges (\n        attempt_id TEXT PRIMARY KEY REFERENCES challenge_attempts (attempt_id),\n        body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL\n      ) STRICT",
         "CREATE TABLE challenge_attempt_records (\n        attempt_id TEXT PRIMARY KEY REFERENCES challenge_attempts (attempt_id),\n        device_sequence INTEGER NOT NULL UNIQUE,\n        body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL\n      ) STRICT",
         "CREATE TABLE device_preferences (key TEXT PRIMARY KEY, value TEXT NOT NULL) STRICT",
-        "CREATE TABLE lesson_progress_events (\n      event_id TEXT PRIMARY KEY,\n      device_sequence INTEGER NOT NULL UNIQUE,\n      body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL\n    ) STRICT"
+        "CREATE TABLE lesson_progress_events (\n      event_id TEXT PRIMARY KEY,\n      device_sequence INTEGER NOT NULL UNIQUE,\n      body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL\n    ) STRICT",
+        "CREATE TABLE readiness_milestones (\n      installation_id TEXT NOT NULL,\n      group_key TEXT NOT NULL,\n      first_attempt_id TEXT NOT NULL,\n      second_attempt_id TEXT NOT NULL,\n      earned_at INTEGER NOT NULL,\n      body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n      PRIMARY KEY (installation_id, group_key)\n    ) STRICT"
       ],
       "rows": {
         "meta": [
@@ -492,7 +499,7 @@ export const RECORDED_STORE_SCHEMA_3: RecordedStoreSchema = {
           },
           {
             "name": "schema_version",
-            "value": "3"
+            "value": "4"
           }
         ],
         "activities": [
@@ -600,7 +607,8 @@ export const RECORDED_STORE_SCHEMA_3: RecordedStoreSchema = {
         "challenge_charges": [],
         "challenge_attempt_records": [],
         "device_preferences": [],
-        "lesson_progress_events": []
+        "lesson_progress_events": [],
+        "readiness_milestones": []
       }
     },
     {
@@ -639,7 +647,8 @@ export const RECORDED_STORE_SCHEMA_3: RecordedStoreSchema = {
         "CREATE TABLE challenge_charges (\n        attempt_id TEXT PRIMARY KEY REFERENCES challenge_attempts (attempt_id),\n        body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL\n      ) STRICT",
         "CREATE TABLE challenge_attempt_records (\n        attempt_id TEXT PRIMARY KEY REFERENCES challenge_attempts (attempt_id),\n        device_sequence INTEGER NOT NULL UNIQUE,\n        body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL\n      ) STRICT",
         "CREATE TABLE device_preferences (key TEXT PRIMARY KEY, value TEXT NOT NULL) STRICT",
-        "CREATE TABLE lesson_progress_events (\n      event_id TEXT PRIMARY KEY,\n      device_sequence INTEGER NOT NULL UNIQUE,\n      body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL\n    ) STRICT"
+        "CREATE TABLE lesson_progress_events (\n      event_id TEXT PRIMARY KEY,\n      device_sequence INTEGER NOT NULL UNIQUE,\n      body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL\n    ) STRICT",
+        "CREATE TABLE readiness_milestones (\n      installation_id TEXT NOT NULL,\n      group_key TEXT NOT NULL,\n      first_attempt_id TEXT NOT NULL,\n      second_attempt_id TEXT NOT NULL,\n      earned_at INTEGER NOT NULL,\n      body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n      PRIMARY KEY (installation_id, group_key)\n    ) STRICT"
       ],
       "rows": {
         "meta": [
@@ -657,7 +666,7 @@ export const RECORDED_STORE_SCHEMA_3: RecordedStoreSchema = {
           },
           {
             "name": "schema_version",
-            "value": "3"
+            "value": "4"
           }
         ],
         "activities": [
@@ -738,7 +747,8 @@ export const RECORDED_STORE_SCHEMA_3: RecordedStoreSchema = {
         "challenge_charges": [],
         "challenge_attempt_records": [],
         "device_preferences": [],
-        "lesson_progress_events": []
+        "lesson_progress_events": [],
+        "readiness_milestones": []
       }
     },
     {
@@ -777,7 +787,8 @@ export const RECORDED_STORE_SCHEMA_3: RecordedStoreSchema = {
         "CREATE TABLE challenge_charges (\n        attempt_id TEXT PRIMARY KEY REFERENCES challenge_attempts (attempt_id),\n        body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL\n      ) STRICT",
         "CREATE TABLE challenge_attempt_records (\n        attempt_id TEXT PRIMARY KEY REFERENCES challenge_attempts (attempt_id),\n        device_sequence INTEGER NOT NULL UNIQUE,\n        body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL\n      ) STRICT",
         "CREATE TABLE device_preferences (key TEXT PRIMARY KEY, value TEXT NOT NULL) STRICT",
-        "CREATE TABLE lesson_progress_events (\n      event_id TEXT PRIMARY KEY,\n      device_sequence INTEGER NOT NULL UNIQUE,\n      body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL\n    ) STRICT"
+        "CREATE TABLE lesson_progress_events (\n      event_id TEXT PRIMARY KEY,\n      device_sequence INTEGER NOT NULL UNIQUE,\n      body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL\n    ) STRICT",
+        "CREATE TABLE readiness_milestones (\n      installation_id TEXT NOT NULL,\n      group_key TEXT NOT NULL,\n      first_attempt_id TEXT NOT NULL,\n      second_attempt_id TEXT NOT NULL,\n      earned_at INTEGER NOT NULL,\n      body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n      PRIMARY KEY (installation_id, group_key)\n    ) STRICT"
       ],
       "rows": {
         "meta": [
@@ -795,7 +806,7 @@ export const RECORDED_STORE_SCHEMA_3: RecordedStoreSchema = {
           },
           {
             "name": "schema_version",
-            "value": "3"
+            "value": "4"
           }
         ],
         "activities": [
@@ -894,7 +905,8 @@ export const RECORDED_STORE_SCHEMA_3: RecordedStoreSchema = {
         "challenge_charges": [],
         "challenge_attempt_records": [],
         "device_preferences": [],
-        "lesson_progress_events": []
+        "lesson_progress_events": [],
+        "readiness_milestones": []
       }
     },
     {
@@ -933,7 +945,8 @@ export const RECORDED_STORE_SCHEMA_3: RecordedStoreSchema = {
         "CREATE TABLE challenge_charges (\n        attempt_id TEXT PRIMARY KEY REFERENCES challenge_attempts (attempt_id),\n        body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL\n      ) STRICT",
         "CREATE TABLE challenge_attempt_records (\n        attempt_id TEXT PRIMARY KEY REFERENCES challenge_attempts (attempt_id),\n        device_sequence INTEGER NOT NULL UNIQUE,\n        body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL\n      ) STRICT",
         "CREATE TABLE device_preferences (key TEXT PRIMARY KEY, value TEXT NOT NULL) STRICT",
-        "CREATE TABLE lesson_progress_events (\n      event_id TEXT PRIMARY KEY,\n      device_sequence INTEGER NOT NULL UNIQUE,\n      body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL\n    ) STRICT"
+        "CREATE TABLE lesson_progress_events (\n      event_id TEXT PRIMARY KEY,\n      device_sequence INTEGER NOT NULL UNIQUE,\n      body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL\n    ) STRICT",
+        "CREATE TABLE readiness_milestones (\n      installation_id TEXT NOT NULL,\n      group_key TEXT NOT NULL,\n      first_attempt_id TEXT NOT NULL,\n      second_attempt_id TEXT NOT NULL,\n      earned_at INTEGER NOT NULL,\n      body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n      PRIMARY KEY (installation_id, group_key)\n    ) STRICT"
       ],
       "rows": {
         "meta": [
@@ -951,7 +964,7 @@ export const RECORDED_STORE_SCHEMA_3: RecordedStoreSchema = {
           },
           {
             "name": "schema_version",
-            "value": "3"
+            "value": "4"
           }
         ],
         "activities": [
@@ -1050,7 +1063,8 @@ export const RECORDED_STORE_SCHEMA_3: RecordedStoreSchema = {
         "challenge_charges": [],
         "challenge_attempt_records": [],
         "device_preferences": [],
-        "lesson_progress_events": []
+        "lesson_progress_events": [],
+        "readiness_milestones": []
       }
     },
     {
@@ -1089,7 +1103,8 @@ export const RECORDED_STORE_SCHEMA_3: RecordedStoreSchema = {
         "CREATE TABLE challenge_charges (\n        attempt_id TEXT PRIMARY KEY REFERENCES challenge_attempts (attempt_id),\n        body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL\n      ) STRICT",
         "CREATE TABLE challenge_attempt_records (\n        attempt_id TEXT PRIMARY KEY REFERENCES challenge_attempts (attempt_id),\n        device_sequence INTEGER NOT NULL UNIQUE,\n        body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL\n      ) STRICT",
         "CREATE TABLE device_preferences (key TEXT PRIMARY KEY, value TEXT NOT NULL) STRICT",
-        "CREATE TABLE lesson_progress_events (\n      event_id TEXT PRIMARY KEY,\n      device_sequence INTEGER NOT NULL UNIQUE,\n      body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL\n    ) STRICT"
+        "CREATE TABLE lesson_progress_events (\n      event_id TEXT PRIMARY KEY,\n      device_sequence INTEGER NOT NULL UNIQUE,\n      body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL\n    ) STRICT",
+        "CREATE TABLE readiness_milestones (\n      installation_id TEXT NOT NULL,\n      group_key TEXT NOT NULL,\n      first_attempt_id TEXT NOT NULL,\n      second_attempt_id TEXT NOT NULL,\n      earned_at INTEGER NOT NULL,\n      body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n      PRIMARY KEY (installation_id, group_key)\n    ) STRICT"
       ],
       "rows": {
         "meta": [
@@ -1107,7 +1122,7 @@ export const RECORDED_STORE_SCHEMA_3: RecordedStoreSchema = {
           },
           {
             "name": "schema_version",
-            "value": "3"
+            "value": "4"
           }
         ],
         "activities": [
@@ -1206,7 +1221,8 @@ export const RECORDED_STORE_SCHEMA_3: RecordedStoreSchema = {
         "challenge_charges": [],
         "challenge_attempt_records": [],
         "device_preferences": [],
-        "lesson_progress_events": []
+        "lesson_progress_events": [],
+        "readiness_milestones": []
       }
     },
     {
@@ -1245,7 +1261,8 @@ export const RECORDED_STORE_SCHEMA_3: RecordedStoreSchema = {
         "CREATE TABLE challenge_charges (\n        attempt_id TEXT PRIMARY KEY REFERENCES challenge_attempts (attempt_id),\n        body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL\n      ) STRICT",
         "CREATE TABLE challenge_attempt_records (\n        attempt_id TEXT PRIMARY KEY REFERENCES challenge_attempts (attempt_id),\n        device_sequence INTEGER NOT NULL UNIQUE,\n        body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL\n      ) STRICT",
         "CREATE TABLE device_preferences (key TEXT PRIMARY KEY, value TEXT NOT NULL) STRICT",
-        "CREATE TABLE lesson_progress_events (\n      event_id TEXT PRIMARY KEY,\n      device_sequence INTEGER NOT NULL UNIQUE,\n      body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL\n    ) STRICT"
+        "CREATE TABLE lesson_progress_events (\n      event_id TEXT PRIMARY KEY,\n      device_sequence INTEGER NOT NULL UNIQUE,\n      body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL\n    ) STRICT",
+        "CREATE TABLE readiness_milestones (\n      installation_id TEXT NOT NULL,\n      group_key TEXT NOT NULL,\n      first_attempt_id TEXT NOT NULL,\n      second_attempt_id TEXT NOT NULL,\n      earned_at INTEGER NOT NULL,\n      body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n      PRIMARY KEY (installation_id, group_key)\n    ) STRICT"
       ],
       "rows": {
         "meta": [
@@ -1263,7 +1280,7 @@ export const RECORDED_STORE_SCHEMA_3: RecordedStoreSchema = {
           },
           {
             "name": "schema_version",
-            "value": "3"
+            "value": "4"
           }
         ],
         "activities": [
@@ -1344,7 +1361,8 @@ export const RECORDED_STORE_SCHEMA_3: RecordedStoreSchema = {
         "challenge_charges": [],
         "challenge_attempt_records": [],
         "device_preferences": [],
-        "lesson_progress_events": []
+        "lesson_progress_events": [],
+        "readiness_milestones": []
       }
     },
     {
@@ -1383,7 +1401,8 @@ export const RECORDED_STORE_SCHEMA_3: RecordedStoreSchema = {
         "CREATE TABLE challenge_charges (\n        attempt_id TEXT PRIMARY KEY REFERENCES challenge_attempts (attempt_id),\n        body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL\n      ) STRICT",
         "CREATE TABLE challenge_attempt_records (\n        attempt_id TEXT PRIMARY KEY REFERENCES challenge_attempts (attempt_id),\n        device_sequence INTEGER NOT NULL UNIQUE,\n        body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL\n      ) STRICT",
         "CREATE TABLE device_preferences (key TEXT PRIMARY KEY, value TEXT NOT NULL) STRICT",
-        "CREATE TABLE lesson_progress_events (\n      event_id TEXT PRIMARY KEY,\n      device_sequence INTEGER NOT NULL UNIQUE,\n      body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL\n    ) STRICT"
+        "CREATE TABLE lesson_progress_events (\n      event_id TEXT PRIMARY KEY,\n      device_sequence INTEGER NOT NULL UNIQUE,\n      body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL\n    ) STRICT",
+        "CREATE TABLE readiness_milestones (\n      installation_id TEXT NOT NULL,\n      group_key TEXT NOT NULL,\n      first_attempt_id TEXT NOT NULL,\n      second_attempt_id TEXT NOT NULL,\n      earned_at INTEGER NOT NULL,\n      body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n      PRIMARY KEY (installation_id, group_key)\n    ) STRICT"
       ],
       "rows": {
         "meta": [
@@ -1401,7 +1420,7 @@ export const RECORDED_STORE_SCHEMA_3: RecordedStoreSchema = {
           },
           {
             "name": "schema_version",
-            "value": "3"
+            "value": "4"
           }
         ],
         "activities": [
@@ -1482,7 +1501,8 @@ export const RECORDED_STORE_SCHEMA_3: RecordedStoreSchema = {
         "challenge_charges": [],
         "challenge_attempt_records": [],
         "device_preferences": [],
-        "lesson_progress_events": []
+        "lesson_progress_events": [],
+        "readiness_milestones": []
       }
     },
     {
@@ -1516,7 +1536,8 @@ export const RECORDED_STORE_SCHEMA_3: RecordedStoreSchema = {
         "CREATE TABLE challenge_charges (\n        attempt_id TEXT PRIMARY KEY REFERENCES challenge_attempts (attempt_id),\n        body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL\n      ) STRICT",
         "CREATE TABLE challenge_attempt_records (\n        attempt_id TEXT PRIMARY KEY REFERENCES challenge_attempts (attempt_id),\n        device_sequence INTEGER NOT NULL UNIQUE,\n        body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL\n      ) STRICT",
         "CREATE TABLE device_preferences (key TEXT PRIMARY KEY, value TEXT NOT NULL) STRICT",
-        "CREATE TABLE lesson_progress_events (\n      event_id TEXT PRIMARY KEY,\n      device_sequence INTEGER NOT NULL UNIQUE,\n      body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL\n    ) STRICT"
+        "CREATE TABLE lesson_progress_events (\n      event_id TEXT PRIMARY KEY,\n      device_sequence INTEGER NOT NULL UNIQUE,\n      body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL\n    ) STRICT",
+        "CREATE TABLE readiness_milestones (\n      installation_id TEXT NOT NULL,\n      group_key TEXT NOT NULL,\n      first_attempt_id TEXT NOT NULL,\n      second_attempt_id TEXT NOT NULL,\n      earned_at INTEGER NOT NULL,\n      body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n      PRIMARY KEY (installation_id, group_key)\n    ) STRICT"
       ],
       "rows": {
         "meta": [
@@ -1534,7 +1555,7 @@ export const RECORDED_STORE_SCHEMA_3: RecordedStoreSchema = {
           },
           {
             "name": "schema_version",
-            "value": "3"
+            "value": "4"
           }
         ],
         "activities": [
@@ -1856,7 +1877,8 @@ export const RECORDED_STORE_SCHEMA_3: RecordedStoreSchema = {
         "challenge_charges": [],
         "challenge_attempt_records": [],
         "device_preferences": [],
-        "lesson_progress_events": []
+        "lesson_progress_events": [],
+        "readiness_milestones": []
       }
     },
     {
@@ -1890,7 +1912,8 @@ export const RECORDED_STORE_SCHEMA_3: RecordedStoreSchema = {
         "CREATE TABLE challenge_charges (\n        attempt_id TEXT PRIMARY KEY REFERENCES challenge_attempts (attempt_id),\n        body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL\n      ) STRICT",
         "CREATE TABLE challenge_attempt_records (\n        attempt_id TEXT PRIMARY KEY REFERENCES challenge_attempts (attempt_id),\n        device_sequence INTEGER NOT NULL UNIQUE,\n        body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL\n      ) STRICT",
         "CREATE TABLE device_preferences (key TEXT PRIMARY KEY, value TEXT NOT NULL) STRICT",
-        "CREATE TABLE lesson_progress_events (\n      event_id TEXT PRIMARY KEY,\n      device_sequence INTEGER NOT NULL UNIQUE,\n      body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL\n    ) STRICT"
+        "CREATE TABLE lesson_progress_events (\n      event_id TEXT PRIMARY KEY,\n      device_sequence INTEGER NOT NULL UNIQUE,\n      body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL\n    ) STRICT",
+        "CREATE TABLE readiness_milestones (\n      installation_id TEXT NOT NULL,\n      group_key TEXT NOT NULL,\n      first_attempt_id TEXT NOT NULL,\n      second_attempt_id TEXT NOT NULL,\n      earned_at INTEGER NOT NULL,\n      body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,\n      PRIMARY KEY (installation_id, group_key)\n    ) STRICT"
       ],
       "rows": {
         "meta": [
@@ -1908,7 +1931,7 @@ export const RECORDED_STORE_SCHEMA_3: RecordedStoreSchema = {
           },
           {
             "name": "schema_version",
-            "value": "3"
+            "value": "4"
           }
         ],
         "activities": [],
@@ -1969,20 +1992,20 @@ export const RECORDED_STORE_SCHEMA_3: RecordedStoreSchema = {
             "position": 1,
             "status": "ended",
             "sequence": 41,
-            "body": "{\"admission\":{\"meteringBasis\":\"challenge-attempt\",\"provenance\":\"recorded\"},\"attemptId\":\"attempt-1\",\"checkpoint\":\"{\\\"answers\\\":[{\\\"first\\\":1,\\\"last\\\":1,\\\"position\\\":0,\\\"tries\\\":1},{\\\"first\\\":0,\\\"last\\\":0,\\\"position\\\":1,\\\"tries\\\":1},{\\\"first\\\":0,\\\"last\\\":0,\\\"position\\\":2,\\\"tries\\\":1},{\\\"first\\\":0,\\\"last\\\":0,\\\"position\\\":3,\\\"tries\\\":1},{\\\"first\\\":0,\\\"last\\\":0,\\\"position\\\":4,\\\"tries\\\":1},{\\\"first\\\":0,\\\"last\\\":0,\\\"position\\\":5,\\\"tries\\\":1},{\\\"first\\\":0,\\\"last\\\":0,\\\"position\\\":6,\\\"tries\\\":1},{\\\"first\\\":0,\\\"last\\\":0,\\\"position\\\":7,\\\"tries\\\":1},{\\\"first\\\":0,\\\"last\\\":0,\\\"position\\\":8,\\\"tries\\\":1},{\\\"first\\\":0,\\\"last\\\":0,\\\"position\\\":9,\\\"tries\\\":1},{\\\"first\\\":0,\\\"last\\\":0,\\\"position\\\":10,\\\"tries\\\":1},{\\\"first\\\":0,\\\"last\\\":0,\\\"position\\\":11,\\\"tries\\\":1},{\\\"first\\\":0,\\\"last\\\":0,\\\"position\\\":12,\\\"tries\\\":1},{\\\"first\\\":0,\\\"last\\\":0,\\\"position\\\":13,\\\"tries\\\":1},{\\\"first\\\":0,\\\"last\\\":0,\\\"position\\\":14,\\\"tries\\\":1},{\\\"first\\\":0,\\\"last\\\":0,\\\"position\\\":15,\\\"tries\\\":1},{\\\"first\\\":0,\\\"last\\\":0,\\\"position\\\":16,\\\"tries\\\":1},{\\\"first\\\":0,\\\"last\\\":0,\\\"position\\\":17,\\\"tries\\\":1},{\\\"first\\\":0,\\\"last\\\":0,\\\"position\\\":18,\\\"tries\\\":1},{\\\"first\\\":0,\\\"last\\\":0,\\\"position\\\":19,\\\"tries\\\":1}],\\\"attempt\\\":{\\\"device\\\":\\\"recorded-installation\\\",\\\"id\\\":\\\"attempt-1\\\",\\\"owner\\\":\\\"recorded-account\\\"},\\\"content\\\":{\\\"category\\\":\\\"card-values\\\",\\\"coverage\\\":\\\"every-rank\\\",\\\"id\\\":\\\"card-values\\\",\\\"length\\\":20,\\\"version\\\":1},\\\"ending\\\":\\\"completed\\\",\\\"identities\\\":{\\\"category\\\":\\\"card-values\\\",\\\"content\\\":{\\\"id\\\":\\\"card-values\\\",\\\"version\\\":1},\\\"engine\\\":\\\"0.0.0\\\",\\\"random\\\":{\\\"key\\\":[1,2654435769],\\\"protocol\\\":1,\\\"session\\\":[8,0]},\\\"reference\\\":null},\\\"items\\\":[{\\\"card\\\":{\\\"rank\\\":5,\\\"suit\\\":\\\"diamonds\\\"}},{\\\"card\\\":{\\\"rank\\\":7,\\\"suit\\\":\\\"diamonds\\\"}},{\\\"card\\\":{\\\"rank\\\":10,\\\"suit\\\":\\\"clubs\\\"}},{\\\"card\\\":{\\\"rank\\\":2,\\\"suit\\\":\\\"clubs\\\"}},{\\\"card\\\":{\\\"rank\\\":7,\\\"suit\\\":\\\"hearts\\\"}},{\\\"card\\\":{\\\"rank\\\":2,\\\"suit\\\":\\\"spades\\\"}},{\\\"card\\\":{\\\"rank\\\":11,\\\"suit\\\":\\\"hearts\\\"}},{\\\"card\\\":{\\\"rank\\\":4,\\\"suit\\\":\\\"spades\\\"}},{\\\"card\\\":{\\\"rank\\\":6,\\\"suit\\\":\\\"hearts\\\"}},{\\\"card\\\":{\\\"rank\\\":11,\\\"suit\\\":\\\"clubs\\\"}},{\\\"card\\\":{\\\"rank\\\":12,\\\"suit\\\":\\\"diamonds\\\"}},{\\\"card\\\":{\\\"rank\\\":9,\\\"suit\\\":\\\"hearts\\\"}},{\\\"card\\\":{\\\"rank\\\":2,\\\"suit\\\":\\\"diamonds\\\"}},{\\\"card\\\":{\\\"rank\\\":6,\\\"suit\\\":\\\"hearts\\\"}},{\\\"card\\\":{\\\"rank\\\":2,\\\"suit\\\":\\\"spades\\\"}},{\\\"card\\\":{\\\"rank\\\":1,\\\"suit\\\":\\\"clubs\\\"}},{\\\"card\\\":{\\\"rank\\\":9,\\\"suit\\\":\\\"spades\\\"}},{\\\"card\\\":{\\\"rank\\\":8,\\\"suit\\\":\\\"diamonds\\\"}},{\\\"card\\\":{\\\"rank\\\":3,\\\"suit\\\":\\\"clubs\\\"}},{\\\"card\\\":{\\\"rank\\\":13,\\\"suit\\\":\\\"spades\\\"}}],\\\"phase\\\":\\\"ended\\\",\\\"position\\\":20,\\\"random\\\":{\\\"block\\\":[200,0],\\\"exhausted\\\":false,\\\"key\\\":[1,2654435769],\\\"lane\\\":0,\\\"protocol\\\":1,\\\"session\\\":[8,0]},\\\"receipts\\\":[{\\\"command\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"begin\\\\\\\"}\\\",\\\"commandId\\\":\\\"attempt-1/0\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":0},{\\\"command\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"answer\\\\\\\",\\\\\\\"value\\\\\\\":1}\\\",\\\"commandId\\\":\\\"attempt-1/1\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":1},{\\\"command\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"next-item\\\\\\\"}\\\",\\\"commandId\\\":\\\"attempt-1/2\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":2},{\\\"command\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"answer\\\\\\\",\\\\\\\"value\\\\\\\":0}\\\",\\\"commandId\\\":\\\"attempt-1/3\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":3},{\\\"command\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"next-item\\\\\\\"}\\\",\\\"commandId\\\":\\\"attempt-1/4\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":4},{\\\"command\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"answer\\\\\\\",\\\\\\\"value\\\\\\\":0}\\\",\\\"commandId\\\":\\\"attempt-1/5\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":5},{\\\"command\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"next-item\\\\\\\"}\\\",\\\"commandId\\\":\\\"attempt-1/6\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":6},{\\\"command\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"answer\\\\\\\",\\\\\\\"value\\\\\\\":0}\\\",\\\"commandId\\\":\\\"attempt-1/7\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":7},{\\\"command\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"next-item\\\\\\\"}\\\",\\\"commandId\\\":\\\"attempt-1/8\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":8},{\\\"command\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"answer\\\\\\\",\\\\\\\"value\\\\\\\":0}\\\",\\\"commandId\\\":\\\"attempt-1/9\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":9},{\\\"command\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"next-item\\\\\\\"}\\\",\\\"commandId\\\":\\\"attempt-1/10\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":10},{\\\"command\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"answer\\\\\\\",\\\\\\\"value\\\\\\\":0}\\\",\\\"commandId\\\":\\\"attempt-1/11\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":11},{\\\"command\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"next-item\\\\\\\"}\\\",\\\"commandId\\\":\\\"attempt-1/12\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":12},{\\\"command\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"answer\\\\\\\",\\\\\\\"value\\\\\\\":0}\\\",\\\"commandId\\\":\\\"attempt-1/13\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":13},{\\\"command\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"next-item\\\\\\\"}\\\",\\\"commandId\\\":\\\"attempt-1/14\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":14},{\\\"command\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"answer\\\\\\\",\\\\\\\"value\\\\\\\":0}\\\",\\\"commandId\\\":\\\"attempt-1/15\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":15},{\\\"command\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"next-item\\\\\\\"}\\\",\\\"commandId\\\":\\\"attempt-1/16\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":16},{\\\"command\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"answer\\\\\\\",\\\\\\\"value\\\\\\\":0}\\\",\\\"commandId\\\":\\\"attempt-1/17\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":17},{\\\"command\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"next-item\\\\\\\"}\\\",\\\"commandId\\\":\\\"attempt-1/18\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":18},{\\\"command\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"answer\\\\\\\",\\\\\\\"value\\\\\\\":0}\\\",\\\"commandId\\\":\\\"attempt-1/19\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":19},{\\\"command\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"next-item\\\\\\\"}\\\",\\\"commandId\\\":\\\"attempt-1/20\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":20},{\\\"command\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"answer\\\\\\\",\\\\\\\"value\\\\\\\":0}\\\",\\\"commandId\\\":\\\"attempt-1/21\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":21},{\\\"command\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"next-item\\\\\\\"}\\\",\\\"commandId\\\":\\\"attempt-1/22\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":22},{\\\"command\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"answer\\\\\\\",\\\\\\\"value\\\\\\\":0}\\\",\\\"commandId\\\":\\\"attempt-1/23\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":23},{\\\"command\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"next-item\\\\\\\"}\\\",\\\"commandId\\\":\\\"attempt-1/24\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":24},{\\\"command\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"answer\\\\\\\",\\\\\\\"value\\\\\\\":0}\\\",\\\"commandId\\\":\\\"attempt-1/25\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":25},{\\\"command\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"next-item\\\\\\\"}\\\",\\\"commandId\\\":\\\"attempt-1/26\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":26},{\\\"command\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"answer\\\\\\\",\\\\\\\"value\\\\\\\":0}\\\",\\\"commandId\\\":\\\"attempt-1/27\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":27},{\\\"command\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"next-item\\\\\\\"}\\\",\\\"commandId\\\":\\\"attempt-1/28\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":28},{\\\"command\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"answer\\\\\\\",\\\\\\\"value\\\\\\\":0}\\\",\\\"commandId\\\":\\\"attempt-1/29\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":29},{\\\"command\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"next-item\\\\\\\"}\\\",\\\"commandId\\\":\\\"attempt-1/30\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":30},{\\\"command\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"answer\\\\\\\",\\\\\\\"value\\\\\\\":0}\\\",\\\"commandId\\\":\\\"attempt-1/31\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":31},{\\\"command\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"next-item\\\\\\\"}\\\",\\\"commandId\\\":\\\"attempt-1/32\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":32},{\\\"command\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"answer\\\\\\\",\\\\\\\"value\\\\\\\":0}\\\",\\\"commandId\\\":\\\"attempt-1/33\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":33},{\\\"command\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"next-item\\\\\\\"}\\\",\\\"commandId\\\":\\\"attempt-1/34\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":34},{\\\"command\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"answer\\\\\\\",\\\\\\\"value\\\\\\\":0}\\\",\\\"commandId\\\":\\\"attempt-1/35\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":35},{\\\"command\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"next-item\\\\\\\"}\\\",\\\"commandId\\\":\\\"attempt-1/36\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":36},{\\\"command\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"answer\\\\\\\",\\\\\\\"value\\\\\\\":0}\\\",\\\"commandId\\\":\\\"attempt-1/37\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":37},{\\\"command\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"next-item\\\\\\\"}\\\",\\\"commandId\\\":\\\"attempt-1/38\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":38},{\\\"command\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"answer\\\\\\\",\\\\\\\"value\\\\\\\":0}\\\",\\\"commandId\\\":\\\"attempt-1/39\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":39},{\\\"command\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"next-item\\\\\\\"}\\\",\\\"commandId\\\":\\\"attempt-1/40\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":40}],\\\"rejected\\\":39,\\\"revealedAt\\\":null,\\\"schema\\\":11,\\\"sequence\\\":41,\\\"table\\\":null,\\\"variant\\\":\\\"learn\\\"}\",\"createdAt\":1790000000000,\"random\":{\"key\":[1,2654435769],\"protocol\":1,\"session\":[8,0]},\"specification\":{\"attemptId\":\"attempt-1\",\"content\":{\"category\":\"card-values\",\"coverage\":\"every-rank\",\"id\":\"card-values\",\"length\":20,\"version\":1},\"device\":\"recorded-installation\",\"owner\":\"recorded-account\",\"variant\":\"learn\"}}",
+            "body": "{\"admission\":{\"meteringBasis\":\"challenge-attempt\",\"provenance\":\"recorded\"},\"attemptId\":\"attempt-1\",\"checkpoint\":\"{\\\"answers\\\":[{\\\"first\\\":1,\\\"last\\\":1,\\\"position\\\":0,\\\"tries\\\":1},{\\\"first\\\":0,\\\"last\\\":0,\\\"position\\\":1,\\\"tries\\\":1},{\\\"first\\\":0,\\\"last\\\":0,\\\"position\\\":2,\\\"tries\\\":1},{\\\"first\\\":0,\\\"last\\\":0,\\\"position\\\":3,\\\"tries\\\":1},{\\\"first\\\":0,\\\"last\\\":0,\\\"position\\\":4,\\\"tries\\\":1},{\\\"first\\\":0,\\\"last\\\":0,\\\"position\\\":5,\\\"tries\\\":1},{\\\"first\\\":0,\\\"last\\\":0,\\\"position\\\":6,\\\"tries\\\":1},{\\\"first\\\":0,\\\"last\\\":0,\\\"position\\\":7,\\\"tries\\\":1},{\\\"first\\\":0,\\\"last\\\":0,\\\"position\\\":8,\\\"tries\\\":1},{\\\"first\\\":0,\\\"last\\\":0,\\\"position\\\":9,\\\"tries\\\":1},{\\\"first\\\":0,\\\"last\\\":0,\\\"position\\\":10,\\\"tries\\\":1},{\\\"first\\\":0,\\\"last\\\":0,\\\"position\\\":11,\\\"tries\\\":1},{\\\"first\\\":0,\\\"last\\\":0,\\\"position\\\":12,\\\"tries\\\":1},{\\\"first\\\":0,\\\"last\\\":0,\\\"position\\\":13,\\\"tries\\\":1},{\\\"first\\\":0,\\\"last\\\":0,\\\"position\\\":14,\\\"tries\\\":1},{\\\"first\\\":0,\\\"last\\\":0,\\\"position\\\":15,\\\"tries\\\":1},{\\\"first\\\":0,\\\"last\\\":0,\\\"position\\\":16,\\\"tries\\\":1},{\\\"first\\\":0,\\\"last\\\":0,\\\"position\\\":17,\\\"tries\\\":1},{\\\"first\\\":0,\\\"last\\\":0,\\\"position\\\":18,\\\"tries\\\":1},{\\\"first\\\":0,\\\"last\\\":0,\\\"position\\\":19,\\\"tries\\\":1}],\\\"attempt\\\":{\\\"device\\\":\\\"recorded-installation\\\",\\\"id\\\":\\\"attempt-1\\\",\\\"owner\\\":\\\"recorded-account\\\"},\\\"content\\\":{\\\"category\\\":\\\"card-values\\\",\\\"coverage\\\":\\\"every-rank\\\",\\\"id\\\":\\\"card-values\\\",\\\"length\\\":20,\\\"version\\\":1},\\\"ending\\\":\\\"completed\\\",\\\"identities\\\":{\\\"category\\\":\\\"card-values\\\",\\\"content\\\":{\\\"id\\\":\\\"card-values\\\",\\\"version\\\":1},\\\"engine\\\":\\\"0.0.0\\\",\\\"random\\\":{\\\"key\\\":[1,2654435769],\\\"protocol\\\":1,\\\"session\\\":[8,0]},\\\"reference\\\":null},\\\"items\\\":[{\\\"card\\\":{\\\"rank\\\":5,\\\"suit\\\":\\\"diamonds\\\"}},{\\\"card\\\":{\\\"rank\\\":7,\\\"suit\\\":\\\"diamonds\\\"}},{\\\"card\\\":{\\\"rank\\\":10,\\\"suit\\\":\\\"clubs\\\"}},{\\\"card\\\":{\\\"rank\\\":2,\\\"suit\\\":\\\"clubs\\\"}},{\\\"card\\\":{\\\"rank\\\":7,\\\"suit\\\":\\\"hearts\\\"}},{\\\"card\\\":{\\\"rank\\\":2,\\\"suit\\\":\\\"spades\\\"}},{\\\"card\\\":{\\\"rank\\\":11,\\\"suit\\\":\\\"hearts\\\"}},{\\\"card\\\":{\\\"rank\\\":4,\\\"suit\\\":\\\"spades\\\"}},{\\\"card\\\":{\\\"rank\\\":6,\\\"suit\\\":\\\"hearts\\\"}},{\\\"card\\\":{\\\"rank\\\":11,\\\"suit\\\":\\\"clubs\\\"}},{\\\"card\\\":{\\\"rank\\\":12,\\\"suit\\\":\\\"diamonds\\\"}},{\\\"card\\\":{\\\"rank\\\":9,\\\"suit\\\":\\\"hearts\\\"}},{\\\"card\\\":{\\\"rank\\\":2,\\\"suit\\\":\\\"diamonds\\\"}},{\\\"card\\\":{\\\"rank\\\":6,\\\"suit\\\":\\\"hearts\\\"}},{\\\"card\\\":{\\\"rank\\\":2,\\\"suit\\\":\\\"spades\\\"}},{\\\"card\\\":{\\\"rank\\\":1,\\\"suit\\\":\\\"clubs\\\"}},{\\\"card\\\":{\\\"rank\\\":9,\\\"suit\\\":\\\"spades\\\"}},{\\\"card\\\":{\\\"rank\\\":8,\\\"suit\\\":\\\"diamonds\\\"}},{\\\"card\\\":{\\\"rank\\\":3,\\\"suit\\\":\\\"clubs\\\"}},{\\\"card\\\":{\\\"rank\\\":13,\\\"suit\\\":\\\"spades\\\"}}],\\\"phase\\\":\\\"ended\\\",\\\"position\\\":20,\\\"random\\\":{\\\"block\\\":[200,0],\\\"exhausted\\\":false,\\\"key\\\":[1,2654435769],\\\"lane\\\":0,\\\"protocol\\\":1,\\\"session\\\":[8,0]},\\\"receipts\\\":[{\\\"command\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"begin\\\\\\\"}\\\",\\\"commandId\\\":\\\"attempt-1/0\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":0},{\\\"command\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"answer\\\\\\\",\\\\\\\"value\\\\\\\":1}\\\",\\\"commandId\\\":\\\"attempt-1/1\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":1},{\\\"command\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"next-item\\\\\\\"}\\\",\\\"commandId\\\":\\\"attempt-1/2\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":2},{\\\"command\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"answer\\\\\\\",\\\\\\\"value\\\\\\\":0}\\\",\\\"commandId\\\":\\\"attempt-1/3\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":3},{\\\"command\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"next-item\\\\\\\"}\\\",\\\"commandId\\\":\\\"attempt-1/4\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":4},{\\\"command\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"answer\\\\\\\",\\\\\\\"value\\\\\\\":0}\\\",\\\"commandId\\\":\\\"attempt-1/5\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":5},{\\\"command\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"next-item\\\\\\\"}\\\",\\\"commandId\\\":\\\"attempt-1/6\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":6},{\\\"command\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"answer\\\\\\\",\\\\\\\"value\\\\\\\":0}\\\",\\\"commandId\\\":\\\"attempt-1/7\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":7},{\\\"command\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"next-item\\\\\\\"}\\\",\\\"commandId\\\":\\\"attempt-1/8\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":8},{\\\"command\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"answer\\\\\\\",\\\\\\\"value\\\\\\\":0}\\\",\\\"commandId\\\":\\\"attempt-1/9\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":9},{\\\"command\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"next-item\\\\\\\"}\\\",\\\"commandId\\\":\\\"attempt-1/10\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":10},{\\\"command\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"answer\\\\\\\",\\\\\\\"value\\\\\\\":0}\\\",\\\"commandId\\\":\\\"attempt-1/11\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":11},{\\\"command\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"next-item\\\\\\\"}\\\",\\\"commandId\\\":\\\"attempt-1/12\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":12},{\\\"command\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"answer\\\\\\\",\\\\\\\"value\\\\\\\":0}\\\",\\\"commandId\\\":\\\"attempt-1/13\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":13},{\\\"command\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"next-item\\\\\\\"}\\\",\\\"commandId\\\":\\\"attempt-1/14\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":14},{\\\"command\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"answer\\\\\\\",\\\\\\\"value\\\\\\\":0}\\\",\\\"commandId\\\":\\\"attempt-1/15\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":15},{\\\"command\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"next-item\\\\\\\"}\\\",\\\"commandId\\\":\\\"attempt-1/16\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":16},{\\\"command\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"answer\\\\\\\",\\\\\\\"value\\\\\\\":0}\\\",\\\"commandId\\\":\\\"attempt-1/17\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":17},{\\\"command\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"next-item\\\\\\\"}\\\",\\\"commandId\\\":\\\"attempt-1/18\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":18},{\\\"command\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"answer\\\\\\\",\\\\\\\"value\\\\\\\":0}\\\",\\\"commandId\\\":\\\"attempt-1/19\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":19},{\\\"command\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"next-item\\\\\\\"}\\\",\\\"commandId\\\":\\\"attempt-1/20\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":20},{\\\"command\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"answer\\\\\\\",\\\\\\\"value\\\\\\\":0}\\\",\\\"commandId\\\":\\\"attempt-1/21\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":21},{\\\"command\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"next-item\\\\\\\"}\\\",\\\"commandId\\\":\\\"attempt-1/22\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":22},{\\\"command\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"answer\\\\\\\",\\\\\\\"value\\\\\\\":0}\\\",\\\"commandId\\\":\\\"attempt-1/23\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":23},{\\\"command\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"next-item\\\\\\\"}\\\",\\\"commandId\\\":\\\"attempt-1/24\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":24},{\\\"command\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"answer\\\\\\\",\\\\\\\"value\\\\\\\":0}\\\",\\\"commandId\\\":\\\"attempt-1/25\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":25},{\\\"command\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"next-item\\\\\\\"}\\\",\\\"commandId\\\":\\\"attempt-1/26\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":26},{\\\"command\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"answer\\\\\\\",\\\\\\\"value\\\\\\\":0}\\\",\\\"commandId\\\":\\\"attempt-1/27\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":27},{\\\"command\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"next-item\\\\\\\"}\\\",\\\"commandId\\\":\\\"attempt-1/28\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":28},{\\\"command\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"answer\\\\\\\",\\\\\\\"value\\\\\\\":0}\\\",\\\"commandId\\\":\\\"attempt-1/29\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":29},{\\\"command\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"next-item\\\\\\\"}\\\",\\\"commandId\\\":\\\"attempt-1/30\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":30},{\\\"command\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"answer\\\\\\\",\\\\\\\"value\\\\\\\":0}\\\",\\\"commandId\\\":\\\"attempt-1/31\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":31},{\\\"command\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"next-item\\\\\\\"}\\\",\\\"commandId\\\":\\\"attempt-1/32\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":32},{\\\"command\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"answer\\\\\\\",\\\\\\\"value\\\\\\\":0}\\\",\\\"commandId\\\":\\\"attempt-1/33\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":33},{\\\"command\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"next-item\\\\\\\"}\\\",\\\"commandId\\\":\\\"attempt-1/34\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":34},{\\\"command\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"answer\\\\\\\",\\\\\\\"value\\\\\\\":0}\\\",\\\"commandId\\\":\\\"attempt-1/35\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":35},{\\\"command\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"next-item\\\\\\\"}\\\",\\\"commandId\\\":\\\"attempt-1/36\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":36},{\\\"command\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"answer\\\\\\\",\\\\\\\"value\\\\\\\":0}\\\",\\\"commandId\\\":\\\"attempt-1/37\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":37},{\\\"command\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"next-item\\\\\\\"}\\\",\\\"commandId\\\":\\\"attempt-1/38\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":38},{\\\"command\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"answer\\\\\\\",\\\\\\\"value\\\\\\\":0}\\\",\\\"commandId\\\":\\\"attempt-1/39\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":39},{\\\"command\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"next-item\\\\\\\"}\\\",\\\"commandId\\\":\\\"attempt-1/40\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":40}],\\\"rejected\\\":39,\\\"revealedAt\\\":null,\\\"schema\\\":11,\\\"sequence\\\":41,\\\"table\\\":null,\\\"variant\\\":\\\"learn\\\"}\",\"createdAt\":1790000000000,\"lifecycle\":{\"interrupted\":false,\"pacing\":\"self-paced\",\"performanceMs\":0,\"timed\":false},\"random\":{\"key\":[1,2654435769],\"protocol\":1,\"session\":[8,0]},\"specification\":{\"attemptId\":\"attempt-1\",\"content\":{\"category\":\"card-values\",\"coverage\":\"every-rank\",\"id\":\"card-values\",\"length\":20,\"version\":1},\"device\":\"recorded-installation\",\"owner\":\"recorded-account\",\"variant\":\"learn\"}}",
             "body_format": 1,
-            "body_length": 8523,
-            "body_sha256": "b5fc02ba89ccf16d378eb0c7bb76e7f12975fdcde132d5995f0b1af5d6953fa6"
+            "body_length": 8611,
+            "body_sha256": "ec240f3bb34c00eed044223dd69a688d84800771ae6de639c76daf26866d0839"
           },
           {
             "attempt_id": "attempt-2",
             "position": 2,
             "status": "unfinished",
             "sequence": 3,
-            "body": "{\"admission\":{\"meteringBasis\":\"challenge-attempt\",\"provenance\":\"recorded\"},\"attemptId\":\"attempt-2\",\"checkpoint\":\"{\\\"answers\\\":[{\\\"first\\\":1,\\\"last\\\":1,\\\"position\\\":0,\\\"tries\\\":1}],\\\"attempt\\\":{\\\"device\\\":\\\"recorded-installation\\\",\\\"id\\\":\\\"attempt-2\\\",\\\"owner\\\":\\\"recorded-account\\\"},\\\"content\\\":{\\\"category\\\":\\\"card-values\\\",\\\"coverage\\\":\\\"every-rank\\\",\\\"id\\\":\\\"card-values\\\",\\\"length\\\":20,\\\"version\\\":1},\\\"ending\\\":null,\\\"identities\\\":{\\\"category\\\":\\\"card-values\\\",\\\"content\\\":{\\\"id\\\":\\\"card-values\\\",\\\"version\\\":1},\\\"engine\\\":\\\"0.0.0\\\",\\\"random\\\":{\\\"key\\\":[1,2654435769],\\\"protocol\\\":1,\\\"session\\\":[8,0]},\\\"reference\\\":null},\\\"items\\\":[{\\\"card\\\":{\\\"rank\\\":5,\\\"suit\\\":\\\"diamonds\\\"}},{\\\"card\\\":{\\\"rank\\\":7,\\\"suit\\\":\\\"diamonds\\\"}},{\\\"card\\\":{\\\"rank\\\":10,\\\"suit\\\":\\\"clubs\\\"}},{\\\"card\\\":{\\\"rank\\\":2,\\\"suit\\\":\\\"clubs\\\"}},{\\\"card\\\":{\\\"rank\\\":7,\\\"suit\\\":\\\"hearts\\\"}},{\\\"card\\\":{\\\"rank\\\":2,\\\"suit\\\":\\\"spades\\\"}},{\\\"card\\\":{\\\"rank\\\":11,\\\"suit\\\":\\\"hearts\\\"}},{\\\"card\\\":{\\\"rank\\\":4,\\\"suit\\\":\\\"spades\\\"}},{\\\"card\\\":{\\\"rank\\\":6,\\\"suit\\\":\\\"hearts\\\"}},{\\\"card\\\":{\\\"rank\\\":11,\\\"suit\\\":\\\"clubs\\\"}},{\\\"card\\\":{\\\"rank\\\":12,\\\"suit\\\":\\\"diamonds\\\"}},{\\\"card\\\":{\\\"rank\\\":9,\\\"suit\\\":\\\"hearts\\\"}},{\\\"card\\\":{\\\"rank\\\":2,\\\"suit\\\":\\\"diamonds\\\"}},{\\\"card\\\":{\\\"rank\\\":6,\\\"suit\\\":\\\"hearts\\\"}},{\\\"card\\\":{\\\"rank\\\":2,\\\"suit\\\":\\\"spades\\\"}},{\\\"card\\\":{\\\"rank\\\":1,\\\"suit\\\":\\\"clubs\\\"}},{\\\"card\\\":{\\\"rank\\\":9,\\\"suit\\\":\\\"spades\\\"}},{\\\"card\\\":{\\\"rank\\\":8,\\\"suit\\\":\\\"diamonds\\\"}},{\\\"card\\\":{\\\"rank\\\":3,\\\"suit\\\":\\\"clubs\\\"}},{\\\"card\\\":{\\\"rank\\\":13,\\\"suit\\\":\\\"spades\\\"}}],\\\"phase\\\":\\\"question\\\",\\\"position\\\":1,\\\"random\\\":{\\\"block\\\":[200,0],\\\"exhausted\\\":false,\\\"key\\\":[1,2654435769],\\\"lane\\\":0,\\\"protocol\\\":1,\\\"session\\\":[8,0]},\\\"receipts\\\":[{\\\"command\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"begin\\\\\\\"}\\\",\\\"commandId\\\":\\\"attempt-2/0\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":0},{\\\"command\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"answer\\\\\\\",\\\\\\\"value\\\\\\\":1}\\\",\\\"commandId\\\":\\\"attempt-2/1\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":1},{\\\"command\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"next-item\\\\\\\"}\\\",\\\"commandId\\\":\\\"attempt-2/2\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":2}],\\\"rejected\\\":39,\\\"revealedAt\\\":null,\\\"schema\\\":11,\\\"sequence\\\":3,\\\"table\\\":null,\\\"variant\\\":\\\"learn\\\"}\",\"createdAt\":1790000000000,\"random\":{\"key\":[1,2654435769],\"protocol\":1,\"session\":[8,0]},\"specification\":{\"attemptId\":\"attempt-2\",\"content\":{\"category\":\"card-values\",\"coverage\":\"every-rank\",\"id\":\"card-values\",\"length\":20,\"version\":1},\"device\":\"recorded-installation\",\"owner\":\"recorded-account\",\"variant\":\"learn\"}}",
+            "body": "{\"admission\":{\"meteringBasis\":\"challenge-attempt\",\"provenance\":\"recorded\"},\"attemptId\":\"attempt-2\",\"checkpoint\":\"{\\\"answers\\\":[{\\\"first\\\":1,\\\"last\\\":1,\\\"position\\\":0,\\\"tries\\\":1}],\\\"attempt\\\":{\\\"device\\\":\\\"recorded-installation\\\",\\\"id\\\":\\\"attempt-2\\\",\\\"owner\\\":\\\"recorded-account\\\"},\\\"content\\\":{\\\"category\\\":\\\"card-values\\\",\\\"coverage\\\":\\\"every-rank\\\",\\\"id\\\":\\\"card-values\\\",\\\"length\\\":20,\\\"version\\\":1},\\\"ending\\\":null,\\\"identities\\\":{\\\"category\\\":\\\"card-values\\\",\\\"content\\\":{\\\"id\\\":\\\"card-values\\\",\\\"version\\\":1},\\\"engine\\\":\\\"0.0.0\\\",\\\"random\\\":{\\\"key\\\":[1,2654435769],\\\"protocol\\\":1,\\\"session\\\":[8,0]},\\\"reference\\\":null},\\\"items\\\":[{\\\"card\\\":{\\\"rank\\\":5,\\\"suit\\\":\\\"diamonds\\\"}},{\\\"card\\\":{\\\"rank\\\":7,\\\"suit\\\":\\\"diamonds\\\"}},{\\\"card\\\":{\\\"rank\\\":10,\\\"suit\\\":\\\"clubs\\\"}},{\\\"card\\\":{\\\"rank\\\":2,\\\"suit\\\":\\\"clubs\\\"}},{\\\"card\\\":{\\\"rank\\\":7,\\\"suit\\\":\\\"hearts\\\"}},{\\\"card\\\":{\\\"rank\\\":2,\\\"suit\\\":\\\"spades\\\"}},{\\\"card\\\":{\\\"rank\\\":11,\\\"suit\\\":\\\"hearts\\\"}},{\\\"card\\\":{\\\"rank\\\":4,\\\"suit\\\":\\\"spades\\\"}},{\\\"card\\\":{\\\"rank\\\":6,\\\"suit\\\":\\\"hearts\\\"}},{\\\"card\\\":{\\\"rank\\\":11,\\\"suit\\\":\\\"clubs\\\"}},{\\\"card\\\":{\\\"rank\\\":12,\\\"suit\\\":\\\"diamonds\\\"}},{\\\"card\\\":{\\\"rank\\\":9,\\\"suit\\\":\\\"hearts\\\"}},{\\\"card\\\":{\\\"rank\\\":2,\\\"suit\\\":\\\"diamonds\\\"}},{\\\"card\\\":{\\\"rank\\\":6,\\\"suit\\\":\\\"hearts\\\"}},{\\\"card\\\":{\\\"rank\\\":2,\\\"suit\\\":\\\"spades\\\"}},{\\\"card\\\":{\\\"rank\\\":1,\\\"suit\\\":\\\"clubs\\\"}},{\\\"card\\\":{\\\"rank\\\":9,\\\"suit\\\":\\\"spades\\\"}},{\\\"card\\\":{\\\"rank\\\":8,\\\"suit\\\":\\\"diamonds\\\"}},{\\\"card\\\":{\\\"rank\\\":3,\\\"suit\\\":\\\"clubs\\\"}},{\\\"card\\\":{\\\"rank\\\":13,\\\"suit\\\":\\\"spades\\\"}}],\\\"phase\\\":\\\"question\\\",\\\"position\\\":1,\\\"random\\\":{\\\"block\\\":[200,0],\\\"exhausted\\\":false,\\\"key\\\":[1,2654435769],\\\"lane\\\":0,\\\"protocol\\\":1,\\\"session\\\":[8,0]},\\\"receipts\\\":[{\\\"command\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"begin\\\\\\\"}\\\",\\\"commandId\\\":\\\"attempt-2/0\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":0},{\\\"command\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"answer\\\\\\\",\\\\\\\"value\\\\\\\":1}\\\",\\\"commandId\\\":\\\"attempt-2/1\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":1},{\\\"command\\\":\\\"{\\\\\\\"kind\\\\\\\":\\\\\\\"next-item\\\\\\\"}\\\",\\\"commandId\\\":\\\"attempt-2/2\\\",\\\"disposition\\\":\\\"applied\\\",\\\"sequence\\\":2}],\\\"rejected\\\":39,\\\"revealedAt\\\":null,\\\"schema\\\":11,\\\"sequence\\\":3,\\\"table\\\":null,\\\"variant\\\":\\\"learn\\\"}\",\"createdAt\":1790000000000,\"lifecycle\":{\"interrupted\":false,\"pacing\":\"self-paced\",\"performanceMs\":0,\"timed\":false},\"random\":{\"key\":[1,2654435769],\"protocol\":1,\"session\":[8,0]},\"specification\":{\"attemptId\":\"attempt-2\",\"content\":{\"category\":\"card-values\",\"coverage\":\"every-rank\",\"id\":\"card-values\",\"length\":20,\"version\":1},\"device\":\"recorded-installation\",\"owner\":\"recorded-account\",\"variant\":\"learn\"}}",
             "body_format": 1,
-            "body_length": 2496,
-            "body_sha256": "0dae26b6576b37212b2073bafcf23d3556f595966f9b6a1b0abe4c704e353205"
+            "body_length": 2584,
+            "body_sha256": "48959300908c4f4f844711d4edc077651e009e4a5ad5a6559660d4af7adf0a35"
           }
         ],
         "challenge_transitions": [
@@ -2431,6 +2454,19 @@ export const RECORDED_STORE_SCHEMA_3: RecordedStoreSchema = {
             "body_format": 1,
             "body_length": 261,
             "body_sha256": "68ef3fb9eaefae2ace36362efe80fff5e6e924447f909687d1c4d56dc0bbb26f"
+          }
+        ],
+        "readiness_milestones": [
+          {
+            "installation_id": "recorded-installation",
+            "group_key": "{\"assistanceClass\":\"unassisted-check\",\"category\":\"card-values\",\"content\":{\"id\":\"card-values\",\"version\":1},\"countRevealed\":false,\"length\":20,\"pacing\":\"self-paced\",\"reference\":null,\"table\":null,\"variant\":\"check\"}",
+            "first_attempt_id": "recorded-check-1",
+            "second_attempt_id": "recorded-check-2",
+            "earned_at": 1790000060000,
+            "body": "{\"attempts\":[\"recorded-check-1\",\"recorded-check-2\"],\"earnedAt\":1790000060000,\"groupKey\":{\"assistanceClass\":\"unassisted-check\",\"category\":\"card-values\",\"content\":{\"id\":\"card-values\",\"version\":1},\"countRevealed\":false,\"length\":20,\"pacing\":\"self-paced\",\"reference\":null,\"table\":null,\"variant\":\"check\"},\"installation\":\"recorded-installation\",\"owner\":\"recorded-account\",\"recordVersion\":1}",
+            "body_format": 1,
+            "body_length": 383,
+            "body_sha256": "51f6e9cdb19d17fc2ea36fa89250b06f46eb406216355404e6f6521bf03c050c"
           }
         ]
       },
