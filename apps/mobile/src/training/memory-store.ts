@@ -3,9 +3,10 @@ import type { ChallengeAttemptRecord, UnsequencedAttemptRecord } from '@tablesid
 
 import { StoreWriteError } from '../practice/memory-store';
 import type { LessonProgressEvent, UnsequencedLessonEvent } from './lesson-progress';
+import { milestoneSlot, type ReadinessMilestoneRecord } from './readiness-milestone';
 import { withLifecycle, type AttemptLifecycle, type AttemptCommitOutcome, type AttemptTransitionCommit, type CommittedAttemptTransition, type NewAttempt, type StoredAttempt, type TrainingStore } from './store';
 
-type Operation = 'createAttempt' | 'commitAttemptTransition' | 'saveAttemptLifecycle' | 'recordAttempt' | 'readAttemptReceipt' | 'writePreference' | 'recordLessonEvent';
+type Operation = 'createAttempt' | 'commitAttemptTransition' | 'saveAttemptLifecycle' | 'recordAttempt' | 'readAttemptReceipt' | 'writePreference' | 'recordLessonEvent' | 'recordMilestone';
 
 interface Row {
   attempt: string;
@@ -17,6 +18,7 @@ export class MemoryTrainingDisk {
   readonly preferences = new Map<string, string>();
   lastDeviceSequence = 0;
   readonly lessonEvents: string[] = [];
+  readonly milestones: string[] = [];
 }
 
 export class MemoryTrainingStore implements TrainingStore {
@@ -134,6 +136,21 @@ export class MemoryTrainingStore implements TrainingStore {
 
   readLessonEvents(): Promise<readonly LessonProgressEvent[]> {
     return this.enqueue(() => this.disk.lessonEvents.map((text) => parse<LessonProgressEvent>(text)));
+  }
+
+  // #141
+  recordMilestone(milestone: ReadinessMilestoneRecord): Promise<ReadinessMilestoneRecord> {
+    return this.injectable('recordMilestone', () => {
+      const group = milestoneSlot(milestone);
+      const existing = this.disk.milestones.map((text) => parse<ReadinessMilestoneRecord>(text)).find((earlier) => milestoneSlot(earlier) === group);
+      if (existing) return existing;
+      this.disk.milestones.push(JSON.stringify(milestone));
+      return clone(milestone);
+    });
+  }
+
+  readMilestones(): Promise<readonly ReadinessMilestoneRecord[]> {
+    return this.enqueue(() => this.disk.milestones.map((text) => parse<ReadinessMilestoneRecord>(text)));
   }
 
   private unfinished(): StoredAttempt | null {

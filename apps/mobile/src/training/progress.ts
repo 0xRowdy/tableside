@@ -1,10 +1,19 @@
 // Spec 3 Modules › Training service (Progress projection); Comparison groups; Amendment 1 C2; #140
 
+import { CATALOG_CATEGORIES, type CatalogCategory } from '@tableside/definitions';
 import { canonicalJson, CHALLENGE_METRICS, type ChallengeAttemptRecord, type ChallengeGroupKey, type ChallengeMetric, type MetricResult } from '@tableside/engine';
+
+import { milestoneSlot, READINESS_MILESTONE_RECORD_VERSION, type ReadinessMilestoneRecord } from './readiness-milestone';
 
 // Spec 3 Comparison groups (local and accepted attempts)
 export interface ProgressAttempt {
   readonly record: ChallengeAttemptRecord;
+  readonly local: boolean;
+}
+
+// Spec 3 Synchronized record types › Readiness milestone (local and accepted)
+export interface ProgressMilestone {
+  readonly record: ReadinessMilestoneRecord;
   readonly local: boolean;
 }
 
@@ -21,6 +30,14 @@ export interface GroupProgress {
   readonly completed: boolean;
   readonly bests: readonly PersonalBest[];
   readonly fastest: Fastest | null;
+  // Spec 3 Comparison groups (Milestones)
+  readonly milestone: EarnedMilestone | null;
+}
+
+export interface EarnedMilestone {
+  readonly earnedAt: number;
+  readonly local: boolean;
+  readonly record: ReadinessMilestoneRecord;
 }
 
 export interface Fastest {
@@ -31,17 +48,44 @@ export interface Fastest {
 export interface Progress {
   readonly groups: readonly GroupProgress[];
   readonly history: readonly ProgressAttempt[];
+  readonly recommendation: Recommendation;
 }
 
+// Spec 3 Comparison groups (Recommendations)
+export type TableStretch = 'play' | 'deviations' | 'more-players' | 'deeper-penetration' | 'larger-n';
+
+export type RecommendationReason =
+  | { readonly kind: 'start' }
+  | { readonly kind: 'next'; readonly after: CatalogCategory }
+  | { readonly kind: 'beyond'; readonly suggestions: readonly TableStretch[] };
+
+export interface Recommendation {
+  readonly category: CatalogCategory;
+  readonly reason: RecommendationReason;
+  readonly enter: 'observe' | null;
+}
+
+// Spec 3 Comparison groups (Milestones)
+export type ReadinessOutcome = { readonly kind: 'earned'; readonly next: CatalogCategory | null } | { readonly kind: 'kept'; readonly earnedAt: number };
+
 // Spec 3 Comparison groups › Milestones; Audio and haptics (cue 16)
-export interface AttemptEarned {
+export interface PersonalBestEarned {
   readonly bests: readonly ChallengeMetric[];
   readonly fastest: number | null;
 }
 
-export const NOTHING_EARNED: AttemptEarned = { bests: [], fastest: null };
+export interface AttemptEarned extends PersonalBestEarned {
+  readonly readiness: ReadinessOutcome | null;
+}
 
-export const setsPersonalBest = (earned: AttemptEarned) => earned.bests.length > 0 || earned.fastest !== null;
+const NO_PERSONAL_BEST: PersonalBestEarned = { bests: [], fastest: null };
+
+export const NOTHING_EARNED: AttemptEarned = { ...NO_PERSONAL_BEST, readiness: null };
+
+export const setsPersonalBest = (earned: PersonalBestEarned) => earned.bests.length > 0 || earned.fastest !== null;
+
+// Spec 3 Comparison groups (Milestones); Audio and haptics (cue 16)
+export const earnsRecord = (earned: AttemptEarned) => setsPersonalBest(earned) || earned.readiness?.kind === 'earned';
 
 export const comparisonGroup = (key: ChallengeGroupKey): string => canonicalJson(key);
 
@@ -51,20 +95,73 @@ export function baseConfiguration(key: ChallengeGroupKey): string {
   return canonicalJson(base);
 }
 
-export function progressProjection(attempts: readonly ProgressAttempt[]): Progress {
+export function progressProjection(attempts: readonly ProgressAttempt[], milestones: readonly ProgressMilestone[] = []): Progress {
+  const earned = earliestMilestones(milestones);
   const history = distinct(attempts).sort((a, b) => b.record.endedAt - a.record.endedAt || (lowerIdentity(a.record, b.record) ? -1 : 1));
   const groups = new Map<string, ProgressAttempt[]>();
   for (const entry of history) {
     const id = comparisonGroup(entry.record.groupKey);
     groups.set(id, [...(groups.get(id) ?? []), entry]);
   }
-  return { groups: [...groups].map(([id, members]) => groupProgress(id, members)), history };
+  return {
+    groups: [...groups].map(([id, members]) => groupProgress(id, members, earned.get(id) ?? null)),
+    history,
+    recommendation: recommendation(milestones.map((milestone) => milestone.record)),
+  };
 }
 
-export function attemptEarned(attempts: readonly ProgressAttempt[], attemptId: string): AttemptEarned {
+// Spec 3 Comparison groups (Milestones)
+export function readinessOutcome(attempts: readonly ProgressAttempt[], milestones: readonly ProgressMilestone[], attemptId: string): ReadinessOutcome | null {
+  const record = distinct(attempts).find((entry) => entry.record.attemptId === attemptId)?.record;
+  if (!record) return null;
+  const records = milestones.map((milestone) => milestone.record);
+  if (records.some((milestone) => milestone.installation === record.installation && milestone.attempts[1] === record.attemptId)) {
+    const next = recommendation(records).category;
+    return { kind: 'earned', next: next === record.groupKey.category ? null : next };
+  }
+  const kept = earliestMilestones(milestones).get(comparisonGroup(record.groupKey));
+  return kept && belowReadinessThreshold(record) ? { kind: 'kept', earnedAt: kept.earnedAt } : null;
+}
+
+// Spec 3 Comparison groups (Recommendations)
+export function recommendation(milestones: readonly ReadinessMilestoneRecord[]): Recommendation {
+  const earned = new Set(milestones.map((milestone) => milestone.groupKey.category));
+  const furthest = Math.max(...CATALOG_CATEGORIES.map((category, index) => (earned.has(category) ? index : -1)));
+  if (furthest < 0) return { category: CATALOG_CATEGORIES[0]!, reason: { kind: 'start' }, enter: null };
+  const after = CATALOG_CATEGORIES[furthest]!;
+  const next = CATALOG_CATEGORIES[furthest + 1];
+  if (next) return { category: next, reason: { kind: 'next', after }, enter: next === 'table' ? 'observe' : null };
+  const tables = milestones.flatMap((milestone) => milestone.groupKey.table ?? []);
+  const suggestions: TableStretch[] = [
+    ...(tables.some((table) => table.seat === 'play') ? [] : (['play'] as const)),
+    ...(tables.some((table) => table.countingMode === 'deviations') ? [] : (['deviations'] as const)),
+    'more-players',
+    'deeper-penetration',
+    'larger-n',
+  ];
+  return { category: after, reason: { kind: 'beyond', suggestions }, enter: null };
+}
+
+function earliestMilestones(milestones: readonly ProgressMilestone[]): Map<string, EarnedMilestone> {
+  const byIdentity = new Map<string, ProgressMilestone>();
+  for (const entry of milestones) {
+    const identity = `${milestoneSlot(entry.record)}/${entry.record.attempts.join('/')}`;
+    const known = byIdentity.get(identity);
+    if (!known || (known.local && !entry.local)) byIdentity.set(identity, entry);
+  }
+  const earliest = new Map<string, EarnedMilestone>();
+  for (const { record, local } of byIdentity.values()) {
+    const group = comparisonGroup(record.groupKey);
+    const known = earliest.get(group);
+    if (!known || record.earnedAt < known.earnedAt) earliest.set(group, { earnedAt: record.earnedAt, local, record });
+  }
+  return earliest;
+}
+
+export function attemptEarned(attempts: readonly ProgressAttempt[], attemptId: string): PersonalBestEarned {
   const all = distinct(attempts).map((entry) => entry.record);
   const record = all.find((candidate) => candidate.attemptId === attemptId);
-  if (record?.endingReason !== 'completed') return NOTHING_EARNED;
+  if (record?.endingReason !== 'completed') return NO_PERSONAL_BEST;
   const id = comparisonGroup(record.groupKey);
   const group = all.filter((candidate) => candidate.endingReason === 'completed' && comparisonGroup(candidate.groupKey) === id);
   const before = group.filter((candidate) => candidate !== record);
@@ -76,6 +173,67 @@ export function attemptEarned(attempts: readonly ProgressAttempt[], attemptId: s
   const fastest = fastestOf(group);
   const previous = fastestOf(before);
   return { bests, fastest: fastest?.attempt === record && (!previous || fastest.performanceMs < previous.performanceMs) ? fastest.performanceMs : null };
+}
+
+// Spec 3 Comparison groups (Readiness streak); Amendment 1 B3
+export function milestoneCandidates(attempts: readonly ProgressAttempt[], installation: string): readonly ReadinessMilestoneRecord[] {
+  const own = distinct(attempts)
+    .map((entry) => entry.record)
+    .filter((record) => record.installation === installation)
+    .sort((a, b) => a.deviceSequence - b.deviceSequence);
+  // Spec 3 Amendment 1 C2
+  const streaks = new Map<string, ChallengeAttemptRecord | null>();
+  const earned = new Map<string, ReadinessMilestoneRecord>();
+  for (const record of own) {
+    const effect = streakEffect(record);
+    if (effect === 'neutral') continue;
+    const base = baseConfiguration(record.groupKey);
+    if (effect === 'breaks') {
+      streaks.set(base, null);
+      continue;
+    }
+    const previous = streaks.get(base) ?? null;
+    streaks.set(base, record);
+    if (!previous || earned.has(base)) continue;
+    earned.set(base, {
+      recordVersion: READINESS_MILESTONE_RECORD_VERSION,
+      owner: record.owner,
+      installation,
+      groupKey: record.groupKey,
+      attempts: [previous.attemptId, record.attemptId],
+      earnedAt: record.endedAt,
+    });
+  }
+  return [...earned.values()];
+}
+
+// Spec 3 Comparison groups (Readiness streak)
+const COUNTING_METRICS: readonly ChallengeMetric[] = ['card-values', 'running-count', 'true-count'];
+const READINESS_THRESHOLD = 0.95;
+
+// Spec 3 Comparison groups (Readiness streak)
+export const belowReadinessThreshold = (record: ChallengeAttemptRecord) =>
+  record.endingReason === 'completed' && record.groupKey.assistanceClass === 'unassisted-check' && !meetsReadinessThreshold(record);
+
+function meetsReadinessThreshold(record: ChallengeAttemptRecord): boolean {
+  const tested = COUNTING_METRICS.flatMap((metric) => record.metrics[metric] ?? []).filter((result) => result.total > 0);
+  return tested.length > 0 && tested.every((result) => result.correct >= READINESS_THRESHOLD * result.total);
+}
+
+// Spec 3 Comparison groups (Readiness streak); Amendment 1 C2, C3
+function streakEffect(record: ChallengeAttemptRecord): 'advances' | 'breaks' | 'neutral' {
+  const { variant, assistanceClass } = record.groupKey;
+  if (variant !== 'check') return 'neutral';
+  switch (record.endingReason) {
+    case 'abandoned':
+    case 'insufficient-funds':
+      return 'breaks';
+    case 'unusable':
+      return 'neutral';
+    case 'completed':
+      if (assistanceClass !== 'unassisted-check') return 'neutral';
+      return meetsReadinessThreshold(record) ? 'advances' : 'breaks';
+  }
 }
 
 // Spec 3 Synchronized record types › Challenge attempt
@@ -92,7 +250,7 @@ function distinct(attempts: readonly ProgressAttempt[]): ProgressAttempt[] {
   return [...byIdentity.values()];
 }
 
-function groupProgress(id: string, attempts: readonly ProgressAttempt[]): GroupProgress {
+function groupProgress(id: string, attempts: readonly ProgressAttempt[], milestone: EarnedMilestone | null): GroupProgress {
   const completed = attempts.map((entry) => entry.record).filter((record) => record.endingReason === 'completed');
   return {
     id,
@@ -104,6 +262,7 @@ function groupProgress(id: string, attempts: readonly ProgressAttempt[]): GroupP
       return best ? [best] : [];
     }),
     fastest: fastestOf(completed),
+    milestone,
   };
 }
 

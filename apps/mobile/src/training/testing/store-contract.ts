@@ -2,6 +2,7 @@
 import type { ChallengeFact, Receipt, UnsequencedAttemptRecord } from '@tableside/engine';
 
 import type { UnsequencedLessonEvent } from '../lesson-progress';
+import type { ReadinessMilestoneRecord } from '../readiness-milestone';
 import { CHALLENGE_CHARGE, FRESH_LIFECYCLE, type AttemptCharge, type AttemptLifecycle, type AttemptTransitionCommit, type NewAttempt, type TrainingStore } from '../store';
 
 export interface TrainingStoreUnderTest {
@@ -92,6 +93,20 @@ export function lessonEvent(eventId: string, overrides: Partial<UnsequencedLesso
     lesson: { id: 'app-orientation', version: 1, materialVersion: 1 },
     event: { kind: 'bookmark', step: 2 },
     recordedAt: 1_790_000_000_000,
+    ...overrides,
+  };
+}
+
+// #141
+export function milestone(attempts: readonly [string, string], overrides: Partial<ReadinessMilestoneRecord> = {}): ReadinessMilestoneRecord {
+  const { groupKey } = attemptRecord(attempts[1]);
+  return {
+    recordVersion: 1,
+    owner: 'local',
+    installation: 'test-device',
+    groupKey: { ...groupKey, variant: 'check', assistanceClass: 'unassisted-check' },
+    attempts,
+    earnedAt: 1_790_000_060_000,
     ...overrides,
   };
 }
@@ -215,6 +230,20 @@ export function describeTrainingStoreContract(name: string, open: () => Promise<
         { ...lessonEvent('e-3', { event: { kind: 'completed' }, lesson: { id: 'other', version: 3, materialVersion: 2 } }), deviceSequence: 3 },
       ]);
       expect((await reopened.readAttemptRecords()).map((record) => record.deviceSequence)).toEqual([1]);
+    });
+
+    // #141
+    it("keeps one readiness milestone per group, the first one written, across a reopen", async () => {
+      const subject = await open();
+      const { store } = subject;
+      expect(await store.readMilestones()).toEqual([]);
+      const first = milestone(['a-1', 'a-2']);
+      expect(await store.recordMilestone(first)).toEqual(first);
+      expect(await store.recordMilestone(milestone(['a-3', 'a-4'], { earnedAt: 5 }))).toEqual(first);
+      const other = milestone(['a-5', 'a-6'], { groupKey: { ...first.groupKey, pacing: '2s' } });
+      await store.recordMilestone(other);
+      const reopened = await subject.reopen();
+      expect(await reopened.readMilestones()).toEqual([first, other]);
     });
   });
 }

@@ -2,7 +2,7 @@
 import type { StrategyStepAnswer, WorkedExample } from '@tableside/definitions';
 import type { ChallengeFact, ChallengeView } from '@tableside/engine';
 
-import { setsPersonalBest } from '@/training/progress';
+import { earnsRecord } from '@/training/progress';
 import type { TrainingService, TrainingSnapshot } from '@/training/service';
 
 import type { CueName } from './catalog';
@@ -57,7 +57,7 @@ export function followTraining(training: TrainingService, feedback: FeedbackServ
     } else if (next.status === 'ended' && previous.status === 'active') {
       feedback.cue('attempt-ended');
       // Spec 3 Comparison groups, records and progression (Milestones); #140
-      if (setsPersonalBest(next.earned)) feedback.cue('milestone');
+      if (earnsRecord(next.earned)) feedback.cue('milestone');
     }
   });
 }
