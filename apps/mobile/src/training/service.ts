@@ -1,5 +1,4 @@
 // Spec 3 Modules › Training service; Training service interface; #158
-// The one interface the Counting tab, lessons and handoffs use.
 
 import { CHALLENGE_CONTENT } from '@tableside/definitions';
 import type { ChallengeAttemptRecord, ChallengeCategory, ChallengeVariant } from '@tableside/engine';
@@ -15,7 +14,6 @@ export type CatalogCategory = (typeof SUGGESTED_ORDER)[number];
 export interface CatalogEntry {
   readonly category: CatalogCategory;
   readonly available: true;
-  // The variants this build can start; later tickets add theirs.
   readonly ready: readonly ChallengeVariant[];
 }
 
@@ -44,7 +42,7 @@ const READY: Readonly<Partial<Record<CatalogCategory, readonly ChallengeVariant[
 
 const VARIANTS: readonly ChallengeVariant[] = ['learn', 'check'];
 
-// Amendment 1 C7
+// Spec 3 Amendment 1 C7
 export const LAST_SETUP = 'challenge.last-setup';
 
 const isCatalogCategory = (value: unknown): value is CatalogCategory => SUGGESTED_ORDER.includes(value as CatalogCategory);

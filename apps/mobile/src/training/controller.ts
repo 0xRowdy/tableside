@@ -1,4 +1,4 @@
-// Spec 3 Modules › Challenge controller: spec 1's practice-controller pattern applied to challenge attempts.
+// Spec 3 Modules › Training service › Challenge controller
 // Spec 3 Attempt lifecycle; Amendment 1 C6; #158
 
 import {
@@ -79,7 +79,7 @@ export class ChallengeController {
       }
       if (stored && this.decode(stored).phase !== 'ready') return this.adopt(stored, this.decode(stored));
 
-      // Amendment 1 C6: an attempt created but never charged rechecks admission.
+      // Spec 3 Amendment 1 C6
       const access = await this.adapters.access.beforeChallenge({ category: content.category, variant }).catch((): AccessDenial => UNANSWERED);
       if (access.status !== 'allowed') return this.showNone(access.status === 'uncertain' ? 'access-uncertain' : 'access-denied');
       const admission: Admission = {
@@ -105,7 +105,7 @@ export class ChallengeController {
     });
   }
 
-  // Amendment 1 C6: the charge commits atomically with the first-content transition, before that content is published.
+  // Spec 3 Amendment 1 C6
   private async beginCharged(stored: StoredAttempt, state: ChallengeState): Promise<void> {
     const charge: AllowanceEffect = { effectId: { grant: stored.admission.provenance, activity: stored.attemptId, sequence: 0 }, kind: CHALLENGE_CHARGE, amount: '1' };
     const committed = await this.commit(state, { kind: 'begin' }, charge);

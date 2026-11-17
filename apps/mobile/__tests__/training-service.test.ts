@@ -9,7 +9,7 @@ import { CHALLENGE_CHARGE } from '@/training/store';
 
 const LEARN_CARD_VALUES = { category: 'card-values', variant: 'learn' } as const;
 
-// Hi-Lo by hand: 2–6 are +1, 7–9 are 0, 10, J, Q, K and A are −1.
+// Spec 1 Game rules, Counting (Hi-Lo)
 const HI_LO: Record<number, -1 | 0 | 1> = { 1: -1, 2: 1, 3: 1, 4: 1, 5: 1, 6: 1, 7: 0, 8: 0, 9: 0, 10: -1, 11: -1, 12: -1, 13: -1 };
 
 function setup(options: { access?: Partial<AccessSupervisor>; store?: MemoryTrainingStore } = {}) {

@@ -452,6 +452,7 @@ export function fakeAppAccount(options: { readonly stored?: AccountGate; readonl
     },
     restrictedPaths: { open: (path) => void opened.push(path) },
     practice: (base) => base,
+    training: (base) => base,
     offlineGame: {
       get: async (accountId) => offlineGames.get(accountId) ?? null,
       set: async (accountId, game) => {

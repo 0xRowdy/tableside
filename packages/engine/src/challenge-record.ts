@@ -1,4 +1,4 @@
-// Spec 3 Synchronized record types › Challenge attempt; Comparison groups; Amendment 1 C1, C3, C8; Amendment 4 §1; #158
+// Spec 3 Synchronized record types › Challenge attempt, Amendment 4 §1; #158
 
 import type { VersionedIdentity } from './activity';
 import { challengeResults, type ChallengeCategory, type ChallengeMetrics, type ChallengeState, type ChallengeVariant, type ReviewFact } from './challenge';

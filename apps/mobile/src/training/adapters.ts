@@ -6,7 +6,7 @@ import type { TrainingStore } from './store';
 
 export interface TrainingAdapters {
   readonly store: TrainingStore;
-  readonly access: Pick<AccessSupervisor, 'beforeChallenge'>;
+  readonly access: AccessSupervisor;
   readonly clock: Clock;
   readonly entropy: EntropySource;
   newId(): string;

@@ -227,7 +227,7 @@ export function createChallenge(spec: ChallengeSpecification, random: RandomStre
   };
 }
 
-// Spec 3 Challenge content › Generation: rejection sampling over whole candidate sets, recorded in the state.
+// Spec 3 Challenge content › Generation
 function generate(content: CardValuesContent, stream: RandomStream): { items: CardValueItem[]; rejected: number } {
   for (let rejected = 0; ; rejected++) {
     const items = Array.from({ length: content.length }, (): CardValueItem => {
@@ -375,7 +375,7 @@ export type ChallengeCheckpointResult =
   | { readonly ok: true; readonly state: ChallengeState }
   | { readonly ok: false; readonly error: { readonly kind: 'damaged' | 'unsupported'; readonly message: string } };
 
-// Spec 3 Challenge content › Generation: a checkpoint is checked by replaying its receipts, so resume regenerates nothing it didn't record.
+// Spec 3 Challenge content › Generation
 export function decodeChallengeCheckpoint(text: string): ChallengeCheckpointResult {
   const damaged = (message: string) => ({ ok: false, error: { kind: 'damaged', message } }) as const;
   let value: unknown;

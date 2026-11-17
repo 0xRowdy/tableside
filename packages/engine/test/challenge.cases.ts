@@ -7,7 +7,7 @@ import { ANSWER, begun, LEARN, NEXT, RETRY, run, seed, SKIP, step } from './chal
 import { throws } from './fixtures';
 
 const SEED_1_CARDS = ['5d', '7d', '10c', '2c', '7h', '2s', '11h', '4s', '6h', '11c', '12d', '9h', '2d', '6h', '2s', '1c', '9s', '8d', '3c', '13s'];
-// Hi-Lo by hand: 2–6 are +1, 7–9 are 0, 10, J, Q, K and A are −1.
+// Spec 1 Game rules, Counting (Hi-Lo)
 const SEED_1_HI_LO = [1, 0, -1, 1, 0, 1, -1, 1, 1, -1, -1, 0, 1, 1, 1, -1, 0, 0, 1, -1] as const;
 
 const RANKS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13];
@@ -47,7 +47,6 @@ export const challengeCases: TestCase[] = [
     run: (t) => {
       t.equal(cards(begun(LEARN, seed(7))), cards(begun({ ...LEARN, attemptId: 'other', owner: 'o', device: 'd' }, seed(7))));
       t.equal(cards(begun(LEARN, seed(7))) === cards(begun(LEARN, seed(8))), false);
-      // Pinned vector: the same draws on every runtime (Node, iOS Hermes, Android Hermes).
       const pinned = begun(LEARN, seed(1));
       t.equal(cards(pinned), SEED_1_CARDS);
       t.equal(pinned.rejected, 39);
@@ -82,7 +81,6 @@ export const challengeCases: TestCase[] = [
   {
     name: 'challenge: only the first submission is scored; a corrected card still counts as wrong (hand-computed)',
     run: (t) => {
-      // Always answering +1 first is right only for the nine 2–6 cards; each miss is retried to the right value.
       const commands = SEED_1_HI_LO.flatMap((value) => (value === 1 ? [ANSWER(1), NEXT] : [ANSWER(1), RETRY, ANSWER(value), NEXT]));
       const ended = run(begun(), commands);
       const results = challengeResults(ended);

@@ -34,8 +34,8 @@ const RANK_NAMES = ['Ace', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'Jack',
 const RANK_SHORT = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
 export const SUIT_GLYPH: Record<Suit, string> = { spades: '♠', hearts: '♥', diamonds: '♦', clubs: '♣' };
 
-export const cardName = (card: Card) => `${RANK_NAMES[card.rank - 1]} of ${card.suit}`;
-export const cardRank = (card: Card) => RANK_SHORT[card.rank - 1] as string;
+export const cardName = (card: Pick<Card, 'rank' | 'suit'>) => `${RANK_NAMES[card.rank - 1]} of ${card.suit}`;
+export const cardRank = (card: Pick<Card, 'rank' | 'suit'>) => RANK_SHORT[card.rank - 1] as string;
 
 export const totalText = (total: HandTotal) => (total.value > 21 ? `bust ${total.value}` : total.soft ? `soft ${total.value}` : String(total.value));
 

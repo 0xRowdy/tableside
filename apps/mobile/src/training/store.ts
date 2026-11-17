@@ -36,7 +36,7 @@ export interface AttemptTransitionCommit {
   readonly checkpoint: string;
   readonly receipt: Receipt;
   readonly facts: readonly ChallengeFact[];
-  // Amendment 1 C6: the charge commits atomically with the first-content transition.
+  // Spec 3 Amendment 1 C6
   readonly charge: AllowanceEffect | null;
 }
 
@@ -57,12 +57,12 @@ export interface ChallengeStore {
   findUnfinishedAttempt(): Promise<StoredAttempt | null>;
   commitAttemptTransition(commit: AttemptTransitionCommit): Promise<AttemptCommitOutcome>;
   readAttemptReceipt(attemptId: string, commandId: string): Promise<CommittedAttemptTransition | null>;
-  // Writes the attempt's one record, numbered in this installation's device sequence; a repeat returns the first.
+  // Spec 3 Synchronized record types › Challenge attempt
   recordAttempt(record: UnsequencedAttemptRecord): Promise<ChallengeAttemptRecord>;
   readAttemptRecords(): Promise<readonly ChallengeAttemptRecord[]>;
 }
 
-// Amendment 1 C7: device-local preferences live in the account's local database, never synced or exported.
+// Spec 3 Amendment 1 C7
 export interface DevicePreferences {
   readPreference(key: string): Promise<string | null>;
   writePreference(key: string, value: string): Promise<void>;

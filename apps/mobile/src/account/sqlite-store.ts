@@ -480,7 +480,7 @@ export class SqliteActivityStore implements ActivityStore, TrainingStore {
     );
   }
 
-  // Amendment 1 C7
+  // Spec 3 Amendment 1 C7
   readPreference(key: string): Promise<string | null> {
     return this.transaction(async (tx) => (await tx.get<{ value: string }>('SELECT value FROM device_preferences WHERE key = ?', [key]))?.value ?? null);
   }
