@@ -76,7 +76,7 @@ describe('blackjack lessons', () => {
       expect(sixteen.publishedNote).toEqual([
         'For hard 16 against a 10, Tableside teaches: stand at +1 or higher, otherwise hit. Schlesinger’s published Illustrious 18 value is 0, one count lower.',
         'At 0 the two plays differ by 0.0000 ± 0.0008 of a unit bet, inside the margin Tableside treats as a tie. Its tie rule then keeps the play that adds no extra wager, so following the published value here costs nothing measurable.',
-        'Published charts were worked out under their own conditions, so a count of difference is expected and doesn’t make them wrong.',
+        'The difference comes from how Tableside sets its own values, so it doesn’t make the published chart wrong.',
       ]);
       const twelve = deviations.steps.find((step) => step.heading === 'Plays that kick in when the count drops')!;
       expect(twelve.publishedNote?.[1]).toBe(
@@ -94,9 +94,17 @@ describe('blackjack lessons', () => {
       ]);
     });
 
+    // docs/research/blackjack-lessons.md, Deviations › H17
+    it('compare the H17 values with the published ones, including the two-count gap on 12 vs 6', () => {
+      const h17 = lesson('basic-with-deviations').content!.steps.find((step) => step.heading === 'When the dealer hits soft 17')!.paragraphs;
+      expect(h17[1]).toBe(
+        'At that table nine of Tableside’s values differ from the published Illustrious 18 and Fab 4, hard 12 against a 6 by two counts (−3 against −1) and the rest by one. Four of them come only from the tie rule: hard 16 against a 10, hard 9 against a 7, hard 14 against a 10 (surrender) and hard 15 against a 9 (surrender).',
+      );
+    });
+
     it('never call the published values wrong', () => {
       const aboutPublished = IDS.flatMap(text).filter((line) => /published|Schlesinger|Blackjack Apprenticeship/.test(line));
-      for (const line of aboutPublished) expect(line.replace('doesn’t make them wrong', '')).not.toMatch(/\b(wrong|incorrect|mistaken|error)/i);
+      for (const line of aboutPublished) expect(line.replace('doesn’t make the published chart wrong', '')).not.toMatch(/\b(wrong|incorrect|mistaken|error)/i);
     });
   });
 
@@ -104,11 +112,12 @@ describe('blackjack lessons', () => {
     expect(publishedGaps('S17_LS').map((gap) => situationName(gap.deviation))).toContain('a pair of tens against a 6');
   });
 
-  // Spec 3 Lessons › Content requirements (bet schedule); #3
-  it('teach the 1/2/4/6/8 schedule by true count, scored apart from play and counting', () => {
+  // Spec 3 Lessons › Content requirements (bet schedule); #3; spec 1 Amendment 9 §7 (amounts, not multiples of a base bet)
+  it('teach the 1/2/4/6/8 schedule as amounts by true count, scored apart from play and counting', () => {
     const lines = text('bet-schedule');
-    expect(lines).toEqual(expect.arrayContaining(['below +1: 1 unit (10)', '+1: 2 units (20)', '+2: 4 units (40)', '+3: 6 units (60)', '+4 or higher: 8 units (80)']));
+    expect(lines).toEqual(expect.arrayContaining(['Below +1: bet 10', '+1: bet 20', '+2: bet 40', '+3: bet 60', '+4 or higher: bet 80']));
     expect(lines.join(' ')).toContain('betting adherence is a separate score from playing adherence and counting accuracy');
+    expect(lines.join(' ')).toContain('This schedule is Tableside’s own');
   });
 
   // Spec 3 Lessons › Content requirements; gate 9; Amendment 1 C11
@@ -117,7 +126,8 @@ describe('blackjack lessons', () => {
       for (const line of text(id)) expect(line).not.toMatch(/\b(profit|win money|beat the casino|edge over the house|ready for the casino|guarantee)/i);
       const { content } = lesson(id);
       expect(content!.sources.length).toBeGreaterThan(0);
-      for (const source of content!.sources) expect(source.url).toMatch(/^https:\/\//);
+      for (const line of text(id)) expect(line).not.toMatch(/(by|from|with) (Blackjack Apprenticeship|Casino Quest)'?s? (approval|endorsement)|approved by|endorsed by/i);
+      for (const source of content!.sources) if (source.url !== null) expect(source.url).toMatch(/^https:\/\//);
     }
   });
 });

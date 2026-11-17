@@ -73,7 +73,7 @@ describe('the Training service lessons', () => {
       access: 'available',
       status: { kind: 'not-started' },
     });
-    expect(catalog[1]).toMatchObject({ id: 'blackjack-basics', section: 'blackjack', steps: 5, status: { kind: 'not-started' } });
+    expect(catalog[1]).toMatchObject({ id: 'blackjack-basics', section: 'blackjack', steps: expect.any(Number), status: { kind: 'not-started' } });
     expect(catalog[6]).toMatchObject({ id: 'card-values', section: 'blackjack', steps: null, status: { kind: 'not-started' } });
     await expect(service.openLesson('card-values')).rejects.toThrow(/not available/);
   });

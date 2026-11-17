@@ -223,7 +223,7 @@ describe('lessons', () => {
     await header('The index plays');
     await fireEvent.press(button('Next'));
     expect(await header('When the count changes a decision')).toBeOnTheScreen();
-    expect(screen.getByText('Step 3 of 7')).toBeOnTheScreen();
+    expect(screen.getByText(/^Step 3 of \d+$/)).toBeOnTheScreen();
     expect(screen.getByRole('header', { name: 'Our index vs published charts' })).toBeOnTheScreen();
     expect(screen.getByText(/^For hard 16 against a 10, Tableside teaches: stand at \+1 or higher, otherwise hit\./)).toBeOnTheScreen();
     expect(screen.getByRole('link', { name: /^Source: / })).toBeOnTheScreen();

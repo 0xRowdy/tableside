@@ -7,14 +7,34 @@ import { basicStrategy, blackjackHouseEdge, playingDeviations, type BlackjackPre
 // Spec 3 Amendment 1 C11
 export const BLACKJACK_SOURCES = {
   schlesinger: {
-    citation: 'Don Schlesinger, Blackjack Attack, the Illustrious 18 and Fab 4, as republished with permission by Wizard of Odds, “High-Low”, section “Illustrious 18 and Fab 4”',
+    citation:
+      'Michael Shackleford, Wizard of Odds, “Introduction to the High-Low Card Counting Strategy”, section “How it Works”, tables “Illustrious 18” and “Fab 4 Surrenders” (from Don Schlesinger, Blackjack Attack, 2004 ed., p. 62, republished with permission)',
     url: 'https://wizardofodds.com/games/blackjack/card-counting/high-low/',
   },
-  bjaS17: { citation: 'Blackjack Apprenticeship, “Blackjack Strategy Chart: S17” (PDF), deviations and surrender sections', url: 'https://www.blackjackapprenticeship.com/wp-content/uploads/2019/07/BJA_S17.pdf' },
-  bjaH17: { citation: 'Blackjack Apprenticeship, “Blackjack Strategy Chart: H17” (PDF), deviations and surrender sections', url: 'https://www.blackjackapprenticeship.com/wp-content/uploads/2019/07/BJA_H17.pdf' },
-  bjaCharts: { citation: 'Blackjack Apprenticeship, “Blackjack Strategy Charts”', url: 'https://www.blackjackapprenticeship.com/blackjack-strategy-charts/' },
-  bjaCounting: { citation: 'Blackjack Apprenticeship, “How to Count Cards”', url: 'https://www.blackjackapprenticeship.com/how-to-count-cards/' },
-  wizardBasic: { citation: 'Wizard of Odds, “4-Deck to 8-Deck Blackjack Strategy”', url: 'https://wizardofodds.com/games/blackjack/strategy/4-decks/' },
+  hiLoValues: {
+    citation: 'Michael Shackleford, Wizard of Odds, “Introduction to the High-Low Card Counting Strategy”, section “How it Works”, table “High-Low Point Values”',
+    url: 'https://wizardofodds.com/games/blackjack/card-counting/high-low/',
+  },
+  wizardBasic: { citation: 'Michael Shackleford, Wizard of Odds, “4-Deck to 8-Deck Blackjack Strategy”, section “Basic Strategy in Text”', url: 'https://wizardofodds.com/games/blackjack/strategy/4-decks/' },
+  bjaS17: {
+    citation: 'Blackjack Apprenticeship, “S17 Deviation Chart” (PDF, © 2018), sections “Pair Splitting”, “Hard Totals”, “Late Surrender” and “Insurance or Even Money”',
+    url: 'https://www.blackjackapprenticeship.com/wp-content/uploads/2019/07/BJA_S17.pdf',
+  },
+  bjaH17: {
+    citation: 'Blackjack Apprenticeship, “H17 Deviation Chart” (PDF, © 2018), sections “Pair Splitting”, “Hard Totals”, “Late Surrender” and “Insurance or Even Money”',
+    url: 'https://www.blackjackapprenticeship.com/wp-content/uploads/2019/07/BJA_H17.pdf',
+  },
+  bjaCounting: {
+    citation: 'Blackjack Apprenticeship, “How To Count Cards”, sections “Step 1: Assign A Value To Every Card”, “Step 2: The Running Count” and “Step 3: Calculate A “True Count” Or Count Per Deck”',
+    url: 'https://www.blackjackapprenticeship.com/how-to-count-cards/',
+  },
+  bjaBetting: { citation: 'Blackjack Apprenticeship, “How To Count Cards”, section “Step 4: Change Your Bets As The True Count Rises And Falls”', url: 'https://www.blackjackapprenticeship.com/how-to-count-cards/' },
+  bjaDeviations: {
+    citation: 'Blackjack Apprenticeship, “What are Blackjack Deviations?”, sections “So what are blackjack deviations?” and “When do you perform deviations?”',
+    url: 'https://www.blackjackapprenticeship.com/blackjack-deviations/',
+  },
+  bjaOrder: { citation: 'Blackjack Apprenticeship, “Learn Blackjack Strategy” (Blackjack Strategy Charts), section “Basic Strategy Has An Order Of Operations:”', url: 'https://www.blackjackapprenticeship.com/blackjack-strategy-charts/' },
+  certified: { citation: 'Tableside certified blackjack coaching reference, indices_S17_final.csv and indices_H17_final.csv (frozen 2026-09-14, manifest 9892826d)', url: null },
 } as const satisfies Record<string, LessonSource>;
 
 const S = BLACKJACK_SOURCES;
@@ -81,7 +101,7 @@ export function publishedNote(gap: PublishedGap): readonly string[] {
   const why = gap.tieOnly
     ? `At ${signed(gap.trueCount)} the two plays differ by ${fraction(gap.perBet)} ± ${fraction(gap.standardError)} of a unit bet, inside the margin Tableside treats as a tie. Its tie rule then keeps the play that adds no extra wager, so following the published value here costs nothing measurable.`
     : `Tableside values each play assuming you finish the hand by the taught chart (its teaching-continuation rule), over the hands its own six-deck game deals. On that basis, following the published value at ${signed(gap.trueCount)} gives up ${fraction(gap.perBet)} ± ${fraction(gap.standardError)} of a unit bet each time the hand comes up, so Tableside waits one more count.`;
-  return [lead, why, 'Published charts were worked out under their own conditions, so a count of difference is expected and doesn’t make them wrong.'];
+  return [lead, why, 'The difference comes from how Tableside sets its own values, so it doesn’t make the published chart wrong.'];
 }
 
 const gapFor = (preset: BlackjackPreset, situation: string): PublishedGap => {
@@ -119,22 +139,26 @@ function differenceSummary(): readonly string[] {
   ];
 }
 
-function h17Summary(): string {
+function h17Summary(): readonly string[] {
   const s17 = playingDeviations('S17_LS');
   const changed = playingDeviations('H17_LS').filter((h) => {
     const s = s17.find((candidate) => candidate.situation === h.situation);
     return s !== undefined && (s.threshold !== h.threshold || s.direction !== h.direction);
   });
-  return `When the dealer hits soft 17, ${words(changed.length)} plays move: ${list(changed.map((d) => `${situationName(d)}, ${indexRule(d)}`))}. Schlesinger’s list is for a dealer who stands on soft 17, so differences from it at an H17 table are mostly the rule itself.`;
+  const gaps = playingDeviations('H17_LS').filter((d) => d.difference.schlesinger !== null && d.difference.schlesinger !== 0);
+  const twoCounts = gaps.filter((d) => Math.abs(d.difference.schlesinger ?? 0) > 1);
+  const ties = publishedGaps('H17_LS').filter((gap) => gap.tieOnly);
+  return [
+    `Tableside’s values change with the dealer rule. When the dealer hits soft 17, ${words(changed.length)} plays move: ${list(changed.map((d) => `${situationName(d)}, ${indexRule(d)}`))}.`,
+    `At that table ${words(gaps.length)} of Tableside’s values differ from the published Illustrious 18 and Fab 4, ${list(twoCounts.map((d) => `${situationName(d)} by two counts (${signed(d.threshold)} against ${signed(Number(d.published.schlesinger))})`))} and the rest by one. ${capitalized(words(ties.length))} of them come only from the tie rule: ${list(ties.map((gap) => situationName(gap.deviation)))}.`,
+  ];
 }
 
 const cellPlay = (preset: BlackjackPreset, kind: 'hard' | 'soft' | 'pair', hand: number, up: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10) => basicStrategy(preset, kind, hand, up);
 const edge = (preset: BlackjackPreset) => `${blackjackHouseEdge(preset).percent}%`;
 
 // Spec 1 Game rules, Counting (Hi-Lo), Amendment 9 §7; #3
-const BASE_UNIT = Number(BET_SCHEDULE[0]!.amount);
-const scheduleLine = ({ from, amount }: (typeof BET_SCHEDULE)[number]) =>
-  `${from === null ? 'below +1' : from === 4 ? `+${from} or higher` : `+${from}`}: ${Number(amount) / BASE_UNIT} ${Number(amount) === BASE_UNIT ? 'unit' : 'units'} (${amount})`;
+const scheduleLine = ({ from, amount }: (typeof BET_SCHEDULE)[number]) => `${from === null ? 'Below +1' : from === 4 ? `+${from} or higher` : `+${from}`}: bet ${amount}`;
 
 const lesson = (id: string, title: string, summary: string, content: Omit<LessonContent, 'version' | 'materialVersion' | 'change' | 'workedExample'>): Lesson => ({
   id,
@@ -175,11 +199,11 @@ export const BLACKJACK_BASICS = lesson('blackjack-basics', 'Blackjack basics', '
     ]),
     step('Settlement and your chips', [
       'Tableside settles every bet for you: a win pays 1 to 1, a blackjack 3 to 2, a push returns your bet, a surrender returns half, and insurance settles on its own.',
-      'Practice play uses simulated chips, never real money. Setup shows how the session is funded before you start, and the table tells you when your chips can’t cover a bet.',
+      'Practice play uses simulated chips, never real money. Each session starts fresh: you choose the buy-in in setup (1,000 unless you change it), and Rebuy adds more during the session. A session that runs on your daily training bankroll has no buy-in and no rebuys.',
     ]),
   ],
   handoffs: [FREE_PLAY, guided('basic')],
-  sources: [S.wizardBasic],
+  sources: [S.wizardBasic, S.bjaOrder],
 });
 
 export const BASIC_STRATEGY = lesson('basic-strategy', 'Basic strategy', 'The best play for every hand, with no count', {
@@ -191,7 +215,7 @@ export const BASIC_STRATEGY = lesson('basic-strategy', 'Basic strategy', 'The be
     step('The order of decisions', [
       `Insurance comes first, and basic strategy always declines it. Surrender comes next where offered: at the default table, hard 16 against a 10 is a ${sixteen.action}. Then split, double, hit or stand.`,
       'After a split or a hit, later decisions follow the chart for your new total.',
-    ]),
+    ], { source: S.bjaOrder }),
     step('When the best play isn’t allowed', [
       `Sometimes the chart’s play isn’t available: you can’t double a three-card hand, or your chips can’t cover the extra bet. Each cell has a fallback for this. Hard 11 against a 6 is a ${elevenVsSix.action}, and the fallback is to ${elevenVsSix.fallbacks.double}; soft 18 against a 3 is a ${softEighteen.action}, falling back to ${softEighteen.fallbacks.double}.`,
       'Coaching always shows the fallback as the right play when the first choice isn’t possible, so you’re never marked wrong for a play you couldn’t make.',
@@ -201,7 +225,7 @@ export const BASIC_STRATEGY = lesson('basic-strategy', 'Basic strategy', 'The be
     ]),
   ],
   handoffs: [guided('basic'), FREE_PLAY],
-  sources: [S.wizardBasic, S.bjaCharts],
+  sources: [S.wizardBasic, S.bjaOrder],
 });
 
 const T16 = gapFor(DEFAULT, '16 vs 10');
@@ -230,12 +254,12 @@ export const BASIC_WITH_DEVIATIONS = lesson('basic-with-deviations', 'Basic with
     ], { source: S.schlesinger }),
     step('Where our numbers differ', differenceSummary(), { publishedNote: publishedNote(TENS), source: S.schlesinger }),
     step('When the dealer hits soft 17', [
-      h17Summary(),
-      'Blackjack Apprenticeship publishes separate S17 and H17 charts. Some of its entries use the sign of the running count at zero; Tableside uses the true count only.',
+      ...h17Summary(),
+      'Blackjack Apprenticeship publishes separate S17 and H17 deviation charts with more index plays than Tableside teaches. A few of their entries depend on whether the running count is above or below zero; Tableside uses the true count only.',
     ], { source: S.bjaH17 }),
   ],
   handoffs: [guided('basic-with-deviations')],
-  sources: [S.schlesinger, S.bjaS17, S.bjaH17],
+  sources: [S.schlesinger, S.bjaS17, S.bjaH17, S.certified],
 });
 
 export const COUNTING_WITH_BASIC = lesson('counting-with-basic', 'Counting with basic', 'Keep the Hi-Lo count while you play basic strategy', {
@@ -255,7 +279,7 @@ export const COUNTING_WITH_BASIC = lesson('counting-with-basic', 'Counting with 
     ]),
   ],
   handoffs: [guided('counting-with-basic'), { kind: 'learn-challenge', category: 'running-count' }],
-  sources: [S.bjaCounting],
+  sources: [S.bjaCounting, S.hiLoValues],
 });
 
 const THIRTEEN_V2 = deviationFor(DEFAULT, '13 vs 2');
@@ -264,10 +288,11 @@ export const COUNTING_WITH_DEVIATIONS = lesson('counting-with-deviations', 'Coun
   steps: [
     step('Your count, your index plays', [
       'This mode puts it all together: you keep the Hi-Lo count and use your own true count for the index plays from Basic with deviations. Plays are checked against the actual true count, so a miss can come from the count or from the play.',
+      'Corrections don’t show the count while you play; they name the play. When the session ends, its result lists the actual count beside each departure.',
     ]),
     step('Recount at the decision', [
       'Cards keep arriving after you bet, so work out the true count again when you reach a decision, including every card dealt so far. The count you bet with is often not the count you play with.',
-    ], { source: S.bjaCounting }),
+    ], { source: S.bjaDeviations }),
     step('Zero and the truncated count', [
       `Tableside truncates the true count toward zero, so a running count of −1 with 2 decks left is a true count of 0, not −1. That matters for plays with an index of 0: for hard 13 against a 2, ${indexRule(THIRTEEN_V2)}, so here you stand.`,
     ]),
@@ -276,13 +301,13 @@ export const COUNTING_WITH_DEVIATIONS = lesson('counting-with-deviations', 'Coun
     ], { publishedNote: publishedNote(TENS), source: S.schlesinger }),
   ],
   handoffs: [guided('counting-with-deviations'), { kind: 'learn-challenge', category: 'table' }],
-  sources: [S.bjaCounting, S.schlesinger],
+  sources: [S.bjaDeviations, S.schlesinger, S.certified],
 });
 
-export const BET_SCHEDULE_LESSON = lesson('bet-schedule', 'Bet schedule', 'Tableside’s practice schedule: 1 to 8 units by true count', {
+export const BET_SCHEDULE_LESSON = lesson('bet-schedule', 'Bet schedule', 'Tableside’s practice schedule: 10 to 80 by true count', {
   steps: [
     step('A bet for every count', [
-      `When you turn on the bet schedule in a counting mode, Tableside checks each bet before the deal against a fixed practice schedule, in base units of ${BASE_UNIT}:`,
+      'When you turn on the bet schedule in a counting mode, Tableside checks each bet before the deal against a fixed practice schedule, by true count:',
       ...BET_SCHEDULE.map(scheduleLine),
     ]),
     step('Which count to use', [
@@ -292,9 +317,9 @@ export const BET_SCHEDULE_LESSON = lesson('bet-schedule', 'Bet schedule', 'Table
       'Bets are checked on their own, apart from your plays and your count: a right bet with a wrong play, or the other way round, shows up as one of each. In a counting challenge, betting adherence is a separate score from playing adherence and counting accuracy, and a different legal bet is allowed but counts as a betting miss.',
     ]),
     step('A practice schedule, not a promise', [
-      'This 1-2-4-6-8 schedule is Tableside’s own, chosen as a simple ramp to practice following. It isn’t a recommendation for real play, and it doesn’t change the house edge on any single bet.',
-    ]),
+      'This schedule is Tableside’s own, a simple ramp to practice following. Published counting guides say to raise your bet as the true count rises, but they don’t give this ramp. It isn’t a recommendation for real play, and it doesn’t change the house edge on any single bet.',
+    ], { source: S.bjaBetting }),
   ],
   handoffs: [guided('counting-with-basic'), guided('counting-with-deviations')],
-  sources: [S.bjaCounting],
+  sources: [S.bjaBetting],
 });
