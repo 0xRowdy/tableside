@@ -52,8 +52,7 @@ const own = (what: string): LessonSource => ({ citation: `Tableside's own, not t
 const EDGE_TABLE = wizard('Craps Odds: House Edge of Every Bet', 'table “Craps House Edge”', WOO_EDGES);
 const NO_SYSTEM_BEATS_THE_EDGE = wizard('The Truth about Betting Systems', 'sections “Introduction” and “The Martingale”', WOO_SYSTEMS);
 
-
-// Spec 3 Lessons › Structure (worked examples); S3-12 aJV2y; #155
+// Spec 3 Lessons › Structure (worked examples); S3-12 aJV2y; #154
 const bets = (...placed: readonly [string, string][]): Wager[] => placed.map(([target, amount]) => ({ target, amount }));
 const roll = (wagers: Wager[], dice: readonly [number, number]) => ({ wagers, outcome: { dice } });
 const choice = (answer: Wager[], correct: boolean, explanation: StrategyStepExplanation, note: string | null): ScriptedChoice<StrategyStepExample['choices'][number]['answer'], StrategyStepExplanation> => ({

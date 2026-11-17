@@ -56,7 +56,7 @@ describe('standard craps lessons', () => {
     expect(stated.filter((figure) => !engine.has(figure))).toEqual([]);
   });
 
-  // Spec 3 Lessons › Structure (worked examples); S3-12 aJV2y; #155
+  // Spec 3 Lessons › Structure (worked examples); S3-12 aJV2y; #154
   it('script a next-bet worked example for each strategy, replayed through guided practice; basics has no strategy to script', () => {
     expect(lesson('craps-basics').content!.workedExample).toBeNull();
     const correct = (id: string) => {

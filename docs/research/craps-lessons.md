@@ -658,7 +658,7 @@ Sources:
 
 ## 8. Worked examples (engine replay)
 
-Each strategy lesson's worked example (`packages/definitions/src/lessons/craps.ts`) is replayed at build time by `strategyStepProblems` (`packages/definitions/src/strategy-examples.ts`). The replay uses guided practice on standard craps at 3-4-5x with 1,000 practice funding and the scripted dice stacked into engine state. Each scripted explanation must equal the engine's, and each choice's correct/incorrect mark must match the engine's correction, or the build fails. The payouts quoted in the choice notes come from §2.3: a lay of 10 against 4 wins 5, and a lay of 40 wins 20.
+Each strategy lesson's worked example (`packages/definitions/src/lessons/craps.ts`) is replayed at build time by `strategyStepProblems` (`packages/definitions/src/strategy-examples.ts`). The replay uses guided practice on standard craps at 3-4-5x with 1,000 practice funding and the scripted dice stacked into engine state. Each scripted explanation must equal the engine's, and each choice's correct/incorrect mark must match the engine's correction, or the build fails. The payouts in the choice notes are worked out from §2.3's 1:2 lay ratio against 4: a lay of 10 wins 5, and a lay of 40 wins 20.
 
 | Lesson | Scripted rolls | Engine's next bet |
 | --- | --- | --- |
