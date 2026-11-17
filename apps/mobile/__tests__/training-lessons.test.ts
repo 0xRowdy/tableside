@@ -60,7 +60,7 @@ beforeEach(() => {
 });
 
 describe('the Training service lessons', () => {
-  it('lists all 24 lesson slots with completion, bookmark and access state; only App orientation can be opened yet', async () => {
+  it('lists all 24 lesson slots with completion, bookmark and access state; only App orientation and the roulette lessons can be opened yet', async () => {
     const { service } = setup();
     const catalog = await service.listLessons();
     expect(catalog).toHaveLength(24);

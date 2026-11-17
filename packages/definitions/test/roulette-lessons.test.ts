@@ -30,7 +30,7 @@ describe('roulette lessons', () => {
 
   it('basics cover the wheel and limits, the bet selector, payouts, turn phases, settlement and funding, and hand off to free play or guided practice', () => {
     const basics = text(lesson('roulette-basics'));
-    for (const topic of ['Single zero (0)', 'Double zero (0, 00)', 'inside bets take 1 to 100', 'Bet list is the bet selector', '“Find by number”', 'pays 35:1', 'Betting:', 'Spin:', 'Settle:', 'returns 360', 'buy-in', 'Rebuy', 'End session']) {
+    for (const topic of ['Single zero (0)', 'Double zero (0, 00)', 'inside bets take 1 to 100', 'view is the bet selector', '“Find by number”', 'pays 35:1', 'Betting:', 'Spin:', 'Settle:', 'returns 360', 'buy-in', 'Rebuy', 'End session']) {
       expect(basics).toContain(topic);
     }
     expect(lesson('roulette-basics').content).toMatchObject({ workedExample: null, handoffs: [{ kind: 'free-play', game: 'roulette' }, { kind: 'guided-practice', game: 'roulette', strategy: null }] });
@@ -46,7 +46,7 @@ describe('roulette lessons', () => {
     const last = lesson(id).content!.steps.at(-1)!;
     expect(last.heading).toBe("Stakes change. The house edge doesn't.");
     expect(last.paragraphs.join('\n')).toContain("Changing stakes doesn't remove the house advantage.");
-    expect(last.paragraphs.join('\n')).toMatch(/Tableside's own variant: .* Tableside's rules/);
+    expect(last.paragraphs.join('\n')).toMatch(/Tableside's own variant: .*starting the next cycle yourself.* Tableside's rules/);
   });
 
   it('cite an exact page section or video time for every source, as text links', () => {

@@ -25,7 +25,7 @@ const FORTY_ON_RED: StrategyStepExplanation = {
   state: { counters: { stake: '40' }, lists: {}, lastResult: 'loss', cycleTurn: 2 },
 };
 
-export const MARTINGALE_AFTER_TWO_LOSSES: WorkedExample = {
+export const MARTINGALE_STRATEGY_STEP: WorkedExample = {
   kind: 'strategy-step',
   step: 2,
   game: 'roulette',

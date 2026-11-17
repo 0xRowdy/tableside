@@ -2,7 +2,7 @@
 
 Research date: 2026-11-17. For ticket #155 (spec #53): the six roulette lessons (basics, Flat even-money, Fixed two-dozen coverage, Capped Martingale, Three-win parlay, Bounded Labouchere).
 
-Lesson copy may state only what this note records. Tableside's behaviour is cited to the repo (`file:line` at commit `a36be99`, branch `ticket/155-roulette-lessons`). Every amount and outcome comes from the definitions or from an engine run (see [Engine verification](#engine-verification)). External pages are cited by exact URL and section heading. Earlier strategy research, with the derivations reused here, is in [roulette-strategies.md](roulette-strategies.md).
+Lesson copy may state only what this note records. Tableside's behavior is cited to the repo (`file:line` at commit `a36be99`, branch `ticket/155-roulette-lessons`). Every amount and outcome comes from the definitions or from an engine run (see [Engine verification](#engine-verification)). External pages are cited by exact URL and section heading. Earlier strategy research, with the derivations reused here, is in [roulette-strategies.md](roulette-strategies.md).
 
 Player copy states stakes and caps as amounts ("cap of 320"), never as multiples of a base bet ([spec 1 Amendment 9 §7](https://github.com/0xRowdy/tableside/issues/51#issuecomment-6307750191)). The spec 1 body gives the strategies in units with a base unit of 10 (#51 body, *Built-in strategies* and *Exact money and limits*). The definitions hold the resulting amounts.
 
@@ -10,8 +10,8 @@ Player copy states stakes and caps as amounts ("cap of 320"), never as multiples
 
 | Source | Exact location | Supports |
 | --- | --- | --- |
-| Tableside repo | Files and lines cited inline | All Tableside behaviour, labels, amounts and limits |
-| Spec 1 (#51) | Body: *Game rules › Roulette*, *Built-in strategies* table, *Funding, ending and results* bullets (Session funding, Rebuys, Ending, Results), *Exact money and limits*, *Random protocol*. Amendment 6 §2 ([comment](https://github.com/0xRowdy/tableside/issues/51#issuecomment-6275071941)). Amendment 9 §§2, 6, 7 ([comment](https://github.com/0xRowdy/tableside/issues/51#issuecomment-6307750191)) | Payouts, full loss on zero, the five strategies' accepted behaviour, funding rules, explicit cycle restarts in practice, inside bets via "Find by number", play pausing at a table limit, amounts not units |
+| Tableside repo | Files and lines cited inline | All Tableside behavior, labels, amounts and limits |
+| Spec 1 (#51) | Body: *Game rules › Roulette*, *Built-in strategies* table, *Funding, ending and results* bullets (Session funding, Rebuys, Ending, Results), *Exact money and limits*, *Random protocol*. Amendment 6 §2 ([comment](https://github.com/0xRowdy/tableside/issues/51#issuecomment-6275071941)). Amendment 9 §§2, 6, 7 ([comment](https://github.com/0xRowdy/tableside/issues/51#issuecomment-6307750191)) | Payouts, full loss on zero, the five strategies' accepted behavior, funding rules, explicit cycle restarts in practice, inside bets via "Find by number", play pausing at a table limit, amounts not units |
 | Spec 3 (#53) | Body: *Lessons and worked examples › Content requirements*. Amendment 1 C11 ([comment](https://github.com/0xRowdy/tableside/issues/53#issuecomment-6256389716)) | What each lesson must cover; content rules |
 | [Built-in reference content rights](../decisions/built-in-reference-content-rights.md) | Q1, Q5 and the *Implementation guidance* section | Casino Quest is the owner's chosen roulette research source; cite exact video and timestamp; no implied authorship |
 | Wizard of Odds, roulette basics | [wizardofodds.com/games/roulette/basics/](https://wizardofodds.com/games/roulette/basics/), sections *Introduction*, *American Rules*, *European Rules*, *French Rules*, *Triple-Zero Roulette*, *Betting Systems* | Pocket counts, payouts (dozens, not columns), house edges, la partage/en prison as other rules, zeros losing even-money bets, systems not overcoming the edge |
@@ -265,6 +265,10 @@ Definition: `roulette-strategies.ts:108-140`. Note: "Line 10, 20, 30: bet first 
   | L, W, W (1,000) | 40, 50, 50 | [10,20,30,40] → [20,30] → [] | cycle complete, net **+60** |
   | W, L, W (1,000) | 40, 20, 40 | [20] → [20,20] → [] | net **+60** |
   | 29 losses (10,000) | 40, 50, 60, … 310, 320 (each 10 more) | grows by one entry per loss | after the loss at 320 the next stake is 330; cycle ends `cap`, cycle net **−5,220**; balance 4,780 |
+
+## Handoffs
+
+Each lesson's final step offers free play or guided practice with the strategy filled in. The setup screen it opens explains whether starting uses the guided-practice allowance, and nothing starts or is charged until the learner presses Start (#53 body, *Lessons and worked examples › Structure*, Handoff; frame pX6CV "Practice it" box; #145 handoff, ZBpF3 sheet text in `apps/mobile/src/training/lesson-text.ts`).
 
 ## The house-edge statement
 

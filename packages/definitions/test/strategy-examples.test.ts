@@ -57,9 +57,7 @@ describe('strategy-step worked examples', () => {
 
   it('report a strategy that is not a built-in for the game, and a game with no replay yet', () => {
     expect(strategyStepProblems({ ...MARTINGALE, strategy: 'reverse-martingale' })).toEqual(['the worked example names no built-in roulette strategy: reverse-martingale']);
-    expect(strategyStepProblems({ ...MARTINGALE, strategy: CRAPS_STRATEGIES[0]!.id })).toEqual([
-      `the worked example's strategy ${CRAPS_STRATEGIES[0]!.id} is a craps strategy, not roulette`,
-    ]);
+    expect(strategyStepProblems({ ...MARTINGALE, strategy: CRAPS_STRATEGIES[0]!.id })).toEqual([`the worked example names no built-in roulette strategy: ${CRAPS_STRATEGIES[0]!.id}`]);
     expect(strategyStepProblems({ ...MARTINGALE, game: 'craps' })).toEqual(['no worked-example replay for craps strategies yet']);
   });
 

@@ -12,10 +12,10 @@ export const CONTENT_SHOWN_CUE: CueName = 'card-dealt';
 export const learnAnswerCue = (correct: boolean): CueName => (correct ? 'correct' : 'incorrect');
 
 // Spec 3 Amendment 1 B4; #155
-type ExampleKind = WorkedExample['kind'];
-export const exampleShownCue = (kind: ExampleKind): CueName | null => (kind === 'card-value' ? CONTENT_SHOWN_CUE : null);
-export const exampleAnswerCues = (kind: ExampleKind, correct: boolean): CueName[] =>
-  kind === 'card-value' ? [learnAnswerCue(correct)] : correct ? ['stake-set'] : ['stake-set', 'correction-offered'];
+export const EXAMPLE_CUES: Readonly<Record<WorkedExample['kind'], { readonly shown: CueName | null; answer(correct: boolean): CueName[] }>> = {
+  'card-value': { shown: CONTENT_SHOWN_CUE, answer: (correct) => [learnAnswerCue(correct)] },
+  'strategy-step': { shown: null, answer: (correct) => (correct ? ['stake-set'] : ['stake-set', 'correction-offered']) },
+};
 
 function cuesForChallenge(view: ChallengeView, facts: readonly ChallengeFact[]): CueName[] {
   return facts.flatMap((fact): CueName[] => {

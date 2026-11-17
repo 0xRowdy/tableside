@@ -9,7 +9,7 @@ import type { Lesson } from '@tableside/definitions';
 import type { substituteFeedbackPorts } from '@/feedback/testing/substitutes';
 import type { ChallengeAllowanceState } from '@/training/allowance';
 import type { MemoryTrainingStore } from '@/training/memory-store';
-import { MARTINGALE_AFTER_TWO_LOSSES, withWorkedExample } from '@/training/testing/worked-example';
+import { MARTINGALE_STRATEGY_STEP, withWorkedExample } from '@/training/testing/worked-example';
 
 let mockStore: unknown = null;
 let mockAllowance: ChallengeAllowanceState | null = null;
@@ -256,7 +256,7 @@ describe('lessons', () => {
 
     // Spec 3 Lessons › Structure (worked examples); #155
     it('a strategy step shows the scripted spins, offers the next bets, and answers with the prescription and play cues', async () => {
-      servedLessons().splice(0, Infinity, ...withWorkedExample(actualLessons(), MARTINGALE_AFTER_TWO_LOSSES));
+      servedLessons().splice(0, Infinity, ...withWorkedExample(actualLessons(), MARTINGALE_STRATEGY_STEP));
       await openOrientation();
       await fireEvent.press(button('Next'));
       await header('Help when you need it');

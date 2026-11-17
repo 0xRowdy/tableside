@@ -8,7 +8,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Choice, PlayingCard } from '@/counting/CardChoices';
 import { useFeedback } from '@/feedback/FeedbackProvider';
-import { exampleAnswerCues } from '@/feedback/training-cues';
+import { EXAMPLE_CUES } from '@/feedback/training-cues';
 import { NavButton } from '@/lessons/LessonParts';
 import { prescriptionLine } from '@/play/coaching-text';
 import { GAME_WORDS } from '@/play/game-words';
@@ -29,16 +29,29 @@ interface Picking {
   readonly onPick: (index: number, correct: boolean) => void;
 }
 
+function Response({ headline, note }: { headline: string; note: string | null }) {
+  return (
+    <View style={styles.response} accessibilityLiveRegion="polite" testID="scripted-response">
+      <Text maxFontSizeMultiplier={textScale.display} style={styles.headline}>
+        {headline}
+      </Text>
+      {note && (
+        <Text maxFontSizeMultiplier={textScale.body} style={styles.detail}>
+          {note}
+        </Text>
+      )}
+    </View>
+  );
+}
+
 export function WorkedExample({ example, lesson, busy, onBack, onDone }: { example: Script; lesson: string; busy: boolean; onBack: () => void; onDone: () => void }) {
   const insets = useSafeAreaInsets();
   const feedback = useFeedback();
   const [picked, setPicked] = useState<number | null>(null);
-  const response = picked === null ? null : (example.choices[picked]?.response ?? null);
   const onPick = (index: number, correct: boolean) => {
     setPicked(index);
-    for (const cue of exampleAnswerCues(example.kind, correct)) feedback.cue(cue);
+    for (const cue of EXAMPLE_CUES[example.kind].answer(correct)) feedback.cue(cue);
   };
-  const headline = response && (example.kind === 'card-value' ? hiLoText(example.choices[picked!]!.response.explanation) : prescriptionLine(strategyName(example.strategy), example.choices[picked!]!.response.explanation, GAME_WORDS[example.game]));
   return (
     <ScrollView
       testID="worked-example-scroll"
@@ -61,18 +74,6 @@ export function WorkedExample({ example, lesson, busy, onBack, onDone }: { examp
           {EXAMPLE_NOTE}
         </Text>
         {example.kind === 'card-value' ? <CardValue example={example} picked={picked} onPick={onPick} /> : <StrategyStep example={example} picked={picked} onPick={onPick} />}
-        {response && (
-          <View style={styles.response} accessibilityLiveRegion="polite" testID="scripted-response">
-            <Text maxFontSizeMultiplier={textScale.display} style={styles.headline}>
-              {headline}
-            </Text>
-            {response.note && (
-              <Text maxFontSizeMultiplier={textScale.body} style={styles.detail}>
-                {response.note}
-              </Text>
-            )}
-          </View>
-        )}
         <View style={styles.nav}>
           {picked === null ? (
             <NavButton icon={SkipForward} label={SKIP_EXAMPLE} disabled={busy} onPress={onDone} />
@@ -89,6 +90,7 @@ export function WorkedExample({ example, lesson, busy, onBack, onDone }: { examp
 }
 
 function CardValue({ example, picked, onPick }: { example: CardValueExample } & Picking) {
+  const response = picked === null ? null : example.choices[picked]!.response;
   return (
     <>
       <PlayingCard card={example.card} />
@@ -100,13 +102,15 @@ function CardValue({ example, picked, onPick }: { example: CardValueExample } & 
           <Choice key={answer} label={signed(answer)} spoken={spokenValue(answer)} state={scriptedChoiceState(index, correct, picked)} enabled={picked === null} onPress={() => onPick(index, correct)} />
         ))}
       </View>
+      {response && <Response headline={hiLoText(response.explanation)} note={response.note} />}
     </>
   );
 }
 
-// Spec 3 Lessons › Structure (worked examples): a fixed table state and the strategy's next bet; #155
+// Spec 3 Lessons › Structure (worked examples); #155
 function StrategyStep({ example, picked, onPick }: { example: StrategyStepExample } & Picking) {
   const name = strategyName(example.strategy);
+  const response = picked === null ? null : example.choices[picked]!.response;
   return (
     <>
       <View style={styles.history}>
@@ -128,6 +132,7 @@ function StrategyStep({ example, picked, onPick }: { example: StrategyStepExampl
           return <Choice key={text} label={text} spoken={text} wide state={scriptedChoiceState(index, correct, picked)} enabled={picked === null} onPress={() => onPick(index, correct)} />;
         })}
       </View>
+      {response && <Response headline={prescriptionLine(name, response.explanation, GAME_WORDS[example.game])} note={response.note} />}
     </>
   );
 }

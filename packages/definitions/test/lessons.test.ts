@@ -40,7 +40,7 @@ describe('lesson definitions', () => {
     expect(new Set(LESSONS.filter((lesson) => lesson.section === 'craps').map((lesson) => lesson.game))).toEqual(new Set(['craps']));
   });
 
-  it('author App orientation at version 1 (navigation, help, practice vs casino records), with no material change yet', () => {
+  it('author App orientation at version 1 (navigation, help, practice vs casino records), with no material change yet; roulette is covered in roulette-lessons.test.ts', () => {
     expect(LESSONS.filter(authored).filter((lesson) => lesson.section !== 'roulette').map((lesson) => lesson.id)).toEqual(['app-orientation']);
     const orientation = LESSONS[0]!;
     expect(orientation.summary).toBe('Tabs, help, practice vs casino records');

@@ -1,4 +1,4 @@
-// Spec 3 Lessons › Inventory (Roulette), Content requirements; Amendment 1 C11; docs/research/roulette-lessons.md; #155
+// Spec 3 Lessons › Inventory (Roulette), Content requirements; Amendment 1 C11; #155
 import type { RoulettePocket, Wager } from '@tableside/engine';
 
 import type { Lesson, LessonHandoff, LessonSource, LessonStep } from '../lessons';
@@ -14,7 +14,7 @@ const practiceIt = (strategy: string) =>
 
 const SOURCES = {
   njPayouts: { citation: 'New Jersey Division of Gaming Enforcement, N.J.A.C. 13:69F-5.2 “Roulette: payout odds”, (a)–(c), PDF pages 231–232', url: 'https://www.nj.gov/lps/ge/docs/Regulations/CHAPTER69F.pdf#page=231' },
-  basics: { citation: 'Wizard of Odds, “Roulette basics”, sections “American Rules” and “European Rules”', url: 'https://wizardofodds.com/games/roulette/basics/' },
+  basics: { citation: 'Wizard of Odds, “Roulette basics”, sections “Introduction”, “American Rules” and “European Rules”', url: 'https://wizardofodds.com/games/roulette/basics/' },
   basicsSystems: { citation: 'Wizard of Odds, “Roulette basics”, section “Betting Systems”', url: 'https://wizardofodds.com/games/roulette/basics/' },
   cqPayouts: { citation: 'Casino Quest, “Roulette Payouts!”, at 0:06–0:30 (inside-bet payouts)', url: 'https://www.youtube.com/watch?v=6A-KsmmgiAg&t=6s' },
   systems: { citation: 'Wizard of Odds, “Betting Systems”, section “Introduction”', url: 'https://wizardofodds.com/gambling/betting-systems/' },
@@ -54,7 +54,7 @@ const example = (step: number, strategy: string, parameters: Record<string, stri
 
 const HOUSE_EDGE_HEADING = "Stakes change. The house edge doesn't.";
 const houseEdge = (shape: string) =>
-  `Every bet on the single-zero wheel keeps its 2.70% house edge, and 5.26% on double zero, whatever you stake. ${shape} Changing stakes doesn't remove the house advantage.`;
+  `Each even-money bet keeps its house edge, 2.70% on the single-zero wheel and 5.26% on double zero, whatever you stake. ${shape} Changing stakes doesn't remove the house advantage.`;
 
 export const ROULETTE_BASICS: Lesson = {
   id: 'roulette-basics',
@@ -75,7 +75,7 @@ export const ROULETTE_BASICS: Lesson = {
         heading: 'Placing bets',
         paragraphs: [
           'The table has two views of the same bets. In Table, pick a chip (1, 5, 25, 100, 500 or 1K) and tap a spot on the layout to add it.',
-          'Bet list is the bet selector: every kind of bet with what it pays. Splits, streets, corners, six lines and the other inside bets are under “Find by number”. You enter the total for a wager, not an amount to add, and nothing is placed until you confirm with “Set … to …”.',
+          'The “Bet list” view is the bet selector: every kind of bet with what it pays. Splits, streets, corners, six lines and the other inside bets are under “Find by number”. You enter the total for a wager, not an amount to add, and nothing is placed until you confirm with “Set … to …”.',
           "A bet outside the limits, or more than your balance can cover, is refused and nothing changes.",
         ],
       },
@@ -102,17 +102,17 @@ export const ROULETTE_BASICS: Lesson = {
         ],
       },
       {
-        heading: 'The house edge, and practising',
+        heading: 'The house edge, and practicing',
         paragraphs: [
           'The single-zero wheel has a 2.70% house edge on every bet. Double zero has 5.26%, except the five-number basket at 7.89%. These are properties of the rules, not predictions of your results, and no choice or pattern of bets changes them.',
-          'Free play lets you bet as you like. Guided practice follows one of five built-in strategies: you place each bet yourself, and before a spin that departs from the strategy, it pauses so you can take the bet back or keep it.',
+          'Free play lets you bet as you like. Guided practice follows a strategy, one of the five built-ins or one of your own: you place each bet yourself, and before a spin that departs from the strategy, it pauses so you can take the bet back or keep it.',
           'Practice it: open free play or guided practice. The setup screen shows whether starting uses your allowance. Nothing starts until you press Start.',
         ],
       },
     ],
     null,
     [FREE_PLAY, guided(null)],
-    [SOURCES.basics, SOURCES.njPayouts, SOURCES.cqPayouts],
+    [SOURCES.basics, SOURCES.basicsSystems, SOURCES.njPayouts, SOURCES.cqPayouts],
   ),
 };
 
@@ -156,7 +156,7 @@ export const FLAT_EVEN_MONEY_LESSON: Lesson = {
       {
         heading: 'A baseline for the other strategies',
         paragraphs: [
-          'Every spin costs the same share of its stake on average: 2.70% on single zero, 5.26% on double zero. That steady baseline is what the progressions are compared against.',
+          'Every spin costs the same share of its stake on average: 2.70% on single zero, 5.26% on double zero.',
           practiceIt('Flat even-money'),
           "Tableside's own policy: the 10 stake and the Red default are Tableside's choices, built from the standard even-money bet.",
         ],
@@ -283,9 +283,9 @@ export const CAPPED_MARTINGALE_LESSON: Lesson = {
       {
         heading: HOUSE_EDGE_HEADING,
         paragraphs: [
-          houseEdge('Martingale changes how wins and losses arrive: each cycle either completes at +10 or reaches the cap down 630.'),
+          houseEdge('Martingale changes how wins and losses arrive: a cycle that completes ends +10, and one that reaches the cap is down 630.'),
           practiceIt('capped Martingale'),
-          "Tableside's own variant: the 10 opening stake, the cap of 320, ending the cycle at the cap, and pausing rather than betting what's left are Tableside's rules, not the published system.",
+          "Tableside's own variant: the 10 opening stake, the cap of 320, ending the cycle at the cap, starting the next cycle yourself, and pausing rather than betting what's left are Tableside's rules, not the published system.",
         ],
       },
     ],
@@ -405,9 +405,9 @@ export const BOUNDED_LABOUCHERE_LESSON: Lesson = {
       {
         heading: HOUSE_EDGE_HEADING,
         paragraphs: [
-          houseEdge('Labouchere changes how wins and losses arrive: each cycle either completes at +60 or reaches the cap after a long losing run.'),
+          houseEdge('Labouchere changes how wins and losses arrive: a cycle that completes ends +60, and one that reaches the cap is down after a long losing run.'),
           practiceIt('bounded Labouchere'),
-          "Tableside's own variant: the 10, 20, 30 line, the cap of 320, and pausing rather than betting what's left are Tableside's rules, not the published system.",
+          "Tableside's own variant: the 10, 20, 30 line, the cap of 320, starting the next cycle yourself, and pausing rather than betting what's left are Tableside's rules, not the published system.",
         ],
       },
     ],

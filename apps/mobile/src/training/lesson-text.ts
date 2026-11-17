@@ -91,7 +91,7 @@ export const TRY_IT_AGAIN = 'Try it again';
 export const CONTINUE = 'Continue';
 export const SKIP_EXAMPLE = 'Skip example';
 
-// Spec 3 Lessons › Structure (worked examples): a strategy's next bet after a fixed table state; #155
+// Spec 3 Lessons › Structure (worked examples); #155
 export const SO_FAR = 'So far';
 export const strategyName = (id: string) => STRATEGY_NAMES.get(id) ?? id;
 export const strategyPrompt = (name: string) => `What does ${name} bet next?`;

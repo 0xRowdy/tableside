@@ -3,7 +3,7 @@ import {
   advanceActivity,
   canonicalJson,
   createActivity,
-  explainPrescription,
+  explainStrategyBets,
   RANDOM_PROTOCOL_VERSION,
   type ActivityState,
   type Command,
@@ -12,12 +12,10 @@ import {
   type GameId,
   type RouletteActivityState,
   type RoulettePocket,
-  type RouletteSituation,
   type StrategyDefinition,
   type Wager,
 } from '@tableside/engine';
 
-import { CRAPS_STRATEGIES } from './craps-strategies';
 import { ROULETTE_PRESETS } from './roulette';
 import { ROULETTE_STRATEGIES } from './roulette-strategies';
 import type { ScriptedChoice } from './worked-examples';
@@ -27,10 +25,10 @@ export interface ScriptedTurn {
   readonly outcome: ScriptedOutcome;
 }
 
-// #154 adds craps dice, #152 blackjack cards
+// TODO(#154)
 export type ScriptedOutcome = { readonly pocket: RoulettePocket };
 
-// #152 adds blackjack play moves
+// TODO(#152)
 export interface StrategyBetsAnswer {
   readonly kind: 'bets';
   readonly bets: readonly Wager[];
@@ -38,7 +36,7 @@ export interface StrategyBetsAnswer {
 
 export type StrategyStepAnswer = StrategyBetsAnswer;
 
-// Spec 3 Lessons › Structure (worked examples render engine-format explanation facts)
+// Spec 3 Lessons › Structure (worked examples)
 export type StrategyStepExplanation = Explanation;
 
 export interface StrategyStepExample {
@@ -61,7 +59,6 @@ interface Stage {
   readonly strategies: readonly StrategyDefinition[];
   start(example: StrategyStepExample, definition: StrategyDefinition): ActivityState;
   stack(state: ActivityState, outcome: ScriptedOutcome): ActivityState;
-  situation(state: ActivityState, example: StrategyStepExample): unknown;
 }
 
 const identity = { activityId: 'worked-example', owner: 'worked-example', device: 'build' } as const;
@@ -81,16 +78,9 @@ const ROULETTE_STAGE: Stage = {
     if (!roulette.outcome) throw new Error('no spin to stack');
     return { ...roulette, outcome: { ...roulette.outcome, pocket: outcome.pocket } };
   },
-  situation: (state, example): RouletteSituation => {
-    const roulette = state as RouletteActivityState;
-    const last = example.turns.at(-1);
-    return { game: 'roulette', rules: { wheel: roulette.rules.wheel, limits: roulette.rules.limits }, balance: roulette.balance, lastPocket: last ? last.outcome.pocket : null };
-  },
 };
 
 const STAGES: Partial<Record<GameId, Stage>> = { roulette: ROULETTE_STAGE };
-
-const BUILT_IN_ELSEWHERE: Readonly<Record<string, readonly StrategyDefinition[]>> = { roulette: ROULETTE_STRATEGIES, craps: CRAPS_STRATEGIES };
 
 function send(state: ActivityState, command: Command): { state: ActivityState; facts: readonly DomainFact[] } {
   const result = advanceActivity(state, { sequence: state.sequence, commandId: `replay-${state.sequence}`, command });
@@ -104,7 +94,7 @@ function place(state: ActivityState, wagers: readonly Wager[]): ActivityState {
 
 const corrected = (facts: readonly DomainFact[]) => facts.find((fact) => fact.kind === 'correction-offered') as (DomainFact & { explanation: Explanation }) | undefined;
 
-const betsText = (bets: readonly Wager[]) => (bets.length === 0 ? 'no bets' : bets.map((bet) => `${bet.amount} on ${bet.target}`).join(' and '));
+const diagnosticBets = (bets: readonly Wager[]) => (bets.length === 0 ? 'no bets' : bets.map((bet) => `${bet.amount} on ${bet.target}`).join(' and '));
 
 // Spec 3 Testing Decisions › Build-time check; Spec 1 Guided practice
 export function strategyStepProblems(example: StrategyStepExample): readonly string[] {
@@ -112,15 +102,12 @@ export function strategyStepProblems(example: StrategyStepExample): readonly str
   const stage = STAGES[example.game];
   if (!stage) return [`no worked-example replay for ${example.game} strategies yet`];
   const definition = stage.strategies.find((strategy) => strategy.id === example.strategy);
-  if (!definition) {
-    const elsewhere = Object.entries(BUILT_IN_ELSEWHERE).find(([, strategies]) => strategies.some((strategy) => strategy.id === example.strategy));
-    return [elsewhere ? `the worked example's strategy ${example.strategy} is a ${elsewhere[0]} strategy, not ${example.game}` : `the worked example names no built-in ${example.game} strategy: ${example.strategy}`];
-  }
+  if (!definition) return [`the worked example names no built-in ${example.game} strategy: ${example.strategy}`];
   const seen = new Set<string>();
   for (const { answer } of example.choices) {
     const key = canonicalJson([...answer.bets].sort((a, b) => a.target.localeCompare(b.target)));
     if (answer.bets.length === 0) problems.push('a worked example choice places at least one bet');
-    else if (seen.has(key)) problems.push(`worked example choice ${betsText(answer.bets)} is offered twice`);
+    else if (seen.has(key)) problems.push(`worked example choice ${diagnosticBets(answer.bets)} is offered twice`);
     seen.add(key);
   }
   if (problems.length > 0) return problems;
@@ -130,7 +117,7 @@ export function strategyStepProblems(example: StrategyStepExample): readonly str
     state = stage.start(example, definition);
     example.turns.forEach((turn, index) => {
       const begun = send(place(state, turn.wagers), { kind: 'begin-turn' });
-      if (corrected(begun.facts)) throw new Error(`scripted turn ${index + 1} (${betsText(turn.wagers)}) does not follow ${definition.name}`);
+      if (corrected(begun.facts)) throw new Error(`scripted turn ${index + 1} (${diagnosticBets(turn.wagers)}) does not follow ${definition.name}`);
       state = send(stage.stack(begun.state, turn.outcome), { kind: 'settle-turn' }).state;
     });
   } catch (error) {
@@ -138,14 +125,12 @@ export function strategyStepProblems(example: StrategyStepExample): readonly str
   }
   const run = state.strategy;
   if (!run || run.status !== 'active') return [`after the scripted turns ${definition.name} has no next bet (its cycle ended)`];
-  const explained = explainPrescription(definition, example.parameters, stage.situation(state, example), run.progress);
-  if (!explained.ok) return [`the engine cannot explain the next bet: ${explained.error}`];
-  const engine = explained.explanation;
+  const engine = explainStrategyBets(state)!;
   if (engine.prescription.status !== 'prescribed') return [`after the scripted turns ${definition.name} places no new bets (${engine.prescription.status})`];
   const replayed = canonicalJson(engine);
 
   for (const { answer, response } of example.choices) {
-    const label = `worked example, choice ${betsText(answer.bets)}`;
+    const label = `worked example, choice ${diagnosticBets(answer.bets)}`;
     let correction: Explanation | undefined;
     try {
       correction = corrected(send(place(state, answer.bets), { kind: 'begin-turn' }).facts)?.explanation;
