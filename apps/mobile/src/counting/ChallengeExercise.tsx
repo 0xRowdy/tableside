@@ -1,4 +1,4 @@
-// Spec 3 S3-03 P4WjR, drVnR, BFdJT, S3-04 qdnQm, S3-05 EDnGd, S3-06 C53yTW; #158, #132, #133
+// Spec 3 S3-03 P4WjR, drVnR, BFdJT, S3-04 qdnQm, S3-05 EDnGd, S3-06 C53yTW; #158, #132, #133, #146
 
 import type { ChallengeCategory, ChallengeEntry, ChallengeView, CountRange, LearnFeedback } from '@tableside/engine';
 import { CircleCheck, CircleDot, CircleX, SkipForward } from 'lucide-react-native';
@@ -8,6 +8,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button } from '@/components/Button';
 import { Choice, PlayingCard } from '@/counting/CardChoices';
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
+import { FirstUseHint, HelpButton } from '@/lessons/FirstUseHints';
 import { SaveFailedBanner } from '@/play/TableChrome';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/theme/tokens';
 import { CountAid } from './CountAid';
@@ -58,12 +59,15 @@ export function ChallengeExercise({
   return (
     <ScrollView style={styles.screen} contentContainerStyle={{ paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right, paddingBottom: space[6] }}>
       <View style={styles.header}>
-        <Text accessibilityRole="header" maxFontSizeMultiplier={textScale.display} style={styles.title}>
-          {CATEGORY_TEXT[view.category].title}
-        </Text>
-        <Text maxFontSizeMultiplier={textScale.body} style={styles.subtitle}>
-          {`${variantLabel(view.variant)} · ${PACING_LABEL}`}
-        </Text>
+        <View style={styles.titles}>
+          <Text accessibilityRole="header" maxFontSizeMultiplier={textScale.display} style={styles.title}>
+            {CATEGORY_TEXT[view.category].title}
+          </Text>
+          <Text maxFontSizeMultiplier={textScale.body} style={styles.subtitle}>
+            {`${variantLabel(view.variant)} · ${PACING_LABEL}`}
+          </Text>
+        </View>
+        <HelpButton />
       </View>
       <View style={styles.progress}>
         <Text maxFontSizeMultiplier={textScale.body} style={styles.progressText}>
@@ -144,9 +148,11 @@ function CountingBody({
             </Text>
           )}
         </View>
+        {view.countAid && <FirstUseHint id="show-count" />}
         {view.countAid && <CountAid key={view.attemptId} variant={view.variant} aid={view.countAid} enabled={ready && view.legalCommands.includes('reveal-count')} onReveal={() => onCommand({ kind: 'reveal-count' })} />}
       </View>
       <View style={[styles.column, sideBySide && styles.side]}>
+        {view.phase === 'question' && <FirstUseHint id="count-entry" />}
         {view.phase === 'question' && (
           <CountEntry
             key={view.position}
@@ -241,7 +247,8 @@ function CoachButton({ label, primary = false, enabled, onPress }: { label: stri
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: palette.background },
-  header: { gap: 2, minHeight: 60, justifyContent: 'center', paddingHorizontal: space[4], paddingVertical: space[1] },
+  header: { flexDirection: 'row', alignItems: 'center', gap: space[2], minHeight: 60, paddingLeft: space[4], paddingRight: space[2], paddingVertical: space[1] },
+  titles: { flex: 1, gap: 2 },
   title: { fontFamily: fonts.uiBold, fontSize: 17, color: palette.foreground },
   subtitle: { fontFamily: fonts.ui, fontSize: 13, color: palette.mutedForeground },
   progress: { gap: space[1] + 2, paddingHorizontal: space[4], paddingTop: space[1] + 2, paddingBottom: space[3] - 2 },

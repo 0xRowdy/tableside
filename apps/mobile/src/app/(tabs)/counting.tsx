@@ -1,4 +1,4 @@
-// Spec 3 Screens; Lessons › Entry points, Structure (Handoff); #158, #132, #145, #133
+// Spec 3 Screens; Lessons › Entry points, Structure; #158, #132, #145, #133, #146
 import { CHALLENGE_LESSONS } from '@tableside/definitions';
 import { CHALLENGE_VARIANTS, type ChallengeVariant } from '@tableside/engine';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
@@ -12,10 +12,13 @@ import { ChallengeSetupScreen } from '@/counting/ChallengeSetupScreen';
 import { CountingHome } from '@/counting/CountingHome';
 import { useFeedback } from '@/feedback/FeedbackProvider';
 import { useLoaded } from '@/hooks/use-loaded';
+import { ScreenHints } from '@/lessons/FirstUseHints';
 import { lessonHref } from '@/lessons/routes';
 import { allowanceCopy, COUNTING_TITLE, FINDING_ATTEMPT } from '@/training/challenge-text';
 import { setupFor, type ChallengeSetup, type TrainingService, type TrainingSnapshot } from '@/training/service';
 import { useLessons, useTraining } from '@/training/TrainingProvider';
+
+const EXERCISE_HINTS = ['count-entry', 'show-count'] as const;
 
 const lastSetupOf = (service: TrainingService) => service.lastSetup();
 const allowanceOf = async (service: TrainingService, _reloadOnStatus: TrainingSnapshot['status']) => allowanceCopy(await service.allowance());
@@ -44,7 +47,8 @@ export default function Counting() {
       return <Placeholder title={COUNTING_TITLE} message={FINDING_ATTEMPT} />;
     case 'active':
       return (
-        <ChallengeExercise
+        <ScreenHints service={service} ids={EXERCISE_HINTS}>
+          <ChallengeExercise
           view={snapshot.view}
           busy={snapshot.busy}
           saveFailed={snapshot.save === 'failed'}
@@ -52,7 +56,8 @@ export default function Counting() {
           // Spec 3 Learn, Check and assistance › Malformed input: cue 9
           onInputRejected={() => feedback.cue('input-rejected')}
           onRetrySave={() => void service.retrySave()}
-        />
+          />
+        </ScreenHints>
       );
     case 'ended':
       if (reviewing === snapshot.record.attemptId) return <CardReview

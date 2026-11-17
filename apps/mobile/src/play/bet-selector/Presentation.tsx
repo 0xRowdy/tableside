@@ -2,6 +2,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Button } from '@/components/Button';
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
+import { FirstUseHint } from '@/lessons/FirstUseHints';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/theme/tokens';
 
 export type Presentation = 'table' | 'selector';
@@ -13,11 +14,16 @@ const OPTIONS: readonly { value: Presentation; label: string }[] = [
 
 export function PresentationSwitch({ value, onChange }: { value: Presentation; onChange: (value: Presentation) => void }) {
   return (
-    <View accessibilityRole="tablist" accessibilityLabel="Presentation" style={styles.switch}>
-      {OPTIONS.map((option) => (
-        <Option key={option.value} label={option.label} selected={option.value === value} onPress={() => onChange(option.value)} />
-      ))}
-    </View>
+    <>
+      <View accessibilityRole="tablist" accessibilityLabel="Presentation" style={styles.switch}>
+        {OPTIONS.map((option) => (
+          <Option key={option.value} label={option.label} selected={option.value === value} onPress={() => onChange(option.value)} />
+        ))}
+      </View>
+      <View style={styles.hint}>
+        <FirstUseHint id="bet-selector" />
+      </View>
+    </>
   );
 }
 
@@ -53,6 +59,7 @@ export function DraftBar({ name, amount, onEdit }: { name: string; amount: strin
 }
 
 const styles = StyleSheet.create({
+  hint: { marginHorizontal: space[4] },
   switch: { flexDirection: 'row', gap: space[1], marginHorizontal: space[4], padding: space[1], borderRadius: radius.pill, backgroundColor: palette.card },
   option: {
     flex: 1,

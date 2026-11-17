@@ -85,4 +85,6 @@ export {
   type LessonStep,
 } from './lessons';
 
+export { HINT_IDS, HINT_MAX_LENGTH, HINTS, hintProblems, type Hint, type HintId } from './hints';
+
 export { workedExampleProblems, type CardValueExample, type ScriptedChoice, type ScriptedResponse, type WorkedExample } from './worked-examples';
