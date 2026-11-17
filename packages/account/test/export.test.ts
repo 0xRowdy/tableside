@@ -101,6 +101,9 @@ describe('the server export', () => {
 describe('challenge attempts in the server export', () => {
   it('holds every synced challenge attempt whole as versioned JSON, with no CSV and no device preference', async () => {
     const { phone, email } = await signedInPhone('attempts');
+    const training = await phone.training();
+    await training.setStartHere(false);
+    await training.hintSeen('count-entry');
     const first = await phone.playCheck({ wrong: 1 });
     const second = await phone.playCheck({ abandonAfter: 2 });
     await phone.account.sync.reconcile();

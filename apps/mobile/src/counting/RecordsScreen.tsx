@@ -11,7 +11,7 @@ import { useLoaded } from '@/hooks/use-loaded';
 import { Group, GroupLabel, ListRow, Note, SettingsScreen } from '@/settings/SettingsParts';
 import { fonts, palette, radius, space, textScale } from '@/theme/tokens';
 import { COUNTING_TITLE } from '@/training/challenge-text';
-import { attemptIdentity, type GroupProgress, type Progress } from '@/training/progress';
+import { attemptIdentity, offersReview, type GroupProgress, type Progress } from '@/training/progress';
 import {
   bestsLabel,
   bestText,
@@ -31,7 +31,6 @@ import {
   type StatText,
 } from '@/training/records-text';
 import type { LessonEntry, TrainingService } from '@/training/service';
-import type { AcceptedAttempt } from '@/training/store';
 
 import { CardReview } from './CardReview';
 
@@ -98,7 +97,7 @@ export function RecordsScreen({
                 title={text.title}
                 detail={text.detail}
                 value={text.value}
-                onPress={hasReview(record) ? () => void openReview(record.attemptId) : undefined}
+                onPress={offersReview(record) ? () => void openReview(record.attemptId) : undefined}
               />
             );
           })}
@@ -108,10 +107,6 @@ export function RecordsScreen({
     </SettingsScreen>
   );
 }
-
-// Spec 3 Amendment 1 C8
-const hasReview = (record: AcceptedAttempt) =>
-  record.review ? record.review.length > 0 : Object.values(record.metrics).some((result) => result !== null && result.total > 0);
 
 function GroupCard({ group }: { group: GroupProgress }) {
   const stats = [...bestText(group), ...(group.key.assistanceClass === 'unassisted-check' ? [fastestText(group)] : [])];

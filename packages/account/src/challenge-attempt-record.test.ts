@@ -1,7 +1,7 @@
-import type { ChallengeAttemptRecord } from '@tableside/engine';
+import type { ChallengeAttemptRecord, ChallengeAttemptSummary } from '@tableside/engine';
 import { describe, expect, it } from 'vitest';
 
-import { challengeAttempt, challengeAttemptSummary } from './challenge-attempt-record';
+import { challengeAttempt } from './challenge-attempt-record';
 import { recordTypes } from './sync/registry';
 
 const record: ChallengeAttemptRecord = {
@@ -50,6 +50,8 @@ describe('the challenge-attempt registration (spec 3 Synchronized record types)'
     expect(challengeAttempt.isPayload({ ...record, endingReason: 'unfinished' })).toBe(false);
     expect(challengeAttempt.isPayload({ ...record, recordVersion: 2 })).toBe(false);
     expect(challengeAttempt.isPayload({ ...record, deviceSequence: 0 })).toBe(false);
+    expect(challengeAttempt.isPayload({ ...record, meteringBasis: 'premium' })).toBe(true);
+    expect(challengeAttempt.isPayload({ ...record, meteringBasis: 'free-play' })).toBe(false);
   });
 
   it('adds nothing to practice totals', () => {
@@ -58,23 +60,12 @@ describe('the challenge-attempt registration (spec 3 Synchronized record types)'
 
   // Spec 3 Amendment 1 C8, Amendment 4 §1
   it('bootstraps a summary without the review facts, and reads the whole record as detail', () => {
-    const summary = challengeAttemptSummary(record);
-    expect(summary).not.toHaveProperty('review');
-    expect(summary).toMatchObject({
-      groupKey: record.groupKey,
-      metrics: record.metrics,
-      endingReason: 'completed',
-      deviceSequence: 3,
-      performanceMs: 41_000,
-      finances: null,
-      allowancePolicyVersion: 'launch-1',
-      meteringBasis: 'challenge-attempt',
-    });
+    const summary = Object.fromEntries(Object.entries(record).filter(([key]) => key !== 'review'));
     expect(challengeAttempt.fromChange({ record: summary })).toEqual(summary);
     expect(challengeAttempt.fromChange({ record })).toEqual(record);
-    expect(challengeAttempt.detail?.complete(summary)).toBe(false);
+    expect(challengeAttempt.detail?.complete(summary as ChallengeAttemptSummary)).toBe(false);
     expect(challengeAttempt.detail?.complete(record)).toBe(true);
-    expect(challengeAttempt.detail?.at(summary)).toBe(record.endedAt);
+    expect(challengeAttempt.detail?.at(summary as ChallengeAttemptSummary)).toBe(record.endedAt);
   });
 
   it('reads only its own payloads from feed changes', () => {

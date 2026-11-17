@@ -49,7 +49,9 @@ begin
     or jsonb_typeof(v_payload -> 'metrics') is distinct from 'object'
     or jsonb_typeof(v_payload -> 'review') is distinct from 'array'
     or jsonb_typeof(v_payload -> 'interrupted') is distinct from 'boolean'
-    or jsonb_typeof(v_payload -> 'meteringBasis') is distinct from 'string'
+    -- Amendment 4 §1: the metering basis and the allowance-policy version in force
+    or v_payload ->> 'meteringBasis' is null or v_payload ->> 'meteringBasis' not in ('challenge-attempt', 'premium')
+    or jsonb_typeof(v_payload -> 'allowancePolicyVersion') not in ('string', 'null')
     or jsonb_typeof(v_payload -> 'startedAt') is distinct from 'number'
     or jsonb_typeof(v_payload -> 'endedAt') is distinct from 'number' then
     return jsonb_build_object('status', 'rejected', 'code', 'invalid-payload');

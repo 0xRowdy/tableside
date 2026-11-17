@@ -1,8 +1,11 @@
 // Spec 3 Synchronized record types › Challenge attempt; Amendment 1 C8, Amendment 4 §1; #142
 
-import { ATTEMPT_ENDING_REASONS, CHALLENGE_RECORD_VERSION, type ChallengeAttemptRecord, type ChallengeAttemptSummary } from '@tableside/engine';
+import { ATTEMPT_ENDING_REASONS, CHALLENGE_RECORD_VERSION, type ChallengeAttemptRecord, type ChallengeAttemptSummary, type MeteringBasis } from '@tableside/engine';
 
 import type { RecordType } from './sync/registry';
+
+// Spec 3 Amendment 4 §1
+const METERING_BASES: readonly MeteringBasis[] = ['challenge-attempt', 'premium'];
 
 const isObject = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
 const isCount = (value: unknown) => Number.isSafeInteger(value) && (value as number) >= 1;
@@ -25,18 +28,13 @@ function isSummary(value: unknown): value is ChallengeAttemptSummary {
     isNullOr(value.performanceMs, Number.isFinite) &&
     isNullOr(value.finances, isObject) &&
     isNullOr(value.allowancePolicyVersion, (version) => typeof version === 'string') &&
-    typeof value.meteringBasis === 'string' &&
+    METERING_BASES.includes(value.meteringBasis as MeteringBasis) &&
     Number.isSafeInteger(value.startedAt) &&
     Number.isSafeInteger(value.endedAt)
   );
 }
 
 const isRecord = (value: unknown): value is ChallengeAttemptRecord => isSummary(value) && Array.isArray((value as { review?: unknown }).review);
-
-// Spec 3 Amendment 1 C8
-export function challengeAttemptSummary(record: ChallengeAttemptRecord): ChallengeAttemptSummary {
-  return Object.fromEntries(Object.entries(record).filter(([key]) => key !== 'review')) as unknown as ChallengeAttemptSummary;
-}
 
 export const challengeAttempt: RecordType<ChallengeAttemptRecord, ChallengeAttemptRecord | ChallengeAttemptSummary> = {
   name: 'challenge-attempt',

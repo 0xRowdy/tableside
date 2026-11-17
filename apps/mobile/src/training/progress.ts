@@ -111,6 +111,10 @@ function groupProgress(id: string, attempts: readonly ProgressAttempt[]): GroupP
 }
 
 // Spec 3 Comparison groups › Personal bests (Fastest)
+// Spec 3 Amendment 1 C8; #142
+export const offersReview = (record: AcceptedAttempt): boolean =>
+  record.review ? record.review.length > 0 : Object.values(record.metrics).some((result) => result !== null && result.total > 0);
+
 export function everyMetricPerfect(record: AcceptedAttempt): boolean {
   const tested = CHALLENGE_METRICS.flatMap((metric) => record.metrics[metric] ?? []);
   return tested.length > 0 && tested.every((result) => result.correct === result.total);

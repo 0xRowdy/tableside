@@ -37,7 +37,6 @@ async function ended(store: SqliteActivityStore, attemptId: string, overrides: P
   return store.recordAttempt(attemptRecord(attemptId, overrides));
 }
 
-// What another installation wrote, as the feed delivers it
 function elsewhere(attemptId: string, position: number, overrides: Partial<ChallengeAttemptRecord> = {}): ChallengeAttemptRecord {
   return { ...attemptRecord(attemptId, { installation: 'other-device' }), deviceSequence: position, ...overrides };
 }

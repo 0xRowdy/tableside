@@ -3,7 +3,8 @@
 import type { ChallengeAttemptRecord } from '@tableside/engine';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { PROTOCOL_VERSION, byOriginatingDevice, challengeAttempt, challengeAttemptSummary } from '../src';
+import type { TrainingService } from '../../../apps/mobile/src/training/service';
+import { PROTOCOL_VERSION, byOriginatingDevice, challengeAttempt } from '../src';
 import { prepareOperation } from '../src/sync/protocol';
 import {
   type SimulatedDevice,
@@ -45,6 +46,14 @@ function accountOf(d: SimulatedDevice): string {
   const gate = d.account.gate;
   if (gate.state !== 'active') throw new Error(`${d.name} is not signed in`);
   return gate.accountId;
+}
+
+// Spec 3 Amendment 1 C7
+const PREFERENCES = ['challenge.last-setup', 'learning.start-here-dismissed', 'learning.hints-seen'];
+
+async function writePreferences(service: TrainingService) {
+  await service.setStartHere(false);
+  await service.hintSeen('count-entry');
 }
 
 const installationOf = (d: SimulatedDevice) => d.vault.store().identity.installationId;
@@ -208,7 +217,9 @@ describe('bootstrap (Amendment 1 C8, Amendment 4 §1)', () => {
     const rows = await stack.sql<{ change: { record: Record<string, unknown>; origin: unknown } }[]>`
       select change from private.snapshot_challenge_attempts(${accountOf(phone)}::uuid, 'challenge-attempt')`;
     expect(rows).toHaveLength(1);
-    expect(rows[0]!.change).toEqual({ record: challengeAttemptSummary(record), origin: { installation: installationOf(phone), position: 1 } });
+    expect(rows[0]!.change.origin).toEqual({ installation: installationOf(phone), position: 1 });
+    expect(rows[0]!.change.record).not.toHaveProperty('review');
+    expect({ ...rows[0]!.change.record, review: record.review }).toEqual(record);
     expect(rows[0]!.change.record).toMatchObject({
       groupKey: record.groupKey,
       metrics: record.metrics,
@@ -232,10 +243,11 @@ describe('bootstrap (Amendment 1 C8, Amendment 4 §1)', () => {
 // Spec 3 Amendment 1 C9
 describe('the local export supplement', () => {
   it('holds an unfinished Check only as its entered answers and the fact it exists, and no device preference', async () => {
-    const { phone } = await twoDevices('supplement');
+    const { phone, tablet } = await twoDevices('supplement');
+    const service = await phone.training();
+    await writePreferences(service);
     phone.proxy.online = false;
     const ended = await phone.playCheck();
-    const service = await phone.training();
     await service.startAttempt({ category: 'card-values', variant: 'check' });
     let snapshot = service.snapshot();
     for (let guard = 0; snapshot.status === 'active' && snapshot.view.phase !== 'question' && guard < 10; guard++) {
@@ -260,8 +272,15 @@ describe('the local export supplement', () => {
     ]);
     const unfinished = JSON.stringify(supplement?.unfinished);
     for (const hidden of ['reference', 'rank', 'suit', 'items', 'random', 'checkpoint', 'review']) expect(unfinished).not.toContain(hidden);
-    for (const preference of ['challenge.last-setup', 'learning.start-here-dismissed', 'learning.hints-seen']) {
-      expect(JSON.stringify(supplement)).not.toContain(preference);
+    for (const preference of PREFERENCES) expect(JSON.stringify(supplement)).not.toContain(preference);
+
+    phone.proxy.online = true;
+    await synced(phone, tablet);
+    const uploads = phone.proxy.sent.filter(({ url }) => url.includes('sync_upload_v1')).map(({ body }) => body ?? '');
+    expect(uploads.some((body) => body.includes(ended.attemptId))).toBe(true);
+    for (const preference of PREFERENCES) {
+      for (const body of uploads) expect(body).not.toContain(preference);
+      expect(JSON.stringify(await acceptedOn(tablet))).not.toContain(preference);
     }
   });
 });
