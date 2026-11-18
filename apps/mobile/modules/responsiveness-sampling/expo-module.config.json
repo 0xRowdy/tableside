@@ -1,0 +1,9 @@
+{
+  "platforms": ["apple", "android"],
+  "apple": {
+    "modules": ["ResponsivenessSamplingModule"]
+  },
+  "android": {
+    "modules": ["expo.modules.responsivenesssampling.ResponsivenessSamplingModule"]
+  }
+}

@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/Button';
 import { GameCard } from '@/components/GameCard';
+import { useLaunchSample } from '@/hooks/use-launch-sample';
 import { Notice, NoticeText } from '@/components/Notice';
 import { LAUNCH_GAMES } from '@/games';
 import { lessonsHref } from '@/lessons/routes';
@@ -25,6 +26,7 @@ export default function Home() {
   const suspended = snapshot.status === 'active' && snapshot.suspension?.reached ? snapshot : null;
   const words = suspended ? GAME_WORDS[suspended.view.game] : null;
   const { service: training, learning } = useLearning();
+  useLaunchSample();
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>

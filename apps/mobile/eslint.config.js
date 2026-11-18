@@ -8,7 +8,7 @@ const GAME_DISPATCH = ['src/app/(tabs)/play.tsx'];
 const GAME_BRANCHES_TO_MOVE = ['src/practice/controller.ts', 'src/play/EndSessionDialog.tsx'];
 
 const HOOKS = 'src/hooks/**';
-const PLATFORM_ADAPTERS = ['src/practice/app-adapters.ts', 'src/account/device-ports.ts', 'src/account/native-vault.ts'];
+const PLATFORM_ADAPTERS = ['src/practice/app-adapters.ts', 'src/account/device-ports.ts', 'src/account/native-vault.ts', 'src/responsiveness/recorder.tsx'];
 
 const EFFECT_ALTERNATIVES =
   'Use a hook from src/hooks instead: useLoaded (load a value), useFollow (keep a subscription while mounted), usePolling, useMoveFocus, useAnnouncement; or React\'s useSyncExternalStore to read a store. If none fits, move the work into the event handler or controller that changes the state rather than reacting to it; only extend src/hooks when a new intent needs a hook.';
