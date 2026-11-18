@@ -1,5 +1,5 @@
 // Spec 3 Testing Decisions › Seam 2, Amendment 1 C6; #158, #132, #137
-import { DEFAULT_TABLE_SETUP, observeSetup } from '@tableside/definitions';
+import { DEFAULT_TABLE_SETUP, tableSetup } from '@tableside/definitions';
 import { createChallenge, EMPTY_QUARANTINE_LIST, encodeChallengeCheckpoint, type ChallengeView } from '@tableside/engine';
 
 import { alwaysAllowed, type AccessSupervisor } from '@/practice/adapters';
@@ -8,7 +8,7 @@ import { plentyAllowance } from '@/training/allowance';
 import { resetTimeText } from '@/training/challenge-text';
 import { MemoryTrainingStore } from '@/training/memory-store';
 import { RECORDED_MS } from '@/training/controller';
-import { TrainingService, type TrainingSnapshot } from '@/training/service';
+import { retrySetup, TrainingService, type TrainingSnapshot } from '@/training/service';
 import { CHALLENGE_CHARGE } from '@/training/store';
 import { newAttempt } from '@/training/testing/store-contract';
 import { cardOf, HI_LO_BY_RANK } from '@/training/testing/hi-lo';
@@ -306,7 +306,7 @@ describe('the Training service', () => {
       metrics: { 'card-values': { correct, total: 20 } },
       assistanceStep: null,
     });
-    expect(snapshot.record.review.map(({ position, entered, reference: value }) => ({ position, entered, reference: value }))).toEqual(review);
+    expect(snapshot.record.review.map((fact) => ({ position: fact.position, entered: fact.kind === 'card-value' ? fact.entered : null, reference: fact.kind === 'card-value' ? fact.reference : null }))).toEqual(review);
   });
 
   it('leaves the catalog and the attempt records as they were until a Check attempt ends', async () => {
@@ -340,16 +340,17 @@ describe('the Training service', () => {
     expect(later.admissions).toEqual([]);
   });
 
-  // Spec 3 User stories 27; Challenge content › Table
-  it('validates table options: preset, penetration 50–80% in steps of 5, 0–4 extra players, N from 1 to 10, Observe only', () => {
+  // Spec 3 User stories 27, 28; Challenge content › Table; #138
+  it('validates table options: Observe or Play, preset, penetration 50–80% in steps of 5, 0–4 extra players, N from 1 to 10, counting mode', () => {
     const { service } = setup();
     const table = (options: object) => service.validateSetup({ category: 'table', variant: 'check', table: { ...DEFAULT_TABLE_SETUP, ...options } });
     const invalid = { valid: false, diagnostics: [{ field: 'table', problem: 'invalid' }] };
-    expect([table({ preset: 'H17_noLS', penetration: 50, extraPlayers: 4, interval: 10 }), table({ penetration: 80, interval: 1 })]).toEqual([
+    expect([table({ preset: 'H17_noLS', penetration: 50, extraPlayers: 4, interval: 10 }), table({ penetration: 80, interval: 1 }), table({ seat: 'play', countingMode: 'deviations' })]).toEqual([
+      { valid: true, diagnostics: [] },
       { valid: true, diagnostics: [] },
       { valid: true, diagnostics: [] },
     ]);
-    for (const bad of [{ penetration: 85 }, { penetration: 72 }, { extraPlayers: 5 }, { extraPlayers: -1 }, { interval: 0 }, { interval: 11 }, { interval: 2.5 }, { preset: 'S19' }, { seat: 'play' }]) {
+    for (const bad of [{ penetration: 85 }, { penetration: 72 }, { extraPlayers: 5 }, { extraPlayers: -1 }, { interval: 0 }, { interval: 11 }, { interval: 2.5 }, { preset: 'S19' }, { seat: 'sit-out' }, { countingMode: 'supplied' }, { countingMode: undefined }]) {
       expect([bad, table(bad)]).toEqual([bad, invalid]);
     }
     expect(service.validateSetup({ category: 'table', variant: 'check' })).toEqual(invalid);
@@ -361,7 +362,7 @@ describe('the Training service', () => {
     const options = { ...DEFAULT_TABLE_SETUP, preset: 'H17_LS', penetration: 60, extraPlayers: 2, interval: 3 } as const;
     await service.startAttempt({ category: 'table', variant: 'check', table: options });
     expect(admissions).toEqual([{ category: 'table', variant: 'check' }]);
-    expect((await store.findUnfinishedAttempt())?.specification.table).toEqual(observeSetup(options));
+    expect((await store.findUnfinishedAttempt())?.specification.table).toEqual(tableSetup(options));
     const first = active(service.snapshot());
     expect([first.category, first.phase, first.table?.round, first.table?.interval, first.table?.rules]).toEqual([
       'table',
@@ -381,6 +382,33 @@ describe('the Training service', () => {
       { correct: 0, total: 4 },
       3,
     ]);
+  });
+
+  // Spec 3 User stories 28, 37, 38; Scoring and review › Metrics; #138
+  it('runs a table Play Check attempt from its options: the learner plays every decision, and results score playing adherence beside the counts', async () => {
+    const { service, store } = setup();
+    await service.load();
+    const options = { ...DEFAULT_TABLE_SETUP, seat: 'play', countingMode: 'deviations' } as const;
+    await service.startAttempt({ category: 'table', variant: 'check', table: options });
+    expect((await store.findUnfinishedAttempt())?.specification.table).toEqual(tableSetup(options));
+    let decisions = 0;
+    for (let guard = 0; guard < 3000 && service.snapshot().status === 'active'; guard++) {
+      const view = active(service.snapshot());
+      if (view.phase === 'decision') decisions++;
+      await service.submit(
+        view.phase === 'question' ? { kind: 'skip' } : view.phase === 'decision' ? { kind: 'play', action: view.table?.decision?.kind === 'insurance' ? 'decline-insurance' : 'stand' } : { kind: 'next-item' },
+      );
+    }
+    const [record] = await store.readAttemptRecords();
+    expect([record?.endingReason, record?.metrics['playing-adherence']?.total, record?.metrics['running-count']?.total, record?.groupKey.table?.seat, record?.groupKey.table?.countingMode]).toEqual([
+      'completed',
+      decisions,
+      20,
+      'play',
+      'deviations',
+    ]);
+    expect(record?.metrics['true-count']?.total).toBeGreaterThanOrEqual(10);
+    expect(retrySetup(record!.groupKey)).toEqual({ category: 'table', variant: 'check', table: options });
   });
 
   it('remembers table options with the last setup', async () => {

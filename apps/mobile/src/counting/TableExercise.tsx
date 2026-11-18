@@ -1,21 +1,37 @@
-// Spec 3 Screens › Exercise (table); S3-07 v82z3, AcmMa, bh8oE, xjtSW, heGUV, j4tjKT; #137
+// Spec 3 Screens › Exercise (table); S3-07 v82z3, AcmMa, E3Gbeh, kLgWV, qRHlC, j4X6V; #137, #138
 
-import type { ChallengeEntry, ChallengeView, LearnFeedback, TableHandView, TableView } from '@tableside/engine';
-import { ArrowRight, ChevronsRight, CircleDot, Hand, Info, Layers, Shuffle } from 'lucide-react-native';
-import type { ReactNode } from 'react';
+import type { ChallengeEntry, ChallengeView, LearnFeedback, PlayChoice, TableHandView, TableView } from '@tableside/engine';
+import { ArrowRight, Ban, ChevronsRight, CircleDot, Hand, Info, Layers, Shuffle } from 'lucide-react-native';
+import { useState, type ReactNode } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { Button } from '@/components/Button';
 import { PlayingCard } from '@/counting/CardChoices';
 import { signed } from '@/play/blackjack-text';
 import { FirstUseHint } from '@/lessons/FirstUseHints';
+import { CorrectionPanel } from '@/play/Guidance';
 import { BlackjackFeltRules, FaceDownCard, FeltBadge, PhaseStepper, StatStrip, type PhaseStep } from '@/play/TableChrome';
 import { fonts, palette, radius, space, textScale } from '@/theme/tokens';
 import { conversionText } from '@/training/blackjack-conversion-text';
 import {
   checkpointText,
   checkpointTitle,
+  CHOOSE_AGAIN,
   CONTINUE,
+  DECISION_PROMPT_NOTE,
+  HAND_MOVES,
+  INSURANCE_MOVES,
+  insureLabel,
+  MOVE_LABEL,
+  moveText,
+  PLAY_DEAL_KICKER,
+  PLAY_DEAL_TEXT,
+  PLAY_KICKER,
+  REFUSED_KICKER,
+  refusedText,
+  tableCorrectionCopy,
+  YOU_PLAY,
+  YOUR_MOVE,
   continueText,
   DEALER,
   decksText,
@@ -58,8 +74,12 @@ import { CountEntry } from './CountEntry';
 
 function status(view: ChallengeView, table: TableView): TableStatus {
   if (view.variant === 'learn' && view.feedback) return 'feedback';
+  if (view.phase === 'correction') return 'correction';
   if (table.step === 'shuffle') return 'shuffled';
-  return table.prompt ? 'checkpoint' : 'observing';
+  if (table.decision) return view.variant === 'check' ? 'check-deciding' : 'deciding';
+  if (table.prompt?.timing === 'decision') return 'count-first';
+  if (table.prompt) return 'checkpoint';
+  return table.seat === 'play' ? 'dealing' : 'observing';
 }
 
 // Spec 3 S3-07 v82z3, bh8oE, heGUV
@@ -80,7 +100,7 @@ export function TableProgress({ view, table, timer }: { view: ChallengeView; tab
       {timer && <View style={styles.timer}>{timer}</View>}
       <StatStrip
         stats={[
-          { label: YOUR_SEAT, spoken: YOUR_SEAT_SPOKEN, value: SIMULATED },
+          { label: YOUR_SEAT, spoken: YOUR_SEAT_SPOKEN, value: table.seat === 'play' ? YOU_PLAY : SIMULATED },
           { label: ROUND_LABEL, spoken: ROUND_SPOKEN, value: roundOf(table) },
         ]}
         status={STATUS_TEXT[status(view, table)]}
@@ -112,16 +132,27 @@ export function TableBody({
         {(table.step === 'deal' || table.step === 'reveal') && (
           <>
             <Text maxFontSizeMultiplier={textScale.body} style={styles.kicker}>
-              {OBSERVE_KICKER}
+              {table.seat === 'play' ? PLAY_DEAL_KICKER : OBSERVE_KICKER}
             </Text>
             <Text accessibilityRole="header" maxFontSizeMultiplier={textScale.display} style={styles.panelTitle}>
               {KEEP_THE_COUNT}
             </Text>
             <Text maxFontSizeMultiplier={textScale.body} style={styles.panelText}>
-              {observeText(table)}
+              {table.seat === 'play' ? PLAY_DEAL_TEXT : observeText(table)}
             </Text>
             <Button label={NEXT_CARD} icon={ChevronsRight} stretch disabled={!ready} onPress={() => onCommand({ kind: 'next-item' })} />
           </>
+        )}
+        {table.decision && view.phase === 'decision' && <DecisionPanel key={view.sequence} view={view} table={table} ready={ready} onCommand={onCommand} />}
+        {view.variant === 'learn' && view.correction && (
+          <CorrectionPanel
+            copy={tableCorrectionCopy(view.correction, table)}
+            table={null}
+            fullScreen={false}
+            busy={!ready}
+            onRetry={() => onCommand({ kind: 'retry-correction' })}
+            onOverride={() => onCommand({ kind: 'override-correction' })}
+          />
         )}
         {table.prompt && <CheckpointPanel view={view} table={table} feedback={feedback} entered={entered} ready={ready} onCommand={onCommand} onInputRejected={onInputRejected} />}
         {view.countAid && <FirstUseHint id="show-count" />}
@@ -176,11 +207,65 @@ function CheckpointPanel({
         <View style={styles.recorded} accessibilityLiveRegion="polite" testID="recorded-notice">
           <CircleDot color={palette.foreground} size={18} />
           <Text maxFontSizeMultiplier={textScale.body} style={styles.recordedText}>
-            {tableRecordedText(entered, prompt.count, prompt.count === 'running' && pairs)}
+            {tableRecordedText(entered, prompt.count, prompt.count === 'running' && pairs, prompt.timing === 'decision')}
           </Text>
         </View>
       )}
+      {prompt.timing === 'decision' && (
+        <Text maxFontSizeMultiplier={textScale.body} style={styles.panelText} testID="decision-prompt-note">
+          {DECISION_PROMPT_NOTE}
+        </Text>
+      )}
       {feedback && <TableCoach feedback={feedback} timing={prompt.timing} count={prompt.count} canRetry={view.legalCommands.includes('retry-item')} enabled={ready} onCommand={onCommand} />}
+    </>
+  );
+}
+
+// Spec 3 S3-07 E3Gbeh, kLgWV; User stories 37, 38
+function DecisionPanel({ view, table, ready, onCommand }: { view: ChallengeView; table: TableView; ready: boolean; onCommand: (command: LearnerCommand) => void }) {
+  const decision = table.decision as NonNullable<TableView['decision']>;
+  const [dismissed, setDismissed] = useState(false);
+  const enabled = ready && view.legalCommands.includes('play');
+  const moves = decision.kind === 'insurance' ? INSURANCE_MOVES : HAND_MOVES.filter((move) => move !== 'surrender' || table.rules.lateSurrender);
+  const label = (move: PlayChoice) => (move === 'insure' ? insureLabel(table.rules.minimum) : MOVE_LABEL[move]);
+  if (decision.refused && !dismissed) {
+    const refused = refusedText(table, decision.refused, view.variant);
+    return (
+      <View style={styles.refused} accessibilityLiveRegion="polite" testID="move-refused">
+        <View style={styles.refusedHead}>
+          <Ban color={palette.foreground} size={18} />
+          <Text accessibilityRole="header" maxFontSizeMultiplier={textScale.body} style={styles.kicker}>
+            {REFUSED_KICKER}
+          </Text>
+        </View>
+        <Text maxFontSizeMultiplier={textScale.display} style={styles.checkpointTitle}>
+          {refused.title}
+        </Text>
+        <Text maxFontSizeMultiplier={textScale.body} style={styles.panelText}>
+          {refused.detail}
+        </Text>
+        <Button label={CHOOSE_AGAIN} stretch disabled={!enabled} onPress={() => setDismissed(true)} />
+      </View>
+    );
+  }
+  return (
+    <>
+      <Text maxFontSizeMultiplier={textScale.body} style={styles.kicker}>
+        {PLAY_KICKER}
+      </Text>
+      <Text accessibilityRole="header" maxFontSizeMultiplier={textScale.display} style={styles.panelTitle}>
+        {YOUR_MOVE}
+      </Text>
+      <Text maxFontSizeMultiplier={textScale.body} style={styles.panelText}>
+        {moveText(table)}
+      </Text>
+      <View style={styles.moves}>
+        {moves.map((move) => (
+          <View key={move} style={styles.move}>
+            <Button label={label(move)} variant="secondary" stretch disabled={!enabled} onPress={() => onCommand({ kind: 'play', action: move })} />
+          </View>
+        ))}
+      </View>
     </>
   );
 }
@@ -297,19 +382,19 @@ function Felt({ table }: { table: TableView }) {
           </View>
         )),
       )}
-      {learner?.hands.map((hand) => <SeatHand key={hand.target} hand={hand} />)}
+      {learner?.hands.map((hand) => <SeatHand key={hand.target} hand={hand} seat={table.seat} />)}
     </View>
   );
 }
 
-function SeatHand({ hand }: { hand: TableHandView }) {
+function SeatHand({ hand, seat }: { hand: TableHandView; seat: TableView['seat'] }) {
   return (
     <View style={styles.handRow}>
       {hand.action && (
         <View style={styles.action}>
           <Hand color={palette.foreground} size={16} />
           <Text maxFontSizeMultiplier={textScale.body} style={styles.actionText}>
-            {seatActionText(hand.action)}
+            {seatActionText(hand.action, seat)}
           </Text>
         </View>
       )}
@@ -347,4 +432,8 @@ const styles = StyleSheet.create({
   detail: { fontFamily: fonts.ui, fontSize: 14, lineHeight: 20, color: palette.inkMuted },
   coachActions: { flexDirection: 'row', flexWrap: 'wrap', gap: space[2] },
   pressed: { opacity: 0.8 },
+  moves: { flexDirection: 'row', flexWrap: 'wrap', gap: space[2] },
+  move: { flexGrow: 1, flexBasis: '30%' },
+  refused: { gap: space[2], padding: space[4], borderRadius: radius.lg, borderWidth: 1, borderColor: palette.controlBorder, backgroundColor: palette.card },
+  refusedHead: { flexDirection: 'row', alignItems: 'center', gap: space[2] },
 });

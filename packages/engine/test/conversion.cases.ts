@@ -83,7 +83,8 @@ export const conversionCases: TestCase[] = [
         { kind: 'conversion', position: 4, running: 7, decks: 2, entered: 4, reference: 3, error: 1 },
         { kind: 'conversion', position: 5, running: -7, decks: 2, entered: -4, reference: -3, error: -1 },
       ]);
-      t.equal(Object.is(rounded?.review[9]?.reference, -0), false);
+      const last = rounded?.review[9];
+      t.equal(last?.kind === 'conversion' && Object.is(last.reference, -0), false);
     },
   },
   {

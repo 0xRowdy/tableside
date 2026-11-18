@@ -12,9 +12,9 @@ import { NO_SCREEN_READER } from '@/training/speech';
 
 const ORIENTATION = 'app-orientation';
 
-// Spec 3 Lessons › Access: lessons are unmetered
-const refusingAccess = (asked: string[]): AccessSupervisor =>
-  Object.fromEntries(
+// Spec 3 Lessons › Access: lessons are unmetered; they only ask whether a game is playable now (Amendment 4 §5)
+const refusingAccess = (asked: string[]): AccessSupervisor => ({
+  ...(Object.fromEntries(
     Object.keys(alwaysAllowed).map((name) => [
       name,
       async () => {
@@ -22,7 +22,9 @@ const refusingAccess = (asked: string[]): AccessSupervisor =>
         throw new Error(`lessons never ask ${name}`);
       },
     ]),
-  ) as unknown as AccessSupervisor;
+  ) as unknown as AccessSupervisor),
+  gameAccess: alwaysAllowed.gameAccess,
+});
 
 function revised(content: Partial<NonNullable<Lesson['content']>>): readonly Lesson[] {
   return LESSONS.map((lesson) => (lesson.id === ORIENTATION ? { ...lesson, content: { ...lesson.content!, ...content } } : lesson));
@@ -75,7 +77,7 @@ describe('the Training service lessons', () => {
       summary: 'Tabs, help, practice vs casino records',
       section: 'app',
       steps: 5,
-      access: 'available',
+      access: { kind: 'available' },
       status: { kind: 'not-started' },
     });
     expect(catalog.filter((entry) => entry.steps !== null).map((entry) => entry.id)).toEqual([
@@ -197,7 +199,7 @@ describe('the Training service lessons', () => {
       summary: 'Tabs, help, practice vs casino records',
       section: 'app',
       steps: 5,
-      access: 'available',
+      access: { kind: 'available' },
       status: { kind: 'completed' },
     });
     expect(await statusOf(service, 'blackjack-basics')).toEqual({ kind: 'not-started' });

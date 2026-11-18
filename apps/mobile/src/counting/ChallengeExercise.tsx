@@ -192,7 +192,7 @@ export function ChallengeExercise({
           <CountingBody view={view} range={view.countRange} automatic={pacing !== 'self-paced'} ready={ready} answering={answering} onCommand={onCommand} onInputRejected={onInputRejected} />
         )}
       </View>
-      {hold?.reached && !helping && <HoldSheet hold={hold} context={{ variant: view.variant, position: view.position, pacing, reader: screenReaderName(Platform.OS) }} busy={busy} onResume={onResume} onEnd={onEnd} onClose={onLeave} />}
+      {hold?.reached && !helping && <HoldSheet hold={hold} context={{ variant: view.variant, position: view.position, pacing, reader: screenReaderName(Platform.OS), play: view.table?.seat === 'play' }} busy={busy} onResume={onResume} onEnd={onEnd} onClose={onLeave} />}
       {helping && <HelpSheet view={view} onClose={() => setHelping(false)} />}
     </ScrollView>
   );

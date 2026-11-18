@@ -87,7 +87,7 @@ export function TextLink({
   hint,
   onPress,
 }: {
-  icon: LucideIcon;
+  icon?: LucideIcon;
   label: string;
   accent?: boolean;
   disabled?: boolean;
@@ -106,7 +106,7 @@ export function TextLink({
       {...focusProps}
       style={({ pressed }) => [styles.link, pressed && styles.pressed, disabled && styles.disabled, focused && styles.focused]}
     >
-      <Icon color={accent ? palette.primary : palette.foreground} size={18} />
+      {Icon && <Icon color={accent ? palette.primary : palette.foreground} size={18} />}
       <Text maxFontSizeMultiplier={textScale.body} style={[styles.linkText, !accent && styles.linkPlain]}>
         {label}
       </Text>

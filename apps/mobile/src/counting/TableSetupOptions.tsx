@@ -1,22 +1,25 @@
-// Spec 3 S3-02 ZreSb; User stories 27; #137
+// Spec 3 S3-02 ZreSb, FkMDw; User stories 27, 28; #137, #138
 
 import { BLACKJACK_PRESETS, DEFAULT_BLACKJACK_PRESET, type TableOptions } from '@tableside/definitions';
 import { MAX_CHECKPOINT_INTERVAL, MAX_OTHER_PLAYERS, PENETRATIONS } from '@tableside/engine';
-import { Eye } from 'lucide-react-native';
+import { Eye, Hand } from 'lucide-react-native';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { ChoiceGroup, Help, Section, Stepper } from '@/play/setup/SetupParts';
 import { fonts, palette, radius, space, textScale } from '@/theme/tokens';
 import {
   COUNT_CHECKPOINTS,
+  COUNTING_MODE,
   DEFAULT_PRESET_DETAIL,
   INTERVAL_DETAIL,
   INTERVAL_HELP,
   intervalText,
+  MODE_HELP,
   OBSERVE,
   OBSERVE_NOTICE,
   PENETRATION_DETAIL,
   PLAY,
+  PLAY_NOTICE,
   PLAYERS_DETAIL,
   playersText,
   PRESET_TEXT,
@@ -24,8 +27,9 @@ import {
   SEAT_HELP,
   SHOE_AND_TABLE,
   WHO_PLAYS,
+  WITH_BASIC,
+  WITH_DEVIATIONS,
 } from '@/training/blackjack-table-text';
-import { NOT_READY_HINT } from '@/training/challenge-text';
 
 export function TableSetupOptions({ options, onChange }: { options: TableOptions; onChange: (options: TableOptions) => void }) {
   const set = (change: Partial<TableOptions>) => onChange({ ...options, ...change });
@@ -37,8 +41,7 @@ export function TableSetupOptions({ options, onChange }: { options: TableOptions
           label="Who plays your seat"
           options={[
             { label: OBSERVE, selected: options.seat === 'observe', onPress: () => set({ seat: 'observe' }) },
-            // TODO(#138)
-            { label: PLAY, selected: false, disabled: true, disabledHint: NOT_READY_HINT, onPress: () => undefined },
+            { label: PLAY, selected: options.seat === 'play', onPress: () => set({ seat: 'play' }) },
           ]}
         />
         <Help>{SEAT_HELP}</Help>
@@ -87,19 +90,29 @@ export function TableSetupOptions({ options, onChange }: { options: TableOptions
         />
         <Help>{INTERVAL_HELP}</Help>
       </Section>
-      {options.seat === 'observe' && (
-        <View style={styles.notice} accessible>
-          <Eye color={palette.foreground} size={20} />
-          <View style={styles.noticeText}>
-            <Text maxFontSizeMultiplier={textScale.body} style={styles.noticeTitle}>
-              {OBSERVE_NOTICE.title}
-            </Text>
-            <Text maxFontSizeMultiplier={textScale.body} style={styles.noticeDetail}>
-              {OBSERVE_NOTICE.detail}
-            </Text>
-          </View>
-        </View>
+      {options.seat === 'play' && (
+        <Section label={COUNTING_MODE}>
+          <ChoiceGroup
+            label="Counting mode"
+            options={[
+              { label: WITH_BASIC, selected: options.countingMode === 'basic', onPress: () => set({ countingMode: 'basic' }) },
+              { label: WITH_DEVIATIONS, selected: options.countingMode === 'deviations', onPress: () => set({ countingMode: 'deviations' }) },
+            ]}
+          />
+          <Help>{MODE_HELP}</Help>
+        </Section>
       )}
+      <View style={styles.notice} accessible>
+        {options.seat === 'observe' ? <Eye color={palette.foreground} size={20} /> : <Hand color={palette.foreground} size={20} />}
+        <View style={styles.noticeText}>
+          <Text maxFontSizeMultiplier={textScale.body} style={styles.noticeTitle}>
+            {(options.seat === 'observe' ? OBSERVE_NOTICE : PLAY_NOTICE).title}
+          </Text>
+          <Text maxFontSizeMultiplier={textScale.body} style={styles.noticeDetail}>
+            {(options.seat === 'observe' ? OBSERVE_NOTICE : PLAY_NOTICE).detail}
+          </Text>
+        </View>
+      </View>
     </>
   );
 }

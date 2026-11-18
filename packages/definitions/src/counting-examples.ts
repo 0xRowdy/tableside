@@ -18,7 +18,7 @@ import {
   type TableSetup,
 } from '@tableside/engine';
 
-import { CONVERSION_CONTENT, DEFAULT_TABLE_SETUP, observeSetup, RUNNING_COUNT_CONTENT, TABLE_CONTENT } from './challenges';
+import { CONVERSION_CONTENT, DEFAULT_TABLE_SETUP, tableSetup, RUNNING_COUNT_CONTENT, TABLE_CONTENT } from './challenges';
 import type { ScriptedChoice } from './worked-examples';
 
 // Spec 3 S3-12 aJV2y; #144
@@ -119,7 +119,7 @@ function stackedTable(example: TableCountExample): ChallengeState {
     if (at < 0) throw new Error(`no ${cardText(card)} left to stack`);
     return remaining.splice(at, 1)[0]!;
   });
-  const setup = observeSetup(DEFAULT_TABLE_SETUP);
+  const setup = tableSetup(DEFAULT_TABLE_SETUP);
   const created = start(TABLE_CONTENT, setup);
   const cut = Math.floor((SHOE.length * setup.rules.penetration) / 100);
   return { ...created, table: { ...created.table!, shoe: { order: [...order, ...remaining], next: 0, cut } } };

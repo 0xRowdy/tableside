@@ -93,6 +93,12 @@ export const CHALLENGE_LESSONS: Readonly<Record<CatalogCategory, string>> = {
   table: 'table-counting',
 };
 
+// Spec 3 Lessons › Check protection; Amendment 1 A2
+export const CHECK_WITHHELD_LESSONS: { readonly anyCheck: readonly string[]; readonly playCheck: readonly string[] } = {
+  anyCheck: Object.values(CHALLENGE_LESSONS),
+  playCheck: [BASIC_STRATEGY.id, BASIC_WITH_DEVIATIONS.id, COUNTING_WITH_BASIC.id, COUNTING_WITH_DEVIATIONS.id, BET_SCHEDULE_LESSON.id],
+};
+
 const IDENTITY = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 const sameSource = (a: LessonSource, b: LessonSource) => a.citation === b.citation && a.url === b.url;
 const isVersion = (value: number) => Number.isInteger(value) && value > 0;

@@ -132,7 +132,20 @@ export function playHeadline(strategyName: string, explanation: PlayExplanation)
   return `${strategyName} ${verbPhrase(play, handWords(explanation))} against ${upName(situation.up)}${atCount ? ' at this count' : ''}.`;
 }
 
-export function playCorrectionCopy(strategyName: string, correction: PlayCorrection, rules: { dealer: 'S17' | 'H17'; lateSurrender: boolean }, countSupplied = true): CorrectionCopy {
+// Spec 1 Counting; Spec 3 S3-07 j4X6V; #138
+export type CorrectionCount = 'supplied' | 'kept' | 'kept-shown';
+
+// Spec 3 S3-07 j4X6V; #138
+export function playAdvice(explanation: PlayExplanation): string {
+  const { situation, deviation } = explanation;
+  const play = explanation.prescribed.action;
+  const atCount = deviation !== null && deviation.side === (deviation.direction === 'deviate-at-or-above' ? 'at-or-above' : 'below');
+  const advice = situation.decision === 'insurance' ? IMPERATIVE[play] : `${IMPERATIVE[play]} ${play === 'stand' ? 'on ' : ''}${handWords(explanation)} against ${upName(situation.up)}`;
+  return `${atCount ? 'At this count, ' : ''}${advice}.`.replace(/^./, (first) => first.toUpperCase());
+}
+
+export function playCorrectionCopy(strategyName: string, correction: PlayCorrection, rules: { dealer: 'S17' | 'H17'; lateSurrender: boolean }, countSource: CorrectionCount = 'supplied'): CorrectionCopy {
+  const countSupplied = countSource === 'supplied';
   const { explanation } = correction;
   const { situation, deviation, cell } = explanation;
   const play = explanation.prescribed.action;
@@ -158,7 +171,9 @@ export function playCorrectionCopy(strategyName: string, correction: PlayCorrect
     lines.push(
       countSupplied && count
         ? `The true count is ${signed(count.trueCount)}, supplied by Tableside in this mode (${countWorking(count)}).`
-        : 'You keep the count in this mode; your play was checked against the actual count, which Tableside doesn\'t show.',
+        : countSource === 'kept-shown' && count
+          ? `The true count is ${signed(count.trueCount)} from the actual cards (${countWorking(count)}). You keep the count yourself; this uses the real count, not the one you entered.`
+          : 'You keep the count in this mode; your play was checked against the actual count, which Tableside doesn\'t show.',
     );
     lines.push(`${deviation.situation}: at ${signed(deviation.threshold)} or more, ${deviationPlay(deviation.atOrAbove)}; below ${signed(deviation.threshold)}, ${deviationPlay(deviation.below)}.`);
   }
