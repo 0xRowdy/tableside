@@ -1,7 +1,7 @@
 // docs/development.md House-edge sources
 import { describe, expect, it } from 'vitest';
 
-import { BLACKJACK_REFERENCE, blackjackHouseEdge, type BlackjackPreset } from '../src/index';
+import { BLACKJACK_HOUSE_EDGE_SOURCE, BLACKJACK_REFERENCE, blackjackHouseEdge, type BlackjackPreset } from '../src/index';
 import { frozenRows, LETTER, PRESETS } from './frozen-files';
 
 function derivedHouseEdge(preset: BlackjackPreset): number {
@@ -36,6 +36,18 @@ describe('blackjack house edge', () => {
     const { percent } = blackjackHouseEdge(preset);
     expect(percent).toMatch(/^\d+\.\d\d$/);
     expect(percent).toBe(derivedHouseEdge(preset).toFixed(2));
+  });
+
+  // Spec 1 Amendment 9 §1; docs/research/blackjack-lessons.md House edge per preset
+  it.each([
+    ['S17_LS', 0.33361],
+    ['S17_noLS', 0.40622],
+    ['H17_LS', 0.53051],
+    ['H17_noLS', 0.61873],
+  ] as const)('%s is within 0.05 points of Wizard of Odds’ six-deck figure for the same rules (%s%%)', (preset, published) => {
+    expect(BLACKJACK_HOUSE_EDGE_SOURCE.percent[preset]).toBe(published);
+    expect(Math.abs(Number(blackjackHouseEdge(preset).percent) - published)).toBeLessThanOrEqual(0.05);
+    expect(Math.abs(derivedHouseEdge(preset) - published)).toBeLessThanOrEqual(0.05);
   });
 
   it('orders the presets as their rules do (late surrender helps the player, H17 the house), each within the published 0.3% to 0.7%', () => {

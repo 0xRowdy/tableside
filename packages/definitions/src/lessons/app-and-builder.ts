@@ -50,7 +50,7 @@ export const APP_ORIENTATION: Lesson = {
       { kind: 'free-play', game: 'craps' },
       { kind: 'free-play', game: 'roulette' },
     ],
-    sources: [{ citation: "Tableside's own app design; no outside source", url: null }],
+    sources: [],
   },
 };
 
@@ -127,6 +127,6 @@ export const BUILDING_A_STRATEGY: Lesson = {
       { kind: 'guided-practice', game: 'craps', strategy: null },
       { kind: 'guided-practice', game: 'roulette', strategy: null },
     ],
-    sources: [{ citation: "Tableside's own strategy-builder design; no outside source", url: null }],
+    sources: [],
   },
 };

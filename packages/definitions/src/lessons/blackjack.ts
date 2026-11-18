@@ -11,7 +11,7 @@ import {
   COUNTING_DEVIATIONS_EXAMPLE,
   DEVIATIONS_EXAMPLE,
 } from './blackjack-examples';
-import { basicStrategy, blackjackHouseEdge, playingDeviations, type BlackjackPreset, type DeviationAction, type PlayingDeviation, type PublishedCost } from '../blackjack/reference';
+import { basicStrategy, BLACKJACK_HOUSE_EDGE_SOURCE, blackjackHouseEdge, playingDeviations, type BlackjackPreset, type DeviationAction, type PlayingDeviation, type PublishedCost } from '../blackjack/reference';
 
 // Spec 3 Amendment 1 C11; docs/research/blackjack-lessons.md Citable sources
 const SOURCE = {
@@ -24,6 +24,7 @@ const SOURCE = {
     citation: 'Michael Shackleford, Wizard of Odds, “Introduction to the High-Low Card Counting Strategy”, section “How it Works”, table “High-Low Point Values”',
     url: 'https://wizardofodds.com/games/blackjack/card-counting/high-low/',
   },
+  wizardEdge: { citation: BLACKJACK_HOUSE_EDGE_SOURCE.citation, url: BLACKJACK_HOUSE_EDGE_SOURCE.url },
   wizardBasic: { citation: 'Michael Shackleford, Wizard of Odds, “4-Deck to 8-Deck Blackjack Strategy”, section “Basic Strategy in Text”', url: 'https://wizardofodds.com/games/blackjack/strategy/4-decks/' },
   bjaS17: {
     citation: 'Blackjack Apprenticeship, “S17 Deviation Chart” (PDF, © 2018), sections “Pair Splitting”, “Hard Totals”, “Late Surrender” and “Insurance or Even Money”',
@@ -206,6 +207,7 @@ function chartSummary(preset: BlackjackPreset): readonly string[] {
 }
 
 const edge = (preset: BlackjackPreset) => `${blackjackHouseEdge(preset).percent}%`;
+const SIX_TO_FIVE_EDGE = `${BLACKJACK_HOUSE_EDGE_SOURCE.defaultTableSixToFivePercent.toFixed(2)}%`;
 
 // Spec 1 Game rules, Counting (Hi-Lo), Amendment 9 §7; #3
 const scheduleLine = ({ from, amount }: (typeof BET_SCHEDULE)[number], index: number) =>
@@ -238,7 +240,8 @@ export const BLACKJACK_BASICS = lesson('blackjack-basics', 'Blackjack basics', '
     step('The table you choose', [
       'Every Tableside blackjack table uses six decks. Before you start, setup lets you choose whether the dealer hits or stands on soft 17 and whether late surrender is offered, how deep into the shoe to deal before shuffling, and up to four other players. The default is: dealer stands on soft 17, late surrender on, 75% of the shoe dealt.',
       `These rules change the house edge, even when every play is right. With perfect basic strategy it’s ${edge('S17_LS')} of each bet at the default table, ${edge('S17_noLS')} without surrender, ${edge('H17_LS')} when the dealer hits soft 17, and ${edge('H17_noLS')} with both. Setup shows the figure for the table you pick.`,
-    ]),
+      `These figures are for Tableside’s table: six decks, blackjack paying 3 to 2, doubling on any two cards and after a split, splitting to four hands, and one card on each split ace. Tables elsewhere differ. Fewer decks lower the edge and more decks raise it, and paying 6 to 5 for blackjack raises the default table’s ${edge('S17_LS')} to ${SIX_TO_FIVE_EDGE}.`,
+    ], { source: SOURCE.wizardEdge }),
     step('Placing a bet', [
       'Each round starts with your bet. Pick a chip and tap the betting spot, or open the bet list to type an amount. Rebet repeats your last bet and Clear takes it back; nothing is committed until you press Deal.',
       'The table minimum and maximum apply to that first bet (10 to 1,000 unless you change them in setup). Insurance, splits and doubles can take you past the maximum.',
@@ -255,7 +258,7 @@ export const BLACKJACK_BASICS = lesson('blackjack-basics', 'Blackjack basics', '
   ],
   workedExample: BASICS_EXAMPLE,
   handoffs: [FREE_PLAY, guided('basic')],
-  sources: [SOURCE.wizardBasic, SOURCE.bjaOrder],
+  sources: [SOURCE.wizardEdge, SOURCE.wizardBasic, SOURCE.bjaOrder],
 });
 
 export const BASIC_STRATEGY = lesson('basic-strategy', 'Basic strategy', 'The best play for every hand, with no count', {

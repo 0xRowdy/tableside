@@ -5,7 +5,6 @@ import { LESSONS, lessonProblems, type Lesson } from '../src';
 
 const lesson = (id: string): Lesson => LESSONS.find((candidate) => candidate.id === id)!;
 const copy = (subject: Lesson) => subject.content!.steps.flatMap((step) => [step.heading, ...step.paragraphs]).join('\n');
-const sourceText = (subject: Lesson) => subject.content!.sources.map((source) => source.citation).join('\n');
 
 describe.each(['app-orientation', 'building-a-strategy'])('the %s lesson', (id) => {
   const subject = lesson(id);
@@ -21,9 +20,10 @@ describe.each(['app-orientation', 'building-a-strategy'])('the %s lesson', (id) 
   });
 
   // Spec 3 Amendment 1 C11
-  it("records its provenance as Tableside's own work, with no outside credit or link", () => {
-    expect(subject.content!.sources).toEqual([{ citation: expect.stringMatching(/^Tableside's own .+; no outside source$/), url: null }]);
-    expect(`${copy(subject)}\n${sourceText(subject)}`).not.toMatch(/apprenticeship|casino quest|\bBJA\b|youtube|https?:/i);
+  // Spec 3 Amendment 1 C11; docs/research/lessons-app-orientation-and-builder.md Scope and sources
+  it('cites no outside source and names none in its copy', () => {
+    expect(subject.content!.sources).toEqual([]);
+    expect(copy(subject)).not.toMatch(/apprenticeship|casino quest|\bBJA\b|youtube|https?:/i);
   });
 
   // Spec 3 Content requirements; gate 9

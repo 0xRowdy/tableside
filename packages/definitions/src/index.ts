@@ -3,6 +3,7 @@ export const DEFINITIONS_VERSION = '0.0.0';
 export {
   basicStrategy,
   BLACKJACK_PRESETS,
+  BLACKJACK_HOUSE_EDGE_SOURCE,
   BLACKJACK_REFERENCE,
   blackjackHouseEdge,
   type BlackjackHouseEdge,
