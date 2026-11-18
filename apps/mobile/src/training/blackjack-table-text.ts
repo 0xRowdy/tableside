@@ -21,11 +21,11 @@ import {
   type TableView,
 } from '@tableside/engine';
 
-import { playAdvice, playCorrectionCopy, upName } from '@/play/blackjack-coaching';
-import type { CorrectionCopy } from '@/play/coaching-text';
+import { playAdvice, playCorrectionCopy, upName } from '../play/blackjack-coaching';
+import type { CorrectionCopy } from '../play/coaching-text';
 
-import { cardRank, signed, SUIT_GLYPH } from '@/play/blackjack-text';
-import { formatSigned, formatUnits, halfUnits } from '@/play/units';
+import { cardRank, signed, SUIT_GLYPH } from '../play/blackjack-text';
+import { formatSigned, formatUnits, halfUnits } from '../play/units';
 
 const presetText = (dealer: 'S17' | 'H17', lateSurrender: boolean) => `${dealer} ${lateSurrender ? 'LS' : 'no LS'}`;
 const players = (count: number) => `${count} ${count === 1 ? 'player' : 'players'}`;

@@ -1,7 +1,7 @@
 // Spec 3 Challenge content › Conversion; Lessons › Content requirements; #134
 import type { ConversionExplanation } from '@tableside/engine';
 
-import { signed } from '@/play/blackjack-text';
+import { signed } from '../play/blackjack-text';
 
 // Spec 3 Challenge content › Conversion; S3-06 zAatf
 export const decksText = (decks: number) => String(decks);

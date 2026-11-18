@@ -2,8 +2,8 @@
 
 import { runningCountDrift, type AssistanceClass, type ChallengeAttemptRecord, type ChallengeCategory, type ChallengeEntry, type ChallengeMetric, type ChallengePacing, type ChallengeVariant, type ChallengeView, type ConversionReview, type CountRange, type HiLoExplanation, type HiLoValue, type LearnFeedback, type MetricResult, type ReviewFact, type RunningCountReview, type TableBetReview, type TableDecisionReview } from '@tableside/engine';
 
-import { cardName, rankName, signed } from '@/play/blackjack-text';
-import { conversionText, decksText } from '@/training/blackjack-conversion-text';
+import { cardName, rankName, signed } from '../play/blackjack-text';
+import { conversionText, decksText } from './blackjack-conversion-text';
 import {
   abandonedTableTitle,
   completedRounds,
@@ -16,8 +16,8 @@ import {
   TABLE_LEARN_DETAIL,
   tableCheckpointTitle,
   tableRunningText,
-} from '@/training/blackjack-table-text';
-import { GAME_WORDS } from '@/play/game-words';
+} from './blackjack-table-text';
+import { GAME_WORDS } from '../play/game-words';
 
 import type { ChallengeAllowance } from './allowance';
 import { PACE_SECONDS, type AttemptHold } from './controller';
