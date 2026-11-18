@@ -59,7 +59,18 @@ Order of the player's own decision, as BJA teaches it: surrender first, then spl
 | H17, late surrender | 0.53 |
 | H17, no surrender | 0.62 |
 
-Source: `HOUSE_EDGE_PERCENT` in [`reference.ts:228`](../../packages/definitions/src/blackjack/reference.ts). Each value is the edge of the preset's certified basic strategy off the top of a fresh six-deck shoe. The test derives it from the certified `basic_<preset>.csv` values with exact six-deck card-removal probabilities ([`house-edge.test.ts`](../../packages/definitions/test/house-edge.test.ts); commit `1e350bc`, "Versioned house edge per preset, tested against a derivation from the certified basic tables and exact six-deck card removal"). The display rule: "shown as a property of the rules, never as a prediction of results" ([spec 1 Amendment 1 §B](https://github.com/0xRowdy/tableside/issues/51#issuecomment-6256569082)). The method is [Amendment 9 §1](https://github.com/0xRowdy/tableside/issues/51#issuecomment-6307750191). No amendment comment states the four numbers; see Not confirmed.
+Source: `HOUSE_EDGE_PERCENT` in [`reference.ts:228`](../../packages/definitions/src/blackjack/reference.ts). Each value is the edge of the preset's certified basic strategy off the top of a fresh six-deck shoe. The test derives it from the certified `basic_<preset>.csv` values with exact six-deck card-removal probabilities ([`house-edge.test.ts`](../../packages/definitions/test/house-edge.test.ts); commit `1e350bc`, "Versioned house edge per preset, tested against a derivation from the certified basic tables and exact six-deck card removal"). The display rule: "shown as a property of the rules, never as a prediction of results" ([spec 1 Amendment 1 §B](https://github.com/0xRowdy/tableside/issues/51#issuecomment-6256569082)). The method is [Amendment 9 §1](https://github.com/0xRowdy/tableside/issues/51#issuecomment-6307750191). No amendment comment states the four numbers.
+
+**Published comparison** (Amendment 9 §1), retrieved 2026-11-18 from the [Wizard of Odds Blackjack House Edge Calculator](https://wizardofodds.com/games/blackjack/calculator/) with six decks, 3 to 2, player loses only the original bet to a dealer blackjack, double on any first two cards, double after split, resplit to four hands, no resplitting or hitting split aces:
+
+| Preset | Basic strategy, continuous shuffler (fresh shoe) | Basic strategy, cut card | Tableside |
+| --- | --- | --- | --- |
+| S17, late surrender | 0.33361% | 0.35361% | 0.33 |
+| S17, no surrender | 0.40622% | 0.42622% | 0.40 |
+| H17, late surrender | 0.53051% | 0.55051% | 0.53 |
+| H17, no surrender | 0.61873% | 0.63873% | 0.62 |
+
+All four are within 0.01 points of the fresh-shoe column. `BLACKJACK_HOUSE_EDGE_SOURCE` in `reference.ts` cites it and `house-edge.test.ts` checks it. Other tables, same calculator and column: S17 with late surrender is 0.16624% in the player's favour with one deck, 0.14116% with two, 0.28622% with four, 0.31457% with five and 0.35704% with eight; with 6 to 5 blackjack at six decks it is 1.6933%. The Basics lesson states that fewer decks lower the edge and 6 to 5 raises the default table's to 1.69%.
 
 ### App behaviour the lessons describe
 
@@ -342,7 +353,7 @@ Retrieval detail:
 - **No BJA video and no timestamp was verified,** including "who keeps the count" and bet-spread videos. Do not cite any.
 - **The rules behind Schlesinger's numbers.** The Wizard page does not state the rules or decks for the Illustrious 18 / Fab 4 tables. Its "Six decks / Dealer stands on soft 17 / … resplit to four hands, including aces" list belongs to the page's simulation-statistics table. The report's statement that "Schlesinger's list is a six-deck S17 list" has no source in this note. Copy should not say what rules Schlesinger assumed, nor call the H17 differences "rule differences" as a fact about Schlesinger.
 - **The edition behind Wizard's citation.** Wizard cites "2004 ed." and "page 62" with no publisher or edition number. This note records nothing beyond that.
-- **No published figure backs the house-edge numbers.** No #51 amendment comment states 0.33/0.40/0.53/0.62. Amendment 9 §1 requires a match "within ±0.05 percentage points" against "a published six-deck figure for the same rules … with the source cited in definitions". The definitions cite none; the test only checks the derivation and a 0.3–0.7% range. The numbers are certified-derived; the comparison against a published figure is unrecorded.
+- ~~**No published figure backs the house-edge numbers.**~~ Resolved 2026-11-18: see the published comparison under House edge per preset.
 - **"1/2/4/6/8 units" against Amendment 9 §7.** Spec 3's bet-schedule wording uses units; spec 1 Amendment 9 §7 says copy never states stakes as multiples of a base bet. Which wording the lesson uses is an owner call. This note supplies both forms.
 - **BJA deviations-page prose against its own chart.** The page says to stand 12 v 2 "anytime above true 3", while the chart prints "3+" (at 3 and above). Cite the chart, not the prose, for the number.
 - **Why BJA uses running-count-sign rules,** and why some cells (12 vs 5, 12 vs 6, 13 vs 3, 14 vs T surrender) carry no index. No source here explains either.

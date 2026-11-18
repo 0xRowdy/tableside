@@ -8,7 +8,7 @@ Both lessons describe Tableside itself, so every fact comes from Tableside's own
 
 - **No Blackjack Apprenticeship, Casino Quest, book or video source is used.** Neither lesson draws on outside work. There is no number to certify, so no certified blackjack artifact, engine replay, published rule or house-edge figure is needed. Neither lesson quotes a house-edge figure.
 - The builder is spec 4's ([#54](https://github.com/0xRowdy/tableside/issues/54)), not yet built. The Builder lesson is written against spec 4's description and amendments, as #151 directs.
-- Each lesson's `sources` list records this provenance for spec 7's register: Tableside's own copy and the decisions it was written from. Those entries carry no link, because they are internal records rather than credits a player needs.
+- Each lesson's `sources` list is empty, so the player shows no Sources step (owner ruling on [PR #160](https://github.com/0xRowdy/tableside/pull/160), 2026-11-18: a lesson shows Sources only when it has a real outside source). Spec 7's provenance register records that both lessons are Tableside's own copy, written from the decisions below.
 
 Primary sources read:
 

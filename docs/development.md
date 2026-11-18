@@ -126,7 +126,7 @@ Craps and roulette house edges (`packages/definitions/src/craps.ts`, `roulette.t
 
 - **Craps** (`test/craps-house-edge.test.ts`): Wizard of Odds (Shackleford), "Craps — house edge" and "Odds in craps". `PUBLISHED_COMBINED` holds the line bets with full odds per total amount bet; `PUBLISHED` the rest of the menu per bet resolved.
 - **Roulette** (`test/roulette-house-edge.test.ts`): the payouts in #3 and the Wizard of Odds roulette payout table. First four is single zero only, the five-number basket double zero only.
-- **Blackjack** (`test/house-edge.test.ts`): derived from the certified basic tables with exact six-deck card-removal probabilities.
+- **Blackjack** (`test/house-edge.test.ts`): derived from the certified basic tables with exact six-deck card-removal probabilities, and checked within ±0.05 points (spec 1 Amendment 9 §1) of `BLACKJACK_HOUSE_EDGE_SOURCE`: the Wizard of Odds house edge calculator's "Basic strategy with continuous shuffler" result for the same rules (six decks, 3 to 2, peek, double any two and after a split, split to four hands, no resplit aces), retrieved 2026-11-18 (`defaultTableSixToFivePercent` is the default table with 6 to 5 blackjack). That result is the fresh-shoe figure; the calculator's cut-card result is about 0.02 points higher.
 
 ## Releases: recorded checkpoints and the quarantine list
 

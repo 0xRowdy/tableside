@@ -224,12 +224,25 @@ export interface BlackjackHouseEdge {
   readonly reference: string;
 }
 
-// Spec 1 Amendment 1 §B, Amendment 9 §1
+// Spec 1 Amendment 1 §B, Amendment 9 §1; docs/development.md House-edge sources
 const HOUSE_EDGE_PERCENT: Readonly<Record<BlackjackPreset, string>> = {
   S17_LS: '0.33',
   S17_noLS: '0.40',
   H17_LS: '0.53',
   H17_noLS: '0.62',
+};
+
+// Spec 1 Amendment 9 §1; docs/development.md House-edge sources
+export const BLACKJACK_HOUSE_EDGE_SOURCE = {
+  citation: 'Michael Shackleford, Wizard of Odds, “Blackjack House Edge Calculator”, result “Basic strategy with continuous shuffler”',
+  url: 'https://wizardofodds.com/games/blackjack/calculator/',
+  percent: { S17_LS: 0.33361, S17_noLS: 0.40622, H17_LS: 0.53051, H17_noLS: 0.61873 },
+  defaultTableSixToFivePercent: 1.6933,
+} as const satisfies {
+  readonly citation: string;
+  readonly url: string;
+  readonly percent: Readonly<Record<BlackjackPreset, number>>;
+  readonly defaultTableSixToFivePercent: number;
 };
 
 export function blackjackHouseEdge(preset: BlackjackPreset): BlackjackHouseEdge {

@@ -43,6 +43,9 @@ describe('blackjack lessons', () => {
     }
     // Spec 1 Amendment 1 §B, Amendment 9 §1
     expect(basics).toContain('0.33% of each bet at the default table, 0.40% without surrender, 0.53% when the dealer hits soft 17, and 0.62% with both');
+    // docs/research/blackjack-lessons.md House edge per preset
+    expect(basics).toContain('Fewer decks lower the edge and more decks raise it, and paying 6 to 5 for blackjack raises the default table’s 0.33% to 1.69%.');
+    expect(lesson('blackjack-basics').content!.steps[1]!.source?.url).toBe('https://wizardofodds.com/games/blackjack/calculator/');
   });
 
   // docs/research/blackjack-lessons.md Basics

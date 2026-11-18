@@ -76,7 +76,7 @@ describe('the Training service lessons', () => {
       title: 'App orientation',
       summary: 'Tabs, help, practice vs casino records',
       section: 'app',
-      steps: 5,
+      steps: 4,
       access: { kind: 'available' },
       status: { kind: 'not-started' },
     });
@@ -198,7 +198,7 @@ describe('the Training service lessons', () => {
       title: 'App orientation',
       summary: 'Tabs, help, practice vs casino records',
       section: 'app',
-      steps: 5,
+      steps: 4,
       access: { kind: 'available' },
       status: { kind: 'completed' },
     });
