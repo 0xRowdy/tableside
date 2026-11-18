@@ -72,7 +72,6 @@ export { benchmarkProfile, BENCHMARK_PROFILES } from './benchmark-profiles';
 
 export {
   CARD_VALUES_CONTENT,
-  CATALOG_CATEGORIES,
   CHALLENGE_CONTENT,
   CONVERSION_CONTENT,
   DEFAULT_STARTING_BALANCE,
@@ -80,7 +79,6 @@ export {
   tableSetup,
   RUNNING_COUNT_CONTENT,
   TABLE_CONTENT,
-  type CatalogCategory,
   type TableOptions,
 } from './challenges';
 

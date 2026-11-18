@@ -1,7 +1,6 @@
 // Spec 3 Modules › Training service (Progress projection); Comparison groups; Amendment 1 C2; #140
 
-import { CATALOG_CATEGORIES, type CatalogCategory } from '@tableside/definitions';
-import { canonicalJson, CHALLENGE_METRICS, type ChallengeAttemptSummary, type ChallengeGroupKey, type ChallengeMetric, type MetricResult } from '@tableside/engine';
+import { canonicalJson, CHALLENGE_CATEGORIES, CHALLENGE_METRICS, type ChallengeAttemptSummary, type ChallengeCategory, type ChallengeGroupKey, type ChallengeMetric, type MetricResult } from '@tableside/engine';
 
 import type { AcceptedAttempt } from './store';
 import { meetsReadinessThreshold, milestoneIdentity, milestoneSlot, READINESS_MILESTONE_RECORD_VERSION, readinessStreakEffect, type ReadinessMilestoneRecord } from './readiness-milestone';
@@ -58,17 +57,17 @@ export type TableStretch = 'play' | 'deviations' | 'more-players' | 'deeper-pene
 
 export type RecommendationReason =
   | { readonly kind: 'start' }
-  | { readonly kind: 'next'; readonly after: CatalogCategory }
+  | { readonly kind: 'next'; readonly after: ChallengeCategory }
   | { readonly kind: 'beyond'; readonly suggestions: readonly TableStretch[] };
 
 export interface Recommendation {
-  readonly category: CatalogCategory;
+  readonly category: ChallengeCategory;
   readonly reason: RecommendationReason;
   readonly enter: 'observe' | null;
 }
 
 // Spec 3 Comparison groups (Milestones)
-export type ReadinessOutcome = { readonly kind: 'earned'; readonly next: CatalogCategory | null } | { readonly kind: 'kept'; readonly earnedAt: number };
+export type ReadinessOutcome = { readonly kind: 'earned'; readonly next: ChallengeCategory | null } | { readonly kind: 'kept'; readonly earnedAt: number };
 
 // Spec 3 Comparison groups › Milestones; Audio and haptics (cue 16)
 export interface PersonalBestEarned {
@@ -128,10 +127,10 @@ export function readinessOutcome(attempts: readonly ProgressAttempt[], milestone
 // Spec 3 Comparison groups (Recommendations)
 export function recommendation(milestones: readonly ReadinessMilestoneRecord[]): Recommendation {
   const earned = new Set(milestones.map((milestone) => milestone.groupKey.category));
-  const furthest = Math.max(...CATALOG_CATEGORIES.map((category, index) => (earned.has(category) ? index : -1)));
-  if (furthest < 0) return { category: CATALOG_CATEGORIES[0]!, reason: { kind: 'start' }, enter: null };
-  const after = CATALOG_CATEGORIES[furthest]!;
-  const next = CATALOG_CATEGORIES[furthest + 1];
+  const furthest = Math.max(...CHALLENGE_CATEGORIES.map((category, index) => (earned.has(category) ? index : -1)));
+  if (furthest < 0) return { category: CHALLENGE_CATEGORIES[0]!, reason: { kind: 'start' }, enter: null };
+  const after = CHALLENGE_CATEGORIES[furthest]!;
+  const next = CHALLENGE_CATEGORIES[furthest + 1];
   if (next) return { category: next, reason: { kind: 'next', after }, enter: next === 'table' ? 'observe' : null };
   const tables = milestones.flatMap((milestone) => milestone.groupKey.table ?? []);
   const suggestions: TableStretch[] = [

@@ -21,9 +21,9 @@ import { GAME_WORDS } from '@/play/game-words';
 
 import type { ChallengeAllowance } from './allowance';
 import { PACE_SECONDS, type AttemptHold } from './controller';
-import type { CatalogCategory, StartProblem } from './service';
+import type { StartProblem } from './service';
 
-export const CATEGORY_TEXT: Record<CatalogCategory, { readonly title: string; readonly description: string }> = {
+export const CATEGORY_TEXT: Record<ChallengeCategory, { readonly title: string; readonly description: string }> = {
   'card-values': { title: 'Card values', description: '20 cards covering every rank. Answer +1, 0 or −1 for each.' },
   'running-count': { title: 'Running count', description: '52 cards from a shuffled six-deck shoe, starting at zero. Keep the Hi-Lo count as they appear.' },
   conversion: { title: 'True-count conversion', description: "10 questions. You're given a running count and decks remaining; enter the true count." },
@@ -41,7 +41,7 @@ export const startLabel = (variant: ChallengeVariant) => `Start ${variantLabel(v
 export const FINDING_ATTEMPT = 'Finding your counting attempt…';
 
 export const VARIANT_HELP = "Check holds all feedback until the end. Learn tells you after each answer whether it's right, explains it and lets you retry.";
-export const WHAT_YOU_DO: Partial<Record<CatalogCategory, string>> = {
+export const WHAT_YOU_DO: Partial<Record<ChallengeCategory, string>> = {
   'card-values': '20 cards covering every rank, one at a time. Choose +1, 0 or −1 for each. Only your first answer to each card is scored.',
   'running-count':
     '52 cards from a shuffled six-deck shoe, starting at zero. Learn asks for the count after every card; Check asks after cards 13, 26, 39 and 52. Only your first answer at each point is scored.',
@@ -534,7 +534,7 @@ export function helpText(view: Pick<ChallengeView, 'variant' | 'countRange' | 'c
 }
 
 // Spec 3 S3-01 Uq05w; Attempt lifecycle › One unfinished attempt
-export function unfinishedText(view: Pick<ChallengeView, 'category' | 'variant' | 'position' | 'length'>, next: CatalogCategory) {
+export function unfinishedText(view: Pick<ChallengeView, 'category' | 'variant' | 'position' | 'length'>, next: ChallengeCategory) {
   const title = CATEGORY_TEXT[view.category].title;
   const nextTitle = CATEGORY_TEXT[next].title;
   return {
@@ -593,3 +593,7 @@ function timingText({ interrupted, performanceMs }: Pick<ChallengeAttemptRecord,
 
 // docs/development.md Releases
 export const NEEDS_UPDATE = 'Update Tableside to continue your counting attempt. It was saved by a newer version, and it stays exactly as it was.';
+
+// Spec 3 Attempt lifecycle › Resume, End; #135
+export const CANT_RESUME = "This attempt can't resume right now.";
+export const CHECK_FAILED = "Couldn't check whether this attempt can end. Try again.";

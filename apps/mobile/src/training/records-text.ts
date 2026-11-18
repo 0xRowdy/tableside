@@ -9,7 +9,6 @@ import { tableGroupTitle, tableSettingsText } from './blackjack-table-text';
 import { pacingLabel, spokenScore, scoreText, timerText, variantLabel } from './challenge-text';
 import { MILESTONE_HISTORY } from './readiness-text';
 import { everyMetricPerfect, type AttemptEarned, type GroupProgress, type ProgressAttempt } from './progress';
-import type { CatalogCategory } from './service';
 
 export const RECORDS_TITLE = 'Records & history';
 export const RECORDS_ROW = { title: RECORDS_TITLE, detail: 'Personal bests, fastest times, milestones and every attempt' } as const;
@@ -26,7 +25,7 @@ export const HISTORY_LABEL = 'ATTEMPT HISTORY';
 export const NO_HISTORY = 'No attempts yet.';
 export const RECORDS_NOTE = 'Records only compare attempts with identical settings. Speed counts only for perfect, unassisted, uninterrupted, timed Check attempts.';
 
-const RECORD_TITLE: Record<CatalogCategory, string> = { 'card-values': 'Card values', 'running-count': 'Running count', conversion: 'Conversion', table: 'Table counting' };
+const RECORD_TITLE: Record<ChallengeCategory, string> = { 'card-values': 'Card values', 'running-count': 'Running count', conversion: 'Conversion', table: 'Table counting' };
 const ITEMS: Record<Exclude<ChallengeCategory, 'table'>, string> = { 'card-values': 'cards', 'running-count': 'cards', conversion: 'questions' };
 const METRIC_TITLE: Record<ChallengeMetric, string> = {
   'card-values': 'card values',

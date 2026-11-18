@@ -1,18 +1,17 @@
 // Spec 3 S3-01 PDCaD, S3-08 CEb6T, nXGFk, S3-10 OVKkc; Comparison groups; #141
 
-import type { ChallengeGroupKey } from '@tableside/engine';
+import type { ChallengeCategory, ChallengeGroupKey } from '@tableside/engine';
 
 import { dayText } from '@/account/account-text';
 import { GAME_WORDS } from '@/play/game-words';
 
 import { CATEGORY_TEXT, pacingLabel, scoreText, timerText, variantLabel, type AllowanceCopy } from './challenge-text';
 import { attemptIdentity, setsPersonalBest, type AttemptEarned, type GroupProgress, type Progress, type Recommendation, type TableStretch } from './progress';
-import type { CatalogCategory } from './service';
 
 const lowerFirst = (text: string) => text.charAt(0).toLowerCase() + text.slice(1);
 
 // Spec 3 S3-01 PDCaD, S3-08 CEb6T, nXGFk
-const READINESS_WORDS: Record<CatalogCategory, { readonly milestone: string; readonly accuracy: string; readonly lesson: string }> = {
+const READINESS_WORDS: Record<ChallengeCategory, { readonly milestone: string; readonly accuracy: string; readonly lesson: string }> = {
   'card-values': { milestone: 'card-values', accuracy: 'card-value', lesson: 'card values' },
   'running-count': { milestone: 'running-count', accuracy: 'running-count', lesson: 'running count' },
   conversion: { milestone: 'true-count conversion', accuracy: 'true-count', lesson: 'true-count conversion' },
@@ -57,7 +56,7 @@ export interface CategoryStatus {
   readonly text: string;
 }
 
-export function categoryStatus(category: CatalogCategory, progress: Progress | undefined): CategoryStatus {
+export function categoryStatus(category: ChallengeCategory, progress: Progress | undefined): CategoryStatus {
   const groups = progress?.groups.filter((group) => group.key.category === category) ?? [];
   const earned = groups.find((group) => group.milestone !== null);
   if (earned) return { earned: true, text: `Readiness milestone earned · ${variantLabel('check')}, ${pacingLabel(earned.key.pacing)}` };
@@ -87,14 +86,13 @@ export function milestonePill(earned: AttemptEarned): string | null {
 
 export const MILESTONE_KEPT = 'Your milestone stays earned';
 
-
 export const keptDetail = (key: Pick<ChallengeGroupKey, 'category'>, earnedAt: number) =>
   `You earned the ${READINESS_WORDS[key.category].accuracy} readiness milestone at these settings on ${dayText(earnedAt)}. A slip never takes it away. To brush up: a Learn ${GAME_WORDS.blackjack.turn}, or the ${READINESS_WORDS[key.category].lesson} lesson.`;
 
 export const openLessonLabel = (key: Pick<ChallengeGroupKey, 'category'>) => `Open the ${READINESS_WORDS[key.category].lesson} lesson`;
 export const PRACTICE_IN_LEARN = 'Practice in Learn';
 
-export const nextOnPath = (next: CatalogCategory) => `Next on the suggested path: ${lowerFirst(CATEGORY_TEXT[next].title)}.`;
+export const nextOnPath = (next: ChallengeCategory) => `Next on the suggested path: ${lowerFirst(CATEGORY_TEXT[next].title)}.`;
 
 // Spec 3 S3-08 nXGFk
 export const practiceNote = (allowance: AllowanceCopy | undefined) => allowance?.practice ?? '';

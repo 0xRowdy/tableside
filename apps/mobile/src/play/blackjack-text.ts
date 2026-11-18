@@ -1,6 +1,4 @@
 import { blackjackPreset, signed, SUIT_GLYPH, type BlackjackMode } from '@tableside/definitions';
-
-export { signed, SUIT_GLYPH };
 import {
   FUNDING_CEILING,
   INSURANCE_TARGET,
@@ -13,10 +11,11 @@ import {
   type IllegalActionReason,
   type PlayChoice,
   type PlayMove,
-  type Suit,
 } from '@tableside/engine';
 
 import { capitalize, formatUnits } from './units';
+
+export { signed, SUIT_GLYPH };
 
 // Spec 1 S1-02
 export const BLACKJACK_MODE_TEXT: Record<BlackjackMode, { readonly label: string; readonly help: string }> = {

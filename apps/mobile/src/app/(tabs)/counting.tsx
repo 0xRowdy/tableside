@@ -14,19 +14,19 @@ import { ChallengeSetupScreen } from '@/counting/ChallengeSetupScreen';
 import { CountingHome } from '@/counting/CountingHome';
 import { RecordsScreen } from '@/counting/RecordsScreen';
 import { useFeedback } from '@/feedback/FeedbackProvider';
-import { useLoaded } from '@/hooks/use-loaded';
+import { useLoaded, useReloaded } from '@/hooks/use-loaded';
 import { ScreenHints } from '@/lessons/FirstUseHints';
 import { lessonHref, returnsToAttempt } from '@/lessons/routes';
 import { allowanceCopy, COUNTING_TITLE, FINDING_ATTEMPT, NEEDS_UPDATE } from '@/training/challenge-text';
-import { setupFor, type ChallengeSetup, type TrainingService, type TrainingSnapshot } from '@/training/service';
+import { setupFor, type ChallengeSetup, type TrainingService } from '@/training/service';
 import { useLessons, useTraining } from '@/training/TrainingProvider';
 
 const lastSetupOf = (service: TrainingService) => service.lastSetup();
 // Spec 3 Play challenge funding › Starting balance (remembered Play amount); #139
 const playAmountOf = (service: TrainingService) => service.playAmount();
-const allowanceOf = async (service: TrainingService, _reloadOnStatus: TrainingSnapshot['status']) => allowanceCopy(await service.allowance());
+const allowanceOf = async (service: TrainingService) => allowanceCopy(await service.allowance());
 // Spec 3 Comparison groups (Recommendations); Information hiding
-const progressOf = (service: TrainingService, _reloadOnStatus: TrainingSnapshot['status']) => service.progress();
+const progressOf = (service: TrainingService) => service.progress();
 
 export default function Counting() {
   const { service, snapshot } = useTraining();
@@ -36,8 +36,8 @@ export default function Counting() {
   const remembered = useLoaded(lastSetupOf, service);
   const playAmount = useLoaded(playAmountOf, service);
   // Spec 3 Amendment 4 §2
-  const allowance = useLoaded(allowanceOf, service, snapshot.status);
-  const progress = useLoaded(progressOf, service, snapshot.status);
+  const allowance = useReloaded(snapshot.status, allowanceOf, service);
+  const progress = useReloaded(snapshot.status, progressOf, service);
   const [chosen, setChosen] = useState<ChallengeSetup | null>(null);
   const [reviewing, setReviewing] = useState<string | null>(null);
   // Spec 3 S3-01 Uq05w

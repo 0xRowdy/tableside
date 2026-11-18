@@ -4,7 +4,6 @@ import {
   BLACKJACK_LIMITS,
   BLACKJACK_PRESETS,
   blackjackPreset,
-  CATALOG_CATEGORIES,
   CHALLENGE_CONTENT,
   CHECK_WITHHELD_LESSONS,
   DEFAULT_TABLE_SETUP,
@@ -14,7 +13,6 @@ import {
   LESSONS,
   type Hint,
   type HintId,
-  type CatalogCategory,
   type Lesson,
   type LessonContent,
   type LessonHandoff,
@@ -24,6 +22,7 @@ import {
   type WorkedExample,
 } from '@tableside/definitions';
 import {
+  CHALLENGE_CATEGORIES,
   CHALLENGE_PACINGS,
   CHALLENGE_VARIANTS,
   MAX_CHECKPOINT_INTERVAL,
@@ -51,21 +50,15 @@ import { attemptEarned, milestoneCandidates, progressProjection, readinessOutcom
 import { milestoneIdentity, milestoneSlot, type ReadinessMilestoneRecord } from './readiness-milestone';
 import { LESSON_PROGRESS_RECORD_VERSION, lessonProgress, type LessonChange, type LessonHistory, type LessonProgress, type LessonProgressChange, type LessonStatus } from './lesson-progress';
 
-// Spec 3 Recommendations
-export const SUGGESTED_ORDER = CATALOG_CATEGORIES;
-
-export type { CatalogCategory };
-
 export interface CatalogEntry {
-  readonly category: CatalogCategory;
-  readonly available: true;
+  readonly category: ChallengeCategory;
   readonly ready: readonly ChallengeVariant[];
   // Spec 3 Attempt lifecycle › Automatic pacing; #136
   readonly pacings: readonly ChallengePacing[];
 }
 
 export interface ChallengeSetup {
-  readonly category: CatalogCategory;
+  readonly category: ChallengeCategory;
   readonly variant: ChallengeVariant;
   // Spec 3 Attempt lifecycle › Performance timer; #135
   readonly timed?: boolean;
@@ -94,12 +87,6 @@ export type TrainingSnapshot =
 
 export type { LearnerCommand, StartProblem };
 
-const READY: Readonly<Partial<Record<CatalogCategory, readonly ChallengeVariant[]>>> = {
-  'card-values': ['learn', 'check'],
-  'running-count': ['learn', 'check'],
-  conversion: ['learn', 'check'],
-  table: ['learn', 'check'],
-};
 
 // Spec 3 Challenge content › Table; S3-02 ZreSb, FkMDw; #138
 function isTableOptions(value: unknown): value is TableOptions {
@@ -157,7 +144,7 @@ const withFundingDefaults = (table: unknown): unknown => (typeof table === 'obje
 
 // Spec 3 Lessons › Check protection; Amendment 1 A2; #149
 export interface InstructionWithheld {
-  readonly category: CatalogCategory;
+  readonly category: ChallengeCategory;
   readonly play: boolean;
 }
 
@@ -211,7 +198,7 @@ export type { LearningPreferences };
 
 type AuthoredLesson = Lesson & { readonly content: LessonContent };
 
-const isCatalogCategory = (value: unknown): value is CatalogCategory => SUGGESTED_ORDER.includes(value as CatalogCategory);
+const isChallengeCategory = (value: unknown): value is ChallengeCategory => CHALLENGE_CATEGORIES.includes(value as ChallengeCategory);
 
 export class TrainingService {
   private readonly challenges: ChallengeController;
@@ -256,22 +243,18 @@ export class TrainingService {
   }
 
   listCatalog(): readonly CatalogEntry[] {
-    return SUGGESTED_ORDER.map((category) => ({ category, available: true, ready: READY[category] ?? [], pacings: pacingsOf(category) }));
+    return CHALLENGE_CATEGORIES.map((category) => ({ category, ready: CHALLENGE_VARIANTS, pacings: pacingsOf(category) }));
   }
 
   validateSetup(setup: { readonly category: unknown; readonly variant: unknown; readonly pacing?: unknown; readonly table?: unknown }): SetupValidation {
     const diagnostics: SetupDiagnostic[] = [];
-    const known = isCatalogCategory(setup.category);
+    const known = isChallengeCategory(setup.category);
     if (!known) diagnostics.push({ field: 'category', problem: 'unknown' });
-    else if ((READY[setup.category as CatalogCategory] ?? []).length === 0) diagnostics.push({ field: 'category', problem: 'not-ready' });
     if (!CHALLENGE_VARIANTS.includes(setup.variant as ChallengeVariant)) diagnostics.push({ field: 'variant', problem: 'unknown' });
-    else if (known && diagnostics.length === 0 && !READY[setup.category as CatalogCategory]?.includes(setup.variant as ChallengeVariant)) {
-      diagnostics.push({ field: 'variant', problem: 'not-ready' });
-    }
     // Spec 3 Attempt lifecycle › Automatic pacing; #136
     const pacing = pacingOf(setup);
     if (!CHALLENGE_PACINGS.includes(pacing as ChallengePacing)) diagnostics.push({ field: 'pacing', problem: 'unknown' });
-    else if (known && !pacingsOf(setup.category as CatalogCategory).includes(pacing as ChallengePacing)) diagnostics.push({ field: 'pacing', problem: 'not-ready' });
+    else if (known && !pacingsOf(setup.category as ChallengeCategory).includes(pacing as ChallengePacing)) diagnostics.push({ field: 'pacing', problem: 'not-ready' });
     if (setup.category === 'table' && !isTableOptions(setup.table)) diagnostics.push({ field: 'table', problem: 'invalid' });
     else if (setup.category === 'table') diagnostics.push(...tableFundingProblems(setup.table as TableOptions));
     return { valid: diagnostics.length === 0, diagnostics };
@@ -421,7 +404,7 @@ export class TrainingService {
     if (text === null) return null;
     try {
       const value = JSON.parse(text) as Partial<ChallengeSetup>;
-      if (!isCatalogCategory(value.category) || !CHALLENGE_VARIANTS.includes(value.variant as ChallengeVariant)) return null;
+      if (!isChallengeCategory(value.category) || !CHALLENGE_VARIANTS.includes(value.variant as ChallengeVariant)) return null;
       const pacing = pacingsOf(value.category).includes(value.pacing as ChallengePacing) ? (value.pacing as ChallengePacing) : 'self-paced';
       return rememberedSetup({ category: value.category, variant: value.variant as ChallengeVariant, timed: value.timed === true, pacing, ...(value.table === undefined ? {} : { table: withFundingDefaults(value.table) as TableOptions }) });
     } catch {
@@ -617,7 +600,7 @@ function rememberedSetup({ category, variant, timed, pacing, table }: ChallengeS
 // Spec 3 Attempt lifecycle › Automatic pacing; #136
 export const pacingOf = <T>(setup: { readonly pacing?: T }): T | 'self-paced' => setup.pacing ?? 'self-paced';
 
-const pacingsOf = (category: CatalogCategory): readonly ChallengePacing[] =>
+const pacingsOf = (category: ChallengeCategory): readonly ChallengePacing[] =>
   CHALLENGE_PACINGS.filter((pacing) => pacingApplies(category, pacing));
 
 const AVAILABLE: LessonAccess = { kind: 'available' };

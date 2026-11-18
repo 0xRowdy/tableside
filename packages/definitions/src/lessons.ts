@@ -1,9 +1,8 @@
 // Spec 3 Modules › Definitions package; Lessons (#48); Amendment 1 B1, C10; #143, #145, #153
-import type { GameId, StrategyDefinition } from '@tableside/engine';
+import { CHALLENGE_CATEGORIES, type ChallengeCategory, type GameId, type StrategyDefinition } from '@tableside/engine';
 
 import { BLACKJACK_MODES, countingMode, type BlackjackMode } from './blackjack/strategies';
 import { BASIC_STRATEGY, BASIC_WITH_DEVIATIONS, BET_SCHEDULE_LESSON, BLACKJACK_BASICS, COUNTING_WITH_BASIC, COUNTING_WITH_DEVIATIONS } from './lessons/blackjack';
-import { CATALOG_CATEGORIES, type CatalogCategory } from './challenges';
 import { CARD_VALUES_LESSON, CONVERSION_LESSON, RUNNING_COUNT_LESSON, TABLE_COUNTING_LESSON } from './lessons/counting';
 import { CRAPS_STRATEGIES } from './craps-strategies';
 import { APP_ORIENTATION, BUILDING_A_STRATEGY } from './lessons/app-and-builder';
@@ -34,7 +33,7 @@ export type LessonHandoff =
   | { readonly kind: 'free-play'; readonly game: GameId }
   // Spec 1 Built-in strategies
   | { readonly kind: 'guided-practice'; readonly game: GameId; readonly strategy: string | null; readonly betSchedule?: boolean }
-  | { readonly kind: 'learn-challenge'; readonly category: CatalogCategory };
+  | { readonly kind: 'learn-challenge'; readonly category: ChallengeCategory };
 
 // Spec 3 Lessons › Content requirements; Amendment 1 C11
 export interface LessonSource {
@@ -86,7 +85,7 @@ export const LESSONS: readonly Lesson[] = [
 ];
 
 // Spec 3 Lessons › Entry points
-export const CHALLENGE_LESSONS: Readonly<Record<CatalogCategory, string>> = {
+export const CHALLENGE_LESSONS: Readonly<Record<ChallengeCategory, string>> = {
   'card-values': 'card-values',
   'running-count': 'running-count',
   conversion: 'true-count-conversion',
@@ -163,7 +162,7 @@ function handoffProblem(lesson: Lesson, handoff: LessonHandoff): string | null {
   const target = handoff as { kind?: unknown; game?: unknown; strategy?: unknown; category?: unknown; betSchedule?: unknown };
   let game: GameId;
   if (target.kind === 'learn-challenge') {
-    if (!CATALOG_CATEGORIES.includes(target.category as CatalogCategory)) return `names no counting challenge: ${String(target.category)}`;
+    if (!CHALLENGE_CATEGORIES.includes(target.category as ChallengeCategory)) return `names no counting challenge: ${String(target.category)}`;
     game = 'blackjack';
   } else if (target.kind === 'free-play' || target.kind === 'guided-practice') {
     if (!GAMES.includes(target.game as GameId)) return `opens no game setup: ${String(target.game)}`;

@@ -1,7 +1,9 @@
 // Spec 3 Lessons and worked examples (#48), Amendment 1 B1; Testing Decisions › Build-time check; #143
 import { describe, expect, it } from 'vitest';
 
-import { APP_ORIENTATION, CATALOG_CATEGORIES, CHALLENGE_LESSONS, LESSONS, lessonProblems, type Lesson, type LessonHandoff } from '../src';
+import { CHALLENGE_CATEGORIES } from '@tableside/engine';
+
+import { APP_ORIENTATION, CHALLENGE_LESSONS, LESSONS, lessonProblems, type Lesson, type LessonHandoff } from '../src';
 
 describe('lesson definitions', () => {
   it('list 24 lesson slots: 1 app, 10 blackjack, 6 standard craps, 6 roulette, 1 builder', () => {
@@ -44,8 +46,8 @@ describe('lesson definitions', () => {
 
   // Spec 3 Lessons › Entry points; #145
   it('name the blackjack lesson beside each counting challenge category on the Counting tab', () => {
-    expect(CATALOG_CATEGORIES).toEqual(['card-values', 'running-count', 'conversion', 'table']);
-    expect(CATALOG_CATEGORIES.map((category) => LESSONS.find((lesson) => lesson.id === CHALLENGE_LESSONS[category])?.title)).toEqual([
+    expect(CHALLENGE_CATEGORIES).toEqual(['card-values', 'running-count', 'conversion', 'table']);
+    expect(CHALLENGE_CATEGORIES.map((category) => LESSONS.find((lesson) => lesson.id === CHALLENGE_LESSONS[category])?.title)).toEqual([
       'Card values',
       'Running count',
       'True-count conversion',

@@ -1,7 +1,7 @@
 // Spec 3 S3-11 sVqX1, S3-12 l8pMS, pX6CV, S3-13 JJl51, Fvlgc, ZBpF3, Learning NvGyZ; #143, #145
 
 import { BLACKJACK_MODES, CRAPS_STRATEGIES, ROULETTE_STRATEGIES, type BlackjackMode, type LessonHandoff, type LessonSection, type ScriptedTurn, type StrategyStepAnswer, type StrategyStepExample, type StrategyStepExplanation } from '@tableside/definitions';
-import type { Explanation, GameId } from '@tableside/engine';
+import type { ChallengeCategory, Explanation, GameId } from '@tableside/engine';
 
 import { findGame } from '@/games';
 import { BLACKJACK_MODE_TEXT, moveText } from '@/play/blackjack-text';
@@ -11,7 +11,7 @@ import { GAME_WORDS } from '@/play/game-words';
 
 import { CATEGORY_TEXT, NOT_READY_HINT, type AllowanceCopy } from './challenge-text';
 import type { LessonStatus } from './lesson-progress';
-import type { CatalogCategory, InstructionWithheld, LessonAccess, LessonEntry, LessonView } from './service';
+import type { InstructionWithheld, LessonAccess, LessonEntry, LessonView } from './service';
 
 export const LEARNING_TITLE = 'Learning';
 export const LEARNING_DETAIL = 'Lessons';
@@ -217,7 +217,7 @@ export function handoffDetail(handoff: LessonHandoff, allowance: AllowanceCopy |
 }
 
 // Spec 3 Lessons › Entry points; S3-01 PDCaD, S3-02 buD2R, S1-02 FxxAj
-export const lessonLinkLabel = (category: CatalogCategory) => `Lesson: ${lowerFirst(CATEGORY_TEXT[category].title)}`;
+export const lessonLinkLabel = (category: ChallengeCategory) => `Lesson: ${lowerFirst(CATEGORY_TEXT[category].title)}`;
 export const LEARN_THIS_SKILL = 'Learn this skill';
 export const learnThisSkillDetail = (lesson: LessonEntry) =>
   `${lesson.title} lesson · ${lesson.steps === null ? NOT_READY_HINT : (accessText(lesson.access) ?? `${lesson.steps} short steps`)}`;

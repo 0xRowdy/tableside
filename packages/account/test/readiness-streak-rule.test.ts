@@ -1,4 +1,4 @@
-// Spec 3 Comparison groups (Readiness streak); Amendment 1 C2, C3; Testing Decisions › Seam 2; #148, #53
+// Spec 3 Comparison groups (Readiness streak); Testing Decisions › Seam 2; #148, #53
 import type { AssistanceClass, AttemptEndingReason, ChallengeMetric, ChallengeMetrics, ChallengeVariant, MetricResult } from '@tableside/engine';
 import { describe, expect, it } from 'vitest';
 

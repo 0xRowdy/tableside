@@ -1,6 +1,6 @@
 // Spec 3 S3-05 r5pCx, T9sCI, qGARl; S3-01 Uq05w; Attempt lifecycle; #135, #136
 
-import type { ChallengeView } from '@tableside/engine';
+import type { ChallengeCategory, ChallengeView } from '@tableside/engine';
 import { BookOpen, CircleAlert, CircleStop, Eye, Hand, Keyboard, Pause, Play, SkipForward, type LucideIcon } from 'lucide-react-native';
 import { StyleSheet, Text, View } from 'react-native';
 
@@ -9,7 +9,6 @@ import { Sheet, SheetText } from '@/components/Sheet';
 import { fonts, palette, radius, space, textScale } from '@/theme/tokens';
 import { END_ATTEMPT, helpText, holdText, RESUME_LABEL, unfinishedText, type HoldContext } from '@/training/challenge-text';
 import type { AttemptHold } from '@/training/controller';
-import type { CatalogCategory } from '@/training/service';
 
 export function HoldSheet({
   hold,
@@ -100,7 +99,7 @@ export function UnfinishedSheet({
   onClose,
 }: {
   view: Pick<ChallengeView, 'category' | 'variant' | 'position' | 'length'>;
-  next: CatalogCategory;
+  next: ChallengeCategory;
   busy: boolean;
   onResume: () => void;
   onEnd: () => void;
