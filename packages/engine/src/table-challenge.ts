@@ -550,7 +550,7 @@ export function tableCountAt(steps: readonly TableStep[], position: number): Tab
 
 const SHOE_CARDS = BLACKJACK_RULES.decks * 52;
 
-// Spec 3 Learn, Check and assistance › Learn; S3-07 AcmMa
+// Spec 3 Learn, Check and assistance › Learn; S3-07 AcmMa; Amendment 1 C5
 export interface TableRunningExplanation {
   readonly kind: 'table-running';
   readonly round: number;
@@ -562,10 +562,11 @@ export interface TableRunningExplanation {
 }
 
 export function tableRunningExplanation(steps: readonly TableStep[], position: number): TableRunningExplanation {
+  const round = (steps[position] as TableStep).round;
   let start = position - 1;
   while (start >= 0) {
     const step = steps[start] as TableStep;
-    if (step.step === 'shuffle' || (step.step === 'prompt' && step.count === 'running')) break;
+    if (step.step === 'shuffle' || (step.step === 'prompt' && step.count === 'running') || step.round !== round) break;
     start--;
   }
   const from = steps[start];
@@ -573,7 +574,7 @@ export function tableRunningExplanation(steps: readonly TableStep[], position: n
   const cards = steps.slice(start + 1, position).flatMap((step) => ((step.step === 'deal' || step.step === 'reveal') && step.face ? [{ ...step.face }] : []));
   return {
     kind: 'table-running',
-    round: (steps[position] as TableStep).round,
+    round,
     cards,
     values: cards.map((card) => hiLo(card) as -1 | 0 | 1),
     before: from === undefined || shuffled ? 0 : tableCountAt(steps, start).running,

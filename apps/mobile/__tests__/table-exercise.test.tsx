@@ -19,7 +19,7 @@ import { CardReview } from '@/counting/CardReview';
 import { ChallengeExercise } from '@/counting/ChallengeExercise';
 import { attemptRecord, TABLE_PLAY_CHECK } from '@/training/testing/attempt-records';
 import type { LearnerCommand } from '@/training/service';
-import { expectIndistinguishable, expectNoFeedbackColors, presentedScreen, watchAccessibilityEvents, type AccessibilityEvents } from '@/training/testing/information-hiding';
+import { expectIndistinguishable, expectNoFeedbackColors, expectNotPresented, presentedScreen, watchAccessibilityEvents, type AccessibilityEvents } from '@/training/testing/information-hiding';
 
 const seed = (n: number) => ({ protocol: RANDOM_PROTOCOL_VERSION, key: [n, 0x9e3779b9], session: [n * 7 + 1, 0] }) as const;
 
@@ -35,6 +35,9 @@ function send(state: ChallengeState, command: ChallengeCommand): ChallengeState 
 }
 
 const stepOf = (state: ChallengeState) => state.items[state.position] as TableStep;
+
+const RANK_TEXT: Record<number, string> = { 1: 'A', 11: 'J', 12: 'Q', 13: 'K' };
+const SUIT_TEXT: Record<string, string> = { spades: '♠', hearts: '♥', diamonds: '♦', clubs: '♣' };
 
 function advanceUntil(start: ChallengeState, wanted: (state: ChallengeState) => boolean): ChallengeState {
   let state = start;
@@ -170,6 +173,18 @@ describe('the table counting exercise', () => {
     await press('Try again');
     await press('Show answer');
     expect(sent).toEqual([{ kind: 'retry-item' }, { kind: 'next-item' }]);
+  });
+
+  it('explains a Learn block checkpoint from the cards still on the felt and never names a card from an earlier round (Amendment 1 C5)', async () => {
+    const block = advanceUntil(attempt('learn', 3, { interval: 3 }), (state) => state.phase === 'question' && stepOf(state).step === 'prompt');
+    const steps = block.items.slice(0, block.position) as TableStep[];
+    const faceOf = (step: TableStep) => ((step.step === 'deal' || step.step === 'reveal') && step.face ? [`${RANK_TEXT[step.face.rank] ?? step.face.rank}${SUIT_TEXT[step.face.suit]}`] : []);
+    const current = steps.filter((step) => step.round === 3).flatMap(faceOf);
+    const earlier = steps.filter((step) => step.round < 3).flatMap(faceOf).filter((card) => !current.includes(card));
+    expect(earlier.length).toBeGreaterThan(0);
+    const presented = await present(readChallengeView(send(block, { kind: 'answer', value: 40 })));
+    expect(screen.getByText(/^Round 3’s exposed cards were .* The count was [+−]?\d+ before the round, so it’s [+−]?\d+ now\.$/)).toBeOnTheScreen();
+    expectNotPresented(presented, earlier);
   });
 
   it('keeps a recorded Check checkpoint free of correctness: a right and a wrong count look the same apart from the cards (j4tjKT)', async () => {

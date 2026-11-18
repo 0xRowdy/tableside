@@ -17,7 +17,7 @@ import {
 } from '../src';
 
 import { ANSWER, begun, checkView, learnView, NEXT, REVEAL, seed, SKIP, step } from './challenge.fixtures';
-import { expectCheckViewHides } from './information-hiding';
+import { expectCheckViewHides, revealingFields } from './information-hiding';
 import { OBSERVE, TABLE_CHECK, TABLE_LEARN, tableSpec, TABLE_V1, withExtraPlayers } from './table.fixtures';
 
 const face = (card: { rank: number; suit: string } | null) => (card === null ? 'down' : `${card.rank}${card.suit[0]}`);
@@ -57,6 +57,20 @@ function runningAtRoundStart(state: ChallengeState): number {
 }
 
 const stepOf = (state: ChallengeState) => state.items[state.position] as TableStep;
+
+const valueAt = (root: unknown, path: string): unknown =>
+  path
+    .replace(/^view/, '')
+    .split(/[.[\]]/)
+    .filter(Boolean)
+    .reduce((value, key) => (value as Record<string, unknown>)[key], root);
+
+const cardsIn = (value: unknown): string[] => {
+  if (Array.isArray(value)) return value.flatMap(cardsIn);
+  if (value === null || typeof value !== 'object') return [];
+  if ('rank' in value && 'suit' in value) return [face(value as { rank: number; suit: string })];
+  return Object.values(value).flatMap(cardsIn);
+};
 
 function playThrough(start: ChallengeState, answer: (state: ChallengeState) => ChallengeCommand = () => SKIP, visit: (state: ChallengeState) => void = () => undefined): ChallengeState {
   let state = start;
@@ -306,6 +320,27 @@ export const tableCases: TestCase[] = [
       nextRound = step(nextRound, ANSWER(1));
       t.equal(learnView(nextRound).feedback?.explanation, { kind: 'conversion', running: 3, decks: 6, trueCount: 0, exact: false });
       t.equal(learnView(nextRound).feedback?.reference, 0);
+    },
+  },
+  {
+    // Spec 3 Amendment 1 C5; #53 review
+    name: 'table Learn N>1: a block checkpoint\'s feedback names only cards still on display, and counts the earlier rounds as a number',
+    run: (t) => {
+      let blocks = 0;
+      playThrough(begun(tableSpec('learn', { ...withExtraPlayers(2), interval: 3 }), seed(3)), () => ANSWER(0), (state) => {
+        const item = stepOf(state);
+        if (state.phase !== 'question' || item.step !== 'prompt' || item.count !== 'running') return;
+        blocks++;
+        const table = learnView(state).table as TableView;
+        const shown = [...table.dealer.cards, ...table.seats.flatMap((seat) => seat.hands.flatMap((hand) => hand.cards))].flatMap((card) => (card ? [face(card)] : []));
+        const answered = learnView(step(state, ANSWER(0)));
+        const named = revealingFields(answered).flatMap((path) => cardsIn(valueAt(answered, path)));
+        t.equal([item.round, named.filter((card) => !shown.includes(card))], [item.round, []]);
+        t.equal([item.round, [...named].sort()], [item.round, [...shown].sort()]);
+        const explanation = answered.feedback?.explanation as Extract<NonNullable<typeof answered.feedback>['explanation'], { kind: 'table-running' }>;
+        t.equal([item.round, explanation.before], [item.round, runningAtRoundStart(state)]);
+      });
+      t.equal(blocks, 4);
     },
   },
   {

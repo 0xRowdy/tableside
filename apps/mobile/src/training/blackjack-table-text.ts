@@ -155,9 +155,10 @@ export const CONTINUE = 'Continue';
 
 export function tableRunningText(explanation: TableRunningExplanation, timing: NonNullable<TableView['prompt']>['timing']): string {
   const { cards, values, before, count, shuffled, round } = explanation;
-  const start = shuffled ? 'The shoe was reshuffled, so the count started again at 0' : `The count was ${signed(before)} before ${timing === 'after-round' ? 'the round' : 'that'}`;
+  const afterRound = timing !== 'before-bet';
+  const start = shuffled ? 'The shoe was reshuffled, so the count started again at 0' : `The count was ${signed(before)} before ${afterRound ? 'the round' : 'that'}`;
   if (cards.length === 0) return `No cards have been exposed since then. ${start}, so it’s still ${signed(count)}.`;
-  const which = timing === 'after-round' ? `Round ${round}’s exposed cards were` : 'The cards exposed since your last running count were';
+  const which = afterRound ? `Round ${round}’s exposed cards were` : 'The cards exposed since your last running count were';
   const sum = values.reduce((total: number, value) => total + value, 0);
   return `${which} ${listText(cards.map((card) => `${cardRank(card)}${SUIT_GLYPH[card.suit]}`))}: ${values.map(signed).join(', ')} adds up to ${signed(sum)}. ${start}, so it’s ${signed(count)} now.`;
 }
