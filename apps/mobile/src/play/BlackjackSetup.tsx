@@ -141,7 +141,7 @@ export function BlackjackSetup({
             {(mode === 'basic-with-deviations' || mode === 'counting-with-deviations') && (
               <Help>Index plays are the certified {hits ? 'H17' : 'S17'} deviations{surrender ? ' and the Fab 4 surrenders' : ''}.</Help>
             )}
-            {held && <PracticeHold mode={mode} />}
+            {held === true && <PracticeHold mode={mode} />}
             {fit && !fit.compatible && (
               <InlineProblem alert>
                 {[...new Set(fit.requirements.map((r) => limitRequirementText(definition, r, BLACKJACK_WORDS) ?? "The bet schedule doesn't fit this table."))].join(' ')} Tableside won&apos;t change the schedule&apos;s amounts: change the limits, or turn the schedule off.
@@ -198,7 +198,7 @@ export function BlackjackSetup({
       <FundingSection funding={funding} opening={opening} problem={problem} problemReason={problemReason} />
       <LimitsBanner limits={limits} />
 
-      <Button label={guided ? 'Start guided practice' : 'Start free play'} stretch disabled={busy || held || !accepted || (fit !== null && !fit.compatible) || funding.short} onPress={start} />
+      <Button label={guided ? 'Start guided practice' : 'Start free play'} stretch disabled={busy || held !== false || !accepted || (fit !== null && !fit.compatible) || funding.short} onPress={start} />
     </Screen>
   );
 }

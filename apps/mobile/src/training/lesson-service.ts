@@ -66,7 +66,7 @@ type AuthoredLesson = Lesson & { readonly content: LessonContent };
 
 type LessonAdapters = Pick<TrainingAdapters, 'store' | 'access' | 'newId' | 'owner' | 'device' | 'clock'>;
 
-export class TrainingLessons {
+export class LessonService {
   constructor(
     private readonly adapters: LessonAdapters,
     private readonly lessons: readonly Lesson[],

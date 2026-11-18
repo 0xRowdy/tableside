@@ -12,9 +12,10 @@ import { END_TO_PRACTICE, ENDING_ABANDONS, PRACTICE_AFTER_ATTEMPT, practiceHeldT
 import { useInstructionWithheld, useTraining } from '@/training/TrainingProvider';
 import { fonts, palette, space, textScale } from '@/theme/tokens';
 
-export function useModeWithheld(mode: BlackjackMode | null): boolean {
+export function useModeWithheld(mode: BlackjackMode | null): boolean | undefined {
   const withheld = useInstructionWithheld();
-  return withheld?.play === true && mode !== null && PLAY_CHECK_WITHHELD_MODES.includes(mode);
+  if (mode === null || !PLAY_CHECK_WITHHELD_MODES.includes(mode)) return false;
+  return withheld === undefined ? undefined : withheld?.play === true;
 }
 
 export function PracticeHold({ mode }: { mode: BlackjackMode }) {

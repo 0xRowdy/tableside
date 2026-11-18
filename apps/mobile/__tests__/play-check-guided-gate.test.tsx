@@ -112,6 +112,19 @@ describe('blackjack guided practice during an unfinished Play Check', () => {
     expect(screen.queryByRole('header', { name: GATE })).toBeNull();
   });
 
+  it('still lets the learner end a held session, or switch to another game', async () => {
+    await openSetup();
+    await fireEvent.press(screen.getByRole('radio', { name: 'Counting with deviations' }));
+    await fireEvent.press(button('Start guided practice'));
+    await screen.findByLabelText('Session balance 1,000');
+
+    await unfinished(PLAY_CHECK);
+    await renderRouter('./src/app', { initialUrl: '/play?game=craps' });
+    expect(await screen.findByRole('header', { name: GATE })).toBeOnTheScreen();
+    await fireEvent.press(await screen.findByRole('button', { name: 'End blackjack session and switch' }));
+    expect(await screen.findByRole('header', { name: 'Craps' })).toBeOnTheScreen();
+  });
+
   it('leaves every mode open during a Check that is not Play', async () => {
     await unfinished({ category: 'running-count', variant: 'check' });
     await openSetup();

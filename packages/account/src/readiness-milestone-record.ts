@@ -19,7 +19,7 @@ export interface ReadinessMilestoneRecord {
   readonly earnedAt: number;
 }
 
-// Spec 3 Comparison groups (Readiness streak); private.readiness_streak_effect
+// Spec 3 Comparison groups (Readiness streak)
 const COUNTING_METRICS: readonly ChallengeMetric[] = ['card-values', 'running-count', 'true-count'];
 const READINESS_THRESHOLD = 0.95;
 

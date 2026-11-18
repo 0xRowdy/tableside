@@ -1,4 +1,5 @@
-import { blackjackModeOf } from '@tableside/definitions';
+import { blackjackModeOf, type BlackjackMode } from '@tableside/definitions';
+import type { PermittedView } from '@tableside/engine';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { AppState } from 'react-native';
@@ -27,6 +28,30 @@ import { SuspendedSession } from '@/play/SuspendedSession';
 import type { PracticeController, PracticeSnapshot } from '@/practice/controller';
 import { usePractice } from '@/practice/PracticeProvider';
 import { useTrainingService } from '@/training/TrainingProvider';
+
+// Spec 3 Lessons › Check protection; Amendment 1 A2, Amendment 3; S3-14 SUUN4
+function HeldSession({ mode, view, held }: { mode: BlackjackMode; view: PermittedView; held: boolean }) {
+  const { controller } = usePractice();
+  const [confirming, setConfirming] = useState(false);
+  if (!held) return <Placeholder title="Play" message="Finding your practice session…" />;
+  return (
+    <Screen>
+      <SetupHeader title="Blackjack" subtitle={`Guided practice · ${BLACKJACK_MODE_TEXT[mode].label}`} onBack={() => router.navigate('/')} />
+      <PracticeHold mode={mode} />
+      <Button label="End session" variant="secondary" stretch onPress={() => setConfirming(true)} />
+      <EndSessionDialog
+        visible={confirming}
+        view={view}
+        cancelLabel="Not now"
+        onCancel={() => setConfirming(false)}
+        onConfirm={() => {
+          setConfirming(false);
+          void controller.endSession();
+        }}
+      />
+    </Screen>
+  );
+}
 
 const isSwitched = (snapshot: PracticeSnapshot) =>
   snapshot.status === 'completed' && (snapshot.result.endingReason === 'switch' || snapshot.result.endingReason === 'reset');
@@ -57,17 +82,19 @@ export default function Play() {
   const held = useModeWithheld(guidedMode);
   useFollow(leaveSwitchedResults, controller);
 
+  // Spec 3 Lessons › Check protection; Amendment 1 A2, Amendment 3
+  const resumable = held === false;
   useFocusEffect(
     useCallback(() => {
-      void controller.resumeOnReturn();
+      if (resumable) void controller.resumeOnReturn();
       const subscription = AppState.addEventListener('change', (state) => {
-        if (state === 'active') void controller.resumeOnReturn();
+        if (state === 'active' && resumable) void controller.resumeOnReturn();
       });
       return () => {
         subscription.remove();
         controller.suspend('navigation');
       };
-    }, [controller]),
+    }, [controller, resumable]),
   );
 
   switch (snapshot.status) {
@@ -75,19 +102,13 @@ export default function Play() {
       return <Placeholder title="Play" message="Finding your practice session…" />;
     case 'active': {
       const { suspension } = snapshot;
-      if (held && guidedMode) {
-        return (
-          <Screen>
-            <SetupHeader title="Blackjack" subtitle={`Guided practice · ${BLACKJACK_MODE_TEXT[guidedMode].label}`} onBack={() => router.navigate('/')} />
-            <PracticeHold mode={guidedMode} />
-          </Screen>
-        );
-      }
-      if (suspension?.waitsForPlayer) {
+      if (suspension?.waitsForPlayer && resumable) {
         return <SuspendedSession snapshot={snapshot} suspension={suspension} />;
       }
       const table =
-        snapshot.view.game === 'blackjack' ? (
+        guidedMode && !resumable ? (
+          <HeldSession mode={guidedMode} view={snapshot.view} held={held === true} />
+        ) : snapshot.view.game === 'blackjack' ? (
           <BlackjackTable snapshot={{ ...snapshot, view: snapshot.view }} />
         ) : snapshot.view.game === 'craps' ? (
           <CrapsTable snapshot={{ ...snapshot, view: snapshot.view }} />

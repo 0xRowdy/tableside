@@ -40,7 +40,7 @@ import { ChallengeController, type AttemptSnapshot, type DirectSuspendCause, typ
 import { DeviceLearningPreferences, type LearningPreferences } from './learning-preferences';
 import { attemptEarned, milestoneCandidates, progressProjection, readinessOutcome, type AttemptEarned, type Progress, type ProgressAttempt, type ProgressMilestone } from './progress';
 import { milestoneIdentity, milestoneSlot, type ReadinessMilestoneRecord } from './readiness-milestone';
-import { stepCount, TrainingLessons, type HeldLessonAccess, type InstructionWithheld, type LessonAccess, type LessonEntry, type LessonView } from './lesson-service';
+import { stepCount, LessonService, type HeldLessonAccess, type InstructionWithheld, type LessonAccess, type LessonEntry, type LessonView } from './lesson-service';
 
 export interface CatalogEntry {
   readonly category: ChallengeCategory;
@@ -83,18 +83,17 @@ export type { LearnerCommand, StartProblem };
 // Spec 3 Challenge content › Table; S3-02 ZreSb, FkMDw; #138
 function isTableOptions(value: unknown): value is TableOptions {
   if (!hasExactKeys(value, Object.keys(DEFAULT_TABLE_SETUP))) return false;
-  const options = value;
   const whole = (n: unknown, min: number, max: number) => Number.isInteger(n) && (n as number) >= min && (n as number) <= max;
   return (
-    (options.seat === 'observe' || options.seat === 'play') &&
-    typeof options.betSchedule === 'boolean' &&
-    typeof options.baseWager === 'string' &&
-    typeof options.startingBalance === 'string' &&
-    (options.countingMode === 'basic' || options.countingMode === 'deviations') &&
-    BLACKJACK_PRESETS.includes(options.preset as TableOptions['preset']) &&
-    PENETRATIONS.includes(options.penetration as number) &&
-    whole(options.extraPlayers, 0, MAX_OTHER_PLAYERS) &&
-    whole(options.interval, 1, MAX_CHECKPOINT_INTERVAL)
+    (value.seat === 'observe' || value.seat === 'play') &&
+    typeof value.betSchedule === 'boolean' &&
+    typeof value.baseWager === 'string' &&
+    typeof value.startingBalance === 'string' &&
+    (value.countingMode === 'basic' || value.countingMode === 'deviations') &&
+    BLACKJACK_PRESETS.includes(value.preset as TableOptions['preset']) &&
+    PENETRATIONS.includes(value.penetration as number) &&
+    whole(value.extraPlayers, 0, MAX_OTHER_PLAYERS) &&
+    whole(value.interval, 1, MAX_CHECKPOINT_INTERVAL)
   );
 }
 
@@ -151,7 +150,7 @@ export class TrainingService {
   private current: TrainingSnapshot = { status: 'loading' };
   private readonly listeners = new Set<() => void>();
 
-  private readonly lessons: TrainingLessons;
+  private readonly lessons: LessonService;
   private lessonChanges = 0;
   private accessChanges = 0;
   private readonly preferences: DeviceLearningPreferences;
@@ -160,7 +159,7 @@ export class TrainingService {
     private readonly adapters: TrainingAdapters,
     options: TrainingOptions = {},
   ) {
-    this.lessons = new TrainingLessons(adapters, options.lessons ?? LESSONS, () => this.instructionWithheld(), () => this.reviseLessons());
+    this.lessons = new LessonService(adapters, options.lessons ?? LESSONS, () => this.instructionWithheld(), () => this.reviseLessons());
     this.preferences = new DeviceLearningPreferences(adapters.store, options.hints ?? HINTS, () => this.notify());
     this.challenges = new ChallengeController(adapters, (record) => this.earned(record));
     this.challenges.subscribe(() => this.refresh());
