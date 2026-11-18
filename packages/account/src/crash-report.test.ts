@@ -1,5 +1,6 @@
 // Spec 2 Observability and privacy boundaries; #108
 
+import { RANDOM_PROTOCOL_VERSION, advanceChallenge, challengeAttemptRecord, createChallenge, readChallengeView, type ChallengeState } from '@tableside/engine';
 import { describe, expect, it } from 'vitest';
 
 import { crashReport } from './crash-report';
@@ -59,5 +60,52 @@ describe('a crash report', () => {
     const error = new Error('x');
     error.name = 'player@example.com';
     expect(crashReport(error).type).toBe('Error');
+  });
+});
+
+// Spec 3 Information hiding (end to end), Launch gates 2; #156
+describe('a crash during an unfinished Check attempt', () => {
+  const ATTEMPT = 'attempt-5f0c2a9e41b7';
+
+  function unfinishedCheck(): ChallengeState {
+    let state = createChallenge(
+      { attemptId: ATTEMPT, owner: 'account-1', device: 'installation-1', variant: 'check', content: { category: 'card-values', id: 'card-values', version: 1, length: 20, coverage: 'every-rank' } },
+      { protocol: RANDOM_PROTOCOL_VERSION, key: [7, 0x9e3779b9], session: [50, 0] },
+    );
+    for (const command of [{ kind: 'begin' }, { kind: 'answer', value: -1 }, { kind: 'next-item' }] as const) {
+      const result = advanceChallenge(state, { sequence: state.sequence, commandId: `c-${state.sequence}`, command });
+      if (result.status !== 'committed') throw new Error('refused');
+      state = result.state;
+    }
+    return state;
+  }
+
+  function hiddenIn(state: ChallengeState): string[] {
+    const cards = state.items.slice(0, 4).map((item) => JSON.stringify(item));
+    return [ATTEMPT, 'account-1', 'installation-1', ...cards, JSON.stringify(state.answers), JSON.stringify(readChallengeView(state)), '"reference"', '"answers"'];
+  }
+
+  it("carries none of the attempt, its cards, answers or references, even when the error's message holds them", () => {
+    const state = unfinishedCheck();
+    const thrown: unknown[] = [];
+    try {
+      challengeAttemptRecord(state, {} as never);
+    } catch (error) {
+      thrown.push(error);
+    }
+    thrown.push(new Error(`attempt ${ATTEMPT} has a damaged checkpoint: ${JSON.stringify(state)}`));
+    thrown.push(Object.assign(new RangeError(JSON.stringify({ view: readChallengeView(state), items: state.items })), { code: 'answer -1', kind: state.attempt.id }));
+    expect(thrown).toHaveLength(3);
+    for (const error of thrown) {
+      const report = JSON.stringify(crashReport(error));
+      expect(report).toContain('crash-report.test.ts');
+      for (const hidden of hiddenIn(state)) expect(report).not.toContain(hidden);
+    }
+  });
+
+  it('is only the error type, an optional code and code locations: no breadcrumb trail of screens, commands or answers', () => {
+    const report = crashReport(new TypeError(JSON.stringify(unfinishedCheck())));
+    expect(Object.keys(report).sort()).toEqual(['frames', 'type']);
+    expect(Object.keys(crashReport(new SyncCallError('refused'))).sort()).toEqual(['code', 'frames', 'type']);
   });
 });

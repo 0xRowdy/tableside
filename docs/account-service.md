@@ -59,7 +59,7 @@ The Account service (`packages/account`), the app's account vault (`apps/mobile/
 - The sync engine recognizes the app's disk-full `SqlError` by its shape (`kind: 'full'`, `isAccountStoreDiskFull`), since the package can't import the app. Renaming that kind in the app silently breaks full-disk handling.
 - `src/testing` imports the app's account store and practice controller by path. The dependency goes only that way (the app never depends on the test harness); don't make it a package dependency.
 - React Native's `URL` on Hermes is incomplete, so `sign-in.ts` builds URLs and query strings by hand.
-- **Crash reports.** V8 and Hermes start `error.stack` with `name: message`, and the message can span lines shaped like frames, so `crash-report.ts` cuts the message off before parsing frames. JavaScriptCore frames are `name@location`.
+- **Crash reports.** V8 and Hermes start `error.stack` with `name: message`, and the message can span lines shaped like frames, so `crash-report.ts` cuts the message off before parsing frames. A report keeps an error's `kind` or `code` only when it is a few hyphenated words with no digits (`refused`, `cipher-missing`), so an attempt or record id set as a kind never leaves the device (spec 3 launch gate 2). JavaScriptCore frames are `name@location`.
 
 ## Seam 2 scenarios
 
