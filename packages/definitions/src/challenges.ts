@@ -42,7 +42,7 @@ export interface TableOptions extends PlayFunding {
   readonly countingMode: TableCountingMode;
 }
 
-// Spec 3 Play challenge funding › Starting balance: default 1,000
+// Spec 3 Play challenge funding › Starting balance
 export const DEFAULT_STARTING_BALANCE = '1000';
 
 export const DEFAULT_TABLE_SETUP: TableOptions = {
@@ -65,6 +65,3 @@ export function tableSetup(options: TableOptions): TableSetup {
   const { betSchedule, baseWager, startingBalance } = options;
   return { seat: 'play', rules, policy: blackjackStrategy(options.preset, mode).play as BlackjackPlayPolicy, interval: options.interval, betSchedule, baseWager, startingBalance };
 }
-// Spec 3 Challenge content (from #4), Recommendations; #145
-export const CATALOG_CATEGORIES = ['card-values', 'running-count', 'conversion', 'table'] as const;
-export type CatalogCategory = (typeof CATALOG_CATEGORIES)[number];

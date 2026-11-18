@@ -6,7 +6,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
 import { cardName, cardRank, SUIT_GLYPH } from '@/play/blackjack-text';
-import { fonts, palette, space, textScale } from '@/theme/tokens';
+import { fonts, palette, radius, space, textScale } from '@/theme/tokens';
 import { CHOICE_TAG, type ChoiceState } from '@/training/challenge-text';
 
 const SUIT_TOKEN = { spades: 'suitSpade', hearts: 'suitHeart', diamonds: 'suitDiamond', clubs: 'suitClub' } as const;
@@ -65,7 +65,7 @@ export function Choice({ label, spoken, wide = false, state, enabled, onPress }:
 }
 
 const styles = StyleSheet.create({
-  card: { alignSelf: 'center', width: 120, height: 168, paddingVertical: space[3] - 2, paddingHorizontal: space[3], borderRadius: 12, backgroundColor: palette.cardFace, justifyContent: 'space-between' },
+  card: { alignSelf: 'center', width: 120, height: 168, paddingVertical: space[3] - 2, paddingHorizontal: space[3], borderRadius: radius.md, backgroundColor: palette.cardFace, justifyContent: 'space-between' },
   corner: { alignItems: 'center', alignSelf: 'flex-start' },
   rank: { fontFamily: fonts.uiBold, fontSize: 40, lineHeight: 44 },
   cornerSuit: { fontSize: 28, lineHeight: 30 },
@@ -81,7 +81,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: space[1],
     paddingVertical: space[3],
-    borderRadius: 14,
+    borderRadius: radius.lg,
     borderWidth: 1,
     backgroundColor: palette.secondary,
   },

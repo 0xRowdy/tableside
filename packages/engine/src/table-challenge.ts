@@ -161,7 +161,7 @@ export type TableStep =
       readonly unaffordable: readonly Unaffordable[];
       readonly events: readonly TableEvent[];
     }
-  // Spec 3 Play challenge funding: the opening wager and the funding notice; S3-07 fiCRg; #139
+  // Spec 3 Play challenge funding; S3-07 fiCRg; #139
   | { readonly step: 'bet'; readonly round: number; readonly amounts: readonly string[]; readonly notice: boolean };
 
 export type TablePrompt = Extract<TableStep, { readonly step: 'prompt' }>;
@@ -463,7 +463,7 @@ function placeOpening(progress: TableProgress, content: TableContent, earlier: r
   return continuePlayRound({ ...progress, seat: { ...seat, activity: begun.activity, balances: [...seat.balances, entry] } }, content, earlier, begun.facts, []);
 }
 
-// Spec 3 Count checkpoints (table): deviation-decision prompts; Amendment 1 A3; #138
+// Spec 3 Count checkpoints (table); Amendment 1 A3; #138
 function continuePlayRound(
   progress: TableProgress,
   content: TableContent,
@@ -550,7 +550,7 @@ export function tableCountAt(steps: readonly TableStep[], position: number): Tab
 
 const SHOE_CARDS = BLACKJACK_RULES.decks * 52;
 
-// Spec 3 Learn, Check and assistance › Learn; S3-07 AcmMa
+// Spec 3 Learn, Check and assistance › Learn; S3-07 AcmMa; Amendment 1 C5
 export interface TableRunningExplanation {
   readonly kind: 'table-running';
   readonly round: number;
@@ -562,10 +562,11 @@ export interface TableRunningExplanation {
 }
 
 export function tableRunningExplanation(steps: readonly TableStep[], position: number): TableRunningExplanation {
+  const round = (steps[position] as TableStep).round;
   let start = position - 1;
   while (start >= 0) {
     const step = steps[start] as TableStep;
-    if (step.step === 'shuffle' || (step.step === 'prompt' && step.count === 'running')) break;
+    if (step.step === 'shuffle' || (step.step === 'prompt' && step.count === 'running') || step.round !== round) break;
     start--;
   }
   const from = steps[start];
@@ -573,7 +574,7 @@ export function tableRunningExplanation(steps: readonly TableStep[], position: n
   const cards = steps.slice(start + 1, position).flatMap((step) => ((step.step === 'deal' || step.step === 'reveal') && step.face ? [{ ...step.face }] : []));
   return {
     kind: 'table-running',
-    round: (steps[position] as TableStep).round,
+    round,
     cards,
     values: cards.map((card) => hiLo(card) as -1 | 0 | 1),
     before: from === undefined || shuffled ? 0 : tableCountAt(steps, start).running,
@@ -731,7 +732,7 @@ function challengeBalanceAt(seat: PlaySeat, setup: PlaySetup, position: number, 
   return { balance: entry?.balance ?? setup.startingBalance, stake: entry && entry.round === round && entry.change === 'wager' ? entry.stake : null };
 }
 
-// Spec 3 Comparison groups: counting mode
+// Spec 3 Comparison groups
 // Spec 3 User stories 28; #138
 export type TableCountingMode = 'basic' | 'deviations';
 

@@ -1,7 +1,7 @@
 // Spec 3 S3-01 PDCaD, RqPCB; spec 5 S5-17 j3UhJ; Lessons › Entry points; #158, #150, #145, #140, #141
 
 import { CHALLENGE_LESSONS } from '@tableside/definitions';
-import { CHALLENGE_VARIANTS, type ChallengeVariant } from '@tableside/engine';
+import { CHALLENGE_VARIANTS, type ChallengeCategory, type ChallengeVariant } from '@tableside/engine';
 import { CircleDashed, ClipboardCheck, Compass, Flag, GraduationCap, Trophy, type LucideIcon } from 'lucide-react-native';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
@@ -14,7 +14,7 @@ import { lessonLinkLabel } from '@/training/lesson-text';
 import type { Progress } from '@/training/progress';
 import { categoryStatus, RECOMMENDED_BADGE, recommendationText, recommendedLabel } from '@/training/readiness-text';
 import { RECORDS_ROW } from '@/training/records-text';
-import type { CatalogCategory, CatalogEntry, ChallengeSetup, LessonEntry } from '@/training/service';
+import type { CatalogEntry, ChallengeSetup, LessonEntry } from '@/training/service';
 
 import { AllowanceBanner } from './AllowanceBanner';
 
@@ -149,7 +149,7 @@ function VariantButton({
   elsewhere,
   onChoose,
 }: {
-  category: CatalogCategory;
+  category: ChallengeCategory;
   variant: ChallengeSetup['variant'];
   icon: LucideIcon;
   ready: boolean;

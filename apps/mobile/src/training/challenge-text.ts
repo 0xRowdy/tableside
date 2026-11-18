@@ -2,8 +2,8 @@
 
 import { runningCountDrift, type AssistanceClass, type ChallengeAttemptRecord, type ChallengeCategory, type ChallengeEntry, type ChallengeMetric, type ChallengePacing, type ChallengeVariant, type ChallengeView, type ConversionReview, type CountRange, type HiLoExplanation, type HiLoValue, type LearnFeedback, type MetricResult, type ReviewFact, type RunningCountReview, type TableBetReview, type TableDecisionReview } from '@tableside/engine';
 
-import { cardName, rankName, signed } from '@/play/blackjack-text';
-import { conversionText, decksText } from '@/training/blackjack-conversion-text';
+import { cardName, rankName, signed } from '../play/blackjack-text';
+import { conversionText, decksText } from './blackjack-conversion-text';
 import {
   abandonedTableTitle,
   completedRounds,
@@ -16,14 +16,14 @@ import {
   TABLE_LEARN_DETAIL,
   tableCheckpointTitle,
   tableRunningText,
-} from '@/training/blackjack-table-text';
-import { GAME_WORDS } from '@/play/game-words';
+} from './blackjack-table-text';
+import { GAME_WORDS } from '../play/game-words';
 
 import type { ChallengeAllowance } from './allowance';
 import { PACE_SECONDS, type AttemptHold } from './controller';
-import type { CatalogCategory, StartProblem } from './service';
+import type { StartProblem } from './service';
 
-export const CATEGORY_TEXT: Record<CatalogCategory, { readonly title: string; readonly description: string }> = {
+export const CATEGORY_TEXT: Record<ChallengeCategory, { readonly title: string; readonly description: string }> = {
   'card-values': { title: 'Card values', description: '20 cards covering every rank. Answer +1, 0 or −1 for each.' },
   'running-count': { title: 'Running count', description: '52 cards from a shuffled six-deck shoe, starting at zero. Keep the Hi-Lo count as they appear.' },
   conversion: { title: 'True-count conversion', description: "10 questions. You're given a running count and decks remaining; enter the true count." },
@@ -41,7 +41,7 @@ export const startLabel = (variant: ChallengeVariant) => `Start ${variantLabel(v
 export const FINDING_ATTEMPT = 'Finding your counting attempt…';
 
 export const VARIANT_HELP = "Check holds all feedback until the end. Learn tells you after each answer whether it's right, explains it and lets you retry.";
-export const WHAT_YOU_DO: Partial<Record<CatalogCategory, string>> = {
+export const WHAT_YOU_DO: Partial<Record<ChallengeCategory, string>> = {
   'card-values': '20 cards covering every rank, one at a time. Choose +1, 0 or −1 for each. Only your first answer to each card is scored.',
   'running-count':
     '52 cards from a shuffled six-deck shoe, starting at zero. Learn asks for the count after every card; Check asks after cards 13, 26, 39 and 52. Only your first answer at each point is scored.',
@@ -467,7 +467,7 @@ export const END_ATTEMPT = 'End attempt';
 
 export interface HoldContext {
   readonly variant: ChallengeVariant;
-  // Spec 3 Amendment 1 A2: a Play Check also withholds the mode and bet-schedule lessons; #138
+  // Spec 3 Amendment 1 A2; #138
   readonly play?: boolean;
   readonly position: number;
   readonly pacing: ChallengePacing;
@@ -519,7 +519,7 @@ export function helpText(view: Pick<ChallengeView, 'variant' | 'countRange' | 'c
     enter,
     { key: 'skip' as const, title: 'Skip', detail: 'Moves on and counts as incorrect.' },
     { key: 'pause' as const, title: PAUSE_LABEL, detail: 'Tap Pause, or leave the tab or app. Your answers and place are kept.' },
-    // Spec 3 User stories 38: legality only; #138
+    // Spec 3 User stories 38; #138
     ...(view.table?.seat === 'play'
       ? [{ key: 'moves' as const, title: 'Moves', detail: check ? "Tap a move. A move that isn't allowed is refused straight away; nothing says whether an allowed move is right." : 'Tap a move. A move that departs from the strategy pauses so you can take it back or keep it.' }]
       : []),
@@ -534,7 +534,7 @@ export function helpText(view: Pick<ChallengeView, 'variant' | 'countRange' | 'c
 }
 
 // Spec 3 S3-01 Uq05w; Attempt lifecycle › One unfinished attempt
-export function unfinishedText(view: Pick<ChallengeView, 'category' | 'variant' | 'position' | 'length'>, next: CatalogCategory) {
+export function unfinishedText(view: Pick<ChallengeView, 'category' | 'variant' | 'position' | 'length'>, next: ChallengeCategory) {
   const title = CATEGORY_TEXT[view.category].title;
   const nextTitle = CATEGORY_TEXT[next].title;
   return {
@@ -593,3 +593,7 @@ function timingText({ interrupted, performanceMs }: Pick<ChallengeAttemptRecord,
 
 // docs/development.md Releases
 export const NEEDS_UPDATE = 'Update Tableside to continue your counting attempt. It was saved by a newer version, and it stays exactly as it was.';
+
+// Spec 3 Attempt lifecycle › Resume, End; #135
+export const CANT_RESUME = "This attempt can't resume right now.";
+export const CHECK_FAILED = "Couldn't check whether this attempt can end. Try again.";

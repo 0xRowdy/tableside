@@ -1,7 +1,9 @@
 // Spec 3 Lessons and worked examples (#48), Amendment 1 B1; Testing Decisions › Build-time check; #143
 import { describe, expect, it } from 'vitest';
 
-import { APP_ORIENTATION, CATALOG_CATEGORIES, CHALLENGE_LESSONS, LESSONS, lessonProblems, type Lesson, type LessonHandoff } from '../src';
+import { CHALLENGE_CATEGORIES } from '@tableside/engine';
+
+import { APP_ORIENTATION, CHALLENGE_LESSONS, LESSONS, lessonProblems, type Lesson, type LessonHandoff } from '../src';
 
 describe('lesson definitions', () => {
   it('list 24 lesson slots: 1 app, 10 blackjack, 6 standard craps, 6 roulette, 1 builder', () => {
@@ -44,8 +46,8 @@ describe('lesson definitions', () => {
 
   // Spec 3 Lessons › Entry points; #145
   it('name the blackjack lesson beside each counting challenge category on the Counting tab', () => {
-    expect(CATALOG_CATEGORIES).toEqual(['card-values', 'running-count', 'conversion', 'table']);
-    expect(CATALOG_CATEGORIES.map((category) => LESSONS.find((lesson) => lesson.id === CHALLENGE_LESSONS[category])?.title)).toEqual([
+    expect(CHALLENGE_CATEGORIES).toEqual(['card-values', 'running-count', 'conversion', 'table']);
+    expect(CHALLENGE_CATEGORIES.map((category) => LESSONS.find((lesson) => lesson.id === CHALLENGE_LESSONS[category])?.title)).toEqual([
       'Card values',
       'Running count',
       'True-count conversion',
@@ -107,6 +109,7 @@ describe('lesson definitions', () => {
             withHandoffs(cardValues, [
               { kind: 'learn-challenge', category: 'conversion' },
               { kind: 'guided-practice', game: 'blackjack', strategy: 'counting-with-deviations' },
+              { kind: 'guided-practice', game: 'blackjack', strategy: 'counting-with-deviations', betSchedule: true },
               { kind: 'guided-practice', game: 'blackjack', strategy: null },
               { kind: 'free-play', game: 'blackjack' },
             ]),
@@ -139,6 +142,25 @@ describe('lesson definitions', () => {
           'app-orientation: handoff 1 opens no game setup: baccarat',
           'capped-martingale: handoff 1 names no built-in roulette strategy: builtin-craps-pass-with-odds',
           'capped-martingale: handoff 2 names no built-in roulette strategy: reverse-martingale',
+        ]);
+      });
+
+      // Spec 1 S1-02; #53
+      it('a bet schedule outside a blackjack counting mode, or one that is not on or off', () => {
+        expect(
+          lessonProblems([
+            withHandoffs(cardValues, [
+              { kind: 'guided-practice', game: 'blackjack', strategy: 'basic', betSchedule: true },
+              { kind: 'guided-practice', game: 'blackjack', strategy: null, betSchedule: true },
+              { kind: 'guided-practice', game: 'blackjack', strategy: 'counting-with-basic', betSchedule: 'on' },
+            ]),
+            withHandoffs(roulette, [{ kind: 'guided-practice', game: 'roulette', strategy: 'builtin-roulette-capped-martingale', betSchedule: true }]),
+          ]),
+        ).toEqual([
+          'card-values: handoff 1 turns on the bet schedule outside a counting mode',
+          'card-values: handoff 2 turns on the bet schedule outside a counting mode',
+          'card-values: handoff 3 has a bet schedule that is neither on nor off: on',
+          'capped-martingale: handoff 1 turns on the bet schedule outside a counting mode',
         ]);
       });
 

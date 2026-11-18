@@ -4,7 +4,7 @@ import { Check } from 'lucide-react-native';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
-import { fonts, palette, space, textScale } from '@/theme/tokens';
+import { fonts, palette, radius, space, textScale } from '@/theme/tokens';
 
 export interface SegmentOption<T extends string> {
   readonly value: T;
@@ -47,7 +47,7 @@ function Segment<T extends string>({ option, selected, onPress }: { option: Segm
 }
 
 const styles = StyleSheet.create({
-  segmented: { flexDirection: 'row', gap: space[1], padding: space[1], borderRadius: 12, borderWidth: 1, borderColor: palette.controlBorder, backgroundColor: palette.muted },
+  segmented: { flexDirection: 'row', gap: space[1], padding: space[1], borderRadius: radius.md, borderWidth: 1, borderColor: palette.controlBorder, backgroundColor: palette.muted },
   segment: {
     flex: 1,
     minHeight: 44,

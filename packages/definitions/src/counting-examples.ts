@@ -18,6 +18,7 @@ import {
   type TableSetup,
 } from '@tableside/engine';
 
+import { SUIT_GLYPH } from './card-text';
 import { CONVERSION_CONTENT, DEFAULT_TABLE_SETUP, tableSetup, RUNNING_COUNT_CONTENT, TABLE_CONTENT } from './challenges';
 import type { ScriptedChoice } from './worked-examples';
 
@@ -53,9 +54,8 @@ export type CountingExample = ConversionExample | RunningCountExample | TableCou
 const SUITS: readonly string[] = ['clubs', 'diamonds', 'hearts', 'spades'];
 export const isPlayingCard = (card: ChallengeCard) => Number.isInteger(card.rank) && card.rank >= 1 && card.rank <= 13 && SUITS.includes(card.suit);
 export const answerText = (answer: number) => (answer > 0 ? `+${answer}` : String(answer));
-const SUIT_GLYPH: Readonly<Record<string, string>> = { clubs: '♣', diamonds: '♦', hearts: '♥', spades: '♠' };
 const RANK_GLYPH: Readonly<Record<number, string>> = { 1: 'A', 11: 'J', 12: 'Q', 13: 'K' };
-const cardText = (card: ChallengeCard) => `${RANK_GLYPH[card.rank] ?? String(card.rank)}${SUIT_GLYPH[card.suit] ?? '?'}`;
+const cardText = (card: ChallengeCard) => `${RANK_GLYPH[card.rank] ?? String(card.rank)}${SUIT_GLYPH[card.suit]}`;
 const cardsText = (cards: readonly ChallengeCard[]) => cards.map(cardText).join(' ');
 const sameCards = (a: readonly ChallengeCard[], b: readonly ChallengeCard[]) => canonicalJson(a.map(({ rank, suit }) => ({ rank, suit }))) === canonicalJson(b.map(({ rank, suit }) => ({ rank, suit })));
 

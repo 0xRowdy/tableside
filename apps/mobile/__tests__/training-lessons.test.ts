@@ -12,7 +12,7 @@ import { NO_SCREEN_READER } from '@/training/speech';
 
 const ORIENTATION = 'app-orientation';
 
-// Spec 3 Lessons › Access: lessons are unmetered; they only ask whether a game is playable now (Amendment 4 §5)
+// Spec 3 Lessons › Access, Amendment 4 §5
 const refusingAccess = (asked: string[]): AccessSupervisor => ({
   ...(Object.fromEntries(
     Object.keys(alwaysAllowed).map((name) => [

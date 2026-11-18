@@ -1,10 +1,10 @@
 // Spec 3 Synchronized record types › Lesson-progress event; Amendment 1 C8, C10; #143, #147
-import { lessonProgressEvent, type LessonProgressChange, type LessonProgressEvent, type UnsequencedLessonEvent } from '@tableside/account';
+import { LESSON_PROGRESS_RECORD_VERSION, lessonProgressEvent, type LessonProgressChange, type LessonProgressEvent, type UnsequencedLessonEvent } from '@tableside/account';
 
 // Spec 2 registry
 export const LESSON_PROGRESS_RECORD_TYPE = lessonProgressEvent.name;
 
-export type { LessonProgressChange, LessonProgressEvent, UnsequencedLessonEvent };
+export { LESSON_PROGRESS_RECORD_VERSION, type LessonProgressChange, type LessonProgressEvent, type UnsequencedLessonEvent };
 
 // #147
 export interface AcceptedLessonEvent {

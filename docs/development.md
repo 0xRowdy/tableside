@@ -139,6 +139,10 @@ Versioned identities are bumped by hand:
 | `STANDARD_CRAPS.version` (`packages/engine/src/craps.ts`) | a new wager family or rule option; strategies and presets are checked against it |
 | `RECORD_VERSION` (`src/record.ts`) | any change to a completed record's fields |
 | `CHALLENGE_RECORD_VERSION` (`src/challenge-record.ts`) | any change to a challenge-attempt record's fields |
+| `READINESS_MILESTONE_RECORD_VERSION` (`packages/account/src/readiness-milestone-record.ts`) | any change to a readiness-milestone record's fields |
+| `LESSON_PROGRESS_RECORD_VERSION` (`packages/account/src/lesson-progress-record.ts`) | any change to a lesson-progress event's fields |
+| a lesson's `version` (`LESSONS`, definitions) | any change to its content |
+| a lesson's `materialVersion` (`LESSONS`, definitions) | a material change: set it to the new `version` and explain it in `change`; bookmarks are keyed on it and an earlier completion shows "Completed (earlier version)" (spec 3, *Lessons*) |
 | a challenge content definition's `version` (`CHALLENGE_CONTENT`, definitions) | any change to its length or coverage, or to how the engine generates its content; a new version starts fresh comparison groups |
 | `CANONICAL_ENCODING` (`src/fingerprint.ts`) | any change to the instruction schema or its normalization, which changes every fingerprint |
 | `CRAPS_HOUSE_EDGE_VERSION`, `ROULETTE_HOUSE_EDGE_VERSION` (definitions) | any change to a value or its derivation |

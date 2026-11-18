@@ -1,11 +1,14 @@
 // Spec 3 Synchronized record types › Lesson-progress event; Amendment 1 C8, C10; #147
 
 import type { RecordType } from './sync/registry';
+import { isJsonObject, isPositiveInteger } from './values';
 
 export type LessonProgressChange = { readonly kind: 'bookmark'; readonly step: number } | { readonly kind: 'completed' } | { readonly kind: 'restarted' };
 
+export const LESSON_PROGRESS_RECORD_VERSION = 1 as const;
+
 export interface UnsequencedLessonEvent {
-  readonly recordVersion: 1;
+  readonly recordVersion: typeof LESSON_PROGRESS_RECORD_VERSION;
   readonly eventId: string;
   readonly owner: string;
   readonly installation: string;
@@ -18,14 +21,12 @@ export interface LessonProgressEvent extends UnsequencedLessonEvent {
   readonly deviceSequence: number;
 }
 
-const isObject = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
-const isCount = (value: unknown) => Number.isSafeInteger(value) && (value as number) >= 1;
 
 function isChange(value: unknown): value is LessonProgressChange {
-  if (!isObject(value)) return false;
+  if (!isJsonObject(value)) return false;
   switch (value.kind) {
     case 'bookmark':
-      return isCount(value.step);
+      return isPositiveInteger(value.step);
     case 'completed':
     case 'restarted':
       return true;
@@ -36,16 +37,16 @@ function isChange(value: unknown): value is LessonProgressChange {
 
 function isEvent(value: unknown): value is LessonProgressEvent {
   return (
-    isObject(value) &&
-    value.recordVersion === 1 &&
+    isJsonObject(value) &&
+    value.recordVersion === LESSON_PROGRESS_RECORD_VERSION &&
     typeof value.eventId === 'string' &&
     typeof value.owner === 'string' &&
     typeof value.installation === 'string' &&
-    isCount(value.deviceSequence) &&
-    isObject(value.lesson) &&
+    isPositiveInteger(value.deviceSequence) &&
+    isJsonObject(value.lesson) &&
     typeof value.lesson.id === 'string' &&
-    isCount(value.lesson.version) &&
-    isCount(value.lesson.materialVersion) &&
+    isPositiveInteger(value.lesson.version) &&
+    isPositiveInteger(value.lesson.materialVersion) &&
     isChange(value.event) &&
     Number.isSafeInteger(value.recordedAt)
   );
@@ -63,7 +64,7 @@ export const lessonProgressEvent: RecordType<LessonProgressEvent> = {
   // Spec 3 Amendment 1 C8
   snapshot: 'private.snapshot_lesson_progress_events',
   fromChange(change) {
-    const record = isObject(change) ? change.record : undefined;
+    const record = isJsonObject(change) ? change.record : undefined;
     return isEvent(record) ? record : null;
   },
   contribution: null,

@@ -183,7 +183,7 @@ describe('cues during a challenge attempt', () => {
     expect(ports.sound.played.map((play) => play.cue)).toEqual(['card-dealt', 'attempt-ended']);
   });
 
-  // Spec 3 Audio and haptics: cues 2/3 (Play wagers) and 6–8 (Play round net result); #139
+  // Spec 3 Audio and haptics; #139
   it('Play: each wager plays cue 2 as it is shown and each round\'s result plays cue 6, 7 or 8 once the round is seen to resolve, Check included', async () => {
     const table = { ...DEFAULT_TABLE_SETUP, seat: 'play', betSchedule: true } as const;
     const { service, ports } = await setup('check', new MemoryTrainingStore(), EMPTY_QUARANTINE_LIST, { category: 'table', variant: 'check', table });

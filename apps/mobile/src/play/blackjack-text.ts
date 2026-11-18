@@ -1,4 +1,4 @@
-import { blackjackPreset, type BlackjackMode } from '@tableside/definitions';
+import { blackjackPreset, signed, SUIT_GLYPH, type BlackjackMode } from '@tableside/definitions';
 import {
   FUNDING_CEILING,
   INSURANCE_TARGET,
@@ -11,10 +11,11 @@ import {
   type IllegalActionReason,
   type PlayChoice,
   type PlayMove,
-  type Suit,
 } from '@tableside/engine';
 
 import { capitalize, formatUnits } from './units';
+
+export { signed, SUIT_GLYPH };
 
 // Spec 1 S1-02
 export const BLACKJACK_MODE_TEXT: Record<BlackjackMode, { readonly label: string; readonly help: string }> = {
@@ -23,8 +24,6 @@ export const BLACKJACK_MODE_TEXT: Record<BlackjackMode, { readonly label: string
   'counting-with-basic': { label: 'Counting with basic', help: 'You keep the Hi-Lo count. Play is checked against the real count.' },
   'counting-with-deviations': { label: 'Counting with deviations', help: 'You keep the count. Basic plus index plays.' },
 };
-
-export const signed = (value: number) => (value > 0 ? `+${value}` : value < 0 ? `−${-value}` : '0');
 
 export const PLAY_NOUN: Record<PlayChoice, string> = {
   hit: 'hit',
@@ -41,7 +40,6 @@ export const moveText = (move: PlayMove) =>
 
 const RANK_NAMES = ['Ace', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'Jack', 'Queen', 'King'];
 const RANK_SHORT = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
-export const SUIT_GLYPH: Record<Suit, string> = { spades: '♠', hearts: '♥', diamonds: '♦', clubs: '♣' };
 
 export const rankName = (rank: Card['rank']) => RANK_NAMES[rank - 1] as string;
 
@@ -146,7 +144,6 @@ export function seatSummary(seat: number, hand: BlackjackHandView, index: number
   const state = settledState(inHand(view) ? hand : { ...hand, done: true }, 'done');
   return `${name}: ${hand.cards.map(cardName).join(', ')}. ${capitalize(handTotalText(hand))}, ${state}`;
 }
-
 
 const seatOf = (target: string) => /^seat-(\d+)-/.exec(target)?.[1] ?? null;
 

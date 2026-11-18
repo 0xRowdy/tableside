@@ -21,11 +21,11 @@ import {
   type TableView,
 } from '@tableside/engine';
 
-import { playAdvice, playCorrectionCopy } from '@/play/blackjack-coaching';
-import type { CorrectionCopy } from '@/play/coaching-text';
+import { playAdvice, playCorrectionCopy, upName } from '../play/blackjack-coaching';
+import type { CorrectionCopy } from '../play/coaching-text';
 
-import { cardRank, signed, SUIT_GLYPH } from '@/play/blackjack-text';
-import { formatSigned, formatUnits } from '@/play/units';
+import { cardRank, signed, SUIT_GLYPH } from '../play/blackjack-text';
+import { formatSigned, formatUnits, halfUnits } from '../play/units';
 
 const presetText = (dealer: 'S17' | 'H17', lateSurrender: boolean) => `${dealer} ${lateSurrender ? 'LS' : 'no LS'}`;
 const players = (count: number) => `${count} ${count === 1 ? 'player' : 'players'}`;
@@ -39,7 +39,7 @@ export const tableSettingsText = (table: TableGroupKey) =>
     `${table.penetration}%`,
     players(table.extraPlayers),
     `N = ${table.checkpointInterval}`,
-    // Spec 3 Comparison groups: bet schedule, base wager, starting balance; #139
+    // Spec 3 Comparison groups; #139
     ...(table.betSchedule ? ['bet schedule'] : []),
     ...(table.baseWager === null ? [] : [`base ${formatUnits(table.baseWager)}`]),
     ...(table.startingBalance === null ? [] : [`balance ${formatUnits(table.startingBalance)}`]),
@@ -155,9 +155,10 @@ export const CONTINUE = 'Continue';
 
 export function tableRunningText(explanation: TableRunningExplanation, timing: NonNullable<TableView['prompt']>['timing']): string {
   const { cards, values, before, count, shuffled, round } = explanation;
-  const start = shuffled ? 'The shoe was reshuffled, so the count started again at 0' : `The count was ${signed(before)} before ${timing === 'after-round' ? 'the round' : 'that'}`;
+  const afterRound = timing !== 'before-bet';
+  const start = shuffled ? 'The shoe was reshuffled, so the count started again at 0' : `The count was ${signed(before)} before ${afterRound ? 'the round' : 'that'}`;
   if (cards.length === 0) return `No cards have been exposed since then. ${start}, so it’s still ${signed(count)}.`;
-  const which = timing === 'after-round' ? `Round ${round}’s exposed cards were` : 'The cards exposed since your last running count were';
+  const which = afterRound ? `Round ${round}’s exposed cards were` : 'The cards exposed since your last running count were';
   const sum = values.reduce((total: number, value) => total + value, 0);
   return `${which} ${listText(cards.map((card) => `${cardRank(card)}${SUIT_GLYPH[card.suit]}`))}: ${values.map(signed).join(', ')} adds up to ${signed(sum)}. ${start}, so it’s ${signed(count)} now.`;
 }
@@ -302,7 +303,6 @@ export const PLAY_DEAL_TEXT = 'Cards appear one at a time in dealing order; the 
 // Spec 3 S3-07 E3Gbeh, kLgWV; User stories 37, 38
 export const PLAY_KICKER = 'PLAY · YOUR MOVE';
 export const YOUR_MOVE = 'Your move';
-const upWord = (card: { rank: number }) => (card.rank === 1 ? 'an ace' : card.rank >= 10 ? 'a 10' : card.rank === 8 ? 'an 8' : `a ${card.rank}`);
 export function moveText(table: TableView): string {
   const decision = table.decision as NonNullable<TableView['decision']>;
   const up = table.dealer.cards[0];
@@ -310,16 +310,16 @@ export function moveText(table: TableView): string {
   const index = hands.findIndex((hand) => hand.target === decision.target);
   const hand = hands[index];
   const which = hands.length > 1 ? `Hand ${index + 1} of ${hands.length}: ` : 'You have ';
-  const against = up ? ` against ${upWord(up)}` : '';
+  const against = up ? ` against ${upName(up)}` : '';
   if (decision.kind === 'insurance') return `The dealer shows an ace. Insurance costs half your bet and pays 2:1 if the dealer has blackjack. Decide before anything else.`;
   return `${which}${hand ? `${hand.total.soft ? 'soft' : 'hard'} ${hand.total.value}` : 'your hand'}${against}. Choose a move; the next card waits for you.`;
 }
 export const MOVE_LABEL: Record<PlayChoice, string> = { hit: 'Hit', stand: 'Stand', double: 'Double', split: 'Split', surrender: 'Surrender', insure: 'Insure', 'decline-insurance': 'No insurance' };
-export const insureLabel = (minimum: string) => `Insure ${Number(minimum) / 2}`;
+export const insureLabel = (bet: string) => `Insure ${formatUnits(halfUnits(bet))}`;
 export const HAND_MOVES: readonly PlayChoice[] = ['hit', 'stand', 'double', 'split', 'surrender'];
 export const INSURANCE_MOVES: readonly PlayChoice[] = ['insure', 'decline-insurance'];
 
-// Spec 3 S3-07 kLgWV: legality only, never correctness
+// Spec 3 S3-07 kLgWV
 export const REFUSED_KICKER = 'THAT MOVE ISN’T AVAILABLE';
 export const CHOOSE_AGAIN = 'Choose again';
 export function refusedText(table: TableView, move: PlayChoice, variant: ChallengeVariant): { readonly title: string; readonly detail: string } {
@@ -353,7 +353,7 @@ export function tableCorrectionCopy(correction: PlayCorrection, table: TableView
   };
 }
 
-// Spec 3 S3-09 VToCp, aEdMd: every row says match, miss or fallback in words
+// Spec 3 S3-09 VToCp, aEdMd
 export const DECISION_REVIEW_TITLE = 'Decision review';
 export const REFERENCE_LABEL = 'Reference';
 export const AT_LABEL = 'At';
@@ -378,7 +378,7 @@ export function decisionReviewText(fact: TableDecisionReview): { readonly outcom
   return { outcome, title, status, values, label };
 }
 
-// Spec 3 Scoring and review › Attribution; S3-09 VToCp: never excuses the error
+// Spec 3 Scoring and review › Attribution; S3-09 VToCp
 export function attributionText(fact: TableDecisionReview): string | null {
   if (typeof fact.entered !== 'number' || fact.atEntered === null || fact.chosen === fact.prescribed || fact.chosen !== fact.atEntered) return null;
   const doing = { hit: 'hitting', stand: 'standing on', double: 'doubling', split: 'splitting', surrender: 'surrendering', insure: 'taking insurance', 'decline-insurance': 'declining insurance' }[fact.chosen];

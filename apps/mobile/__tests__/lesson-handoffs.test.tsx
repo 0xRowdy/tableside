@@ -173,6 +173,18 @@ describe('lesson handoffs', () => {
     expect(await screen.findByLabelText('Session balance 1,000')).toBeOnTheScreen();
   });
 
+  // #53
+  it('the bet-schedule lesson opens blackjack guided practice with its counting mode and the schedule on', async () => {
+    await renderRouter('./src/app', { initialUrl: '/more/settings/learning/lessons/bet-schedule' });
+    await header('Bet schedule');
+    for (let more = 0; more < 3; more++) await fireEvent.press(button('Next'));
+    await fireEvent.press(await screen.findByRole('link', { name: 'Guided practice · Blackjack, counting with deviations, bet schedule on' }));
+    expect(await header('Blackjack')).toBeOnTheScreen();
+    expect(radio('Counting with deviations')).toBeChecked();
+    expect(screen.getByRole('switch', { name: /^Practice the Hi-Lo bet schedule/ })).toBeChecked();
+    await expectNothingStarted();
+  });
+
   it('free play opens blackjack setup in free play, even after a guided handoff', async () => {
     await finalStep('card-values', 'Card values');
     await fireEvent.press(screen.getByRole('link', { name: 'Guided practice · Blackjack, counting with deviations' }));

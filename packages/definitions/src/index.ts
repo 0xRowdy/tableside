@@ -23,7 +23,7 @@ export {
 
 export { BLACKJACK_LIMITS, blackjackPreset, blackjackRules, DEFAULT_BLACKJACK_PRESET, DEFAULT_PENETRATION } from './blackjack/rules';
 export { seatStrategy } from './blackjack/seats';
-export { BET_SCHEDULE, BLACKJACK_MODES, BLACKJACK_REFERENCE_IDENTITY, blackjackStrategy, countingMode, type BlackjackMode } from './blackjack/strategies';
+export { BET_SCHEDULE, BLACKJACK_MODES, BLACKJACK_REFERENCE_IDENTITY, blackjackModeOf, blackjackStrategy, countingMode, type BlackjackMode } from './blackjack/strategies';
 export {
   CRAPS_EDGE_WAGERS,
   CRAPS_LIMITS,
@@ -72,7 +72,6 @@ export { benchmarkProfile, BENCHMARK_PROFILES } from './benchmark-profiles';
 
 export {
   CARD_VALUES_CONTENT,
-  CATALOG_CATEGORIES,
   CHALLENGE_CONTENT,
   CONVERSION_CONTENT,
   DEFAULT_STARTING_BALANCE,
@@ -80,7 +79,6 @@ export {
   tableSetup,
   RUNNING_COUNT_CONTENT,
   TABLE_CONTENT,
-  type CatalogCategory,
   type TableOptions,
 } from './challenges';
 
@@ -89,6 +87,7 @@ export {
   CHALLENGE_LESSONS,
   CHECK_WITHHELD_LESSONS,
   LESSONS,
+  PLAY_CHECK_WITHHELD_MODES,
   lessonProblems,
   type Lesson,
   type LessonContent,
@@ -112,3 +111,5 @@ export {
   type StrategyStepExample,
   type StrategyStepExplanation,
 } from './strategy-examples';
+
+export { signed, SUIT_GLYPH } from './card-text';

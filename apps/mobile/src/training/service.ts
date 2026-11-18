@@ -4,9 +4,7 @@ import {
   BLACKJACK_LIMITS,
   BLACKJACK_PRESETS,
   blackjackPreset,
-  CATALOG_CATEGORIES,
   CHALLENGE_CONTENT,
-  CHECK_WITHHELD_LESSONS,
   DEFAULT_TABLE_SETUP,
   tableSetup,
   type TableOptions,
@@ -14,50 +12,45 @@ import {
   LESSONS,
   type Hint,
   type HintId,
-  type CatalogCategory,
   type Lesson,
-  type LessonContent,
-  type LessonHandoff,
-  type LessonSection,
-  type LessonSource,
-  type LessonStep,
-  type WorkedExample,
 } from '@tableside/definitions';
 import {
+  CHALLENGE_CATEGORIES,
   CHALLENGE_PACINGS,
   CHALLENGE_VARIANTS,
   MAX_CHECKPOINT_INTERVAL,
   MAX_OTHER_PLAYERS,
   pacingApplies,
   PENETRATIONS,
+  hasExactKeys,
   playFundingProblems,
+  type ChallengeAttemptRecord,
+  type ChallengeCategory,
+  type ChallengeGroupKey,
+  type ChallengePacing,
+  type ChallengeVariant,
+  type PlayFunding,
   type PlayFundingProblem,
-  type ChallengeAttemptRecord, type ChallengeCategory, type ChallengeGroupKey, type ChallengePacing, type ChallengeVariant, type GameId } from '@tableside/engine';
+} from '@tableside/engine';
 
-import type { GameAccess, LifecycleEvent } from '../practice/adapters';
+import type { LifecycleEvent } from '../practice/adapters';
 import type { TrainingAdapters } from './adapters';
 import type { ChallengeAllowance } from './allowance';
 import { ChallengeController, type AttemptSnapshot, type DirectSuspendCause, type LearnerCommand, type PauseCause, type StartProblem } from './controller';
 import { DeviceLearningPreferences, type LearningPreferences } from './learning-preferences';
 import { attemptEarned, milestoneCandidates, progressProjection, readinessOutcome, type AttemptEarned, type Progress, type ProgressAttempt, type ProgressMilestone } from './progress';
 import { milestoneIdentity, milestoneSlot, type ReadinessMilestoneRecord } from './readiness-milestone';
-import { lessonProgress, type LessonChange, type LessonHistory, type LessonProgress, type LessonProgressChange, type LessonStatus } from './lesson-progress';
-
-// Spec 3 Recommendations
-export const SUGGESTED_ORDER = CATALOG_CATEGORIES;
-
-export type { CatalogCategory };
+import { stepCount, LessonService, type HeldLessonAccess, type InstructionWithheld, type LessonAccess, type LessonEntry, type LessonView } from './lesson-service';
 
 export interface CatalogEntry {
-  readonly category: CatalogCategory;
-  readonly available: true;
+  readonly category: ChallengeCategory;
   readonly ready: readonly ChallengeVariant[];
   // Spec 3 Attempt lifecycle › Automatic pacing; #136
   readonly pacings: readonly ChallengePacing[];
 }
 
 export interface ChallengeSetup {
-  readonly category: CatalogCategory;
+  readonly category: ChallengeCategory;
   readonly variant: ChallengeVariant;
   // Spec 3 Attempt lifecycle › Performance timer; #135
   readonly timed?: boolean;
@@ -86,29 +79,21 @@ export type TrainingSnapshot =
 
 export type { LearnerCommand, StartProblem };
 
-const READY: Readonly<Partial<Record<CatalogCategory, readonly ChallengeVariant[]>>> = {
-  'card-values': ['learn', 'check'],
-  'running-count': ['learn', 'check'],
-  conversion: ['learn', 'check'],
-  table: ['learn', 'check'],
-};
 
 // Spec 3 Challenge content › Table; S3-02 ZreSb, FkMDw; #138
 function isTableOptions(value: unknown): value is TableOptions {
-  if (typeof value !== 'object' || value === null) return false;
-  const options = value as Record<string, unknown>;
+  if (!hasExactKeys(value, Object.keys(DEFAULT_TABLE_SETUP))) return false;
   const whole = (n: unknown, min: number, max: number) => Number.isInteger(n) && (n as number) >= min && (n as number) <= max;
   return (
-    Object.keys(options).length === 9 &&
-    (options.seat === 'observe' || options.seat === 'play') &&
-    typeof options.betSchedule === 'boolean' &&
-    typeof options.baseWager === 'string' &&
-    typeof options.startingBalance === 'string' &&
-    (options.countingMode === 'basic' || options.countingMode === 'deviations') &&
-    BLACKJACK_PRESETS.includes(options.preset as TableOptions['preset']) &&
-    PENETRATIONS.includes(options.penetration as number) &&
-    whole(options.extraPlayers, 0, MAX_OTHER_PLAYERS) &&
-    whole(options.interval, 1, MAX_CHECKPOINT_INTERVAL)
+    (value.seat === 'observe' || value.seat === 'play') &&
+    typeof value.betSchedule === 'boolean' &&
+    typeof value.baseWager === 'string' &&
+    typeof value.startingBalance === 'string' &&
+    (value.countingMode === 'basic' || value.countingMode === 'deviations') &&
+    BLACKJACK_PRESETS.includes(value.preset as TableOptions['preset']) &&
+    PENETRATIONS.includes(value.penetration as number) &&
+    whole(value.extraPlayers, 0, MAX_OTHER_PLAYERS) &&
+    whole(value.interval, 1, MAX_CHECKPOINT_INTERVAL)
   );
 }
 
@@ -116,15 +101,20 @@ function isTableOptions(value: unknown): value is TableOptions {
 // Spec 3 Play challenge funding (#20) › Starting balance; S3-02 Al6Pw; #139
 export const tableFundingProblems = (options: TableOptions): PlayFundingProblem[] => (options.seat === 'play' ? playFundingProblems(options, BLACKJACK_LIMITS.initial) : []);
 
-// Spec 3 Training service interface › Results: Retry keeps the attempt's settings
+// Spec 3 Play challenge funding; Comparison groups; #139
+const tableFunding = (funding: { readonly betSchedule?: boolean; readonly baseWager?: string | null; readonly startingBalance?: string | null }): PlayFunding => ({
+  betSchedule: funding.betSchedule ?? DEFAULT_TABLE_SETUP.betSchedule,
+  baseWager: funding.baseWager ?? DEFAULT_TABLE_SETUP.baseWager,
+  startingBalance: funding.startingBalance ?? DEFAULT_TABLE_SETUP.startingBalance,
+});
+
+// Spec 3 Training service interface › Results
 export function retrySetup(groupKey: ChallengeGroupKey): ChallengeSetup {
   const { category, variant, table } = groupKey;
   if (!table) return { category, variant };
   const preset = blackjackPreset(table.dealer, table.lateSurrender);
   const countingMode = table.countingMode ?? DEFAULT_TABLE_SETUP.countingMode;
-  // Spec 3 Comparison groups: bet schedule, base wager, starting balance; #139
-  const funding = { betSchedule: table.betSchedule, baseWager: table.baseWager ?? DEFAULT_TABLE_SETUP.baseWager, startingBalance: table.startingBalance ?? DEFAULT_TABLE_SETUP.startingBalance };
-  return { category, variant, table: { seat: table.seat, preset, penetration: table.penetration, extraPlayers: table.extraPlayers, interval: table.checkpointInterval, countingMode, ...funding } };
+  return { category, variant, table: { seat: table.seat, preset, penetration: table.penetration, extraPlayers: table.extraPlayers, interval: table.checkpointInterval, countingMode, ...tableFunding(table) } };
 }
 
 // Spec 3 Amendment 1 C7
@@ -138,60 +128,12 @@ export function setupFor(entry: CatalogEntry, preferred: readonly (ChallengeSetu
   const chosen = fits ?? { category: entry.category, variant: entry.ready[0] ?? 'learn' };
   if (entry.category !== 'table' || chosen.table) return chosen;
   const remembered = preferred.find((setup) => setup?.category === 'table' && setup.table)?.table;
-  return { ...chosen, table: remembered ?? { ...DEFAULT_TABLE_SETUP, startingBalance: playAmount ?? DEFAULT_TABLE_SETUP.startingBalance } };
+  return { ...chosen, table: remembered ?? { ...DEFAULT_TABLE_SETUP, ...tableFunding({ startingBalance: playAmount }) } };
 }
 
-const withFundingDefaults = (table: unknown): unknown =>
-  typeof table === 'object' && table !== null
-    ? { betSchedule: DEFAULT_TABLE_SETUP.betSchedule, baseWager: DEFAULT_TABLE_SETUP.baseWager, startingBalance: DEFAULT_TABLE_SETUP.startingBalance, ...table }
-    : table;
+const withFundingDefaults = (table: unknown): unknown => (typeof table === 'object' && table !== null ? { ...tableFunding({}), ...table } : table);
 
-// Spec 3 Lessons › Check protection; Amendment 1 A2; #149
-export interface InstructionWithheld {
-  readonly category: CatalogCategory;
-  readonly play: boolean;
-}
-
-// Spec 3 Training service interface › List catalog, Lesson progress; #143
-export interface LessonEntry {
-  readonly id: string;
-  readonly title: string;
-  readonly summary: string | null;
-  readonly section: LessonSection;
-  readonly steps: number | null;
-  readonly access: LessonAccess;
-  readonly status: LessonStatus;
-}
-
-// Spec 3 Lessons › Access, Check protection; Amendment 1 A2, Amendment 4 §5; #149
-export type LessonAccess =
-  | { readonly kind: 'available' }
-  | { readonly kind: 'after-check'; readonly attempt: InstructionWithheld }
-  | { readonly kind: 'needs-connection'; readonly game: GameId; readonly offlineGame: GameId | null };
-
-export type HeldLessonAccess = Exclude<LessonAccess, { readonly kind: 'available' }>;
-
-const HELD_MESSAGE: Record<HeldLessonAccess['kind'], string> = { 'after-check': 'opens after the Check attempt ends', 'needs-connection': 'needs a connection' };
-
-export interface LessonView {
-  readonly id: string;
-  readonly title: string;
-  readonly section: LessonSection;
-  readonly step: number;
-  readonly steps: readonly LessonStep[];
-  readonly prompt: { readonly kind: 'resume-or-restart'; readonly step: number } | null;
-  // Spec 3 Lessons › Progress, Amendment 1 C10
-  readonly notice: { readonly kind: LessonChange; readonly change: string } | null;
-  // Spec 3 Lessons › Structure (worked examples); #144
-  readonly example: WorkedExample | null;
-  // Spec 3 Lessons › Structure (Handoff)
-  readonly handoffs: readonly LessonHandoff[];
-  // Spec 3 Amendment 1 C11; S3-12 hGHha; #154
-  readonly sources: readonly LessonSource[];
-}
-
-// Spec 3 S3-12 hGHha; #154
-export const stepCount = (lesson: Pick<LessonContent, 'steps' | 'sources'>): number => lesson.steps.length + (lesson.sources.length > 0 ? 1 : 0);
+export { stepCount, type HeldLessonAccess, type InstructionWithheld, type LessonAccess, type LessonEntry, type LessonView };
 
 export interface TrainingOptions {
   readonly lessons?: readonly Lesson[];
@@ -200,9 +142,7 @@ export interface TrainingOptions {
 
 export type { LearningPreferences };
 
-type AuthoredLesson = Lesson & { readonly content: LessonContent };
-
-const isCatalogCategory = (value: unknown): value is CatalogCategory => SUGGESTED_ORDER.includes(value as CatalogCategory);
+const isChallengeCategory = (value: unknown): value is ChallengeCategory => CHALLENGE_CATEGORIES.includes(value as ChallengeCategory);
 
 export class TrainingService {
   private readonly challenges: ChallengeController;
@@ -210,18 +150,17 @@ export class TrainingService {
   private current: TrainingSnapshot = { status: 'loading' };
   private readonly listeners = new Set<() => void>();
 
-  private readonly lessons: readonly Lesson[];
+  private readonly lessons: LessonService;
   private lessonChanges = 0;
   private accessChanges = 0;
   private readonly preferences: DeviceLearningPreferences;
-  private learningChanges = 0;
 
   constructor(
     private readonly adapters: TrainingAdapters,
     options: TrainingOptions = {},
   ) {
-    this.lessons = options.lessons ?? LESSONS;
-    this.preferences = new DeviceLearningPreferences(adapters.store, options.hints ?? HINTS);
+    this.lessons = new LessonService(adapters, options.lessons ?? LESSONS, () => this.instructionWithheld(), () => this.reviseLessons());
+    this.preferences = new DeviceLearningPreferences(adapters.store, options.hints ?? HINTS, () => this.notify());
     this.challenges = new ChallengeController(adapters, (record) => this.earned(record));
     this.challenges.subscribe(() => this.refresh());
   }
@@ -233,7 +172,7 @@ export class TrainingService {
   // Spec 3 Lessons › Access, Check protection; #149
   accessRevision = (): number => this.accessChanges;
 
-  learningRevision = (): number => this.learningChanges;
+  learningRevision = (): number => this.preferences.revision();
 
   subscribe = (listener: () => void): (() => void) => {
     this.listeners.add(listener);
@@ -247,22 +186,18 @@ export class TrainingService {
   }
 
   listCatalog(): readonly CatalogEntry[] {
-    return SUGGESTED_ORDER.map((category) => ({ category, available: true, ready: READY[category] ?? [], pacings: pacingsOf(category) }));
+    return CHALLENGE_CATEGORIES.map((category) => ({ category, ready: CHALLENGE_VARIANTS, pacings: pacingsOf(category) }));
   }
 
   validateSetup(setup: { readonly category: unknown; readonly variant: unknown; readonly pacing?: unknown; readonly table?: unknown }): SetupValidation {
     const diagnostics: SetupDiagnostic[] = [];
-    const known = isCatalogCategory(setup.category);
+    const known = isChallengeCategory(setup.category);
     if (!known) diagnostics.push({ field: 'category', problem: 'unknown' });
-    else if ((READY[setup.category as CatalogCategory] ?? []).length === 0) diagnostics.push({ field: 'category', problem: 'not-ready' });
     if (!CHALLENGE_VARIANTS.includes(setup.variant as ChallengeVariant)) diagnostics.push({ field: 'variant', problem: 'unknown' });
-    else if (known && diagnostics.length === 0 && !READY[setup.category as CatalogCategory]?.includes(setup.variant as ChallengeVariant)) {
-      diagnostics.push({ field: 'variant', problem: 'not-ready' });
-    }
     // Spec 3 Attempt lifecycle › Automatic pacing; #136
     const pacing = pacingOf(setup);
     if (!CHALLENGE_PACINGS.includes(pacing as ChallengePacing)) diagnostics.push({ field: 'pacing', problem: 'unknown' });
-    else if (known && !pacingsOf(setup.category as CatalogCategory).includes(pacing as ChallengePacing)) diagnostics.push({ field: 'pacing', problem: 'not-ready' });
+    else if (known && !pacingsOf(setup.category as ChallengeCategory).includes(pacing as ChallengePacing)) diagnostics.push({ field: 'pacing', problem: 'not-ready' });
     if (setup.category === 'table' && !isTableOptions(setup.table)) diagnostics.push({ field: 'table', problem: 'invalid' });
     else if (setup.category === 'table') diagnostics.push(...tableFundingProblems(setup.table as TableOptions));
     return { valid: diagnostics.length === 0, diagnostics };
@@ -351,17 +286,22 @@ export class TrainingService {
   private async earned(record: ChallengeAttemptRecord): Promise<AttemptEarned> {
     await this.recordMilestones().catch(() => undefined);
     const attempts = await this.attempts();
-    const milestones = await this.milestones(milestoneCandidates(attempts, this.adapters.device));
+    const milestones = await this.milestones(milestoneCandidates(attempts, this.adapters.device, await this.refusedMilestones()));
     return { ...attemptEarned(attempts, record.attemptId), readiness: readinessOutcome(attempts, milestones, record.attemptId) };
   }
 
   // Spec 3 Synchronized record types › Readiness milestone
   private async recordMilestones(): Promise<void> {
     const recorded = await this.adapters.store.readMilestones();
-    const missing = milestoneCandidates(await this.attempts(), this.adapters.device).filter(
-      (candidate) => !recorded.some((milestone) => milestoneSlot(milestone) === milestoneSlot(candidate)),
+    const refused = await this.refusedMilestones();
+    const missing = milestoneCandidates(await this.attempts(), this.adapters.device, refused).filter(
+      (candidate) => !recorded.some((milestone) => milestoneSlot(milestone) === milestoneSlot(candidate) && !refused.has(milestoneIdentity(milestone))),
     );
     for (const milestone of missing) await this.adapters.store.recordMilestone(milestone);
+  }
+
+  private async refusedMilestones(): Promise<ReadonlySet<string>> {
+    return new Set((await this.adapters.store.readMilestoneSync()).refused);
   }
 
   // Spec 3 Synchronized record types › Readiness milestone; #148
@@ -407,7 +347,7 @@ export class TrainingService {
     if (text === null) return null;
     try {
       const value = JSON.parse(text) as Partial<ChallengeSetup>;
-      if (!isCatalogCategory(value.category) || !CHALLENGE_VARIANTS.includes(value.variant as ChallengeVariant)) return null;
+      if (!isChallengeCategory(value.category) || !CHALLENGE_VARIANTS.includes(value.variant as ChallengeVariant)) return null;
       const pacing = pacingsOf(value.category).includes(value.pacing as ChallengePacing) ? (value.pacing as ChallengePacing) : 'self-paced';
       return rememberedSetup({ category: value.category, variant: value.variant as ChallengeVariant, timed: value.timed === true, pacing, ...(value.table === undefined ? {} : { table: withFundingDefaults(value.table) as TableOptions }) });
     } catch {
@@ -433,69 +373,38 @@ export class TrainingService {
   }
 
   // Spec 3 Lessons › Access
-  async listLessons(): Promise<readonly LessonEntry[]> {
-    const games = [...new Set(this.lessons.flatMap((lesson) => (lesson.game ? [lesson.game] : [])))];
-    const [history, withheld, answers] = await Promise.all([
-      this.lessonHistory(),
-      this.instructionWithheld(),
-      Promise.all(games.map(async (game) => [game, await this.gameAccess(game)] as const)),
-    ]);
-    const access = new Map(answers);
-    return this.lessons.map((lesson) => ({
-      id: lesson.id,
-      title: lesson.title,
-      summary: lesson.summary,
-      section: lesson.section,
-      steps: lesson.content ? stepCount(lesson.content) : null,
-      access: accessOf(lesson, withheld, lesson.game && (access.get(lesson.game) ?? null)),
-      status: lesson.content ? lessonProgress(history, progressKey(lesson.id, lesson.content)).status : { kind: 'not-started' as const },
-    }));
+  listLessons(): Promise<readonly LessonEntry[]> {
+    return this.lessons.list();
   }
 
   // Spec 3 S3-14 SUUN4, S3-12 JsXMJ
   aboutLesson(id: string): Pick<Lesson, 'id' | 'title' | 'section'> | null {
-    const lesson = this.lessons.find((candidate) => candidate.id === id);
-    return lesson ? { id: lesson.id, title: lesson.title, section: lesson.section } : null;
+    return this.lessons.about(id);
   }
 
   // Spec 3 Lessons › Access, Check protection; #149
-  async lessonAccess(id: string): Promise<LessonAccess> {
-    const lesson = this.lessons.find((candidate) => candidate.id === id);
-    if (!lesson) throw new Error(`lesson ${id} is not in this version`);
-    const [withheld, game] = await Promise.all([this.instructionWithheld(), lesson.game && this.gameAccess(lesson.game)]);
-    return accessOf(lesson, withheld, game);
+  lessonAccess(id: string): Promise<LessonAccess> {
+    return this.lessons.access(id);
   }
 
-  // Spec 3 Amendment 4 §5
-  private gameAccess(game: GameId): Promise<GameAccess> {
-    return this.adapters.access.gameAccess({ game }).catch((): GameAccess => ({ status: 'needs-connection', offlineGame: null }));
+  openLesson(id: string): Promise<LessonView> {
+    return this.lessons.open(id);
   }
 
-  async openLesson(id: string): Promise<LessonView> {
-    const lesson = await this.accessible(id);
-    const progress = await this.progressOf(lesson);
-    const resume = progress.bookmark !== null && progress.bookmark > 1 ? progress.bookmark : null;
-    return viewOf(lesson, progress, resume ?? 1, resume === null ? null : { kind: 'resume-or-restart', step: resume });
+  stepForward(id: string, from: number): Promise<LessonView> {
+    return this.lessons.stepForward(id, from);
   }
 
-  async stepForward(id: string, from: number): Promise<LessonView> {
-    const lesson = await this.accessible(id);
-    return this.record(lesson, { kind: 'bookmark', step: Math.min(from + 1, stepCount(lesson.content)) });
+  stepBack(id: string, from: number): Promise<LessonView> {
+    return this.lessons.stepBack(id, from);
   }
 
-  async stepBack(id: string, from: number): Promise<LessonView> {
-    return this.record(await this.accessible(id), { kind: 'bookmark', step: Math.max(from - 1, 1) });
+  restartLesson(id: string): Promise<LessonView> {
+    return this.lessons.restart(id);
   }
 
-  async restartLesson(id: string): Promise<LessonView> {
-    const lesson = await this.accessible(id);
-    const progress = await this.progressOf(lesson);
-    if ((progress.bookmark ?? 1) === 1 && progress.changed === null) return viewOf(lesson, progress, 1, null);
-    return this.record(lesson, { kind: 'restarted' });
-  }
-
-  async completeLesson(id: string): Promise<void> {
-    await this.record(await this.accessible(id), { kind: 'completed' });
+  completeLesson(id: string): Promise<void> {
+    return this.lessons.complete(id);
   }
 
   // Spec 3 Lessons › Entry points, Structure (First-use hints), Amendment 1 C7; #146
@@ -504,62 +413,15 @@ export class TrainingService {
   }
 
   setStartHere(shown: boolean): Promise<void> {
-    return this.changePreferences(this.preferences.setStartHere(shown));
+    return this.preferences.setStartHere(shown);
   }
 
   hintSeen(id: HintId): Promise<void> {
-    return this.changePreferences(this.preferences.hintSeen(id));
+    return this.preferences.hintSeen(id);
   }
 
   resetHints(): Promise<void> {
-    return this.changePreferences(this.preferences.resetHints());
-  }
-
-  private async changePreferences(change: Promise<void>): Promise<void> {
-    await change;
-    this.learningChanges++;
-    this.notify();
-  }
-
-  private authored(id: string): AuthoredLesson {
-    const lesson = this.lessons.find((candidate) => candidate.id === id);
-    if (!lesson?.content) throw new Error(`lesson ${id} is not available in this version`);
-    return lesson as AuthoredLesson;
-  }
-
-  // Spec 3 Lessons › Access (bookmark kept), Check protection
-  private async accessible(id: string): Promise<AuthoredLesson> {
-    const lesson = this.authored(id);
-    const access = await this.lessonAccess(id);
-    if (access.kind !== 'available') throw new Error(`lesson ${id} ${HELD_MESSAGE[access.kind]}`);
-    return lesson;
-  }
-
-  private async progressOf(lesson: AuthoredLesson): Promise<LessonProgress> {
-    return lessonProgress(await this.lessonHistory(), progressKey(lesson.id, lesson.content));
-  }
-
-  // Spec 3 Amendment 1 C10; #147
-  private async lessonHistory(): Promise<LessonHistory> {
-    const { store } = this.adapters;
-    const [sync, local] = await Promise.all([store.readLessonSync(), store.readLessonEvents()]);
-    return { ...sync, local };
-  }
-
-  private async record(lesson: AuthoredLesson, event: LessonProgressChange): Promise<LessonView> {
-    const { version, materialVersion } = lesson.content;
-    await this.adapters.store.recordLessonEvent({
-      recordVersion: 1,
-      eventId: this.adapters.newId(),
-      owner: this.adapters.owner,
-      installation: this.adapters.device,
-      lesson: { id: lesson.id, version, materialVersion },
-      event,
-      recordedAt: this.adapters.clock.now(),
-    });
-    this.reviseLessons();
-    const progress = await this.progressOf(lesson);
-    return viewOf(lesson, progress, progress.bookmark ?? 1, null);
+    return this.preferences.resetHints();
   }
 
   private accessMayHaveChanged(): void {
@@ -603,32 +465,5 @@ function rememberedSetup({ category, variant, timed, pacing, table }: ChallengeS
 // Spec 3 Attempt lifecycle › Automatic pacing; #136
 export const pacingOf = <T>(setup: { readonly pacing?: T }): T | 'self-paced' => setup.pacing ?? 'self-paced';
 
-const pacingsOf = (category: CatalogCategory): readonly ChallengePacing[] =>
+const pacingsOf = (category: ChallengeCategory): readonly ChallengePacing[] =>
   CHALLENGE_PACINGS.filter((pacing) => pacingApplies(category, pacing));
-
-const AVAILABLE: LessonAccess = { kind: 'available' };
-
-// Spec 3 Lessons › Access, Check protection; Amendment 1 A2, Amendment 4 §5
-function accessOf({ id, game }: Lesson, withheld: InstructionWithheld | null, playable: GameAccess | null): LessonAccess {
-  if (game && playable?.status === 'needs-connection') return { kind: 'needs-connection', game, offlineGame: playable.offlineGame };
-  if (withheld && (CHECK_WITHHELD_LESSONS.anyCheck.includes(id) || (withheld.play && CHECK_WITHHELD_LESSONS.playCheck.includes(id)))) return { kind: 'after-check', attempt: withheld };
-  return AVAILABLE;
-}
-
-const progressKey = (id: string, content: LessonContent) => ({ id, materialVersion: content.materialVersion, steps: stepCount(content) });
-
-function viewOf(lesson: AuthoredLesson, progress: LessonProgress, step: number, prompt: LessonView['prompt']): LessonView {
-  const { change } = lesson.content;
-  return {
-    id: lesson.id,
-    title: lesson.title,
-    section: lesson.section,
-    step,
-    steps: lesson.content.steps,
-    prompt,
-    notice: progress.changed && change ? { kind: progress.changed, change } : null,
-    example: lesson.content.workedExample,
-    handoffs: lesson.content.handoffs,
-    sources: lesson.content.sources,
-  };
-}

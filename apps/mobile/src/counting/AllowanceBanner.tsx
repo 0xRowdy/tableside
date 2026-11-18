@@ -5,7 +5,7 @@ import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { LinkButton } from '@/play/setup/SetupParts';
-import { fonts, palette, space, textScale } from '@/theme/tokens';
+import { fonts, palette, radius, space, textScale } from '@/theme/tokens';
 import { ALLOWANCE_ACTION_LABEL, ARRIVES_LATER, type AllowanceAction, type AllowanceCopy } from '@/training/challenge-text';
 
 const ICON = { premium: Ticket, available: Ticket, 'used-up': CircleSlash, elsewhere: Smartphone } as const;
@@ -48,7 +48,7 @@ export function AllowanceBanner({
 }
 
 const styles = StyleSheet.create({
-  banner: { flexDirection: 'row', gap: space[3], padding: 14, borderRadius: 12, borderWidth: 1, borderColor: palette.controlBorder, backgroundColor: palette.card },
+  banner: { flexDirection: 'row', gap: space[3], padding: space[4], borderRadius: radius.md, borderWidth: 1, borderColor: palette.controlBorder, backgroundColor: palette.card },
   usedUp: { borderColor: palette.warning },
   text: { flex: 1, gap: space[1] },
   title: { fontFamily: fonts.uiBold, fontSize: 14, lineHeight: 20, color: palette.foreground },

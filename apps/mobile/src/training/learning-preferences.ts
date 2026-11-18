@@ -20,11 +20,15 @@ interface Saved {
 
 export class DeviceLearningPreferences {
   private saved: Promise<Saved> | null = null;
+  private changes = 0;
 
   constructor(
     private readonly store: DevicePreferences,
     private readonly hints: Readonly<Record<HintId, Hint>>,
+    private readonly changed: () => void,
   ) {}
+
+  revision = (): number => this.changes;
 
   async read(): Promise<LearningPreferences> {
     const { dismissed, seen } = await this.load();
@@ -35,6 +39,7 @@ export class DeviceLearningPreferences {
     const saved = await this.load();
     this.saved = Promise.resolve({ ...saved, dismissed: !shown });
     await this.store.writePreference(START_HERE_DISMISSED, JSON.stringify(!shown)).catch(() => undefined);
+    this.change();
   }
 
   async hintSeen(id: HintId): Promise<void> {
@@ -49,6 +54,12 @@ export class DeviceLearningPreferences {
   private async saveSeen(saved: Saved, seen: SeenVersions): Promise<void> {
     this.saved = Promise.resolve({ ...saved, seen });
     await this.store.writePreference(HINTS_SEEN, JSON.stringify(seen)).catch(() => undefined);
+    this.change();
+  }
+
+  private change(): void {
+    this.changes++;
+    this.changed();
   }
 
   private load(): Promise<Saved> {

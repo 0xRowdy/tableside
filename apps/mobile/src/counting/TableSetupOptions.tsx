@@ -164,7 +164,7 @@ function Betting({ options, onChange }: { options: TableOptions; onChange: (chan
 
 const styles = StyleSheet.create({
   card: { borderRadius: radius.lg, borderWidth: 1, borderColor: palette.border, backgroundColor: palette.card, overflow: 'hidden' },
-  notice: { flexDirection: 'row', gap: space[3], padding: 14, borderRadius: radius.lg, borderLeftWidth: 4, borderLeftColor: palette.coachAccent, backgroundColor: palette.card },
+  notice: { flexDirection: 'row', gap: space[3], padding: space[4], borderRadius: radius.lg, borderLeftWidth: 4, borderLeftColor: palette.coachAccent, backgroundColor: palette.card },
   noticeText: { flex: 1, gap: space[1] },
   noticeTitle: { fontFamily: fonts.uiBold, fontSize: 15, color: palette.foreground },
   noticeDetail: { fontFamily: fonts.ui, fontSize: 14, lineHeight: 20, color: palette.mutedForeground },

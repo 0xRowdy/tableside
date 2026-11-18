@@ -1,9 +1,8 @@
 // Spec 3 Modules › Definitions package; Lessons (#48); Amendment 1 B1, C10; #143, #145, #153
-import type { GameId, StrategyDefinition } from '@tableside/engine';
+import { CHALLENGE_CATEGORIES, type ChallengeCategory, type GameId, type StrategyDefinition } from '@tableside/engine';
 
-import { BLACKJACK_MODES } from './blackjack/strategies';
+import { BLACKJACK_MODES, countingMode, type BlackjackMode } from './blackjack/strategies';
 import { BASIC_STRATEGY, BASIC_WITH_DEVIATIONS, BET_SCHEDULE_LESSON, BLACKJACK_BASICS, COUNTING_WITH_BASIC, COUNTING_WITH_DEVIATIONS } from './lessons/blackjack';
-import { CATALOG_CATEGORIES, type CatalogCategory } from './challenges';
 import { CARD_VALUES_LESSON, CONVERSION_LESSON, RUNNING_COUNT_LESSON, TABLE_COUNTING_LESSON } from './lessons/counting';
 import { CRAPS_STRATEGIES } from './craps-strategies';
 import { APP_ORIENTATION, BUILDING_A_STRATEGY } from './lessons/app-and-builder';
@@ -33,8 +32,8 @@ export interface PublishedNote {
 export type LessonHandoff =
   | { readonly kind: 'free-play'; readonly game: GameId }
   // Spec 1 Built-in strategies
-  | { readonly kind: 'guided-practice'; readonly game: GameId; readonly strategy: string | null }
-  | { readonly kind: 'learn-challenge'; readonly category: CatalogCategory };
+  | { readonly kind: 'guided-practice'; readonly game: GameId; readonly strategy: string | null; readonly betSchedule?: boolean }
+  | { readonly kind: 'learn-challenge'; readonly category: ChallengeCategory };
 
 // Spec 3 Lessons › Content requirements; Amendment 1 C11
 export interface LessonSource {
@@ -86,7 +85,7 @@ export const LESSONS: readonly Lesson[] = [
 ];
 
 // Spec 3 Lessons › Entry points
-export const CHALLENGE_LESSONS: Readonly<Record<CatalogCategory, string>> = {
+export const CHALLENGE_LESSONS: Readonly<Record<ChallengeCategory, string>> = {
   'card-values': 'card-values',
   'running-count': 'running-count',
   conversion: 'true-count-conversion',
@@ -98,6 +97,9 @@ export const CHECK_WITHHELD_LESSONS: { readonly anyCheck: readonly string[]; rea
   anyCheck: Object.values(CHALLENGE_LESSONS),
   playCheck: [BASIC_STRATEGY.id, BASIC_WITH_DEVIATIONS.id, COUNTING_WITH_BASIC.id, COUNTING_WITH_DEVIATIONS.id, BET_SCHEDULE_LESSON.id],
 };
+
+// Spec 3 Amendment 1 A2, Amendment 3
+export const PLAY_CHECK_WITHHELD_MODES: readonly BlackjackMode[] = ['basic-with-deviations', 'counting-with-basic', 'counting-with-deviations'];
 
 const IDENTITY = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 const sameSource = (a: LessonSource, b: LessonSource) => a.citation === b.citation && a.url === b.url;
@@ -157,16 +159,23 @@ const GAMES = Object.keys(BUILT_IN_STRATEGIES) as GameId[];
 
 // Spec 3 Testing Decisions › Build-time check
 function handoffProblem(lesson: Lesson, handoff: LessonHandoff): string | null {
-  const target = handoff as { kind?: unknown; game?: unknown; strategy?: unknown; category?: unknown };
+  const target = handoff as { kind?: unknown; game?: unknown; strategy?: unknown; category?: unknown; betSchedule?: unknown };
   let game: GameId;
   if (target.kind === 'learn-challenge') {
-    if (!CATALOG_CATEGORIES.includes(target.category as CatalogCategory)) return `names no counting challenge: ${String(target.category)}`;
+    if (!CHALLENGE_CATEGORIES.includes(target.category as ChallengeCategory)) return `names no counting challenge: ${String(target.category)}`;
     game = 'blackjack';
   } else if (target.kind === 'free-play' || target.kind === 'guided-practice') {
     if (!GAMES.includes(target.game as GameId)) return `opens no game setup: ${String(target.game)}`;
     game = target.game as GameId;
     if (target.kind === 'guided-practice' && target.strategy !== null && !BUILT_IN_STRATEGIES[game].includes(target.strategy as string)) {
       return `names no built-in ${game} strategy: ${String(target.strategy)}`;
+    }
+    // Spec 1 S1-02
+    if (target.kind === 'guided-practice' && target.betSchedule !== undefined) {
+      if (typeof target.betSchedule !== 'boolean') return `has a bet schedule that is neither on nor off: ${String(target.betSchedule)}`;
+      if (target.betSchedule && !(game === 'blackjack' && BLACKJACK_MODES.includes(target.strategy as BlackjackMode) && countingMode(target.strategy as BlackjackMode))) {
+        return 'turns on the bet schedule outside a counting mode';
+      }
     }
   } else {
     return 'is not free play, guided practice or a Learn challenge';

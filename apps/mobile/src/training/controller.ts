@@ -27,7 +27,9 @@ import {
 
 import type { AccessDecision, AccessDenial, LifecycleEvent } from '../practice/adapters';
 import { RECONNECT_TO_VERIFY, SAVE_RETRY_MS } from '../practice/controller';
+
 import type { TrainingAdapters } from './adapters';
+import { CANT_RESUME, CHECK_FAILED } from './challenge-text';
 import { NOTHING_EARNED, type AttemptEarned } from './progress';
 import { CHALLENGE_CHARGE, FRESH_LIFECYCLE, type Admission, type AttemptCharge, type AttemptLifecycle, type CommittedAttemptTransition, type StoredAttempt } from './store';
 
@@ -57,7 +59,7 @@ export interface AttemptHold {
   readonly endBlocked: string | null;
 }
 
-// Spec 3 Amendment 1 C6: a hold gives way only to one of equal or higher rank
+// Spec 3 Amendment 1 C6
 const HOLDS: Record<HoldCause, { readonly kind: AttemptHold['kind']; readonly rank: number }> = {
   learner: { kind: 'paused', rank: 0 },
   'speech-backlog': { kind: 'auto-paused', rank: 0 },
@@ -73,8 +75,6 @@ const ITEM_FINISHED: ReadonlySet<ChallengePhase> = new Set(['ready', 'card', 're
 // Spec 3 Attempt lifecycle › Performance timer
 // Spec 3 Attempt lifecycle › Performance timer (table actions count); #138
 const TIMED_PHASES: ReadonlySet<ChallengePhase> = new Set(['card', 'question', 'recorded', 'decision']);
-
-const answeredLast = (state: ChallengeState) => lastAnswerGiven(state);
 
 export interface PerformanceTimer {
   readonly ms: number;
@@ -115,9 +115,6 @@ type Pending = { readonly kind: 'transition'; readonly command: ControllerComman
 type Unusable = { readonly explanation: string | null };
 
 const UNANSWERED: AccessDenial = { status: 'uncertain', provenance: 'unanswered', disposition: 'stop' };
-
-const CANT_RESUME = "This attempt can't resume right now.";
-const CHECK_FAILED = "Couldn't check whether this attempt can end. Try again.";
 
 export class ChallengeController {
   private current: AttemptSnapshot = { status: 'loading' };
@@ -525,7 +522,7 @@ export class ChallengeController {
 
   private retime(): void {
     const state = this.state;
-    const running = this.attemptLifecycle.timed && state !== null && TIMED_PHASES.has(state.phase) && !answeredLast(state) && !this.hold?.reached;
+    const running = this.attemptLifecycle.timed && state !== null && TIMED_PHASES.has(state.phase) && !lastAnswerGiven(state) && !this.hold?.reached;
     if (running === (this.timedSince !== null)) return;
     this.attemptLifecycle = this.lifecycleNow();
     this.timedSince = running ? this.adapters.clock.now() : null;

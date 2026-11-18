@@ -3,7 +3,7 @@
 import { Pressable, StyleSheet, Text } from 'react-native';
 
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
-import { fonts, MIN_TOUCH_TARGET, palette, radius, textScale } from '@/theme/tokens';
+import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/theme/tokens';
 
 export function CoachButton({ label, primary = false, enabled, onPress }: { label: string; primary?: boolean; enabled: boolean; onPress: () => void }) {
   const { focused, focusProps } = useKeyboardFocus();
@@ -24,7 +24,7 @@ export function CoachButton({ label, primary = false, enabled, onPress }: { labe
 }
 
 const styles = StyleSheet.create({
-  button: { minHeight: MIN_TOUCH_TARGET, justifyContent: 'center', paddingHorizontal: 14, borderRadius: radius.md, borderWidth: 2 },
+  button: { minHeight: MIN_TOUCH_TARGET, justifyContent: 'center', paddingHorizontal: space[4], borderRadius: radius.md, borderWidth: 2 },
   primary: { backgroundColor: palette.ink, borderColor: palette.ink },
   secondary: { borderColor: palette.inkMuted },
   text: { fontFamily: fonts.uiBold, fontSize: 14, color: palette.ink },

@@ -1,27 +1,57 @@
+import { blackjackModeOf, type BlackjackMode } from '@tableside/definitions';
+import type { PermittedView } from '@tableside/engine';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { AppState } from 'react-native';
 
 import { Button } from '@/components/Button';
 import { Placeholder } from '@/components/Placeholder';
+import { Screen } from '@/components/Screen';
 import { findGame } from '@/games';
 import { useFollow } from '@/hooks/use-follow';
 import { ScreenHints } from '@/lessons/FirstUseHints';
 import { practicePrefill } from '@/lessons/routes';
 import { BlackjackSetup } from '@/play/BlackjackSetup';
+import { BLACKJACK_MODE_TEXT } from '@/play/blackjack-text';
 import { BlackjackTable } from '@/play/BlackjackTable';
 import { CrapsSetup } from '@/play/CrapsSetup';
 import { CrapsTable } from '@/play/CrapsTable';
 import { EndSessionDialog } from '@/play/EndSessionDialog';
 import { TABLE_HINTS } from '@/play/bet-selector/Presentation';
 import { IncompleteSession } from '@/play/IncompleteSession';
+import { PracticeHold, useModeWithheld } from '@/play/PracticeHold';
 import { RouletteSetup } from '@/play/RouletteSetup';
 import { RouletteTable } from '@/play/RouletteTable';
 import { SessionResult } from '@/play/SessionResult';
+import { SetupHeader } from '@/play/setup/SetupParts';
 import { SuspendedSession } from '@/play/SuspendedSession';
 import type { PracticeController, PracticeSnapshot } from '@/practice/controller';
 import { usePractice } from '@/practice/PracticeProvider';
 import { useTrainingService } from '@/training/TrainingProvider';
+
+// Spec 3 Lessons › Check protection; Amendment 1 A2, Amendment 3; S3-14 SUUN4
+function HeldSession({ mode, view, held }: { mode: BlackjackMode; view: PermittedView; held: boolean }) {
+  const { controller } = usePractice();
+  const [confirming, setConfirming] = useState(false);
+  if (!held) return <Placeholder title="Play" message="Finding your practice session…" />;
+  return (
+    <Screen>
+      <SetupHeader title="Blackjack" subtitle={`Guided practice · ${BLACKJACK_MODE_TEXT[mode].label}`} onBack={() => router.navigate('/')} />
+      <PracticeHold mode={mode} />
+      <Button label="End session" variant="secondary" stretch onPress={() => setConfirming(true)} />
+      <EndSessionDialog
+        visible={confirming}
+        view={view}
+        cancelLabel="Not now"
+        onCancel={() => setConfirming(false)}
+        onConfirm={() => {
+          setConfirming(false);
+          void controller.endSession();
+        }}
+      />
+    </Screen>
+  );
+}
 
 const isSwitched = (snapshot: PracticeSnapshot) =>
   snapshot.status === 'completed' && (snapshot.result.endingReason === 'switch' || snapshot.result.endingReason === 'reset');
@@ -36,30 +66,35 @@ function leaveSwitchedResults(controller: PracticeController): () => void {
 }
 
 export default function Play() {
-  const params = useLocalSearchParams<{ game?: string; practice?: string; strategy?: string }>();
+  const params = useLocalSearchParams<{ game?: string; practice?: string; strategy?: string; schedule?: string }>();
   const game = findGame(params.game);
   // Spec 3 Lessons › Structure (Handoff)
   const prefill = practicePrefill(params);
-  const setupKey = `${params.game}:${params.practice ?? ''}:${params.strategy ?? ''}`;
+  const setupKey = `${params.game}:${params.practice ?? ''}:${params.strategy ?? ''}:${params.schedule ?? ''}`;
   const { controller, snapshot } = usePractice();
   const training = useTrainingService();
   const [switchingFrom, setSwitchingFrom] = useState<string | null>(null);
   const activeGame = snapshot.status === 'active' ? snapshot.view.game : null;
   const switchTo = game && activeGame && game.id !== activeGame ? game.id : null;
   const switched = isSwitched(snapshot);
+  // Spec 3 Lessons › Check protection; Amendment 1 A2, Amendment 3
+  const guidedMode = snapshot.status === 'active' && snapshot.view.game === 'blackjack' && snapshot.view.strategy ? blackjackModeOf(snapshot.view.strategy.id) : null;
+  const held = useModeWithheld(guidedMode);
   useFollow(leaveSwitchedResults, controller);
 
+  // Spec 3 Lessons › Check protection; Amendment 1 A2, Amendment 3
+  const resumable = held === false;
   useFocusEffect(
     useCallback(() => {
-      void controller.resumeOnReturn();
+      if (resumable) void controller.resumeOnReturn();
       const subscription = AppState.addEventListener('change', (state) => {
-        if (state === 'active') void controller.resumeOnReturn();
+        if (state === 'active' && resumable) void controller.resumeOnReturn();
       });
       return () => {
         subscription.remove();
         controller.suspend('navigation');
       };
-    }, [controller]),
+    }, [controller, resumable]),
   );
 
   switch (snapshot.status) {
@@ -67,11 +102,13 @@ export default function Play() {
       return <Placeholder title="Play" message="Finding your practice session…" />;
     case 'active': {
       const { suspension } = snapshot;
-      if (suspension?.waitsForPlayer) {
+      if (suspension?.waitsForPlayer && resumable) {
         return <SuspendedSession snapshot={snapshot} suspension={suspension} />;
       }
       const table =
-        snapshot.view.game === 'blackjack' ? (
+        guidedMode && !resumable ? (
+          <HeldSession mode={guidedMode} view={snapshot.view} held={held === true} />
+        ) : snapshot.view.game === 'blackjack' ? (
           <BlackjackTable snapshot={{ ...snapshot, view: snapshot.view }} />
         ) : snapshot.view.game === 'craps' ? (
           <CrapsTable snapshot={{ ...snapshot, view: snapshot.view }} />

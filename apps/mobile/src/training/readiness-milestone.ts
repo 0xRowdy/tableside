@@ -1,11 +1,11 @@
 // Spec 3 Synchronized record types › Readiness milestone; Comparison groups (Milestones); #141, #148
 import { canonicalJson } from '@tableside/engine';
-import { isBarrierFor, READINESS_MILESTONE_RECORD_VERSION, readinessMilestone, type ReadinessMilestoneRecord, type RecordType } from '@tableside/account';
+import { isBarrierFor, meetsReadinessThreshold, READINESS_MILESTONE_RECORD_VERSION, readinessMilestone, readinessStreakEffect, type ReadinessMilestoneRecord, type RecordType } from '@tableside/account';
 
 // Spec 2 registry
 export const READINESS_MILESTONE_RECORD_TYPE = readinessMilestone.name;
 
-export { READINESS_MILESTONE_RECORD_VERSION, type ReadinessMilestoneRecord };
+export { meetsReadinessThreshold, READINESS_MILESTONE_RECORD_VERSION, readinessStreakEffect, type ReadinessMilestoneRecord };
 
 // #148
 export const milestoneIdentity = (milestone: ReadinessMilestoneRecord): string => readinessMilestone.identity.of(milestone);

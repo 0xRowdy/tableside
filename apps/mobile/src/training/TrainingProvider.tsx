@@ -6,7 +6,7 @@ import { AppState } from 'react-native';
 import { useAccount } from '@/account/AccountProvider';
 import { followAccountGate, withAccountGate } from '@/account/gate-access';
 import { useFollow } from '@/hooks/use-follow';
-import { useLoaded } from '@/hooks/use-loaded';
+import { useLoaded, useReloaded } from '@/hooks/use-loaded';
 import { sampling } from '@/responsiveness/probe';
 
 import { createTrainingAdapters } from './app-adapters';
@@ -57,35 +57,35 @@ export function useTraining() {
 }
 
 // #143
-const listLessonsOf = (service: TrainingService, _revision: number) => service.listLessons();
+const listLessonsOf = (service: TrainingService) => service.listLessons();
 
 export function useLessons(): { readonly service: TrainingService; readonly lessons: readonly LessonEntry[] | undefined } {
   const service = useContext(TrainingContext);
   if (!service) throw new Error('useLessons needs a TrainingProvider');
   const revision = useSyncExternalStore(service.subscribe, service.lessonRevision);
-  return { service, lessons: useLoaded(listLessonsOf, service, revision) };
+  return { service, lessons: useReloaded(revision, listLessonsOf, service) };
 }
 
 // Spec 3 Lessons › Access, Check protection; Amendments 3 and 5; #149
-const withheldOf = (service: TrainingService, _revision: number) => service.instructionWithheld().catch(() => null);
-const lessonAccessOf = (service: TrainingService, lesson: string, _revision: number) => service.lessonAccess(lesson).catch(() => null);
+const withheldOf = (service: TrainingService) => service.instructionWithheld().catch(() => null);
+const lessonAccessOf = (service: TrainingService, lesson: string) => service.lessonAccess(lesson).catch(() => null);
 
 export function useInstructionWithheld(): InstructionWithheld | null | undefined {
   const service = useTrainingService();
-  return useLoaded(withheldOf, service, useSyncExternalStore(service.subscribe, service.accessRevision));
+  return useReloaded(useSyncExternalStore(service.subscribe, service.accessRevision), withheldOf, service);
 }
 
 export function useLessonAccess(lesson: string): LessonAccess | null | undefined {
   const service = useTrainingService();
-  return useLoaded(lessonAccessOf, service, lesson, useSyncExternalStore(service.subscribe, service.accessRevision));
+  return useReloaded(useSyncExternalStore(service.subscribe, service.accessRevision), lessonAccessOf, service, lesson);
 }
 
 // Spec 3 Lessons › Entry points, Amendment 1 C7; #146
-const learningOf = (service: TrainingService, _revision: number) => service.learningPreferences();
+const learningOf = (service: TrainingService) => service.learningPreferences();
 
 export function useLearningOf(service: TrainingService): LearningPreferences | undefined {
   const revision = useSyncExternalStore(service.subscribe, service.learningRevision);
-  return useLoaded(learningOf, service, revision);
+  return useReloaded(revision, learningOf, service);
 }
 
 export function useLearning(): { readonly service: TrainingService; readonly learning: LearningPreferences | undefined } {

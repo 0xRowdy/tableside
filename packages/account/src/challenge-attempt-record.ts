@@ -3,30 +3,29 @@
 import { ATTEMPT_ENDING_REASONS, CHALLENGE_RECORD_VERSION, type ChallengeAttemptRecord, type ChallengeAttemptSummary, type MeteringBasis } from '@tableside/engine';
 
 import type { RecordType } from './sync/registry';
+import { isJsonObject, isPositiveInteger } from './values';
 
 // Spec 3 Amendment 4 §1
 const METERING_BASES: readonly MeteringBasis[] = ['challenge-attempt', 'premium'];
 
-const isObject = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
-const isCount = (value: unknown) => Number.isSafeInteger(value) && (value as number) >= 1;
 const isNullOr = (value: unknown, test: (value: unknown) => boolean) => value === null || test(value);
 
 function isSummary(value: unknown): value is ChallengeAttemptSummary {
   return (
-    isObject(value) &&
+    isJsonObject(value) &&
     value.recordVersion === CHALLENGE_RECORD_VERSION &&
     typeof value.attemptId === 'string' &&
     typeof value.owner === 'string' &&
     typeof value.installation === 'string' &&
-    isCount(value.deviceSequence) &&
-    isObject(value.groupKey) &&
-    isObject(value.identities) &&
+    isPositiveInteger(value.deviceSequence) &&
+    isJsonObject(value.groupKey) &&
+    isJsonObject(value.identities) &&
     ATTEMPT_ENDING_REASONS.includes(value.endingReason as ChallengeAttemptRecord['endingReason']) &&
-    isObject(value.metrics) &&
+    isJsonObject(value.metrics) &&
     isNullOr(value.assistanceStep, Number.isSafeInteger) &&
     typeof value.interrupted === 'boolean' &&
     isNullOr(value.performanceMs, Number.isFinite) &&
-    isNullOr(value.finances, isObject) &&
+    isNullOr(value.finances, isJsonObject) &&
     isNullOr(value.allowancePolicyVersion, (version) => typeof version === 'string') &&
     METERING_BASES.includes(value.meteringBasis as MeteringBasis) &&
     Number.isSafeInteger(value.startedAt) &&
@@ -52,7 +51,7 @@ export const challengeAttempt: RecordType<ChallengeAttemptRecord, ChallengeAttem
     at: (record) => record.endedAt,
   },
   fromChange(change) {
-    const record = isObject(change) ? change.record : undefined;
+    const record = isJsonObject(change) ? change.record : undefined;
     if (!isSummary(record)) return null;
     const { review } = record as { review?: unknown };
     return review === undefined || Array.isArray(review) ? record : null;

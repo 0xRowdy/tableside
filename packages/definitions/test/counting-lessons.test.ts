@@ -33,7 +33,7 @@ describe('counting lessons', () => {
     expect(IDS.map((id) => lesson(id).content!.workedExample!.kind)).toEqual(['card-value', 'running-count', 'conversion', 'table-count']);
   });
 
-  // Spec 3 Lessons and worked examples: the conversion lesson; Amendment 2 §3
+  // Spec 3 Lessons and worked examples; Amendment 2 §3
   it('teach half-deck estimation, truncation toward zero, other sources’ conventions and zero-threshold indices in the conversion lesson', () => {
     const conversion = text('true-count-conversion');
     for (const fact of ['nearest half deck', 'go up', 'Never use less than half a deck', '+7 with 2 decks left is +3.5, which becomes +3', '−7 with 2 decks left is −3.5, which becomes −3, not −4']) {

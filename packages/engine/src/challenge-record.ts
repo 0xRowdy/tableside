@@ -20,7 +20,7 @@ export const pacingApplies = (category: string, pacing: ChallengePacing): boolea
 // Spec 3 Comparison groups
 export interface TableGroupKey {
   readonly rules: VersionedIdentity;
-  // Spec 3 Comparison groups: the rule preset
+  // Spec 3 Comparison groups
   readonly dealer: 'S17' | 'H17';
   readonly lateSurrender: boolean;
   readonly penetration: number;
@@ -120,7 +120,7 @@ function tableGroupKey(setup: TableSetup): TableGroupKey {
     penetration: rules.penetration,
     extraPlayers: rules.players.otherWagers.length,
     seat,
-    // Spec 3 Comparison groups: counting mode; #138
+    // Spec 3 Comparison groups; #138
     countingMode: countingModeOf(setup),
     // Spec 3 Comparison groups; #139
     ...(setup.seat === 'play' ? { betSchedule: setup.betSchedule, baseWager: setup.baseWager, startingBalance: setup.startingBalance } : NO_FUNDING),

@@ -54,10 +54,10 @@ describe('the Training service', () => {
   it('lists the four challenge categories in the suggested order, all available, with no exercise content', () => {
     const { service } = setup();
     expect(service.listCatalog()).toEqual([
-      { category: 'card-values', available: true, ready: ['learn', 'check'], pacings: ['self-paced'] },
-      { category: 'running-count', available: true, ready: ['learn', 'check'], pacings: ['self-paced', '3s', '2s', '1s'] },
-      { category: 'conversion', available: true, ready: ['learn', 'check'], pacings: ['self-paced'] },
-      { category: 'table', available: true, ready: ['learn', 'check'], pacings: ['self-paced'] },
+      { category: 'card-values', ready: ['learn', 'check'], pacings: ['self-paced'] },
+      { category: 'running-count', ready: ['learn', 'check'], pacings: ['self-paced', '3s', '2s', '1s'] },
+      { category: 'conversion', ready: ['learn', 'check'], pacings: ['self-paced'] },
+      { category: 'table', ready: ['learn', 'check'], pacings: ['self-paced'] },
     ]);
   });
 

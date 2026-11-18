@@ -1,7 +1,7 @@
 // Spec 3 S3-11 sVqX1, S3-12 l8pMS, pX6CV, S3-13 JJl51, Fvlgc, ZBpF3, Learning NvGyZ; #143, #145
 
-import { BLACKJACK_MODES, CRAPS_STRATEGIES, ROULETTE_STRATEGIES, type LessonHandoff, type LessonSection, type ScriptedTurn, type StrategyStepAnswer, type StrategyStepExample, type StrategyStepExplanation } from '@tableside/definitions';
-import type { Explanation, GameId } from '@tableside/engine';
+import { BLACKJACK_MODES, CRAPS_STRATEGIES, ROULETTE_STRATEGIES, type BlackjackMode, type LessonHandoff, type LessonSection, type ScriptedTurn, type StrategyStepAnswer, type StrategyStepExample, type StrategyStepExplanation } from '@tableside/definitions';
+import type { ChallengeCategory, Explanation, GameId } from '@tableside/engine';
 
 import { findGame } from '@/games';
 import { BLACKJACK_MODE_TEXT, moveText } from '@/play/blackjack-text';
@@ -11,7 +11,7 @@ import { GAME_WORDS } from '@/play/game-words';
 
 import { CATEGORY_TEXT, NOT_READY_HINT, type AllowanceCopy } from './challenge-text';
 import type { LessonStatus } from './lesson-progress';
-import type { CatalogCategory, InstructionWithheld, LessonAccess, LessonEntry, LessonView } from './service';
+import type { InstructionWithheld, LessonAccess, LessonEntry, LessonView } from './service';
 
 export const LEARNING_TITLE = 'Learning';
 export const LEARNING_DETAIL = 'Lessons';
@@ -106,6 +106,12 @@ export function afterCheckText({ category, play }: InstructionWithheld): string 
     : `You have an unfinished Check attempt in ${title}. The four counting lessons (card values, running count, true-count conversion, table counting) and their worked examples wait until it ends. Every other lesson is open now.`;
 }
 
+// Spec 3 Lessons › Check protection; Amendment 1 A2, Amendment 3; S3-14 SUUN4
+export const PRACTICE_AFTER_ATTEMPT = 'This practice mode is available after this attempt.';
+export const END_TO_PRACTICE = 'End attempt to practice this mode';
+export const practiceHeldText = ({ category }: InstructionWithheld, mode: BlackjackMode) =>
+  `You have an unfinished Play Check attempt in ${CATEGORY_TEXT[category].title}. Guided practice with ${BLACKJACK_MODE_TEXT[mode].label.toLowerCase()} coaches what the Check tests, so it waits until the attempt ends. Free play and basic strategy guided practice are open now.`;
+
 // Spec 3 S3-12 JsXMJ; Amendment 4 §5
 export const NEEDS_CONNECTION_TITLE = 'This lesson needs a connection';
 export const needsConnectionText = ({ game, offlineGame }: { readonly game: GameId; readonly offlineGame: GameId | null }) =>
@@ -188,7 +194,7 @@ export function handoffLabel(handoff: LessonHandoff): string {
       return `Free play · ${gameTitle(handoff.game)}`;
     case 'guided-practice': {
       const strategy = handoff.strategy && STRATEGY_NAMES.get(handoff.strategy);
-      return `Guided practice · ${gameTitle(handoff.game)}${strategy ? `, ${lowerFirst(strategy)}` : ''}`;
+      return `Guided practice · ${gameTitle(handoff.game)}${strategy ? `, ${lowerFirst(strategy)}` : ''}${handoff.betSchedule ? ', bet schedule on' : ''}`;
     }
   }
 }
@@ -211,7 +217,7 @@ export function handoffDetail(handoff: LessonHandoff, allowance: AllowanceCopy |
 }
 
 // Spec 3 Lessons › Entry points; S3-01 PDCaD, S3-02 buD2R, S1-02 FxxAj
-export const lessonLinkLabel = (category: CatalogCategory) => `Lesson: ${lowerFirst(CATEGORY_TEXT[category].title)}`;
+export const lessonLinkLabel = (category: ChallengeCategory) => `Lesson: ${lowerFirst(CATEGORY_TEXT[category].title)}`;
 export const LEARN_THIS_SKILL = 'Learn this skill';
 export const learnThisSkillDetail = (lesson: LessonEntry) =>
   `${lesson.title} lesson · ${lesson.steps === null ? NOT_READY_HINT : (accessText(lesson.access) ?? `${lesson.steps} short steps`)}`;

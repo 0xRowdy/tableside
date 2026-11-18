@@ -262,7 +262,7 @@ function DecisionPanel({ view, table, ready, onCommand }: { view: ChallengeView;
   const [dismissed, setDismissed] = useState(false);
   const enabled = ready && view.legalCommands.includes('play');
   const moves = decision.kind === 'insurance' ? INSURANCE_MOVES : HAND_MOVES.filter((move) => move !== 'surrender' || table.rules.lateSurrender);
-  const label = (move: PlayChoice) => (move === 'insure' ? insureLabel(table.rules.minimum) : MOVE_LABEL[move]);
+  const label = (move: PlayChoice) => (move === 'insure' ? insureLabel(table.challengeBalance?.stake ?? table.rules.minimum) : MOVE_LABEL[move]);
   const shortfall = decision.refusal === 'funds' ? decision.unaffordable.find((item) => item.action === decision.refused) : undefined;
   if (shortfall && !dismissed) {
     // Spec 3 Play challenge funding › Mid-round shortfalls; S3-07 RDS5F; #139
@@ -531,9 +531,9 @@ const styles = StyleSheet.create({
   panelTitle: { fontFamily: fonts.display, fontSize: 22, color: palette.foreground },
   checkpointTitle: { fontFamily: fonts.uiBold, fontSize: 17, color: palette.foreground },
   panelText: { fontFamily: fonts.ui, fontSize: 15, lineHeight: 21, color: palette.mutedForeground },
-  recorded: { flexDirection: 'row', alignItems: 'center', gap: space[2], paddingVertical: space[3], paddingHorizontal: 14, borderRadius: 12, borderWidth: 1, borderColor: palette.controlBorder, backgroundColor: palette.card },
+  recorded: { flexDirection: 'row', alignItems: 'center', gap: space[2], paddingVertical: space[3], paddingHorizontal: space[4], borderRadius: radius.md, borderWidth: 1, borderColor: palette.controlBorder, backgroundColor: palette.card },
   recordedText: { flex: 1, fontFamily: fonts.ui, fontSize: 14, color: palette.foreground },
-  coach: { gap: space[3] - 2, paddingTop: 14, paddingHorizontal: space[4], paddingBottom: space[4], borderRadius: radius.lg, borderWidth: 1, borderColor: palette.coachAccent, backgroundColor: palette.coach },
+  coach: { gap: space[3] - 2, paddingTop: space[4], paddingHorizontal: space[4], paddingBottom: space[4], borderRadius: radius.lg, borderWidth: 1, borderColor: palette.coachAccent, backgroundColor: palette.coach },
   coachHead: { flexDirection: 'row', alignItems: 'flex-start', gap: space[3] - 2 },
   who: { flex: 1 },
   coachName: { fontFamily: fonts.uiBold, fontSize: 13, color: palette.ink },

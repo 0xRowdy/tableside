@@ -100,7 +100,7 @@ export function HelpButton() {
 }
 
 const styles = StyleSheet.create({
-  hint: { gap: 6, paddingVertical: space[3], paddingHorizontal: 14, borderRadius: 14, borderWidth: 1, borderColor: palette.primary, backgroundColor: palette.popover },
+  hint: { gap: 6, paddingVertical: space[3], paddingHorizontal: space[4], borderRadius: radius.lg, borderWidth: 1, borderColor: palette.primary, backgroundColor: palette.popover },
   kicker: { fontFamily: fonts.uiBold, fontSize: 10, letterSpacing: 1, color: palette.primary },
   text: { fontFamily: fonts.ui, fontSize: 13, lineHeight: 19, color: palette.foreground },
   footer: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: space[2] },

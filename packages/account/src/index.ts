@@ -125,9 +125,9 @@ export {
 // #142
 export { challengeAttempt } from './challenge-attempt-record';
 // #147
-export { type LessonProgressChange, type LessonProgressEvent, type UnsequencedLessonEvent, lessonProgressEvent } from './lesson-progress-record';
+export { LESSON_PROGRESS_RECORD_VERSION, type LessonProgressChange, type LessonProgressEvent, type UnsequencedLessonEvent, lessonProgressEvent } from './lesson-progress-record';
 // #148
-export { READINESS_MILESTONE_RECORD_VERSION, type ReadinessMilestoneRecord, readinessMilestone } from './readiness-milestone-record';
+export { READINESS_MILESTONE_RECORD_VERSION, type ReadinessMilestoneRecord, meetsReadinessThreshold, readinessMilestone, readinessStreakEffect } from './readiness-milestone-record';
 export {
   BOOTSTRAP_PAGE_SIZE,
   DETAIL_PAGES_PER_RUN,
