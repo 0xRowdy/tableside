@@ -157,5 +157,6 @@ describe('milestones from every device', () => {
     await refusedStore.refuseMilestones(['test-device/attempt-1/attempt-2']);
     expect(await checkGroup(refused)).toMatchObject({ milestone: null });
     expect((await refused.progress()).recommendation.category).toBe('card-values');
+    expect((await finish(refused, CHECK, wrongOn(1, 2))).earned.readiness).toBeNull();
   });
 });

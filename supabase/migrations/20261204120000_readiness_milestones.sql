@@ -29,8 +29,7 @@ create table private.readiness_milestones (
 
 revoke all on private.readiness_milestones from public, anon, authenticated;
 
--- Spec 3 Comparison groups (Readiness streak); Amendment 1 C2, C3: what one
--- ended attempt does to the streak of its base configuration.
+-- Spec 3 Comparison groups (Readiness streak); Amendment 1 C2, C3
 create function private.readiness_streak_effect(p_attempt jsonb) returns text
 language sql immutable set search_path = '' as $$
   select case
@@ -47,7 +46,7 @@ language sql immutable set search_path = '' as $$
   end
 $$;
 
--- Amendment 1 C2
+-- Spec 3 Amendment 1 C2
 create function private.readiness_base_configuration(p_group_key jsonb) returns jsonb
 language sql immutable set search_path = '' as $$
   select p_group_key - 'assistanceClass' - 'countRevealed'
@@ -87,7 +86,7 @@ begin
   if v_payload ->> 'owner' is distinct from p_account::text then
     return jsonb_build_object('status', 'rejected', 'code', 'owner-mismatch');
   end if;
-  -- A device claims only its own streak (Amendment 1 B3).
+  -- Spec 3 Amendment 1 B3
   if v_installation is distinct from p_request ->> 'installation' then
     return jsonb_build_object('status', 'rejected', 'code', 'device-mismatch');
   end if;
@@ -100,7 +99,7 @@ begin
     return jsonb_build_object('status', 'rejected', 'code', 'identity-reused');
   end if;
 
-  -- The streak, re-checked over the accepted attempts.
+  -- Spec 3 Synchronized record types › Readiness milestone (Barrier)
   select * into v_first from private.challenge_attempts where account_id = p_account and attempt_id = v_payload #>> '{attempts,0}';
   if not found then
     return jsonb_build_object('status', 'rejected', 'code', 'attempt-missing');
@@ -147,7 +146,7 @@ begin
   return jsonb_build_object('status', 'accepted', 'change', jsonb_build_object('record', v_payload));
 end $$;
 
--- Bootstrap (Amendment 1 C8): every accepted milestone whole, at its acceptance.
+-- Spec 3 Amendment 1 C8
 create function private.snapshot_readiness_milestones(p_account uuid, p_record_type text)
 returns table (item_id text, sequence bigint, change jsonb)
 language sql stable security definer set search_path = '' as $$
@@ -155,7 +154,7 @@ language sql stable security definer set search_path = '' as $$
   from private.readiness_milestones m where m.account_id = p_account
 $$;
 
--- Export: each accepted milestone whole, in acceptance order.
+-- Spec 2 Export
 create function private.export_readiness_milestones(p_account uuid, p_record_type text)
 returns table (item_id text, record jsonb)
 language sql stable security definer set search_path = '' as $$
@@ -164,7 +163,7 @@ language sql stable security definer set search_path = '' as $$
   order by m.sequence
 $$;
 
--- Deletion coverage: the type's own table (the feed and receipts are the platform's).
+-- Spec 2 Deletion
 create function private.erase_readiness_milestones(p_account uuid) returns void
 language sql volatile security definer set search_path = '' as $$
   delete from private.readiness_milestones where account_id = p_account

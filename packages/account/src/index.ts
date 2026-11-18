@@ -185,6 +185,7 @@ export {
   type RevisionedState,
   type RevisionedUpload,
   completedPracticeSession,
+  isBarrierFor,
   recordTypes,
   revisionedItemType,
 } from './sync/registry';

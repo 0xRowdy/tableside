@@ -2,6 +2,7 @@
 
 import type { ChallengeAttemptSummary, ChallengeGroupKey } from '@tableside/engine';
 
+import { challengeAttempt } from './challenge-attempt-record';
 import type { RecordType } from './sync/registry';
 
 export const READINESS_MILESTONE_RECORD_VERSION = 1 as const;
@@ -43,7 +44,7 @@ export const readinessMilestone: RecordType<ReadinessMilestoneRecord> = {
   identity: { scheme: 'installation-attempts', of: (milestone) => `${milestone.installation}/${milestone.attempts[0]}/${milestone.attempts[1]}` },
   isPayload: isMilestone,
   // Spec 3 Synchronized record types › Readiness milestone (Barrier)
-  barriers: ['challenge-attempt'],
+  barriers: [challengeAttempt.name],
   affectedBy(barrier, milestone) {
     const attempt = barrier.payload as Partial<ChallengeAttemptSummary>;
     const [first, last] = milestone.deviceSequences;

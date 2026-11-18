@@ -40,7 +40,7 @@ import type { ChallengeAllowance } from './allowance';
 import { ChallengeController, type AttemptSnapshot, type DirectSuspendCause, type LearnerCommand, type PauseCause, type StartProblem } from './controller';
 import { DeviceLearningPreferences, type LearningPreferences } from './learning-preferences';
 import { attemptEarned, milestoneCandidates, progressProjection, readinessOutcome, type AttemptEarned, type Progress, type ProgressAttempt, type ProgressMilestone } from './progress';
-import { milestoneIdentity, milestoneSlot } from './readiness-milestone';
+import { milestoneIdentity, milestoneSlot, type ReadinessMilestoneRecord } from './readiness-milestone';
 import { lessonProgress, type LessonChange, type LessonHistory, type LessonProgress, type LessonProgressChange, type LessonStatus } from './lesson-progress';
 
 // Spec 3 Recommendations
@@ -351,8 +351,8 @@ export class TrainingService {
   private async earned(record: ChallengeAttemptRecord): Promise<AttemptEarned> {
     await this.recordMilestones().catch(() => undefined);
     const attempts = await this.attempts();
-    const own = milestoneCandidates(attempts, this.adapters.device).map((milestone) => ({ record: milestone, local: true }));
-    return { ...attemptEarned(attempts, record.attemptId), readiness: readinessOutcome(attempts, [...(await this.milestones()), ...own], record.attemptId) };
+    const milestones = await this.milestones(milestoneCandidates(attempts, this.adapters.device));
+    return { ...attemptEarned(attempts, record.attemptId), readiness: readinessOutcome(attempts, milestones, record.attemptId) };
   }
 
   // Spec 3 Synchronized record types › Readiness milestone
@@ -365,13 +365,13 @@ export class TrainingService {
   }
 
   // Spec 3 Synchronized record types › Readiness milestone; #148
-  private async milestones(): Promise<readonly ProgressMilestone[]> {
+  private async milestones(candidates: readonly ReadinessMilestoneRecord[] = []): Promise<readonly ProgressMilestone[]> {
     const { store } = this.adapters;
     const [{ accepted, refused }, local] = await Promise.all([store.readMilestoneSync(), store.readMilestones()]);
-    const settled = new Set(refused);
+    const refusedIdentities = new Set(refused);
     return [
       ...accepted.map((record) => ({ record, local: false })),
-      ...local.filter((record) => !settled.has(milestoneIdentity(record))).map((record) => ({ record, local: true })),
+      ...[...local, ...candidates].filter((record) => !refusedIdentities.has(milestoneIdentity(record))).map((record) => ({ record, local: true })),
     ];
   }
 
