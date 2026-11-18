@@ -122,7 +122,7 @@ describe('an unfinished Check attempt, beyond its screens', () => {
 
     for (const run of [right, wrong]) {
       for (const hidden of ['attempt-7d3f9a21c6', ...run.cards, 'plus 1', 'minus 1', 'Recorded']) expect(run.channels.sampleText).not.toContain(hidden);
-      expectNotPresented({ ...run.presented, elements: [] }, ['attempt-7d3f9a21c6', ...run.cards, 'correct', 'Correct', 'incorrect', 'Wrong']);
+      expectNotPresented(run.presented, ['attempt-7d3f9a21c6', 'Correct', 'Wrong', 'Recorded']);
     }
   }, 180_000);
 });

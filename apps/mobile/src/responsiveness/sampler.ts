@@ -5,7 +5,7 @@ import { INSURANCE_TARGET, type ChallengeCategory, type ChallengeCommand, type C
 import type { ActivityStore, StoredActivity, TransitionCommit } from '@/practice/store';
 import type { AttemptTransitionCommit, StoredAttempt, TrainingStore } from '@/training/store';
 
-import { CHALLENGE, COLD_LAUNCH, type DeviceInfo, type Measure, type ResponsivenessSample, type SampledArea } from './samples';
+import { CHALLENGE, COLD_LAUNCH, type ChallengeFamily, type DeviceInfo, type Measure, type ResponsivenessSample, type SampledArea } from './samples';
 
 export const CLAIM_MS = 1000;
 export const HOLD_MS = 10_000;
@@ -69,7 +69,7 @@ export function practiceFamily(command: Command): string | null {
 }
 
 // Spec 3 Launch gates 8; docs/development.md Responsiveness sampling (action families)
-export function challengeFamily(commit: AttemptTransitionCommit, category: ChallengeCategory): string | null {
+export function challengeFamily(commit: AttemptTransitionCommit, category: ChallengeCategory): ChallengeFamily | null {
   const command = JSON.parse(commit.receipt.command) as ChallengeCommand;
   if (commit.facts.some((fact) => fact.kind === 'move-refused' || fact.kind === 'attempt-ended')) return null;
   switch (command.kind) {

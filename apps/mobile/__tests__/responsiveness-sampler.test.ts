@@ -2,7 +2,16 @@
 import type { ChallengeCategory, ChallengeCommand, ChallengeFact, Command, DomainFact, Receipt } from '@tableside/engine';
 
 import { MemoryActivityStore } from '@/practice/memory-store';
+import { DEFAULT_TABLE_SETUP } from '@tableside/definitions';
+import { EMPTY_QUARANTINE_LIST } from '@tableside/engine';
+
+import { alwaysAllowed } from '@/practice/adapters';
+import { entropyFromWords, FakeClock, PI_WORDS } from '@/practice/testing/substitutes';
+import { plentyAllowance } from '@/training/allowance';
 import { MemoryTrainingStore } from '@/training/memory-store';
+import type { LearnerCommand } from '@/training/controller';
+import { TrainingService, type ChallengeSetup } from '@/training/service';
+import { NO_SCREEN_READER } from '@/training/speech';
 import { FRESH_LIFECYCLE, type AttemptCommitOutcome, type AttemptLifecycle, type AttemptTransitionCommit, type NewAttempt, type TrainingStore } from '@/training/store';
 import type { ActivityStore, CommitOutcome, NewActivity, TransitionCommit } from '@/practice/store';
 import { CLAIM_MS, createSampler, HOLD_MS, type Sampler, type SamplerPorts } from '@/responsiveness/sampler';
@@ -317,6 +326,55 @@ describe('challenge actions', () => {
     await expect(store.readAttemptRecords()).resolves.toEqual([]);
     await expect(store.readLessonSync()).resolves.toEqual(await inner.readLessonSync());
     await expect(store.readMilestoneSync()).resolves.toEqual(await inner.readMilestoneSync());
+  });
+});
+
+// Spec 3 Launch gates 8; #156
+describe('challenge actions, as the engine commits them', () => {
+  async function tappedThrough(setup: ChallengeSetup) {
+    const h = harness();
+    const clock = new FakeClock(1_790_000_000_000, true);
+    const store = h.sampler.trainingStore(new MemoryTrainingStore());
+    const service = new TrainingService({ store, access: alwaysAllowed, allowance: plentyAllowance(() => clock.now()), clock, entropy: entropyFromWords(PI_WORDS), newId: () => 'attempt-1', device: 'test-device', owner: 'local', quarantine: EMPTY_QUARANTINE_LIST, speech: NO_SCREEN_READER });
+    await service.load();
+    await service.startAttempt(setup);
+    const taps: string[] = [];
+    let at = 10_000;
+    for (let guard = 0; guard < 3000; guard++) {
+      const snapshot = service.snapshot();
+      if (snapshot.status !== 'active') break;
+      const { phase, table } = snapshot.view;
+      const command: LearnerCommand =
+        phase === 'question' ? { kind: 'answer', value: 0 }
+        : phase === 'decision' ? { kind: 'play', action: table?.decision?.kind === 'insurance' ? 'decline-insurance' : 'stand' }
+        : phase === 'bet' ? { kind: 'bet', amount: table!.bet!.amounts[0]! }
+        : { kind: 'next-item' };
+      taps.push(command.kind);
+      h.sampler.touchStart(touch((at += 2_000)));
+      h.at(at + 30);
+      const submitting = service.submit(command);
+      h.sampler.touchEnd(touch(at + 30));
+      await submitting;
+      await h.drawAt(at + 100);
+    }
+    expect(service.snapshot().status).toBe('ended');
+    const count = (family: string) => h.recorded.filter((sample) => sample.measure === 'completion' && sample.family === family).length;
+    return { taps, count, games: new Set(h.recorded.map((sample) => sample.game)) };
+  }
+
+  it('samples each tapped card and checkpoint of a self-paced running count, and not the automatic Next after a recorded answer', async () => {
+    const { taps, count, games } = await tappedThrough({ category: 'running-count', variant: 'check' });
+    const answers = taps.filter((kind) => kind === 'answer').length;
+    expect([answers > 0, taps.at(-1)]).toEqual([true, 'answer']);
+    expect([count('checkpoint-entry'), count('card-advance'), count('answer-submission')]).toEqual([answers, taps.length - answers, 0]);
+    expect([...games]).toEqual(['challenge']);
+  });
+
+  it('samples a table Play attempt’s decisions and wagers as answers, and its count prompts as checkpoint entries', async () => {
+    const { taps, count } = await tappedThrough({ category: 'table', variant: 'check', table: { ...DEFAULT_TABLE_SETUP, seat: 'play', countingMode: 'deviations', betSchedule: true } });
+    const of = (...kinds: string[]) => taps.filter((kind) => kinds.includes(kind)).length;
+    expect(of('play', 'bet')).toBeGreaterThan(0);
+    expect([count('answer-submission'), count('checkpoint-entry')]).toEqual([of('play', 'bet'), of('answer')]);
   });
 });
 

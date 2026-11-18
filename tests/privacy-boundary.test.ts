@@ -111,7 +111,8 @@ describe('routine logs in shipped code', () => {
 
 // Spec 3 Information hiding (end to end), Launch gates 2; #156
 describe('challenge and lesson code', () => {
-  const CHALLENGE_AND_LESSON = /^(apps\/mobile\/src\/(training|counting|lessons)\/|packages\/engine\/src\/(challenge|challenge-record|table-challenge)\.ts$|packages\/definitions\/src\/(challenges|lessons|counting-examples|hints)\.ts$)/;
+  const CHALLENGE_AND_LESSON =
+    /^(apps\/mobile\/src\/(training|counting|lessons)\/|apps\/mobile\/src\/app\/.*(counting|lesson|learning)|packages\/engine\/src\/[^/]*challenge|packages\/definitions\/src\/[^/]*(challenge|lesson|counting|hint))/;
 
   function consoleUses(source: string, fileName: string): string[] {
     const file = ts.createSourceFile(fileName, source, ts.ScriptTarget.Latest, true, fileName.endsWith('x') ? ts.ScriptKind.TSX : ts.ScriptKind.TS);
@@ -134,6 +135,7 @@ describe('challenge and lesson code', () => {
         'apps/mobile/src/lessons/WorkedExample.tsx',
         'packages/engine/src/challenge.ts',
         'packages/definitions/src/lessons.ts',
+        'apps/mobile/src/app/(tabs)/counting.tsx',
       ]),
     );
     const uses: string[] = [];

@@ -68,7 +68,7 @@ async function hiddenData(d: SimulatedDevice) {
   if (!stored) throw new Error('no unfinished attempt');
   const decoded = decodeChallengeCheckpoint(stored.checkpoint);
   if (!decoded.ok) throw new Error('unreadable checkpoint');
-  return { attemptId: stored.attemptId, state: decoded.state };
+  return { attemptId: stored.attemptId, checkpoint: stored.checkpoint, state: decoded.state };
 }
 
 function sentSince(d: SimulatedDevice, from: number) {
@@ -91,6 +91,7 @@ function parsed(value: unknown): unknown {
 function expectNothingOfTheAttempt(sent: readonly { url: string; body: string }[], events: readonly MetricEvent[], hidden: Awaited<ReturnType<typeof hiddenData>>) {
   const text = JSON.stringify([sent, events]);
   expect(text).not.toContain(hidden.attemptId);
+  expect(text).not.toContain(hidden.checkpoint);
   expect(text).not.toContain(JSON.stringify(hidden.state.answers));
   expect(text).not.toContain(JSON.stringify(hidden.state.items.slice(0, 3)));
   for (const { url, body } of sent) expect([url, revealingFields(parsed(body), 'body')]).toEqual([url, []]);

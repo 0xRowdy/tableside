@@ -11,16 +11,20 @@ const ACTION_MEASURES: readonly Measure[] = ['acknowledgment', 'completion'];
 
 export const COLD_LAUNCH = 'cold-launch';
 
-// Spec 3 Launch gates 8: challenges are sampled beside the games; #156
+// Spec 3 Launch gates 8; #156
 export const CHALLENGE = 'challenge';
 export type SampledArea = GameId | typeof CHALLENGE;
+
+// Spec 3 Launch gates 8; docs/development.md Responsiveness sampling
+export const CHALLENGE_FAMILIES = ['answer-submission', 'card-advance', 'checkpoint-entry'] as const;
+export type ChallengeFamily = (typeof CHALLENGE_FAMILIES)[number];
 
 // Spec 1 Launch gates 5; Spec 3 Launch gates 8; docs/development.md Responsiveness sampling
 export const GATE_FAMILIES: Readonly<Record<SampledArea, readonly string[]>> = {
   blackjack: ['place-wager', 'remove-wager', 'begin-turn', 'play:hit', 'play:stand', 'play:double', 'play:split', 'play:surrender', 'play:decline-insurance', 'insurance', 'rebuy'],
   craps: ['place-wager', 'remove-wager', 'set-working', 'begin-turn', 'rebuy'],
   roulette: ['place-wager', 'remove-wager', 'begin-turn', 'rebuy'],
-  challenge: ['answer-submission', 'card-advance', 'checkpoint-entry'],
+  challenge: CHALLENGE_FAMILIES,
 };
 const GAMES = Object.keys(GATE_FAMILIES) as readonly SampledArea[];
 

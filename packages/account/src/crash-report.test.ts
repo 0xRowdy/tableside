@@ -49,6 +49,7 @@ describe('a crash report', () => {
 
   it("keeps a sync failure's structured kind, which is a code, not text", () => {
     expect(crashReport(new SyncCallError('refused'))).toMatchObject({ type: 'SyncCallError', code: 'refused' });
+    expect(crashReport(Object.assign(new Error('x'), { code: 'otp_expired' }))).toMatchObject({ code: 'otp_expired' });
   });
 
   it('reports a thrown non-error as its kind only', () => {
