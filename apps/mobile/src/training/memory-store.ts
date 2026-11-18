@@ -3,7 +3,7 @@ import type { ChallengeAttemptRecord, UnsequencedAttemptRecord } from '@tablesid
 
 import { StoreWriteError } from '../practice/memory-store';
 import type { AcceptedLessonEvent, LessonProgressEvent, LessonSync, UnsequencedLessonEvent } from './lesson-progress';
-import { milestoneSlot, type MilestoneSync, type ReadinessMilestoneRecord } from './readiness-milestone';
+import { milestoneIdentity, milestoneSlot, type MilestoneSync, type ReadinessMilestoneRecord } from './readiness-milestone';
 import { withLifecycle, type AcceptedAttempt, type AttemptLifecycle, type AttemptCommitOutcome, type AttemptTransitionCommit, type CommittedAttemptTransition, type NewAttempt, type StoredAttempt, type TrainingStore } from './store';
 
 type Operation = 'createAttempt' | 'commitAttemptTransition' | 'saveAttemptLifecycle' | 'recordAttempt' | 'readAttemptReceipt' | 'writePreference' | 'recordLessonEvent' | 'recordMilestone';
@@ -184,8 +184,11 @@ export class MemoryTrainingStore implements TrainingStore {
   recordMilestone(milestone: ReadinessMilestoneRecord): Promise<ReadinessMilestoneRecord> {
     return this.injectable('recordMilestone', () => {
       const group = milestoneSlot(milestone);
-      const existing = this.disk.milestones.map((text) => parse<ReadinessMilestoneRecord>(text)).find((earlier) => milestoneSlot(earlier) === group);
-      if (existing) return existing;
+      const at = this.disk.milestones.findIndex((text) => milestoneSlot(parse<ReadinessMilestoneRecord>(text)) === group);
+      const existing = at === -1 ? null : parse<ReadinessMilestoneRecord>(this.disk.milestones[at] as string);
+      // #148's handoff
+      if (existing && !this.disk.refusedMilestones.includes(milestoneIdentity(existing))) return existing;
+      if (existing) this.disk.milestones.splice(at, 1);
       this.disk.milestones.push(JSON.stringify(milestone));
       return clone(milestone);
     });

@@ -4,7 +4,7 @@ import { CATALOG_CATEGORIES, type CatalogCategory } from '@tableside/definitions
 import { canonicalJson, CHALLENGE_METRICS, type ChallengeAttemptSummary, type ChallengeGroupKey, type ChallengeMetric, type MetricResult } from '@tableside/engine';
 
 import type { AcceptedAttempt } from './store';
-import { milestoneSlot, READINESS_MILESTONE_RECORD_VERSION, type ReadinessMilestoneRecord } from './readiness-milestone';
+import { milestoneIdentity, milestoneSlot, READINESS_MILESTONE_RECORD_VERSION, type ReadinessMilestoneRecord } from './readiness-milestone';
 
 // Spec 3 Comparison groups (local and accepted attempts)
 export interface ProgressAttempt {
@@ -178,7 +178,7 @@ export function attemptEarned(attempts: readonly ProgressAttempt[], attemptId: s
 }
 
 // Spec 3 Comparison groups (Readiness streak); Amendment 1 B3
-export function milestoneCandidates(attempts: readonly ProgressAttempt[], installation: string): readonly ReadinessMilestoneRecord[] {
+export function milestoneCandidates(attempts: readonly ProgressAttempt[], installation: string, refused: ReadonlySet<string> = new Set()): readonly ReadinessMilestoneRecord[] {
   const own = distinct(attempts)
     .map((entry) => entry.record)
     .filter((record) => record.installation === installation)
@@ -197,7 +197,7 @@ export function milestoneCandidates(attempts: readonly ProgressAttempt[], instal
     const previous = streaks.get(base) ?? null;
     streaks.set(base, record);
     if (!previous || earned.has(base)) continue;
-    earned.set(base, {
+    const milestone: ReadinessMilestoneRecord = {
       recordVersion: READINESS_MILESTONE_RECORD_VERSION,
       owner: record.owner,
       installation,
@@ -205,7 +205,9 @@ export function milestoneCandidates(attempts: readonly ProgressAttempt[], instal
       attempts: [previous.attemptId, record.attemptId],
       deviceSequences: [previous.deviceSequence, record.deviceSequence],
       earnedAt: record.endedAt,
-    });
+    };
+    // #148's handoff
+    if (!refused.has(milestoneIdentity(milestone))) earned.set(base, milestone);
   }
   return [...earned.values()];
 }

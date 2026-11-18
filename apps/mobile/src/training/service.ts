@@ -351,17 +351,22 @@ export class TrainingService {
   private async earned(record: ChallengeAttemptRecord): Promise<AttemptEarned> {
     await this.recordMilestones().catch(() => undefined);
     const attempts = await this.attempts();
-    const milestones = await this.milestones(milestoneCandidates(attempts, this.adapters.device));
+    const milestones = await this.milestones(milestoneCandidates(attempts, this.adapters.device, await this.refusedMilestones()));
     return { ...attemptEarned(attempts, record.attemptId), readiness: readinessOutcome(attempts, milestones, record.attemptId) };
   }
 
   // Spec 3 Synchronized record types › Readiness milestone
   private async recordMilestones(): Promise<void> {
     const recorded = await this.adapters.store.readMilestones();
-    const missing = milestoneCandidates(await this.attempts(), this.adapters.device).filter(
-      (candidate) => !recorded.some((milestone) => milestoneSlot(milestone) === milestoneSlot(candidate)),
+    const refused = await this.refusedMilestones();
+    const missing = milestoneCandidates(await this.attempts(), this.adapters.device, refused).filter(
+      (candidate) => !recorded.some((milestone) => milestoneSlot(milestone) === milestoneSlot(candidate) && !refused.has(milestoneIdentity(milestone))),
     );
     for (const milestone of missing) await this.adapters.store.recordMilestone(milestone);
+  }
+
+  private async refusedMilestones(): Promise<ReadonlySet<string>> {
+    return new Set((await this.adapters.store.readMilestoneSync()).refused);
   }
 
   // Spec 3 Synchronized record types › Readiness milestone; #148

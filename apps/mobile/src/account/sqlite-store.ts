@@ -578,7 +578,12 @@ export class SqliteActivityStore implements ActivityStore, TrainingStore {
       }
       const group = canonicalJson(milestone.groupKey);
       const existing = await tx.get<BodyRow>(`SELECT ${BODY} FROM readiness_milestones WHERE installation_id = ? AND group_key = ?`, [milestone.installation, group]);
-      if (existing) return decode<ReadinessMilestoneRecord>(existing);
+      if (existing) {
+        const earlier = decode<ReadinessMilestoneRecord>(existing);
+        // #148's handoff
+        if (!(await readSync(tx, READINESS_MILESTONE_RECORD_TYPE)).refused.includes(milestoneIdentity(earlier))) return earlier;
+        await tx.run('DELETE FROM readiness_milestones WHERE installation_id = ? AND group_key = ?', [milestone.installation, group]);
+      }
       const [first, second] = milestone.attempts;
       await tx.run(
         `INSERT INTO readiness_milestones (installation_id, group_key, first_attempt_id, second_attempt_id, earned_at, ${BODY}) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,

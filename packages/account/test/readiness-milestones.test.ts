@@ -207,6 +207,32 @@ describe('a readiness milestone', () => {
   });
 });
 
+// Spec 3 Synchronized record types › Readiness milestone; #148's handoff
+describe('a refused milestone', () => {
+  it('frees its group, so the next streak there is claimed and synced, and never shows meanwhile', async () => {
+    const { phone } = await onePhone('refused');
+    phone.proxy.online = false;
+    const first = await phone.playCheck();
+    const second = await phone.playCheck();
+    // The server's own earlier milestone in the group stands in for any refusal.
+    await stack.sql`
+      insert into private.readiness_milestones (account_id, item_id, payload, installation_id, group_key, operation_id, sequence)
+      values (${accountOf(phone)}::uuid, 'stand-in', '{}'::jsonb, ${installationOf(phone)}, ${stack.sql.json(second.groupKey as never)}, 'stand-in', 0)`;
+    phone.proxy.online = true;
+    await synced(phone);
+    const [refused] = (await phone.vault.store().readMilestoneSync()).refused;
+    expect(refused).toBe(readinessMilestone.identity.of(citing(first, second)));
+    expect(await milestoneOn(phone)).toBeNull();
+
+    await stack.sql`delete from private.readiness_milestones where item_id = 'stand-in'`;
+    const third = await phone.playCheck();
+    expect(await milestoneOn(phone)).toEqual({ installation: installationOf(phone), attempts: [second.attemptId, third.attemptId], local: true });
+    await synced(phone);
+    expect(await milestoneOn(phone)).toEqual({ installation: installationOf(phone), attempts: [second.attemptId, third.attemptId], local: false });
+    expect(await serverMilestones(phone)).toMatchObject([citing(second, third)]);
+  });
+});
+
 // Spec 3 Amendment 1 B3
 describe('two devices’ streaks', () => {
   it('are never stitched: each device earns its own milestone, and both show on every device', async () => {
