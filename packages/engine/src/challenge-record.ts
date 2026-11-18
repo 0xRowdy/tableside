@@ -126,9 +126,10 @@ function tableGroupKey(setup: TableSetup): TableGroupKey {
     seat,
     // Spec 3 Comparison groups: counting mode; #138
     countingMode: countingModeOf(setup),
-    betSchedule: false,
-    baseWager: null,
-    startingBalance: null,
+    // Spec 3 Comparison groups: bet schedule, base wager, starting balance; #139
+    betSchedule: setup.seat === 'play' && setup.betSchedule,
+    baseWager: setup.seat === 'play' ? setup.baseWager : null,
+    startingBalance: setup.seat === 'play' ? setup.startingBalance : null,
     checkpointInterval: interval,
   };
 }

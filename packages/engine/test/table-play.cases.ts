@@ -325,7 +325,7 @@ export const tablePlayCases: TestCase[] = [
       const context = { installation: 'i', startedAt: 1, endedAt: 2, interrupted: false, performanceMs: null, meteringBasis: 'challenge-attempt', allowancePolicyVersion: null, pacing: 'self-paced' } as const;
       const basic = challengeAttemptRecord(playAll(begun(playSpec('check', 'basic'), seed(1))), context).groupKey.table;
       const deviations = challengeAttemptRecord(playAll(begun(playSpec('check', 'deviations', { interval: 2 }), seed(1))), context).groupKey.table;
-      t.equal([basic?.seat, basic?.countingMode, basic?.betSchedule, basic?.baseWager, basic?.startingBalance, basic?.checkpointInterval], ['play', 'basic', false, null, null, 1]);
+      t.equal([basic?.seat, basic?.countingMode, basic?.betSchedule, basic?.baseWager, basic?.startingBalance, basic?.checkpointInterval], ['play', 'basic', false, '10', '1000', 1]);
       t.equal([deviations?.seat, deviations?.countingMode, deviations?.checkpointInterval], ['play', 'deviations', 2]);
     },
   },

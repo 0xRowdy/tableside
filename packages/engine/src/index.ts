@@ -359,13 +359,18 @@ export {
   type RunningCountAid,
   type RunningCountExplanation,
   type RunningCountReview,
+  type TableBetReview,
   type TableCountReview,
   type TableDecisionReview,
 } from './challenge';
 export {
+  BET_SCHEDULE_UNITS,
   MAX_CHECKPOINT_INTERVAL,
   MAX_TABLE_ROUNDS,
+  scheduleUnits,
   tableCheckpointRounds,
+  type TableBetCorrection,
+  type PlayBet,
   type CheckpointTiming,
   type TableContent,
   type TableCount,
