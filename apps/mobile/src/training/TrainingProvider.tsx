@@ -9,7 +9,7 @@ import { useFollow } from '@/hooks/use-follow';
 import { useLoaded } from '@/hooks/use-loaded';
 
 import { createTrainingAdapters } from './app-adapters';
-import { TrainingService, type LearningPreferences, type LessonEntry } from './service';
+import { TrainingService, type InstructionWithheld, type LearningPreferences, type LessonAccess, type LessonEntry } from './service';
 import { followSpokenCards } from './speech';
 
 const TrainingContext = createContext<TrainingService | null>(null);
@@ -61,6 +61,20 @@ export function useLessons(): { readonly service: TrainingService; readonly less
   if (!service) throw new Error('useLessons needs a TrainingProvider');
   const revision = useSyncExternalStore(service.subscribe, service.lessonRevision);
   return { service, lessons: useLoaded(listLessonsOf, service, revision) };
+}
+
+// Spec 3 Lessons › Access, Check protection; Amendments 3 and 5; #149
+const withheldOf = (service: TrainingService, _revision: number) => service.instructionWithheld().catch(() => null);
+const lessonAccessOf = (service: TrainingService, lesson: string, _revision: number) => service.lessonAccess(lesson).catch(() => null);
+
+export function useInstructionWithheld(): InstructionWithheld | null | undefined {
+  const service = useTrainingService();
+  return useLoaded(withheldOf, service, useSyncExternalStore(service.subscribe, service.accessRevision));
+}
+
+export function useLessonAccess(lesson: string): LessonAccess | null | undefined {
+  const service = useTrainingService();
+  return useLoaded(lessonAccessOf, service, lesson, useSyncExternalStore(service.subscribe, service.accessRevision));
 }
 
 // Spec 3 Lessons › Entry points, Amendment 1 C7; #146

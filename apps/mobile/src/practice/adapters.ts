@@ -68,7 +68,7 @@ export interface AccessSupervisor {
   beforeEndWhileSuspended(context: { readonly activityId: string }): Promise<{ readonly status: 'allowed' } | { readonly status: 'blocked'; readonly reason: string }>;
   phaseChanged(report: PhaseReport): void;
   setupTerms?(context: { readonly game: string }): Promise<SetupTerms>;
-  // Spec 3 Lessons › Access; #149: spec 5's access service answers it
+  // Spec 3 Lessons › Access; #149
   gameAccess(context: { readonly game: GameId }): Promise<GameAccess>;
 }
 

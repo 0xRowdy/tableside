@@ -107,12 +107,11 @@ export function afterCheckText({ category, play }: InstructionWithheld): string 
 }
 
 // Spec 3 S3-12 JsXMJ; Amendment 4 §5
-const GAME_NAME: Record<GameId, string> = { blackjack: 'blackjack', craps: 'craps', roulette: 'roulette' };
 export const NEEDS_CONNECTION_TITLE = 'This lesson needs a connection';
 export const needsConnectionText = ({ game, offlineGame }: { readonly game: GameId; readonly offlineGame: GameId | null }) =>
-  `You're offline${offlineGame ? `, and ${GAME_NAME[offlineGame]} is your offline game,` : ','} so ${GAME_NAME[game]} lessons wait until you reconnect. Your place in this lesson is kept.`;
+  `You're offline${offlineGame ? `, and ${GAME_WORDS[offlineGame].name} is your offline game,` : ','} so ${GAME_WORDS[game].name} lessons wait until you reconnect. Your place in this lesson is kept.`;
 export const offlineLessonsText = (offlineGame: GameId | null) =>
-  `Offline you can open ${offlineGame ? `the ${GAME_NAME[offlineGame]} lessons, ` : ''}the app orientation lesson and the builder lesson.`;
+  `Offline you can open ${offlineGame ? `the ${GAME_WORDS[offlineGame].name} lessons, ` : ''}the app orientation lesson and the builder lesson.`;
 
 export const stepText = (step: number, steps: number) => `Step ${step} of ${steps}`;
 export const NEXT = 'Next';

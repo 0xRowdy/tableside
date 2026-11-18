@@ -122,15 +122,6 @@ export interface InstructionWithheld {
   readonly play: boolean;
 }
 
-export class LessonUnavailableError extends Error {
-  constructor(
-    readonly lesson: string,
-    readonly access: Exclude<LessonAccess, { readonly kind: 'available' }>,
-  ) {
-    super(access.kind === 'after-check' ? `lesson ${lesson} opens after the Check attempt ends` : `lesson ${lesson} needs a connection`);
-  }
-}
-
 // Spec 3 Training service interface › List catalog, Lesson progress; #143
 export interface LessonEntry {
   readonly id: string;
@@ -147,6 +138,10 @@ export type LessonAccess =
   | { readonly kind: 'available' }
   | { readonly kind: 'after-check'; readonly attempt: InstructionWithheld }
   | { readonly kind: 'needs-connection'; readonly game: GameId; readonly offlineGame: GameId | null };
+
+export type HeldLessonAccess = Exclude<LessonAccess, { readonly kind: 'available' }>;
+
+const HELD_MESSAGE: Record<HeldLessonAccess['kind'], string> = { 'after-check': 'opens after the Check attempt ends', 'needs-connection': 'needs a connection' };
 
 export interface LessonView {
   readonly id: string;
@@ -205,7 +200,7 @@ export class TrainingService {
 
   lessonRevision = (): number => this.lessonChanges;
 
-  // Spec 3 Lessons › Access, Check protection; #149: changes when lesson access may have changed
+  // Spec 3 Lessons › Access, Check protection; #149
   accessRevision = (): number => this.accessChanges;
 
   learningRevision = (): number => this.learningChanges;
@@ -296,8 +291,11 @@ export class TrainingService {
 
   async lifecycle(event: LifecycleEvent): Promise<void> {
     await this.challenges.lifecycle(event);
-    // Spec 3 Lessons › Access; #149: offline access may have changed
-    if (event === 'access-changed') this.reviseAccess();
+    // Spec 3 Lessons › Access; #149
+    if (event === 'access-changed') {
+      this.accessMayHaveChanged();
+      this.notify();
+    }
   }
 
   // Spec 3 Amendment 4 §2–3
@@ -382,7 +380,7 @@ export class TrainingService {
   // Spec 3 Lessons › Check protection; Amendment 1 A2, Amendments 3 and 5
   async instructionWithheld(): Promise<InstructionWithheld | null> {
     const unfinished = await this.adapters.store.findUnfinishedAttempt();
-    // Spec 3 Amendment 1 C6: an uncharged attempt has shown nothing
+    // Spec 3 Amendment 1 C6
     if (!unfinished || unfinished.sequence === 0 || unfinished.specification.variant !== 'check') return null;
     const { content, table } = unfinished.specification;
     return { category: content.category, play: table?.seat === 'play' };
@@ -408,7 +406,7 @@ export class TrainingService {
     }));
   }
 
-  // Spec 3 S3-14 SUUN4, S3-12 JsXMJ: what a lesson is, without its content
+  // Spec 3 S3-14 SUUN4, S3-12 JsXMJ
   aboutLesson(id: string): Pick<Lesson, 'id' | 'title' | 'section'> | null {
     const lesson = this.lessons.find((candidate) => candidate.id === id);
     return lesson ? { id: lesson.id, title: lesson.title, section: lesson.section } : null;
@@ -487,7 +485,7 @@ export class TrainingService {
   private async accessible(id: string): Promise<AuthoredLesson> {
     const lesson = this.authored(id);
     const access = await this.lessonAccess(id);
-    if (access.kind !== 'available') throw new LessonUnavailableError(id, access);
+    if (access.kind !== 'available') throw new Error(`lesson ${id} ${HELD_MESSAGE[access.kind]}`);
     return lesson;
   }
 
@@ -511,9 +509,9 @@ export class TrainingService {
     return viewOf(lesson, progress, progress.bookmark ?? 1, null);
   }
 
-  private reviseAccess(): void {
+  private accessMayHaveChanged(): void {
     this.accessChanges++;
-    this.reviseLessons();
+    this.lessonChanges++;
   }
 
   private reviseLessons(): void {
@@ -524,10 +522,7 @@ export class TrainingService {
   private refresh(): void {
     const attempt = this.challenges.snapshot();
     // Spec 3 Lessons › Check protection; #149
-    if (attempt.status !== this.current.status) {
-      this.accessChanges++;
-      this.lessonChanges++;
-    }
+    if (attempt.status !== this.current.status) this.accessMayHaveChanged();
     if (attempt.status === 'none') {
       const problem = this.diagnostics ? 'invalid-setup' : attempt.problem;
       this.current = { status: 'none', problem, diagnostics: this.diagnostics ?? [], busy: attempt.busy };

@@ -2,7 +2,7 @@
 // #143, #144, #145, #149
 import type { LessonHandoff } from '@tableside/definitions';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useState, useSyncExternalStore } from 'react';
+import { useState } from 'react';
 
 import { Placeholder } from '@/components/Placeholder';
 import { useFeedback } from '@/feedback/FeedbackProvider';
@@ -12,13 +12,12 @@ import { LessonPlayer } from '@/lessons/LessonPlayer';
 import { LessonGate } from '@/lessons/LessonGate';
 import { attemptHref, handoffHref, lessonsHref } from '@/lessons/routes';
 import { WorkedExample } from '@/lessons/WorkedExample';
-import { allowanceCopy, NOT_READY_HINT, type AllowanceCopy } from '@/training/challenge-text';
+import { allowanceCopy, NEEDS_UPDATE, NOT_READY_HINT, type AllowanceCopy } from '@/training/challenge-text';
 import { LESSONS_TITLE, OPENING_LESSON } from '@/training/lesson-text';
-import type { LessonAccess, LessonView, TrainingService } from '@/training/service';
-import { useTraining } from '@/training/TrainingProvider';
+import type { LessonView, TrainingService } from '@/training/service';
+import { useLessonAccess, useTraining } from '@/training/TrainingProvider';
 
 // Spec 3 Lessons › Access, Check protection; #149
-const accessOf = (service: TrainingService, lesson: string, _revision: number): Promise<LessonAccess | null> => service.lessonAccess(lesson).catch(() => null);
 const openOf = async (service: TrainingService, lesson: string, open: boolean): Promise<LessonView | null | undefined> => (open ? service.openLesson(lesson).catch(() => null) : undefined);
 
 // Spec 3 Amendment 4 §2
@@ -29,8 +28,7 @@ export default function LessonScreen() {
   const { lesson = '', section } = useLocalSearchParams<{ lesson: string; section?: string }>();
   const { service, snapshot } = useTraining();
   const feedback = useFeedback();
-  const accessRevision = useSyncExternalStore(service.subscribe, service.accessRevision);
-  const access = useLoaded(accessOf, service, lesson, accessRevision);
+  const access = useLessonAccess(lesson);
   const opened = useLoaded(openOf, service, lesson, access?.kind === 'available');
   const [latest, setLatest] = useState<LessonView | null>(null);
   const [busy, setBusy] = useState(false);
@@ -52,7 +50,8 @@ export default function LessonScreen() {
         access={access}
         back={LESSONS_TITLE}
         busy={busy}
-        endBlocked={snapshot.status === 'active' ? (snapshot.hold?.endBlocked ?? null) : null}
+        canEnd={snapshot.status === 'active'}
+        endBlocked={snapshot.status === 'needs-update' ? NEEDS_UPDATE : snapshot.status === 'active' ? (snapshot.hold?.endBlocked ?? null) : null}
         onLeave={leave}
         onReturnToAttempt={() => router.navigate(attemptHref)}
         onEndAttempt={() => {

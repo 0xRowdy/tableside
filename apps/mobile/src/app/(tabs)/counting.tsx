@@ -16,7 +16,7 @@ import { RecordsScreen } from '@/counting/RecordsScreen';
 import { useFeedback } from '@/feedback/FeedbackProvider';
 import { useLoaded } from '@/hooks/use-loaded';
 import { ScreenHints } from '@/lessons/FirstUseHints';
-import { lessonHref } from '@/lessons/routes';
+import { lessonHref, returnsToAttempt } from '@/lessons/routes';
 import { allowanceCopy, COUNTING_TITLE, FINDING_ATTEMPT, NEEDS_UPDATE } from '@/training/challenge-text';
 import { setupFor, type ChallengeSetup, type TrainingService, type TrainingSnapshot } from '@/training/service';
 import { useLessons, useTraining } from '@/training/TrainingProvider';
@@ -75,7 +75,7 @@ export default function Counting() {
     case 'active': {
       const { view, hold } = snapshot;
       // Spec 3 Attempt lifecycle › One unfinished attempt; S3-01 Uq05w, S3-14 SUUN4
-      if (browsing && hold?.reached && attempt !== '1') {
+      if (browsing && hold?.reached && !returnsToAttempt({ attempt })) {
         if (recordsScreen) return recordsScreen;
         return (
           <>

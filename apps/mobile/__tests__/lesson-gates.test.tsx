@@ -123,6 +123,33 @@ describe('lessons during an unfinished Check attempt', () => {
     ).toBeOnTheScreen();
   });
 
+  it('keep the banner when the counting lessons need a connection too, and say so rather than offering to end', async () => {
+    mockGameAccess = (game) => (game === 'craps' ? { status: 'playable' } : { status: 'needs-connection', offlineGame: 'craps' });
+    await unfinished({ category: 'card-values', variant: 'check' });
+    await openCatalog();
+    expect(await screen.findByText('A Check attempt is unfinished')).toBeOnTheScreen();
+    await fireEvent.press(button('Card values. Needs a connection'));
+    expect(await header('This lesson needs a connection')).toBeOnTheScreen();
+    expect(screen.queryByRole('button', { name: 'End attempt to view this lesson' })).toBeNull();
+  });
+
+  it("can't be ended from a lesson while the attempt waits for an app update", async () => {
+    const { newAttempt, attemptTransition, chargeFor } = jest.requireActual('@/training/testing/store-contract') as typeof import('@/training/testing/store-contract');
+    const { MemoryTrainingStore } = jest.requireActual('@/training/memory-store') as typeof import('@/training/memory-store');
+    const later = '{"schema":999,"identities":{},"attempt":{},"receipts":[]}';
+    const store = new MemoryTrainingStore();
+    const attempt = newAttempt('later', { checkpoint: later });
+    await store.createAttempt({ ...attempt, specification: { ...attempt.specification, variant: 'check' } });
+    await store.commitAttemptTransition({ ...attemptTransition('later', 0, { charge: chargeFor('later') }), checkpoint: later });
+    mockStore = store;
+
+    await openCatalog();
+    await fireEvent.press(await screen.findByRole('button', { name: 'Card values. After your Check attempt' }));
+    expect(await header('This lesson is available after this attempt.')).toBeOnTheScreen();
+    expect(button('End attempt to view this lesson')).toBeDisabled();
+    expect(screen.getByRole('alert')).toHaveTextContent('Update Tableside to continue your counting attempt. It was saved by a newer version, and it stays exactly as it was.');
+  });
+
   it('leave every lesson open during a Learn attempt', async () => {
     await unfinished({ category: 'running-count', variant: 'learn' });
     await openCatalog();

@@ -1,6 +1,6 @@
 // Spec 3 S3-11 sVqX1, LDmev; #143, #149
 
-import { ChevronRight, Circle, CircleCheckBig, CircleDotDashed, CircleHelp, Clock, RefreshCcw, WifiOff, type LucideIcon } from 'lucide-react-native';
+import { ChevronRight, Circle, CircleCheckBig, CircleDotDashed, Clock, RefreshCcw, type LucideIcon } from 'lucide-react-native';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
@@ -9,7 +9,7 @@ import { fonts, palette, radius, space, textScale } from '@/theme/tokens';
 import { NOT_READY_HINT } from '@/training/challenge-text';
 import type { LessonStatus } from '@/training/lesson-progress';
 import { CATALOG_INTRO, CHECK_BANNER, FINDING_LESSONS, lessonDetail, LESSONS_TITLE, RETURN_TO_ATTEMPT, sectionHeading } from '@/training/lesson-text';
-import type { LessonAccess, LessonEntry } from '@/training/service';
+import type { LessonEntry } from '@/training/service';
 
 import { TextLink } from './LessonEntries';
 
@@ -20,23 +20,22 @@ const STATUS_ICON: Record<LessonStatus['kind'], LucideIcon> = {
   'completed-earlier-version': RefreshCcw,
 };
 
-// Spec 3 Lessons › Access, Check protection; #149
-const ACCESS_ICON: Record<Exclude<LessonAccess['kind'], 'available'>, LucideIcon> = { 'after-check': CircleHelp, 'needs-connection': WifiOff };
-
 export function LessonCatalog({
   lessons,
   back,
   onOpen,
+  checkUnfinished,
   onReturnToAttempt,
 }: {
   lessons: readonly LessonEntry[] | undefined;
   back: { label: string; onPress: () => void };
   onOpen: (id: string) => void;
+  checkUnfinished: boolean;
   onReturnToAttempt: () => void;
 }) {
   return (
     <SettingsScreen title={LESSONS_TITLE} back={back}>
-      {lessons?.some((lesson) => lesson.access.kind === 'after-check') && <CheckBanner onReturn={onReturnToAttempt} />}
+      {checkUnfinished && <CheckBanner onReturn={onReturnToAttempt} />}
       <Note>{lessons ? CATALOG_INTRO : FINDING_LESSONS}</Note>
       {lessons &&
         [...new Set(lessons.map((lesson) => lesson.section))].map((section) => {
@@ -60,7 +59,7 @@ function LessonRow({ lesson, first, onOpen }: { lesson: LessonEntry; first: bool
   const { focused, focusProps } = useKeyboardFocus();
   const ready = lesson.steps !== null;
   const held = lesson.access.kind !== 'available';
-  const Icon = lesson.access.kind === 'available' ? STATUS_ICON[lesson.status.kind] : ACCESS_ICON[lesson.access.kind];
+  const Icon = held ? Clock : STATUS_ICON[lesson.status.kind];
   const detail = lessonDetail(lesson);
   return (
     <Pressable
@@ -74,7 +73,7 @@ function LessonRow({ lesson, first, onOpen }: { lesson: LessonEntry; first: bool
       style={({ pressed }) => [styles.row, !first && styles.divided, pressed && styles.pressed, focused && styles.focused]}
     >
       <View style={[styles.lead, held && styles.held]}>
-        <Icon color={lesson.status.kind === 'not-started' || held ? palette.mutedForeground : palette.foreground} size={18} />
+        <Icon color={lesson.status.kind === 'not-started' && !held ? palette.mutedForeground : palette.foreground} size={18} />
       </View>
       <View style={[styles.text, held && styles.held]}>
         <Text maxFontSizeMultiplier={textScale.body} style={styles.title}>
