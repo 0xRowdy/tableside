@@ -113,3 +113,5 @@ export {
   type StrategyStepExample,
   type StrategyStepExplanation,
 } from './strategy-examples';
+
+export { signed, SUIT_GLYPH } from './card-text';

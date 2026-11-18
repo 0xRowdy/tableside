@@ -21,7 +21,7 @@ import {
   type TableView,
 } from '@tableside/engine';
 
-import { playAdvice, playCorrectionCopy } from '@/play/blackjack-coaching';
+import { playAdvice, playCorrectionCopy, upName } from '@/play/blackjack-coaching';
 import type { CorrectionCopy } from '@/play/coaching-text';
 
 import { cardRank, signed, SUIT_GLYPH } from '@/play/blackjack-text';
@@ -303,7 +303,6 @@ export const PLAY_DEAL_TEXT = 'Cards appear one at a time in dealing order; the 
 // Spec 3 S3-07 E3Gbeh, kLgWV; User stories 37, 38
 export const PLAY_KICKER = 'PLAY · YOUR MOVE';
 export const YOUR_MOVE = 'Your move';
-const upWord = (card: { rank: number }) => (card.rank === 1 ? 'an ace' : card.rank >= 10 ? 'a 10' : card.rank === 8 ? 'an 8' : `a ${card.rank}`);
 export function moveText(table: TableView): string {
   const decision = table.decision as NonNullable<TableView['decision']>;
   const up = table.dealer.cards[0];
@@ -311,7 +310,7 @@ export function moveText(table: TableView): string {
   const index = hands.findIndex((hand) => hand.target === decision.target);
   const hand = hands[index];
   const which = hands.length > 1 ? `Hand ${index + 1} of ${hands.length}: ` : 'You have ';
-  const against = up ? ` against ${upWord(up)}` : '';
+  const against = up ? ` against ${upName(up)}` : '';
   if (decision.kind === 'insurance') return `The dealer shows an ace. Insurance costs half your bet and pays 2:1 if the dealer has blackjack. Decide before anything else.`;
   return `${which}${hand ? `${hand.total.soft ? 'soft' : 'hard'} ${hand.total.value}` : 'your hand'}${against}. Choose a move; the next card waits for you.`;
 }

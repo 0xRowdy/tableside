@@ -6,3 +6,7 @@ export const instant = (value: unknown): number | null => {
 };
 
 export const isCurrency = (value: unknown): value is string => typeof value === 'string' && /^[A-Z]{3}$/.test(value);
+
+// Spec 3 Synchronized record types
+export const isJsonObject = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
+export const isPositiveInteger = (value: unknown): value is number => Number.isSafeInteger(value) && (value as number) >= 1;

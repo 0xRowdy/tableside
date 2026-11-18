@@ -2,6 +2,7 @@
 // docs/research/blackjack-lessons.md
 import type { Lesson, LessonContent, LessonHandoff, LessonSource, LessonStep, PublishedNote } from '../lessons';
 import { BET_SCHEDULE } from '../blackjack/strategies';
+import { signed } from '../card-text';
 import {
   BASIC_STRATEGY_EXAMPLE,
   BASICS_EXAMPLE,
@@ -48,7 +49,6 @@ const SOURCE = {
 // Spec 1 Game rules (Blackjack)
 const DEFAULT: BlackjackPreset = 'S17_LS';
 
-const signed = (value: number) => (value > 0 ? `+${value}` : value < 0 ? `−${-value}` : '0');
 
 export type Publisher = 'schlesinger' | 'bja';
 

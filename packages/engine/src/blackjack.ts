@@ -243,7 +243,7 @@ const cutIndex = (table: Pick<BlackjackTable, 'penetration'>) => Math.floor((SHO
 const learnerPosition = (rules: BlackjackTable) => rules.players.learnerSeat + 1;
 const otherPositions = (rules: BlackjackTable) => rules.players.otherWagers.map((_, k) => (k < rules.players.learnerSeat ? k + 1 : k + 2));
 
-export const cardValue = (card: Card): number => (card.rank >= 10 ? 10 : card.rank);
+export const cardValue = (card: Pick<Card, 'rank'>): number => (card.rank >= 10 ? 10 : card.rank);
 
 export function handTotal(cards: readonly Card[]): HandTotal {
   const hard = cards.reduce((sum, card) => sum + cardValue(card), 0);

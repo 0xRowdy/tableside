@@ -4,6 +4,7 @@ import type { ChallengeAttemptSummary, ChallengeGroupKey } from '@tableside/engi
 
 import { challengeAttempt } from './challenge-attempt-record';
 import type { RecordType } from './sync/registry';
+import { isJsonObject, isPositiveInteger } from './values';
 
 export const READINESS_MILESTONE_RECORD_VERSION = 1 as const;
 
@@ -18,20 +19,18 @@ export interface ReadinessMilestoneRecord {
   readonly earnedAt: number;
 }
 
-const isObject = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
-const isCount = (value: unknown): value is number => Number.isSafeInteger(value) && (value as number) >= 1;
 const isPair = (value: unknown, test: (member: unknown) => boolean): value is readonly [unknown, unknown] =>
   Array.isArray(value) && value.length === 2 && value.every(test);
 
 function isMilestone(value: unknown): value is ReadinessMilestoneRecord {
   return (
-    isObject(value) &&
+    isJsonObject(value) &&
     value.recordVersion === READINESS_MILESTONE_RECORD_VERSION &&
     typeof value.owner === 'string' &&
     typeof value.installation === 'string' &&
-    isObject(value.groupKey) &&
+    isJsonObject(value.groupKey) &&
     isPair(value.attempts, (id) => typeof id === 'string') &&
-    isPair(value.deviceSequences, isCount) &&
+    isPair(value.deviceSequences, isPositiveInteger) &&
     (value.deviceSequences[0] as number) < (value.deviceSequences[1] as number) &&
     Number.isSafeInteger(value.earnedAt)
   );
@@ -54,7 +53,7 @@ export const readinessMilestone: RecordType<ReadinessMilestoneRecord> = {
   // Spec 3 Amendment 1 C8
   snapshot: 'private.snapshot_readiness_milestones',
   fromChange(change) {
-    const record = isObject(change) ? change.record : undefined;
+    const record = isJsonObject(change) ? change.record : undefined;
     return isMilestone(record) ? record : null;
   },
   contribution: null,

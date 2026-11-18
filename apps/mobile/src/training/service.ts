@@ -30,9 +30,17 @@ import {
   MAX_OTHER_PLAYERS,
   pacingApplies,
   PENETRATIONS,
+  hasExactKeys,
   playFundingProblems,
+  type ChallengeAttemptRecord,
+  type ChallengeCategory,
+  type ChallengeGroupKey,
+  type ChallengePacing,
+  type ChallengeVariant,
+  type GameId,
+  type PlayFunding,
   type PlayFundingProblem,
-  type ChallengeAttemptRecord, type ChallengeCategory, type ChallengeGroupKey, type ChallengePacing, type ChallengeVariant, type GameId } from '@tableside/engine';
+} from '@tableside/engine';
 
 import type { GameAccess, LifecycleEvent } from '../practice/adapters';
 import type { TrainingAdapters } from './adapters';
@@ -95,11 +103,10 @@ const READY: Readonly<Partial<Record<CatalogCategory, readonly ChallengeVariant[
 
 // Spec 3 Challenge content › Table; S3-02 ZreSb, FkMDw; #138
 function isTableOptions(value: unknown): value is TableOptions {
-  if (typeof value !== 'object' || value === null) return false;
-  const options = value as Record<string, unknown>;
+  if (!hasExactKeys(value, Object.keys(DEFAULT_TABLE_SETUP))) return false;
+  const options = value;
   const whole = (n: unknown, min: number, max: number) => Number.isInteger(n) && (n as number) >= min && (n as number) <= max;
   return (
-    Object.keys(options).length === 9 &&
     (options.seat === 'observe' || options.seat === 'play') &&
     typeof options.betSchedule === 'boolean' &&
     typeof options.baseWager === 'string' &&
@@ -116,15 +123,20 @@ function isTableOptions(value: unknown): value is TableOptions {
 // Spec 3 Play challenge funding (#20) › Starting balance; S3-02 Al6Pw; #139
 export const tableFundingProblems = (options: TableOptions): PlayFundingProblem[] => (options.seat === 'play' ? playFundingProblems(options, BLACKJACK_LIMITS.initial) : []);
 
+// Spec 3 Play challenge funding; Comparison groups; #139
+const tableFunding = (funding: { readonly betSchedule?: boolean; readonly baseWager?: string | null; readonly startingBalance?: string | null }): PlayFunding => ({
+  betSchedule: funding.betSchedule ?? DEFAULT_TABLE_SETUP.betSchedule,
+  baseWager: funding.baseWager ?? DEFAULT_TABLE_SETUP.baseWager,
+  startingBalance: funding.startingBalance ?? DEFAULT_TABLE_SETUP.startingBalance,
+});
+
 // Spec 3 Training service interface › Results
 export function retrySetup(groupKey: ChallengeGroupKey): ChallengeSetup {
   const { category, variant, table } = groupKey;
   if (!table) return { category, variant };
   const preset = blackjackPreset(table.dealer, table.lateSurrender);
   const countingMode = table.countingMode ?? DEFAULT_TABLE_SETUP.countingMode;
-  // Spec 3 Comparison groups; #139
-  const funding = { betSchedule: table.betSchedule, baseWager: table.baseWager ?? DEFAULT_TABLE_SETUP.baseWager, startingBalance: table.startingBalance ?? DEFAULT_TABLE_SETUP.startingBalance };
-  return { category, variant, table: { seat: table.seat, preset, penetration: table.penetration, extraPlayers: table.extraPlayers, interval: table.checkpointInterval, countingMode, ...funding } };
+  return { category, variant, table: { seat: table.seat, preset, penetration: table.penetration, extraPlayers: table.extraPlayers, interval: table.checkpointInterval, countingMode, ...tableFunding(table) } };
 }
 
 // Spec 3 Amendment 1 C7
@@ -138,13 +150,10 @@ export function setupFor(entry: CatalogEntry, preferred: readonly (ChallengeSetu
   const chosen = fits ?? { category: entry.category, variant: entry.ready[0] ?? 'learn' };
   if (entry.category !== 'table' || chosen.table) return chosen;
   const remembered = preferred.find((setup) => setup?.category === 'table' && setup.table)?.table;
-  return { ...chosen, table: remembered ?? { ...DEFAULT_TABLE_SETUP, startingBalance: playAmount ?? DEFAULT_TABLE_SETUP.startingBalance } };
+  return { ...chosen, table: remembered ?? { ...DEFAULT_TABLE_SETUP, ...tableFunding({ startingBalance: playAmount }) } };
 }
 
-const withFundingDefaults = (table: unknown): unknown =>
-  typeof table === 'object' && table !== null
-    ? { betSchedule: DEFAULT_TABLE_SETUP.betSchedule, baseWager: DEFAULT_TABLE_SETUP.baseWager, startingBalance: DEFAULT_TABLE_SETUP.startingBalance, ...table }
-    : table;
+const withFundingDefaults = (table: unknown): unknown => (typeof table === 'object' && table !== null ? { ...tableFunding({}), ...table } : table);
 
 // Spec 3 Lessons › Check protection; Amendment 1 A2; #149
 export interface InstructionWithheld {

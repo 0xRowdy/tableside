@@ -2,7 +2,7 @@
 
 export { ENGINE_VERSION } from './version';
 export { checkLimitInput, type LimitAmountProblem, type LimitInputCheck } from './limits';
-export { BASE_WAGER_CEILING } from './shape';
+export { BASE_WAGER_CEILING, hasExactKeys } from './shape';
 export {
   advanceActivity,
   checkpointHash,
