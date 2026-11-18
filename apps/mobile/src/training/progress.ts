@@ -4,7 +4,7 @@ import { CATALOG_CATEGORIES, type CatalogCategory } from '@tableside/definitions
 import { canonicalJson, CHALLENGE_METRICS, type ChallengeAttemptSummary, type ChallengeGroupKey, type ChallengeMetric, type MetricResult } from '@tableside/engine';
 
 import type { AcceptedAttempt } from './store';
-import { milestoneIdentity, milestoneSlot, READINESS_MILESTONE_RECORD_VERSION, type ReadinessMilestoneRecord } from './readiness-milestone';
+import { meetsReadinessThreshold, milestoneIdentity, milestoneSlot, READINESS_MILESTONE_RECORD_VERSION, readinessStreakEffect, type ReadinessMilestoneRecord } from './readiness-milestone';
 
 // Spec 3 Comparison groups (local and accepted attempts)
 export interface ProgressAttempt {
@@ -187,7 +187,7 @@ export function milestoneCandidates(attempts: readonly ProgressAttempt[], instal
   const streaks = new Map<string, AcceptedAttempt | null>();
   const earned = new Map<string, ReadinessMilestoneRecord>();
   for (const record of own) {
-    const effect = streakEffect(record);
+    const effect = readinessStreakEffect(record);
     if (effect === 'neutral') continue;
     const base = baseConfiguration(record.groupKey);
     if (effect === 'breaks') {
@@ -213,33 +213,8 @@ export function milestoneCandidates(attempts: readonly ProgressAttempt[], instal
 }
 
 // Spec 3 Comparison groups (Readiness streak)
-const COUNTING_METRICS: readonly ChallengeMetric[] = ['card-values', 'running-count', 'true-count'];
-const READINESS_THRESHOLD = 0.95;
-
-// Spec 3 Comparison groups (Readiness streak)
 export const belowReadinessThreshold = (record: AcceptedAttempt) =>
   record.endingReason === 'completed' && record.groupKey.assistanceClass === 'unassisted-check' && !meetsReadinessThreshold(record);
-
-function meetsReadinessThreshold(record: AcceptedAttempt): boolean {
-  const tested = COUNTING_METRICS.flatMap((metric) => record.metrics[metric] ?? []).filter((result) => result.total > 0);
-  return tested.length > 0 && tested.every((result) => result.correct >= READINESS_THRESHOLD * result.total);
-}
-
-// Spec 3 Comparison groups (Readiness streak); Amendment 1 C2, C3
-function streakEffect(record: AcceptedAttempt): 'advances' | 'breaks' | 'neutral' {
-  const { variant, assistanceClass } = record.groupKey;
-  if (variant !== 'check') return 'neutral';
-  switch (record.endingReason) {
-    case 'abandoned':
-    case 'insufficient-funds':
-      return 'breaks';
-    case 'unusable':
-      return 'neutral';
-    case 'completed':
-      if (assistanceClass !== 'unassisted-check') return 'neutral';
-      return meetsReadinessThreshold(record) ? 'advances' : 'breaks';
-  }
-}
 
 // Spec 3 Synchronized record types › Challenge attempt
 export const attemptIdentity = (record: Pick<ChallengeAttemptSummary, 'installation' | 'attemptId'>) => `${record.installation}/${record.attemptId}`;

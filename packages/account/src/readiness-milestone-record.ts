@@ -1,6 +1,6 @@
 // Spec 3 Synchronized record types › Readiness milestone; Amendment 1 B3; #141, #148
 
-import type { ChallengeAttemptSummary, ChallengeGroupKey } from '@tableside/engine';
+import type { ChallengeAttemptSummary, ChallengeGroupKey, ChallengeMetric } from '@tableside/engine';
 
 import { challengeAttempt } from './challenge-attempt-record';
 import type { RecordType } from './sync/registry';
@@ -17,6 +17,33 @@ export interface ReadinessMilestoneRecord {
   // #148
   readonly deviceSequences: readonly [first: number, second: number];
   readonly earnedAt: number;
+}
+
+// Spec 3 Comparison groups (Readiness streak); private.readiness_streak_effect
+const COUNTING_METRICS: readonly ChallengeMetric[] = ['card-values', 'running-count', 'true-count'];
+const READINESS_THRESHOLD = 0.95;
+
+type StreakAttempt = Pick<ChallengeAttemptSummary, 'groupKey' | 'endingReason' | 'metrics'>;
+
+export function meetsReadinessThreshold(attempt: Pick<ChallengeAttemptSummary, 'metrics'>): boolean {
+  const tested = COUNTING_METRICS.flatMap((metric) => attempt.metrics[metric] ?? []).filter((result) => result.total > 0);
+  return tested.length > 0 && tested.every((result) => result.correct >= READINESS_THRESHOLD * result.total);
+}
+
+// Spec 3 Comparison groups (Readiness streak); Amendment 1 C2, C3
+export function readinessStreakEffect(attempt: StreakAttempt): 'advances' | 'breaks' | 'neutral' {
+  const { variant, assistanceClass } = attempt.groupKey;
+  if (variant !== 'check') return 'neutral';
+  switch (attempt.endingReason) {
+    case 'abandoned':
+    case 'insufficient-funds':
+      return 'breaks';
+    case 'unusable':
+      return 'neutral';
+    case 'completed':
+      if (assistanceClass !== 'unassisted-check') return 'neutral';
+      return meetsReadinessThreshold(attempt) ? 'advances' : 'breaks';
+  }
 }
 
 const isPair = (value: unknown, test: (member: unknown) => boolean): value is readonly [unknown, unknown] =>
