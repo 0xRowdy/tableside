@@ -31,7 +31,7 @@ describe('challenge content definitions', () => {
   });
 
   it('default table counting to Observe, S17 with late surrender, 75% penetration, no extra players and N = 1; Play funding to no bet schedule, a base wager of 10 and 1,000', () => {
-    expect(DEFAULT_TABLE_SETUP).toEqual({ seat: 'observe', preset: 'S17_LS', penetration: 75, extraPlayers: 0, interval: 1, countingMode: 'basic', betSchedule: false, baseWager: 10, startingBalance: 1000 });
+    expect(DEFAULT_TABLE_SETUP).toEqual({ seat: 'observe', preset: 'S17_LS', penetration: 75, extraPlayers: 0, interval: 1, countingMode: 'basic', betSchedule: false, baseWager: '10', startingBalance: '1000' });
     expect(tableSetup(DEFAULT_TABLE_SETUP)).toEqual({ seat: 'observe', rules: blackjackRules('S17_LS', 75, 0), strategy: seatStrategy('S17_LS'), interval: 1 });
   });
 
@@ -54,7 +54,7 @@ describe('challenge content definitions', () => {
       baseWager: '10',
       startingBalance: '1000',
     });
-    const scheduled = tableSetup({ ...DEFAULT_TABLE_SETUP, seat: 'play', betSchedule: true, baseWager: 25, startingBalance: 300 });
+    const scheduled = tableSetup({ ...DEFAULT_TABLE_SETUP, seat: 'play', betSchedule: true, baseWager: '25', startingBalance: '300' });
     expect(scheduled.seat === 'play' && [scheduled.betSchedule, scheduled.baseWager, scheduled.startingBalance]).toEqual([true, '25', '300']);
     expect(deviations.seat === 'play' && [deviations.policy.count, deviations.policy.deviations.length > 0]).toEqual(['player', true]);
     expect(deviations.rules.players.strategy).toEqual(seatStrategy('S17_LS'));

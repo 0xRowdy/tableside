@@ -121,9 +121,9 @@ export function TableProgress({ view, table, timer }: { view: ChallengeView; tab
       {timer && <View style={styles.timer}>{timer}</View>}
       <StatStrip
         stats={[
-          // Spec 3 S3-07 fiCRg: the attempt balance, never a practice one (Amendment 2 §3); #139
-          table.funds
-            ? { label: ATTEMPT_BALANCE, spoken: ATTEMPT_BALANCE_SPOKEN, value: formatUnits(table.funds.balance) }
+          // Spec 3 S3-07 fiCRg; Amendment 2 §3; #139
+          table.challengeBalance
+            ? { label: ATTEMPT_BALANCE, spoken: ATTEMPT_BALANCE_SPOKEN, value: formatUnits(table.challengeBalance.balance) }
             : { label: YOUR_SEAT, spoken: YOUR_SEAT_SPOKEN, value: table.seat === 'play' ? YOU_PLAY : SIMULATED },
           { label: ROUND_LABEL, spoken: ROUND_SPOKEN, value: roundOf(table) },
         ]}
@@ -263,8 +263,8 @@ function DecisionPanel({ view, table, ready, onCommand }: { view: ChallengeView;
   const enabled = ready && view.legalCommands.includes('play');
   const moves = decision.kind === 'insurance' ? INSURANCE_MOVES : HAND_MOVES.filter((move) => move !== 'surrender' || table.rules.lateSurrender);
   const label = (move: PlayChoice) => (move === 'insure' ? insureLabel(table.rules.minimum) : MOVE_LABEL[move]);
-  const short = decision.refusal === 'funds' ? decision.unaffordable.find((item) => item.action === decision.refused) : undefined;
-  if (short && !dismissed) {
+  const shortfall = decision.refusal === 'funds' ? decision.unaffordable.find((item) => item.action === decision.refused) : undefined;
+  if (shortfall && !dismissed) {
     // Spec 3 Play challenge funding › Mid-round shortfalls; S3-07 RDS5F; #139
     return (
       <View style={styles.refused} accessibilityLiveRegion="polite" testID="move-unaffordable">
@@ -275,7 +275,7 @@ function DecisionPanel({ view, table, ready, onCommand }: { view: ChallengeView;
           </Text>
         </View>
         <Text maxFontSizeMultiplier={textScale.body} style={styles.refusedText}>
-          {fundsRefusedText(short.action, short.amount, table.funds?.balance ?? '0')}
+          {fundsRefusedText(shortfall.action, shortfall.amount, table.challengeBalance?.balance ?? '0')}
         </Text>
         <Text maxFontSizeMultiplier={textScale.body} style={styles.panelText}>
           {FUNDS_NOTE}
@@ -335,7 +335,7 @@ function BetPanel({ view, table, ready, onCommand }: { view: ChallengeView; tabl
     return (
       <View style={styles.refused} testID="betting-override">
         <Text accessibilityRole="header" maxFontSizeMultiplier={textScale.display} style={styles.checkpointTitle}>
-          {overrideTitle(confirming)}
+          {overrideTitle(confirming, table.betSchedule)}
         </Text>
         <Text maxFontSizeMultiplier={textScale.body} style={styles.panelText}>
           {overrideText(table.betSchedule)}
@@ -348,13 +348,13 @@ function BetPanel({ view, table, ready, onCommand }: { view: ChallengeView; tabl
   return (
     <>
       <Text maxFontSizeMultiplier={textScale.body} style={styles.kicker}>
-        {bet.funding ? FUNDING_KICKER : BET_KICKER}
+        {bet.notice ? FUNDING_KICKER : BET_KICKER}
       </Text>
       <Text accessibilityRole="header" maxFontSizeMultiplier={textScale.display} style={styles.panelTitle}>
-        {bet.funding ? FUNDING_TITLE : OPENING_WAGER}
+        {bet.notice ? FUNDING_TITLE : OPENING_WAGER}
       </Text>
       <Text maxFontSizeMultiplier={textScale.body} style={styles.panelText}>
-        {bet.funding ? fundingText(table.funds?.balance ?? '0', bet.amounts) : betText(table.round)}
+        {bet.notice ? fundingText(table.challengeBalance?.balance ?? '0', bet.amounts) : betText(table.round)}
       </Text>
       <View style={styles.moves}>
         {bet.amounts.map((amount) => (
@@ -365,7 +365,7 @@ function BetPanel({ view, table, ready, onCommand }: { view: ChallengeView; tabl
               variant="secondary"
               stretch
               disabled={!enabled}
-              onPress={() => (bet.funding ? setConfirming(amount) : onCommand({ kind: 'bet', amount }))}
+              onPress={() => (bet.notice ? setConfirming(amount) : onCommand({ kind: 'bet', amount }))}
             />
           </View>
         ))}
@@ -492,7 +492,7 @@ function Felt({ table }: { table: TableView }) {
         )),
       )}
       {learner?.hands.map((hand) => <SeatHand key={hand.target} hand={hand} seat={table.seat} />)}
-      {table.funds?.wager && <FeltBadge text={betBadge(table.funds.wager)} />}
+      {table.challengeBalance?.stake && <FeltBadge text={betBadge(table.challengeBalance.stake)} />}
     </View>
   );
 }

@@ -31,7 +31,7 @@ const OUTCOME_ICON: Record<ReviewOutcome | 'miss' | 'fallback' | 'override', { r
   skipped: { Icon: SkipForward, color: palette.mistake },
   miss: { Icon: CircleX, color: palette.mistake },
   fallback: { Icon: Shuffle, color: palette.foreground },
-  // Spec 3 Amendment 1 C4: a legal betting override is always a betting miss; #139
+  // Spec 3 Amendment 1 C4; #139
   override: { Icon: CircleX, color: palette.mistake },
 };
 

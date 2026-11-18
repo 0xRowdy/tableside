@@ -191,7 +191,7 @@ export type ChallengeFact =
   | { readonly kind: 'move-refused'; readonly position: number; readonly action: PlayChoice }
   // Spec 3 Audio and haptics: cue 15, Amendment 1 B4; #138
   | { readonly kind: 'correction-offered'; readonly position: number }
-  // Spec 3 Audio and haptics: cue 2 (Play wager) and cues 6–8 (Play round net result); #139
+  // Spec 3 Audio and haptics (cues 2, 6–8); #139
   | { readonly kind: 'wager-placed'; readonly position: number }
   | { readonly kind: 'round-settled'; readonly position: number; readonly net: string }
   | { readonly kind: 'attempt-ended'; readonly ending: ChallengeEnding };
@@ -319,7 +319,7 @@ export interface TableBetReview {
 
 export type ReviewFact = CardValueReview | RunningCountReview | ConversionReview | TableCountReview | TableDecisionReview | TableBetReview;
 
-// Spec 3 Play challenge funding › Results: beside, never inside, the skill metrics; #139
+// Spec 3 Play challenge funding › Results; #139
 export interface ChallengeFinances {
   readonly startingBalance: string;
   readonly finishingBalance: string;
@@ -577,11 +577,11 @@ function stepFacts(step: TableStep, position: number): ChallengeFact[] {
   return [{ kind: 'content-shown', position }];
 }
 
-// Spec 3 Audio and haptics: cues 2 and 6–8 when the wager or the round's result is shown; #139
+// Spec 3 Audio and haptics (cues 2, 6–8); #139
 function fundsFacts(state: ChallengeState, position: number): ChallengeFact[] {
   const seat = state.table?.seat;
   if (!seat) return [];
-  return seat.ledger
+  return seat.balances
     .filter((entry) => entry.position === position)
     .map((entry): ChallengeFact => (entry.change === 'wager' ? { kind: 'wager-placed', position } : { kind: 'round-settled', position, net: entry.net as string }));
 }
@@ -730,7 +730,7 @@ function apply(state: ChallengeState, command: ChallengeCommand): { change: Chan
     case 'next-item': {
       const position = state.position + 1;
       const more = state.content.category === 'table' && position === state.items.length && (state.table as TableProgress).round < state.content.rounds;
-      if (more && unfunded(state)) return ended('insufficient-funds', position);
+      if (more && outOfFunds(state)) return ended('insufficient-funds', position);
       const change = more ? dealNextRound(state) : {};
       if (position < (change.items ?? state.items).length) return show(state, change, position);
       return ended('completed', position);
@@ -746,14 +746,14 @@ function apply(state: ChallengeState, command: ChallengeCommand): { change: Chan
       const seat = (state.table as TableProgress).seat as PlaySeat;
       if (seat.betCorrection) {
         const { prescribed, chosen } = seat.betCorrection;
-        return placed(state, command.kind === 'retry-correction' ? prescribed : chosen, command.kind === 'retry-correction' ? 'retried' : 'overridden');
+        return placeWager(state, command.kind === 'retry-correction' ? prescribed : chosen, command.kind === 'retry-correction' ? 'retried' : 'overridden');
       }
       const correction = seat.correction as PlayCorrection;
       const move = command.kind === 'retry-correction' ? correction.explanation.prescribed.action : correction.actual.action;
       return played(state, move, command.kind === 'retry-correction' ? 'retried' : 'overridden');
     }
     case 'end':
-      return ended(unfunded(state) ? 'insufficient-funds' : 'abandoned', state.position);
+      return ended(outOfFunds(state) ? 'insufficient-funds' : 'abandoned', state.position);
   }
 }
 
@@ -763,7 +763,7 @@ const ended = (ending: ChallengeEnding, position: number): { change: Change; fac
 });
 
 // Spec 3 Play challenge funding › Insufficient funds ending; #139
-function unfunded(state: ChallengeState): boolean {
+function outOfFunds(state: ChallengeState): boolean {
   const table = state.table;
   if (!table?.seat || state.content.category !== 'table' || table.round >= state.content.rounds) return false;
   const { activity } = table.seat;
@@ -800,14 +800,14 @@ function bet(state: ChallengeState, amount: string): { change: Change; facts: Ch
   const seat = table.seat as PlaySeat;
   const current = currentBet(seat);
   const withChoice: TableProgress = { ...table, seat: { ...seat, bets: [...seat.bets.slice(0, -1), { ...current, chosen: current.chosen ?? amount }] } };
-  if (state.variant === 'learn' && !current.funding && amount !== current.prescribed) {
+  if (state.variant === 'learn' && !current.override && amount !== current.prescribed) {
     const betCorrection: TableBetCorrection = { position: state.position, trueCount: current.trueCount, prescribed: current.prescribed, chosen: amount };
     return { change: { phase: 'correction', table: { ...withChoice, seat: { ...(withChoice.seat as PlaySeat), betCorrection } } }, facts: [{ kind: 'correction-offered', position: state.position }] };
   }
-  return placed({ ...state, table: withChoice }, amount, current.funding ? 'overridden' : amount === current.prescribed ? 'followed' : 'departed');
+  return placeWager({ ...state, table: withChoice }, amount, current.override ? 'overridden' : amount === current.prescribed ? 'followed' : 'departed');
 }
 
-function placed(state: ChallengeState, amount: string, resolution: NonNullable<PlayBet['resolution']>): { change: Change; facts: ChallengeFact[] } {
+function placeWager(state: ChallengeState, amount: string, resolution: NonNullable<PlayBet['resolution']>): { change: Change; facts: ChallengeFact[] } {
   const next = placeBet(state.table as TableProgress, state.content as TableContent, tableSteps(state), amount, resolution);
   return show(state, { table: next.progress, items: [...state.items, ...next.steps] }, state.position + 1);
 }
@@ -886,7 +886,7 @@ function decisionReviews(state: ChallengeState): TableDecisionReview[] {
   if (table.seat === null) return [];
   const setup = table.setup as PlaySetup;
   return table.seat.decisions.flatMap((decision): TableDecisionReview[] => {
-    // Spec 3 Scoring and review › Attribution: lack of funds alone is not an error; #139
+    // Spec 3 Scoring and review › Attribution; #139
     const first = decision.attempts.find((attempt) => attempt.refusal !== 'funds');
     if (!first) return [];
     const { situation, prescribed } = decision.explanation;
@@ -927,7 +927,7 @@ function betReviews(state: ChallengeState): TableBetReview[] {
   return seat.bets.flatMap((bet): TableBetReview[] =>
     bet.chosen === null
       ? []
-      : [{ kind: 'table-bet', round: bet.round, position: bet.position + 1, trueCount: bet.trueCount, prescribed: bet.prescribed, chosen: bet.chosen, placed: bet.placed, override: bet.funding, resolution: bet.resolution }],
+      : [{ kind: 'table-bet', round: bet.round, position: bet.position + 1, trueCount: bet.trueCount, prescribed: bet.prescribed, chosen: bet.chosen, placed: bet.placed, override: bet.override, resolution: bet.resolution }],
   );
 }
 

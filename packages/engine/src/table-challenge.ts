@@ -48,15 +48,19 @@ export interface ObserveSetup {
   readonly interval: number;
 }
 
-// Spec 3 User stories 28; S3-02 FkMDw; Play challenge funding (#20); #138, #139
-export interface PlaySetup {
+// Spec 3 Play challenge funding (#20) › Starting balance; S3-02 FkMDw; #139
+export interface PlayFunding {
+  readonly betSchedule: boolean;
+  readonly baseWager: string;
+  readonly startingBalance: string;
+}
+
+// Spec 3 User stories 28; S3-02 FkMDw; #138, #139
+export interface PlaySetup extends PlayFunding {
   readonly seat: 'play';
   readonly rules: BlackjackRuleSet;
   readonly policy: BlackjackPlayPolicy;
   readonly interval: number;
-  readonly betSchedule: boolean;
-  readonly baseWager: string;
-  readonly startingBalance: string;
 }
 
 export type TableSetup = ObserveSetup | PlaySetup;
@@ -74,7 +78,7 @@ export interface PlayDecision {
   readonly position: number;
   readonly prompt: number | null;
   readonly explanation: PlayExplanation;
-  // Spec 3 Scoring and review › Attribution (lack of funds alone is not an error); #139
+  // Spec 3 Scoring and review › Attribution; #139
   readonly attempts: readonly { readonly action: PlayChoice; readonly refusal: PlayRefusal | null }[];
   readonly played: PlayChoice | null;
   readonly resolution: 'followed' | 'departed' | 'retried' | 'overridden' | null;
@@ -86,8 +90,8 @@ export interface PlayBet {
   readonly round: number;
   readonly trueCount: number;
   readonly prescribed: string;
-  // Spec 3 Play challenge funding › Unaffordable prescribed opening wager
-  readonly funding: boolean;
+  // Spec 3 Play challenge funding › Unaffordable prescribed opening wager; Amendment 1 C4
+  readonly override: boolean;
   readonly chosen: string | null;
   readonly placed: string | null;
   readonly resolution: PlayDecision['resolution'];
@@ -101,13 +105,13 @@ export interface TableBetCorrection {
   readonly chosen: string;
 }
 
-// Spec 3 Play challenge funding; Amendment 2 §3 (S3-07 attempt balance only); #139
-export interface FundsEntry {
+// Spec 3 Play challenge funding; Amendment 2 §3; #139
+export interface ChallengeBalanceEntry {
   readonly position: number;
   readonly round: number;
   readonly change: 'wager' | 'settled';
   readonly balance: string;
-  readonly wager: string;
+  readonly stake: string;
   readonly net: string | null;
 }
 
@@ -118,7 +122,7 @@ export interface PlaySeat {
   readonly correction: PlayCorrection | null;
   readonly bets: readonly PlayBet[];
   readonly betCorrection: TableBetCorrection | null;
-  readonly ledger: readonly FundsEntry[];
+  readonly balances: readonly ChallengeBalanceEntry[];
 }
 
 export interface TableProgress {
@@ -157,8 +161,8 @@ export type TableStep =
       readonly unaffordable: readonly Unaffordable[];
       readonly events: readonly TableEvent[];
     }
-  // Spec 3 Play challenge funding: the opening wager; S3-07 fiCRg; #139
-  | { readonly step: 'bet'; readonly round: number; readonly amounts: readonly string[]; readonly funding: boolean };
+  // Spec 3 Play challenge funding: the opening wager and the funding notice; S3-07 fiCRg; #139
+  | { readonly step: 'bet'; readonly round: number; readonly amounts: readonly string[]; readonly notice: boolean };
 
 export type TablePrompt = Extract<TableStep, { readonly step: 'prompt' }>;
 
@@ -173,7 +177,7 @@ export const BET_SCHEDULE_UNITS: readonly { readonly from: number | null; readon
   { from: 4, units: 8 },
 ];
 
-const TOP_UNITS = (BET_SCHEDULE_UNITS.at(-1) as { units: number }).units;
+export const BET_SCHEDULE_TOP_UNITS = (BET_SCHEDULE_UNITS.at(-1) as { units: number }).units;
 
 export const scheduleUnits = (trueCount: number): number => BET_SCHEDULE_UNITS.reduce((units, band) => (band.from === null || trueCount >= band.from ? band.units : units), 1);
 export const MAX_CHECKPOINT_INTERVAL = 10;
@@ -201,18 +205,44 @@ const wholeMoney = (value: unknown): Money | undefined => {
   return amount !== undefined && amount.d === 1n ? amount : undefined;
 };
 
-// Spec 3 Play challenge funding (#20) › Starting balance; S3-02 Al6Pw; #139
+// Spec 3 Play challenge funding › Starting balance; S3-02 Al6Pw; #139
+export type PlayFundingProblem =
+  | { readonly field: 'base-wager'; readonly problem: 'outside-limits'; readonly min: string; readonly max: string }
+  | { readonly field: 'base-wager'; readonly problem: 'schedule-over-maximum'; readonly top: string; readonly max: string; readonly most: string }
+  | { readonly field: 'starting-balance'; readonly problem: 'not-whole' }
+  | { readonly field: 'starting-balance'; readonly problem: 'over-ceiling'; readonly most: string }
+  | { readonly field: 'starting-balance'; readonly problem: 'short'; readonly opening: string };
+
+export function playFundingProblems(funding: PlayFunding, limits: { readonly min: string; readonly max: string }): PlayFundingProblem[] {
+  const { min, max } = limits;
+  const problems: PlayFundingProblem[] = [];
+  const base = wholeMoney(funding.baseWager);
+  const within = base !== undefined && compare(base, decodeMoney(min)) >= 0 && compare(base, decodeMoney(max)) <= 0;
+  const top = within && mul(base, money(BigInt(BET_SCHEDULE_TOP_UNITS)));
+  if (!within) problems.push({ field: 'base-wager', problem: 'outside-limits', min, max });
+  else if (funding.betSchedule && top && compare(top, decodeMoney(max)) > 0) {
+    const most = encodeMoney(money(decodeMoney(max).n / BigInt(BET_SCHEDULE_TOP_UNITS)));
+    problems.push({ field: 'base-wager', problem: 'schedule-over-maximum', top: encodeMoney(top), max, most });
+  }
+  const balance = wholeMoney(funding.startingBalance);
+  if (!balance || balance.n < 1n) problems.push({ field: 'starting-balance', problem: 'not-whole' });
+  else if (balance.n > FUNDING_CEILING) problems.push({ field: 'starting-balance', problem: 'over-ceiling', most: String(FUNDING_CEILING) });
+  else if (within && compare(balance, base) < 0) problems.push({ field: 'starting-balance', problem: 'short', opening: encodeMoney(base) });
+  return problems;
+}
+
+const FUNDING_MESSAGES = {
+  'outside-limits': (p: { min: string; max: string }) => `the base wager is whole units within the table limits, ${p.min} to ${p.max}`,
+  'schedule-over-maximum': (p: { top: string; max: string }) => `the bet schedule's top wager of ${p.top} is over the table maximum of ${p.max}`,
+  'not-whole': () => `the starting balance is whole units from 1 to ${FUNDING_CEILING}`,
+  'over-ceiling': () => `the starting balance is whole units from 1 to ${FUNDING_CEILING}`,
+  short: () => "the starting balance can't cover the opening wager",
+};
+
 function fundingProblem(setup: Record<string, unknown> & { rules: BlackjackRuleSet }): string | undefined {
-  const { min, max } = setup.rules.limits.initial;
-  const base = wholeMoney(setup.baseWager);
   if (typeof setup.betSchedule !== 'boolean') return 'the bet schedule is on or off';
-  if (!base || compare(base, decodeMoney(min)) < 0 || compare(base, decodeMoney(max)) > 0) return `the base wager is whole units within the table limits, ${min} to ${max}`;
-  const top = mul(base, money(BigInt(TOP_UNITS)));
-  if (setup.betSchedule && compare(top, decodeMoney(max)) > 0) return `the bet schedule's top wager of ${encodeMoney(top)} is over the table maximum of ${max}`;
-  const balance = wholeMoney(setup.startingBalance);
-  if (!balance || balance.n < 1n || balance.n > FUNDING_CEILING) return `the starting balance is whole units from 1 to ${FUNDING_CEILING}`;
-  if (compare(balance, base) < 0) return "the starting balance can't cover the opening wager";
-  return undefined;
+  const [problem] = playFundingProblems(setup as unknown as PlayFunding, setup.rules.limits.initial);
+  return problem && (FUNDING_MESSAGES[problem.problem] as (p: PlayFundingProblem) => string)(problem);
 }
 
 export function tableSetupProblem(setup: unknown): string | undefined {
@@ -283,11 +313,11 @@ function lastCardIndex(steps: readonly TableStep[]): number {
   return 0;
 }
 
-// Spec 3 Play challenge funding › Results; Audio and haptics: cues 6–8 (round net result); #139
-function settlement(seat: PlaySeat, round: number, balance: string, position: number): FundsEntry {
-  const opening = seat.ledger.find((entry) => entry.round === round && entry.change === 'wager') as FundsEntry;
-  const before = add(decodeMoney(opening.balance), decodeMoney(opening.wager));
-  return { position, round, change: 'settled', balance, wager: opening.wager, net: encodeMoney(sub(decodeMoney(balance), before)) };
+// Spec 3 Play challenge funding › Results; Audio and haptics (cues 6–8); #139
+function settlement(seat: PlaySeat, round: number, balance: string, position: number): ChallengeBalanceEntry {
+  const opening = seat.balances.find((entry) => entry.round === round && entry.change === 'wager') as ChallengeBalanceEntry;
+  const before = add(decodeMoney(opening.balance), decodeMoney(opening.stake));
+  return { position, round, change: 'settled', balance, stake: opening.stake, net: encodeMoney(sub(decodeMoney(balance), before)) };
 }
 
 // Spec 3 User stories 37, 38; #138
@@ -350,7 +380,7 @@ export function openPlaySeat(setup: PlaySetup, content: TableContent, attempt: {
     },
     random,
   );
-  return { activity, decisions: [], correction: null, bets: [], betCorrection: null, ledger: [] };
+  return { activity, decisions: [], correction: null, bets: [], betCorrection: null, balances: [] };
 }
 
 function seatCommand(activity: BlackjackActivityState, command: Command): { readonly activity: BlackjackActivityState; readonly facts: readonly DomainFact[] } {
@@ -361,8 +391,11 @@ function seatCommand(activity: BlackjackActivityState, command: Command): { read
 
 const seatOf = (progress: TableProgress) => progress.seat as PlaySeat;
 
-const scheduleAmounts = (setup: PlaySetup): Money[] =>
-  setup.betSchedule ? BET_SCHEDULE_UNITS.map(({ units }) => mul(decodeMoney(setup.baseWager), money(BigInt(units)))) : [decodeMoney(setup.baseWager)];
+const unitsOf = (setup: PlaySetup, units: number): Money => mul(decodeMoney(setup.baseWager), money(BigInt(units)));
+
+const scheduleWager = (setup: PlaySetup, trueCount: number): Money => unitsOf(setup, scheduleUnits(trueCount));
+
+const scheduleAmounts = (setup: PlaySetup): Money[] => (setup.betSchedule ? BET_SCHEDULE_UNITS.map(({ units }) => unitsOf(setup, units)) : [decodeMoney(setup.baseWager)]);
 
 // Spec 3 Play challenge funding › Unaffordable prescribed opening wager; S3-07 fiCRg
 const MAX_LISTED_MULTIPLES = 100;
@@ -391,17 +424,19 @@ function openPlayRound(progress: TableProgress, content: TableContent, steps: re
   if (setup.interval === 1) opening.push(...promptsAt([...steps, ...opening], round, 'before-bet', ['running', 'true']));
   const earlier = [...steps, ...opening];
   const trueCount = tableCountAt(earlier, earlier.length - 1).trueCount;
-  const prescribed = setup.betSchedule ? mul(decodeMoney(setup.baseWager), money(BigInt(scheduleUnits(trueCount)))) : decodeMoney(setup.baseWager);
+  const prescribed = setup.betSchedule ? scheduleWager(setup, trueCount) : decodeMoney(setup.baseWager);
   const balance = decodeMoney(seat.activity.balance);
-  const funding = compare(prescribed, balance) > 0;
+  // Spec 3 Play challenge funding › Unaffordable prescribed opening wager; Information hiding
+  const notice = compare(scheduleAmounts(setup).at(-1) as Money, balance) > 0;
   const next = { ...progress, round };
-  if (!setup.betSchedule && !funding) {
+  if (!setup.betSchedule && !notice) {
     const placed = placeOpening(next, content, earlier, encodeMoney(prescribed));
     return { steps: [...opening, ...placed.steps], progress: placed.progress };
   }
-  const amounts = funding ? affordableWagers(setup, balance) : scheduleAmounts(setup).filter((amount) => compare(amount, balance) <= 0).map(encodeMoney);
-  const bet: PlayBet = { position: earlier.length, round, trueCount, prescribed: encodeMoney(prescribed), funding, chosen: null, placed: null, resolution: null };
-  return { steps: [...opening, { step: 'bet', round, amounts, funding }], progress: { ...next, seat: { ...seat, bets: [...seat.bets, bet] } } };
+  const amounts = notice ? affordableWagers(setup, balance) : scheduleAmounts(setup).map(encodeMoney);
+  const override = compare(prescribed, balance) > 0;
+  const bet: PlayBet = { position: earlier.length, round, trueCount, prescribed: encodeMoney(prescribed), override, chosen: null, placed: null, resolution: null };
+  return { steps: [...opening, { step: 'bet', round, amounts, notice }], progress: { ...next, seat: { ...seat, bets: [...seat.bets, bet] } } };
 }
 
 // Spec 3 Play challenge funding; #139
@@ -424,8 +459,8 @@ function placeOpening(progress: TableProgress, content: TableContent, earlier: r
   const seat = seatOf(progress);
   const wagered = seatCommand(seat.activity, { kind: 'place-wager', target: HAND_TARGET, amount });
   const begun = seatCommand(wagered.activity, { kind: 'begin-turn' });
-  const entry: FundsEntry = { position: earlier.length, round: progress.round, change: 'wager', balance: wagered.activity.balance, wager: amount, net: null };
-  return continuePlayRound({ ...progress, seat: { ...seat, activity: begun.activity, ledger: [...seat.ledger, entry] } }, content, earlier, begun.facts, []);
+  const entry: ChallengeBalanceEntry = { position: earlier.length, round: progress.round, change: 'wager', balance: wagered.activity.balance, stake: amount, net: null };
+  return continuePlayRound({ ...progress, seat: { ...seat, activity: begun.activity, balances: [...seat.balances, entry] } }, content, earlier, begun.facts, []);
 }
 
 // Spec 3 Count checkpoints (table): deviation-decision prompts; Amendment 1 A3; #138
@@ -445,7 +480,7 @@ function continuePlayRound(
     const settled = seatCommand(seat.activity, { kind: 'settle-turn' });
     const entry = settlement(seat, progress.round, settled.activity.balance, earlier.length + lastCardIndex(steps));
     steps.push(...roundEndPrompts(setup, content, [...earlier, ...steps], progress.round));
-    return { steps, progress: { ...progress, seat: { ...seat, activity: settled.activity, ledger: [...seat.ledger, entry] } } };
+    return { steps, progress: { ...progress, seat: { ...seat, activity: settled.activity, balances: [...seat.balances, entry] } } };
   }
   const explanation = prescribePlay(setup.policy, decision.situation, decision.target, decision.hand);
   let prompt: number | null = null;
@@ -455,7 +490,7 @@ function continuePlayRound(
   }
   const offer = readPermittedView(seat.activity);
   const offered: PlayChoice[] = offer.insuranceOffer ? ['insure', 'decline-insurance'] : [...offer.playActions];
-  // Spec 3 Play challenge funding › Mid-round shortfalls (never resized); #139
+  // Spec 3 Play challenge funding › Mid-round shortfalls; #139
   const balance = decodeMoney(seat.activity.balance);
   const stake = decodeMoney(decision.situation.stake);
   const costOf = (action: PlayChoice) => (action === 'insure' ? decodeMoney((offer.insuranceOffer as { max: string }).max) : action === 'double' || action === 'split' ? stake : null);
@@ -486,9 +521,10 @@ export function playMove(
   const target = (steps[decision.position] as Extract<TableStep, { step: 'decision' }>).target;
   const decisions = [...seat.decisions.slice(0, -1), { ...decision, played: move, resolution }];
   const staked = played.activity.balance !== seat.activity.balance;
-  const opening = seat.ledger.at(-1) as FundsEntry;
-  const ledger = staked ? [...seat.ledger, { ...opening, position: steps.length, balance: played.activity.balance }] : seat.ledger;
-  const next = { ...progress, seat: { ...seat, activity: played.activity, decisions, correction: null, ledger } };
+  const stake = encodeMoney(played.activity.wagers.reduce((sum, wager) => add(sum, decodeMoney(wager.amount)), money(0n)));
+  const latest = seat.balances.at(-1) as ChallengeBalanceEntry;
+  const balances = staked ? [...seat.balances, { ...latest, position: steps.length, balance: played.activity.balance, stake }] : seat.balances;
+  const next = { ...progress, seat: { ...seat, activity: played.activity, decisions, correction: null, balances } };
   return continuePlayRound(next, content, steps, played.facts, move === 'insure' ? [{ kind: 'played', target, action: 'insure' }] : []);
 }
 
@@ -586,8 +622,8 @@ export interface TableView {
   readonly prompt: { readonly checkpoint: number; readonly timing: CheckpointTiming; readonly count: TableCount } | null;
   readonly decision: TableDecisionView | null;
   // Spec 3 Learn, Check and assistance › Check (legal affordability); S3-07 fiCRg; #139
-  readonly bet: { readonly amounts: readonly string[]; readonly funding: boolean } | null;
-  readonly funds: { readonly balance: string; readonly wager: string | null } | null;
+  readonly bet: { readonly amounts: readonly string[]; readonly notice: boolean } | null;
+  readonly challengeBalance: { readonly balance: string; readonly stake: string | null } | null;
   readonly betSchedule: boolean;
   readonly decks: number;
   readonly dealer: { readonly cards: readonly (TableCard | null)[]; readonly total: HandTotal | null; readonly peek: 'no-blackjack' | 'blackjack' | null };
@@ -664,8 +700,8 @@ export function tableView(progress: TableProgress, content: TableContent, steps:
     step: current.step,
     prompt,
     decision,
-    bet: current.step === 'bet' ? { amounts: [...current.amounts], funding: current.funding } : null,
-    funds: setup.seat === 'play' ? fundsAt(progress.seat as PlaySeat, setup, position, round) : null,
+    bet: current.step === 'bet' ? { amounts: [...current.amounts], notice: current.notice } : null,
+    challengeBalance: setup.seat === 'play' ? challengeBalanceAt(progress.seat as PlaySeat, setup, position, round) : null,
     betSchedule: setup.seat === 'play' && setup.betSchedule,
     decks: tableCountAt(steps, position).decks,
     dealer: { cards: dealer, total: visible.length > 0 ? handTotal(visible) : null, peek },
@@ -689,12 +725,10 @@ export function tableView(progress: TableProgress, content: TableContent, steps:
   };
 }
 
-// Spec 3 Play challenge funding; S3-07 (attempt balance only); #139
-export const fundsEntryAt = (seat: PlaySeat, position: number): FundsEntry | undefined => [...seat.ledger].reverse().find((entry) => entry.position <= position);
-
-function fundsAt(seat: PlaySeat, setup: PlaySetup, position: number, round: number): NonNullable<TableView['funds']> {
-  const entry = fundsEntryAt(seat, position);
-  return { balance: entry?.balance ?? setup.startingBalance, wager: entry && entry.round === round && entry.change === 'wager' ? entry.wager : null };
+// Spec 3 Play challenge funding; Amendment 2 §3; #139
+function challengeBalanceAt(seat: PlaySeat, setup: PlaySetup, position: number, round: number): NonNullable<TableView['challengeBalance']> {
+  const entry = [...seat.balances].reverse().find((candidate) => candidate.position <= position);
+  return { balance: entry?.balance ?? setup.startingBalance, stake: entry && entry.round === round && entry.change === 'wager' ? entry.stake : null };
 }
 
 // Spec 3 Comparison groups: counting mode

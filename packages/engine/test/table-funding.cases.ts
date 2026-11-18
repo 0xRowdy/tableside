@@ -45,6 +45,7 @@ const stepOf = (state: ChallengeState) => state.items[state.position] as TableSt
 
 const standing = (state: ChallengeState): ChallengeCommand => (readChallengeView(state).table?.decision?.kind === 'insurance' ? DECLINE : STAND);
 const lowest = (state: ChallengeState): ChallengeCommand => BET(readChallengeView(state).table?.bet?.amounts[0] as string);
+const highest = (state: ChallengeState): ChallengeCommand => BET(readChallengeView(state).table?.bet?.amounts.at(-1) as string);
 
 function playAll(
   start: ChallengeState,
@@ -120,8 +121,8 @@ export const tableFundingCases: TestCase[] = [
       const view = checkView(atBet);
       const before = atBet.items.slice(0, atBet.position) as TableStep[];
       t.equal(before.map((item) => (item.step === 'prompt' ? `${item.timing} ${item.count}` : item.step)), ['before-bet running', 'before-bet true']);
-      t.equal([view.phase, view.legalCommands, view.table?.step, view.table?.bet], ['bet', ['bet', 'reveal-count', 'end'], 'bet', { amounts: ['10', '20', '40', '60', '80'], funding: false }]);
-      t.equal(view.table?.funds, { balance: '1000', wager: null });
+      t.equal([view.phase, view.legalCommands, view.table?.step, view.table?.bet], ['bet', ['bet', 'reveal-count', 'end'], 'bet', { amounts: ['10', '20', '40', '60', '80'], notice: false }]);
+      t.equal(view.table?.challengeBalance, { balance: '1000', stake: null });
       expectCheckViewHides(t, 'bet', view);
       const result = advanceChallenge(atBet, { sequence: atBet.sequence, commandId: 'odd', command: BET('30') });
       t.equal(result.status === 'rejected' && result.reason, 'malformed');
@@ -130,7 +131,7 @@ export const tableFundingCases: TestCase[] = [
         { kind: 'wager-placed', position: atBet.position + 1 },
       ]);
       const placed = checkView(step(atBet, BET('20')));
-      t.equal([placed.phase, placed.table?.step, placed.table?.funds], ['card', 'deal', { balance: '980', wager: '20' }]);
+      t.equal([placed.phase, placed.table?.step, placed.table?.challengeBalance], ['card', 'deal', { balance: '980', stake: '20' }]);
       expectCheckViewHides(t, 'placed', placed);
     },
   },
@@ -159,7 +160,7 @@ export const tableFundingCases: TestCase[] = [
       });
       t.equal([challengeResults(ended)?.metrics['betting-adherence'], reviewOf(ended, 'table-bet')], [null, []]);
       const dealt = toPhase(begun(funded('check', { baseWager: '25' }), seed(1)), 'decision');
-      t.equal(checkView(dealt).table?.funds, { balance: '975', wager: '25' });
+      t.equal(checkView(dealt).table?.challengeBalance, { balance: '975', stake: '25' });
     },
   },
   {
@@ -167,14 +168,14 @@ export const tableFundingCases: TestCase[] = [
     run: (t) => {
       for (const variant of ['check', 'learn'] as const) {
         const spec = funded(variant, { betSchedule: true, baseWager: '20', startingBalance: '20' });
-        const n = findSeed(spec, (ended) => reviewOf(ended, 'table-bet').some((fact) => fact.round === 2 && fact.override), { decide: surrenderFirst });
+        const n = findSeed(spec, (ended) => reviewOf(ended, 'table-bet').some((fact) => fact.round === 2 && fact.override), { bet: highest, decide: surrenderFirst });
         let state = begun(spec, seed(n));
         while (!(state.phase === 'bet' && state.table?.round === 2)) {
-          const next = state.phase === 'question' ? SKIP : state.phase === 'bet' ? lowest(state) : state.phase === 'decision' ? surrenderFirst(state) : state.phase === 'correction' ? OVERRIDE : NEXT;
+          const next = state.phase === 'question' ? SKIP : state.phase === 'bet' ? highest(state) : state.phase === 'decision' ? surrenderFirst(state) : state.phase === 'correction' ? OVERRIDE : NEXT;
           state = step(state, next);
         }
         const view = readChallengeView(state);
-        t.equal([variant, view.table?.bet, view.table?.funds], [variant, { amounts: ['10'], funding: true }, { balance: '10', wager: null }]);
+        t.equal([variant, view.table?.bet, view.table?.challengeBalance], [variant, { amounts: ['10'], notice: true }, { balance: '10', stake: null }]);
         if (view.variant === 'check') expectCheckViewHides(t, 'funding notice', view);
         t.equal(factsOf(state, BET('10')), [
           { kind: 'content-shown', position: state.position + 1 },
@@ -215,9 +216,9 @@ export const tableFundingCases: TestCase[] = [
       ]);
       const retried = step(paused, { kind: 'retry-correction' });
       const overridden = step(paused, { kind: 'override-correction' });
-      t.equal([readChallengeView(retried).table?.funds, readChallengeView(overridden).table?.funds], [
-        { balance: '990', wager: '10' },
-        { balance: '960', wager: '40' },
+      t.equal([readChallengeView(retried).table?.challengeBalance, readChallengeView(overridden).table?.challengeBalance], [
+        { balance: '990', stake: '10' },
+        { balance: '960', stake: '40' },
       ]);
       const [byRetry] = reviewOf(playAll(retried), 'table-bet');
       const [byOverride] = reviewOf(playAll(overridden), 'table-bet');
@@ -299,7 +300,7 @@ export const tableFundingCases: TestCase[] = [
       }
       if (!found) throw new Error('no seed doubles first');
       const view = checkView(found);
-      t.equal([view.table?.decision?.actions.includes('double'), view.table?.decision?.unaffordable, view.table?.funds], [false, [{ action: 'double', amount: '10' }], { balance: '0', wager: '10' }]);
+      t.equal([view.table?.decision?.actions.includes('double'), view.table?.decision?.unaffordable, view.table?.challengeBalance], [false, [{ action: 'double', amount: '10' }], { balance: '0', stake: '10' }]);
       t.equal(factsOf(found, { kind: 'play', action: 'double' }), [{ kind: 'move-refused', position: found.position, action: 'double' }]);
       const refused = step(found, { kind: 'play', action: 'double' });
       t.equal([checkView(refused).phase, checkView(refused).table?.decision?.refused, checkView(refused).table?.decision?.refusal], ['decision', 'double', 'funds']);
@@ -345,10 +346,10 @@ export const tableFundingCases: TestCase[] = [
         const command = state.phase === 'question' ? SKIP : state.phase === 'decision' ? standing(state) : NEXT;
         const facts = factsOf(state, command);
         state = step(state, command);
-        const funds = readChallengeView(state).table?.funds;
+        const funds = readChallengeView(state).table?.challengeBalance;
         for (const fact of facts) {
-          if (fact.kind === 'wager-placed') seen.push(`wager ${funds?.balance} ${funds?.wager}`);
-          if (fact.kind === 'round-settled') seen.push(`settled ${fact.net} ${funds?.balance} ${funds?.wager}`);
+          if (fact.kind === 'wager-placed') seen.push(`wager ${funds?.balance} ${funds?.stake}`);
+          if (fact.kind === 'round-settled') seen.push(`settled ${fact.net} ${funds?.balance} ${funds?.stake}`);
         }
       }
       t.equal(seen.slice(0, 2), ['wager 990 10', `settled ${seen[1]?.split(' ')[1]} ${990 + 10 + Number(seen[1]?.split(' ')[1])} null`]);
@@ -373,6 +374,32 @@ export const tableFundingCases: TestCase[] = [
           },
         });
         expectCheckViewHides(t, 'ended', checkView(ended));
+      }
+    },
+  },
+  {
+    name: 'table Play funding Check: the funding notice depends on the balance alone, never the count; an amount below an affordable prescription is a miss, not an override',
+    run: (t) => {
+      const spec = funded('check', { betSchedule: true, baseWager: '10', startingBalance: '30' });
+      const atBet = toPhase(begun(spec, seed(1)), 'bet');
+      t.equal([checkView(atBet).table?.bet, stepOf(atBet).round], [{ amounts: ['10', '20', '30'], notice: true }, 1]);
+      const [first] = reviewOf(playAll(step(atBet, BET('20'))), 'table-bet');
+      t.equal([first?.trueCount, first?.prescribed, first?.chosen, first?.override, first?.resolution], [0, '10', '20', false, 'departed']);
+      const seen = new Set<string>();
+      for (const n of [1, 2, 3, 4, 5, 6]) {
+        playAll(begun(spec, seed(n)), {
+          visit: (state) => {
+            const bet = readChallengeView(state).table?.bet;
+            const balance = readChallengeView(state).table?.challengeBalance?.balance;
+            if (bet) seen.add(`${balance} ${bet.notice} ${bet.amounts.join(',')}`);
+          },
+        });
+      }
+      const byBalance = new Map<string, string>();
+      for (const line of seen) {
+        const [balance, ...rest] = line.split(' ');
+        t.equal([balance, byBalance.get(balance as string) ?? rest.join(' ')], [balance, rest.join(' ')]);
+        byBalance.set(balance as string, rest.join(' '));
       }
     },
   },

@@ -279,10 +279,10 @@ describe('the table counting exercise with challenge funding', () => {
 
   function firstFunding(): ChallengeState {
     for (let n = 1; n < 200; n++) {
-      let state = funded('check', n, { betSchedule: true, baseWager: 20, startingBalance: 30 });
+      let state = funded('check', n, { betSchedule: true, baseWager: '10', startingBalance: '30' });
       for (let guard = 0; guard < 400 && state.phase !== 'ended'; guard++) {
         const view = readChallengeView(state);
-        if (view.table?.bet?.funding) return state;
+        if (view.table?.bet?.notice) return state;
         state = send(
           state,
           state.phase === 'question'
@@ -311,29 +311,31 @@ describe('the table counting exercise with challenge funding', () => {
     expect(sent).toEqual([{ kind: 'bet', amount: '40' }]);
   });
 
-  it('shows the funding notice with only the affordable legal amounts, then confirms the wager as a betting override (S3-07 fiCRg, qvatd)', async () => {
+  it('shows the funding notice with only the affordable legal amounts whenever the balance can\'t cover every wager, then confirms the wager without saying whether it is an override (S3-07 fiCRg, qvatd; Information hiding)', async () => {
     const notice = await present(readChallengeView(firstFunding()));
     expect(screen.getByText('FUNDING')).toBeOnTheScreen();
     expect(screen.getByRole('header', { name: 'Your balance can’t cover every opening wager' })).toBeOnTheScreen();
-    expect(screen.getByText('Balance 10. Legal opening wagers you can afford: 10. Choose one to keep playing.')).toBeOnTheScreen();
+    expect(screen.getByText('Balance 30. Legal opening wagers you can afford: 10, 20 or 30. Choose one to keep playing.')).toBeOnTheScreen();
     expect(screen.getByText('During Check, Tableside won’t say which amount the strategy would choose, or whether yours matches it.')).toBeOnTheScreen();
-    expect(screen.queryByText(/20|40|60|80/)).toBeNull();
+    expect(screen.queryByRole('button', { name: /Bet (40|60|80)/ })).toBeNull();
     expectNoFeedbackColors(notice);
-    await press('Bet 10');
+    await press('Bet 20');
     expect(sent).toEqual([]);
-    expect(screen.getByRole('header', { name: 'Place 10 as a betting override?' })).toBeOnTheScreen();
+    expect(screen.getByRole('header', { name: 'Place 20 from a short balance?' })).toBeOnTheScreen();
     expect(
-      screen.getByText('Your balance can’t cover every opening wager, so whatever you place now is recorded as a betting override. Betting adherence counts it as a miss. Your counting and playing scores aren’t affected.'),
+      screen.getByText(
+        'Your balance can’t cover every opening wager. Whenever the bet schedule’s amount is more than your balance, whatever you place is recorded as a betting override, which betting adherence counts as a miss. Your counting and playing scores aren’t affected.',
+      ),
     ).toBeOnTheScreen();
     await press('Choose another amount');
     expect(screen.getByText('FUNDING')).toBeOnTheScreen();
-    await press('Bet 10');
-    await press('Place 10');
-    expect(sent).toEqual([{ kind: 'bet', amount: '10' }]);
+    await press('Bet 20');
+    await press('Place 20');
+    expect(sent).toEqual([{ kind: 'bet', amount: '20' }]);
   });
 
   it('refuses a double the balance can\'t cover for funds alone, never for less, and says the legal fallback is what counts (S3-07 RDS5F)', async () => {
-    const decision = advanceUntil(funded('check', 1, { startingBalance: 10 }), (state) => state.phase === 'decision');
+    const decision = advanceUntil(funded('check', 1, { startingBalance: '10' }), (state) => state.phase === 'decision');
     const refused = await present(readChallengeView(send(decision, { kind: 'play', action: 'double' })));
     expect(screen.getByText('NOT ENOUGH IN THIS ATTEMPT’S BALANCE')).toBeOnTheScreen();
     expect(screen.getByText('Double isn’t affordable: it needs another 10 and your balance is 0. Choose another move. Not having the funds is never counted against you; your play is scored against the legal fallback.')).toBeOnTheScreen();

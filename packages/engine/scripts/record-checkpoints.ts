@@ -202,7 +202,7 @@ const CHALLENGE_SCENARIOS: ChallengeScenario[] = [
   // #139
   untilPhase('table Play Check N=1 with the bet schedule, choosing the opening wager', playSpec('check', 'basic', { betSchedule: true }), seed(1), 'bet', []),
   untilPhase('table Play Learn with the bet schedule, a wager held in the correction pause', playSpec('learn', 'basic', { betSchedule: true }), seed(1), 'bet', [{ kind: 'bet', amount: '40' }]),
-  untilSeen('table Play Check with the bet schedule, the funding notice offering affordable wagers', playSpec('check', 'basic', { betSchedule: true, baseWager: '20', startingBalance: '30' }), (state) => readChallengeView(state).table?.bet?.funding === true),
+  untilSeen('table Play Check with the bet schedule, the funding notice offering affordable wagers', playSpec('check', 'basic', { betSchedule: true, baseWager: '20', startingBalance: '30' }), (state) => readChallengeView(state).table?.bet?.notice === true),
   untilSeen('table Play Check, a double refused for funds', playSpec('check', 'basic', { startingBalance: '10' }), (state) => readChallengeView(state).table?.decision?.unaffordable.some((short) => short.action === 'double') === true, [{ kind: 'play', action: 'double' }]),
 ];
 

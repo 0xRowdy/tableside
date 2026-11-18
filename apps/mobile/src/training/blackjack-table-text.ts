@@ -10,6 +10,7 @@ import {
   type ChallengeVariant,
   type PlayChoice,
   type PlayCorrection,
+  type PlayFundingProblem,
   type TableBetCorrection,
   type TableBetReview,
   type TableCountReview,
@@ -71,7 +72,7 @@ export const YOUR_SEAT_SPOKEN = 'Your seat';
 export const roundOf = (table: Pick<TableView, 'round' | 'rounds'>) => `${table.round} of ${table.rounds}`;
 export const PHASES = ['Bet', 'Deal', 'Play', 'Settle'] as const;
 
-export type TableStatus = 'observing' | 'checkpoint' | 'shuffled' | 'feedback' | 'dealing' | 'deciding' | 'check-deciding' | 'count-first' | 'correction' | 'betting' | 'confirming';
+export type TableStatus = 'observing' | 'checkpoint' | 'shuffled' | 'feedback' | 'dealing' | 'deciding' | 'check-deciding' | 'count-first' | 'correction' | 'betting';
 export const STATUS_TEXT: Record<TableStatus, string> = {
   observing: 'Observing',
   checkpoint: 'Count checkpoint',
@@ -85,7 +86,6 @@ export const STATUS_TEXT: Record<TableStatus, string> = {
   correction: 'Correction',
   // Spec 3 S3-07 fiCRg, qvatd; #139
   betting: 'Choose your bet',
-  confirming: 'Confirm your bet',
 };
 
 export const decksText = (table: Pick<TableView, 'decks' | 'step'>) => (table.step === 'shuffle' ? `Decks remaining: ${table.decks}` : `${table.decks} decks left`);
@@ -198,27 +198,24 @@ export const tableLimitsHelp = (min: string, max: string) => `Table limits ${for
 export const STARTING_BALANCE_HELP = 'Just for this attempt. No rebuys. Never added to your practice totals.';
 export const FIX_ONE_SETTING = 'Fix one setting to start';
 export const NOTHING_STARTED = 'Nothing has started and no attempt has been used.';
-export const shortBalanceText = (balance: number, base: number) => `${formatUnits(String(balance))} can’t cover the opening wager of ${formatUnits(String(base))}. Enter at least ${formatUnits(String(base))}.`;
-export function fundingProblemText(
-  diagnostic: { readonly field: 'base-wager'; readonly problem: 'outside-limits' | 'schedule-over-maximum' } | { readonly field: 'starting-balance'; readonly problem: 'not-whole' | 'over-ceiling' | 'short' },
-  options: { readonly baseWager: number; readonly startingBalance: number },
-  limits: { readonly min: string; readonly max: string },
-  ceiling: string,
-  topUnits: number,
-): string {
-  if (diagnostic.field === 'base-wager') return baseProblemText(diagnostic.problem, options.baseWager, limits.min, limits.max, topUnits);
-  return diagnostic.problem === 'short' ? shortBalanceText(options.startingBalance, options.baseWager) : balanceProblemText(diagnostic.problem, ceiling);
+export function fundingProblemText(problem: PlayFundingProblem, startingBalance: string): string {
+  switch (problem.problem) {
+    case 'short':
+      return `${formatUnits(startingBalance)} can’t cover the opening wager of ${formatUnits(problem.opening)}. Enter at least ${formatUnits(problem.opening)}.`;
+    case 'not-whole':
+      return 'Enter a whole number of units, at least 1.';
+    case 'over-ceiling':
+      return `Enter at most ${formatUnits(problem.most)}.`;
+    case 'outside-limits':
+      return `Enter a whole number from ${formatUnits(problem.min)} to ${formatUnits(problem.max)}.`;
+    case 'schedule-over-maximum':
+      return `The schedule’s top wager would be ${formatUnits(problem.top)}, over the table maximum of ${formatUnits(problem.max)}. Enter at most ${formatUnits(problem.most)}.`;
+  }
 }
 export const START_UNAVAILABLE_SHORT = 'Start is unavailable until the starting balance covers the opening wager.';
 export const START_UNAVAILABLE = 'Start is unavailable until the settings above are fixed.';
-export const balanceProblemText = (problem: 'not-whole' | 'over-ceiling', ceiling: string) =>
-  problem === 'not-whole' ? 'Enter a whole number of units, at least 1.' : `Enter at most ${formatUnits(ceiling)}.`;
-export const baseProblemText = (problem: 'outside-limits' | 'schedule-over-maximum', base: number, min: string, max: string, topUnits: number) =>
-  problem === 'outside-limits'
-    ? `Enter a whole number from ${formatUnits(min)} to ${formatUnits(max)}.`
-    : `The schedule’s top wager of ${topUnits} units is ${formatUnits(String(base * topUnits))}, over the table maximum of ${formatUnits(max)}. Enter at most ${formatUnits(String(Math.floor(Number(max) / topUnits)))}.`;
 
-// Spec 3 Play challenge funding; S3-07 fiCRg, qvatd (attempt balance only, Amendment 2 §3); #139
+// Spec 3 Play challenge funding; S3-07 fiCRg, qvatd; Amendment 2 §3; #139
 export const ATTEMPT_BALANCE = 'ATTEMPT BALANCE';
 export const ATTEMPT_BALANCE_SPOKEN = 'Attempt balance';
 export const betLabel = (amount: string) => `Bet ${formatUnits(amount)}`;
@@ -230,10 +227,11 @@ export const FUNDING_KICKER = 'FUNDING';
 export const FUNDING_TITLE = 'Your balance can’t cover every opening wager';
 const orList = (items: readonly string[]) => (items.length < 2 ? items.join('') : `${items.slice(0, -1).join(', ')} or ${items.at(-1)}`);
 export const fundingText = (balance: string, amounts: readonly string[]) => `Balance ${formatUnits(balance)}. Legal opening wagers you can afford: ${orList(amounts.map(formatUnits))}. Choose one to keep playing.`;
-export const overrideTitle = (amount: string) => `Place ${formatUnits(amount)} as a betting override?`;
+// Spec 3 Information hiding (funding notices and override dialogs); S3-07 qvatd; #139
+export const overrideTitle = (amount: string, betSchedule: boolean) => (betSchedule ? `Place ${formatUnits(amount)} from a short balance?` : `Place ${formatUnits(amount)} as a betting override?`);
 export const overrideText = (betSchedule: boolean) =>
   betSchedule
-    ? 'Your balance can’t cover every opening wager, so whatever you place now is recorded as a betting override. Betting adherence counts it as a miss. Your counting and playing scores aren’t affected.'
+    ? 'Your balance can’t cover every opening wager. Whenever the bet schedule’s amount is more than your balance, whatever you place is recorded as a betting override, which betting adherence counts as a miss. Your counting and playing scores aren’t affected.'
     : 'Your balance can’t cover the base wager, so whatever you place now is recorded as a betting override. With no bet schedule, betting isn’t scored, and your counting and playing scores aren’t affected.';
 export const placeLabel = (amount: string) => `Place ${formatUnits(amount)}`;
 export const CHOOSE_ANOTHER = 'Choose another amount';

@@ -1,6 +1,6 @@
 // Spec 3 Audio and haptics; Learn, Check and assistance › Answer accepted; #132, #140, #137, #138
 import type { StrategyStepAnswer, WorkedExample } from '@tableside/definitions';
-import { compare, decodeMoney, money, type ChallengeFact, type ChallengeView } from '@tableside/engine';
+import type { ChallengeFact, ChallengeView } from '@tableside/engine';
 
 import { earnsRecord } from '@/training/progress';
 import type { TrainingService, TrainingSnapshot } from '@/training/service';
@@ -44,11 +44,11 @@ function cuesForChallenge(view: ChallengeView, facts: readonly ChallengeFact[]):
       // Spec 3 Amendment 1 B4: cue 15 on the Play Learn correction pause
       case 'correction-offered':
         return ['correction-offered'];
-      // Spec 3 Audio and haptics: cue 2 (Play wager) and cues 6–8 (Play round net result); #139
+      // Spec 3 Audio and haptics (cues 2, 6–8); #139
       case 'wager-placed':
         return ['stake-set'];
       case 'round-settled':
-        return [({ 1: 'net-win', [-1]: 'net-loss', 0: 'net-even' } as const)[compare(decodeMoney(fact.net), money(0n))]];
+        return [fact.net === '0' ? 'net-even' : fact.net.startsWith('-') ? 'net-loss' : 'net-win'];
       case 'shoe-shuffled':
       case 'attempt-ended':
         return [];

@@ -1,12 +1,13 @@
 // Spec 3 S3-02 ZreSb, FkMDw, Al6Pw; User stories 27, 28; Play challenge funding; #137, #138, #139
 
 import { BLACKJACK_LIMITS, BLACKJACK_PRESETS, DEFAULT_BLACKJACK_PRESET, type TableOptions } from '@tableside/definitions';
-import { BET_SCHEDULE_UNITS, FUNDING_CEILING, MAX_CHECKPOINT_INTERVAL, MAX_OTHER_PLAYERS, PENETRATIONS } from '@tableside/engine';
+import { MAX_CHECKPOINT_INTERVAL, MAX_OTHER_PLAYERS, PENETRATIONS } from '@tableside/engine';
 import { Eye, Hand } from 'lucide-react-native';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { SwitchRow } from '@/components/SwitchRow';
 import { AmountField, ChoiceGroup, Help, Section, Stepper } from '@/play/setup/SetupParts';
+import { withoutGrouping } from '@/play/units';
 import { fonts, palette, radius, space, textScale } from '@/theme/tokens';
 import {
   BASE_WAGER,
@@ -40,11 +41,6 @@ import {
   WITH_DEVIATIONS,
 } from '@/training/blackjack-table-text';
 import { tableFundingProblems } from '@/training/service';
-
-const TOP_UNITS = (BET_SCHEDULE_UNITS[BET_SCHEDULE_UNITS.length - 1] as { readonly units: number }).units;
-
-const unitsOf = (text: string) => (/^\d+$/.test(text.trim()) ? Number(text.trim()) : Number.NaN);
-const unitsText = (value: number) => (Number.isNaN(value) ? '' : String(value));
 
 export function TableSetupOptions({ options, onChange }: { options: TableOptions; onChange: (options: TableOptions) => void }) {
   const set = (change: Partial<TableOptions>) => onChange({ ...options, ...change });
@@ -139,7 +135,7 @@ function Betting({ options, onChange }: { options: TableOptions; onChange: (chan
   const problems = tableFundingProblems(options);
   const problemFor = (field: 'base-wager' | 'starting-balance') => {
     const problem = problems.find((diagnostic) => diagnostic.field === field);
-    return problem ? fundingProblemText(problem, options, { min, max }, String(FUNDING_CEILING), TOP_UNITS) : null;
+    return problem ? fundingProblemText(problem, options.startingBalance) : null;
   };
   return (
     <Section label={BETTING}>
@@ -149,16 +145,16 @@ function Betting({ options, onChange }: { options: TableOptions; onChange: (chan
       <AmountField
         label={BASE_WAGER}
         accessibilityLabel={`${BASE_WAGER}, in units`}
-        value={unitsText(options.baseWager)}
-        onChange={(text) => onChange({ baseWager: unitsOf(text) })}
+        value={options.baseWager}
+        onChange={(text) => onChange({ baseWager: withoutGrouping(text) })}
         problem={problemFor('base-wager')}
         help={tableLimitsHelp(min, max)}
       />
       <AmountField
         label={STARTING_BALANCE}
         accessibilityLabel={`${STARTING_BALANCE}, in units`}
-        value={unitsText(options.startingBalance)}
-        onChange={(text) => onChange({ startingBalance: unitsOf(text) })}
+        value={options.startingBalance}
+        onChange={(text) => onChange({ startingBalance: withoutGrouping(text) })}
         problem={problemFor('starting-balance')}
         help={STARTING_BALANCE_HELP}
       />

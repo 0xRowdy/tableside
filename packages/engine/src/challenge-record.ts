@@ -48,8 +48,6 @@ export interface ChallengeGroupKey {
 // Spec 3 Attempt lifecycle
 export type AttemptEndingReason = 'completed' | 'abandoned' | 'insufficient-funds' | 'unusable';
 
-export type { ChallengeFinances };
-
 export interface ChallengeAttemptRecord {
   readonly recordVersion: typeof CHALLENGE_RECORD_VERSION;
   readonly attemptId: string;
@@ -110,6 +108,8 @@ export function challengeGroupKey(state: ChallengeState, pacing: ChallengePacing
   };
 }
 
+const NO_FUNDING = { betSchedule: false, baseWager: null, startingBalance: null } as const;
+
 // Spec 3 Comparison groups; Challenge content › Observe seats
 function tableGroupKey(setup: TableSetup): TableGroupKey {
   const { rules, seat, interval } = setup;
@@ -122,10 +122,8 @@ function tableGroupKey(setup: TableSetup): TableGroupKey {
     seat,
     // Spec 3 Comparison groups: counting mode; #138
     countingMode: countingModeOf(setup),
-    // Spec 3 Comparison groups: bet schedule, base wager, starting balance; #139
-    betSchedule: setup.seat === 'play' && setup.betSchedule,
-    baseWager: setup.seat === 'play' ? setup.baseWager : null,
-    startingBalance: setup.seat === 'play' ? setup.startingBalance : null,
+    // Spec 3 Comparison groups; #139
+    ...(setup.seat === 'play' ? { betSchedule: setup.betSchedule, baseWager: setup.baseWager, startingBalance: setup.startingBalance } : NO_FUNDING),
     checkpointInterval: interval,
   };
 }

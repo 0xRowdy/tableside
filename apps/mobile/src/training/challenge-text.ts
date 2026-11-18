@@ -564,7 +564,7 @@ export function endingText(
   if (record.endingReason === 'abandoned') {
     return {
       kind: 'alert',
-      // Spec 3 S3-08 UXrpw: table attempts count rounds; #139
+      // Spec 3 S3-08 UXrpw; #139
       title: groupKey.category === 'table' ? abandonedTableTitle(position, groupKey.length) : `Abandoned after ${itemWord(groupKey.category)} ${position} of ${groupKey.length}`,
       detail: "You ended this attempt. It keeps today's attempt used and earns no record. Answers you gave before ending are shown, but they can't set a personal best.",
       note: groupKey.variant === 'check' ? "Abandoning a Check restarts progress toward the readiness milestone for these settings. It's only labeled abandoned, never as a failed skill." : null,
