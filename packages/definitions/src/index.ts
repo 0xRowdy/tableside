@@ -23,7 +23,7 @@ export {
 
 export { BLACKJACK_LIMITS, blackjackPreset, blackjackRules, DEFAULT_BLACKJACK_PRESET, DEFAULT_PENETRATION } from './blackjack/rules';
 export { seatStrategy } from './blackjack/seats';
-export { BET_SCHEDULE, BLACKJACK_MODES, BLACKJACK_REFERENCE_IDENTITY, blackjackStrategy, countingMode, type BlackjackMode } from './blackjack/strategies';
+export { BET_SCHEDULE, BLACKJACK_MODES, BLACKJACK_REFERENCE_IDENTITY, blackjackModeOf, blackjackStrategy, countingMode, type BlackjackMode } from './blackjack/strategies';
 export {
   CRAPS_EDGE_WAGERS,
   CRAPS_LIMITS,
@@ -89,6 +89,7 @@ export {
   CHALLENGE_LESSONS,
   CHECK_WITHHELD_LESSONS,
   LESSONS,
+  PLAY_CHECK_WITHHELD_MODES,
   lessonProblems,
   type Lesson,
   type LessonContent,

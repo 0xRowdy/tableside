@@ -1,23 +1,28 @@
+import { blackjackModeOf } from '@tableside/definitions';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { AppState } from 'react-native';
 
 import { Button } from '@/components/Button';
 import { Placeholder } from '@/components/Placeholder';
+import { Screen } from '@/components/Screen';
 import { findGame } from '@/games';
 import { useFollow } from '@/hooks/use-follow';
 import { ScreenHints } from '@/lessons/FirstUseHints';
 import { practicePrefill } from '@/lessons/routes';
 import { BlackjackSetup } from '@/play/BlackjackSetup';
+import { BLACKJACK_MODE_TEXT } from '@/play/blackjack-text';
 import { BlackjackTable } from '@/play/BlackjackTable';
 import { CrapsSetup } from '@/play/CrapsSetup';
 import { CrapsTable } from '@/play/CrapsTable';
 import { EndSessionDialog } from '@/play/EndSessionDialog';
 import { TABLE_HINTS } from '@/play/bet-selector/Presentation';
 import { IncompleteSession } from '@/play/IncompleteSession';
+import { PracticeHold, useModeWithheld } from '@/play/PracticeHold';
 import { RouletteSetup } from '@/play/RouletteSetup';
 import { RouletteTable } from '@/play/RouletteTable';
 import { SessionResult } from '@/play/SessionResult';
+import { SetupHeader } from '@/play/setup/SetupParts';
 import { SuspendedSession } from '@/play/SuspendedSession';
 import type { PracticeController, PracticeSnapshot } from '@/practice/controller';
 import { usePractice } from '@/practice/PracticeProvider';
@@ -47,6 +52,9 @@ export default function Play() {
   const activeGame = snapshot.status === 'active' ? snapshot.view.game : null;
   const switchTo = game && activeGame && game.id !== activeGame ? game.id : null;
   const switched = isSwitched(snapshot);
+  // Spec 3 Lessons › Check protection; Amendment 1 A2, Amendment 3
+  const guidedMode = snapshot.status === 'active' && snapshot.view.game === 'blackjack' && snapshot.view.strategy ? blackjackModeOf(snapshot.view.strategy.id) : null;
+  const held = useModeWithheld(guidedMode);
   useFollow(leaveSwitchedResults, controller);
 
   useFocusEffect(
@@ -67,6 +75,14 @@ export default function Play() {
       return <Placeholder title="Play" message="Finding your practice session…" />;
     case 'active': {
       const { suspension } = snapshot;
+      if (held && guidedMode) {
+        return (
+          <Screen>
+            <SetupHeader title="Blackjack" subtitle={`Guided practice · ${BLACKJACK_MODE_TEXT[guidedMode].label}`} onBack={() => router.navigate('/')} />
+            <PracticeHold mode={guidedMode} />
+          </Screen>
+        );
+      }
       if (suspension?.waitsForPlayer) {
         return <SuspendedSession snapshot={snapshot} suspension={suspension} />;
       }

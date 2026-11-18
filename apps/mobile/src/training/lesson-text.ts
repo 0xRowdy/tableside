@@ -1,6 +1,6 @@
 // Spec 3 S3-11 sVqX1, S3-12 l8pMS, pX6CV, S3-13 JJl51, Fvlgc, ZBpF3, Learning NvGyZ; #143, #145
 
-import { BLACKJACK_MODES, CRAPS_STRATEGIES, ROULETTE_STRATEGIES, type LessonHandoff, type LessonSection, type ScriptedTurn, type StrategyStepAnswer, type StrategyStepExample, type StrategyStepExplanation } from '@tableside/definitions';
+import { BLACKJACK_MODES, CRAPS_STRATEGIES, ROULETTE_STRATEGIES, type BlackjackMode, type LessonHandoff, type LessonSection, type ScriptedTurn, type StrategyStepAnswer, type StrategyStepExample, type StrategyStepExplanation } from '@tableside/definitions';
 import type { Explanation, GameId } from '@tableside/engine';
 
 import { findGame } from '@/games';
@@ -105,6 +105,12 @@ export function afterCheckText({ category, play }: InstructionWithheld): string 
     ? `You have an unfinished Play Check attempt in ${title}. The four counting lessons, the four blackjack mode lessons, the bet-schedule lesson and their worked examples wait until it ends. Every other lesson is open now.`
     : `You have an unfinished Check attempt in ${title}. The four counting lessons (card values, running count, true-count conversion, table counting) and their worked examples wait until it ends. Every other lesson is open now.`;
 }
+
+// Spec 3 Lessons › Check protection; Amendment 1 A2, Amendment 3; SUUN4's pattern
+export const PRACTICE_AFTER_ATTEMPT = 'This practice mode is available after this attempt.';
+export const END_TO_PRACTICE = 'End attempt to practice this mode';
+export const practiceHeldText = ({ category }: InstructionWithheld, mode: BlackjackMode) =>
+  `You have an unfinished Play Check attempt in ${CATEGORY_TEXT[category].title}. Guided practice with ${BLACKJACK_MODE_TEXT[mode].label.toLowerCase()} coaches what the Check tests, so it waits until the attempt ends. Free play and basic strategy guided practice are open now.`;
 
 // Spec 3 S3-12 JsXMJ; Amendment 4 §5
 export const NEEDS_CONNECTION_TITLE = 'This lesson needs a connection';

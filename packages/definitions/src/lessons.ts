@@ -1,7 +1,7 @@
 // Spec 3 Modules › Definitions package; Lessons (#48); Amendment 1 B1, C10; #143, #145, #153
 import type { GameId, StrategyDefinition } from '@tableside/engine';
 
-import { BLACKJACK_MODES } from './blackjack/strategies';
+import { BLACKJACK_MODES, type BlackjackMode } from './blackjack/strategies';
 import { BASIC_STRATEGY, BASIC_WITH_DEVIATIONS, BET_SCHEDULE_LESSON, BLACKJACK_BASICS, COUNTING_WITH_BASIC, COUNTING_WITH_DEVIATIONS } from './lessons/blackjack';
 import { CATALOG_CATEGORIES, type CatalogCategory } from './challenges';
 import { CARD_VALUES_LESSON, CONVERSION_LESSON, RUNNING_COUNT_LESSON, TABLE_COUNTING_LESSON } from './lessons/counting';
@@ -98,6 +98,9 @@ export const CHECK_WITHHELD_LESSONS: { readonly anyCheck: readonly string[]; rea
   anyCheck: Object.values(CHALLENGE_LESSONS),
   playCheck: [BASIC_STRATEGY.id, BASIC_WITH_DEVIATIONS.id, COUNTING_WITH_BASIC.id, COUNTING_WITH_DEVIATIONS.id, BET_SCHEDULE_LESSON.id],
 };
+
+// Spec 3 Amendment 1 A2, Amendment 3
+export const PLAY_CHECK_WITHHELD_MODES: readonly BlackjackMode[] = ['basic-with-deviations', 'counting-with-basic', 'counting-with-deviations'];
 
 const IDENTITY = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 const sameSource = (a: LessonSource, b: LessonSource) => a.citation === b.citation && a.url === b.url;
