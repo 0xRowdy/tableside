@@ -142,7 +142,7 @@ describe('challenge and lesson code', () => {
   });
 });
 
-// Spec 3 Information hiding (end to end), Launch gates 2: notifications, crash reports and breadcrumbs; #156
+// Spec 3 Information hiding (end to end), Launch gates 2; #156
 describe('the apps', () => {
   const CHANNELS = [
     /^expo-notifications$/, /^@notifee\//, /push-notification/, /^@react-native-firebase\//, /^@sentry\//, /^sentry-expo$/, /^@bugsnag\//, /crashlytics/,

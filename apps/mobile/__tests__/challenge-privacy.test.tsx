@@ -55,7 +55,7 @@ const WRONG: Record<string, string> = { 'plus 1': 'minus 1', '0': 'plus 1', 'min
 const shownCard = () => screen.getByTestId('challenge-card').props.accessibilityLabel as string;
 
 let touchAt = 1_000;
-// The root view's touch handlers (src/app/_layout.tsx) around a press, as Fabric orders them (docs/development.md, touch order).
+// docs/development.md Responsiveness sampling (touch order)
 async function tap(name: string) {
   const button = screen.getByRole('button', { name });
   mockClock.now = touchAt += 1_000;

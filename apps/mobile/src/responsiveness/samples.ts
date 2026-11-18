@@ -15,7 +15,7 @@ export const COLD_LAUNCH = 'cold-launch';
 export const CHALLENGE = 'challenge';
 export type SampledArea = GameId | typeof CHALLENGE;
 
-// Spec 1 Launch gates 5; Spec 3 Launch gates 8; docs/development.md Responsiveness sampling (action families)
+// Spec 1 Launch gates 5; Spec 3 Launch gates 8; docs/development.md Responsiveness sampling
 export const GATE_FAMILIES: Readonly<Record<SampledArea, readonly string[]>> = {
   blackjack: ['place-wager', 'remove-wager', 'begin-turn', 'play:hit', 'play:stand', 'play:double', 'play:split', 'play:surrender', 'play:decline-insurance', 'insurance', 'rebuy'],
   craps: ['place-wager', 'remove-wager', 'set-working', 'begin-turn', 'rebuy'],

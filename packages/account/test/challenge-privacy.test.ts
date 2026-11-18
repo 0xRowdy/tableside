@@ -1,4 +1,4 @@
-// Spec 3 Information hiding (end to end), Launch gates 2, Testing Decisions › Seam 2; Amendment 1 C7, C9; #156
+// Spec 3 Information hiding (end to end), Launch gates 2, Testing Decisions › Seam 2; #156
 
 import { decodeChallengeCheckpoint, type ChallengeView } from '@tableside/engine';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -42,7 +42,6 @@ const active = (service: TrainingService): ChallengeView => {
   return snapshot.view;
 };
 
-// Enters a mix of answers, plays and bets, never ending the attempt.
 async function partway(service: TrainingService, answers: number) {
   let given = 0;
   for (let guard = 0; guard < 3000 && given < answers && service.snapshot().status === 'active'; guard++) {
@@ -64,7 +63,6 @@ async function partway(service: TrainingService, answers: number) {
   active(service);
 }
 
-// What an unfinished Check keeps on this device only: its identity, card sequence, answers and references.
 async function hiddenData(d: SimulatedDevice) {
   const stored = await d.vault.store().findUnfinishedAttempt();
   if (!stored) throw new Error('no unfinished attempt');
@@ -77,7 +75,6 @@ function sentSince(d: SimulatedDevice, from: number) {
   return d.proxy.sent.slice(from).map(({ url, body }) => ({ url, body: body ?? '' }));
 }
 
-// A sync call nests its request as canonical JSON text; read every level.
 function parsed(value: unknown): unknown {
   if (typeof value === 'string' && /^[[{]/.test(value)) {
     try {
@@ -130,7 +127,6 @@ describe('an unfinished Check attempt', () => {
       await d.account.sync.reconcile();
       const uploads = sentSince(d, from).filter(({ url, body }) => url.includes('sync_upload_v1') && body.includes(hidden.attemptId));
       expect(uploads.length).toBeGreaterThan(0);
-      // The same checks find the ended attempt's review once it may leave the device.
       expect(uploads.flatMap(({ body }) => revealingFields(parsed(body), 'body'))).not.toEqual([]);
       expect((await d.vault.store().readAcceptedRecords(challengeAttempt.name)).map((record) => record.item)).toEqual([hidden.attemptId]);
     },

@@ -7,7 +7,7 @@ export interface CrashReport {
 }
 
 const TYPE = /^[A-Z][A-Za-z]{0,63}$/;
-// A code is a few words, never digits: an identifier set as an error's kind (an attempt or record id) stays out. Spec 3 Launch gates 2; #156
+// Spec 3 Launch gates 2; #156
 const CODE = /^[a-z]{1,24}(?:-[a-z]{1,24}){0,3}$/;
 const FUNCTION = /^(?:new |async )?[\w$.<>[\]]{1,200}$/;
 const MAX_FRAMES = 50;
