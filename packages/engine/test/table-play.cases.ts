@@ -95,8 +95,8 @@ export const tablePlayCases: TestCase[] = [
       const state = toDecision(begun(playSpec('check', 'basic'), seed(1)));
       const view = checkView(state);
       t.equal([view.phase, view.legalCommands, view.table?.seat, view.table?.countingMode], ['decision', ['play', 'reveal-count', 'end'], 'play', 'basic']);
-      t.equal(stepOf(state), { step: 'decision', round: 1, target: 'hand-1', decision: 'hand', actions: ['hit', 'stand', 'double', 'surrender'], events: [] });
-      t.equal(view.table?.decision, { target: 'hand-1', kind: 'hand', actions: ['hit', 'stand', 'double', 'surrender'], refused: null });
+      t.equal(stepOf(state), { step: 'decision', round: 1, target: 'hand-1', decision: 'hand', actions: ['hit', 'stand', 'double', 'surrender'], unaffordable: [], events: [] });
+      t.equal(view.table?.decision, { target: 'hand-1', kind: 'hand', actions: ['hit', 'stand', 'double', 'surrender'], unaffordable: [], refused: null, refusal: null });
       t.equal(view.table?.seats.find((seat) => seat.learner)?.hands[0]?.cards, [
         { rank: 13, suit: 'diamonds' },
         { rank: 4, suit: 'clubs' },

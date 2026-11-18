@@ -371,6 +371,8 @@ export {
   tableCheckpointRounds,
   type TableBetCorrection,
   type PlayBet,
+  type PlayRefusal,
+  type Unaffordable,
   type CheckpointTiming,
   type TableContent,
   type TableCount,

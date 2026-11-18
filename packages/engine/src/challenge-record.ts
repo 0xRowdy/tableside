@@ -1,7 +1,7 @@
 // Spec 3 Synchronized record types › Challenge attempt, Amendment 4 §1; #158, #133, #137
 
 import type { VersionedIdentity } from './activity';
-import { challengeResults, type ChallengeCategory, type ChallengeMetrics, type ChallengeState, type ChallengeVariant, type ReviewFact } from './challenge';
+import { challengeFinances, challengeResults, type ChallengeCategory, type ChallengeFinances, type ChallengeMetrics, type ChallengeState, type ChallengeVariant, type ReviewFact } from './challenge';
 import type { RandomStreamIdentity } from './random';
 import { countingModeOf, type TableCountingMode, type TableSetup } from './table-challenge';
 import type { MeteringBasis } from './record';
@@ -48,11 +48,7 @@ export interface ChallengeGroupKey {
 // Spec 3 Attempt lifecycle
 export type AttemptEndingReason = 'completed' | 'abandoned' | 'insufficient-funds' | 'unusable';
 
-export interface ChallengeFinances {
-  readonly startingBalance: string;
-  readonly finishingBalance: string;
-  readonly net: string;
-}
+export type { ChallengeFinances };
 
 export interface ChallengeAttemptRecord {
   readonly recordVersion: typeof CHALLENGE_RECORD_VERSION;
@@ -170,7 +166,7 @@ function recordOf(
     assistanceStep: results.assistanceStep,
     interrupted: context.interrupted,
     performanceMs: context.performanceMs,
-    finances: null,
+    finances: challengeFinances(state),
     allowancePolicyVersion: context.allowancePolicyVersion,
     meteringBasis: context.meteringBasis,
     startedAt: context.startedAt,

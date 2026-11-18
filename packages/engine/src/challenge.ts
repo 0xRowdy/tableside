@@ -4,6 +4,7 @@ import { STATE_SCHEMA_VERSION, type PlayCorrection, type Receipt, type Rejection
 import { hiLoTag, truncatedTrueCount, type HandTotal } from './blackjack';
 import { prescribeAtTrueCount, type PlayChoice } from './blackjack-strategy';
 import { canonicalJson } from './canonical';
+import { add, compare, decodeMoney, encodeMoney, sub } from './money';
 import { canonicalShoe, shuffle, type Rank, type Suit } from './draws';
 import { RANDOM_PROTOCOL_VERSION, RandomStream, uniformInt, type RandomStreamIdentity, type RandomStreamState } from './random';
 import { sha256Hex } from './sha256';
@@ -125,7 +126,8 @@ export interface ItemAnswers {
 // Spec 3 Play challenge funding: the opening wager; #139
 export type ChallengePhase = 'ready' | 'card' | 'question' | 'explanation' | 'recorded' | 'bet' | 'decision' | 'correction' | 'ended';
 
-export type ChallengeEnding = 'completed' | 'abandoned';
+// Spec 3 Attempt lifecycle › Phases (ending reasons); Play challenge funding › Insufficient funds ending; #139
+export type ChallengeEnding = 'completed' | 'abandoned' | 'insufficient-funds';
 
 export interface ChallengeState {
   readonly schema: typeof STATE_SCHEMA_VERSION;
@@ -293,6 +295,8 @@ export interface TableDecisionReview {
   readonly fallback: boolean;
   readonly chosen: PlayChoice;
   readonly refused: readonly PlayChoice[];
+  // Spec 3 Play challenge funding › Mid-round shortfalls: tried, refused for funds alone, not scored; #139
+  readonly unaffordable: readonly PlayChoice[];
   readonly played: PlayChoice | null;
   readonly resolution: PlayDecision['resolution'];
   readonly entered: ChallengeEntry | null;
@@ -315,12 +319,20 @@ export interface TableBetReview {
 
 export type ReviewFact = CardValueReview | RunningCountReview | ConversionReview | TableCountReview | TableDecisionReview | TableBetReview;
 
+// Spec 3 Play challenge funding › Results: beside, never inside, the skill metrics; #139
+export interface ChallengeFinances {
+  readonly startingBalance: string;
+  readonly finishingBalance: string;
+  readonly net: string;
+}
+
 export interface ChallengeResults {
   readonly ending: ChallengeEnding;
   readonly metrics: ChallengeMetrics;
   readonly review: readonly ReviewFact[];
   readonly assisted: boolean;
   readonly assistanceStep: number | null;
+  readonly finances: ChallengeFinances | null;
 }
 
 export interface LearnFeedback {
@@ -718,9 +730,10 @@ function apply(state: ChallengeState, command: ChallengeCommand): { change: Chan
     case 'next-item': {
       const position = state.position + 1;
       const more = state.content.category === 'table' && position === state.items.length && (state.table as TableProgress).round < state.content.rounds;
+      if (more && unfunded(state)) return ended('insufficient-funds', position);
       const change = more ? dealNextRound(state) : {};
       if (position < (change.items ?? state.items).length) return show(state, change, position);
-      return { change: { phase: 'ended', ending: 'completed', position }, facts: [{ kind: 'attempt-ended', ending: 'completed' }] };
+      return ended('completed', position);
     }
     case 'reveal-count':
       return { change: { revealedAt: state.position + 1 }, facts: [] };
@@ -740,8 +753,22 @@ function apply(state: ChallengeState, command: ChallengeCommand): { change: Chan
       return played(state, move, command.kind === 'retry-correction' ? 'retried' : 'overridden');
     }
     case 'end':
-      return { change: { phase: 'ended', ending: 'abandoned' }, facts: [{ kind: 'attempt-ended', ending: 'abandoned' }] };
+      return ended(unfunded(state) ? 'insufficient-funds' : 'abandoned', state.position);
   }
+}
+
+const ended = (ending: ChallengeEnding, position: number): { change: Change; facts: ChallengeFact[] } => ({
+  change: { phase: 'ended', ending, position },
+  facts: [{ kind: 'attempt-ended', ending }],
+});
+
+// Spec 3 Play challenge funding › Insufficient funds ending: the round has resolved, fewer than all rounds are complete,
+// and no legal opening wager is affordable (quitting while play is affordable is abandonment); #139
+function unfunded(state: ChallengeState): boolean {
+  const table = state.table;
+  if (!table?.seat || state.content.category !== 'table' || table.round >= state.content.rounds) return false;
+  const { activity } = table.seat;
+  return activity.phase === 'settled-outcome' && compare(decodeMoney(activity.balance), decodeMoney(table.setup.rules.limits.initial.min)) < 0;
 }
 
 // Spec 3 User stories 37, 38; Scoring and review › Attribution; #138
@@ -749,10 +776,11 @@ function play(state: ChallengeState, action: PlayChoice): { change: Change; fact
   const table = state.table as TableProgress;
   const seat = table.seat as NonNullable<TableProgress['seat']>;
   const decision = currentDecision(seat);
-  const legal = (state.items[state.position] as Extract<TableStep, { step: 'decision' }>).actions.includes(action);
-  const tried: PlayDecision = { ...decision, attempts: [...decision.attempts, { action, legal }] };
+  const item = state.items[state.position] as Extract<TableStep, { step: 'decision' }>;
+  const refusal = item.actions.includes(action) ? null : item.unaffordable.some((short) => short.action === action) ? 'funds' : 'rule';
+  const tried: PlayDecision = { ...decision, attempts: [...decision.attempts, { action, refusal }] };
   const withAttempt = { ...table, seat: { ...seat, decisions: [...seat.decisions.slice(0, -1), tried] } };
-  if (!legal) return { change: { table: withAttempt }, facts: [{ kind: 'move-refused', position: state.position, action }] };
+  if (refusal) return { change: { table: withAttempt }, facts: [{ kind: 'move-refused', position: state.position, action }] };
   const prescribed = decision.explanation.prescribed.action;
   if (state.variant === 'learn' && action !== prescribed) {
     const correction: PlayCorrection = {
@@ -839,7 +867,18 @@ export function challengeResults(state: ChallengeState): ChallengeResults | null
     review.push(...decisions, ...bets);
     review.sort((a, b) => a.position - b.position);
   } else metrics[CATEGORY_METRIC[state.content.category]] = score(counts, counted);
-  return { ending: state.ending, metrics, review, assisted: assisted(state), assistanceStep: state.revealedAt };
+  return { ending: state.ending, metrics, review, assisted: assisted(state), assistanceStep: state.revealedAt, finances: challengeFinances(state) };
+}
+
+// Spec 3 Play challenge funding › Results; Synchronized record types › Challenge attempt (Play finances); #139
+export function challengeFinances(state: ChallengeState): ChallengeFinances | null {
+  const table = state.table;
+  if (!table?.seat || table.setup.seat !== 'play') return null;
+  const { activity } = table.seat;
+  // a wager still on the table when the attempt ends early is returned, as spec 1 returns wagers on a stop
+  const finishing = activity.wagers.reduce((sum, wager) => add(sum, decodeMoney(wager.amount)), decodeMoney(activity.balance));
+  const starting = decodeMoney(table.setup.startingBalance);
+  return { startingBalance: encodeMoney(starting), finishingBalance: encodeMoney(finishing), net: encodeMoney(sub(finishing, starting)) };
 }
 
 
@@ -849,7 +888,8 @@ function decisionReviews(state: ChallengeState): TableDecisionReview[] {
   if (table.seat === null) return [];
   const setup = table.setup as PlaySetup;
   return table.seat.decisions.flatMap((decision): TableDecisionReview[] => {
-    const [first] = decision.attempts;
+    // Spec 3 Scoring and review › Attribution: lack of funds alone is not an error; #139
+    const first = decision.attempts.find((attempt) => attempt.refusal !== 'funds');
     if (!first) return [];
     const { situation, prescribed } = decision.explanation;
     const prompt = decision.prompt === null ? undefined : state.answers.find((answers) => answers.position === decision.prompt);
@@ -871,7 +911,8 @@ function decisionReviews(state: ChallengeState): TableDecisionReview[] {
         prescribed: prescribed.action,
         fallback: decision.explanation.unavailable.length > 0,
         chosen: first.action,
-        refused: decision.attempts.flatMap((attempt) => (attempt.legal ? [] : [attempt.action])),
+        refused: decision.attempts.flatMap((attempt) => (attempt.refusal === 'rule' ? [attempt.action] : [])),
+        unaffordable: decision.attempts.flatMap((attempt) => (attempt.refusal === 'funds' ? [attempt.action] : [])),
         played: decision.played,
         resolution: decision.resolution,
         entered,

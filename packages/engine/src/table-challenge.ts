@@ -61,12 +61,21 @@ export interface PlaySetup {
 
 export type TableSetup = ObserveSetup | PlaySetup;
 
+export type PlayRefusal = 'rule' | 'funds';
+
+// Spec 3 Play challenge funding › Mid-round shortfalls; S3-07 RDS5F; #139
+export interface Unaffordable {
+  readonly action: PlayChoice;
+  readonly amount: string;
+}
+
 // Spec 3 Scoring and review › Reference, Attribution; #138
 export interface PlayDecision {
   readonly position: number;
   readonly prompt: number | null;
   readonly explanation: PlayExplanation;
-  readonly attempts: readonly { readonly action: PlayChoice; readonly legal: boolean }[];
+  // refusal: 'rule' for a move the rules don't offer; 'funds' for one the balance can't cover (lack of funds alone is not an error; #139)
+  readonly attempts: readonly { readonly action: PlayChoice; readonly refusal: PlayRefusal | null }[];
   readonly played: PlayChoice | null;
   readonly resolution: 'followed' | 'departed' | 'retried' | 'overridden' | null;
 }
@@ -145,6 +154,7 @@ export type TableStep =
       readonly target: string;
       readonly decision: 'insurance' | 'hand';
       readonly actions: readonly PlayChoice[];
+      readonly unaffordable: readonly Unaffordable[];
       readonly events: readonly TableEvent[];
     }
   // Spec 3 Play challenge funding: the opening wager; S3-07 fiCRg; #139
@@ -445,9 +455,18 @@ function continuePlayRound(
     steps.push(...promptsAt([...earlier, ...steps], progress.round, 'decision', ['true']));
   }
   const offer = readPermittedView(seat.activity);
-  const actions: PlayChoice[] = offer.insuranceOffer ? ['insure', 'decline-insurance'] : [...offer.playActions];
+  const offered: PlayChoice[] = offer.insuranceOffer ? ['insure', 'decline-insurance'] : [...offer.playActions];
+  // Spec 3 Play challenge funding › Mid-round shortfalls: never resized, so a move costing more than the balance is unaffordable
+  const balance = decodeMoney(seat.activity.balance);
+  const stake = decodeMoney(decision.situation.stake);
+  const costOf = (action: PlayChoice) => (action === 'insure' ? decodeMoney((offer.insuranceOffer as { max: string }).max) : action === 'double' || action === 'split' ? stake : null);
+  const unaffordable = offered.flatMap((action): Unaffordable[] => {
+    const cost = costOf(action);
+    return cost && compare(cost, balance) > 0 ? [{ action, amount: encodeMoney(cost) }] : [];
+  });
+  const actions = offered.filter((action) => !unaffordable.some((short) => short.action === action));
   const position = earlier.length + steps.length;
-  steps.push({ step: 'decision', round: progress.round, target: decision.target, decision: decision.situation.decision, actions, events: pending });
+  steps.push({ step: 'decision', round: progress.round, target: decision.target, decision: decision.situation.decision, actions, unaffordable, events: pending });
   const recorded: PlayDecision = { position, prompt, explanation, attempts: [], played: null, resolution: null };
   return { steps, progress: { ...progress, seat: { ...seat, decisions: [...seat.decisions, recorded] } } };
 }
@@ -550,7 +569,10 @@ export interface TableDecisionView {
   readonly target: string;
   readonly kind: 'insurance' | 'hand';
   readonly actions: readonly PlayChoice[];
+  // Spec 3 Learn, Check and assistance › Check (legal affordability); S3-07 RDS5F; #139
+  readonly unaffordable: readonly Unaffordable[];
   readonly refused: PlayChoice | null;
+  readonly refusal: PlayRefusal | null;
 }
 
 export interface TableView {
@@ -626,7 +648,11 @@ export function tableView(progress: TableProgress, content: TableContent, steps:
   const prompt = current.step === 'prompt' ? { checkpoint: current.checkpoint, timing: current.timing, count: current.count } : null;
   const attempts = current.step === 'decision' ? (progress.seat?.decisions.find((decision) => decision.position === position)?.attempts ?? []) : [];
   const last = attempts.at(-1);
-  const decision = current.step === 'decision' ? { target: current.target, kind: current.decision, actions: [...current.actions], refused: last && !last.legal ? last.action : null } : null;
+  const refused = last?.refusal ? last : null;
+  const decision =
+    current.step === 'decision'
+      ? { target: current.target, kind: current.decision, actions: [...current.actions], unaffordable: current.unaffordable.map((short) => ({ ...short })), refused: refused?.action ?? null, refusal: refused?.refusal ?? null }
+      : null;
   return {
     seat: setup.seat,
     countingMode: countingModeOf(setup),
