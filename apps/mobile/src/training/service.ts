@@ -31,7 +31,7 @@ import { ChallengeController, type AttemptSnapshot, type DirectSuspendCause, typ
 import { DeviceLearningPreferences, type LearningPreferences } from './learning-preferences';
 import { attemptEarned, milestoneCandidates, progressProjection, readinessOutcome, type AttemptEarned, type Progress, type ProgressAttempt, type ProgressMilestone } from './progress';
 import { milestoneSlot } from './readiness-milestone';
-import { lessonProgress, type LessonChange, type LessonProgress, type LessonProgressChange, type LessonStatus } from './lesson-progress';
+import { lessonProgress, type LessonChange, type LessonHistory, type LessonProgress, type LessonProgressChange, type LessonStatus } from './lesson-progress';
 
 // Spec 3 Recommendations
 export const SUGGESTED_ORDER = CATALOG_CATEGORIES;
@@ -389,8 +389,8 @@ export class TrainingService {
   // Spec 3 Lessons › Access
   async listLessons(): Promise<readonly LessonEntry[]> {
     const games = [...new Set(this.lessons.flatMap((lesson) => (lesson.game ? [lesson.game] : [])))];
-    const [events, withheld, answers] = await Promise.all([
-      this.adapters.store.readLessonEvents(),
+    const [history, withheld, answers] = await Promise.all([
+      this.lessonHistory(),
       this.instructionWithheld(),
       Promise.all(games.map(async (game) => [game, await this.gameAccess(game)] as const)),
     ]);
@@ -402,7 +402,7 @@ export class TrainingService {
       section: lesson.section,
       steps: lesson.content ? stepCount(lesson.content) : null,
       access: accessOf(lesson, withheld, lesson.game && (access.get(lesson.game) ?? null)),
-      status: lesson.content ? lessonProgress(events, progressKey(lesson.id, lesson.content)).status : { kind: 'not-started' as const },
+      status: lesson.content ? lessonProgress(history, progressKey(lesson.id, lesson.content)).status : { kind: 'not-started' as const },
     }));
   }
 
@@ -490,7 +490,14 @@ export class TrainingService {
   }
 
   private async progressOf(lesson: AuthoredLesson): Promise<LessonProgress> {
-    return lessonProgress(await this.adapters.store.readLessonEvents(), progressKey(lesson.id, lesson.content));
+    return lessonProgress(await this.lessonHistory(), progressKey(lesson.id, lesson.content));
+  }
+
+  // Spec 3 Amendment 1 C10; #147
+  private async lessonHistory(): Promise<LessonHistory> {
+    const { store } = this.adapters;
+    const [sync, local] = await Promise.all([store.readLessonSync(), store.readLessonEvents()]);
+    return { ...sync, local };
   }
 
   private async record(lesson: AuthoredLesson, event: LessonProgressChange): Promise<LessonView> {

@@ -1,22 +1,25 @@
-// Spec 3 Synchronized record types › Lesson-progress event; Amendment 1 C8, C10; #143
+// Spec 3 Synchronized record types › Lesson-progress event; Amendment 1 C8, C10; #143, #147
+import { lessonProgressEvent, type LessonProgressChange, type LessonProgressEvent, type UnsequencedLessonEvent } from '@tableside/account';
 
 // Spec 2 registry
-export const LESSON_PROGRESS_RECORD_TYPE = 'lesson-progress';
+export const LESSON_PROGRESS_RECORD_TYPE = lessonProgressEvent.name;
 
-export type LessonProgressChange = { readonly kind: 'bookmark'; readonly step: number } | { readonly kind: 'completed' } | { readonly kind: 'restarted' };
+export type { LessonProgressChange, LessonProgressEvent, UnsequencedLessonEvent };
 
-export interface UnsequencedLessonEvent {
-  readonly recordVersion: 1;
-  readonly eventId: string;
-  readonly owner: string;
-  readonly installation: string;
-  readonly lesson: { readonly id: string; readonly version: number; readonly materialVersion: number };
-  readonly event: LessonProgressChange;
-  readonly recordedAt: number;
+// #147
+export interface AcceptedLessonEvent {
+  readonly sequence: number;
+  readonly event: LessonProgressEvent;
 }
 
-export interface LessonProgressEvent extends UnsequencedLessonEvent {
-  readonly deviceSequence: number;
+// #147
+export interface LessonSync {
+  readonly accepted: readonly AcceptedLessonEvent[];
+  readonly refused: readonly string[];
+}
+
+export interface LessonHistory extends LessonSync {
+  readonly local: readonly LessonProgressEvent[];
 }
 
 export type LessonStatus =
@@ -33,10 +36,18 @@ export interface LessonProgress {
   readonly changed: LessonChange | null;
 }
 
+// Spec 3 Amendment 1 C10; #147
+export function acceptanceOrder({ accepted, refused, local }: LessonHistory): LessonProgressEvent[] {
+  const settled = new Set([...accepted.map(({ event }) => event.eventId), ...refused]);
+  return [
+    ...[...accepted].sort((a, b) => a.sequence - b.sequence).map(({ event }) => event),
+    ...local.filter((event) => !settled.has(event.eventId)).sort((a, b) => a.deviceSequence - b.deviceSequence),
+  ];
+}
+
 // Spec 3 Amendment 1 C10
-export function lessonProgress(events: readonly LessonProgressEvent[], lesson: { readonly id: string; readonly materialVersion: number; readonly steps: number }): LessonProgress {
-  // TODO(#147)
-  const own = events.filter((event) => event.lesson.id === lesson.id).sort((a, b) => a.deviceSequence - b.deviceSequence);
+export function lessonProgress(history: LessonHistory, lesson: { readonly id: string; readonly materialVersion: number; readonly steps: number }): LessonProgress {
+  const own = acceptanceOrder(history).filter((event) => event.lesson.id === lesson.id);
   const current = own.filter((event) => event.lesson.materialVersion === lesson.materialVersion);
   const completedNow = current.some((event) => event.event.kind === 'completed');
   const completedBefore = own.some((event) => event.event.kind === 'completed');
