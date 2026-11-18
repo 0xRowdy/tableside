@@ -40,16 +40,34 @@ export interface TableOptions {
   readonly extraPlayers: number;
   readonly interval: number;
   readonly countingMode: TableCountingMode;
+  // Spec 3 Play challenge funding (#20); S3-02 FkMDw; #139
+  readonly betSchedule: boolean;
+  readonly baseWager: number;
+  readonly startingBalance: number;
 }
 
-export const DEFAULT_TABLE_SETUP: TableOptions = { seat: 'observe', preset: DEFAULT_BLACKJACK_PRESET, penetration: DEFAULT_PENETRATION, extraPlayers: 0, interval: 1, countingMode: 'basic' };
+// Spec 3 Play challenge funding › Starting balance: default 1,000
+export const DEFAULT_STARTING_BALANCE = 1000;
+
+export const DEFAULT_TABLE_SETUP: TableOptions = {
+  seat: 'observe',
+  preset: DEFAULT_BLACKJACK_PRESET,
+  penetration: DEFAULT_PENETRATION,
+  extraPlayers: 0,
+  interval: 1,
+  countingMode: 'basic',
+  betSchedule: false,
+  baseWager: 10,
+  startingBalance: DEFAULT_STARTING_BALANCE,
+};
 
 // Spec 3 Challenge content › Observe seats, Table; #138
 export function tableSetup(options: TableOptions): TableSetup {
   const rules = blackjackRules(options.preset, options.penetration, options.extraPlayers);
   if (options.seat === 'observe') return { seat: 'observe', rules, strategy: seatStrategy(options.preset), interval: options.interval };
   const mode = options.countingMode === 'deviations' ? 'counting-with-deviations' : 'counting-with-basic';
-  return { seat: 'play', rules, policy: blackjackStrategy(options.preset, mode).play as BlackjackPlayPolicy, interval: options.interval };
+  const funding = { betSchedule: options.betSchedule, baseWager: String(options.baseWager), startingBalance: String(options.startingBalance) };
+  return { seat: 'play', rules, policy: blackjackStrategy(options.preset, mode).play as BlackjackPlayPolicy, interval: options.interval, ...funding };
 }
 // Spec 3 Challenge content (from #4), Recommendations; #145
 export const CATALOG_CATEGORIES = ['card-values', 'running-count', 'conversion', 'table'] as const;

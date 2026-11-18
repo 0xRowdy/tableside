@@ -126,7 +126,7 @@ export interface ItemAnswers {
 // Spec 3 Play challenge funding: the opening wager; #139
 export type ChallengePhase = 'ready' | 'card' | 'question' | 'explanation' | 'recorded' | 'bet' | 'decision' | 'correction' | 'ended';
 
-// Spec 3 Attempt lifecycle › Phases (ending reasons); Play challenge funding › Insufficient funds ending; #139
+// Spec 3 Attempt lifecycle › Phases (ending reasons), Play challenge funding; #139
 export type ChallengeEnding = 'completed' | 'abandoned' | 'insufficient-funds';
 
 export interface ChallengeState {
@@ -295,7 +295,7 @@ export interface TableDecisionReview {
   readonly fallback: boolean;
   readonly chosen: PlayChoice;
   readonly refused: readonly PlayChoice[];
-  // Spec 3 Play challenge funding › Mid-round shortfalls: tried, refused for funds alone, not scored; #139
+  // Spec 3 Play challenge funding › Mid-round shortfalls; #139
   readonly unaffordable: readonly PlayChoice[];
   readonly played: PlayChoice | null;
   readonly resolution: PlayDecision['resolution'];
@@ -303,7 +303,7 @@ export interface TableDecisionReview {
   readonly atEntered: PlayChoice | null;
 }
 
-// Spec 3 Scoring and review › Review facts (per decision: prescribed vs chosen, legal betting override); #139
+// Spec 3 Scoring and review › Review facts (legal betting override); #139
 export interface TableBetReview {
   readonly kind: 'table-bet';
   readonly round: number;
@@ -312,7 +312,7 @@ export interface TableBetReview {
   readonly prescribed: string;
   readonly chosen: string;
   readonly placed: string | null;
-  // a legal betting override: the prescribed wager was unaffordable (Amendment 1 C4: always a betting-adherence miss)
+  // Spec 3 Amendment 1 C4
   readonly override: boolean;
   readonly resolution: PlayBet['resolution'];
 }
@@ -762,8 +762,7 @@ const ended = (ending: ChallengeEnding, position: number): { change: Change; fac
   facts: [{ kind: 'attempt-ended', ending }],
 });
 
-// Spec 3 Play challenge funding › Insufficient funds ending: the round has resolved, fewer than all rounds are complete,
-// and no legal opening wager is affordable (quitting while play is affordable is abandonment); #139
+// Spec 3 Play challenge funding › Insufficient funds ending; #139
 function unfunded(state: ChallengeState): boolean {
   const table = state.table;
   if (!table?.seat || state.content.category !== 'table' || table.round >= state.content.rounds) return false;
@@ -870,12 +869,11 @@ export function challengeResults(state: ChallengeState): ChallengeResults | null
   return { ending: state.ending, metrics, review, assisted: assisted(state), assistanceStep: state.revealedAt, finances: challengeFinances(state) };
 }
 
-// Spec 3 Play challenge funding › Results; Synchronized record types › Challenge attempt (Play finances); #139
+// Spec 3 Play challenge funding › Results; Synchronized record types › Challenge attempt; #139
 export function challengeFinances(state: ChallengeState): ChallengeFinances | null {
   const table = state.table;
   if (!table?.seat || table.setup.seat !== 'play') return null;
   const { activity } = table.seat;
-  // a wager still on the table when the attempt ends early is returned, as spec 1 returns wagers on a stop
   const finishing = activity.wagers.reduce((sum, wager) => add(sum, decodeMoney(wager.amount)), decodeMoney(activity.balance));
   const starting = decodeMoney(table.setup.startingBalance);
   return { startingBalance: encodeMoney(starting), finishingBalance: encodeMoney(finishing), net: encodeMoney(sub(finishing, starting)) };

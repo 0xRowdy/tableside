@@ -1,4 +1,4 @@
-// Spec 3 Play challenge funding (#20); Scoring and review; Amendment 1 C4; Testing Decisions › Seam 1 (funding); #139
+// Spec 3 Play challenge funding (#20); Amendment 1 C4; Testing Decisions › Seam 1 (funding); #139
 import type { TestCase } from '@tableside/harness';
 
 import {
@@ -78,7 +78,6 @@ const reviewOf = <K extends 'table-bet' | 'table'>(state: ChallengeState, kind: 
 const OVERRIDE: ChallengeCommand = { kind: 'override-correction' };
 const SURRENDER: ChallengeCommand = { kind: 'play', action: 'surrender' };
 
-// Round 1 loses half the wager by surrendering, where surrender is offered; later rounds stand
 const surrenderFirst = (state: ChallengeState): ChallengeCommand =>
   state.table?.round === 1 && readChallengeView(state).table?.decision?.actions.includes('surrender') ? SURRENDER : standing(state);
 
@@ -286,7 +285,6 @@ export const tableFundingCases: TestCase[] = [
     run: (t) => {
       const spec = funded('check', { startingBalance: '10' });
       const value = (card: { rank: number }) => (card.rank >= 10 ? 10 : card.rank);
-      // TEST_POLICY doubles hard 9–11 against these up cards; on the original late-surrender hand short of funds it hits instead
       const doubles = (state: ChallengeState) => {
         const table = readChallengeView(state).table;
         const hand = table?.seats.find((seat) => seat.learner)?.hands[0];

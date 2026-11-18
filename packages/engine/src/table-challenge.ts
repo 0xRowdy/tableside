@@ -74,7 +74,7 @@ export interface PlayDecision {
   readonly position: number;
   readonly prompt: number | null;
   readonly explanation: PlayExplanation;
-  // refusal: 'rule' for a move the rules don't offer; 'funds' for one the balance can't cover (lack of funds alone is not an error; #139)
+  // Spec 3 Scoring and review › Attribution (lack of funds alone is not an error); #139
   readonly attempts: readonly { readonly action: PlayChoice; readonly refusal: PlayRefusal | null }[];
   readonly played: PlayChoice | null;
   readonly resolution: 'followed' | 'departed' | 'retried' | 'overridden' | null;
@@ -86,7 +86,7 @@ export interface PlayBet {
   readonly round: number;
   readonly trueCount: number;
   readonly prescribed: string;
-  // the prescribed opening wager is unaffordable: any wager placed is a legal betting override
+  // Spec 3 Play challenge funding › Unaffordable prescribed opening wager
   readonly funding: boolean;
   readonly chosen: string | null;
   readonly placed: string | null;
@@ -101,7 +101,7 @@ export interface TableBetCorrection {
   readonly chosen: string;
 }
 
-// Spec 3 Play challenge funding; the challenge balance shown from a step on (S3-07: an attempt balance, never a practice one); #139
+// Spec 3 Play challenge funding; Amendment 2 §3 (S3-07 attempt balance only); #139
 export interface FundsEntry {
   readonly position: number;
   readonly round: number;
@@ -164,7 +164,7 @@ export type TablePrompt = Extract<TableStep, { readonly step: 'prompt' }>;
 
 export const MAX_TABLE_ROUNDS = 20;
 
-// Spec 3 Play challenge funding; Spec 1 Counting (Hi-Lo) bet schedule: 1/2/4/6/8 units by true count; #139
+// Spec 3 Play challenge funding; Spec 1 Counting (Hi-Lo) bet schedule; #139
 export const BET_SCHEDULE_UNITS: readonly { readonly from: number | null; readonly units: number }[] = [
   { from: null, units: 1 },
   { from: 1, units: 2 },
@@ -275,7 +275,6 @@ function noPlaysAfterLastCard(pending: readonly TableEvent[], round: number): vo
   if (pending.length > 0) throw new Error(`round ${round} ended with plays after its last card`);
 }
 
-// The step at which the round is seen to resolve: the last card shown, or the next step when no card follows
 function lastCardIndex(steps: readonly TableStep[]): number {
   for (let index = steps.length - 1; index >= 0; index--) {
     const step = steps[index] as TableStep;
@@ -365,7 +364,7 @@ const seatOf = (progress: TableProgress) => progress.seat as PlaySeat;
 const scheduleAmounts = (setup: PlaySetup): Money[] =>
   setup.betSchedule ? BET_SCHEDULE_UNITS.map(({ units }) => mul(decodeMoney(setup.baseWager), money(BigInt(units)))) : [decodeMoney(setup.baseWager)];
 
-// Spec 3 Play challenge funding › Unaffordable prescribed opening wager: the legal amounts the balance covers; S3-07 fiCRg
+// Spec 3 Play challenge funding › Unaffordable prescribed opening wager; S3-07 fiCRg
 const MAX_LISTED_MULTIPLES = 100;
 
 function affordableWagers(setup: PlaySetup, balance: Money): string[] {
@@ -456,7 +455,7 @@ function continuePlayRound(
   }
   const offer = readPermittedView(seat.activity);
   const offered: PlayChoice[] = offer.insuranceOffer ? ['insure', 'decline-insurance'] : [...offer.playActions];
-  // Spec 3 Play challenge funding › Mid-round shortfalls: never resized, so a move costing more than the balance is unaffordable
+  // Spec 3 Play challenge funding › Mid-round shortfalls (never resized); #139
   const balance = decodeMoney(seat.activity.balance);
   const stake = decodeMoney(decision.situation.stake);
   const costOf = (action: PlayChoice) => (action === 'insure' ? decodeMoney((offer.insuranceOffer as { max: string }).max) : action === 'double' || action === 'split' ? stake : null);
@@ -586,9 +585,10 @@ export interface TableView {
   readonly step: TableStep['step'];
   readonly prompt: { readonly checkpoint: number; readonly timing: CheckpointTiming; readonly count: TableCount } | null;
   readonly decision: TableDecisionView | null;
-  // Spec 3 Play challenge funding; Learn, Check and assistance › Check (legal affordability); S3-07 fiCRg; #139
+  // Spec 3 Learn, Check and assistance › Check (legal affordability); S3-07 fiCRg; #139
   readonly bet: { readonly amounts: readonly string[]; readonly funding: boolean } | null;
   readonly funds: { readonly balance: string; readonly wager: string | null } | null;
+  readonly betSchedule: boolean;
   readonly decks: number;
   readonly dealer: { readonly cards: readonly (TableCard | null)[]; readonly total: HandTotal | null; readonly peek: 'no-blackjack' | 'blackjack' | null };
   readonly seats: readonly TableSeatView[];
@@ -666,6 +666,7 @@ export function tableView(progress: TableProgress, content: TableContent, steps:
     decision,
     bet: current.step === 'bet' ? { amounts: [...current.amounts], funding: current.funding } : null,
     funds: setup.seat === 'play' ? fundsAt(progress.seat as PlaySeat, setup, position, round) : null,
+    betSchedule: setup.seat === 'play' && setup.betSchedule,
     decks: tableCountAt(steps, position).decks,
     dealer: { cards: dealer, total: visible.length > 0 ? handTotal(visible) : null, peek },
     seats: seats.map((seat) => {
