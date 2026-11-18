@@ -1,7 +1,7 @@
-// Spec 3 Screens › Exercise (table); S3-07 v82z3, AcmMa, E3Gbeh, kLgWV, qRHlC, j4X6V; #137, #138
+// Spec 3 Screens › Exercise (table); S3-07 v82z3, AcmMa, E3Gbeh, kLgWV, qRHlC, j4X6V, fiCRg; #137–#139
 
 import type { ChallengeEntry, ChallengeView, LearnFeedback, PlayChoice, TableHandView, TableView } from '@tableside/engine';
-import { ArrowRight, Ban, ChevronsRight, CircleDot, Hand, Info, Layers, Shuffle } from 'lucide-react-native';
+import { ArrowRight, Ban, ChevronsRight, CircleDot, Coins, Hand, Info, Layers, Shuffle, Wallet } from 'lucide-react-native';
 import { useState, type ReactNode } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
@@ -10,10 +10,30 @@ import { PlayingCard } from '@/counting/CardChoices';
 import { signed } from '@/play/blackjack-text';
 import { FirstUseHint } from '@/lessons/FirstUseHints';
 import { CorrectionPanel } from '@/play/Guidance';
+import { formatUnits } from '@/play/units';
 import { BlackjackFeltRules, FaceDownCard, FeltBadge, PhaseStepper, StatStrip, type PhaseStep } from '@/play/TableChrome';
 import { fonts, palette, radius, space, textScale } from '@/theme/tokens';
 import { conversionText } from '@/training/blackjack-conversion-text';
 import {
+  ATTEMPT_BALANCE,
+  ATTEMPT_BALANCE_SPOKEN,
+  BET_KICKER,
+  betBadge,
+  betCorrectionCopy,
+  betLabel,
+  betText,
+  CHECK_BET_NOTE,
+  CHOOSE_ANOTHER,
+  FUNDING_KICKER,
+  FUNDING_TITLE,
+  fundingText,
+  FUNDS_KICKER,
+  FUNDS_NOTE,
+  fundsRefusedText,
+  OPENING_WAGER,
+  overrideText,
+  overrideTitle,
+  placeLabel,
   checkpointText,
   checkpointTitle,
   CHOOSE_AGAIN,
@@ -75,6 +95,7 @@ import { CountEntry } from './CountEntry';
 function status(view: ChallengeView, table: TableView): TableStatus {
   if (view.variant === 'learn' && view.feedback) return 'feedback';
   if (view.phase === 'correction') return 'correction';
+  if (table.bet) return 'betting';
   if (table.step === 'shuffle') return 'shuffled';
   if (table.decision) return view.variant === 'check' ? 'check-deciding' : 'deciding';
   if (table.prompt?.timing === 'decision') return 'count-first';
@@ -100,7 +121,10 @@ export function TableProgress({ view, table, timer }: { view: ChallengeView; tab
       {timer && <View style={styles.timer}>{timer}</View>}
       <StatStrip
         stats={[
-          { label: YOUR_SEAT, spoken: YOUR_SEAT_SPOKEN, value: table.seat === 'play' ? YOU_PLAY : SIMULATED },
+          // Spec 3 S3-07 fiCRg: the attempt balance, never a practice one (Amendment 2 §3); #139
+          table.funds
+            ? { label: ATTEMPT_BALANCE, spoken: ATTEMPT_BALANCE_SPOKEN, value: formatUnits(table.funds.balance) }
+            : { label: YOUR_SEAT, spoken: YOUR_SEAT_SPOKEN, value: table.seat === 'play' ? YOU_PLAY : SIMULATED },
           { label: ROUND_LABEL, spoken: ROUND_SPOKEN, value: roundOf(table) },
         ]}
         status={STATUS_TEXT[status(view, table)]}
@@ -143,7 +167,18 @@ export function TableBody({
             <Button label={NEXT_CARD} icon={ChevronsRight} stretch disabled={!ready} onPress={() => onCommand({ kind: 'next-item' })} />
           </>
         )}
+        {table.bet && view.phase === 'bet' && <BetPanel key={view.sequence} view={view} table={table} ready={ready} onCommand={onCommand} />}
         {table.decision && view.phase === 'decision' && <DecisionPanel key={view.sequence} view={view} table={table} ready={ready} onCommand={onCommand} />}
+        {view.variant === 'learn' && view.betCorrection && (
+          <CorrectionPanel
+            copy={betCorrectionCopy(view.betCorrection)}
+            table={null}
+            fullScreen={false}
+            busy={!ready}
+            onRetry={() => onCommand({ kind: 'retry-correction' })}
+            onOverride={() => onCommand({ kind: 'override-correction' })}
+          />
+        )}
         {view.variant === 'learn' && view.correction && (
           <CorrectionPanel
             copy={tableCorrectionCopy(view.correction, table)}
@@ -228,6 +263,27 @@ function DecisionPanel({ view, table, ready, onCommand }: { view: ChallengeView;
   const enabled = ready && view.legalCommands.includes('play');
   const moves = decision.kind === 'insurance' ? INSURANCE_MOVES : HAND_MOVES.filter((move) => move !== 'surrender' || table.rules.lateSurrender);
   const label = (move: PlayChoice) => (move === 'insure' ? insureLabel(table.rules.minimum) : MOVE_LABEL[move]);
+  const short = decision.refusal === 'funds' ? decision.unaffordable.find((item) => item.action === decision.refused) : undefined;
+  if (short && !dismissed) {
+    // Spec 3 Play challenge funding › Mid-round shortfalls; S3-07 RDS5F; #139
+    return (
+      <View style={styles.refused} accessibilityLiveRegion="polite" testID="move-unaffordable">
+        <View style={styles.refusedHead}>
+          <Wallet color={palette.foreground} size={18} />
+          <Text accessibilityRole="header" maxFontSizeMultiplier={textScale.body} style={styles.kicker}>
+            {FUNDS_KICKER}
+          </Text>
+        </View>
+        <Text maxFontSizeMultiplier={textScale.body} style={styles.refusedText}>
+          {fundsRefusedText(short.action, short.amount, table.funds?.balance ?? '0')}
+        </Text>
+        <Text maxFontSizeMultiplier={textScale.body} style={styles.panelText}>
+          {FUNDS_NOTE}
+        </Text>
+        <Button label={CHOOSE_AGAIN} stretch disabled={!enabled} onPress={() => setDismissed(true)} />
+      </View>
+    );
+  }
   if (decision.refused && !dismissed) {
     const refused = refusedText(table, decision.refused, view.variant);
     return (
@@ -266,6 +322,59 @@ function DecisionPanel({ view, table, ready, onCommand }: { view: ChallengeView;
           </View>
         ))}
       </View>
+    </>
+  );
+}
+
+// Spec 3 Play challenge funding; S3-07 fiCRg, qvatd; Amendment 1 C4; #139
+function BetPanel({ view, table, ready, onCommand }: { view: ChallengeView; table: TableView; ready: boolean; onCommand: (command: LearnerCommand) => void }) {
+  const bet = table.bet as NonNullable<TableView['bet']>;
+  const [confirming, setConfirming] = useState<string | null>(null);
+  const enabled = ready && view.legalCommands.includes('bet');
+  if (confirming !== null) {
+    return (
+      <View style={styles.refused} testID="betting-override">
+        <Text accessibilityRole="header" maxFontSizeMultiplier={textScale.display} style={styles.checkpointTitle}>
+          {overrideTitle(confirming)}
+        </Text>
+        <Text maxFontSizeMultiplier={textScale.body} style={styles.panelText}>
+          {overrideText(table.betSchedule)}
+        </Text>
+        <Button label={placeLabel(confirming)} stretch disabled={!enabled} onPress={() => onCommand({ kind: 'bet', amount: confirming })} />
+        <Button label={CHOOSE_ANOTHER} variant="secondary" stretch disabled={!enabled} onPress={() => setConfirming(null)} />
+      </View>
+    );
+  }
+  return (
+    <>
+      <Text maxFontSizeMultiplier={textScale.body} style={styles.kicker}>
+        {bet.funding ? FUNDING_KICKER : BET_KICKER}
+      </Text>
+      <Text accessibilityRole="header" maxFontSizeMultiplier={textScale.display} style={styles.panelTitle}>
+        {bet.funding ? FUNDING_TITLE : OPENING_WAGER}
+      </Text>
+      <Text maxFontSizeMultiplier={textScale.body} style={styles.panelText}>
+        {bet.funding ? fundingText(table.funds?.balance ?? '0', bet.amounts) : betText(table.round)}
+      </Text>
+      <View style={styles.moves}>
+        {bet.amounts.map((amount) => (
+          <View key={amount} style={styles.move}>
+            <Button
+              label={betLabel(amount)}
+              icon={Coins}
+              variant="secondary"
+              stretch
+              disabled={!enabled}
+              onPress={() => (bet.funding ? setConfirming(amount) : onCommand({ kind: 'bet', amount }))}
+            />
+          </View>
+        ))}
+      </View>
+      {view.variant === 'check' && (
+        <Text maxFontSizeMultiplier={textScale.body} style={styles.panelText}>
+          {CHECK_BET_NOTE}
+        </Text>
+      )}
     </>
   );
 }
@@ -383,6 +492,7 @@ function Felt({ table }: { table: TableView }) {
         )),
       )}
       {learner?.hands.map((hand) => <SeatHand key={hand.target} hand={hand} seat={table.seat} />)}
+      {table.funds?.wager && <FeltBadge text={betBadge(table.funds.wager)} />}
     </View>
   );
 }
@@ -436,4 +546,5 @@ const styles = StyleSheet.create({
   move: { flexGrow: 1, flexBasis: '30%' },
   refused: { gap: space[2], padding: space[4], borderRadius: radius.lg, borderWidth: 1, borderColor: palette.controlBorder, backgroundColor: palette.card },
   refusedHead: { flexDirection: 'row', alignItems: 'center', gap: space[2] },
+  refusedText: { fontFamily: fonts.ui, fontSize: 15, lineHeight: 21, color: palette.foreground },
 });

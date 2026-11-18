@@ -1,4 +1,5 @@
 // Spec 3 Audio and haptics, Learn, Check and assistance, Testing Decisions › Seam 3 (cue dispatch); #132
+import { DEFAULT_TABLE_SETUP } from '@tableside/definitions';
 import { EMPTY_QUARANTINE_LIST, ENGINE_VERSION, type ChallengeVariant, type ChallengeView, type QuarantineList } from '@tableside/engine';
 
 import { FeedbackService } from '@/feedback/service';
@@ -9,14 +10,14 @@ import { alwaysAllowed } from '@/practice/adapters';
 import { FakeClock, entropyFromWords, PI_WORDS } from '@/practice/testing/substitutes';
 import { plentyAllowance } from '@/training/allowance';
 import { MemoryTrainingStore } from '@/training/memory-store';
-import { TrainingService, type TrainingSnapshot } from '@/training/service';
+import { TrainingService, type ChallengeSetup, type TrainingSnapshot } from '@/training/service';
 import { cardOf, HI_LO_BY_RANK } from '@/training/testing/hi-lo';
 import { NO_SCREEN_READER } from '@/training/speech';
 
 const reference = (view: ChallengeView) => HI_LO_BY_RANK[cardOf(view.item).rank]!;
 const wrongFor = (view: ChallengeView) => (reference(view) === 1 ? -1 : 1);
 
-async function setup(variant: ChallengeVariant, store = new MemoryTrainingStore(), quarantine: QuarantineList = EMPTY_QUARANTINE_LIST) {
+async function setup(variant: ChallengeVariant, store = new MemoryTrainingStore(), quarantine: QuarantineList = EMPTY_QUARANTINE_LIST, start: ChallengeSetup = { category: 'card-values', variant }) {
   const clock = new FakeClock(1_790_000_000_000, true);
   let next = 0;
   const service = new TrainingService({ store, access: alwaysAllowed, allowance: plentyAllowance(() => clock.now()), clock, entropy: entropyFromWords(PI_WORDS), newId: () => `attempt-${++next}`, device: 'test-device', owner: 'local', quarantine, speech: NO_SCREEN_READER });
@@ -34,7 +35,7 @@ async function setup(variant: ChallengeVariant, store = new MemoryTrainingStore(
   service.subscribe(() => seen.push(service.snapshot()));
   const stop = followTraining(service, feedback);
   await service.load();
-  await service.startAttempt({ category: 'card-values', variant });
+  await service.startAttempt(start);
   return { service, ports, feedback, heard, stop, store, seen };
 }
 
@@ -180,5 +181,35 @@ describe('cues during a challenge attempt', () => {
     const { service, ports } = await setup('check');
     await service.end();
     expect(ports.sound.played.map((play) => play.cue)).toEqual(['card-dealt', 'attempt-ended']);
+  });
+
+  // Spec 3 Audio and haptics: cues 2/3 (Play wagers) and 6–8 (Play round net result); #139
+  it('Play: each wager plays cue 2 as it is shown and each round\'s result plays cue 6, 7 or 8 once the round is seen to resolve, Check included', async () => {
+    const table = { ...DEFAULT_TABLE_SETUP, seat: 'play', betSchedule: true } as const;
+    const { service, ports } = await setup('check', new MemoryTrainingStore(), EMPTY_QUARANTINE_LIST, { category: 'table', variant: 'check', table });
+    const nets: string[] = [];
+    for (let guard = 0; guard < 3000 && service.snapshot().status === 'active'; guard++) {
+      const snapshot = service.snapshot();
+      if (snapshot.status !== 'active') break;
+      const { view } = snapshot;
+      const before = ports.sound.played.length;
+      await service.submit(
+        view.phase === 'question'
+          ? { kind: 'skip' }
+          : view.phase === 'bet'
+            ? { kind: 'bet', amount: view.table?.bet?.amounts[0] as string }
+            : view.phase === 'decision'
+              ? { kind: 'play', action: view.table?.decision?.kind === 'insurance' ? 'decline-insurance' : 'stand' }
+              : { kind: 'next-item' },
+      );
+      const after = service.snapshot();
+      const played = ports.sound.played.slice(before).map((play) => play.cue);
+      if (after.status === 'active' && played.some((cue) => cue.startsWith('net-'))) nets.push(`${after.view.table?.settled}`);
+    }
+    const heard = ports.sound.played.map((play) => play.cue);
+    expect(heard.filter((cue) => cue === 'stake-set').length).toBeGreaterThanOrEqual(10);
+    expect(heard.filter((cue) => cue.startsWith('net-')).length).toBe(10);
+    expect(nets.every((settled) => settled === 'true')).toBe(true);
+    expect(heard.filter((cue) => cue === 'correct' || cue === 'incorrect' || cue === 'correction-offered')).toEqual([]);
   });
 });

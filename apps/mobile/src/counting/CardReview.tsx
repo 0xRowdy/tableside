@@ -1,4 +1,4 @@
-// Spec 3 S3-09 h0MsKr, VToCp, S3-10 OVKkc; Scoring and review; #132, #133, #134, #140, #138
+// Spec 3 S3-09 h0MsKr, VToCp, S3-10 OVKkc; Scoring and review; #132, #133, #134, #140, #138, #139
 
 import { CATEGORY_METRIC, type ChallengeAttemptRecord } from '@tableside/engine';
 import { BookOpen, CircleCheckBig, CircleX, Lightbulb, Shuffle, SkipForward, TrendingUp } from 'lucide-react-native';
@@ -22,15 +22,17 @@ import {
   SUGGESTED_LESSON,
   type ReviewOutcome,
 } from '@/training/challenge-text';
-import { attributionText, decisionReviewText, DECISION_REVIEW_TITLE } from '@/training/blackjack-table-text';
+import { attributionText, betReviewText, decisionReviewText, DECISION_REVIEW_TITLE } from '@/training/blackjack-table-text';
 import type { LessonEntry } from '@/training/service';
 
-const OUTCOME_ICON: Record<ReviewOutcome | 'miss' | 'fallback', { readonly Icon: typeof CircleX; readonly color: string }> = {
+const OUTCOME_ICON: Record<ReviewOutcome | 'miss' | 'fallback' | 'override', { readonly Icon: typeof CircleX; readonly color: string }> = {
   match: { Icon: CircleCheckBig, color: palette.correct },
   off: { Icon: CircleX, color: palette.mistake },
   skipped: { Icon: SkipForward, color: palette.mistake },
   miss: { Icon: CircleX, color: palette.mistake },
   fallback: { Icon: Shuffle, color: palette.foreground },
+  // Spec 3 Amendment 1 C4: a legal betting override is always a betting miss; #139
+  override: { Icon: CircleX, color: palette.mistake },
 };
 
 interface Row {
@@ -43,6 +45,7 @@ interface Row {
 
 function rowOf(fact: ChallengeAttemptRecord['review'][number], variant: ChallengeAttemptRecord['groupKey']['variant']): Row {
   if (fact.kind === 'table-decision') return decisionReviewText(fact);
+  if (fact.kind === 'table-bet') return betReviewText(fact);
   const text = reviewText(fact, variant);
   const values = [{ label: YOU_LABEL, value: text.entered }, { label: CORRECT_LABEL, value: text.reference }, ...(text.error !== null ? [{ label: ERROR_LABEL, value: text.error }] : [])];
   return { outcome: text.outcome, title: text.title, status: text.status, values, label: text.label };

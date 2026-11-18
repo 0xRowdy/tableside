@@ -1,13 +1,13 @@
-// Spec 3 S3-08 liAfT, CEb6T, nXGFk, cX5Gc, UXrpw; #158, #132, #150, #133, #135, #140, #141
+// Spec 3 S3-08 liAfT, CEb6T, nXGFk, cX5Gc, UXrpw, ValDZ, e5MASr; #158, #132, #135, #140, #141, #139
 
 import type { ChallengeAttemptRecord } from '@tableside/engine';
-import { BookOpen, CircleAlert, CircleCheckBig, Divide, Flag, GraduationCap, Hash, Info, ListChecks, RotateCcw, Square, Trophy, type LucideIcon } from 'lucide-react-native';
+import { BookOpen, CircleAlert, CircleCheckBig, Coins, Divide, Flag, GraduationCap, Hash, Info, ListChecks, RotateCcw, Spade, Square, Trophy, type LucideIcon } from 'lucide-react-native';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/Button';
 import { fonts, palette, radius, space, textScale } from '@/theme/tokens';
-import { resultsSubtitle } from '@/training/blackjack-table-text';
+import { BETTING_ADHERENCE, bettingTested, financeValues, FINANCES_LABEL, FINANCES_NOTE, NO_BET_SCHEDULE, resultsSubtitle } from '@/training/blackjack-table-text';
 import {
   ASSISTED_NOTE,
   CATEGORY_TEXT,
@@ -44,13 +44,18 @@ import {
 import { personalBestText } from '@/training/records-text';
 import type { LessonEntry } from '@/training/service';
 
-const ROW_ICON: Record<(typeof RESULT_ROWS)[number]['metric'], LucideIcon> = {
+const ROW_ICON: Record<(typeof RESULT_ROWS)[number]['metric'] | 'betting-adherence', LucideIcon> = {
   'card-values': Square,
   'running-count': Hash,
   'true-count': Divide,
-  'playing-adherence': Square,
-  'betting-adherence': Square,
+  'playing-adherence': Spade,
+  'betting-adherence': Coins,
 };
+
+// Spec 3 Scoring and review › Metrics (betting adherence, Play only); S3-08 e5MASr, ValDZ; #139
+const BETTING_ROW = { metric: 'betting-adherence', title: BETTING_ADHERENCE, tested: bettingTested } as const;
+
+const rowsFor = (record: ChallengeAttemptRecord) => (record.groupKey.table?.seat === 'play' ? [...resultRows(record.metrics), BETTING_ROW] : resultRows(record.metrics));
 
 export function ChallengeResults({
   record,
@@ -138,9 +143,9 @@ export function ChallengeResults({
           {SCORES_LABEL}
         </Text>
         <View style={styles.group}>
-          {resultRows(record.metrics).map((row, index) => {
+          {rowsFor(record).map((row, index) => {
             const result = record.metrics[row.metric];
-            const detail = result ? row.tested(result.total, groupKey.variant, groupKey.category) : NOT_TESTED;
+            const detail = result ? row.tested(result.total, groupKey.variant, groupKey.category) : row.metric === 'betting-adherence' ? NO_BET_SCHEDULE : NOT_TESTED;
             const Icon = ROW_ICON[row.metric];
             return (
               <View key={row.metric} accessible accessibilityLabel={`${row.title}, ${detail}: ${spokenScore(result)}`} style={[styles.row, index > 0 && styles.rowDivider]}>
@@ -162,6 +167,30 @@ export function ChallengeResults({
             );
           })}
         </View>
+        {record.finances && (
+          <>
+            <Text maxFontSizeMultiplier={textScale.body} style={styles.label}>
+              {FINANCES_LABEL}
+            </Text>
+            <View style={[styles.group, styles.finances]} testID="challenge-finances">
+              <View style={styles.financeRow}>
+                {financeValues(record.finances).map(({ label, value }) => (
+                  <View key={label} accessible accessibilityLabel={`${label}: ${value}`} style={styles.financeItem}>
+                    <Text maxFontSizeMultiplier={textScale.body} style={styles.financeLabel}>
+                      {label}
+                    </Text>
+                    <Text maxFontSizeMultiplier={textScale.display} style={styles.financeValue}>
+                      {value}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+              <Text maxFontSizeMultiplier={textScale.body} style={styles.boxDetail}>
+                {FINANCES_NOTE}
+              </Text>
+            </View>
+          </>
+        )}
         {ending.note && (
           <Text maxFontSizeMultiplier={textScale.body} style={styles.note}>
             {ending.note}
@@ -279,4 +308,9 @@ const styles = StyleSheet.create({
   rowDetail: { fontFamily: fonts.ui, fontSize: 13, color: palette.mutedForeground },
   score: { fontFamily: fonts.uiBold, fontSize: 14, color: palette.mutedForeground },
   note: { fontFamily: fonts.ui, fontSize: 13, lineHeight: 19, color: palette.mutedForeground },
+  finances: { gap: space[3], padding: space[4] },
+  financeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: space[4] },
+  financeItem: { flexGrow: 1, flexBasis: 80, gap: 2 },
+  financeLabel: { fontFamily: fonts.ui, fontSize: 13, color: palette.mutedForeground },
+  financeValue: { fontFamily: fonts.uiBold, fontSize: 22, color: palette.foreground },
 });
