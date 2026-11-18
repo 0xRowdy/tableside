@@ -137,7 +137,6 @@ export interface LessonEntry {
   readonly title: string;
   readonly summary: string | null;
   readonly section: LessonSection;
-  // null: not written in this version yet, whatever its access
   readonly steps: number | null;
   readonly access: LessonAccess;
   readonly status: LessonStatus;
@@ -188,6 +187,7 @@ export class TrainingService {
 
   private readonly lessons: readonly Lesson[];
   private lessonChanges = 0;
+  private accessChanges = 0;
   private readonly preferences: DeviceLearningPreferences;
   private learningChanges = 0;
 
@@ -204,6 +204,9 @@ export class TrainingService {
   snapshot = (): TrainingSnapshot => this.current;
 
   lessonRevision = (): number => this.lessonChanges;
+
+  // Spec 3 Lessons › Access, Check protection; #149: changes when lesson access may have changed
+  accessRevision = (): number => this.accessChanges;
 
   learningRevision = (): number => this.learningChanges;
 
@@ -294,7 +297,7 @@ export class TrainingService {
   async lifecycle(event: LifecycleEvent): Promise<void> {
     await this.challenges.lifecycle(event);
     // Spec 3 Lessons › Access; #149: offline access may have changed
-    if (event === 'access-changed') this.reviseLessons();
+    if (event === 'access-changed') this.reviseAccess();
   }
 
   // Spec 3 Amendment 4 §2–3
@@ -376,7 +379,7 @@ export class TrainingService {
     }
   }
 
-  // Spec 3 Lessons › Check protection; Amendment 1 A2, Amendments 3 and 5: spec 4's strategy content and spec 6's community content consult this too
+  // Spec 3 Lessons › Check protection; Amendment 1 A2, Amendments 3 and 5
   async instructionWithheld(): Promise<InstructionWithheld | null> {
     const unfinished = await this.adapters.store.findUnfinishedAttempt();
     // Spec 3 Amendment 1 C6: an uncharged attempt has shown nothing
@@ -405,6 +408,12 @@ export class TrainingService {
     }));
   }
 
+  // Spec 3 S3-14 SUUN4, S3-12 JsXMJ: what a lesson is, without its content
+  aboutLesson(id: string): Pick<Lesson, 'id' | 'title' | 'section'> | null {
+    const lesson = this.lessons.find((candidate) => candidate.id === id);
+    return lesson ? { id: lesson.id, title: lesson.title, section: lesson.section } : null;
+  }
+
   // Spec 3 Lessons › Access, Check protection; #149
   async lessonAccess(id: string): Promise<LessonAccess> {
     const lesson = this.lessons.find((candidate) => candidate.id === id);
@@ -413,7 +422,7 @@ export class TrainingService {
     return accessOf(lesson, withheld, game);
   }
 
-  // Spec 3 Amendment 4 §5: an access service that can't answer leaves the game's lessons waiting for a connection
+  // Spec 3 Amendment 4 §5
   private gameAccess(game: GameId): Promise<GameAccess> {
     return this.adapters.access.gameAccess({ game }).catch((): GameAccess => ({ status: 'needs-connection', offlineGame: null }));
   }
@@ -474,7 +483,7 @@ export class TrainingService {
     return lesson as AuthoredLesson;
   }
 
-  // Spec 3 Lessons › Access, Check protection: an inaccessible lesson's content never leaves the service, and its bookmark stays as it was
+  // Spec 3 Lessons › Access (bookmark kept), Check protection
   private async accessible(id: string): Promise<AuthoredLesson> {
     const lesson = this.authored(id);
     const access = await this.lessonAccess(id);
@@ -502,6 +511,11 @@ export class TrainingService {
     return viewOf(lesson, progress, progress.bookmark ?? 1, null);
   }
 
+  private reviseAccess(): void {
+    this.accessChanges++;
+    this.reviseLessons();
+  }
+
   private reviseLessons(): void {
     this.lessonChanges++;
     this.notify();
@@ -509,8 +523,11 @@ export class TrainingService {
 
   private refresh(): void {
     const attempt = this.challenges.snapshot();
-    // Spec 3 Lessons › Check protection; #149: an attempt starting or ending changes which lessons are withheld
-    if (attempt.status !== this.current.status) this.lessonChanges++;
+    // Spec 3 Lessons › Check protection; #149
+    if (attempt.status !== this.current.status) {
+      this.accessChanges++;
+      this.lessonChanges++;
+    }
     if (attempt.status === 'none') {
       const problem = this.diagnostics ? 'invalid-setup' : attempt.problem;
       this.current = { status: 'none', problem, diagnostics: this.diagnostics ?? [], busy: attempt.busy };
@@ -544,7 +561,6 @@ const pacingsOf = (category: CatalogCategory): readonly ChallengePacing[] =>
 const AVAILABLE: LessonAccess = { kind: 'available' };
 
 // Spec 3 Lessons › Access, Check protection; Amendment 1 A2, Amendment 4 §5
-// App orientation and Builder have no game, so they are always available. Ending a Check attempt can't open a lesson that needs a connection, so that comes first.
 function accessOf({ id, game }: Lesson, withheld: InstructionWithheld | null, playable: GameAccess | null): LessonAccess {
   if (game && playable?.status === 'needs-connection') return { kind: 'needs-connection', game, offlineGame: playable.offlineGame };
   if (withheld && (CHECK_WITHHELD_LESSONS.anyCheck.includes(id) || (withheld.play && CHECK_WITHHELD_LESSONS.playCheck.includes(id)))) return { kind: 'after-check', attempt: withheld };

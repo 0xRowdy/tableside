@@ -181,13 +181,22 @@ describe('lesson access changes', () => {
   it('revises the lessons when a Check attempt starts or ends, and when access changes', async () => {
     const { service } = setup();
     await service.load();
-    const revisions = [service.lessonRevision()];
+    const revisions = () => [service.lessonRevision(), service.accessRevision()] as const;
+    const seen = [revisions()];
     await service.startAttempt(CHECK_RUNNING_COUNT);
-    revisions.push(service.lessonRevision());
+    seen.push(revisions());
     await service.end({ showResults: false });
-    revisions.push(service.lessonRevision());
+    seen.push(revisions());
     await service.lifecycle('access-changed');
-    revisions.push(service.lessonRevision());
-    expect(new Set(revisions).size).toBe(4);
+    seen.push(revisions());
+    for (const kind of [0, 1]) expect(new Set(seen.map((revision) => revision[kind])).size).toBe(4);
+  });
+
+  it('keeps the access revision when only lesson progress changes', async () => {
+    const { service } = setup();
+    await service.load();
+    const before = service.accessRevision();
+    await service.stepForward('app-orientation', 1);
+    expect(service.accessRevision()).toBe(before);
   });
 });

@@ -12,6 +12,9 @@ export const lessonHref = (lesson: string, section?: string): Href => ({
 
 export const lessonsHref = (section?: string): Href => ({ pathname: '/more/settings/learning/lessons', params: section ? { section } : {} });
 
+// Spec 3 S3-14 SUUN4, S3-11 LDmev: Return to attempt; #149
+export const attemptHref: Href = { pathname: '/counting', params: { attempt: '1' } };
+
 // Spec 3 Lessons › Structure (Handoff)
 export function handoffHref(handoff: LessonHandoff): Href {
   switch (handoff.kind) {

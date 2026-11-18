@@ -1,21 +1,25 @@
-// Spec 3 S3-12 l8pMS, aJV2y, pX6CV, S3-13 JJl51, Fvlgc, ZBpF3; #143, #144, #145
+// Spec 3 S3-12 l8pMS, aJV2y, pX6CV, JsXMJ, S3-13 JJl51, Fvlgc, ZBpF3, S3-14 SUUN4
+// #143, #144, #145, #149
 import type { LessonHandoff } from '@tableside/definitions';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useState } from 'react';
+import { useState, useSyncExternalStore } from 'react';
 
 import { Placeholder } from '@/components/Placeholder';
 import { useFeedback } from '@/feedback/FeedbackProvider';
 import { EXAMPLE_CUES } from '@/feedback/training-cues';
 import { useLoaded } from '@/hooks/use-loaded';
 import { LessonPlayer } from '@/lessons/LessonPlayer';
-import { handoffHref, lessonsHref } from '@/lessons/routes';
+import { LessonGate } from '@/lessons/LessonGate';
+import { attemptHref, handoffHref, lessonsHref } from '@/lessons/routes';
 import { WorkedExample } from '@/lessons/WorkedExample';
 import { allowanceCopy, NOT_READY_HINT, type AllowanceCopy } from '@/training/challenge-text';
 import { LESSONS_TITLE, OPENING_LESSON } from '@/training/lesson-text';
-import type { LessonView, TrainingService } from '@/training/service';
+import type { LessonAccess, LessonView, TrainingService } from '@/training/service';
 import { useTraining } from '@/training/TrainingProvider';
 
-const openOf = (service: TrainingService, lesson: string): Promise<LessonView | null> => service.openLesson(lesson).catch(() => null);
+// Spec 3 Lessons › Access, Check protection; #149
+const accessOf = (service: TrainingService, lesson: string, _revision: number): Promise<LessonAccess | null> => service.lessonAccess(lesson).catch(() => null);
+const openOf = async (service: TrainingService, lesson: string, open: boolean): Promise<LessonView | null | undefined> => (open ? service.openLesson(lesson).catch(() => null) : undefined);
 
 // Spec 3 Amendment 4 §2
 const allowanceOf = async (service: TrainingService, sheet: boolean): Promise<AllowanceCopy | undefined> =>
@@ -23,9 +27,11 @@ const allowanceOf = async (service: TrainingService, sheet: boolean): Promise<Al
 
 export default function LessonScreen() {
   const { lesson = '', section } = useLocalSearchParams<{ lesson: string; section?: string }>();
-  const { service } = useTraining();
+  const { service, snapshot } = useTraining();
   const feedback = useFeedback();
-  const opened = useLoaded(openOf, service, lesson);
+  const accessRevision = useSyncExternalStore(service.subscribe, service.accessRevision);
+  const access = useLoaded(accessOf, service, lesson, accessRevision);
+  const opened = useLoaded(openOf, service, lesson, access?.kind === 'available');
   const [latest, setLatest] = useState<LessonView | null>(null);
   const [busy, setBusy] = useState(false);
   const [saveFailed, setSaveFailed] = useState(false);
@@ -35,10 +41,29 @@ export default function LessonScreen() {
   const [trying, setTrying] = useState(false);
   const view = latest?.id === lesson ? latest : opened;
 
-  if (opened === null) return <Placeholder title={LESSONS_TITLE} message={NOT_READY_HINT} />;
+  const leave = () => router.dismissTo(lessonsHref(section));
+  const about = service.aboutLesson(lesson);
+
+  if (access === null || opened === null || !about) return <Placeholder title={LESSONS_TITLE} message={NOT_READY_HINT} />;
+  if (access && access.kind !== 'available') {
+    return (
+      <LessonGate
+        lesson={about}
+        access={access}
+        back={LESSONS_TITLE}
+        busy={busy}
+        endBlocked={snapshot.status === 'active' ? (snapshot.hold?.endBlocked ?? null) : null}
+        onLeave={leave}
+        onReturnToAttempt={() => router.navigate(attemptHref)}
+        onEndAttempt={() => {
+          setBusy(true);
+          void service.end({ showResults: false }).finally(() => setBusy(false));
+        }}
+      />
+    );
+  }
   if (!view) return <Placeholder title={LESSONS_TITLE} message={OPENING_LESSON} />;
 
-  const leave = () => router.dismissTo(lessonsHref(section));
   const save = (operation: () => Promise<LessonView | void>, then: () => void = leave) => {
     setBusy(true);
     void operation()

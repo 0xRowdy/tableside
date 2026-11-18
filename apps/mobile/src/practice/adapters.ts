@@ -52,7 +52,7 @@ export interface SetupTerms {
 
 export const PRACTICE_FUNDING_TERMS: SetupTerms = { funding: { source: 'practice-funding' }, allowance: null, seePremium: false };
 
-// Spec 3 Amendment 4 §5: playable now when online, premium within its deadline, or the selected offline game
+// Spec 3 Amendment 4 §5
 export type GameAccess = { readonly status: 'playable' } | { readonly status: 'needs-connection'; readonly offlineGame: GameId | null };
 
 // Spec 1 Access boundary
