@@ -1,0 +1,845 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-18T20:38:37+00:00",
+  "title": "Design System: Tableside",
+  "extensions": {
+    "colorMeta": {
+      "background": {
+        "role": "neutral",
+        "displayName": "After-Hours Green",
+        "canonical": "#0E1311",
+        "tonalRamp": [
+          "#0A0C0B",
+          "#222524",
+          "#3C413F",
+          "#595F5D",
+          "#797F7C",
+          "#9AA09E",
+          "#C1C5C3",
+          "#ECEFEE"
+        ]
+      },
+      "foreground": {
+        "role": "neutral",
+        "displayName": "Linen",
+        "canonical": "#F3EFE6",
+        "tonalRamp": [
+          "#0C0B08",
+          "#262420",
+          "#423F3A",
+          "#605D56",
+          "#807D75",
+          "#A19E97",
+          "#C6C4BE",
+          "#F0EEEA"
+        ]
+      },
+      "card": {
+        "role": "neutral",
+        "displayName": "Card Table",
+        "canonical": "#161D1A",
+        "tonalRamp": [
+          "#090C0B",
+          "#212523",
+          "#3B413F",
+          "#58605C",
+          "#777F7C",
+          "#99A09D",
+          "#C0C6C3",
+          "#EBF0EE"
+        ]
+      },
+      "popover": {
+        "role": "neutral",
+        "displayName": "Lamplit Panel",
+        "canonical": "#1B2420",
+        "tonalRamp": [
+          "#090C0A",
+          "#202523",
+          "#3A423E",
+          "#57605C",
+          "#76807B",
+          "#98A19D",
+          "#BFC6C3",
+          "#EAF0ED"
+        ]
+      },
+      "muted": {
+        "role": "neutral",
+        "displayName": "Deep Baize",
+        "canonical": "#1E2723",
+        "tonalRamp": [
+          "#090C0A",
+          "#202523",
+          "#3A423E",
+          "#57605C",
+          "#76807B",
+          "#98A19D",
+          "#BFC6C3",
+          "#EAF0ED"
+        ]
+      },
+      "secondary": {
+        "role": "neutral",
+        "displayName": "Felt Shadow",
+        "canonical": "#26312C",
+        "tonalRamp": [
+          "#080C0A",
+          "#1F2623",
+          "#39423E",
+          "#56615B",
+          "#75817B",
+          "#97A19C",
+          "#BEC6C2",
+          "#EAF0ED"
+        ]
+      },
+      "border": {
+        "role": "neutral",
+        "displayName": "Hairline",
+        "canonical": "#2C3832",
+        "tonalRamp": [
+          "#080C0A",
+          "#1F2622",
+          "#39423E",
+          "#55615B",
+          "#74817A",
+          "#96A29C",
+          "#BDC7C2",
+          "#E9F0ED"
+        ]
+      },
+      "controlBorder": {
+        "role": "neutral",
+        "displayName": "Control Edge",
+        "canonical": "#6E7B74",
+        "tonalRamp": [
+          "#080C0A",
+          "#1F2622",
+          "#39423D",
+          "#55615B",
+          "#74817A",
+          "#97A19C",
+          "#BEC7C2",
+          "#EAF0ED"
+        ]
+      },
+      "mutedForeground": {
+        "role": "neutral",
+        "displayName": "Smoke",
+        "canonical": "#A9B2AC",
+        "tonalRamp": [
+          "#090C0A",
+          "#212522",
+          "#3C413E",
+          "#58605B",
+          "#78807A",
+          "#99A09C",
+          "#C0C6C2",
+          "#EBF0ED"
+        ]
+      },
+      "primary": {
+        "role": "primary",
+        "displayName": "Rail Brass",
+        "canonical": "#D4AE62",
+        "tonalRamp": [
+          "#140800",
+          "#322000",
+          "#543B00",
+          "#77580A",
+          "#99772F",
+          "#B79A61",
+          "#D9C193",
+          "#FEECCB"
+        ]
+      },
+      "primaryForeground": {
+        "role": "primary",
+        "displayName": "Brass Shadow",
+        "canonical": "#1A1406",
+        "tonalRamp": [
+          "#0D0B06",
+          "#27241B",
+          "#443F33",
+          "#645D4E",
+          "#847D6C",
+          "#A49E8F",
+          "#C9C4B8",
+          "#F2EEE5"
+        ]
+      },
+      "ring": {
+        "role": "primary",
+        "displayName": "Rail Brass (focus ring)",
+        "canonical": "#D4AE62",
+        "tonalRamp": [
+          "#140800",
+          "#322000",
+          "#543B00",
+          "#77580A",
+          "#99772F",
+          "#B79A61",
+          "#D9C193",
+          "#FEECCB"
+        ]
+      },
+      "onImage": {
+        "role": "neutral",
+        "displayName": "Pure White",
+        "canonical": "#FFFFFF",
+        "tonalRamp": [
+          "#0B0B0B",
+          "#242424",
+          "#404040",
+          "#5D5D5D",
+          "#7D7D7D",
+          "#9E9E9E",
+          "#C4C4C4",
+          "#EEEEEE"
+        ]
+      },
+      "scrim": {
+        "role": "neutral",
+        "displayName": "Scrim",
+        "canonical": "#000000B3",
+        "tonalRamp": [
+          "#0B0B0B",
+          "#242424",
+          "#404040",
+          "#5D5D5D",
+          "#7D7D7D",
+          "#9E9E9E",
+          "#C4C4C4",
+          "#EEEEEE"
+        ]
+      },
+      "correct": {
+        "role": "status",
+        "displayName": "Felt Green Check",
+        "canonical": "#3FA877",
+        "tonalRamp": [
+          "#001104",
+          "#002E17",
+          "#004E2E",
+          "#007047",
+          "#2E9265",
+          "#65B189",
+          "#98D4B3",
+          "#D0FBE2"
+        ]
+      },
+      "destructive": {
+        "role": "status",
+        "displayName": "Terracotta",
+        "canonical": "#E07A5F",
+        "tonalRamp": [
+          "#1E0100",
+          "#431104",
+          "#6A2716",
+          "#954029",
+          "#BC5F46",
+          "#D78670",
+          "#F5B19F",
+          "#FFE1D3"
+        ]
+      },
+      "warning": {
+        "role": "status",
+        "displayName": "Amber",
+        "canonical": "#E8A23A",
+        "tonalRamp": [
+          "#1A0500",
+          "#3C1A00",
+          "#613300",
+          "#884E00",
+          "#AC6E00",
+          "#C99348",
+          "#E8BB83",
+          "#FFE9C0"
+        ]
+      },
+      "info": {
+        "role": "status",
+        "displayName": "Soft Blue",
+        "canonical": "#7FA8F5",
+        "tonalRamp": [
+          "#020922",
+          "#102247",
+          "#243E70",
+          "#3B5C9B",
+          "#577CC1",
+          "#7E9EDB",
+          "#AAC5F7",
+          "#DBEFFF"
+        ]
+      },
+      "felt": {
+        "role": "table",
+        "displayName": "Baize",
+        "canonical": "#1B5A43",
+        "tonalRamp": [
+          "#000F08",
+          "#0A2B1E",
+          "#1F4938",
+          "#356A54",
+          "#538B73",
+          "#7BAB95",
+          "#A9CEBD",
+          "#DAF6E9"
+        ]
+      },
+      "feltDeep": {
+        "role": "table",
+        "displayName": "Deep Baize Pocket",
+        "canonical": "#123F2F",
+        "tonalRamp": [
+          "#020F09",
+          "#122920",
+          "#28473A",
+          "#406757",
+          "#5E8876",
+          "#84A898",
+          "#AFCCBF",
+          "#DFF4EA"
+        ]
+      },
+      "feltText": {
+        "role": "table",
+        "displayName": "Chalk",
+        "canonical": "#F1EAD6",
+        "tonalRamp": [
+          "#0D0B06",
+          "#27241B",
+          "#443F33",
+          "#635D4E",
+          "#837D6C",
+          "#A39E8F",
+          "#C8C4B8",
+          "#F1EEE5"
+        ]
+      },
+      "rail": {
+        "role": "table",
+        "displayName": "Walnut Rail",
+        "canonical": "#3A2A1E",
+        "tonalRamp": [
+          "#100A06",
+          "#2B221B",
+          "#4A3D33",
+          "#6A5A4E",
+          "#8B796C",
+          "#AB9B90",
+          "#CEC1B8",
+          "#F6ECE5"
+        ]
+      },
+      "ink": {
+        "role": "coaching",
+        "displayName": "Ink",
+        "canonical": "#1E1A14",
+        "tonalRamp": [
+          "#0D0B08",
+          "#262420",
+          "#433F3A",
+          "#615D56",
+          "#817C75",
+          "#A29E97",
+          "#C7C3BE",
+          "#F1EEEA"
+        ]
+      },
+      "inkMuted": {
+        "role": "coaching",
+        "displayName": "Faded Ink",
+        "canonical": "#5E574B",
+        "tonalRamp": [
+          "#0D0B07",
+          "#27231D",
+          "#443F36",
+          "#635D52",
+          "#837C70",
+          "#A49E93",
+          "#C8C3BB",
+          "#F2EEE7"
+        ]
+      },
+      "cardFace": {
+        "role": "table",
+        "displayName": "Card Face",
+        "canonical": "#FBF8F1",
+        "tonalRamp": [
+          "#0C0B09",
+          "#252421",
+          "#41403B",
+          "#605D58",
+          "#7F7D77",
+          "#A09E99",
+          "#C6C4C0",
+          "#F0EEEB"
+        ]
+      },
+      "suitSpade": {
+        "role": "table",
+        "displayName": "Spade Ink",
+        "canonical": "#15171A",
+        "tonalRamp": [
+          "#0A0B0C",
+          "#232426",
+          "#3E4042",
+          "#5B5E61",
+          "#7B7D81",
+          "#9C9EA2",
+          "#C2C4C7",
+          "#EDEEF0"
+        ]
+      },
+      "suitHeart": {
+        "role": "table",
+        "displayName": "Heart Ink",
+        "canonical": "#C8312F",
+        "tonalRamp": [
+          "#250000",
+          "#4E0001",
+          "#7A0B10",
+          "#A92323",
+          "#D24640",
+          "#ED756B",
+          "#FFA59B",
+          "#FFD9D0"
+        ]
+      },
+      "suitDiamond": {
+        "role": "table",
+        "displayName": "Diamond Ink",
+        "canonical": "#1F5FBF",
+        "tonalRamp": [
+          "#00072A",
+          "#012053",
+          "#0F3C80",
+          "#225AAF",
+          "#3F7BD8",
+          "#6B9FEF",
+          "#9BC6FF",
+          "#D1F1FF"
+        ]
+      },
+      "suitClub": {
+        "role": "table",
+        "displayName": "Club Ink",
+        "canonical": "#1C7A3E",
+        "tonalRamp": [
+          "#001101",
+          "#002E0E",
+          "#084D23",
+          "#1E6F3A",
+          "#3F9157",
+          "#6EB07E",
+          "#9FD3AA",
+          "#D4FADB"
+        ]
+      },
+      "chip1": {
+        "role": "table",
+        "displayName": "1 Chip Bone",
+        "canonical": "#EDE7D8",
+        "tonalRamp": [
+          "#0D0B07",
+          "#26241D",
+          "#433F36",
+          "#625D52",
+          "#827D70",
+          "#A39E93",
+          "#C7C4BB",
+          "#F1EEE7"
+        ]
+      },
+      "chip5": {
+        "role": "table",
+        "displayName": "5 Chip Red",
+        "canonical": "#B83A33",
+        "tonalRamp": [
+          "#220000",
+          "#490505",
+          "#731B17",
+          "#A0312B",
+          "#C95148",
+          "#E47C71",
+          "#FFAAA0",
+          "#FFDCD4"
+        ]
+      },
+      "chip25": {
+        "role": "table",
+        "displayName": "25 Chip Green",
+        "canonical": "#2E7D4F",
+        "tonalRamp": [
+          "#001103",
+          "#012D15",
+          "#134C2C",
+          "#286D45",
+          "#478F62",
+          "#73AE87",
+          "#A2D2B1",
+          "#D6F9E0"
+        ]
+      },
+      "chip100": {
+        "role": "table",
+        "displayName": "100 Chip Black",
+        "canonical": "#1D1F22",
+        "tonalRamp": [
+          "#0A0B0C",
+          "#232426",
+          "#3E4042",
+          "#5C5E61",
+          "#7B7D81",
+          "#9C9EA2",
+          "#C2C4C7",
+          "#EDEEF0"
+        ]
+      },
+      "chip500": {
+        "role": "table",
+        "displayName": "500 Chip Purple",
+        "canonical": "#6A3FA0",
+        "tonalRamp": [
+          "#110223",
+          "#2C1548",
+          "#4B2D72",
+          "#6C479E",
+          "#8D66C4",
+          "#AB8CDE",
+          "#CFB6F9",
+          "#F6E4FF"
+        ]
+      },
+      "chip1k": {
+        "role": "table",
+        "displayName": "1K Chip Gold",
+        "canonical": "#D99A2B",
+        "tonalRamp": [
+          "#190500",
+          "#3A1C00",
+          "#5E3500",
+          "#855100",
+          "#A97000",
+          "#C69447",
+          "#E5BD82",
+          "#FFEABF"
+        ]
+      },
+      "pocketRed": {
+        "role": "table",
+        "displayName": "Red Pocket",
+        "canonical": "#B83A33",
+        "tonalRamp": [
+          "#220000",
+          "#490505",
+          "#731B17",
+          "#A0312B",
+          "#C95148",
+          "#E47C71",
+          "#FFAAA0",
+          "#FFDCD4"
+        ]
+      },
+      "pocketBlack": {
+        "role": "table",
+        "displayName": "Black Pocket",
+        "canonical": "#1D1F22",
+        "tonalRamp": [
+          "#0A0B0C",
+          "#232426",
+          "#3E4042",
+          "#5C5E61",
+          "#7B7D81",
+          "#9C9EA2",
+          "#C2C4C7",
+          "#EDEEF0"
+        ]
+      },
+      "pocketGreen": {
+        "role": "table",
+        "displayName": "Zero Pocket",
+        "canonical": "#2E7D4F",
+        "tonalRamp": [
+          "#001103",
+          "#012D15",
+          "#134C2C",
+          "#286D45",
+          "#478F62",
+          "#73AE87",
+          "#A2D2B1",
+          "#D6F9E0"
+        ]
+      },
+      "coach": {
+        "role": "coaching",
+        "displayName": "Coach Paper",
+        "canonical": "#F6F1E4",
+        "tonalRamp": [
+          "#0C0B07",
+          "#26241E",
+          "#433F38",
+          "#615D53",
+          "#817D72",
+          "#A29E95",
+          "#C7C4BC",
+          "#F1EEE8"
+        ]
+      },
+      "coachAccent": {
+        "role": "coaching",
+        "displayName": "Coach Blue",
+        "canonical": "#2563C8",
+        "tonalRamp": [
+          "#00072B",
+          "#012054",
+          "#0F3B82",
+          "#2259B2",
+          "#3F7ADB",
+          "#6B9EF2",
+          "#9BC5FF",
+          "#D1F0FF"
+        ]
+      },
+      "mistake": {
+        "role": "status",
+        "displayName": "Mistake (feedback)",
+        "canonical": "#E07A5F",
+        "tonalRamp": [
+          "#1E0100",
+          "#431104",
+          "#6A2716",
+          "#954029",
+          "#BC5F46",
+          "#D78670",
+          "#F5B19F",
+          "#FFE1D3"
+        ]
+      },
+      "mistakeInk": {
+        "role": "coaching",
+        "displayName": "Correction Red Ink",
+        "canonical": "#B4472C",
+        "tonalRamp": [
+          "#200000",
+          "#460C01",
+          "#6F230F",
+          "#9A3A23",
+          "#C25940",
+          "#DD826B",
+          "#FAAF9B",
+          "#FFDFD0"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "Screen titles on Home, first run and session results."
+      },
+      "display-card": {
+        "displayName": "Game Card Title",
+        "purpose": "Game card titles over photography."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Sheet and dialog titles, coaching headlines, lesson headings."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Button labels, row titles, table top-bar titles."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Explanations, sheet text, row details."
+      },
+      "body-small": {
+        "displayName": "Body Small",
+        "purpose": "Details, notes and secondary copy."
+      },
+      "stat": {
+        "displayName": "Stat",
+        "purpose": "Balances, counts and results."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Stat labels, kickers and strip labels."
+      },
+      "label-medium": {
+        "displayName": "Tab Label",
+        "purpose": "Tab bar labels and stepper text."
+      }
+    },
+    "shadows": [],
+    "motion": [
+      {
+        "name": "press-feedback",
+        "value": "opacity 0.8 while pressed (0.85 on game cards)",
+        "purpose": "The only press response; no scale or bounce."
+      },
+      {
+        "name": "sheet-enter",
+        "value": "React Native Modal animationType slide",
+        "purpose": "Sheets slide up from the bottom."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "sheet-full-screen",
+        "value": "fontScale > 1.5",
+        "purpose": "Sheets become full screen at large text."
+      },
+      {
+        "name": "android-large-content",
+        "value": "fontScale >= 1.3",
+        "purpose": "Tab long-press shows the large-content preview on Android."
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The one Rail Brass action on a view.",
+      "html": "<button class=\"ds-btn-primary\">Start practice</button>",
+      "css": ".ds-btn-primary { display:inline-flex; align-items:center; justify-content:center; gap:8px; min-height:48px; padding:12px 24px; border-radius:999px; border:2px solid transparent; font-family: Inter, system-ui, sans-serif; font-weight:700; font-size:16px; cursor:pointer; transition: opacity .12s; background:#D4AE62; color:#1A1406; border-color:#D4AE62; } .ds-btn-primary:active { opacity:.8; } .ds-btn-primary:focus-visible { outline:none; border-color:#F3EFE6; } .ds-btn-primary:disabled { opacity:.4; }"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Supporting actions on Felt Shadow.",
+      "html": "<button class=\"ds-btn-secondary\">View rules</button>",
+      "css": ".ds-btn-secondary { display:inline-flex; align-items:center; justify-content:center; gap:8px; min-height:48px; padding:12px 24px; border-radius:999px; border:2px solid transparent; font-family: Inter, system-ui, sans-serif; font-weight:700; font-size:16px; cursor:pointer; transition: opacity .12s; background:#26312C; color:#F3EFE6; border-color:#26312C; } .ds-btn-secondary:active { opacity:.8; } .ds-btn-secondary:focus-visible { outline:none; border-color:#F3EFE6; }"
+    },
+    {
+      "name": "Outline Choice",
+      "kind": "button",
+      "refersTo": "button-outline",
+      "description": "List-like choices: 10px corners, Control Edge border.",
+      "html": "<button class=\"ds-btn-outline\">Running count</button>",
+      "css": ".ds-btn-outline { display:flex; align-items:center; justify-content:center; min-height:52px; padding:12px 20px; border-radius:10px; border:1px solid #6E7B74; background:transparent; color:#F3EFE6; font-family: Inter, system-ui, sans-serif; font-weight:700; font-size:15px; cursor:pointer; } .ds-btn-outline:active { opacity:.8; } .ds-btn-outline:focus-visible { outline:2px solid #D4AE62; outline-offset:2px; }"
+    },
+    {
+      "name": "Segmented Control",
+      "kind": "chip",
+      "refersTo": "segmented",
+      "description": "Radio group; the selected segment is brass with a check.",
+      "html": "<div class=\"ds-seg\" role=\"radiogroup\" aria-label=\"Mode\"><button class=\"ds-seg-item ds-seg-on\" role=\"radio\" aria-checked=\"true\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M20 6 9 17l-5-5\"/></svg>Learn</button><button class=\"ds-seg-item\" role=\"radio\" aria-checked=\"false\">Check</button><button class=\"ds-seg-item\" role=\"radio\" aria-checked=\"false\">Play</button></div>",
+      "css": ".ds-seg { display:flex; gap:4px; padding:4px; border-radius:10px; border:1px solid #6E7B74; background:#1E2723; } .ds-seg-item { flex:1; display:flex; align-items:center; justify-content:center; gap:6px; min-height:44px; padding:0 8px; border-radius:9px; border:2px solid transparent; background:transparent; color:#F3EFE6; font-family: Inter, system-ui, sans-serif; font-weight:700; font-size:14px; cursor:pointer; } .ds-seg-on { background:#D4AE62; color:#1A1406; } .ds-seg-item:focus-visible { outline:none; border-color:#D4AE62; }"
+    },
+    {
+      "name": "Card",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "Card Table surface, 16px corners, no shadow.",
+      "html": "<div class=\"ds-card\"><div class=\"ds-card-label\">BALANCE</div><div class=\"ds-card-value\">$1,240</div><div class=\"ds-card-note\">Practice session · 48 turns</div></div>",
+      "css": ".ds-card { display:grid; gap:2px; padding:16px; border-radius:16px; background:#161D1A; color:#F3EFE6; font-family: Inter, system-ui, sans-serif; max-width:280px; } .ds-card-label { font-weight:700; font-size:10px; letter-spacing:.5px; color:#A9B2AC; } .ds-card-value { font-weight:700; font-size:24px; } .ds-card-note { font-size:13px; color:#A9B2AC; }"
+    },
+    {
+      "name": "Switch Row",
+      "kind": "input",
+      "refersTo": "switch-row",
+      "description": "Full-width toggle row with a check on the brass knob.",
+      "html": "<button class=\"ds-switch-row\" role=\"switch\" aria-checked=\"true\"><span class=\"ds-switch-text\"><span class=\"ds-switch-title\">Spoken cards</span><span class=\"ds-switch-detail\">Read each card aloud.</span></span><span class=\"ds-switch ds-switch-on\"><span class=\"ds-knob\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M20 6 9 17l-5-5\"/></svg></span></span></button>",
+      "css": ".ds-switch-row { display:flex; align-items:center; gap:16px; width:100%; min-height:64px; padding:12px 16px; border:2px solid transparent; background:#161D1A; text-align:left; cursor:pointer; font-family: Inter, system-ui, sans-serif; } .ds-switch-row:focus-visible { outline:none; border-color:#D4AE62; } .ds-switch-text { flex:1; display:grid; gap:2px; } .ds-switch-title { font-weight:700; font-size:15px; color:#F3EFE6; } .ds-switch-detail { font-size:13px; color:#A9B2AC; } .ds-switch { display:flex; width:52px; height:32px; border-radius:16px; padding:3px; box-sizing:border-box; } .ds-switch-on { background:#D4AE62; justify-content:flex-end; } .ds-knob { display:flex; align-items:center; justify-content:center; width:26px; height:26px; border-radius:13px; background:#1A1406; color:#D4AE62; }"
+    },
+    {
+      "name": "Tab Bar",
+      "kind": "nav",
+      "refersTo": "tab-bar",
+      "description": "The only global navigation; selected tab sits in a brass-outlined pill.",
+      "html": "<nav class=\"ds-tabs\" role=\"tablist\"><button class=\"ds-tab ds-tab-on\" role=\"tab\" aria-selected=\"true\"><span class=\"ds-tab-pill\"><svg width=\"22\" height=\"22\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M3 10.5 12 3l9 7.5\"/><path d=\"M5 9.5V21h14V9.5\"/></svg></span>Home</button><button class=\"ds-tab\" role=\"tab\" aria-selected=\"false\"><span class=\"ds-tab-pill\"><svg width=\"22\" height=\"22\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><rect x=\"3\" y=\"3\" width=\"7\" height=\"7\" rx=\"1\"/><rect x=\"14\" y=\"3\" width=\"7\" height=\"7\" rx=\"1\"/><rect x=\"3\" y=\"14\" width=\"7\" height=\"7\" rx=\"1\"/><rect x=\"14\" y=\"14\" width=\"7\" height=\"7\" rx=\"1\"/></svg></span>Play</button></nav>",
+      "css": ".ds-tabs { display:flex; padding:4px 6px; background:#161D1A; border-top:1px solid #2C3832; } .ds-tab { flex:1; display:flex; flex-direction:column; align-items:center; gap:2px; min-height:48px; padding:4px 0; border-radius:10px; border:2px solid transparent; background:transparent; color:#A9B2AC; font-family: Inter, system-ui, sans-serif; font-weight:500; font-size:11px; cursor:pointer; } .ds-tab:focus-visible { outline:none; border-color:#D4AE62; } .ds-tab-pill { display:flex; align-items:center; justify-content:center; width:56px; height:30px; border-radius:999px; border:1.5px solid transparent; box-sizing:border-box; } .ds-tab-on { color:#F3EFE6; font-weight:700; } .ds-tab-on .ds-tab-pill { background:#26312C; border-color:#D4AE62; color:#D4AE62; }"
+    },
+    {
+      "name": "Coach Note",
+      "kind": "custom",
+      "refersTo": "coach-note",
+      "description": "Marcus speaks on cream paper, the only light surface in the chrome.",
+      "html": "<div class=\"ds-coach\"><div class=\"ds-coach-kicker\">MARCUS · COACH</div><div class=\"ds-coach-head\">Stand on 16 against a 10 here.</div><div class=\"ds-coach-detail\">The true count is +1, which meets this deviation's index.</div><button class=\"ds-coach-btn\">Try again</button></div>",
+      "css": ".ds-coach { display:grid; gap:10px; padding:16px; border-radius:16px; border:1px solid #2563C8; background:#F6F1E4; color:#1E1A14; font-family: Inter, system-ui, sans-serif; max-width:320px; } .ds-coach-kicker { font-weight:700; font-size:10px; letter-spacing:.5px; color:#2563C8; } .ds-coach-head { font-weight:700; font-size:17px; } .ds-coach-detail { font-size:14px; line-height:20px; color:#5E574B; } .ds-coach-btn { justify-self:start; min-height:48px; padding:12px 24px; border-radius:999px; border:2px solid #1E1A14; background:#1E1A14; color:#F6F1E4; font-family: Inter, system-ui, sans-serif; font-weight:700; font-size:16px; cursor:pointer; } .ds-coach-btn:focus-visible { outline:none; border-color:#2563C8; }"
+    },
+    {
+      "name": "Game Card",
+      "kind": "custom",
+      "refersTo": "game-card",
+      "description": "Full-bleed photo game entry with a scrim band and a brass go button.",
+      "html": "<button class=\"ds-game\"><span class=\"ds-game-band\"><span class=\"ds-game-summary\">STRATEGY · COUNTING</span><span class=\"ds-game-row\"><span class=\"ds-game-title\">Blackjack</span><span class=\"ds-game-go\"><svg width=\"22\" height=\"22\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M5 12h14\"/><path d=\"m12 5 7 7-7 7\"/></svg></span></span></span></button>",
+      "css": ".ds-game { position:relative; display:flex; align-items:flex-end; width:100%; min-height:220px; padding:0; border:0; overflow:hidden; text-align:left; cursor:pointer; background: radial-gradient(circle at 50% 35%, #1B5A43, #123F2F 70%); } .ds-game:active { opacity:.85; } .ds-game:focus-visible { outline:3px solid #D4AE62; outline-offset:-3px; } .ds-game-band { display:grid; gap:4px; width:100%; padding:20px; background:linear-gradient(to bottom, rgba(0,0,0,0), rgba(0,0,0,.7) 40%); color:#FFFFFF; } .ds-game-summary { font-family: Inter, system-ui, sans-serif; font-weight:700; font-size:11px; letter-spacing:1px; } .ds-game-row { display:flex; align-items:center; gap:12px; } .ds-game-title { flex:1; font-family: Fraunces, Georgia, serif; font-size:34px; line-height:38px; } .ds-game-go { display:flex; align-items:center; justify-content:center; width:44px; height:44px; border-radius:22px; background:#D4AE62; color:#1A1406; }"
+    },
+    {
+      "name": "Chip Rack",
+      "kind": "custom",
+      "refersTo": "chip-rack",
+      "description": "Walnut rail with denomination chips; selection is a brass ring plus check.",
+      "html": "<div class=\"ds-rack\"><div class=\"ds-chips\"><button class=\"ds-chip-slot\" aria-pressed=\"false\"><span class=\"ds-chip\" style=\"background:#EDE7D8;color:#1E1A14\">1</span></button><button class=\"ds-chip-slot ds-chip-on\" aria-pressed=\"true\"><span class=\"ds-chip\" style=\"background:#B83A33;color:#FFFFFF\">5</span></button><button class=\"ds-chip-slot\" aria-pressed=\"false\"><span class=\"ds-chip\" style=\"background:#2E7D4F;color:#FFFFFF\">25</span></button><button class=\"ds-chip-slot\" aria-pressed=\"false\"><span class=\"ds-chip\" style=\"background:#1D1F22;color:#FFFFFF\">100</span></button></div><div class=\"ds-rack-cap\">Chip value: 5</div></div>",
+      "css": ".ds-rack { display:grid; gap:8px; padding:12px; border-radius:16px; background:#3A2A1E; font-family: Inter, system-ui, sans-serif; } .ds-chips { display:flex; flex-wrap:wrap; gap:4px; } .ds-chip-slot { display:flex; align-items:center; justify-content:center; min-width:56px; min-height:56px; padding:0; border-radius:999px; border:2px solid transparent; background:transparent; cursor:pointer; } .ds-chip-slot:focus-visible { outline:2px solid #D4AE62; outline-offset:1px; } .ds-chip-on { border-color:#D4AE62; } .ds-chip { display:flex; align-items:center; justify-content:center; width:48px; height:48px; border-radius:24px; font-weight:700; font-size:15px; } .ds-rack-cap { font-size:12px; color:#F3EFE6; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Private Card Room",
+    "overview": "**Creative North Star: \"The Private Card Room\"**\n\nTableside is a practice room after hours. The lights are low, the room is a green so dark it reads as night, and the one bright thing is the table. Brass trim catches the eye only where a hand should go. Everything else (the chrome, the records, the settings) sits back in the dark and lets the felt, the cards and the numbers do the talking.\n\nThe mood is **calm, exact and warm**. Calm because players come here between casino trips to drill, not to be stimulated: nothing flashes, bounces or celebrates. Exact because the product's promise is honest records, so figures are stated plainly in bold Inter and never dressed up. Warm because the warmth comes from material, not effects: brass gold, a Fraunces serif on titles, cream card faces, and Marcus's notes on a sheet of cream paper.\n\nControls are **quiet and sure-footed**: big, plain targets, few borders, gold reserved for the one action that matters. The confirmed anti-references are **generic fintech** (cold white-and-blue cards and charts that forget this is a table game) and **sportsbook dashboards** (dense odds tickers, red/green money everywhere, urgency banners). Dark is the only MVP theme; every color is a named token so a light theme can arrive later without hunting hex values.",
+    "keyCharacteristics": [
+      "Green-black ground, never pure black; surfaces step up in lightness, never in shadow.",
+      "One brass accent, used for the primary action, selection and progress.",
+      "Fraunces for titles and moments, Inter for everything you read or operate.",
+      "Real table materials (felt, rail, chips, card faces, pockets) carry their own colors, set apart from the app chrome.",
+      "Accessibility is built into the palette: every essential pairing is listed and contrast-tested in code."
+    ],
+    "rules": [
+      {
+        "name": "The One Brass Rule",
+        "body": "Rail Brass marks the primary action, the current selection, progress and focus. It is never a background wash, a decorative border or a heading color. If two things on a screen are gold, one of them is wrong (focus rings excepted).",
+        "section": "colors"
+      },
+      {
+        "name": "The Table Is Not Chrome Rule",
+        "body": "Felt, rail, chip, pocket and suit colors appear only on table surfaces and real game objects. A settings card is never felt green; a chart bar is never a chip color.",
+        "section": "colors"
+      },
+      {
+        "name": "The Listed Pair Rule",
+        "body": "Every essential foreground/background pairing is declared in `essentialPairs` in `apps/mobile/src/theme/tokens.ts` and tested at 4.5:1 for text and 3:1 for graphics. A new pairing gets a new entry before it ships.",
+        "section": "colors"
+      },
+      {
+        "name": "The Serif Names, Sans Works Rule",
+        "body": "Fraunces is used for titles and headline moments only, never for body text, buttons, labels or form input.",
+        "section": "typography"
+      },
+      {
+        "name": "The Scale Cap Rule",
+        "body": "Every text element sets `maxFontSizeMultiplier`: `textScale.display` (1.5×) for Fraunces, `textScale.body` (2×) for Inter. Layout reflows to accept the growth; type never shrinks to fit, except the tab bar label, which has a large-content viewer instead.",
+        "section": "typography"
+      },
+      {
+        "name": "The Lamplight Rule",
+        "body": "A surface is raised by making it lighter, never by casting a shadow. Something that needs to come forward moves up one tonal step (card → popover) or gets a Control Edge border.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do keep the ground After-Hours Green (#0E1311) and raise surfaces by tone: card, then popover.",
+      "Do spend Rail Brass on one thing per view: the primary action, the selection, progress or focus.",
+      "Do pair every status color with an icon, word or shape. Suits use four colors and their pips; selections get a check.",
+      "Do add a new foreground/background pairing to `essentialPairs` before using it, and keep text at 4.5:1 and graphics at 3:1.",
+      "Do reserve a transparent 2px border on every focusable control so the focus ring doesn't shift the layout.",
+      "Do set `maxFontSizeMultiplier` on every `Text` and let layouts reflow at large sizes.",
+      "Do keep numbers in Inter Bold and say them plainly. Practice, simulation and casino figures sit in visibly separate places."
+    ],
+    "donts": [
+      "Don't drift toward generic fintech: no cold white or blue-gray cards, no stock chart styling, no white backgrounds outside the coach note and card faces.",
+      "Don't build sportsbook dashboards: no dense tickers, no red/green money coloring across a screen, no urgency banners or countdowns.",
+      "Don't add shadows or elevation; use the next tonal step.",
+      "Don't use felt, rail, chip or pocket colors in app chrome.",
+      "Don't set body text, buttons, labels or inputs in Fraunces.",
+      "Don't use pure black or pure white on chrome; Pure White is only for text over photos and on chips and pockets.",
+      "Don't add a light theme or ad-hoc hex values; new colors are named tokens in `tokens.ts`."
+    ]
+  }
+}
