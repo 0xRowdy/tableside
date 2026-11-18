@@ -3,7 +3,7 @@
 import type { ChallengeAttemptRecord, ChallengeAttemptSummary, ChallengeFact, ChallengePacing, ChallengeSpecification, RandomStreamIdentity, Receipt, UnsequencedAttemptRecord } from '@tableside/engine';
 
 import type { AllowanceEffect, MeteringBasis } from '../practice/store';
-import type { LessonProgressEvent, UnsequencedLessonEvent } from './lesson-progress';
+import type { AcceptedLessonEvent, LessonProgressEvent, UnsequencedLessonEvent } from './lesson-progress';
 import type { ReadinessMilestoneRecord } from './readiness-milestone';
 
 export const CHALLENGE_ATTEMPT_RECORD_TYPE = 'challenge-attempt';
@@ -107,6 +107,8 @@ export interface DevicePreferences {
 export interface LessonProgressStore {
   recordLessonEvent(event: UnsequencedLessonEvent): Promise<LessonProgressEvent>;
   readLessonEvents(): Promise<readonly LessonProgressEvent[]>;
+  // #147
+  readAcceptedLessonEvents(): Promise<readonly AcceptedLessonEvent[]>;
 }
 
 // Spec 3 Synchronized record types › Readiness milestone; #141

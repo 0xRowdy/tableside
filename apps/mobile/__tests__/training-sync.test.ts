@@ -1,4 +1,4 @@
-// Spec 3 Synchronized record types › Challenge attempt; Amendment 1 C8, C9; Testing Decisions › Seam 2 (Failure injection, Sync); #142
+// Spec 3 Synchronized record types › Challenge attempt, Lesson-progress event; Amendment 1 C8, C9, C10; Testing Decisions › Seam 2 (Failure injection, Sync); #142, #147
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -14,7 +14,8 @@ import { CHALLENGE_ATTEMPT_RECORD_TYPE } from '@/training/store';
 import { TrainingService, type ChallengeSetup } from '@/training/service';
 import { NO_SCREEN_READER } from '@/training/speech';
 import { cardOf, HI_LO_BY_RANK } from '@/training/testing/hi-lo';
-import { attemptRecord, newAttempt } from '@/training/testing/store-contract';
+import { attemptRecord, lessonEvent, newAttempt } from '@/training/testing/store-contract';
+import { LESSON_PROGRESS_RECORD_TYPE, type LessonProgressEvent } from '@/training/lesson-progress';
 
 const KEY = 'cd'.repeat(32);
 const IDENTITY: StoreIdentity = { environment: 'test', accountId: 'local', installationId: 'test-device' };
@@ -164,6 +165,34 @@ describe('the Training service with synced attempts', () => {
     await service.load();
     await store.applyFeedPage(0, [accepted(elsewhere('b-1', 1), 1, true)]);
     expect(await service.attemptReview('b-1')).toBeNull();
+  });
+});
+
+// #147
+describe('recording a lesson-progress event on an account database', () => {
+  it('queues its one upload at the same device position in the same write, announcing it after the commit', async () => {
+    const store = await openStore();
+    let announced = 0;
+    store.onUploadQueued(() => announced++);
+    const first = await store.recordLessonEvent(lessonEvent('e-1'));
+    const second = await store.recordLessonEvent(lessonEvent('e-2', { event: { kind: 'completed' } }));
+    expect(await store.recordLessonEvent(lessonEvent('e-1'))).toEqual(first);
+    expect(announced).toBe(2);
+    expect((await store.readUploadQueue()).map((entry) => ({ recordType: entry.recordType, payload: entry.payload, position: entry.position, dependencies: entry.dependencies }))).toEqual([
+      { recordType: 'lesson-progress', payload: first, position: 1, dependencies: [] },
+      { recordType: 'lesson-progress', payload: second, position: 2, dependencies: [] },
+    ]);
+  });
+
+  it('reads the account’s accepted lesson-progress events with their acceptance sequence', async () => {
+    const store = await openStore();
+    const theirs: LessonProgressEvent = { ...lessonEvent('t-1', { installation: 'other-device' }), deviceSequence: 1 };
+    expect(
+      await store.applyFeedPage(0, [
+        { recordType: LESSON_PROGRESS_RECORD_TYPE, item: 't-1', sequence: 1, payload: theirs, origin: { installation: 'other-device', position: 1 } },
+      ]),
+    ).toBe(true);
+    expect(await store.readAcceptedLessonEvents()).toEqual([{ sequence: 1, event: theirs }]);
   });
 });
 

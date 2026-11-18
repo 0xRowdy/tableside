@@ -1,4 +1,4 @@
-// Spec 3 Testing Decisions › Seam 2 (lessons); Lessons › Progress, Handoff; Amendment 1 C10; #143, #145, #153
+// Spec 3 Testing Decisions › Seam 2 (lessons); Lessons › Progress, Handoff; Amendment 1 C10; #143, #145, #147, #153
 import { EMPTY_QUARANTINE_LIST } from '@tableside/engine';
 import { APP_ORIENTATION, LESSONS, type Lesson, type LessonHandoff } from '@tableside/definitions';
 
@@ -6,6 +6,7 @@ import { alwaysAllowed, type AccessSupervisor } from '@/practice/adapters';
 import { FakeClock, entropyFromWords, PI_WORDS } from '@/practice/testing/substitutes';
 import { MemoryTrainingStore } from '@/training/memory-store';
 import { TrainingService } from '@/training/service';
+import type { LessonProgressChange, LessonProgressEvent } from '@/training/lesson-progress';
 import { FIVE_OF_HEARTS, withWorkedExample } from '@/training/testing/worked-example';
 import { NO_SCREEN_READER } from '@/training/speech';
 
@@ -280,5 +281,49 @@ describe('the Training service lessons', () => {
     store.failNext('recordLessonEvent', 'before');
     await expect(service.stepForward(ORIENTATION, 2)).rejects.toThrow();
     expect(await statusOf(service)).toEqual({ kind: 'in-progress', step: 2 });
+  });
+});
+
+// Spec 3 Amendment 1 C10; #147
+describe('lesson progress synced from other devices', () => {
+  const fromTablet = (deviceSequence: number, event: LessonProgressChange, materialVersion = 1): LessonProgressEvent => ({
+    recordVersion: 1,
+    eventId: `tablet-${deviceSequence}`,
+    owner: 'local',
+    installation: 'tablet',
+    deviceSequence,
+    lesson: { id: ORIENTATION, version: materialVersion, materialVersion },
+    event,
+    recordedAt: 1_789_000_000_000,
+  });
+
+  it('counts a lesson another device completed as completed here', async () => {
+    const { service, store } = setup();
+    await store.acceptLessonEvents([{ sequence: 1, event: fromTablet(1, { kind: 'completed' }) }]);
+    expect(await statusOf(service)).toEqual({ kind: 'completed' });
+  });
+
+  it('resumes at the most recently synced bookmark, shows this device’s unsynced place until it syncs, and lets a late device’s upload overwrite it', async () => {
+    const { service, store } = setup();
+    await store.acceptLessonEvents([{ sequence: 1, event: fromTablet(1, { kind: 'bookmark', step: 4 }) }]);
+    expect(await service.openLesson(ORIENTATION)).toMatchObject({ step: 4, prompt: { kind: 'resume-or-restart', step: 4 } });
+
+    await service.stepForward(ORIENTATION, 1);
+    expect(await statusOf(service)).toEqual({ kind: 'in-progress', step: 2 });
+
+    const [mine] = await store.readLessonEvents();
+    await store.acceptLessonEvents([
+      { sequence: 2, event: mine! },
+      { sequence: 3, event: fromTablet(2, { kind: 'bookmark', step: 3 }) },
+    ]);
+    expect(await statusOf(service)).toEqual({ kind: 'in-progress', step: 3 });
+  });
+
+  it('keeps completion through a restart on another device', async () => {
+    const { service, store } = setup();
+    await service.completeLesson(ORIENTATION);
+    await store.acceptLessonEvents([{ sequence: 1, event: fromTablet(1, { kind: 'restarted' }) }]);
+    expect(await statusOf(service)).toEqual({ kind: 'completed' });
+    expect(await service.openLesson(ORIENTATION)).toMatchObject({ step: 1, prompt: null });
   });
 });

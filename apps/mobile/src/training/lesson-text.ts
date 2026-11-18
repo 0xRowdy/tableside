@@ -92,7 +92,8 @@ export const OPENING_LESSON = 'Opening the lesson…';
 export const stoppedAt = (step: number, steps: number) => `You stopped at step ${step} of ${steps}.`;
 export const resumeAt = (step: number) => `Resume at step ${step}`;
 export const RESTART_FROM_START = 'Restart from step 1';
-export const RESTART_NOTE = 'Restarting keeps your history.';
+// #147
+export const RESTART_NOTE = 'Restarting keeps your history. Your place is synced, so it follows you to your other devices.';
 
 export const SAVE_FAILED = 'Couldn’t save your place in this lesson. Try again.';
 

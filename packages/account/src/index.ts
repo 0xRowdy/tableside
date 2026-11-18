@@ -124,6 +124,8 @@ export {
 } from './privacy-record';
 // #142
 export { challengeAttempt } from './challenge-attempt-record';
+// #147
+export { type LessonProgressChange, type LessonProgressEvent, type UnsequencedLessonEvent, lessonProgressEvent } from './lesson-progress-record';
 export {
   BOOTSTRAP_PAGE_SIZE,
   DETAIL_PAGES_PER_RUN,

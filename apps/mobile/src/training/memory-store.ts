@@ -2,7 +2,7 @@
 import type { ChallengeAttemptRecord, UnsequencedAttemptRecord } from '@tableside/engine';
 
 import { StoreWriteError } from '../practice/memory-store';
-import type { LessonProgressEvent, UnsequencedLessonEvent } from './lesson-progress';
+import type { AcceptedLessonEvent, LessonProgressEvent, UnsequencedLessonEvent } from './lesson-progress';
 import { milestoneSlot, type ReadinessMilestoneRecord } from './readiness-milestone';
 import { withLifecycle, type AcceptedAttempt, type AttemptLifecycle, type AttemptCommitOutcome, type AttemptTransitionCommit, type CommittedAttemptTransition, type NewAttempt, type StoredAttempt, type TrainingStore } from './store';
 
@@ -21,6 +21,8 @@ export class MemoryTrainingDisk {
   readonly milestones: string[] = [];
   // #142
   readonly accepted: string[] = [];
+  // #147
+  readonly acceptedLessonEvents: string[] = [];
 }
 
 export class MemoryTrainingStore implements TrainingStore {
@@ -150,6 +152,18 @@ export class MemoryTrainingStore implements TrainingStore {
 
   readLessonEvents(): Promise<readonly LessonProgressEvent[]> {
     return this.enqueue(() => this.disk.lessonEvents.map((text) => parse<LessonProgressEvent>(text)));
+  }
+
+  // #147
+  readAcceptedLessonEvents(): Promise<readonly AcceptedLessonEvent[]> {
+    return this.enqueue(() => this.disk.acceptedLessonEvents.map((text) => parse<AcceptedLessonEvent>(text)).sort((a, b) => a.sequence - b.sequence));
+  }
+
+  // #147
+  acceptLessonEvents(events: readonly AcceptedLessonEvent[]): Promise<void> {
+    return this.enqueue(() => {
+      this.disk.acceptedLessonEvents.push(...events.map((event) => JSON.stringify(event)));
+    });
   }
 
   // #141
