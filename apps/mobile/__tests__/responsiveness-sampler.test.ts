@@ -1,5 +1,5 @@
 // Spec 1 Launch gates 5; #121
-import type { Command, Receipt } from '@tableside/engine';
+import type { Command, DomainFact, Receipt } from '@tableside/engine';
 
 import { MemoryActivityStore } from '@/practice/memory-store';
 import type { ActivityStore, CommitOutcome, NewActivity, TransitionCommit } from '@/practice/store';
@@ -158,6 +158,16 @@ describe('acknowledgment and durable completion', () => {
       ['acknowledgment', 30_000],
       ['completion', 30_010],
     ]);
+  });
+
+  it('records nothing for an action the engine refused', async () => {
+    const h = harness();
+    const { store } = await tableStore(h.sampler);
+    const command: Command = { kind: 'place-wager', target: 'red', amount: '1' };
+    const refused: TransitionCommit = { ...commit('roulette', command), facts: [{ kind: 'illegal-action', command, reason: 'below-minimum' } as unknown as DomainFact] };
+    await tap(h, store, refused, { down: 10, up: 20 });
+    await h.drawAt(100);
+    expect(h.recorded).toEqual([]);
   });
 
   it('records no completion for a commit that failed or was not this one', async () => {

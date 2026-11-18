@@ -105,7 +105,7 @@ export function createSampler(ports: SamplerPorts): Sampler {
     const game = games.get(commit.activityId);
     const family = practiceFamily(JSON.parse(commit.receipt.command) as Command);
     const run = () => store.commitTransition(commit);
-    if (!game || !family) return run();
+    if (!game || !family || commit.facts.some((fact) => fact.kind === 'illegal-action')) return run();
     return action(game, family, run, (outcome) => outcome.status === 'committed');
   };
 

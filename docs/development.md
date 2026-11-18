@@ -243,7 +243,7 @@ The root view's `onTouchStart`, `onTouchEnd` and `onTouchCancel` (`src/app/_layo
 | `rebuy` | a rebuy |
 | `retry-correction`, `override-correction`, `restart-cycle`, `collect-instead`, `stop-strategy` | guided practice's choices |
 
-Settling a turn, stopping and final or strategy settlement aren't sampled: the gate tests long work separately. Spec 3 adds challenge actions to the same `Sampler.action` (#156).
+An action the engine refuses (an `illegal-action` fact, such as a stake under the minimum) isn't sampled either. Settling a turn, stopping and final or strategy settlement aren't sampled: the gate tests long work separately. Spec 3 adds challenge actions to the same `Sampler.action` (#156).
 
 ### Building it
 
