@@ -34,7 +34,7 @@ import {
   type StoredAttempt,
   type TrainingStore,
 } from '../training/store';
-import { LESSON_PROGRESS_RECORD_TYPE, type AcceptedLessonEvent, type LessonProgressEvent, type UnsequencedLessonEvent } from '../training/lesson-progress';
+import { LESSON_PROGRESS_RECORD_TYPE, type LessonProgressEvent, type LessonSync, type UnsequencedLessonEvent } from '../training/lesson-progress';
 import type { ReadinessMilestoneRecord } from '../training/readiness-milestone';
 import type { SqlConnection, SqlExecutor } from './sql';
 import { createSchema, readSchemaVersion, schemaVersionOf, STORE_MIGRATIONS, STORE_SCHEMA_VERSION, type StoreMigration } from './store-schema';
@@ -556,10 +556,15 @@ export class SqliteActivityStore implements ActivityStore, TrainingStore {
   }
 
   // #147
-  readAcceptedLessonEvents(): Promise<readonly AcceptedLessonEvent[]> {
-    return this.readAcceptedRecords(LESSON_PROGRESS_RECORD_TYPE).then((records) =>
-      records.map((record) => ({ sequence: record.sequence, event: record.payload as LessonProgressEvent })),
-    );
+  readLessonSync(): Promise<LessonSync> {
+    return this.transaction(async (tx) => {
+      const accepted = (await tx.all<AcceptedRow>(`SELECT ${ACCEPTED} FROM accepted_records WHERE record_type = ? ORDER BY sequence`, [LESSON_PROGRESS_RECORD_TYPE])).map(acceptedOf);
+      const refused = await tx.all<{ item_id: string }>(`SELECT item_id FROM outgoing WHERE record_type = ? AND status = 'rejected'`, [LESSON_PROGRESS_RECORD_TYPE]);
+      return {
+        accepted: accepted.map((record) => ({ sequence: record.sequence, event: record.payload as LessonProgressEvent })),
+        refused: refused.map((row) => row.item_id),
+      };
+    });
   }
 
   readLessonEvents(): Promise<readonly LessonProgressEvent[]> {

@@ -45,12 +45,11 @@ begin
     or jsonb_typeof(v_payload -> 'recordedAt') is distinct from 'number'
     or jsonb_typeof(v_lesson) is distinct from 'object'
     or jsonb_typeof(v_lesson -> 'id') is distinct from 'string'
-    or jsonb_typeof(v_lesson -> 'version') is distinct from 'number'
-    or jsonb_typeof(v_lesson -> 'materialVersion') is distinct from 'number'
+    or not v_lesson @? '$ ? (@.version.type() == "number" && @.version >= 1 && @.version == @.version.floor())'
+    or not v_lesson @? '$ ? (@.materialVersion.type() == "number" && @.materialVersion >= 1 && @.materialVersion == @.materialVersion.floor())'
     or jsonb_typeof(v_event) is distinct from 'object'
     or v_event ->> 'kind' is null or v_event ->> 'kind' not in ('bookmark', 'completed', 'restarted')
-    or (v_event ->> 'kind' = 'bookmark' and case when jsonb_typeof(v_event -> 'step') = 'number'
-      then (v_event ->> 'step')::numeric < 1 or (v_event ->> 'step')::numeric <> trunc((v_event ->> 'step')::numeric) else true end) then
+    or (v_event ->> 'kind' = 'bookmark' and not v_event @? '$ ? (@.step.type() == "number" && @.step >= 1 && @.step == @.step.floor())') then
     return jsonb_build_object('status', 'rejected', 'code', 'invalid-payload');
   end if;
   -- The item is the event's own ID; the owner is the authenticated account;

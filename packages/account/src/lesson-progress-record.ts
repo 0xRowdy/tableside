@@ -60,7 +60,7 @@ export const lessonProgressEvent: RecordType<LessonProgressEvent> = {
   barriers: [],
   ordering: 'per-device',
   acceptance: 'private.accept_lesson_progress_event_v1',
-  // Spec 3 Amendment 1 C8: summary data, so no detail
+  // Spec 3 Amendment 1 C8
   snapshot: 'private.snapshot_lesson_progress_events',
   fromChange(change) {
     const record = isObject(change) ? change.record : undefined;

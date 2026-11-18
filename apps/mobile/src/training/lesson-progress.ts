@@ -12,6 +12,16 @@ export interface AcceptedLessonEvent {
   readonly event: LessonProgressEvent;
 }
 
+// #147
+export interface LessonSync {
+  readonly accepted: readonly AcceptedLessonEvent[];
+  readonly refused: readonly string[];
+}
+
+export interface LessonHistory extends LessonSync {
+  readonly local: readonly LessonProgressEvent[];
+}
+
 export type LessonStatus =
   | { readonly kind: 'not-started' }
   | { readonly kind: 'in-progress'; readonly step: number }
@@ -26,18 +36,18 @@ export interface LessonProgress {
   readonly changed: LessonChange | null;
 }
 
-// Spec 3 Amendment 1 C10: server-acceptance order, then this device's unsynced events in device order
-export function acceptanceOrder(accepted: readonly AcceptedLessonEvent[], local: readonly LessonProgressEvent[]): LessonProgressEvent[] {
-  const synced = new Set(accepted.map(({ event }) => event.eventId));
+// Spec 3 Amendment 1 C10; #147
+export function acceptanceOrder({ accepted, refused, local }: LessonHistory): LessonProgressEvent[] {
+  const settled = new Set([...accepted.map(({ event }) => event.eventId), ...refused]);
   return [
     ...[...accepted].sort((a, b) => a.sequence - b.sequence).map(({ event }) => event),
-    ...local.filter((event) => !synced.has(event.eventId)).sort((a, b) => a.deviceSequence - b.deviceSequence),
+    ...local.filter((event) => !settled.has(event.eventId)).sort((a, b) => a.deviceSequence - b.deviceSequence),
   ];
 }
 
-// Spec 3 Amendment 1 C10; events in acceptanceOrder
-export function lessonProgress(events: readonly LessonProgressEvent[], lesson: { readonly id: string; readonly materialVersion: number; readonly steps: number }): LessonProgress {
-  const own = events.filter((event) => event.lesson.id === lesson.id);
+// Spec 3 Amendment 1 C10
+export function lessonProgress(history: LessonHistory, lesson: { readonly id: string; readonly materialVersion: number; readonly steps: number }): LessonProgress {
+  const own = acceptanceOrder(history).filter((event) => event.lesson.id === lesson.id);
   const current = own.filter((event) => event.lesson.materialVersion === lesson.materialVersion);
   const completedNow = current.some((event) => event.event.kind === 'completed');
   const completedBefore = own.some((event) => event.event.kind === 'completed');

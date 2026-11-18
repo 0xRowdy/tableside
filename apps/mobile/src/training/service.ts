@@ -30,7 +30,7 @@ import { ChallengeController, type AttemptSnapshot, type DirectSuspendCause, typ
 import { DeviceLearningPreferences, type LearningPreferences } from './learning-preferences';
 import { attemptEarned, milestoneCandidates, progressProjection, readinessOutcome, type AttemptEarned, type Progress, type ProgressAttempt, type ProgressMilestone } from './progress';
 import { milestoneSlot } from './readiness-milestone';
-import { acceptanceOrder, lessonProgress, type LessonChange, type LessonProgress, type LessonProgressChange, type LessonProgressEvent, type LessonStatus } from './lesson-progress';
+import { lessonProgress, type LessonChange, type LessonHistory, type LessonProgress, type LessonProgressChange, type LessonStatus } from './lesson-progress';
 
 // Spec 3 Recommendations
 export const SUGGESTED_ORDER = CATALOG_CATEGORIES;
@@ -352,7 +352,7 @@ export class TrainingService {
 
   // Spec 3 Lessons › Access
   async listLessons(): Promise<readonly LessonEntry[]> {
-    const events = await this.lessonEvents();
+    const history = await this.lessonHistory();
     return this.lessons.map(({ id, title, summary, section, content }) => ({
       id,
       title,
@@ -360,7 +360,7 @@ export class TrainingService {
       section,
       steps: content ? stepCount(content) : null,
       access: 'available' as const,
-      status: content ? lessonProgress(events, progressKey(id, content)).status : { kind: 'not-started' as const },
+      status: content ? lessonProgress(history, progressKey(id, content)).status : { kind: 'not-started' as const },
     }));
   }
 
@@ -421,14 +421,14 @@ export class TrainingService {
   }
 
   private async progressOf(lesson: AuthoredLesson): Promise<LessonProgress> {
-    return lessonProgress(await this.lessonEvents(), progressKey(lesson.id, lesson.content));
+    return lessonProgress(await this.lessonHistory(), progressKey(lesson.id, lesson.content));
   }
 
   // Spec 3 Amendment 1 C10; #147
-  private async lessonEvents(): Promise<readonly LessonProgressEvent[]> {
+  private async lessonHistory(): Promise<LessonHistory> {
     const { store } = this.adapters;
-    const [accepted, local] = await Promise.all([store.readAcceptedLessonEvents(), store.readLessonEvents()]);
-    return acceptanceOrder(accepted, local);
+    const [sync, local] = await Promise.all([store.readLessonSync(), store.readLessonEvents()]);
+    return { ...sync, local };
   }
 
   private async record(lesson: AuthoredLesson, event: LessonProgressChange): Promise<LessonView> {

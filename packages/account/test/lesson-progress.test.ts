@@ -213,6 +213,10 @@ describe('the server', () => {
     expect(await send('b', { ...event, installation: 'someone-else' }, 1)).toMatchObject({ status: 'rejected', code: 'device-mismatch' });
     expect(await send('c', { ...event, event: { kind: 'bookmark', step: 0 } }, 1)).toMatchObject({ status: 'rejected', code: 'invalid-payload' });
     expect(await send('d', { ...event, event: { kind: 'skipped' } }, 1)).toMatchObject({ status: 'rejected', code: 'invalid-payload' });
+    expect(await send('1', { ...event, event: { kind: 'bookmark', step: 1.5 } }, 1)).toMatchObject({ status: 'rejected', code: 'invalid-payload' });
+    expect(await send('2', { ...event, event: { kind: 'bookmark', step: '2' } }, 1)).toMatchObject({ status: 'rejected', code: 'invalid-payload' });
+    expect(await send('3', { ...event, lesson: { ...event.lesson, version: 0 } }, 1)).toMatchObject({ status: 'rejected', code: 'invalid-payload' });
+    expect(await send('4', { ...event, lesson: { ...event.lesson, materialVersion: 1.5 } }, 1)).toMatchObject({ status: 'rejected', code: 'invalid-payload' });
     expect(await send('e', event, 1)).toMatchObject({ status: 'accepted' });
   });
 });

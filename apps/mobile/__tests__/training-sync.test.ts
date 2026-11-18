@@ -18,6 +18,7 @@ import { attemptRecord, lessonEvent, newAttempt } from '@/training/testing/store
 import { LESSON_PROGRESS_RECORD_TYPE, type LessonProgressEvent } from '@/training/lesson-progress';
 
 const KEY = 'cd'.repeat(32);
+const ABC_SHA256 = 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad';
 const IDENTITY: StoreIdentity = { environment: 'test', accountId: 'local', installationId: 'test-device' };
 const directories: string[] = [];
 const opened: SqliteActivityStore[] = [];
@@ -184,7 +185,7 @@ describe('recording a lesson-progress event on an account database', () => {
     ]);
   });
 
-  it('reads the account’s accepted lesson-progress events with their acceptance sequence', async () => {
+  it('reads the account’s accepted lesson-progress events with their acceptance sequence, and this device’s refused ones', async () => {
     const store = await openStore();
     const theirs: LessonProgressEvent = { ...lessonEvent('t-1', { installation: 'other-device' }), deviceSequence: 1 };
     expect(
@@ -192,7 +193,14 @@ describe('recording a lesson-progress event on an account database', () => {
         { recordType: LESSON_PROGRESS_RECORD_TYPE, item: 't-1', sequence: 1, payload: theirs, origin: { installation: 'other-device', position: 1 } },
       ]),
     ).toBe(true);
-    expect(await store.readAcceptedLessonEvents()).toEqual([{ sequence: 1, event: theirs }]);
+    await store.recordLessonEvent(lessonEvent('e-1'));
+    await store.recordLessonEvent(lessonEvent('e-2'));
+    await store.adoptCommandScope(1);
+    const [refused] = await store.readUploadQueue();
+    const operation = { operationId: 'a'.repeat(32), request: 'abc', requestHash: ABC_SHA256 };
+    await store.prepareUpload(refused!.id, () => operation);
+    await store.acknowledgeUpload(refused!.id, { status: 'rejected', operation: operation.operationId, requestHash: ABC_SHA256, code: 'invalid-payload' }, null);
+    expect(await store.readLessonSync()).toEqual({ accepted: [{ sequence: 1, event: theirs }], refused: ['e-1'] });
   });
 });
 

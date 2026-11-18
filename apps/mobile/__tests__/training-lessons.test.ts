@@ -319,6 +319,15 @@ describe('lesson progress synced from other devices', () => {
     expect(await statusOf(service)).toEqual({ kind: 'in-progress', step: 3 });
   });
 
+  it('lets synced progress outrank this device’s event the server refused', async () => {
+    const { service, store } = setup();
+    await service.stepForward(ORIENTATION, 1);
+    const [refused] = await store.readLessonEvents();
+    await store.refuseLessonEvents([refused!.eventId]);
+    await store.acceptLessonEvents([{ sequence: 1, event: fromTablet(1, { kind: 'bookmark', step: 4 }) }]);
+    expect(await statusOf(service)).toEqual({ kind: 'in-progress', step: 4 });
+  });
+
   it('keeps completion through a restart on another device', async () => {
     const { service, store } = setup();
     await service.completeLesson(ORIENTATION);
