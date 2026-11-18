@@ -117,7 +117,8 @@ describe('per-device order', () => {
 
     const raw = stack.rawClient(accessToken(phone));
     const positions = await directCommands(raw, installationOf(phone));
-    for (const [index, entry] of (await phone.vault.store().readUploadQueue()).entries()) {
+    // #148
+    for (const [index, entry] of (await phone.vault.store().readUploadQueue()).filter((queued) => queued.recordType === challengeAttempt.name).entries()) {
       if (index === 1) continue;
       const record = entry.payload as ChallengeAttemptRecord;
       expect(entry.position).toBe(record.deviceSequence);

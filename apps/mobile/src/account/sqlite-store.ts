@@ -35,7 +35,7 @@ import {
   type TrainingStore,
 } from '../training/store';
 import { LESSON_PROGRESS_RECORD_TYPE, type LessonProgressEvent, type LessonSync, type UnsequencedLessonEvent } from '../training/lesson-progress';
-import type { ReadinessMilestoneRecord } from '../training/readiness-milestone';
+import { milestoneIdentity, READINESS_MILESTONE_RECORD_TYPE, type MilestoneSync, type ReadinessMilestoneRecord } from '../training/readiness-milestone';
 import type { SqlConnection, SqlExecutor } from './sql';
 import { createSchema, readSchemaVersion, schemaVersionOf, STORE_MIGRATIONS, STORE_SCHEMA_VERSION, type StoreMigration } from './store-schema';
 
@@ -575,6 +575,7 @@ export class SqliteActivityStore implements ActivityStore, TrainingStore {
 
   // Spec 3 Synchronized record types › Readiness milestone; #141
   recordMilestone(milestone: ReadinessMilestoneRecord): Promise<ReadinessMilestoneRecord> {
+    let queued = false;
     return this.transaction(async (tx) => {
       if (milestone.owner !== this.identity.accountId || milestone.installation !== this.identity.installationId) {
         throw new StoreMismatchError('a readiness milestone belongs to another account or installation');
@@ -587,12 +588,32 @@ export class SqliteActivityStore implements ActivityStore, TrainingStore {
         `INSERT INTO readiness_milestones (installation_id, group_key, first_attempt_id, second_attempt_id, earned_at, ${BODY}) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [milestone.installation, group, first, second, milestone.earnedAt, ...encode(milestone)],
       );
+      // Spec 3 Synchronized record types › Readiness milestone (Barrier); #148
+      const [from, to] = milestone.deviceSequences;
+      const barrier = await tx.all<{ id: string }>(
+        `SELECT id FROM outgoing WHERE record_type = ? AND status = 'pending' AND device_position BETWEEN ? AND ? ORDER BY device_position`,
+        [CHALLENGE_ATTEMPT_RECORD_TYPE, from, to],
+      );
+      await queueUnpositioned(tx, READINESS_MILESTONE_RECORD_TYPE, milestoneIdentity(milestone), milestone, barrier.map((row) => row.id));
+      queued = true;
       return decodeText<ReadinessMilestoneRecord>(encode(milestone)[0]);
+    }).then((result) => {
+      if (queued) this.notifyQueued();
+      return result;
     });
   }
 
   readMilestones(): Promise<readonly ReadinessMilestoneRecord[]> {
     return this.transaction(async (tx) => (await tx.all<BodyRow>(`SELECT ${BODY} FROM readiness_milestones ORDER BY rowid`)).map((row) => decode<ReadinessMilestoneRecord>(row)));
+  }
+
+  // #148
+  readMilestoneSync(): Promise<MilestoneSync> {
+    return this.transaction(async (tx) => {
+      const accepted = (await tx.all<AcceptedRow>(`SELECT ${ACCEPTED} FROM accepted_records WHERE record_type = ? ORDER BY sequence`, [READINESS_MILESTONE_RECORD_TYPE])).map(acceptedOf);
+      const refused = await tx.all<{ item_id: string }>(`SELECT item_id FROM outgoing WHERE record_type = ? AND status = 'rejected'`, [READINESS_MILESTONE_RECORD_TYPE]);
+      return { accepted: accepted.map((record) => record.payload as ReadinessMilestoneRecord), refused: refused.map((row) => row.item_id) };
+    });
   }
 
   // Spec 3 Amendment 1 C7
@@ -1253,6 +1274,16 @@ async function queueAtDevicePosition(tx: SqlExecutor, recordType: string, item: 
     `INSERT INTO outgoing (id, activity_id, record_type, item_id, revisioned, position, ${BODY}, dependencies, status, device_position)
      VALUES (?, NULL, ?, ?, 0, (SELECT coalesce(max(position), 0) + 1 FROM outgoing), ?, ?, ?, ?, '[]', 'pending', ?)`,
     [body.id, recordType, item, ...encode(body), devicePosition],
+  );
+}
+
+// Spec 3 Synchronized record types › Readiness milestone; #148
+async function queueUnpositioned(tx: SqlExecutor, recordType: string, item: string, record: unknown, dependencies: readonly string[]): Promise<void> {
+  const body: QueuedBody = { id: `${recordType}/${item}`, kind: recordType, record };
+  await tx.run(
+    `INSERT INTO outgoing (id, activity_id, record_type, item_id, revisioned, position, ${BODY}, dependencies, status, device_position)
+     VALUES (?, NULL, ?, ?, 0, (SELECT coalesce(max(position), 0) + 1 FROM outgoing), ?, ?, ?, ?, ?, 'pending', NULL)`,
+    [body.id, recordType, item, ...encode(body), JSON.stringify(dependencies)],
   );
 }
 

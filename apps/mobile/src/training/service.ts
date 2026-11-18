@@ -40,7 +40,7 @@ import type { ChallengeAllowance } from './allowance';
 import { ChallengeController, type AttemptSnapshot, type DirectSuspendCause, type LearnerCommand, type PauseCause, type StartProblem } from './controller';
 import { DeviceLearningPreferences, type LearningPreferences } from './learning-preferences';
 import { attemptEarned, milestoneCandidates, progressProjection, readinessOutcome, type AttemptEarned, type Progress, type ProgressAttempt, type ProgressMilestone } from './progress';
-import { milestoneSlot } from './readiness-milestone';
+import { milestoneIdentity, milestoneSlot } from './readiness-milestone';
 import { lessonProgress, type LessonChange, type LessonHistory, type LessonProgress, type LessonProgressChange, type LessonStatus } from './lesson-progress';
 
 // Spec 3 Recommendations
@@ -364,9 +364,15 @@ export class TrainingService {
     for (const milestone of missing) await this.adapters.store.recordMilestone(milestone);
   }
 
-  // TODO(#148)
+  // Spec 3 Synchronized record types › Readiness milestone; #148
   private async milestones(): Promise<readonly ProgressMilestone[]> {
-    return (await this.adapters.store.readMilestones()).map((record) => ({ record, local: true }));
+    const { store } = this.adapters;
+    const [{ accepted, refused }, local] = await Promise.all([store.readMilestoneSync(), store.readMilestones()]);
+    const settled = new Set(refused);
+    return [
+      ...accepted.map((record) => ({ record, local: false })),
+      ...local.filter((record) => !settled.has(milestoneIdentity(record))).map((record) => ({ record, local: true })),
+    ];
   }
 
   // Spec 3 Comparison groups (local and accepted attempts); #142

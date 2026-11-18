@@ -1,19 +1,19 @@
-// Spec 3 Synchronized record types › Readiness milestone; Comparison groups (Milestones); #141
+// Spec 3 Synchronized record types › Readiness milestone; Comparison groups (Milestones); #141, #148
+import { canonicalJson } from '@tableside/engine';
+import { READINESS_MILESTONE_RECORD_VERSION, readinessMilestone, type ReadinessMilestoneRecord } from '@tableside/account';
 
-import { canonicalJson, type ChallengeGroupKey } from '@tableside/engine';
+// Spec 2 registry
+export const READINESS_MILESTONE_RECORD_TYPE = readinessMilestone.name;
 
-// Spec 2 registry; #148
-export const READINESS_MILESTONE_RECORD_TYPE = 'readiness-milestone';
+export { READINESS_MILESTONE_RECORD_VERSION, type ReadinessMilestoneRecord };
 
-export const READINESS_MILESTONE_RECORD_VERSION = 1 as const;
+// #148
+export const milestoneIdentity = (milestone: ReadinessMilestoneRecord): string => readinessMilestone.identity.of(milestone);
 
-export interface ReadinessMilestoneRecord {
-  readonly recordVersion: typeof READINESS_MILESTONE_RECORD_VERSION;
-  readonly owner: string;
-  readonly installation: string;
-  readonly groupKey: ChallengeGroupKey;
-  readonly attempts: readonly [first: string, second: string];
-  readonly earnedAt: number;
+// #148
+export interface MilestoneSync {
+  readonly accepted: readonly ReadinessMilestoneRecord[];
+  readonly refused: readonly string[];
 }
 
 // Spec 3 Comparison groups (Readiness streak); Amendment 1 B3
