@@ -127,6 +127,8 @@ describe('lessons', () => {
 
     await fireEvent.press(button(/^App orientation\b/));
     expect(await screen.findByText('You stopped at step 2 of 5.')).toBeOnTheScreen();
+    // JJl51; #147
+    expect(screen.getByText('Restarting keeps your history. Your place is synced, so it follows you to your other devices.')).toBeOnTheScreen();
     await fireEvent.press(button('Resume at step 2'));
     expect(await header('Help when you need it')).toBeOnTheScreen();
     expect(screen.queryByText('You stopped at step 2 of 5.')).toBeNull();

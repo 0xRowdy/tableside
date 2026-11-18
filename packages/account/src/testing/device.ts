@@ -16,7 +16,7 @@ import { FakeClock as PracticeClock, substituteAdapters } from '../../../../apps
 import { attemptDetailFrom } from '../../../../apps/mobile/src/account/training';
 import { alwaysAllowed } from '../../../../apps/mobile/src/practice/adapters';
 import { plentyAllowance } from '../../../../apps/mobile/src/training/allowance';
-import { TrainingService } from '../../../../apps/mobile/src/training/service';
+import { TrainingService, type TrainingOptions } from '../../../../apps/mobile/src/training/service';
 import { NO_SCREEN_READER } from '../../../../apps/mobile/src/training/screen-reader-port';
 import { HI_LO_BY_RANK, cardOf } from '../../../../apps/mobile/src/training/testing/hi-lo';
 import type { AgeSignal, EligibilityBand, PlatformAgeSignals } from '../eligibility';
@@ -160,7 +160,7 @@ export interface SimulatedDevice {
   playPracticeSession(options?: { readonly activityId?: string; readonly longerThan?: number }): Promise<CompletedPracticeSession>;
   startPracticeSession(options?: { readonly clock?: PracticeClock }): Promise<PracticeController>;
   // Spec 3 Testing Decisions › Seam 2 (Sync scenarios); #142
-  training(): Promise<TrainingService>;
+  training(options?: TrainingOptions): Promise<TrainingService>;
   playCheck(options?: { readonly wrong?: number; readonly abandonAfter?: number }): Promise<ChallengeAttemptRecord>;
   kill(): void;
   restart(): Promise<void>;
@@ -374,7 +374,7 @@ export function createDevice(stack: LocalStack, options: DeviceOptions): Simulat
   };
 
   // Spec 3 Testing Decisions › Seam 2; #142
-  const training = async () => {
+  const training = async (options: TrainingOptions = {}) => {
     const { account } = app;
     const { store, accountId, installationId } = openSession(app);
     const trainingClock = new PracticeClock(clock.now(), true);
@@ -390,7 +390,7 @@ export function createDevice(stack: LocalStack, options: DeviceOptions): Simulat
       quarantine: EMPTY_QUARANTINE_LIST,
       speech: NO_SCREEN_READER,
       attemptDetail: attemptDetailFrom(account.records),
-    });
+    }, options);
     followAccountGate(account, service);
     await service.load();
     return service;

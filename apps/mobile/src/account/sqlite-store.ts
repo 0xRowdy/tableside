@@ -34,7 +34,7 @@ import {
   type StoredAttempt,
   type TrainingStore,
 } from '../training/store';
-import { LESSON_PROGRESS_RECORD_TYPE, type LessonProgressEvent, type UnsequencedLessonEvent } from '../training/lesson-progress';
+import { LESSON_PROGRESS_RECORD_TYPE, type LessonProgressEvent, type LessonSync, type UnsequencedLessonEvent } from '../training/lesson-progress';
 import type { ReadinessMilestoneRecord } from '../training/readiness-milestone';
 import type { SqlConnection, SqlExecutor } from './sql';
 import { createSchema, readSchemaVersion, schemaVersionOf, STORE_MIGRATIONS, STORE_SCHEMA_VERSION, type StoreMigration } from './store-schema';
@@ -513,12 +513,7 @@ export class SqliteActivityStore implements ActivityStore, TrainingStore {
       ]);
       await tx.run(`UPDATE challenge_attempts SET status = 'ended' WHERE attempt_id = ?`, [record.attemptId]);
       // Spec 3 Attempt lifecycle › Durability; #142
-      const sync: QueuedBody = { id: `${CHALLENGE_ATTEMPT_RECORD_TYPE}/${record.attemptId}`, kind: CHALLENGE_ATTEMPT_RECORD_TYPE, record: sequenced };
-      await tx.run(
-        `INSERT INTO outgoing (id, activity_id, record_type, item_id, revisioned, position, ${BODY}, dependencies, status, device_position)
-         VALUES (?, NULL, ?, ?, 0, (SELECT coalesce(max(position), 0) + 1 FROM outgoing), ?, ?, ?, ?, '[]', 'pending', ?)`,
-        [sync.id, CHALLENGE_ATTEMPT_RECORD_TYPE, record.attemptId, ...encode(sync), deviceSequence],
-      );
+      await queueAtDevicePosition(tx, CHALLENGE_ATTEMPT_RECORD_TYPE, record.attemptId, sequenced, deviceSequence);
       queued = true;
       return decodeText<ChallengeAttemptRecord>(encode(sequenced)[0]);
     }).then((result) => {
@@ -540,6 +535,7 @@ export class SqliteActivityStore implements ActivityStore, TrainingStore {
 
   // Spec 3 Synchronized record types › Lesson-progress event; #143
   recordLessonEvent(event: UnsequencedLessonEvent): Promise<LessonProgressEvent> {
+    let queued = false;
     return this.transaction(async (tx) => {
       if (event.owner !== this.identity.accountId || event.installation !== this.identity.installationId) {
         throw new StoreMismatchError(`lesson-progress event ${event.eventId} belongs to another account or installation`);
@@ -549,7 +545,25 @@ export class SqliteActivityStore implements ActivityStore, TrainingStore {
       const deviceSequence = await nextDevicePosition(tx, LESSON_PROGRESS_RECORD_TYPE);
       const sequenced: LessonProgressEvent = { ...event, deviceSequence };
       await tx.run(`INSERT INTO lesson_progress_events (event_id, device_sequence, ${BODY}) VALUES (?, ?, ?, ?, ?, ?)`, [event.eventId, deviceSequence, ...encode(sequenced)]);
+      // #147
+      await queueAtDevicePosition(tx, LESSON_PROGRESS_RECORD_TYPE, event.eventId, sequenced, deviceSequence);
+      queued = true;
       return decodeText<LessonProgressEvent>(encode(sequenced)[0]);
+    }).then((result) => {
+      if (queued) this.notifyQueued();
+      return result;
+    });
+  }
+
+  // #147
+  readLessonSync(): Promise<LessonSync> {
+    return this.transaction(async (tx) => {
+      const accepted = (await tx.all<AcceptedRow>(`SELECT ${ACCEPTED} FROM accepted_records WHERE record_type = ? ORDER BY sequence`, [LESSON_PROGRESS_RECORD_TYPE])).map(acceptedOf);
+      const refused = await tx.all<{ item_id: string }>(`SELECT item_id FROM outgoing WHERE record_type = ? AND status = 'rejected'`, [LESSON_PROGRESS_RECORD_TYPE]);
+      return {
+        accepted: accepted.map((record) => ({ sequence: record.sequence, event: record.payload as LessonProgressEvent })),
+        refused: refused.map((row) => row.item_id),
+      };
     });
   }
 
@@ -1230,6 +1244,16 @@ async function nextDevicePosition(tx: SqlExecutor, recordType: string): Promise<
   const position = (last?.last ?? 0) + 1;
   await tx.run('INSERT INTO device_positions (record_type, last) VALUES (?, ?) ON CONFLICT (record_type) DO UPDATE SET last = excluded.last', [recordType, position]);
   return position;
+}
+
+// Spec 3 Synchronized record types (per-device results); #142, #147
+async function queueAtDevicePosition(tx: SqlExecutor, recordType: string, item: string, record: unknown, devicePosition: number): Promise<void> {
+  const body: QueuedBody = { id: `${recordType}/${item}`, kind: recordType, record };
+  await tx.run(
+    `INSERT INTO outgoing (id, activity_id, record_type, item_id, revisioned, position, ${BODY}, dependencies, status, device_position)
+     VALUES (?, NULL, ?, ?, 0, (SELECT coalesce(max(position), 0) + 1 FROM outgoing), ?, ?, ?, ?, '[]', 'pending', ?)`,
+    [body.id, recordType, item, ...encode(body), devicePosition],
+  );
 }
 
 // Spec 3 Amendment 1 C9

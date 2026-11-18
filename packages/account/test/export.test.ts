@@ -122,6 +122,34 @@ describe('challenge attempts in the server export', () => {
   });
 });
 
+// Spec 3 Synchronized record types › Lesson-progress event (exported as JSON); Amendment 1 C7; #147
+describe('lesson progress in the server export', () => {
+  it('holds every synced lesson-progress event whole as versioned JSON in acceptance order, with no CSV and no device preference', async () => {
+    const { phone, email } = await signedInPhone('lessons');
+    const training = await phone.training();
+    await training.setStartHere(false);
+    await training.hintSeen('count-entry');
+    await training.stepForward('app-orientation', 1);
+    await training.completeLesson('app-orientation');
+    await phone.account.sync.reconcile();
+    expect(await phone.account.sync.countWaiting()).toBe(0);
+
+    const { files } = await exportArchive(phone, email);
+    const manifest = JSON.parse(files.get('manifest.json')!) as { files: { path: string; format: string; records?: number }[] };
+    expect(manifest.files.find((file) => file.path === 'lesson-progress.json')).toMatchObject({ format: 'json', records: 2 });
+    expect(files.has('lesson-progress.csv')).toBe(false);
+    const json = JSON.parse(files.get('lesson-progress.json')!) as { records: { event: unknown; deviceSequence: number }[] };
+    expect(json).toMatchObject({ version: 1, recordType: 'lesson-progress', payloadVersion: 1 });
+    expect(json.records.map((record) => [record.deviceSequence, record.event])).toEqual([
+      [1, { kind: 'bookmark', step: 2 }],
+      [2, { kind: 'completed' }],
+    ]);
+    for (const preference of ['challenge.last-setup', 'learning.start-here-dismissed', 'learning.hints-seen']) {
+      for (const [path, text] of files) expect(text, path).not.toContain(preference);
+    }
+  });
+});
+
 async function objectPath(accountId: string): Promise<string> {
   const [row] = await stack.sql<{ object_path: string }[]>`
     select object_path from private.exports where account_id = ${accountId} order by requested_at desc limit 1`;
