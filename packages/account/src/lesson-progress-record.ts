@@ -4,8 +4,10 @@ import type { RecordType } from './sync/registry';
 
 export type LessonProgressChange = { readonly kind: 'bookmark'; readonly step: number } | { readonly kind: 'completed' } | { readonly kind: 'restarted' };
 
+export const LESSON_PROGRESS_RECORD_VERSION = 1 as const;
+
 export interface UnsequencedLessonEvent {
-  readonly recordVersion: 1;
+  readonly recordVersion: typeof LESSON_PROGRESS_RECORD_VERSION;
   readonly eventId: string;
   readonly owner: string;
   readonly installation: string;
@@ -37,7 +39,7 @@ function isChange(value: unknown): value is LessonProgressChange {
 function isEvent(value: unknown): value is LessonProgressEvent {
   return (
     isObject(value) &&
-    value.recordVersion === 1 &&
+    value.recordVersion === LESSON_PROGRESS_RECORD_VERSION &&
     typeof value.eventId === 'string' &&
     typeof value.owner === 'string' &&
     typeof value.installation === 'string' &&

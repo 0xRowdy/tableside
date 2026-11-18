@@ -41,7 +41,7 @@ import { ChallengeController, type AttemptSnapshot, type DirectSuspendCause, typ
 import { DeviceLearningPreferences, type LearningPreferences } from './learning-preferences';
 import { attemptEarned, milestoneCandidates, progressProjection, readinessOutcome, type AttemptEarned, type Progress, type ProgressAttempt, type ProgressMilestone } from './progress';
 import { milestoneIdentity, milestoneSlot, type ReadinessMilestoneRecord } from './readiness-milestone';
-import { lessonProgress, type LessonChange, type LessonHistory, type LessonProgress, type LessonProgressChange, type LessonStatus } from './lesson-progress';
+import { LESSON_PROGRESS_RECORD_VERSION, lessonProgress, type LessonChange, type LessonHistory, type LessonProgress, type LessonProgressChange, type LessonStatus } from './lesson-progress';
 
 // Spec 3 Recommendations
 export const SUGGESTED_ORDER = CATALOG_CATEGORIES;
@@ -554,7 +554,7 @@ export class TrainingService {
   private async record(lesson: AuthoredLesson, event: LessonProgressChange): Promise<LessonView> {
     const { version, materialVersion } = lesson.content;
     await this.adapters.store.recordLessonEvent({
-      recordVersion: 1,
+      recordVersion: LESSON_PROGRESS_RECORD_VERSION,
       eventId: this.adapters.newId(),
       owner: this.adapters.owner,
       installation: this.adapters.device,
