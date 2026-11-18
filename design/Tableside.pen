@@ -108574,6 +108574,30 @@
                   }
                 },
                 {
+                  "id": "SFSi8",
+                  "type": "ref",
+                  "ref": "YqcmY",
+                  "name": "Row Text size",
+                  "width": "fill_container",
+                  "strokeWidth": {
+                    "bottom": 1
+                  },
+                  "descendants": {
+                    "laibs": {
+                      "icon": "a-large-small"
+                    },
+                    "YsOgK": {
+                      "content": "Text size"
+                    },
+                    "AXfKi": {
+                      "content": "Standard"
+                    },
+                    "zwbRu": {
+                      "enabled": false
+                    }
+                  }
+                },
+                {
                   "id": "dxHVr",
                   "type": "ref",
                   "ref": "YqcmY",
@@ -108676,7 +108700,7 @@
               "fill": "$--muted-foreground",
               "textGrowth": "fixed-width",
               "width": "fill_container",
-              "content": "Settings has eight areas. Sound & haptics holds one slider and one switch; there are no other sound settings. Sources & credits and About work offline.",
+              "content": "Settings has nine areas. Sound & haptics holds one slider and one switch; there are no other sound settings. Text size has three steps. Sources & credits and About work offline.",
               "lineHeight": 1.45,
               "fontFamily": "$--font-ui",
               "fontSize": 13,
@@ -438914,6 +438938,976 @@
               "fontWeight": "700"
             }
           }
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "I886X",
+      "x": 6800,
+      "y": 14774,
+      "name": "[MVP] S1-12 Settings › Text size — Large selected, applied live (scrolls)",
+      "theme": {
+        "text": "large"
+      },
+      "clip": true,
+      "width": 390,
+      "fill": "$--background",
+      "layout": "vertical",
+      "children": [
+        {
+          "id": "e4guhQ",
+          "type": "ref",
+          "ref": "g3jlEe",
+          "name": "Status Bar",
+          "width": "fill_container"
+        },
+        {
+          "id": "n8MWfH",
+          "type": "ref",
+          "ref": "OhMJB",
+          "name": "Header",
+          "width": "fill_container",
+          "descendants": {
+            "q0sEP1": {
+              "content": "Text size"
+            },
+            "ywbdp": {
+              "content": "Settings"
+            },
+            "i2RY9": {
+              "enabled": false
+            }
+          }
+        },
+        {
+          "type": "frame",
+          "id": "C3A79",
+          "name": "Body",
+          "width": "fill_container",
+          "layout": "vertical",
+          "gap": 12,
+          "padding": [
+            8,
+            20,
+            24,
+            20
+          ],
+          "children": [
+            {
+              "type": "text",
+              "id": "gWSol",
+              "name": "Preview label",
+              "fill": "$--muted-foreground",
+              "content": "Preview",
+              "fontFamily": "$--font-ui",
+              "fontSize": "$--text-label",
+              "fontWeight": "600"
+            },
+            {
+              "type": "frame",
+              "id": "O1i9Q7",
+              "name": "Preview",
+              "width": "fill_container",
+              "fill": "$--card",
+              "cornerRadius": "$--radius-lg",
+              "layout": "vertical",
+              "gap": 14,
+              "padding": 16,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "C4POU6",
+                  "name": "Prompt",
+                  "width": "fill_container",
+                  "gap": 14,
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "id": "SbRpM",
+                      "type": "ref",
+                      "ref": "zqstp",
+                      "name": "Card 9♥",
+                      "descendants": {
+                        "H25l8L": {
+                          "content": "9",
+                          "fill": "$--suit-heart"
+                        },
+                        "eG77y": {
+                          "content": "♥︎",
+                          "fill": "$--suit-heart"
+                        },
+                        "MnuHe": {
+                          "content": "♥︎",
+                          "fill": "$--suit-heart"
+                        }
+                      }
+                    },
+                    {
+                      "type": "frame",
+                      "id": "hGzrj",
+                      "name": "Text",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 2,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "A75acA",
+                          "name": "Checkpoint",
+                          "fill": "$--muted-foreground",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "Checkpoint 1 of 4",
+                          "fontFamily": "$--font-ui",
+                          "fontSize": "$--text-label",
+                          "fontWeight": "600"
+                        },
+                        {
+                          "type": "text",
+                          "id": "WhNTl",
+                          "name": "Prompt",
+                          "fill": "$--foreground",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "Enter the running count after 13 cards",
+                          "lineHeight": 1.25,
+                          "fontFamily": "$--font-ui",
+                          "fontSize": "$--text-heading",
+                          "fontWeight": "600"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "text",
+                  "id": "Q5Cfzg",
+                  "name": "Sentence",
+                  "fill": "$--foreground",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "Check holds all feedback until the end.",
+                  "lineHeight": 1.45,
+                  "fontFamily": "$--font-ui",
+                  "fontSize": "$--text-body",
+                  "fontWeight": "normal"
+                },
+                {
+                  "id": "NZ6p8",
+                  "type": "ref",
+                  "ref": "uAI8V",
+                  "name": "Submit",
+                  "width": "fill_container",
+                  "descendants": {
+                    "JPqtW": {
+                      "content": "Submit"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "hTZ5N",
+              "name": "Gap",
+              "width": "fill_container",
+              "height": 4
+            },
+            {
+              "type": "frame",
+              "id": "tm7pr",
+              "name": "Text size options",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 10,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "dXmji",
+                  "name": "Option Standard",
+                  "theme": {
+                    "text": "standard"
+                  },
+                  "width": "fill_container",
+                  "fill": "$--card",
+                  "cornerRadius": 14,
+                  "gap": 12,
+                  "padding": [
+                    14,
+                    16
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "icon",
+                      "id": "HiiPn",
+                      "name": "Radio",
+                      "width": 24,
+                      "height": 24,
+                      "icon": "circle",
+                      "library": "lucide",
+                      "fill": "$--muted-foreground"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "FYTFJ",
+                      "name": "Text",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 2,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "Td1Ah",
+                          "name": "Name",
+                          "fill": "$--foreground",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "Standard",
+                          "fontFamily": "$--font-ui",
+                          "fontSize": "$--text-body",
+                          "fontWeight": "600"
+                        },
+                        {
+                          "type": "text",
+                          "id": "Xd5Qn",
+                          "name": "Detail",
+                          "fill": "$--muted-foreground",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "The default size.",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$--font-ui",
+                          "fontSize": "$--text-secondary",
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "Myib3",
+                  "name": "Option Large (selected)",
+                  "theme": {
+                    "text": "large"
+                  },
+                  "width": "fill_container",
+                  "fill": "$--secondary",
+                  "cornerRadius": 14,
+                  "stroke": "$--primary",
+                  "strokeWidth": 2,
+                  "gap": 12,
+                  "padding": [
+                    14,
+                    16
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "icon",
+                      "id": "xowMo",
+                      "name": "Radio",
+                      "width": 24,
+                      "height": 24,
+                      "icon": "circle-check-big",
+                      "library": "lucide",
+                      "fill": "$--primary"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "Cr8ZG",
+                      "name": "Text",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 2,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "PSifw",
+                          "name": "Name",
+                          "fill": "$--foreground",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "Large",
+                          "fontFamily": "$--font-ui",
+                          "fontSize": "$--text-body",
+                          "fontWeight": "600"
+                        },
+                        {
+                          "type": "text",
+                          "id": "BHZE9",
+                          "name": "Detail",
+                          "fill": "$--muted-foreground",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "Bigger text everywhere in Tableside.",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$--font-ui",
+                          "fontSize": "$--text-secondary",
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "Xm5ll",
+                      "name": "Selected",
+                      "fill": "$--foreground",
+                      "content": "Selected",
+                      "fontFamily": "$--font-ui",
+                      "fontSize": "$--text-label",
+                      "fontWeight": "600"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "Usisk",
+                  "name": "Option Larger",
+                  "theme": {
+                    "text": "larger"
+                  },
+                  "width": "fill_container",
+                  "fill": "$--card",
+                  "cornerRadius": 14,
+                  "gap": 12,
+                  "padding": [
+                    14,
+                    16
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "icon",
+                      "id": "b3y1A",
+                      "name": "Radio",
+                      "width": 24,
+                      "height": 24,
+                      "icon": "circle",
+                      "library": "lucide",
+                      "fill": "$--muted-foreground"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "C2UokQ",
+                      "name": "Text",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 2,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "Dz2Ie",
+                          "name": "Name",
+                          "fill": "$--foreground",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "Larger",
+                          "fontFamily": "$--font-ui",
+                          "fontSize": "$--text-body",
+                          "fontWeight": "600"
+                        },
+                        {
+                          "type": "text",
+                          "id": "ph21X",
+                          "name": "Detail",
+                          "fill": "$--muted-foreground",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "The biggest. Tables and long lists scroll more.",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$--font-ui",
+                          "fontSize": "$--text-secondary",
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "id": "oxPdU",
+              "name": "Phone note",
+              "fill": "$--muted-foreground",
+              "textGrowth": "fixed-width",
+              "width": "fill_container",
+              "content": "Your phone's text size still applies, and this adds to it. At the very largest combinations, text stops growing so tables still fit.",
+              "lineHeight": 1.4,
+              "fontFamily": "$--font-ui",
+              "fontSize": "$--text-secondary",
+              "fontWeight": "normal"
+            },
+            {
+              "type": "text",
+              "id": "iipYV",
+              "name": "Storage note",
+              "fill": "$--muted-foreground",
+              "textGrowth": "fixed-width",
+              "width": "fill_container",
+              "content": "Stored on this device only. It never affects scoring or records.",
+              "lineHeight": 1.4,
+              "fontFamily": "$--font-ui",
+              "fontSize": "$--text-secondary",
+              "fontWeight": "normal"
+            }
+          ]
+        },
+        {
+          "id": "yG7My",
+          "type": "ref",
+          "ref": "thF4f",
+          "name": "Tab Bar",
+          "width": "fill_container",
+          "descendants": {
+            "u1eykY/n3nPM": {
+              "fill": "$--secondary",
+              "stroke": "$--primary",
+              "strokeWidth": 1.5
+            },
+            "u1eykY/w9JZY0": {
+              "fill": "$--primary"
+            },
+            "u1eykY/I1qtr": {
+              "fill": "$--foreground",
+              "fontWeight": "700"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "Np7f0",
+      "x": 9000,
+      "y": 16700,
+      "name": "[MVP] S2-16 First run — text size (step 0, before Welcome)",
+      "theme": {
+        "text": "standard"
+      },
+      "clip": true,
+      "width": 390,
+      "height": 844,
+      "fill": "$--background",
+      "layout": "vertical",
+      "children": [
+        {
+          "id": "p1MIJA",
+          "type": "ref",
+          "ref": "g3jlEe",
+          "name": "Status Bar",
+          "width": "fill_container"
+        },
+        {
+          "type": "frame",
+          "id": "FZ7Px",
+          "name": "Body",
+          "width": "fill_container",
+          "height": "fill_container",
+          "layout": "vertical",
+          "gap": 12,
+          "padding": [
+            16,
+            20
+          ],
+          "children": [
+            {
+              "type": "text",
+              "id": "tJYxs",
+              "name": "Title",
+              "fill": "$--foreground",
+              "textGrowth": "fixed-width",
+              "width": "fill_container",
+              "content": "Choose a text size",
+              "lineHeight": 1.15,
+              "fontFamily": "$--font-display",
+              "fontSize": "$--text-display",
+              "fontWeight": "normal"
+            },
+            {
+              "type": "text",
+              "id": "glTB8",
+              "name": "Sub",
+              "fill": "$--foreground",
+              "textGrowth": "fixed-width",
+              "width": "fill_container",
+              "content": "Pick what's comfortable to read. You can change it any time in More › Settings.",
+              "lineHeight": 1.4,
+              "fontFamily": "$--font-ui",
+              "fontSize": "$--text-secondary",
+              "fontWeight": "normal"
+            },
+            {
+              "type": "frame",
+              "id": "RGgmH",
+              "name": "Preview group",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "Xc4dT",
+                  "name": "Preview label",
+                  "fill": "$--muted-foreground",
+                  "content": "Preview",
+                  "fontFamily": "$--font-ui",
+                  "fontSize": "$--text-label",
+                  "fontWeight": "600"
+                },
+                {
+                  "type": "frame",
+                  "id": "EzBBA",
+                  "name": "Preview",
+                  "width": "fill_container",
+                  "fill": "$--card",
+                  "cornerRadius": "$--radius-lg",
+                  "layout": "vertical",
+                  "gap": 14,
+                  "padding": 16,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "EkGYI",
+                      "name": "Prompt",
+                      "width": "fill_container",
+                      "gap": 14,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "id": "j4VPDx",
+                          "type": "ref",
+                          "ref": "zqstp",
+                          "name": "Card 9♥",
+                          "descendants": {
+                            "H25l8L": {
+                              "content": "9",
+                              "fill": "$--suit-heart"
+                            },
+                            "eG77y": {
+                              "content": "♥︎",
+                              "fill": "$--suit-heart"
+                            },
+                            "MnuHe": {
+                              "content": "♥︎",
+                              "fill": "$--suit-heart"
+                            }
+                          }
+                        },
+                        {
+                          "type": "frame",
+                          "id": "EPL8I",
+                          "name": "Text",
+                          "width": "fill_container",
+                          "layout": "vertical",
+                          "gap": 2,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "j6Ikzf",
+                              "name": "Checkpoint",
+                              "fill": "$--muted-foreground",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container",
+                              "content": "Checkpoint 1 of 4",
+                              "fontFamily": "$--font-ui",
+                              "fontSize": "$--text-label",
+                              "fontWeight": "600"
+                            },
+                            {
+                              "type": "text",
+                              "id": "NncJ0",
+                              "name": "Prompt",
+                              "fill": "$--foreground",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container",
+                              "content": "Enter the running count after 13 cards",
+                              "lineHeight": 1.25,
+                              "fontFamily": "$--font-ui",
+                              "fontSize": "$--text-heading",
+                              "fontWeight": "600"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "Sr7Pq",
+                      "name": "Sentence",
+                      "fill": "$--foreground",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "Check holds all feedback until the end.",
+                      "lineHeight": 1.45,
+                      "fontFamily": "$--font-ui",
+                      "fontSize": "$--text-body",
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "id": "KzszG",
+                      "type": "ref",
+                      "ref": "uAI8V",
+                      "name": "Submit",
+                      "width": "fill_container",
+                      "descendants": {
+                        "JPqtW": {
+                          "content": "Submit"
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "y7PaL",
+              "name": "Text size options",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "wNZIV",
+                  "name": "Option Standard (selected)",
+                  "theme": {
+                    "text": "standard"
+                  },
+                  "width": "fill_container",
+                  "fill": "$--secondary",
+                  "cornerRadius": 14,
+                  "stroke": "$--primary",
+                  "strokeWidth": 2,
+                  "gap": 12,
+                  "padding": [
+                    14,
+                    16
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "icon",
+                      "id": "r8biBN",
+                      "name": "Radio",
+                      "width": 24,
+                      "height": 24,
+                      "icon": "circle-check-big",
+                      "library": "lucide",
+                      "fill": "$--primary"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "vzA8h",
+                      "name": "Text",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 2,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "xwCWC",
+                          "name": "Name",
+                          "fill": "$--foreground",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "Standard",
+                          "fontFamily": "$--font-ui",
+                          "fontSize": "$--text-body",
+                          "fontWeight": "600"
+                        },
+                        {
+                          "type": "text",
+                          "id": "YJKiD",
+                          "name": "Detail",
+                          "fill": "$--muted-foreground",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "The default size.",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$--font-ui",
+                          "fontSize": "$--text-secondary",
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "b0z9jl",
+                      "name": "Selected",
+                      "fill": "$--foreground",
+                      "content": "Selected",
+                      "fontFamily": "$--font-ui",
+                      "fontSize": "$--text-label",
+                      "fontWeight": "600"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "X9MXy",
+                  "name": "Option Large",
+                  "theme": {
+                    "text": "large"
+                  },
+                  "width": "fill_container",
+                  "fill": "$--card",
+                  "cornerRadius": 14,
+                  "gap": 12,
+                  "padding": [
+                    14,
+                    16
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "icon",
+                      "id": "CoWyQ",
+                      "name": "Radio",
+                      "width": 24,
+                      "height": 24,
+                      "icon": "circle",
+                      "library": "lucide",
+                      "fill": "$--muted-foreground"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "vXwPP",
+                      "name": "Text",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 2,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "lTjhB",
+                          "name": "Name",
+                          "fill": "$--foreground",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "Large",
+                          "fontFamily": "$--font-ui",
+                          "fontSize": "$--text-body",
+                          "fontWeight": "600"
+                        },
+                        {
+                          "type": "text",
+                          "id": "DOi66",
+                          "name": "Detail",
+                          "fill": "$--muted-foreground",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "Bigger text everywhere in Tableside.",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$--font-ui",
+                          "fontSize": "$--text-secondary",
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "X55ntj",
+                  "name": "Option Larger",
+                  "theme": {
+                    "text": "larger"
+                  },
+                  "width": "fill_container",
+                  "fill": "$--card",
+                  "cornerRadius": 14,
+                  "gap": 12,
+                  "padding": [
+                    14,
+                    16
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "icon",
+                      "id": "R0c1z",
+                      "name": "Radio",
+                      "width": 24,
+                      "height": 24,
+                      "icon": "circle",
+                      "library": "lucide",
+                      "fill": "$--muted-foreground"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "b5PbpR",
+                      "name": "Text",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 2,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "k24YU",
+                          "name": "Name",
+                          "fill": "$--foreground",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "Larger",
+                          "fontFamily": "$--font-ui",
+                          "fontSize": "$--text-body",
+                          "fontWeight": "600"
+                        },
+                        {
+                          "type": "text",
+                          "id": "x8QsFU",
+                          "name": "Detail",
+                          "fill": "$--muted-foreground",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "The biggest. Tables and long lists scroll more.",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$--font-ui",
+                          "fontSize": "$--text-secondary",
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "ydwCC",
+              "name": "Spacer",
+              "width": "fill_container",
+              "height": "fill_container"
+            },
+            {
+              "id": "hF0u6",
+              "type": "ref",
+              "ref": "CF3yA",
+              "name": "Continue",
+              "width": "fill_container",
+              "descendants": {
+                "Ostw3": {
+                  "enabled": false
+                },
+                "lehj6": {
+                  "content": "Continue"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "w5dxmC",
+          "name": "Home Indicator",
+          "width": "fill_container",
+          "height": 22,
+          "justifyContent": "center",
+          "alignItems": "center",
+          "children": [
+            {
+              "type": "rectangle",
+              "cornerRadius": 3,
+              "id": "LkoAD",
+              "name": "Bar",
+              "fill": "$--foreground",
+              "width": 134,
+              "height": 5
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "PKe5o",
+      "x": 6800,
+      "y": 15791,
+      "name": "Annotation — S1-12 Settings › Text size (not UI)",
+      "width": 390,
+      "stroke": "$--annotation",
+      "strokeWidth": {
+        "left": 2
+      },
+      "layout": "vertical",
+      "gap": 6,
+      "padding": [
+        10,
+        12
+      ],
+      "children": [
+        {
+          "type": "text",
+          "id": "DAV8C",
+          "name": "Label",
+          "fill": "$--annotation",
+          "content": "ANNOTATION · NOT IN THE UI",
+          "fontFamily": "$--font-ui",
+          "fontSize": 10,
+          "fontWeight": "700",
+          "letterSpacing": 1
+        },
+        {
+          "type": "text",
+          "id": "g5VcY",
+          "name": "Annotation",
+          "fill": "$--annotation",
+          "textGrowth": "fixed-width",
+          "width": "fill_container",
+          "content": "Three steps: Standard, Large, Larger (the --text-* variables, theme axis text). Tapping a step applies at once to the whole app, this screen included; there is no Save. This frame is drawn at Large. Each option row is drawn at its own step. The preview uses the same card, prompt, sentence and button as a running-count checkpoint; the card keeps its size at every step. The size multiplies with the phone's text size, capped at 2× for Inter and 1.5× for Fraunces (textScale); tab labels stay 12 and use the large-content viewer. Stored per installation, never synced or exported, and never read by scoring, readiness or record comparison. Screen readers: a radio group named Text size; each option reads its name, its detail and selected state.",
+          "lineHeight": 1.4,
+          "fontFamily": "$--font-ui",
+          "fontSize": 12,
+          "fontWeight": "normal"
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "Te2bq",
+      "x": 9000,
+      "y": 17584,
+      "name": "Annotation — S2-16 First run · text size (not UI)",
+      "width": 390,
+      "stroke": "$--annotation",
+      "strokeWidth": {
+        "left": 2
+      },
+      "layout": "vertical",
+      "gap": 6,
+      "padding": [
+        10,
+        12
+      ],
+      "children": [
+        {
+          "type": "text",
+          "id": "DRY2E",
+          "name": "Label",
+          "fill": "$--annotation",
+          "content": "ANNOTATION · NOT IN THE UI",
+          "fontFamily": "$--font-ui",
+          "fontSize": 10,
+          "fontWeight": "700",
+          "letterSpacing": 1
+        },
+        {
+          "type": "text",
+          "id": "F16bo",
+          "name": "Annotation",
+          "fill": "$--annotation",
+          "textGrowth": "fixed-width",
+          "width": "fill_container",
+          "content": "Step 0 of first run, before Welcome, on the new-player and returning (new device) paths: it needs no account and makes every later setup screen readable. Shown once per installation; afterwards only in More › Settings › Text size. Standard is preselected, so Continue alone keeps the default. Choosing a step applies at once to this screen. No skip link: Continue is the only way forward. S2-16's order diagram (zJjsp) still shows Welcome first; update it when this step is accepted.",
+          "lineHeight": 1.4,
+          "fontFamily": "$--font-ui",
+          "fontSize": 12,
+          "fontWeight": "normal"
         }
       ]
     }
