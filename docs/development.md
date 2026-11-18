@@ -258,7 +258,7 @@ pnpm exec expo run:android --variant release --device
 
 The prebuild must be `--clean`: without the flag, `plugins/with-responsiveness-sampling.js` leaves the native module out of autolinking (`exclude` in the Podfile and `settings.gradle`), and a clean prebuild also drops a JS bundle Gradle cached from an earlier build. Against a `local` backend over `http:`, the plugin also allows cleartext traffic on Android. When you're done, run `pnpm exec expo prebuild --clean --platform <ios|android>` without the flag before any other build.
 
-For a simulator, build with `xcodebuild` (`-configuration Release -sdk iphonesimulator CODE_SIGNING_ALLOWED=NO`), since a simulator app can't carry Sign in with Apple without a signing certificate.
+For an iOS simulator, prebuild with `ENGINE_HARNESS=1` as well, which leaves out Sign in with Apple as the harness legs do: a simulator app can't carry that entitlement without a signing certificate. Then build with `xcodebuild -configuration Release -sdk iphonesimulator CODE_SIGN_IDENTITY=- CODE_SIGNING_REQUIRED=NO` and install with `xcrun simctl install booted <app>`. Don't turn signing off (`CODE_SIGNING_ALLOWED=NO`): an unsigned simulator app has no keychain, so the account never opens and the app stays on the splash screen.
 
 A store build carries none of the recorder (**store builds**): `src/responsiveness/probe.ts` folds to `sampling = null` without the flag, so Metro never bundles `recorder.tsx`, and the native module isn't linked. `__tests__/responsiveness-build-flag.test.ts` checks both.
 
