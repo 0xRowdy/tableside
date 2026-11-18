@@ -54,6 +54,7 @@ const config: ExpoConfig = {
     './plugins/with-google-sign-in',
     './plugins/with-backup-exclusion',
     './plugins/with-engine-harness',
+    './plugins/with-responsiveness-sampling',
   ],
   experiments: {
     typedRoutes: true,
