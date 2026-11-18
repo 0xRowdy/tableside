@@ -8833,7 +8833,7 @@
                         "XoMSE": {
                           "content": "Lesson: running count",
                           "fill": "$--primary",
-                          "fontSize": 14
+                          "fontSize": "$--text-secondary"
                         }
                       }
                     }
@@ -439908,6 +439908,1418 @@
           "fontFamily": "$--font-ui",
           "fontSize": 12,
           "fontWeight": "normal"
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "i4KmLC",
+      "x": 9550,
+      "y": 12280,
+      "name": "[MVP] S1-04 Table chrome — Blackjack · Larger text step (scrolls)",
+      "theme": {
+        "text": "larger"
+      },
+      "clip": true,
+      "width": 390,
+      "fill": "$--background",
+      "cornerRadius": 32,
+      "layout": "vertical",
+      "children": [
+        {
+          "id": "r3Bck6",
+          "type": "ref",
+          "ref": "g3jlEe",
+          "name": "Status Bar",
+          "width": "fill_container"
+        },
+        {
+          "id": "txuaS",
+          "type": "ref",
+          "ref": "DqrMq",
+          "name": "Table Top Bar",
+          "width": "fill_container",
+          "padding": [
+            6,
+            8,
+            6,
+            16
+          ],
+          "descendants": {
+            "t2c3l": {
+              "enabled": false
+            },
+            "oFBQO": {
+              "content": "Blackjack"
+            },
+            "x6gZY1": {
+              "content": "6 decks · S17 · LS · 10–1,000"
+            },
+            "LVGvP": {
+              "content": "Edge with basic strategy: 0.33% (this preset)"
+            },
+            "Phsv6": {
+              "enabled": false
+            },
+            "S9na0": {
+              "icon": "circle-stop"
+            }
+          }
+        },
+        {
+          "id": "whMyp",
+          "type": "ref",
+          "ref": "bXiVQ",
+          "name": "Phase Stepper",
+          "width": "fill_container",
+          "descendants": {
+            "E2qVs": {
+              "fill": "$--primary"
+            },
+            "ZgIKm": {
+              "content": "✓ Bet",
+              "fill": "$--muted-foreground",
+              "fontWeight": "500"
+            },
+            "Q4FWX": {
+              "fill": "$--primary"
+            },
+            "h26bxp": {
+              "content": "✓ Deal",
+              "fill": "$--muted-foreground",
+              "fontWeight": "500"
+            },
+            "GEaqx": {
+              "fill": "$--primary"
+            },
+            "d2dhWu": {
+              "content": "3  Play",
+              "fill": "$--foreground",
+              "fontWeight": "700"
+            },
+            "EIejm": {
+              "fill": "$--border"
+            },
+            "tYpMh": {
+              "content": "4  Settle",
+              "fill": "$--muted-foreground",
+              "fontWeight": "500"
+            }
+          }
+        },
+        {
+          "type": "frame",
+          "id": "iQRbf",
+          "name": "Session summary",
+          "width": "fill_container",
+          "fill": "$--card",
+          "stroke": "$--border",
+          "strokeWidth": {
+            "top": 1,
+            "bottom": 1
+          },
+          "layout": "vertical",
+          "gap": 4,
+          "padding": [
+            10,
+            16
+          ],
+          "children": [
+            {
+              "type": "frame",
+              "id": "hFa9n",
+              "name": "KV Session balance",
+              "width": "fill_container",
+              "gap": 12,
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "vOB0b",
+                  "name": "Session balance",
+                  "fill": "$--muted-foreground",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "Session balance",
+                  "fontFamily": "$--font-ui",
+                  "fontSize": "$--text-secondary",
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "jr1Sv",
+                  "name": "Value Session balance",
+                  "fill": "$--foreground",
+                  "content": "950",
+                  "fontFamily": "$--font-ui",
+                  "fontSize": "$--text-heading",
+                  "fontWeight": "700"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "CAlmo",
+              "name": "KV On table",
+              "width": "fill_container",
+              "gap": 12,
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "cwZER",
+                  "name": "On table",
+                  "fill": "$--muted-foreground",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "On table",
+                  "fontFamily": "$--font-ui",
+                  "fontSize": "$--text-secondary",
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "nceW6",
+                  "name": "Value On table",
+                  "fill": "$--foreground",
+                  "content": "50",
+                  "fontFamily": "$--font-ui",
+                  "fontSize": "$--text-heading",
+                  "fontWeight": "700"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "IkT44",
+              "name": "Status",
+              "width": "fill_container",
+              "gap": 8,
+              "padding": [
+                4,
+                0,
+                0,
+                0
+              ],
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "icon",
+                  "id": "YMofi",
+                  "name": "hand",
+                  "width": 20,
+                  "height": 20,
+                  "icon": "hand",
+                  "library": "lucide",
+                  "fill": "$--foreground"
+                },
+                {
+                  "type": "text",
+                  "id": "n5oVR",
+                  "name": "Your turn · hand 1",
+                  "fill": "$--foreground",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "Your turn · hand 1",
+                  "fontFamily": "$--font-ui",
+                  "fontSize": "$--text-body",
+                  "fontWeight": "600"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "u2vqMA",
+          "name": "Felt",
+          "width": 390,
+          "height": 386,
+          "fill": {
+            "type": "gradient",
+            "gradientType": "radial",
+            "enabled": true,
+            "rotation": 0,
+            "size": {
+              "width": 1.5,
+              "height": 1.2
+            },
+            "colors": [
+              {
+                "color": "$--felt-light",
+                "position": 0
+              },
+              {
+                "color": "$--felt-deep",
+                "position": 1
+              }
+            ],
+            "center": {
+              "y": 0.45
+            }
+          },
+          "cornerRadius": [
+            0,
+            0,
+            150,
+            150
+          ],
+          "stroke": "$--rail",
+          "strokeWidth": {
+            "bottom": 10
+          },
+          "layout": "none",
+          "children": [
+            {
+              "type": "frame",
+              "id": "wLDEU",
+              "x": 115,
+              "y": 0,
+              "name": "Dealer Tray",
+              "width": 160,
+              "height": 22,
+              "fill": "$--felt-ink",
+              "cornerRadius": [
+                0,
+                0,
+                8,
+                8
+              ],
+              "gap": 3,
+              "padding": [
+                3,
+                8
+              ],
+              "justifyContent": "center",
+              "children": [
+                {
+                  "type": "rectangle",
+                  "cornerRadius": 3,
+                  "id": "F3w2e",
+                  "name": "Stack 0",
+                  "fill": "$--chip-1",
+                  "width": 20,
+                  "height": 14
+                },
+                {
+                  "type": "rectangle",
+                  "cornerRadius": 3,
+                  "id": "NcdwX",
+                  "name": "Stack 1",
+                  "fill": "$--chip-5",
+                  "width": 20,
+                  "height": 14
+                },
+                {
+                  "type": "rectangle",
+                  "cornerRadius": 3,
+                  "id": "bu0O7",
+                  "name": "Stack 2",
+                  "fill": "$--chip-25",
+                  "width": 20,
+                  "height": 14
+                },
+                {
+                  "type": "rectangle",
+                  "cornerRadius": 3,
+                  "id": "MYwkx",
+                  "name": "Stack 3",
+                  "fill": "$--chip-100",
+                  "width": 20,
+                  "height": 14
+                },
+                {
+                  "type": "rectangle",
+                  "cornerRadius": 3,
+                  "id": "t2Kk3P",
+                  "name": "Stack 4",
+                  "fill": "$--chip-500",
+                  "width": 20,
+                  "height": 14
+                },
+                {
+                  "type": "rectangle",
+                  "cornerRadius": 3,
+                  "id": "X5MgtC",
+                  "name": "Stack 5",
+                  "fill": "$--chip-1",
+                  "width": 20,
+                  "height": 14
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "oaglo",
+              "x": 318,
+              "y": 34,
+              "name": "Shoe",
+              "width": 52,
+              "height": 40,
+              "fill": "$--felt-ink",
+              "cornerRadius": 6,
+              "stroke": "$--primary-40",
+              "strokeWidth": 1,
+              "justifyContent": "center",
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "SqeWj",
+                  "name": "Pen",
+                  "fill": "$--felt-text",
+                  "content": "SHOE",
+                  "fontFamily": "$--font-ui",
+                  "fontSize": "$--text-caption",
+                  "fontWeight": "700",
+                  "letterSpacing": 1
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "id": "HuFgF",
+              "x": 0,
+              "y": 36,
+              "name": "Dealer Label",
+              "fill": "$--felt-text",
+              "textGrowth": "fixed-width",
+              "width": 390,
+              "content": "DEALER",
+              "textAlign": "center",
+              "fontFamily": "$--font-ui",
+              "fontSize": "$--text-caption",
+              "fontWeight": "700",
+              "letterSpacing": 2
+            },
+            {
+              "type": "frame",
+              "id": "vt8vl",
+              "x": 131,
+              "y": 58,
+              "name": "Dealer Hand",
+              "width": 128,
+              "height": 82,
+              "cornerRadius": 8,
+              "stroke": "$--felt-line-25",
+              "gap": 8,
+              "justifyContent": "center",
+              "alignItems": "center",
+              "children": [
+                {
+                  "id": "rVPa8",
+                  "type": "ref",
+                  "ref": "I9Udbi",
+                  "name": "Hole Card"
+                },
+                {
+                  "id": "lpl8E",
+                  "type": "ref",
+                  "ref": "zqstp",
+                  "name": "Card 5s",
+                  "descendants": {
+                    "H25l8L": {
+                      "content": "5",
+                      "fill": "$--suit-spade"
+                    },
+                    "eG77y": {
+                      "content": "♠︎",
+                      "fill": "$--suit-spade"
+                    },
+                    "MnuHe": {
+                      "content": "♠︎",
+                      "fill": "$--suit-spade"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "id": "M1rC8",
+              "x": 0,
+              "y": 160,
+              "name": "Pays",
+              "fill": "$--felt-print",
+              "textGrowth": "fixed-width",
+              "width": 390,
+              "content": "BLACKJACK PAYS 3 TO 2",
+              "textAlign": "center",
+              "fontFamily": "$--font-display",
+              "fontSize": 18,
+              "fontWeight": "normal",
+              "letterSpacing": 2.5
+            },
+            {
+              "type": "text",
+              "id": "Uet0H",
+              "x": 0,
+              "y": 186,
+              "name": "Rule",
+              "fill": "$--felt-print",
+              "textGrowth": "fixed-width",
+              "width": 390,
+              "content": "DEALER STANDS ON ALL 17s",
+              "textAlign": "center",
+              "fontFamily": "$--font-ui",
+              "fontSize": "$--text-caption",
+              "fontWeight": "normal",
+              "letterSpacing": 2
+            },
+            {
+              "type": "frame",
+              "id": "AJV1D",
+              "x": 140,
+              "y": 204,
+              "name": "Player Hand",
+              "width": 110,
+              "height": 82,
+              "cornerRadius": 8,
+              "stroke": "$--felt-line-25",
+              "gap": -24,
+              "justifyContent": "center",
+              "alignItems": "center",
+              "children": [
+                {
+                  "id": "ZDrnU",
+                  "type": "ref",
+                  "ref": "zqstp",
+                  "name": "Card Ah",
+                  "rotation": 3.0000000000000004,
+                  "descendants": {
+                    "H25l8L": {
+                      "content": "A",
+                      "fill": "$--suit-heart"
+                    },
+                    "eG77y": {
+                      "content": "♥︎",
+                      "fill": "$--suit-heart"
+                    },
+                    "MnuHe": {
+                      "content": "♥︎",
+                      "fill": "$--suit-heart"
+                    }
+                  }
+                },
+                {
+                  "id": "WbXKz",
+                  "type": "ref",
+                  "ref": "zqstp",
+                  "name": "Card 6c",
+                  "rotation": -2,
+                  "descendants": {
+                    "H25l8L": {
+                      "content": "6",
+                      "fill": "$--suit-club"
+                    },
+                    "eG77y": {
+                      "content": "♣︎",
+                      "fill": "$--suit-club"
+                    },
+                    "MnuHe": {
+                      "content": "♣︎",
+                      "fill": "$--suit-club"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "t3eYBx",
+              "x": 150,
+              "y": 292,
+              "name": "Bet Spot",
+              "width": 90,
+              "height": 90,
+              "fill": "$--white-4",
+              "cornerRadius": 45,
+              "stroke": "$--felt-line",
+              "strokeWidth": 1.5,
+              "layout": "none",
+              "children": [
+                {
+                  "id": "eIHJS",
+                  "type": "ref",
+                  "ref": "R2Oc4o",
+                  "name": "Chip 25",
+                  "x": 19,
+                  "y": 24,
+                  "descendants": {
+                    "Cjanw": {
+                      "fill": "$--chip-25"
+                    },
+                    "W7zpu": {
+                      "content": "25",
+                      "fill": "$--on-image"
+                    }
+                  }
+                },
+                {
+                  "id": "lOM7f",
+                  "type": "ref",
+                  "ref": "R2Oc4o",
+                  "name": "Chip 25",
+                  "x": 19,
+                  "y": 17,
+                  "descendants": {
+                    "Cjanw": {
+                      "fill": "$--chip-25"
+                    },
+                    "W7zpu": {
+                      "content": "25",
+                      "fill": "$--on-image"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "qit5j",
+              "x": 246,
+              "y": 322,
+              "name": "Bet Amount",
+              "fill": "$--felt-ink-90",
+              "cornerRadius": 999,
+              "stroke": "$--felt-line",
+              "strokeWidth": 1,
+              "padding": [
+                4,
+                10
+              ],
+              "children": [
+                {
+                  "type": "text",
+                  "id": "G32n2",
+                  "name": "T",
+                  "fill": "$--felt-text",
+                  "content": "50",
+                  "fontFamily": "$--font-ui",
+                  "fontSize": "$--text-secondary",
+                  "fontWeight": "700"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "MnTFg",
+              "x": 258,
+              "y": 232,
+              "name": "Hand Total",
+              "fill": "$--felt-ink-90",
+              "cornerRadius": 999,
+              "stroke": "$--felt-line",
+              "strokeWidth": 1,
+              "padding": [
+                4,
+                10
+              ],
+              "children": [
+                {
+                  "type": "text",
+                  "id": "s8Fr0",
+                  "name": "T",
+                  "fill": "$--felt-text",
+                  "content": "Soft 17",
+                  "fontFamily": "$--font-ui",
+                  "fontSize": "$--text-secondary",
+                  "fontWeight": "700"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "V6ixAL",
+              "x": 44,
+              "y": 232,
+              "name": "Your Move",
+              "enabled": false,
+              "fill": "$--mistake",
+              "cornerRadius": 999,
+              "gap": 5,
+              "padding": [
+                4,
+                10
+              ],
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "icon",
+                  "id": "pNCp3",
+                  "name": "I",
+                  "width": 12,
+                  "height": 12,
+                  "icon": "hand",
+                  "library": "lucide",
+                  "fill": "$--on-mistake"
+                },
+                {
+                  "type": "text",
+                  "id": "m75qIe",
+                  "name": "T",
+                  "fill": "$--on-mistake",
+                  "content": "You: Stand",
+                  "fontFamily": "$--font-ui",
+                  "fontSize": 12,
+                  "fontWeight": "700"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "BZRN8",
+          "name": "Actions",
+          "width": "fill_container",
+          "fill": "$--background",
+          "layout": "vertical",
+          "gap": 8,
+          "padding": [
+            12,
+            16
+          ],
+          "children": [
+            {
+              "type": "frame",
+              "id": "YUumF",
+              "name": "Row 1",
+              "width": "fill_container",
+              "gap": 8,
+              "alignItems": "center",
+              "children": [
+                {
+                  "id": "q9vqvD",
+                  "type": "ref",
+                  "ref": "K8XQN",
+                  "name": "Button Hit",
+                  "height": 48,
+                  "width": "fill_container",
+                  "descendants": {
+                    "w9XFYH": {
+                      "icon": "plus"
+                    },
+                    "jDUbX": {
+                      "content": "Hit"
+                    }
+                  }
+                },
+                {
+                  "id": "EcWoA",
+                  "type": "ref",
+                  "ref": "K8XQN",
+                  "name": "Button Stand",
+                  "height": 48,
+                  "width": "fill_container",
+                  "descendants": {
+                    "w9XFYH": {
+                      "icon": "hand"
+                    },
+                    "jDUbX": {
+                      "content": "Stand"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "mPC40",
+              "name": "Row 2",
+              "width": "fill_container",
+              "gap": 8,
+              "alignItems": "center",
+              "children": [
+                {
+                  "id": "wWeZ3",
+                  "type": "ref",
+                  "ref": "K8XQN",
+                  "name": "Button Double",
+                  "height": 48,
+                  "width": "fill_container",
+                  "descendants": {
+                    "w9XFYH": {
+                      "icon": "chevrons-up"
+                    },
+                    "jDUbX": {
+                      "content": "Double"
+                    }
+                  }
+                },
+                {
+                  "id": "tZ4nW",
+                  "type": "ref",
+                  "ref": "K8XQN",
+                  "name": "Button Split",
+                  "height": 48,
+                  "width": "fill_container",
+                  "opacity": 0.4,
+                  "descendants": {
+                    "w9XFYH": {
+                      "icon": "split"
+                    },
+                    "jDUbX": {
+                      "content": "Split"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "eZNWI",
+              "name": "Row 3",
+              "width": "fill_container",
+              "gap": 8,
+              "alignItems": "center",
+              "children": [
+                {
+                  "id": "KJ4kz",
+                  "type": "ref",
+                  "ref": "K8XQN",
+                  "name": "Button Surrender",
+                  "height": 48,
+                  "width": "fill_container",
+                  "descendants": {
+                    "w9XFYH": {
+                      "icon": "flag"
+                    },
+                    "jDUbX": {
+                      "content": "Surrender"
+                    }
+                  }
+                },
+                {
+                  "id": "AkCGN",
+                  "type": "ref",
+                  "ref": "K8XQN",
+                  "name": "Button Bet list",
+                  "height": 48,
+                  "width": "fill_container",
+                  "descendants": {
+                    "w9XFYH": {
+                      "icon": "list"
+                    },
+                    "jDUbX": {
+                      "content": "Bet list"
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "NLKhQ",
+          "type": "ref",
+          "ref": "thF4f",
+          "name": "Tab Bar",
+          "width": "fill_container",
+          "descendants": {
+            "W3xcp3/n3nPM": {
+              "fill": "$--secondary",
+              "stroke": "$--primary",
+              "strokeWidth": 1.5
+            },
+            "W3xcp3/w9JZY0": {
+              "fill": "$--primary"
+            },
+            "W3xcp3/I1qtr": {
+              "fill": "$--foreground",
+              "fontWeight": "700"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "u67F1C",
+      "x": 12500,
+      "y": 24800,
+      "name": "[MVP] S3-04 Exercise — Running count · Check, Larger text step (scrolls)",
+      "theme": {
+        "text": "larger"
+      },
+      "clip": true,
+      "width": 390,
+      "fill": "$--background",
+      "cornerRadius": 32,
+      "layout": "vertical",
+      "children": [
+        {
+          "id": "bpAD4",
+          "type": "ref",
+          "ref": "g3jlEe",
+          "name": "Status Bar",
+          "width": "fill_container"
+        },
+        {
+          "id": "d7cw92",
+          "type": "ref",
+          "ref": "Vbp68",
+          "name": "Exercise Header",
+          "width": "fill_container",
+          "descendants": {
+            "IvLdu": {
+              "content": "Running count"
+            },
+            "NCbCa": {
+              "content": "Check · 2 s pace · timed"
+            }
+          }
+        },
+        {
+          "id": "V56ta",
+          "type": "ref",
+          "ref": "pHE7J",
+          "name": "Exercise Progress",
+          "width": "fill_container",
+          "descendants": {
+            "ISWPo": {
+              "content": "Card 13 of 52 · checkpoint 1 of 4"
+            },
+            "SBJ0R": {
+              "content": "01:12"
+            },
+            "o7ItX": {
+              "width": 90
+            }
+          }
+        },
+        {
+          "type": "frame",
+          "id": "dfdzB",
+          "name": "Body",
+          "width": "fill_container",
+          "layout": "vertical",
+          "gap": 8,
+          "padding": [
+            4,
+            16
+          ],
+          "children": [
+            {
+              "type": "frame",
+              "id": "woBd2",
+              "name": "Prompt",
+              "width": "fill_container",
+              "gap": 14,
+              "alignItems": "center",
+              "children": [
+                {
+                  "id": "s0TMd",
+                  "type": "ref",
+                  "ref": "Q67gj7",
+                  "name": "Card 13 (last dealt) 9♥",
+                  "descendants": {
+                    "fLq5W": {
+                      "content": "9",
+                      "fill": "$--suit-heart"
+                    },
+                    "Inoo5": {
+                      "content": "♥︎",
+                      "fill": "$--suit-heart"
+                    },
+                    "yc7bq": {
+                      "content": "♥︎",
+                      "fill": "$--suit-heart"
+                    }
+                  }
+                },
+                {
+                  "type": "frame",
+                  "id": "d23qQ",
+                  "name": "Text",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 2,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "iCMOc",
+                      "name": "Checkpoint 1 of 4",
+                      "fill": "$--muted-foreground",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "Checkpoint 1 of 4",
+                      "lineHeight": 1.45,
+                      "fontFamily": "$--font-ui",
+                      "fontSize": "$--text-label",
+                      "fontWeight": "700"
+                    },
+                    {
+                      "type": "text",
+                      "id": "v6pDrp",
+                      "name": "Enter the running count afte",
+                      "fill": "$--foreground",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "Enter the running count after 13 cards",
+                      "lineHeight": 1.25,
+                      "fontFamily": "$--font-ui",
+                      "fontSize": "$--text-heading",
+                      "fontWeight": "600"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "eKo0S",
+              "name": "Show count group",
+              "clip": true,
+              "width": "fill_container",
+              "fill": "$--card",
+              "cornerRadius": 14,
+              "stroke": "$--border",
+              "strokeWidth": 1,
+              "layout": "vertical",
+              "children": [
+                {
+                  "id": "t6nUH",
+                  "type": "ref",
+                  "ref": "N00RR2",
+                  "name": "Toggle Show running count",
+                  "width": "fill_container",
+                  "strokeWidth": 0,
+                  "padding": [
+                    8,
+                    16
+                  ],
+                  "descendants": {
+                    "BZRUK": {
+                      "content": "Show running count"
+                    },
+                    "q8Hc4w": {
+                      "content": "Hidden. Showing it marks this whole attempt assisted, permanently."
+                    },
+                    "kZ1aJ": {
+                      "fill": "$--muted",
+                      "stroke": "$--control-border",
+                      "strokeWidth": 1.5,
+                      "justifyContent": "start"
+                    },
+                    "kZ1aJ/kPhN9": {
+                      "fill": "$--muted-foreground"
+                    },
+                    "kZ1aJ/IyFNH": {
+                      "enabled": false
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "id": "pHvmP",
+              "type": "ref",
+              "ref": "IklpE",
+              "name": "Count Keypad",
+              "width": "fill_container",
+              "gap": 8,
+              "descendants": {
+                "pT48o": {
+                  "content": "Running count"
+                },
+                "UdOa5": {
+                  "content": "−3"
+                },
+                "ZlpQF": {
+                  "gap": 8
+                },
+                "yEVjq": {
+                  "height": 56
+                },
+                "SJNIo": {
+                  "height": 56
+                },
+                "VEbUP": {
+                  "height": 56
+                },
+                "kpNrR": {
+                  "gap": 8
+                },
+                "pYzrg": {
+                  "height": 56
+                },
+                "eyOgf": {
+                  "height": 56
+                },
+                "o5M2bj": {
+                  "height": 56
+                },
+                "I9kxz4": {
+                  "gap": 8
+                },
+                "bs2Nu": {
+                  "height": 56
+                },
+                "gtAE2": {
+                  "height": 56
+                },
+                "utzE8": {
+                  "height": 56
+                },
+                "gTEq9": {
+                  "gap": 8
+                },
+                "syyhM": {
+                  "height": 56
+                },
+                "pjj1C": {
+                  "height": 56
+                },
+                "tQURO": {
+                  "height": 56
+                },
+                "Di2FP": {
+                  "gap": 8
+                },
+                "z8ZFo": {
+                  "height": 56
+                },
+                "hcrr7": {
+                  "height": 56
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "raoMe",
+          "type": "ref",
+          "ref": "thF4f",
+          "name": "Tab Bar",
+          "width": "fill_container",
+          "descendants": {
+            "hVAjl/n3nPM": {
+              "fill": "$--secondary",
+              "stroke": "$--primary",
+              "strokeWidth": 1.5
+            },
+            "hVAjl/w9JZY0": {
+              "fill": "$--primary"
+            },
+            "hVAjl/I1qtr": {
+              "fill": "$--foreground",
+              "fontWeight": "700"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "o1b5Py",
+      "x": 3150,
+      "y": 22500,
+      "name": "[MVP] S3-01 Counting tab — Larger text step (scrolls)",
+      "theme": {
+        "text": "larger"
+      },
+      "clip": true,
+      "width": 390,
+      "fill": "$--background",
+      "cornerRadius": 32,
+      "layout": "vertical",
+      "children": [
+        {
+          "id": "DqjVB",
+          "type": "ref",
+          "ref": "g3jlEe",
+          "name": "Status Bar",
+          "width": "fill_container"
+        },
+        {
+          "id": "O7fu9O",
+          "type": "ref",
+          "ref": "OhMJB",
+          "name": "Header",
+          "width": "fill_container",
+          "padding": [
+            0,
+            8,
+            0,
+            20
+          ],
+          "descendants": {
+            "pWOeg": {
+              "enabled": false
+            },
+            "q0sEP1": {
+              "content": "Counting",
+              "fontSize": "$--text-headline"
+            },
+            "ywbdp": {
+              "enabled": false
+            },
+            "i2RY9": {
+              "enabled": false
+            }
+          }
+        },
+        {
+          "type": "frame",
+          "id": "F09Piw",
+          "name": "Body",
+          "width": "fill_container",
+          "layout": "vertical",
+          "gap": 16,
+          "padding": [
+            8,
+            16,
+            24,
+            16
+          ],
+          "children": [
+            {
+              "id": "RJfKt",
+              "type": "ref",
+              "ref": "JF3sr",
+              "name": "Banner Attempts left",
+              "width": "fill_container",
+              "stroke": "$--control-border",
+              "descendants": {
+                "eLpEN": {
+                  "icon": "ticket",
+                  "fill": "$--foreground"
+                },
+                "EEgQC": {
+                  "content": "4 of 5 challenge attempts left today · resets at 12:00 AM Mountain Time"
+                },
+                "EzSwo": {
+                  "content": "Starting an attempt uses one. Resuming one, showing the count and lessons don't."
+                },
+                "yyGL5": {
+                  "enabled": true
+                },
+                "sFEVJ": {
+                  "content": "See premium"
+                }
+              }
+            },
+            {
+              "type": "text",
+              "id": "u4QgI",
+              "name": "SUGGESTED ORDER · ALL FOUR A",
+              "fill": "$--muted-foreground",
+              "textGrowth": "fixed-width",
+              "width": "fill_container",
+              "content": "Suggested order · all four available now",
+              "lineHeight": 1.3,
+              "fontFamily": "$--font-ui",
+              "fontSize": "$--text-label",
+              "fontWeight": "600"
+            },
+            {
+              "id": "oMA9r",
+              "type": "ref",
+              "ref": "TNONR",
+              "name": "Challenge 1 Card values",
+              "width": "fill_container",
+              "descendants": {
+                "jOjHm": {
+                  "content": "1"
+                },
+                "VfCma": {
+                  "content": "Card values"
+                },
+                "L03oA8": {
+                  "enabled": false
+                },
+                "lxE4t": {
+                  "content": "20 cards covering every rank. Answer +1, 0 or −1 for each."
+                },
+                "X2KLK": {
+                  "icon": "flag",
+                  "fill": "$--primary"
+                },
+                "MYh8i": {
+                  "content": "Readiness milestone earned · Check, self-paced",
+                  "fill": "$--foreground"
+                },
+                "dqjfi/XoMSE": {
+                  "content": "Lesson: card values",
+                  "fill": "$--primary",
+                  "fontSize": 14
+                }
+              }
+            },
+            {
+              "id": "fCvtB",
+              "type": "ref",
+              "ref": "TNONR",
+              "name": "Challenge 2 Running count",
+              "width": "fill_container",
+              "descendants": {
+                "jOjHm": {
+                  "content": "2"
+                },
+                "VfCma": {
+                  "content": "Running count"
+                },
+                "do7NH": {
+                  "content": "You earned the card-values readiness milestone. Running count is next on the suggested path."
+                },
+                "lxE4t": {
+                  "content": "52 cards from a shuffled six-deck shoe, starting at zero. Keep the Hi-Lo count as they appear."
+                },
+                "X2KLK": {
+                  "icon": "circle-dashed",
+                  "fill": "$--muted-foreground"
+                },
+                "MYh8i": {
+                  "content": "Learn best 49 / 52 · not tried in Check yet",
+                  "fill": "$--muted-foreground"
+                },
+                "dqjfi/XoMSE": {
+                  "content": "Lesson: running count",
+                  "fill": "$--primary",
+                  "fontSize": 14
+                }
+              }
+            },
+            {
+              "id": "vwkL0",
+              "type": "ref",
+              "ref": "TNONR",
+              "name": "Challenge 3 True-count conversion",
+              "width": "fill_container",
+              "descendants": {
+                "jOjHm": {
+                  "content": "3"
+                },
+                "VfCma": {
+                  "content": "True-count conversion"
+                },
+                "L03oA8": {
+                  "enabled": false
+                },
+                "lxE4t": {
+                  "content": "10 questions. You're given a running count and decks remaining; enter the true count."
+                },
+                "X2KLK": {
+                  "icon": "circle-dashed",
+                  "fill": "$--muted-foreground"
+                },
+                "MYh8i": {
+                  "content": "Not tried yet",
+                  "fill": "$--muted-foreground"
+                },
+                "dqjfi/XoMSE": {
+                  "content": "Lesson: true-count conversion",
+                  "fill": "$--primary",
+                  "fontSize": 14
+                }
+              }
+            },
+            {
+              "id": "L1zXb",
+              "type": "ref",
+              "ref": "TNONR",
+              "name": "Challenge 4 Table counting",
+              "width": "fill_container",
+              "descendants": {
+                "jOjHm": {
+                  "content": "4"
+                },
+                "VfCma": {
+                  "content": "Table counting"
+                },
+                "L03oA8": {
+                  "enabled": false
+                },
+                "lxE4t": {
+                  "content": "10 rounds at a simulated blackjack table. Observe the players, or play and count yourself."
+                },
+                "X2KLK": {
+                  "icon": "circle-dashed",
+                  "fill": "$--muted-foreground"
+                },
+                "MYh8i": {
+                  "content": "Not tried yet",
+                  "fill": "$--muted-foreground"
+                },
+                "dqjfi/XoMSE": {
+                  "content": "Lesson: table counting",
+                  "fill": "$--primary",
+                  "fontSize": 14
+                }
+              }
+            },
+            {
+              "type": "frame",
+              "id": "PAt6o",
+              "name": "Records group",
+              "clip": true,
+              "width": "fill_container",
+              "fill": "$--card",
+              "cornerRadius": 16,
+              "stroke": "$--border",
+              "strokeWidth": 1,
+              "layout": "vertical",
+              "children": [
+                {
+                  "id": "iHinA",
+                  "type": "ref",
+                  "ref": "YqcmY",
+                  "name": "Row Records",
+                  "width": "fill_container",
+                  "strokeWidth": 0,
+                  "descendants": {
+                    "laibs": {
+                      "icon": "trophy"
+                    },
+                    "YsOgK": {
+                      "content": "Records & history"
+                    },
+                    "AXfKi": {
+                      "content": "Personal bests, fastest times, milestones and every attempt"
+                    },
+                    "zwbRu": {
+                      "enabled": false
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "id": "Xh8RF",
+              "name": "Recommendations use your acc",
+              "fill": "$--muted-foreground",
+              "textGrowth": "fixed-width",
+              "width": "fill_container",
+              "content": "Recommendations use your accuracy only, never speed or winnings. Nothing here is locked.",
+              "lineHeight": 1.4,
+              "fontFamily": "$--font-ui",
+              "fontSize": "$--text-secondary",
+              "fontWeight": "normal"
+            }
+          ]
+        },
+        {
+          "id": "Dpph4",
+          "type": "ref",
+          "ref": "thF4f",
+          "name": "Tab Bar",
+          "width": "fill_container",
+          "descendants": {
+            "hVAjl/n3nPM": {
+              "fill": "$--secondary",
+              "stroke": "$--primary",
+              "strokeWidth": 1.5
+            },
+            "hVAjl/w9JZY0": {
+              "fill": "$--primary"
+            },
+            "hVAjl/I1qtr": {
+              "fill": "$--foreground",
+              "fontWeight": "700"
+            }
+          }
         }
       ]
     }
