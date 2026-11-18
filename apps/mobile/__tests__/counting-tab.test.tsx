@@ -586,5 +586,70 @@ describe('the Counting tab', () => {
       expect(await screen.findByRole('header', { name: 'Decision review' })).toBeOnTheScreen();
       expect(screen.getAllByText(/^Round \d+ · /).length).toBeGreaterThan(0);
     });
+
+    // Spec 3 Play challenge funding (#20); S3-02 FkMDw, Al6Pw, S3-07 fiCRg, qvatd, S3-08 ValDZ, e5MASr; #139
+    it('explains a starting balance that can\'t cover the opening wager with nothing started, then runs a funded Check with the bet schedule to results with challenge finances', async () => {
+      await openTable('Check');
+      await fireEvent.press(within(screen.getByLabelText('Who plays your seat')).getByRole('radio', { name: 'Play' }));
+      expect(screen.getByText('BETTING')).toBeOnTheScreen();
+      expect(screen.getByText('Table limits 10–1,000.')).toBeOnTheScreen();
+      expect(screen.getByText('Just for this attempt. No rebuys. Never added to your practice totals.')).toBeOnTheScreen();
+      expect(screen.getByLabelText('Starting balance, in units').props.value).toBe('1000');
+      await fireEvent.changeText(screen.getByLabelText('Starting balance, in units'), '5');
+      expect(screen.getByText('Fix one setting to start')).toBeOnTheScreen();
+      expect(screen.getByText('Nothing has started and no attempt has been used.')).toBeOnTheScreen();
+      expect(screen.getByText('5 can’t cover the opening wager of 10. Enter at least 10.')).toBeOnTheScreen();
+      expect(screen.getByText('Start is unavailable until the starting balance covers the opening wager.')).toBeOnTheScreen();
+      expect(screen.getByRole('button', { name: 'Start Check attempt' })).toBeDisabled();
+      await fireEvent.press(screen.getByRole('switch', { name: 'Hi-Lo bet schedule' }));
+      await fireEvent.changeText(screen.getByLabelText('Starting balance, in units'), '30');
+      expect(screen.queryByText('Fix one setting to start')).toBeNull();
+      await fireEvent.press(screen.getByRole('button', { name: 'Start Check attempt' }));
+      expect(await screen.findByText('ATTEMPT BALANCE')).toBeOnTheScreen();
+      let bets = 0;
+      for (let guard = 0; guard < 1500 && !screen.queryByRole('header', { name: 'Results' }); guard++) {
+        const place = screen.queryByRole('button', { name: /^Place \d+$/ });
+        if (place) {
+          await fireEvent.press(place);
+          continue;
+        }
+        const again = screen.queryByRole('button', { name: 'Choose again' });
+        if (again) {
+          await fireEvent.press(again);
+          continue;
+        }
+        const bet = screen.queryAllByRole('button', { name: /^Bet \d+$/ })[0];
+        if (bet && !bet.props.accessibilityState?.disabled) {
+          bets++;
+          await fireEvent.press(bet);
+          continue;
+        }
+        const move = screen.queryByRole('button', { name: /^(Stand|No insurance)$/ });
+        if (move && !move.props.accessibilityState?.disabled) {
+          await fireEvent.press(move);
+          continue;
+        }
+        const next = screen.queryByRole('button', { name: 'Next card' });
+        if (next && !next.props.accessibilityState?.disabled) {
+          await fireEvent.press(next);
+          continue;
+        }
+        const field = screen.queryByLabelText(/^(Running|True) count$/);
+        if (field) {
+          await fireEvent.changeText(field, '0');
+          await fireEvent.press(screen.getByRole('button', { name: /^(Submit|Next: true count)$/ }));
+          continue;
+        }
+        await screen.findByRole('button', { name: /Next card|Submit|Next: true count|Stand|No insurance|Choose again|^Bet \d+$|^Place \d+$/ }).catch(() => undefined);
+      }
+      await screen.findByRole('header', { name: 'Results' });
+      expect(bets).toBeGreaterThan(0);
+      expect(cues()).toContain('stake-set');
+      expect(screen.getByLabelText(new RegExp(`^Betting adherence, Hi-Lo bet schedule · \\d+ bets?: \\d+ of \\d+$`))).toBeOnTheScreen();
+      expect(screen.getByText('CHALLENGE FINANCES · NOT A SKILL SCORE')).toBeOnTheScreen();
+      expect(screen.getByLabelText('Starting: 30')).toBeOnTheScreen();
+      expect(screen.getByText('Kept in this challenge’s history only. Never added to your practice totals or training bankroll.')).toBeOnTheScreen();
+      expect(screen.queryByText('Ended early — insufficient funds') ?? screen.getByText(/^Completed · 10 of 10 rounds/)).toBeOnTheScreen();
+    });
   });
 });

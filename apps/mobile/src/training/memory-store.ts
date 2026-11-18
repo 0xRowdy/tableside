@@ -3,7 +3,7 @@ import type { ChallengeAttemptRecord, UnsequencedAttemptRecord } from '@tablesid
 
 import { StoreWriteError } from '../practice/memory-store';
 import type { AcceptedLessonEvent, LessonProgressEvent, LessonSync, UnsequencedLessonEvent } from './lesson-progress';
-import { milestoneSlot, type ReadinessMilestoneRecord } from './readiness-milestone';
+import { milestoneSlot, type MilestoneSync, type ReadinessMilestoneRecord } from './readiness-milestone';
 import { withLifecycle, type AcceptedAttempt, type AttemptLifecycle, type AttemptCommitOutcome, type AttemptTransitionCommit, type CommittedAttemptTransition, type NewAttempt, type StoredAttempt, type TrainingStore } from './store';
 
 type Operation = 'createAttempt' | 'commitAttemptTransition' | 'saveAttemptLifecycle' | 'recordAttempt' | 'readAttemptReceipt' | 'writePreference' | 'recordLessonEvent' | 'recordMilestone';
@@ -24,6 +24,9 @@ export class MemoryTrainingDisk {
   // #147
   readonly acceptedLessonEvents: string[] = [];
   readonly refusedLessonEvents: string[] = [];
+  // #148
+  readonly acceptedMilestones: string[] = [];
+  readonly refusedMilestones: string[] = [];
 }
 
 export class MemoryTrainingStore implements TrainingStore {
@@ -190,6 +193,28 @@ export class MemoryTrainingStore implements TrainingStore {
 
   readMilestones(): Promise<readonly ReadinessMilestoneRecord[]> {
     return this.enqueue(() => this.disk.milestones.map((text) => parse<ReadinessMilestoneRecord>(text)));
+  }
+
+  // #148
+  readMilestoneSync(): Promise<MilestoneSync> {
+    return this.enqueue(() => ({
+      accepted: this.disk.acceptedMilestones.map((text) => parse<ReadinessMilestoneRecord>(text)),
+      refused: [...this.disk.refusedMilestones],
+    }));
+  }
+
+  // #148
+  acceptMilestones(milestones: readonly ReadinessMilestoneRecord[]): Promise<void> {
+    return this.enqueue(() => {
+      this.disk.acceptedMilestones.push(...milestones.map((milestone) => JSON.stringify(milestone)));
+    });
+  }
+
+  // #148
+  refuseMilestones(identities: readonly string[]): Promise<void> {
+    return this.enqueue(() => {
+      this.disk.refusedMilestones.push(...identities);
+    });
   }
 
   private unfinished(): StoredAttempt | null {

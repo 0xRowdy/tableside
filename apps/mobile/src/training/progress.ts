@@ -203,6 +203,7 @@ export function milestoneCandidates(attempts: readonly ProgressAttempt[], instal
       installation,
       groupKey: record.groupKey,
       attempts: [previous.attemptId, record.attemptId],
+      deviceSequences: [previous.deviceSequence, record.deviceSequence],
       earnedAt: record.endedAt,
     });
   }

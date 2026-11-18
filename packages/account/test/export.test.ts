@@ -150,6 +150,35 @@ describe('lesson progress in the server export', () => {
   });
 });
 
+// Spec 3 Synchronized record types › Readiness milestone (exported as JSON); #148
+describe('readiness milestones in the server export', () => {
+  it('hold every accepted milestone whole as versioned JSON, with no CSV', async () => {
+    const { phone, email } = await signedInPhone('milestones');
+    const first = await phone.playCheck();
+    const second = await phone.playCheck();
+    await phone.account.sync.reconcile();
+    expect(await phone.account.sync.countWaiting()).toBe(0);
+
+    const { files } = await exportArchive(phone, email);
+    const manifest = JSON.parse(files.get('manifest.json')!) as { files: { path: string; format: string; records?: number }[] };
+    expect(manifest.files.find((file) => file.path === 'readiness-milestones.json')).toMatchObject({ format: 'json', records: 1 });
+    expect(files.has('readiness-milestones.csv')).toBe(false);
+    const json = JSON.parse(files.get('readiness-milestones.json')!) as { records: unknown[] };
+    expect(json).toMatchObject({ version: 1, recordType: 'readiness-milestone', payloadVersion: 1 });
+    expect(json.records).toEqual([
+      {
+        recordVersion: 1,
+        owner: first.owner,
+        installation: first.installation,
+        groupKey: first.groupKey,
+        attempts: [first.attemptId, second.attemptId],
+        deviceSequences: [1, 2],
+        earnedAt: second.endedAt,
+      },
+    ]);
+  });
+});
+
 async function objectPath(accountId: string): Promise<string> {
   const [row] = await stack.sql<{ object_path: string }[]>`
     select object_path from private.exports where account_id = ${accountId} order by requested_at desc limit 1`;

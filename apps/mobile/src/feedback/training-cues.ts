@@ -44,6 +44,11 @@ function cuesForChallenge(view: ChallengeView, facts: readonly ChallengeFact[]):
       // Spec 3 Amendment 1 B4: cue 15 on the Play Learn correction pause
       case 'correction-offered':
         return ['correction-offered'];
+      // Spec 3 Audio and haptics (cues 2, 6–8); #139
+      case 'wager-placed':
+        return ['stake-set'];
+      case 'round-settled':
+        return [fact.net === '0' ? 'net-even' : fact.net.startsWith('-') ? 'net-loss' : 'net-win'];
       case 'shoe-shuffled':
       case 'attempt-ended':
         return [];

@@ -4,7 +4,7 @@ import type { ChallengeAttemptRecord, ChallengeAttemptSummary, ChallengeFact, Ch
 
 import type { AllowanceEffect, MeteringBasis } from '../practice/store';
 import type { LessonProgressEvent, LessonSync, UnsequencedLessonEvent } from './lesson-progress';
-import type { ReadinessMilestoneRecord } from './readiness-milestone';
+import type { MilestoneSync, ReadinessMilestoneRecord } from './readiness-milestone';
 
 export const CHALLENGE_ATTEMPT_RECORD_TYPE = 'challenge-attempt';
 
@@ -115,6 +115,8 @@ export interface LessonProgressStore {
 export interface MilestoneStore {
   recordMilestone(milestone: ReadinessMilestoneRecord): Promise<ReadinessMilestoneRecord>;
   readMilestones(): Promise<readonly ReadinessMilestoneRecord[]>;
+  // #148
+  readMilestoneSync(): Promise<MilestoneSync>;
 }
 
 export type TrainingStore = ChallengeStore & DevicePreferences & LessonProgressStore & MilestoneStore;

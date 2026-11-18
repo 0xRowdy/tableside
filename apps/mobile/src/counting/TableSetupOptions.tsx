@@ -1,13 +1,23 @@
-// Spec 3 S3-02 ZreSb, FkMDw; User stories 27, 28; #137, #138
+// Spec 3 S3-02 ZreSb, FkMDw, Al6Pw; User stories 27, 28; Play challenge funding; #137, #138, #139
 
-import { BLACKJACK_PRESETS, DEFAULT_BLACKJACK_PRESET, type TableOptions } from '@tableside/definitions';
+import { BLACKJACK_LIMITS, BLACKJACK_PRESETS, DEFAULT_BLACKJACK_PRESET, type TableOptions } from '@tableside/definitions';
 import { MAX_CHECKPOINT_INTERVAL, MAX_OTHER_PLAYERS, PENETRATIONS } from '@tableside/engine';
 import { Eye, Hand } from 'lucide-react-native';
 import { StyleSheet, Text, View } from 'react-native';
 
-import { ChoiceGroup, Help, Section, Stepper } from '@/play/setup/SetupParts';
+import { SwitchRow } from '@/components/SwitchRow';
+import { AmountField, ChoiceGroup, Help, Section, Stepper } from '@/play/setup/SetupParts';
+import { withoutGrouping } from '@/play/units';
 import { fonts, palette, radius, space, textScale } from '@/theme/tokens';
 import {
+  BASE_WAGER,
+  BET_SCHEDULE_DETAIL,
+  BET_SCHEDULE_TITLE,
+  BETTING,
+  fundingProblemText,
+  STARTING_BALANCE,
+  STARTING_BALANCE_HELP,
+  tableLimitsHelp,
   COUNT_CHECKPOINTS,
   COUNTING_MODE,
   DEFAULT_PRESET_DETAIL,
@@ -30,6 +40,7 @@ import {
   WITH_BASIC,
   WITH_DEVIATIONS,
 } from '@/training/blackjack-table-text';
+import { tableFundingProblems } from '@/training/service';
 
 export function TableSetupOptions({ options, onChange }: { options: TableOptions; onChange: (options: TableOptions) => void }) {
   const set = (change: Partial<TableOptions>) => onChange({ ...options, ...change });
@@ -102,6 +113,7 @@ export function TableSetupOptions({ options, onChange }: { options: TableOptions
           <Help>{MODE_HELP}</Help>
         </Section>
       )}
+      {options.seat === 'play' && <Betting options={options} onChange={set} />}
       <View style={styles.notice} accessible>
         {options.seat === 'observe' ? <Eye color={palette.foreground} size={20} /> : <Hand color={palette.foreground} size={20} />}
         <View style={styles.noticeText}>
@@ -117,7 +129,41 @@ export function TableSetupOptions({ options, onChange }: { options: TableOptions
   );
 }
 
+// Spec 3 Play challenge funding › Starting balance; S3-02 FkMDw, Al6Pw
+function Betting({ options, onChange }: { options: TableOptions; onChange: (change: Partial<TableOptions>) => void }) {
+  const { min, max } = BLACKJACK_LIMITS.initial;
+  const problems = tableFundingProblems(options);
+  const problemFor = (field: 'base-wager' | 'starting-balance') => {
+    const problem = problems.find((diagnostic) => diagnostic.field === field);
+    return problem ? fundingProblemText(problem, options.startingBalance) : null;
+  };
+  return (
+    <Section label={BETTING}>
+      <View style={styles.card}>
+        <SwitchRow title={BET_SCHEDULE_TITLE} detail={BET_SCHEDULE_DETAIL} value={options.betSchedule} onChange={(betSchedule) => onChange({ betSchedule })} />
+      </View>
+      <AmountField
+        label={BASE_WAGER}
+        accessibilityLabel={`${BASE_WAGER}, in units`}
+        value={options.baseWager}
+        onChange={(text) => onChange({ baseWager: withoutGrouping(text) })}
+        problem={problemFor('base-wager')}
+        help={tableLimitsHelp(min, max)}
+      />
+      <AmountField
+        label={STARTING_BALANCE}
+        accessibilityLabel={`${STARTING_BALANCE}, in units`}
+        value={options.startingBalance}
+        onChange={(text) => onChange({ startingBalance: withoutGrouping(text) })}
+        problem={problemFor('starting-balance')}
+        help={STARTING_BALANCE_HELP}
+      />
+    </Section>
+  );
+}
+
 const styles = StyleSheet.create({
+  card: { borderRadius: radius.lg, borderWidth: 1, borderColor: palette.border, backgroundColor: palette.card, overflow: 'hidden' },
   notice: { flexDirection: 'row', gap: space[3], padding: 14, borderRadius: radius.lg, borderLeftWidth: 4, borderLeftColor: palette.coachAccent, backgroundColor: palette.card },
   noticeText: { flex: 1, gap: space[1] },
   noticeTitle: { fontFamily: fonts.uiBold, fontSize: 15, color: palette.foreground },

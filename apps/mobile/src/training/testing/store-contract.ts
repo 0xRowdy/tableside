@@ -106,6 +106,7 @@ export function milestone(attempts: readonly [string, string], overrides: Partia
     installation: 'test-device',
     groupKey: { ...groupKey, variant: 'check', assistanceClass: 'unassisted-check' },
     attempts,
+    deviceSequences: [1, 2],
     earnedAt: 1_790_000_060_000,
     ...overrides,
   };

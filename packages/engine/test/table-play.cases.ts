@@ -95,8 +95,8 @@ export const tablePlayCases: TestCase[] = [
       const state = toDecision(begun(playSpec('check', 'basic'), seed(1)));
       const view = checkView(state);
       t.equal([view.phase, view.legalCommands, view.table?.seat, view.table?.countingMode], ['decision', ['play', 'reveal-count', 'end'], 'play', 'basic']);
-      t.equal(stepOf(state), { step: 'decision', round: 1, target: 'hand-1', decision: 'hand', actions: ['hit', 'stand', 'double', 'surrender'], events: [] });
-      t.equal(view.table?.decision, { target: 'hand-1', kind: 'hand', actions: ['hit', 'stand', 'double', 'surrender'], refused: null });
+      t.equal(stepOf(state), { step: 'decision', round: 1, target: 'hand-1', decision: 'hand', actions: ['hit', 'stand', 'double', 'surrender'], unaffordable: [], events: [] });
+      t.equal(view.table?.decision, { target: 'hand-1', kind: 'hand', actions: ['hit', 'stand', 'double', 'surrender'], unaffordable: [], refused: null, refusal: null });
       t.equal(view.table?.seats.find((seat) => seat.learner)?.hands[0]?.cards, [
         { rank: 13, suit: 'diamonds' },
         { rank: 4, suit: 'clubs' },
@@ -325,7 +325,7 @@ export const tablePlayCases: TestCase[] = [
       const context = { installation: 'i', startedAt: 1, endedAt: 2, interrupted: false, performanceMs: null, meteringBasis: 'challenge-attempt', allowancePolicyVersion: null, pacing: 'self-paced' } as const;
       const basic = challengeAttemptRecord(playAll(begun(playSpec('check', 'basic'), seed(1))), context).groupKey.table;
       const deviations = challengeAttemptRecord(playAll(begun(playSpec('check', 'deviations', { interval: 2 }), seed(1))), context).groupKey.table;
-      t.equal([basic?.seat, basic?.countingMode, basic?.betSchedule, basic?.baseWager, basic?.startingBalance, basic?.checkpointInterval], ['play', 'basic', false, null, null, 1]);
+      t.equal([basic?.seat, basic?.countingMode, basic?.betSchedule, basic?.baseWager, basic?.startingBalance, basic?.checkpointInterval], ['play', 'basic', false, '10', '1000', 1]);
       t.equal([deviations?.seat, deviations?.countingMode, deviations?.checkpointInterval], ['play', 'deviations', 2]);
     },
   },

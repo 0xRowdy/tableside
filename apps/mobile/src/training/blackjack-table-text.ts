@@ -2,12 +2,17 @@
 
 import { blackjackHouseEdge, blackjackPreset, type BlackjackPreset } from '@tableside/definitions';
 import {
+  scheduleUnits,
   tableCheckpointRounds,
   type BlackjackAction,
+  type ChallengeFinances,
   type ChallengeEntry,
   type ChallengeVariant,
   type PlayChoice,
   type PlayCorrection,
+  type PlayFundingProblem,
+  type TableBetCorrection,
+  type TableBetReview,
   type TableCountReview,
   type TableDecisionReview,
   type TableGroupKey,
@@ -20,6 +25,7 @@ import { playAdvice, playCorrectionCopy } from '@/play/blackjack-coaching';
 import type { CorrectionCopy } from '@/play/coaching-text';
 
 import { cardRank, signed, SUIT_GLYPH } from '@/play/blackjack-text';
+import { formatSigned, formatUnits } from '@/play/units';
 
 const presetText = (dealer: 'S17' | 'H17', lateSurrender: boolean) => `${dealer} ${lateSurrender ? 'LS' : 'no LS'}`;
 const players = (count: number) => `${count} ${count === 1 ? 'player' : 'players'}`;
@@ -27,7 +33,17 @@ const players = (count: number) => `${count} ${count === 1 ? 'player' : 'players
 // Spec 3 S3-10 OVKkc
 export const tableGroupTitle = (table: TableGroupKey) => `Table counting · ${table.seat === 'observe' ? 'Observe' : 'Play'}`;
 export const tableSettingsText = (table: TableGroupKey) =>
-  [...(table.countingMode ? [MODE_TEXT[table.countingMode]] : []), presetText(table.dealer, table.lateSurrender), `${table.penetration}%`, players(table.extraPlayers), `N = ${table.checkpointInterval}`].join(' · ');
+  [
+    ...(table.countingMode ? [MODE_TEXT[table.countingMode]] : []),
+    presetText(table.dealer, table.lateSurrender),
+    `${table.penetration}%`,
+    players(table.extraPlayers),
+    `N = ${table.checkpointInterval}`,
+    // Spec 3 Comparison groups: bet schedule, base wager, starting balance; #139
+    ...(table.betSchedule ? ['bet schedule'] : []),
+    ...(table.baseWager === null ? [] : [`base ${formatUnits(table.baseWager)}`]),
+    ...(table.startingBalance === null ? [] : [`balance ${formatUnits(table.startingBalance)}`]),
+  ].join(' · ');
 
 // Spec 3 S3-02 FkMDw, S3-07 qRHlC
 const MODE_TEXT = { basic: 'with basic', deviations: 'with deviations' } as const;
@@ -56,7 +72,7 @@ export const YOUR_SEAT_SPOKEN = 'Your seat';
 export const roundOf = (table: Pick<TableView, 'round' | 'rounds'>) => `${table.round} of ${table.rounds}`;
 export const PHASES = ['Bet', 'Deal', 'Play', 'Settle'] as const;
 
-export type TableStatus = 'observing' | 'checkpoint' | 'shuffled' | 'feedback' | 'dealing' | 'deciding' | 'check-deciding' | 'count-first' | 'correction';
+export type TableStatus = 'observing' | 'checkpoint' | 'shuffled' | 'feedback' | 'dealing' | 'deciding' | 'check-deciding' | 'count-first' | 'correction' | 'betting';
 export const STATUS_TEXT: Record<TableStatus, string> = {
   observing: 'Observing',
   checkpoint: 'Count checkpoint',
@@ -68,6 +84,8 @@ export const STATUS_TEXT: Record<TableStatus, string> = {
   'check-deciding': 'Check · your move',
   'count-first': 'Count before your move',
   correction: 'Correction',
+  // Spec 3 S3-07 fiCRg, qvatd; #139
+  betting: 'Choose your bet',
 };
 
 export const decksText = (table: Pick<TableView, 'decks' | 'step'>) => (table.step === 'shuffle' ? `Decks remaining: ${table.decks}` : `${table.decks} decks left`);
@@ -166,9 +184,116 @@ export const WITH_DEVIATIONS = 'With deviations';
 export const MODE_HELP = 'With deviations also asks for the true count at each count-dependent decision.';
 export const CHECK_PLAY_HELP = 'Check holds all feedback until the end. Illegal moves are still refused straight away.';
 export const PLAY_NOTICE = {
-  title: 'You bet the table minimum',
-  detail: 'Every round you bet the table minimum from a balance that always covers it, and you make every playing decision. Your scores are counting and playing accuracy; winnings never count.',
+  title: 'A balance just for this attempt',
+  detail: 'You bet from this attempt’s own balance and make every playing decision. Your scores are counting, playing and, with the bet schedule, betting accuracy; winnings never count.',
 } as const;
+
+// Spec 3 Play challenge funding (#20); S3-02 FkMDw, Al6Pw; #139
+export const BETTING = 'BETTING';
+export const BET_SCHEDULE_TITLE = 'Hi-Lo bet schedule';
+export const BET_SCHEDULE_DETAIL = '1 / 2 / 4 / 6 / 8 units by true count. Scored separately from play and counting.';
+export const BASE_WAGER = 'Base wager';
+export const STARTING_BALANCE = 'Starting balance';
+export const tableLimitsHelp = (min: string, max: string) => `Table limits ${formatUnits(min)}–${formatUnits(max)}.`;
+export const STARTING_BALANCE_HELP = 'Just for this attempt. No rebuys. Never added to your practice totals.';
+export const FIX_ONE_SETTING = 'Fix one setting to start';
+export const NOTHING_STARTED = 'Nothing has started and no attempt has been used.';
+export function fundingProblemText(problem: PlayFundingProblem, startingBalance: string): string {
+  switch (problem.problem) {
+    case 'short':
+      return `${formatUnits(startingBalance)} can’t cover the opening wager of ${formatUnits(problem.opening)}. Enter at least ${formatUnits(problem.opening)}.`;
+    case 'not-whole':
+      return 'Enter a whole number of units, at least 1.';
+    case 'over-ceiling':
+      return `Enter at most ${formatUnits(problem.most)}.`;
+    case 'outside-limits':
+      return `Enter a whole number from ${formatUnits(problem.min)} to ${formatUnits(problem.max)}.`;
+    case 'schedule-over-maximum':
+      return `The schedule’s top wager would be ${formatUnits(problem.top)}, over the table maximum of ${formatUnits(problem.max)}. Enter at most ${formatUnits(problem.most)}.`;
+  }
+}
+export const START_UNAVAILABLE_SHORT = 'Start is unavailable until the starting balance covers the opening wager.';
+export const START_UNAVAILABLE = 'Start is unavailable until the settings above are fixed.';
+
+// Spec 3 Play challenge funding; S3-07 fiCRg, qvatd; Amendment 2 §3; #139
+export const ATTEMPT_BALANCE = 'ATTEMPT BALANCE';
+export const ATTEMPT_BALANCE_SPOKEN = 'Attempt balance';
+export const betLabel = (amount: string) => `Bet ${formatUnits(amount)}`;
+export const BET_KICKER = 'PLAY · YOUR BET';
+export const OPENING_WAGER = 'Your opening wager';
+export const betText = (round: number) => `Choose round ${round}’s opening wager. The bet schedule sizes it by the true count, and betting adherence scores your first choice.`;
+export const CHECK_BET_NOTE = 'During Check, Tableside won’t say which amount the strategy would choose, or whether yours matches it.';
+export const FUNDING_KICKER = 'FUNDING';
+export const FUNDING_TITLE = 'Your balance can’t cover every opening wager';
+const orList = (items: readonly string[]) => (items.length < 2 ? items.join('') : `${items.slice(0, -1).join(', ')} or ${items.at(-1)}`);
+export const fundingText = (balance: string, amounts: readonly string[]) => `Balance ${formatUnits(balance)}. Legal opening wagers you can afford: ${orList(amounts.map(formatUnits))}. Choose one to keep playing.`;
+// Spec 3 Information hiding (funding notices and override dialogs); S3-07 qvatd; #139
+export const overrideTitle = (amount: string, betSchedule: boolean) => (betSchedule ? `Place ${formatUnits(amount)} from a short balance?` : `Place ${formatUnits(amount)} as a betting override?`);
+export const overrideText = (betSchedule: boolean) =>
+  betSchedule
+    ? 'Your balance can’t cover every opening wager. Whenever the bet schedule’s amount is more than your balance, whatever you place is recorded as a betting override, which betting adherence counts as a miss. Your counting and playing scores aren’t affected.'
+    : 'Your balance can’t cover the base wager, so whatever you place now is recorded as a betting override. With no bet schedule, betting isn’t scored, and your counting and playing scores aren’t affected.';
+export const placeLabel = (amount: string) => `Place ${formatUnits(amount)}`;
+export const CHOOSE_ANOTHER = 'Choose another amount';
+export const betBadge = (wager: string) => `Bet ${formatUnits(wager)}`;
+
+// Spec 3 Play challenge funding › Mid-round shortfalls; S3-07 RDS5F; #139
+export const FUNDS_KICKER = 'NOT ENOUGH IN THIS ATTEMPT’S BALANCE';
+export const fundsRefusedText = (move: PlayChoice, needs: string, balance: string) =>
+  `${MOVE_LABEL[move]} isn’t affordable: it needs ${move === 'insure' ? '' : 'another '}${formatUnits(needs)} and your balance is ${formatUnits(balance)}. Choose another move. Not having the funds is never counted against you; your play is scored against the legal fallback.`;
+export const FUNDS_NOTE = 'The same applies to split and insurance. Tableside never doubles or insures for less.';
+
+// Spec 3 Learn, Check and assistance › Learn (correction pause on a wager); #139
+export function betCorrectionCopy(correction: TableBetCorrection): CorrectionCopy {
+  const units = scheduleUnits(correction.trueCount);
+  const chosen = formatUnits(correction.chosen);
+  const prescribed = formatUnits(correction.prescribed);
+  return {
+    coach: 'Marcus · Learn, bet schedule',
+    kicker: `Before your bet of ${chosen}`,
+    headline: `At a true count of ${signed(correction.trueCount)} the schedule bets ${units} ${units === 1 ? 'unit' : 'units'}: ${prescribed}.`,
+    lines: [`Your bet of ${chosen} hasn’t been placed yet.`],
+    fallback: null,
+    retry: `Take it back & bet ${prescribed}`,
+    override: `Keep my ${chosen}`,
+    note: `“Keep my ${chosen}” is recorded once as an override and scored as a betting miss.`,
+    why: [],
+  };
+}
+
+// Spec 3 Play challenge funding › Insufficient funds ending, Results; S3-08 ValDZ, e5MASr; #139
+export const abandonedTableTitle = (round: number, rounds: number) => `Abandoned after round ${round} of ${rounds}`;
+export const INSUFFICIENT_FUNDS_TITLE = 'Ended early — insufficient funds';
+export const insufficientFundsText = (round: number, rounds: number) => `After round ${round} of ${rounds}, no legal opening wager was affordable. Your partial results are kept.`;
+export const insufficientFundsNote = (check: boolean) =>
+  check
+    ? 'An ended-early attempt can’t set a personal best or earn a milestone. It also restarts progress toward the readiness milestone for these settings.'
+    : 'An ended-early attempt can’t set a personal best.';
+export const SKILL_FIRST = 'Your skill scores come first. Challenge finances are shown beside them, never inside them.';
+export const FINANCES_LABEL = 'CHALLENGE FINANCES · NOT A SKILL SCORE';
+export const FINANCES_NOTE = 'Kept in this challenge’s history only. Never added to your practice totals or training bankroll.';
+export const financeValues = (finances: ChallengeFinances) => [
+  { label: 'Starting', value: formatUnits(finances.startingBalance) },
+  { label: 'Finishing', value: formatUnits(finances.finishingBalance) },
+  { label: 'Net', value: formatSigned(finances.net) },
+];
+export const BETTING_ADHERENCE = 'Betting adherence';
+export const bettingTested = (total: number) => `Hi-Lo bet schedule · ${total} ${total === 1 ? 'bet' : 'bets'}`;
+export const NO_BET_SCHEDULE = 'No bet schedule selected';
+
+// Spec 3 S3-09; Scoring and review › Review facts (betting, legal betting override); #139
+export function betReviewText(fact: TableBetReview): { readonly outcome: 'match' | 'miss' | 'override'; readonly title: string; readonly status: string; readonly values: readonly { readonly label: string; readonly value: string }[]; readonly label: string } {
+  const outcome = fact.override ? 'override' : fact.chosen === fact.prescribed ? 'match' : 'miss';
+  const status = outcome === 'override' ? 'Betting override · miss' : outcome === 'match' ? 'Match' : 'Betting miss';
+  const title = `Round ${fact.round} · opening wager`;
+  const values = [
+    { label: 'You', value: formatUnits(fact.chosen) },
+    { label: REFERENCE_LABEL, value: formatUnits(fact.prescribed) },
+    { label: AT_LABEL, value: `TC ${signed(fact.trueCount)}` },
+  ];
+  const label = `${title}: you bet ${formatUnits(fact.chosen)}, reference ${formatUnits(fact.prescribed)}${fact.override ? ', which the balance couldn’t cover' : ''}, ${status.toLowerCase()}`;
+  return { outcome, title, status, values, label };
+}
 
 // Spec 3 S3-07 E3Gbeh
 export const PLAY_DEAL_KICKER = 'PLAY · DEALING';

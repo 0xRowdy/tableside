@@ -63,7 +63,8 @@ describe('a recorded database', () => {
       expect(await store.readEffects(id)).toEqual(stored(database, 'effects', (row) => row.activity_id === id));
       expect(JSON.parse(activity.checkpoint)).toMatchObject({ schema: recording.stateSchema, identities: { engine: recording.engine } });
     }
-    expect(await store.readOutgoing()).toEqual(stored(database, 'outgoing'));
+    // #142
+    expect(await store.readOutgoing()).toEqual(stored(database, 'outgoing', (row) => row.activity_id !== null));
     expect((await store.findUnfinished())?.activityId ?? null).toBe(database.unfinished?.activityId ?? null);
 
     // #91

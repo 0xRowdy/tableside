@@ -35,7 +35,7 @@ import {
   type TrainingStore,
 } from '../training/store';
 import { LESSON_PROGRESS_RECORD_TYPE, type LessonProgressEvent, type LessonSync, type UnsequencedLessonEvent } from '../training/lesson-progress';
-import type { ReadinessMilestoneRecord } from '../training/readiness-milestone';
+import { MILESTONE_BARRIERS, milestoneIdentity, milestoneWaitsOn, READINESS_MILESTONE_RECORD_TYPE, type MilestoneSync, type ReadinessMilestoneRecord } from '../training/readiness-milestone';
 import type { SqlConnection, SqlExecutor } from './sql';
 import { createSchema, readSchemaVersion, schemaVersionOf, STORE_MIGRATIONS, STORE_SCHEMA_VERSION, type StoreMigration } from './store-schema';
 
@@ -513,7 +513,7 @@ export class SqliteActivityStore implements ActivityStore, TrainingStore {
       ]);
       await tx.run(`UPDATE challenge_attempts SET status = 'ended' WHERE attempt_id = ?`, [record.attemptId]);
       // Spec 3 Attempt lifecycle › Durability; #142
-      await queueAtDevicePosition(tx, CHALLENGE_ATTEMPT_RECORD_TYPE, record.attemptId, sequenced, deviceSequence);
+      await queueRecord(tx, CHALLENGE_ATTEMPT_RECORD_TYPE, record.attemptId, sequenced, { devicePosition: deviceSequence });
       queued = true;
       return decodeText<ChallengeAttemptRecord>(encode(sequenced)[0]);
     }).then((result) => {
@@ -546,7 +546,7 @@ export class SqliteActivityStore implements ActivityStore, TrainingStore {
       const sequenced: LessonProgressEvent = { ...event, deviceSequence };
       await tx.run(`INSERT INTO lesson_progress_events (event_id, device_sequence, ${BODY}) VALUES (?, ?, ?, ?, ?, ?)`, [event.eventId, deviceSequence, ...encode(sequenced)]);
       // #147
-      await queueAtDevicePosition(tx, LESSON_PROGRESS_RECORD_TYPE, event.eventId, sequenced, deviceSequence);
+      await queueRecord(tx, LESSON_PROGRESS_RECORD_TYPE, event.eventId, sequenced, { devicePosition: deviceSequence });
       queued = true;
       return decodeText<LessonProgressEvent>(encode(sequenced)[0]);
     }).then((result) => {
@@ -558,12 +558,8 @@ export class SqliteActivityStore implements ActivityStore, TrainingStore {
   // #147
   readLessonSync(): Promise<LessonSync> {
     return this.transaction(async (tx) => {
-      const accepted = (await tx.all<AcceptedRow>(`SELECT ${ACCEPTED} FROM accepted_records WHERE record_type = ? ORDER BY sequence`, [LESSON_PROGRESS_RECORD_TYPE])).map(acceptedOf);
-      const refused = await tx.all<{ item_id: string }>(`SELECT item_id FROM outgoing WHERE record_type = ? AND status = 'rejected'`, [LESSON_PROGRESS_RECORD_TYPE]);
-      return {
-        accepted: accepted.map((record) => ({ sequence: record.sequence, event: record.payload as LessonProgressEvent })),
-        refused: refused.map((row) => row.item_id),
-      };
+      const { accepted, refused } = await readSync(tx, LESSON_PROGRESS_RECORD_TYPE);
+      return { accepted: accepted.map((record) => ({ sequence: record.sequence, event: record.payload as LessonProgressEvent })), refused };
     });
   }
 
@@ -575,6 +571,7 @@ export class SqliteActivityStore implements ActivityStore, TrainingStore {
 
   // Spec 3 Synchronized record types › Readiness milestone; #141
   recordMilestone(milestone: ReadinessMilestoneRecord): Promise<ReadinessMilestoneRecord> {
+    let queued = false;
     return this.transaction(async (tx) => {
       if (milestone.owner !== this.identity.accountId || milestone.installation !== this.identity.installationId) {
         throw new StoreMismatchError('a readiness milestone belongs to another account or installation');
@@ -587,12 +584,27 @@ export class SqliteActivityStore implements ActivityStore, TrainingStore {
         `INSERT INTO readiness_milestones (installation_id, group_key, first_attempt_id, second_attempt_id, earned_at, ${BODY}) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [milestone.installation, group, first, second, milestone.earnedAt, ...encode(milestone)],
       );
+      // Spec 3 Synchronized record types › Readiness milestone (Barrier); #148
+      const dependencies = await pendingBarriers(tx, MILESTONE_BARRIERS, (queued) => milestoneWaitsOn(queued, milestone));
+      await queueRecord(tx, READINESS_MILESTONE_RECORD_TYPE, milestoneIdentity(milestone), milestone, { dependencies });
+      queued = true;
       return decodeText<ReadinessMilestoneRecord>(encode(milestone)[0]);
+    }).then((result) => {
+      if (queued) this.notifyQueued();
+      return result;
     });
   }
 
   readMilestones(): Promise<readonly ReadinessMilestoneRecord[]> {
     return this.transaction(async (tx) => (await tx.all<BodyRow>(`SELECT ${BODY} FROM readiness_milestones ORDER BY rowid`)).map((row) => decode<ReadinessMilestoneRecord>(row)));
+  }
+
+  // #148
+  readMilestoneSync(): Promise<MilestoneSync> {
+    return this.transaction(async (tx) => {
+      const { accepted, refused } = await readSync(tx, READINESS_MILESTONE_RECORD_TYPE);
+      return { accepted: accepted.map((record) => record.payload as ReadinessMilestoneRecord), refused };
+    });
   }
 
   // Spec 3 Amendment 1 C7
@@ -1246,14 +1258,40 @@ async function nextDevicePosition(tx: SqlExecutor, recordType: string): Promise<
   return position;
 }
 
-// Spec 3 Synchronized record types (per-device results); #142, #147
-async function queueAtDevicePosition(tx: SqlExecutor, recordType: string, item: string, record: unknown, devicePosition: number): Promise<void> {
+// Spec 3 Synchronized record types; #142, #147, #148
+async function queueRecord(
+  tx: SqlExecutor,
+  recordType: string,
+  item: string,
+  record: unknown,
+  { devicePosition = null, dependencies = [] }: { readonly devicePosition?: number | null; readonly dependencies?: readonly string[] },
+): Promise<void> {
   const body: QueuedBody = { id: `${recordType}/${item}`, kind: recordType, record };
   await tx.run(
     `INSERT INTO outgoing (id, activity_id, record_type, item_id, revisioned, position, ${BODY}, dependencies, status, device_position)
-     VALUES (?, NULL, ?, ?, 0, (SELECT coalesce(max(position), 0) + 1 FROM outgoing), ?, ?, ?, ?, '[]', 'pending', ?)`,
-    [body.id, recordType, item, ...encode(body), devicePosition],
+     VALUES (?, NULL, ?, ?, 0, (SELECT coalesce(max(position), 0) + 1 FROM outgoing), ?, ?, ?, ?, ?, 'pending', ?)`,
+    [body.id, recordType, item, ...encode(body), JSON.stringify(dependencies), devicePosition],
   );
+}
+
+// Spec 2 registry (barriers); #148
+async function pendingBarriers(
+  tx: SqlExecutor,
+  recordTypes: readonly string[],
+  waitsOn: (queued: { readonly recordType: string; readonly payload: unknown }) => boolean,
+): Promise<string[]> {
+  const rows = await tx.all<BodyRow & { id: string; record_type: string }>(
+    `SELECT ${BODY}, id, record_type FROM outgoing WHERE status = 'pending' AND record_type IN (${recordTypes.map(() => '?').join(', ')}) ORDER BY position`,
+    [...recordTypes],
+  );
+  return rows.filter((row) => waitsOn({ recordType: row.record_type, payload: decode<QueuedBody>(row).record })).map((row) => row.id);
+}
+
+// #147, #148
+async function readSync(tx: SqlExecutor, recordType: string): Promise<{ readonly accepted: readonly AcceptedRecord[]; readonly refused: readonly string[] }> {
+  const accepted = (await tx.all<AcceptedRow>(`SELECT ${ACCEPTED} FROM accepted_records WHERE record_type = ? ORDER BY sequence`, [recordType])).map(acceptedOf);
+  const refused = await tx.all<{ item_id: string }>(`SELECT item_id FROM outgoing WHERE record_type = ? AND status = 'rejected'`, [recordType]);
+  return { accepted, refused: refused.map((row) => row.item_id) };
 }
 
 // Spec 3 Amendment 1 C9

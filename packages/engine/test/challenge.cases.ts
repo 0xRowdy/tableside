@@ -1,7 +1,7 @@
 // Spec 3 Challenge content, Learn, Check and assistance, Scoring and review; #158, #132, #133
 import type { TestCase } from '@tableside/harness';
 
-import { advanceChallenge, canonicalJson, challengeAttemptRecord, challengeResults, ENGINE_VERSION, createChallenge, decodeChallengeCheckpoint, encodeChallengeCheckpoint, readChallengeView, unusableAttemptRecord, type ChallengeState } from '../src';
+import { advanceChallenge, canonicalJson, challengeAttemptRecord, challengeResults, ENGINE_VERSION, createChallenge, decodeChallengeCheckpoint, encodeChallengeCheckpoint, readChallengeView, unusableAttemptRecord, type CardValueReview, type ChallengeState } from '../src';
 
 import { ANSWER, begun, cardItems, CHECK, checkView, LEARN, learnView, NEXT, RETRY, run, seed, SKIP, step } from './challenge.fixtures';
 import { throws } from './fixtures';
@@ -97,7 +97,7 @@ export const challengeCases: TestCase[] = [
       const commands = SEED_1_HI_LO.flatMap((value, index) => (index === 2 ? [SKIP, NEXT] : [ANSWER(value), NEXT]));
       const results = challengeResults(run(begun(), commands));
       t.equal(results?.metrics['card-values'], { correct: 19, total: 20 });
-      t.equal(results?.review[2]?.entered, 'skip');
+      t.equal((results?.review[2] as CardValueReview | undefined)?.entered, 'skip');
     },
   },
   {

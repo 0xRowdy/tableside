@@ -199,7 +199,27 @@ const CHALLENGE_SCENARIOS: ChallengeScenario[] = [
     random: seed(2),
     commands: [{ kind: 'begin' }, { kind: 'next-item' }, { kind: 'next-item' }, { kind: 'next-item' }],
   },
+  // #139
+  untilPhase('table Play Check N=1 with the bet schedule, choosing the opening wager', playSpec('check', 'basic', { betSchedule: true }), seed(1), 'bet', []),
+  untilPhase('table Play Learn with the bet schedule, a wager held in the correction pause', playSpec('learn', 'basic', { betSchedule: true }), seed(1), 'bet', [{ kind: 'bet', amount: '40' }]),
+  untilSeen('table Play Check with the bet schedule, the funding notice offering affordable wagers', playSpec('check', 'basic', { betSchedule: true, baseWager: '20', startingBalance: '30' }), (state) => readChallengeView(state).table?.bet?.notice === true),
+  untilSeen('table Play Check, a double refused for funds', playSpec('check', 'basic', { startingBalance: '10' }), (state) => readChallengeView(state).table?.decision?.unaffordable.some((short) => short.action === 'double') === true, [{ kind: 'play', action: 'double' }]),
 ];
+
+// #139
+function untilSeen(name: string, specification: ChallengeSpecification, seen: (state: ChallengeState) => boolean, then: readonly ChallengeCommand[] = []): ChallengeScenario {
+  for (let n = 1; n < 400; n++) {
+    let state = createChallenge(specification, seed(n));
+    const commands: ChallengeCommand[] = [];
+    while (state.phase !== 'ended' && !seen(state)) {
+      const command = nextChallengeCommand(state);
+      commands.push(command);
+      state = advanceAttempt(state, command).state;
+    }
+    if (state.phase !== 'ended') return { name, specification, random: seed(n), commands: [...commands, ...then] };
+  }
+  throw new Error(`${name}: no seed reaches it`);
+}
 
 // #138
 function untilPhase(name: string, specification: ChallengeSpecification, random: ReturnType<typeof seed>, phase: ChallengeState['phase'], then: readonly ChallengeCommand[]): ChallengeScenario {
@@ -257,6 +277,8 @@ function nextChallengeCommand(state: ChallengeState): ChallengeCommand {
   // #138
   if (view.legalCommands.includes('override-correction')) return { kind: 'override-correction' };
   if (view.legalCommands.includes('play')) return { kind: 'play', action: view.table?.decision?.kind === 'insurance' ? 'decline-insurance' : 'stand' };
+  // #139
+  if (view.legalCommands.includes('bet')) return { kind: 'bet', amount: view.table?.bet?.amounts[0] as string };
   return { kind: 'answer', value: 0 };
 }
 

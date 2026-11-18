@@ -40,7 +40,7 @@ export const RECORDED_MS = 800;
 export const PACE_SECONDS: Readonly<Record<ChallengePacing, number | null>> = { 'self-paced': null, '3s': 3, '2s': 2, '1s': 1 };
 
 // Spec 3 Training service interface › Submit command; #138
-export type LearnerCommand = Extract<ChallengeCommand, { readonly kind: 'answer' | 'skip' | 'retry-item' | 'next-item' | 'reveal-count' | 'play' | 'retry-correction' | 'override-correction' }>;
+export type LearnerCommand = Extract<ChallengeCommand, { readonly kind: 'answer' | 'skip' | 'retry-item' | 'next-item' | 'reveal-count' | 'play' | 'bet' | 'retry-correction' | 'override-correction' }>;
 
 // Spec 3 Attempt lifecycle › Phases, Pause; Amendment 1 B5, C1
 export type HoldCause = 'learner' | 'speech-backlog' | 'navigation' | 'app-lifecycle' | 'sign-out' | 'recovered' | 'access';

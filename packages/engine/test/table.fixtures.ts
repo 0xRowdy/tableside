@@ -32,7 +32,10 @@ export const withExtraPlayers = (count: number, penetration = S17_LS.penetration
 // Spec 3 User stories 28; #138
 export const PLAY_POLICY = { basic: TEST_COUNTING_BASIC.play, deviations: TEST_COUNTING_DEVIATING.play } as const;
 
-export const playSetup = (mode: 'basic' | 'deviations', interval = 1): TableSetup => ({ seat: 'play', rules: S17_LS, policy: PLAY_POLICY[mode] as BlackjackPlayPolicy, interval });
+// Spec 3 Play challenge funding (#20); #139
+export const PLAY_FUNDING = { betSchedule: false, baseWager: '10', startingBalance: '1000' } as const;
+
+export const playSetup = (mode: 'basic' | 'deviations', interval = 1): TableSetup => ({ seat: 'play', rules: S17_LS, policy: PLAY_POLICY[mode] as BlackjackPlayPolicy, interval, ...PLAY_FUNDING });
 
 export const playSpec = (variant: 'learn' | 'check', mode: 'basic' | 'deviations', setup: Partial<TableSetup> = {}): ChallengeSpecification => ({
   ...LEARN,

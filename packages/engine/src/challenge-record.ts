@@ -1,7 +1,7 @@
 // Spec 3 Synchronized record types › Challenge attempt, Amendment 4 §1; #158, #133, #137
 
 import type { VersionedIdentity } from './activity';
-import { challengeResults, type ChallengeCategory, type ChallengeMetrics, type ChallengeState, type ChallengeVariant, type ReviewFact } from './challenge';
+import { challengeFinances, challengeResults, type ChallengeCategory, type ChallengeFinances, type ChallengeMetrics, type ChallengeState, type ChallengeVariant, type ReviewFact } from './challenge';
 import type { RandomStreamIdentity } from './random';
 import { countingModeOf, type TableCountingMode, type TableSetup } from './table-challenge';
 import type { MeteringBasis } from './record';
@@ -47,12 +47,6 @@ export interface ChallengeGroupKey {
 
 // Spec 3 Attempt lifecycle
 export type AttemptEndingReason = 'completed' | 'abandoned' | 'insufficient-funds' | 'unusable';
-
-export interface ChallengeFinances {
-  readonly startingBalance: string;
-  readonly finishingBalance: string;
-  readonly net: string;
-}
 
 export interface ChallengeAttemptRecord {
   readonly recordVersion: typeof CHALLENGE_RECORD_VERSION;
@@ -114,6 +108,8 @@ export function challengeGroupKey(state: ChallengeState, pacing: ChallengePacing
   };
 }
 
+const NO_FUNDING = { betSchedule: false, baseWager: null, startingBalance: null } as const;
+
 // Spec 3 Comparison groups; Challenge content › Observe seats
 function tableGroupKey(setup: TableSetup): TableGroupKey {
   const { rules, seat, interval } = setup;
@@ -126,9 +122,8 @@ function tableGroupKey(setup: TableSetup): TableGroupKey {
     seat,
     // Spec 3 Comparison groups: counting mode; #138
     countingMode: countingModeOf(setup),
-    betSchedule: false,
-    baseWager: null,
-    startingBalance: null,
+    // Spec 3 Comparison groups; #139
+    ...(setup.seat === 'play' ? { betSchedule: setup.betSchedule, baseWager: setup.baseWager, startingBalance: setup.startingBalance } : NO_FUNDING),
     checkpointInterval: interval,
   };
 }
@@ -169,7 +164,7 @@ function recordOf(
     assistanceStep: results.assistanceStep,
     interrupted: context.interrupted,
     performanceMs: context.performanceMs,
-    finances: null,
+    finances: challengeFinances(state),
     allowancePolicyVersion: context.allowancePolicyVersion,
     meteringBasis: context.meteringBasis,
     startedAt: context.startedAt,

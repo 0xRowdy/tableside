@@ -1,4 +1,4 @@
-// Spec 3 Synchronized record types › Challenge attempt, Lesson-progress event; Amendment 1 C8, C9, C10; Testing Decisions › Seam 2 (Failure injection, Sync); #142, #147
+// Spec 3 Synchronized record types › Challenge attempt, Lesson-progress event, Readiness milestone; Amendment 1 C8, C9, C10; Testing Decisions › Seam 2 (Failure injection, Sync); #142, #147, #148
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -14,7 +14,8 @@ import { CHALLENGE_ATTEMPT_RECORD_TYPE } from '@/training/store';
 import { TrainingService, type ChallengeSetup } from '@/training/service';
 import { NO_SCREEN_READER } from '@/training/speech';
 import { cardOf, HI_LO_BY_RANK } from '@/training/testing/hi-lo';
-import { attemptRecord, lessonEvent, newAttempt } from '@/training/testing/store-contract';
+import { attemptRecord, lessonEvent, milestone, newAttempt } from '@/training/testing/store-contract';
+import { READINESS_MILESTONE_RECORD_TYPE } from '@/training/readiness-milestone';
 import { LESSON_PROGRESS_RECORD_TYPE, type LessonProgressEvent } from '@/training/lesson-progress';
 
 const KEY = 'cd'.repeat(32);
@@ -201,6 +202,43 @@ describe('recording a lesson-progress event on an account database', () => {
     await store.prepareUpload(refused!.id, () => operation);
     await store.acknowledgeUpload(refused!.id, { status: 'rejected', operation: operation.operationId, requestHash: ABC_SHA256, code: 'invalid-payload' }, null);
     expect(await store.readLessonSync()).toEqual({ accepted: [{ sequence: 1, event: theirs }], refused: ['e-1'] });
+  });
+});
+
+// #148
+describe('recording a readiness milestone on an account database', () => {
+  it('queues its one upload in the same write, waiting on every still-queued attempt from the first to the second it cites', async () => {
+    const store = await openStore();
+    for (const id of ['a-1', 'a-2', 'a-3', 'a-4', 'a-5']) await ended(store, id);
+    await store.adoptCommandScope(1);
+    const [sent] = await store.readUploadQueue();
+    const operation = { operationId: 'a'.repeat(32), request: 'abc', requestHash: ABC_SHA256 };
+    await store.prepareUpload(sent!.id, () => operation);
+    await store.acknowledgeUpload(sent!.id, { status: 'accepted', operation: operation.operationId, requestHash: ABC_SHA256, sequence: 1 }, null);
+    let announced = 0;
+    store.onUploadQueued(() => announced++);
+
+    const earned = milestone(['a-1', 'a-4'], { deviceSequences: [1, 4] });
+    expect(await store.recordMilestone(earned)).toEqual(earned);
+    expect(await store.recordMilestone(milestone(['a-2', 'a-5'], { deviceSequences: [2, 5] }))).toEqual(earned);
+    expect(announced).toBe(1);
+    const queued = (await store.readUploadQueue()).filter((entry) => entry.recordType === READINESS_MILESTONE_RECORD_TYPE);
+    expect(queued.map((entry) => ({ payload: entry.payload, position: entry.position, dependencies: entry.dependencies }))).toEqual([
+      { payload: earned, position: undefined, dependencies: ['challenge-attempt/a-2', 'challenge-attempt/a-3', 'challenge-attempt/a-4'] },
+    ]);
+  });
+
+  it('reads the account’s accepted milestones, and this device’s refused ones', async () => {
+    const store = await openStore();
+    const theirs = milestone(['t-1', 't-2'], { installation: 'other-device' });
+    expect(await store.applyFeedPage(0, [{ recordType: READINESS_MILESTONE_RECORD_TYPE, item: 'other-device/t-1/t-2', sequence: 1, payload: theirs }])).toBe(true);
+    await store.recordMilestone(milestone(['a-1', 'a-2']));
+    await store.adoptCommandScope(1);
+    const [refused] = await store.readUploadQueue();
+    const operation = { operationId: 'a'.repeat(32), request: 'abc', requestHash: ABC_SHA256 };
+    await store.prepareUpload(refused!.id, () => operation);
+    await store.acknowledgeUpload(refused!.id, { status: 'rejected', operation: operation.operationId, requestHash: ABC_SHA256, code: 'gap' }, null);
+    expect(await store.readMilestoneSync()).toEqual({ accepted: [theirs], refused: ['test-device/a-1/a-2'] });
   });
 });
 

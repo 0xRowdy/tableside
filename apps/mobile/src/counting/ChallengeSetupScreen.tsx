@@ -1,5 +1,5 @@
-// Spec 3 S3-02 buD2R, ZreSb, Amendment 4 §2–3; Lessons › Entry points
-// #158, #150, #145, #135, #136, #140, #137
+// Spec 3 S3-02 buD2R, ZreSb, Al6Pw, Amendment 4 §2–3; Lessons › Entry points
+// #158, #150, #145, #135, #136, #140, #137, #139
 
 import { CHALLENGE_VARIANTS, type ChallengeVariant } from '@tableside/engine';
 import { BookOpen, CircleAlert, Play } from 'lucide-react-native';
@@ -33,11 +33,11 @@ import {
   type AllowanceCopy,
 } from '@/training/challenge-text';
 import { LEARN_THIS_SKILL, learnThisSkillDetail } from '@/training/lesson-text';
-import { pacingOf, type CatalogEntry, type ChallengeSetup, type LessonEntry, type StartProblem } from '@/training/service';
+import { pacingOf, tableFundingProblems, type CatalogEntry, type ChallengeSetup, type LessonEntry, type StartProblem } from '@/training/service';
 
 import { AllowanceBanner } from './AllowanceBanner';
 import { TableSetupOptions } from './TableSetupOptions';
-import { CHECK_PLAY_HELP } from '@/training/blackjack-table-text';
+import { CHECK_PLAY_HELP, FIX_ONE_SETTING, NOTHING_STARTED, START_UNAVAILABLE, START_UNAVAILABLE_SHORT } from '@/training/blackjack-table-text';
 
 export function ChallengeSetupScreen({
   entry,
@@ -63,8 +63,24 @@ export function ChallengeSetupScreen({
   onBack: () => void;
 }) {
   const text = CATEGORY_TEXT[entry.category];
+  // Spec 3 Play challenge funding › Starting balance; S3-02 Al6Pw; #139
+  const funding = setup.table ? tableFundingProblems(setup.table) : [];
+  const short = funding.some((diagnostic) => diagnostic.problem === 'short');
   return (
     <SettingsScreen title={text.title} back={{ label: COUNTING_TITLE, onPress: onBack }}>
+      {funding.length > 0 && (
+        <View style={[styles.banner, styles.problem]} testID="setup-problem">
+          <CircleAlert color={palette.destructive} size={20} />
+          <View style={styles.bannerBody}>
+            <Text accessibilityRole="alert" maxFontSizeMultiplier={textScale.body} style={styles.bannerText}>
+              {FIX_ONE_SETTING}
+            </Text>
+            <Text maxFontSizeMultiplier={textScale.body} style={styles.help}>
+              {NOTHING_STARTED}
+            </Text>
+          </View>
+        </View>
+      )}
       <View style={styles.section}>
         <Text maxFontSizeMultiplier={textScale.body} style={styles.label}>
           {VARIANT_LABEL}
@@ -129,7 +145,12 @@ export function ChallengeSetupScreen({
           </Text>
         </View>
       )}
-      <Button label={startLabel(setup.variant)} icon={Play} stretch disabled={busy || startWaits(allowance)} onPress={onStart} />
+      <Button label={startLabel(setup.variant)} icon={Play} stretch disabled={busy || startWaits(allowance) || funding.length > 0} onPress={onStart} />
+      {funding.length > 0 && (
+        <Text maxFontSizeMultiplier={textScale.body} style={styles.help}>
+          {short && funding.length === 1 ? START_UNAVAILABLE_SHORT : START_UNAVAILABLE}
+        </Text>
+      )}
     </SettingsScreen>
   );
 }
@@ -140,6 +161,7 @@ const styles = StyleSheet.create({
   help: { fontFamily: fonts.ui, fontSize: 13, lineHeight: 19, color: palette.mutedForeground },
   banner: { flexDirection: 'row', gap: space[3], padding: 14, borderRadius: 12, borderWidth: 1, borderColor: palette.controlBorder, backgroundColor: palette.card },
   problem: { borderColor: palette.destructive },
+  bannerBody: { flex: 1, gap: space[1] },
   bannerText: { flex: 1, fontFamily: fonts.uiBold, fontSize: 14, lineHeight: 20, color: palette.foreground },
   card: { borderRadius: 12, borderWidth: 1, borderColor: palette.border, backgroundColor: palette.card, overflow: 'hidden' },
 });
