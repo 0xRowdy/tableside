@@ -243,7 +243,17 @@ The root view's `onTouchStart`, `onTouchEnd` and `onTouchCancel` (`src/app/_layo
 | `rebuy` | a rebuy |
 | `retry-correction`, `override-correction`, `restart-cycle`, `collect-instead`, `stop-strategy` | guided practice's choices |
 
-An action the engine refuses (an `illegal-action` fact, such as a stake under the minimum) isn't sampled either. Settling a turn, stopping and final or strategy settlement aren't sampled: the gate tests long work separately. Spec 3 adds challenge actions to the same `Sampler.action` (#156).
+An action the engine refuses (an `illegal-action` fact, such as a stake under the minimum) isn't sampled either. Settling a turn, stopping and final or strategy settlement aren't sampled: the gate tests long work separately.
+
+**Challenge families** (spec 3 launch gate 8) are reported under `challenge` instead of a game. `sampling.trainingStore` (`src/training/TrainingProvider.tsx`) wraps the training store the same way, and `challengeFamily` names each committed command:
+
+| Family | Action |
+| --- | --- |
+| `answer-submission` | an answer or Skip in card values or true-count conversion; a Play decision or opening wager in a table challenge |
+| `checkpoint-entry` | a count entered, or skipped, at a running-count or table checkpoint |
+| `card-advance` | the learner's Next, which shows the next card or table step (self-paced only) |
+
+A Play decision the rules refuse (a `move-refused` fact), a command that ends the attempt (the last Next included: recording and results are long work), starting, Show count, retries and corrections aren't sampled. Neither is a card that automatic pacing advanced, or the Next that follows Check's "Answer recorded" pause: no learner touch caused them. A sample holds only the family and its times, so a right and a wrong answer give the same sample, and nothing about the attempt, its cards or answers leaves the attempt through the export. Lesson and worked-example steps don't commit to a store, so they aren't sampled.
 
 ### Building it
 
@@ -267,7 +277,7 @@ A store build carries none of the recorder (**store builds**): `src/responsivene
 Sign in once, set the offline game, then turn on airplane mode. A badge at the top right counts samples ("Samples 240 · Share").
 
 - **Cold launches:** force-quit the app and open it again, at least 30 times per device.
-- **Actions:** play each game until the report shows at least 100 samples in every family on every older device. Tap; don't use a keyboard or switch control.
+- **Actions:** play each game, and tap through self-paced counting challenges (card values, running count, conversion and a table Play challenge), until the report shows at least 100 samples in every family on every older device. Tap; don't use a keyboard or switch control.
 
 The file is `responsiveness-samples.jsonl`, one JSON sample per line, with the device's model, OS version, build, ABI, the game, the family, and the start, end and duration in milliseconds. It keeps growing across launches until the app is deleted. To get it off the device:
 
@@ -281,7 +291,7 @@ The file is `responsiveness-samples.jsonl`, one JSON sample per line, with the d
 pnpm --filter @tableside/mobile responsiveness-report iphone-8.jsonl moto-g7-play.jsonl
 ```
 
-For each device and build it lists every family of every game (`GATE_FAMILIES` in `src/responsiveness/samples.ts`; guided practice's families appear when sampled) and cold launch. Builds are reported separately, because each build must meet the gate on its own. For each family it prints the sample count, the nearest-rank p95 (all samples, outliers kept: the value at rank ⌈0.95 n⌉), the maximum, the target (100 ms, 250 ms or 5 s) and pass or fail. A p95 within the target means at least 95% of samples are within it. Families with fewer than 100 samples (30 for cold launch) are flagged, including families with none, which also fail. It exits 1 when any family fails or is flagged. The export can't show the device was offline: airplane mode is the collector's job.
+For each device and build it lists every family of every game and of challenges (`GATE_FAMILIES` in `src/responsiveness/samples.ts`; guided practice's families appear when sampled) and cold launch. Builds are reported separately, because each build must meet the gate on its own. For each family it prints the sample count, the nearest-rank p95 (all samples, outliers kept: the value at rank ⌈0.95 n⌉), the maximum, the target (100 ms, 250 ms or 5 s) and pass or fail. A p95 within the target means at least 95% of samples are within it. Families with fewer than 100 samples (30 for cold launch) are flagged, including families with none, which also fail. It exits 1 when any family fails or is flagged. The export can't show the device was offline: airplane mode is the collector's job.
 
 ## App tests
 

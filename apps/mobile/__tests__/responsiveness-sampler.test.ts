@@ -1,7 +1,9 @@
 // Spec 1 Launch gates 5; #121
-import type { Command, DomainFact, Receipt } from '@tableside/engine';
+import type { ChallengeCategory, ChallengeCommand, ChallengeFact, Command, DomainFact, Receipt } from '@tableside/engine';
 
 import { MemoryActivityStore } from '@/practice/memory-store';
+import { MemoryTrainingStore } from '@/training/memory-store';
+import { FRESH_LIFECYCLE, type AttemptCommitOutcome, type AttemptLifecycle, type AttemptTransitionCommit, type NewAttempt, type TrainingStore } from '@/training/store';
 import type { ActivityStore, CommitOutcome, NewActivity, TransitionCommit } from '@/practice/store';
 import { CLAIM_MS, createSampler, HOLD_MS, type Sampler, type SamplerPorts } from '@/responsiveness/sampler';
 import type { DeviceInfo, ResponsivenessSample } from '@/responsiveness/samples';
@@ -201,6 +203,120 @@ describe('acknowledgment and durable completion', () => {
     await tap(h, store, commit('craps', { kind: 'begin-turn' }), { down: 10, up: 20 });
     await h.drawAt(100);
     expect(h.recorded.map((sample) => sample.game)).toEqual(['craps', 'craps']);
+  });
+});
+
+// Spec 3 Launch gates 8; #156
+describe('challenge actions', () => {
+  const attempt = (category: ChallengeCategory, id = `attempt-${category}`): NewAttempt =>
+    ({ attemptId: id, specification: { variant: 'check', content: { category } }, lifecycle: FRESH_LIFECYCLE }) as unknown as NewAttempt;
+
+  const challengeCommit = (category: ChallengeCategory, command: ChallengeCommand, facts: readonly ChallengeFact[] = [], lifecycle: AttemptLifecycle = FRESH_LIFECYCLE): AttemptTransitionCommit => ({
+    attemptId: `attempt-${category}`,
+    priorSequence: 1,
+    checkpoint: '',
+    receipt: { commandId: 'c', sequence: 1, command: JSON.stringify(command), disposition: 'applied' },
+    facts,
+    charge: null,
+    lifecycle,
+  });
+
+  class ScriptedTrainingStore extends MemoryTrainingStore {
+    override async commitAttemptTransition(_commit: AttemptTransitionCommit): Promise<AttemptCommitOutcome> {
+      return { status: 'committed' };
+    }
+  }
+
+  async function challengeStore(sampler: Sampler, category: ChallengeCategory) {
+    const store = sampler.trainingStore(new ScriptedTrainingStore());
+    await store.createAttempt(attempt(category));
+    return store;
+  }
+
+  async function tapChallenge(h: Harness, store: TrainingStore, transition: AttemptTransitionCommit) {
+    h.sampler.touchStart(touch(10));
+    h.at(20);
+    const committing = store.commitAttemptTransition(transition);
+    h.sampler.touchEnd(touch(20));
+    await committing;
+    await h.drawAt(100);
+    return h.recorded.map((sample) => [sample.measure, sample.game, sample.family]);
+  }
+
+  const both = (family: string) => [
+    ['acknowledgment', 'challenge', family],
+    ['completion', 'challenge', family],
+  ];
+
+  it.each<[string, ChallengeCategory, ChallengeCommand, readonly ChallengeFact[], string]>([
+    ['a card value', 'card-values', { kind: 'answer', value: 1 }, [{ kind: 'answer-accepted', position: 0, scored: true }], 'answer-submission'],
+    ['a true count', 'conversion', { kind: 'answer', value: -2 }, [{ kind: 'answer-accepted', position: 0, scored: true }], 'answer-submission'],
+    ['a skipped card value', 'card-values', { kind: 'skip' }, [{ kind: 'answer-accepted', position: 0, scored: true }], 'answer-submission'],
+    ['a Play decision', 'table', { kind: 'play', action: 'hit' }, [], 'answer-submission'],
+    ['an opening wager', 'table', { kind: 'bet', amount: '20' }, [{ kind: 'wager-placed', position: 3 }], 'answer-submission'],
+    ['a running count at a checkpoint', 'running-count', { kind: 'answer', value: 3 }, [{ kind: 'answer-accepted', position: 9, scored: true }], 'checkpoint-entry'],
+    ['a table count at a checkpoint', 'table', { kind: 'answer', value: -1 }, [{ kind: 'answer-accepted', position: 9, scored: true }], 'checkpoint-entry'],
+    ['a skipped checkpoint', 'running-count', { kind: 'skip' }, [{ kind: 'answer-accepted', position: 9, scored: true }], 'checkpoint-entry'],
+    ['the next card', 'running-count', { kind: 'next-item' }, [{ kind: 'content-shown', position: 4 }], 'card-advance'],
+    ['the next card, due a checkpoint', 'running-count', { kind: 'next-item' }, [{ kind: 'content-shown', position: 4 }, { kind: 'checkpoint-due', position: 4 }], 'card-advance'],
+    ['the next table step', 'table', { kind: 'next-item' }, [], 'card-advance'],
+  ])('names the family for %s', async (_, category, command, facts, family) => {
+    const h = harness();
+    const store = await challengeStore(h.sampler, category);
+    expect(await tapChallenge(h, store, challengeCommit(category, command, facts))).toEqual(both(family));
+  });
+
+  it.each<[string, ChallengeCategory, ChallengeCommand, readonly ChallengeFact[], AttemptLifecycle]>([
+    ['starting (the charge commits with the first content)', 'card-values', { kind: 'begin' }, [{ kind: 'content-shown', position: 0 }], FRESH_LIFECYCLE],
+    ['ending', 'card-values', { kind: 'end' }, [{ kind: 'attempt-ended', ending: 'abandoned' }], FRESH_LIFECYCLE],
+    ['the last card, which ends the attempt', 'running-count', { kind: 'next-item' }, [{ kind: 'attempt-ended', ending: 'completed' }], FRESH_LIFECYCLE],
+    ['a card that automatic pacing advanced', 'running-count', { kind: 'next-item' }, [{ kind: 'content-shown', position: 4 }], { ...FRESH_LIFECYCLE, pacing: '2s' }],
+    ['showing the count', 'running-count', { kind: 'reveal-count' }, [], FRESH_LIFECYCLE],
+    ['retrying an item', 'card-values', { kind: 'retry-item' }, [], FRESH_LIFECYCLE],
+    ['a Play decision the rules refuse', 'table', { kind: 'play', action: 'split' }, [{ kind: 'move-refused', position: 3, action: 'split' }], FRESH_LIFECYCLE],
+    ['retrying a correction', 'table', { kind: 'retry-correction' }, [], FRESH_LIFECYCLE],
+  ])('leaves out %s', async (_, category, command, facts, lifecycle) => {
+    const h = harness();
+    const store = await challengeStore(h.sampler, category);
+    expect(await tapChallenge(h, store, challengeCommit(category, command, facts, lifecycle))).toEqual([]);
+  });
+
+  // Spec 3 Information hiding (end to end)
+  it('samples a right and a wrong answer identically: the family, never the answer, card or attempt', async () => {
+    const run = async (value: number, scored: boolean) => {
+      const h = harness();
+      const store = await challengeStore(h.sampler, 'running-count');
+      await tapChallenge(h, store, challengeCommit('running-count', { kind: 'answer', value }, [{ kind: 'answer-accepted', position: 9, scored }]));
+      return h.recorded;
+    };
+    const right = await run(4, true);
+    expect(await run(-7, true)).toEqual(right);
+    const sent = JSON.stringify(right);
+    for (const hidden of ['attempt-running-count', 'value', 'position', '"4"', 'scored', 'running-count']) expect(sent).not.toContain(hidden);
+  });
+
+  it('knows the category of an attempt it finds or loads after a restart', async () => {
+    for (const find of ['findUnfinishedAttempt', 'loadAttempt'] as const) {
+      const h = harness();
+      const inner = new ScriptedTrainingStore();
+      await inner.createAttempt(attempt('table'));
+      const store = h.sampler.trainingStore(inner);
+      await (find === 'loadAttempt' ? store.loadAttempt('attempt-table') : store.findUnfinishedAttempt());
+      expect(await tapChallenge(h, store, challengeCommit('table', { kind: 'answer', value: 2 }))).toEqual(both('checkpoint-entry'));
+    }
+  });
+
+  it('passes every training store call through', async () => {
+    const h = harness();
+    const inner = new MemoryTrainingStore();
+    const store = h.sampler.trainingStore(inner);
+    await store.createAttempt(attempt('card-values'));
+    await store.writePreference('challenge.last-setup', '{}');
+    await expect(store.readPreference('challenge.last-setup')).resolves.toBe('{}');
+    await expect(store.findUnfinishedAttempt()).resolves.toEqual(await inner.findUnfinishedAttempt());
+    await expect(store.readAttemptRecords()).resolves.toEqual([]);
+    await expect(store.readLessonSync()).resolves.toEqual(await inner.readLessonSync());
+    await expect(store.readMilestoneSync()).resolves.toEqual(await inner.readMilestoneSync());
   });
 });
 

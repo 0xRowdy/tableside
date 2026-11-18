@@ -1,10 +1,11 @@
 // Spec 1 Launch gates 5; #121; docs/development.md Responsiveness sampling
 
-import { INSURANCE_TARGET, type Command, type GameId } from '@tableside/engine';
+import { INSURANCE_TARGET, type ChallengeCategory, type ChallengeCommand, type Command } from '@tableside/engine';
 
 import type { ActivityStore, StoredActivity, TransitionCommit } from '@/practice/store';
+import type { AttemptTransitionCommit, StoredAttempt, TrainingStore } from '@/training/store';
 
-import { COLD_LAUNCH, type DeviceInfo, type Measure, type ResponsivenessSample } from './samples';
+import { CHALLENGE, COLD_LAUNCH, type DeviceInfo, type Measure, type ResponsivenessSample, type SampledArea } from './samples';
 
 export const CLAIM_MS = 1000;
 export const HOLD_MS = 10_000;
@@ -28,8 +29,10 @@ export interface Sampler {
   touchEnd(event: TouchLike): void;
   touchCancel(): void;
   // docs/development.md Responsiveness sampling
-  action<T>(game: GameId, family: string, run: () => Promise<T>, committed: (result: T) => boolean): Promise<T>;
+  action<T>(game: SampledArea, family: string, run: () => Promise<T>, committed: (result: T) => boolean): Promise<T>;
   practiceStore(store: ActivityStore): ActivityStore;
+  // Spec 3 Launch gates 8; #156
+  trainingStore(store: TrainingStore): TrainingStore;
   launchUsable(): void;
 }
 
@@ -65,18 +68,42 @@ export function practiceFamily(command: Command): string | null {
   }
 }
 
+// Spec 3 Launch gates 8; docs/development.md Responsiveness sampling (action families)
+export function challengeFamily(commit: AttemptTransitionCommit, category: ChallengeCategory): string | null {
+  const command = JSON.parse(commit.receipt.command) as ChallengeCommand;
+  if (commit.facts.some((fact) => fact.kind === 'move-refused' || fact.kind === 'attempt-ended')) return null;
+  switch (command.kind) {
+    case 'answer':
+    case 'skip':
+      return category === 'running-count' || category === 'table' ? 'checkpoint-entry' : 'answer-submission';
+    case 'play':
+    case 'bet':
+      return 'answer-submission';
+    case 'next-item':
+      return commit.lifecycle.pacing === 'self-paced' ? 'card-advance' : null;
+    case 'begin':
+    case 'retry-item':
+    case 'reveal-count':
+    case 'retry-correction':
+    case 'override-correction':
+    case 'end':
+      return null;
+  }
+}
+
 export function createSampler(ports: SamplerPorts): Sampler {
   let touch: Touch | null = null;
   let touched = false;
   let launched = false;
-  const games = new Map<string, GameId>();
+  const games = new Map<string, SampledArea>();
+  const categories = new Map<string, ChallengeCategory>();
 
   const nextFrameAfterCommit = () => new Promise<number>((resolve, reject) => ports.afterCommit(() => void ports.nextFrame().then(resolve, reject)));
 
-  const record = (measure: Measure, game: GameId | null, family: string, start: number, end: number) =>
+  const record = (measure: Measure, game: SampledArea | null, family: string, start: number, end: number) =>
     ports.record({ version: 1, device: ports.device, measure, game, family, start, end, ms: end - start });
 
-  const recordAt = (frame: Promise<number>, measure: Measure, game: GameId | null, family: string, start: number) =>
+  const recordAt = (frame: Promise<number>, measure: Measure, game: SampledArea | null, family: string, start: number) =>
     void frame.then((end) => record(measure, game, family, start, end), () => undefined);
 
   // docs/development.md Responsiveness sampling (touch order)
@@ -93,6 +120,11 @@ export function createSampler(ports: SamplerPorts): Sampler {
     return activity;
   };
 
+  const rememberAttempt = <A extends StoredAttempt | null>(attempt: A): A => {
+    if (attempt) categories.set(attempt.attemptId, attempt.specification.content.category);
+    return attempt;
+  };
+
   const action: Sampler['action'] = async (game, family, run, committed) => {
     const claimed = claim();
     if (claimed) recordAt(claimed.acknowledged, 'acknowledgment', game, family, claimed.start);
@@ -107,6 +139,14 @@ export function createSampler(ports: SamplerPorts): Sampler {
     const run = () => store.commitTransition(commit);
     if (!game || !family || commit.facts.some((fact) => fact.kind === 'illegal-action')) return run();
     return action(game, family, run, (outcome) => outcome.status === 'committed');
+  };
+
+  const commitAttempt = (store: TrainingStore, commit: AttemptTransitionCommit) => {
+    const category = categories.get(commit.attemptId);
+    const family = category ? challengeFamily(commit, category) : null;
+    const run = () => store.commitAttemptTransition(commit);
+    if (!family) return run();
+    return action(CHALLENGE, family, run, (outcome) => outcome.status === 'committed');
   };
 
   return {
@@ -135,6 +175,29 @@ export function createSampler(ports: SamplerPorts): Sampler {
         complete: (completed) => store.complete(completed),
         readOutgoing: () => store.readOutgoing(),
         markIncomplete: async (activityId, reason) => remember(await store.markIncomplete(activityId, reason)),
+      };
+    },
+    // Spec 3 Launch gates 8; #156
+    trainingStore(store) {
+      return {
+        createAttempt: async (attempt) => rememberAttempt(await store.createAttempt(attempt)),
+        loadAttempt: async (attemptId) => rememberAttempt(await store.loadAttempt(attemptId)),
+        findUnfinishedAttempt: async () => rememberAttempt(await store.findUnfinishedAttempt()),
+        commitAttemptTransition: (commit) => commitAttempt(store, commit),
+        readAttemptReceipt: (attemptId, commandId) => store.readAttemptReceipt(attemptId, commandId),
+        discardUnchargedAttempt: (attemptId) => store.discardUnchargedAttempt(attemptId),
+        saveAttemptLifecycle: (attemptId, lifecycle) => store.saveAttemptLifecycle(attemptId, lifecycle),
+        recordAttempt: (record) => store.recordAttempt(record),
+        readAttemptRecords: () => store.readAttemptRecords(),
+        readAcceptedAttempts: () => store.readAcceptedAttempts(),
+        readPreference: (key) => store.readPreference(key),
+        writePreference: (key, value) => store.writePreference(key, value),
+        recordLessonEvent: (event) => store.recordLessonEvent(event),
+        readLessonEvents: () => store.readLessonEvents(),
+        readLessonSync: () => store.readLessonSync(),
+        recordMilestone: (milestone) => store.recordMilestone(milestone),
+        readMilestones: () => store.readMilestones(),
+        readMilestoneSync: () => store.readMilestoneSync(),
       };
     },
     // docs/development.md Responsiveness sampling (cold launch)
