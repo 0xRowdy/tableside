@@ -1,4 +1,4 @@
-import type { ChallengePhase, EntropySource, Phase, QuarantineList, VersionedIdentity } from '@tableside/engine';
+import type { ChallengePhase, EntropySource, GameId, Phase, QuarantineList, VersionedIdentity } from '@tableside/engine';
 
 import type { ActivityStore, CompletedPracticeSession, MeteringBasis } from './store';
 
@@ -52,6 +52,9 @@ export interface SetupTerms {
 
 export const PRACTICE_FUNDING_TERMS: SetupTerms = { funding: { source: 'practice-funding' }, allowance: null, seePremium: false };
 
+// Spec 3 Amendment 4 §5
+export type GameAccess = { readonly status: 'playable' } | { readonly status: 'needs-connection'; readonly offlineGame: GameId | null };
+
 // Spec 1 Access boundary
 export interface AccessSupervisor {
   beforeActivity(context: { readonly game: string }): Promise<AdmissionDecision>;
@@ -65,6 +68,8 @@ export interface AccessSupervisor {
   beforeEndWhileSuspended(context: { readonly activityId: string }): Promise<{ readonly status: 'allowed' } | { readonly status: 'blocked'; readonly reason: string }>;
   phaseChanged(report: PhaseReport): void;
   setupTerms?(context: { readonly game: string }): Promise<SetupTerms>;
+  // Spec 3 Lessons › Access; #149
+  gameAccess(context: { readonly game: GameId }): Promise<GameAccess>;
 }
 
 const STUB = 'spec-1-stub';
@@ -77,6 +82,7 @@ export const alwaysAllowed: AccessSupervisor = {
   onLifecycle: async () => ({ status: 'allowed', provenance: STUB }),
   beforeEndWhileSuspended: async () => ({ status: 'allowed' }),
   phaseChanged: () => undefined,
+  gameAccess: async () => ({ status: 'playable' }),
 };
 
 export interface RequiredRemovals {

@@ -1,5 +1,5 @@
 // Spec 3 Screens; Lessons › Entry points, Structure; Attempt lifecycle; Amendment 1 B5
-// #158, #132, #145, #133, #134, #135, #146, #140, #137, #141
+// #158, #132, #145, #133, #134, #135, #146, #140, #137, #141, #149
 import { CHALLENGE_LESSONS } from '@tableside/definitions';
 import { CHALLENGE_VARIANTS, type ChallengeVariant } from '@tableside/engine';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
@@ -16,7 +16,7 @@ import { RecordsScreen } from '@/counting/RecordsScreen';
 import { useFeedback } from '@/feedback/FeedbackProvider';
 import { useLoaded } from '@/hooks/use-loaded';
 import { ScreenHints } from '@/lessons/FirstUseHints';
-import { lessonHref } from '@/lessons/routes';
+import { lessonHref, returnsToAttempt } from '@/lessons/routes';
 import { allowanceCopy, COUNTING_TITLE, FINDING_ATTEMPT, NEEDS_UPDATE } from '@/training/challenge-text';
 import { setupFor, type ChallengeSetup, type TrainingService, type TrainingSnapshot } from '@/training/service';
 import { useLessons, useTraining } from '@/training/TrainingProvider';
@@ -29,7 +29,7 @@ const progressOf = (service: TrainingService, _reloadOnStatus: TrainingSnapshot[
 export default function Counting() {
   const { service, snapshot } = useTraining();
   const feedback = useFeedback();
-  const { category, variant, records } = useLocalSearchParams<{ category?: string; variant?: string; records?: string }>();
+  const { category, variant, records, attempt } = useLocalSearchParams<{ category?: string; variant?: string; records?: string; attempt?: string }>();
   const { lessons } = useLessons();
   const remembered = useLoaded(lastSetupOf, service);
   // Spec 3 Amendment 4 §2
@@ -74,8 +74,8 @@ export default function Counting() {
       return <Placeholder title={COUNTING_TITLE} message={NEEDS_UPDATE} />;
     case 'active': {
       const { view, hold } = snapshot;
-      // Spec 3 Attempt lifecycle › One unfinished attempt; S3-01 Uq05w
-      if (browsing && hold?.reached) {
+      // Spec 3 Attempt lifecycle › One unfinished attempt; S3-01 Uq05w, S3-14 SUUN4
+      if (browsing && hold?.reached && !returnsToAttempt({ attempt })) {
         if (recordsScreen) return recordsScreen;
         return (
           <>
@@ -123,7 +123,7 @@ export default function Counting() {
           onEnd={() => void service.end()}
           onLeave={() => {
             setBrowsing(true);
-            router.setParams({ category: undefined, variant: undefined });
+            router.setParams({ category: undefined, variant: undefined, attempt: undefined });
           }}
           lesson={lessons?.find((lesson) => lesson.id === CHALLENGE_LESSONS[view.category])}
           onOpenLesson={openLesson}

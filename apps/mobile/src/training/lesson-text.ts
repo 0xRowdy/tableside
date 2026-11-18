@@ -11,7 +11,7 @@ import { GAME_WORDS } from '@/play/game-words';
 
 import { CATEGORY_TEXT, NOT_READY_HINT, type AllowanceCopy } from './challenge-text';
 import type { LessonStatus } from './lesson-progress';
-import type { CatalogCategory, LessonEntry, LessonView } from './service';
+import type { CatalogCategory, InstructionWithheld, LessonAccess, LessonEntry, LessonView } from './service';
 
 export const LEARNING_TITLE = 'Learning';
 export const LEARNING_DETAIL = 'Lessons';
@@ -80,7 +80,38 @@ export function statusText(status: LessonStatus, steps: number | null): string {
   }
 }
 
-export const lessonDetail = (entry: LessonEntry) => [statusText(entry.status, entry.steps), entry.summary].filter((part) => part !== null).join(' · ');
+// Spec 3 Lessons › Access, Check protection; S3-11 LDmev; #149
+export const AFTER_CHECK = 'After your Check attempt';
+export const NEEDS_CONNECTION = 'Needs a connection';
+const accessText = (access: LessonAccess): string | null => (access.kind === 'after-check' ? AFTER_CHECK : access.kind === 'needs-connection' ? NEEDS_CONNECTION : null);
+
+export const lessonDetail = (entry: LessonEntry) =>
+  accessText(entry.access) ?? [statusText(entry.status, entry.steps), entry.summary].filter((part) => part !== null).join(' · ');
+
+// Spec 3 S3-11 LDmev; Amendment 1 A2
+export const CHECK_BANNER = {
+  title: 'A Check attempt is unfinished',
+  text: 'The four counting lessons open after it ends. During a Play Check, the four blackjack mode lessons and the bet-schedule lesson wait too. Everything else is open.',
+} as const;
+export const RETURN_TO_ATTEMPT = 'Return to attempt';
+
+// Spec 3 S3-14 SUUN4, with Amendment 2 §3's narrowing to Amendment 1 A2
+export const AFTER_THIS_ATTEMPT = 'This lesson is available after this attempt.';
+export const END_TO_VIEW = 'End attempt to view this lesson';
+export const ENDING_ABANDONS = "Ending counts as abandoned: today's attempt stays used, there's no record, and progress toward this setting's readiness milestone restarts.";
+export function afterCheckText({ category, play }: InstructionWithheld): string {
+  const title = CATEGORY_TEXT[category].title;
+  return play
+    ? `You have an unfinished Play Check attempt in ${title}. The four counting lessons, the four blackjack mode lessons, the bet-schedule lesson and their worked examples wait until it ends. Every other lesson is open now.`
+    : `You have an unfinished Check attempt in ${title}. The four counting lessons (card values, running count, true-count conversion, table counting) and their worked examples wait until it ends. Every other lesson is open now.`;
+}
+
+// Spec 3 S3-12 JsXMJ; Amendment 4 §5
+export const NEEDS_CONNECTION_TITLE = 'This lesson needs a connection';
+export const needsConnectionText = ({ game, offlineGame }: { readonly game: GameId; readonly offlineGame: GameId | null }) =>
+  `You're offline${offlineGame ? `, and ${GAME_WORDS[offlineGame].name} is your offline game,` : ','} so ${GAME_WORDS[game].name} lessons wait until you reconnect. Your place in this lesson is kept.`;
+export const offlineLessonsText = (offlineGame: GameId | null) =>
+  `Offline you can open ${offlineGame ? `the ${GAME_WORDS[offlineGame].name} lessons, ` : ''}the app orientation lesson and the builder lesson.`;
 
 export const stepText = (step: number, steps: number) => `Step ${step} of ${steps}`;
 export const NEXT = 'Next';
@@ -181,7 +212,8 @@ export function handoffDetail(handoff: LessonHandoff, allowance: AllowanceCopy |
 // Spec 3 Lessons › Entry points; S3-01 PDCaD, S3-02 buD2R, S1-02 FxxAj
 export const lessonLinkLabel = (category: CatalogCategory) => `Lesson: ${lowerFirst(CATEGORY_TEXT[category].title)}`;
 export const LEARN_THIS_SKILL = 'Learn this skill';
-export const learnThisSkillDetail = (lesson: LessonEntry) => `${lesson.title} lesson · ${lesson.steps === null ? NOT_READY_HINT : `${lesson.steps} short steps`}`;
+export const learnThisSkillDetail = (lesson: LessonEntry) =>
+  `${lesson.title} lesson · ${lesson.steps === null ? NOT_READY_HINT : (accessText(lesson.access) ?? `${lesson.steps} short steps`)}`;
 export const LEARN_THIS_GAME = 'Learn this game';
 export const lessonCount = (count: number) => `${count} ${count === 1 ? 'lesson' : 'lessons'}`;
 export const LEARN_THIS_GAME_DETAIL: Record<GameId, string> = {
