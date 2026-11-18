@@ -122,7 +122,7 @@ export function UnfinishedSheet({
 
 const styles = StyleSheet.create({
   lead: { fontFamily: fonts.ui, fontSize: 16, lineHeight: 23, color: palette.foreground },
-  warning: { flexDirection: 'row', gap: space[3], padding: 14, borderRadius: 12, borderWidth: 1, borderColor: palette.warning, backgroundColor: palette.card },
+  warning: { flexDirection: 'row', gap: space[3], padding: space[4], borderRadius: radius.md, borderWidth: 1, borderColor: palette.warning, backgroundColor: palette.card },
   warningText: { flex: 1, fontFamily: fonts.uiBold, fontSize: 14, lineHeight: 20, color: palette.foreground },
   row: { flexDirection: 'row', gap: space[4] },
   rowText: { flex: 1, gap: space[1] },

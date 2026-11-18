@@ -107,7 +107,7 @@ function CheckBanner({ onReturn }: { onReturn: () => void }) {
 }
 
 const styles = StyleSheet.create({
-  banner: { flexDirection: 'row', gap: space[3], padding: 14, borderRadius: radius.lg - 4, borderWidth: 1, borderColor: palette.info, backgroundColor: palette.card },
+  banner: { flexDirection: 'row', gap: space[3], padding: space[4], borderRadius: radius.md, borderWidth: 1, borderColor: palette.info, backgroundColor: palette.card },
   bannerText: { flex: 1, gap: space[1] },
   bannerTitle: { fontFamily: fonts.uiBold, fontSize: 14, lineHeight: 20, color: palette.foreground },
   held: { opacity: 0.6 },

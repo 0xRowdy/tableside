@@ -148,13 +148,13 @@ export function countingAnswer(example: CountingExample, picked: number): Script
 
 const styles = StyleSheet.create({
   givens: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: space[2] + 2 },
-  given: { flexGrow: 1, flexBasis: 150, gap: space[1], paddingVertical: space[3], paddingHorizontal: 14, borderRadius: radius.lg - 2, borderWidth: 1, borderColor: palette.border, backgroundColor: palette.card },
+  given: { flexGrow: 1, flexBasis: 150, gap: space[1], paddingVertical: space[3], paddingHorizontal: space[4], borderRadius: radius.lg, borderWidth: 1, borderColor: palette.border, backgroundColor: palette.card },
   givenLabel: { fontFamily: fonts.ui, fontSize: 13, color: palette.mutedForeground },
   givenValue: { fontFamily: fonts.uiBold, fontSize: 30, color: palette.foreground },
   prompt: { fontFamily: fonts.uiBold, fontSize: 18, color: palette.foreground },
   choices: { flexDirection: 'row', flexWrap: 'wrap', gap: space[3] - 2 },
   lead: { fontFamily: fonts.ui, fontSize: 15, lineHeight: 22, color: palette.foreground },
-  table: { gap: space[3], padding: 14, borderRadius: radius.lg - 2, borderWidth: 1, borderColor: palette.border, backgroundColor: palette.card },
+  table: { gap: space[3], padding: space[4], borderRadius: radius.lg, borderWidth: 1, borderColor: palette.border, backgroundColor: palette.card },
   hand: { gap: space[2] },
   cards: { flexDirection: 'row', flexWrap: 'wrap', gap: space[2] },
 });

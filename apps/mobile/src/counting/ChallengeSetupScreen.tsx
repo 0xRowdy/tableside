@@ -10,7 +10,7 @@ import { Segmented } from '@/components/Segmented';
 import { SwitchRow } from '@/components/SwitchRow';
 import { LearnRow } from '@/lessons/LessonEntries';
 import { SettingsScreen } from '@/settings/SettingsParts';
-import { fonts, palette, space, textScale } from '@/theme/tokens';
+import { fonts, palette, radius, space, textScale } from '@/theme/tokens';
 import {
   CATEGORY_TEXT,
   COUNTING_TITLE,
@@ -159,9 +159,9 @@ const styles = StyleSheet.create({
   section: { gap: space[3] - 2 },
   label: { fontFamily: fonts.uiBold, fontSize: 12, letterSpacing: 0.6, color: palette.mutedForeground },
   help: { fontFamily: fonts.ui, fontSize: 13, lineHeight: 19, color: palette.mutedForeground },
-  banner: { flexDirection: 'row', gap: space[3], padding: 14, borderRadius: 12, borderWidth: 1, borderColor: palette.controlBorder, backgroundColor: palette.card },
+  banner: { flexDirection: 'row', gap: space[3], padding: space[4], borderRadius: radius.md, borderWidth: 1, borderColor: palette.controlBorder, backgroundColor: palette.card },
   problem: { borderColor: palette.destructive },
   bannerBody: { flex: 1, gap: space[1] },
   bannerText: { flex: 1, fontFamily: fonts.uiBold, fontSize: 14, lineHeight: 20, color: palette.foreground },
-  card: { borderRadius: 12, borderWidth: 1, borderColor: palette.border, backgroundColor: palette.card, overflow: 'hidden' },
+  card: { borderRadius: radius.md, borderWidth: 1, borderColor: palette.border, backgroundColor: palette.card, overflow: 'hidden' },
 });
