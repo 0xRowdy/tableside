@@ -33,7 +33,7 @@ export function SettingsScreen({ title, back, children }: { title: string; back?
   );
 }
 
-function BackButton({ label, onPress }: { label: string; onPress: () => void }) {
+export function BackButton({ label, onPress }: { label: string; onPress: () => void }) {
   const { focused, focusProps } = useKeyboardFocus();
   return (
     <Pressable
@@ -58,6 +58,7 @@ export function ListRow({
   detail,
   value,
   destructive = false,
+  chevron = true,
   onPress,
 }: {
   icon: LucideIcon;
@@ -65,6 +66,7 @@ export function ListRow({
   detail?: string;
   value?: string;
   destructive?: boolean;
+  chevron?: boolean;
   onPress?: () => void;
 }) {
   const { focused, focusProps } = useKeyboardFocus();
@@ -82,12 +84,12 @@ export function ListRow({
           {value}
         </Text>
       )}
-      {onPress && <ChevronRight color={palette.mutedForeground} size={18} />}
+      {onPress && chevron && <ChevronRight color={palette.mutedForeground} size={18} />}
     </>
   );
   if (!onPress) {
     return (
-      <View accessible accessibilityLabel={spoken([title, detail])} style={styles.row}>
+      <View accessible accessibilityLabel={spoken([title, detail, value])} style={styles.row}>
         {content}
       </View>
     );

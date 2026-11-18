@@ -9,7 +9,72 @@ export interface StoreMigration {
 
 export const BASE_SCHEMA_VERSION = 1;
 
-export const STORE_MIGRATIONS: readonly StoreMigration[] = [];
+// Spec 3 Attempt lifecycle › Durability, Amendment 1 C7; #158
+const CHALLENGE_ATTEMPTS: StoreMigration = {
+  to: 2,
+  async migrate(tx) {
+    for (const statement of [
+      `CREATE TABLE challenge_attempts (
+        attempt_id TEXT PRIMARY KEY,
+        position INTEGER NOT NULL UNIQUE,
+        status TEXT NOT NULL CHECK (status IN ('unfinished', 'ended')),
+        sequence INTEGER NOT NULL,
+        body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL
+      ) STRICT`,
+      "CREATE UNIQUE INDEX challenge_attempts_one_unfinished ON challenge_attempts (status) WHERE status = 'unfinished'",
+      `CREATE TABLE challenge_transitions (
+        attempt_id TEXT NOT NULL REFERENCES challenge_attempts (attempt_id),
+        command_id TEXT NOT NULL,
+        sequence INTEGER NOT NULL,
+        body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,
+        PRIMARY KEY (attempt_id, command_id),
+        UNIQUE (attempt_id, sequence)
+      ) STRICT`,
+      `CREATE TABLE challenge_charges (
+        attempt_id TEXT PRIMARY KEY REFERENCES challenge_attempts (attempt_id),
+        body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL
+      ) STRICT`,
+      `CREATE TABLE challenge_attempt_records (
+        attempt_id TEXT PRIMARY KEY REFERENCES challenge_attempts (attempt_id),
+        device_sequence INTEGER NOT NULL UNIQUE,
+        body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL
+      ) STRICT`,
+      'CREATE TABLE device_preferences (key TEXT PRIMARY KEY, value TEXT NOT NULL) STRICT',
+    ]) {
+      await tx.run(statement);
+    }
+  },
+};
+
+// Spec 3 Synchronized record types › Lesson-progress event; #143
+const LESSON_PROGRESS: StoreMigration = {
+  to: 3,
+  async migrate(tx) {
+    await tx.run(`CREATE TABLE lesson_progress_events (
+      event_id TEXT PRIMARY KEY,
+      device_sequence INTEGER NOT NULL UNIQUE,
+      body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL
+    ) STRICT`);
+  },
+};
+
+// Spec 3 Synchronized record types › Readiness milestone; #141
+const READINESS_MILESTONES: StoreMigration = {
+  to: 4,
+  async migrate(tx) {
+    await tx.run(`CREATE TABLE readiness_milestones (
+      installation_id TEXT NOT NULL,
+      group_key TEXT NOT NULL,
+      first_attempt_id TEXT NOT NULL,
+      second_attempt_id TEXT NOT NULL,
+      earned_at INTEGER NOT NULL,
+      body TEXT NOT NULL, body_format INTEGER NOT NULL, body_length INTEGER NOT NULL, body_sha256 TEXT NOT NULL,
+      PRIMARY KEY (installation_id, group_key)
+    ) STRICT`);
+  },
+};
+
+export const STORE_MIGRATIONS: readonly StoreMigration[] = [CHALLENGE_ATTEMPTS, LESSON_PROGRESS, READINESS_MILESTONES];
 
 export const schemaVersionOf = (migrations: readonly StoreMigration[]): number => BASE_SCHEMA_VERSION + migrations.length;
 

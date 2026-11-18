@@ -279,6 +279,12 @@ describe('cleanup', () => {
     const tablet = device('complete-tablet');
     await signInAlso(tablet, email);
     await phone.playPracticeSession();
+    // #142
+    await phone.playCheck();
+    // #147
+    await (await phone.training()).completeLesson('app-orientation');
+    // #148
+    await phone.playCheck();
     await queue(phone, testResult.name, { version: 1, resultId: 'r-1', amount: '1', detail: 'detail of r-1' });
     await queue(phone, testAttempt.name, { version: 1, attemptId: 'a-1', passed: true, at: phone.clock.now() });
     expect(await phone.account.privacy.grantAnalytics()).toEqual({ status: 'changed' });
@@ -293,6 +299,7 @@ describe('cleanup', () => {
     const bucket = stack.rawClient(accessToken(phone)).storage.from('account-private');
     for (const name of ['notes.txt', 'nested/more.txt']) expect((await bucket.upload(`${accountId}/${name}`, 'mine')).error).toBeNull();
     expect(Object.keys(await rowsLeft(accountId)).length).toBeGreaterThan(10);
+    expect(await rowsLeft(accountId)).toMatchObject({ 'private.challenge_attempts': 2, 'private.lesson_progress_events': 1, 'private.readiness_milestones': 1 });
 
     await confirmByEmail(phone, email);
     expect(await phone.account.deletion.deletePermanently()).toEqual({ status: 'deleted' });

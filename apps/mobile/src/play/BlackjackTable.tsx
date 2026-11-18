@@ -52,7 +52,7 @@ import {
 import { betCorrectionCopy, BLACKJACK_WORDS } from './coaching-text';
 import { CorrectionPanel, GuidedStrip, type TableNow } from './Guidance';
 import { RebuySheet } from './RebuySheet';
-import { AccessStopBanner, AllowanceLine, ChipRack, PhaseStepper, SaveFailedBanner, SessionStrip, TableDialogs, TableTopBar, TurnBoundaryBanner, useTableAnnouncements, type PhaseStep } from './TableChrome';
+import { AccessStopBanner, AllowanceLine, BlackjackFeltRules, ChipRack, FaceDownCard, FeltBadge, PhaseStepper, SaveFailedBanner, SessionStrip, TableDialogs, TableTopBar, TurnBoundaryBanner, useTableAnnouncements, type PhaseStep } from './TableChrome';
 import { capitalize, formatSigned, formatUnits, halfUnits, sumUnits, totalOnTable } from './units';
 
 type ActiveSnapshot = Active<BlackjackPermittedView>;
@@ -199,7 +199,7 @@ export function BlackjackTable({ snapshot }: { snapshot: ActiveSnapshot }) {
             )}
             {held && strategy ? (
               <CorrectionPanel
-                copy={playCorrectionCopy(strategy.name, held, rules, view.count !== null)}
+                copy={playCorrectionCopy(strategy.name, held, rules, view.count !== null ? 'supplied' : 'kept')}
                 table={tableNow(view, handsText)}
                 fullScreen={fontScale > SIDE_BY_SIDE_MAX_FONT_SCALE}
                 busy={!ready}
@@ -355,15 +355,10 @@ function Felt({
       <Text maxFontSizeMultiplier={textScale.body} style={styles.feltLabel}>DEALER</Text>
       <View accessible accessibilityLabel={dealerSummary(view)} style={styles.handRow}>
         {round ? round.dealer.cards.map((card, index) => <PlayingCard key={index} card={card} />) : <EmptyCards />}
-        {round && <TotalBadge text={totalText(round.dealer.total)} />}
+        {round && <FeltBadge text={totalText(round.dealer.total)} />}
       </View>
 
-      <View style={styles.rules}>
-        <Text maxFontSizeMultiplier={textScale.display} style={styles.pays}>BLACKJACK PAYS 3 TO 2</Text>
-        <Text maxFontSizeMultiplier={textScale.body} style={styles.dealerRule}>
-          {view.table.dealer === 'S17' ? 'DEALER STANDS ON ALL 17s' : 'DEALER HITS SOFT 17'}
-        </Text>
-      </View>
+      <BlackjackFeltRules dealer={view.table.dealer} />
 
       {round && round.others.length > 0 && (
         <View style={styles.others} testID="other-players">
@@ -382,7 +377,7 @@ function Felt({
                 {hand.cards.map((card, i) => (
                   <PlayingCard key={i} card={card} small />
                 ))}
-                <TotalBadge text={capitalize(handTotalText(hand))} />
+                <FeltBadge text={capitalize(handTotalText(hand))} />
               </View>
             )),
           )}
@@ -398,7 +393,7 @@ function Felt({
       ) : (
         <View accessible accessibilityLabel={handSummary(view)} style={[styles.handRow, last && styles.lastRound]}>
           {hands[0] ? hands[0].cards.map((card, index) => <PlayingCard key={index} card={card} />) : <EmptyCards />}
-          {hands[0] && <TotalBadge text={`${capitalize(handTotalText(hands[0]))}${handNote(hands[0])}`} />}
+          {hands[0] && <FeltBadge text={`${capitalize(handTotalText(hands[0]))}${handNote(hands[0])}`} />}
         </View>
       )}
       {settledNet && (
@@ -448,13 +443,7 @@ function SplitHand({ view, hand, index, last }: { view: BlackjackPermittedView; 
 }
 
 function PlayingCard({ card, small = false }: { card: Card | null; small?: boolean }) {
-  if (card === null) {
-    return (
-      <View accessible accessibilityLabel="Face-down card" style={[styles.card, styles.cardBack]}>
-        <View style={styles.cardBackField} />
-      </View>
-    );
-  }
+  if (card === null) return <FaceDownCard />;
   const color = palette[SUIT_TOKEN[card.suit]];
   return (
     <View accessible accessibilityLabel={cardName(card)} style={[styles.card, small && styles.cardSmall]}>
@@ -466,14 +455,6 @@ function PlayingCard({ card, small = false }: { card: Card | null; small?: boole
 
 function EmptyCards() {
   return <View style={[styles.card, styles.cardEmpty]} />;
-}
-
-function TotalBadge({ text }: { text: string }) {
-  return (
-    <View style={styles.totalBadge}>
-      <Text maxFontSizeMultiplier={textScale.body} style={styles.totalText}>{text}</Text>
-    </View>
-  );
 }
 
 function BetSpot({ wager, chip, disabled, onPress, committed }: { wager: string | undefined; chip: string; disabled: boolean; onPress: () => void; committed: boolean }) {
@@ -651,9 +632,6 @@ const styles = StyleSheet.create({
   feltLabel: { fontFamily: fonts.uiBold, fontSize: 11, letterSpacing: 0.5, color: palette.feltText },
   handRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center', gap: space[2] },
   lastRound: { opacity: 0.85 },
-  rules: { alignItems: 'center', gap: 2 },
-  pays: { fontFamily: fonts.display, fontSize: 18, color: palette.feltText, textAlign: 'center' },
-  dealerRule: { fontFamily: fonts.uiMedium, fontSize: 10, letterSpacing: 0.5, color: palette.feltText, textAlign: 'center' },
   card: {
     width: CARD_WIDTH,
     minHeight: 80,
@@ -662,8 +640,6 @@ const styles = StyleSheet.create({
     backgroundColor: palette.cardFace,
     justifyContent: 'space-between',
   },
-  cardBack: { padding: 4, backgroundColor: palette.cardFace },
-  cardBackField: { flex: 1, borderRadius: 4, backgroundColor: palette.chip5 },
   cardEmpty: { backgroundColor: palette.transparent, borderWidth: 1, borderColor: palette.feltText, borderStyle: 'dashed' },
   cardRank: { fontFamily: fonts.uiBold, fontSize: 20 },
   cardPip: { fontSize: 26, alignSelf: 'flex-end' },
@@ -681,8 +657,6 @@ const styles = StyleSheet.create({
   decision: { gap: space[2], padding: space[4], borderRadius: radius.lg, backgroundColor: palette.card, borderWidth: 1, borderColor: palette.primary },
   decisionTitle: { fontFamily: fonts.display, fontSize: 22, color: palette.foreground },
   decisionText: { fontFamily: fonts.ui, fontSize: 15, lineHeight: 21, color: palette.foreground },
-  totalBadge: { paddingHorizontal: space[2], paddingVertical: 3, borderRadius: radius.pill, backgroundColor: palette.feltDeep },
-  totalText: { fontFamily: fonts.uiBold, fontSize: 13, color: palette.feltText },
   result: { fontFamily: fonts.uiBold, fontSize: 16, color: palette.feltText },
   betSpot: {
     minWidth: 88,

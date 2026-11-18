@@ -25,6 +25,10 @@ const MODE_NAMES: Readonly<Record<BlackjackMode, string>> = {
 };
 
 export const countingMode = (mode: BlackjackMode) => mode === 'counting-with-basic' || mode === 'counting-with-deviations';
+
+// Spec 3 Lessons › Check protection
+export const blackjackModeOf = (strategyId: string): BlackjackMode | null =>
+  BLACKJACK_MODES.find((mode) => new RegExp(`^blackjack-${mode}(-bet-schedule)?-[A-Za-z0-9_]+$`).test(strategyId)) ?? null;
 const deviating = (mode: BlackjackMode) => mode === 'basic-with-deviations' || mode === 'counting-with-deviations';
 
 // Spec 1 Game rules, Counting (Hi-Lo), Amendment 9 §7

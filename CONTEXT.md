@@ -162,6 +162,9 @@ A short, replayable exercise in card-value recognition, running counts, true-cou
 **Challenge attempt**:
 One run of a counting challenge from its first exercise content through completion or an early ending, including abandonment or insufficient funds. Resuming preserves the attempt; restarting with fresh randomized content creates another.
 
+**Charge point**:
+The moment a challenge attempt uses its one allowance charge: committed together with its first exercise content, before that content is shown. "Started" means charged. Setup, an invalid setup, a denied admission, resuming and corrections never reach it.
+
 **Learn variant**:
 A counting challenge that provides immediate explanations and retries. Its accuracy preserves the learner's first answer even after correction.
 

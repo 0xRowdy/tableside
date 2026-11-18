@@ -6,6 +6,7 @@ import { useAccount } from '@/account/AccountProvider';
 import { followAccountGate, withAccountGate } from '@/account/gate-access';
 import { useFollow } from '@/hooks/use-follow';
 import { useLoaded } from '@/hooks/use-loaded';
+import { sampling } from '@/responsiveness/probe';
 
 import { createAppAdapters } from './app-adapters';
 import { PracticeController } from './controller';
@@ -30,7 +31,8 @@ export function PracticeProvider({ children }: { children: ReactNode }) {
   const { service } = account;
   const [controller] = useState(() => {
     const adapters = account.practice(createAppAdapters());
-    return new PracticeController({ ...adapters, access: withAccountGate(adapters.access, () => service.gate) });
+    const store = sampling?.practiceStore(adapters.store) ?? adapters.store;
+    return new PracticeController({ ...adapters, store, access: withAccountGate(adapters.access, () => service.gate) });
   });
   useLoaded((practice) => practice.load(), controller);
   useFollow(followAccountSessionEnding, service, controller);

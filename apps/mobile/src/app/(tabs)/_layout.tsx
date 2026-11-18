@@ -10,6 +10,7 @@ import { TabBar, TabButton } from '@/navigation/TabBar';
 import { TABS } from '@/navigation/tabs';
 import { PracticeProvider, usePractice } from '@/practice/PracticeProvider';
 import { palette } from '@/theme/tokens';
+import { TrainingProvider } from '@/training/TrainingProvider';
 
 export default function TabsLayout() {
   const { gate, offlineGame } = useAccount();
@@ -25,7 +26,9 @@ export default function TabsLayout() {
   }
   return (
     <PracticeProvider key={gate.accountId}>
-      <TabsOrRestricted restricted={restricted ? gate : null} />
+      <TrainingProvider>
+        <TabsOrRestricted restricted={restricted ? gate : null} />
+      </TrainingProvider>
     </PracticeProvider>
   );
 }

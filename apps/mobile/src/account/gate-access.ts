@@ -22,6 +22,7 @@ export function withAccountGate(access: AccessSupervisor, gate: () => AccountGat
   return {
     ...access,
     beforeActivity: (context) => ask(() => access.beforeActivity(context)),
+    beforeChallenge: (context) => ask(() => access.beforeChallenge(context)),
     beforeTurn: (context) => ask(() => access.beforeTurn(context)),
     beforeResume: (context) => ask(() => access.beforeResume(context)),
     onLifecycle: (context) => ask(() => access.onLifecycle(context)),

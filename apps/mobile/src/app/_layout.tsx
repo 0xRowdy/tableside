@@ -9,6 +9,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { AccountProvider } from '@/account/AccountProvider';
 import { SetupPreferencesProvider } from '@/play/setup/SetupPreferencesProvider';
+import { sampling } from '@/responsiveness/probe';
 import { palette } from '@/theme/tokens';
 
 SplashScreen.preventAutoHideAsync();
@@ -42,10 +43,11 @@ export default function RootLayout() {
       <ThemeProvider value={theme}>
         <StatusBar style="light" />
         <AccountProvider>
-          <View style={styles.root} onLayout={hideSplash}>
+          <View style={styles.root} onLayout={hideSplash} onTouchStart={sampling?.touchStart} onTouchEnd={sampling?.touchEnd} onTouchCancel={sampling?.touchCancel}>
             <SetupPreferencesProvider>
               <Slot />
             </SetupPreferencesProvider>
+            {sampling && <sampling.Badge />}
           </View>
         </AccountProvider>
       </ThemeProvider>

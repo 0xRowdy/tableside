@@ -1,8 +1,10 @@
-import { INSURANCE_TARGET, type BlackjackPermittedView, type CrapsPermittedView, type GameId, type PermittedView, type RoulettePermittedView, type StrategyView } from '@tableside/engine';
+import type { ScriptedOutcome } from '@tableside/definitions';
+import { BLACKJACK_RULES, countOf, hiLoTag, INSURANCE_TARGET, type Card, type Rank, type BlackjackPermittedView, type CrapsPermittedView, type GameId, type PermittedView, type RoulettePermittedView, type StrategyView } from '@tableside/engine';
 
-import { statusText } from './blackjack-text';
-import { crapsStatus, crapsTargetName } from './craps-text';
-import { STATUS, targetName } from './roulette-text';
+import { upName } from './blackjack-coaching';
+import { cardRank, signed, statusText } from './blackjack-text';
+import { crapsStatus, crapsTargetName, rollSentence } from './craps-text';
+import { describePocket, STATUS, targetName } from './roulette-text';
 import type { TurnWord } from './strategy-text';
 
 export interface GameWords {
@@ -18,9 +20,32 @@ export interface GameWords {
   readonly noneCommitted: string;
   readonly noWagers: string;
   readonly status: (view: PermittedView) => string;
+  readonly scriptedOutcome: (outcome: ScriptedOutcome, atDecision: boolean) => string;
 }
 
 const blackjackTarget = (target: string) => (target === INSURANCE_TARGET ? 'insurance' : 'your hand');
+
+// Spec 3 Lessons › Structure (worked examples); Spec 1 Counting (Hi-Lo); #152
+const SHOE_CARDS = BLACKJACK_RULES.decks * 52;
+
+function blackjackOutcome(outcome: ScriptedOutcome, atDecision: boolean): string {
+  if (!('dealt' in outcome)) return '';
+  const cards = (ranks: readonly Rank[]): Card[] => ranks.map((rank) => ({ deck: 0, rank, suit: 'spades' }));
+  const dealt = cards(outcome.dealt);
+  const [first, up, second] = dealt;
+  const visible = atDecision ? [first, up, second].filter((card) => card !== undefined) : dealt;
+  const parts = outcome.shown.length > 0 ? [`Already out of the shoe: ${cards(outcome.shown).map(cardRank).join(', ')}.`] : [];
+  parts.push(
+    atDecision && first && up && second
+      ? `You have ${cardRank(first)} and ${cardRank(second)}; the dealer shows ${upName(up)}.`
+      : `Dealt in order: ${dealt.map(cardRank).join(', ')}.`,
+  );
+  if (atDecision && outcome.shown.length === 0) return parts.join(' ');
+  const running = [...cards(outcome.shown), ...visible].reduce((sum, card) => sum + hiLoTag(card), 0);
+  const count = countOf({ running, remaining: SHOE_CARDS - outcome.shown.length - outcome.dealt.length });
+  parts.push(`Running count ${signed(count.running)}, ${count.decks} decks left: true count ${signed(count.trueCount)}.`);
+  return parts.join(' ');
+}
 
 export const GAME_WORDS: Readonly<Record<GameId, GameWords>> = {
   roulette: {
@@ -36,6 +61,7 @@ export const GAME_WORDS: Readonly<Record<GameId, GameWords>> = {
     noneCommitted: 'None between spins',
     noWagers: 'No wagers yet. Choose one above, set its stake, then spin.',
     status: (view) => STATUS[(view as RoulettePermittedView).phase],
+    scriptedOutcome: (outcome) => ('pocket' in outcome ? `The ball lands on ${describePocket(outcome.pocket)}.` : ''),
   },
   craps: {
     title: 'Craps',
@@ -51,6 +77,7 @@ export const GAME_WORDS: Readonly<Record<GameId, GameWords>> = {
     // TODO(spec 1 craps bet selector frame copy)
     noWagers: 'No wagers yet. Choose one above, set its stake, then roll.',
     status: (view) => crapsStatus(view as CrapsPermittedView),
+    scriptedOutcome: (outcome) => ('dice' in outcome ? rollSentence(outcome.dice) : ''),
   },
   blackjack: {
     title: 'Blackjack',
@@ -65,6 +92,7 @@ export const GAME_WORDS: Readonly<Record<GameId, GameWords>> = {
     noneCommitted: 'None between rounds',
     noWagers: 'No wagers yet. Set a stake above, then deal.',
     status: (view) => statusText(view as BlackjackPermittedView),
+    scriptedOutcome: blackjackOutcome,
   },
 };
 

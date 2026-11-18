@@ -4,12 +4,16 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/Button';
 import { GameCard } from '@/components/GameCard';
+import { useLaunchSample } from '@/hooks/use-launch-sample';
 import { Notice, NoticeText } from '@/components/Notice';
 import { LAUNCH_GAMES } from '@/games';
+import { lessonsHref } from '@/lessons/routes';
+import { StartHereCard } from '@/lessons/StartHereCard';
 import { GAME_WORDS, modeText } from '@/play/game-words';
 import { capitalize } from '@/play/units';
 import { usePractice } from '@/practice/PracticeProvider';
 import { fonts, palette, space, textScale } from '@/theme/tokens';
+import { useLearning } from '@/training/TrainingProvider';
 
 const SIDE_BY_SIDE_MAX_FONT_SCALE = 1.35;
 const MIN_CARD_HEIGHT = 188;
@@ -21,6 +25,8 @@ export default function Home() {
   const { snapshot } = usePractice();
   const suspended = snapshot.status === 'active' && snapshot.suspension?.reached ? snapshot : null;
   const words = suspended ? GAME_WORDS[suspended.view.game] : null;
+  const { service: training, learning } = useLearning();
+  useLaunchSample(snapshot.status !== 'loading');
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
@@ -39,6 +45,12 @@ export default function Home() {
             </NoticeText>
             <Button label="Resume session" onPress={() => router.navigate('/play')} />
           </Notice>
+        </View>
+      )}
+      {learning?.startHere && (
+        // Spec 3 Lessons › Entry points; S1-01 olGG6; #146
+        <View style={[styles.startHere, { marginLeft: insets.left + space[4], marginRight: insets.right + space[4] }]}>
+          <StartHereCard onOpen={() => router.navigate(lessonsHref())} onDismiss={() => void training.setStartHere(false)} />
         </View>
       )}
       <View style={[styles.cards, sideBySide && styles.cardsSideBySide]}>
@@ -69,4 +81,5 @@ const styles = StyleSheet.create({
   cardsSideBySide: { flexDirection: 'row' },
   card: { flex: 1, minHeight: MIN_CARD_HEIGHT },
   suspended: { marginBottom: space[3] },
+  startHere: { marginBottom: space[3] },
 });

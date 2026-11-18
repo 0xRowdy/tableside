@@ -3,6 +3,7 @@ export const DEFINITIONS_VERSION = '0.0.0';
 export {
   basicStrategy,
   BLACKJACK_PRESETS,
+  BLACKJACK_HOUSE_EDGE_SOURCE,
   BLACKJACK_REFERENCE,
   blackjackHouseEdge,
   type BlackjackHouseEdge,
@@ -21,9 +22,9 @@ export {
   type PlayAction,
 } from './blackjack/reference';
 
-export { BLACKJACK_LIMITS, blackjackRules, DEFAULT_BLACKJACK_PRESET, DEFAULT_PENETRATION } from './blackjack/rules';
+export { BLACKJACK_LIMITS, blackjackPreset, blackjackRules, DEFAULT_BLACKJACK_PRESET, DEFAULT_PENETRATION } from './blackjack/rules';
 export { seatStrategy } from './blackjack/seats';
-export { BET_SCHEDULE, BLACKJACK_MODES, BLACKJACK_REFERENCE_IDENTITY, blackjackStrategy, countingMode, type BlackjackMode } from './blackjack/strategies';
+export { BET_SCHEDULE, BLACKJACK_MODES, BLACKJACK_REFERENCE_IDENTITY, blackjackModeOf, blackjackStrategy, countingMode, type BlackjackMode } from './blackjack/strategies';
 export {
   CRAPS_EDGE_WAGERS,
   CRAPS_LIMITS,
@@ -69,3 +70,47 @@ export {
 export { QUARANTINE_LIST } from './quarantine';
 
 export { benchmarkProfile, BENCHMARK_PROFILES } from './benchmark-profiles';
+
+export {
+  CARD_VALUES_CONTENT,
+  CHALLENGE_CONTENT,
+  CONVERSION_CONTENT,
+  DEFAULT_STARTING_BALANCE,
+  DEFAULT_TABLE_SETUP,
+  tableSetup,
+  RUNNING_COUNT_CONTENT,
+  TABLE_CONTENT,
+  type TableOptions,
+} from './challenges';
+
+export {
+  APP_ORIENTATION,
+  CHALLENGE_LESSONS,
+  CHECK_WITHHELD_LESSONS,
+  LESSONS,
+  PLAY_CHECK_WITHHELD_MODES,
+  lessonProblems,
+  type Lesson,
+  type LessonContent,
+  type LessonHandoff,
+  type LessonSection,
+  type LessonSource,
+  type LessonStep,
+  type PublishedNote,
+} from './lessons';
+
+export { HINT_IDS, HINT_MAX_LENGTH, HINTS, hintProblems, type Hint, type HintId } from './hints';
+
+export { workedExampleProblems, type CardValueExample, type ScriptedChoice, type ScriptedResponse, type WorkedExample } from './worked-examples';
+export { type ConversionExample, type CountingExample, type RunningCountExample, type TableCountExample } from './counting-examples';
+export {
+  strategyStepProblems,
+  type ScriptedOutcome,
+  type ScriptedTurn,
+  type StrategyBetsAnswer,
+  type StrategyStepAnswer,
+  type StrategyStepExample,
+  type StrategyStepExplanation,
+} from './strategy-examples';
+
+export { signed, SUIT_GLYPH } from './card-text';

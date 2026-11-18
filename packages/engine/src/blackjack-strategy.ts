@@ -1,5 +1,6 @@
 import type { Command } from './activity';
 import {
+  BLACKJACK_RULES,
   cardValue,
   handTotal,
   HAND_TARGET,
@@ -335,6 +336,12 @@ const laterCell = (rows: LaterRows, kind: 'hard' | 'soft', total: number, up: nu
 
 const atCount = (deviation: BlackjackDeviation, count: number) =>
   count >= deviation.threshold ? { side: 'at-or-above' as const, play: deviation.atOrAbove } : { side: 'below' as const, play: deviation.below };
+
+// Spec 3 Scoring and review › Attribution; #138
+export function prescribeAtTrueCount(policy: BlackjackPlayPolicy, situation: Omit<BlackjackPlaySituation, 'shoe'>, trueCount: number): PlayExplanation {
+  const undealt = BLACKJACK_RULES.decks * 52;
+  return prescribePlay(policy, { ...situation, shoe: { running: BLACKJACK_RULES.decks * trueCount, remaining: undealt } });
+}
 
 export function prescribePlay(policy: BlackjackPlayPolicy, situation: BlackjackPlaySituation, target = HAND_TARGET, hand = 0): PlayExplanation {
   const { cards, hands, rules } = situation;

@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 
-import { canonicalJson } from '@tableside/engine';
+import { EMPTY_QUARANTINE_LIST, canonicalJson, type ChallengeAttemptRecord, type ChallengeView } from '@tableside/engine';
 
 import { followAccountGate, withAccountGate } from '../../../../apps/mobile/src/account/gate-access';
 import { forAccountSession } from '../../../../apps/mobile/src/account/practice';
@@ -13,6 +13,12 @@ import type { AccountVault as AppVault, VaultOpening as AppVaultOpening } from '
 import { PracticeController } from '../../../../apps/mobile/src/practice/controller';
 import type { CompletedPracticeSession } from '../../../../apps/mobile/src/practice/store';
 import { FakeClock as PracticeClock, substituteAdapters } from '../../../../apps/mobile/src/practice/testing/substitutes';
+import { attemptDetailFrom } from '../../../../apps/mobile/src/account/training';
+import { alwaysAllowed } from '../../../../apps/mobile/src/practice/adapters';
+import { plentyAllowance } from '../../../../apps/mobile/src/training/allowance';
+import { TrainingService, type TrainingOptions } from '../../../../apps/mobile/src/training/service';
+import { NO_SCREEN_READER } from '../../../../apps/mobile/src/training/screen-reader-port';
+import { HI_LO_BY_RANK, cardOf } from '../../../../apps/mobile/src/training/testing/hi-lo';
 import type { AgeSignal, EligibilityBand, PlatformAgeSignals } from '../eligibility';
 import type { EnvironmentName } from '../environment';
 import type { MetricsSink } from '../metrics';
@@ -153,6 +159,9 @@ export interface SimulatedDevice {
   freeStorage: number | null;
   playPracticeSession(options?: { readonly activityId?: string; readonly longerThan?: number }): Promise<CompletedPracticeSession>;
   startPracticeSession(options?: { readonly clock?: PracticeClock }): Promise<PracticeController>;
+  // Spec 3 Testing Decisions › Seam 2 (Sync scenarios); #142
+  training(options?: TrainingOptions): Promise<TrainingService>;
+  playCheck(options?: { readonly wrong?: number; readonly abandonAfter?: number }): Promise<ChallengeAttemptRecord>;
   kill(): void;
   restart(): Promise<void>;
   dispose(): void;
@@ -364,6 +373,29 @@ export function createDevice(stack: LocalStack, options: DeviceOptions): Simulat
     return controller;
   };
 
+  // Spec 3 Testing Decisions › Seam 2; #142
+  const training = async (options: TrainingOptions = {}) => {
+    const { account } = app;
+    const { store, accountId, installationId } = openSession(app);
+    const trainingClock = new PracticeClock(clock.now(), true);
+    const service = new TrainingService({
+      store,
+      access: withAccountGate(alwaysAllowed, () => account.gate),
+      allowance: plentyAllowance(() => trainingClock.now()),
+      clock: trainingClock,
+      entropy: { randomBytes: (count) => entropy.bytes(count) },
+      newId: () => `attempt-${hex(entropy.bytes(16))}`,
+      device: installationId,
+      owner: accountId,
+      quarantine: EMPTY_QUARANTINE_LIST,
+      speech: NO_SCREEN_READER,
+      attemptDetail: attemptDetailFrom(account.records),
+    }, options);
+    followAccountGate(account, service);
+    await service.load();
+    return service;
+  };
+
   const device: SimulatedDevice = {
     name: options.name,
     environment,
@@ -406,6 +438,32 @@ export function createDevice(stack: LocalStack, options: DeviceOptions): Simulat
       const snapshot = controller.snapshot();
       if (snapshot.status !== 'completed') throw new Error(`the practice session did not complete (${snapshot.status})`);
       return snapshot.result;
+    },
+    training,
+    async playCheck({ wrong = 0, abandonAfter } = {}) {
+      const service = await training();
+      await service.startAttempt({ category: 'card-values', variant: 'check', timed: true });
+      const right = (view: ChallengeView) => HI_LO_BY_RANK[cardOf(view.item).rank]!;
+      let answered = 0;
+      for (let guard = 0; guard < 200 && service.snapshot().status === 'active'; guard++) {
+        const snapshot = service.snapshot();
+        if (snapshot.status !== 'active') break;
+        if (abandonAfter !== undefined && answered >= abandonAfter) {
+          await service.end({ showResults: true });
+          break;
+        }
+        if (snapshot.hold?.reached) await service.resume();
+        else if (snapshot.view.phase !== 'question') await service.submit({ kind: 'next-item' });
+        else {
+          const value = right(snapshot.view);
+          await service.submit({ kind: 'answer', value: answered < wrong ? (value === 1 ? -1 : 1) : value });
+          answered++;
+        }
+      }
+      const ended = service.snapshot();
+      if (ended.status !== 'ended') throw new Error(`the attempt did not end (${ended.status})`);
+      service.dismissResults();
+      return ended.record;
     },
     async startPracticeSession({ clock } = {}) {
       const controller = await startPractice(clock ? { clock } : {});

@@ -5,8 +5,17 @@ import { fileURLToPath } from 'node:url';
 
 import {
   advanceActivity,
+  advanceChallenge,
   canonicalJson,
+  challengeResults,
   createActivity,
+  createChallenge,
+  encodeChallengeCheckpoint,
+  readChallengeView,
+  type ChallengeCommand,
+  type ChallengeFact,
+  type ChallengeSpecification,
+  type ChallengeState,
   encodeCheckpoint,
   ENGINE_VERSION,
   readPermittedView,
@@ -22,8 +31,10 @@ import { BJ_SPEC, BJ_STREAM } from '../test/blackjack.fixtures';
 import { CRAPS_SPEC } from '../test/craps.cases';
 import { PASS_WITH_ODDS } from '../test/craps-strategy.fixtures';
 import { PI, ZERO } from '../test/fixtures';
-import type { RecordedBuild, RecordedCheckpoint } from '../test/recorded';
+import type { RecordedBuild, RecordedChallenge, RecordedCheckpoint } from '../test/recorded';
+import { CHECK, CONVERSION_CHECK, CONVERSION_LEARN, COUNT_CHECK, COUNT_LEARN, LEARN, seed } from '../test/challenge.fixtures';
 import { TEST_COUNTING_SCHEDULE } from '../test/blackjack-strategy.fixtures';
+import { playSpec, TABLE_CHECK, TABLE_LEARN, tableSpec, withExtraPlayers } from '../test/table.fixtures';
 import { DOUBLING, FLAT_EVEN_MONEY } from '../test/strategy.fixtures';
 
 const place = (target: string, amount: string): Command => ({ kind: 'place-wager', target, amount });
@@ -119,13 +130,192 @@ function record(scenario: Scenario): RecordedCheckpoint {
   };
 }
 
+// #158
+interface ChallengeScenario {
+  readonly name: string;
+  readonly specification: ChallengeSpecification;
+  readonly random: RandomStreamIdentity;
+  readonly commands: readonly ChallengeCommand[];
+}
+
+const CHALLENGE_SCENARIOS: ChallengeScenario[] = [
+  { name: 'card values Learn, created and not yet begun', specification: LEARN, random: seed(1), commands: [] },
+  { name: 'card values Learn, a card waiting for its answer', specification: LEARN, random: seed(1), commands: [{ kind: 'begin' }, { kind: 'answer', value: 1 }, { kind: 'next-item' }] },
+  { name: 'card values Learn, a wrong answer explained', specification: LEARN, random: seed(1), commands: [{ kind: 'begin' }, { kind: 'answer', value: 1 }, { kind: 'next-item' }, { kind: 'answer', value: 1 }] },
+  // #132
+  { name: 'card values Check, an answer recorded', specification: CHECK, random: seed(1), commands: [{ kind: 'begin' }, { kind: 'answer', value: 1 }, { kind: 'next-item' }, { kind: 'answer', value: 1 }] },
+  // #133
+  { name: 'running count Learn, a wrong count explained after the count was shown', specification: COUNT_LEARN, random: seed(1), commands: [{ kind: 'begin' }, { kind: 'reveal-count' }, { kind: 'answer', value: 3 }] },
+  {
+    name: 'running count Check, a card between checkpoints after the count was shown',
+    specification: COUNT_CHECK,
+    random: seed(1),
+    commands: [{ kind: 'begin' }, { kind: 'next-item' }, { kind: 'next-item' }, { kind: 'reveal-count' }],
+  },
+  {
+    name: 'running count Check, the first checkpoint skipped',
+    specification: COUNT_CHECK,
+    random: seed(1),
+    commands: [{ kind: 'begin' }, ...Array.from({ length: 12 }, (): ChallengeCommand => ({ kind: 'next-item' })), { kind: 'skip' }],
+  },
+  // #134
+  { name: 'conversion Learn, a wrong true count explained', specification: CONVERSION_LEARN, random: seed(1), commands: [{ kind: 'begin' }, { kind: 'answer', value: -3 }] },
+  {
+    name: 'conversion Check, a true count recorded',
+    specification: CONVERSION_CHECK,
+    random: seed(1),
+    commands: [{ kind: 'begin' }, { kind: 'answer', value: -2 }, { kind: 'next-item' }, { kind: 'answer', value: 23 }],
+  },
+  // #137
+  {
+    name: 'table Observe Learn N=1, a wrong running count after round 1 explained',
+    specification: TABLE_LEARN,
+    random: seed(1),
+    commands: [
+      { kind: 'begin' },
+      { kind: 'answer', value: 0 },
+      { kind: 'next-item' },
+      { kind: 'answer', value: 0 },
+      { kind: 'next-item' },
+      ...Array.from({ length: 8 }, (): ChallengeCommand => ({ kind: 'next-item' })),
+      { kind: 'answer', value: 4 },
+    ],
+  },
+  {
+    name: 'table Observe Check N=3, mid-round with the count revealed',
+    specification: tableSpec('check', { interval: 3 }),
+    random: seed(1),
+    commands: [{ kind: 'begin' }, { kind: 'next-item' }, { kind: 'next-item' }, { kind: 'reveal-count' }],
+  },
+  pastReshuffle('table Observe Check, four extra players at 50%, past a reshuffle', tableSpec('check', withExtraPlayers(4, 50))),
+  { name: 'table Observe Check N=1, created and not yet begun', specification: TABLE_CHECK, random: seed(3), commands: [] },
+  // #138
+  untilPhase('table Play Check N=1 with basic, an illegal move refused at a decision', playSpec('check', 'basic'), seed(1), 'decision', [{ kind: 'play', action: 'split' }]),
+  untilPhase('table Play Learn N=1 with basic, a departing move held in the correction pause', playSpec('learn', 'basic'), seed(1), 'decision', [{ kind: 'play', action: 'hit' }]),
+  untilDecisionPrompt('table Play Check N=1 with deviations, the true count asked before a decision', playSpec('check', 'deviations')),
+  {
+    name: 'table Play Learn N=2 with deviations, mid-round after a move',
+    specification: playSpec('learn', 'deviations', { interval: 2 }),
+    random: seed(2),
+    commands: [{ kind: 'begin' }, { kind: 'next-item' }, { kind: 'next-item' }, { kind: 'next-item' }],
+  },
+  // #139
+  untilPhase('table Play Check N=1 with the bet schedule, choosing the opening wager', playSpec('check', 'basic', { betSchedule: true }), seed(1), 'bet', []),
+  untilPhase('table Play Learn with the bet schedule, a wager held in the correction pause', playSpec('learn', 'basic', { betSchedule: true }), seed(1), 'bet', [{ kind: 'bet', amount: '40' }]),
+  untilSeen('table Play Check with the bet schedule, the funding notice offering affordable wagers', playSpec('check', 'basic', { betSchedule: true, baseWager: '20', startingBalance: '30' }), (state) => readChallengeView(state).table?.bet?.notice === true),
+  untilSeen('table Play Check, a double refused for funds', playSpec('check', 'basic', { startingBalance: '10' }), (state) => readChallengeView(state).table?.decision?.unaffordable.some((short) => short.action === 'double') === true, [{ kind: 'play', action: 'double' }]),
+];
+
+// #139
+function untilSeen(name: string, specification: ChallengeSpecification, seen: (state: ChallengeState) => boolean, then: readonly ChallengeCommand[] = []): ChallengeScenario {
+  for (let n = 1; n < 400; n++) {
+    let state = createChallenge(specification, seed(n));
+    const commands: ChallengeCommand[] = [];
+    while (state.phase !== 'ended' && !seen(state)) {
+      const command = nextChallengeCommand(state);
+      commands.push(command);
+      state = advanceAttempt(state, command).state;
+    }
+    if (state.phase !== 'ended') return { name, specification, random: seed(n), commands: [...commands, ...then] };
+  }
+  throw new Error(`${name}: no seed reaches it`);
+}
+
+// #138
+function untilPhase(name: string, specification: ChallengeSpecification, random: ReturnType<typeof seed>, phase: ChallengeState['phase'], then: readonly ChallengeCommand[]): ChallengeScenario {
+  let state = createChallenge(specification, random);
+  const commands: ChallengeCommand[] = [];
+  while (state.phase !== phase) {
+    const command = nextChallengeCommand(state);
+    commands.push(command);
+    state = advanceAttempt(state, command).state;
+  }
+  return { name, specification, random, commands: [...commands, ...then] };
+}
+
+function untilDecisionPrompt(name: string, specification: ChallengeSpecification): ChallengeScenario {
+  const asking = (state: ChallengeState) => state.phase === 'question' && readChallengeView(state).table?.prompt?.timing === 'decision';
+  for (let n = 1; n < 400; n++) {
+    let state = createChallenge(specification, seed(n));
+    const commands: ChallengeCommand[] = [];
+    while (state.phase !== 'ended' && !asking(state)) {
+      const command = nextChallengeCommand(state);
+      commands.push(command);
+      state = advanceAttempt(state, command).state;
+    }
+    if (state.phase !== 'ended') return { name, specification, random: seed(n), commands };
+  }
+  throw new Error(`${name}: no seed asks before a decision`);
+}
+
+// #137
+function pastReshuffle(name: string, specification: ChallengeSpecification): ChallengeScenario {
+  const shuffled = (state: ChallengeState) => state.items.some((item, index) => 'step' in item && item.step === 'shuffle' && index < state.position);
+  for (let n = 1; n < 400; n++) {
+    let state = createChallenge(specification, seed(n));
+    const commands: ChallengeCommand[] = [];
+    while (state.phase !== 'ended' && !shuffled(state)) {
+      const command = nextChallengeCommand(state);
+      commands.push(command);
+      state = advanceAttempt(state, command).state;
+    }
+    if (state.phase !== 'ended') return { name, specification, random: seed(n), commands };
+  }
+  throw new Error(`${name}: no seed reshuffles`);
+}
+
+function advanceAttempt(state: ChallengeState, command: ChallengeCommand): { state: ChallengeState; facts: readonly ChallengeFact[] } {
+  const result = advanceChallenge(state, { sequence: state.sequence, commandId: `record-${state.sequence}`, command });
+  if (result.status !== 'committed') throw new Error(`refused ${JSON.stringify(command)}: ${JSON.stringify(result)}`);
+  return result;
+}
+
+function nextChallengeCommand(state: ChallengeState): ChallengeCommand {
+  const view = readChallengeView(state);
+  if (view.legalCommands.includes('begin')) return { kind: 'begin' };
+  if (view.legalCommands.includes('next-item')) return { kind: 'next-item' };
+  // #138
+  if (view.legalCommands.includes('override-correction')) return { kind: 'override-correction' };
+  if (view.legalCommands.includes('play')) return { kind: 'play', action: view.table?.decision?.kind === 'insurance' ? 'decline-insurance' : 'stand' };
+  // #139
+  if (view.legalCommands.includes('bet')) return { kind: 'bet', amount: view.table?.bet?.amounts[0] as string };
+  return { kind: 'answer', value: 0 };
+}
+
+function recordChallenge(scenario: ChallengeScenario): RecordedChallenge {
+  let state = createChallenge(scenario.specification, scenario.random);
+  for (const command of scenario.commands) state = advanceAttempt(state, command).state;
+  const checkpoint = encodeChallengeCheckpoint(state);
+  const phase = state.phase;
+  const continuation: ChallengeCommand[] = [];
+  const facts: ChallengeFact[] = [];
+  while (state.phase !== 'ended') {
+    const command = nextChallengeCommand(state);
+    const next = advanceAttempt(state, command);
+    continuation.push(command);
+    facts.push(...next.facts);
+    state = next.state;
+  }
+  return {
+    name: scenario.name,
+    category: scenario.specification.content.category,
+    phase,
+    specification: JSON.parse(canonicalJson(scenario.specification)),
+    random: JSON.parse(canonicalJson(scenario.random)),
+    checkpoint,
+    continuation,
+    facts: canonicalJson(facts),
+    results: canonicalJson(challengeResults(state)),
+  };
+}
+
 const exportName = `RECORDED_ENGINE_${ENGINE_VERSION.replaceAll('.', '_')}_SCHEMA_${STATE_SCHEMA_VERSION}`;
 const target = fileURLToPath(new URL(`../test/recorded/engine-${ENGINE_VERSION}-schema-${STATE_SCHEMA_VERSION}.ts`, import.meta.url));
 const released = JSON.parse(readFileSync(new URL('../test/recorded/released.json', import.meta.url), 'utf8')) as Record<string, string>;
 if (basename(target) in released) throw new Error(`${target} is a released build's recording: it is never rewritten`);
 if (existsSync(target) && !process.argv.includes('--replace')) throw new Error(`${target} exists: pass --replace to re-record this unreleased build`);
 
-const build: RecordedBuild = { engine: ENGINE_VERSION, schema: STATE_SCHEMA_VERSION, checkpoints: SCENARIOS.map(record) };
+const build: RecordedBuild = { engine: ENGINE_VERSION, schema: STATE_SCHEMA_VERSION, checkpoints: SCENARIOS.map(record), challenges: CHALLENGE_SCENARIOS.map(recordChallenge) };
 writeFileSync(
   target,
   '// docs/development.md Releases: recorded checkpoints and the quarantine list\n' +

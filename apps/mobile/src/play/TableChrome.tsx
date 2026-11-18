@@ -7,6 +7,7 @@ import { Button } from '@/components/Button';
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
 import { useFollow } from '@/hooks/use-follow';
 import { useLoaded } from '@/hooks/use-loaded';
+import { HelpButton } from '@/lessons/FirstUseHints';
 import type { SetupTerms } from '@/practice/adapters';
 import { SAVE_RETRY_MS, type AccessStop, type ActiveSnapshot, type PracticeController, type PracticeSnapshot, type Suspension } from '@/practice/controller';
 import { usePractice } from '@/practice/PracticeProvider';
@@ -39,6 +40,7 @@ export function TableTopBar({
           {subtitle}
         </Text>
       </View>
+      <HelpButton />
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="End session"
@@ -85,15 +87,26 @@ export function PhaseStepper({ steps }: { steps: readonly PhaseStep[] }) {
 
 export function SessionStrip({ balance, onTable, status }: { balance: string; onTable: string; status: string }) {
   return (
+    <StatStrip
+      stats={[
+        { label: 'SESSION BALANCE', spoken: 'Session balance', value: balance },
+        { label: 'ON TABLE', spoken: 'On table', value: onTable },
+      ]}
+      status={status}
+    />
+  );
+}
+
+// Spec 3 S3-07 v82z3
+export function StatStrip({ stats, status }: { stats: readonly { readonly label: string; readonly spoken: string; readonly value: string }[]; status: string }) {
+  return (
     <View style={styles.strip}>
-      <View accessible accessibilityLabel={`Session balance ${balance}`} style={styles.stat}>
-        <Text maxFontSizeMultiplier={textScale.body} style={styles.statLabel}>SESSION BALANCE</Text>
-        <Text maxFontSizeMultiplier={textScale.body} style={styles.statValue}>{balance}</Text>
-      </View>
-      <View accessible accessibilityLabel={`On table ${onTable}`} style={styles.stat}>
-        <Text maxFontSizeMultiplier={textScale.body} style={styles.statLabel}>ON TABLE</Text>
-        <Text maxFontSizeMultiplier={textScale.body} style={styles.statValue}>{onTable}</Text>
-      </View>
+      {stats.map((stat) => (
+        <View key={stat.label} accessible accessibilityLabel={`${stat.spoken} ${stat.value}`} style={styles.stat}>
+          <Text maxFontSizeMultiplier={textScale.body} style={styles.statLabel}>{stat.label}</Text>
+          <Text maxFontSizeMultiplier={textScale.body} style={styles.statValue}>{stat.value}</Text>
+        </View>
+      ))}
       <View accessible accessibilityLabel={`Status ${status}`} style={styles.statusTag}>
         <Text maxFontSizeMultiplier={textScale.body} style={styles.statusText}>{status}</Text>
       </View>
@@ -309,7 +322,42 @@ export function TableDialogs({
   );
 }
 
+// Spec 1 S1-04; Spec 3 S3-07 v82z3
+export function BlackjackFeltRules({ dealer }: { dealer: 'S17' | 'H17' }) {
+  return (
+    <View style={styles.feltRules}>
+      <Text maxFontSizeMultiplier={textScale.display} style={styles.pays}>BLACKJACK PAYS 3 TO 2</Text>
+      <Text maxFontSizeMultiplier={textScale.body} style={styles.dealerRule}>
+        {dealer === 'S17' ? 'DEALER STANDS ON ALL 17s' : 'DEALER HITS SOFT 17'}
+      </Text>
+    </View>
+  );
+}
+
+export function FeltBadge({ text }: { text: string }) {
+  return (
+    <View style={styles.feltBadge}>
+      <Text maxFontSizeMultiplier={textScale.body} style={styles.feltBadgeText}>{text}</Text>
+    </View>
+  );
+}
+
+export function FaceDownCard() {
+  return (
+    <View accessible accessibilityLabel="Face-down card" style={styles.cardBack}>
+      <View style={styles.cardBackField} />
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
+  feltRules: { alignItems: 'center', gap: 2 },
+  pays: { fontFamily: fonts.display, fontSize: 18, color: palette.feltText, textAlign: 'center' },
+  dealerRule: { fontFamily: fonts.uiMedium, fontSize: 10, letterSpacing: 0.5, color: palette.feltText, textAlign: 'center' },
+  feltBadge: { paddingHorizontal: space[2], paddingVertical: 3, borderRadius: radius.pill, backgroundColor: palette.feltDeep },
+  feltBadgeText: { fontFamily: fonts.uiBold, fontSize: 13, color: palette.feltText },
+  cardBack: { width: 56, minHeight: 80, padding: 4, borderRadius: radius.sm, backgroundColor: palette.cardFace },
+  cardBackField: { flex: 1, borderRadius: 4, backgroundColor: palette.chip5 },
   banner: { margin: space[4], padding: space[4], gap: space[2], borderRadius: radius.lg, backgroundColor: palette.card, borderWidth: 1, borderColor: palette.destructive },
   bannerTitle: { fontFamily: fonts.uiBold, fontSize: 14, color: palette.foreground },
   bannerText: { fontFamily: fonts.ui, fontSize: 13, color: palette.mutedForeground },

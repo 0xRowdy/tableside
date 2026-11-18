@@ -122,6 +122,12 @@ export {
   type RestrictiveChange,
   privacyChoice,
 } from './privacy-record';
+// #142
+export { challengeAttempt } from './challenge-attempt-record';
+// #147
+export { LESSON_PROGRESS_RECORD_VERSION, type LessonProgressChange, type LessonProgressEvent, type UnsequencedLessonEvent, lessonProgressEvent } from './lesson-progress-record';
+// #148
+export { READINESS_MILESTONE_RECORD_VERSION, type ReadinessMilestoneRecord, meetsReadinessThreshold, readinessMilestone, readinessStreakEffect } from './readiness-milestone-record';
 export {
   BOOTSTRAP_PAGE_SIZE,
   DETAIL_PAGES_PER_RUN,
@@ -179,6 +185,7 @@ export {
   type RevisionedState,
   type RevisionedUpload,
   completedPracticeSession,
+  isBarrierFor,
   recordTypes,
   revisionedItemType,
 } from './sync/registry';

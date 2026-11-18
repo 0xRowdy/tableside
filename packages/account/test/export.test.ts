@@ -97,6 +97,88 @@ describe('the server export', () => {
   });
 });
 
+// Spec 3 Synchronized record types › Challenge attempt (exported as JSON); #142
+describe('challenge attempts in the server export', () => {
+  it('holds every synced challenge attempt whole as versioned JSON, with no CSV and no device preference', async () => {
+    const { phone, email } = await signedInPhone('attempts');
+    const training = await phone.training();
+    await training.setStartHere(false);
+    await training.hintSeen('count-entry');
+    const first = await phone.playCheck({ wrong: 1 });
+    const second = await phone.playCheck({ abandonAfter: 2 });
+    await phone.account.sync.reconcile();
+    expect(await phone.account.sync.countWaiting()).toBe(0);
+
+    const { files } = await exportArchive(phone, email);
+    const manifest = JSON.parse(files.get('manifest.json')!) as { files: { path: string; format: string; records?: number }[] };
+    expect(manifest.files.find((file) => file.path === 'challenge-attempts.json')).toMatchObject({ format: 'json', records: 2 });
+    expect(files.has('challenge-attempts.csv')).toBe(false);
+    const json = JSON.parse(files.get('challenge-attempts.json')!) as { records: { endedAt: number }[] };
+    expect(json).toMatchObject({ version: 1, recordType: 'challenge-attempt', payloadVersion: 1 });
+    expect(json.records).toEqual([first, second].sort((a, b) => a.endedAt - b.endedAt));
+    for (const preference of ['challenge.last-setup', 'learning.start-here-dismissed', 'learning.hints-seen']) {
+      for (const [path, text] of files) expect(text, path).not.toContain(preference);
+    }
+  });
+});
+
+// Spec 3 Synchronized record types › Lesson-progress event (exported as JSON); Amendment 1 C7; #147
+describe('lesson progress in the server export', () => {
+  it('holds every synced lesson-progress event whole as versioned JSON in acceptance order, with no CSV and no device preference', async () => {
+    const { phone, email } = await signedInPhone('lessons');
+    const training = await phone.training();
+    await training.setStartHere(false);
+    await training.hintSeen('count-entry');
+    await training.stepForward('app-orientation', 1);
+    await training.completeLesson('app-orientation');
+    await phone.account.sync.reconcile();
+    expect(await phone.account.sync.countWaiting()).toBe(0);
+
+    const { files } = await exportArchive(phone, email);
+    const manifest = JSON.parse(files.get('manifest.json')!) as { files: { path: string; format: string; records?: number }[] };
+    expect(manifest.files.find((file) => file.path === 'lesson-progress.json')).toMatchObject({ format: 'json', records: 2 });
+    expect(files.has('lesson-progress.csv')).toBe(false);
+    const json = JSON.parse(files.get('lesson-progress.json')!) as { records: { event: unknown; deviceSequence: number }[] };
+    expect(json).toMatchObject({ version: 1, recordType: 'lesson-progress', payloadVersion: 1 });
+    expect(json.records.map((record) => [record.deviceSequence, record.event])).toEqual([
+      [1, { kind: 'bookmark', step: 2 }],
+      [2, { kind: 'completed' }],
+    ]);
+    for (const preference of ['challenge.last-setup', 'learning.start-here-dismissed', 'learning.hints-seen']) {
+      for (const [path, text] of files) expect(text, path).not.toContain(preference);
+    }
+  });
+});
+
+// Spec 3 Synchronized record types › Readiness milestone (exported as JSON); #148
+describe('readiness milestones in the server export', () => {
+  it('hold every accepted milestone whole as versioned JSON, with no CSV', async () => {
+    const { phone, email } = await signedInPhone('milestones');
+    const first = await phone.playCheck();
+    const second = await phone.playCheck();
+    await phone.account.sync.reconcile();
+    expect(await phone.account.sync.countWaiting()).toBe(0);
+
+    const { files } = await exportArchive(phone, email);
+    const manifest = JSON.parse(files.get('manifest.json')!) as { files: { path: string; format: string; records?: number }[] };
+    expect(manifest.files.find((file) => file.path === 'readiness-milestones.json')).toMatchObject({ format: 'json', records: 1 });
+    expect(files.has('readiness-milestones.csv')).toBe(false);
+    const json = JSON.parse(files.get('readiness-milestones.json')!) as { records: unknown[] };
+    expect(json).toMatchObject({ version: 1, recordType: 'readiness-milestone', payloadVersion: 1 });
+    expect(json.records).toEqual([
+      {
+        recordVersion: 1,
+        owner: first.owner,
+        installation: first.installation,
+        groupKey: first.groupKey,
+        attempts: [first.attemptId, second.attemptId],
+        deviceSequences: [1, 2],
+        earnedAt: second.endedAt,
+      },
+    ]);
+  });
+});
+
 async function objectPath(accountId: string): Promise<string> {
   const [row] = await stack.sql<{ object_path: string }[]>`
     select object_path from private.exports where account_id = ${accountId} order by requested_at desc limit 1`;

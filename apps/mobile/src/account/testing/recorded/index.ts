@@ -1,6 +1,6 @@
 // docs/development.md Releases: recorded checkpoints and the quarantine list
 import type { DatabaseDump } from '../database-dump';
-import { RECORDED_STORE_SCHEMA_1 } from './store-schema-1';
+import { RECORDED_STORE_SCHEMA_4 } from './store-schema-4';
 
 export interface RecordedDatabase extends DatabaseDump {
   readonly name: string;
@@ -8,6 +8,8 @@ export interface RecordedDatabase extends DatabaseDump {
   readonly accountId: string;
   readonly installationId: string;
   readonly unfinished: { readonly activityId: string; readonly game: string; readonly phase: string; readonly finalCashOut: string } | null;
+  // #158
+  readonly unfinishedAttempt?: { readonly attemptId: string; readonly phase: string; readonly position: number } | null;
 }
 
 export interface RecordedStoreSchema {
@@ -17,4 +19,4 @@ export interface RecordedStoreSchema {
   readonly databases: readonly RecordedDatabase[];
 }
 
-export const RECORDED_STORE_SCHEMAS: readonly RecordedStoreSchema[] = [RECORDED_STORE_SCHEMA_1];
+export const RECORDED_STORE_SCHEMAS: readonly RecordedStoreSchema[] = [RECORDED_STORE_SCHEMA_4];

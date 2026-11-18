@@ -13,7 +13,8 @@
     "typecheck": "tsc --noEmit",
     "lint": "expo lint",
     "test": "jest",
-    "record-databases": "tsx scripts/record-databases.ts"
+    "record-databases": "tsx scripts/record-databases.ts",
+    "responsiveness-report": "tsx scripts/responsiveness-report.ts"
   },
   "dependencies": {
     "@expo-google-fonts/fraunces": "^0.4.1",

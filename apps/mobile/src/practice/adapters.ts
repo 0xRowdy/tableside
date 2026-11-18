@@ -1,4 +1,4 @@
-import type { EntropySource, Phase, QuarantineList, VersionedIdentity } from '@tableside/engine';
+import type { ChallengePhase, EntropySource, GameId, Phase, QuarantineList, VersionedIdentity } from '@tableside/engine';
 
 import type { ActivityStore, CompletedPracticeSession, MeteringBasis } from './store';
 
@@ -52,27 +52,37 @@ export interface SetupTerms {
 
 export const PRACTICE_FUNDING_TERMS: SetupTerms = { funding: { source: 'practice-funding' }, allowance: null, seePremium: false };
 
+// Spec 3 Amendment 4 §5
+export type GameAccess = { readonly status: 'playable' } | { readonly status: 'needs-connection'; readonly offlineGame: GameId | null };
+
 // Spec 1 Access boundary
 export interface AccessSupervisor {
   beforeActivity(context: { readonly game: string }): Promise<AdmissionDecision>;
+  // Spec 3 Training service interface › Start attempt; #158
+  beforeChallenge(context: { readonly category: string; readonly variant: string }): Promise<AdmissionDecision>;
   beforeTurn(context: { readonly activityId: string; readonly turn: number; readonly strategy: VersionedIdentity | null }): Promise<TurnDecision>;
-  beforeResume(context: { readonly activityId: string; readonly phase: Phase }): Promise<AccessDecision>;
+  // Spec 3 Training service interface › Resume; #135
+  beforeResume(context: { readonly activityId: string; readonly phase: Phase | ChallengePhase }): Promise<AccessDecision>;
   onLifecycle(context: { readonly activityId: string; readonly event: LifecycleEvent }): Promise<AccessDecision>;
   // Spec 1 Amendment 4 A2
   beforeEndWhileSuspended(context: { readonly activityId: string }): Promise<{ readonly status: 'allowed' } | { readonly status: 'blocked'; readonly reason: string }>;
   phaseChanged(report: PhaseReport): void;
   setupTerms?(context: { readonly game: string }): Promise<SetupTerms>;
+  // Spec 3 Lessons › Access; #149
+  gameAccess(context: { readonly game: GameId }): Promise<GameAccess>;
 }
 
 const STUB = 'spec-1-stub';
 
 export const alwaysAllowed: AccessSupervisor = {
   beforeActivity: async () => ({ status: 'allowed', provenance: STUB, meteringBasis: 'free-play' }),
+  beforeChallenge: async () => ({ status: 'allowed', provenance: STUB, meteringBasis: 'challenge-attempt' }),
   beforeTurn: async () => ({ status: 'allowed', provenance: STUB }),
   beforeResume: async () => ({ status: 'allowed', provenance: STUB }),
   onLifecycle: async () => ({ status: 'allowed', provenance: STUB }),
   beforeEndWhileSuspended: async () => ({ status: 'allowed' }),
   phaseChanged: () => undefined,
+  gameAccess: async () => ({ status: 'playable' }),
 };
 
 export interface RequiredRemovals {

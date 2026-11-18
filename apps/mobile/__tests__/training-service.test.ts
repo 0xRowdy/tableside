@@ -1,0 +1,489 @@
+// Spec 3 Testing Decisions › Seam 2, Amendment 1 C6; #158, #132, #137
+import { DEFAULT_TABLE_SETUP, tableSetup } from '@tableside/definitions';
+import { createChallenge, EMPTY_QUARANTINE_LIST, encodeChallengeCheckpoint, type ChallengeView } from '@tableside/engine';
+
+import { alwaysAllowed, type AccessSupervisor } from '@/practice/adapters';
+import { FakeClock, entropyFromWords, PI_WORDS } from '@/practice/testing/substitutes';
+import { plentyAllowance } from '@/training/allowance';
+import { resetTimeText } from '@/training/challenge-text';
+import { MemoryTrainingStore } from '@/training/memory-store';
+import { RECORDED_MS } from '@/training/controller';
+import { LAST_SETUP, PLAY_AMOUNT, retrySetup, setupFor, tableFundingProblems, TrainingService, type TrainingSnapshot } from '@/training/service';
+import { CHALLENGE_CHARGE } from '@/training/store';
+import { newAttempt } from '@/training/testing/store-contract';
+import { cardOf, HI_LO_BY_RANK } from '@/training/testing/hi-lo';
+import { NO_SCREEN_READER } from '@/training/speech';
+
+const LEARN_CARD_VALUES = { category: 'card-values', variant: 'learn' } as const;
+const CHECK_CARD_VALUES = { category: 'card-values', variant: 'check' } as const;
+
+function setup(options: { access?: Partial<AccessSupervisor>; store?: MemoryTrainingStore; clock?: FakeClock } = {}) {
+  const store = options.store ?? new MemoryTrainingStore();
+  const admissions: unknown[] = [];
+  const access: AccessSupervisor = {
+    ...alwaysAllowed,
+    beforeChallenge: async (context) => {
+      admissions.push(context);
+      return alwaysAllowed.beforeChallenge(context);
+    },
+    ...options.access,
+  };
+  let next = 0;
+  const clock = options.clock ?? new FakeClock(1_790_000_000_000, true);
+  const service = new TrainingService({ store, access, allowance: plentyAllowance(() => clock.now()), clock, entropy: entropyFromWords(PI_WORDS), newId: () => `attempt-${++next}`, device: 'test-device', owner: 'local', quarantine: EMPTY_QUARANTINE_LIST, speech: NO_SCREEN_READER });
+  return { service, store, admissions, clock };
+}
+
+function active(snapshot: TrainingSnapshot): ChallengeView {
+  if (snapshot.status !== 'active') throw new Error(`expected an active attempt, got ${JSON.stringify(snapshot)}`);
+  return snapshot.view;
+}
+
+async function answerEveryCard(service: TrainingService, choose: (view: ChallengeView) => -1 | 0 | 1) {
+  for (let guard = 0; guard < 100 && service.snapshot().status === 'active'; guard++) {
+    const view = active(service.snapshot());
+    await service.submit(view.phase === 'question' ? { kind: 'answer', value: choose(view) } : { kind: 'next-item' });
+  }
+}
+
+const reference = (view: ChallengeView) => HI_LO_BY_RANK[cardOf(view.item).rank]!;
+
+const feedbackOf = (view: ChallengeView) => (view.variant === 'learn' ? view.feedback : undefined);
+
+describe('the Training service', () => {
+  it('lists the four challenge categories in the suggested order, all available, with no exercise content', () => {
+    const { service } = setup();
+    expect(service.listCatalog()).toEqual([
+      { category: 'card-values', ready: ['learn', 'check'], pacings: ['self-paced'] },
+      { category: 'running-count', ready: ['learn', 'check'], pacings: ['self-paced', '3s', '2s', '1s'] },
+      { category: 'conversion', ready: ['learn', 'check'], pacings: ['self-paced'] },
+      { category: 'table', ready: ['learn', 'check'], pacings: ['self-paced'] },
+    ]);
+  });
+
+  it('validates a setup with structured diagnostics, creating and charging nothing', async () => {
+    const { service, store } = setup();
+    expect(service.validateSetup(LEARN_CARD_VALUES)).toEqual({ valid: true, diagnostics: [] });
+    expect(service.validateSetup(CHECK_CARD_VALUES)).toEqual({ valid: true, diagnostics: [] });
+    expect(service.validateSetup({ category: 'running-count', variant: 'check' })).toEqual({ valid: true, diagnostics: [] });
+    expect(service.validateSetup({ category: 'conversion', variant: 'learn' })).toEqual({ valid: true, diagnostics: [] });
+    expect(service.validateSetup({ category: 'table', variant: 'learn', table: DEFAULT_TABLE_SETUP })).toEqual({ valid: true, diagnostics: [] });
+    expect(service.validateSetup({ category: 'baccarat', variant: 'quiz' })).toEqual({
+      valid: false,
+      diagnostics: [
+        { field: 'category', problem: 'unknown' },
+        { field: 'variant', problem: 'unknown' },
+      ],
+    });
+    expect(await store.findUnfinishedAttempt()).toBeNull();
+  });
+
+  it('starts an attempt: admission is asked once, and the charge commits with the first card, exactly once', async () => {
+    const { service, store, admissions } = setup();
+    await service.load();
+    await service.startAttempt(LEARN_CARD_VALUES);
+
+    const view = active(service.snapshot());
+    expect([view.phase, view.position, view.length, feedbackOf(view)]).toEqual(['question', 1, 20, null]);
+    expect(admissions).toEqual([LEARN_CARD_VALUES]);
+    const stored = await store.loadAttempt(view.attemptId);
+    expect(stored?.charge).toEqual({ effect: { effectId: { grant: 'spec-1-stub', activity: view.attemptId, sequence: 0 }, kind: CHALLENGE_CHARGE, amount: '1' }, chargedAt: 1_790_000_000_000 });
+    expect(stored?.sequence).toBe(1);
+    expect(await store.readAttemptReceipt(view.attemptId, `${view.attemptId}/0`)).toMatchObject({ receipt: { command: '{"kind":"begin"}' } });
+  });
+
+  it('shows no content and charges nothing for an invalid setup', async () => {
+    const { service, store, admissions } = setup();
+    await service.load();
+    await service.startAttempt({ category: 'table', variant: 'check' });
+    expect(service.snapshot()).toEqual({ status: 'none', problem: 'invalid-setup', diagnostics: [{ field: 'table', problem: 'invalid' }], busy: false });
+    expect([admissions, await store.findUnfinishedAttempt(), await store.readAttemptRecords()]).toEqual([[], null, []]);
+  });
+
+  // Spec 3 Learn, Check and assistance › Show/hide running count; Attempt lifecycle › Charge; #133
+  it('revealing the running count in Check is a free, durable step that marks the attempt assisted, with no cue facts', async () => {
+    const { service, store } = setup();
+    await service.load();
+    await service.startAttempt({ category: 'running-count', variant: 'check' });
+    const shown = active(service.snapshot());
+    expect([shown.phase, shown.countAid]).toEqual(['card', { revealed: false, count: null }]);
+    await service.submit({ kind: 'reveal-count' });
+    const snapshot = service.snapshot();
+    if (snapshot.status !== 'active') throw new Error(snapshot.status);
+    expect([snapshot.view.assisted, snapshot.view.countAid?.revealed, snapshot.facts]).toEqual([true, true, []]);
+    const stored = await store.loadAttempt(shown.attemptId);
+    expect([stored?.sequence, stored?.charge?.effect.amount]).toEqual([2, '1']);
+    expect(await store.readAttemptReceipt(shown.attemptId, `${shown.attemptId}/1`)).toMatchObject({ receipt: { command: '{"kind":"reveal-count"}' } });
+  });
+
+  it('shows no content and charges nothing when admission is denied', async () => {
+    const { service, store } = setup({ access: { beforeChallenge: async () => ({ status: 'denied', provenance: 'test', disposition: 'stop', reason: 'No attempts left.' }) } });
+    await service.load();
+    await service.startAttempt(LEARN_CARD_VALUES);
+    expect(service.snapshot()).toEqual({ status: 'none', problem: 'access-denied', diagnostics: [], busy: false });
+    expect(await store.findUnfinishedAttempt()).toBeNull();
+  });
+
+  it('reports the charge once when the first-content commit is acknowledged late', async () => {
+    const store = new MemoryTrainingStore();
+    store.failNext('commitAttemptTransition', 'after');
+    const { service } = setup({ store });
+    await service.load();
+    await service.startAttempt(LEARN_CARD_VALUES);
+    const view = active(service.snapshot());
+    expect(view.position).toBe(1);
+    expect((await store.loadAttempt(view.attemptId))?.charge?.effect.kind).toBe(CHALLENGE_CHARGE);
+  });
+
+  it('shows no content when the first-content commit fails; starting again asks admission again, replaces the uncharged attempt and charges once', async () => {
+    const store = new MemoryTrainingStore();
+    store.failNext('commitAttemptTransition', 'before');
+    const { service, admissions } = setup({ store });
+    await service.load();
+    await service.startAttempt(LEARN_CARD_VALUES);
+    expect(service.snapshot()).toMatchObject({ status: 'none', problem: 'save-failed' });
+    const uncharged = await store.findUnfinishedAttempt();
+    expect([uncharged?.sequence, uncharged?.charge]).toEqual([0, null]);
+
+    await service.startAttempt(LEARN_CARD_VALUES);
+    const view = active(service.snapshot());
+    expect(admissions).toHaveLength(2);
+    expect((await store.loadAttempt(view.attemptId))?.charge).not.toBeNull();
+    expect(await store.loadAttempt(uncharged!.attemptId)).toBeNull();
+  });
+
+  it('replaces a leftover uncharged attempt for another setup with the setup the learner chose', async () => {
+    const store = new MemoryTrainingStore();
+    const leftover = newAttempt('leftover', {
+      specification: { ...newAttempt('leftover').specification, content: { category: 'card-values', id: 'card-values', version: 1, length: 13, coverage: 'every-rank' } },
+    });
+    await store.createAttempt({ ...leftover, checkpoint: encodeChallengeCheckpoint(createChallenge(leftover.specification, leftover.random)) });
+    const { service } = setup({ store });
+    await service.load();
+    await service.startAttempt(LEARN_CARD_VALUES);
+    const view = active(service.snapshot());
+    expect(view.length).toBe(20);
+    expect(await store.loadAttempt('leftover')).toBeNull();
+  });
+
+  it('records the attempt as started when it was charged, not when it was created', async () => {
+    const store = new MemoryTrainingStore();
+    store.failNext('commitAttemptTransition', 'before');
+    const { service, clock } = setup({ store });
+    await service.load();
+    await service.startAttempt(LEARN_CARD_VALUES);
+    clock.advance(60_000);
+    await service.startAttempt(LEARN_CARD_VALUES);
+    await answerEveryCard(service, reference);
+    expect(service.snapshot()).toMatchObject({ status: 'ended', record: { startedAt: 1_790_000_060_000 } });
+  });
+
+  it('runs a Learn attempt to results: only first answers are scored, and completion writes one attempt record', async () => {
+    const { service, store } = setup();
+    await service.load();
+    await service.startAttempt(LEARN_CARD_VALUES);
+    const { attemptId } = active(service.snapshot());
+    expect(await service.results(attemptId)).toBeNull();
+
+    let expected = 0;
+    for (let guard = 0; guard < 100 && service.snapshot().status === 'active'; guard++) {
+      const view = active(service.snapshot());
+      if (view.phase === 'question' && feedbackOf(view) === null) {
+        if (reference(view) === 1) expected++;
+        await service.submit({ kind: 'answer', value: 1 });
+      } else if (view.phase === 'explanation' && view.legalCommands.includes('retry-item')) {
+        expect(feedbackOf(view)).toMatchObject({ correct: false, scored: true, reference: reference(view) });
+        await service.submit({ kind: 'retry-item' });
+        await service.submit({ kind: 'answer', value: reference(view) });
+      } else {
+        await service.submit({ kind: 'next-item' });
+      }
+    }
+
+    const snapshot = service.snapshot();
+    if (snapshot.status !== 'ended') throw new Error('not ended');
+    expect(snapshot.record).toMatchObject({
+      attemptId,
+      installation: 'test-device',
+      deviceSequence: 1,
+      endingReason: 'completed',
+      metrics: { 'card-values': { correct: expected, total: 20 }, 'running-count': null, 'true-count': null },
+      groupKey: { category: 'card-values', variant: 'learn', assistanceClass: 'learn' },
+      meteringBasis: 'challenge-attempt',
+      interrupted: false,
+      performanceMs: null,
+    });
+    expect(await store.readAttemptRecords()).toEqual([snapshot.record]);
+    expect(await service.results(attemptId)).toEqual(snapshot.record);
+    expect(await store.findUnfinishedAttempt()).toBeNull();
+  });
+
+  it('writes one attempt record when its acknowledgement is lost', async () => {
+    const store = new MemoryTrainingStore();
+    const { service } = setup({ store });
+    await service.load();
+    await service.startAttempt(LEARN_CARD_VALUES);
+    store.failNext('recordAttempt', 'after');
+    await answerEveryCard(service, reference);
+    expect(service.snapshot()).toMatchObject({ status: 'ended', record: { metrics: { 'card-values': { correct: 20, total: 20 } } } });
+    expect(await store.readAttemptRecords()).toHaveLength(1);
+  });
+
+  // #150
+  it('reports a plentiful free allowance by default that charges never use up, resetting at the next midnight', async () => {
+    const { service, clock } = setup();
+    await service.startAttempt(LEARN_CARD_VALUES);
+    await answerEveryCard(service, reference);
+    const allowance = await service.allowance();
+    if (allowance.kind !== 'free') throw new Error(`expected a free allowance, got ${allowance.kind}`);
+    expect(allowance.left).toBe(allowance.amount);
+    expect(allowance.left).toBeGreaterThan(0);
+    expect(allowance.allowanceDevice).toEqual({ here: true });
+    expect(allowance.resetsAt).toBeGreaterThan(clock.now());
+    expect(allowance.resetsAt - clock.now()).toBeLessThanOrEqual(25 * 60 * 60 * 1000);
+    expect(resetTimeText(allowance.resetsAt, allowance.timeZone)).toMatch(/^12:00 AM /);
+  });
+
+  it('remembers the last setup as a device-local preference in the account database', async () => {
+    const store = new MemoryTrainingStore();
+    const first = setup({ store });
+    expect(await first.service.lastSetup()).toBeNull();
+    await first.service.load();
+    await first.service.startAttempt(LEARN_CARD_VALUES);
+    const later = setup({ store: store.reopen() });
+    expect(await later.service.lastSetup()).toEqual(LEARN_CARD_VALUES);
+  });
+
+  it('picks up an unfinished charged attempt where it was after a restart, without charging again', async () => {
+    const store = new MemoryTrainingStore();
+    const first = setup({ store });
+    await first.service.load();
+    await first.service.startAttempt(LEARN_CARD_VALUES);
+    await first.service.submit({ kind: 'answer', value: 1 });
+    const before = active(first.service.snapshot());
+
+    const later = setup({ store: store.reopen() });
+    await later.service.load();
+    expect(active(later.service.snapshot())).toEqual(before);
+    expect(later.admissions).toEqual([]);
+  });
+
+  it('runs a Check attempt: each entry is recorded with no correctness, the next card follows after the same pause for right and wrong, and results review every card', async () => {
+    const { service, clock } = setup();
+    await service.load();
+    await service.startAttempt(CHECK_CARD_VALUES);
+    const timeline: { at: number; snapshot: TrainingSnapshot }[] = [];
+    service.subscribe(() => timeline.push({ at: clock.now(), snapshot: service.snapshot() }));
+
+    const review: { position: number; entered: unknown; reference: number }[] = [];
+    const pauses = new Set<string>();
+    for (let card = 1; card <= 20; card++) {
+      const view = active(service.snapshot());
+      expect([view.phase, view.position, view.legalCommands]).toEqual(['question', card, ['answer', 'skip', 'end']]);
+      const right = reference(view);
+      const entered = card === 4 ? 'skip' : card % 2 === 1 ? right : right === 1 ? -1 : 1;
+      review.push({ position: card, entered, reference: right });
+      timeline.length = 0;
+      const submittedAt = clock.now();
+      await service.submit(entered === 'skip' ? { kind: 'skip' } : { kind: 'answer', value: entered });
+
+      const isRecorded = (entry: (typeof timeline)[number]) => entry.snapshot.status === 'active' && entry.snapshot.view.phase === 'recorded';
+      const recorded = timeline.find(isRecorded)!;
+      const after = timeline.slice(timeline.indexOf(recorded)).find((entry) => !isRecorded(entry))!;
+      const recordedView = active(recorded.snapshot);
+      expect(recordedView).toMatchObject({ variant: 'check', position: card, entered, legalCommands: ['next-item', 'end'], results: null, assisted: false });
+      expect(recordedView).not.toHaveProperty('feedback');
+      pauses.add(`${recorded.at - submittedAt}/${after.at - recorded.at}`);
+    }
+    expect([...pauses]).toEqual([`0/${RECORDED_MS}`]);
+
+    const snapshot = service.snapshot();
+    if (snapshot.status !== 'ended') throw new Error('not ended');
+    const correct = review.filter((item) => item.entered === item.reference).length;
+    expect(snapshot.record).toMatchObject({
+      endingReason: 'completed',
+      groupKey: { category: 'card-values', variant: 'check', assistanceClass: 'unassisted-check', countRevealed: false },
+      metrics: { 'card-values': { correct, total: 20 } },
+      assistanceStep: null,
+    });
+    expect(snapshot.record.review.map((fact) => ({ position: fact.position, entered: fact.kind === 'card-value' ? fact.entered : null, reference: fact.kind === 'card-value' ? fact.reference : null }))).toEqual(review);
+  });
+
+  it('leaves the catalog and the attempt records as they were until a Check attempt ends', async () => {
+    const { service, store } = setup();
+    await service.load();
+    const before = service.listCatalog();
+    await service.startAttempt(CHECK_CARD_VALUES);
+    for (let card = 1; card < 20; card++) {
+      await service.submit({ kind: 'answer', value: 1 });
+      expect([service.listCatalog(), await store.readAttemptRecords()]).toEqual([before, []]);
+    }
+    await service.submit({ kind: 'answer', value: 1 });
+    expect(await store.readAttemptRecords()).toHaveLength(1);
+  });
+
+  // Spec 3 Amendment 1 C1; #135
+  it('moves on to the next card when it resumes a recovered Check attempt whose answer was recorded', async () => {
+    const store = new MemoryTrainingStore();
+    const first = setup({ store, clock: new FakeClock(1_790_000_000_000, false) });
+    await first.service.load();
+    await first.service.startAttempt(CHECK_CARD_VALUES);
+    void first.service.submit({ kind: 'answer', value: 0 });
+    for (let tries = 0; tries < 50 && (await store.findUnfinishedAttempt())?.sequence !== 2; tries++) await Promise.resolve();
+    expect((await store.findUnfinishedAttempt())?.sequence).toBe(2);
+
+    const later = setup({ store: store.reopen() });
+    await later.service.load();
+    expect(later.service.snapshot()).toMatchObject({ view: { phase: 'recorded', position: 1 }, hold: { cause: 'recovered' } });
+    await later.service.resume();
+    expect(active(later.service.snapshot())).toMatchObject({ phase: 'question', position: 2 });
+    expect(later.admissions).toEqual([]);
+  });
+
+  // Spec 3 User stories 27, 28; Challenge content › Table; #138
+  it('validates table options: Observe or Play, preset, penetration 50–80% in steps of 5, 0–4 extra players, N from 1 to 10, counting mode', () => {
+    const { service } = setup();
+    const table = (options: object) => service.validateSetup({ category: 'table', variant: 'check', table: { ...DEFAULT_TABLE_SETUP, ...options } });
+    const invalid = { valid: false, diagnostics: [{ field: 'table', problem: 'invalid' }] };
+    expect([table({ preset: 'H17_noLS', penetration: 50, extraPlayers: 4, interval: 10 }), table({ penetration: 80, interval: 1 }), table({ seat: 'play', countingMode: 'deviations' })]).toEqual([
+      { valid: true, diagnostics: [] },
+      { valid: true, diagnostics: [] },
+      { valid: true, diagnostics: [] },
+    ]);
+    for (const bad of [{ penetration: 85 }, { penetration: 72 }, { extraPlayers: 5 }, { extraPlayers: -1 }, { interval: 0 }, { interval: 11 }, { interval: 2.5 }, { preset: 'S19' }, { seat: 'sit-out' }, { countingMode: 'supplied' }, { countingMode: undefined }]) {
+      expect([bad, table(bad)]).toEqual([bad, invalid]);
+    }
+    expect(service.validateSetup({ category: 'table', variant: 'check' })).toEqual(invalid);
+  });
+
+  it('starts a table Observe attempt from its options: the simulated seat plays the preset, and results score running and true counts', async () => {
+    const { service, store, admissions } = setup();
+    await service.load();
+    const options = { ...DEFAULT_TABLE_SETUP, preset: 'H17_LS', penetration: 60, extraPlayers: 2, interval: 3 } as const;
+    await service.startAttempt({ category: 'table', variant: 'check', table: options });
+    expect(admissions).toEqual([{ category: 'table', variant: 'check' }]);
+    expect((await store.findUnfinishedAttempt())?.specification.table).toEqual(tableSetup(options));
+    const first = active(service.snapshot());
+    expect([first.category, first.phase, first.table?.round, first.table?.interval, first.table?.rules]).toEqual([
+      'table',
+      'card',
+      1,
+      3,
+      { dealer: 'H17', lateSurrender: true, penetration: 60, extraPlayers: 2, minimum: '10' },
+    ]);
+    for (let guard = 0; guard < 2000 && service.snapshot().status === 'active'; guard++) {
+      const view = active(service.snapshot());
+      await service.submit(view.phase === 'question' ? { kind: 'skip' } : { kind: 'next-item' });
+    }
+    const [record] = await store.readAttemptRecords();
+    expect([record?.endingReason, record?.metrics['running-count'], record?.metrics['true-count'], record?.groupKey.table?.checkpointInterval]).toEqual([
+      'completed',
+      { correct: 0, total: 4 },
+      { correct: 0, total: 4 },
+      3,
+    ]);
+  });
+
+  // Spec 3 User stories 28, 37, 38; Scoring and review › Metrics; #138
+  it('runs a table Play Check attempt from its options: the learner plays every decision, and results score playing adherence beside the counts', async () => {
+    const { service, store } = setup();
+    await service.load();
+    const options = { ...DEFAULT_TABLE_SETUP, seat: 'play', countingMode: 'deviations' } as const;
+    await service.startAttempt({ category: 'table', variant: 'check', table: options });
+    expect((await store.findUnfinishedAttempt())?.specification.table).toEqual(tableSetup(options));
+    let decisions = 0;
+    for (let guard = 0; guard < 3000 && service.snapshot().status === 'active'; guard++) {
+      const view = active(service.snapshot());
+      if (view.phase === 'decision') decisions++;
+      await service.submit(
+        view.phase === 'question' ? { kind: 'skip' } : view.phase === 'decision' ? { kind: 'play', action: view.table?.decision?.kind === 'insurance' ? 'decline-insurance' : 'stand' } : { kind: 'next-item' },
+      );
+    }
+    const [record] = await store.readAttemptRecords();
+    expect([record?.endingReason, record?.metrics['playing-adherence']?.total, record?.metrics['running-count']?.total, record?.groupKey.table?.seat, record?.groupKey.table?.countingMode]).toEqual([
+      'completed',
+      decisions,
+      20,
+      'play',
+      'deviations',
+    ]);
+    expect(record?.metrics['true-count']?.total).toBeGreaterThanOrEqual(10);
+    expect(retrySetup(record!.groupKey)).toEqual({ category: 'table', variant: 'check', table: options });
+  });
+
+  it('remembers table options with the last setup', async () => {
+    const store = new MemoryTrainingStore();
+    const first = setup({ store });
+    await first.service.load();
+    const chosen = { category: 'table', variant: 'learn', table: { ...DEFAULT_TABLE_SETUP, interval: 4 } } as const;
+    await first.service.startAttempt(chosen);
+    expect(await setup({ store: store.reopen() }).service.lastSetup()).toEqual(chosen);
+  });
+
+  // Spec 3 Play challenge funding (#20) › Starting balance; S3-02 Al6Pw; #139
+  it('validates Play funding: a positive whole starting balance within the ceiling that covers the opening wager, and a base wager within the table limits', () => {
+    const { service } = setup();
+    const play = (options: object) => service.validateSetup({ category: 'table', variant: 'check', table: { ...DEFAULT_TABLE_SETUP, seat: 'play', ...options } });
+    expect(play({ baseWager: '25', startingBalance: '25' })).toEqual({ valid: true, diagnostics: [] });
+    expect(play({ baseWager: '10', startingBalance: '5' })).toEqual({ valid: false, diagnostics: [{ field: 'starting-balance', problem: 'short', opening: '10' }] });
+    expect(play({ startingBalance: '0' })).toEqual({ valid: false, diagnostics: [{ field: 'starting-balance', problem: 'not-whole' }] });
+    expect(play({ startingBalance: '10.5' })).toEqual({ valid: false, diagnostics: [{ field: 'starting-balance', problem: 'not-whole' }] });
+    expect(play({ startingBalance: '1000000001' })).toEqual({ valid: false, diagnostics: [{ field: 'starting-balance', problem: 'over-ceiling', most: '1000000000' }] });
+    expect(play({ baseWager: '5' })).toEqual({ valid: false, diagnostics: [{ field: 'base-wager', problem: 'outside-limits', min: '10', max: '1000' }] });
+    expect(play({ baseWager: '' })).toEqual({ valid: false, diagnostics: [{ field: 'base-wager', problem: 'outside-limits', min: '10', max: '1000' }] });
+    expect(play({ betSchedule: true, baseWager: '130', startingBalance: '5000' })).toEqual({ valid: false, diagnostics: [{ field: 'base-wager', problem: 'schedule-over-maximum', top: '1040', max: '1000', most: '125' }] });
+    expect(play({ betSchedule: 'on' })).toEqual({ valid: false, diagnostics: [{ field: 'table', problem: 'invalid' }] });
+    expect(service.validateSetup({ category: 'table', variant: 'check', table: { ...DEFAULT_TABLE_SETUP, startingBalance: '5' } })).toEqual({ valid: true, diagnostics: [] });
+    expect(tableFundingProblems({ ...DEFAULT_TABLE_SETUP, seat: 'play', startingBalance: '5' })).toEqual([{ field: 'starting-balance', problem: 'short', opening: '10' }]);
+  });
+
+  it('refuses a Play setup the balance can\'t fund with no content and no charge', async () => {
+    const { service, store, admissions } = setup();
+    await service.load();
+    await service.startAttempt({ category: 'table', variant: 'check', table: { ...DEFAULT_TABLE_SETUP, seat: 'play', startingBalance: '5' } });
+    expect(service.snapshot()).toEqual({ status: 'none', problem: 'invalid-setup', diagnostics: [{ field: 'starting-balance', problem: 'short', opening: '10' }], busy: false });
+    expect([admissions, await store.findUnfinishedAttempt()]).toEqual([[], null]);
+  });
+
+  // Spec 3 Play challenge funding; Amendment 1 C7 (the remembered Play amount)
+  it('runs a funded Play attempt with the bet schedule, remembers the Play amount apart from the setup, and Retry keeps the funding', async () => {
+    const store = new MemoryTrainingStore();
+    const { service } = setup({ store });
+    await service.load();
+    const options = { ...DEFAULT_TABLE_SETUP, seat: 'play', betSchedule: true, baseWager: '20', startingBalance: '500' } as const;
+    await service.startAttempt({ category: 'table', variant: 'check', table: options });
+    expect(await store.readPreference(PLAY_AMOUNT)).toBe('500');
+    let bets = 0;
+    for (let guard = 0; guard < 3000 && service.snapshot().status === 'active'; guard++) {
+      const view = active(service.snapshot());
+      if (view.phase === 'bet') bets++;
+      const command =
+        view.phase === 'question'
+          ? ({ kind: 'skip' } as const)
+          : view.phase === 'bet'
+            ? ({ kind: 'bet', amount: view.table?.bet?.amounts[0] as string } as const)
+            : view.phase === 'decision'
+              ? ({ kind: 'play', action: view.table?.decision?.kind === 'insurance' ? 'decline-insurance' : 'stand' } as const)
+              : ({ kind: 'next-item' } as const);
+      await service.submit(command);
+    }
+    const [record] = await store.readAttemptRecords();
+    expect([record?.groupKey.table?.betSchedule, record?.groupKey.table?.baseWager, record?.groupKey.table?.startingBalance, record?.metrics['betting-adherence']?.total, bets]).toEqual([true, '20', '500', bets, bets]);
+    expect(record?.finances?.startingBalance).toBe('500');
+    expect(retrySetup(record!.groupKey)).toEqual({ category: 'table', variant: 'check', table: options });
+    const reopened = setup({ store: store.reopen() }).service;
+    expect(await reopened.playAmount()).toBe('500');
+  });
+
+  it('prefills a new table setup with the remembered Play amount, and fills funding defaults into a last setup remembered before funding existed', async () => {
+    const store = new MemoryTrainingStore();
+    const { service } = setup({ store });
+    const table = service.listCatalog().find((entry) => entry.category === 'table')!;
+    expect(setupFor(table, [{ category: 'table', variant: 'learn' }], '750').table?.startingBalance).toBe('750');
+    expect(setupFor(table, [{ category: 'table', variant: 'learn' }], null).table?.startingBalance).toBe('1000');
+    const { betSchedule: _b, baseWager: _w, startingBalance: _s, ...older } = { ...DEFAULT_TABLE_SETUP, interval: 3 };
+    await store.writePreference(LAST_SETUP, JSON.stringify({ category: 'table', variant: 'check', table: older }));
+    expect(await service.lastSetup()).toEqual({ category: 'table', variant: 'check', table: { ...DEFAULT_TABLE_SETUP, interval: 3 } });
+    expect(await service.playAmount()).toBeNull();
+  });
+});

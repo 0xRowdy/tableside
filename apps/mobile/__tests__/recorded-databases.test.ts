@@ -16,6 +16,9 @@ import type { StoreMigration } from '@/account/store-schema';
 import type { AccountSession } from '@/account/vault';
 import { PracticeController } from '@/practice/controller';
 import { FakeClock, substituteAdapters } from '@/practice/testing/substitutes';
+import { plentyAllowance } from '@/training/allowance';
+import { LAST_SETUP, TrainingService } from '@/training/service';
+import { NO_SCREEN_READER } from '@/training/speech';
 
 const devices: TestDevice[] = [];
 afterAll(() => devices.forEach((device) => device.remove()));
@@ -60,7 +63,8 @@ describe('a recorded database', () => {
       expect(await store.readEffects(id)).toEqual(stored(database, 'effects', (row) => row.activity_id === id));
       expect(JSON.parse(activity.checkpoint)).toMatchObject({ schema: recording.stateSchema, identities: { engine: recording.engine } });
     }
-    expect(await store.readOutgoing()).toEqual(stored(database, 'outgoing'));
+    // #142
+    expect(await store.readOutgoing()).toEqual(stored(database, 'outgoing', (row) => row.activity_id !== null));
     expect((await store.findUnfinished())?.activityId ?? null).toBe(database.unfinished?.activityId ?? null);
 
     // #91
@@ -94,6 +98,29 @@ describe('a recorded database', () => {
     if (snapshot.status !== 'completed') throw new Error('not completed');
     expect(snapshot.result.finalCashOut).toBe(database.unfinished?.finalCashOut);
     expect(snapshot.result.identities.engine).toBe(recording.engine);
+  });
+
+  // #158
+  it.each(cases.filter(([, , database]) => database.unfinishedAttempt))('keeps its challenge attempts and preferences through the upgrade and resumes the unfinished attempt (%s)', async (_, __, database, migrations) => {
+    const session = await onDevice(database, migrations);
+    const { store } = session;
+    expect(await store.readAttemptRecords()).toEqual(stored(database, 'challenge_attempt_records'));
+    expect(await store.readPreference(LAST_SETUP)).toBe((database.rows.device_preferences ?? []).find((row) => row.key === LAST_SETUP)?.value);
+    // #143
+    expect(await store.readLessonEvents()).toEqual(stored(database, 'lesson_progress_events'));
+    // #141
+    expect(await store.readMilestones()).toEqual(stored(database, 'readiness_milestones'));
+
+    const base = substituteAdapters({ clock: new FakeClock(undefined, true) });
+    const service = new TrainingService({ ...base, store, allowance: plentyAllowance(() => base.clock.now()), device: session.installationId, owner: session.accountId, speech: NO_SCREEN_READER });
+    await service.load();
+    const snapshot = service.snapshot();
+    expect(snapshot).toMatchObject({ status: 'active', view: { attemptId: database.unfinishedAttempt?.attemptId, phase: database.unfinishedAttempt?.phase, position: database.unfinishedAttempt?.position } });
+    // Spec 3 Amendment 1 C1; #135
+    expect(service.snapshot()).toMatchObject({ hold: { cause: 'recovered' } });
+    await service.resume();
+    await service.submit({ kind: 'skip' });
+    expect(service.snapshot()).toMatchObject({ status: 'active', view: { phase: 'explanation', feedback: { entered: 'skip' } } });
   });
 });
 

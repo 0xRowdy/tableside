@@ -37,9 +37,17 @@ export const palette = {
   suitDiamond: '#1F5FBF',
   suitClub: '#1C7A3E',
   feltText: '#F1EAD6',
+  coach: '#F6F1E4',
+  coachAccent: '#2563C8',
+  inkMuted: '#5E574B',
+  mistake: '#E07A5F',
+  mistakeInk: '#B4472C',
 } as const;
 
 export type ColorToken = keyof typeof palette;
+
+// Spec 3 Information hiding (end to end); Design conflicts › Frames consulted
+export const FEEDBACK_TOKENS: readonly ColorToken[] = ['coach', 'coachAccent', 'correct', 'mistake', 'mistakeInk'];
 
 // docs/development.md Accessibility notes for the shell
 export const essentialPairs: readonly {
@@ -117,6 +125,15 @@ export const essentialPairs: readonly {
   { use: 'wagered bet spot outline', kind: 'graphic', foreground: 'cardFace', background: 'feltDeep' },
   { use: 'focused control ring on the felt', kind: 'graphic', foreground: 'ring', background: 'felt' },
   { use: 'volume fill and switch on', kind: 'graphic', foreground: 'primary', background: 'card' },
+  { use: 'coach note text', kind: 'text', foreground: 'ink', background: 'coach' },
+  { use: 'coach note detail', kind: 'text', foreground: 'inkMuted', background: 'coach' },
+  { use: 'coach note wrong-answer label and icon', kind: 'text', foreground: 'mistakeInk', background: 'coach' },
+  { use: 'coach note primary action', kind: 'text', foreground: 'coach', background: 'ink' },
+  { use: 'coach note outline', kind: 'graphic', foreground: 'coachAccent', background: 'background' },
+  { use: 'answer choice text', kind: 'text', foreground: 'foreground', background: 'secondary' },
+  { use: 'correct answer tag and outline', kind: 'text', foreground: 'correct', background: 'secondary' },
+  { use: 'your wrong answer tag and outline', kind: 'text', foreground: 'mistake', background: 'secondary' },
+  { use: 'challenge progress fill', kind: 'graphic', foreground: 'primary', background: 'muted' },
   { use: 'volume thumb', kind: 'graphic', foreground: 'foreground', background: 'card' },
   { use: 'switch knob when off', kind: 'graphic', foreground: 'mutedForeground', background: 'muted' },
   { use: 'this device badge on Devices', kind: 'text', foreground: 'mutedForeground', background: 'muted' },

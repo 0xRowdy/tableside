@@ -1,6 +1,13 @@
 // Spec 2 Local storage
 
-import { canonicalJson, sha256Hex } from '@tableside/engine';
+import {
+  canonicalJson,
+  decodeChallengeCheckpoint,
+  sha256Hex,
+  type ChallengeAttemptRecord,
+  type ChallengeEntry,
+  type UnsequencedAttemptRecord,
+} from '@tableside/engine';
 
 import type {
   ActivityStore,
@@ -14,17 +21,42 @@ import type {
   StoredActivity,
   TransitionCommit,
 } from '../practice/store';
+import {
+  CHALLENGE_ATTEMPT_RECORD_TYPE,
+  withLifecycle,
+  type AcceptedAttempt,
+  type AttemptLifecycle,
+  type AttemptCharge,
+  type AttemptCommitOutcome,
+  type AttemptTransitionCommit,
+  type CommittedAttemptTransition,
+  type NewAttempt,
+  type StoredAttempt,
+  type TrainingStore,
+} from '../training/store';
+import { LESSON_PROGRESS_RECORD_TYPE, type LessonProgressEvent, type LessonSync, type UnsequencedLessonEvent } from '../training/lesson-progress';
+import { MILESTONE_BARRIERS, milestoneIdentity, milestoneWaitsOn, READINESS_MILESTONE_RECORD_TYPE, type MilestoneSync, type ReadinessMilestoneRecord } from '../training/readiness-milestone';
 import type { SqlConnection, SqlExecutor } from './sql';
 import { createSchema, readSchemaVersion, schemaVersionOf, STORE_MIGRATIONS, STORE_SCHEMA_VERSION, type StoreMigration } from './store-schema';
 
-export interface UnfinishedActivity {
-  readonly activityId: string;
-  readonly kind: 'practice-session';
-  readonly game: string;
-  readonly mode: 'free-play' | 'guided';
-  readonly startedAt: number;
-  readonly steps: number;
-}
+export type UnfinishedActivity =
+  | {
+      readonly activityId: string;
+      readonly kind: 'practice-session';
+      readonly game: string;
+      readonly mode: 'free-play' | 'guided';
+      readonly startedAt: number;
+      readonly steps: number;
+    }
+  // Spec 3 Amendment 1 C9
+  | {
+      readonly activityId: string;
+      readonly kind: 'challenge-attempt';
+      readonly category: string;
+      readonly variant: string;
+      readonly startedAt: number;
+      readonly answers: readonly { readonly position: number; readonly entered: ChallengeEntry }[];
+    };
 
 export interface PreparedOperation {
   readonly operationId: string;
@@ -217,7 +249,7 @@ interface BodyRow {
   readonly body_sha256: string;
 }
 
-export class SqliteActivityStore implements ActivityStore {
+export class SqliteActivityStore implements ActivityStore, TrainingStore {
   private readonly queuedListeners = new Set<() => void>();
 
   private constructor(
@@ -289,17 +321,21 @@ export class SqliteActivityStore implements ActivityStore {
 
   // Spec 2 Export, Amendment 2 §5
   async readUnfinishedActivities(): Promise<readonly UnfinishedActivity[]> {
-    const activity = await this.findUnfinished();
-    if (!activity) return [];
+    const [activity, attempt] = await Promise.all([this.findUnfinished(), this.findUnfinishedAttempt()]);
     return [
-      {
-        activityId: activity.activityId,
-        kind: 'practice-session',
-        game: activity.specification.game,
-        mode: activity.specification.strategy === null ? 'free-play' : 'guided',
-        startedAt: activity.createdAt,
-        steps: activity.sequence,
-      },
+      ...(activity
+        ? [
+            {
+              activityId: activity.activityId,
+              kind: 'practice-session',
+              game: activity.specification.game,
+              mode: activity.specification.strategy === null ? 'free-play' : 'guided',
+              startedAt: activity.createdAt,
+              steps: activity.sequence,
+            } as const,
+          ]
+        : []),
+      ...(attempt ? [unfinishedAttempt(attempt)] : []),
     ];
   }
 
@@ -380,6 +416,213 @@ export class SqliteActivityStore implements ActivityStore {
     });
   }
 
+  // #158
+  createAttempt(attempt: NewAttempt): Promise<StoredAttempt> {
+    return this.transaction(async (tx) => {
+      const { owner, device } = attempt.specification;
+      if (owner !== this.identity.accountId || device !== this.identity.installationId) {
+        throw new StoreMismatchError(`attempt ${attempt.attemptId} belongs to another account or installation`);
+      }
+      const existing = await readAttempt(tx, attempt.attemptId);
+      if (existing) return existing;
+      const stored: StoredAttempt = { ...attempt, sequence: 0, charge: null, record: null };
+      await tx.run(
+        `INSERT INTO challenge_attempts (attempt_id, position, status, sequence, ${BODY})
+         VALUES (?, (SELECT coalesce(max(position), 0) + 1 FROM challenge_attempts), 'unfinished', 0, ?, ?, ?, ?)`,
+        [attempt.attemptId, ...encode(attempt)],
+      );
+      return decodeText<StoredAttempt>(encode(stored)[0]);
+    });
+  }
+
+  loadAttempt(attemptId: string): Promise<StoredAttempt | null> {
+    return this.transaction((tx) => readAttempt(tx, attemptId));
+  }
+
+  findUnfinishedAttempt(): Promise<StoredAttempt | null> {
+    return this.transaction(async (tx) => {
+      const row = await tx.get<{ attempt_id: string }>(`SELECT attempt_id FROM challenge_attempts WHERE status = 'unfinished'`);
+      return row ? readAttempt(tx, row.attempt_id) : null;
+    });
+  }
+
+  commitAttemptTransition(commit: AttemptTransitionCommit): Promise<AttemptCommitOutcome> {
+    return this.transaction(async (tx): Promise<AttemptCommitOutcome> => {
+      const attempt = await readAttempt(tx, commit.attemptId);
+      if (!attempt) throw new StoreError(`no attempt ${commit.attemptId}`);
+      const earlier = await readAttemptTransition(tx, commit.attemptId, commit.receipt.commandId);
+      if (earlier) return { status: 'already-committed', transition: earlier };
+      if (attempt.sequence !== commit.priorSequence) return { status: 'sequence-conflict', sequence: attempt.sequence };
+      const transition: CommittedAttemptTransition = { receipt: commit.receipt, checkpoint: commit.checkpoint, facts: commit.facts };
+      await tx.run(`INSERT INTO challenge_transitions (attempt_id, command_id, sequence, ${BODY}) VALUES (?, ?, ?, ?, ?, ?, ?)`, [
+        commit.attemptId,
+        commit.receipt.commandId,
+        commit.priorSequence,
+        ...encode(transition),
+      ]);
+      if (commit.charge) await tx.run(`INSERT OR IGNORE INTO challenge_charges (attempt_id, ${BODY}) VALUES (?, ?, ?, ?, ?)`, [commit.attemptId, ...encode(commit.charge)]);
+      const { attemptId, admission, specification, random, createdAt } = attempt;
+      await tx.run('UPDATE challenge_attempts SET sequence = ?, body = ?, body_format = ?, body_length = ?, body_sha256 = ? WHERE attempt_id = ?', [
+        commit.priorSequence + 1,
+        ...encode({ attemptId, admission, specification, random, createdAt, checkpoint: commit.checkpoint, lifecycle: commit.lifecycle } satisfies NewAttempt),
+        commit.attemptId,
+      ]);
+      return { status: 'committed' };
+    });
+  }
+
+  readAttemptReceipt(attemptId: string, commandId: string): Promise<CommittedAttemptTransition | null> {
+    return this.transaction((tx) => readAttemptTransition(tx, attemptId, commandId));
+  }
+
+  discardUnchargedAttempt(attemptId: string): Promise<void> {
+    return this.transaction(async (tx) => {
+      await tx.run(`DELETE FROM challenge_attempts WHERE attempt_id = ? AND sequence = 0 AND status = 'unfinished'`, [attemptId]);
+    });
+  }
+
+  // #135
+  saveAttemptLifecycle(attemptId: string, lifecycle: AttemptLifecycle): Promise<void> {
+    return this.transaction(async (tx) => {
+      const attempt = await readAttempt(tx, attemptId);
+      if (!attempt || attempt.record) return;
+      const { admission, specification, random, createdAt, checkpoint } = attempt;
+      await tx.run(`UPDATE challenge_attempts SET body = ?, body_format = ?, body_length = ?, body_sha256 = ? WHERE attempt_id = ? AND status = 'unfinished'`, [
+        ...encode({ attemptId, admission, specification, random, createdAt, checkpoint, lifecycle } satisfies NewAttempt),
+        attemptId,
+      ]);
+    });
+  }
+
+  recordAttempt(record: UnsequencedAttemptRecord): Promise<ChallengeAttemptRecord> {
+    let queued = false;
+    return this.transaction(async (tx) => {
+      if (record.owner !== this.identity.accountId || record.installation !== this.identity.installationId) {
+        throw new StoreMismatchError(`the record of ${record.attemptId} belongs to another account or installation`);
+      }
+      const attempt = await readAttempt(tx, record.attemptId);
+      if (!attempt) throw new StoreError(`no attempt ${record.attemptId}`);
+      if (attempt.record) return attempt.record;
+      // Spec 3 Synchronized record types
+      const deviceSequence = await nextDevicePosition(tx, CHALLENGE_ATTEMPT_RECORD_TYPE);
+      const sequenced: ChallengeAttemptRecord = { ...record, deviceSequence };
+      await tx.run(`INSERT INTO challenge_attempt_records (attempt_id, device_sequence, ${BODY}) VALUES (?, ?, ?, ?, ?, ?)`, [
+        record.attemptId,
+        deviceSequence,
+        ...encode(sequenced),
+      ]);
+      await tx.run(`UPDATE challenge_attempts SET status = 'ended' WHERE attempt_id = ?`, [record.attemptId]);
+      // Spec 3 Attempt lifecycle › Durability; #142
+      await queueRecord(tx, CHALLENGE_ATTEMPT_RECORD_TYPE, record.attemptId, sequenced, { devicePosition: deviceSequence });
+      queued = true;
+      return decodeText<ChallengeAttemptRecord>(encode(sequenced)[0]);
+    }).then((result) => {
+      if (queued) this.notifyQueued();
+      return result;
+    });
+  }
+
+  // #142
+  readAcceptedAttempts(): Promise<readonly AcceptedAttempt[]> {
+    return this.readAcceptedRecords(CHALLENGE_ATTEMPT_RECORD_TYPE).then((records) => records.map((record) => record.payload as AcceptedAttempt));
+  }
+
+  readAttemptRecords(): Promise<readonly ChallengeAttemptRecord[]> {
+    return this.transaction(async (tx) =>
+      (await tx.all<BodyRow>(`SELECT ${BODY} FROM challenge_attempt_records ORDER BY device_sequence`)).map((row) => decode<ChallengeAttemptRecord>(row)),
+    );
+  }
+
+  // Spec 3 Synchronized record types › Lesson-progress event; #143
+  recordLessonEvent(event: UnsequencedLessonEvent): Promise<LessonProgressEvent> {
+    let queued = false;
+    return this.transaction(async (tx) => {
+      if (event.owner !== this.identity.accountId || event.installation !== this.identity.installationId) {
+        throw new StoreMismatchError(`lesson-progress event ${event.eventId} belongs to another account or installation`);
+      }
+      const existing = await tx.get<BodyRow>(`SELECT ${BODY} FROM lesson_progress_events WHERE event_id = ?`, [event.eventId]);
+      if (existing) return decode<LessonProgressEvent>(existing);
+      const deviceSequence = await nextDevicePosition(tx, LESSON_PROGRESS_RECORD_TYPE);
+      const sequenced: LessonProgressEvent = { ...event, deviceSequence };
+      await tx.run(`INSERT INTO lesson_progress_events (event_id, device_sequence, ${BODY}) VALUES (?, ?, ?, ?, ?, ?)`, [event.eventId, deviceSequence, ...encode(sequenced)]);
+      // #147
+      await queueRecord(tx, LESSON_PROGRESS_RECORD_TYPE, event.eventId, sequenced, { devicePosition: deviceSequence });
+      queued = true;
+      return decodeText<LessonProgressEvent>(encode(sequenced)[0]);
+    }).then((result) => {
+      if (queued) this.notifyQueued();
+      return result;
+    });
+  }
+
+  // #147
+  readLessonSync(): Promise<LessonSync> {
+    return this.transaction(async (tx) => {
+      const { accepted, refused } = await readSync(tx, LESSON_PROGRESS_RECORD_TYPE);
+      return { accepted: accepted.map((record) => ({ sequence: record.sequence, event: record.payload as LessonProgressEvent })), refused };
+    });
+  }
+
+  readLessonEvents(): Promise<readonly LessonProgressEvent[]> {
+    return this.transaction(async (tx) =>
+      (await tx.all<BodyRow>(`SELECT ${BODY} FROM lesson_progress_events ORDER BY device_sequence`)).map((row) => decode<LessonProgressEvent>(row)),
+    );
+  }
+
+  // Spec 3 Synchronized record types › Readiness milestone; #141
+  recordMilestone(milestone: ReadinessMilestoneRecord): Promise<ReadinessMilestoneRecord> {
+    let queued = false;
+    return this.transaction(async (tx) => {
+      if (milestone.owner !== this.identity.accountId || milestone.installation !== this.identity.installationId) {
+        throw new StoreMismatchError('a readiness milestone belongs to another account or installation');
+      }
+      const group = canonicalJson(milestone.groupKey);
+      const existing = await tx.get<BodyRow>(`SELECT ${BODY} FROM readiness_milestones WHERE installation_id = ? AND group_key = ?`, [milestone.installation, group]);
+      if (existing) {
+        const earlier = decode<ReadinessMilestoneRecord>(existing);
+        // #148
+        if (!(await readSync(tx, READINESS_MILESTONE_RECORD_TYPE)).refused.includes(milestoneIdentity(earlier))) return earlier;
+        await tx.run('DELETE FROM readiness_milestones WHERE installation_id = ? AND group_key = ?', [milestone.installation, group]);
+      }
+      const [first, second] = milestone.attempts;
+      await tx.run(
+        `INSERT INTO readiness_milestones (installation_id, group_key, first_attempt_id, second_attempt_id, earned_at, ${BODY}) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [milestone.installation, group, first, second, milestone.earnedAt, ...encode(milestone)],
+      );
+      // Spec 3 Synchronized record types › Readiness milestone (Barrier); #148
+      const dependencies = await pendingBarriers(tx, MILESTONE_BARRIERS, (queued) => milestoneWaitsOn(queued, milestone));
+      await queueRecord(tx, READINESS_MILESTONE_RECORD_TYPE, milestoneIdentity(milestone), milestone, { dependencies });
+      queued = true;
+      return decodeText<ReadinessMilestoneRecord>(encode(milestone)[0]);
+    }).then((result) => {
+      if (queued) this.notifyQueued();
+      return result;
+    });
+  }
+
+  readMilestones(): Promise<readonly ReadinessMilestoneRecord[]> {
+    return this.transaction(async (tx) => (await tx.all<BodyRow>(`SELECT ${BODY} FROM readiness_milestones ORDER BY rowid`)).map((row) => decode<ReadinessMilestoneRecord>(row)));
+  }
+
+  // #148
+  readMilestoneSync(): Promise<MilestoneSync> {
+    return this.transaction(async (tx) => {
+      const { accepted, refused } = await readSync(tx, READINESS_MILESTONE_RECORD_TYPE);
+      return { accepted: accepted.map((record) => record.payload as ReadinessMilestoneRecord), refused };
+    });
+  }
+
+  // Spec 3 Amendment 1 C7
+  readPreference(key: string): Promise<string | null> {
+    return this.transaction(async (tx) => (await tx.get<{ value: string }>('SELECT value FROM device_preferences WHERE key = ?', [key]))?.value ?? null);
+  }
+
+  writePreference(key: string, value: string): Promise<void> {
+    return this.transaction(async (tx) => {
+      await tx.run('INSERT INTO device_preferences (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value', [key, value]);
+    });
+  }
+
   readOutgoing(): Promise<readonly OutgoingSyncRecord[]> {
     return this.transaction(async (tx) =>
       (await tx.all<BodyRow>(`SELECT ${BODY} FROM outgoing WHERE activity_id IS NOT NULL ORDER BY position`)).map((row) =>
@@ -442,15 +685,7 @@ export class SqliteActivityStore implements ActivityStore {
 
   queueUpload(entry: NewUpload): Promise<QueuedUpload> {
     return this.transaction(async (tx): Promise<QueuedUpload> => {
-      let position: number | null = null;
-      if (entry.positioned) {
-        const last = await tx.get<{ last: number }>('SELECT last FROM device_positions WHERE record_type = ?', [entry.recordType]);
-        position = (last?.last ?? 0) + 1;
-        await tx.run(
-          'INSERT INTO device_positions (record_type, last) VALUES (?, ?) ON CONFLICT (record_type) DO UPDATE SET last = excluded.last',
-          [entry.recordType, position],
-        );
-      }
+      const position = entry.positioned ? await nextDevicePosition(tx, entry.recordType) : null;
       const body: QueuedBody = { id: entry.id, kind: entry.recordType, record: entry.payload };
       await tx.run(
         `INSERT INTO outgoing (id, activity_id, record_type, item_id, revisioned, position, ${BODY}, dependencies, status, device_position)
@@ -1018,6 +1253,77 @@ async function putAccepted(tx: SqlExecutor, record: AcceptedRecord): Promise<voi
 async function purgeRecord(tx: SqlExecutor, ref: RecordRef): Promise<void> {
   await tx.run('DELETE FROM accepted_records WHERE record_type = ? AND item_id = ?', [ref.recordType, ref.item]);
   await tx.run('INSERT OR IGNORE INTO purged_records (record_type, item_id) VALUES (?, ?)', [ref.recordType, ref.item]);
+}
+
+// Spec 3 Synchronized record types
+async function nextDevicePosition(tx: SqlExecutor, recordType: string): Promise<number> {
+  const last = await tx.get<{ last: number }>('SELECT last FROM device_positions WHERE record_type = ?', [recordType]);
+  const position = (last?.last ?? 0) + 1;
+  await tx.run('INSERT INTO device_positions (record_type, last) VALUES (?, ?) ON CONFLICT (record_type) DO UPDATE SET last = excluded.last', [recordType, position]);
+  return position;
+}
+
+// Spec 3 Synchronized record types; #142, #147, #148
+async function queueRecord(
+  tx: SqlExecutor,
+  recordType: string,
+  item: string,
+  record: unknown,
+  { devicePosition = null, dependencies = [] }: { readonly devicePosition?: number | null; readonly dependencies?: readonly string[] },
+): Promise<void> {
+  const body: QueuedBody = { id: `${recordType}/${item}`, kind: recordType, record };
+  await tx.run(
+    `INSERT INTO outgoing (id, activity_id, record_type, item_id, revisioned, position, ${BODY}, dependencies, status, device_position)
+     VALUES (?, NULL, ?, ?, 0, (SELECT coalesce(max(position), 0) + 1 FROM outgoing), ?, ?, ?, ?, ?, 'pending', ?)`,
+    [body.id, recordType, item, ...encode(body), JSON.stringify(dependencies), devicePosition],
+  );
+}
+
+// Spec 2 registry (barriers); #148
+async function pendingBarriers(
+  tx: SqlExecutor,
+  recordTypes: readonly string[],
+  waitsOn: (queued: { readonly recordType: string; readonly payload: unknown }) => boolean,
+): Promise<string[]> {
+  const rows = await tx.all<BodyRow & { id: string; record_type: string }>(
+    `SELECT ${BODY}, id, record_type FROM outgoing WHERE status = 'pending' AND record_type IN (${recordTypes.map(() => '?').join(', ')}) ORDER BY position`,
+    [...recordTypes],
+  );
+  return rows.filter((row) => waitsOn({ recordType: row.record_type, payload: decode<QueuedBody>(row).record })).map((row) => row.id);
+}
+
+// #147, #148
+async function readSync(tx: SqlExecutor, recordType: string): Promise<{ readonly accepted: readonly AcceptedRecord[]; readonly refused: readonly string[] }> {
+  const accepted = (await tx.all<AcceptedRow>(`SELECT ${ACCEPTED} FROM accepted_records WHERE record_type = ? ORDER BY sequence`, [recordType])).map(acceptedOf);
+  const refused = await tx.all<{ item_id: string }>(`SELECT item_id FROM outgoing WHERE record_type = ? AND status = 'rejected'`, [recordType]);
+  return { accepted, refused: refused.map((row) => row.item_id) };
+}
+
+// Spec 3 Amendment 1 C9
+function unfinishedAttempt(attempt: StoredAttempt): UnfinishedActivity {
+  const decoded = decodeChallengeCheckpoint(attempt.checkpoint);
+  return {
+    activityId: attempt.attemptId,
+    kind: 'challenge-attempt',
+    category: attempt.specification.content.category,
+    variant: attempt.specification.variant,
+    startedAt: attempt.createdAt,
+    answers: decoded.ok ? decoded.state.answers.map((answer) => ({ position: answer.position + 1, entered: answer.first })) : [],
+  };
+}
+
+async function readAttempt(tx: SqlExecutor, attemptId: string): Promise<StoredAttempt | null> {
+  const row = await tx.get<BodyRow & { sequence: number }>(`SELECT sequence, ${BODY} FROM challenge_attempts WHERE attempt_id = ?`, [attemptId]);
+  if (!row) return null;
+  const charge = await tx.get<BodyRow>(`SELECT ${BODY} FROM challenge_charges WHERE attempt_id = ?`, [attemptId]);
+  const record = await tx.get<BodyRow>(`SELECT ${BODY} FROM challenge_attempt_records WHERE attempt_id = ?`, [attemptId]);
+  const body = withLifecycle(decode<Omit<NewAttempt, 'lifecycle'> & Partial<Pick<NewAttempt, 'lifecycle'>>>(row));
+  return { ...body, sequence: row.sequence, charge: charge ? decode<AttemptCharge>(charge) : null, record: record ? decode<ChallengeAttemptRecord>(record) : null };
+}
+
+async function readAttemptTransition(tx: SqlExecutor, attemptId: string, commandId: string): Promise<CommittedAttemptTransition | null> {
+  const row = await tx.get<BodyRow>(`SELECT ${BODY} FROM challenge_transitions WHERE attempt_id = ? AND command_id = ?`, [attemptId, commandId]);
+  return row ? decode<CommittedAttemptTransition>(row) : null;
 }
 
 const statusOf = (activity: StoredActivity) => (activity.completion ? 'completed' : activity.incomplete ? 'incomplete' : 'unfinished');

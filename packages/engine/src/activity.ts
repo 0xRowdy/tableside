@@ -57,7 +57,7 @@ import { ENGINE_VERSION } from './version';
 
 export type { Limit, VersionedIdentity } from './shape';
 
-export const STATE_SCHEMA_VERSION = 7 as const;
+export const STATE_SCHEMA_VERSION = 13 as const;
 
 interface SpecificationBase {
   readonly activityId: string;
@@ -844,6 +844,11 @@ function resolvePlay(state: ActivityState, run: StrategyRun, correction: PlayCor
 }
 
 const gameStrategy = (state: ActivityState) => strategyGame(state.identities.game) as unknown as StrategyGame<ActivityState>;
+
+// Spec 3 Lessons › Structure (worked examples); #155
+export function explainStrategyBets(state: ActivityState): Explanation | null {
+  return state.strategy ? explain(state, state.strategy) : null;
+}
 
 function explain(state: ActivityState, run: StrategyRun): Explanation {
   const game = gameStrategy(state);

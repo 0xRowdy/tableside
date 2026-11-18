@@ -10,6 +10,7 @@ import { Linking, Platform } from 'react-native';
 
 import { findGame, type GameId } from '@/games';
 import type { PracticeAdapters } from '@/practice/adapters';
+import type { TrainingAdapters } from '@/training/adapters';
 
 import { describeDevice } from './account-text';
 import { deviceExportFiles, type ExportFiles } from './export-files';
@@ -17,6 +18,7 @@ import { buildBackend } from './backend';
 import { appDevicePorts } from './device-ports';
 import { createNativeVault, KEYCHAIN_OPTIONS } from './native-vault';
 import { forAccountSession } from './practice';
+import { attemptDetailFrom } from './training';
 import type { RestrictedPaths } from './RestrictedPaths';
 import { providerSettings } from './provider-ports';
 import type { AccountSession } from './vault';
@@ -31,6 +33,7 @@ export interface OfflineGameSelection {
 export interface AppAccount {
   readonly service: AccountService;
   practice(base: PracticeAdapters): PracticeAdapters;
+  training(base: TrainingAdapters): TrainingAdapters;
   readonly offlineGame: OfflineGameSelection;
   readonly restrictedPaths: RestrictedPaths;
   readonly exportFiles: ExportFiles;
@@ -98,6 +101,10 @@ export function createAppAccount(): AppAccount {
     practice(base) {
       if (!session) throw new Error('no open account session');
       return forAccountSession(base, session);
+    },
+    training(base) {
+      if (!session) throw new Error('no open account session');
+      return { ...forAccountSession(base, session), attemptDetail: attemptDetailFrom(service.records) };
     },
     offlineGame: {
       async get(accountId) {

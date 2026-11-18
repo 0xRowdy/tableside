@@ -18,18 +18,21 @@ import { useState } from 'react';
 import { useWindowDimensions } from 'react-native';
 
 import { Button } from '@/components/Button';
+import { LearnThisGame } from '@/lessons/LessonEntries';
+import type { PracticePrefill } from '@/lessons/routes';
 import { Screen } from '@/components/Screen';
 import { SwitchRow } from '@/components/SwitchRow';
 import type { StartProblem } from '@/practice/controller';
 import { usePractice } from '@/practice/PracticeProvider';
 
-import { otherPlayersText } from './blackjack-text';
+import { BLACKJACK_MODE_TEXT, otherPlayersText } from './blackjack-text';
 import { betsText, BLACKJACK_WORDS } from './coaching-text';
 import { formatUnits, totalStake } from './units';
 import { limitRequirementText } from './setup/StrategyPicker';
 import { FundingSection, useFunding, type Opening } from './setup/Funding';
 import { GroupFields, LimitsBanner, useLimits } from './setup/Limits';
 import type { LimitGroup } from './setup/limit-drafts';
+import { PracticeHold, useModeWithheld } from './PracticeHold';
 import { ChoiceGroup, FieldLabel, Help, InlineProblem, Section, SetupHeader, Stepper } from './setup/SetupParts';
 
 const PRESETS: readonly { preset: BlackjackPreset; label: string }[] = [
@@ -45,13 +48,6 @@ const GROUPS: readonly LimitGroup<'initial'>[] = [
 
 // Spec 1 S1-02, Amendment 9 §7
 const SCHEDULE_DETAIL = `${BET_SCHEDULE.map((band) => formatUnits(band.amount)).join(' / ')} by true count. Scored separately from your play.`;
-
-const MODE_TEXT: Record<BlackjackMode, { label: string; help: string }> = {
-  basic: { label: 'Basic strategy', help: 'Coaches every decision for these table rules.' },
-  'basic-with-deviations': { label: 'Basic with deviations', help: 'Adds index plays. Tableside shows you the count.' },
-  'counting-with-basic': { label: 'Counting with basic', help: 'You keep the Hi-Lo count. Play is checked against the real count.' },
-  'counting-with-deviations': { label: 'Counting with deviations', help: 'You keep the count. Basic plus index plays.' },
-};
 
 function scheduleOpening(strategy: StrategyDefinition, rules: ReturnType<typeof blackjackRules>): Opening | null {
   const situation = {
@@ -69,13 +65,26 @@ function scheduleOpening(strategy: StrategyDefinition, rules: ReturnType<typeof 
 // Spec 1 S1-02 annotation V0ckk
 const CHIPS_MAX_FONT_SCALE = 1.35;
 
-export function BlackjackSetup({ problem, problemReason = null, busy }: { problem: StartProblem | null; problemReason?: string | null; busy: boolean }) {
+const prefilledMode = (prefill: PracticePrefill | null): BlackjackMode => BLACKJACK_MODES.find((mode) => mode === prefill?.strategy) ?? 'basic';
+
+export function BlackjackSetup({
+  problem,
+  problemReason = null,
+  busy,
+  prefill = null,
+}: {
+  problem: StartProblem | null;
+  problemReason?: string | null;
+  busy: boolean;
+  // Spec 3 Lessons › Structure (Handoff)
+  prefill?: PracticePrefill | null;
+}) {
   const { controller } = usePractice();
   const { fontScale } = useWindowDimensions();
   const [preset, setPreset] = useState<BlackjackPreset>('S17_LS');
-  const [guided, setGuided] = useState(false);
-  const [mode, setMode] = useState<BlackjackMode>('basic');
-  const [schedule, setSchedule] = useState(false);
+  const [guided, setGuided] = useState(prefill?.guided ?? false);
+  const [mode, setMode] = useState<BlackjackMode>(() => prefilledMode(prefill));
+  const [schedule, setSchedule] = useState(prefill?.betSchedule ?? false);
   const [penetration, setPenetration] = useState(DEFAULT_PENETRATION);
   const [others, setOthers] = useState(0);
   const limits = useLimits(GROUPS, BLACKJACK_LIMITS);
@@ -91,6 +100,8 @@ export function BlackjackSetup({ problem, problemReason = null, busy }: { proble
   if (rules && fit?.compatible) opening = scheduleOpening(definition, rules);
   const funding = useFunding('blackjack', opening);
   const step = PENETRATIONS.indexOf(penetration);
+  // Spec 3 Lessons › Check protection; Amendment 1 A2, Amendment 3
+  const held = useModeWithheld(guided ? mode : null);
 
   const start = () => {
     if (!rules) return;
@@ -101,6 +112,7 @@ export function BlackjackSetup({ problem, problemReason = null, busy }: { proble
   return (
     <Screen>
       <SetupHeader title="Blackjack" subtitle={`New session · ${guided ? 'guided practice' : 'free play'}`} onBack={() => router.navigate('/')} />
+      <LearnThisGame game="blackjack" />
 
       <Section label="HOW DO YOU WANT TO PLAY?">
         <ChoiceGroup
@@ -115,7 +127,7 @@ export function BlackjackSetup({ problem, problemReason = null, busy }: { proble
             <ChoiceGroup
               label="Strategy"
               stacked
-              options={BLACKJACK_MODES.map((option) => ({ label: MODE_TEXT[option].label, detail: MODE_TEXT[option].help, selected: mode === option, onPress: () => setMode(option) }))}
+              options={BLACKJACK_MODES.map((option) => ({ label: BLACKJACK_MODE_TEXT[option].label, detail: BLACKJACK_MODE_TEXT[option].help, selected: mode === option, onPress: () => setMode(option) }))}
             />
             {countingMode(mode) ? (
               <SwitchRow
@@ -129,6 +141,7 @@ export function BlackjackSetup({ problem, problemReason = null, busy }: { proble
             {(mode === 'basic-with-deviations' || mode === 'counting-with-deviations') && (
               <Help>Index plays are the certified {hits ? 'H17' : 'S17'} deviations{surrender ? ' and the Fab 4 surrenders' : ''}.</Help>
             )}
+            {held === true && <PracticeHold mode={mode} />}
             {fit && !fit.compatible && (
               <InlineProblem alert>
                 {[...new Set(fit.requirements.map((r) => limitRequirementText(definition, r, BLACKJACK_WORDS) ?? "The bet schedule doesn't fit this table."))].join(' ')} Tableside won&apos;t change the schedule&apos;s amounts: change the limits, or turn the schedule off.
@@ -185,7 +198,7 @@ export function BlackjackSetup({ problem, problemReason = null, busy }: { proble
       <FundingSection funding={funding} opening={opening} problem={problem} problemReason={problemReason} />
       <LimitsBanner limits={limits} />
 
-      <Button label={guided ? 'Start guided practice' : 'Start free play'} stretch disabled={busy || !accepted || (fit !== null && !fit.compatible) || funding.short} onPress={start} />
+      <Button label={guided ? 'Start guided practice' : 'Start free play'} stretch disabled={busy || held !== false || !accepted || (fit !== null && !fit.compatible) || funding.short} onPress={start} />
     </Screen>
   );
 }
