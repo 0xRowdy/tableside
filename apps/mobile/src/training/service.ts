@@ -5,7 +5,6 @@ import {
   BLACKJACK_PRESETS,
   blackjackPreset,
   CHALLENGE_CONTENT,
-  CHECK_WITHHELD_LESSONS,
   DEFAULT_TABLE_SETUP,
   tableSetup,
   type TableOptions,
@@ -14,12 +13,6 @@ import {
   type Hint,
   type HintId,
   type Lesson,
-  type LessonContent,
-  type LessonHandoff,
-  type LessonSection,
-  type LessonSource,
-  type LessonStep,
-  type WorkedExample,
 } from '@tableside/definitions';
 import {
   CHALLENGE_CATEGORIES,
@@ -36,19 +29,18 @@ import {
   type ChallengeGroupKey,
   type ChallengePacing,
   type ChallengeVariant,
-  type GameId,
   type PlayFunding,
   type PlayFundingProblem,
 } from '@tableside/engine';
 
-import type { GameAccess, LifecycleEvent } from '../practice/adapters';
+import type { LifecycleEvent } from '../practice/adapters';
 import type { TrainingAdapters } from './adapters';
 import type { ChallengeAllowance } from './allowance';
 import { ChallengeController, type AttemptSnapshot, type DirectSuspendCause, type LearnerCommand, type PauseCause, type StartProblem } from './controller';
 import { DeviceLearningPreferences, type LearningPreferences } from './learning-preferences';
 import { attemptEarned, milestoneCandidates, progressProjection, readinessOutcome, type AttemptEarned, type Progress, type ProgressAttempt, type ProgressMilestone } from './progress';
 import { milestoneIdentity, milestoneSlot, type ReadinessMilestoneRecord } from './readiness-milestone';
-import { LESSON_PROGRESS_RECORD_VERSION, lessonProgress, type LessonChange, type LessonHistory, type LessonProgress, type LessonProgressChange, type LessonStatus } from './lesson-progress';
+import { stepCount, TrainingLessons, type HeldLessonAccess, type InstructionWithheld, type LessonAccess, type LessonEntry, type LessonView } from './lesson-service';
 
 export interface CatalogEntry {
   readonly category: ChallengeCategory;
@@ -142,52 +134,7 @@ export function setupFor(entry: CatalogEntry, preferred: readonly (ChallengeSetu
 
 const withFundingDefaults = (table: unknown): unknown => (typeof table === 'object' && table !== null ? { ...tableFunding({}), ...table } : table);
 
-// Spec 3 Lessons › Check protection; Amendment 1 A2; #149
-export interface InstructionWithheld {
-  readonly category: ChallengeCategory;
-  readonly play: boolean;
-}
-
-// Spec 3 Training service interface › List catalog, Lesson progress; #143
-export interface LessonEntry {
-  readonly id: string;
-  readonly title: string;
-  readonly summary: string | null;
-  readonly section: LessonSection;
-  readonly steps: number | null;
-  readonly access: LessonAccess;
-  readonly status: LessonStatus;
-}
-
-// Spec 3 Lessons › Access, Check protection; Amendment 1 A2, Amendment 4 §5; #149
-export type LessonAccess =
-  | { readonly kind: 'available' }
-  | { readonly kind: 'after-check'; readonly attempt: InstructionWithheld }
-  | { readonly kind: 'needs-connection'; readonly game: GameId; readonly offlineGame: GameId | null };
-
-export type HeldLessonAccess = Exclude<LessonAccess, { readonly kind: 'available' }>;
-
-const HELD_MESSAGE: Record<HeldLessonAccess['kind'], string> = { 'after-check': 'opens after the Check attempt ends', 'needs-connection': 'needs a connection' };
-
-export interface LessonView {
-  readonly id: string;
-  readonly title: string;
-  readonly section: LessonSection;
-  readonly step: number;
-  readonly steps: readonly LessonStep[];
-  readonly prompt: { readonly kind: 'resume-or-restart'; readonly step: number } | null;
-  // Spec 3 Lessons › Progress, Amendment 1 C10
-  readonly notice: { readonly kind: LessonChange; readonly change: string } | null;
-  // Spec 3 Lessons › Structure (worked examples); #144
-  readonly example: WorkedExample | null;
-  // Spec 3 Lessons › Structure (Handoff)
-  readonly handoffs: readonly LessonHandoff[];
-  // Spec 3 Amendment 1 C11; S3-12 hGHha; #154
-  readonly sources: readonly LessonSource[];
-}
-
-// Spec 3 S3-12 hGHha; #154
-export const stepCount = (lesson: Pick<LessonContent, 'steps' | 'sources'>): number => lesson.steps.length + (lesson.sources.length > 0 ? 1 : 0);
+export { stepCount, type HeldLessonAccess, type InstructionWithheld, type LessonAccess, type LessonEntry, type LessonView };
 
 export interface TrainingOptions {
   readonly lessons?: readonly Lesson[];
@@ -195,8 +142,6 @@ export interface TrainingOptions {
 }
 
 export type { LearningPreferences };
-
-type AuthoredLesson = Lesson & { readonly content: LessonContent };
 
 const isChallengeCategory = (value: unknown): value is ChallengeCategory => CHALLENGE_CATEGORIES.includes(value as ChallengeCategory);
 
@@ -206,18 +151,17 @@ export class TrainingService {
   private current: TrainingSnapshot = { status: 'loading' };
   private readonly listeners = new Set<() => void>();
 
-  private readonly lessons: readonly Lesson[];
+  private readonly lessons: TrainingLessons;
   private lessonChanges = 0;
   private accessChanges = 0;
   private readonly preferences: DeviceLearningPreferences;
-  private learningChanges = 0;
 
   constructor(
     private readonly adapters: TrainingAdapters,
     options: TrainingOptions = {},
   ) {
-    this.lessons = options.lessons ?? LESSONS;
-    this.preferences = new DeviceLearningPreferences(adapters.store, options.hints ?? HINTS);
+    this.lessons = new TrainingLessons(adapters, options.lessons ?? LESSONS, () => this.instructionWithheld(), () => this.reviseLessons());
+    this.preferences = new DeviceLearningPreferences(adapters.store, options.hints ?? HINTS, () => this.notify());
     this.challenges = new ChallengeController(adapters, (record) => this.earned(record));
     this.challenges.subscribe(() => this.refresh());
   }
@@ -229,7 +173,7 @@ export class TrainingService {
   // Spec 3 Lessons › Access, Check protection; #149
   accessRevision = (): number => this.accessChanges;
 
-  learningRevision = (): number => this.learningChanges;
+  learningRevision = (): number => this.preferences.revision();
 
   subscribe = (listener: () => void): (() => void) => {
     this.listeners.add(listener);
@@ -430,69 +374,38 @@ export class TrainingService {
   }
 
   // Spec 3 Lessons › Access
-  async listLessons(): Promise<readonly LessonEntry[]> {
-    const games = [...new Set(this.lessons.flatMap((lesson) => (lesson.game ? [lesson.game] : [])))];
-    const [history, withheld, answers] = await Promise.all([
-      this.lessonHistory(),
-      this.instructionWithheld(),
-      Promise.all(games.map(async (game) => [game, await this.gameAccess(game)] as const)),
-    ]);
-    const access = new Map(answers);
-    return this.lessons.map((lesson) => ({
-      id: lesson.id,
-      title: lesson.title,
-      summary: lesson.summary,
-      section: lesson.section,
-      steps: lesson.content ? stepCount(lesson.content) : null,
-      access: accessOf(lesson, withheld, lesson.game && (access.get(lesson.game) ?? null)),
-      status: lesson.content ? lessonProgress(history, progressKey(lesson.id, lesson.content)).status : { kind: 'not-started' as const },
-    }));
+  listLessons(): Promise<readonly LessonEntry[]> {
+    return this.lessons.list();
   }
 
   // Spec 3 S3-14 SUUN4, S3-12 JsXMJ
   aboutLesson(id: string): Pick<Lesson, 'id' | 'title' | 'section'> | null {
-    const lesson = this.lessons.find((candidate) => candidate.id === id);
-    return lesson ? { id: lesson.id, title: lesson.title, section: lesson.section } : null;
+    return this.lessons.about(id);
   }
 
   // Spec 3 Lessons › Access, Check protection; #149
-  async lessonAccess(id: string): Promise<LessonAccess> {
-    const lesson = this.lessons.find((candidate) => candidate.id === id);
-    if (!lesson) throw new Error(`lesson ${id} is not in this version`);
-    const [withheld, game] = await Promise.all([this.instructionWithheld(), lesson.game && this.gameAccess(lesson.game)]);
-    return accessOf(lesson, withheld, game);
+  lessonAccess(id: string): Promise<LessonAccess> {
+    return this.lessons.access(id);
   }
 
-  // Spec 3 Amendment 4 §5
-  private gameAccess(game: GameId): Promise<GameAccess> {
-    return this.adapters.access.gameAccess({ game }).catch((): GameAccess => ({ status: 'needs-connection', offlineGame: null }));
+  openLesson(id: string): Promise<LessonView> {
+    return this.lessons.open(id);
   }
 
-  async openLesson(id: string): Promise<LessonView> {
-    const lesson = await this.accessible(id);
-    const progress = await this.progressOf(lesson);
-    const resume = progress.bookmark !== null && progress.bookmark > 1 ? progress.bookmark : null;
-    return viewOf(lesson, progress, resume ?? 1, resume === null ? null : { kind: 'resume-or-restart', step: resume });
+  stepForward(id: string, from: number): Promise<LessonView> {
+    return this.lessons.stepForward(id, from);
   }
 
-  async stepForward(id: string, from: number): Promise<LessonView> {
-    const lesson = await this.accessible(id);
-    return this.record(lesson, { kind: 'bookmark', step: Math.min(from + 1, stepCount(lesson.content)) });
+  stepBack(id: string, from: number): Promise<LessonView> {
+    return this.lessons.stepBack(id, from);
   }
 
-  async stepBack(id: string, from: number): Promise<LessonView> {
-    return this.record(await this.accessible(id), { kind: 'bookmark', step: Math.max(from - 1, 1) });
+  restartLesson(id: string): Promise<LessonView> {
+    return this.lessons.restart(id);
   }
 
-  async restartLesson(id: string): Promise<LessonView> {
-    const lesson = await this.accessible(id);
-    const progress = await this.progressOf(lesson);
-    if ((progress.bookmark ?? 1) === 1 && progress.changed === null) return viewOf(lesson, progress, 1, null);
-    return this.record(lesson, { kind: 'restarted' });
-  }
-
-  async completeLesson(id: string): Promise<void> {
-    await this.record(await this.accessible(id), { kind: 'completed' });
+  completeLesson(id: string): Promise<void> {
+    return this.lessons.complete(id);
   }
 
   // Spec 3 Lessons › Entry points, Structure (First-use hints), Amendment 1 C7; #146
@@ -501,62 +414,15 @@ export class TrainingService {
   }
 
   setStartHere(shown: boolean): Promise<void> {
-    return this.changePreferences(this.preferences.setStartHere(shown));
+    return this.preferences.setStartHere(shown);
   }
 
   hintSeen(id: HintId): Promise<void> {
-    return this.changePreferences(this.preferences.hintSeen(id));
+    return this.preferences.hintSeen(id);
   }
 
   resetHints(): Promise<void> {
-    return this.changePreferences(this.preferences.resetHints());
-  }
-
-  private async changePreferences(change: Promise<void>): Promise<void> {
-    await change;
-    this.learningChanges++;
-    this.notify();
-  }
-
-  private authored(id: string): AuthoredLesson {
-    const lesson = this.lessons.find((candidate) => candidate.id === id);
-    if (!lesson?.content) throw new Error(`lesson ${id} is not available in this version`);
-    return lesson as AuthoredLesson;
-  }
-
-  // Spec 3 Lessons › Access (bookmark kept), Check protection
-  private async accessible(id: string): Promise<AuthoredLesson> {
-    const lesson = this.authored(id);
-    const access = await this.lessonAccess(id);
-    if (access.kind !== 'available') throw new Error(`lesson ${id} ${HELD_MESSAGE[access.kind]}`);
-    return lesson;
-  }
-
-  private async progressOf(lesson: AuthoredLesson): Promise<LessonProgress> {
-    return lessonProgress(await this.lessonHistory(), progressKey(lesson.id, lesson.content));
-  }
-
-  // Spec 3 Amendment 1 C10; #147
-  private async lessonHistory(): Promise<LessonHistory> {
-    const { store } = this.adapters;
-    const [sync, local] = await Promise.all([store.readLessonSync(), store.readLessonEvents()]);
-    return { ...sync, local };
-  }
-
-  private async record(lesson: AuthoredLesson, event: LessonProgressChange): Promise<LessonView> {
-    const { version, materialVersion } = lesson.content;
-    await this.adapters.store.recordLessonEvent({
-      recordVersion: LESSON_PROGRESS_RECORD_VERSION,
-      eventId: this.adapters.newId(),
-      owner: this.adapters.owner,
-      installation: this.adapters.device,
-      lesson: { id: lesson.id, version, materialVersion },
-      event,
-      recordedAt: this.adapters.clock.now(),
-    });
-    this.reviseLessons();
-    const progress = await this.progressOf(lesson);
-    return viewOf(lesson, progress, progress.bookmark ?? 1, null);
+    return this.preferences.resetHints();
   }
 
   private accessMayHaveChanged(): void {
@@ -602,30 +468,3 @@ export const pacingOf = <T>(setup: { readonly pacing?: T }): T | 'self-paced' =>
 
 const pacingsOf = (category: ChallengeCategory): readonly ChallengePacing[] =>
   CHALLENGE_PACINGS.filter((pacing) => pacingApplies(category, pacing));
-
-const AVAILABLE: LessonAccess = { kind: 'available' };
-
-// Spec 3 Lessons › Access, Check protection; Amendment 1 A2, Amendment 4 §5
-function accessOf({ id, game }: Lesson, withheld: InstructionWithheld | null, playable: GameAccess | null): LessonAccess {
-  if (game && playable?.status === 'needs-connection') return { kind: 'needs-connection', game, offlineGame: playable.offlineGame };
-  if (withheld && (CHECK_WITHHELD_LESSONS.anyCheck.includes(id) || (withheld.play && CHECK_WITHHELD_LESSONS.playCheck.includes(id)))) return { kind: 'after-check', attempt: withheld };
-  return AVAILABLE;
-}
-
-const progressKey = (id: string, content: LessonContent) => ({ id, materialVersion: content.materialVersion, steps: stepCount(content) });
-
-function viewOf(lesson: AuthoredLesson, progress: LessonProgress, step: number, prompt: LessonView['prompt']): LessonView {
-  const { change } = lesson.content;
-  return {
-    id: lesson.id,
-    title: lesson.title,
-    section: lesson.section,
-    step,
-    steps: lesson.content.steps,
-    prompt,
-    notice: progress.changed && change ? { kind: progress.changed, change } : null,
-    example: lesson.content.workedExample,
-    handoffs: lesson.content.handoffs,
-    sources: lesson.content.sources,
-  };
-}
