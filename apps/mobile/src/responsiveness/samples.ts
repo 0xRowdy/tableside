@@ -2,15 +2,22 @@
 
 import type { GameId } from '@tableside/engine';
 
-const GAMES: readonly GameId[] = ['blackjack', 'craps', 'roulette'];
+export type Measure = 'acknowledgment' | 'completion' | 'cold-launch';
 
-export type Measure = 'acknowledgement' | 'completion' | 'cold-launch';
-const MEASURES: readonly Measure[] = ['acknowledgement', 'completion', 'cold-launch'];
-
-export const TARGET_MS: Readonly<Record<Measure, number>> = { acknowledgement: 100, completion: 250, 'cold-launch': 5000 };
-export const MIN_SAMPLES: Readonly<Record<Measure, number>> = { acknowledgement: 100, completion: 100, 'cold-launch': 30 };
+export const TARGET_MS: Readonly<Record<Measure, number>> = { acknowledgment: 100, completion: 250, 'cold-launch': 5000 };
+export const MIN_SAMPLES: Readonly<Record<Measure, number>> = { acknowledgment: 100, completion: 100, 'cold-launch': 30 };
+const MEASURES = Object.keys(TARGET_MS) as readonly Measure[];
+const ACTION_MEASURES: readonly Measure[] = ['acknowledgment', 'completion'];
 
 export const COLD_LAUNCH = 'cold-launch';
+
+// Spec 1 Launch gates 5; docs/development.md Responsiveness sampling (action families)
+export const GATE_FAMILIES: Readonly<Record<GameId, readonly string[]>> = {
+  blackjack: ['place-wager', 'remove-wager', 'begin-turn', 'play:hit', 'play:stand', 'play:double', 'play:split', 'play:surrender', 'play:decline-insurance', 'insurance', 'rebuy'],
+  craps: ['place-wager', 'remove-wager', 'set-working', 'begin-turn', 'rebuy'],
+  roulette: ['place-wager', 'remove-wager', 'begin-turn', 'rebuy'],
+};
+const GAMES = Object.keys(GATE_FAMILIES) as readonly GameId[];
 
 export interface DeviceInfo {
   readonly model: string;
@@ -43,8 +50,8 @@ export interface ReportRow {
   readonly game: GameId | null;
   readonly family: string;
   readonly count: number;
-  readonly p95: number;
-  readonly max: number;
+  readonly p95: number | null;
+  readonly max: number | null;
   readonly target: number;
   readonly result: 'pass' | 'fail';
   readonly tooFew: boolean;
@@ -55,28 +62,34 @@ const deviceTitle = (device: DeviceInfo) => `${device.model} · ${device.os} ${d
 const compare = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
 
 export function responsivenessReport(samples: readonly ResponsivenessSample[]): { readonly rows: readonly ReportRow[]; readonly text: string } {
-  const groups = new Map<string, ResponsivenessSample[]>();
+  type Family = Pick<ResponsivenessSample, 'device' | 'measure' | 'game' | 'family'>;
+  const groups = new Map<string, { readonly family: Family; readonly values: number[] }>();
+  const add = (family: Family, value: number | null) => {
+    const key = [deviceKey(family.device), family.measure, family.game ?? '', family.family].join('\u0001');
+    const group = groups.get(key) ?? { family, values: [] };
+    if (value !== null) group.values.push(value);
+    groups.set(key, group);
+  };
   for (const sample of samples) {
-    const key = [deviceKey(sample.device), sample.measure, sample.game ?? '', sample.family].join('\u0001');
-    groups.set(key, [...(groups.get(key) ?? []), sample]);
+    add(sample, null);
+    for (const game of GAMES) {
+      for (const family of GATE_FAMILIES[game]) for (const measure of ACTION_MEASURES) add({ device: sample.device, measure, game, family }, null);
+    }
+    add({ device: sample.device, measure: 'cold-launch', game: null, family: COLD_LAUNCH }, null);
   }
+  for (const sample of samples) add(sample, sample.ms);
   const rows = [...groups.values()]
-    .map((group): ReportRow => {
-      const [first] = group as [ResponsivenessSample];
-      const values = group.map((sample) => sample.ms);
-      const p95 = nearestRankP95(values) ?? 0;
-      const target = TARGET_MS[first.measure];
+    .map(({ family, values }): ReportRow => {
+      const p95 = nearestRankP95(values);
+      const target = TARGET_MS[family.measure];
       return {
-        device: first.device,
-        measure: first.measure,
-        game: first.game,
-        family: first.family,
-        count: group.length,
+        ...family,
+        count: values.length,
         p95,
-        max: Math.max(...values),
+        max: values.length === 0 ? null : Math.max(...values),
         target,
-        result: p95 <= target ? 'pass' : 'fail',
-        tooFew: group.length < MIN_SAMPLES[first.measure],
+        result: p95 !== null && p95 <= target ? 'pass' : 'fail',
+        tooFew: values.length < MIN_SAMPLES[family.measure],
       };
     })
     .sort(
@@ -115,7 +128,7 @@ function reportText(rows: readonly ReportRow[]): string {
   return blocks.length === 0 ? 'No samples.' : blocks.join('\n\n');
 }
 
-const formatMs = (ms: number) => String(Math.round(ms * 10) / 10);
+const formatMs = (ms: number | null) => (ms === null ? '—' : String(Math.round(ms * 10) / 10));
 
 const isText = (value: unknown): value is string => typeof value === 'string';
 const isTime = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value);

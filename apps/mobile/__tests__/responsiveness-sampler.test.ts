@@ -3,7 +3,7 @@ import type { Command, Receipt } from '@tableside/engine';
 
 import { MemoryActivityStore } from '@/practice/memory-store';
 import type { ActivityStore, CommitOutcome, NewActivity, TransitionCommit } from '@/practice/store';
-import { CLAIM_MS, createSampler, type SamplerPorts } from '@/responsiveness/sampler';
+import { CLAIM_MS, createSampler, HOLD_MS, type Sampler, type SamplerPorts } from '@/responsiveness/sampler';
 import type { DeviceInfo, ResponsivenessSample } from '@/responsiveness/samples';
 
 const DEVICE: DeviceInfo = { model: 'Pixel 3a', os: 'Android', osVersion: '14', build: '0.1.0 (1)', abi: 'arm64-v8a' };
@@ -27,7 +27,6 @@ function harness(processStart: number | null = 100) {
     at(ms: number) {
       clock = ms;
     },
-    // The commit has rendered and the next frame is drawn at `ms`.
     async drawAt(ms: number) {
       frame = ms;
       for (const run of deferred.splice(0)) run();
@@ -53,26 +52,52 @@ const activity = (game: 'roulette' | 'blackjack' | 'craps'): NewActivity =>
 const receipt = (command: Command): Receipt => ({ commandId: 'c', sequence: 1, command: JSON.stringify(command), disposition: 'applied' });
 const commit = (game: string, command: Command): TransitionCommit => ({ activityId: `a-${game}`, priorSequence: 1, checkpoint: '', receipt: receipt(command), facts: [], effects: [] });
 
-async function tableStore(sampler: ReturnType<typeof createSampler>, game: 'roulette' | 'blackjack' | 'craps' = 'roulette') {
+async function tableStore(sampler: Sampler, game: 'roulette' | 'blackjack' | 'craps' = 'roulette') {
   const inner = new ScriptedStore();
   const store: ActivityStore = sampler.practiceStore(inner);
   await store.createActivity(activity(game));
   return { inner, store };
 }
 
-describe('acknowledgement and durable completion', () => {
+type Harness = ReturnType<typeof harness>;
+
+// docs/development.md Responsiveness sampling (touch order)
+async function tap(h: Harness, store: ActivityStore, transition: TransitionCommit, times: { down: number; up: number; at?: number }) {
+  h.sampler.touchStart(touch(times.down));
+  h.at(times.at ?? times.up);
+  const committing = store.commitTransition(transition);
+  h.sampler.touchEnd(touch(times.up));
+  return committing;
+}
+
+describe('acknowledgment and durable completion', () => {
   it('measures a tapped action from the touch to the frames after its press response and its commit', async () => {
-    const { sampler, recorded, at, drawAt } = harness();
-    const { store } = await tableStore(sampler);
-    sampler.touchStart(touch(1000));
-    await drawAt(1030);
-    sampler.touchEnd(touch(1080));
-    at(1090);
-    await store.commitTransition(commit('roulette', { kind: 'place-wager', target: 'red', amount: '10' }));
-    await drawAt(1250);
-    expect(recorded).toEqual([
-      { version: 1, device: DEVICE, measure: 'acknowledgement', game: 'roulette', family: 'place-wager', start: 1000, end: 1030, ms: 30 },
+    const h = harness();
+    const { store } = await tableStore(h.sampler);
+    h.sampler.touchStart(touch(1000));
+    await h.drawAt(1030);
+    h.at(1080);
+    const committing = store.commitTransition(commit('roulette', { kind: 'place-wager', target: 'red', amount: '10' }));
+    h.sampler.touchEnd(touch(1080));
+    await committing;
+    await h.drawAt(1250);
+    expect(h.recorded).toEqual([
+      { version: 1, device: DEVICE, measure: 'acknowledgment', game: 'roulette', family: 'place-wager', start: 1000, end: 1030, ms: 30 },
       { version: 1, device: DEVICE, measure: 'completion', game: 'roulette', family: 'place-wager', start: 1080, end: 1250, ms: 170 },
+    ]);
+  });
+
+  it('also measures an action whose commit waits for something after the touch ends', async () => {
+    const h = harness();
+    const { store } = await tableStore(h.sampler);
+    h.sampler.touchStart(touch(10));
+    h.sampler.touchEnd(touch(20));
+    h.at(20 + CLAIM_MS);
+    await store.commitTransition(commit('roulette', { kind: 'begin-turn' }));
+    await h.drawAt(1100);
+    expect(h.recorded.map((sample) => [sample.measure, sample.start])).toEqual([
+      ['acknowledgment', 10],
+      ['completion', 20],
     ]);
   });
 
@@ -87,15 +112,12 @@ describe('acknowledgement and durable completion', () => {
     ['retrying a correction', 'roulette', { kind: 'retry-correction' }, 'retry-correction'],
     ['overriding a correction', 'roulette', { kind: 'override-correction' }, 'override-correction'],
   ])('names the family for %s', async (_, game, command, family) => {
-    const { sampler, recorded, at, drawAt } = harness();
-    const { store } = await tableStore(sampler, game);
-    sampler.touchStart(touch(10));
-    sampler.touchEnd(touch(20));
-    at(30);
-    await store.commitTransition(commit(game, command));
-    await drawAt(100);
-    expect(recorded.map((sample) => [sample.measure, sample.game, sample.family])).toEqual([
-      ['acknowledgement', game, family],
+    const h = harness();
+    const { store } = await tableStore(h.sampler, game);
+    await tap(h, store, commit(game, command), { down: 10, up: 20 });
+    await h.drawAt(100);
+    expect(h.recorded.map((sample) => [sample.measure, sample.game, sample.family])).toEqual([
+      ['acknowledgment', game, family],
       ['completion', game, family],
     ]);
   });
@@ -106,89 +128,95 @@ describe('acknowledgement and durable completion', () => {
     ['advancing final settlement', { kind: 'advance-final-settlement' }],
     ['advancing strategy settlement', { kind: 'advance-strategy-settlement' }],
   ])('leaves out %s', async (_, command) => {
-    const { sampler, recorded, at, drawAt } = harness();
-    const { store } = await tableStore(sampler);
-    sampler.touchStart(touch(10));
-    sampler.touchEnd(touch(20));
-    at(30);
-    await store.commitTransition(commit('roulette', command));
-    await drawAt(100);
-    expect(recorded).toEqual([]);
+    const h = harness();
+    const { store } = await tableStore(h.sampler);
+    await tap(h, store, commit('roulette', command), { down: 10, up: 20 });
+    await h.drawAt(100);
+    expect(h.recorded).toEqual([]);
   });
 
-  it('records nothing for a command no touch started, or a touch already used or too old', async () => {
-    const { sampler, recorded, at, drawAt } = harness();
-    const { store } = await tableStore(sampler);
+  it('records nothing for a command no touch started, or a touch already used, ended too long ago, held too long or cancelled', async () => {
+    const h = harness();
+    const { store } = await tableStore(h.sampler);
     const spin = commit('roulette', { kind: 'begin-turn' });
     await store.commitTransition(spin);
-    sampler.touchStart(touch(10));
-    sampler.touchEnd(touch(20));
-    at(20 + CLAIM_MS + 1);
+    h.sampler.touchStart(touch(10));
+    h.sampler.touchEnd(touch(20));
+    h.at(20 + CLAIM_MS + 1);
     await store.commitTransition(spin);
-    sampler.touchStart(touch(5000));
-    sampler.touchEnd(touch(5010));
-    at(5020);
+    h.sampler.touchStart(touch(2000));
+    h.at(2000 + HOLD_MS + 1);
     await store.commitTransition(spin);
+    h.sampler.touchStart(touch(20_000));
+    h.sampler.touchCancel();
+    h.at(20_010);
     await store.commitTransition(spin);
-    await drawAt(5100);
-    expect(recorded.map((sample) => [sample.measure, sample.start])).toEqual([
-      ['acknowledgement', 5000],
-      ['completion', 5010],
+    await tap(h, store, spin, { down: 30_000, up: 30_010 });
+    await store.commitTransition(spin);
+    await h.drawAt(30_100);
+    expect(h.recorded.map((sample) => [sample.measure, sample.start])).toEqual([
+      ['acknowledgment', 30_000],
+      ['completion', 30_010],
     ]);
   });
 
   it('records no completion for a commit that failed or was not this one', async () => {
-    const { sampler, recorded, at, drawAt } = harness();
-    const { inner, store } = await tableStore(sampler);
+    const h = harness();
+    const { inner, store } = await tableStore(h.sampler);
     const outcomes: (CommitOutcome | Error)[] = [new Error('disk full'), { status: 'sequence-conflict', sequence: 2 }];
     for (const outcome of outcomes) {
       inner.outcome = outcome;
-      sampler.touchStart(touch(10));
-      sampler.touchEnd(touch(20));
-      at(30);
-      await store.commitTransition(commit('roulette', { kind: 'begin-turn' })).catch(() => undefined);
+      await tap(h, store, commit('roulette', { kind: 'begin-turn' }), { down: 10, up: 20 }).catch(() => undefined);
     }
-    await drawAt(100);
-    expect(recorded.map((sample) => sample.measure)).toEqual(['acknowledgement', 'acknowledgement']);
+    await h.drawAt(100);
+    expect(h.recorded.map((sample) => sample.measure)).toEqual(['acknowledgment', 'acknowledgment']);
   });
 
   it('passes every store call through', async () => {
-    const { sampler } = harness();
-    const { inner, store } = await tableStore(sampler);
+    const h = harness();
+    const { inner, store } = await tableStore(h.sampler);
     await expect(store.commitTransition(commit('roulette', { kind: 'begin-turn' }))).resolves.toEqual({ status: 'committed' });
     await expect(store.load('a-roulette')).resolves.toEqual(await inner.load('a-roulette'));
     await expect(store.findUnfinished()).resolves.toEqual(await inner.findUnfinished());
+    await expect(store.readTransitions('a-roulette')).resolves.toEqual(await inner.readTransitions('a-roulette'));
+    await expect(store.readOutgoing()).resolves.toEqual(await inner.readOutgoing());
   });
 
   it('knows the game of a practice session it finds on launch', async () => {
-    const { sampler, recorded, at, drawAt } = harness();
+    const h = harness();
     const inner = new ScriptedStore();
     await inner.createActivity(activity('craps'));
-    const store = sampler.practiceStore(inner);
+    const store = h.sampler.practiceStore(inner);
     await store.findUnfinished();
-    sampler.touchStart(touch(10));
-    sampler.touchEnd(touch(20));
-    at(30);
-    await store.commitTransition(commit('craps', { kind: 'begin-turn' }));
-    await drawAt(100);
-    expect(recorded.map((sample) => sample.game)).toEqual(['craps', 'craps']);
+    await tap(h, store, commit('craps', { kind: 'begin-turn' }), { down: 10, up: 20 });
+    await h.drawAt(100);
+    expect(h.recorded.map((sample) => sample.game)).toEqual(['craps', 'craps']);
   });
 });
 
 describe('cold launch', () => {
-  it('measures from process start to the frame after Home first renders, once per process', async () => {
-    const { sampler, recorded, drawAt } = harness(100);
-    sampler.launchUsable();
-    await drawAt(2600);
-    sampler.launchUsable();
-    await drawAt(9000);
-    expect(recorded).toEqual([{ version: 1, device: DEVICE, measure: 'cold-launch', game: null, family: 'cold-launch', start: 100, end: 2600, ms: 2500 }]);
+  it('measures from process start to the frame after Home is usable, once per process', async () => {
+    const h = harness(100);
+    h.sampler.launchUsable();
+    await h.drawAt(2600);
+    h.sampler.launchUsable();
+    await h.drawAt(9000);
+    expect(h.recorded).toEqual([{ version: 1, device: DEVICE, measure: 'cold-launch', game: null, family: 'cold-launch', start: 100, end: 2600, ms: 2500 }]);
   });
 
   it('records nothing when the process start is unknown', async () => {
-    const { sampler, recorded, drawAt } = harness(null);
-    sampler.launchUsable();
-    await drawAt(2600);
-    expect(recorded).toEqual([]);
+    const h = harness(null);
+    h.sampler.launchUsable();
+    await h.drawAt(2600);
+    expect(h.recorded).toEqual([]);
+  });
+
+  it('records nothing when the player had to touch the screen before Home (signing in, choosing the offline game)', async () => {
+    const h = harness(100);
+    h.sampler.touchStart(touch(500));
+    h.sampler.touchEnd(touch(600));
+    h.sampler.launchUsable();
+    await h.drawAt(9000);
+    expect(h.recorded).toEqual([]);
   });
 });

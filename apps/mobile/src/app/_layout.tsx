@@ -43,7 +43,7 @@ export default function RootLayout() {
       <ThemeProvider value={theme}>
         <StatusBar style="light" />
         <AccountProvider>
-          <View style={styles.root} onLayout={hideSplash} onTouchStart={sampling?.touchStart} onTouchEnd={sampling?.touchEnd}>
+          <View style={styles.root} onLayout={hideSplash} onTouchStart={sampling?.touchStart} onTouchEnd={sampling?.touchEnd} onTouchCancel={sampling?.touchCancel}>
             <SetupPreferencesProvider>
               <Slot />
             </SetupPreferencesProvider>

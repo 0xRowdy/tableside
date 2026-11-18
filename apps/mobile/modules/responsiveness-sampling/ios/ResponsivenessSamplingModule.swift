@@ -14,7 +14,7 @@ public class ResponsivenessSamplingModule: Module {
     }
 
     Function("processStart") { () -> Double? in
-      // Apple: "Prepare your app for prewarming"
+      // docs/development.md Responsiveness sampling (cold launch)
       if ProcessInfo.processInfo.environment["ActivePrewarm"] == "1" { return nil }
       var info = kinfo_proc()
       var size = MemoryLayout<kinfo_proc>.stride

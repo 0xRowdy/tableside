@@ -2,15 +2,16 @@
 
 import { INSURANCE_TARGET, type Command, type GameId } from '@tableside/engine';
 
-import type { ActivityStore, StoredActivity } from '@/practice/store';
+import type { ActivityStore, StoredActivity, TransitionCommit } from '@/practice/store';
 
 import { COLD_LAUNCH, type DeviceInfo, type Measure, type ResponsivenessSample } from './samples';
 
 export const CLAIM_MS = 1000;
+export const HOLD_MS = 10_000;
 
+// docs/development.md Responsiveness sampling
 export interface SamplerPorts {
   readonly device: DeviceInfo;
-  // docs/development.md Responsiveness sampling (one clock)
   now(): number;
   afterCommit(run: () => void): void;
   nextFrame(): Promise<number>;
@@ -25,9 +26,10 @@ export interface TouchLike {
 export interface Sampler {
   touchStart(event: TouchLike): void;
   touchEnd(event: TouchLike): void;
-  // docs/development.md Responsiveness sampling (what is measured)
+  touchCancel(): void;
+  // docs/development.md Responsiveness sampling
   action<T>(game: GameId, family: string, run: () => Promise<T>, committed: (result: T) => boolean): Promise<T>;
-  practiceStore<S extends ActivityStore>(store: S): S;
+  practiceStore(store: ActivityStore): ActivityStore;
   launchUsable(): void;
 }
 
@@ -38,7 +40,7 @@ interface Touch {
   claimed: boolean;
 }
 
-// Spec 1 Launch gates 5 (long work tested separately)
+// Spec 1 Launch gates 5
 export function practiceFamily(command: Command): string | null {
   switch (command.kind) {
     case 'place-wager':
@@ -65,6 +67,7 @@ export function practiceFamily(command: Command): string | null {
 
 export function createSampler(ports: SamplerPorts): Sampler {
   let touch: Touch | null = null;
+  let touched = false;
   let launched = false;
   const games = new Map<string, GameId>();
 
@@ -73,9 +76,14 @@ export function createSampler(ports: SamplerPorts): Sampler {
   const record = (measure: Measure, game: GameId | null, family: string, start: number, end: number) =>
     ports.record({ version: 1, device: ports.device, measure, game, family, start, end, ms: end - start });
 
+  const recordAt = (frame: Promise<number>, measure: Measure, game: GameId | null, family: string, start: number) =>
+    void frame.then((end) => record(measure, game, family, start, end), () => undefined);
+
+  // docs/development.md Responsiveness sampling (touch order)
   const claim = (): Touch | null => {
     const claimed = touch;
-    if (!claimed || claimed.claimed || claimed.end === null || ports.now() - claimed.end > CLAIM_MS) return null;
+    if (!claimed || claimed.claimed) return null;
+    if (claimed.end === null ? ports.now() - claimed.start > HOLD_MS : ports.now() - claimed.end > CLAIM_MS) return null;
     claimed.claimed = true;
     return claimed;
   };
@@ -85,52 +93,57 @@ export function createSampler(ports: SamplerPorts): Sampler {
     return activity;
   };
 
-  const sampler: Sampler = {
+  const action: Sampler['action'] = async (game, family, run, committed) => {
+    const claimed = claim();
+    if (claimed) recordAt(claimed.acknowledged, 'acknowledgment', game, family, claimed.start);
+    const result = await run();
+    if (claimed && claimed.end !== null && committed(result)) recordAt(nextFrameAfterCommit(), 'completion', game, family, claimed.end);
+    return result;
+  };
+
+  const commitTransition = (store: ActivityStore, commit: TransitionCommit) => {
+    const game = games.get(commit.activityId);
+    const family = practiceFamily(JSON.parse(commit.receipt.command) as Command);
+    const run = () => store.commitTransition(commit);
+    if (!game || !family) return run();
+    return action(game, family, run, (outcome) => outcome.status === 'committed');
+  };
+
+  return {
     touchStart(event) {
+      touched = true;
       touch = { start: event.nativeEvent.timestamp, acknowledged: nextFrameAfterCommit(), end: null, claimed: false };
       touch.acknowledged.catch(() => undefined);
     },
     touchEnd(event) {
       if (touch && touch.end === null) touch.end = event.nativeEvent.timestamp;
     },
-    async action(game, family, run, committed) {
-      const claimed = claim();
-      if (claimed) void claimed.acknowledged.then((frame) => record('acknowledgement', game, family, claimed.start, frame), () => undefined);
-      const result = await run();
-      if (claimed && claimed.end !== null && committed(result)) {
-        const end = claimed.end;
-        void nextFrameAfterCommit().then((frame) => record('completion', game, family, end, frame), () => undefined);
-      }
-      return result;
+    touchCancel() {
+      if (touch) touch.claimed = true;
     },
+    action,
     practiceStore(store) {
-      return new Proxy(store, {
-        get(target, property) {
-          const value: unknown = Reflect.get(target, property);
-          if (typeof value !== 'function') return value;
-          if (property === 'commitTransition') {
-            return (commit: Parameters<ActivityStore['commitTransition']>[0]) => {
-              const game = games.get(commit.activityId);
-              const family = practiceFamily(JSON.parse(commit.receipt.command) as Command);
-              const run = () => target.commitTransition(commit);
-              if (!game || !family) return run();
-              return sampler.action(game, family, run, (outcome) => outcome.status === 'committed');
-            };
-          }
-          if (property === 'createActivity' || property === 'load' || property === 'findUnfinished') {
-            return async (...args: unknown[]) => remember(await (value as (...a: unknown[]) => Promise<StoredActivity | null>).apply(target, args));
-          }
-          return (value as (...a: unknown[]) => unknown).bind(target);
-        },
-      });
+      return {
+        createActivity: async (activity) => remember(await store.createActivity(activity)),
+        load: async (activityId) => remember(await store.load(activityId)),
+        findUnfinished: async () => remember(await store.findUnfinished()),
+        commitTransition: (commit) => commitTransition(store, commit),
+        recordEffects: (activityId, effects) => store.recordEffects(activityId, effects),
+        readEffects: (activityId) => store.readEffects(activityId),
+        readTransitions: (activityId) => store.readTransitions(activityId),
+        readReceipt: (activityId, commandId) => store.readReceipt(activityId, commandId),
+        complete: (completed) => store.complete(completed),
+        readOutgoing: () => store.readOutgoing(),
+        markIncomplete: async (activityId, reason) => remember(await store.markIncomplete(activityId, reason)),
+      };
     },
+    // docs/development.md Responsiveness sampling (cold launch)
     launchUsable() {
       if (launched) return;
       launched = true;
       const start = ports.processStart();
-      if (start === null) return;
-      void nextFrameAfterCommit().then((frame) => record('cold-launch', null, COLD_LAUNCH, start, frame), () => undefined);
+      if (start === null || touched) return;
+      recordAt(nextFrameAfterCommit(), 'cold-launch', null, COLD_LAUNCH, start);
     },
   };
-  return sampler;
 }

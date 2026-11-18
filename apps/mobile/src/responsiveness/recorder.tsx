@@ -8,6 +8,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { fonts, palette, radius, space } from '@/theme/tokens';
 
 import { responsivenessSampling, type ResponsivenessSamplingNative } from '../../modules/responsiveness-sampling';
+import { nativeTiming } from './native-ports';
 import { createSampler, type Sampler } from './sampler';
 import type { DeviceInfo } from './samples';
 
@@ -47,10 +48,7 @@ export function samplingMode(native: ResponsivenessSamplingNative = responsivene
   };
   const sampler = createSampler({
     device,
-    now: () => performance.now(),
-    afterCommit: (run) => void setTimeout(run, 0),
-    nextFrame: () => native.nextFrame(),
-    processStart: () => native.processStart(),
+    ...nativeTiming(native),
     record(sample) {
       if (status.problem) return;
       native.append(`${JSON.stringify(sample)}\n`).then(

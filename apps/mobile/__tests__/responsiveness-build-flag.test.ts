@@ -1,6 +1,3 @@
-/**
- * @jest-environment node
- */
 // Spec 1 Launch gates 5; #121; docs/development.md Responsiveness sampling
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
@@ -21,7 +18,7 @@ interface Babel {
 const resolveFrom = (module: string, from: string) => require.resolve(module, { paths: [from] });
 const packageDir = (module: string, from: string) => dirname(resolveFrom(`${module}/package.json`, from));
 
-// The production transform Metro applies to the app: babel-preset-expo (which inlines EXPO_PUBLIC_ variables), then Metro's constant folding.
+// docs/development.md Responsiveness sampling (store builds)
 function productionTransform(file: string, flag: string | undefined): string {
   const expo = packageDir('expo', APP);
   const preset = packageDir('babel-preset-expo', expo);
@@ -66,12 +63,12 @@ describe('a build without the sampling flag', () => {
     expect(sampling).toMatch(/require\(['"]\.\/recorder['"]\)/);
   });
 
-  it('reaches the recorder and the native module only through the probe', () => {
+  it('reaches the recorder, and through it the native module, only from the probe', () => {
     const files = [...sourceFiles(join(APP, 'src')), join(APP, 'index.ts')];
     const importers = files
       .filter((file) => /responsiveness\/recorder|['"]\.\/recorder['"]|modules\/responsiveness-sampling|ResponsivenessSampling['"]/.test(readFileSync(file, 'utf8')))
       .map((file) => relative(APP, file));
-    expect(importers.sort()).toEqual(['src/responsiveness/probe.ts', 'src/responsiveness/recorder.tsx']);
+    expect(importers.sort()).toEqual(['src/responsiveness/native-ports.ts', 'src/responsiveness/probe.ts', 'src/responsiveness/recorder.tsx']);
   });
 
   it('leaves the native module out of autolinking on both platforms', () => {

@@ -26,7 +26,7 @@ export default function Home() {
   const suspended = snapshot.status === 'active' && snapshot.suspension?.reached ? snapshot : null;
   const words = suspended ? GAME_WORDS[suspended.view.game] : null;
   const { service: training, learning } = useLearning();
-  useLaunchSample();
+  useLaunchSample(snapshot.status !== 'loading');
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>

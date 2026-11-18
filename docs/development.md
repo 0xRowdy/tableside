@@ -222,13 +222,15 @@ Spec 1 launch gate 5 is judged from samples taken on physical devices (#82) by a
 
 Every time comes from one clock: React Native's steady clock. A touch's `nativeEvent.timestamp` and `performance.now()` read it, and the local module `modules/responsiveness-sampling` reads the same one natively: mach absolute time on iOS (`CACurrentMediaTime`), `CLOCK_MONOTONIC` on Android. At startup the recorder checks that the native clock agrees with `performance.now()` within 5 ms. If it doesn't, the badge says so and nothing is recorded.
 
-- **Acknowledgement** runs from the touch-down timestamp to the first frame drawn after the press's visible response (the pressed state) commits.
+- **Acknowledgment** runs from the touch-down timestamp to the first frame drawn after the press's visible response (the pressed state) commits.
 - **Durable completion** runs from the touch-up that fired the action to the first frame drawn after the action's store commit resolves and the published outcome renders.
-- **Offline cold launch** runs from native process start to the first frame of Home. The app always opens on Home, which shows a practice session in progress as suspended. Home exists only behind an open account, so every cold-launch sample is a previously signed-in launch, as the gate requires. Process start is `Process.getStartUptimeMillis()` on Android and the kernel's process start time (`sysctl`) on iOS. iOS launches that the system prewarmed are skipped, because their process started before the tap.
+- **Offline cold launch** runs from native process start to the first frame of a usable Home: rendered, with the practice session loaded. The app always opens on Home, which shows a practice session in progress as suspended. Home exists only behind an open account, so a cold launch to it is a previously signed-in launch, as the gate requires. A launch that needed a touch before Home (signing in, choosing the offline game, recovery) isn't sampled. Process start is `Process.getStartUptimeMillis()` on Android and the kernel's process start time (`sysctl`) on iOS. iOS launches that the system prewarmed are skipped, because their process started before the tap.
 
 "The first frame drawn after" is read natively once React has committed. On iOS it is the next `CADisplayLink` tick's `targetTimestamp`, queued on the main thread behind Fabric's mount. On Android it is the vsync after the next `Choreographer` frame, which is when the frame drawn at that tick reaches the screen.
 
-The root view's `onTouchStart` and `onTouchEnd` (`src/app/_layout.tsx`) give the touch. The practice store gives the action: `sampling.practiceStore` (`src/practice/PracticeProvider.tsx`) wraps it and pairs each committed player command with the touch that ended at most 1 s before (`CLAIM_MS`). A command with no such touch, such as one sent from a keyboard, isn't sampled.
+The root view's `onTouchStart`, `onTouchEnd` and `onTouchCancel` (`src/app/_layout.tsx`) give the touch. The practice store gives the action: `sampling.practiceStore` (`src/practice/PracticeProvider.tsx`) wraps it and pairs each player command it commits with the latest touch that hasn't been used. The touch must still be down (for at most 10 s, `HOLD_MS`) or have ended at most 1 s before (`CLAIM_MS`). A command with no such touch, such as one sent from a keyboard, isn't sampled.
+
+**Touch order.** Fabric runs the responder's `onPress`, and with it the action's store commit, before the root's bubbling `onTouchEnd`. So the sampler claims a touch that is still down, and reads its end once the commit resolves.
 
 **Action families** are named after the controller's commands (`practiceFamily` in `src/responsiveness/sampler.ts`), reported per game:
 
@@ -258,7 +260,7 @@ The prebuild must be `--clean`: without the flag, `plugins/with-responsiveness-s
 
 For a simulator, build with `xcodebuild` (`-configuration Release -sdk iphonesimulator CODE_SIGNING_ALLOWED=NO`), since a simulator app can't carry Sign in with Apple without a signing certificate.
 
-A store build carries none of the recorder: `src/responsiveness/probe.ts` folds to `sampling = null` without the flag, so Metro never bundles `recorder.tsx`, and the native module isn't linked. `__tests__/responsiveness-build-flag.test.ts` checks both.
+A store build carries none of the recorder (**store builds**): `src/responsiveness/probe.ts` folds to `sampling = null` without the flag, so Metro never bundles `recorder.tsx`, and the native module isn't linked. `__tests__/responsiveness-build-flag.test.ts` checks both.
 
 ### Collecting
 
@@ -279,7 +281,7 @@ The file is `responsiveness-samples.jsonl`, one JSON sample per line, with the d
 pnpm --filter @tableside/mobile responsiveness-report iphone-8.jsonl moto-g7-play.jsonl
 ```
 
-For each device, build, game and family it prints the sample count, the nearest-rank p95 (all samples, outliers kept: the value at rank ⌈0.95 n⌉), the maximum, the target (100 ms, 250 ms or 5 s) and pass or fail. A p95 within the target means at least 95% of samples are within it. Families with fewer than 100 samples (30 for cold launch) are flagged. It exits 1 when any family fails or is flagged.
+For each device and build it lists every family of every game (`GATE_FAMILIES` in `src/responsiveness/samples.ts`; guided practice's families appear when sampled) and cold launch. Builds are reported separately, because each build must meet the gate on its own. For each family it prints the sample count, the nearest-rank p95 (all samples, outliers kept: the value at rank ⌈0.95 n⌉), the maximum, the target (100 ms, 250 ms or 5 s) and pass or fail. A p95 within the target means at least 95% of samples are within it. Families with fewer than 100 samples (30 for cold launch) are flagged, including families with none, which also fail. It exits 1 when any family fails or is flagged. The export can't show the device was offline: airplane mode is the collector's job.
 
 ## App tests
 
