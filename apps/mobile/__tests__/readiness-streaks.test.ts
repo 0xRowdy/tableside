@@ -25,6 +25,12 @@ describe('readiness streaks', () => {
     expect(earnedBy({ ...PASS, id: 'a' }, { ...PASS, id: 'b' })).toEqual([['a', 'b']]);
   });
 
+  // Spec 3 Synchronized record types › Readiness milestone (Barrier); #148
+  it('cite the device positions of both earning attempts, across the neutral ones between them', () => {
+    const [milestone] = milestoneCandidates(sequence({ ...PASS, id: 'a' }, { id: 'n', key: LEARN, scores: { 'running-count': [1, 4] } }, { ...PASS, id: 'b' }), 'device-a');
+    expect(milestone).toMatchObject({ attempts: ['a', 'b'], deviceSequences: [1, 3] });
+  });
+
   it('advance only at 95% or better in every counting metric tested: card values 19/20, running count 4/4', () => {
     const cards = (id: string, correct: number) => ({ id, key: CARD_VALUES, scores: { 'card-values': [correct, 20] as const } });
     expect(earnedBy(cards('a', 19), cards('b', 20))).toEqual([['a', 'b']]);
@@ -80,7 +86,7 @@ describe('readiness streaks', () => {
       'device-a',
     );
     expect(candidates).toEqual([
-      { recordVersion: 1, owner: 'local', installation: 'device-a', groupKey: RUNNING_COUNT_CHECK, attempts: ['a', 'b'], earnedAt: 2_000 },
+      { recordVersion: 1, owner: 'local', installation: 'device-a', groupKey: RUNNING_COUNT_CHECK, attempts: ['a', 'b'], deviceSequences: [1, 2], earnedAt: 2_000 },
     ]);
   });
 
@@ -104,7 +110,7 @@ describe('readiness streaks', () => {
 describe('recommendations', () => {
   const earnedIn = (...keys: ChallengeGroupKey[]): ProgressMilestone[] =>
     keys.map((groupKey, index) => ({
-      record: { recordVersion: 1, owner: 'local', installation: 'device-a', groupKey, attempts: [`a-${index}`, `b-${index}`], earnedAt: index },
+      record: { recordVersion: 1, owner: 'local', installation: 'device-a', groupKey, attempts: [`a-${index}`, `b-${index}`], deviceSequences: [1, 2], earnedAt: index },
       local: true,
     }));
   const CONVERSION: ChallengeGroupKey = { ...RUNNING_COUNT_CHECK, category: 'conversion', content: { id: 'conversion', version: 1 }, reference: null, length: 10 };

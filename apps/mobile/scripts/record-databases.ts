@@ -219,6 +219,7 @@ function challengeDatabase(): Promise<RecordedDatabase> {
       installation: IDENTITY.installationId,
       groupKey: { ...finishedRecord.groupKey, variant: 'check', assistanceClass: 'unassisted-check' },
       attempts: ['recorded-check-1', 'recorded-check-2'],
+      deviceSequences: [1, 2],
       earnedAt: CREATED_AT + 60_000,
     });
   }).then((database) => ({ ...database, unfinishedAttempt: { attemptId: unfinished.attemptId, phase: 'question', position: readChallengeView(createAndReplay(unfinished, recorded.random as RandomStreamIdentity, commands)).position } }));

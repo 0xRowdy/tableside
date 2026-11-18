@@ -5,6 +5,7 @@ import { type CompletedPracticeSessionRecord, canonicalJson, decodeMoney } from 
 import { challengeAttempt } from '../challenge-attempt-record';
 import { lessonProgressEvent } from '../lesson-progress-record';
 import { privacyChoice } from '../privacy-record';
+import { readinessMilestone } from '../readiness-milestone-record';
 
 import type { QueuedUpload, ReconcileOutcome, RecordRef } from './store';
 
@@ -171,6 +172,7 @@ export const recordTypes: ReadonlyMap<string, RecordType> = new Map<string, Reco
     privacyChoice as unknown as RecordType,
     challengeAttempt as unknown as RecordType,
     lessonProgressEvent as unknown as RecordType,
+    readinessMilestone as unknown as RecordType,
   ].map((type) => [type.name, type]),
 );
 
