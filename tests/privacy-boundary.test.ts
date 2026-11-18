@@ -108,3 +108,62 @@ describe('routine logs in shipped code', () => {
     expect(unsafe).toEqual([]);
   });
 });
+
+// Spec 3 Information hiding (end to end), Launch gates 2; #156
+describe('challenge and lesson code', () => {
+  const CHALLENGE_AND_LESSON = /^(apps\/mobile\/src\/(training|counting|lessons)\/|packages\/engine\/src\/(challenge|challenge-record|table-challenge)\.ts$|packages\/definitions\/src\/(challenges|lessons|counting-examples|hints)\.ts$)/;
+
+  function consoleUses(source: string, fileName: string): string[] {
+    const file = ts.createSourceFile(fileName, source, ts.ScriptTarget.Latest, true, fileName.endsWith('x') ? ts.ScriptKind.TSX : ts.ScriptKind.TS);
+    const found: string[] = [];
+    const visit = (node: ts.Node) => {
+      if (ts.isIdentifier(node) && node.text === 'console') found.push(node.parent.getText(file));
+      ts.forEachChild(node, visit);
+    };
+    visit(file);
+    return found;
+  }
+
+  it('writes no routine log at all, so no answer, card, reference or unfinished attempt can reach one', async () => {
+    const files = [...(await filesUnder('apps/mobile/src', shipped)), ...(await filesUnder('packages', shipped))].filter((path) => CHALLENGE_AND_LESSON.test(path));
+    expect(files).toEqual(
+      expect.arrayContaining([
+        'apps/mobile/src/training/controller.ts',
+        'apps/mobile/src/training/service.ts',
+        'apps/mobile/src/counting/ChallengeExercise.tsx',
+        'apps/mobile/src/lessons/WorkedExample.tsx',
+        'packages/engine/src/challenge.ts',
+        'packages/definitions/src/lessons.ts',
+      ]),
+    );
+    const uses: string[] = [];
+    for (const path of files) for (const use of consoleUses(await readFile(join(root, path), 'utf8'), path)) uses.push(`${path}: ${use}`);
+    expect(uses).toEqual([]);
+  });
+});
+
+// Spec 3 Information hiding (end to end), Launch gates 2: notifications, crash reports and breadcrumbs; #156
+describe('the apps', () => {
+  const CHANNELS = [
+    /^expo-notifications$/, /^@notifee\//, /push-notification/, /^@react-native-firebase\//, /^@sentry\//, /^sentry-expo$/, /^@bugsnag\//, /crashlytics/,
+    /^@datadog\//, /^@amplitude\//, /^@segment\//, /^posthog/, /^mixpanel/, /^expo-insights$/, /^@newrelic\//, /^instabug/, /^@embrace-io\//,
+  ];
+  const isChannel = (name: string) => CHANNELS.some((pattern) => pattern.test(name));
+
+  it.each(['expo-notifications', '@sentry/react-native', '@bugsnag/expo', '@react-native-firebase/crashlytics', 'posthog-react-native'])('the check catches %s', (name) => {
+    expect(isChannel(name)).toBe(true);
+  });
+
+  it('carry no notification, crash-reporting, breadcrumb or analytics SDK, so a challenge or lesson has no such channel to leak through (spec 7 adds one under its consent rules)', async () => {
+    const found: string[] = [];
+    for (const app of ['apps/mobile', 'apps/web']) {
+      const manifest = JSON.parse(await readFile(join(root, app, 'package.json'), 'utf8')) as Record<string, Record<string, string> | undefined>;
+      for (const name of Object.keys({ ...manifest.dependencies, ...manifest.devDependencies })) if (isChannel(name)) found.push(`${app}: ${name}`);
+    }
+    for (const path of [...(await filesUnder('apps', shipped)), ...(await filesUnder('packages', shipped))]) {
+      const source = await readFile(join(root, path), 'utf8');
+      for (const [, name] of source.matchAll(/(?:from\s+|require\(\s*|import\(\s*)['"]([^'"]+)['"]/g)) if (isChannel(name!)) found.push(`${path}: ${name}`);
+    }
+    expect(found).toEqual([]);
+  });
+});
