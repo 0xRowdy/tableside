@@ -1,5 +1,5 @@
 // Spec 3 Modules › Definitions package; Challenge content (from #4); #158, #133, #134, #137, #138
-import type { BlackjackPlayPolicy, CardValuesContent, ChallengeCategory, TableCountingMode, ChallengeContent, ConversionContent, RunningCountContent, TableContent, TableSetup } from '@tableside/engine';
+import type { BlackjackPlayPolicy, CardValuesContent, ChallengeCategory, TableCountingMode, ChallengeContent, ConversionContent, PlayFunding, RunningCountContent, TableContent, TableSetup } from '@tableside/engine';
 
 import type { BlackjackPreset } from './blackjack/reference';
 import { blackjackRules, DEFAULT_BLACKJACK_PRESET, DEFAULT_PENETRATION } from './blackjack/rules';
@@ -33,7 +33,7 @@ export const CHALLENGE_CONTENT: Readonly<Record<ChallengeCategory, ChallengeCont
 };
 
 // Spec 3 User stories 27, 28; S3-02 ZreSb, FkMDw
-export interface TableOptions {
+export interface TableOptions extends PlayFunding {
   readonly seat: 'observe' | 'play';
   readonly preset: BlackjackPreset;
   readonly penetration: number;
@@ -42,14 +42,28 @@ export interface TableOptions {
   readonly countingMode: TableCountingMode;
 }
 
-export const DEFAULT_TABLE_SETUP: TableOptions = { seat: 'observe', preset: DEFAULT_BLACKJACK_PRESET, penetration: DEFAULT_PENETRATION, extraPlayers: 0, interval: 1, countingMode: 'basic' };
+// Spec 3 Play challenge funding › Starting balance: default 1,000
+export const DEFAULT_STARTING_BALANCE = '1000';
+
+export const DEFAULT_TABLE_SETUP: TableOptions = {
+  seat: 'observe',
+  preset: DEFAULT_BLACKJACK_PRESET,
+  penetration: DEFAULT_PENETRATION,
+  extraPlayers: 0,
+  interval: 1,
+  countingMode: 'basic',
+  betSchedule: false,
+  baseWager: '10',
+  startingBalance: DEFAULT_STARTING_BALANCE,
+};
 
 // Spec 3 Challenge content › Observe seats, Table; #138
 export function tableSetup(options: TableOptions): TableSetup {
   const rules = blackjackRules(options.preset, options.penetration, options.extraPlayers);
   if (options.seat === 'observe') return { seat: 'observe', rules, strategy: seatStrategy(options.preset), interval: options.interval };
   const mode = options.countingMode === 'deviations' ? 'counting-with-deviations' : 'counting-with-basic';
-  return { seat: 'play', rules, policy: blackjackStrategy(options.preset, mode).play as BlackjackPlayPolicy, interval: options.interval };
+  const { betSchedule, baseWager, startingBalance } = options;
+  return { seat: 'play', rules, policy: blackjackStrategy(options.preset, mode).play as BlackjackPlayPolicy, interval: options.interval, betSchedule, baseWager, startingBalance };
 }
 // Spec 3 Challenge content (from #4), Recommendations; #145
 export const CATALOG_CATEGORIES = ['card-values', 'running-count', 'conversion', 'table'] as const;

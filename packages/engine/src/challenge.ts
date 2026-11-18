@@ -4,6 +4,7 @@ import { STATE_SCHEMA_VERSION, type PlayCorrection, type Receipt, type Rejection
 import { hiLoTag, truncatedTrueCount, type HandTotal } from './blackjack';
 import { prescribeAtTrueCount, type PlayChoice } from './blackjack-strategy';
 import { canonicalJson } from './canonical';
+import { add, compare, decodeMoney, encodeMoney, sub } from './money';
 import { canonicalShoe, shuffle, type Rank, type Suit } from './draws';
 import { RANDOM_PROTOCOL_VERSION, RandomStream, uniformInt, type RandomStreamIdentity, type RandomStreamState } from './random';
 import { sha256Hex } from './sha256';
@@ -11,9 +12,11 @@ import { hasExactKeys, isCount, isRecord, isText } from './shape';
 import {
   cardOf,
   copyTableSetup,
+  currentBet,
   currentDecision,
   dealTableRound,
   openPlaySeat,
+  placeBet,
   playMove,
   tableContentProblem,
   tableCountAt,
@@ -21,8 +24,11 @@ import {
   tableRunningExplanation,
   tableSetupProblem,
   tableView,
+  type TableBetCorrection,
   type CheckpointTiming,
+  type PlayBet,
   type PlayDecision,
+  type PlaySeat,
   type PlaySetup,
   type TableContent,
   type TableCount,
@@ -117,9 +123,11 @@ export interface ItemAnswers {
 
 // Spec 3 Challenge content › Running count
 // Spec 3 User stories 37, 38 (Play decisions and the Learn correction pause); #138
-export type ChallengePhase = 'ready' | 'card' | 'question' | 'explanation' | 'recorded' | 'decision' | 'correction' | 'ended';
+// Spec 3 Play challenge funding: the opening wager; #139
+export type ChallengePhase = 'ready' | 'card' | 'question' | 'explanation' | 'recorded' | 'bet' | 'decision' | 'correction' | 'ended';
 
-export type ChallengeEnding = 'completed' | 'abandoned';
+// Spec 3 Attempt lifecycle › Phases (ending reasons), Play challenge funding; #139
+export type ChallengeEnding = 'completed' | 'abandoned' | 'insufficient-funds';
 
 export interface ChallengeState {
   readonly schema: typeof STATE_SCHEMA_VERSION;
@@ -158,6 +166,8 @@ export type ChallengeCommand =
   | { readonly kind: 'reveal-count' }
   // Spec 3 Training service interface › Submit command (playing action, retry/override); #138
   | { readonly kind: 'play'; readonly action: PlayChoice }
+  // Spec 3 Training service interface › Submit command (betting action, legal betting override); #139
+  | { readonly kind: 'bet'; readonly amount: string }
   | { readonly kind: 'retry-correction' }
   | { readonly kind: 'override-correction' }
   | { readonly kind: 'end' };
@@ -181,6 +191,9 @@ export type ChallengeFact =
   | { readonly kind: 'move-refused'; readonly position: number; readonly action: PlayChoice }
   // Spec 3 Audio and haptics: cue 15, Amendment 1 B4; #138
   | { readonly kind: 'correction-offered'; readonly position: number }
+  // Spec 3 Audio and haptics (cues 2, 6–8); #139
+  | { readonly kind: 'wager-placed'; readonly position: number }
+  | { readonly kind: 'round-settled'; readonly position: number; readonly net: string }
   | { readonly kind: 'attempt-ended'; readonly ending: ChallengeEnding };
 
 export type ChallengeAdvance =
@@ -282,13 +295,36 @@ export interface TableDecisionReview {
   readonly fallback: boolean;
   readonly chosen: PlayChoice;
   readonly refused: readonly PlayChoice[];
+  // Spec 3 Play challenge funding › Mid-round shortfalls; #139
+  readonly unaffordable: readonly PlayChoice[];
   readonly played: PlayChoice | null;
   readonly resolution: PlayDecision['resolution'];
   readonly entered: ChallengeEntry | null;
   readonly atEntered: PlayChoice | null;
 }
 
-export type ReviewFact = CardValueReview | RunningCountReview | ConversionReview | TableCountReview | TableDecisionReview;
+// Spec 3 Scoring and review › Review facts (legal betting override); #139
+export interface TableBetReview {
+  readonly kind: 'table-bet';
+  readonly round: number;
+  readonly position: number;
+  readonly trueCount: number;
+  readonly prescribed: string;
+  readonly chosen: string;
+  readonly placed: string | null;
+  // Spec 3 Amendment 1 C4
+  readonly override: boolean;
+  readonly resolution: PlayBet['resolution'];
+}
+
+export type ReviewFact = CardValueReview | RunningCountReview | ConversionReview | TableCountReview | TableDecisionReview | TableBetReview;
+
+// Spec 3 Play challenge funding › Results; #139
+export interface ChallengeFinances {
+  readonly startingBalance: string;
+  readonly finishingBalance: string;
+  readonly net: string;
+}
 
 export interface ChallengeResults {
   readonly ending: ChallengeEnding;
@@ -296,6 +332,7 @@ export interface ChallengeResults {
   readonly review: readonly ReviewFact[];
   readonly assisted: boolean;
   readonly assistanceStep: number | null;
+  readonly finances: ChallengeFinances | null;
 }
 
 export interface LearnFeedback {
@@ -331,6 +368,8 @@ export interface LearnChallengeView extends ChallengeViewBase {
   readonly feedback: LearnFeedback | null;
   // Spec 3 Learn, Check and assistance › Learn (Play correction pause); S3-07 j4X6V; #138
   readonly correction: PlayCorrection | null;
+  // Spec 3 Learn, Check and assistance › Learn (correction pause on a wager); #139
+  readonly betCorrection: TableBetCorrection | null;
 }
 
 // Spec 3 Learn, Check and assistance › Check
@@ -528,16 +567,30 @@ function shownFacts(state: ChallengeState, position: number): ChallengeFact[] {
     const checkpoint = state.content.category === 'running-count' && state.variant === 'check' && asks(state, position);
     return [{ kind: 'content-shown', position }, ...(checkpoint ? [{ kind: 'checkpoint-due', position } as const] : [])];
   }
-  const step = state.items[position] as TableStep;
+  return [...stepFacts(state.items[position] as TableStep, position), ...fundsFacts(state, position)];
+}
+
+function stepFacts(step: TableStep, position: number): ChallengeFact[] {
   if (step.step === 'shuffle') return [{ kind: 'shoe-shuffled', position }];
   if (step.step === 'prompt') return step.count === 'running' || step.timing === 'decision' ? [{ kind: 'checkpoint-due', position }] : [];
-  if (step.step === 'decision') return [];
+  if (step.step === 'decision' || step.step === 'bet') return [];
   return [{ kind: 'content-shown', position }];
+}
+
+// Spec 3 Audio and haptics (cues 2, 6–8); #139
+function fundsFacts(state: ChallengeState, position: number): ChallengeFact[] {
+  const seat = state.table?.seat;
+  if (!seat) return [];
+  return seat.balances
+    .filter((entry) => entry.position === position)
+    .map((entry): ChallengeFact => (entry.change === 'wager' ? { kind: 'wager-placed', position } : { kind: 'round-settled', position, net: entry.net as string }));
 }
 
 function showingPhase(state: ChallengeState, position: number): ChallengePhase {
   if (asks(state, position)) return 'question';
-  return state.content.category === 'table' && (state.items[position] as TableStep).step === 'decision' ? 'decision' : 'card';
+  if (state.content.category !== 'table') return 'card';
+  const step = (state.items[position] as TableStep).step;
+  return step === 'decision' ? 'decision' : step === 'bet' ? 'bet' : 'card';
 }
 
 const currentAnswers = (state: ChallengeState): ItemAnswers | undefined => {
@@ -551,12 +604,13 @@ const LEGAL: Record<ChallengePhase, readonly ChallengeCommandKind[]> = {
   question: ['answer', 'skip', 'end'],
   explanation: ['retry-item', 'next-item', 'end'],
   recorded: ['next-item', 'end'],
+  bet: ['bet', 'end'],
   decision: ['play', 'end'],
   correction: ['retry-correction', 'override-correction', 'end'],
   ended: [],
 };
 
-const SHOWING: readonly ChallengePhase[] = ['card', 'question', 'explanation', 'recorded', 'decision', 'correction'];
+const SHOWING: readonly ChallengePhase[] = ['card', 'question', 'explanation', 'recorded', 'bet', 'decision', 'correction'];
 
 const canReveal = (state: ChallengeState) => counting(state) && state.revealedAt === null && SHOWING.includes(state.phase);
 
@@ -596,6 +650,8 @@ function isCommand(value: unknown): value is ChallengeCommand {
       return hasExactKeys(value, ['kind', 'value']) && Number.isSafeInteger(value.value);
     case 'play':
       return hasExactKeys(value, ['kind', 'action']) && PLAY_CHOICES.includes(value.action as PlayChoice);
+    case 'bet':
+      return hasExactKeys(value, ['kind', 'amount']) && isText(value.amount);
     case 'begin':
     case 'reveal-count':
     case 'retry-correction':
@@ -630,6 +686,9 @@ export function advanceChallenge(state: ChallengeState, envelope: ChallengeEnvel
   if (command.kind === 'answer') {
     const problem = answerProblem(state, command.value);
     if (problem) return reject('malformed', problem);
+  }
+  if (command.kind === 'bet' && !(state.items[state.position] as Extract<TableStep, { step: 'bet' }>).amounts.includes(command.amount)) {
+    return reject('malformed', 'a wager is one of the amounts offered');
   }
   const { change, facts } = apply(state, command);
   const receipt: Receipt = { commandId: envelope.commandId, sequence: state.sequence, command: commandText, disposition: 'applied' };
@@ -671,23 +730,44 @@ function apply(state: ChallengeState, command: ChallengeCommand): { change: Chan
     case 'next-item': {
       const position = state.position + 1;
       const more = state.content.category === 'table' && position === state.items.length && (state.table as TableProgress).round < state.content.rounds;
+      if (more && outOfFunds(state)) return ended('insufficient-funds', position);
       const change = more ? dealNextRound(state) : {};
       if (position < (change.items ?? state.items).length) return show(state, change, position);
-      return { change: { phase: 'ended', ending: 'completed', position }, facts: [{ kind: 'attempt-ended', ending: 'completed' }] };
+      return ended('completed', position);
     }
     case 'reveal-count':
       return { change: { revealedAt: state.position + 1 }, facts: [] };
     case 'play':
       return play(state, command.action);
+    case 'bet':
+      return bet(state, command.amount);
     case 'retry-correction':
     case 'override-correction': {
-      const correction = (state.table as TableProgress).seat?.correction as PlayCorrection;
+      const seat = (state.table as TableProgress).seat as PlaySeat;
+      if (seat.betCorrection) {
+        const { prescribed, chosen } = seat.betCorrection;
+        return placeWager(state, command.kind === 'retry-correction' ? prescribed : chosen, command.kind === 'retry-correction' ? 'retried' : 'overridden');
+      }
+      const correction = seat.correction as PlayCorrection;
       const move = command.kind === 'retry-correction' ? correction.explanation.prescribed.action : correction.actual.action;
       return played(state, move, command.kind === 'retry-correction' ? 'retried' : 'overridden');
     }
     case 'end':
-      return { change: { phase: 'ended', ending: 'abandoned' }, facts: [{ kind: 'attempt-ended', ending: 'abandoned' }] };
+      return ended(outOfFunds(state) ? 'insufficient-funds' : 'abandoned', state.position);
   }
+}
+
+const ended = (ending: ChallengeEnding, position: number): { change: Change; facts: ChallengeFact[] } => ({
+  change: { phase: 'ended', ending, position },
+  facts: [{ kind: 'attempt-ended', ending }],
+});
+
+// Spec 3 Play challenge funding › Insufficient funds ending; #139
+function outOfFunds(state: ChallengeState): boolean {
+  const table = state.table;
+  if (!table?.seat || state.content.category !== 'table' || table.round >= state.content.rounds) return false;
+  const { activity } = table.seat;
+  return activity.phase === 'settled-outcome' && compare(decodeMoney(activity.balance), decodeMoney(table.setup.rules.limits.initial.min)) < 0;
 }
 
 // Spec 3 User stories 37, 38; Scoring and review › Attribution; #138
@@ -695,10 +775,11 @@ function play(state: ChallengeState, action: PlayChoice): { change: Change; fact
   const table = state.table as TableProgress;
   const seat = table.seat as NonNullable<TableProgress['seat']>;
   const decision = currentDecision(seat);
-  const legal = (state.items[state.position] as Extract<TableStep, { step: 'decision' }>).actions.includes(action);
-  const tried: PlayDecision = { ...decision, attempts: [...decision.attempts, { action, legal }] };
+  const item = state.items[state.position] as Extract<TableStep, { step: 'decision' }>;
+  const refusal = item.actions.includes(action) ? null : item.unaffordable.some((short) => short.action === action) ? 'funds' : 'rule';
+  const tried: PlayDecision = { ...decision, attempts: [...decision.attempts, { action, refusal }] };
   const withAttempt = { ...table, seat: { ...seat, decisions: [...seat.decisions.slice(0, -1), tried] } };
-  if (!legal) return { change: { table: withAttempt }, facts: [{ kind: 'move-refused', position: state.position, action }] };
+  if (refusal) return { change: { table: withAttempt }, facts: [{ kind: 'move-refused', position: state.position, action }] };
   const prescribed = decision.explanation.prescribed.action;
   if (state.variant === 'learn' && action !== prescribed) {
     const correction: PlayCorrection = {
@@ -711,6 +792,24 @@ function play(state: ChallengeState, action: PlayChoice): { change: Change; fact
     return { change: { phase: 'correction', table: { ...withAttempt, seat: { ...withAttempt.seat, correction } } }, facts: [{ kind: 'correction-offered', position: state.position }] };
   }
   return played({ ...state, table: withAttempt }, action, action === prescribed ? 'followed' : 'departed');
+}
+
+// Spec 3 Play challenge funding; Learn, Check and assistance; Amendment 1 C4; #139
+function bet(state: ChallengeState, amount: string): { change: Change; facts: ChallengeFact[] } {
+  const table = state.table as TableProgress;
+  const seat = table.seat as PlaySeat;
+  const current = currentBet(seat);
+  const withChoice: TableProgress = { ...table, seat: { ...seat, bets: [...seat.bets.slice(0, -1), { ...current, chosen: current.chosen ?? amount }] } };
+  if (state.variant === 'learn' && !current.override && amount !== current.prescribed) {
+    const betCorrection: TableBetCorrection = { position: state.position, trueCount: current.trueCount, prescribed: current.prescribed, chosen: amount };
+    return { change: { phase: 'correction', table: { ...withChoice, seat: { ...(withChoice.seat as PlaySeat), betCorrection } } }, facts: [{ kind: 'correction-offered', position: state.position }] };
+  }
+  return placeWager({ ...state, table: withChoice }, amount, current.override ? 'overridden' : amount === current.prescribed ? 'followed' : 'departed');
+}
+
+function placeWager(state: ChallengeState, amount: string, resolution: NonNullable<PlayBet['resolution']>): { change: Change; facts: ChallengeFact[] } {
+  const next = placeBet(state.table as TableProgress, state.content as TableContent, tableSteps(state), amount, resolution);
+  return show(state, { table: next.progress, items: [...state.items, ...next.steps] }, state.position + 1);
 }
 
 function played(state: ChallengeState, move: PlayChoice, resolution: NonNullable<PlayDecision['resolution']>): { change: Change; facts: ChallengeFact[] } {
@@ -754,17 +853,30 @@ export function challengeResults(state: ChallengeState): ChallengeResults | null
   });
   const metrics = Object.fromEntries(CHALLENGE_METRICS.map((metric) => [metric, null])) as Record<ChallengeMetric, MetricResult | null>;
   const score = <F extends ReviewFact>(facts: readonly F[], right: (fact: F) => boolean): MetricResult | null => (facts.length === 0 ? null : { correct: facts.filter(right).length, total: facts.length });
-  const counted = (fact: Exclude<ReviewFact, TableDecisionReview>) => fact.entered === fact.reference;
-  const counts = review as Exclude<ReviewFact, TableDecisionReview>[];
+  const counted = (fact: Exclude<ReviewFact, TableDecisionReview | TableBetReview>) => fact.entered === fact.reference;
+  const counts = review as Exclude<ReviewFact, TableDecisionReview | TableBetReview>[];
   if (state.content.category === 'table') {
     metrics['running-count'] = score(counts.filter((fact) => fact.kind === 'table' && fact.count === 'running'), counted);
     metrics['true-count'] = score(counts.filter((fact) => fact.kind === 'table' && fact.count === 'true'), counted);
     const decisions = decisionReviews(state);
+    const bets = betReviews(state);
     if (state.table?.setup.seat === 'play') metrics['playing-adherence'] = score(decisions, (fact) => fact.chosen === fact.prescribed);
-    review.push(...decisions);
+    // Spec 3 Scoring and review › Metrics (betting adherence: Play with bet schedule); Amendment 1 C4
+    if (state.table?.setup.seat === 'play' && state.table.setup.betSchedule) metrics['betting-adherence'] = score(bets, (fact) => !fact.override && fact.chosen === fact.prescribed);
+    review.push(...decisions, ...bets);
     review.sort((a, b) => a.position - b.position);
   } else metrics[CATEGORY_METRIC[state.content.category]] = score(counts, counted);
-  return { ending: state.ending, metrics, review, assisted: assisted(state), assistanceStep: state.revealedAt };
+  return { ending: state.ending, metrics, review, assisted: assisted(state), assistanceStep: state.revealedAt, finances: challengeFinances(state) };
+}
+
+// Spec 3 Play challenge funding › Results; Synchronized record types › Challenge attempt; #139
+export function challengeFinances(state: ChallengeState): ChallengeFinances | null {
+  const table = state.table;
+  if (!table?.seat || table.setup.seat !== 'play') return null;
+  const { activity } = table.seat;
+  const finishing = activity.wagers.reduce((sum, wager) => add(sum, decodeMoney(wager.amount)), decodeMoney(activity.balance));
+  const starting = decodeMoney(table.setup.startingBalance);
+  return { startingBalance: encodeMoney(starting), finishingBalance: encodeMoney(finishing), net: encodeMoney(sub(finishing, starting)) };
 }
 
 
@@ -774,7 +886,8 @@ function decisionReviews(state: ChallengeState): TableDecisionReview[] {
   if (table.seat === null) return [];
   const setup = table.setup as PlaySetup;
   return table.seat.decisions.flatMap((decision): TableDecisionReview[] => {
-    const [first] = decision.attempts;
+    // Spec 3 Scoring and review › Attribution; #139
+    const first = decision.attempts.find((attempt) => attempt.refusal !== 'funds');
     if (!first) return [];
     const { situation, prescribed } = decision.explanation;
     const prompt = decision.prompt === null ? undefined : state.answers.find((answers) => answers.position === decision.prompt);
@@ -796,7 +909,8 @@ function decisionReviews(state: ChallengeState): TableDecisionReview[] {
         prescribed: prescribed.action,
         fallback: decision.explanation.unavailable.length > 0,
         chosen: first.action,
-        refused: decision.attempts.flatMap((attempt) => (attempt.legal ? [] : [attempt.action])),
+        refused: decision.attempts.flatMap((attempt) => (attempt.refusal === 'rule' ? [attempt.action] : [])),
+        unaffordable: decision.attempts.flatMap((attempt) => (attempt.refusal === 'funds' ? [attempt.action] : [])),
         played: decision.played,
         resolution: decision.resolution,
         entered,
@@ -806,6 +920,16 @@ function decisionReviews(state: ChallengeState): TableDecisionReview[] {
   });
 }
 
+// Spec 3 Scoring and review › Review facts (betting); #139
+function betReviews(state: ChallengeState): TableBetReview[] {
+  const seat = state.table?.seat;
+  if (!seat) return [];
+  return seat.bets.flatMap((bet): TableBetReview[] =>
+    bet.chosen === null
+      ? []
+      : [{ kind: 'table-bet', round: bet.round, position: bet.position + 1, trueCount: bet.trueCount, prescribed: bet.prescribed, chosen: bet.chosen, placed: bet.placed, override: bet.override, resolution: bet.resolution }],
+  );
+}
 
 function policyAt(setup: PlaySetup, decision: PlayDecision, trueCount: number): PlayChoice {
   const { situation } = decision.explanation;
@@ -894,6 +1018,7 @@ export function readChallengeView(state: ChallengeState): ChallengeView {
           }
         : null,
     correction: state.phase === 'correction' ? (state.table?.seat?.correction ?? null) : null,
+    betCorrection: state.phase === 'correction' ? (state.table?.seat?.betCorrection ?? null) : null,
   };
 }
 

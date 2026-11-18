@@ -22,6 +22,8 @@ import { setupFor, type ChallengeSetup, type TrainingService, type TrainingSnaps
 import { useLessons, useTraining } from '@/training/TrainingProvider';
 
 const lastSetupOf = (service: TrainingService) => service.lastSetup();
+// Spec 3 Play challenge funding › Starting balance (remembered Play amount); #139
+const playAmountOf = (service: TrainingService) => service.playAmount();
 const allowanceOf = async (service: TrainingService, _reloadOnStatus: TrainingSnapshot['status']) => allowanceCopy(await service.allowance());
 // Spec 3 Comparison groups (Recommendations); Information hiding
 const progressOf = (service: TrainingService, _reloadOnStatus: TrainingSnapshot['status']) => service.progress();
@@ -32,6 +34,7 @@ export default function Counting() {
   const { category, variant, records, attempt } = useLocalSearchParams<{ category?: string; variant?: string; records?: string; attempt?: string }>();
   const { lessons } = useLessons();
   const remembered = useLoaded(lastSetupOf, service);
+  const playAmount = useLoaded(playAmountOf, service);
   // Spec 3 Amendment 4 §2
   const allowance = useLoaded(allowanceOf, service, snapshot.status);
   const progress = useLoaded(progressOf, service, snapshot.status);
@@ -171,7 +174,7 @@ export default function Counting() {
           />
         );
       }
-      const setup = setupFor(entry, [handedOff, chosen, remembered]);
+      const setup = setupFor(entry, [handedOff, chosen, remembered], playAmount ?? null);
       return (
         <ChallengeSetupScreen
           entry={entry}

@@ -27,6 +27,7 @@ import { standardizedCases } from './standardized.cases';
 import { strategyCases } from './strategy.cases';
 import { tableCases } from './table.cases';
 import { tablePlayCases } from './table-play.cases';
+import { tableFundingCases } from './table-funding.cases';
 import { guidedCases } from './guided.cases';
 import { progressionCases } from './progression.cases';
 
@@ -61,5 +62,6 @@ export const engineSuite: Suite = {
     ...conversionCases,
     ...tableCases,
     ...tablePlayCases,
+    ...tableFundingCases,
   ],
 };

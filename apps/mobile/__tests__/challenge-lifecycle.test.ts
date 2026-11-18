@@ -142,7 +142,7 @@ describe('challenge attempt lifecycle', () => {
       expect(viewOf(service)).toEqual(before);
       await service.resume();
       const record = await finish(service);
-      expect([record.interrupted, record.review[0]?.entered, (await store.readAttemptRecords()).length]).toEqual([true, 1, 1]);
+      expect([record.interrupted, (record.review[0] as { entered?: unknown } | undefined)?.entered, (await store.readAttemptRecords()).length]).toEqual([true, 1, 1]);
     });
   });
 

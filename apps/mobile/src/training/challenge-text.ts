@@ -1,10 +1,22 @@
 // Spec 3 S3-01 to S3-09; S5-17 j3UhJ; #158, #132, #150, #133, #134, #136, #137
 
-import { runningCountDrift, type AssistanceClass, type ChallengeAttemptRecord, type ChallengeCategory, type ChallengeEntry, type ChallengeMetric, type ChallengePacing, type ChallengeVariant, type ChallengeView, type ConversionReview, type CountRange, type HiLoExplanation, type HiLoValue, type LearnFeedback, type MetricResult, type ReviewFact, type RunningCountReview, type TableDecisionReview } from '@tableside/engine';
+import { runningCountDrift, type AssistanceClass, type ChallengeAttemptRecord, type ChallengeCategory, type ChallengeEntry, type ChallengeMetric, type ChallengePacing, type ChallengeVariant, type ChallengeView, type ConversionReview, type CountRange, type HiLoExplanation, type HiLoValue, type LearnFeedback, type MetricResult, type ReviewFact, type RunningCountReview, type TableBetReview, type TableDecisionReview } from '@tableside/engine';
 
 import { cardName, rankName, signed } from '@/play/blackjack-text';
 import { conversionText, decksText } from '@/training/blackjack-conversion-text';
-import { completedRounds, RETRY_WITH_NEW_SHOE, runningHeadline, TABLE_LEARN_DETAIL, tableCheckpointTitle, tableRunningText } from '@/training/blackjack-table-text';
+import {
+  abandonedTableTitle,
+  completedRounds,
+  INSUFFICIENT_FUNDS_TITLE,
+  insufficientFundsNote,
+  insufficientFundsText,
+  RETRY_WITH_NEW_SHOE,
+  runningHeadline,
+  SKILL_FIRST,
+  TABLE_LEARN_DETAIL,
+  tableCheckpointTitle,
+  tableRunningText,
+} from '@/training/blackjack-table-text';
 import { GAME_WORDS } from '@/play/game-words';
 
 import type { ChallengeAllowance } from './allowance';
@@ -374,7 +386,7 @@ export interface ReviewRowText {
 }
 
 // Spec 3 Scoring and review › Review facts; #138
-export type CountReviewFact = Exclude<ReviewFact, TableDecisionReview>;
+export type CountReviewFact = Exclude<ReviewFact, TableDecisionReview | TableBetReview>;
 
 export function reviewText(fact: CountReviewFact, variant: ChallengeVariant): ReviewRowText {
   const { entered, reference } = fact;
@@ -545,10 +557,15 @@ export function endingText(
   explanation: string | null,
 ): { readonly kind: 'done' | 'alert'; readonly title: string; readonly detail: string | null; readonly note: string | null } {
   const { groupKey } = record;
+  // Spec 3 Play challenge funding › Insufficient funds ending; S3-08 ValDZ; #139
+  if (record.endingReason === 'insufficient-funds') {
+    return { kind: 'alert', title: INSUFFICIENT_FUNDS_TITLE, detail: insufficientFundsText(position, groupKey.length), note: insufficientFundsNote(groupKey.variant === 'check') };
+  }
   if (record.endingReason === 'abandoned') {
     return {
       kind: 'alert',
-      title: `Abandoned after ${itemWord(groupKey.category)} ${position} of ${groupKey.length}`,
+      // Spec 3 S3-08 UXrpw; #139
+      title: groupKey.category === 'table' ? abandonedTableTitle(position, groupKey.length) : `Abandoned after ${itemWord(groupKey.category)} ${position} of ${groupKey.length}`,
       detail: "You ended this attempt. It keeps today's attempt used and earns no record. Answers you gave before ending are shown, but they can't set a personal best.",
       note: groupKey.variant === 'check' ? "Abandoning a Check restarts progress toward the readiness milestone for these settings. It's only labeled abandoned, never as a failed skill." : null,
     };
@@ -563,7 +580,9 @@ export function endingText(
   }
   const completed = completedText(groupKey, record.assistanceStep);
   const timing = groupKey.variant === 'check' ? timingText(record) : null;
-  return { kind: 'done', title: completed.title, detail: [completed.detail, timing].filter(Boolean).join(' ') || null, note: null };
+  // Spec 3 S3-08 e5MASr; #139
+  const skillFirst = groupKey.table?.seat === 'play' ? SKILL_FIRST : null;
+  return { kind: 'done', title: completed.title, detail: [completed.detail, skillFirst, timing].filter(Boolean).join(' ') || null, note: null };
 }
 
 function timingText({ interrupted, performanceMs }: Pick<ChallengeAttemptRecord, 'interrupted' | 'performanceMs'>): string | null {

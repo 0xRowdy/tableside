@@ -187,14 +187,16 @@ describe('the table counting exercise in Play', () => {
   const play = (variant: ChallengeVariant, n: number, countingMode: TableOptions['countingMode'] = 'basic') => attempt(variant, n, { seat: 'play', countingMode });
   const atDecision = (state: ChallengeState) => advanceUntil(state, (candidate) => candidate.phase === 'decision');
 
-  it('offers every move at the learner\'s decision, without the practice balance (S3-07 E3Gbeh, Amendment 2 §3)', async () => {
+  it('offers every move at the learner\'s decision, with the attempt balance and never a practice balance (S3-07 E3Gbeh, fiCRg, Amendment 2 §3)', async () => {
     const decision = await present(readChallengeView(atDecision(play('check', 1))));
     expect(screen.getByText('Check · Play · S17 LS · 75% · N = 1')).toBeOnTheScreen();
-    expect(screen.getByText('You')).toBeOnTheScreen();
+    expect(screen.getByText('ATTEMPT BALANCE')).toBeOnTheScreen();
+    expect(screen.getByText('990')).toBeOnTheScreen();
+    expect(screen.getByText('Bet 10')).toBeOnTheScreen();
+    expect(screen.queryByText(/practice/i)).toBeNull();
     expect(screen.getByRole('header', { name: 'Your move' })).toBeOnTheScreen();
     expect(screen.getByText('Check · your move')).toBeOnTheScreen();
     expect(screen.getByText('You have hard 14 against a 3. Choose a move; the next card waits for you.')).toBeOnTheScreen();
-    expect(screen.queryByText(/balance/i)).toBeNull();
     for (const move of ['Hit', 'Stand', 'Double', 'Split', 'Surrender']) expect(screen.getByRole('button', { name: move })).toBeEnabled();
     expectNoFeedbackColors(decision);
     await press('Stand');
@@ -267,6 +269,91 @@ describe('the table counting exercise in Play', () => {
     expect(screen.getByText('Why Tableside\'s index can differ from published charts')).toBeOnTheScreen();
     expect(screen.getByText(/Tableside teaches [+−-]?\d+/)).toBeOnTheScreen();
     expect(screen.getByText(/You keep the count yourself; this uses the real count, not the one you entered\./)).toBeOnTheScreen();
+  });
+});
+
+// Spec 3 Play challenge funding (#20); S3-07 fiCRg, qvatd, RDS5F; Amendment 1 C4; #139
+describe('the table counting exercise with challenge funding', () => {
+  const funded = (variant: ChallengeVariant, n: number, options: Partial<TableOptions>) => attempt(variant, n, { seat: 'play', ...options });
+  const atBet = (state: ChallengeState) => advanceUntil(state, (candidate) => candidate.phase === 'bet');
+
+  function firstFunding(): ChallengeState {
+    for (let n = 1; n < 200; n++) {
+      let state = funded('check', n, { betSchedule: true, baseWager: '10', startingBalance: '30' });
+      for (let guard = 0; guard < 400 && state.phase !== 'ended'; guard++) {
+        const view = readChallengeView(state);
+        if (view.table?.bet?.notice) return state;
+        state = send(
+          state,
+          state.phase === 'question'
+            ? { kind: 'skip' }
+            : state.phase === 'bet'
+              ? { kind: 'bet', amount: view.table?.bet?.amounts[0] as string }
+              : state.phase === 'decision'
+                ? { kind: 'play', action: view.table?.decision?.kind === 'insurance' ? 'decline-insurance' : 'stand' }
+                : { kind: 'next-item' },
+        );
+      }
+    }
+    throw new Error('no seed reaches the funding notice');
+  }
+
+  it('asks for the opening wager from the bet schedule after the before-bet counts, with no hint of the schedule\'s amount (S3-07)', async () => {
+    const shown = await present(readChallengeView(atBet(funded('check', 1, { betSchedule: true }))));
+    expect(screen.getByText('Check · Play · S17 LS · 75% · N = 1')).toBeOnTheScreen();
+    expect(screen.getByText('Choose your bet')).toBeOnTheScreen();
+    expect(screen.getByRole('header', { name: 'Your opening wager' })).toBeOnTheScreen();
+    expect(screen.getByText('1,000')).toBeOnTheScreen();
+    for (const amount of ['10', '20', '40', '60', '80']) expect(screen.getByRole('button', { name: `Bet ${amount}` })).toBeEnabled();
+    expect(screen.getByText('During Check, Tableside won’t say which amount the strategy would choose, or whether yours matches it.')).toBeOnTheScreen();
+    expectNoFeedbackColors(shown);
+    await press('Bet 40');
+    expect(sent).toEqual([{ kind: 'bet', amount: '40' }]);
+  });
+
+  it('shows the funding notice with only the affordable legal amounts whenever the balance can\'t cover every wager, then confirms the wager without saying whether it is an override (S3-07 fiCRg, qvatd; Information hiding)', async () => {
+    const notice = await present(readChallengeView(firstFunding()));
+    expect(screen.getByText('FUNDING')).toBeOnTheScreen();
+    expect(screen.getByRole('header', { name: 'Your balance can’t cover every opening wager' })).toBeOnTheScreen();
+    expect(screen.getByText('Balance 30. Legal opening wagers you can afford: 10, 20 or 30. Choose one to keep playing.')).toBeOnTheScreen();
+    expect(screen.getByText('During Check, Tableside won’t say which amount the strategy would choose, or whether yours matches it.')).toBeOnTheScreen();
+    expect(screen.queryByRole('button', { name: /Bet (40|60|80)/ })).toBeNull();
+    expectNoFeedbackColors(notice);
+    await press('Bet 20');
+    expect(sent).toEqual([]);
+    expect(screen.getByRole('header', { name: 'Place 20 from a short balance?' })).toBeOnTheScreen();
+    expect(
+      screen.getByText(
+        'Your balance can’t cover every opening wager. Whenever the bet schedule’s amount is more than your balance, whatever you place is recorded as a betting override, which betting adherence counts as a miss. Your counting and playing scores aren’t affected.',
+      ),
+    ).toBeOnTheScreen();
+    await press('Choose another amount');
+    expect(screen.getByText('FUNDING')).toBeOnTheScreen();
+    await press('Bet 20');
+    await press('Place 20');
+    expect(sent).toEqual([{ kind: 'bet', amount: '20' }]);
+  });
+
+  it('refuses a double the balance can\'t cover for funds alone, never for less, and says the legal fallback is what counts (S3-07 RDS5F)', async () => {
+    const decision = advanceUntil(funded('check', 1, { startingBalance: '10' }), (state) => state.phase === 'decision');
+    const refused = await present(readChallengeView(send(decision, { kind: 'play', action: 'double' })));
+    expect(screen.getByText('NOT ENOUGH IN THIS ATTEMPT’S BALANCE')).toBeOnTheScreen();
+    expect(screen.getByText('Double isn’t affordable: it needs another 10 and your balance is 0. Choose another move. Not having the funds is never counted against you; your play is scored against the legal fallback.')).toBeOnTheScreen();
+    expect(screen.getByText('The same applies to split and insurance. Tableside never doubles or insures for less.')).toBeOnTheScreen();
+    expectNoFeedbackColors(refused);
+    await press('Choose again');
+    expect(screen.getByRole('button', { name: 'Double' })).toBeOnTheScreen();
+  });
+
+  it('pauses a Learn wager off the schedule before it is placed, with retry or override', async () => {
+    await present(readChallengeView(send(atBet(funded('learn', 1, { betSchedule: true })), { kind: 'bet', amount: '40' })));
+    expect(screen.getByText('Correction')).toBeOnTheScreen();
+    expect(screen.getByText('Before your bet of 40')).toBeOnTheScreen();
+    expect(screen.getByText('At a true count of 0 the schedule bets 1 unit: 10.')).toBeOnTheScreen();
+    expect(screen.getByText('“Keep my 40” is recorded once as an override and scored as a betting miss.')).toBeOnTheScreen();
+    await press('Take it back & bet 10');
+    await press('Keep my 40');
+    expect(sent).toEqual([{ kind: 'retry-correction' }, { kind: 'override-correction' }]);
   });
 });
 

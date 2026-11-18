@@ -1,6 +1,7 @@
 // Spec 3 Modules › Training service; Training service interface; #158, #132, #133, #134, #137
 
 import {
+  BLACKJACK_LIMITS,
   BLACKJACK_PRESETS,
   blackjackPreset,
   CATALOG_CATEGORIES,
@@ -22,7 +23,16 @@ import {
   type LessonStep,
   type WorkedExample,
 } from '@tableside/definitions';
-import { CHALLENGE_PACINGS, CHALLENGE_VARIANTS, MAX_CHECKPOINT_INTERVAL, MAX_OTHER_PLAYERS, pacingApplies, PENETRATIONS, type ChallengeAttemptRecord, type ChallengeCategory, type ChallengeGroupKey, type ChallengePacing, type ChallengeVariant, type GameId } from '@tableside/engine';
+import {
+  CHALLENGE_PACINGS,
+  CHALLENGE_VARIANTS,
+  MAX_CHECKPOINT_INTERVAL,
+  MAX_OTHER_PLAYERS,
+  pacingApplies,
+  PENETRATIONS,
+  playFundingProblems,
+  type PlayFundingProblem,
+  type ChallengeAttemptRecord, type ChallengeCategory, type ChallengeGroupKey, type ChallengePacing, type ChallengeVariant, type GameId } from '@tableside/engine';
 
 import type { GameAccess, LifecycleEvent } from '../practice/adapters';
 import type { TrainingAdapters } from './adapters';
@@ -59,7 +69,11 @@ export interface ChallengeSetup {
 
 export type { TableOptions };
 
-export type SetupDiagnostic = { readonly field: 'category' | 'variant' | 'pacing'; readonly problem: 'unknown' | 'not-ready' } | { readonly field: 'table'; readonly problem: 'invalid' };
+export type SetupDiagnostic =
+  | { readonly field: 'category' | 'variant' | 'pacing'; readonly problem: 'unknown' | 'not-ready' }
+  | { readonly field: 'table'; readonly problem: 'invalid' }
+  // Spec 3 Play challenge funding › Starting balance; S3-02 Al6Pw; #139
+  | PlayFundingProblem;
 
 export interface SetupValidation {
   readonly valid: boolean;
@@ -85,8 +99,11 @@ function isTableOptions(value: unknown): value is TableOptions {
   const options = value as Record<string, unknown>;
   const whole = (n: unknown, min: number, max: number) => Number.isInteger(n) && (n as number) >= min && (n as number) <= max;
   return (
-    Object.keys(options).length === 6 &&
+    Object.keys(options).length === 9 &&
     (options.seat === 'observe' || options.seat === 'play') &&
+    typeof options.betSchedule === 'boolean' &&
+    typeof options.baseWager === 'string' &&
+    typeof options.startingBalance === 'string' &&
     (options.countingMode === 'basic' || options.countingMode === 'deviations') &&
     BLACKJACK_PRESETS.includes(options.preset as TableOptions['preset']) &&
     PENETRATIONS.includes(options.penetration as number) &&
@@ -96,25 +113,38 @@ function isTableOptions(value: unknown): value is TableOptions {
 }
 
 
+// Spec 3 Play challenge funding (#20) › Starting balance; S3-02 Al6Pw; #139
+export const tableFundingProblems = (options: TableOptions): PlayFundingProblem[] => (options.seat === 'play' ? playFundingProblems(options, BLACKJACK_LIMITS.initial) : []);
+
 // Spec 3 Training service interface › Results: Retry keeps the attempt's settings
 export function retrySetup(groupKey: ChallengeGroupKey): ChallengeSetup {
   const { category, variant, table } = groupKey;
   if (!table) return { category, variant };
   const preset = blackjackPreset(table.dealer, table.lateSurrender);
   const countingMode = table.countingMode ?? DEFAULT_TABLE_SETUP.countingMode;
-  return { category, variant, table: { seat: table.seat, preset, penetration: table.penetration, extraPlayers: table.extraPlayers, interval: table.checkpointInterval, countingMode } };
+  // Spec 3 Comparison groups: bet schedule, base wager, starting balance; #139
+  const funding = { betSchedule: table.betSchedule, baseWager: table.baseWager ?? DEFAULT_TABLE_SETUP.baseWager, startingBalance: table.startingBalance ?? DEFAULT_TABLE_SETUP.startingBalance };
+  return { category, variant, table: { seat: table.seat, preset, penetration: table.penetration, extraPlayers: table.extraPlayers, interval: table.checkpointInterval, countingMode, ...funding } };
 }
 
 // Spec 3 Amendment 1 C7
 export const LAST_SETUP = 'challenge.last-setup';
 
-export function setupFor(entry: CatalogEntry, preferred: readonly (ChallengeSetup | null | undefined)[]): ChallengeSetup {
+// Spec 3 Play challenge funding › Starting balance; Amendment 1 C7; #139
+export const PLAY_AMOUNT = 'challenge.play-amount';
+
+export function setupFor(entry: CatalogEntry, preferred: readonly (ChallengeSetup | null | undefined)[], playAmount: string | null): ChallengeSetup {
   const fits = preferred.find((setup) => setup?.category === entry.category && entry.ready.includes(setup.variant));
   const chosen = fits ?? { category: entry.category, variant: entry.ready[0] ?? 'learn' };
   if (entry.category !== 'table' || chosen.table) return chosen;
   const remembered = preferred.find((setup) => setup?.category === 'table' && setup.table)?.table;
-  return { ...chosen, table: remembered ?? DEFAULT_TABLE_SETUP };
+  return { ...chosen, table: remembered ?? { ...DEFAULT_TABLE_SETUP, startingBalance: playAmount ?? DEFAULT_TABLE_SETUP.startingBalance } };
 }
+
+const withFundingDefaults = (table: unknown): unknown =>
+  typeof table === 'object' && table !== null
+    ? { betSchedule: DEFAULT_TABLE_SETUP.betSchedule, baseWager: DEFAULT_TABLE_SETUP.baseWager, startingBalance: DEFAULT_TABLE_SETUP.startingBalance, ...table }
+    : table;
 
 // Spec 3 Lessons › Check protection; Amendment 1 A2; #149
 export interface InstructionWithheld {
@@ -234,6 +264,7 @@ export class TrainingService {
     if (!CHALLENGE_PACINGS.includes(pacing as ChallengePacing)) diagnostics.push({ field: 'pacing', problem: 'unknown' });
     else if (known && !pacingsOf(setup.category as CatalogCategory).includes(pacing as ChallengePacing)) diagnostics.push({ field: 'pacing', problem: 'not-ready' });
     if (setup.category === 'table' && !isTableOptions(setup.table)) diagnostics.push({ field: 'table', problem: 'invalid' });
+    else if (setup.category === 'table') diagnostics.push(...tableFundingProblems(setup.table as TableOptions));
     return { valid: diagnostics.length === 0, diagnostics };
   }
 
@@ -246,6 +277,7 @@ export class TrainingService {
     this.diagnostics = null;
     const remembered = rememberedSetup(setup);
     await this.adapters.store.writePreference(LAST_SETUP, JSON.stringify(remembered)).catch(() => undefined);
+    if (remembered.table?.seat === 'play') await this.adapters.store.writePreference(PLAY_AMOUNT, remembered.table.startingBalance).catch(() => undefined);
     const table = remembered.table ? tableSetup(remembered.table) : undefined;
     await this.challenges.start(setup.variant, CHALLENGE_CONTENT[setup.category as ChallengeCategory], { timed: setup.timed === true, pacing: pacingOf(setup), ...(table ? { table } : {}) });
   }
@@ -371,10 +403,18 @@ export class TrainingService {
       const value = JSON.parse(text) as Partial<ChallengeSetup>;
       if (!isCatalogCategory(value.category) || !CHALLENGE_VARIANTS.includes(value.variant as ChallengeVariant)) return null;
       const pacing = pacingsOf(value.category).includes(value.pacing as ChallengePacing) ? (value.pacing as ChallengePacing) : 'self-paced';
-      return rememberedSetup({ category: value.category, variant: value.variant as ChallengeVariant, timed: value.timed === true, pacing, ...(value.table === undefined ? {} : { table: value.table }) });
+      return rememberedSetup({ category: value.category, variant: value.variant as ChallengeVariant, timed: value.timed === true, pacing, ...(value.table === undefined ? {} : { table: withFundingDefaults(value.table) as TableOptions }) });
     } catch {
       return null;
     }
+  }
+
+  // Spec 3 Play challenge funding › Starting balance; Amendment 1 C7; #139
+  async playAmount(): Promise<string | null> {
+    const text = await this.adapters.store.readPreference(PLAY_AMOUNT).catch(() => null);
+    if (text === null) return null;
+    const remembered = { ...DEFAULT_TABLE_SETUP, seat: 'play', startingBalance: text } as const;
+    return tableFundingProblems(remembered).some((problem) => problem.field === 'starting-balance' && problem.problem !== 'short') ? null : text;
   }
 
   // Spec 3 Lessons › Check protection; Amendment 1 A2, Amendments 3 and 5

@@ -51,7 +51,7 @@ export const activityCases: TestCase[] = [
         reference: null,
         random: STREAM,
       });
-      t.equal(state.schema, 12);
+      t.equal(state.schema, 13);
       t.equal([state.phase, state.turn, state.balance, state.wagers], ['open-decision', 0, '1000', []]);
       t.equal(JSON.parse(JSON.stringify(state)), state);
     },
