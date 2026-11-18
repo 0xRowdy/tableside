@@ -161,7 +161,7 @@ export type TableStep =
       readonly unaffordable: readonly Unaffordable[];
       readonly events: readonly TableEvent[];
     }
-  // Spec 3 Play challenge funding: the opening wager and the funding notice; S3-07 fiCRg; #139
+  // Spec 3 Play challenge funding; S3-07 fiCRg; #139
   | { readonly step: 'bet'; readonly round: number; readonly amounts: readonly string[]; readonly notice: boolean };
 
 export type TablePrompt = Extract<TableStep, { readonly step: 'prompt' }>;
@@ -463,7 +463,7 @@ function placeOpening(progress: TableProgress, content: TableContent, earlier: r
   return continuePlayRound({ ...progress, seat: { ...seat, activity: begun.activity, balances: [...seat.balances, entry] } }, content, earlier, begun.facts, []);
 }
 
-// Spec 3 Count checkpoints (table): deviation-decision prompts; Amendment 1 A3; #138
+// Spec 3 Count checkpoints (table); Amendment 1 A3; #138
 function continuePlayRound(
   progress: TableProgress,
   content: TableContent,
@@ -732,7 +732,7 @@ function challengeBalanceAt(seat: PlaySeat, setup: PlaySetup, position: number, 
   return { balance: entry?.balance ?? setup.startingBalance, stake: entry && entry.round === round && entry.change === 'wager' ? entry.stake : null };
 }
 
-// Spec 3 Comparison groups: counting mode
+// Spec 3 Comparison groups
 // Spec 3 User stories 28; #138
 export type TableCountingMode = 'basic' | 'deviations';
 

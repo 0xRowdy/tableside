@@ -57,7 +57,7 @@ export interface AttemptHold {
   readonly endBlocked: string | null;
 }
 
-// Spec 3 Amendment 1 C6: a hold gives way only to one of equal or higher rank
+// Spec 3 Amendment 1 C6
 const HOLDS: Record<HoldCause, { readonly kind: AttemptHold['kind']; readonly rank: number }> = {
   learner: { kind: 'paused', rank: 0 },
   'speech-backlog': { kind: 'auto-paused', rank: 0 },

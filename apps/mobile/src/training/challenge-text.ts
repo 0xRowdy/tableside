@@ -467,7 +467,7 @@ export const END_ATTEMPT = 'End attempt';
 
 export interface HoldContext {
   readonly variant: ChallengeVariant;
-  // Spec 3 Amendment 1 A2: a Play Check also withholds the mode and bet-schedule lessons; #138
+  // Spec 3 Amendment 1 A2; #138
   readonly play?: boolean;
   readonly position: number;
   readonly pacing: ChallengePacing;
@@ -519,7 +519,7 @@ export function helpText(view: Pick<ChallengeView, 'variant' | 'countRange' | 'c
     enter,
     { key: 'skip' as const, title: 'Skip', detail: 'Moves on and counts as incorrect.' },
     { key: 'pause' as const, title: PAUSE_LABEL, detail: 'Tap Pause, or leave the tab or app. Your answers and place are kept.' },
-    // Spec 3 User stories 38: legality only; #138
+    // Spec 3 User stories 38; #138
     ...(view.table?.seat === 'play'
       ? [{ key: 'moves' as const, title: 'Moves', detail: check ? "Tap a move. A move that isn't allowed is refused straight away; nothing says whether an allowed move is right." : 'Tap a move. A move that departs from the strategy pauses so you can take it back or keep it.' }]
       : []),

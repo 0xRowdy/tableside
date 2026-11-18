@@ -1,4 +1,4 @@
-// Spec 3 Testing Decisions › Seam 3; Lessons › Check protection; Amendment 1 A2, Amendment 3; #53 review
+// Spec 3 Testing Decisions › Seam 3; Lessons › Check protection; Amendment 1 A2, Amendment 3; #53
 import { fireEvent, screen } from '@testing-library/react-native';
 import { renderRouter } from 'expo-router/testing-library';
 

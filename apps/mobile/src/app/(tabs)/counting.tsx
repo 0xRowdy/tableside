@@ -118,7 +118,7 @@ export default function Counting() {
           pacing={snapshot.pacing}
           performanceMs={service.performanceMs}
           onCommand={(command) => void service.submit(command)}
-          // Spec 3 Learn, Check and assistance › Malformed input: cue 9
+          // Spec 3 Learn, Check and assistance › Malformed input
           onInputRejected={() => feedback.cue('input-rejected')}
           onRetrySave={() => void service.retrySave()}
           onPause={() => service.pause()}

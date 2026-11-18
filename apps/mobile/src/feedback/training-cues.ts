@@ -38,10 +38,10 @@ function cuesForChallenge(view: ChallengeView, facts: readonly ChallengeFact[]):
         return [learnAnswerCue(view.feedback?.correct === true)];
       case 'checkpoint-due':
         return ['checkpoint-due'];
-      // Spec 3 Learn, Check and assistance › Check: cue 9 is a legality event
+      // Spec 3 Learn, Check and assistance › Check
       case 'move-refused':
         return ['input-rejected'];
-      // Spec 3 Amendment 1 B4: cue 15 on the Play Learn correction pause
+      // Spec 3 Amendment 1 B4
       case 'correction-offered':
         return ['correction-offered'];
       // Spec 3 Audio and haptics (cues 2, 6–8); #139

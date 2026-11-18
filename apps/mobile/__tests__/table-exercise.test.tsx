@@ -313,7 +313,7 @@ describe('the table counting exercise with challenge funding', () => {
     throw new Error('no seed reaches the funding notice');
   }
 
-  // Spec 1 Game rules (insurance is half the bet); #53 review
+  // Spec 1 Game rules; #53
   it('prices insurance at half the learner\'s own bet, in money units', async () => {
     let insuring: ChallengeState | null = null;
     for (let n = 1; n < 200 && !insuring; n++) {

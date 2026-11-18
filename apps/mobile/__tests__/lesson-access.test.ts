@@ -114,7 +114,7 @@ describe('opening a withheld lesson', () => {
   });
 });
 
-// Spec 3 Amendment 4 §5: the access service says whether a game is playable now
+// Spec 3 Amendment 4 §5
 function offline(offlineGame: GameId | null): Pick<AccessSupervisor, 'gameAccess'> {
   return { gameAccess: async ({ game }) => (game === offlineGame ? { status: 'playable' } : { status: 'needs-connection', offlineGame }) };
 }

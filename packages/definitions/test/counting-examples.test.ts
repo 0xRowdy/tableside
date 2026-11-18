@@ -28,7 +28,7 @@ const RUNNING: RunningCountExample = {
   ],
 };
 
-// Spec 3 Count checkpoints (table): the hole card counts once it is turned over
+// Spec 3 Count checkpoints (table)
 const ROUND: TableRunningExplanation = {
   kind: 'table-running',
   round: 1,

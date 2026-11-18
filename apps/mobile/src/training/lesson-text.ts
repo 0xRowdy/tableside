@@ -106,7 +106,7 @@ export function afterCheckText({ category, play }: InstructionWithheld): string 
     : `You have an unfinished Check attempt in ${title}. The four counting lessons (card values, running count, true-count conversion, table counting) and their worked examples wait until it ends. Every other lesson is open now.`;
 }
 
-// Spec 3 Lessons › Check protection; Amendment 1 A2, Amendment 3; SUUN4's pattern
+// Spec 3 Lessons › Check protection; Amendment 1 A2, Amendment 3; S3-14 SUUN4
 export const PRACTICE_AFTER_ATTEMPT = 'This practice mode is available after this attempt.';
 export const END_TO_PRACTICE = 'End attempt to practice this mode';
 export const practiceHeldText = ({ category }: InstructionWithheld, mode: BlackjackMode) =>

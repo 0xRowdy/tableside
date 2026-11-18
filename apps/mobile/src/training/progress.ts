@@ -206,7 +206,7 @@ export function milestoneCandidates(attempts: readonly ProgressAttempt[], instal
       deviceSequences: [previous.deviceSequence, record.deviceSequence],
       earnedAt: record.endedAt,
     };
-    // #148's handoff
+    // #148
     if (!refused.has(milestoneIdentity(milestone))) earned.set(base, milestone);
   }
   return [...earned.values()];

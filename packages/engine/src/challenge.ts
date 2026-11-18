@@ -123,7 +123,7 @@ export interface ItemAnswers {
 
 // Spec 3 Challenge content › Running count
 // Spec 3 User stories 37, 38 (Play decisions and the Learn correction pause); #138
-// Spec 3 Play challenge funding: the opening wager; #139
+// Spec 3 Play challenge funding; #139
 export type ChallengePhase = 'ready' | 'card' | 'question' | 'explanation' | 'recorded' | 'bet' | 'decision' | 'correction' | 'ended';
 
 // Spec 3 Attempt lifecycle › Phases (ending reasons), Play challenge funding; #139
@@ -182,14 +182,14 @@ export interface ChallengeEnvelope {
 
 export type ChallengeFact =
   | { readonly kind: 'content-shown'; readonly position: number }
-  // Spec 3 Count checkpoints (table), Audio and haptics: cue 11
+  // Spec 3 Count checkpoints (table), Audio and haptics
   | { readonly kind: 'checkpoint-due'; readonly position: number }
   // Spec 3 Challenge content › Reshuffle
   | { readonly kind: 'shoe-shuffled'; readonly position: number }
   | { readonly kind: 'answer-accepted'; readonly position: number; readonly scored: boolean }
-  // Spec 3 Learn, Check and assistance › Check: cue 9 is a legality event; #138
+  // Spec 3 Learn, Check and assistance › Check; #138
   | { readonly kind: 'move-refused'; readonly position: number; readonly action: PlayChoice }
-  // Spec 3 Audio and haptics: cue 15, Amendment 1 B4; #138
+  // Spec 3 Audio and haptics, Amendment 1 B4; #138
   | { readonly kind: 'correction-offered'; readonly position: number }
   // Spec 3 Audio and haptics (cues 2, 6–8); #139
   | { readonly kind: 'wager-placed'; readonly position: number }

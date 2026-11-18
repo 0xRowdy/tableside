@@ -25,7 +25,7 @@ const SEED_1_SIX_DECK_SHOE_FIRST_52 = [
   '4c', '11c', '13d', '10s', '9s', '9s', '1s', '12s', '10c', '10c', '8s', '7d', '7d',
 ];
 
-// Spec 3 Testing Decisions › Seam 1: hand-computed running-count checkpoints
+// Spec 3 Testing Decisions › Seam 1
 const SEED_1_CHECKPOINTS = [-2, 0, -1, -7];
 const HI_LO_OF_CARDS_14_TO_21 = { '6s': 1, '8h': 0, '2h': 1, '10h': -1, '13c': -1, '5c': 1, '13h': -1, '7s': 0 };
 const SEED_1_AFTER_21 = -2 + Object.values(HI_LO_OF_CARDS_14_TO_21).reduce((sum, value) => sum + value, 0);

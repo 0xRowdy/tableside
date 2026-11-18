@@ -1,5 +1,5 @@
 // Spec 3 First-run order, Amendment 1 A1, Amendment 2 §1, Amendment 4 §4; Testing Decisions › Seam 3; Launch gate 1; S2-16 zJjsp; #146
-// Amendment 2 §1 (no Auth user): packages/account/test/provider-sign-in.test.ts
+// Amendment 2 §1; packages/account/test/provider-sign-in.test.ts
 
 import type { AccountGate } from '@tableside/account';
 import { HINT_IDS } from '@tableside/definitions';

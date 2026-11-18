@@ -173,7 +173,7 @@ describe('lesson handoffs', () => {
     expect(await screen.findByLabelText('Session balance 1,000')).toBeOnTheScreen();
   });
 
-  // #53 review
+  // #53
   it('the bet-schedule lesson opens blackjack guided practice with its counting mode and the schedule on', async () => {
     await renderRouter('./src/app', { initialUrl: '/more/settings/learning/lessons/bet-schedule' });
     await header('Bet schedule');

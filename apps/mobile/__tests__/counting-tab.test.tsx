@@ -393,7 +393,7 @@ describe('the Counting tab', () => {
       const [, sign, digits] = SPOKEN.exec(screen.getByLabelText(SPOKEN).props.accessibilityLabel as string)!;
       const running = (sign === 'minus ' ? -1 : 1) * Number(digits);
       const decks = Number((screen.getByLabelText(/^Decks remaining, /).props.accessibilityLabel as string).split(', ')[1]);
-      // Spec 3 Challenge content › Conversion: the quotient truncated toward zero
+      // Spec 3 Challenge content › Conversion
       return { running, decks, trueCount: Math.trunc(running / decks) || 0 };
     }
 

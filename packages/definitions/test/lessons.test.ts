@@ -143,7 +143,7 @@ describe('lesson definitions', () => {
         ]);
       });
 
-      // Spec 1 S1-02 (the schedule goes with a counting mode); #53 review
+      // Spec 1 S1-02; #53
       it('a bet schedule outside a blackjack counting mode, or one that is not on or off', () => {
         expect(
           lessonProblems([

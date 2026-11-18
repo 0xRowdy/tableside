@@ -116,13 +116,13 @@ function isTableOptions(value: unknown): value is TableOptions {
 // Spec 3 Play challenge funding (#20) › Starting balance; S3-02 Al6Pw; #139
 export const tableFundingProblems = (options: TableOptions): PlayFundingProblem[] => (options.seat === 'play' ? playFundingProblems(options, BLACKJACK_LIMITS.initial) : []);
 
-// Spec 3 Training service interface › Results: Retry keeps the attempt's settings
+// Spec 3 Training service interface › Results
 export function retrySetup(groupKey: ChallengeGroupKey): ChallengeSetup {
   const { category, variant, table } = groupKey;
   if (!table) return { category, variant };
   const preset = blackjackPreset(table.dealer, table.lateSurrender);
   const countingMode = table.countingMode ?? DEFAULT_TABLE_SETUP.countingMode;
-  // Spec 3 Comparison groups: bet schedule, base wager, starting balance; #139
+  // Spec 3 Comparison groups; #139
   const funding = { betSchedule: table.betSchedule, baseWager: table.baseWager ?? DEFAULT_TABLE_SETUP.baseWager, startingBalance: table.startingBalance ?? DEFAULT_TABLE_SETUP.startingBalance };
   return { category, variant, table: { seat: table.seat, preset, penetration: table.penetration, extraPlayers: table.extraPlayers, interval: table.checkpointInterval, countingMode, ...funding } };
 }

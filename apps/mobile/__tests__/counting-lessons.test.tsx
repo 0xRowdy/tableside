@@ -109,7 +109,7 @@ describe('counting lessons', () => {
       expect(screen.getByText('Ace counts −1 in Hi-Lo.')).toBeOnTheScreen();
     });
 
-    // Spec 3 Count checkpoints (table): the hole card counts once it's turned over
+    // Spec 3 Count checkpoints (table)
     it('table counting shows a finished round and asks the running count after it, with the checkpoint cue', async () => {
       await openExample('Lesson: table counting', 'Table counting', 3);
       expect(screen.getByText('Round 1 has just finished, with the dealer’s hole card turned over. The count was 0 before the round.')).toBeOnTheScreen();

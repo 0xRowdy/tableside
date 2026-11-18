@@ -39,7 +39,7 @@ export const tableSettingsText = (table: TableGroupKey) =>
     `${table.penetration}%`,
     players(table.extraPlayers),
     `N = ${table.checkpointInterval}`,
-    // Spec 3 Comparison groups: bet schedule, base wager, starting balance; #139
+    // Spec 3 Comparison groups; #139
     ...(table.betSchedule ? ['bet schedule'] : []),
     ...(table.baseWager === null ? [] : [`base ${formatUnits(table.baseWager)}`]),
     ...(table.startingBalance === null ? [] : [`balance ${formatUnits(table.startingBalance)}`]),
@@ -320,7 +320,7 @@ export const insureLabel = (bet: string) => `Insure ${formatUnits(halfUnits(bet)
 export const HAND_MOVES: readonly PlayChoice[] = ['hit', 'stand', 'double', 'split', 'surrender'];
 export const INSURANCE_MOVES: readonly PlayChoice[] = ['insure', 'decline-insurance'];
 
-// Spec 3 S3-07 kLgWV: legality only, never correctness
+// Spec 3 S3-07 kLgWV
 export const REFUSED_KICKER = 'THAT MOVE ISN’T AVAILABLE';
 export const CHOOSE_AGAIN = 'Choose again';
 export function refusedText(table: TableView, move: PlayChoice, variant: ChallengeVariant): { readonly title: string; readonly detail: string } {
@@ -354,7 +354,7 @@ export function tableCorrectionCopy(correction: PlayCorrection, table: TableView
   };
 }
 
-// Spec 3 S3-09 VToCp, aEdMd: every row says match, miss or fallback in words
+// Spec 3 S3-09 VToCp, aEdMd
 export const DECISION_REVIEW_TITLE = 'Decision review';
 export const REFERENCE_LABEL = 'Reference';
 export const AT_LABEL = 'At';
@@ -379,7 +379,7 @@ export function decisionReviewText(fact: TableDecisionReview): { readonly outcom
   return { outcome, title, status, values, label };
 }
 
-// Spec 3 Scoring and review › Attribution; S3-09 VToCp: never excuses the error
+// Spec 3 Scoring and review › Attribution; S3-09 VToCp
 export function attributionText(fact: TableDecisionReview): string | null {
   if (typeof fact.entered !== 'number' || fact.atEntered === null || fact.chosen === fact.prescribed || fact.chosen !== fact.atEntered) return null;
   const doing = { hit: 'hitting', stand: 'standing on', double: 'doubling', split: 'splitting', surrender: 'surrendering', insure: 'taking insurance', 'decline-insurance': 'declining insurance' }[fact.chosen];

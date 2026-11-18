@@ -207,14 +207,13 @@ describe('a readiness milestone', () => {
   });
 });
 
-// Spec 3 Synchronized record types › Readiness milestone; #148's handoff
+// Spec 3 Synchronized record types › Readiness milestone; #148
 describe('a refused milestone', () => {
   it('frees its group, so the next streak there is claimed and synced, and never shows meanwhile', async () => {
     const { phone } = await onePhone('refused');
     phone.proxy.online = false;
     const first = await phone.playCheck();
     const second = await phone.playCheck();
-    // The server's own earlier milestone in the group stands in for any refusal.
     await stack.sql`
       insert into private.readiness_milestones (account_id, item_id, payload, installation_id, group_key, operation_id, sequence)
       values (${accountOf(phone)}::uuid, 'stand-in', '{}'::jsonb, ${installationOf(phone)}, ${stack.sql.json(second.groupKey as never)}, 'stand-in', 0)`;

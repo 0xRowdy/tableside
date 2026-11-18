@@ -186,7 +186,7 @@ export class MemoryTrainingStore implements TrainingStore {
       const group = milestoneSlot(milestone);
       const at = this.disk.milestones.findIndex((text) => milestoneSlot(parse<ReadinessMilestoneRecord>(text)) === group);
       const existing = at === -1 ? null : parse<ReadinessMilestoneRecord>(this.disk.milestones[at] as string);
-      // #148's handoff
+      // #148
       if (existing && !this.disk.refusedMilestones.includes(milestoneIdentity(existing))) return existing;
       if (existing) this.disk.milestones.splice(at, 1);
       this.disk.milestones.push(JSON.stringify(milestone));

@@ -1,4 +1,4 @@
-// Spec 3 Lessons › Check protection; Amendment 1 A2, Amendment 3; #149's lesson gate (S3-14 SUUN4)
+// Spec 3 Lessons › Check protection; Amendment 1 A2, Amendment 3; S3-14 SUUN4; #149
 import { PLAY_CHECK_WITHHELD_MODES, type BlackjackMode } from '@tableside/definitions';
 import { router } from 'expo-router';
 import { ArrowLeft, CircleStop } from 'lucide-react-native';

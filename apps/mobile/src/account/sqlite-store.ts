@@ -580,7 +580,7 @@ export class SqliteActivityStore implements ActivityStore, TrainingStore {
       const existing = await tx.get<BodyRow>(`SELECT ${BODY} FROM readiness_milestones WHERE installation_id = ? AND group_key = ?`, [milestone.installation, group]);
       if (existing) {
         const earlier = decode<ReadinessMilestoneRecord>(existing);
-        // #148's handoff
+        // #148
         if (!(await readSync(tx, READINESS_MILESTONE_RECORD_TYPE)).refused.includes(milestoneIdentity(earlier))) return earlier;
         await tx.run('DELETE FROM readiness_milestones WHERE installation_id = ? AND group_key = ?', [milestone.installation, group]);
       }

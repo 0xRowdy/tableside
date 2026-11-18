@@ -323,7 +323,7 @@ export const tableCases: TestCase[] = [
     },
   },
   {
-    // Spec 3 Amendment 1 C5; #53 review
+    // Spec 3 Amendment 1 C5; #53
     name: 'table Learn N>1: a block checkpoint\'s feedback names only cards still on display, and counts the earlier rounds as a number',
     run: (t) => {
       let blocks = 0;

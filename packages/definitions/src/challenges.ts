@@ -42,7 +42,7 @@ export interface TableOptions extends PlayFunding {
   readonly countingMode: TableCountingMode;
 }
 
-// Spec 3 Play challenge funding › Starting balance: default 1,000
+// Spec 3 Play challenge funding › Starting balance
 export const DEFAULT_STARTING_BALANCE = '1000';
 
 export const DEFAULT_TABLE_SETUP: TableOptions = {
