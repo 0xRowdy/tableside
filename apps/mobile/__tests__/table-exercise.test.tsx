@@ -313,6 +313,31 @@ describe('the table counting exercise with challenge funding', () => {
     throw new Error('no seed reaches the funding notice');
   }
 
+  // Spec 1 Game rules (insurance is half the bet); #53 review
+  it('prices insurance at half the learner\'s own bet, in money units', async () => {
+    let insuring: ChallengeState | null = null;
+    for (let n = 1; n < 200 && !insuring; n++) {
+      let state = funded('check', n, { betSchedule: true, baseWager: '15', startingBalance: '1000' });
+      for (let guard = 0; guard < 400 && state.phase !== 'ended' && !insuring; guard++) {
+        const view = readChallengeView(state);
+        if (view.table?.decision?.kind === 'insurance') insuring = state;
+        else
+          state = send(
+            state,
+            state.phase === 'question'
+              ? { kind: 'skip' }
+              : state.phase === 'bet'
+                ? { kind: 'bet', amount: '15' }
+                : state.phase === 'decision'
+                  ? { kind: 'play', action: 'stand' }
+                  : { kind: 'next-item' },
+          );
+      }
+    }
+    await present(readChallengeView(insuring as ChallengeState));
+    expect(screen.getByRole('button', { name: 'Insure 7.5' })).toBeEnabled();
+  });
+
   it('asks for the opening wager from the bet schedule after the before-bet counts, with no hint of the schedule\'s amount (S3-07)', async () => {
     const shown = await present(readChallengeView(atBet(funded('check', 1, { betSchedule: true }))));
     expect(screen.getByText('Check · Play · S17 LS · 75% · N = 1')).toBeOnTheScreen();

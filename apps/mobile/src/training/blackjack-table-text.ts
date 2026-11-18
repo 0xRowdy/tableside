@@ -25,7 +25,7 @@ import { playAdvice, playCorrectionCopy } from '@/play/blackjack-coaching';
 import type { CorrectionCopy } from '@/play/coaching-text';
 
 import { cardRank, signed, SUIT_GLYPH } from '@/play/blackjack-text';
-import { formatSigned, formatUnits } from '@/play/units';
+import { formatSigned, formatUnits, halfUnits } from '@/play/units';
 
 const presetText = (dealer: 'S17' | 'H17', lateSurrender: boolean) => `${dealer} ${lateSurrender ? 'LS' : 'no LS'}`;
 const players = (count: number) => `${count} ${count === 1 ? 'player' : 'players'}`;
@@ -316,7 +316,7 @@ export function moveText(table: TableView): string {
   return `${which}${hand ? `${hand.total.soft ? 'soft' : 'hard'} ${hand.total.value}` : 'your hand'}${against}. Choose a move; the next card waits for you.`;
 }
 export const MOVE_LABEL: Record<PlayChoice, string> = { hit: 'Hit', stand: 'Stand', double: 'Double', split: 'Split', surrender: 'Surrender', insure: 'Insure', 'decline-insurance': 'No insurance' };
-export const insureLabel = (minimum: string) => `Insure ${Number(minimum) / 2}`;
+export const insureLabel = (bet: string) => `Insure ${formatUnits(halfUnits(bet))}`;
 export const HAND_MOVES: readonly PlayChoice[] = ['hit', 'stand', 'double', 'split', 'surrender'];
 export const INSURANCE_MOVES: readonly PlayChoice[] = ['insure', 'decline-insurance'];
 

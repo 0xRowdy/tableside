@@ -262,7 +262,7 @@ function DecisionPanel({ view, table, ready, onCommand }: { view: ChallengeView;
   const [dismissed, setDismissed] = useState(false);
   const enabled = ready && view.legalCommands.includes('play');
   const moves = decision.kind === 'insurance' ? INSURANCE_MOVES : HAND_MOVES.filter((move) => move !== 'surrender' || table.rules.lateSurrender);
-  const label = (move: PlayChoice) => (move === 'insure' ? insureLabel(table.rules.minimum) : MOVE_LABEL[move]);
+  const label = (move: PlayChoice) => (move === 'insure' ? insureLabel(table.challengeBalance?.stake ?? table.rules.minimum) : MOVE_LABEL[move]);
   const shortfall = decision.refusal === 'funds' ? decision.unaffordable.find((item) => item.action === decision.refused) : undefined;
   if (shortfall && !dismissed) {
     // Spec 3 Play challenge funding › Mid-round shortfalls; S3-07 RDS5F; #139
