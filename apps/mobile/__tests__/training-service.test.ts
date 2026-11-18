@@ -8,7 +8,7 @@ import { plentyAllowance } from '@/training/allowance';
 import { resetTimeText } from '@/training/challenge-text';
 import { MemoryTrainingStore } from '@/training/memory-store';
 import { RECORDED_MS } from '@/training/controller';
-import { retrySetup, TrainingService, type TrainingSnapshot } from '@/training/service';
+import { LAST_SETUP, PLAY_AMOUNT, retrySetup, setupFor, tableFundingProblems, TrainingService, type TrainingSnapshot } from '@/training/service';
 import { CHALLENGE_CHARGE } from '@/training/store';
 import { newAttempt } from '@/training/testing/store-contract';
 import { cardOf, HI_LO_BY_RANK } from '@/training/testing/hi-lo';
@@ -418,5 +418,72 @@ describe('the Training service', () => {
     const chosen = { category: 'table', variant: 'learn', table: { ...DEFAULT_TABLE_SETUP, interval: 4 } } as const;
     await first.service.startAttempt(chosen);
     expect(await setup({ store: store.reopen() }).service.lastSetup()).toEqual(chosen);
+  });
+
+  // Spec 3 Play challenge funding (#20) › Starting balance; S3-02 Al6Pw; #139
+  it('validates Play funding: a positive whole starting balance within the ceiling that covers the opening wager, and a base wager within the table limits', () => {
+    const { service } = setup();
+    const play = (options: object) => service.validateSetup({ category: 'table', variant: 'check', table: { ...DEFAULT_TABLE_SETUP, seat: 'play', ...options } });
+    expect(play({ baseWager: 25, startingBalance: 25 })).toEqual({ valid: true, diagnostics: [] });
+    expect(play({ baseWager: 10, startingBalance: 5 })).toEqual({ valid: false, diagnostics: [{ field: 'starting-balance', problem: 'short' }] });
+    expect(play({ startingBalance: 0 })).toEqual({ valid: false, diagnostics: [{ field: 'starting-balance', problem: 'not-whole' }] });
+    expect(play({ startingBalance: 10.5 })).toEqual({ valid: false, diagnostics: [{ field: 'starting-balance', problem: 'not-whole' }] });
+    expect(play({ startingBalance: 1_000_000_001 })).toEqual({ valid: false, diagnostics: [{ field: 'starting-balance', problem: 'over-ceiling' }] });
+    expect(play({ baseWager: 5 })).toEqual({ valid: false, diagnostics: [{ field: 'base-wager', problem: 'outside-limits' }] });
+    expect(play({ baseWager: Number.NaN })).toEqual({ valid: false, diagnostics: [{ field: 'base-wager', problem: 'outside-limits' }] });
+    expect(play({ betSchedule: true, baseWager: 130, startingBalance: 5000 })).toEqual({ valid: false, diagnostics: [{ field: 'base-wager', problem: 'schedule-over-maximum' }] });
+    expect(play({ betSchedule: 'on' })).toEqual({ valid: false, diagnostics: [{ field: 'table', problem: 'invalid' }] });
+    expect(service.validateSetup({ category: 'table', variant: 'check', table: { ...DEFAULT_TABLE_SETUP, startingBalance: 5 } })).toEqual({ valid: true, diagnostics: [] });
+    expect(tableFundingProblems({ ...DEFAULT_TABLE_SETUP, seat: 'play', startingBalance: 5 })).toEqual([{ field: 'starting-balance', problem: 'short' }]);
+  });
+
+  it('refuses a Play setup the balance can\'t fund with no content and no charge', async () => {
+    const { service, store, admissions } = setup();
+    await service.load();
+    await service.startAttempt({ category: 'table', variant: 'check', table: { ...DEFAULT_TABLE_SETUP, seat: 'play', startingBalance: 5 } });
+    expect(service.snapshot()).toEqual({ status: 'none', problem: 'invalid-setup', diagnostics: [{ field: 'starting-balance', problem: 'short' }], busy: false });
+    expect([admissions, await store.findUnfinishedAttempt()]).toEqual([[], null]);
+  });
+
+  // Spec 3 Play challenge funding; Amendment 1 C7 (the remembered Play amount)
+  it('runs a funded Play attempt with the bet schedule, remembers the Play amount apart from the setup, and Retry keeps the funding', async () => {
+    const store = new MemoryTrainingStore();
+    const { service } = setup({ store });
+    await service.load();
+    const options = { ...DEFAULT_TABLE_SETUP, seat: 'play', betSchedule: true, baseWager: 20, startingBalance: 500 } as const;
+    await service.startAttempt({ category: 'table', variant: 'check', table: options });
+    expect(await store.readPreference(PLAY_AMOUNT)).toBe('500');
+    let bets = 0;
+    for (let guard = 0; guard < 3000 && service.snapshot().status === 'active'; guard++) {
+      const view = active(service.snapshot());
+      if (view.phase === 'bet') bets++;
+      const command =
+        view.phase === 'question'
+          ? ({ kind: 'skip' } as const)
+          : view.phase === 'bet'
+            ? ({ kind: 'bet', amount: view.table?.bet?.amounts[0] as string } as const)
+            : view.phase === 'decision'
+              ? ({ kind: 'play', action: view.table?.decision?.kind === 'insurance' ? 'decline-insurance' : 'stand' } as const)
+              : ({ kind: 'next-item' } as const);
+      await service.submit(command);
+    }
+    const [record] = await store.readAttemptRecords();
+    expect([record?.groupKey.table?.betSchedule, record?.groupKey.table?.baseWager, record?.groupKey.table?.startingBalance, record?.metrics['betting-adherence']?.total, bets]).toEqual([true, '20', '500', bets, bets]);
+    expect(record?.finances?.startingBalance).toBe('500');
+    expect(retrySetup(record!.groupKey)).toEqual({ category: 'table', variant: 'check', table: options });
+    const reopened = setup({ store: store.reopen() }).service;
+    expect(await reopened.playAmount()).toBe(500);
+  });
+
+  it('prefills a new table setup with the remembered Play amount, and fills funding defaults into a last setup remembered before funding existed', async () => {
+    const store = new MemoryTrainingStore();
+    const { service } = setup({ store });
+    const table = service.listCatalog().find((entry) => entry.category === 'table')!;
+    expect(setupFor(table, [{ category: 'table', variant: 'learn' }], 750).table?.startingBalance).toBe(750);
+    expect(setupFor(table, [{ category: 'table', variant: 'learn' }], null).table?.startingBalance).toBe(1000);
+    const { betSchedule: _b, baseWager: _w, startingBalance: _s, ...older } = { ...DEFAULT_TABLE_SETUP, interval: 3 };
+    await store.writePreference(LAST_SETUP, JSON.stringify({ category: 'table', variant: 'check', table: older }));
+    expect(await service.lastSetup()).toEqual({ category: 'table', variant: 'check', table: { ...DEFAULT_TABLE_SETUP, interval: 3 } });
+    expect(await service.playAmount()).toBeNull();
   });
 });
