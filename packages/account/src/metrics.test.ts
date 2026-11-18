@@ -257,7 +257,7 @@ describe('challenges and lessons', () => {
       'billing_verification_failures', 'bootstrap_duration', 'email_delivery_problems', 'email_queue_age', 'email_sends_failed', 'staged_chunks_age',
       'storage_bytes', 'sync_queue_age', 'sync_receipts_refused', 'sync_run_failed', 'sync_upload_failed', 'transactions_rolled_back',
     ]);
-    expect(Object.values(METRICS).filter((definition) => definition.purpose === 'product-analytics')).toEqual([]);
+    expect(Object.values(METRICS as Record<string, { readonly purpose: string }>).filter((definition) => definition.purpose === 'product-analytics')).toEqual([]);
     for (const purpose of Object.values(TEEN_METRICS)) expect(words(purpose).filter((word) => TRAINING.has(word)), purpose).toEqual([]);
   });
 
