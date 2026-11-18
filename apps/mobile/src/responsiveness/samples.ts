@@ -11,13 +11,22 @@ const ACTION_MEASURES: readonly Measure[] = ['acknowledgment', 'completion'];
 
 export const COLD_LAUNCH = 'cold-launch';
 
-// Spec 1 Launch gates 5; docs/development.md Responsiveness sampling (action families)
-export const GATE_FAMILIES: Readonly<Record<GameId, readonly string[]>> = {
+// Spec 3 Launch gates 8; #156
+export const CHALLENGE = 'challenge';
+export type SampledArea = GameId | typeof CHALLENGE;
+
+// Spec 3 Launch gates 8; docs/development.md Responsiveness sampling
+export const CHALLENGE_FAMILIES = ['answer-submission', 'card-advance', 'checkpoint-entry'] as const;
+export type ChallengeFamily = (typeof CHALLENGE_FAMILIES)[number];
+
+// Spec 1 Launch gates 5; Spec 3 Launch gates 8; docs/development.md Responsiveness sampling
+export const GATE_FAMILIES: Readonly<Record<SampledArea, readonly string[]>> = {
   blackjack: ['place-wager', 'remove-wager', 'begin-turn', 'play:hit', 'play:stand', 'play:double', 'play:split', 'play:surrender', 'play:decline-insurance', 'insurance', 'rebuy'],
   craps: ['place-wager', 'remove-wager', 'set-working', 'begin-turn', 'rebuy'],
   roulette: ['place-wager', 'remove-wager', 'begin-turn', 'rebuy'],
+  challenge: CHALLENGE_FAMILIES,
 };
-const GAMES = Object.keys(GATE_FAMILIES) as readonly GameId[];
+const GAMES = Object.keys(GATE_FAMILIES) as readonly SampledArea[];
 
 export interface DeviceInfo {
   readonly model: string;
@@ -31,7 +40,7 @@ export interface ResponsivenessSample {
   readonly version: 1;
   readonly device: DeviceInfo;
   readonly measure: Measure;
-  readonly game: GameId | null;
+  readonly game: SampledArea | null;
   readonly family: string;
   readonly start: number;
   readonly end: number;
@@ -47,7 +56,7 @@ export function nearestRankP95(values: readonly number[]): number | null {
 export interface ReportRow {
   readonly device: DeviceInfo;
   readonly measure: Measure;
-  readonly game: GameId | null;
+  readonly game: SampledArea | null;
   readonly family: string;
   readonly count: number;
   readonly p95: number | null;
@@ -143,7 +152,7 @@ function isSample(value: unknown): value is ResponsivenessSample {
     device !== null &&
     ['model', 'os', 'osVersion', 'build', 'abi'].every((field) => isText(device[field])) &&
     MEASURES.includes(sample.measure as Measure) &&
-    (sample.game === null || GAMES.includes(sample.game as GameId)) &&
+    (sample.game === null || GAMES.includes(sample.game as SampledArea)) &&
     isText(sample.family) &&
     isTime(sample.start) &&
     isTime(sample.end) &&

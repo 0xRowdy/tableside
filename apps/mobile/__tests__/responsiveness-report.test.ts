@@ -90,11 +90,12 @@ describe('the report', () => {
 
   it('lists every family of every game for each device, failing and flagging those with no samples', () => {
     const { rows } = responsivenessReport([sample(10)]);
-    expect(Object.values(GATE_FAMILIES).flat()).toHaveLength(20);
-    expect(rows).toHaveLength(20 * 2 + 1);
+    expect(Object.values(GATE_FAMILIES).flat()).toHaveLength(23);
+    expect(rows).toHaveLength(23 * 2 + 1);
     expect(rows).toContainEqual(
       expect.objectContaining({ measure: 'completion', game: 'blackjack', family: 'play:surrender', count: 0, p95: null, max: null, result: 'fail', tooFew: true }),
     );
+    expect(rows).toContainEqual(expect.objectContaining({ measure: 'acknowledgment', game: 'challenge', family: 'checkpoint-entry', count: 0, result: 'fail', tooFew: true }));
     expect(rows).toContainEqual(expect.objectContaining({ measure: 'cold-launch', game: null, family: 'cold-launch', count: 0, result: 'fail', tooFew: true }));
   });
 

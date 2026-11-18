@@ -7,6 +7,7 @@ import { useAccount } from '@/account/AccountProvider';
 import { followAccountGate, withAccountGate } from '@/account/gate-access';
 import { useFollow } from '@/hooks/use-follow';
 import { useLoaded } from '@/hooks/use-loaded';
+import { sampling } from '@/responsiveness/probe';
 
 import { createTrainingAdapters } from './app-adapters';
 import { TrainingService, type InstructionWithheld, type LearningPreferences, type LessonAccess, type LessonEntry } from './service';
@@ -31,7 +32,9 @@ export function TrainingProvider({ children }: { children: ReactNode }) {
   const { service: accounts } = account;
   const [{ service, speech }] = useState(() => {
     const adapters = account.training(createTrainingAdapters());
-    return { service: new TrainingService({ ...adapters, access: withAccountGate(adapters.access, () => accounts.gate) }), speech: adapters.speech };
+    // Spec 3 Launch gates 8; #156
+    const store = sampling?.trainingStore(adapters.store) ?? adapters.store;
+    return { service: new TrainingService({ ...adapters, store, access: withAccountGate(adapters.access, () => accounts.gate) }), speech: adapters.speech };
   });
   useLoaded((training) => training.load(), service);
   useFollow(followAccountSessionEnding, accounts, service);

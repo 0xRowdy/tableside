@@ -214,3 +214,58 @@ describe("the backend's snapshot", () => {
     expect(JSON.stringify(events)).not.toMatch(/player@example\.com|secret/);
   });
 });
+
+// Spec 3 Information hiding (end to end), Launch gates 2; #156
+describe('challenges and lessons', () => {
+  const TRAINING = new Set([
+    'answer', 'entry', 'entered', 'correct', 'wrong', 'right', 'skip', 'score', 'accuracy', 'card', 'rank', 'suit', 'shoe', 'deck', 'count', 'reference',
+    'prescribed', 'prescription', 'drift', 'checkpoint', 'attempt', 'challenge', 'lesson', 'example', 'step', 'bookmark', 'hint', 'reveal', 'bet', 'wager',
+    'hand', 'value', 'milestone', 'streak', 'record', 'best', 'training', 'counting',
+  ]);
+  const RANKS = new Set(['a', 'j', 'q', 'k', 't', 'ace', 'jack', 'queen', 'king']);
+  const words = (text: string) => text.split(/(?=[A-Z])|[^A-Za-z]+/).map((word) => word.toLowerCase().replace(/s$/, '')).filter((word) => word.length > 0);
+
+  function couldCarryAnswer(key: string, values: readonly string[]): string[] {
+    const found = words(key).filter((word) => TRAINING.has(word));
+    for (const value of values) {
+      if (/\d/.test(value)) found.push(`${key}=${value} holds a number`);
+      if (RANKS.has(value.toLowerCase())) found.push(`${key}=${value} is a card`);
+      found.push(...words(value).filter((word) => TRAINING.has(word)));
+    }
+    return found;
+  }
+
+  it('the check catches a property that could carry an answer, card or reference', () => {
+    expect(couldCarryAnswer('error', ['+1', '-2'])).not.toEqual([]);
+    expect(couldCarryAnswer('card', ['low', 'high'])).not.toEqual([]);
+    expect(couldCarryAnswer('outcome', ['A', 'K'])).not.toEqual([]);
+    expect(couldCarryAnswer('outcome', ['answered-right', 'answered-wrong'])).not.toEqual([]);
+    expect(couldCarryAnswer('trueCount', ['positive'])).not.toEqual([]);
+    expect(couldCarryAnswer('outcome', ['failed', 'refused'])).toEqual([]);
+  });
+
+  it('no metric property or value could carry answer, card or reference data', () => {
+    for (const [name, definition] of Object.entries(METRICS)) {
+      expect(words(name).filter((word) => TRAINING.has(word)), name).toEqual([]);
+      for (const [key, values] of Object.entries(definition.properties)) expect(couldCarryAnswer(key, values), `${name}.${key}`).toEqual([]);
+    }
+  });
+
+  it('adds no metric to the catalog and no optional teen analytics', () => {
+    expect(Object.keys(METRICS).sort()).toEqual([
+      'billing_ownership_mismatches', 'billing_pending_activations', 'billing_queue_lag', 'billing_reconciliation_coverage', 'billing_verification_age',
+      'billing_verification_failures', 'bootstrap_duration', 'email_delivery_problems', 'email_queue_age', 'email_sends_failed', 'staged_chunks_age',
+      'storage_bytes', 'sync_queue_age', 'sync_receipts_refused', 'sync_run_failed', 'sync_upload_failed', 'transactions_rolled_back',
+    ]);
+    expect(Object.values(METRICS as Record<string, { readonly purpose: string }>).filter((definition) => definition.purpose === 'product-analytics')).toEqual([]);
+    for (const purpose of Object.values(TEEN_METRICS)) expect(words(purpose).filter((word) => TRAINING.has(word)), purpose).toEqual([]);
+  });
+
+  it('refuses an answer, card or reference passed as a property, even under a known key', () => {
+    const { sink, metrics } = sender(adult);
+    expect(metrics.record('sync_run_failed', 1, { error: -2 } as never)).toBe(false);
+    expect(metrics.record('sync_run_failed', 1, { error: { rank: 'K', suit: 'spades' } } as never)).toBe(false);
+    expect(metrics.record('sync_upload_failed', 1, { outcome: 'refused', reference: '3' } as never)).toBe(false);
+    expect(sink.events).toEqual([]);
+  });
+});
