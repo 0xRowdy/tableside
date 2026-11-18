@@ -41,11 +41,11 @@ function leaveSwitchedResults(controller: PracticeController): () => void {
 }
 
 export default function Play() {
-  const params = useLocalSearchParams<{ game?: string; practice?: string; strategy?: string }>();
+  const params = useLocalSearchParams<{ game?: string; practice?: string; strategy?: string; schedule?: string }>();
   const game = findGame(params.game);
   // Spec 3 Lessons › Structure (Handoff)
   const prefill = practicePrefill(params);
-  const setupKey = `${params.game}:${params.practice ?? ''}:${params.strategy ?? ''}`;
+  const setupKey = `${params.game}:${params.practice ?? ''}:${params.strategy ?? ''}:${params.schedule ?? ''}`;
   const { controller, snapshot } = usePractice();
   const training = useTrainingService();
   const [switchingFrom, setSwitchingFrom] = useState<string | null>(null);

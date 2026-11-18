@@ -24,18 +24,23 @@ export function handoffHref(handoff: LessonHandoff): Href {
     case 'free-play':
       return { pathname: '/play', params: { game: handoff.game, practice: 'free-play' } };
     case 'guided-practice':
-      return { pathname: '/play', params: { game: handoff.game, practice: 'guided', ...(handoff.strategy ? { strategy: handoff.strategy } : {}) } };
+      return {
+        pathname: '/play',
+        params: { game: handoff.game, practice: 'guided', ...(handoff.strategy ? { strategy: handoff.strategy } : {}), ...(handoff.betSchedule ? { schedule: 'on' } : {}) },
+      };
   }
 }
 
 export interface PracticePrefill {
   readonly guided: boolean;
   readonly strategy: string | null;
+  readonly betSchedule: boolean;
 }
 
-export function practicePrefill(params: { readonly practice?: string; readonly strategy?: string }): PracticePrefill | null {
+export function practicePrefill(params: { readonly practice?: string; readonly strategy?: string; readonly schedule?: string }): PracticePrefill | null {
   if (params.practice !== 'guided' && params.practice !== 'free-play') return null;
-  return { guided: params.practice === 'guided', strategy: params.practice === 'guided' ? (params.strategy ?? null) : null };
+  const guided = params.practice === 'guided';
+  return { guided, strategy: guided ? (params.strategy ?? null) : null, betSchedule: guided && params.schedule === 'on' };
 }
 
 export const prefilledStrategy = (builtIns: readonly StrategyDefinition[], prefill: PracticePrefill | null): StrategyDefinition =>

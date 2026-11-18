@@ -107,6 +107,7 @@ describe('lesson definitions', () => {
             withHandoffs(cardValues, [
               { kind: 'learn-challenge', category: 'conversion' },
               { kind: 'guided-practice', game: 'blackjack', strategy: 'counting-with-deviations' },
+              { kind: 'guided-practice', game: 'blackjack', strategy: 'counting-with-deviations', betSchedule: true },
               { kind: 'guided-practice', game: 'blackjack', strategy: null },
               { kind: 'free-play', game: 'blackjack' },
             ]),
@@ -139,6 +140,25 @@ describe('lesson definitions', () => {
           'app-orientation: handoff 1 opens no game setup: baccarat',
           'capped-martingale: handoff 1 names no built-in roulette strategy: builtin-craps-pass-with-odds',
           'capped-martingale: handoff 2 names no built-in roulette strategy: reverse-martingale',
+        ]);
+      });
+
+      // Spec 1 S1-02 (the schedule goes with a counting mode); #53 review
+      it('a bet schedule outside a blackjack counting mode, or one that is not on or off', () => {
+        expect(
+          lessonProblems([
+            withHandoffs(cardValues, [
+              { kind: 'guided-practice', game: 'blackjack', strategy: 'basic', betSchedule: true },
+              { kind: 'guided-practice', game: 'blackjack', strategy: null, betSchedule: true },
+              { kind: 'guided-practice', game: 'blackjack', strategy: 'counting-with-basic', betSchedule: 'on' },
+            ]),
+            withHandoffs(roulette, [{ kind: 'guided-practice', game: 'roulette', strategy: 'builtin-roulette-capped-martingale', betSchedule: true }]),
+          ]),
+        ).toEqual([
+          'card-values: handoff 1 turns on the bet schedule outside a counting mode',
+          'card-values: handoff 2 turns on the bet schedule outside a counting mode',
+          'card-values: handoff 3 has a bet schedule that is neither on nor off: on',
+          'capped-martingale: handoff 1 turns on the bet schedule outside a counting mode',
         ]);
       });
 

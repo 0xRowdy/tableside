@@ -194,7 +194,7 @@ export function handoffLabel(handoff: LessonHandoff): string {
       return `Free play · ${gameTitle(handoff.game)}`;
     case 'guided-practice': {
       const strategy = handoff.strategy && STRATEGY_NAMES.get(handoff.strategy);
-      return `Guided practice · ${gameTitle(handoff.game)}${strategy ? `, ${lowerFirst(strategy)}` : ''}`;
+      return `Guided practice · ${gameTitle(handoff.game)}${strategy ? `, ${lowerFirst(strategy)}` : ''}${handoff.betSchedule ? ', bet schedule on' : ''}`;
     }
   }
 }

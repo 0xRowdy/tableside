@@ -29,7 +29,10 @@ describe('blackjack lessons', () => {
     for (const mode of ['basic-strategy', 'basic-with-deviations', 'counting-with-basic', 'counting-with-deviations']) {
       expect(lesson(mode).content!.handoffs).toContainEqual({ kind: 'guided-practice', game: 'blackjack', strategy: mode === 'basic-strategy' ? 'basic' : mode });
     }
-    expect(lesson('bet-schedule').content!.handoffs.map((handoff) => handoff.kind)).toEqual(['guided-practice', 'guided-practice']);
+    expect(lesson('bet-schedule').content!.handoffs).toEqual([
+      { kind: 'guided-practice', game: 'blackjack', strategy: 'counting-with-basic', betSchedule: true },
+      { kind: 'guided-practice', game: 'blackjack', strategy: 'counting-with-deviations', betSchedule: true },
+    ]);
   });
 
   // Spec 3 Lessons › Content requirements (game basics)

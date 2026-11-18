@@ -84,7 +84,7 @@ export function BlackjackSetup({
   const [preset, setPreset] = useState<BlackjackPreset>('S17_LS');
   const [guided, setGuided] = useState(prefill?.guided ?? false);
   const [mode, setMode] = useState<BlackjackMode>(() => prefilledMode(prefill));
-  const [schedule, setSchedule] = useState(false);
+  const [schedule, setSchedule] = useState(prefill?.betSchedule ?? false);
   const [penetration, setPenetration] = useState(DEFAULT_PENETRATION);
   const [others, setOthers] = useState(0);
   const limits = useLimits(GROUPS, BLACKJACK_LIMITS);

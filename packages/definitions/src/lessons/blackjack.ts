@@ -220,7 +220,7 @@ export const lesson = (id: string, title: string, summary: string, content: Omit
   content: { version: 1, materialVersion: 1, change: null, ...content },
 });
 
-const guided = (strategy: string | null): LessonHandoff => ({ kind: 'guided-practice', game: 'blackjack', strategy });
+const guided = (strategy: string | null, betSchedule?: true): LessonHandoff => ({ kind: 'guided-practice', game: 'blackjack', strategy, ...(betSchedule ? { betSchedule } : {}) });
 const FREE_PLAY: LessonHandoff = { kind: 'free-play', game: 'blackjack' };
 
 export const step = (heading: string, paragraphs: readonly string[], extra: Pick<LessonStep, 'publishedNote' | 'source'> = {}): LessonStep => ({ heading, paragraphs, ...extra });
@@ -376,6 +376,6 @@ export const BET_SCHEDULE_LESSON = lesson('bet-schedule', 'Bet schedule', 'Table
     ], { source: SOURCE.bjaBetting }),
   ],
   workedExample: BET_SCHEDULE_EXAMPLE,
-  handoffs: [guided('counting-with-basic'), guided('counting-with-deviations')],
+  handoffs: [guided('counting-with-basic', true), guided('counting-with-deviations', true)],
   sources: [SOURCE.bjaBetting],
 });
