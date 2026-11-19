@@ -12,7 +12,7 @@ import {
   type ChallengeView,
   type ConversionItem,
 } from '@tableside/engine';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react-native';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { ChallengeExercise } from '@/counting/ChallengeExercise';
@@ -140,7 +140,7 @@ describe('the true-count conversion exercise', () => {
     expect(screen.getByText('Learn · self-paced')).toBeOnTheScreen();
     expect(screen.getByLabelText('Running count, minus 7')).toBeOnTheScreen();
     expect(screen.getByText('Marcus · Learn')).toBeOnTheScreen();
-    expect(screen.getByText('TRUE COUNT')).toBeOnTheScreen();
+    expect(within(screen.getByTestId('coach-note')).getByText('True count')).toBeOnTheScreen();
     expect(screen.getByText('−3 is right.')).toBeOnTheScreen();
     expect(screen.getByText('−7 ÷ 2 = −3.5. Tableside truncates toward zero, so −3. Rounding down to −4 is the common slip; some charts online round differently.')).toBeOnTheScreen();
     expect(screen.queryByRole('button', { name: 'Try this question again' })).toBeNull();

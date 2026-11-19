@@ -13,6 +13,9 @@ const PLATFORM_ADAPTERS = ['src/practice/app-adapters.ts', 'src/account/device-p
 const EFFECT_ALTERNATIVES =
   'Use a hook from src/hooks instead: useLoaded (load a value), useFollow (keep a subscription while mounted), usePolling, useMoveFocus, useAnnouncement; or React\'s useSyncExternalStore to read a store. If none fits, move the work into the event handler or controller that changes the state rather than reacting to it; only extend src/hooks when a new intent needs a hook.';
 
+const TYPE_RAMP =
+  'Text sizes come from the type ramp (docs/decisions/text-size-type-floor.md): build styles with makeStyles((type) => ({ title: { ...type.body } })) or useType(role) from src/theme/type.tsx. Card and chip glyphs use objectType in src/theme/tokens.ts.';
+
 const effects = ['useEffect', 'useLayoutEffect', 'useInsertionEffect'];
 
 const TIMER_ALTERNATIVES =
@@ -43,6 +46,10 @@ module.exports = defineConfig([
         {
           selector: "CallExpression[callee.name='BigInt']",
           message: 'Money in the app goes through src/play/units.ts: use or add a helper there instead of calling BigInt.',
+        },
+        {
+          selector: "Property[key.name='fontSize'][value.type='Literal']",
+          message: TYPE_RAMP,
         },
         {
           selector: "CallExpression[callee.name='useFollow'][arguments.0.type=/^(ArrowFunctionExpression|FunctionExpression)$/]",

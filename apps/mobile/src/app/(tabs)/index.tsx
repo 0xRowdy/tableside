@@ -1,5 +1,6 @@
 import { router } from 'expo-router';
-import { ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Users } from 'lucide-react-native';
+import { Pressable, ScrollView, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/Button';
@@ -12,16 +13,41 @@ import { StartHereCard } from '@/lessons/StartHereCard';
 import { GAME_WORDS, modeText } from '@/play/game-words';
 import { capitalize } from '@/play/units';
 import { usePractice } from '@/practice/PracticeProvider';
-import { fonts, palette, space, textScale } from '@/theme/tokens';
+import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
+import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/theme/tokens';
+import { makeStyles, useTextStep } from '@/theme/type';
 import { useLearning } from '@/training/TrainingProvider';
 
 const SIDE_BY_SIDE_MAX_FONT_SCALE = 1.35;
 const MIN_CARD_HEIGHT = 188;
+const STACKED_HEADER_FONT_SCALE = 1.3;
+
+function CommunityEntry() {
+  const styles = useStyles();
+  const { focused, focusProps } = useKeyboardFocus();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="Community"
+      onPress={() => router.navigate('/more/community')}
+      {...focusProps}
+      style={({ pressed }) => [styles.community, pressed && styles.pressed, focused && styles.focused]}
+    >
+      <Users color={palette.foreground} size={18} />
+      <Text maxFontSizeMultiplier={textScale.body} style={styles.communityLabel}>
+        Community
+      </Text>
+    </Pressable>
+  );
+}
 
 export default function Home() {
+  const styles = useStyles();
+  const textStep = useTextStep();
   const insets = useSafeAreaInsets();
   const { width, height, fontScale } = useWindowDimensions();
   const sideBySide = width > height && fontScale <= SIDE_BY_SIDE_MAX_FONT_SCALE;
+  const stacked = fontScale > STACKED_HEADER_FONT_SCALE || textStep === 'larger';
   const { snapshot } = usePractice();
   const suspended = snapshot.status === 'active' && snapshot.suspension?.reached ? snapshot : null;
   const words = suspended ? GAME_WORDS[suspended.view.game] : null;
@@ -30,11 +56,15 @@ export default function Home() {
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-      <View style={[styles.header, { paddingTop: insets.top + space[2], paddingLeft: insets.left + 20, paddingRight: insets.right + 20 }]}>
-        <Text accessibilityRole="header" maxFontSizeMultiplier={textScale.display} style={styles.title}>
-          Tableside
-        </Text>
-        {!sideBySide && <Text maxFontSizeMultiplier={textScale.body} style={styles.subtitle}>Pick a table to practice.</Text>}
+      <View style={[styles.header, stacked && styles.headerStacked, { paddingTop: insets.top + space[2], paddingLeft: insets.left + 20, paddingRight: insets.right + 20 }]}>
+        <View style={styles.wordmark}>
+          <Text accessibilityRole="header" maxFontSizeMultiplier={textScale.display} style={styles.title}>
+            Tableside
+          </Text>
+          {!sideBySide && <Text maxFontSizeMultiplier={textScale.body} style={styles.subtitle}>Pick a table to practice.</Text>}
+        </View>
+        {/* Spec 2 Amendment 10 §1; S1-01 MYB3r, i41k8 */}
+        <CommunityEntry />
       </View>
       {suspended && words && (
         // Spec 1 S1-01, Amendment 1 A6
@@ -71,15 +101,31 @@ export default function Home() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((type) => ({
   screen: { flex: 1, backgroundColor: palette.background },
   content: { flexGrow: 1 },
-  header: { paddingBottom: space[3], gap: 2 },
-  title: { fontFamily: fonts.display, fontSize: 30, color: palette.foreground },
-  subtitle: { fontFamily: fonts.ui, fontSize: 14, color: palette.mutedForeground },
+  header: { paddingBottom: space[3], flexDirection: 'row', alignItems: 'center', gap: space[3] },
+  headerStacked: { flexDirection: 'column', alignItems: 'flex-start' },
+  wordmark: { flexShrink: 1, flexGrow: 1, gap: 2 },
+  community: {
+    minHeight: MIN_TOUCH_TARGET,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space[2],
+    paddingHorizontal: space[4],
+    borderRadius: radius.pill,
+    borderWidth: 2,
+    borderColor: palette.secondary,
+    backgroundColor: palette.secondary,
+  },
+  communityLabel: { fontFamily: fonts.uiSemiBold, ...type.secondary, color: palette.foreground },
+  pressed: { opacity: 0.8 },
+  focused: { borderColor: palette.foreground },
+  title: { fontFamily: fonts.display, ...type.display, color: palette.foreground },
+  subtitle: { fontFamily: fonts.ui, ...type.secondary, color: palette.mutedForeground },
   cards: { flex: 1, gap: 2 },
   cardsSideBySide: { flexDirection: 'row' },
   card: { flex: 1, minHeight: MIN_CARD_HEIGHT },
   suspended: { marginBottom: space[3] },
   startHere: { marginBottom: space[3] },
-});
+}));

@@ -176,7 +176,7 @@ describe('Delete permanently now', () => {
       prepare?.();
     });
     await fireEvent.press(await screen.findByRole('button', { name: 'Delete permanently now' }));
-    expect(await screen.findByText('IF YOU DELETE PERMANENTLY NOW')).toBeOnTheScreen();
+    expect(await screen.findByText('If you delete permanently now')).toBeOnTheScreen();
   }
 
   it('shows its own warnings and asks once more before anything is deleted', async () => {
@@ -184,7 +184,7 @@ describe('Delete permanently now', () => {
     for (const warning of PERMANENT_WARNINGS) expect(await screen.findByLabelText(warning)).toBeOnTheScreen();
     expect(service().deletionCalls).not.toContain('delete-permanently');
     await fireEvent.press(button('Keep my account'));
-    expect(screen.queryByText('IF YOU DELETE PERMANENTLY NOW')).toBeNull();
+    expect(screen.queryByText('If you delete permanently now')).toBeNull();
     expect(service().deletionCalls).not.toContain('delete-permanently');
     expect(screen.queryByText(/was canceled|refunded/)).toBeNull();
   });

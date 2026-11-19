@@ -114,7 +114,7 @@ describe('counting lessons', () => {
       await openExample('Lesson: table counting', 'Table counting', 3);
       expect(screen.getByText('Round 1 has just finished, with the dealer’s hole card turned over. The count was 0 before the round.')).toBeOnTheScreen();
       expect(screen.getByRole('header', { name: 'DEALER' })).toBeOnTheScreen();
-      expect(screen.getByRole('header', { name: 'YOUR SEAT' })).toBeOnTheScreen();
+      expect(screen.getByRole('header', { name: 'Your seat' })).toBeOnTheScreen();
       expect(screen.getAllByTestId('challenge-card').map((card) => card.props.accessibilityLabel)).toEqual(['5 of clubs', 'King of diamonds', '9 of spades', '10 of spades', '6 of hearts']);
       expect(screen.getByText("What's the running count after the round?")).toBeOnTheScreen();
       expect(cues()).toEqual(['checkpoint-due']);

@@ -4,11 +4,12 @@
 import type { LessonSection } from '@tableside/definitions';
 import { ArrowLeft, CircleStop, Clock3 } from 'lucide-react-native';
 import type { ReactNode } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { BackButton } from '@/settings/SettingsParts';
 import { fonts, palette, space, textScale } from '@/theme/tokens';
+import { makeStyles } from '@/theme/type';
 import {
   AFTER_THIS_ATTEMPT,
   afterCheckText,
@@ -46,6 +47,7 @@ export function LessonGate({
   onReturnToAttempt: () => void;
   onEndAttempt: () => void;
 }) {
+  const styles = useStyles();
   const insets = useSafeAreaInsets();
   return (
     <ScrollView
@@ -84,6 +86,7 @@ export function LessonGate({
 }
 
 function Body({ heading, text, footnote, alert, children }: { heading: string; text: string; footnote: string; alert: string | null; children: ReactNode }) {
+  const styles = useStyles();
   return (
     <View style={styles.body}>
       <View style={styles.top}>
@@ -112,19 +115,19 @@ function Body({ heading, text, footnote, alert, children }: { heading: string; t
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((type) => ({
   screen: { flex: 1, backgroundColor: palette.background },
   content: { flexGrow: 1 },
   header: { flexDirection: 'row', alignItems: 'center', gap: space[1], minHeight: 56, paddingLeft: space[1], paddingRight: space[2] },
   titles: { flex: 1, gap: 1, paddingVertical: space[1] },
-  title: { fontFamily: fonts.uiBold, fontSize: 17, color: palette.foreground },
-  kind: { fontFamily: fonts.ui, fontSize: 12, color: palette.mutedForeground },
+  title: { fontFamily: fonts.uiSemiBold, ...type.body, color: palette.foreground },
+  kind: { fontFamily: fonts.ui, ...type.caption, color: palette.mutedForeground },
   body: { flex: 1, justifyContent: 'space-between', gap: space[8], paddingTop: space[6], paddingHorizontal: space[6] - space[1] },
   top: { gap: space[4] },
   icon: { width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', backgroundColor: palette.secondary },
-  heading: { fontFamily: fonts.display, fontSize: 26, lineHeight: 32, color: palette.foreground },
-  text: { fontFamily: fonts.ui, fontSize: 15, lineHeight: 23, color: palette.mutedForeground },
+  heading: { fontFamily: fonts.display, ...type.headline, color: palette.foreground },
+  text: { fontFamily: fonts.ui, ...type.secondary, color: palette.mutedForeground },
   actions: { gap: space[4] },
-  alert: { fontFamily: fonts.ui, fontSize: 14, lineHeight: 20, color: palette.warning },
-  footnote: { fontFamily: fonts.ui, fontSize: 13, lineHeight: 20, color: palette.mutedForeground },
-});
+  alert: { fontFamily: fonts.ui, ...type.body, color: palette.warning },
+  footnote: { fontFamily: fonts.ui, ...type.secondary, color: palette.mutedForeground },
+}));

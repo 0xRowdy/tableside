@@ -6,6 +6,7 @@ import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { fonts, palette, radius, space } from '@/theme/tokens';
+import { typeScale } from '@/theme/type';
 
 import { responsivenessSampling, type ResponsivenessSamplingNative } from '../../modules/responsiveness-sampling';
 import { nativeTiming } from './native-ports';
@@ -82,6 +83,6 @@ export function samplingMode(native: ResponsivenessSamplingNative = responsivene
 const styles = StyleSheet.create({
   badge: { position: 'absolute', zIndex: 1000 },
   pill: { minHeight: 32, justifyContent: 'center', paddingHorizontal: space[3], borderRadius: radius.pill, backgroundColor: palette.secondary, opacity: 0.85 },
-  text: { fontFamily: fonts.uiBold, fontSize: 12, color: palette.foreground },
+  text: { fontFamily: fonts.uiBold, ...typeScale('standard').label, color: palette.foreground },
   problem: { color: palette.destructive },
 });

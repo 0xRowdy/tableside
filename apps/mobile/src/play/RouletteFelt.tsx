@@ -2,10 +2,11 @@
 
 import type { RoulettePermittedView as PermittedView, RoulettePocket } from '@tableside/engine';
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, View, type LayoutChangeEvent, type StyleProp, type ViewStyle } from 'react-native';
+import { Pressable, Text, View, type LayoutChangeEvent, type StyleProp, type ViewStyle } from 'react-native';
 
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale, type ColorToken } from '@/theme/tokens';
+import { makeStyles } from '@/theme/type';
 
 import { formatUnits, ORDINAL, POCKET_TOKEN, pocketColor, spokenPayout, targetName, wheelZeros } from './roulette-text';
 
@@ -34,6 +35,7 @@ export function RouletteFelt({
   wagerOn: (target: string) => string | undefined;
   onSpot: (target: string) => void;
 }) {
+  const styles = useStyles();
   const [edges, setEdges] = useState({ top: MIN_TOUCH_TARGET, bottom: MIN_TOUCH_TARGET });
   const measure = (edge: 'top' | 'bottom') => (event: LayoutChangeEvent) => {
     const height = event.nativeEvent.layout.height;
@@ -138,6 +140,7 @@ function Spot({
   onPress: () => void;
   style: StyleProp<ViewStyle>;
 }) {
+  const styles = useStyles();
   const { focused, focusProps } = useKeyboardFocus();
   return (
     <Pressable
@@ -163,7 +166,7 @@ function Spot({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((type) => ({
   wrap: { gap: space[2] },
   felt: { flexDirection: 'row', gap: 2, padding: space[3], marginHorizontal: space[2], borderRadius: radius.lg, backgroundColor: palette.feltDeep },
   side: { gap: ROW_GAP },
@@ -185,9 +188,9 @@ const styles = StyleSheet.create({
   },
   spotMarked: { borderColor: palette.foreground },
   focused: { borderColor: palette.ring },
-  spotText: { fontFamily: fonts.uiBold, fontSize: 14, color: palette.onImage, textAlign: 'center' },
-  spotCaption: { fontFamily: fonts.uiMedium, fontSize: 10, color: palette.onImage, textAlign: 'center' },
+  spotText: { fontFamily: fonts.uiSemiBold, ...type.body, color: palette.onImage, textAlign: 'center' },
+  spotCaption: { fontFamily: fonts.uiMedium, ...type.caption, color: palette.onImage, textAlign: 'center' },
   marker: { marginTop: 2, minWidth: 26, paddingHorizontal: 4, borderRadius: radius.pill, backgroundColor: palette.chip1, alignItems: 'center' },
-  markerText: { fontFamily: fonts.uiBold, fontSize: 11, color: palette.ink },
-  caption: { marginHorizontal: space[4], fontFamily: fonts.ui, fontSize: 12, color: palette.mutedForeground },
-});
+  markerText: { fontFamily: fonts.uiSemiBold, ...type.label, color: palette.ink },
+  caption: { marginHorizontal: space[4], fontFamily: fonts.ui, ...type.caption, color: palette.mutedForeground },
+}));

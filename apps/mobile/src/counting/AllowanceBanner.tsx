@@ -2,10 +2,11 @@
 
 import { CircleSlash, Smartphone, Ticket } from 'lucide-react-native';
 import { useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 
 import { LinkButton } from '@/play/setup/SetupParts';
 import { fonts, palette, radius, space, textScale } from '@/theme/tokens';
+import { makeStyles } from '@/theme/type';
 import { ALLOWANCE_ACTION_LABEL, ARRIVES_LATER, type AllowanceAction, type AllowanceCopy } from '@/training/challenge-text';
 
 const ICON = { premium: Ticket, available: Ticket, 'used-up': CircleSlash, elsewhere: Smartphone } as const;
@@ -21,6 +22,7 @@ export function AllowanceBanner({
   detail?: string | null;
   action: AllowanceAction | null;
 }) {
+  const styles = useStyles();
   const [showArrivesLater, setShowArrivesLater] = useState(false);
   const usedUp = standing === 'used-up';
   const Icon = ICON[standing];
@@ -47,10 +49,10 @@ export function AllowanceBanner({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((type) => ({
   banner: { flexDirection: 'row', gap: space[3], padding: space[4], borderRadius: radius.md, borderWidth: 1, borderColor: palette.controlBorder, backgroundColor: palette.card },
   usedUp: { borderColor: palette.warning },
   text: { flex: 1, gap: space[1] },
-  title: { fontFamily: fonts.uiBold, fontSize: 14, lineHeight: 20, color: palette.foreground },
-  detail: { fontFamily: fonts.ui, fontSize: 13, lineHeight: 18, color: palette.mutedForeground },
-});
+  title: { fontFamily: fonts.uiSemiBold, ...type.body, color: palette.foreground },
+  detail: { fontFamily: fonts.ui, ...type.secondary, color: palette.mutedForeground },
+}));

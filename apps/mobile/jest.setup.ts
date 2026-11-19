@@ -27,6 +27,16 @@ jest.mock('@/play/setup/device-storage', () => {
   return mock;
 });
 
+jest.mock('@/theme/device-storage', () => {
+  const { MemorySettingsStorage } = jest.requireActual('@/feedback/testing/substitutes') as typeof import('@/feedback/testing/substitutes');
+  const mock = {
+    latest: null as InstanceType<typeof MemorySettingsStorage> | null,
+    stored: '{"step":"standard"}' as string | null,
+    createTextSizeStorage: () => (mock.latest = new MemorySettingsStorage(mock.stored)),
+  };
+  return mock;
+});
+
 jest.mock('@/account/app-account', () => {
   const { fakeAppAccount, SIGNED_IN } = jest.requireActual('@/account/testing/fake-account') as typeof import('@/account/testing/fake-account');
   const launch: Required<Parameters<typeof fakeAppAccount>[0]> = { stored: SIGNED_IN, offlineGame: 'blackjack' };

@@ -2,7 +2,7 @@ import { act, cleanup, fireEvent, screen, within } from '@testing-library/react-
 import { renderRouter } from 'expo-router/testing-library';
 import { Platform } from 'react-native';
 
-const TAB_LABELS = ['Home', 'Play', 'Counting', 'Community', 'Saved', 'More'];
+const TAB_LABELS = ['Home', 'Play', 'Counting', 'Saved', 'More'];
 
 async function renderApp(initialUrl = '/') {
   await renderRouter('./src/app', { initialUrl });
@@ -20,7 +20,7 @@ describe('app shell', () => {
     await cleanup();
   }, 180_000);
 
-  it('opens on Home with the six labelled tabs and Home selected', async () => {
+  it('opens on Home with the five labelled tabs and Home selected', async () => {
     await renderApp();
 
     expect(tabBar().getAllByRole('tab').map((tab) => tab.props.accessibilityLabel)).toEqual(TAB_LABELS);
@@ -54,14 +54,34 @@ describe('app shell', () => {
     expect(tabBar().getByRole('tab', { name: 'Play', selected: true })).toBeOnTheScreen();
   });
 
-  it.each(['Counting', 'Community', 'Saved', 'More'])('shows a placeholder for %s and keeps the tab bar', async (label) => {
+  it.each(['Counting', 'Saved', 'More'])('shows a placeholder for %s and keeps the tab bar', async (label) => {
     await renderApp();
 
     await fireEvent.press(tabBar().getByRole('tab', { name: label }));
 
     expect(await screen.findByRole('header', { name: label })).toBeOnTheScreen();
     expect(tabBar().getByRole('tab', { name: label, selected: true })).toBeOnTheScreen();
-    expect(tabBar().getAllByRole('tab')).toHaveLength(6);
+    expect(tabBar().getAllByRole('tab')).toHaveLength(5);
+  });
+
+  // Spec 2 Amendment 10 §1; spec 6 Amendment 5
+  it('opens Community from the top of More, with More selected', async () => {
+    await renderApp();
+
+    await fireEvent.press(tabBar().getByRole('tab', { name: 'More' }));
+    await fireEvent.press(await screen.findByRole('button', { name: /^Community\b/ }));
+
+    expect(await screen.findByRole('header', { name: 'Community' })).toBeOnTheScreen();
+    expect(tabBar().getByRole('tab', { name: 'More', selected: true })).toBeOnTheScreen();
+  });
+
+  it('opens Community from the Home header', async () => {
+    await renderApp();
+
+    await fireEvent.press(screen.getByRole('button', { name: 'Community' }));
+
+    expect(await screen.findByRole('header', { name: 'Community' })).toBeOnTheScreen();
+    expect(tabBar().getByRole('tab', { name: 'More', selected: true })).toBeOnTheScreen();
   });
 
   it('shows Play without a game as a prompt to choose one on Home', async () => {

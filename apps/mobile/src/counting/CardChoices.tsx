@@ -2,16 +2,18 @@
 
 import type { ChallengeCard } from '@tableside/engine';
 import { Check, CircleDot, X } from 'lucide-react-native';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
 import { cardName, cardRank, SUIT_GLYPH } from '@/play/blackjack-text';
-import { fonts, palette, radius, space, textScale } from '@/theme/tokens';
+import { fonts, objectType, palette, radius, space, textScale } from '@/theme/tokens';
+import { makeStyles } from '@/theme/type';
 import { CHOICE_TAG, type ChoiceState } from '@/training/challenge-text';
 
 const SUIT_TOKEN = { spades: 'suitSpade', hearts: 'suitHeart', diamonds: 'suitDiamond', clubs: 'suitClub' } as const;
 
 export function PlayingCard({ card, small = false }: { card: ChallengeCard; small?: boolean }) {
+  const styles = useStyles();
   const color = palette[SUIT_TOKEN[card.suit]];
   const glyph = SUIT_GLYPH[card.suit];
   return (
@@ -35,6 +37,7 @@ const CHOICE_TONE = { correct: palette.correct, 'your-answer': palette.mistake, 
 const CHOICE_ICON = { correct: Check, 'your-answer': X, 'your-pick': X, recorded: CircleDot } as const;
 
 export function Choice({ label, spoken, wide = false, state, enabled, onPress }: { label: string; spoken: string; wide?: boolean; state: ChoiceState; enabled: boolean; onPress: () => void }) {
+  const styles = useStyles();
   const { focused, focusProps } = useKeyboardFocus();
   const tone = state ? CHOICE_TONE[state] : palette.controlBorder;
   const Icon = state ? CHOICE_ICON[state] : X;
@@ -64,16 +67,16 @@ export function Choice({ label, spoken, wide = false, state, enabled, onPress }:
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((type) => ({
   card: { alignSelf: 'center', width: 120, height: 168, paddingVertical: space[3] - 2, paddingHorizontal: space[3], borderRadius: radius.md, backgroundColor: palette.cardFace, justifyContent: 'space-between' },
   corner: { alignItems: 'center', alignSelf: 'flex-start' },
-  rank: { fontFamily: fonts.uiBold, fontSize: 40, lineHeight: 44 },
-  cornerSuit: { fontSize: 28, lineHeight: 30 },
-  pip: { alignSelf: 'flex-end', fontSize: 60, lineHeight: 64 },
+  rank: { fontFamily: fonts.uiBold, fontSize: objectType.largeCard.rank, lineHeight: objectType.largeCard.rank + 4 },
+  cornerSuit: { fontSize: objectType.largeCard.suit, lineHeight: objectType.largeCard.suit + 2 },
+  pip: { alignSelf: 'flex-end', fontSize: objectType.largeCard.pip, lineHeight: objectType.largeCard.pip + 4 },
   smallCard: { alignSelf: 'auto', width: 58, height: 82, paddingVertical: space[1], paddingHorizontal: space[1] + 2 },
-  smallRank: { fontSize: 22, lineHeight: 24 },
-  smallSuit: { fontSize: 14, lineHeight: 16 },
-  smallPip: { fontSize: 28, lineHeight: 30 },
+  smallRank: { fontSize: objectType.card.rank, lineHeight: objectType.card.rank + 2 },
+  smallSuit: { fontSize: objectType.card.suit, lineHeight: objectType.card.suit + 2 },
+  smallPip: { fontSize: objectType.card.pip, lineHeight: objectType.card.pip + 2 },
   choice: {
     flex: 1,
     minHeight: 80,
@@ -87,10 +90,10 @@ const styles = StyleSheet.create({
   },
   choiceMarked: { borderWidth: 2, minHeight: 96 },
   wide: { flex: 0, minHeight: 64, paddingHorizontal: space[4] },
-  wideValue: { fontSize: 18, textAlign: 'center' },
-  choiceValue: { fontFamily: fonts.uiBold, fontSize: 30, color: palette.foreground },
+  wideValue: { ...type.heading, textAlign: 'center' },
+  choiceValue: { fontFamily: fonts.uiBold, ...type.figure, color: palette.foreground },
   tag: { flexDirection: 'row', alignItems: 'center', gap: space[1] },
-  tagText: { fontFamily: fonts.uiBold, fontSize: 12 },
+  tagText: { fontFamily: fonts.uiBold, ...type.label },
   pressed: { opacity: 0.8 },
   focused: { borderColor: palette.ring, borderWidth: 2 },
-});
+}));

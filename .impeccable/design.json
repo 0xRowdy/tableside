@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-11-18T20:38:37+00:00",
+  "generatedAt": "2026-11-19T02:12:46+00:00",
   "title": "Design System: Tableside",
   "extensions": {
     "colorMeta": {
@@ -638,39 +638,47 @@
     "typographyMeta": {
       "display": {
         "displayName": "Display",
-        "purpose": "Screen titles on Home, first run and session results."
+        "purpose": "Screen titles on Home, first run and session results. Fraunces. 32 / 36 / 40."
       },
       "display-card": {
         "displayName": "Game Card Title",
-        "purpose": "Game card titles over photography."
+        "purpose": "Game card titles over photography. Fraunces. 36 / 40 / 44."
       },
       "headline": {
         "displayName": "Headline",
-        "purpose": "Sheet and dialog titles, coaching headlines, lesson headings."
+        "purpose": "Sheet and dialog titles, the decision title, lesson headings. Fraunces. 24 / 27 / 30."
       },
-      "title": {
-        "displayName": "Title",
-        "purpose": "Button labels, row titles, table top-bar titles."
+      "figure": {
+        "displayName": "Figure",
+        "purpose": "Count readout and big numbers. Inter Bold. 36 / 40 / 44."
+      },
+      "key": {
+        "displayName": "Key",
+        "purpose": "Keypad digits. Inter SemiBold. 24 / 26 / 28."
+      },
+      "heading": {
+        "displayName": "Heading",
+        "purpose": "Card heads, prompts, the coach headline, strip values. Inter Bold. 20 / 22 / 25."
       },
       "body": {
         "displayName": "Body",
-        "purpose": "Explanations, sheet text, row details."
+        "purpose": "Explanations, row titles, button labels. Inter 400, or 600 for titles and buttons. 17 / 19 / 21."
       },
-      "body-small": {
-        "displayName": "Body Small",
-        "purpose": "Details, notes and secondary copy."
-      },
-      "stat": {
-        "displayName": "Stat",
-        "purpose": "Balances, counts and results."
+      "secondary": {
+        "displayName": "Secondary",
+        "purpose": "Row details, subtitles, segment labels. Inter. 15 / 17 / 19."
       },
       "label": {
         "displayName": "Label",
-        "purpose": "Stat labels, kickers and strip labels."
+        "purpose": "Stat labels, kickers, strip labels, tags. Sentence case. Inter SemiBold. 13 / 15 / 16."
       },
-      "label-medium": {
+      "caption": {
+        "displayName": "Caption",
+        "purpose": "Printed felt markings, header button labels, chart cells, chip values. The 12 floor. 12 / 14 / 15."
+      },
+      "tab": {
         "displayName": "Tab Label",
-        "purpose": "Tab bar labels and stepper text."
+        "purpose": "Tab bar labels. Fixed at 12 at every text step, with a large-content viewer."
       }
     },
     "shadows": [],
@@ -696,6 +704,11 @@
         "name": "android-large-content",
         "value": "fontScale >= 1.3",
         "purpose": "Tab long-press shows the large-content preview on Android."
+      },
+      {
+        "name": "text-step",
+        "value": "standard | large | larger (per installation)",
+        "purpose": "Selects the ramp column. Multiplies with the system font scale under the textScale caps."
       }
     ]
   },
@@ -706,7 +719,7 @@
       "refersTo": "button-primary",
       "description": "The one Rail Brass action on a view.",
       "html": "<button class=\"ds-btn-primary\">Start practice</button>",
-      "css": ".ds-btn-primary { display:inline-flex; align-items:center; justify-content:center; gap:8px; min-height:48px; padding:12px 24px; border-radius:999px; border:2px solid transparent; font-family: Inter, system-ui, sans-serif; font-weight:700; font-size:16px; cursor:pointer; transition: opacity .12s; background:#D4AE62; color:#1A1406; border-color:#D4AE62; } .ds-btn-primary:active { opacity:.8; } .ds-btn-primary:focus-visible { outline:none; border-color:#F3EFE6; } .ds-btn-primary:disabled { opacity:.4; }"
+      "css": ".ds-btn-primary { display:inline-flex; align-items:center; justify-content:center; gap:8px; min-height:48px; padding:12px 24px; border-radius:999px; border:2px solid transparent; font-family: Inter, system-ui, sans-serif; font-weight:600; font-size:17px; cursor:pointer; transition: opacity .12s; background:#D4AE62; color:#1A1406; border-color:#D4AE62; } .ds-btn-primary:active { opacity:.8; } .ds-btn-primary:focus-visible { outline:none; border-color:#F3EFE6; } .ds-btn-primary:disabled { opacity:.4; }"
     },
     {
       "name": "Secondary Button",
@@ -714,7 +727,7 @@
       "refersTo": "button-secondary",
       "description": "Supporting actions on Felt Shadow.",
       "html": "<button class=\"ds-btn-secondary\">View rules</button>",
-      "css": ".ds-btn-secondary { display:inline-flex; align-items:center; justify-content:center; gap:8px; min-height:48px; padding:12px 24px; border-radius:999px; border:2px solid transparent; font-family: Inter, system-ui, sans-serif; font-weight:700; font-size:16px; cursor:pointer; transition: opacity .12s; background:#26312C; color:#F3EFE6; border-color:#26312C; } .ds-btn-secondary:active { opacity:.8; } .ds-btn-secondary:focus-visible { outline:none; border-color:#F3EFE6; }"
+      "css": ".ds-btn-secondary { display:inline-flex; align-items:center; justify-content:center; gap:8px; min-height:48px; padding:12px 24px; border-radius:999px; border:2px solid transparent; font-family: Inter, system-ui, sans-serif; font-weight:600; font-size:17px; cursor:pointer; transition: opacity .12s; background:#26312C; color:#F3EFE6; border-color:#26312C; } .ds-btn-secondary:active { opacity:.8; } .ds-btn-secondary:focus-visible { outline:none; border-color:#F3EFE6; }"
     },
     {
       "name": "Outline Choice",
@@ -722,7 +735,7 @@
       "refersTo": "button-outline",
       "description": "List-like choices: 10px corners, Control Edge border.",
       "html": "<button class=\"ds-btn-outline\">Running count</button>",
-      "css": ".ds-btn-outline { display:flex; align-items:center; justify-content:center; min-height:52px; padding:12px 20px; border-radius:10px; border:1px solid #6E7B74; background:transparent; color:#F3EFE6; font-family: Inter, system-ui, sans-serif; font-weight:700; font-size:15px; cursor:pointer; } .ds-btn-outline:active { opacity:.8; } .ds-btn-outline:focus-visible { outline:2px solid #D4AE62; outline-offset:2px; }"
+      "css": ".ds-btn-outline { display:flex; align-items:center; justify-content:center; min-height:52px; padding:12px 20px; border-radius:10px; border:1px solid #6E7B74; background:transparent; color:#F3EFE6; font-family: Inter, system-ui, sans-serif; font-weight:600; font-size:15px; cursor:pointer; } .ds-btn-outline:active { opacity:.8; } .ds-btn-outline:focus-visible { outline:2px solid #D4AE62; outline-offset:2px; }"
     },
     {
       "name": "Segmented Control",
@@ -730,15 +743,15 @@
       "refersTo": "segmented",
       "description": "Radio group; the selected segment is brass with a check.",
       "html": "<div class=\"ds-seg\" role=\"radiogroup\" aria-label=\"Mode\"><button class=\"ds-seg-item ds-seg-on\" role=\"radio\" aria-checked=\"true\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M20 6 9 17l-5-5\"/></svg>Learn</button><button class=\"ds-seg-item\" role=\"radio\" aria-checked=\"false\">Check</button><button class=\"ds-seg-item\" role=\"radio\" aria-checked=\"false\">Play</button></div>",
-      "css": ".ds-seg { display:flex; gap:4px; padding:4px; border-radius:10px; border:1px solid #6E7B74; background:#1E2723; } .ds-seg-item { flex:1; display:flex; align-items:center; justify-content:center; gap:6px; min-height:44px; padding:0 8px; border-radius:9px; border:2px solid transparent; background:transparent; color:#F3EFE6; font-family: Inter, system-ui, sans-serif; font-weight:700; font-size:14px; cursor:pointer; } .ds-seg-on { background:#D4AE62; color:#1A1406; } .ds-seg-item:focus-visible { outline:none; border-color:#D4AE62; }"
+      "css": ".ds-seg { display:flex; gap:4px; padding:4px; border-radius:10px; border:1px solid #6E7B74; background:#1E2723; } .ds-seg-item { flex:1; display:flex; align-items:center; justify-content:center; gap:6px; min-height:48px; padding:0 8px; border-radius:9px; border:2px solid transparent; background:transparent; color:#F3EFE6; font-family: Inter, system-ui, sans-serif; font-weight:600; font-size:15px; cursor:pointer; } .ds-seg-on { background:#D4AE62; color:#1A1406; } .ds-seg-item:focus-visible { outline:none; border-color:#D4AE62; }"
     },
     {
       "name": "Card",
       "kind": "card",
       "refersTo": "card",
       "description": "Card Table surface, 16px corners, no shadow.",
-      "html": "<div class=\"ds-card\"><div class=\"ds-card-label\">BALANCE</div><div class=\"ds-card-value\">$1,240</div><div class=\"ds-card-note\">Practice session · 48 turns</div></div>",
-      "css": ".ds-card { display:grid; gap:2px; padding:16px; border-radius:16px; background:#161D1A; color:#F3EFE6; font-family: Inter, system-ui, sans-serif; max-width:280px; } .ds-card-label { font-weight:700; font-size:10px; letter-spacing:.5px; color:#A9B2AC; } .ds-card-value { font-weight:700; font-size:24px; } .ds-card-note { font-size:13px; color:#A9B2AC; }"
+      "html": "<div class=\"ds-card\"><div class=\"ds-card-label\">Balance</div><div class=\"ds-card-value\">$1,240</div><div class=\"ds-card-note\">Practice session · 48 turns</div></div>",
+      "css": ".ds-card { display:grid; gap:2px; padding:16px; border-radius:16px; background:#161D1A; color:#F3EFE6; font-family: Inter, system-ui, sans-serif; max-width:280px; } .ds-card-label { font-weight:600; font-size:15px; color:#A9B2AC; } .ds-card-value { font-weight:700; font-size:24px; } .ds-card-note { font-size:15px; color:#A9B2AC; }"
     },
     {
       "name": "Switch Row",
@@ -746,31 +759,31 @@
       "refersTo": "switch-row",
       "description": "Full-width toggle row with a check on the brass knob.",
       "html": "<button class=\"ds-switch-row\" role=\"switch\" aria-checked=\"true\"><span class=\"ds-switch-text\"><span class=\"ds-switch-title\">Spoken cards</span><span class=\"ds-switch-detail\">Read each card aloud.</span></span><span class=\"ds-switch ds-switch-on\"><span class=\"ds-knob\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M20 6 9 17l-5-5\"/></svg></span></span></button>",
-      "css": ".ds-switch-row { display:flex; align-items:center; gap:16px; width:100%; min-height:64px; padding:12px 16px; border:2px solid transparent; background:#161D1A; text-align:left; cursor:pointer; font-family: Inter, system-ui, sans-serif; } .ds-switch-row:focus-visible { outline:none; border-color:#D4AE62; } .ds-switch-text { flex:1; display:grid; gap:2px; } .ds-switch-title { font-weight:700; font-size:15px; color:#F3EFE6; } .ds-switch-detail { font-size:13px; color:#A9B2AC; } .ds-switch { display:flex; width:52px; height:32px; border-radius:16px; padding:3px; box-sizing:border-box; } .ds-switch-on { background:#D4AE62; justify-content:flex-end; } .ds-knob { display:flex; align-items:center; justify-content:center; width:26px; height:26px; border-radius:13px; background:#1A1406; color:#D4AE62; }"
+      "css": ".ds-switch-row { display:flex; align-items:center; gap:16px; width:100%; min-height:64px; padding:12px 16px; border:2px solid transparent; background:#161D1A; text-align:left; cursor:pointer; font-family: Inter, system-ui, sans-serif; } .ds-switch-row:focus-visible { outline:none; border-color:#D4AE62; } .ds-switch-text { flex:1; display:grid; gap:2px; } .ds-switch-title { font-weight:600; font-size:17px; color:#F3EFE6; } .ds-switch-detail { font-size:15px; color:#A9B2AC; } .ds-switch { display:flex; width:52px; height:32px; border-radius:16px; padding:3px; box-sizing:border-box; } .ds-switch-on { background:#D4AE62; justify-content:flex-end; } .ds-knob { display:flex; align-items:center; justify-content:center; width:26px; height:26px; border-radius:13px; background:#1A1406; color:#D4AE62; }"
     },
     {
       "name": "Tab Bar",
       "kind": "nav",
       "refersTo": "tab-bar",
-      "description": "The only global navigation; selected tab sits in a brass-outlined pill.",
+      "description": "The only global navigation: five tabs (Home, Play, Counting, Saved, More). Labels stay 12 at every text step; the selected tab sits in a brass-outlined pill.",
       "html": "<nav class=\"ds-tabs\" role=\"tablist\"><button class=\"ds-tab ds-tab-on\" role=\"tab\" aria-selected=\"true\"><span class=\"ds-tab-pill\"><svg width=\"22\" height=\"22\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M3 10.5 12 3l9 7.5\"/><path d=\"M5 9.5V21h14V9.5\"/></svg></span>Home</button><button class=\"ds-tab\" role=\"tab\" aria-selected=\"false\"><span class=\"ds-tab-pill\"><svg width=\"22\" height=\"22\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><rect x=\"3\" y=\"3\" width=\"7\" height=\"7\" rx=\"1\"/><rect x=\"14\" y=\"3\" width=\"7\" height=\"7\" rx=\"1\"/><rect x=\"3\" y=\"14\" width=\"7\" height=\"7\" rx=\"1\"/><rect x=\"14\" y=\"14\" width=\"7\" height=\"7\" rx=\"1\"/></svg></span>Play</button></nav>",
-      "css": ".ds-tabs { display:flex; padding:4px 6px; background:#161D1A; border-top:1px solid #2C3832; } .ds-tab { flex:1; display:flex; flex-direction:column; align-items:center; gap:2px; min-height:48px; padding:4px 0; border-radius:10px; border:2px solid transparent; background:transparent; color:#A9B2AC; font-family: Inter, system-ui, sans-serif; font-weight:500; font-size:11px; cursor:pointer; } .ds-tab:focus-visible { outline:none; border-color:#D4AE62; } .ds-tab-pill { display:flex; align-items:center; justify-content:center; width:56px; height:30px; border-radius:999px; border:1.5px solid transparent; box-sizing:border-box; } .ds-tab-on { color:#F3EFE6; font-weight:700; } .ds-tab-on .ds-tab-pill { background:#26312C; border-color:#D4AE62; color:#D4AE62; }"
+      "css": ".ds-tabs { display:flex; padding:4px 6px; background:#161D1A; border-top:1px solid #2C3832; } .ds-tab { flex:1; display:flex; flex-direction:column; align-items:center; gap:2px; min-height:48px; padding:4px 0; border-radius:10px; border:2px solid transparent; background:transparent; color:#A9B2AC; font-family: Inter, system-ui, sans-serif; font-weight:500; font-size:12px; cursor:pointer; } .ds-tab:focus-visible { outline:none; border-color:#D4AE62; } .ds-tab-pill { display:flex; align-items:center; justify-content:center; width:56px; height:30px; border-radius:999px; border:1.5px solid transparent; box-sizing:border-box; } .ds-tab-on { color:#F3EFE6; font-weight:700; } .ds-tab-on .ds-tab-pill { background:#26312C; border-color:#D4AE62; color:#D4AE62; }"
     },
     {
       "name": "Coach Note",
       "kind": "custom",
       "refersTo": "coach-note",
       "description": "Marcus speaks on cream paper, the only light surface in the chrome.",
-      "html": "<div class=\"ds-coach\"><div class=\"ds-coach-kicker\">MARCUS · COACH</div><div class=\"ds-coach-head\">Stand on 16 against a 10 here.</div><div class=\"ds-coach-detail\">The true count is +1, which meets this deviation's index.</div><button class=\"ds-coach-btn\">Try again</button></div>",
-      "css": ".ds-coach { display:grid; gap:10px; padding:16px; border-radius:16px; border:1px solid #2563C8; background:#F6F1E4; color:#1E1A14; font-family: Inter, system-ui, sans-serif; max-width:320px; } .ds-coach-kicker { font-weight:700; font-size:10px; letter-spacing:.5px; color:#2563C8; } .ds-coach-head { font-weight:700; font-size:17px; } .ds-coach-detail { font-size:14px; line-height:20px; color:#5E574B; } .ds-coach-btn { justify-self:start; min-height:48px; padding:12px 24px; border-radius:999px; border:2px solid #1E1A14; background:#1E1A14; color:#F6F1E4; font-family: Inter, system-ui, sans-serif; font-weight:700; font-size:16px; cursor:pointer; } .ds-coach-btn:focus-visible { outline:none; border-color:#2563C8; }"
+      "html": "<div class=\"ds-coach\"><div class=\"ds-coach-kicker\">Marcus · coach</div><div class=\"ds-coach-head\">Stand on 16 against a 10 here.</div><div class=\"ds-coach-detail\">The true count is +1, which meets this deviation's index.</div><button class=\"ds-coach-btn\">Try again</button></div>",
+      "css": ".ds-coach { display:grid; gap:10px; padding:16px; border-radius:16px; border:1px solid #2563C8; background:#F6F1E4; color:#1E1A14; font-family: Inter, system-ui, sans-serif; max-width:320px; } .ds-coach-kicker { font-weight:600; font-size:13px; color:#2563C8; } .ds-coach-head { font-weight:700; font-size:20px; } .ds-coach-detail { font-size:17px; line-height:24px; color:#5E574B; } .ds-coach-btn { justify-self:start; min-height:48px; padding:12px 24px; border-radius:999px; border:2px solid #1E1A14; background:#1E1A14; color:#F6F1E4; font-family: Inter, system-ui, sans-serif; font-weight:600; font-size:17px; cursor:pointer; } .ds-coach-btn:focus-visible { outline:none; border-color:#2563C8; }"
     },
     {
       "name": "Game Card",
       "kind": "custom",
       "refersTo": "game-card",
       "description": "Full-bleed photo game entry with a scrim band and a brass go button.",
-      "html": "<button class=\"ds-game\"><span class=\"ds-game-band\"><span class=\"ds-game-summary\">STRATEGY · COUNTING</span><span class=\"ds-game-row\"><span class=\"ds-game-title\">Blackjack</span><span class=\"ds-game-go\"><svg width=\"22\" height=\"22\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M5 12h14\"/><path d=\"m12 5 7 7-7 7\"/></svg></span></span></span></button>",
-      "css": ".ds-game { position:relative; display:flex; align-items:flex-end; width:100%; min-height:220px; padding:0; border:0; overflow:hidden; text-align:left; cursor:pointer; background: radial-gradient(circle at 50% 35%, #1B5A43, #123F2F 70%); } .ds-game:active { opacity:.85; } .ds-game:focus-visible { outline:3px solid #D4AE62; outline-offset:-3px; } .ds-game-band { display:grid; gap:4px; width:100%; padding:20px; background:linear-gradient(to bottom, rgba(0,0,0,0), rgba(0,0,0,.7) 40%); color:#FFFFFF; } .ds-game-summary { font-family: Inter, system-ui, sans-serif; font-weight:700; font-size:11px; letter-spacing:1px; } .ds-game-row { display:flex; align-items:center; gap:12px; } .ds-game-title { flex:1; font-family: Fraunces, Georgia, serif; font-size:34px; line-height:38px; } .ds-game-go { display:flex; align-items:center; justify-content:center; width:44px; height:44px; border-radius:22px; background:#D4AE62; color:#1A1406; }"
+      "html": "<button class=\"ds-game\"><span class=\"ds-game-band\"><span class=\"ds-game-summary\">Strategy · counting</span><span class=\"ds-game-row\"><span class=\"ds-game-title\">Blackjack</span><span class=\"ds-game-go\"><svg width=\"22\" height=\"22\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M5 12h14\"/><path d=\"m12 5 7 7-7 7\"/></svg></span></span></span></button>",
+      "css": ".ds-game { position:relative; display:flex; align-items:flex-end; width:100%; min-height:220px; padding:0; border:0; overflow:hidden; text-align:left; cursor:pointer; background: radial-gradient(circle at 50% 35%, #1B5A43, #123F2F 70%); } .ds-game:active { opacity:.85; } .ds-game:focus-visible { outline:3px solid #D4AE62; outline-offset:-3px; } .ds-game-band { display:grid; gap:4px; width:100%; padding:20px; background:linear-gradient(to bottom, rgba(0,0,0,0), rgba(0,0,0,.7) 40%); color:#FFFFFF; } .ds-game-summary { font-family: Inter, system-ui, sans-serif; font-weight:600; font-size:13px; } .ds-game-row { display:flex; align-items:center; gap:12px; } .ds-game-title { flex:1; font-family: Fraunces, Georgia, serif; font-size:36px; line-height:40px; } .ds-game-go { display:flex; align-items:center; justify-content:center; width:44px; height:44px; border-radius:22px; background:#D4AE62; color:#1A1406; }"
     },
     {
       "name": "Chip Rack",
@@ -778,7 +791,7 @@
       "refersTo": "chip-rack",
       "description": "Walnut rail with denomination chips; selection is a brass ring plus check.",
       "html": "<div class=\"ds-rack\"><div class=\"ds-chips\"><button class=\"ds-chip-slot\" aria-pressed=\"false\"><span class=\"ds-chip\" style=\"background:#EDE7D8;color:#1E1A14\">1</span></button><button class=\"ds-chip-slot ds-chip-on\" aria-pressed=\"true\"><span class=\"ds-chip\" style=\"background:#B83A33;color:#FFFFFF\">5</span></button><button class=\"ds-chip-slot\" aria-pressed=\"false\"><span class=\"ds-chip\" style=\"background:#2E7D4F;color:#FFFFFF\">25</span></button><button class=\"ds-chip-slot\" aria-pressed=\"false\"><span class=\"ds-chip\" style=\"background:#1D1F22;color:#FFFFFF\">100</span></button></div><div class=\"ds-rack-cap\">Chip value: 5</div></div>",
-      "css": ".ds-rack { display:grid; gap:8px; padding:12px; border-radius:16px; background:#3A2A1E; font-family: Inter, system-ui, sans-serif; } .ds-chips { display:flex; flex-wrap:wrap; gap:4px; } .ds-chip-slot { display:flex; align-items:center; justify-content:center; min-width:56px; min-height:56px; padding:0; border-radius:999px; border:2px solid transparent; background:transparent; cursor:pointer; } .ds-chip-slot:focus-visible { outline:2px solid #D4AE62; outline-offset:1px; } .ds-chip-on { border-color:#D4AE62; } .ds-chip { display:flex; align-items:center; justify-content:center; width:48px; height:48px; border-radius:24px; font-weight:700; font-size:15px; } .ds-rack-cap { font-size:12px; color:#F3EFE6; }"
+      "css": ".ds-rack { display:grid; gap:8px; padding:12px; border-radius:16px; background:#3A2A1E; font-family: Inter, system-ui, sans-serif; } .ds-chips { display:flex; flex-wrap:wrap; gap:4px; } .ds-chip-slot { display:flex; align-items:center; justify-content:center; min-width:56px; min-height:56px; padding:0; border-radius:999px; border:2px solid transparent; background:transparent; cursor:pointer; } .ds-chip-slot:focus-visible { outline:2px solid #D4AE62; outline-offset:1px; } .ds-chip-on { border-color:#D4AE62; } .ds-chip { display:flex; align-items:center; justify-content:center; width:48px; height:48px; border-radius:24px; font-weight:700; font-size:15px; } .ds-rack-cap { font-size:13px; color:#F3EFE6; }"
     }
   ],
   "narrative": {
@@ -789,7 +802,8 @@
       "One brass accent, used for the primary action, selection and progress.",
       "Fraunces for titles and moments, Inter for everything you read or operate.",
       "Real table materials (felt, rail, chips, card faces, pockets) carry their own colors, set apart from the app chrome.",
-      "Accessibility is built into the palette: every essential pairing is listed and contrast-tested in code."
+      "Accessibility is built into the palette: every essential pairing is listed and contrast-tested in code.",
+      "Type tuned for older eyes at the default text size: a 12 floor, sentence-case labels, and a three-step Text size setting."
     ],
     "rules": [
       {
@@ -808,13 +822,28 @@
         "section": "colors"
       },
       {
+        "name": "The Twelve Floor Rule",
+        "body": "Nothing on screen is smaller than 12 at Standard, including felt markings and chip values. If a label doesn't fit, the layout reflows, the label wraps or the copy gets shorter; the type never drops below its role.",
+        "section": "typography"
+      },
+      {
         "name": "The Serif Names, Sans Works Rule",
         "body": "Fraunces is used for titles and headline moments only, never for body text, buttons, labels or form input.",
         "section": "typography"
       },
       {
+        "name": "The Read It In Linen Rule",
+        "body": "Text the player must read (instructions, questions, results, errors) is Linen. Smoke is for supporting detail only.",
+        "section": "typography"
+      },
+      {
         "name": "The Scale Cap Rule",
-        "body": "Every text element sets `maxFontSizeMultiplier`: `textScale.display` (1.5×) for Fraunces, `textScale.body` (2×) for Inter. Layout reflows to accept the growth; type never shrinks to fit, except the tab bar label, which has a large-content viewer instead.",
+        "body": "The text step multiplies with the phone's text size: an element's size is `ramp[step][role] × system font scale`, with the system part capped by `maxFontSizeMultiplier`, `textScale.display` (1.5×) for Fraunces and `textScale.body` (2×) for Inter. Layout reflows to accept the growth, and type never shrinks to fit. The one exception is the tab bar label: it stays 12 and has a large-content viewer instead.",
+        "section": "typography"
+      },
+      {
+        "name": "The Presentation Only Rule",
+        "body": "The text step is saved per installation and is purely visual. It never changes scoring, timing, assistance, personal bests or which records are compared.",
         "section": "typography"
       },
       {
@@ -829,8 +858,9 @@
       "Do pair every status color with an icon, word or shape. Suits use four colors and their pips; selections get a check.",
       "Do add a new foreground/background pairing to `essentialPairs` before using it, and keep text at 4.5:1 and graphics at 3:1.",
       "Do reserve a transparent 2px border on every focusable control so the focus ring doesn't shift the layout.",
-      "Do set `maxFontSizeMultiplier` on every `Text` and let layouts reflow at large sizes.",
-      "Do keep numbers in Inter Bold and say them plainly. Practice, simulation and casino figures sit in visibly separate places."
+      "Do give every `Text` a ramp role and a `maxFontSizeMultiplier`, and let layouts reflow at large sizes.",
+      "Do keep numbers in Inter Bold and say them plainly. Practice, simulation and casino figures sit in visibly separate places.",
+      "Do check every screen at Standard with the phone at its default text size, and again at Larger with the largest system size."
     ],
     "donts": [
       "Don't drift toward generic fintech: no cold white or blue-gray cards, no stock chart styling, no white backgrounds outside the coach note and card faces.",
@@ -838,6 +868,7 @@
       "Don't add shadows or elevation; use the next tonal step.",
       "Don't use felt, rail, chip or pocket colors in app chrome.",
       "Don't set body text, buttons, labels or inputs in Fraunces.",
+      "Don't go below 12, use all-caps kickers, or put must-read text in Smoke.",
       "Don't use pure black or pure white on chrome; Pure White is only for text over photos and on chips and pockets.",
       "Don't add a light theme or ad-hoc hex values; new colors are named tokens in `tokens.ts`."
     ]

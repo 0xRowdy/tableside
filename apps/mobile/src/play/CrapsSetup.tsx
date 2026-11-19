@@ -117,7 +117,7 @@ export function CrapsSetup({
       <SetupHeader title="Craps" subtitle={`New session · ${guided ? 'guided practice' : 'free play'} · standard craps`} onBack={() => router.navigate('/')} />
       <LearnThisGame game="craps" />
 
-      <Section label="HOW DO YOU WANT TO PLAY?">
+      <Section label="How do you want to play?">
         <ChoiceGroup
           label="How do you want to play?"
           options={[
@@ -140,7 +140,7 @@ export function CrapsSetup({
         />
       )}
 
-      <Section label="TABLE RULES">
+      <Section label="Table rules">
         <FieldLabel>Maximum odds</FieldLabel>
         <ChoiceGroup
           label="Maximum odds"
@@ -152,15 +152,15 @@ export function CrapsSetup({
         <Help>The field is one roll: 3, 4, 9, 10 and 11 pay even money and 5, 6, 7 and 8 lose.</Help>
       </Section>
 
-      <Section label="TABLE LIMITS">
+      <Section label="Table limits">
         {GROUPS.map((group) => (
-          <Section key={group.key} label={group.label.toUpperCase()}>
+          <Section key={group.key} label={group.label}>
             <GroupFields limits={limits} group={group} />
           </Section>
         ))}
       </Section>
 
-      <Section label="HOUSE EDGE">
+      <Section label="House edge">
         <FieldLabel>
           Pass and come {edge('pass').percent}% · Don&apos;t pass and don&apos;t come {edge('dont-pass').percent}% · Odds 0%
         </FieldLabel>

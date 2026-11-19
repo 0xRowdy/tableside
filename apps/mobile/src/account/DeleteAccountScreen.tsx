@@ -85,13 +85,13 @@ export function DeleteAccountScreen({ back, onExport }: { back: { label: string;
         </>
       ) : (
         <>
-          <GroupLabel>BEFORE YOU GO</GroupLabel>
+          <GroupLabel>Before you go</GroupLabel>
           <Group>
             <ListRow icon={Download} title="Export my data first" detail="Get a copy of your data before you go. Deletion doesn't wait for it." onPress={onExport} />
           </Group>
-          <GroupLabel>YOUR SUBSCRIPTION</GroupLabel>
+          <GroupLabel>Your subscription</GroupLabel>
           <BillingHelpRows />
-          <GroupLabel>IF YOU SCHEDULE DELETION</GroupLabel>
+          <GroupLabel>If you schedule deletion</GroupLabel>
           <Group>
             <ListRow icon={Lock} title="Access locks now" detail="Practice and your account lock now, and on your other devices once they connect." />
             <ListRow icon={EyeOff} title="Public content is hidden" detail="Your profile, strategies, ratings and contributions are hidden at once." />
@@ -108,7 +108,7 @@ export function DeleteAccountScreen({ back, onExport }: { back: { label: string;
             <Button label="Delete permanently now" variant="ghost" stretch disabled={busy} onPress={() => void choosePermanent()} />
           ) : (
             <>
-              <GroupLabel>IF YOU DELETE PERMANENTLY NOW</GroupLabel>
+              <GroupLabel>If you delete permanently now</GroupLabel>
               <Group>
                 <ListRow icon={CloudOff} title="Records that haven't synced are lost" detail={unsyncedDetail(waiting)} />
                 <ListRow

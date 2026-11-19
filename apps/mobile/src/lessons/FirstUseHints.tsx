@@ -2,10 +2,11 @@
 import { HINTS, type HintId } from '@tableside/definitions';
 import { CircleHelp } from 'lucide-react-native';
 import { createContext, useContext, useState, type ReactNode } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/theme/tokens';
+import { makeStyles } from '@/theme/type';
 import { gotItLabel, HELP_HINT, HELP_LABEL, hintKicker, GOT_IT, REREAD_FROM_HELP } from '@/training/lesson-text';
 import type { TrainingService } from '@/training/service';
 import { useLearningOf } from '@/training/TrainingProvider';
@@ -40,6 +41,7 @@ export function ScreenHints({ service, ids, children }: { service: TrainingServi
 }
 
 export function FirstUseHint({ id }: { id: HintId }) {
+  const styles = useStyles();
   const hints = useContext(ScreenHintContext);
   const { focused, focusProps } = useKeyboardFocus();
   if (!hints?.shows(id)) return null;
@@ -79,6 +81,7 @@ export function useReopenHints(): () => void {
 }
 
 export function HelpButton() {
+  const styles = useStyles();
   const hints = useContext(ScreenHintContext);
   const { focused, focusProps } = useKeyboardFocus();
   if (!hints?.any) return null;
@@ -99,16 +102,16 @@ export function HelpButton() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((type) => ({
   hint: { gap: 6, paddingVertical: space[3], paddingHorizontal: space[4], borderRadius: radius.lg, borderWidth: 1, borderColor: palette.primary, backgroundColor: palette.popover },
-  kicker: { fontFamily: fonts.uiBold, fontSize: 10, letterSpacing: 1, color: palette.primary },
-  text: { fontFamily: fonts.ui, fontSize: 13, lineHeight: 19, color: palette.foreground },
+  kicker: { fontFamily: fonts.uiSemiBold, ...type.label, color: palette.primary },
+  text: { fontFamily: fonts.ui, ...type.secondary, color: palette.foreground },
   footer: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: space[2] },
-  reread: { flexShrink: 1, fontFamily: fonts.ui, fontSize: 12, color: palette.mutedForeground },
+  reread: { flexShrink: 1, fontFamily: fonts.ui, ...type.caption, color: palette.mutedForeground },
   gotIt: { minHeight: MIN_TOUCH_TARGET, justifyContent: 'center', paddingHorizontal: space[4], borderRadius: radius.md, borderWidth: 2, borderColor: palette.transparent },
-  gotItText: { fontFamily: fonts.uiBold, fontSize: 14, color: palette.foreground },
+  gotItText: { fontFamily: fonts.uiSemiBold, ...type.body, color: palette.foreground },
   help: { minWidth: 56, minHeight: 52, alignItems: 'center', justifyContent: 'center', gap: 2, paddingHorizontal: space[1], borderRadius: 10, borderWidth: 2, borderColor: palette.transparent },
-  helpText: { fontFamily: fonts.uiBold, fontSize: 11, color: palette.foreground },
+  helpText: { fontFamily: fonts.uiSemiBold, ...type.label, color: palette.foreground },
   pressed: { opacity: 0.8 },
   focused: { borderColor: palette.ring },
-});
+}));

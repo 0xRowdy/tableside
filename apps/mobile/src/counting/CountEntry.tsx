@@ -3,11 +3,12 @@
 import { CornerDownLeft, Delete, Info, SkipForward } from 'lucide-react-native';
 import type { CountRange } from '@tableside/engine';
 import { useState, type ReactNode } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, Text, TextInput, View } from 'react-native';
 
 import { Button } from '@/components/Button';
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/theme/tokens';
+import { makeStyles } from '@/theme/type';
 import { CHANGE_SIGN, COUNT_SKIP, COUNT_SKIP_HINT, countProblemText, DELETE_DIGIT, parseCount, SUBMIT, toggleSign, type CountProblem } from '@/training/challenge-text';
 
 const DIGITS = ['1', '2', '3', '4', '5', '6', '7', '8', '9'];
@@ -31,6 +32,7 @@ export function CountEntry({
   next?: { readonly label: string; readonly enabled: boolean; readonly onPress: () => void };
   submitLabel?: string;
 }) {
+  const styles = useStyles();
   const [text, setText] = useState('');
   const [problem, setProblem] = useState<CountProblem | null>(null);
   const { focused, focusProps } = useKeyboardFocus();
@@ -100,6 +102,7 @@ export function CountEntry({
 }
 
 function Key({ label, accessibilityLabel, enabled, onPress }: { label: ReactNode; accessibilityLabel?: string; enabled: boolean; onPress: () => void }) {
+  const styles = useStyles();
   const { focused, focusProps } = useKeyboardFocus();
   return (
     <Pressable
@@ -122,10 +125,10 @@ function Key({ label, accessibilityLabel, enabled, onPress }: { label: ReactNode
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((type) => ({
   entry: { gap: space[3] },
   problem: { flexDirection: 'row', alignItems: 'center', gap: space[3], padding: space[3], borderRadius: radius.md, borderWidth: 1, borderColor: palette.controlBorder, backgroundColor: palette.card },
-  problemText: { flex: 1, fontFamily: fonts.ui, fontSize: 14, lineHeight: 20, color: palette.foreground },
+  problemText: { flex: 1, fontFamily: fonts.ui, ...type.body, color: palette.foreground },
   field: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -138,13 +141,13 @@ const styles = StyleSheet.create({
     backgroundColor: palette.card,
   },
   fieldFocused: { borderColor: palette.ring },
-  fieldLabel: { fontFamily: fonts.ui, fontSize: 15, color: palette.mutedForeground },
-  fieldValue: { flex: 1, textAlign: 'right', fontFamily: fonts.uiBold, fontSize: 30, color: palette.foreground },
+  fieldLabel: { fontFamily: fonts.ui, ...type.secondary, color: palette.mutedForeground },
+  fieldValue: { flex: 1, textAlign: 'right', fontFamily: fonts.uiBold, ...type.figure, color: palette.foreground },
   keypad: { flexDirection: 'row', flexWrap: 'wrap', gap: space[3] - 2 },
   key: {
     flexBasis: '30%',
     flexGrow: 1,
-    minHeight: MIN_TOUCH_TARGET + 8,
+    minHeight: MIN_TOUCH_TARGET,
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: radius.md,
@@ -153,8 +156,8 @@ const styles = StyleSheet.create({
     backgroundColor: palette.secondary,
   },
   keyFocused: { borderColor: palette.ring, borderWidth: 2 },
-  keyText: { fontFamily: fonts.uiBold, fontSize: 22, color: palette.foreground },
+  keyText: { fontFamily: fonts.uiSemiBold, ...type.key, color: palette.foreground },
   actions: { flexDirection: 'row', gap: space[3] - 2 },
   action: { flex: 1 },
   pressed: { opacity: 0.8 },
-});
+}));

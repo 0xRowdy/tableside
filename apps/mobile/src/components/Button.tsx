@@ -1,8 +1,9 @@
 import type { LucideIcon } from 'lucide-react-native';
-import { Pressable, StyleSheet, Text } from 'react-native';
+import { Pressable, Text } from 'react-native';
 
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/theme/tokens';
+import { makeStyles } from '@/theme/type';
 
 export function Button({
   label,
@@ -23,6 +24,7 @@ export function Button({
   icon?: LucideIcon;
   accessibilityLabel?: string;
 }) {
+  const styles = useStyles();
   const { focused, focusProps } = useKeyboardFocus();
   const secondary = variant !== 'primary';
   return (
@@ -53,7 +55,7 @@ export function Button({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((type) => ({
   button: {
     minHeight: MIN_TOUCH_TARGET,
     alignSelf: 'flex-start',
@@ -76,7 +78,7 @@ const styles = StyleSheet.create({
   pressed: { opacity: 0.8 },
   disabled: { opacity: 0.4 },
   focused: { borderColor: palette.foreground },
-  label: { flexShrink: 1, fontFamily: fonts.uiBold, fontSize: 16, color: palette.primaryForeground, textAlign: 'center' },
+  label: { flexShrink: 1, fontFamily: fonts.uiSemiBold, ...type.body, color: palette.primaryForeground, textAlign: 'center' },
   secondaryLabel: { color: palette.foreground },
-  outlineLabel: { fontSize: 15 },
-});
+  outlineLabel: { ...type.body },
+}));

@@ -3,7 +3,7 @@
 import { router } from 'expo-router';
 import { TriangleAlert } from 'lucide-react-native';
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 
 import { Button } from '@/components/Button';
 import { Screen } from '@/components/Screen';
@@ -11,6 +11,7 @@ import { findGame } from '@/games';
 import type { IncompleteSessionSummary } from '@/practice/controller';
 import { usePractice } from '@/practice/PracticeProvider';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/theme/tokens';
+import { makeStyles } from '@/theme/type';
 
 import { GAME_WORDS } from './game-words';
 import { formatUnits } from './units';
@@ -24,6 +25,7 @@ const COPY = {
 } as const;
 
 export function IncompleteSession({ session }: { session: IncompleteSessionSummary }) {
+  const styles = useStyles();
   const { controller } = usePractice();
   const [explained, setExplained] = useState(false);
   const gameTitle = findGame(session.game)?.title ?? session.game;
@@ -89,16 +91,16 @@ export function IncompleteSession({ session }: { session: IncompleteSessionSumma
   );
 }
 
-const styles = StyleSheet.create({
-  title: { fontFamily: fonts.display, fontSize: 26, color: palette.foreground },
+const useStyles = makeStyles((type) => ({
+  title: { fontFamily: fonts.display, ...type.headline, color: palette.foreground },
   banner: { flexDirection: 'row', gap: space[3], padding: space[4], borderRadius: radius.lg, backgroundColor: palette.card, borderWidth: 1, borderColor: palette.primary },
   bannerText: { flex: 1, gap: space[1] },
-  bannerTitle: { fontFamily: fonts.uiBold, fontSize: 14, color: palette.foreground },
-  muted: { fontFamily: fonts.ui, fontSize: 14, color: palette.mutedForeground },
-  explanation: { fontFamily: fonts.ui, fontSize: 14, color: palette.foreground },
+  bannerTitle: { fontFamily: fonts.uiSemiBold, ...type.body, color: palette.foreground },
+  muted: { fontFamily: fonts.ui, ...type.secondary, color: palette.mutedForeground },
+  explanation: { fontFamily: fonts.ui, ...type.body, color: palette.foreground },
   action: { minHeight: MIN_TOUCH_TARGET, justifyContent: 'center', alignSelf: 'flex-start' },
-  actionText: { fontFamily: fonts.uiBold, fontSize: 14, color: palette.primary },
+  actionText: { fontFamily: fonts.uiSemiBold, ...type.body, color: palette.primary },
   details: { gap: space[2], padding: space[4], borderRadius: radius.lg, backgroundColor: palette.card, borderWidth: 1, borderColor: palette.border },
   kv: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: space[2] },
-  kvValue: { fontFamily: fonts.uiMedium, fontSize: 15, color: palette.foreground },
-});
+  kvValue: { fontFamily: fonts.uiMedium, ...type.body, color: palette.foreground },
+}));

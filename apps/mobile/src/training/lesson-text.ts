@@ -15,7 +15,7 @@ import type { InstructionWithheld, LessonAccess, LessonEntry, LessonView } from 
 
 export const LEARNING_TITLE = 'Learning';
 export const LEARNING_DETAIL = 'Lessons';
-export const LESSONS_LABEL = 'LESSONS';
+export const LESSONS_LABEL = 'Lessons';
 export const CATALOG_ROW = 'Lesson catalog';
 export const LEARNING_NOTE =
   "Lessons never score you, award anything or lock anything. They're available to every account, including when today's challenge attempts are used up. Start here and hint settings stay on this device.";
@@ -33,11 +33,11 @@ export const startHereDetail = (shown: boolean) =>
   shown ? 'On. The card shows on Home on this device until you dismiss it.' : 'Off because you dismissed it. Turn on to show the card again on this device.';
 
 // Spec 3 Lessons › Structure (First-use hints); S1-04 XjwQc, Learning NvGyZ; #146
-export const HINTS_LABEL = 'HINTS';
+export const HINTS_LABEL = 'Hints';
 export const HINTS_AGAIN = 'Show first-use hints again';
 export const HINTS_AGAIN_DETAIL = 'Bet selector, count entry and the show-count toggle hints reappear the next time you meet them.';
 export const HINTS_RESET = 'First-use hints will show again.';
-export const hintKicker = (name: string) => `NEW HERE · ${name.toUpperCase()}`;
+export const hintKicker = (name: string) => `New here · ${name.toLowerCase()}`;
 export const REREAD_FROM_HELP = 'Reread from Help (?)';
 export const GOT_IT = 'Got it';
 export const gotItLabel = (name: string) => `Got it, hide the ${name} hint`;
@@ -55,11 +55,11 @@ export const CATALOG_INTRO = 'Open any lesson, in any order. Finishing one just 
 export const FINDING_LESSONS = 'Finding your lessons…';
 
 const SECTION_LABEL: Record<LessonSection, string> = {
-  app: 'APP',
-  blackjack: 'BLACKJACK',
-  craps: 'STANDARD CRAPS',
-  roulette: 'ROULETTE',
-  builder: 'STRATEGY BUILDER',
+  app: 'App',
+  blackjack: 'Blackjack',
+  craps: 'Standard craps',
+  roulette: 'Roulette',
+  builder: 'Strategy builder',
 };
 
 const SECTION_NAME: Record<LessonSection, string> = { app: 'App', blackjack: 'Blackjack', craps: 'Craps', roulette: 'Roulette', builder: 'Strategy builder' };

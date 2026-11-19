@@ -31,12 +31,12 @@ export const CATEGORY_TEXT: Record<ChallengeCategory, { readonly title: string; 
 };
 
 export const COUNTING_TITLE = 'Counting';
-export const SUGGESTED_ORDER_LABEL = 'SUGGESTED ORDER · ALL FOUR AVAILABLE NOW';
+export const SUGGESTED_ORDER_LABEL = 'Suggested order · all four available now';
 export const RECOMMENDATIONS_NOTE = 'Recommendations use your accuracy only, never speed or winnings. Nothing here is locked.';
 export const NOT_READY_HINT = 'Not available in this version yet.';
 
-export const VARIANT_LABEL = 'VARIANT';
-export const WHAT_YOU_DO_LABEL = 'WHAT YOU’LL DO';
+export const VARIANT_LABEL = 'Variant';
+export const WHAT_YOU_DO_LABEL = 'What you’ll do';
 export const startLabel = (variant: ChallengeVariant) => `Start ${variantLabel(variant)} attempt`;
 export const FINDING_ATTEMPT = 'Finding your counting attempt…';
 
@@ -138,7 +138,7 @@ export const START_PROBLEM: Record<StartProblem, string> = {
 export const variantLabel = (variant: ChallengeVariant) => (variant === 'learn' ? 'Learn' : 'Check');
 
 // Spec 3 S3-02 buD2R, S3-04 qmDou, S3-05 qGARl; Attempt lifecycle › Automatic pacing; #136
-export const PACE_LABEL = 'CARD PACE';
+export const PACE_LABEL = 'Card pace';
 export const PACE_GROUP = 'Card pace';
 export function paceOption(pacing: ChallengePacing): { readonly label: string; readonly spoken: string } {
   const seconds = PACE_SECONDS[pacing];
@@ -178,7 +178,7 @@ export const hiLoText = (explanation: Pick<HiLoExplanation, 'rank' | 'value'>) =
 
 export function feedbackText(feedback: LearnFeedback, position: number): { readonly kicker: string; readonly headline: string; readonly detail: string } {
   const { explanation } = feedback;
-  const kicker = feedback.correct ? (feedback.scored ? 'CORRECT' : 'CORRECT ON RETRY · YOUR FIRST ANSWER IS SCORED') : 'NOT QUITE · YOUR FIRST ANSWER IS SCORED';
+  const kicker = feedback.correct ? (feedback.scored ? 'Correct' : 'Correct on retry · your first answer is scored') : 'Not quite · your first answer is scored';
   if (explanation.kind === 'conversion') {
     const answer = signed(explanation.trueCount);
     return { kicker: CONVERSION_KICKER, headline: feedback.correct ? `${answer} is right.` : `The true count is ${answer}.`, detail: conversionText(explanation) };
@@ -204,7 +204,7 @@ export const TRY_AGAIN = 'Try this card again';
 // Spec 3 S3-06 Qv1An
 export const NEXT_QUESTION = 'Next question';
 export const TRY_QUESTION_AGAIN = 'Try this question again';
-export const CONVERSION_KICKER = 'TRUE COUNT';
+export const CONVERSION_KICKER = 'True count';
 export const CONVERSION_LESSON_ACTION = 'Read the conversion lesson';
 
 export type ChoiceState = 'your-answer' | 'your-pick' | 'correct' | 'recorded' | null;
@@ -328,7 +328,7 @@ export const ASSISTED_NOTE = {
 } as const;
 
 export const resultsNote = (variant: ChallengeVariant, allowance: AllowanceCopy | undefined) => [COMPLETED[variant].note, allowance?.results].filter(Boolean).join(' ');
-export const SCORES_LABEL = 'SKILL SCORES · FIRST ANSWERS';
+export const SCORES_LABEL = 'Skill scores · first answers';
 // Spec 3 S3-08 e5MASr; #138
 export const REVIEW_DECISIONS_LABEL = 'Review checkpoints and decisions';
 export const REVIEW_LABEL: Record<ChallengeCategory, string> = { 'card-values': 'Review cards', 'running-count': 'Review checkpoints', conversion: 'Review questions', table: 'Review checkpoints' };
@@ -433,7 +433,7 @@ export function driftText(review: readonly ReviewFact[], variant: ChallengeVaria
 }
 
 // Spec 3 S3-02 buD2R; Attempt lifecycle › Performance timer; #135
-export const TIMING_LABEL = 'TIMING';
+export const TIMING_LABEL = 'Timing';
 export const TIME_THIS = 'Time this attempt';
 export const TIME_THIS_DETAIL = 'Optional. Only perfect, unassisted, uninterrupted timed Check attempts set a fastest time.';
 

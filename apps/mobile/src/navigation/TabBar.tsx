@@ -7,6 +7,7 @@ import { Platform, Pressable, StyleSheet, Text, useWindowDimensions, View } from
 import { LargeContentContainer, LargeContentItem } from '../../modules/large-content-viewer';
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space } from '@/theme/tokens';
+import { makeStyles } from '@/theme/type';
 import type { TabDefinition } from './tabs';
 
 const ANDROID_LARGE_CONTENT_FONT_SCALE = Math.fround(1.3);
@@ -14,6 +15,7 @@ const ANDROID_LARGE_CONTENT_FONT_SCALE = Math.fround(1.3);
 const PreviewContext = createContext<{ preview: (tab: TabDefinition | null) => void }>({ preview: () => {} });
 
 export function TabBar({ children, style, ...props }: TabListProps & { children?: ReactNode }) {
+  const styles = useStyles();
   const insets = useSafeAreaInsets();
   const [previewed, setPreviewed] = useState<TabDefinition | null>(null);
 
@@ -28,6 +30,7 @@ export function TabBar({ children, style, ...props }: TabListProps & { children?
 }
 
 export function TabButton({ tab, isFocused = false, ref: _ref, ...props }: TabTriggerSlotProps & { tab: TabDefinition }) {
+  const styles = useStyles();
   const { preview } = use(PreviewContext);
   const { fontScale } = useWindowDimensions();
   const { focused: keyboardFocused, focusProps } = useKeyboardFocus({ onFocus: props.onFocus, onBlur: props.onBlur });
@@ -59,8 +62,6 @@ export function TabButton({ tab, isFocused = false, ref: _ref, ...props }: TabTr
         <Text
           allowFontScaling={false}
           numberOfLines={1}
-          adjustsFontSizeToFit
-          minimumFontScale={0.8}
           style={[styles.label, isFocused && styles.labelSelected]}
         >
           {tab.label}
@@ -75,6 +76,7 @@ function selectWithoutEvent(onPress: TabTriggerSlotProps['onPress']) {
 }
 
 function LargeContentPreview({ tab }: { tab: TabDefinition }) {
+  const styles = useStyles();
   const Icon = tab.icon;
   return (
     <View testID="large-content-preview" pointerEvents="none" importantForAccessibility="no-hide-descendants" style={styles.preview}>
@@ -86,7 +88,7 @@ function LargeContentPreview({ tab }: { tab: TabDefinition }) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((type) => ({
   bar: {
     flexDirection: 'column',
     justifyContent: 'flex-start',
@@ -119,7 +121,7 @@ const styles = StyleSheet.create({
     borderColor: palette.transparent,
   },
   iconWrapSelected: { backgroundColor: palette.secondary, borderColor: palette.primary },
-  label: { fontFamily: fonts.uiMedium, fontSize: 11, color: palette.mutedForeground },
+  label: { fontFamily: fonts.uiMedium, ...type.tab, color: palette.mutedForeground },
   labelSelected: { fontFamily: fonts.uiBold, color: palette.foreground },
   preview: {
     position: 'absolute',
@@ -136,5 +138,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: space[2],
   },
-  previewLabel: { fontFamily: fonts.uiBold, fontSize: 28, color: palette.foreground },
-});
+  previewLabel: { fontFamily: fonts.uiBold, ...type.figure, color: palette.foreground },
+}));

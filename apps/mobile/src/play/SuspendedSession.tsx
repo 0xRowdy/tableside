@@ -1,7 +1,7 @@
 // Spec 1 S1-11
 
 import { useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 
 import { Button } from '@/components/Button';
 import { Notice, NoticeText } from '@/components/Notice';
@@ -9,6 +9,7 @@ import { Screen } from '@/components/Screen';
 import type { ActivePracticeSnapshot, Suspension } from '@/practice/controller';
 import { usePractice } from '@/practice/PracticeProvider';
 import { fonts, palette, radius, space, textScale } from '@/theme/tokens';
+import { makeStyles } from '@/theme/type';
 
 import { EndSessionDialog } from './EndSessionDialog';
 import { GAME_WORDS, modeText, type GameWords } from './game-words';
@@ -23,6 +24,7 @@ const why = (words: GameWords): Record<Suspension['cause'], string> => ({
 });
 
 export function SuspendedSession({ snapshot, suspension }: { snapshot: ActivePracticeSnapshot; suspension: Suspension }) {
+  const styles = useStyles();
   const { controller } = usePractice();
   const [confirming, setConfirming] = useState(false);
   const { view, busy } = snapshot;
@@ -88,6 +90,7 @@ export function SuspendedSession({ snapshot, suspension }: { snapshot: ActivePra
 }
 
 function Row({ label, value }: { label: string; value: string }) {
+  const styles = useStyles();
   return (
     <View accessible accessibilityLabel={`${label}: ${value}`} style={styles.row}>
       <Text maxFontSizeMultiplier={textScale.body} style={styles.rowLabel}>{label}</Text>
@@ -96,16 +99,16 @@ function Row({ label, value }: { label: string; value: string }) {
   );
 }
 
-const styles = StyleSheet.create({
-  title: { fontFamily: fonts.display, fontSize: 26, color: palette.foreground },
-  body: { fontFamily: fonts.ui, fontSize: 14, lineHeight: 20, color: palette.mutedForeground },
+const useStyles = makeStyles((type) => ({
+  title: { fontFamily: fonts.display, ...type.headline, color: palette.foreground },
+  body: { fontFamily: fonts.ui, ...type.secondary, color: palette.mutedForeground },
   card: { gap: space[3], padding: space[4], borderRadius: radius.lg, backgroundColor: palette.card, borderWidth: 1, borderColor: palette.border },
   cardHead: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: space[2] },
-  cardTitle: { fontFamily: fonts.uiBold, fontSize: 16, color: palette.foreground },
+  cardTitle: { fontFamily: fonts.uiSemiBold, ...type.body, color: palette.foreground },
   tag: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: radius.pill, backgroundColor: palette.secondary },
-  tagText: { fontFamily: fonts.uiMedium, fontSize: 12, color: palette.foreground },
+  tagText: { fontFamily: fonts.uiMedium, ...type.caption, color: palette.foreground },
   row: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: space[2] },
-  rowLabel: { fontFamily: fonts.ui, fontSize: 14, color: palette.mutedForeground },
-  rowValue: { fontFamily: fonts.uiBold, fontSize: 15, color: palette.foreground },
-  caption: { fontFamily: fonts.ui, fontSize: 12.5, color: palette.mutedForeground },
-});
+  rowLabel: { fontFamily: fonts.ui, ...type.secondary, color: palette.mutedForeground },
+  rowValue: { fontFamily: fonts.uiSemiBold, ...type.body, color: palette.foreground },
+  caption: { fontFamily: fonts.ui, ...type.secondary, color: palette.mutedForeground },
+}));

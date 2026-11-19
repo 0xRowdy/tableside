@@ -114,7 +114,7 @@ export function BlackjackSetup({
       <SetupHeader title="Blackjack" subtitle={`New session · ${guided ? 'guided practice' : 'free play'}`} onBack={() => router.navigate('/')} />
       <LearnThisGame game="blackjack" />
 
-      <Section label="HOW DO YOU WANT TO PLAY?">
+      <Section label="How do you want to play?">
         <ChoiceGroup
           label="How do you want to play?"
           options={[
@@ -151,7 +151,7 @@ export function BlackjackSetup({
         )}
       </Section>
 
-      <Section label="TABLE RULES">
+      <Section label="Table rules">
         <ChoiceGroup
           label="Rule preset"
           stacked={fontScale > CHIPS_MAX_FONT_SCALE}
@@ -186,11 +186,11 @@ export function BlackjackSetup({
         <Help>Fixed for every preset: 6 decks · blackjack pays 3:2 · dealer peeks · double any two cards, including after splits · split to 4 hands.</Help>
       </Section>
 
-      <Section label="TABLE LIMITS · INITIAL WAGER">
+      <Section label="Table limits · initial wager">
         <GroupFields limits={limits} group={GROUPS[0] as LimitGroup<'initial'>} />
       </Section>
 
-      <Section label="HOUSE EDGE">
+      <Section label="House edge">
         <FieldLabel>House edge with basic strategy: {blackjackHouseEdge(preset).percent}%</FieldLabel>
         <Help>Off the top of a fresh six-deck shoe. A property of these rules, not a prediction of your results.</Help>
       </Section>

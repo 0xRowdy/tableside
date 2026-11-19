@@ -1,11 +1,12 @@
 // Spec 3 S3-11 sVqX1, LDmev; #143, #149
 
 import { ChevronRight, Circle, CircleCheckBig, CircleDotDashed, Clock, RefreshCcw, type LucideIcon } from 'lucide-react-native';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
 import { Group, GroupLabel, Note, SettingsScreen } from '@/settings/SettingsParts';
 import { fonts, palette, radius, space, textScale } from '@/theme/tokens';
+import { makeStyles } from '@/theme/type';
 import { NOT_READY_HINT } from '@/training/challenge-text';
 import type { LessonStatus } from '@/training/lesson-progress';
 import { CATALOG_INTRO, CHECK_BANNER, FINDING_LESSONS, lessonDetail, LESSONS_TITLE, RETURN_TO_ATTEMPT, sectionHeading } from '@/training/lesson-text';
@@ -33,6 +34,7 @@ export function LessonCatalog({
   checkUnfinished: boolean;
   onReturnToAttempt: () => void;
 }) {
+  const styles = useStyles();
   return (
     <SettingsScreen title={LESSONS_TITLE} back={back}>
       {checkUnfinished && <CheckBanner onReturn={onReturnToAttempt} />}
@@ -56,6 +58,7 @@ export function LessonCatalog({
 }
 
 function LessonRow({ lesson, first, onOpen }: { lesson: LessonEntry; first: boolean; onOpen: (id: string) => void }) {
+  const styles = useStyles();
   const { focused, focusProps } = useKeyboardFocus();
   const ready = lesson.steps !== null;
   const held = lesson.access.kind !== 'available';
@@ -90,6 +93,7 @@ function LessonRow({ lesson, first, onOpen }: { lesson: LessonEntry; first: bool
 
 // Spec 3 S3-11 LDmev
 function CheckBanner({ onReturn }: { onReturn: () => void }) {
+  const styles = useStyles();
   return (
     <View style={styles.banner}>
       <Clock color={palette.info} size={20} />
@@ -106,10 +110,10 @@ function CheckBanner({ onReturn }: { onReturn: () => void }) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((type) => ({
   banner: { flexDirection: 'row', gap: space[3], padding: space[4], borderRadius: radius.md, borderWidth: 1, borderColor: palette.info, backgroundColor: palette.card },
   bannerText: { flex: 1, gap: space[1] },
-  bannerTitle: { fontFamily: fonts.uiBold, fontSize: 14, lineHeight: 20, color: palette.foreground },
+  bannerTitle: { fontFamily: fonts.uiSemiBold, ...type.body, color: palette.foreground },
   held: { opacity: 0.6 },
   section: { gap: space[6] - 2 },
   row: { flexDirection: 'row', alignItems: 'center', gap: space[3], minHeight: 60, paddingVertical: space[2] + 2, paddingHorizontal: space[4], borderWidth: 2, borderColor: palette.transparent },
@@ -118,6 +122,6 @@ const styles = StyleSheet.create({
   focused: { borderColor: palette.ring },
   lead: { width: 36, height: 36, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', backgroundColor: palette.secondary },
   text: { flex: 1, gap: 2 },
-  title: { fontFamily: fonts.uiBold, fontSize: 15, lineHeight: 20, color: palette.foreground },
-  detail: { fontFamily: fonts.ui, fontSize: 13, lineHeight: 18, color: palette.mutedForeground },
-});
+  title: { fontFamily: fonts.uiSemiBold, ...type.body, color: palette.foreground },
+  detail: { fontFamily: fonts.ui, ...type.secondary, color: palette.mutedForeground },
+}));

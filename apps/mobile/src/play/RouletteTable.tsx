@@ -1,12 +1,13 @@
 import { isPlayCorrection, type CycleTurn, type RoulettePermittedView as PermittedView, type RoulettePocket } from '@tableside/engine';
 import { useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { ScrollView, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/Button';
 import type { ActivePracticeSnapshot } from '@/practice/controller';
 import { usePractice } from '@/practice/PracticeProvider';
 import { fonts, palette, space, textScale } from '@/theme/tokens';
+import { makeStyles } from '@/theme/type';
 
 import { BetSelector } from './bet-selector/BetSelector';
 import { betCorrectionCopy, betsText } from './coaching-text';
@@ -43,6 +44,7 @@ function limitsText(view: PermittedView): string {
 }
 
 export function RouletteTable({ snapshot }: { snapshot: ActiveSnapshot }) {
+  const styles = useStyles();
   const { controller } = usePractice();
   const insets = useSafeAreaInsets();
   const { width, height, fontScale } = useWindowDimensions();
@@ -177,7 +179,7 @@ export function RouletteTable({ snapshot }: { snapshot: ActiveSnapshot }) {
               )}
               {view.outcome && (
                 <View accessible accessibilityLabel={`Last spin: ${describePocket(view.outcome.pocket)}`} style={styles.lastSpin}>
-                  <Text maxFontSizeMultiplier={textScale.body} style={styles.sectionLabel}>LAST SPIN</Text>
+                  <Text maxFontSizeMultiplier={textScale.body} style={styles.sectionLabel}>Last spin</Text>
                   <View style={styles.lastSpinRow}>
                     <View style={[styles.pocketBadge, { backgroundColor: palette[POCKET_TOKEN[pocketColor(view.outcome.pocket)]] }]}>
                       <Text maxFontSizeMultiplier={textScale.body} style={styles.pocketBadgeText}>{String(view.outcome.pocket)}</Text>
@@ -248,21 +250,21 @@ const WHEEL_NAMES: Record<PermittedView['table']['wheel'], string> = { 'single-z
 
 const announcement = ({ facts, view }: ActiveSnapshot) => describeFacts(facts, view) ?? `${STATUS[view.phase]}. Balance ${formatUnits(view.balance)}.`;
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((type) => ({
   screen: { flex: 1, backgroundColor: palette.background },
   columns: { gap: space[3], paddingTop: space[2] },
   columnsSideBySide: { flexDirection: 'row', alignItems: 'flex-start' },
   column: { flex: 1 },
   tableView: { gap: space[3] },
   controls: { gap: space[3], paddingHorizontal: space[4] },
-  message: { fontFamily: fonts.uiMedium, fontSize: 15, lineHeight: 21, color: palette.foreground },
-  sectionLabel: { fontFamily: fonts.uiBold, fontSize: 10, letterSpacing: 0.5, color: palette.mutedForeground },
+  message: { fontFamily: fonts.uiMedium, ...type.body, color: palette.foreground },
+  sectionLabel: { fontFamily: fonts.uiSemiBold, ...type.label, color: palette.mutedForeground },
   lastSpin: { gap: space[1] },
   lastSpinRow: { flexDirection: 'row', alignItems: 'center', gap: space[2] },
   pocketBadge: { minWidth: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', paddingHorizontal: space[2] },
-  pocketBadgeText: { fontFamily: fonts.uiBold, fontSize: 16, color: palette.onImage },
-  lastSpinText: { fontFamily: fonts.uiBold, fontSize: 16, color: palette.foreground },
+  pocketBadgeText: { fontFamily: fonts.uiSemiBold, ...type.body, color: palette.onImage },
+  lastSpinText: { fontFamily: fonts.uiSemiBold, ...type.body, color: palette.foreground },
   summary: { gap: 2 },
-  summaryTitle: { fontFamily: fonts.uiBold, fontSize: 15, color: palette.foreground },
-  summaryText: { fontFamily: fonts.ui, fontSize: 12, color: palette.mutedForeground },
-});
+  summaryTitle: { fontFamily: fonts.uiSemiBold, ...type.body, color: palette.foreground },
+  summaryText: { fontFamily: fonts.ui, ...type.caption, color: palette.mutedForeground },
+}));

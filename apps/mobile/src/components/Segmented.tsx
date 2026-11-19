@@ -1,10 +1,11 @@
 // Spec 3 S3-02 buD2R, S3-10 OVKkc; #158, #140, #136
 
 import { Check } from 'lucide-react-native';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
-import { fonts, palette, radius, space, textScale } from '@/theme/tokens';
+import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/theme/tokens';
+import { makeStyles } from '@/theme/type';
 
 export interface SegmentOption<T extends string> {
   readonly value: T;
@@ -15,6 +16,7 @@ export interface SegmentOption<T extends string> {
 }
 
 export function Segmented<T extends string>({ label, options, selected, onSelect }: { label: string; options: readonly SegmentOption<T>[]; selected: T; onSelect: (value: T) => void }) {
+  const styles = useStyles();
   return (
     <View accessibilityRole="radiogroup" accessibilityLabel={label} style={styles.segmented}>
       {options.map((option) => (
@@ -25,6 +27,7 @@ export function Segmented<T extends string>({ label, options, selected, onSelect
 }
 
 function Segment<T extends string>({ option, selected, onPress }: { option: SegmentOption<T>; selected: boolean; onPress: () => void }) {
+  const styles = useStyles();
   const { focused, focusProps } = useKeyboardFocus();
   const disabled = option.disabled === true;
   return (
@@ -46,11 +49,14 @@ function Segment<T extends string>({ option, selected, onPress }: { option: Segm
   );
 }
 
-const styles = StyleSheet.create({
-  segmented: { flexDirection: 'row', gap: space[1], padding: space[1], borderRadius: radius.md, borderWidth: 1, borderColor: palette.controlBorder, backgroundColor: palette.muted },
+const useStyles = makeStyles((type) => ({
+  segmented: { flexDirection: 'row', flexWrap: 'wrap', gap: space[1], padding: space[1], borderRadius: radius.md, borderWidth: 1, borderColor: palette.controlBorder, backgroundColor: palette.muted },
   segment: {
-    flex: 1,
-    minHeight: 44,
+    flexGrow: 1,
+    flexShrink: 0,
+    flexBasis: 'auto',
+    maxWidth: '100%',
+    minHeight: MIN_TOUCH_TARGET,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -61,8 +67,8 @@ const styles = StyleSheet.create({
     borderColor: palette.transparent,
   },
   segmentSelected: { backgroundColor: palette.primary },
-  segmentText: { fontFamily: fonts.uiBold, fontSize: 14, color: palette.foreground },
+  segmentText: { fontFamily: fonts.uiSemiBold, ...type.body, color: palette.foreground },
   segmentTextSelected: { color: palette.primaryForeground },
   disabled: { opacity: 0.4 },
   focused: { borderColor: palette.ring },
-});
+}));

@@ -1,10 +1,11 @@
 // Spec 3 S3-12 l8pMS and aJV2y, S3-13 JJl51 and ZBpF3; #143, #144, #145
 
 import type { LucideIcon } from 'lucide-react-native';
-import { Pressable, StyleSheet, Text } from 'react-native';
+import { Pressable, Text } from 'react-native';
 
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
 import { fonts, palette, radius, space, textScale } from '@/theme/tokens';
+import { makeStyles } from '@/theme/type';
 
 export function NavButton({
   icon: Icon,
@@ -23,6 +24,7 @@ export function NavButton({
   disabled: boolean;
   onPress: () => void;
 }) {
+  const styles = useStyles();
   const { focused, focusProps } = useKeyboardFocus();
   return (
     <Pressable
@@ -42,7 +44,7 @@ export function NavButton({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((type) => ({
   navButton: {
     flexGrow: 1,
     flexBasis: 140,
@@ -60,10 +62,10 @@ const styles = StyleSheet.create({
   },
   block: { flexGrow: 0, flexBasis: 'auto', alignSelf: 'stretch' },
   navPrimary: { borderColor: palette.primary, backgroundColor: palette.primary },
-  navLabel: { flexShrink: 1, fontFamily: fonts.uiBold, fontSize: 15, color: palette.foreground, textAlign: 'center' },
+  navLabel: { flexShrink: 1, fontFamily: fonts.uiSemiBold, ...type.body, color: palette.foreground, textAlign: 'center' },
   navPrimaryLabel: { color: palette.primaryForeground },
   navQuiet: { borderColor: palette.transparent, backgroundColor: palette.transparent },
   pressed: { opacity: 0.8 },
   disabled: { opacity: 0.4 },
   focused: { borderColor: palette.ring, borderWidth: 2 },
-});
+}));

@@ -3,13 +3,14 @@
 import type { ChallengeVariant, RunningCountAid } from '@tableside/engine';
 import { Eye } from 'lucide-react-native';
 import { useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 
 import { Button } from '@/components/Button';
 import { Sheet, SheetText } from '@/components/Sheet';
 import { SwitchRow } from '@/components/SwitchRow';
 import { signed } from '@/play/blackjack-text';
 import { fonts, palette, radius, space, textScale } from '@/theme/tokens';
+import { makeStyles } from '@/theme/type';
 import { COUNT_LABEL, countAidDetail, REVEAL_WARNING, SHOW_COUNT, spokenValue } from '@/training/challenge-text';
 
 export function CountAid({
@@ -23,6 +24,7 @@ export function CountAid({
   enabled: boolean;
   onReveal: () => void;
 }) {
+  const styles = useStyles();
   const [showing, setShowing] = useState(false);
   const [warning, setWarning] = useState(false);
   const shown = showing && aid.revealed;
@@ -69,10 +71,10 @@ export function CountAid({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((type) => ({
   aid: { borderRadius: radius.lg, borderWidth: 1, borderColor: palette.border, backgroundColor: palette.card, overflow: 'hidden' },
   count: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: space[4], paddingBottom: space[3] },
-  countLabel: { fontFamily: fonts.ui, fontSize: 15, color: palette.mutedForeground },
-  countValue: { fontFamily: fonts.uiBold, fontSize: 28, color: palette.foreground },
-  lead: { fontFamily: fonts.ui, fontSize: 16, lineHeight: 23, color: palette.foreground },
-});
+  countLabel: { fontFamily: fonts.ui, ...type.secondary, color: palette.mutedForeground },
+  countValue: { fontFamily: fonts.uiBold, ...type.figure, color: palette.foreground },
+  lead: { fontFamily: fonts.ui, ...type.body, color: palette.foreground },
+}));

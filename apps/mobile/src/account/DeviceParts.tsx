@@ -2,16 +2,18 @@
 
 import type { DeviceEntry } from '@tableside/account';
 import { Check, CircleCheck, LogOut, Monitor, Smartphone, Tablet } from 'lucide-react-native';
-import { StyleSheet, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 
 import { Button } from '@/components/Button';
 import { Sheet, SheetText } from '@/components/Sheet';
 import { fonts, palette, radius, space, textScale } from '@/theme/tokens';
+import { makeStyles } from '@/theme/type';
 
 import { deviceShortName, lastActiveText, namesList } from './account-text';
 import { MethodButton } from './FirstRunParts';
 
 export function DeviceCard({ entry, now, disabled, onSignOut }: { entry: DeviceEntry; now: number; disabled: boolean; onSignOut?: () => void }) {
+  const styles = useStyles();
   const label = entry.label ?? 'Unknown device';
   const active = lastActiveText(entry.lastActiveAt, now);
   const Glyph = entry.platform === 'web' ? Monitor : entry.label?.startsWith('iPad') ? Tablet : Smartphone;
@@ -84,6 +86,7 @@ export function SignOutDevicesSheet({
 }
 
 export function DoneBanner({ names, email }: { names: readonly string[]; email: string | null }) {
+  const styles = useStyles();
   const title = names.length === 1 ? `Signed out ${names[0]}` : `Signed out ${names.length} other devices`;
   const emailed = email ? ` We've sent a security email to ${email}.` : " We've sent a security email.";
   return (
@@ -101,16 +104,16 @@ export function DoneBanner({ names, email }: { names: readonly string[]; email: 
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((type) => ({
   card: { gap: space[3] - 2, padding: space[4], borderRadius: radius.lg, borderWidth: 1, borderColor: palette.border, backgroundColor: palette.card },
   head: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: space[3] },
   lead: { width: 36, height: 36, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', backgroundColor: palette.secondary },
   text: { flex: 1, minWidth: 140, gap: 2 },
-  title: { fontFamily: fonts.uiBold, fontSize: 15, lineHeight: 21, color: palette.foreground },
-  detail: { fontFamily: fonts.ui, fontSize: 13, lineHeight: 18, color: palette.mutedForeground },
+  title: { fontFamily: fonts.uiSemiBold, ...type.body, color: palette.foreground },
+  detail: { fontFamily: fonts.ui, ...type.secondary, color: palette.mutedForeground },
   badge: { flexDirection: 'row', alignItems: 'center', gap: space[1] + 2, paddingVertical: space[1], paddingHorizontal: space[3] - 2, borderRadius: radius.pill, backgroundColor: palette.muted },
-  badgeText: { fontFamily: fonts.uiMedium, fontSize: 12, color: palette.mutedForeground },
+  badgeText: { fontFamily: fonts.uiMedium, ...type.caption, color: palette.mutedForeground },
   banner: { flexDirection: 'row', gap: space[3], padding: space[3] + 2, borderRadius: radius.lg, borderWidth: 1, borderColor: palette.border, backgroundColor: palette.card },
   bannerText: { flex: 1, gap: space[1] },
-  bannerTitle: { fontFamily: fonts.uiBold, fontSize: 14, color: palette.foreground },
-});
+  bannerTitle: { fontFamily: fonts.uiSemiBold, ...type.body, color: palette.foreground },
+}));

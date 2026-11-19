@@ -48,7 +48,7 @@ export function AccountDeleted() {
       <Actions>
         <Button label="Done" stretch disabled={busy} onPress={() => void done()} />
       </Actions>
-      <GroupLabel>DELETION STATUS</GroupLabel>
+      <GroupLabel>Deletion status</GroupLabel>
       <Group>
         <ListRow icon={CalendarClock} title="Deletion" detail={status === undefined ? 'Checking…' : deletionDetail(progress)} />
         <ListRow icon={ChartBar} title="Analytics data" detail={analyticsDetail(progress)} />
@@ -57,7 +57,7 @@ export function AccountDeleted() {
           <ListRow icon={KeyRound} title="Apple or Google sign-in" detail={PROVIDER_GRANT_DETAIL} />
         )}
       </Group>
-      <GroupLabel>YOUR SUBSCRIPTION</GroupLabel>
+      <GroupLabel>Your subscription</GroupLabel>
       <BillingHelpRows />
       <SupportLinks />
     </FirstRunScreen>

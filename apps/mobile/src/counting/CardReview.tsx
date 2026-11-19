@@ -2,12 +2,13 @@
 
 import { CATEGORY_METRIC, type ChallengeAttemptRecord } from '@tableside/engine';
 import { BookOpen, CircleCheckBig, CircleX, Lightbulb, Shuffle, SkipForward, TrendingUp } from 'lucide-react-native';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { LearnRow } from '@/lessons/LessonEntries';
 import { SetupHeader } from '@/play/setup/SetupParts';
 import { fonts, palette, radius, space, textScale } from '@/theme/tokens';
+import { makeStyles } from '@/theme/type';
 import {
   CATEGORY_TEXT,
   CORRECT_LABEL,
@@ -64,6 +65,7 @@ export function CardReview({
   backTo?: string;
   onBack: () => void;
 }) {
+  const styles = useStyles();
   const insets = useSafeAreaInsets();
   const { groupKey } = record;
   const drift = driftText(record.review, groupKey.variant);
@@ -125,6 +127,7 @@ export function CardReview({
 }
 
 function Value({ label, value }: { label: string; value: string }) {
+  const styles = useStyles();
   return (
     <View style={styles.value}>
       <Text maxFontSizeMultiplier={textScale.body} style={styles.valueLabel}>
@@ -137,19 +140,19 @@ function Value({ label, value }: { label: string; value: string }) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((type) => ({
   screen: { flex: 1, backgroundColor: palette.background },
   body: { gap: space[4], paddingTop: space[2], paddingHorizontal: space[4] },
   group: { borderRadius: radius.lg, borderWidth: 1, borderColor: palette.border, backgroundColor: palette.card, overflow: 'hidden' },
   row: { gap: space[2], paddingVertical: space[3], paddingHorizontal: space[4] },
   rowDivider: { borderTopWidth: 1, borderTopColor: palette.border },
   head: { flexDirection: 'row', alignItems: 'center', gap: space[2] },
-  rowTitle: { flex: 1, fontFamily: fonts.uiBold, fontSize: 15, color: palette.foreground },
-  status: { fontFamily: fonts.uiBold, fontSize: 13, color: palette.foreground },
+  rowTitle: { flex: 1, fontFamily: fonts.uiSemiBold, ...type.body, color: palette.foreground },
+  status: { fontFamily: fonts.uiSemiBold, ...type.label, color: palette.foreground },
   values: { flexDirection: 'row', gap: space[2] },
   value: { flex: 1, gap: 2 },
-  valueLabel: { fontFamily: fonts.ui, fontSize: 12, color: palette.mutedForeground },
-  valueText: { fontFamily: fonts.uiBold, fontSize: 18, color: palette.foreground },
+  valueLabel: { fontFamily: fonts.ui, ...type.caption, color: palette.mutedForeground },
+  valueText: { fontFamily: fonts.uiBold, ...type.heading, color: palette.foreground },
   drift: { flexDirection: 'row', gap: space[3], padding: space[4], borderRadius: radius.lg, backgroundColor: palette.card },
-  driftText: { flex: 1, fontFamily: fonts.ui, fontSize: 15, lineHeight: 21, color: palette.foreground },
-});
+  driftText: { flex: 1, fontFamily: fonts.ui, ...type.body, color: palette.foreground },
+}));

@@ -1,10 +1,11 @@
 import type { HintId } from '@tableside/definitions';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 
 import { Button } from '@/components/Button';
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
 import { FirstUseHint } from '@/lessons/FirstUseHints';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/theme/tokens';
+import { makeStyles } from '@/theme/type';
 
 export type Presentation = 'table' | 'selector';
 
@@ -17,6 +18,7 @@ const OPTIONS: readonly { value: Presentation; label: string }[] = [
 ];
 
 export function PresentationSwitch({ value, onChange }: { value: Presentation; onChange: (value: Presentation) => void }) {
+  const styles = useStyles();
   return (
     <>
       <View accessibilityRole="tablist" accessibilityLabel="Presentation" style={styles.switch}>
@@ -32,6 +34,7 @@ export function PresentationSwitch({ value, onChange }: { value: Presentation; o
 }
 
 function Option({ label, selected, onPress }: { label: string; selected: boolean; onPress: () => void }) {
+  const styles = useStyles();
   const { focused, focusProps } = useKeyboardFocus();
   return (
     <Pressable
@@ -51,6 +54,7 @@ function Option({ label, selected, onPress }: { label: string; selected: boolean
 }
 
 export function DraftBar({ name, amount, onEdit }: { name: string; amount: string; onEdit: () => void }) {
+  const styles = useStyles();
   return (
     <View style={styles.draft}>
       <View accessible accessibilityLabel={`Draft, ${name}, ${amount}, not placed`}>
@@ -62,7 +66,7 @@ export function DraftBar({ name, amount, onEdit }: { name: string; amount: strin
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((type) => ({
   hint: { marginHorizontal: space[4] },
   switch: { flexDirection: 'row', gap: space[1], marginHorizontal: space[4], padding: space[1], borderRadius: radius.pill, backgroundColor: palette.card },
   option: {
@@ -77,9 +81,9 @@ const styles = StyleSheet.create({
   },
   selected: { backgroundColor: palette.secondary, borderColor: palette.primary },
   focused: { borderColor: palette.ring },
-  label: { fontFamily: fonts.uiMedium, fontSize: 14, color: palette.mutedForeground, textAlign: 'center' },
+  label: { fontFamily: fonts.uiMedium, ...type.secondary, color: palette.mutedForeground, textAlign: 'center' },
   labelSelected: { fontFamily: fonts.uiBold, color: palette.foreground },
   draft: { gap: space[2], marginHorizontal: space[4], padding: space[3], borderRadius: radius.lg, borderWidth: 1, borderColor: palette.primary, backgroundColor: palette.card },
-  draftTitle: { fontFamily: fonts.uiBold, fontSize: 14, color: palette.foreground },
-  draftText: { fontFamily: fonts.ui, fontSize: 13, color: palette.mutedForeground },
-});
+  draftTitle: { fontFamily: fonts.uiSemiBold, ...type.body, color: palette.foreground },
+  draftText: { fontFamily: fonts.ui, ...type.secondary, color: palette.mutedForeground },
+}));

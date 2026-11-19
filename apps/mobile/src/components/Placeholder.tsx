@@ -1,10 +1,12 @@
 import type { ReactNode } from 'react';
-import { StyleSheet, Text } from 'react-native';
+import { Text } from 'react-native';
 
 import { Screen } from './Screen';
 import { fonts, palette, textScale } from '@/theme/tokens';
+import { makeStyles } from '@/theme/type';
 
 export function Placeholder({ title, message, children }: { title: string; message: string; children?: ReactNode }) {
+  const styles = useStyles();
   return (
     <Screen>
       <Text accessibilityRole="header" maxFontSizeMultiplier={textScale.display} style={styles.title}>
@@ -16,7 +18,7 @@ export function Placeholder({ title, message, children }: { title: string; messa
   );
 }
 
-const styles = StyleSheet.create({
-  title: { fontFamily: fonts.display, fontSize: 30, color: palette.foreground },
-  message: { fontFamily: fonts.ui, fontSize: 16, lineHeight: 24, color: palette.mutedForeground },
-});
+const useStyles = makeStyles((type) => ({
+  title: { fontFamily: fonts.display, ...type.display, color: palette.foreground },
+  message: { fontFamily: fonts.ui, ...type.body, color: palette.mutedForeground },
+}));

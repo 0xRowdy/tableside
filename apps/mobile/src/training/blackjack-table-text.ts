@@ -63,10 +63,10 @@ export function tableSubtitle(variant: ChallengeVariant, table: Pick<TableView, 
 
 export const edgeText = (rules: TableView['rules']) => `Edge with basic strategy: ${blackjackHouseEdge(blackjackPreset(rules.dealer, rules.lateSurrender)).percent}% (this preset)`;
 
-export const YOUR_SEAT = 'YOUR SEAT';
+export const YOUR_SEAT = 'Your seat';
 export const SIMULATED = 'Simulated';
 export const YOU_PLAY = 'You';
-export const ROUND_LABEL = 'ROUND';
+export const ROUND_LABEL = 'Round';
 export const ROUND_SPOKEN = 'Round';
 export const YOUR_SEAT_SPOKEN = 'Your seat';
 export const roundOf = (table: Pick<TableView, 'round' | 'rounds'>) => `${table.round} of ${table.rounds}`;
@@ -102,7 +102,7 @@ export function handText(hand: TableHandView): string {
 }
 
 // Spec 3 S3-07 v82z3
-export const OBSERVE_KICKER = 'OBSERVE · NO DECISIONS';
+export const OBSERVE_KICKER = 'Observe · no decisions';
 export const KEEP_THE_COUNT = 'Keep the count';
 export const observeText = (table: Pick<TableView, 'rules' | 'interval' | 'nextCheckpointRound'>) =>
   `A simulated player sits in your seat, betting the table minimum of ${table.rules.minimum} and playing basic strategy. Cards appear one at a time; the next waits for you. With N = ${table.interval} your next checkpoint is after round ${table.nextCheckpointRound}.`;
@@ -137,7 +137,7 @@ export function tableRecordedText(entered: ChallengeEntry, count: 'running' | 't
 }
 
 // Spec 3 S3-07 heGUV
-export const NEW_SHOE = 'NEW SHOE';
+export const NEW_SHOE = 'New shoe';
 export const SHUFFLED_TITLE = 'The shoe was reshuffled';
 export const shuffledText = (round: number) =>
   `The cut card came out in round ${round - 1}. That round finished, then the shoe was shuffled. The running count starts again at 0 and decks remaining is back to 6. Checkpoints carry on as before.`;
@@ -145,8 +145,8 @@ export const continueText = (round: number, interval: number) => (interval === 1
 
 // Spec 3 S3-07 AcmMa
 export const enteredLine = (entered: ChallengeEntry, count: 'running' | 'true', reference: number) =>
-  `${entered === 'skip' ? 'YOU SKIPPED' : `YOU ENTERED ${signed(entered)}`} · ${count === 'running' ? 'RUNNING' : 'TRUE'} COUNT IS ${signed(reference)}`;
-export const RUNNING_KICKER = 'RUNNING COUNT';
+  `${entered === 'skip' ? 'You skipped' : `You entered ${signed(entered)}`} · ${count === 'running' ? 'running' : 'true'} count is ${signed(reference)}`;
+export const RUNNING_KICKER = 'Running count';
 export const runningHeadline = (count: number) => `The running count is ${signed(count)}.`;
 export const ONLY_FIRST_SCORED = 'Only your first answer is scored. The next card waits until the count is right.';
 export const TRY_AGAIN = 'Try again';
@@ -179,7 +179,7 @@ export const RETRY_WITH_NEW_SHOE = 'Retry with a new shoe';
 export const completedRounds = (rounds: number) => `${rounds} of ${rounds} rounds`;
 
 // Spec 3 S3-02 FkMDw; #138
-export const COUNTING_MODE = 'COUNTING MODE';
+export const COUNTING_MODE = 'Counting mode';
 export const WITH_BASIC = 'With basic';
 export const WITH_DEVIATIONS = 'With deviations';
 export const MODE_HELP = 'With deviations also asks for the true count at each count-dependent decision.';
@@ -190,7 +190,7 @@ export const PLAY_NOTICE = {
 } as const;
 
 // Spec 3 Play challenge funding (#20); S3-02 FkMDw, Al6Pw; #139
-export const BETTING = 'BETTING';
+export const BETTING = 'Betting';
 export const BET_SCHEDULE_TITLE = 'Hi-Lo bet schedule';
 export const BET_SCHEDULE_DETAIL = '1 / 2 / 4 / 6 / 8 units by true count. Scored separately from play and counting.';
 export const BASE_WAGER = 'Base wager';
@@ -217,14 +217,14 @@ export const START_UNAVAILABLE_SHORT = 'Start is unavailable until the starting 
 export const START_UNAVAILABLE = 'Start is unavailable until the settings above are fixed.';
 
 // Spec 3 Play challenge funding; S3-07 fiCRg, qvatd; Amendment 2 §3; #139
-export const ATTEMPT_BALANCE = 'ATTEMPT BALANCE';
+export const ATTEMPT_BALANCE = 'Attempt balance';
 export const ATTEMPT_BALANCE_SPOKEN = 'Attempt balance';
 export const betLabel = (amount: string) => `Bet ${formatUnits(amount)}`;
-export const BET_KICKER = 'PLAY · YOUR BET';
+export const BET_KICKER = 'Play · your bet';
 export const OPENING_WAGER = 'Your opening wager';
 export const betText = (round: number) => `Choose round ${round}’s opening wager. The bet schedule sizes it by the true count, and betting adherence scores your first choice.`;
 export const CHECK_BET_NOTE = 'During Check, Tableside won’t say which amount the strategy would choose, or whether yours matches it.';
-export const FUNDING_KICKER = 'FUNDING';
+export const FUNDING_KICKER = 'Funding';
 export const FUNDING_TITLE = 'Your balance can’t cover every opening wager';
 const orList = (items: readonly string[]) => (items.length < 2 ? items.join('') : `${items.slice(0, -1).join(', ')} or ${items.at(-1)}`);
 export const fundingText = (balance: string, amounts: readonly string[]) => `Balance ${formatUnits(balance)}. Legal opening wagers you can afford: ${orList(amounts.map(formatUnits))}. Choose one to keep playing.`;
@@ -239,7 +239,7 @@ export const CHOOSE_ANOTHER = 'Choose another amount';
 export const betBadge = (wager: string) => `Bet ${formatUnits(wager)}`;
 
 // Spec 3 Play challenge funding › Mid-round shortfalls; S3-07 RDS5F; #139
-export const FUNDS_KICKER = 'NOT ENOUGH IN THIS ATTEMPT’S BALANCE';
+export const FUNDS_KICKER = 'Not enough in this attempt’s balance';
 export const fundsRefusedText = (move: PlayChoice, needs: string, balance: string) =>
   `${MOVE_LABEL[move]} isn’t affordable: it needs ${move === 'insure' ? '' : 'another '}${formatUnits(needs)} and your balance is ${formatUnits(balance)}. Choose another move. Not having the funds is never counted against you; your play is scored against the legal fallback.`;
 export const FUNDS_NOTE = 'The same applies to split and insurance. Tableside never doubles or insures for less.';
@@ -271,7 +271,7 @@ export const insufficientFundsNote = (check: boolean) =>
     ? 'An ended-early attempt can’t set a personal best or earn a milestone. It also restarts progress toward the readiness milestone for these settings.'
     : 'An ended-early attempt can’t set a personal best.';
 export const SKILL_FIRST = 'Your skill scores come first. Challenge finances are shown beside them, never inside them.';
-export const FINANCES_LABEL = 'CHALLENGE FINANCES · NOT A SKILL SCORE';
+export const FINANCES_LABEL = 'Challenge finances · not a skill score';
 export const FINANCES_NOTE = 'Kept in this challenge’s history only. Never added to your practice totals or training bankroll.';
 export const financeValues = (finances: ChallengeFinances) => [
   { label: 'Starting', value: formatUnits(finances.startingBalance) },
@@ -297,11 +297,11 @@ export function betReviewText(fact: TableBetReview): { readonly outcome: 'match'
 }
 
 // Spec 3 S3-07 E3Gbeh
-export const PLAY_DEAL_KICKER = 'PLAY · DEALING';
+export const PLAY_DEAL_KICKER = 'Play · dealing';
 export const PLAY_DEAL_TEXT = 'Cards appear one at a time in dealing order; the next waits for you. Keep the count as they land.';
 
 // Spec 3 S3-07 E3Gbeh, kLgWV; User stories 37, 38
-export const PLAY_KICKER = 'PLAY · YOUR MOVE';
+export const PLAY_KICKER = 'Play · your move';
 export const YOUR_MOVE = 'Your move';
 export function moveText(table: TableView): string {
   const decision = table.decision as NonNullable<TableView['decision']>;
@@ -320,7 +320,7 @@ export const HAND_MOVES: readonly PlayChoice[] = ['hit', 'stand', 'double', 'spl
 export const INSURANCE_MOVES: readonly PlayChoice[] = ['insure', 'decline-insurance'];
 
 // Spec 3 S3-07 kLgWV
-export const REFUSED_KICKER = 'THAT MOVE ISN’T AVAILABLE';
+export const REFUSED_KICKER = 'That move isn’t available';
 export const CHOOSE_AGAIN = 'Choose again';
 export function refusedText(table: TableView, move: PlayChoice, variant: ChallengeVariant): { readonly title: string; readonly detail: string } {
   const decision = table.decision as NonNullable<TableView['decision']>;
@@ -387,18 +387,18 @@ export function attributionText(fact: TableDecisionReview): string | null {
 }
 
 // Spec 3 S3-02 ZreSb
-export const WHO_PLAYS = 'WHO PLAYS YOUR SEAT';
+export const WHO_PLAYS = 'Who plays your seat';
 export const OBSERVE = 'Observe';
 export const PLAY = 'Play';
 export const SEAT_HELP = 'Observe: a simulated player plays your seat at the table minimum and you keep the count. Play: you also make the playing decisions.';
-export const RULE_PRESET = 'RULE PRESET';
+export const RULE_PRESET = 'Rule preset';
 export const PRESET_TEXT: Record<BlackjackPreset, string> = { S17_LS: 'S17 · late surrender', S17_noLS: 'S17 · no surrender', H17_LS: 'H17 · late surrender', H17_noLS: 'H17 · no surrender' };
 export const DEFAULT_PRESET_DETAIL = 'Default · six decks · 3:2';
-export const SHOE_AND_TABLE = 'SHOE AND TABLE';
+export const SHOE_AND_TABLE = 'Shoe and table';
 export const PENETRATION_DETAIL = 'dealt before the shuffle · 50–80% in steps of 5';
 export const playersText = (count: number) => players(count);
 export const PLAYERS_DETAIL = 'extra simulated players · 0–4';
-export const COUNT_CHECKPOINTS = 'COUNT CHECKPOINTS';
+export const COUNT_CHECKPOINTS = 'Count checkpoints';
 export const intervalText = (interval: number) => (interval === 1 ? 'Every round' : `Every ${interval} rounds`);
 export const INTERVAL_DETAIL = 'N = 1 to 10';
 export const INTERVAL_HELP = 'At 1 you enter the running and true count before each bet and the running count after each round. Above 1, only after every N rounds and the last partial block.';

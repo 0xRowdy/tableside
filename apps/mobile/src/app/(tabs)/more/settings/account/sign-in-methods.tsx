@@ -156,7 +156,7 @@ export default function SignInMethodsScreen() {
       ))}
       {missing.length > 0 && (
         <>
-          <GroupLabel>ADD A METHOD</GroupLabel>
+          <GroupLabel>Add a method</GroupLabel>
           <Group>
             {missing.map((method) => (
               <AddMethodRow key={method} method={method} detail={backupDetail} disabled={busy} onPress={() => add(method)} />

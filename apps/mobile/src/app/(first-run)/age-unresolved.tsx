@@ -14,7 +14,7 @@ export default function AgeUnresolved() {
       bar={{ title: 'Create your account' }}
       intro="No account was created and nothing was kept. You can try again when your device can share an age range, or answer the age question if it's offered."
     >
-      <GroupLabel>NEED HELP?</GroupLabel>
+      <GroupLabel>Need help?</GroupLabel>
       <RestrictedPathRows only={['contact-support', 'privacy-request']} />
       <Actions>
         <Button label="Try the age check again" variant="secondary" stretch onPress={() => router.replace('/age')} />

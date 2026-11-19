@@ -151,6 +151,9 @@ export const essentialPairs: readonly {
   { use: 'failing record label', kind: 'text', foreground: 'destructive', background: 'card' },
   { use: 'banner action', kind: 'text', foreground: 'primary', background: 'card' },
   { use: 'progress fill on its track', kind: 'graphic', foreground: 'primary', background: 'muted' },
+  { use: 'selected text size option detail', kind: 'text', foreground: 'mutedForeground', background: 'secondary' },
+  { use: 'selected text size option outline and icon', kind: 'graphic', foreground: 'primary', background: 'secondary' },
+  { use: 'Home Community button label and icon', kind: 'text', foreground: 'foreground', background: 'secondary' },
 ];
 
 export const space = { 1: 4, 2: 8, 3: 12, 4: 16, 6: 24, 8: 32, 12: 48, 16: 64 } as const;
@@ -160,10 +163,48 @@ export const fonts = {
   display: 'Fraunces_400Regular',
   ui: 'Inter_400Regular',
   uiMedium: 'Inter_500Medium',
+  uiSemiBold: 'Inter_600SemiBold',
   uiBold: 'Inter_700Bold',
 } as const;
 
 export const textScale = { display: 1.5, body: 2 } as const;
+
+// docs/decisions/text-size-type-floor.md; design/Tableside.pen --text-* (bi8Au)
+export const TEXT_STEPS = ['standard', 'large', 'larger'] as const;
+export type TextStep = (typeof TEXT_STEPS)[number];
+
+export type TypeRole = 'tab' | 'caption' | 'label' | 'secondary' | 'body' | 'heading' | 'key' | 'headline' | 'display' | 'displayCard' | 'figure';
+
+export const typeRamp: Readonly<Record<TextStep, Readonly<Record<TypeRole, number>>>> = {
+  standard: { tab: 12, caption: 12, label: 13, secondary: 15, body: 17, heading: 20, key: 24, headline: 24, display: 32, displayCard: 36, figure: 36 },
+  large: { tab: 12, caption: 14, label: 15, secondary: 17, body: 19, heading: 22, key: 26, headline: 27, display: 36, displayCard: 40, figure: 40 },
+  larger: { tab: 12, caption: 15, label: 16, secondary: 19, body: 21, heading: 25, key: 28, headline: 30, display: 40, displayCard: 44, figure: 44 },
+};
+
+export const typeLeading: Readonly<Record<TypeRole, number>> = {
+  tab: 1.2,
+  caption: 1.35,
+  label: 1.3,
+  secondary: 1.4,
+  body: 1.4,
+  heading: 1.25,
+  key: 1.15,
+  headline: 1.2,
+  display: 1.15,
+  displayCard: 1.1,
+  figure: 1.1,
+};
+
+export const SERIF_ROLES: ReadonlySet<TypeRole> = new Set(['headline', 'display', 'displayCard']);
+
+// Spec 3 Amendment 6 §1
+export const objectType = {
+  card: { rank: 20, suit: 15, pip: 30 },
+  largeCard: { rank: 40, suit: 28, pip: 60 },
+  splitCard: { rank: 15, pip: 18 },
+  chipValue: 16,
+  feltPrint: 18,
+} as const;
 
 // docs/decisions/mobile-device-support-accessibility.md Q1–Q9
 export const MIN_TOUCH_TARGET = 48;

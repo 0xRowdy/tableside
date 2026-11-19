@@ -59,7 +59,7 @@ describe('setup terms', () => {
     const asked: string[] = [];
     const terms = {
       funding: { source: 'training-bankroll', available: '500' },
-      allowance: { title: 'TRAINING BANKROLL', text: '500 training units available. Resets daily; no top-ups.' },
+      allowance: { title: 'Training bankroll', text: '500 training units available. Resets daily; no top-ups.' },
       seePremium: true,
     } as const;
     const { controller } = setup({

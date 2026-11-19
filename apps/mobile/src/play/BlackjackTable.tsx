@@ -16,14 +16,15 @@ import {
   type Card,
 } from '@tableside/engine';
 import { useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Pressable, ScrollView, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/Button';
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
 import type { ActiveSnapshot as Active } from '@/practice/controller';
 import { usePractice } from '@/practice/PracticeProvider';
-import { fonts, palette, radius, space, textScale } from '@/theme/tokens';
+import { fonts, objectType, palette, radius, space, textScale } from '@/theme/tokens';
+import { makeStyles, useTextStep } from '@/theme/type';
 
 import { BetSelector } from './bet-selector/BetSelector';
 import { draftAmountText, EMPTY_DRAFT, findChoice, isDraftPending, type BetDraft } from './bet-selector/catalog';
@@ -81,6 +82,7 @@ function phaseSteps(view: BlackjackPermittedView): PhaseStep[] {
 }
 
 export function BlackjackTable({ snapshot }: { snapshot: ActiveSnapshot }) {
+  const styles = useStyles();
   const { controller } = usePractice();
   const insets = useSafeAreaInsets();
   const { width, height, fontScale } = useWindowDimensions();
@@ -297,6 +299,7 @@ function tableNow(view: BlackjackPermittedView, handsText: string): TableNow {
 }
 
 function CountPanel({ view, count, betweenRounds }: { view: BlackjackPermittedView; count: BlackjackCount; betweenRounds: boolean }) {
+  const styles = useStyles();
   const { at, next } = deviationsAtCount(view.deviations, count.trueCount);
   return (
     <View
@@ -305,7 +308,7 @@ function CountPanel({ view, count, betweenRounds }: { view: BlackjackPermittedVi
       accessible
       accessibilityLabel={`Count supplied in this mode: true count ${signed(count.trueCount)}. Running count ${signed(count.running)}, ${count.decks} decks left.${betweenRounds && at ? ` Deviation at this count: ${deviationRule(at)}.` : ''}${betweenRounds && next ? ` Next index: ${next.situation} at ${signed(next.threshold)}.` : ''}`}
     >
-      <Text maxFontSizeMultiplier={textScale.body} style={styles.countLabel}>COUNT SUPPLIED IN THIS MODE</Text>
+      <Text maxFontSizeMultiplier={textScale.body} style={styles.countLabel}>Count supplied in this mode</Text>
       <Text maxFontSizeMultiplier={textScale.display} style={styles.countValue}>True count {signed(count.trueCount)}</Text>
       <Text maxFontSizeMultiplier={textScale.body} style={styles.hint}>{countWorking(count)}</Text>
       {betweenRounds && at && (
@@ -335,6 +338,7 @@ function Felt({
   wager: string | undefined;
   onSpot: () => void;
 }) {
+  const styles = useStyles();
   const round = view.outcome;
   const hands = round?.hands ?? [];
   const last = showingLastRound(view);
@@ -419,6 +423,7 @@ function lastResult(view: BlackjackPermittedView, facts: ActiveSnapshot['facts']
 const handNote = (hand: BlackjackHandView) => (hand.surrendered ? ' · surrendered' : hand.doubled ? ' · doubled' : '');
 
 function SplitHand({ view, hand, index, last }: { view: BlackjackPermittedView; hand: BlackjackHandView; index: number; last: boolean }) {
+  const styles = useStyles();
   const active = inHand(view) && view.outcome?.active === index;
   const stake = view.wagers.find((wager) => wager.target === hand.target)?.amount;
   return (
@@ -443,21 +448,24 @@ function SplitHand({ view, hand, index, last }: { view: BlackjackPermittedView; 
 }
 
 function PlayingCard({ card, small = false }: { card: Card | null; small?: boolean }) {
+  const styles = useStyles();
   if (card === null) return <FaceDownCard />;
   const color = palette[SUIT_TOKEN[card.suit]];
   return (
     <View accessible accessibilityLabel={cardName(card)} style={[styles.card, small && styles.cardSmall]}>
-      <Text maxFontSizeMultiplier={textScale.body} style={[styles.cardRank, small && styles.cardRankSmall, { color }]}>{cardRank(card)}</Text>
-      <Text maxFontSizeMultiplier={textScale.body} style={[styles.cardPip, small && styles.cardPipSmall, { color }]}>{SUIT_GLYPH[card.suit]}</Text>
+      <Text maxFontSizeMultiplier={1} style={[styles.cardRank, small && styles.cardRankSmall, { color }]}>{cardRank(card)}</Text>
+      <Text maxFontSizeMultiplier={1} style={[styles.cardPip, small && styles.cardPipSmall, { color }]}>{SUIT_GLYPH[card.suit]}</Text>
     </View>
   );
 }
 
 function EmptyCards() {
+  const styles = useStyles();
   return <View style={[styles.card, styles.cardEmpty]} />;
 }
 
 function BetSpot({ wager, chip, disabled, onPress, committed }: { wager: string | undefined; chip: string; disabled: boolean; onPress: () => void; committed: boolean }) {
+  const styles = useStyles();
   const { focused, focusProps } = useKeyboardFocus();
   return (
     <Pressable
@@ -493,9 +501,15 @@ function unavailable(action: TableAction, view: BlackjackPermittedView): string 
   }
 }
 
+// Spec 1 Amendment 12 §5
+const actionRows = <T,>(actions: readonly T[], perRow: number): T[][] =>
+  Array.from({ length: Math.ceil(actions.length / perRow) }, (_, i) => actions.slice(i * perRow, i * perRow + perRow));
+
 function PlayActions({ view, enabled, onPlay }: { view: BlackjackPermittedView; enabled: boolean; onPlay: (action: BlackjackAction) => void }) {
+  const styles = useStyles();
   const offered = (action: BlackjackAction) => view.playActions.includes(action);
-  const rows: TableAction[][] = [['hit', 'stand', 'double'], view.table.lateSurrender ? ['split', 'surrender'] : ['split']];
+  const actions: TableAction[] = ['hit', 'stand', 'double', 'split', ...(view.table.lateSurrender ? (['surrender'] as const) : [])];
+  const rows = actionRows(actions, useTextStep() === 'larger' ? 2 : 3);
   const reasons = rows.flat().flatMap((action) => unavailable(action, view) ?? []);
   const round = view.outcome;
   const active = round?.active != null ? round.hands[round.active] : undefined;
@@ -538,6 +552,7 @@ function InsurancePanel({
   onInsure: () => void;
   onDecline: () => void;
 }) {
+  const styles = useStyles();
   const offer = view.insuranceOffer;
   const bet = view.wagers[0]?.amount;
   if (!offer || !bet) return null;
@@ -589,6 +604,7 @@ function BettingActions({
   onRebet: (amount: string) => void;
   onDeal: () => void;
 }) {
+  const styles = useStyles();
   if (view.phase === 'final-settlement' || view.phase === 'revealing-outcome' || view.phase === 'correction') return null;
   return (
     <View style={styles.actions}>
@@ -609,27 +625,27 @@ function BettingActions({
 
 const CARD_WIDTH = 56;
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((type) => ({
   screen: { flex: 1, backgroundColor: palette.background },
   flex: { flex: 1 },
-  edge: { fontFamily: fonts.ui, fontSize: 12, color: palette.mutedForeground, paddingHorizontal: space[4] },
+  edge: { fontFamily: fonts.ui, ...type.caption, color: palette.mutedForeground, paddingHorizontal: space[4] },
   columns: { gap: space[3], paddingTop: space[2] },
   columnsSideBySide: { flexDirection: 'row', alignItems: 'flex-start' },
   column: { flex: 1 },
   tableView: { gap: space[2] },
   controls: { gap: space[3], paddingHorizontal: space[4] },
-  message: { fontFamily: fonts.uiMedium, fontSize: 15, lineHeight: 21, color: palette.foreground },
-  hint: { fontFamily: fonts.ui, fontSize: 13, color: palette.mutedForeground },
+  message: { fontFamily: fonts.uiMedium, ...type.body, color: palette.foreground },
+  hint: { fontFamily: fonts.ui, ...type.secondary, color: palette.mutedForeground },
   countPanel: { gap: 2, marginHorizontal: space[4], marginTop: space[2], padding: space[3], borderRadius: radius.lg, backgroundColor: palette.card, borderWidth: 1, borderColor: palette.border },
-  countLabel: { fontFamily: fonts.uiBold, fontSize: 10, letterSpacing: 0.5, color: palette.mutedForeground },
-  countValue: { fontFamily: fonts.display, fontSize: 20, color: palette.foreground },
-  countHint: { fontFamily: fonts.uiMedium, fontSize: 13, color: palette.foreground },
+  countLabel: { fontFamily: fonts.uiSemiBold, ...type.label, color: palette.mutedForeground },
+  countValue: { fontFamily: fonts.display, ...type.headline, color: palette.foreground },
+  countHint: { fontFamily: fonts.uiMedium, ...type.secondary, color: palette.foreground },
   felt: { gap: space[3], padding: space[4], marginHorizontal: space[2], borderRadius: radius.lg, backgroundColor: palette.felt, alignItems: 'center' },
   feltTop: { flexDirection: 'row', alignSelf: 'stretch' },
   shoe: { minWidth: 52, paddingVertical: space[1], paddingHorizontal: space[2], borderRadius: radius.sm, backgroundColor: palette.feltDeep, alignItems: 'center' },
-  shoeLabel: { fontFamily: fonts.uiBold, fontSize: 9, letterSpacing: 0.5, color: palette.feltText },
-  shoeCount: { fontFamily: fonts.uiBold, fontSize: 13, color: palette.feltText },
-  feltLabel: { fontFamily: fonts.uiBold, fontSize: 11, letterSpacing: 0.5, color: palette.feltText },
+  shoeLabel: { fontFamily: fonts.uiSemiBold, ...type.label, color: palette.feltText },
+  shoeCount: { fontFamily: fonts.uiSemiBold, ...type.label, color: palette.feltText },
+  feltLabel: { fontFamily: fonts.uiSemiBold, ...type.label, color: palette.feltText },
   handRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center', gap: space[2] },
   lastRound: { opacity: 0.85 },
   card: {
@@ -641,23 +657,23 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   cardEmpty: { backgroundColor: palette.transparent, borderWidth: 1, borderColor: palette.feltText, borderStyle: 'dashed' },
-  cardRank: { fontFamily: fonts.uiBold, fontSize: 20 },
-  cardPip: { fontSize: 26, alignSelf: 'flex-end' },
+  cardRank: { fontFamily: fonts.uiBold, fontSize: objectType.card.rank },
+  cardPip: { fontSize: objectType.card.pip, alignSelf: 'flex-end' },
   cardSmall: { width: 40, minHeight: 58 },
-  cardRankSmall: { fontSize: 15 },
-  cardPipSmall: { fontSize: 18 },
+  cardRankSmall: { fontSize: objectType.splitCard.rank },
+  cardPipSmall: { fontSize: objectType.splitCard.pip },
   others: { alignSelf: 'stretch', gap: space[2], alignItems: 'center' },
-  seatLabel: { fontFamily: fonts.uiBold, fontSize: 12, color: palette.feltText },
+  seatLabel: { fontFamily: fonts.uiSemiBold, ...type.label, color: palette.feltText },
   splitHands: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: space[2] },
   splitHand: { alignItems: 'center', gap: space[1], padding: space[1], borderRadius: radius.md, borderWidth: 2, borderColor: palette.transparent },
   splitHandActive: { borderColor: palette.primary },
-  splitLabel: { fontFamily: fonts.uiBold, fontSize: 12, color: palette.feltText },
-  splitState: { fontFamily: fonts.uiMedium, fontSize: 11, color: palette.feltText },
+  splitLabel: { fontFamily: fonts.uiSemiBold, ...type.label, color: palette.feltText },
+  splitState: { fontFamily: fonts.uiMedium, ...type.caption, color: palette.feltText },
   splitStateActive: { fontFamily: fonts.uiBold, textDecorationLine: 'underline' },
   decision: { gap: space[2], padding: space[4], borderRadius: radius.lg, backgroundColor: palette.card, borderWidth: 1, borderColor: palette.primary },
-  decisionTitle: { fontFamily: fonts.display, fontSize: 22, color: palette.foreground },
-  decisionText: { fontFamily: fonts.ui, fontSize: 15, lineHeight: 21, color: palette.foreground },
-  result: { fontFamily: fonts.uiBold, fontSize: 16, color: palette.feltText },
+  decisionTitle: { fontFamily: fonts.display, ...type.headline, color: palette.foreground },
+  decisionText: { fontFamily: fonts.ui, ...type.body, color: palette.foreground },
+  result: { fontFamily: fonts.uiSemiBold, ...type.body, color: palette.feltText },
   betSpot: {
     minWidth: 88,
     minHeight: 88,
@@ -669,10 +685,10 @@ const styles = StyleSheet.create({
     backgroundColor: palette.feltDeep,
   },
   betSpotWagered: { borderColor: palette.cardFace, borderWidth: 3 },
-  betSpotText: { fontFamily: fonts.uiBold, fontSize: 16, color: palette.feltText },
-  betSpotState: { fontFamily: fonts.uiBold, fontSize: 9, letterSpacing: 0.5, color: palette.feltText },
+  betSpotText: { fontFamily: fonts.uiSemiBold, ...type.body, color: palette.feltText },
+  betSpotState: { fontFamily: fonts.uiSemiBold, ...type.label, color: palette.feltText },
   focused: { borderColor: palette.ring, borderWidth: 3 },
   actions: { gap: space[2] },
   actionRow: { flexDirection: 'row', flexWrap: 'wrap', gap: space[2] },
   action: { flexGrow: 1, flexBasis: 96 },
-});
+}));

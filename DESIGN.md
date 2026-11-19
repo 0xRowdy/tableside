@@ -47,44 +47,49 @@ colors:
 typography:
   display:
     fontFamily: "Fraunces (Fraunces_400Regular)"
-    fontSize: "30px"
+    fontSize: "32px"
     fontWeight: 400
   display-card:
     fontFamily: "Fraunces (Fraunces_400Regular)"
-    fontSize: "34px"
+    fontSize: "36px"
     fontWeight: 400
-    lineHeight: "38px"
   headline:
     fontFamily: "Fraunces (Fraunces_400Regular)"
-    fontSize: "22px"
+    fontSize: "24px"
     fontWeight: 400
-    lineHeight: "28px"
-  title:
+  figure:
     fontFamily: "Inter (Inter_700Bold)"
-    fontSize: "16px"
+    fontSize: "36px"
+    fontWeight: 700
+  key:
+    fontFamily: "Inter (Inter_600SemiBold)"
+    fontSize: "24px"
+    fontWeight: 600
+  heading:
+    fontFamily: "Inter (Inter_700Bold)"
+    fontSize: "20px"
     fontWeight: 700
   body:
     fontFamily: "Inter (Inter_400Regular)"
-    fontSize: "14px"
+    fontSize: "17px"
     fontWeight: 400
-    lineHeight: "20px"
-  body-small:
+    lineHeight: "24px"
+  secondary:
     fontFamily: "Inter (Inter_400Regular)"
-    fontSize: "13px"
+    fontSize: "15px"
     fontWeight: 400
-    lineHeight: "18px"
-  stat:
-    fontFamily: "Inter (Inter_700Bold)"
-    fontSize: "24px"
-    fontWeight: 700
+    lineHeight: "21px"
   label:
-    fontFamily: "Inter (Inter_700Bold)"
-    fontSize: "10px"
-    fontWeight: 700
-    letterSpacing: "0.5px"
-  label-medium:
+    fontFamily: "Inter (Inter_600SemiBold)"
+    fontSize: "13px"
+    fontWeight: 600
+  caption:
+    fontFamily: "Inter (Inter_400Regular)"
+    fontSize: "12px"
+    fontWeight: 400
+  tab:
     fontFamily: "Inter (Inter_500Medium)"
-    fontSize: "11px"
+    fontSize: "12px"
     fontWeight: 500
 rounded:
   sm: "6px"
@@ -105,21 +110,21 @@ components:
   button-primary:
     backgroundColor: "{colors.primary}"
     textColor: "{colors.primaryForeground}"
-    typography: "{typography.title}"
+    typography: "{typography.body}"
     rounded: "{rounded.pill}"
     padding: "12px 24px"
     height: "48px"
   button-secondary:
     backgroundColor: "{colors.secondary}"
     textColor: "{colors.foreground}"
-    typography: "{typography.title}"
+    typography: "{typography.body}"
     rounded: "{rounded.pill}"
     padding: "12px 24px"
     height: "48px"
   button-ghost:
     backgroundColor: "{colors.background}"
     textColor: "{colors.foreground}"
-    typography: "{typography.title}"
+    typography: "{typography.body}"
     rounded: "{rounded.pill}"
     padding: "12px 24px"
     height: "48px"
@@ -137,7 +142,8 @@ components:
   segment-selected:
     backgroundColor: "{colors.primary}"
     textColor: "{colors.primaryForeground}"
-    height: "44px"
+    typography: "{typography.secondary}"
+    height: "48px"
   card:
     backgroundColor: "{colors.card}"
     textColor: "{colors.foreground}"
@@ -156,7 +162,7 @@ components:
   tab-bar:
     backgroundColor: "{colors.card}"
     textColor: "{colors.mutedForeground}"
-    typography: "{typography.label-medium}"
+    typography: "{typography.tab}"
   tab-selected-pill:
     backgroundColor: "{colors.secondary}"
     textColor: "{colors.foreground}"
@@ -250,24 +256,41 @@ These belong to the table, never to the chrome.
 ## Typography
 
 **Display Font:** Fraunces, Regular 400 (`Fraunces_400Regular`)
-**Body Font:** Inter, Regular 400, Medium 500 and Bold 700 (`Inter_400Regular`, `Inter_500Medium`, `Inter_700Bold`)
+**Body Font:** Inter, Regular 400, Medium 500, SemiBold 600 and Bold 700 (`Inter_400Regular`, `Inter_500Medium`, `Inter_600SemiBold`, `Inter_700Bold`)
 
 **Character:** Fraunces brings the soft, old-style warmth of a printed table layout; Inter does the work. The serif is for naming a place or a moment, and the sans is for anything read quickly or operated.
 
 The web account page cannot load web fonts (its CSP sets `font-src 'none'`), so it uses the system UI stack with the same palette.
 
 ### Hierarchy
-- **Display** (Fraunces 400, 30px): screen titles on Home, first run, session results. Game cards use a larger 34/38.
-- **Headline** (Fraunces 400, 22–26px, ~28–32 line height): sheet and dialog titles, coaching headlines, lesson headings, the blackjack decision title, the craps roll.
-- **Title** (Inter 700, 15–17px): button labels, row titles, table top-bar titles, the coach note headline.
-- **Body** (Inter 400, 14/20; small 13/18): explanations, sheet text, row details. Secondary copy uses Smoke.
-- **Stat** (Inter 700, 16–24px): balances, counts and results. Numbers are always Inter Bold, never serif, except the session result's headline figures and the running count, which use Fraunces at 20–28px.
-- **Label** (Inter 700, 10–12px, 0.5px tracking): stat labels, kickers and strip labels. Uppercase with 1px tracking only for the game card's summary line. Tab labels are Inter 500, 11px.
+Sizes are roles, not numbers. Each role has a size per **text step** (Standard, Large and Larger), set by the player in More › Settings › Text size and in first run. Standard is the default and is tuned for older eyes at the phone's default text size. In code the ramp is `typeRamp` in `apps/mobile/src/theme/tokens.ts`; in `design/Tableside.pen` it is the `--text-*` variables on the `text` theme axis. See `docs/decisions/text-size-type-floor.md`.
+
+| Role | Standard / Large / Larger | Face | Used for |
+| --- | --- | --- | --- |
+| `display` | 32 / 36 / 40 | Fraunces 400 | Screen titles on Home, first run, session results |
+| `display-card` | 36 / 40 / 44 | Fraunces 400 | Game card titles over photography |
+| `headline` | 24 / 27 / 30 | Fraunces 400 | Sheet and dialog titles, the blackjack decision title, lesson headings, the craps roll |
+| `figure` | 36 / 40 / 44 | Inter 700 | The count readout and other big numbers |
+| `key` | 24 / 26 / 28 | Inter 600 | Keypad digits |
+| `heading` | 20 / 22 / 25 | Inter 700 | Card heads, prompts, the coach note headline, strip values |
+| `body` | 17 / 19 / 21 | Inter 400; 600 for titles and buttons | Explanations, sheet text, row titles, button labels, the table top-bar title |
+| `secondary` | 15 / 17 / 19 | Inter 400; 600 for segments | Row details, subtitles, segment labels, supporting copy |
+| `label` | 13 / 15 / 16 | Inter 600 | Stat labels, kickers, strip labels, tags |
+| `caption` | 12 / 14 / 15 | Inter 400–800 | Printed felt markings, header button labels, chart cells, chip values |
+| `tab` | 12 at every step | Inter 500; 700 selected | Tab bar labels |
+
+Numbers are Inter Bold, never serif, except the session result's headline figures, which use Fraunces. Kickers and labels are sentence case with no tracking. Only printed felt markings (DEALER, PASS LINE, ODDS) use capitals with tracking.
 
 ### Named Rules
+**The Twelve Floor Rule.** Nothing on screen is smaller than 12 at Standard, including felt markings and chip values. If a label doesn't fit, the layout reflows, the label wraps or the copy gets shorter; the type never drops below its role.
+
 **The Serif Names, Sans Works Rule.** Fraunces is used for titles and headline moments only, never for body text, buttons, labels or form input.
 
-**The Scale Cap Rule.** Every text element sets `maxFontSizeMultiplier`: `textScale.display` (1.5×) for Fraunces, `textScale.body` (2×) for Inter. Layout reflows to accept the growth; type never shrinks to fit, except the tab bar label, which has a large-content viewer instead.
+**The Read It In Linen Rule.** Text the player must read (instructions, questions, results, errors) is Linen. Smoke is for supporting detail only.
+
+**The Scale Cap Rule.** The text step multiplies with the phone's text size: an element's size is `ramp[step][role] × system font scale`, with the system part capped by `maxFontSizeMultiplier`, `textScale.display` (1.5×) for Fraunces and `textScale.body` (2×) for Inter. Layout reflows to accept the growth, and type never shrinks to fit. The one exception is the tab bar label: it stays 12 and has a large-content viewer instead.
+
+**The Presentation Only Rule.** The text step is saved per installation and is purely visual. It never changes scoring, timing, assistance, personal bests or which records are compared.
 
 ## Layout
 
@@ -275,7 +298,7 @@ A single scrolling column. `Screen` gives every page the After-Hours Green groun
 
 Home is the exception: three full-bleed game cards stacked edge to edge with 2px seams, each filling its share of the height, and side by side when the window is wide. Tables are their own composition: a top bar, a phase stepper, a session strip, the felt, and the chip rack below.
 
-Every screen supports portrait and landscape on phones and tablets. Controls reflow vertically at large text sizes and in narrow windows instead of shrinking. Sheets turn full screen once the font scale passes 1.5×. Touch targets are at least 48×48 (`MIN_TOUCH_TARGET`); chip slots are 56.
+Every screen supports portrait and landscape on phones and tablets. Controls reflow vertically at large text sizes and in narrow windows instead of shrinking. At the Larger step, the table top bar wraps its title and rules, the session strip becomes key-value rows, blackjack actions go two per row, and paired buttons stack full width. Sheets turn full screen once the font scale passes 1.5×. Touch targets are at least 48×48 (`MIN_TOUCH_TARGET`) on both platforms, including segments, table action buttons and keypad keys; chip slots are 56.
 
 The persistent bottom tab bar is the only global navigation: one row at every text size, hidden on pre-account and locked screens and under sheets.
 
@@ -297,13 +320,14 @@ Borders are thin (1–1.5px) and functional. Focus is a 2px border swapped to Ra
 ### Buttons
 Quiet, wide and pill-shaped.
 - **Shape:** full pill, at least 48px tall, 24px horizontal padding, an optional 18px Lucide icon with an 8px gap.
-- **Primary:** Rail Brass fill, Brass Shadow label in Inter Bold 16.
+- **Primary:** Rail Brass fill, Brass Shadow label in Inter SemiBold `body` (17).
 - **Secondary:** Felt Shadow fill, Linen label. **Ghost:** transparent, Linen label.
-- **Outline:** the exception to the pill: 10px corners, 52px tall, 1px Control Edge border, 15px label. Used for list-like choices.
+- **Outline:** the exception to the pill: 10px corners, 52px tall, 1px Control Edge border, `secondary` label. Used for list-like choices.
+- **Long labels wrap** onto two lines rather than shrink. Two buttons that don't fit side by side stack full width, primary first.
 - **States:** pressed drops to 80% opacity; disabled 40%; keyboard focus turns the reserved 2px border Linen. No scale or bounce.
 
 ### Segmented control
-- A Deep Baize trough with a Control Edge border, 10px corners and 4px padding. Each segment is at least 44px tall.
+- A Deep Baize trough with a Control Edge border, 10px corners and 4px padding. Each segment is at least 48px tall, with a `secondary` 600 label. A long label sizes its segment to the content.
 - Selected: Rail Brass fill, Brass Shadow label and a check icon, so selection never relies on color alone. It is a radio group for screen readers.
 
 ### Cards / Containers
@@ -324,20 +348,22 @@ Quiet, wide and pill-shaped.
 - Bottom sheet on Lamplit Panel with 16px top corners, a Control Edge grabber, a Fraunces 22px title and a 48px round close button on Felt Shadow. Slides up; becomes full screen at large text.
 
 ### Navigation
-- **Tab bar:** Card Table with a hairline top border. Each tab has a 22px Lucide icon over an Inter Medium 11px label. Selected: the icon sits in a 56×30 Felt Shadow pill with a 1.5px Rail Brass outline, the icon turns brass and the label turns Linen Bold. Long-press or the system large-content viewer shows a big preview at large text sizes.
-- **Table top bar:** Inter Bold 16 title, Smoke 12px subtitle, round 48px icon buttons. Below it, a phase stepper of 3px bars that fill with Rail Brass as the turn advances.
+- **Tab bar:** five tabs (Home, Play, Counting, Saved, More) on Card Table with a hairline top border. Community is the first row in More and has a Community button in the Home header. Each tab has a 22px Lucide icon over an Inter Medium `tab` (12) label, which stays 12 at every text step. Selected: the icon sits in a 56×30 Felt Shadow pill with a 1.5px Rail Brass outline, the icon turns brass, and the label turns Linen Bold. The iOS Large Content Viewer, or a long-press on Android, shows a big preview at large text sizes.
+- **Table top bar:** Inter SemiBold `body` title, Smoke `secondary` rules line, round 48px icon buttons. The title and rules wrap instead of truncating. Below it, a phase stepper of 3px bars fills with Rail Brass as the turn advances.
 
 ### Game card (signature)
-Full-bleed photograph, a scrim band fading up from the bottom, an uppercase 11px summary line, a Fraunces 34px title in white, and a 44px Rail Brass circle with an arrow. This is the one place photography appears.
+Full-bleed photograph, a scrim band fading up from the bottom, a sentence-case `label` summary line, a Fraunces `display-card` title in white, and a 44px Rail Brass circle with an arrow. This is the one place photography appears.
 
 ### Coach note (signature)
-Marcus speaks on paper: a Coach Paper card with 16px corners and a 1px Coach Blue border, Ink text, a Coach Blue kicker, an Inter Bold 17 headline and Faded Ink detail. Its primary action inverts to Ink with Coach Paper text. A wrong answer is marked in Correction Red Ink with an icon. It is the only light surface on a dark screen, so coaching reads as a separate voice from the game.
+Marcus speaks on paper: a Coach Paper card with 16px corners and a 1px Coach Blue border, Ink text, a Coach Blue sentence-case kicker, an Inter Bold `heading` headline, `body` text and Faded Ink detail. Its two actions stack full width when they don't fit side by side. Its primary action inverts to Ink with Coach Paper text. A wrong answer is marked in Correction Red Ink with an icon. It is the only light surface on a dark screen, so coaching reads as a separate voice from the game.
 
 ### Table pieces
 - **Chip rack:** Walnut Rail panel with 48px round chips in denomination colors; the selected chip gets a 2px Rail Brass ring and a check mark.
-- **Playing cards:** Card Face with four-color suits; empty card spots are dashed Chalk outlines on the felt.
+- **Playing cards:** Card Face with four-color suits; empty card spots are dashed Chalk outlines on the felt. Cards don't grow with the text step; the layout picks the size. Table hands are Standard (58×82), and the card being counted is always Large (120×168), so it's never the smallest thing on screen.
+- **Session strip:** `label` captions over `heading` values, with a status tag on the right. At Larger it becomes key-value rows.
+- **Count keypad:** 48px-minimum keys with `key` digits, a `figure` readout, and Skip and Submit below.
 - **Bet spots:** Chalk boundary on felt; wagered spots get a 3px Card Face outline.
-- **Status tag:** Felt Shadow pill with Inter Bold 12 Linen text.
+- **Status tag:** Felt Shadow pill with an icon and Inter Bold `label` Linen text.
 
 ## Do's and Don'ts
 
@@ -347,7 +373,8 @@ Marcus speaks on paper: a Coach Paper card with 16px corners and a 1px Coach Blu
 - **Do** pair every status color with an icon, word or shape. Suits use four colors and their pips; selections get a check.
 - **Do** add a new foreground/background pairing to `essentialPairs` before using it, and keep text at 4.5:1 and graphics at 3:1.
 - **Do** reserve a transparent 2px border on every focusable control so the focus ring doesn't shift the layout.
-- **Do** set `maxFontSizeMultiplier` on every `Text` and let layouts reflow at large sizes.
+- **Do** give every `Text` a ramp role and a `maxFontSizeMultiplier`, and let layouts reflow at large sizes.
+- **Do** check every screen at Standard with the phone at its default text size, and again at Larger with the largest system size.
 - **Do** keep numbers in Inter Bold and say them plainly. Practice, simulation and casino figures sit in visibly separate places.
 
 ### Don't:
@@ -356,5 +383,6 @@ Marcus speaks on paper: a Coach Paper card with 16px corners and a 1px Coach Blu
 - **Don't** add shadows or elevation; use the next tonal step.
 - **Don't** use felt, rail, chip or pocket colors in app chrome.
 - **Don't** set body text, buttons, labels or inputs in Fraunces.
+- **Don't** go below 12, use all-caps kickers, or put must-read text in Smoke.
 - **Don't** use pure black or pure white on chrome; Pure White is only for text over photos and on chips and pockets.
 - **Don't** add a light theme or ad-hoc hex values; new colors are named tokens in `tokens.ts`.

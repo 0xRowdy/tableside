@@ -89,7 +89,7 @@ describe('lessons', () => {
     await fireEvent.press(await screen.findByRole('button', { name: 'Learning. Lessons' }));
     expect(await header('Learning')).toBeOnTheScreen();
     expect(button('Back to Settings')).toBeOnTheScreen();
-    expect(screen.getByRole('header', { name: 'LESSONS' })).toBeOnTheScreen();
+    expect(screen.getByRole('header', { name: 'Lessons' })).toBeOnTheScreen();
     expect(await screen.findByRole('button', { name: 'Lesson catalog. 24 lessons · 0 completed · 0 in progress' })).toBeOnTheScreen();
     expect(screen.getByText("Lessons never score you, award anything or lock anything. They're available to every account, including when today's challenge attempts are used up. Start here and hint settings stay on this device.")).toBeOnTheScreen();
     expect(within(screen.getByTestId('tab-bar')).getByRole('tab', { name: 'More', selected: true })).toBeOnTheScreen();
@@ -101,11 +101,11 @@ describe('lessons', () => {
     expect(screen.getByText('Open any lesson, in any order. Finishing one just marks it completed: no scores, badges or locks.')).toBeOnTheScreen();
     expect(screen.getAllByRole('header').map((item) => item.props.children)).toEqual([
       'Lessons',
-      'APP · 1',
-      'BLACKJACK · 10',
-      'STANDARD CRAPS · 6',
-      'ROULETTE · 6',
-      'STRATEGY BUILDER · 1',
+      'App · 1',
+      'Blackjack · 10',
+      'Standard craps · 6',
+      'Roulette · 6',
+      'Strategy builder · 1',
     ]);
     expect(button('App orientation. Not started · Tabs, help, practice vs casino records')).toBeEnabled();
     expect(button('Card values. Not started')).toBeDisabled();

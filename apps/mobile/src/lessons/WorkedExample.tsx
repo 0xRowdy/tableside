@@ -3,7 +3,7 @@
 import type { CardValueExample, WorkedExample as Script, StrategyStepExample } from '@tableside/definitions';
 import { ArrowRight, RotateCcw, SkipForward } from 'lucide-react-native';
 import { useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Choice, PlayingCard } from '@/counting/CardChoices';
@@ -14,6 +14,7 @@ import { NavButton } from '@/lessons/LessonParts';
 import { signed } from '@/play/blackjack-text';
 import { BackButton } from '@/settings/SettingsParts';
 import { fonts, palette, radius, space, textScale } from '@/theme/tokens';
+import { makeStyles } from '@/theme/type';
 import { CARD_PROMPT, hiLoText, spokenValue, type ChoiceState } from '@/training/challenge-text';
 import {
   CONTINUE,
@@ -41,6 +42,7 @@ interface Picking {
 }
 
 function Response({ headline, detail = null, note }: { headline: string; detail?: string | null; note: string | null }) {
+  const styles = useStyles();
   return (
     <View style={styles.response} accessibilityLiveRegion="polite" testID="scripted-response">
       <Text maxFontSizeMultiplier={textScale.display} style={styles.headline}>
@@ -61,6 +63,7 @@ function Response({ headline, detail = null, note }: { headline: string; detail?
 }
 
 export function WorkedExample({ example, lesson, busy, onBack, onDone }: { example: Script; lesson: string; busy: boolean; onBack: () => void; onDone: () => void }) {
+  const styles = useStyles();
   const insets = useSafeAreaInsets();
   const feedback = useFeedback();
   const [picked, setPicked] = useState<number | null>(null);
@@ -117,6 +120,7 @@ function Body({ example, picked, onPick }: { example: Script } & Picking) {
 }
 
 function CardValue({ example, picked, onPick }: { example: CardValueExample } & Picking) {
+  const styles = useStyles();
   const response = picked === null ? null : example.choices[picked]!.response;
   return (
     <>
@@ -136,6 +140,7 @@ function CardValue({ example, picked, onPick }: { example: CardValueExample } & 
 
 // Spec 3 Lessons › Structure (worked examples); #155
 function StrategyStep({ example, picked, onPick }: { example: StrategyStepExample } & Picking) {
+  const styles = useStyles();
   const name = exampleStrategyName(example);
   const asks = example.choices[0]?.answer.kind ?? 'bets';
   const response = picked === null ? null : example.choices[picked]!.response;
@@ -165,22 +170,22 @@ function StrategyStep({ example, picked, onPick }: { example: StrategyStepExampl
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((type) => ({
   screen: { flex: 1, backgroundColor: palette.background },
   header: { flexDirection: 'row', alignItems: 'center', gap: space[1], minHeight: 56, paddingLeft: space[1], paddingRight: space[2] },
   titles: { flex: 1, gap: 1, paddingVertical: space[1] },
-  title: { fontFamily: fonts.uiBold, fontSize: 17, color: palette.foreground },
-  subtitle: { fontFamily: fonts.ui, fontSize: 12, color: palette.mutedForeground },
+  title: { fontFamily: fonts.uiSemiBold, ...type.body, color: palette.foreground },
+  subtitle: { fontFamily: fonts.ui, ...type.caption, color: palette.mutedForeground },
   body: { gap: space[4], paddingTop: space[2], paddingHorizontal: space[6] - space[1] },
-  note: { fontFamily: fonts.ui, fontSize: 13, lineHeight: 20, color: palette.mutedForeground },
-  prompt: { fontFamily: fonts.uiBold, fontSize: 18, color: palette.foreground },
+  note: { fontFamily: fonts.ui, ...type.secondary, color: palette.mutedForeground },
+  prompt: { fontFamily: fonts.uiBold, ...type.heading, color: palette.foreground },
   choices: { flexDirection: 'row', gap: space[3] - 2 },
   stacked: { gap: space[2] + 2 },
   history: { gap: space[1], padding: space[4], borderRadius: radius.lg, backgroundColor: palette.card },
-  historyTitle: { fontFamily: fonts.uiBold, fontSize: 13, color: palette.mutedForeground },
-  historyLine: { fontFamily: fonts.ui, fontSize: 15, lineHeight: 22, color: palette.foreground },
+  historyTitle: { fontFamily: fonts.uiSemiBold, ...type.label, color: palette.mutedForeground },
+  historyLine: { fontFamily: fonts.ui, ...type.body, color: palette.foreground },
   response: { gap: space[1], padding: space[4], borderRadius: radius.lg, borderWidth: 1, borderColor: palette.controlBorder, backgroundColor: palette.card },
-  headline: { fontFamily: fonts.uiBold, fontSize: 15, lineHeight: 23, color: palette.foreground },
-  detail: { fontFamily: fonts.ui, fontSize: 14, lineHeight: 22, color: palette.mutedForeground },
+  headline: { fontFamily: fonts.uiSemiBold, ...type.body, color: palette.foreground },
+  detail: { fontFamily: fonts.ui, ...type.secondary, color: palette.mutedForeground },
   nav: { flexDirection: 'row', flexWrap: 'wrap', gap: space[2] + 2, paddingTop: space[2] },
-});
+}));

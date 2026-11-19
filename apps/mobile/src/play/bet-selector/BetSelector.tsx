@@ -2,13 +2,14 @@
 
 import { add, compare, decodeMoney, encodeMoney, money, mul, type DomainFact, type GameId, type IllegalActionReason } from '@tableside/engine';
 import { useRef, useState, type RefObject } from 'react';
-import { AccessibilityInfo, Pressable, StyleSheet, Text, TextInput, View, type HostInstance } from 'react-native';
+import { AccessibilityInfo, Pressable, Text, TextInput, View, type HostInstance } from 'react-native';
 
 import { Button } from '@/components/Button';
 import { SwitchRow } from '@/components/SwitchRow';
 import { useMoveFocus } from '@/hooks/use-accessibility';
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/theme/tokens';
+import { makeStyles } from '@/theme/type';
 
 import { GAME_WORDS } from '../game-words';
 import { capitalize, formatUnits, sumUnits } from '../units';
@@ -49,6 +50,7 @@ const COMMITTED = 'Committed until it settles.';
 type OpenEditor = (draft: BetDraft) => void;
 
 export function BetSelector(props: BetSelectorProps) {
+  const styles = useStyles();
   const { catalog, draft } = props;
   const kind = findKind(catalog, draft.kind);
   const editorHeading = useRef<HostInstance>(null);
@@ -85,6 +87,7 @@ export function BetSelector(props: BetSelectorProps) {
 }
 
 function WagerList({ catalog, wagers, draft, openEditor, onFind }: BetSelectorProps & { openEditor: OpenEditor; onFind: () => void }) {
+  const styles = useStyles();
   const staked = (kind: WagerKind) => sumUnits(...wagers.flatMap((wager) => (kind.choices.some((c) => c.target === wager.target) ? [wager.amount] : [])));
   const open = (kind: WagerKind) => openEditor({ ...draft, kind: kind.id });
   return (
@@ -129,6 +132,7 @@ function WagerList({ catalog, wagers, draft, openEditor, onFind }: BetSelectorPr
 }
 
 function WagerEditor(props: BetSelectorProps & { kind: WagerKind; heading: RefObject<HostInstance | null> }) {
+  const styles = useStyles();
   const { kind, draft, wagers, onDraftChange, heading } = props;
 
   const choice = kind.choices.find((c) => c.target === draft.target);
@@ -171,6 +175,7 @@ function Finder({
   onBack,
   openEditor,
 }: BetSelectorProps & { finder: WagerFinder; selected: string | null; onKey: (key: string) => void; onBack: () => void; openEditor: OpenEditor }) {
+  const styles = useStyles();
   const heading = useRef<HostInstance>(null);
   const results = useRef<HostInstance>(null);
   const entry = finder.keys.find((k) => k.id === selected);
@@ -228,6 +233,7 @@ function Finder({
 }
 
 function StakeEditor(props: BetSelectorProps & { choice: WagerChoice }) {
+  const styles = useStyles();
   const { choice, draft, wagers, sequence, canPlace, onDraftChange, onSet } = props;
   const { focused, focusProps } = useKeyboardFocus();
   const problem = submissionProblem(props);
@@ -293,6 +299,7 @@ function StakeEditor(props: BetSelectorProps & { choice: WagerChoice }) {
 }
 
 function CommittedStake({ wager, choice }: { wager: PlacedWager; choice: WagerChoice }) {
+  const styles = useStyles();
   return (
     <View style={styles.group}>
       <Text maxFontSizeMultiplier={textScale.body} style={styles.sectionLabel}>Total stake on {choice.name}</Text>
@@ -303,6 +310,7 @@ function CommittedStake({ wager, choice }: { wager: PlacedWager; choice: WagerCh
 }
 
 function YourWagers({ game, catalog, wagers, canPlace, onRemove, openEditor }: BetSelectorProps & { openEditor: OpenEditor }) {
+  const styles = useStyles();
   const heading = useRef<HostInstance>(null);
   const [removing, setRemoving] = useState<{ readonly target: string } | null>(null);
   const [explaining, setExplaining] = useState<string | null>(null);
@@ -438,6 +446,7 @@ function Row({
   compact?: boolean;
   children: React.ReactNode;
 }) {
+  const styles = useStyles();
   const { focused, focusProps } = useKeyboardFocus();
   return (
     <Pressable
@@ -455,6 +464,7 @@ function Row({
 }
 
 function ChoiceButton({ name, label, checked, onPress }: { name: string; label: string; checked: boolean; onPress: () => void }) {
+  const styles = useStyles();
   const { focused, focusProps } = useKeyboardFocus();
   return (
     <Pressable
@@ -474,6 +484,7 @@ function ChoiceButton({ name, label, checked, onPress }: { name: string; label: 
 }
 
 function SmallButton({ label, spoken, onPress, disabled = false }: { label: string; spoken: string; onPress: () => void; disabled?: boolean }) {
+  const styles = useStyles();
   const { focused, focusProps } = useKeyboardFocus();
   return (
     <Pressable
@@ -490,12 +501,12 @@ function SmallButton({ label, spoken, onPress, disabled = false }: { label: stri
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((type) => ({
   selector: { gap: space[4], paddingHorizontal: space[4] },
   section: { gap: space[3] },
   group: { gap: space[2] },
   toggle: { borderRadius: radius.lg, borderWidth: 1, borderColor: palette.border, backgroundColor: palette.card, overflow: 'hidden' },
-  sectionLabel: { fontFamily: fonts.uiBold, fontSize: 12, letterSpacing: 0.5, textTransform: 'uppercase', color: palette.mutedForeground },
+  sectionLabel: { fontFamily: fonts.uiSemiBold, ...type.label, color: palette.mutedForeground },
   row: {
     minHeight: MIN_TOUCH_TARGET + 8,
     flexDirection: 'row',
@@ -511,10 +522,10 @@ const styles = StyleSheet.create({
   },
   rowCompact: { minHeight: MIN_TOUCH_TARGET, alignSelf: 'flex-start' },
   rowText: { flex: 1, minWidth: 160, gap: 2 },
-  rowTitle: { fontFamily: fonts.uiBold, fontSize: 15, color: palette.foreground },
-  rowDetail: { fontFamily: fonts.ui, fontSize: 13, lineHeight: 18, color: palette.mutedForeground },
-  rowValue: { fontFamily: fonts.uiBold, fontSize: 15, color: palette.foreground },
-  editorTitle: { fontFamily: fonts.display, fontSize: 24, color: palette.foreground },
+  rowTitle: { fontFamily: fonts.uiSemiBold, ...type.body, color: palette.foreground },
+  rowDetail: { fontFamily: fonts.ui, ...type.secondary, color: palette.mutedForeground },
+  rowValue: { fontFamily: fonts.uiSemiBold, ...type.body, color: palette.foreground },
+  editorTitle: { fontFamily: fonts.display, ...type.headline, color: palette.foreground },
   pressed: { opacity: 0.8 },
   disabled: { opacity: 0.4 },
   focused: { borderColor: palette.ring },
@@ -533,9 +544,9 @@ const styles = StyleSheet.create({
     backgroundColor: palette.background,
   },
   choiceChecked: { borderColor: palette.primary, backgroundColor: palette.secondary },
-  choiceText: { fontFamily: fonts.uiMedium, fontSize: 15, color: palette.foreground },
+  choiceText: { fontFamily: fonts.uiMedium, ...type.body, color: palette.foreground },
   choiceTextChecked: { fontFamily: fonts.uiBold },
-  choiceCheck: { fontFamily: fonts.uiBold, fontSize: 13, color: palette.foreground },
+  choiceCheck: { fontFamily: fonts.uiSemiBold, ...type.label, color: palette.foreground },
   stakeRow: { flexDirection: 'row', alignItems: 'center', gap: space[2] },
   field: {
     flex: 1,
@@ -546,11 +557,11 @@ const styles = StyleSheet.create({
     borderColor: palette.controlBorder,
     backgroundColor: palette.card,
     fontFamily: fonts.uiBold,
-    fontSize: 18,
+    ...type.heading,
     color: palette.foreground,
   },
   fieldProblem: { borderColor: palette.destructive },
-  problem: { fontFamily: fonts.uiMedium, fontSize: 14, lineHeight: 20, color: palette.destructive },
+  problem: { fontFamily: fonts.uiMedium, ...type.body, color: palette.destructive },
   steppers: { flexDirection: 'row', flexWrap: 'wrap', gap: space[2] },
   small: {
     minWidth: MIN_TOUCH_TARGET,
@@ -563,12 +574,12 @@ const styles = StyleSheet.create({
     borderColor: palette.controlBorder,
     backgroundColor: palette.secondary,
   },
-  smallText: { fontFamily: fonts.uiBold, fontSize: 14, color: palette.foreground },
+  smallText: { fontFamily: fonts.uiSemiBold, ...type.body, color: palette.foreground },
   wager: { gap: space[2], paddingVertical: space[2], borderBottomWidth: 1, borderBottomColor: palette.border },
   wagerText: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: space[3] },
   tag: {
-    fontFamily: fonts.uiBold,
-    fontSize: 12,
+    fontFamily: fonts.uiSemiBold,
+    ...type.label,
     color: palette.foreground,
     paddingHorizontal: space[2],
     paddingVertical: 2,
@@ -576,4 +587,4 @@ const styles = StyleSheet.create({
     backgroundColor: palette.secondary,
     overflow: 'hidden',
   },
-});
+}));
