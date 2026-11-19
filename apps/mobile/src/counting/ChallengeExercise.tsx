@@ -3,9 +3,9 @@
 // #158, #132, #133, #134, #135, #146, #136, #137
 
 import type { HintId } from '@tableside/definitions';
-import type { ChallengeCategory, ChallengeEntry, ChallengePacing, ChallengeView, ConversionItem, CountRange, LearnFeedback } from '@tableside/engine';
+import type { ChallengeCategory, ChallengeEntry, ChallengePacing, ChallengeView, ConversionItem, CountRange, LearnFeedback, RunningCountAid, TableView } from '@tableside/engine';
 import { CircleCheck, CircleDot, CircleHelp, CirclePause, CircleX, Info, Pause, SkipForward, Timer, type LucideIcon } from 'lucide-react-native';
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Platform, Pressable, ScrollView, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -15,15 +15,15 @@ import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
 import { usePolling } from '@/hooks/use-polling';
 import { FirstUseHint, useReopenHints } from '@/lessons/FirstUseHints';
 import { signed } from '@/play/blackjack-text';
-import { SaveFailedBanner } from '@/play/TableChrome';
+import { DetailsRow, DetailsSection, SaveFailedBanner, TableHeader, TableLayout } from '@/play/TableChrome';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/theme/tokens';
 import { makeStyles } from '@/theme/type';
 import { HelpSheet, HoldSheet, WarningNote } from './AttemptSheets';
-import { CountAid } from './CountAid';
+import { CountAid, CountAidSwitch, CountAidValue, useCountAid } from './CountAid';
 import { CoachButton } from './CoachButton';
 import { CountEntry } from './CountEntry';
-import { TableBody, TableProgress } from './TableExercise';
-import { edgeText, tableSubtitle } from '@/training/blackjack-table-text';
+import { TableFelt, TablePanel, tableChrome } from './TableExercise';
+import { edgePercent, tableSubtitle } from '@/training/blackjack-table-text';
 import { decksText } from '@/training/blackjack-conversion-text';
 import {
   CARD_PROMPT,
@@ -115,6 +115,53 @@ export function ChallengeExercise({
   const answering = view.legalCommands.includes('answer') && ready;
   const feedback = view.variant === 'learn' ? view.feedback : null;
   const entered = view.variant === 'check' ? view.entered : null;
+  const timerNode = timer && <PerformanceTime timer={timer} performanceMs={performanceMs} />;
+  const helpButton = (
+    <HeaderButton
+      label={HELP_LABEL}
+      hint={HELP_HINT}
+      icon={CircleHelp}
+      enabled
+      onPress={() => {
+        reopenHints();
+        setHelping(true);
+      }}
+    />
+  );
+  const sheets = (
+    <>
+      {hold?.reached && !helping && <HoldSheet hold={hold} context={{ variant: view.variant, position: view.position, pacing, reader: screenReaderName(Platform.OS), play: view.table?.seat === 'play' }} busy={busy} onResume={onResume} onEnd={onEnd} onClose={onLeave} />}
+      {helping && <HelpSheet view={view} onClose={() => setHelping(false)} />}
+    </>
+  );
+  if (view.table) {
+    return (
+      <View style={styles.screen}>
+        <TableExerciseScreen
+          key={view.attemptId}
+          view={view}
+          table={view.table}
+          ready={ready}
+          buttons={
+            <>
+              {helpButton}
+              <HeaderButton label={PAUSE_LABEL} icon={Pause} enabled={!held} onPress={onPause} />
+            </>
+          }
+          notices={
+            <>
+              {timerNode && <View style={styles.tableTimer}>{timerNode}</View>}
+              {saveFailed && <SaveFailedBanner busy={busy} onRetry={onRetrySave} />}
+              {hold && !hold.reached && <WarningNote text={turnBoundaryText(hold)} />}
+            </>
+          }
+          onCommand={onCommand}
+          onInputRejected={onInputRejected}
+        />
+        {sheets}
+      </View>
+    );
+  }
   return (
     <ScrollView style={styles.screen} contentContainerStyle={{ paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right, paddingBottom: space[6] }}>
       <View style={styles.header}>
@@ -123,47 +170,27 @@ export function ChallengeExercise({
             {CATEGORY_TEXT[view.category].title}
           </Text>
           <Text maxFontSizeMultiplier={textScale.body} style={styles.subtitle}>
-            {view.table ? tableSubtitle(view.variant, view.table) : exerciseSubtitle(view.variant, pacing, timer !== null, hold)}
+            {exerciseSubtitle(view.variant, pacing, timer !== null, hold)}
           </Text>
-          {view.table && (
-            <Text maxFontSizeMultiplier={textScale.body} style={styles.subtitle}>
-              {edgeText(view.table.rules)}
-            </Text>
-          )}
         </View>
-        <HeaderButton
-          label={HELP_LABEL}
-          hint={HELP_HINT}
-          icon={CircleHelp}
-          enabled
-          onPress={() => {
-            reopenHints();
-            setHelping(true);
-          }}
-        />
+        {helpButton}
         <HeaderButton label={PAUSE_LABEL} icon={Pause} enabled={!held} onPress={onPause} />
       </View>
-      {view.table ? (
-        <TableProgress view={view} table={view.table} timer={timer && <PerformanceTime timer={timer} performanceMs={performanceMs} />} />
-      ) : (
       <View style={styles.progress}>
         <View style={styles.progressRow}>
           <Text maxFontSizeMultiplier={textScale.body} style={styles.progressText}>
             {exerciseProgress(view)}
           </Text>
-          {timer && <PerformanceTime timer={timer} performanceMs={performanceMs} />}
+          {timerNode}
         </View>
         <View style={styles.track}>
           <View style={[styles.fill, { width: `${(view.position / view.length) * 100}%` }]} />
         </View>
       </View>
-      )}
       <View style={styles.body}>
         {saveFailed && <SaveFailedBanner busy={busy} onRetry={onRetrySave} />}
         {hold && !hold.reached && <WarningNote text={turnBoundaryText(hold)} />}
-        {view.table ? (
-          <TableBody view={view} table={view.table} ready={ready} onCommand={onCommand} onInputRejected={onInputRejected} />
-        ) : view.category === 'conversion' && view.countRange ? (
+        {view.category === 'conversion' && view.countRange ? (
           <ConversionBody
             view={view}
             range={view.countRange}
@@ -194,9 +221,72 @@ export function ChallengeExercise({
           <CountingBody view={view} range={view.countRange} automatic={pacing !== 'self-paced'} ready={ready} answering={answering} onCommand={onCommand} onInputRejected={onInputRejected} />
         )}
       </View>
-      {hold?.reached && !helping && <HoldSheet hold={hold} context={{ variant: view.variant, position: view.position, pacing, reader: screenReaderName(Platform.OS), play: view.table?.seat === 'play' }} busy={busy} onResume={onResume} onEnd={onEnd} onClose={onLeave} />}
-      {helping && <HelpSheet view={view} onClose={() => setHelping(false)} />}
+      {sheets}
     </ScrollView>
+  );
+}
+
+// Spec 3 S3-07 J1nPeT, e2edPR, dFfnT; docs/decisions/table-chrome-summary-row.md
+const NO_AID: RunningCountAid = { revealed: false, count: null };
+
+function TableExerciseScreen({
+  view,
+  table,
+  ready,
+  buttons,
+  notices,
+  onCommand,
+  onInputRejected,
+}: {
+  view: ChallengeView;
+  table: TableView;
+  ready: boolean;
+  buttons: ReactNode;
+  notices: ReactNode;
+  onCommand: (command: LearnerCommand) => void;
+  onInputRejected: () => void;
+}) {
+  const { width, height, fontScale } = useWindowDimensions();
+  const aid = useCountAid(view.variant, view.countAid ?? NO_AID, () => onCommand({ kind: 'reveal-count' }));
+  const { status, steps, stats } = tableChrome(view, table);
+  return (
+    <TableLayout
+      columns={width > height && fontScale <= SIDE_BY_SIDE_MAX_FONT_SCALE}
+      header={
+        <TableHeader
+          title={`${CATEGORY_TEXT[view.category].title} · ${view.variant === 'learn' ? 'Learn' : 'Check'}`}
+          status={status}
+          steps={steps}
+          stats={stats}
+          buttons={buttons}
+          details={() => (
+            <>
+              {view.countAid && (
+                <DetailsSection label="Counting aid">
+                  <FirstUseHint id="show-count" />
+                  <CountAidSwitch state={aid} enabled={ready && view.legalCommands.includes('reveal-count')} />
+                </DetailsSection>
+              )}
+              <DetailsSection label="This attempt">
+                <DetailsRow label="Setup" detail={tableSubtitle(view.variant, table)} />
+              </DetailsSection>
+              <DetailsSection label="House edge">
+                <DetailsRow label="With basic strategy" value={edgePercent(table.rules)} detail="For this preset." />
+              </DetailsSection>
+            </>
+          )}
+        >
+          {notices}
+        </TableHeader>
+      }
+      body={
+        <>
+          <TableFelt table={table} />
+          <CountAidValue state={aid} />
+        </>
+      }
+      footer={<TablePanel view={view} table={table} ready={ready} onCommand={onCommand} onInputRejected={onInputRejected} />}
+    />
   );
 }
 
@@ -521,6 +611,7 @@ const useStyles = makeStyles((type) => ({
   track: { height: 6, borderRadius: 3, backgroundColor: palette.muted, overflow: 'hidden' },
   fill: { height: 6, borderRadius: 3, backgroundColor: palette.primary },
   body: { gap: space[4], paddingHorizontal: space[4], paddingTop: space[3] },
+  tableTimer: { paddingHorizontal: space[4], paddingTop: space[1], alignItems: 'flex-end' },
   prompt: { fontFamily: fonts.uiSemiBold, ...type.heading, color: palette.foreground, textAlign: 'center' },
   countPrompt: { gap: space[1] },
   columns: { gap: space[4] },

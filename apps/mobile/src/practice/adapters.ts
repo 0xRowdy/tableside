@@ -43,10 +43,10 @@ export type SetupFunding =
   | { readonly source: 'practice-funding' }
   | { readonly source: 'training-bankroll'; readonly available: string };
 
-// Spec 1 Amendment 4 D
+// Spec 1 Amendment 4 D; S5-11 xIl3L (figure)
 export interface SetupTerms {
   readonly funding: SetupFunding;
-  readonly allowance: { readonly title: string; readonly text: string } | null;
+  readonly allowance: { readonly title: string; readonly text: string; readonly figure?: { readonly label: string; readonly value: string } } | null;
   readonly seePremium: boolean;
 }
 

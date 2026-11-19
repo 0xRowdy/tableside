@@ -1,8 +1,8 @@
 // Spec 3 Screens › Exercise (table); S3-07 v82z3, AcmMa, E3Gbeh, kLgWV, qRHlC, j4X6V, fiCRg; #137–#139
 
 import type { ChallengeEntry, ChallengeView, LearnFeedback, PlayChoice, TableHandView, TableView } from '@tableside/engine';
-import { ArrowRight, Ban, ChevronsRight, CircleDot, Coins, Hand, Info, Layers, Shuffle, Wallet } from 'lucide-react-native';
-import { useState, type ReactNode } from 'react';
+import { ArrowRight, Ban, ChevronsRight, CircleDot, Coins, Hand, Info, Wallet } from 'lucide-react-native';
+import { useState } from 'react';
 import { Text, View } from 'react-native';
 
 import { Button } from '@/components/Button';
@@ -11,7 +11,7 @@ import { signed } from '@/play/blackjack-text';
 import { FirstUseHint } from '@/lessons/FirstUseHints';
 import { CorrectionPanel } from '@/play/Guidance';
 import { formatUnits } from '@/play/units';
-import { BlackjackFeltRules, FaceDownCard, FeltBadge, PhaseStepper, StatStrip, type PhaseStep } from '@/play/TableChrome';
+import { BlackjackFeltRules, FaceDownCard, FeltBadge, type PhaseStep, type TableStat } from '@/play/TableChrome';
 import { fonts, palette, radius, space, textScale } from '@/theme/tokens';
 import { makeStyles } from '@/theme/type';
 import { conversionText } from '@/training/blackjack-conversion-text';
@@ -55,7 +55,7 @@ import {
   YOUR_MOVE,
   continueText,
   DEALER,
-  decksText,
+  DECKS_LABEL,
   enteredLine,
   handText,
   KEEP_THE_COUNT,
@@ -89,7 +89,6 @@ import {
 import { COACH_NAME, CONVERSION_KICKER, NEXT_CARD } from '@/training/challenge-text';
 import type { LearnerCommand } from '@/training/service';
 
-import { CountAid } from './CountAid';
 import { CoachButton } from './CoachButton';
 import { CountEntry } from './CountEntry';
 
@@ -114,28 +113,23 @@ function phaseSteps(table: TableView): PhaseStep[] {
   return PHASES.map((label, index) => ({ label, state: index < reached ? 'done' : index === reached ? 'current' : 'upcoming' }));
 }
 
-// Spec 3 S3-07 v82z3, heGUV
-export function TableProgress({ view, table, timer }: { view: ChallengeView; table: TableView; timer: ReactNode }) {
-  const styles = useStyles();
-  return (
-    <>
-      <PhaseStepper steps={phaseSteps(table)} />
-      {timer && <View style={styles.timer}>{timer}</View>}
-      <StatStrip
-        stats={[
-          // Spec 3 S3-07 fiCRg; Amendment 2 §3; #139
-          table.challengeBalance
-            ? { label: ATTEMPT_BALANCE, spoken: ATTEMPT_BALANCE_SPOKEN, value: formatUnits(table.challengeBalance.balance) }
-            : { label: YOUR_SEAT, spoken: YOUR_SEAT_SPOKEN, value: table.seat === 'play' ? YOU_PLAY : SIMULATED },
-          { label: ROUND_LABEL, spoken: ROUND_SPOKEN, value: roundOf(table) },
-        ]}
-        status={STATUS_TEXT[status(view, table)]}
-      />
-    </>
-  );
+// Spec 3 S3-07 J1nPeT, e2edPR; docs/decisions/table-chrome-summary-row.md
+export function tableChrome(view: ChallengeView, table: TableView): { status: string; steps: PhaseStep[]; stats: TableStat[] } {
+  return {
+    status: STATUS_TEXT[status(view, table)],
+    steps: phaseSteps(table),
+    stats: [
+      // Spec 3 S3-07 fiCRg; Amendment 2 §3; #139
+      table.challengeBalance
+        ? { label: ATTEMPT_BALANCE, spoken: ATTEMPT_BALANCE_SPOKEN, value: formatUnits(table.challengeBalance.balance) }
+        : { label: YOUR_SEAT, spoken: YOUR_SEAT_SPOKEN, value: table.seat === 'play' ? YOU_PLAY : SIMULATED },
+      { label: ROUND_LABEL, spoken: ROUND_SPOKEN, value: roundOf(table) },
+      { label: DECKS_LABEL, spoken: DECKS_LABEL, value: String(table.decks) },
+    ],
+  };
 }
 
-export function TableBody({
+export function TablePanel({
   view,
   table,
   ready,
@@ -152,9 +146,7 @@ export function TableBody({
   const feedback = view.variant === 'learn' ? view.feedback : null;
   const entered = view.variant === 'check' ? view.entered : null;
   return (
-    <>
-      <Felt table={table} />
-      <View style={styles.panel}>
+    <View style={styles.panel}>
         {table.step === 'shuffle' && <ShufflePanel table={table} enabled={ready} onContinue={() => onCommand({ kind: 'next-item' })} />}
         {(table.step === 'deal' || table.step === 'reveal') && (
           <>
@@ -193,12 +185,11 @@ export function TableBody({
           />
         )}
         {table.prompt && <CheckpointPanel view={view} table={table} feedback={feedback} entered={entered} ready={ready} onCommand={onCommand} onInputRejected={onInputRejected} />}
-        {view.countAid && <FirstUseHint id="show-count" />}
-        {view.countAid && <CountAid key={view.attemptId} variant={view.variant} aid={view.countAid} enabled={ready && view.legalCommands.includes('reveal-count')} onReveal={() => onCommand({ kind: 'reveal-count' })} />}
-      </View>
-    </>
+    </View>
   );
 }
+
+export const TableFelt = ({ table }: { table: TableView }) => <Felt table={table} />;
 
 function CheckpointPanel({
   view,
@@ -472,12 +463,6 @@ function Felt({ table }: { table: TableView }) {
   const learner = table.seats.find((seat) => seat.learner);
   return (
     <View style={styles.felt} testID="table-felt">
-      <View accessible accessibilityLabel={decksText(table)} style={styles.decks}>
-        {table.step === 'shuffle' ? <Shuffle color={palette.feltText} size={16} /> : <Layers color={palette.feltText} size={16} />}
-        <Text maxFontSizeMultiplier={textScale.body} style={styles.decksText}>
-          {decksText(table)}
-        </Text>
-      </View>
       <Text maxFontSizeMultiplier={textScale.body} style={styles.feltLabel}>
         {DEALER}
       </Text>
@@ -527,10 +512,7 @@ function SeatHand({ hand, seat }: { hand: TableHandView; seat: TableView['seat']
 }
 
 const useStyles = makeStyles((type) => ({
-  timer: { paddingHorizontal: space[4], paddingTop: space[1], alignItems: 'flex-end' },
   felt: { gap: space[3], padding: space[4], borderRadius: radius.lg, backgroundColor: palette.felt, alignItems: 'center', minHeight: 280 },
-  decks: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: space[1], paddingVertical: space[1], paddingHorizontal: space[3], borderRadius: radius.pill, backgroundColor: palette.feltDeep },
-  decksText: { fontFamily: fonts.uiSemiBold, ...type.body, color: palette.feltText },
   feltLabel: { fontFamily: fonts.uiSemiBold, ...type.label, color: palette.feltText },
   handRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center', gap: space[2] },
   seatLabel: { fontFamily: fonts.uiSemiBold, ...type.label, color: palette.feltText },

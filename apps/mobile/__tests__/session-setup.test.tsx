@@ -108,7 +108,8 @@ describe('session setup', () => {
       await fireEvent.changeText(field('Initial wager maximum, in units'), '500');
       await fireEvent.press(screen.getByRole('button', { name: 'More other players' }));
       await fireEvent.press(start());
-      expect(await screen.findByText(/25–500/)).toBeOnTheScreen();
+      await fireEvent.press(await screen.findByRole('button', { name: 'Table details' }));
+      expect(screen.getByLabelText('Bets: 25–500')).toBeOnTheScreen();
     });
   });
 
@@ -167,14 +168,17 @@ describe('session setup', () => {
       await fireEvent.changeText(field('Pass, come, place, buy, lay, field minimum, in units'), '25');
       await fireEvent.changeText(field('Hardways and propositions maximum, in units'), '50');
       await fireEvent.press(start());
-      expect(await screen.findByText(/25–1,000 · props 1–50/)).toBeOnTheScreen();
+      await fireEvent.press(await screen.findByRole('button', { name: 'Table details' }));
+      expect(screen.getByLabelText('Bets: 25–1,000')).toBeOnTheScreen();
+      expect(screen.getByLabelText('Center bets: 1–50')).toBeOnTheScreen();
       await cleanup();
 
       await open('roulette', 'Roulette');
       await fireEvent.changeText(field('Outside bets minimum, in units'), '5');
       await fireEvent.press(start());
       await screen.findByLabelText('Session balance 1,000');
-      expect(screen.getByText(/outside 5–1,000/)).toBeOnTheScreen();
+      await fireEvent.press(screen.getByRole('button', { name: 'Table details' }));
+      expect(screen.getByLabelText('Outside bets: 5–1,000')).toBeOnTheScreen();
     });
   });
 
@@ -299,7 +303,8 @@ describe('session setup', () => {
       await open('roulette', 'Roulette');
       await fireEvent.press(start());
       await screen.findByLabelText('Session balance 1,000');
-      expect(await screen.findByLabelText('TIME: 12 min of guided practice left today')).toBeOnTheScreen();
+      await fireEvent.press(screen.getByRole('button', { name: 'Table details' }));
+      expect(await screen.findByLabelText('TIME. 12 min of guided practice left today')).toBeOnTheScreen();
       expect(screen.queryByRole('button', { name: 'See premium' })).toBeNull();
     });
 

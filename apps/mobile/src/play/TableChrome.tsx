@@ -1,9 +1,11 @@
 import type { DomainFact, PermittedView } from '@tableside/engine';
-import { CircleStop } from 'lucide-react-native';
-import type { ReactNode } from 'react';
-import { AccessibilityInfo, Pressable, Text, View } from 'react-native';
+import { ChevronDown, CircleStop } from 'lucide-react-native';
+import { useState, type ReactNode } from 'react';
+import { AccessibilityInfo, Pressable, ScrollView, Text, useWindowDimensions, View, type LayoutChangeEvent } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/Button';
+import { Sheet } from '@/components/Sheet';
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
 import { useFollow } from '@/hooks/use-follow';
 import { useLoaded } from '@/hooks/use-loaded';
@@ -12,36 +14,88 @@ import type { SetupTerms } from '@/practice/adapters';
 import { SAVE_RETRY_MS, type AccessStop, type ActiveSnapshot, type PracticeController, type PracticeSnapshot, type Suspension } from '@/practice/controller';
 import { usePractice } from '@/practice/PracticeProvider';
 import { fonts, MIN_TOUCH_TARGET, objectType, palette, radius, space, textScale, type ColorToken } from '@/theme/tokens';
-import { makeStyles, useTextStep } from '@/theme/type';
+import { makeStyles } from '@/theme/type';
 
 import { EndSessionDialog } from './EndSessionDialog';
 import { StopStrategyDialog } from './Guidance';
 import type { TurnWord } from './strategy-text';
 import { formatUnits, sumUnits } from './units';
 
-export function TableTopBar({
+export interface PhaseStep {
+  label: string;
+  state: 'done' | 'current' | 'upcoming';
+}
+
+export interface TableStat {
+  readonly label: string;
+  readonly spoken: string;
+  readonly value: string;
+}
+
+// docs/decisions/table-chrome-summary-row.md
+const MAX_STATS = 3;
+const SUMMARY_ROWS_FONT_SCALE = 1.35;
+const MIN_PINNED_FELT = 120;
+
+// Spec 1 S1-04 jvB3q, iIMaW, S2tO2R; S5-11 xIl3L, p44ug; S3-07 J1nPeT, dFfnT
+export function TableHeader({
   title,
-  subtitle,
-  canEnd,
-  onEnd,
+  status,
+  steps,
+  stats,
+  buttons,
+  allowance = null,
+  details,
+  children,
 }: {
   title: string;
-  subtitle: string;
-  canEnd: boolean;
-  onEnd: () => void;
+  status: string;
+  steps: readonly PhaseStep[];
+  stats: readonly TableStat[];
+  buttons: ReactNode;
+  allowance?: SetupTerms['allowance'];
+  details: (close: () => void) => ReactNode;
+  children?: ReactNode;
 }) {
+  const styles = useStyles();
+  const [open, setOpen] = useState(false);
+  const close = () => setOpen(false);
+  const shown = allowance?.figure && stats.length < MAX_STATS ? [...stats, { label: allowance.figure.label, spoken: allowance.figure.label, value: allowance.figure.value }] : stats;
+  return (
+    <View>
+      <View style={styles.topBar}>
+        <View style={styles.titles}>
+          <Text accessibilityRole="header" maxFontSizeMultiplier={textScale.display} style={styles.title}>
+            {title}
+          </Text>
+          <Text accessibilityLabel={`Status ${status}`} maxFontSizeMultiplier={textScale.body} style={styles.status} testID="table-status">
+            {status}
+          </Text>
+        </View>
+        {buttons}
+      </View>
+      <PhaseBars steps={steps} />
+      <SummaryRow stats={shown} onOpen={() => setOpen(true)} />
+      {children}
+      {open && (
+        <Sheet title="Table details" testID="table-details" onClose={close}>
+          {allowance && (
+            <DetailsSection label="Today's training">
+              <DetailsRow label={allowance.title} detail={allowance.text} />
+            </DetailsSection>
+          )}
+          {details(close)}
+        </Sheet>
+      )}
+    </View>
+  );
+}
+
+export function TableButtons({ canEnd, onEnd }: { canEnd: boolean; onEnd: () => void }) {
   const styles = useStyles();
   const { focused, focusProps } = useKeyboardFocus();
   return (
-    <View style={styles.topBar}>
-      <View style={styles.titles}>
-        <Text accessibilityRole="header" maxFontSizeMultiplier={textScale.display} style={styles.title}>
-          {title}
-        </Text>
-        <Text maxFontSizeMultiplier={textScale.body} style={styles.subtitle}>
-          {subtitle}
-        </Text>
-      </View>
+    <>
       <HelpButton />
       <Pressable
         accessibilityRole="button"
@@ -55,81 +109,138 @@ export function TableTopBar({
       >
         <CircleStop color={palette.foreground} size={22} />
       </Pressable>
-    </View>
+    </>
   );
 }
 
-export interface PhaseStep {
-  label: string;
-  state: 'done' | 'current' | 'upcoming';
-}
-
-export function PhaseStepper({ steps }: { steps: readonly PhaseStep[] }) {
+function PhaseBars({ steps }: { steps: readonly PhaseStep[] }) {
   const styles = useStyles();
   return (
-    <View style={styles.stepper} testID="phase-stepper">
+    <View style={styles.bars} testID="phase-stepper">
       {steps.map((step, index) => (
         <View
           key={step.label}
           accessible
           accessibilityLabel={`Step ${index + 1} of ${steps.length}, ${step.label}, ${step.state}`}
-          style={styles.step}
-        >
-          <View style={[styles.stepBar, step.state !== 'upcoming' && styles.stepBarReached]} />
-          <Text
-            maxFontSizeMultiplier={textScale.body}
-            style={[styles.stepText, step.state === 'current' && styles.stepTextCurrent]}
-          >
-            {step.state === 'done' ? `✓ ${step.label}` : `${index + 1}  ${step.label}`}
-          </Text>
-        </View>
+          style={[styles.bar, step.state !== 'upcoming' && styles.barReached]}
+        />
       ))}
     </View>
   );
 }
 
-export function SessionStrip({ balance, onTable, status }: { balance: string; onTable: string; status: string }) {
-  return (
-    <StatStrip
-      stats={[
-        { label: 'Session balance', spoken: 'Session balance', value: balance },
-        { label: 'On table', spoken: 'On table', value: onTable },
-      ]}
-      status={status}
-    />
-  );
-}
-
-// Spec 3 S3-07 v82z3; Spec 1 Amendment 12 §5
-export function StatStrip({ stats, status }: { stats: readonly { readonly label: string; readonly spoken: string; readonly value: string }[]; status: string }) {
+// Spec 1 Amendment 12 §5; docs/decisions/table-chrome-summary-row.md
+export function SummaryRow({ stats, onOpen }: { stats: readonly TableStat[]; onOpen: () => void }) {
   const styles = useStyles();
-  const rows = useTextStep() === 'larger';
+  const rows = useWindowDimensions().fontScale > SUMMARY_ROWS_FONT_SCALE;
   return (
-    <View testID="stat-strip" style={[styles.strip, rows && styles.stripRows]}>
+    <Pressable accessible={false} onPress={onOpen} testID="stat-strip" style={[styles.strip, rows && styles.stripRows]}>
       {stats.map((stat) => (
         <View key={stat.label} accessible accessibilityLabel={`${stat.spoken} ${stat.value}`} style={rows ? styles.statRow : styles.stat}>
           <Text maxFontSizeMultiplier={textScale.body} style={styles.statLabel}>{stat.label}</Text>
           <Text maxFontSizeMultiplier={textScale.body} style={styles.statValue}>{stat.value}</Text>
         </View>
       ))}
-      <View accessible accessibilityLabel={`Status ${status}`} style={[styles.statusTag, rows && styles.statusTagRow]}>
-        <Text maxFontSizeMultiplier={textScale.body} style={styles.statusText}>{status}</Text>
+      <DetailsButton labelled={rows} onPress={onOpen} />
+    </Pressable>
+  );
+}
+
+function DetailsButton({ labelled, onPress }: { labelled: boolean; onPress: () => void }) {
+  const styles = useStyles();
+  const { focused, focusProps } = useKeyboardFocus();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="Table details"
+      accessibilityHint="Rules, house edge and the rest of this table's details."
+      onPress={onPress}
+      {...focusProps}
+      style={({ pressed }) => [labelled ? styles.detailsRow : styles.detailsButton, pressed && styles.pressed, focused && styles.focused]}
+    >
+      {labelled && (
+        <Text maxFontSizeMultiplier={textScale.body} style={styles.detailsText}>
+          Table details
+        </Text>
+      )}
+      <View style={labelled ? undefined : styles.chevron}>
+        <ChevronDown color={palette.foreground} size={20} />
       </View>
+    </Pressable>
+  );
+}
+
+export function DetailsSection({ label, children }: { label: string; children: ReactNode }) {
+  const styles = useStyles();
+  return (
+    <View>
+      <Text accessibilityRole="header" maxFontSizeMultiplier={textScale.body} style={styles.sectionLabel}>
+        {label}
+      </Text>
+      {children}
     </View>
   );
 }
 
-// Spec 1 Amendment 4 D
-export function AllowanceLine({ game }: { game: string }) {
+export function DetailsRow({ label, value, detail }: { label: string; value?: string; detail?: string }) {
   const styles = useStyles();
-  const { controller } = usePractice();
-  const allowance: SetupTerms['allowance'] = useLoaded((practice, id) => practice.setupTerms(id), controller, game)?.allowance ?? null;
-  if (!allowance) return null;
   return (
-    <View accessible accessibilityLabel={`${allowance.title}: ${allowance.text}`} style={styles.allowance} testID="allowance-line">
-      <Text maxFontSizeMultiplier={textScale.body} style={styles.statLabel}>{allowance.title}</Text>
-      <Text maxFontSizeMultiplier={textScale.body} style={styles.allowanceText}>{allowance.text}</Text>
+    <View accessible accessibilityLabel={[value === undefined ? label : `${label}: ${value}`, detail].filter(Boolean).join('. ')} style={styles.detailsLine}>
+      <View style={styles.flex}>
+        <Text maxFontSizeMultiplier={textScale.body} style={styles.rowLabel}>{label}</Text>
+        {detail && <Text maxFontSizeMultiplier={textScale.body} style={styles.rowDetail}>{detail}</Text>}
+      </View>
+      {value !== undefined && <Text maxFontSizeMultiplier={textScale.body} style={styles.rowValue}>{value}</Text>}
     </View>
+  );
+}
+
+// Spec 1 S1-08; docs/decisions/table-chrome-summary-row.md
+export function RebuyDetails({ shown, enabled, onRebuy }: { shown: boolean; enabled: boolean; onRebuy: () => void }) {
+  const styles = useStyles();
+  if (!shown) return null;
+  return (
+    <DetailsSection label="Session">
+      <View style={styles.detailsAction}>
+        <Button label="Rebuy" variant="secondary" stretch hint="Adds chips to this session. It counts as funding, not as a win." disabled={!enabled} onPress={onRebuy} />
+      </View>
+    </DetailsSection>
+  );
+}
+
+// Spec 1 Amendment 4 D; S5-11 xIl3L
+export function useTableAllowance(game: string): SetupTerms['allowance'] {
+  const { controller } = usePractice();
+  return useLoaded((practice, id) => practice.setupTerms(id), controller, game)?.allowance ?? null;
+}
+
+// docs/decisions/table-chrome-summary-row.md
+export function TableLayout({ header, body, footer, columns }: { header: ReactNode; body: ReactNode; footer: ReactNode; columns: boolean }) {
+  const styles = useStyles();
+  const insets = useSafeAreaInsets();
+  const [size, setSize] = useState({ screen: 0, header: 0, footer: 0 });
+  const measure = (key: keyof typeof size) => (event: LayoutChangeEvent) => {
+    const height = Math.round(event.nativeEvent.layout.height);
+    setSize((current) => (current[key] === height ? current : { ...current, [key]: height }));
+  };
+  const pinned = !columns && size.screen > 0 && size.screen - size.header - size.footer >= MIN_PINNED_FELT;
+  return (
+    <ScrollView
+      testID="table-scroll"
+      onLayout={measure('screen')}
+      scrollEnabled={!pinned}
+      contentContainerStyle={[{ paddingTop: insets.top }, pinned ? { height: size.screen } : { paddingBottom: space[6] }]}
+    >
+      <View onLayout={measure('header')}>{header}</View>
+      <View testID="table-columns" style={[styles.columns, columns && styles.columnsSideBySide, pinned && styles.fill]}>
+        <ScrollView scrollEnabled={pinned} style={[styles.column, !pinned && styles.unbounded]} contentContainerStyle={styles.bodyContent}>
+          {body}
+        </ScrollView>
+        <View onLayout={measure('footer')} testID="table-footer" style={[styles.column, styles.controls, pinned && styles.pinned]}>
+          {footer}
+        </View>
+      </View>
+    </ScrollView>
   );
 }
 
@@ -377,7 +488,7 @@ const useStyles = makeStyles((type) => ({
   topBar: { flexDirection: 'row', alignItems: 'center', gap: space[1], paddingLeft: space[4], paddingRight: space[2] },
   titles: { flex: 1, gap: 1, paddingVertical: space[1] },
   title: { fontFamily: fonts.uiSemiBold, ...type.body, color: palette.foreground },
-  subtitle: { fontFamily: fonts.ui, ...type.secondary, color: palette.mutedForeground },
+  status: { fontFamily: fonts.ui, ...type.secondary, color: palette.foreground },
   iconButton: {
     minWidth: MIN_TOUCH_TARGET,
     minHeight: MIN_TOUCH_TARGET,
@@ -389,36 +500,66 @@ const useStyles = makeStyles((type) => ({
   },
   focused: { borderColor: palette.ring },
   disabled: { opacity: 0.4 },
-  stepper: { flexDirection: 'row', gap: space[2], paddingHorizontal: space[4], paddingVertical: space[2] },
-  step: { flex: 1, gap: 5 },
-  stepBar: { height: 3, borderRadius: 2, backgroundColor: palette.border },
-  stepBarReached: { backgroundColor: palette.primary },
-  stepText: { fontFamily: fonts.uiMedium, ...type.caption, color: palette.mutedForeground },
-  stepTextCurrent: { fontFamily: fonts.uiBold, color: palette.foreground },
+  pressed: { opacity: 0.8 },
+  flex: { flex: 1 },
+  fill: { flex: 1 },
+  bars: { flexDirection: 'row', gap: space[2], paddingHorizontal: space[4], paddingTop: space[1], paddingBottom: space[2] },
+  bar: { flex: 1, height: 3, borderRadius: 2, backgroundColor: palette.border },
+  barReached: { backgroundColor: palette.primary },
   strip: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     alignItems: 'center',
     gap: space[4],
-    paddingHorizontal: space[4],
+    paddingLeft: space[4],
+    paddingRight: space[2],
     paddingVertical: space[2],
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: palette.border,
     backgroundColor: palette.card,
   },
   stat: { gap: 1 },
   statLabel: { fontFamily: fonts.uiSemiBold, ...type.label, color: palette.mutedForeground },
   statValue: { fontFamily: fonts.uiBold, ...type.heading, color: palette.foreground },
-  stripRows: { flexDirection: 'column', alignItems: 'stretch', gap: space[2] },
+  stripRows: { flexDirection: 'column', alignItems: 'stretch', gap: space[2], paddingRight: space[4] },
   statRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', gap: space[3] },
-  statusTagRow: { marginLeft: 0, alignSelf: 'flex-start' },
-  statusTag: {
+  detailsButton: {
     marginLeft: 'auto',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
+    minWidth: MIN_TOUCH_TARGET,
+    minHeight: MIN_TOUCH_TARGET,
+    alignItems: 'center',
+    justifyContent: 'center',
     borderRadius: radius.pill,
-    backgroundColor: palette.secondary,
+    borderWidth: 2,
+    borderColor: palette.transparent,
   },
-  statusText: { fontFamily: fonts.uiSemiBold, ...type.label, color: palette.foreground },
-  allowance: { gap: 1, paddingHorizontal: space[4], paddingVertical: space[1], backgroundColor: palette.card },
+  chevron: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center', borderRadius: radius.pill, borderWidth: 1, borderColor: palette.controlBorder, backgroundColor: palette.secondary },
+  detailsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space[3],
+    minHeight: MIN_TOUCH_TARGET,
+    paddingTop: space[2],
+    borderTopWidth: 1,
+    borderTopColor: palette.border,
+    borderWidth: 2,
+    borderColor: palette.transparent,
+  },
+  detailsText: { flex: 1, fontFamily: fonts.uiSemiBold, ...type.body, color: palette.foreground },
+  sectionLabel: { fontFamily: fonts.uiSemiBold, ...type.label, color: palette.mutedForeground },
+  detailsAction: { paddingTop: space[2] },
+  detailsLine: { flexDirection: 'row', alignItems: 'flex-start', gap: space[3], paddingVertical: space[3], borderBottomWidth: 1, borderBottomColor: palette.border },
+  rowLabel: { fontFamily: fonts.ui, ...type.body, color: palette.foreground },
+  rowDetail: { fontFamily: fonts.ui, ...type.secondary, color: palette.mutedForeground },
+  rowValue: { fontFamily: fonts.uiSemiBold, ...type.body, color: palette.foreground, textAlign: 'right', flexShrink: 1 },
+  columns: { gap: space[3], paddingTop: space[2] },
+  columnsSideBySide: { flexDirection: 'row', alignItems: 'flex-start' },
+  column: { flex: 1 },
+  unbounded: { flexGrow: 0 },
+  bodyContent: { gap: space[2] },
+  controls: { gap: space[3], paddingHorizontal: space[4] },
+  pinned: { flex: 0, paddingTop: space[3], paddingBottom: space[3], borderTopWidth: 1, borderTopColor: palette.border, backgroundColor: palette.background },
   rack: { gap: space[2], padding: space[3], borderRadius: radius.lg, backgroundColor: palette.rail },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: space[1] },
   chipSlot: {
@@ -441,5 +582,4 @@ const useStyles = makeStyles((type) => ({
   endingStepTitle: { fontFamily: fonts.uiMedium, ...type.body, color: palette.foreground },
   endingStepDetail: { fontFamily: fonts.ui, ...type.secondary, color: palette.mutedForeground },
   muted: { color: palette.mutedForeground },
-  allowanceText: { fontFamily: fonts.uiMedium, ...type.secondary, color: palette.foreground },
 }));

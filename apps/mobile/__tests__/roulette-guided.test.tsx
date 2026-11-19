@@ -54,6 +54,9 @@ function everything(): string {
   return [...texts, ...announcements].join('\n');
 }
 
+const openDetails = () => fireEvent.press(screen.getByRole('button', { name: 'Table details' }));
+const closeDetails = () => fireEvent.press(screen.getByRole('button', { name: 'Close' }));
+
 describe('guided roulette practice', () => {
   beforeAll(async () => {
     await renderRouter('./src/app', { initialUrl: '/' });
@@ -84,9 +87,11 @@ describe('guided roulette practice', () => {
 
   it('shows the strategy and its adherence apart from the balance, and never the next prescription', async () => {
     await startGuided('Flat even-money', 'Black');
-    expect(screen.getByText('Guided · Flat even-money · Black')).toBeOnTheScreen();
-    expect(screen.getByLabelText('Strategy adherence: No strategy spins yet. Departures 0.')).toBeOnTheScreen();
+    expect(screen.getByRole('header', { name: 'Roulette · Guided' })).toBeOnTheScreen();
     expect(screen.getByLabelText('Session balance 1,000')).toBeOnTheScreen();
+    await openDetails();
+    expect(screen.getByLabelText('Strategy: Flat even-money · Black')).toBeOnTheScreen();
+    expect(screen.getByLabelText('Strategy adherence: No strategy spins yet. Departures 0.')).toBeOnTheScreen();
     expect(everything()).not.toMatch(/bets 10|10 on Black/);
   });
 
@@ -112,10 +117,14 @@ describe('guided roulette practice', () => {
     expect(announcements).toContain('Departure recorded: you took it back. Red taken down. Black 10 on the table. Balance 990.');
     expect(screen.queryByTestId('correction-panel')).toBeNull();
     expect(spot(/^Black,/)).toHaveAccessibilityValue({ text: '10 on it' });
+    await openDetails();
     expect(screen.getByLabelText('Strategy adherence: No strategy spins yet. Departures 1.')).toBeOnTheScreen();
+    await closeDetails();
 
     await fireEvent.press(screen.getByRole('button', { name: 'Spin' }));
-    expect(await screen.findByLabelText('Strategy adherence: Followed 0 of 1 spin. Departures 1.')).toBeOnTheScreen();
+    await screen.findByLabelText('Last spin: 27 red');
+    await openDetails();
+    expect(screen.getByLabelText('Strategy adherence: Followed 0 of 1 spin. Departures 1.')).toBeOnTheScreen();
     expect(announcements).toContain('The ball landed on 27 red.');
   });
 
@@ -127,7 +136,9 @@ describe('guided roulette practice', () => {
 
     expect(await screen.findByLabelText('Session balance 1,025')).toBeOnTheScreen();
     expect(announcements).toContain('Departure recorded: you overrode the strategy. The ball landed on 27 red.');
+    await openDetails();
     expect(screen.getByLabelText('Strategy adherence: Followed 0 of 1 spin. Departures 1.')).toBeOnTheScreen();
+    await closeDetails();
     expect(screen.queryByTestId('cycle-panel')).toBeNull();
     expect(screen.getByRole('button', { name: 'Spin' })).toBeOnTheScreen();
   });
@@ -135,11 +146,12 @@ describe('guided roulette practice', () => {
   it('Stop strategy asks first, returns removable wagers and keeps the session open', async () => {
     await startGuided();
     await bet('25', /^Red, pays 1 to 1$/);
+    await openDetails();
     await fireEvent.press(screen.getByRole('button', { name: 'Stop strategy' }));
     expect(screen.getByRole('header', { name: 'Stop the strategy?' })).toBeOnTheScreen();
     expect(screen.getByLabelText('2. Removable wagers come back. Red 25')).toBeOnTheScreen();
     await fireEvent.press(screen.getAllByRole('button', { name: 'Stop strategy' }).at(-1) as never);
-    expect(await screen.findByText('Strategy stopped · playing on your own')).toBeOnTheScreen();
+    expect(await screen.findByRole('header', { name: 'Roulette' })).toBeOnTheScreen();
     expect(announcements).toContain('Strategy stopped. You play on your own now. Red 25 returned to your balance. Balance 1,000.');
     expect(screen.getByLabelText('Session balance 1,000')).toBeOnTheScreen();
     expect(screen.queryByRole('button', { name: 'Stop strategy' })).toBeNull();
@@ -164,7 +176,7 @@ describe('guided roulette practice', () => {
     await fireEvent.press(screen.getByRole('button', { name: 'Spin' }));
     await fireEvent.press(within(await screen.findByTestId('correction-panel')).getByRole('button', { name: 'Take it back & bet 10 on Red' }));
     await fireEvent.press(screen.getByRole('button', { name: 'Spin' }));
-    await screen.findByLabelText('Strategy adherence: Followed 0 of 1 spin. Departures 1.');
+    await screen.findByLabelText('Last spin: 27 red');
     await fireEvent.press(screen.getByRole('button', { name: 'End session' }));
     await fireEvent.press(screen.getAllByRole('button', { name: 'End session' }).at(-1) as never);
     expect(await screen.findByRole('header', { name: 'Session result' })).toBeOnTheScreen();

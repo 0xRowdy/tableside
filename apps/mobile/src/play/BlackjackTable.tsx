@@ -16,8 +16,7 @@ import {
   type Card,
 } from '@tableside/engine';
 import { useMemo, useState } from 'react';
-import { Pressable, ScrollView, Text, useWindowDimensions, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Pressable, Text, useWindowDimensions, View } from 'react-native';
 
 import { Button } from '@/components/Button';
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
@@ -42,7 +41,6 @@ import {
   inHand,
   isPlaying,
   presetOf,
-  rulesText,
   seatSummary,
   showingLastRound,
   signed,
@@ -51,9 +49,27 @@ import {
   totalText,
 } from './blackjack-text';
 import { betCorrectionCopy, BLACKJACK_WORDS } from './coaching-text';
-import { CorrectionPanel, GuidedStrip, type TableNow } from './Guidance';
+import { CorrectionPanel, GuidedDetails, type TableNow } from './Guidance';
 import { RebuySheet } from './RebuySheet';
-import { AccessStopBanner, AllowanceLine, BlackjackFeltRules, ChipRack, FaceDownCard, FeltBadge, PhaseStepper, SaveFailedBanner, SessionStrip, TableDialogs, TableTopBar, TurnBoundaryBanner, useTableAnnouncements, type PhaseStep } from './TableChrome';
+import {
+  AccessStopBanner,
+  BlackjackFeltRules,
+  ChipRack,
+  DetailsRow,
+  DetailsSection,
+  RebuyDetails,
+  FaceDownCard,
+  FeltBadge,
+  SaveFailedBanner,
+  TableButtons,
+  TableDialogs,
+  TableHeader,
+  TableLayout,
+  TurnBoundaryBanner,
+  useTableAllowance,
+  useTableAnnouncements,
+  type PhaseStep,
+} from './TableChrome';
 import { capitalize, formatSigned, formatUnits, halfUnits, sumUnits, totalOnTable } from './units';
 
 type ActiveSnapshot = Active<BlackjackPermittedView>;
@@ -81,10 +97,25 @@ function phaseSteps(view: BlackjackPermittedView): PhaseStep[] {
   }));
 }
 
+// Spec 1 S1-04 iIMaW
+function blackjackRules(view: BlackjackPermittedView): readonly (readonly [string, string])[] {
+  const { table } = view;
+  return [
+    ['Decks', String(table.decks)],
+    ['Dealer', table.dealer === 'S17' ? 'Stands on all 17s' : 'Hits soft 17'],
+    ['Late surrender', table.lateSurrender ? 'Offered' : 'Not offered'],
+    ['Blackjack pays', '3 to 2'],
+    ['Bets', `${formatUnits(table.initial.min)}–${formatUnits(table.initial.max)}`],
+    ['Penetration', `${table.penetration}%`],
+  ];
+}
+
+const presetWords = ({ table }: BlackjackPermittedView) =>
+  `${table.decks} decks, ${table.dealer === 'S17' ? 'dealer stands on all 17s' : 'dealer hits soft 17'}, ${table.lateSurrender ? 'late surrender' : 'no surrender'}`;
+
 export function BlackjackTable({ snapshot }: { snapshot: ActiveSnapshot }) {
   const styles = useStyles();
   const { controller } = usePractice();
-  const insets = useSafeAreaInsets();
   const { width, height, fontScale } = useWindowDimensions();
   const sideBySide = width > height && fontScale <= SIDE_BY_SIDE_MAX_FONT_SCALE;
   const [chip, setChip] = useState('25');
@@ -96,6 +127,7 @@ export function BlackjackTable({ snapshot }: { snapshot: ActiveSnapshot }) {
   const [presentation, setPresentation] = useState<Presentation>('table');
   const [draft, setDraft] = useState<BetDraft>(EMPTY_DRAFT);
   const { view, facts, busy, save } = snapshot;
+  const allowance = useTableAllowance('blackjack');
   const catalog = useMemo(() => blackjackCatalog(view), [view]);
   const placed = useMemo(() => blackjackPlacedWagers(view), [view]);
   const drafted = isDraftPending(draft, placed) ? findChoice(catalog, draft.target) : undefined;
@@ -130,38 +162,56 @@ export function BlackjackTable({ snapshot }: { snapshot: ActiveSnapshot }) {
   const selector = presentation === 'selector' && betting;
   const setWager = (target: string, amount: string) => void (target === INSURANCE_TARGET ? controller.insure(amount) : controller.placeWager(target, amount));
 
+  const rulesRows = blackjackRules(view);
+  const header = (
+    <TableHeader
+      title={strategy && strategy.status !== 'stopped' ? 'Blackjack · Guided' : 'Blackjack'}
+      status={save === 'failed' ? 'Paused · not saved' : statusText(view)}
+      steps={phaseSteps(view)}
+      stats={[
+        { label: 'Session balance', spoken: 'Session balance', value: formatUnits(view.balance) },
+        { label: 'On table', spoken: 'On table', value: formatUnits(totalOnTable(view)) },
+        ...(view.count ? [{ label: 'True count', spoken: 'True count', value: signed(view.count.trueCount) }] : []),
+      ]}
+      buttons={<TableButtons canEnd={legal('request-stop')} onEnd={() => setConfirming(true)} />}
+      allowance={allowance}
+      details={(close) => (
+        <>
+          {strategy && <GuidedDetails strategy={strategy} detail={null} unit="decision" canStop={legal('stop-strategy')} onStop={() => { close(); setStoppingStrategy(true); }} />}
+          {view.count && (
+            <DetailsSection label="Count">
+              <DetailsRow label="Supplied in this mode" value={`True count ${signed(view.count.trueCount)}`} detail={`${countWorking(view.count)}. Tableside recomputes it before every deal and decision.`} />
+            </DetailsSection>
+          )}
+          <RebuyDetails shown={view.legalCommands.includes('rebuy')} enabled={legal('rebuy')} onRebuy={() => { close(); setRebuying(true); }} />
+          <DetailsSection label="House edge">
+            <DetailsRow label="With basic strategy" value={`${blackjackHouseEdge(presetOf(view)).percent}%`} detail={`For this preset: ${presetWords(view)}.`} />
+          </DetailsSection>
+          <DetailsSection label="Rules">
+            {rulesRows.map(([label, value]) => (
+              <DetailsRow key={label} label={label} value={value} />
+            ))}
+          </DetailsSection>
+        </>
+      )}
+    >
+      {save === 'failed' && <SaveFailedBanner busy={busy} onRetry={() => void controller.retrySave()} />}
+      <AccessStopBanner
+        ending={snapshot.ending}
+        detail={`${playing ? 'Finish this hand; then it settles automatically' : 'Your bets settle automatically'}, then you'll see the session result.`}
+      />
+      <TurnBoundaryBanner suspension={snapshot.suspension} turn="round" />
+    </TableHeader>
+  );
+
   return (
     <View style={styles.screen}>
-      <ScrollView testID="table-scroll" contentContainerStyle={{ paddingTop: insets.top, paddingBottom: space[6] }}>
-        <TableTopBar
-          title="Blackjack"
-          subtitle={strategy ? `Guided · ${strategy.name.toLowerCase()} · ${rulesText(view)}` : rulesText(view)}
-          canEnd={legal('request-stop')}
-          onEnd={() => setConfirming(true)}
-        />
-        <Text maxFontSizeMultiplier={textScale.body} style={styles.edge}>
-          Edge with basic strategy: {blackjackHouseEdge(presetOf(view)).percent}% (this preset) · Penetration {view.table.penetration}%
-        </Text>
-        <PhaseStepper steps={phaseSteps(view)} />
-        <SessionStrip
-          balance={formatUnits(view.balance)}
-          onTable={formatUnits(totalOnTable(view))}
-          status={save === 'failed' ? 'Paused · not saved' : statusText(view)}
-        />
-        <AllowanceLine game="blackjack" />
-        {strategy && <GuidedStrip strategy={strategy} detail={null} unit="decision" canStop={legal('stop-strategy')} onStop={() => setStoppingStrategy(true)} />}
-        {view.count && <CountPanel view={view} count={view.count} betweenRounds={!inHand(view) && view.phase !== 'revealing-outcome'} />}
-        {betting && <PresentationSwitch value={presentation} onChange={setPresentation} />}
-
-        {save === 'failed' && <SaveFailedBanner busy={busy} onRetry={() => void controller.retrySave()} />}
-        <AccessStopBanner
-          ending={snapshot.ending}
-          detail={`${playing ? 'Finish this hand; then it settles automatically' : 'Your bets settle automatically'}, then you'll see the session result.`}
-        />
-        <TurnBoundaryBanner suspension={snapshot.suspension} turn="round" />
-
-        <View testID="table-columns" style={[styles.columns, sideBySide && styles.columnsSideBySide]}>
-          <View style={styles.column}>
+      <TableLayout
+        columns={sideBySide}
+        header={header}
+        body={
+          <>
+            {view.count && <CountPanel view={view} count={view.count} betweenRounds={!inHand(view) && view.phase !== 'revealing-outcome'} />}
             {selector ? (
               <BetSelector
                 game="blackjack"
@@ -192,8 +242,11 @@ export function BlackjackTable({ snapshot }: { snapshot: ActiveSnapshot }) {
                 <Felt view={view} result={lastResult(view, facts)} canBet={legal('place-wager')} chip={chip} wager={wager} onSpot={addChip} />
               </View>
             )}
-          </View>
-          <View style={[styles.column, styles.controls]}>
+          </>
+        }
+        footer={
+          <>
+            {betting && <PresentationSwitch value={presentation} onChange={setPresentation} />}
             {message && (
               <Text maxFontSizeMultiplier={textScale.body} style={styles.message} testID="latest-event">
                 {message}
@@ -225,7 +278,7 @@ export function BlackjackTable({ snapshot }: { snapshot: ActiveSnapshot }) {
                 onDecline={() => void controller.play('decline-insurance')}
               />
             ) : playing ? (
-              <PlayActions view={view} enabled={legal('play')} onPlay={(action) => void controller.play(action)} />
+              <PlayActions view={view} enabled={legal('play')} explain={fontScale > SIDE_BY_SIDE_MAX_FONT_SCALE} onPlay={(action) => void controller.play(action)} />
             ) : (
               <BettingActions
                 view={view}
@@ -238,25 +291,15 @@ export function BlackjackTable({ snapshot }: { snapshot: ActiveSnapshot }) {
                 onDeal={deal}
               />
             )}
-            {view.legalCommands.includes('rebuy') && (
-              <Button
-                label="Rebuy"
-                variant="secondary"
-                stretch
-                hint="Adds chips to this session. It counts as funding, not as a win."
-                disabled={!legal('rebuy')}
-                onPress={() => setRebuying(true)}
-              />
-            )}
             {betting && !playing && !selector && <ChipRack chip={chip} onChoose={setChip} from="5" spot="the bet spot" />}
-            {inHand(view) && (
+            {inHand(view) && fontScale > SIDE_BY_SIDE_MAX_FONT_SCALE && (
               <Text maxFontSizeMultiplier={textScale.body} style={styles.hint}>
                 Finish this hand before ending the session.
               </Text>
             )}
-          </View>
-        </View>
-      </ScrollView>
+          </>
+        }
+      />
 
       {rebuyOpen && (
         <RebuySheet
@@ -308,8 +351,6 @@ function CountPanel({ view, count, betweenRounds }: { view: BlackjackPermittedVi
       accessible
       accessibilityLabel={`Count supplied in this mode: true count ${signed(count.trueCount)}. Running count ${signed(count.running)}, ${count.decks} decks left.${betweenRounds && at ? ` Deviation at this count: ${deviationRule(at)}.` : ''}${betweenRounds && next ? ` Next index: ${next.situation} at ${signed(next.threshold)}.` : ''}`}
     >
-      <Text maxFontSizeMultiplier={textScale.body} style={styles.countLabel}>Count supplied in this mode</Text>
-      <Text maxFontSizeMultiplier={textScale.display} style={styles.countValue}>True count {signed(count.trueCount)}</Text>
       <Text maxFontSizeMultiplier={textScale.body} style={styles.hint}>{countWorking(count)}</Text>
       {betweenRounds && at && (
         <Text maxFontSizeMultiplier={textScale.body} style={styles.countHint}>Deviation at this count: {deviationRule(at)}</Text>
@@ -505,7 +546,7 @@ function unavailable(action: TableAction, view: BlackjackPermittedView): string 
 const actionRows = <T,>(actions: readonly T[], perRow: number): T[][] =>
   Array.from({ length: Math.ceil(actions.length / perRow) }, (_, i) => actions.slice(i * perRow, i * perRow + perRow));
 
-function PlayActions({ view, enabled, onPlay }: { view: BlackjackPermittedView; enabled: boolean; onPlay: (action: BlackjackAction) => void }) {
+function PlayActions({ view, enabled, explain, onPlay }: { view: BlackjackPermittedView; enabled: boolean; explain: boolean; onPlay: (action: BlackjackAction) => void }) {
   const styles = useStyles();
   const offered = (action: BlackjackAction) => view.playActions.includes(action);
   const actions: TableAction[] = ['hit', 'stand', 'double', 'split', ...(view.table.lateSurrender ? (['surrender'] as const) : [])];
@@ -514,27 +555,31 @@ function PlayActions({ view, enabled, onPlay }: { view: BlackjackPermittedView; 
   const round = view.outcome;
   const active = round?.active != null ? round.hands[round.active] : undefined;
   const stake = view.wagers.find((wager) => wager.target === active?.target)?.amount;
+  const surrender =
+    offered('surrender') && stake
+      ? `${round?.dealer.peek === 'no-blackjack' ? 'The dealer checked for blackjack and has none. ' : ''}Late surrender is only on your first two cards. Surrendering returns half your bet (${formatUnits(halfUnits(stake))}) and ends the hand.`
+      : null;
+  const hint = (action: TableAction) => unavailable(action, view) ?? (action === 'surrender' ? surrender : null) ?? undefined;
   return (
     <View style={styles.actions}>
       {rows.map((row, i) => (
         <View key={i} style={styles.actionRow}>
           {row.map((action) => (
             <View key={action} style={styles.action}>
-              <Button label={ACTION_LABEL[action]} variant="secondary" stretch disabled={!enabled || !offered(action)} onPress={() => onPlay(action)} />
+              <Button label={ACTION_LABEL[action]} variant="secondary" stretch hint={hint(action)} disabled={!enabled || !offered(action)} onPress={() => onPlay(action)} />
             </View>
           ))}
         </View>
       ))}
-      {reasons.length > 0 && (
+      {explain && reasons.length > 0 && (
         <Text maxFontSizeMultiplier={textScale.body} style={styles.hint}>
           {reasons.join(' ')}
           {(round?.hands.length ?? 1) > 1 ? ' Hands play left to right; split aces get one card each and can’t be resplit.' : ''}
         </Text>
       )}
-      {offered('surrender') && stake && (
+      {explain && surrender && (
         <Text maxFontSizeMultiplier={textScale.body} style={styles.hint}>
-          {round?.dealer.peek === 'no-blackjack' ? 'The dealer checked for blackjack and has none. ' : ''}
-          Late surrender is only on your first two cards. Surrendering returns half your bet ({formatUnits(halfUnits(stake))}) and ends the hand.
+          {surrender}
         </Text>
       )}
     </View>
@@ -628,17 +673,10 @@ const CARD_WIDTH = 56;
 const useStyles = makeStyles((type) => ({
   screen: { flex: 1, backgroundColor: palette.background },
   flex: { flex: 1 },
-  edge: { fontFamily: fonts.ui, ...type.caption, color: palette.mutedForeground, paddingHorizontal: space[4] },
-  columns: { gap: space[3], paddingTop: space[2] },
-  columnsSideBySide: { flexDirection: 'row', alignItems: 'flex-start' },
-  column: { flex: 1 },
   tableView: { gap: space[2] },
-  controls: { gap: space[3], paddingHorizontal: space[4] },
   message: { fontFamily: fonts.uiMedium, ...type.body, color: palette.foreground },
   hint: { fontFamily: fonts.ui, ...type.secondary, color: palette.mutedForeground },
   countPanel: { gap: 2, marginHorizontal: space[4], marginTop: space[2], padding: space[3], borderRadius: radius.lg, backgroundColor: palette.card, borderWidth: 1, borderColor: palette.border },
-  countLabel: { fontFamily: fonts.uiSemiBold, ...type.label, color: palette.mutedForeground },
-  countValue: { fontFamily: fonts.display, ...type.headline, color: palette.foreground },
   countHint: { fontFamily: fonts.uiMedium, ...type.secondary, color: palette.foreground },
   felt: { gap: space[3], padding: space[4], marginHorizontal: space[2], borderRadius: radius.lg, backgroundColor: palette.felt, alignItems: 'center' },
   feltTop: { flexDirection: 'row', alignSelf: 'stretch' },

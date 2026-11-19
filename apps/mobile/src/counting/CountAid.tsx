@@ -13,6 +13,39 @@ import { fonts, palette, radius, space, textScale } from '@/theme/tokens';
 import { makeStyles } from '@/theme/type';
 import { COUNT_LABEL, countAidDetail, REVEAL_WARNING, SHOW_COUNT, spokenValue } from '@/training/challenge-text';
 
+export interface CountAidState {
+  readonly variant: ChallengeVariant;
+  readonly aid: RunningCountAid;
+  readonly shown: boolean;
+  readonly warning: boolean;
+  readonly toggle: (on: boolean) => void;
+  readonly keep: () => void;
+  readonly show: () => void;
+}
+
+export function useCountAid(variant: ChallengeVariant, aid: RunningCountAid, onReveal: () => void): CountAidState {
+  const [showing, setShowing] = useState(false);
+  const [warning, setWarning] = useState(false);
+  return {
+    variant,
+    aid,
+    shown: showing && aid.revealed,
+    warning,
+    toggle: (on) => {
+      if (!on || aid.revealed) return setShowing(on);
+      if (variant === 'check') return setWarning(true);
+      setShowing(true);
+      onReveal();
+    },
+    keep: () => setWarning(false),
+    show: () => {
+      setWarning(false);
+      setShowing(true);
+      onReveal();
+    },
+  };
+}
+
 export function CountAid({
   variant,
   aid,
@@ -25,48 +58,46 @@ export function CountAid({
   onReveal: () => void;
 }) {
   const styles = useStyles();
-  const [showing, setShowing] = useState(false);
-  const [warning, setWarning] = useState(false);
-  const shown = showing && aid.revealed;
-  const toggle = (on: boolean) => {
-    if (!on || aid.revealed) return setShowing(on);
-    if (variant === 'check') return setWarning(true);
-    setShowing(true);
-    onReveal();
-  };
+  const state = useCountAid(variant, aid, onReveal);
   return (
     <View style={styles.aid}>
-      <SwitchRow title={SHOW_COUNT} detail={countAidDetail(variant, aid.revealed, shown)} value={shown} disabled={!enabled && !aid.revealed} onChange={toggle} />
-      {shown && aid.count !== null && (
-        <View accessible accessibilityLabel={`${COUNT_LABEL} ${spokenValue(aid.count)}`} testID="count-aid" style={styles.count}>
-          <Text maxFontSizeMultiplier={textScale.body} style={styles.countLabel}>
-            {COUNT_LABEL}
-          </Text>
-          <Text maxFontSizeMultiplier={textScale.display} style={styles.countValue}>
-            {signed(aid.count)}
-          </Text>
-        </View>
-      )}
-      {warning && (
-        <Sheet title={REVEAL_WARNING.title} onClose={() => setWarning(false)}>
+      <CountAidSwitch state={state} enabled={enabled} />
+      <CountAidValue state={state} />
+    </View>
+  );
+}
+
+export function CountAidSwitch({ state, enabled }: { state: CountAidState; enabled: boolean }) {
+  const styles = useStyles();
+  return (
+    <>
+      <SwitchRow title={SHOW_COUNT} detail={countAidDetail(state.variant, state.aid.revealed, state.shown)} value={state.shown} disabled={!enabled && !state.aid.revealed} onChange={state.toggle} />
+      {state.warning && (
+        <Sheet title={REVEAL_WARNING.title} onClose={state.keep}>
           <Text maxFontSizeMultiplier={textScale.body} style={styles.lead}>
             {REVEAL_WARNING.lead}
           </Text>
           <SheetText>{REVEAL_WARNING.detail}</SheetText>
-          <Button label={REVEAL_WARNING.keep} stretch onPress={() => setWarning(false)} />
-          <Button
-            label={REVEAL_WARNING.show}
-            icon={Eye}
-            variant="outline"
-            stretch
-            onPress={() => {
-              setWarning(false);
-              setShowing(true);
-              onReveal();
-            }}
-          />
+          <Button label={REVEAL_WARNING.keep} stretch onPress={state.keep} />
+          <Button label={REVEAL_WARNING.show} icon={Eye} variant="outline" stretch onPress={state.show} />
         </Sheet>
       )}
+    </>
+  );
+}
+
+export function CountAidValue({ state }: { state: CountAidState }) {
+  const styles = useStyles();
+  const { count } = state.aid;
+  if (!state.shown || count === null) return null;
+  return (
+    <View accessible accessibilityLabel={`${COUNT_LABEL} ${spokenValue(count)}`} testID="count-aid" style={styles.count}>
+      <Text maxFontSizeMultiplier={textScale.body} style={styles.countLabel}>
+        {COUNT_LABEL}
+      </Text>
+      <Text maxFontSizeMultiplier={textScale.display} style={styles.countValue}>
+        {signed(count)}
+      </Text>
     </View>
   );
 }

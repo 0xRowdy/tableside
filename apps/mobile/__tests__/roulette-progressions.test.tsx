@@ -1,6 +1,6 @@
 // Spec 1 S1-06, S1-07
 
-import { act, cleanup, fireEvent, screen, within } from '@testing-library/react-native';
+import { act, cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react-native';
 import { renderRouter } from 'expo-router/testing-library';
 import { AccessibilityInfo, Dimensions } from 'react-native';
 
@@ -105,8 +105,10 @@ describe('roulette progressions', () => {
     expect(within(screen.getByTestId('cycle-panel')).getByLabelText('Cycle result minus 630, Loss')).toBeOnTheScreen();
 
     await fireEvent.press(panel.getByRole('button', { name: 'Start another cycle with 370' }));
-    expect(await screen.findByText('Guided · Capped Martingale · Black · cycle 2')).toBeOnTheScreen();
-    expect(screen.queryByTestId('cycle-panel')).toBeNull();
+    await waitFor(() => expect(screen.queryByTestId('cycle-panel')).toBeNull());
+    await fireEvent.press(screen.getByRole('button', { name: 'Table details' }));
+    expect(screen.getByLabelText('Strategy: Capped Martingale · Black · cycle 2')).toBeOnTheScreen();
+    await fireEvent.press(screen.getByRole('button', { name: 'Close' }));
     expect(screen.getByLabelText('Session balance 370')).toBeOnTheScreen();
     expect(announcements).toContain('Strategy restarted with your current balance.');
   });

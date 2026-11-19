@@ -3,8 +3,7 @@
 import { crapsHouseEdge } from '@tableside/definitions';
 import { CRAPS_POINTS, isPlayCorrection, type CrapsPermittedView as PermittedView, type CycleTurn } from '@tableside/engine';
 import { useMemo, useState } from 'react';
-import { Pressable, ScrollView, Text, useWindowDimensions, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Pressable, Text, useWindowDimensions, View } from 'react-native';
 
 import { Button } from '@/components/Button';
 import { Notice, NoticeText } from '@/components/Notice';
@@ -19,11 +18,27 @@ import { draftAmountText, EMPTY_DRAFT, findChoice, isDraftPending, type BetDraft
 import { DraftBar, PresentationSwitch, type Presentation } from './bet-selector/Presentation';
 import { betCorrectionCopy, betsText, CRAPS_WORDS } from './coaching-text';
 import { crapsCatalog, crapsPlacedWagers, placedToggle } from './craps-catalog';
-import { CorrectionPanel, CycleResultPanel, GuidedStrip, PendingPanel, type TurnWords } from './Guidance';
+import { CorrectionPanel, CycleResultPanel, GuidedDetails, PendingPanel, type TurnWords } from './Guidance';
 import { RebuySheet } from './RebuySheet';
 import { commitmentText, crapsStatus, crapsTargetName, describeCrapsFacts, puckText, workingText } from './craps-text';
 import { formatUnits, sumUnits, totalOnTable } from './units';
-import { AccessStopBanner, AllowanceLine, ChipRack, EndingSteps, PhaseStepper, SaveFailedBanner, SessionStrip, TableDialogs, TableTopBar, TurnBoundaryBanner, useTableAnnouncements, type PhaseStep } from './TableChrome';
+import {
+  AccessStopBanner,
+  ChipRack,
+  DetailsRow,
+  DetailsSection,
+  RebuyDetails,
+  EndingSteps,
+  SaveFailedBanner,
+  TableButtons,
+  TableDialogs,
+  TableHeader,
+  TableLayout,
+  TurnBoundaryBanner,
+  useTableAllowance,
+  useTableAnnouncements,
+  type PhaseStep,
+} from './TableChrome';
 
 type ActiveSnapshot = ActivePracticeSnapshot & { readonly view: PermittedView };
 
@@ -54,7 +69,6 @@ function describeTurn(turn: CycleTurn, index: number): TurnWords {
 export function CrapsTable({ snapshot }: { snapshot: ActiveSnapshot }) {
   const styles = useStyles();
   const { controller } = usePractice();
-  const insets = useSafeAreaInsets();
   const { width, height, fontScale } = useWindowDimensions();
   const sideBySide = width > height && fontScale <= SIDE_BY_SIDE_MAX_FONT_SCALE;
   const [chip, setChip] = useState('25');
@@ -65,6 +79,7 @@ export function CrapsTable({ snapshot }: { snapshot: ActiveSnapshot }) {
   const [presentation, setPresentation] = useState<Presentation>('table');
   const [draft, setDraft] = useState<BetDraft>(EMPTY_DRAFT);
   const { view, facts, busy, save } = snapshot;
+  const allowance = useTableAllowance('craps');
   const { table } = view;
   const catalog = useMemo(() => crapsCatalog(view), [view]);
   const placed = useMemo(() => crapsPlacedWagers(view), [view]);
@@ -105,56 +120,72 @@ export function CrapsTable({ snapshot }: { snapshot: ActiveSnapshot }) {
     if (placedToggle(latest.view, target) !== toggled) await controller.setWorking(target, toggled);
   };
 
+  const header = (
+    <TableHeader
+      title={strategy && strategy.status !== 'stopped' ? 'Craps · Guided' : 'Craps'}
+      status={save === 'failed' ? 'Paused · not saved' : crapsStatus(view)}
+      steps={phaseSteps(view)}
+      stats={[
+        { label: 'Session balance', spoken: 'Session balance', value: formatUnits(view.balance) },
+        { label: 'On table', spoken: 'On table', value: formatUnits(totalOnTable(view)) },
+      ]}
+      buttons={<TableButtons canEnd={legal('request-stop')} onEnd={() => setConfirming(true)} />}
+      allowance={allowance}
+      details={(close) => (
+        <>
+          {strategy && <GuidedDetails strategy={strategy} canStop={legal('stop-strategy')} onStop={() => { close(); setStoppingStrategy(true); }} detail={null} unit="roll" />}
+          <RebuyDetails shown={view.legalCommands.includes('rebuy')} enabled={legal('rebuy')} onRebuy={() => { close(); setRebuying(true); }} />
+          <DetailsSection label="House edge">
+            <DetailsRow label="Pass and come" value={`${edge('pass')}%`} />
+            <DetailsRow label="Don't pass and don't come" value={`${edge('dont-pass')}%`} />
+            <DetailsRow label="Odds" value="0%" />
+            <DetailsRow label="Every other bet" detail="Its edge shows in the Bet list, where you choose it." />
+          </DetailsSection>
+          <DetailsSection label="Rules">
+            <DetailsRow label="Odds" value={table.odds} />
+            <DetailsRow label="Field 12 pays" value={table.field === 'triple-12' ? '3 to 1' : '2 to 1'} />
+            <DetailsRow label="Bets" value={`${formatUnits(table.limits.flat.min)}–${formatUnits(table.limits.flat.max)}`} />
+            <DetailsRow label="Center bets" value={`${formatUnits(table.limits.props.min)}–${formatUnits(table.limits.props.max)}`} />
+          </DetailsSection>
+        </>
+      )}
+    >
+      {save === 'failed' && <SaveFailedBanner busy={busy} onRetry={() => void controller.retrySave()} />}
+      <AccessStopBanner ending={snapshot.ending} detail="The dice roll on to settle only the bets already working. No new bets, odds or rolls of your own." />
+      <TurnBoundaryBanner suspension={snapshot.suspension} turn="roll" />
+    </TableHeader>
+  );
+  const settling = view.phase === 'final-settlement' || view.phase === 'strategy-settlement';
+
   return (
     <View style={styles.screen}>
-      <ScrollView testID="table-scroll" contentContainerStyle={{ paddingTop: insets.top, paddingBottom: space[6] }}>
-        <TableTopBar
-          title="Craps"
-          subtitle={`${table.odds} odds · field 12 pays ${table.field === 'triple-12' ? '3:1' : '2:1'} · ${formatUnits(table.limits.flat.min)}–${formatUnits(table.limits.flat.max)} · props ${formatUnits(table.limits.props.min)}–${formatUnits(table.limits.props.max)}`}
-          canEnd={legal('request-stop')}
-          onEnd={() => setConfirming(true)}
-        />
-        <Text maxFontSizeMultiplier={textScale.body} style={styles.edge}>
-          House edge: pass and come {edge('pass')}% · don&apos;t pass and don&apos;t come {edge('dont-pass')}% · odds 0% · every other wager shows its edge where you choose it
-        </Text>
-        <PhaseStepper steps={phaseSteps(view)} />
-        <SessionStrip
-          balance={formatUnits(view.balance)}
-          onTable={formatUnits(totalOnTable(view))}
-          status={save === 'failed' ? 'Paused · not saved' : crapsStatus(view)}
-        />
-        <AllowanceLine game="craps" />
-        {strategy && <GuidedStrip strategy={strategy} canStop={legal('stop-strategy')} onStop={() => setStoppingStrategy(true)} detail={null} unit="roll" />}
-        {view.phase !== 'final-settlement' && view.phase !== 'strategy-settlement' && <PresentationSwitch value={presentation} onChange={setPresentation} />}
-
-        {save === 'failed' && <SaveFailedBanner busy={busy} onRetry={() => void controller.retrySave()} />}
-        <AccessStopBanner ending={snapshot.ending} detail="The dice roll on to settle only the bets already working. No new bets, odds or rolls of your own." />
-        <TurnBoundaryBanner suspension={snapshot.suspension} turn="roll" />
-
-        {view.phase === 'final-settlement' ? (
-          <EndingSteps
-            facts={snapshot.facts}
-            noneReturned="Nothing removable was on the table"
-            settle={{
-              title: 'Contracts settle automatically',
-              detail: view.wagers.length > 0 ? `Rolling on for ${listText(view.wagers)}. No new bets, odds or presses.` : 'Nothing left to settle.',
-            }}
-            lead={view.outcome ? `Last roll: ${rollText(view.outcome.dice)} · ${puckText(view.table.point)}` : null}
-            footer="The dice roll on their own until every contract is settled. There's nothing to tap."
-          />
-        ) : view.phase === 'strategy-settlement' ? (
-          <Notice title={strategy?.status === 'stopped' ? 'Strategy stopped · its contracts settle' : 'Cycle ended · its contracts settle'} testID="strategy-settlement">
-            <NoticeText>{`Rolling on for ${listText(view.wagers)}. They can't come down, and nothing new is bet: no odds or presses.`}</NoticeText>
-            {view.outcome && <NoticeText>{`Last roll: ${rollText(view.outcome.dice)} · ${puckText(table.point)}`}</NoticeText>}
-            <NoticeText>
-              {strategy?.status === 'stopped'
-                ? "The dice roll on their own until these settle. Then you play on your own or end the session. There's nothing to tap."
-                : "The dice roll on their own until these settle. Then the cycle result shows. There's nothing to tap."}
-            </NoticeText>
-          </Notice>
-        ) : (
-          <View testID="table-columns" style={[styles.columns, sideBySide && styles.columnsSideBySide]}>
-            <View style={styles.column}>
+      <TableLayout
+        columns={sideBySide && !settling}
+        header={header}
+        body={
+          view.phase === 'final-settlement' ? (
+            <EndingSteps
+              facts={snapshot.facts}
+              noneReturned="Nothing removable was on the table"
+              settle={{
+                title: 'Contracts settle automatically',
+                detail: view.wagers.length > 0 ? `Rolling on for ${listText(view.wagers)}. No new bets, odds or presses.` : 'Nothing left to settle.',
+              }}
+              lead={view.outcome ? `Last roll: ${rollText(view.outcome.dice)} · ${puckText(view.table.point)}` : null}
+              footer="The dice roll on their own until every contract is settled. There's nothing to tap."
+            />
+          ) : view.phase === 'strategy-settlement' ? (
+            <Notice title={strategy?.status === 'stopped' ? 'Strategy stopped · its contracts settle' : 'Cycle ended · its contracts settle'} testID="strategy-settlement">
+              <NoticeText>{`Rolling on for ${listText(view.wagers)}. They can't come down, and nothing new is bet: no odds or presses.`}</NoticeText>
+              {view.outcome && <NoticeText>{`Last roll: ${rollText(view.outcome.dice)} · ${puckText(table.point)}`}</NoticeText>}
+              <NoticeText>
+                {strategy?.status === 'stopped'
+                  ? "The dice roll on their own until these settle. Then you play on your own or end the session. There's nothing to tap."
+                  : "The dice roll on their own until these settle. Then the cycle result shows. There's nothing to tap."}
+              </NoticeText>
+            </Notice>
+          ) : (
+            <>
               {presentation === 'table' ? (
                 <View style={styles.tableView}>
                   {drafted && (
@@ -191,8 +222,13 @@ export function CrapsTable({ snapshot }: { snapshot: ActiveSnapshot }) {
                   onRemove={(target) => void controller.placeWager(target, '0')}
                 />
               )}
-            </View>
-            <View style={[styles.column, styles.controls]}>
+            </>
+          )
+        }
+        footer={
+          settling ? null : (
+            <>
+              <PresentationSwitch value={presentation} onChange={setPresentation} />
               {strategy?.correction && !isPlayCorrection(strategy.correction) && view.phase === 'correction' && (
                 <CorrectionPanel
                   copy={betCorrectionCopy(strategy.name, strategy.correction, strategy.overrideEndsCycle, CRAPS_WORDS)}
@@ -247,21 +283,11 @@ export function CrapsTable({ snapshot }: { snapshot: ActiveSnapshot }) {
                 onRemove={(target) => void controller.placeWager(target, '0')}
               />
               <Button label="Roll" stretch disabled={!legal('begin-turn')} onPress={() => void controller.beginTurn()} />
-              {view.legalCommands.includes('rebuy') && (
-                <Button
-                  label="Rebuy"
-                  variant="secondary"
-                  stretch
-                  hint="Adds chips to this session. It counts as funding, not as a win."
-                  disabled={!legal('rebuy')}
-                  onPress={() => setRebuying(true)}
-                />
-              )}
               {presentation === 'table' && <ChipRack chip={chip} onChoose={setChip} />}
-            </View>
-          </View>
-        )}
-      </ScrollView>
+            </>
+          )
+        }
+      />
 
       {rebuyOpen && (
         <RebuySheet
@@ -503,12 +529,7 @@ function WagerList({
 
 const useStyles = makeStyles((type) => ({
   screen: { flex: 1, backgroundColor: palette.background },
-  edge: { fontFamily: fonts.ui, ...type.caption, color: palette.mutedForeground, paddingHorizontal: space[4] },
-  columns: { gap: space[3], paddingTop: space[2] },
-  columnsSideBySide: { flexDirection: 'row', alignItems: 'flex-start' },
-  column: { flex: 1 },
   tableView: { gap: space[3] },
-  controls: { gap: space[3], paddingHorizontal: space[4] },
   message: { fontFamily: fonts.uiMedium, ...type.body, color: palette.foreground },
   sectionLabel: { fontFamily: fonts.uiSemiBold, ...type.label, color: palette.mutedForeground },
   muted: { fontFamily: fonts.ui, ...type.secondary, color: palette.mutedForeground },

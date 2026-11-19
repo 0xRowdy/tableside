@@ -501,7 +501,10 @@ describe('the Counting tab', () => {
       await fireEvent.press(screen.getByRole('button', { name: 'Checkpoints less often' }));
       expect(screen.getByText('Every 3 rounds')).toBeOnTheScreen();
       await fireEvent.press(screen.getByRole('button', { name: 'Start Check attempt' }));
-      expect(await screen.findByText('Check · Observe · H17 no LS · 70% · 1 player · N = 3')).toBeOnTheScreen();
+      await screen.findByRole('header', { name: 'Table counting · Check' });
+      await fireEvent.press(screen.getByRole('button', { name: 'Table details' }));
+      expect(screen.getByLabelText('Setup. Check · Observe · H17 no LS · 70% · 1 player · N = 3')).toBeOnTheScreen();
+      await fireEvent.press(screen.getByRole('button', { name: 'Close' }));
       expect(screen.getByText('Keep the count')).toBeOnTheScreen();
     });
 
@@ -509,7 +512,10 @@ describe('the Counting tab', () => {
       await openTable('Check');
       for (let n = 1; n < 10; n++) await fireEvent.press(screen.getByRole('button', { name: 'Checkpoints less often' }));
       await fireEvent.press(screen.getByRole('button', { name: 'Start Check attempt' }));
-      await screen.findByText('Check · Observe · S17 LS · 75% · N = 10');
+      await screen.findByRole('header', { name: 'Table counting · Check' });
+      await fireEvent.press(screen.getByRole('button', { name: 'Table details' }));
+      expect(screen.getByLabelText('Setup. Check · Observe · S17 LS · 75% · N = 10')).toBeOnTheScreen();
+      await fireEvent.press(screen.getByRole('button', { name: 'Close' }));
       for (let guard = 0; guard < 400 && !screen.queryByRole('header', { name: 'Results' }); guard++) {
         const next = screen.queryByRole('button', { name: 'Next card' });
         if (next && !next.props.accessibilityState?.disabled) {
@@ -534,7 +540,8 @@ describe('the Counting tab', () => {
       expect(screen.getByText('Checkpoint 1 · after round 10 · true count')).toBeOnTheScreen();
       await fireEvent.press(screen.getByRole('button', { name: 'Back to Results' }));
       await fireEvent.press(await screen.findByRole('button', { name: 'Retry with a new shoe' }));
-      expect(await screen.findByText('Check · Observe · S17 LS · 75% · N = 10')).toBeOnTheScreen();
+      await fireEvent.press(await screen.findByRole('button', { name: 'Table details' }));
+      expect(screen.getByLabelText('Setup. Check · Observe · S17 LS · 75% · N = 10')).toBeOnTheScreen();
     });
 
     // Spec 3 User stories 28, 37, 38; S3-02 FkMDw, S3-07 kLgWV, S3-08 e5MASr, S3-09 VToCp; #138
@@ -545,7 +552,10 @@ describe('the Counting tab', () => {
       expect(screen.getByText('Counting mode')).toBeOnTheScreen();
       await fireEvent.press(within(screen.getByLabelText('Counting mode')).getByRole('radio', { name: 'With deviations' }));
       await fireEvent.press(screen.getByRole('button', { name: 'Start Check attempt' }));
-      expect(await screen.findByText('Check · Play · with deviations · N = 1')).toBeOnTheScreen();
+      await screen.findByRole('header', { name: 'Table counting · Check' });
+      await fireEvent.press(screen.getByRole('button', { name: 'Table details' }));
+      expect(screen.getByLabelText('Setup. Check · Play · with deviations · N = 1')).toBeOnTheScreen();
+      await fireEvent.press(screen.getByRole('button', { name: 'Close' }));
       let refused = false;
       for (let guard = 0; guard < 1500 && !screen.queryByRole('header', { name: 'Results' }); guard++) {
         const again = screen.queryByRole('button', { name: 'Choose again' });
