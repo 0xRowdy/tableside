@@ -16,7 +16,7 @@ import { makeStyles } from '@/theme/type';
 import type { AllowanceCopy } from '@/training/challenge-text';
 import {
   BACK,
-  BACK_TO_LESSONS,
+  backTo,
   CREDITS_HEADING,
   CREDITS_NOTE,
   FINISH,
@@ -157,7 +157,7 @@ export function LessonPlayer({
           {view.handoffs.map((handoff) => (
             <HandoffOption key={handoffLabel(handoff)} handoff={handoff} detail={handoffDetail(handoff, handoffSheet.allowance)} disabled={busy} onPress={() => actions.onHandoff(handoff)} />
           ))}
-          <NavButton label={BACK_TO_LESSONS} quiet block disabled={false} onPress={actions.onLeave} />
+          <NavButton label={backTo(back)} quiet block disabled={false} onPress={actions.onLeave} />
         </Sheet>
       )}
     </>

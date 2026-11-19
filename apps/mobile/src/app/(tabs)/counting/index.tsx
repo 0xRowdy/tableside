@@ -16,7 +16,7 @@ import { RecordsScreen } from '@/counting/RecordsScreen';
 import { useFeedback } from '@/feedback/FeedbackProvider';
 import { useLoaded, useReloaded } from '@/hooks/use-loaded';
 import { ScreenHints } from '@/lessons/FirstUseHints';
-import { lessonHref, returnsToAttempt } from '@/lessons/routes';
+import { attemptHref, lessonHref, lessonsHref, returnsToAttempt } from '@/lessons/routes';
 import { allowanceCopy, COUNTING_TITLE, FINDING_ATTEMPT, NEEDS_UPDATE } from '@/training/challenge-text';
 import { setupFor, type ChallengeSetup, type TrainingService } from '@/training/service';
 import { useLessons, useTraining } from '@/training/TrainingProvider';
@@ -48,6 +48,8 @@ export default function Counting() {
   // Spec 3 Lessons › Structure (Handoff)
   const handedOff = entry && CHALLENGE_VARIANTS.includes(variant as ChallengeVariant) ? { category: entry.category, variant: variant as ChallengeVariant } : null;
   const openLesson = (lesson: string) => router.navigate(lessonHref(lesson));
+  // docs/decisions/lessons-entry-points.md
+  const lessonsProps = { onOpenCatalog: () => router.navigate(lessonsHref()), onReturnToAttempt: () => router.navigate(attemptHref) };
   // Spec 3 S3-10 OVKkc
   const openRecords = () => router.setParams({ records: '1' });
   const recordsScreen = records === '1' && <RecordsScreen service={service} lessons={lessons} onOpenLesson={openLesson} onBack={() => router.setParams({ records: undefined })} />;
@@ -82,7 +84,7 @@ export default function Counting() {
         if (recordsScreen) return recordsScreen;
         return (
           <>
-            <CountingHome catalog={catalog} allowance={allowance} progress={progress} lessons={lessons} onOpenLesson={openLesson} onChoose={setNext} onOpenRecords={openRecords} />
+            <CountingHome catalog={catalog} allowance={allowance} progress={progress} lessons={lessons} onOpenLesson={openLesson} {...lessonsProps} onChoose={setNext} onOpenRecords={openRecords} />
             {next && (
               <UnfinishedSheet
                 view={view}
@@ -169,6 +171,7 @@ export default function Counting() {
             progress={progress}
             lessons={lessons}
             onOpenLesson={openLesson}
+            {...lessonsProps}
             onChoose={chooseSetup}
             onOpenRecords={openRecords}
           />

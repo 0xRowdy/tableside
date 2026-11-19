@@ -13,7 +13,7 @@ import type { ChallengeCategory, GameId } from '@tableside/engine';
 
 import type { GameAccess } from '../practice/adapters';
 import type { TrainingAdapters } from './adapters';
-import { LESSON_PROGRESS_RECORD_VERSION, lessonProgress, type LessonChange, type LessonHistory, type LessonProgress, type LessonProgressChange, type LessonStatus } from './lesson-progress';
+import { acceptanceOrder, LESSON_PROGRESS_RECORD_VERSION, lessonProgress, type LessonChange, type LessonHistory, type LessonProgress, type LessonProgressChange, type LessonStatus } from './lesson-progress';
 
 // Spec 3 Lessons › Check protection; Amendment 1 A2; #149
 export interface InstructionWithheld {
@@ -30,6 +30,8 @@ export interface LessonEntry {
   readonly steps: number | null;
   readonly access: LessonAccess;
   readonly status: LessonStatus;
+  // docs/decisions/lessons-entry-points.md (most recent lesson)
+  readonly lastActive: number | null;
 }
 
 // Spec 3 Lessons › Access, Check protection; Amendment 1 A2, Amendment 4 §5; #149
@@ -83,6 +85,7 @@ export class LessonService {
       Promise.all(games.map(async (game) => [game, await this.gameAccess(game)] as const)),
     ]);
     const access = new Map(answers);
+    const lastActive = new Map(acceptanceOrder(history).map((event, index) => [event.lesson.id, index] as const));
     return this.lessons.map((lesson) => ({
       id: lesson.id,
       title: lesson.title,
@@ -91,6 +94,7 @@ export class LessonService {
       steps: lesson.content ? stepCount(lesson.content) : null,
       access: accessOf(lesson, withheld, lesson.game && (access.get(lesson.game) ?? null)),
       status: lesson.content ? lessonProgress(history, progressKey(lesson.id, lesson.content)).status : { kind: 'not-started' as const },
+      lastActive: lastActive.get(lesson.id) ?? null,
     }));
   }
 

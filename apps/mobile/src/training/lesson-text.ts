@@ -11,14 +11,14 @@ import { GAME_WORDS } from '@/play/game-words';
 
 import { CATEGORY_TEXT, NOT_READY_HINT, type AllowanceCopy } from './challenge-text';
 import type { LessonStatus } from './lesson-progress';
+import type { LessonOffer } from './lesson-offer';
 import type { InstructionWithheld, LessonAccess, LessonEntry, LessonView } from './service';
 
 export const LEARNING_TITLE = 'Learning';
-export const LEARNING_DETAIL = 'Lessons';
-export const LESSONS_LABEL = 'Lessons';
-export const CATALOG_ROW = 'Lesson catalog';
-export const LEARNING_NOTE =
-  "Lessons never score you, award anything or lock anything. They're available to every account, including when today's challenge attempts are used up. Start here and hint settings stay on this device.";
+// docs/decisions/lessons-entry-points.md; Settings › Learning OEkKV
+export const LEARNING_DETAIL = 'Start here card, first-use hints';
+export const LESSONS_ON_COUNTING = 'Lessons are on the Counting tab';
+export const LEARNING_NOTE = 'Start here and hint settings stay on this device.';
 
 // Spec 3 Lessons › Entry points; S1-01 olGG6, Learning NvGyZ; #146
 export const START_HERE = {
@@ -42,7 +42,39 @@ export const REREAD_FROM_HELP = 'Reread from Help (?)';
 export const GOT_IT = 'Got it';
 export const gotItLabel = (name: string) => `Got it, hide the ${name} hint`;
 export const HELP_LABEL = 'Help';
-export const HELP_HINT = "Shows this screen's first-use hints again.";
+export const HELP_HINT = "Opens help for this screen.";
+
+// docs/decisions/lessons-entry-points.md; S1-04 qylNY, S3-07 zxRJD
+export const HINTS_AGAIN_HERE = "Show this screen's hints again";
+const listed = (names: readonly string[]) => (names.length < 2 ? (names[0] ?? '') : `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`);
+export const hintsAgainHereDetail = (names: readonly string[]) =>
+  `The ${listed(names.map((name) => name.toLowerCase()))} ${names.length === 1 ? 'hint shows' : 'hints show'} again here.`;
+export const HELP_TITLE = 'Help';
+export const THIS_SCREEN = 'This screen';
+export const SUSPENDS_SESSION = "Opening a lesson suspends this session. It's saved exactly as it is and picks up where you left off when you come back to Play.";
+export const gameLessonsLabel = (game: GameId) => `${capitalizeFirst(GAME_WORDS[game].name)} lessons`;
+export const allGameLessons = (game: GameId) => `All ${GAME_WORDS[game].name} lessons`;
+
+// docs/decisions/lessons-entry-points.md; S3-01 u8a0o, rwwOU
+export const LESSONS_SECTION = 'Lessons';
+export const CHALLENGES_SECTION = 'Challenges';
+export const LESSONS_SECTION_NOTE = '24 short lessons, open in any order. They never use challenge attempts.';
+export const allLessons = (count: number) => `All ${count} lessons`;
+export const completedCount = (count: number) => `${count} completed`;
+export const COUNTING_AFTER_CHECK = 'Counting lessons open after your Check attempt';
+export const offerKicker = (offer: Exclude<LessonOffer, { kind: 'after-check' }>, steps: number | null): string =>
+  offer.kind === 'continue' ? `In progress · step ${offer.step} of ${steps ?? offer.step}` : offer.first ? 'First lesson · counting' : 'Next lesson · counting';
+export const shortSteps = (steps: number | null) => (steps === null ? null : `${steps} short steps`);
+export const offerAction = (offer: Exclude<LessonOffer, { kind: 'after-check' }>) => `${offer.kind === 'continue' ? 'Continue' : 'Start with'} ${offer.lesson.title}`;
+export const offerDetail = (offer: Exclude<LessonOffer, { kind: 'after-check' }>) =>
+  offer.kind === 'continue'
+    ? [`Step ${offer.step} of ${offer.lesson.steps ?? offer.step}`, offer.lesson.summary].filter((part) => part !== null).join(' · ')
+    : [offer.lesson.summary, shortSteps(offer.lesson.steps)].filter((part) => part !== null).join(' · ');
+
+// docs/decisions/lessons-entry-points.md; S3-11 f6mxz
+export const filterText = (section: LessonSection, shown: number, total: number) => `Showing ${SECTION_NAME[section].toLowerCase()} · ${shown} of ${total}`;
+export const SHOW_ALL = 'Show all';
+export const showAllLabel = (total: number) => `Show all ${total} lessons`;
 
 export function catalogSummary(lessons: readonly LessonEntry[]): string {
   const completed = lessons.filter((lesson) => lesson.status.kind === 'completed' || lesson.status.kind === 'completed-earlier-version').length;
@@ -202,6 +234,8 @@ export function handoffLabel(handoff: LessonHandoff): string {
 export const HANDOFF_TITLE = 'Practice what you learned';
 export const HANDOFF_INTRO = 'Each option opens its normal setup screen with this filled in. Nothing starts, and no allowance is used, until you press Start there.';
 export const BACK_TO_LESSONS = 'Back to lessons';
+// docs/decisions/lessons-entry-points.md (back labels)
+export const backTo = (label: string) => (label === LESSONS_TITLE ? BACK_TO_LESSONS : `Back to ${label}`);
 const opensSetup = (game: GameId) => `Opens ${gameTitle(game).toLowerCase()} setup.`;
 
 // Spec 3 Amendment 4 §2

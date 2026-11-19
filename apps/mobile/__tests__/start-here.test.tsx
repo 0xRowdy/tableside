@@ -84,7 +84,7 @@ describe('the Start here card (S1-01 olGG6)', () => {
 
     await fireEvent.press(screen.getByRole('link', { name: 'Open lesson catalog' }));
     expect(await screen.findByRole('header', { name: 'Lessons' })).toBeOnTheScreen();
-    expect(within(screen.getByTestId('tab-bar')).getByRole('tab', { name: 'More', selected: true })).toBeOnTheScreen();
+    expect(within(screen.getByTestId('tab-bar')).getByRole('tab', { name: 'Counting', selected: true })).toBeOnTheScreen();
   });
 
   it('dismisses on this device: it stays gone after a restart, and the games are still one tap away', async () => {
@@ -101,7 +101,7 @@ describe('the Start here card (S1-01 olGG6)', () => {
     expect(screen.queryByText('Start here')).toBeNull();
   });
 
-  it('comes back from More → Settings → Learning, "Show Start here on Home" (NvGyZ)', async () => {
+  it('comes back from More → Settings → Learning, "Show Start here on Home" (OEkKV)', async () => {
     await onThisDevice().setStartHere(false);
     await renderRouter('./src/app', { initialUrl: '/more/settings/learning' });
     const toggle = await screen.findByRole('switch', { name: 'Show Start here on Home' });
@@ -117,17 +117,13 @@ describe('the Start here card (S1-01 olGG6)', () => {
   });
 });
 
-describe('Settings › Learning hints (NvGyZ)', () => {
+describe('Settings › Learning hints (OEkKV)', () => {
   it('lists the hints row and the device-local note, and brings every hint back', async () => {
     const device = onThisDevice();
     for (const id of HINT_IDS) await device.hintSeen(id);
     await renderRouter('./src/app', { initialUrl: '/more/settings/learning' });
     expect(await screen.findByRole('header', { name: 'Hints' })).toBeOnTheScreen();
-    expect(
-      screen.getByText(
-        "Lessons never score you, award anything or lock anything. They're available to every account, including when today's challenge attempts are used up. Start here and hint settings stay on this device.",
-      ),
-    ).toBeOnTheScreen();
+    expect(screen.getByText('Start here and hint settings stay on this device.')).toBeOnTheScreen();
 
     await fireEvent.press(
       button('Show first-use hints again. Bet selector, count entry and the show-count toggle hints reappear the next time you meet them.'),
@@ -138,7 +134,7 @@ describe('Settings › Learning hints (NvGyZ)', () => {
 });
 
 describe('a running-count Check from the Counting tab', () => {
-  it('offers its count-entry and show-count hints; Got it hides one for good and Help shows it again', async () => {
+  it('offers its count-entry and show-count hints; Got it hides one for good and Help’s hints row shows it again', async () => {
     await renderRouter('./src/app', { initialUrl: '/counting' });
     await screen.findByRole('header', { name: 'Counting' });
     await fireEvent.press(screen.getByRole('button', { name: 'Check: Running count' }));
@@ -153,6 +149,7 @@ describe('a running-count Check from the Counting tab', () => {
     expect((await onThisDevice().learningPreferences()).unseenHints).toEqual(['bet-selector', 'count-entry']);
 
     await fireEvent.press(button('Help'));
+    await fireEvent.press(button("Show this screen's hints again. The count entry and show running count hints show again here."));
     expect(screen.getByTestId('first-use-hint-show-count')).toBeOnTheScreen();
     expect(screen.getByText('Card 1 of 52 · checkpoint 1 of 4')).toBeOnTheScreen();
   });

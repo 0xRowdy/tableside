@@ -23,7 +23,7 @@ export function LearnThisGame({ game }: { game: GameId }) {
       title={LEARN_THIS_GAME}
       detail={LEARN_THIS_GAME_DETAIL[game]}
       count={count}
-      onPress={() => router.navigate(lessonsHref(game))}
+      onPress={() => router.navigate(lessonsHref({ section: game, from: 'setup' }))}
     />
   );
 }
@@ -77,8 +77,8 @@ export function LearnRow({
   );
 }
 
-export function LessonLink({ label, ready, onPress }: { label: string; ready: boolean; onPress: () => void }) {
-  return <TextLink icon={BookOpen} label={label} disabled={!ready} hint={ready ? undefined : NOT_READY_HINT} onPress={onPress} />;
+export function LessonLink({ label, ready, accent = true, onPress }: { label: string; ready: boolean; accent?: boolean; onPress: () => void }) {
+  return <TextLink icon={BookOpen} label={label} accent={accent} disabled={!ready} hint={ready ? undefined : NOT_READY_HINT} onPress={onPress} />;
 }
 
 export function TextLink({

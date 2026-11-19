@@ -80,7 +80,7 @@ export default function Home() {
       {learning?.startHere && (
         // Spec 3 Lessons › Entry points; S1-01 olGG6; #146
         <View style={[styles.startHere, { marginLeft: insets.left + space[4], marginRight: insets.right + space[4] }]}>
-          <StartHereCard onOpen={() => router.navigate(lessonsHref())} onDismiss={() => void training.setStartHere(false)} />
+          <StartHereCard onOpen={() => router.navigate(lessonsHref({ from: 'home' }))} onDismiss={() => void training.setStartHere(false)} />
         </View>
       )}
       <View style={[styles.cards, sideBySide && styles.cardsSideBySide]}>

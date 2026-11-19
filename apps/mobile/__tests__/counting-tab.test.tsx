@@ -68,7 +68,7 @@ describe('the Counting tab', () => {
     await renderRouter('./src/app', { initialUrl: '/counting' });
     await screen.findByRole('header', { name: 'Counting' });
     expect(screen.getByText('Suggested order · all four available now')).toBeOnTheScreen();
-    expect(screen.getAllByRole('header').map((header) => header.props.children)).toEqual(['Counting', 'Card values', 'Running count', 'True-count conversion', 'Table counting']);
+    expect(screen.getAllByRole('header').map((header) => header.props.children)).toEqual(['Counting', 'Lessons', 'Challenges', 'Card values', 'Running count', 'True-count conversion', 'Table counting']);
     expect(screen.getByText('20 cards covering every rank. Answer +1, 0 or −1 for each.')).toBeOnTheScreen();
     expect(screen.getByRole('button', { name: 'Learn: Card values' })).toBeEnabled();
     expect(screen.getByRole('button', { name: 'Check: Card values' })).toBeEnabled();

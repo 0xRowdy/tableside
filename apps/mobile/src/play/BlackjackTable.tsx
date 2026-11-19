@@ -173,7 +173,7 @@ export function BlackjackTable({ snapshot }: { snapshot: ActiveSnapshot }) {
         { label: 'On table', spoken: 'On table', value: formatUnits(totalOnTable(view)) },
         ...(view.count ? [{ label: 'True count', spoken: 'True count', value: signed(view.count.trueCount) }] : []),
       ]}
-      buttons={<TableButtons canEnd={legal('request-stop')} onEnd={() => setConfirming(true)} />}
+      buttons={<TableButtons game="blackjack" canEnd={legal('request-stop')} onEnd={() => setConfirming(true)} />}
       allowance={allowance}
       details={(close) => (
         <>
