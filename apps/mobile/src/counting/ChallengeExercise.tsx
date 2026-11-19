@@ -267,7 +267,8 @@ function CountingBody({
     <View testID="count-columns" style={[styles.columns, { flexDirection: sideBySide ? 'row' : 'column' }]}>
       <View style={[styles.column, sideBySide && styles.side]}>
         <View style={[styles.cardRow, sideBySide && styles.cardStack]}>
-          {view.item && 'card' in view.item && <PlayingCard card={view.item.card} small={!sideBySide} />}
+          {/* Spec 3 Amendment 6 §1 */}
+          {view.item && 'card' in view.item && <PlayingCard card={view.item.card} />}
           {view.phase === 'question' && (
             <View style={[styles.countPrompt, !sideBySide && styles.promptBeside]}>
               {checkpoint && (
@@ -275,7 +276,7 @@ function CountingBody({
                   {checkpointKicker(checkpoint)}
                 </Text>
               )}
-              <Text maxFontSizeMultiplier={textScale.display} style={[styles.prompt, !sideBySide && styles.start]}>
+              <Text maxFontSizeMultiplier={textScale.body} style={[styles.prompt, !sideBySide && styles.start]}>
                 {countPrompt(view.position)}
               </Text>
             </View>
@@ -520,7 +521,7 @@ const useStyles = makeStyles((type) => ({
   track: { height: 6, borderRadius: 3, backgroundColor: palette.muted, overflow: 'hidden' },
   fill: { height: 6, borderRadius: 3, backgroundColor: palette.primary },
   body: { gap: space[4], paddingHorizontal: space[4], paddingTop: space[3] },
-  prompt: { fontFamily: fonts.uiBold, ...type.heading, color: palette.foreground, textAlign: 'center' },
+  prompt: { fontFamily: fonts.uiSemiBold, ...type.heading, color: palette.foreground, textAlign: 'center' },
   countPrompt: { gap: space[1] },
   columns: { gap: space[4] },
   column: { gap: space[4] },
@@ -531,7 +532,7 @@ const useStyles = makeStyles((type) => ({
   start: { textAlign: 'left' },
   pace: { flexDirection: 'row', alignSelf: 'flex-start', alignItems: 'center', gap: space[1] + 2, paddingVertical: space[1] + 2, paddingHorizontal: 10, borderRadius: radius.pill, backgroundColor: palette.muted },
   paceText: { fontFamily: fonts.ui, ...type.secondary, color: palette.foreground },
-  checkpointKicker: { fontFamily: fonts.uiSemiBold, ...type.body, color: palette.mutedForeground, textAlign: 'center' },
+  checkpointKicker: { fontFamily: fonts.uiSemiBold, ...type.label, color: palette.mutedForeground, textAlign: 'center' },
   keep: { fontFamily: fonts.ui, ...type.secondary, color: palette.mutedForeground, textAlign: 'center' },
   choices: { flexDirection: 'row', gap: space[3] - 2 },
   given: { flexDirection: 'row', gap: space[3] - 2 },

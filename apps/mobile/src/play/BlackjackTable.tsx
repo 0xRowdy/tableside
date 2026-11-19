@@ -24,7 +24,7 @@ import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
 import type { ActiveSnapshot as Active } from '@/practice/controller';
 import { usePractice } from '@/practice/PracticeProvider';
 import { fonts, objectType, palette, radius, space, textScale } from '@/theme/tokens';
-import { makeStyles } from '@/theme/type';
+import { makeStyles, useTextStep } from '@/theme/type';
 
 import { BetSelector } from './bet-selector/BetSelector';
 import { draftAmountText, EMPTY_DRAFT, findChoice, isDraftPending, type BetDraft } from './bet-selector/catalog';
@@ -501,10 +501,15 @@ function unavailable(action: TableAction, view: BlackjackPermittedView): string 
   }
 }
 
+// Spec 1 Amendment 12 §5
+const actionRows = <T,>(actions: readonly T[], perRow: number): T[][] =>
+  Array.from({ length: Math.ceil(actions.length / perRow) }, (_, i) => actions.slice(i * perRow, i * perRow + perRow));
+
 function PlayActions({ view, enabled, onPlay }: { view: BlackjackPermittedView; enabled: boolean; onPlay: (action: BlackjackAction) => void }) {
   const styles = useStyles();
   const offered = (action: BlackjackAction) => view.playActions.includes(action);
-  const rows: TableAction[][] = [['hit', 'stand', 'double'], view.table.lateSurrender ? ['split', 'surrender'] : ['split']];
+  const actions: TableAction[] = ['hit', 'stand', 'double', 'split', ...(view.table.lateSurrender ? (['surrender'] as const) : [])];
+  const rows = actionRows(actions, useTextStep() === 'larger' ? 2 : 3);
   const reasons = rows.flat().flatMap((action) => unavailable(action, view) ?? []);
   const round = view.outcome;
   const active = round?.active != null ? round.hands[round.active] : undefined;

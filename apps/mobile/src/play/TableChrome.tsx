@@ -12,7 +12,7 @@ import type { SetupTerms } from '@/practice/adapters';
 import { SAVE_RETRY_MS, type AccessStop, type ActiveSnapshot, type PracticeController, type PracticeSnapshot, type Suspension } from '@/practice/controller';
 import { usePractice } from '@/practice/PracticeProvider';
 import { fonts, MIN_TOUCH_TARGET, objectType, palette, radius, space, textScale, type ColorToken } from '@/theme/tokens';
-import { makeStyles } from '@/theme/type';
+import { makeStyles, useTextStep } from '@/theme/type';
 
 import { EndSessionDialog } from './EndSessionDialog';
 import { StopStrategyDialog } from './Guidance';
@@ -100,18 +100,19 @@ export function SessionStrip({ balance, onTable, status }: { balance: string; on
   );
 }
 
-// Spec 3 S3-07 v82z3
+// Spec 3 S3-07 v82z3; Spec 1 Amendment 12 §5
 export function StatStrip({ stats, status }: { stats: readonly { readonly label: string; readonly spoken: string; readonly value: string }[]; status: string }) {
   const styles = useStyles();
+  const rows = useTextStep() === 'larger';
   return (
-    <View style={styles.strip}>
+    <View testID="stat-strip" style={[styles.strip, rows && styles.stripRows]}>
       {stats.map((stat) => (
-        <View key={stat.label} accessible accessibilityLabel={`${stat.spoken} ${stat.value}`} style={styles.stat}>
+        <View key={stat.label} accessible accessibilityLabel={`${stat.spoken} ${stat.value}`} style={rows ? styles.statRow : styles.stat}>
           <Text maxFontSizeMultiplier={textScale.body} style={styles.statLabel}>{stat.label}</Text>
           <Text maxFontSizeMultiplier={textScale.body} style={styles.statValue}>{stat.value}</Text>
         </View>
       ))}
-      <View accessible accessibilityLabel={`Status ${status}`} style={styles.statusTag}>
+      <View accessible accessibilityLabel={`Status ${status}`} style={[styles.statusTag, rows && styles.statusTagRow]}>
         <Text maxFontSizeMultiplier={textScale.body} style={styles.statusText}>{status}</Text>
       </View>
     </View>
@@ -376,7 +377,7 @@ const useStyles = makeStyles((type) => ({
   topBar: { flexDirection: 'row', alignItems: 'center', gap: space[1], paddingLeft: space[4], paddingRight: space[2] },
   titles: { flex: 1, gap: 1, paddingVertical: space[1] },
   title: { fontFamily: fonts.uiSemiBold, ...type.body, color: palette.foreground },
-  subtitle: { fontFamily: fonts.ui, ...type.caption, color: palette.mutedForeground },
+  subtitle: { fontFamily: fonts.ui, ...type.secondary, color: palette.mutedForeground },
   iconButton: {
     minWidth: MIN_TOUCH_TARGET,
     minHeight: MIN_TOUCH_TARGET,
@@ -405,7 +406,10 @@ const useStyles = makeStyles((type) => ({
   },
   stat: { gap: 1 },
   statLabel: { fontFamily: fonts.uiSemiBold, ...type.label, color: palette.mutedForeground },
-  statValue: { fontFamily: fonts.uiSemiBold, ...type.body, color: palette.foreground },
+  statValue: { fontFamily: fonts.uiBold, ...type.heading, color: palette.foreground },
+  stripRows: { flexDirection: 'column', alignItems: 'stretch', gap: space[2] },
+  statRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', gap: space[3] },
+  statusTagRow: { marginLeft: 0, alignSelf: 'flex-start' },
   statusTag: {
     marginLeft: 'auto',
     paddingHorizontal: 10,

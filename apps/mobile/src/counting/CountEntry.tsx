@@ -147,7 +147,7 @@ const useStyles = makeStyles((type) => ({
   key: {
     flexBasis: '30%',
     flexGrow: 1,
-    minHeight: MIN_TOUCH_TARGET + 8,
+    minHeight: MIN_TOUCH_TARGET,
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: radius.md,
@@ -156,7 +156,7 @@ const useStyles = makeStyles((type) => ({
     backgroundColor: palette.secondary,
   },
   keyFocused: { borderColor: palette.ring, borderWidth: 2 },
-  keyText: { fontFamily: fonts.uiBold, ...type.heading, color: palette.foreground },
+  keyText: { fontFamily: fonts.uiSemiBold, ...type.key, color: palette.foreground },
   actions: { flexDirection: 'row', gap: space[3] - 2 },
   action: { flex: 1 },
   pressed: { opacity: 0.8 },

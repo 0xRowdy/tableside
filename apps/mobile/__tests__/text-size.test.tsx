@@ -1,12 +1,15 @@
 // docs/decisions/text-size-type-floor.md; Spec 2 Amendment 10 §2–3; S1-12 I886X, S2-16 Np7f0
 import type { AccountGate } from '@tableside/account';
-import { cleanup, fireEvent, screen, within } from '@testing-library/react-native';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
 import { renderRouter } from 'expo-router/testing-library';
 
 import { SIGNED_IN } from '@/account/testing/fake-account';
+import { Segmented } from '@/components/Segmented';
 import type { MemorySettingsStorage } from '@/feedback/testing/substitutes';
+import { StatStrip } from '@/play/TableChrome';
 import { parseTextSize, TextSizeSetting } from '@/theme/text-size';
 import { textScale, typeRamp } from '@/theme/tokens';
+import { TextSizeProvider } from '@/theme/type';
 
 type Stored = { stored: string | null; latest: MemorySettingsStorage | null };
 const textSize = jest.requireMock<Stored>('@/theme/device-storage');
@@ -137,5 +140,25 @@ describe('first run, step 0 (S2-16)', () => {
 
     expect(await screen.findByRole('header', { name: 'Tableside' })).toBeOnTheScreen();
     expect(screen.queryByRole('header', { name: 'Choose a text size' })).toBeNull();
+  });
+});
+
+describe('reflow at Larger (Spec 1 Amendment 12 §5–6)', () => {
+  const at = (step: string) => ({ read: async () => `{"step":"${step}"}`, write: async () => {} });
+
+  it('turns the session strip into key-value rows at Larger only', async () => {
+    const strip = <StatStrip stats={[{ label: 'Session balance', spoken: 'Session balance', value: '1,000' }]} status="Bets working" />;
+    await render(<TextSizeProvider storage={at('large')}>{strip}</TextSizeProvider>);
+    await waitFor(() => expect(screen.getByText('1,000')).toHaveStyle({ fontSize: typeRamp.large.heading }));
+    expect(screen.getByTestId('stat-strip')).not.toHaveStyle({ flexDirection: 'column' });
+    await cleanup();
+
+    await render(<TextSizeProvider storage={at('larger')}>{strip}</TextSizeProvider>);
+    await waitFor(() => expect(screen.getByTestId('stat-strip')).toHaveStyle({ flexDirection: 'column' }));
+  });
+
+  it('gives every segment a 48-point target', async () => {
+    await render(<Segmented label="Mode" options={[{ value: 'learn', label: 'Learn' }, { value: 'check', label: 'Check' }]} selected="learn" onSelect={() => {}} />);
+    for (const radio of screen.getAllByRole('radio')) expect(radio).toHaveStyle({ minHeight: 48 });
   });
 });
