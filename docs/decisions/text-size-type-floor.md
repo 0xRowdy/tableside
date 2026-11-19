@@ -33,7 +33,7 @@ Every text size is a role. In `design/Tableside.pen` each role is a `--text-*` v
 7. **Tab labels stay 12** at every step and every system size. iOS uses the Large Content Viewer and Android a long-press label (spec 1 Amendment 1 A3 still applies). The tab bar stays one row.
 8. **Cards don't grow with the step.** The layout picks the card size. In counting exercises the counted card is always Playing Card · Large (120 × 168) in every orientation, and the keypad tightens instead. Table hands stay Standard (58 × 82) so the felt fits. The counted card is never the smallest thing on screen.
 9. **Touch targets.** Every control is at least 48 × 48, including segmented-control segments (44 before), table action buttons and keypad keys.
-10. **Larger reflows.** The table top bar wraps its title and rules. The session strip becomes key–value rows. Blackjack actions go two per row. Controls stack before they shrink, and long button labels wrap.
+10. **Larger reflows.** The table top bar wraps its title and status. Blackjack actions go two per row. Controls stack before they shrink, and long button labels wrap. The table summary row turns into key–value rows at large system text (`table-chrome-summary-row.md`).
 
 ## Where the setting lives
 
