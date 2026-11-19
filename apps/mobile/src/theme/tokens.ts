@@ -203,6 +203,7 @@ export const objectType = {
   largeCard: { rank: 40, suit: 28, pip: 60 },
   splitCard: { rank: 15, pip: 18 },
   chipValue: 16,
+  feltPrint: 18,
 } as const;
 
 // docs/decisions/mobile-device-support-accessibility.md Q1–Q9

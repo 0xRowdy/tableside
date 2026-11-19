@@ -337,7 +337,7 @@ export function BlackjackFeltRules({ dealer }: { dealer: 'S17' | 'H17' }) {
   const styles = useStyles();
   return (
     <View style={styles.feltRules}>
-      <Text maxFontSizeMultiplier={textScale.display} style={styles.pays}>Blackjack PAYS 3 TO 2</Text>
+      <Text maxFontSizeMultiplier={1} style={styles.pays}>BLACKJACK PAYS 3 TO 2</Text>
       <Text maxFontSizeMultiplier={textScale.body} style={styles.dealerRule}>
         {dealer === 'S17' ? 'DEALER STANDS ON ALL 17s' : 'DEALER HITS SOFT 17'}
       </Text>
@@ -365,7 +365,7 @@ export function FaceDownCard() {
 
 const useStyles = makeStyles((type) => ({
   feltRules: { alignItems: 'center', gap: 2 },
-  pays: { fontFamily: fonts.display, ...type.headline, color: palette.feltText, textAlign: 'center' },
+  pays: { fontFamily: fonts.display, fontSize: objectType.feltPrint, letterSpacing: 2.5, color: palette.feltText, textAlign: 'center' },
   dealerRule: { fontFamily: fonts.uiMedium, ...type.caption, letterSpacing: 0.5, color: palette.feltText, textAlign: 'center' },
   feltBadge: { paddingHorizontal: space[2], paddingVertical: 3, borderRadius: radius.pill, backgroundColor: palette.feltDeep },
   feltBadgeText: { fontFamily: fonts.uiSemiBold, ...type.label, color: palette.feltText },
