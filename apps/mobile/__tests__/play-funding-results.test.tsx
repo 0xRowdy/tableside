@@ -42,7 +42,7 @@ describe('Play results with challenge finances', () => {
     expect(screen.getByLabelText('Running count, 14 checkpoints: 13 of 14')).toBeOnTheScreen();
     expect(screen.getByLabelText('Playing adherence, 34 decisions: 31 of 34')).toBeOnTheScreen();
     expect(screen.getByLabelText('Betting adherence, No bet schedule selected: N/A')).toBeOnTheScreen();
-    expect(screen.getByText('CHALLENGE FINANCES · NOT A SKILL SCORE')).toBeOnTheScreen();
+    expect(screen.getByText('Challenge finances · not a skill score')).toBeOnTheScreen();
     expect(screen.getByLabelText('Starting: 300')).toBeOnTheScreen();
     expect(screen.getByLabelText('Finishing: 4')).toBeOnTheScreen();
     expect(screen.getByLabelText('Net: −296')).toBeOnTheScreen();

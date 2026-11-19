@@ -67,7 +67,7 @@ describe('the Counting tab', () => {
   it('shows the four challenge categories in the suggested order, all available', async () => {
     await renderRouter('./src/app', { initialUrl: '/counting' });
     await screen.findByRole('header', { name: 'Counting' });
-    expect(screen.getByText('SUGGESTED ORDER · ALL FOUR AVAILABLE NOW')).toBeOnTheScreen();
+    expect(screen.getByText('Suggested order · all four available now')).toBeOnTheScreen();
     expect(screen.getAllByRole('header').map((header) => header.props.children)).toEqual(['Counting', 'Card values', 'Running count', 'True-count conversion', 'Table counting']);
     expect(screen.getByText('20 cards covering every rank. Answer +1, 0 or −1 for each.')).toBeOnTheScreen();
     expect(screen.getByRole('button', { name: 'Learn: Card values' })).toBeEnabled();
@@ -186,12 +186,12 @@ describe('the Counting tab', () => {
     const first = shownCard();
     const wrong = answerFor(first) === 'plus 1' ? 'minus 1' : 'plus 1';
     await fireEvent.press(screen.getByRole('button', { name: wrong }));
-    expect(screen.getByText('NOT QUITE · YOUR FIRST ANSWER IS SCORED')).toBeOnTheScreen();
+    expect(screen.getByText('Not quite · your first answer is scored')).toBeOnTheScreen();
     expect(screen.getByText(/Hi-Lo values: 2 to 6 are \+1\. 7, 8 and 9 are 0\. 10, J, Q, K and A are −1\./)).toBeOnTheScreen();
     expect(screen.getByRole('button', { name: wrong })).toHaveAccessibilityValue({ text: 'Your answer' });
     expect(screen.getByRole('button', { name: answerFor(first) })).toHaveAccessibilityValue({ text: 'Correct' });
     await fireEvent.press(screen.getByRole('button', { name: 'Try this card again' }));
-    expect(screen.queryByText('NOT QUITE · YOUR FIRST ANSWER IS SCORED')).toBeNull();
+    expect(screen.queryByText('Not quite · your first answer is scored')).toBeNull();
     await fireEvent.press(screen.getByRole('button', { name: answerFor(first) }));
     await fireEvent.press(screen.getByRole('button', { name: 'Next card' }));
 
@@ -204,7 +204,7 @@ describe('the Counting tab', () => {
     await screen.findByRole('header', { name: 'Results' });
     expect(screen.getByText('Card values · Learn · self-paced')).toBeOnTheScreen();
     expect(screen.getByText('Completed · Learn')).toBeOnTheScreen();
-    expect(screen.getByText('SKILL SCORES · FIRST ANSWERS')).toBeOnTheScreen();
+    expect(screen.getByText('Skill scores · first answers')).toBeOnTheScreen();
     expect(screen.getByLabelText('Card values, 20 cards: 19 of 20')).toBeOnTheScreen();
     expect(screen.getByLabelText('Running count, Not tested: N/A')).toBeOnTheScreen();
     expect(screen.getByLabelText('True count, Not tested: N/A')).toBeOnTheScreen();
@@ -227,7 +227,7 @@ describe('the Counting tab', () => {
       if (card === 3) await fireEvent.press(screen.getByRole('button', { name: 'Skip (counts as incorrect)' }));
       else await fireEvent.press(screen.getByRole('button', { name: card === 2 ? wrongFor(shown) : answerFor(shown) }));
       expect(screen.queryByTestId('coach-note')).toBeNull();
-      expect(screen.queryByText(/Correct|Your answer|NOT QUITE/)).toBeNull();
+      expect(screen.queryByText(/Correct|Your answer|Not quite/)).toBeNull();
     }
 
     await screen.findByRole('header', { name: 'Results' });
@@ -484,11 +484,11 @@ describe('the Counting tab', () => {
 
     it('sets up Observe with the rule preset, penetration, extra players and N, and starts on those settings (S3-02 ZreSb)', async () => {
       await openTable('Check');
-      expect(screen.getByText('WHO PLAYS YOUR SEAT')).toBeOnTheScreen();
+      expect(screen.getByText('Who plays your seat')).toBeOnTheScreen();
       const seat = within(screen.getByLabelText('Who plays your seat'));
       expect(seat.getByRole('radio', { name: 'Observe' })).toBeChecked();
       expect(seat.getByRole('radio', { name: 'Play' })).toBeEnabled();
-      expect(screen.queryByText('COUNTING MODE')).toBeNull();
+      expect(screen.queryByText('Counting mode')).toBeNull();
       expect(within(screen.getByLabelText('Rule preset')).getByRole('radio', { name: /S17 · late surrender/ })).toBeChecked();
       expect(screen.getByText('75%')).toBeOnTheScreen();
       expect(screen.getByText('0 players')).toBeOnTheScreen();
@@ -542,7 +542,7 @@ describe('the Counting tab', () => {
       await openTable('Check');
       await fireEvent.press(within(screen.getByLabelText('Who plays your seat')).getByRole('radio', { name: 'Play' }));
       expect(screen.getByText('Check holds all feedback until the end. Illegal moves are still refused straight away.')).toBeOnTheScreen();
-      expect(screen.getByText('COUNTING MODE')).toBeOnTheScreen();
+      expect(screen.getByText('Counting mode')).toBeOnTheScreen();
       await fireEvent.press(within(screen.getByLabelText('Counting mode')).getByRole('radio', { name: 'With deviations' }));
       await fireEvent.press(screen.getByRole('button', { name: 'Start Check attempt' }));
       expect(await screen.findByText('Check · Play · with deviations · N = 1')).toBeOnTheScreen();
@@ -557,7 +557,7 @@ describe('the Counting tab', () => {
         if (move && !move.props.accessibilityState?.disabled) {
           if (!refused && screen.queryByRole('button', { name: 'Split' })) {
             await fireEvent.press(screen.getByRole('button', { name: 'Split' }));
-            refused = (await screen.findByText('THAT MOVE ISN’T AVAILABLE').catch(() => null)) !== null;
+            refused = (await screen.findByText('That move isn’t available').catch(() => null)) !== null;
             continue;
           }
           await fireEvent.press(move);
@@ -591,7 +591,7 @@ describe('the Counting tab', () => {
     it('explains a starting balance that can\'t cover the opening wager with nothing started, then runs a funded Check with the bet schedule to results with challenge finances', async () => {
       await openTable('Check');
       await fireEvent.press(within(screen.getByLabelText('Who plays your seat')).getByRole('radio', { name: 'Play' }));
-      expect(screen.getByText('BETTING')).toBeOnTheScreen();
+      expect(screen.getByText('Betting')).toBeOnTheScreen();
       expect(screen.getByText('Table limits 10–1,000.')).toBeOnTheScreen();
       expect(screen.getByText('Just for this attempt. No rebuys. Never added to your practice totals.')).toBeOnTheScreen();
       expect(screen.getByLabelText('Starting balance, in units').props.value).toBe('1000');
@@ -605,7 +605,7 @@ describe('the Counting tab', () => {
       await fireEvent.changeText(screen.getByLabelText('Starting balance, in units'), '30');
       expect(screen.queryByText('Fix one setting to start')).toBeNull();
       await fireEvent.press(screen.getByRole('button', { name: 'Start Check attempt' }));
-      expect(await screen.findByText('ATTEMPT BALANCE')).toBeOnTheScreen();
+      expect(await screen.findByText('Attempt balance')).toBeOnTheScreen();
       let bets = 0;
       for (let guard = 0; guard < 1500 && !screen.queryByRole('header', { name: 'Results' }); guard++) {
         const place = screen.queryByRole('button', { name: /^Place \d+$/ });
@@ -646,7 +646,7 @@ describe('the Counting tab', () => {
       expect(bets).toBeGreaterThan(0);
       expect(cues()).toContain('stake-set');
       expect(screen.getByLabelText(new RegExp(`^Betting adherence, Hi-Lo bet schedule · \\d+ bets?: \\d+ of \\d+$`))).toBeOnTheScreen();
-      expect(screen.getByText('CHALLENGE FINANCES · NOT A SKILL SCORE')).toBeOnTheScreen();
+      expect(screen.getByText('Challenge finances · not a skill score')).toBeOnTheScreen();
       expect(screen.getByLabelText('Starting: 30')).toBeOnTheScreen();
       expect(screen.getByText('Kept in this challenge’s history only. Never added to your practice totals or training bankroll.')).toBeOnTheScreen();
       expect(screen.queryByText('Ended early — insufficient funds') ?? screen.getByText(/^Completed · 10 of 10 rounds/)).toBeOnTheScreen();

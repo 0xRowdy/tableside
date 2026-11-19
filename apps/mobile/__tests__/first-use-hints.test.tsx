@@ -123,9 +123,9 @@ describe('first-use hints on the running-count exercise', () => {
     const atCheckpoint = readChallengeView(attempt(nexts(12)));
     await mount(EXERCISE_HINTS, exercise(atCheckpoint));
     expect(screen.getByTestId('first-use-hint-count-entry')).toHaveTextContent(
-      `NEW HERE · COUNT ENTRY${HINTS['count-entry'].text}Reread from Help (?)Got it`,
+      `New here · count entry${HINTS['count-entry'].text}Reread from Help (?)Got it`,
     );
-    expect(screen.getByTestId('first-use-hint-show-count')).toHaveTextContent(new RegExp(`^NEW HERE · SHOW RUNNING COUNT${HINTS['show-count'].text}`));
+    expect(screen.getByTestId('first-use-hint-show-count')).toHaveTextContent(new RegExp(`^New here · show running count${HINTS['show-count'].text}`));
 
     for (const key of ['1', 'Submit', 'Skip']) expect(screen.getByRole('button', { name: key })).toBeEnabled();
     expect(screen.getByRole('switch', { name: 'Show running count' })).toBeEnabled();
@@ -218,7 +218,7 @@ describe('the count-entry hint on the true-count exercise (S3-06 zAatf)', () => 
     const question = readChallengeView(attempt([], 1, 'conversion'));
     expect(exerciseHints(question)).toEqual(['count-entry']);
     await mount(exerciseHints(question), exercise(question));
-    expect(screen.getByTestId('first-use-hint-count-entry')).toHaveTextContent(`NEW HERE · COUNT ENTRY${HINTS['count-entry'].text}Reread from Help (?)Got it`);
+    expect(screen.getByTestId('first-use-hint-count-entry')).toHaveTextContent(`New here · count entry${HINTS['count-entry'].text}Reread from Help (?)Got it`);
     expect(screen.queryByTestId('first-use-hint-show-count')).toBeNull();
     for (const key of ['1', 'Submit', 'Skip']) expect(screen.getByRole('button', { name: key })).toBeEnabled();
     await press('Got it, hide the Count entry hint');
@@ -246,7 +246,7 @@ describe('the bet selector hint (S1-04 XjwQc)', () => {
   it('shows under the Table / Bet list switch, in the frame’s words, until Got it', async () => {
     await mount(TABLE_HINTS, table);
     expect(screen.getByTestId('first-use-hint-bet-selector')).toHaveTextContent(
-      'NEW HERE · BET LIST' + 'Every wager on this table, as a list you can read. Choosing one opens its editor; nothing is placed until you confirm.' + 'Reread from Help (?)Got it',
+      'New here · bet list' + 'Every wager on this table, as a list you can read. Choosing one opens its editor; nothing is placed until you confirm.' + 'Reread from Help (?)Got it',
     );
     expect(screen.getByRole('tab', { name: 'Bet list' })).toBeOnTheScreen();
     await press('Got it, hide the Bet list hint');

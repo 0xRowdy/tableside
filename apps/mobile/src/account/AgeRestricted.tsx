@@ -25,7 +25,7 @@ export function AgeRestricted({ gate }: { gate: AgeRestrictedGate }) {
         bar={PAUSED}
         intro="Practice and your account are paused. Your records are kept and nothing has been deleted. If this isn't right, contact support."
       >
-        <GroupLabel>YOU CAN STILL</GroupLabel>
+        <GroupLabel>You can still</GroupLabel>
         <RestrictedPathRows />
       </FirstRunScreen>
     );
@@ -51,7 +51,7 @@ export function AgeRestricted({ gate }: { gate: AgeRestrictedGate }) {
       intro="Practice and your account are paused until your age range can be confirmed. Your records are kept and nothing has been deleted."
     >
       {gate.reason === 'check-unmet' && <Body>{"Your device requires an age check that can't be completed here. Contact support if you need help."}</Body>}
-      <GroupLabel>YOU CAN STILL</GroupLabel>
+      <GroupLabel>You can still</GroupLabel>
       <RestrictedPathRows />
       {problem === CONNECTION_PROBLEM ? <InlineMessage>{problem}</InlineMessage> : problem && <Status>{problem}</Status>}
       <Actions>

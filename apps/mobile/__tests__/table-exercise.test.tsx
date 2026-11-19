@@ -110,7 +110,7 @@ describe('the table counting exercise', () => {
     const dealing = advanceUntil(attempt('check', 1), (state) => stepOf(state).step === 'deal' && stepOf(state).round === 1 && (stepOf(state) as { to: string }).to === 'dealer' && (stepOf(state) as { face: unknown }).face === null);
     await present(readChallengeView(dealing));
     expect(screen.getByText('Observing')).toBeOnTheScreen();
-    expect(screen.getByText('OBSERVE · NO DECISIONS')).toBeOnTheScreen();
+    expect(screen.getByText('Observe · no decisions')).toBeOnTheScreen();
     expect(screen.getByText('Keep the count')).toBeOnTheScreen();
     expect(screen.getByText(/betting the table minimum of 10 and playing basic strategy/)).toBeOnTheScreen();
     expect(screen.getByLabelText('Face-down card')).toBeOnTheScreen();
@@ -155,7 +155,7 @@ describe('the table counting exercise', () => {
     const round = view.table?.round as number;
     await present(view);
     expect(screen.getByText('Shoe reshuffled')).toBeOnTheScreen();
-    expect(screen.getByText('NEW SHOE')).toBeOnTheScreen();
+    expect(screen.getByText('New shoe')).toBeOnTheScreen();
     expect(screen.getByText('The shoe was reshuffled')).toBeOnTheScreen();
     expect(screen.getByText(`The cut card came out in round ${round - 1}. That round finished, then the shoe was shuffled. The running count starts again at 0 and decks remaining is back to 6. Checkpoints carry on as before.`)).toBeOnTheScreen();
     expect(screen.getByLabelText('Decks remaining: 6')).toBeOnTheScreen();
@@ -166,7 +166,7 @@ describe('the table counting exercise', () => {
   it('corrects a Learn running count before the next card, explaining the round’s exposed cards (S3-07 AcmMa)', async () => {
     const after = advanceUntil(attempt('learn', 1), (state) => stepOf(state).step === 'prompt' && (stepOf(state) as { timing: string }).timing === 'after-round');
     await present(readChallengeView(send(after, { kind: 'answer', value: 4 })));
-    expect(screen.getByText('YOU ENTERED +4 · RUNNING COUNT IS +3')).toBeOnTheScreen();
+    expect(screen.getByText('You entered +4 · running count is +3')).toBeOnTheScreen();
     expect(screen.getByText('The running count is +3.')).toBeOnTheScreen();
     expect(screen.getByText('Round 1’s exposed cards were K♦, 3♥, 4♣, 3♦, 3♣, 4♣ and Q♣: −1, +1, +1, +1, +1, +1, −1 adds up to +3. The count was 0 before the round, so it’s +3 now.')).toBeOnTheScreen();
     expect(screen.getByText('Only your first answer is scored. The next card waits until the count is right.')).toBeOnTheScreen();
@@ -205,7 +205,7 @@ describe('the table counting exercise in Play', () => {
   it('offers every move at the learner\'s decision, with the attempt balance and never a practice balance (S3-07 E3Gbeh, fiCRg, Amendment 2 §3)', async () => {
     const decision = await present(readChallengeView(atDecision(play('check', 1))));
     expect(screen.getByText('Check · Play · S17 LS · 75% · N = 1')).toBeOnTheScreen();
-    expect(screen.getByText('ATTEMPT BALANCE')).toBeOnTheScreen();
+    expect(screen.getByText('Attempt balance')).toBeOnTheScreen();
     expect(screen.getByText('990')).toBeOnTheScreen();
     expect(screen.getByText('Bet 10')).toBeOnTheScreen();
     expect(screen.queryByText(/practice/i)).toBeNull();
@@ -220,7 +220,7 @@ describe('the table counting exercise in Play', () => {
 
   it('refuses an illegal move by legality alone, then lets the learner choose again (S3-07 kLgWV)', async () => {
     const refused = await present(readChallengeView(send(atDecision(play('check', 1)), { kind: 'play', action: 'split' })));
-    expect(screen.getByText('THAT MOVE ISN’T AVAILABLE')).toBeOnTheScreen();
+    expect(screen.getByText('That move isn’t available')).toBeOnTheScreen();
     expect(screen.getByText('You can only split two cards of the same value.')).toBeOnTheScreen();
     expect(
       screen.getByText('K♦ 4♣ isn’t a pair, so Split isn’t a legal move. During a Check attempt Tableside only tells you what’s allowed. It won’t say which move is right, before or after you choose.'),
@@ -353,7 +353,7 @@ describe('the table counting exercise with challenge funding', () => {
 
   it('shows the funding notice with only the affordable legal amounts whenever the balance can\'t cover every wager, then confirms the wager without saying whether it is an override (S3-07 fiCRg, qvatd; Information hiding)', async () => {
     const notice = await present(readChallengeView(firstFunding()));
-    expect(screen.getByText('FUNDING')).toBeOnTheScreen();
+    expect(screen.getByText('Funding')).toBeOnTheScreen();
     expect(screen.getByRole('header', { name: 'Your balance can’t cover every opening wager' })).toBeOnTheScreen();
     expect(screen.getByText('Balance 30. Legal opening wagers you can afford: 10, 20 or 30. Choose one to keep playing.')).toBeOnTheScreen();
     expect(screen.getByText('During Check, Tableside won’t say which amount the strategy would choose, or whether yours matches it.')).toBeOnTheScreen();
@@ -368,7 +368,7 @@ describe('the table counting exercise with challenge funding', () => {
       ),
     ).toBeOnTheScreen();
     await press('Choose another amount');
-    expect(screen.getByText('FUNDING')).toBeOnTheScreen();
+    expect(screen.getByText('Funding')).toBeOnTheScreen();
     await press('Bet 20');
     await press('Place 20');
     expect(sent).toEqual([{ kind: 'bet', amount: '20' }]);
@@ -377,7 +377,7 @@ describe('the table counting exercise with challenge funding', () => {
   it('refuses a double the balance can\'t cover for funds alone, never for less, and says the legal fallback is what counts (S3-07 RDS5F)', async () => {
     const decision = advanceUntil(funded('check', 1, { startingBalance: '10' }), (state) => state.phase === 'decision');
     const refused = await present(readChallengeView(send(decision, { kind: 'play', action: 'double' })));
-    expect(screen.getByText('NOT ENOUGH IN THIS ATTEMPT’S BALANCE')).toBeOnTheScreen();
+    expect(screen.getByText('Not enough in this attempt’s balance')).toBeOnTheScreen();
     expect(screen.getByText('Double isn’t affordable: it needs another 10 and your balance is 0. Choose another move. Not having the funds is never counted against you; your play is scored against the legal fallback.')).toBeOnTheScreen();
     expect(screen.getByText('The same applies to split and insurance. Tableside never doubles or insures for less.')).toBeOnTheScreen();
     expectNoFeedbackColors(refused);

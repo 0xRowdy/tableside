@@ -188,4 +188,4 @@ const useStyles = makeStyles((type) => ({
   headline: { fontFamily: fonts.uiSemiBold, ...type.body, color: palette.foreground },
   detail: { fontFamily: fonts.ui, ...type.secondary, color: palette.mutedForeground },
   nav: { flexDirection: 'row', flexWrap: 'wrap', gap: space[2] + 2, paddingTop: space[2] },
-}))
+}));

@@ -59,11 +59,11 @@ export function DeletionScheduled({ gate }: { gate: DeletionScheduledGate }) {
         <Button label="Cancel deletion" stretch disabled={busy} onPress={() => void cancel()} />
       </Actions>
       {problem !== null && <InlineMessage>{problem}</InlineMessage>}
-      <GroupLabel>DELETION STATUS</GroupLabel>
+      <GroupLabel>Deletion status</GroupLabel>
       <Group>
         <ListRow icon={CalendarClock} title="Deletion status" detail={statusDetail(gate, status)} />
       </Group>
-      <GroupLabel>YOU CAN STILL</GroupLabel>
+      <GroupLabel>You can still</GroupLabel>
       <RestrictedPathRows only={['export', 'billing-help', 'contact-support', 'privacy-request']} supportDetail="Ask about your account or its deletion" />
       {methods && (
         <ConfirmItsYouSheet

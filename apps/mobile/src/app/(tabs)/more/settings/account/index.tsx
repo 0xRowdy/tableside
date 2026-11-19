@@ -20,7 +20,7 @@ export default function Account() {
   const summary = overview?.summary;
   return (
     <SettingsScreen title="Account" back={{ label: 'Settings', onPress: () => router.dismissTo('/more/settings') }}>
-      <GroupLabel>YOU</GroupLabel>
+      <GroupLabel>You</GroupLabel>
       <Group>
         <ListRow
           icon={User}
@@ -42,7 +42,7 @@ export default function Account() {
             />
           ))}
       </Group>
-      <GroupLabel>SECURITY</GroupLabel>
+      <GroupLabel>Security</GroupLabel>
       <Group>
         <ListRow
           icon={KeyRound}
@@ -59,7 +59,7 @@ export default function Account() {
           onPress={() => router.navigate('/more/settings/account/devices')}
         />
       </Group>
-      <GroupLabel>YOUR DATA</GroupLabel>
+      <GroupLabel>Your data</GroupLabel>
       <Group>
         <ListRow icon={RefreshCw} title="Sync status" detail={overview ? waitingText(overview.waiting) : 'Checking…'} onPress={() => router.navigate('/more/settings/account/sync')} />
         <ListRow

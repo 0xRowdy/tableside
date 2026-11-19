@@ -587,4 +587,4 @@ const useStyles = makeStyles((type) => ({
     backgroundColor: palette.secondary,
     overflow: 'hidden',
   },
-}))
+}));

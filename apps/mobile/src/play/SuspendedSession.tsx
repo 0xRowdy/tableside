@@ -111,4 +111,4 @@ const useStyles = makeStyles((type) => ({
   rowLabel: { fontFamily: fonts.ui, ...type.secondary, color: palette.mutedForeground },
   rowValue: { fontFamily: fonts.uiSemiBold, ...type.body, color: palette.foreground },
   caption: { fontFamily: fonts.ui, ...type.secondary, color: palette.mutedForeground },
-}))
+}));

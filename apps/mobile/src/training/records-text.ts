@@ -19,9 +19,9 @@ const CLASS_NAME: Record<AssistanceClass, string> = { 'unassisted-check': 'unass
 const CHECK_ASSISTANCE: Record<AssistanceClass, string | null> = { 'unassisted-check': 'unassisted', 'assisted-check': 'assisted', learn: null };
 const NEW_BEST: Record<AssistanceClass, string> = { 'unassisted-check': 'New personal best', 'assisted-check': 'New assisted Check personal best', learn: 'New Learn personal best' };
 
-export const bestsLabel = (assistance: AssistanceClass) => `PERSONAL BESTS · ${CLASS_NAME[assistance].toUpperCase()}, BY SETTINGS`;
+export const bestsLabel = (assistance: AssistanceClass) => `Personal bests · ${CLASS_NAME[assistance].toLowerCase()}, by settings`;
 export const noGroups = (assistance: AssistanceClass) => `No ${CLASS_NAME[assistance]} attempts yet.`;
-export const HISTORY_LABEL = 'ATTEMPT HISTORY';
+export const HISTORY_LABEL = 'Attempt history';
 export const NO_HISTORY = 'No attempts yet.';
 export const RECORDS_NOTE = 'Records only compare attempts with identical settings. Speed counts only for perfect, unassisted, uninterrupted, timed Check attempts.';
 

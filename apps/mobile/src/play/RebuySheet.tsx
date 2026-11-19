@@ -205,4 +205,4 @@ const useStyles = makeStyles((type) => ({
     borderColor: palette.transparent,
   },
   focused: { borderColor: palette.ring },
-}))
+}));

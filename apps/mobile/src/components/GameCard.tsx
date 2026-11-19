@@ -70,4 +70,4 @@ const useStyles = makeStyles((type) => ({
     justifyContent: 'center',
   },
   focusRing: { position: 'absolute', inset: 0, borderWidth: 3, borderColor: palette.ring },
-}))
+}));

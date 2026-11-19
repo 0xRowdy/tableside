@@ -21,4 +21,4 @@ export function Placeholder({ title, message, children }: { title: string; messa
 const useStyles = makeStyles((type) => ({
   title: { fontFamily: fonts.display, ...type.display, color: palette.foreground },
   message: { fontFamily: fonts.ui, ...type.body, color: palette.mutedForeground },
-}))
+}));

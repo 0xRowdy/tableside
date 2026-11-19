@@ -92,8 +92,8 @@ export function SessionStrip({ balance, onTable, status }: { balance: string; on
   return (
     <StatStrip
       stats={[
-        { label: 'SESSION BALANCE', spoken: 'Session balance', value: balance },
-        { label: 'ON TABLE', spoken: 'On table', value: onTable },
+        { label: 'Session balance', spoken: 'Session balance', value: balance },
+        { label: 'On table', spoken: 'On table', value: onTable },
       ]}
       status={status}
     />
@@ -336,7 +336,7 @@ export function BlackjackFeltRules({ dealer }: { dealer: 'S17' | 'H17' }) {
   const styles = useStyles();
   return (
     <View style={styles.feltRules}>
-      <Text maxFontSizeMultiplier={textScale.display} style={styles.pays}>BLACKJACK PAYS 3 TO 2</Text>
+      <Text maxFontSizeMultiplier={textScale.display} style={styles.pays}>Blackjack PAYS 3 TO 2</Text>
       <Text maxFontSizeMultiplier={textScale.body} style={styles.dealerRule}>
         {dealer === 'S17' ? 'DEALER STANDS ON ALL 17s' : 'DEALER HITS SOFT 17'}
       </Text>
@@ -438,4 +438,4 @@ const useStyles = makeStyles((type) => ({
   endingStepDetail: { fontFamily: fonts.ui, ...type.secondary, color: palette.mutedForeground },
   muted: { color: palette.mutedForeground },
   allowanceText: { fontFamily: fonts.uiMedium, ...type.secondary, color: palette.foreground },
-}))
+}));

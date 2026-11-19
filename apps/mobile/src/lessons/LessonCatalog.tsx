@@ -124,4 +124,4 @@ const useStyles = makeStyles((type) => ({
   text: { flex: 1, gap: 2 },
   title: { fontFamily: fonts.uiSemiBold, ...type.body, color: palette.foreground },
   detail: { fontFamily: fonts.ui, ...type.secondary, color: palette.mutedForeground },
-}))
+}));

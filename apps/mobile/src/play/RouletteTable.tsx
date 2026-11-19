@@ -179,7 +179,7 @@ export function RouletteTable({ snapshot }: { snapshot: ActiveSnapshot }) {
               )}
               {view.outcome && (
                 <View accessible accessibilityLabel={`Last spin: ${describePocket(view.outcome.pocket)}`} style={styles.lastSpin}>
-                  <Text maxFontSizeMultiplier={textScale.body} style={styles.sectionLabel}>LAST SPIN</Text>
+                  <Text maxFontSizeMultiplier={textScale.body} style={styles.sectionLabel}>Last spin</Text>
                   <View style={styles.lastSpinRow}>
                     <View style={[styles.pocketBadge, { backgroundColor: palette[POCKET_TOKEN[pocketColor(view.outcome.pocket)]] }]}>
                       <Text maxFontSizeMultiplier={textScale.body} style={styles.pocketBadgeText}>{String(view.outcome.pocket)}</Text>
@@ -267,4 +267,4 @@ const useStyles = makeStyles((type) => ({
   summary: { gap: 2 },
   summaryTitle: { fontFamily: fonts.uiSemiBold, ...type.body, color: palette.foreground },
   summaryText: { fontFamily: fonts.ui, ...type.caption, color: palette.mutedForeground },
-}))
+}));

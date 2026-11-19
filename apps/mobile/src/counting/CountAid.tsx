@@ -77,4 +77,4 @@ const useStyles = makeStyles((type) => ({
   countLabel: { fontFamily: fonts.ui, ...type.secondary, color: palette.mutedForeground },
   countValue: { fontFamily: fonts.uiBold, ...type.figure, color: palette.foreground },
   lead: { fontFamily: fonts.ui, ...type.body, color: palette.foreground },
-}))
+}));

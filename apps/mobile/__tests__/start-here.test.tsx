@@ -122,7 +122,7 @@ describe('Settings › Learning hints (NvGyZ)', () => {
     const device = onThisDevice();
     for (const id of HINT_IDS) await device.hintSeen(id);
     await renderRouter('./src/app', { initialUrl: '/more/settings/learning' });
-    expect(await screen.findByRole('header', { name: 'HINTS' })).toBeOnTheScreen();
+    expect(await screen.findByRole('header', { name: 'Hints' })).toBeOnTheScreen();
     expect(
       screen.getByText(
         "Lessons never score you, award anything or lock anything. They're available to every account, including when today's challenge attempts are used up. Start here and hint settings stay on this device.",

@@ -63,4 +63,4 @@ const useStyles = makeStyles((type) => ({
   text: { fontFamily: fonts.ui, ...type.secondary, color: palette.mutedForeground },
   alert: { fontFamily: fonts.ui, ...type.body, color: palette.warning },
   footnote: { fontFamily: fonts.ui, ...type.secondary, color: palette.mutedForeground },
-}))
+}));

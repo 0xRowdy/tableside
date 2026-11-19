@@ -557,4 +557,4 @@ const useStyles = makeStyles((type) => ({
   refused: { gap: space[2], padding: space[4], borderRadius: radius.lg, borderWidth: 1, borderColor: palette.controlBorder, backgroundColor: palette.card },
   refusedHead: { flexDirection: 'row', alignItems: 'center', gap: space[2] },
   refusedText: { fontFamily: fonts.ui, ...type.body, color: palette.foreground },
-}))
+}));

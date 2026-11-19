@@ -130,4 +130,4 @@ const useStyles = makeStyles((type) => ({
   actions: { gap: space[4] },
   alert: { fontFamily: fonts.ui, ...type.body, color: palette.warning },
   footnote: { fontFamily: fonts.ui, ...type.secondary, color: palette.mutedForeground },
-}))
+}));

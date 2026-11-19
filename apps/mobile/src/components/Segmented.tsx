@@ -68,4 +68,4 @@ const useStyles = makeStyles((type) => ({
   segmentTextSelected: { color: palette.primaryForeground },
   disabled: { opacity: 0.4 },
   focused: { borderColor: palette.ring },
-}))
+}));

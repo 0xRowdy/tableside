@@ -136,4 +136,4 @@ const useStyles = makeStyles((type) => ({
   choiceSelected: { borderColor: palette.primary, borderWidth: 2 },
   choiceFocused: { borderColor: palette.ring, borderWidth: 2 },
   incompatible: { gap: space[2], padding: space[4], borderRadius: radius.lg, borderWidth: 2, borderColor: palette.destructive, backgroundColor: palette.card },
-}))
+}));

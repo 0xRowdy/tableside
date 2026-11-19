@@ -55,7 +55,7 @@ export function GuidedStrip({
         accessibilityLabel={`Strategy adherence: ${adherenceText(strategy.adherence, unit)}. Departures ${strategy.adherence.departures}.`}
         style={styles.adherence}
       >
-        <Text maxFontSizeMultiplier={textScale.body} style={styles.stripLabel}>ADHERENCE</Text>
+        <Text maxFontSizeMultiplier={textScale.body} style={styles.stripLabel}>Adherence</Text>
         <Text maxFontSizeMultiplier={textScale.body} style={styles.stripText}>
           {adherenceText(strategy.adherence, unit)} · Departures {strategy.adherence.departures}
         </Text>
@@ -190,7 +190,7 @@ export function CycleResultPanel({
         </View>
       </View>
       {cycle.turns.length > 0 && (
-        <Text accessibilityRole="header" maxFontSizeMultiplier={textScale.body} style={styles.stripLabel}>THIS CYCLE</Text>
+        <Text accessibilityRole="header" maxFontSizeMultiplier={textScale.body} style={styles.stripLabel}>This cycle</Text>
       )}
       {cycle.turns.map((turn, index) => {
         const words = describeTurn(turn, index);
@@ -347,4 +347,4 @@ const useStyles = makeStyles((type) => ({
   statValue: { fontFamily: fonts.uiBold, ...type.heading, color: palette.foreground },
   turn: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: space[2], paddingVertical: space[1] },
   turnText: { flexShrink: 1, gap: 2 },
-}))
+}));

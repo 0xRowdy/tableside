@@ -47,4 +47,4 @@ function SignedOutIcon() {
 const useStyles = makeStyles((type) => ({
   icon: { width: 64, height: 64, borderRadius: radius.lg, alignItems: 'center', justifyContent: 'center', backgroundColor: palette.secondary },
   note: { fontFamily: fonts.ui, ...type.secondary, color: palette.mutedForeground },
-}))
+}));

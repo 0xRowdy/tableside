@@ -116,7 +116,7 @@ export function RouletteSetup({
       <SetupHeader title="Roulette" subtitle={`New session · ${guided ? 'guided practice' : 'free play'}`} onBack={() => router.navigate('/')} />
       <LearnThisGame game="roulette" />
 
-      <Section label="HOW DO YOU WANT TO PLAY?">
+      <Section label="How do you want to play?">
         <ChoiceGroup
           label="How do you want to play?"
           options={[
@@ -156,7 +156,7 @@ export function RouletteSetup({
         </StrategyPicker>
       )}
 
-      <Section label="TABLE LIMITS">
+      <Section label="Table limits">
         {GROUPS.map((group) => (
           <View key={group.key} style={styles.section}>
             <FieldLabel>{group.label}</FieldLabel>

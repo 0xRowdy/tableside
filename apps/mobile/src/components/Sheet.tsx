@@ -73,4 +73,4 @@ const useStyles = makeStyles((type) => ({
     backgroundColor: palette.secondary,
   },
   focused: { borderColor: palette.ring },
-}))
+}));

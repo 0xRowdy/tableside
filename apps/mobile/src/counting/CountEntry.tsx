@@ -160,4 +160,4 @@ const useStyles = makeStyles((type) => ({
   actions: { flexDirection: 'row', gap: space[3] - 2 },
   action: { flex: 1 },
   pressed: { opacity: 0.8 },
-}))
+}));

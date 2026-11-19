@@ -114,4 +114,4 @@ const useStyles = makeStyles((type) => ({
   helpText: { fontFamily: fonts.uiSemiBold, ...type.label, color: palette.foreground },
   pressed: { opacity: 0.8 },
   focused: { borderColor: palette.ring },
-}))
+}));

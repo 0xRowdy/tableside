@@ -193,4 +193,4 @@ const useStyles = makeStyles((type) => ({
   marker: { marginTop: 2, minWidth: 26, paddingHorizontal: 4, borderRadius: radius.pill, backgroundColor: palette.chip1, alignItems: 'center' },
   markerText: { fontFamily: fonts.uiSemiBold, ...type.label, color: palette.ink },
   caption: { marginHorizontal: space[4], fontFamily: fonts.ui, ...type.caption, color: palette.mutedForeground },
-}))
+}));

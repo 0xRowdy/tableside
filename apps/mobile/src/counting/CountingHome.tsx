@@ -227,4 +227,4 @@ const useStyles = makeStyles((type) => ({
   pressed: { opacity: 0.8 },
   disabled: { opacity: 0.4 },
   focused: { borderColor: palette.ring, borderWidth: 2 },
-}))
+}));

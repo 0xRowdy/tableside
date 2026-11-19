@@ -244,4 +244,4 @@ const useStyles = makeStyles((type) => ({
   filled: { height: 6, backgroundColor: palette.primary },
   thumb: { position: 'absolute', width: 28, height: 28, marginLeft: -14, borderRadius: 14, backgroundColor: palette.foreground },
   focused: { borderColor: palette.ring },
-}))
+}));

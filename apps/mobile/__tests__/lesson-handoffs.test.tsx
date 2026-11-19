@@ -234,9 +234,9 @@ describe('lesson entry points', () => {
   });
 
   it.each([
-    ['blackjack', 'Blackjack', 'Blackjack basics, the four strategy modes, counting and the bet schedule. Optional, and lessons never use allowance. 10 lessons', 'BLACKJACK · 10'],
-    ['craps', 'Craps', 'Craps basics and the five strategy lessons. Optional, and lessons never use allowance. 6 lessons', 'STANDARD CRAPS · 6'],
-    ['roulette', 'Roulette', 'Roulette basics and the five strategy lessons. Optional, and lessons never use allowance. 6 lessons', 'ROULETTE · 6'],
+    ['blackjack', 'Blackjack', 'Blackjack basics, the four strategy modes, counting and the bet schedule. Optional, and lessons never use allowance. 10 lessons', 'Blackjack · 10'],
+    ['craps', 'Craps', 'Craps basics and the five strategy lessons. Optional, and lessons never use allowance. 6 lessons', 'Standard craps · 6'],
+    ['roulette', 'Roulette', 'Roulette basics and the five strategy lessons. Optional, and lessons never use allowance. 6 lessons', 'Roulette · 6'],
   ])('%s setup offers Learn this game (FxxAj), opening that game’s lessons', async (game, title, detail, section) => {
     await renderRouter('./src/app', { initialUrl: `/play?game=${game}` });
     await header(title);
@@ -254,6 +254,6 @@ describe('lesson entry points', () => {
     await header('Card values');
     await fireEvent.press(button('Back to Lessons'));
     await header('Lessons');
-    expect(screen.getAllByRole('header').map((item) => item.props.children)).toEqual(['Lessons', 'BLACKJACK · 10']);
+    expect(screen.getAllByRole('header').map((item) => item.props.children)).toEqual(['Lessons', 'Blackjack · 10']);
   });
 });

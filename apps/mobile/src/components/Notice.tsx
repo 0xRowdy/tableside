@@ -39,4 +39,4 @@ const useStyles = makeStyles((type) => ({
   notice: { gap: space[2], padding: space[4], borderRadius: radius.lg, backgroundColor: palette.card, borderWidth: 1, borderColor: palette.primary },
   title: { fontFamily: fonts.uiSemiBold, ...type.body, color: palette.foreground },
   text: { fontFamily: fonts.ui, ...type.secondary, color: palette.mutedForeground },
-}))
+}));

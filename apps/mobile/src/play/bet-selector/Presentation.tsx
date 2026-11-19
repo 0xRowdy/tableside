@@ -86,4 +86,4 @@ const useStyles = makeStyles((type) => ({
   draft: { gap: space[2], marginHorizontal: space[4], padding: space[3], borderRadius: radius.lg, borderWidth: 1, borderColor: palette.primary, backgroundColor: palette.card },
   draftTitle: { fontFamily: fonts.uiSemiBold, ...type.body, color: palette.foreground },
   draftText: { fontFamily: fonts.ui, ...type.secondary, color: palette.mutedForeground },
-}))
+}));

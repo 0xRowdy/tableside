@@ -99,7 +99,7 @@ describe('Records & history', () => {
     await openRecords();
 
     expect(screen.getByRole('radio', { name: 'Check' })).toBeChecked();
-    expect(screen.getByText('PERSONAL BESTS · UNASSISTED CHECK, BY SETTINGS')).toBeOnTheScreen();
+    expect(screen.getByText('Personal bests · unassisted check, by settings')).toBeOnTheScreen();
     expect(await screen.findByLabelText('Running count, 52 cards · self-paced. Best 4 of 4. Fastest 03:41')).toBeOnTheScreen();
     expect(screen.getByLabelText('Running count, 52 cards · 2 s pace. Best 3 of 4. Fastest — (needs a perfect run)')).toBeOnTheScreen();
     expect(screen.getByLabelText('Running count, 52 cards · 1 s pace. Best — (no completed attempt yet). Fastest —')).toBeOnTheScreen();
@@ -116,11 +116,11 @@ describe('Records & history', () => {
     expect(await screen.findByText('No unassisted Check attempts yet.')).toBeOnTheScreen();
 
     await fireEvent.press(screen.getByRole('radio', { name: 'Assisted Check' }));
-    expect(screen.getByText('PERSONAL BESTS · ASSISTED CHECK, BY SETTINGS')).toBeOnTheScreen();
+    expect(screen.getByText('Personal bests · assisted check, by settings')).toBeOnTheScreen();
     expect(screen.getByLabelText('Running count, 52 cards · self-paced. Best 4 of 4')).toBeOnTheScreen();
 
     await fireEvent.press(screen.getByRole('radio', { name: 'Learn' }));
-    expect(screen.getByText('PERSONAL BESTS · LEARN, BY SETTINGS')).toBeOnTheScreen();
+    expect(screen.getByText('Personal bests · learn, by settings')).toBeOnTheScreen();
     expect(screen.getByLabelText('Card values, 20 cards · self-paced. Best 19 of 20')).toBeOnTheScreen();
   });
 
@@ -132,7 +132,7 @@ describe('Records & history', () => {
       { id: 'done', endedAt: MOCK_NOW - 3 * DAY },
     );
     await openRecords();
-    await screen.findByText('ATTEMPT HISTORY');
+    await screen.findByText('Attempt history');
     const rows = screen.getAllByLabelText(/^(Running count|Conversion) · /).map((row) => row.props.accessibilityLabel as string);
     expect(rows).toEqual([
       'Running count · Check. Today · 2 s pace · ended early — insufficient funds · Local, not synced yet. Partial',

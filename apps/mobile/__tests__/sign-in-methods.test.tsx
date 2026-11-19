@@ -67,7 +67,7 @@ describe('Sign-in methods', () => {
     expect(screen.getByText('You need at least one way to sign in. A second one helps if you lose access to the first.')).toBeOnTheScreen();
     expect(screen.getByLabelText('Apple. Hide My Email · x7k2@privaterelay.appleid.com')).toBeOnTheScreen();
     expect(button('Remove Apple')).toBeOnTheScreen();
-    expect(screen.getByRole('header', { name: 'ADD A METHOD' })).toBeOnTheScreen();
+    expect(screen.getByRole('header', { name: 'Add a method' })).toBeOnTheScreen();
     expect(button('Add Google. A backup way in if you lose access to Apple')).toBeOnTheScreen();
     expect(button('Add Email code. A backup way in if you lose access to Apple')).toBeOnTheScreen();
     expect(screen.getByText("Changes ask you to confirm it's you. We email you when a method is added or a device is signed out.")).toBeOnTheScreen();

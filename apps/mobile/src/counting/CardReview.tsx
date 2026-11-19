@@ -155,4 +155,4 @@ const useStyles = makeStyles((type) => ({
   valueText: { fontFamily: fonts.uiBold, ...type.heading, color: palette.foreground },
   drift: { flexDirection: 'row', gap: space[3], padding: space[4], borderRadius: radius.lg, backgroundColor: palette.card },
   driftText: { flex: 1, fontFamily: fonts.ui, ...type.body, color: palette.foreground },
-}))
+}));

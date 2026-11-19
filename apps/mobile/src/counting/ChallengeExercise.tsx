@@ -550,4 +550,4 @@ const useStyles = makeStyles((type) => ({
   coachActions: { flexDirection: 'row', flexWrap: 'wrap', gap: space[2] },
   pressed: { opacity: 0.8 },
   focused: { borderColor: palette.ring, borderWidth: 2 },
-}))
+}));

@@ -458,4 +458,4 @@ const useStyles = makeStyles((type) => ({
   segmentSelected: { backgroundColor: palette.primary },
   segmentLabel: { flexShrink: 1, fontFamily: fonts.uiSemiBold, ...type.body, color: palette.foreground, textAlign: 'center' },
   segmentLabelSelected: { color: palette.primaryForeground },
-}))
+}));

@@ -171,4 +171,4 @@ const useStyles = makeStyles((type) => ({
   noticeText: { flex: 1, gap: space[1] },
   noticeTitle: { fontFamily: fonts.uiSemiBold, ...type.body, color: palette.foreground },
   noticeDetail: { fontFamily: fonts.ui, ...type.secondary, color: palette.mutedForeground },
-}))
+}));

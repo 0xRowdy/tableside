@@ -282,7 +282,7 @@ describe('session setup', () => {
     it('a training-bankroll session has no buy-in field; the whole bankroll funds it', async () => {
       mockTerms = {
         funding: { source: 'training-bankroll', available: '500' },
-        allowance: { title: 'TRAINING BANKROLL', text: '500 training units available. Resets daily; no top-ups.' },
+        allowance: { title: 'Training bankroll', text: '500 training units available. Resets daily; no top-ups.' },
         seePremium: true,
       };
       await open('roulette', 'Roulette');
@@ -304,7 +304,7 @@ describe('session setup', () => {
     });
 
     it('a short training bankroll is explained with no offer to raise it', async () => {
-      mockTerms = { funding: { source: 'training-bankroll', available: '5' }, allowance: { title: 'TRAINING BANKROLL', text: '5 training units available.' }, seePremium: false };
+      mockTerms = { funding: { source: 'training-bankroll', available: '5' }, allowance: { title: 'Training bankroll', text: '5 training units available.' }, seePremium: false };
       await open('blackjack', 'Blackjack');
       await screen.findByText('5 training units available.');
       expect(screen.getByText("Too low for the table's smallest bet (10).")).toBeOnTheScreen();

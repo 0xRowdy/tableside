@@ -99,7 +99,7 @@ describe('readiness on screen', () => {
   it('Counting tab (PDCaD): recommends card values first, with its reason, and says what has not been tried', async () => {
     await openCounting();
     const card = await screen.findByLabelText('Recommended next. Card values is first on the suggested path.');
-    expect(within(card).getByText('RECOMMENDED NEXT')).toBeOnTheScreen();
+    expect(within(card).getByText('Recommended next')).toBeOnTheScreen();
     expect(screen.getAllByText('Not tried yet')).toHaveLength(4);
   });
 

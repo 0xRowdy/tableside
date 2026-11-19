@@ -90,9 +90,9 @@ export function FundingSection({
   return (
     <View style={styles.funding}>
       {training ? (
-        <Section label="FUNDING">
+        <Section label="Funding">
           <AllowanceCard
-            title={terms.allowance?.title ?? 'TRAINING BANKROLL'}
+            title={terms.allowance?.title ?? 'Training bankroll'}
             text={terms.allowance?.text ?? `${formatUnits(training.available)} training units available.`}
             detail="Your whole training bankroll funds this session, so there's no buy-in and no rebuys. What's left when the session ends goes back to today's training bankroll."
             seePremium={terms.seePremium}
@@ -100,7 +100,7 @@ export function FundingSection({
           {inline && <InlineProblem>{inline}</InlineProblem>}
         </Section>
       ) : (
-        <Section label="BUY-IN">
+        <Section label="Buy-in">
           <AmountField
             ref={input}
             label="Starting chips for this session"

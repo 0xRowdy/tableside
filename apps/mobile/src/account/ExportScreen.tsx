@@ -147,7 +147,7 @@ export function ExportScreen({ back }: { back: { label: string; onPress: () => v
   return (
     <SettingsScreen title="Export my data" back={back}>
       <Note>{"Get a free copy of your data: an archive of everything your account holds, and a supplement of what this device hasn't synced yet."}</Note>
-      <GroupLabel>YOUR ACCOUNT</GroupLabel>
+      <GroupLabel>Your account</GroupLabel>
       <Group>
         <ListRow icon={Archive} title="Account archive" detail={latest === undefined ? 'Checking…' : archiveDetail(latest)} />
       </Group>
@@ -162,7 +162,7 @@ export function ExportScreen({ back }: { back: { label: string; onPress: () => v
         latest.state !== 'preparing' && <Button label="Prepare archive" stretch disabled={busy} onPress={() => void request()} />
       )}
       <Note>{"You'll be asked to confirm it's you first. The archive is kept for 24 hours, and only this account can download it."}</Note>
-      <GroupLabel>THIS DEVICE</GroupLabel>
+      <GroupLabel>This device</GroupLabel>
       <Group>
         <ListRow icon={Smartphone} title="Local supplement" detail={supplementDetail(waiting)} />
       </Group>

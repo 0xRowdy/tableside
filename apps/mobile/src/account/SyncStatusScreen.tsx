@@ -509,4 +509,4 @@ const useStyles = makeStyles((type) => ({
   progressValue: { fontFamily: fonts.uiSemiBold, ...type.label, color: palette.foreground },
   track: { height: 8, borderRadius: 4, borderWidth: 1, borderColor: palette.controlBorder, backgroundColor: palette.muted, overflow: 'hidden' },
   fill: { height: '100%', borderRadius: 4, backgroundColor: palette.primary },
-}))
+}));

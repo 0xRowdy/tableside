@@ -134,4 +134,4 @@ const useStyles = makeStyles((type) => ({
   rowDetail: { fontFamily: fonts.ui, ...type.secondary, color: palette.mutedForeground },
   box: { flexDirection: 'row', gap: space[3], padding: space[4], borderRadius: radius.lg, borderWidth: 1, borderColor: palette.controlBorder },
   boxText: { flex: 1, fontFamily: fonts.ui, ...type.body, color: palette.foreground },
-}))
+}));

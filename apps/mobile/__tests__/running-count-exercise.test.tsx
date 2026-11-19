@@ -189,7 +189,7 @@ describe('the running-count exercise', () => {
     const value = HI_LO_BY_RANK[card.rank]!;
     const wrong = value === 1 ? 0 : 1;
     await present(readChallengeView(attempt('learn', 1, [{ kind: 'answer', value: wrong }])));
-    expect(screen.getByText('NOT QUITE · YOUR FIRST ANSWER IS SCORED')).toBeOnTheScreen();
+    expect(screen.getByText('Not quite · your first answer is scored')).toBeOnTheScreen();
     expect(screen.getByText(`The count after card 1 is ${value > 0 ? '+1' : value < 0 ? '−1' : '0'}.`)).toBeOnTheScreen();
     expect(screen.getByRole('button', { name: 'Try this card again' })).toBeEnabled();
     await press('Next card');

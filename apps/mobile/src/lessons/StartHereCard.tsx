@@ -75,4 +75,4 @@ const useStyles = makeStyles((type) => ({
   dismiss: { width: 48, height: 48, alignItems: 'center', justifyContent: 'center', borderRadius: radius.md, borderWidth: 2, borderColor: palette.transparent },
   pressed: { opacity: 0.8 },
   focused: { borderColor: palette.ring },
-}))
+}));

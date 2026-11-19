@@ -164,4 +164,4 @@ const useStyles = makeStyles((type) => ({
   milestone: { flexDirection: 'row', alignItems: 'center', gap: space[1] + 2 },
   milestoneText: { flex: 1, fontFamily: fonts.ui, ...type.secondary, color: palette.foreground },
   statValue: { fontFamily: fonts.uiSemiBold, ...type.body, color: palette.foreground },
-}))
+}));

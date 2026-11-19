@@ -550,4 +550,4 @@ const useStyles = makeStyles((type) => ({
   row: { gap: space[1], padding: space[3], borderRadius: radius.lg, backgroundColor: palette.card },
   rowHeader: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: space[2] },
   rowTitle: { fontFamily: fonts.uiSemiBold, ...type.body, color: palette.foreground },
-}))
+}));

@@ -165,4 +165,4 @@ const useStyles = makeStyles((type) => ({
   table: { gap: space[3], padding: space[4], borderRadius: radius.lg, borderWidth: 1, borderColor: palette.border, backgroundColor: palette.card },
   hand: { gap: space[2] },
   cards: { flexDirection: 'row', flexWrap: 'wrap', gap: space[2] },
-}))
+}));

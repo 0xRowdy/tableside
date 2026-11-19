@@ -33,4 +33,4 @@ const useStyles = makeStyles((type) => ({
   primaryText: { color: palette.coach },
   focused: { borderColor: palette.coachAccent },
   pressed: { opacity: 0.8 },
-}))
+}));

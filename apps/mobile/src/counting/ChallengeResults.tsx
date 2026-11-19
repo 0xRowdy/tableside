@@ -317,4 +317,4 @@ const useStyles = makeStyles((type) => ({
   financeItem: { flexGrow: 1, flexBasis: 80, gap: 2 },
   financeLabel: { fontFamily: fonts.ui, ...type.secondary, color: palette.mutedForeground },
   financeValue: { fontFamily: fonts.uiBold, ...type.heading, color: palette.foreground },
-}))
+}));

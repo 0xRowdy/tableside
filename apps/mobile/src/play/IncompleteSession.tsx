@@ -103,4 +103,4 @@ const useStyles = makeStyles((type) => ({
   details: { gap: space[2], padding: space[4], borderRadius: radius.lg, backgroundColor: palette.card, borderWidth: 1, borderColor: palette.border },
   kv: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: space[2] },
   kvValue: { fontFamily: fonts.uiMedium, ...type.body, color: palette.foreground },
-}))
+}));

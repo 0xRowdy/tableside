@@ -81,4 +81,4 @@ const useStyles = makeStyles((type) => ({
   label: { flexShrink: 1, fontFamily: fonts.uiSemiBold, ...type.body, color: palette.primaryForeground, textAlign: 'center' },
   secondaryLabel: { color: palette.foreground },
   outlineLabel: { ...type.body },
-}))
+}));

@@ -87,4 +87,4 @@ const useStyles = makeStyles((type) => ({
   dialogText: { fontFamily: fonts.ui, ...type.secondary, color: palette.mutedForeground },
   dialogStep: { gap: 2 },
   dialogStepTitle: { fontFamily: fonts.uiMedium, ...type.body, color: palette.foreground },
-}))
+}));

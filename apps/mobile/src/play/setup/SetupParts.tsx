@@ -400,4 +400,4 @@ const useStyles = makeStyles((type) => ({
   link: { minHeight: MIN_TOUCH_TARGET, justifyContent: 'center', alignSelf: 'flex-start', borderRadius: radius.sm, borderWidth: 2, borderColor: palette.transparent },
   linkText: { fontFamily: fonts.uiSemiBold, ...type.body, color: palette.primary, textDecorationLine: 'underline' },
   allowance: { gap: space[1], padding: space[4], borderRadius: radius.lg, borderWidth: 1, borderColor: palette.border, backgroundColor: palette.card },
-}))
+}));

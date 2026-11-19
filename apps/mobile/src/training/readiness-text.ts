@@ -19,7 +19,7 @@ const READINESS_WORDS: Record<ChallengeCategory, { readonly milestone: string; r
 };
 
 // Spec 3 S3-01 PDCaD
-export const RECOMMENDED_BADGE = 'RECOMMENDED NEXT';
+export const RECOMMENDED_BADGE = 'Recommended next';
 
 const STRETCH: Record<TableStretch, string> = {
   play: 'Play',

@@ -56,4 +56,4 @@ const useStyles = makeStyles((type) => ({
   knobOff: { width: 23, height: 23, backgroundColor: palette.mutedForeground },
   disabled: { opacity: 0.4 },
   focused: { borderColor: palette.ring },
-}))
+}));

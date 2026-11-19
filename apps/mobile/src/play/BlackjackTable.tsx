@@ -308,7 +308,7 @@ function CountPanel({ view, count, betweenRounds }: { view: BlackjackPermittedVi
       accessible
       accessibilityLabel={`Count supplied in this mode: true count ${signed(count.trueCount)}. Running count ${signed(count.running)}, ${count.decks} decks left.${betweenRounds && at ? ` Deviation at this count: ${deviationRule(at)}.` : ''}${betweenRounds && next ? ` Next index: ${next.situation} at ${signed(next.threshold)}.` : ''}`}
     >
-      <Text maxFontSizeMultiplier={textScale.body} style={styles.countLabel}>COUNT SUPPLIED IN THIS MODE</Text>
+      <Text maxFontSizeMultiplier={textScale.body} style={styles.countLabel}>Count supplied in this mode</Text>
       <Text maxFontSizeMultiplier={textScale.display} style={styles.countValue}>True count {signed(count.trueCount)}</Text>
       <Text maxFontSizeMultiplier={textScale.body} style={styles.hint}>{countWorking(count)}</Text>
       {betweenRounds && at && (
@@ -686,4 +686,4 @@ const useStyles = makeStyles((type) => ({
   actions: { gap: space[2] },
   actionRow: { flexDirection: 'row', flexWrap: 'wrap', gap: space[2] },
   action: { flexGrow: 1, flexBasis: 96 },
-}))
+}));

@@ -266,4 +266,4 @@ const useStyles = makeStyles((type) => ({
   },
   note: { flexDirection: 'row', gap: space[2], alignItems: 'flex-start' },
   noteText: { flex: 1 },
-}))
+}));

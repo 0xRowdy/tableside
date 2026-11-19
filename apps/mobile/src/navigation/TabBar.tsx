@@ -62,8 +62,6 @@ export function TabButton({ tab, isFocused = false, ref: _ref, ...props }: TabTr
         <Text
           allowFontScaling={false}
           numberOfLines={1}
-          adjustsFontSizeToFit
-          minimumFontScale={0.8}
           style={[styles.label, isFocused && styles.labelSelected]}
         >
           {tab.label}
@@ -123,7 +121,7 @@ const useStyles = makeStyles((type) => ({
     borderColor: palette.transparent,
   },
   iconWrapSelected: { backgroundColor: palette.secondary, borderColor: palette.primary },
-  label: { fontFamily: fonts.uiMedium, ...type.caption, color: palette.mutedForeground },
+  label: { fontFamily: fonts.uiMedium, ...type.tab, color: palette.mutedForeground },
   labelSelected: { fontFamily: fonts.uiBold, color: palette.foreground },
   preview: {
     position: 'absolute',
@@ -141,4 +139,4 @@ const useStyles = makeStyles((type) => ({
     gap: space[2],
   },
   previewLabel: { fontFamily: fonts.uiBold, ...type.figure, color: palette.foreground },
-}))
+}));

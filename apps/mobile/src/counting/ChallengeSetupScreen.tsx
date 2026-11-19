@@ -166,4 +166,4 @@ const useStyles = makeStyles((type) => ({
   bannerBody: { flex: 1, gap: space[1] },
   bannerText: { flex: 1, fontFamily: fonts.uiSemiBold, ...type.body, color: palette.foreground },
   card: { borderRadius: radius.md, borderWidth: 1, borderColor: palette.border, backgroundColor: palette.card, overflow: 'hidden' },
-}))
+}));
