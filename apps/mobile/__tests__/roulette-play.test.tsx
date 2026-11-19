@@ -303,7 +303,9 @@ describe('roulette free play', () => {
 
   it('plays the double-zero wheel: 00 on the layout and a five-number basket that pays 6 to 1', async () => {
     await startSession('Double zero (0, 00)');
-    expect(screen.getByText('Double zero · inside 1–100 · outside 10–1,000')).toBeOnTheScreen();
+    await fireEvent.press(screen.getByRole('button', { name: 'Table details' }));
+    for (const row of ['Wheel: Double zero', 'Inside bets: 1–100', 'Outside bets: 10–1,000', 'Every bet: 5.26%', 'Five-number basket: 7.89%. 0, 00, 1, 2, 3 · pays 6 to 1']) expect(screen.getByLabelText(row)).toBeOnTheScreen();
+    await fireEvent.press(screen.getByRole('button', { name: 'Close' }));
     expect(spot(/^Straight 00, green, pays 35 to 1$/)).toBeOnTheScreen();
 
     await openFinder('00');

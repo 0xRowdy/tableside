@@ -85,18 +85,26 @@ async function present(view: ChallengeView) {
 
 const press = (name: string) => fireEvent.press(screen.getByRole('button', { name }));
 
+async function expectSetup(setup: string) {
+  await press('Table details');
+  expect(screen.getByLabelText(`Setup. ${setup}`)).toBeOnTheScreen();
+  await press('Close');
+}
+
 describe('the table counting exercise', () => {
   it('asks the running count before the first bet on an empty table, then the true count (S3-07 bh8oE, xjtSW)', async () => {
     const start = attempt('check', 1);
     await present(readChallengeView(start));
-    expect(screen.getByText('Table counting')).toBeOnTheScreen();
-    expect(screen.getByText('Check · Observe · S17 LS · 75% · N = 1')).toBeOnTheScreen();
-    expect(screen.getByText('Edge with basic strategy: 0.33% (this preset)')).toBeOnTheScreen();
+    expect(screen.getByRole('header', { name: 'Table counting · Check' })).toBeOnTheScreen();
+    await press('Table details');
+    expect(screen.getByLabelText('Setup. Check · Observe · S17 LS · 75% · N = 1')).toBeOnTheScreen();
+    expect(screen.getByLabelText('With basic strategy: 0.33%. For this preset.')).toBeOnTheScreen();
+    await press('Close');
     expect(screen.getByText('1 of 10')).toBeOnTheScreen();
     expect(screen.getByText('Simulated')).toBeOnTheScreen();
     expect(screen.getByText('Count checkpoint')).toBeOnTheScreen();
     expect(screen.getByText('Checkpoint before round 1’s bet')).toBeOnTheScreen();
-    expect(screen.getByLabelText('6 decks left')).toBeOnTheScreen();
+    expect(screen.getByLabelText('Decks left 6')).toBeOnTheScreen();
     await fireEvent.changeText(screen.getByLabelText('Running count'), '0');
     await press('Next: true count');
     expect(sent).toEqual([{ kind: 'answer', value: 0 }]);
@@ -158,7 +166,7 @@ describe('the table counting exercise', () => {
     expect(screen.getByText('New shoe')).toBeOnTheScreen();
     expect(screen.getByText('The shoe was reshuffled')).toBeOnTheScreen();
     expect(screen.getByText(`The cut card came out in round ${round - 1}. That round finished, then the shoe was shuffled. The running count starts again at 0 and decks remaining is back to 6. Checkpoints carry on as before.`)).toBeOnTheScreen();
-    expect(screen.getByLabelText('Decks remaining: 6')).toBeOnTheScreen();
+    expect(screen.getByLabelText('Decks left 6')).toBeOnTheScreen();
     await press(`Continue to round ${round}’s checkpoint`);
     expect(sent).toEqual([{ kind: 'next-item' }]);
   });
@@ -204,7 +212,7 @@ describe('the table counting exercise in Play', () => {
 
   it('offers every move at the learner\'s decision, with the attempt balance and never a practice balance (S3-07 E3Gbeh, fiCRg, Amendment 2 §3)', async () => {
     const decision = await present(readChallengeView(atDecision(play('check', 1))));
-    expect(screen.getByText('Check · Play · S17 LS · 75% · N = 1')).toBeOnTheScreen();
+    await expectSetup('Check · Play · S17 LS · 75% · N = 1');
     expect(screen.getByText('Attempt balance')).toBeOnTheScreen();
     expect(screen.getByText('990')).toBeOnTheScreen();
     expect(screen.getByText('Bet 10')).toBeOnTheScreen();
@@ -240,7 +248,7 @@ describe('the table counting exercise in Play', () => {
       }
     }
     const shown = await present(readChallengeView(asking as ChallengeState));
-    expect(screen.getByText('Check · Play · with deviations · N = 1')).toBeOnTheScreen();
+    await expectSetup('Check · Play · with deviations · N = 1');
     expect(screen.getByText('Count before your move')).toBeOnTheScreen();
     expect(screen.getByText('Before your decision: true count')).toBeOnTheScreen();
     expect(screen.getByText('Enter the true count, then choose your move.')).toBeOnTheScreen();
@@ -340,7 +348,7 @@ describe('the table counting exercise with challenge funding', () => {
 
   it('asks for the opening wager from the bet schedule after the before-bet counts, with no hint of the schedule\'s amount (S3-07)', async () => {
     const shown = await present(readChallengeView(atBet(funded('check', 1, { betSchedule: true }))));
-    expect(screen.getByText('Check · Play · S17 LS · 75% · N = 1')).toBeOnTheScreen();
+    await expectSetup('Check · Play · S17 LS · 75% · N = 1');
     expect(screen.getByText('Choose your bet')).toBeOnTheScreen();
     expect(screen.getByRole('header', { name: 'Your opening wager' })).toBeOnTheScreen();
     expect(screen.getByText('1,000')).toBeOnTheScreen();

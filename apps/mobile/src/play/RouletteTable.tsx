@@ -1,7 +1,7 @@
+import { rouletteHouseEdge } from '@tableside/definitions';
 import { isPlayCorrection, type CycleTurn, type RoulettePermittedView as PermittedView, type RoulettePocket } from '@tableside/engine';
 import { useMemo, useState } from 'react';
-import { ScrollView, Text, useWindowDimensions, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Text, useWindowDimensions, View } from 'react-native';
 
 import { Button } from '@/components/Button';
 import type { ActivePracticeSnapshot } from '@/practice/controller';
@@ -11,15 +11,31 @@ import { makeStyles } from '@/theme/type';
 
 import { BetSelector } from './bet-selector/BetSelector';
 import { betCorrectionCopy, betsText } from './coaching-text';
-import { CorrectionPanel, CycleResultPanel, GuidedStrip, PendingPanel, type TurnWords } from './Guidance';
+import { CorrectionPanel, CycleResultPanel, GuidedDetails, PendingPanel, type TurnWords } from './Guidance';
 import { draftAmountText, EMPTY_DRAFT, findChoice, isDraftPending, type BetDraft } from './bet-selector/catalog';
 import { DraftBar, PresentationSwitch, type Presentation } from './bet-selector/Presentation';
 import { RebuySheet } from './RebuySheet';
 import { rouletteCatalog, roulettePlacedWagers } from './roulette-catalog';
-import { describeFacts, describePocket, POCKET_TOKEN, pocketColor, STATUS, targetName } from './roulette-text';
-import { capitalize, formatUnits, sumUnits, totalOnTable } from './units';
+import { describeFacts, describePocket, STATUS, targetName } from './roulette-text';
+import { formatUnits, sumUnits, totalOnTable } from './units';
 import { RouletteFelt } from './RouletteFelt';
-import { AccessStopBanner, AllowanceLine, ChipRack, EndingSteps, PhaseStepper, SaveFailedBanner, SessionStrip, TableDialogs, TableTopBar, TurnBoundaryBanner, useTableAnnouncements, type PhaseStep } from './TableChrome';
+import {
+  AccessStopBanner,
+  ChipRack,
+  DetailsRow,
+  DetailsSection,
+  RebuyDetails,
+  EndingSteps,
+  SaveFailedBanner,
+  TableButtons,
+  TableDialogs,
+  TableHeader,
+  TableLayout,
+  TurnBoundaryBanner,
+  useTableAllowance,
+  useTableAnnouncements,
+  type PhaseStep,
+} from './TableChrome';
 
 type ActiveSnapshot = ActivePracticeSnapshot & { readonly view: PermittedView };
 
@@ -34,19 +50,22 @@ function phaseSteps(view: PermittedView): PhaseStep[] {
   }));
 }
 
-function limitsText(view: PermittedView): string {
+// Spec 1 S1-04 dbUaa
+function limitRows(view: PermittedView): readonly (readonly [string, string])[] {
   const limit = (limitClass: 'inside' | 'outside') => {
     const placement = view.table.placements.find((p) => p.limitClass === limitClass);
     return placement ? `${formatUnits(placement.min)}–${formatUnits(placement.max)}` : '';
   };
-  const guided = view.strategy ? ` · guided practice, ${view.strategy.name}` : '';
-  return `${WHEEL_NAMES[view.table.wheel]} · inside ${limit('inside')} · outside ${limit('outside')}${guided}`;
+  return [
+    ['Wheel', WHEEL_NAMES[view.table.wheel]],
+    ['Inside bets', limit('inside')],
+    ['Outside bets', limit('outside')],
+  ];
 }
 
 export function RouletteTable({ snapshot }: { snapshot: ActiveSnapshot }) {
   const styles = useStyles();
   const { controller } = usePractice();
-  const insets = useSafeAreaInsets();
   const { width, height, fontScale } = useWindowDimensions();
   const sideBySide = width > height && fontScale <= SIDE_BY_SIDE_MAX_FONT_SCALE;
   const [chip, setChip] = useState('5');
@@ -57,6 +76,7 @@ export function RouletteTable({ snapshot }: { snapshot: ActiveSnapshot }) {
   const [presentation, setPresentation] = useState<Presentation>('table');
   const [draft, setDraft] = useState<BetDraft>(EMPTY_DRAFT);
   const { view, facts, busy, save } = snapshot;
+  const allowance = useTableAllowance('roulette');
   const catalog = useMemo(() => rouletteCatalog(view), [view]);
   const placed = useMemo(() => roulettePlacedWagers(view), [view]);
   const drafted = isDraftPending(draft, placed) ? findChoice(catalog, draft.target) : undefined;
@@ -81,30 +101,57 @@ export function RouletteTable({ snapshot }: { snapshot: ActiveSnapshot }) {
   const wagersText = view.wagers.length === 0 ? 'nothing' : view.wagers.map((wager) => `${targetName(wager.target)} ${formatUnits(wager.amount)}`).join(' · ');
   const strategy = view.strategy;
 
+  const settling = view.phase === 'final-settlement';
+  const wheel = view.table.wheel;
+  const header = (
+    <TableHeader
+      title={strategy && strategy.status !== 'stopped' ? 'Roulette · Guided' : 'Roulette'}
+      status={save === 'failed' ? 'Paused · not saved' : STATUS[view.phase]}
+      steps={phaseSteps(view)}
+      stats={[
+        { label: 'Session balance', spoken: 'Session balance', value: formatUnits(view.balance) },
+        { label: 'On table', spoken: 'On table', value: formatUnits(totalOnTable(view)) },
+        ...(view.outcome ? [{ label: 'Last spin', spoken: 'Last spin:', value: describePocket(view.outcome.pocket) }] : []),
+      ]}
+      buttons={<TableButtons canEnd={legal('request-stop')} onEnd={() => setConfirming(true)} />}
+      allowance={allowance}
+      details={(close) => (
+        <>
+          {strategy && <GuidedDetails strategy={strategy} canStop={legal('stop-strategy')} onStop={() => { close(); setStoppingStrategy(true); }} />}
+          <RebuyDetails shown={view.legalCommands.includes('rebuy')} enabled={legal('rebuy')} onRebuy={() => { close(); setRebuying(true); }} />
+          <DetailsSection label="House edge">
+            <DetailsRow label="Every bet" value={`${rouletteHouseEdge(wheel, 'straight')?.percent}%`} />
+            {wheel === 'double-zero' && <DetailsRow label="Five-number basket" value={`${rouletteHouseEdge(wheel, 'basket')?.percent}%`} detail="0, 00, 1, 2, 3 · pays 6 to 1" />}
+          </DetailsSection>
+          <DetailsSection label="Rules">
+            {limitRows(view).map(([label, value]) => (
+              <DetailsRow key={label} label={label} value={value} />
+            ))}
+          </DetailsSection>
+        </>
+      )}
+    >
+      {save === 'failed' && <SaveFailedBanner busy={busy} onRetry={() => void controller.retrySave()} />}
+      <AccessStopBanner ending={snapshot.ending} detail="Your bets settle automatically, then you'll see the session result." />
+      <TurnBoundaryBanner suspension={snapshot.suspension} turn="spin" />
+    </TableHeader>
+  );
+
   return (
     <View style={styles.screen}>
-      <ScrollView testID="table-scroll" contentContainerStyle={{ paddingTop: insets.top, paddingBottom: space[6] }}>
-        <TableTopBar title="Roulette" subtitle={limitsText(view)} canEnd={legal('request-stop')} onEnd={() => setConfirming(true)} />
-        <PhaseStepper steps={phaseSteps(view)} />
-        <SessionStrip balance={formatUnits(view.balance)} onTable={formatUnits(totalOnTable(view))} status={save === 'failed' ? 'Paused · not saved' : STATUS[view.phase]} />
-        <AllowanceLine game="roulette" />
-        {strategy && <GuidedStrip strategy={strategy} canStop={legal('stop-strategy')} onStop={() => setStoppingStrategy(true)} />}
-        {view.phase !== 'final-settlement' && <PresentationSwitch value={presentation} onChange={setPresentation} />}
-
-        {save === 'failed' && <SaveFailedBanner busy={busy} onRetry={() => void controller.retrySave()} />}
-        <AccessStopBanner ending={snapshot.ending} detail="Your bets settle automatically, then you'll see the session result." />
-        <TurnBoundaryBanner suspension={snapshot.suspension} turn="spin" />
-
-        {view.phase === 'final-settlement' ? (
-          <EndingSteps
-            facts={snapshot.facts}
-            noneReturned="Nothing was on the table"
-            settle={{ title: 'Final settlement', detail: 'Runs on its own. No more bets.' }}
-            footer="Final settlement starts on its own. There's nothing to tap."
-          />
-        ) : (
-          <View testID="table-columns" style={[styles.columns, sideBySide && styles.columnsSideBySide]}>
-            <View style={styles.column}>
+      <TableLayout
+        columns={sideBySide && !settling}
+        header={header}
+        body={
+          settling ? (
+            <EndingSteps
+              facts={snapshot.facts}
+              noneReturned="Nothing was on the table"
+              settle={{ title: 'Final settlement', detail: 'Runs on its own. No more bets.' }}
+              footer="Final settlement starts on its own. There's nothing to tap."
+            />
+          ) : (
+            <>
               {presentation === 'table' ? (
                 <View style={styles.tableView}>
                   {drafted && (
@@ -135,8 +182,13 @@ export function RouletteTable({ snapshot }: { snapshot: ActiveSnapshot }) {
                   onRemove={(target) => void controller.placeWager(target, '0')}
                 />
               )}
-            </View>
-            <View style={[styles.column, styles.controls]}>
+            </>
+          )
+        }
+        footer={
+          settling ? null : (
+            <>
+              <PresentationSwitch value={presentation} onChange={setPresentation} />
               {strategy?.correction && !isPlayCorrection(strategy.correction) && view.phase === 'correction' && (
                 <CorrectionPanel
                   copy={betCorrectionCopy(strategy.name, strategy.correction, strategy.overrideEndsCycle)}
@@ -177,19 +229,6 @@ export function RouletteTable({ snapshot }: { snapshot: ActiveSnapshot }) {
                   {message}
                 </Text>
               )}
-              {view.outcome && (
-                <View accessible accessibilityLabel={`Last spin: ${describePocket(view.outcome.pocket)}`} style={styles.lastSpin}>
-                  <Text maxFontSizeMultiplier={textScale.body} style={styles.sectionLabel}>Last spin</Text>
-                  <View style={styles.lastSpinRow}>
-                    <View style={[styles.pocketBadge, { backgroundColor: palette[POCKET_TOKEN[pocketColor(view.outcome.pocket)]] }]}>
-                      <Text maxFontSizeMultiplier={textScale.body} style={styles.pocketBadgeText}>{String(view.outcome.pocket)}</Text>
-                    </View>
-                    <Text maxFontSizeMultiplier={textScale.body} style={styles.lastSpinText}>
-                      {capitalize(pocketColor(view.outcome.pocket))}
-                    </Text>
-                  </View>
-                </View>
-              )}
               <View style={styles.summary}>
                 <Text maxFontSizeMultiplier={textScale.body} style={styles.summaryTitle}>On table {formatUnits(totalOnTable(view))}</Text>
                 <Text maxFontSizeMultiplier={textScale.body} style={styles.summaryText}>
@@ -197,21 +236,11 @@ export function RouletteTable({ snapshot }: { snapshot: ActiveSnapshot }) {
                 </Text>
               </View>
               <Button label="Spin" stretch disabled={!legal('begin-turn')} onPress={() => void controller.spin()} />
-              {view.legalCommands.includes('rebuy') && (
-                <Button
-                  label="Rebuy"
-                  variant="secondary"
-                  stretch
-                  hint="Adds chips to this session. It counts as funding, not as a win."
-                  disabled={!legal('rebuy')}
-                  onPress={() => setRebuying(true)}
-                />
-              )}
               {presentation === 'table' && <ChipRack chip={chip} onChoose={setChip} />}
-            </View>
-          </View>
-        )}
-      </ScrollView>
+            </>
+          )
+        }
+      />
 
       {rebuyOpen && (
         <RebuySheet
@@ -252,18 +281,9 @@ const announcement = ({ facts, view }: ActiveSnapshot) => describeFacts(facts, v
 
 const useStyles = makeStyles((type) => ({
   screen: { flex: 1, backgroundColor: palette.background },
-  columns: { gap: space[3], paddingTop: space[2] },
-  columnsSideBySide: { flexDirection: 'row', alignItems: 'flex-start' },
-  column: { flex: 1 },
   tableView: { gap: space[3] },
-  controls: { gap: space[3], paddingHorizontal: space[4] },
   message: { fontFamily: fonts.uiMedium, ...type.body, color: palette.foreground },
   sectionLabel: { fontFamily: fonts.uiSemiBold, ...type.label, color: palette.mutedForeground },
-  lastSpin: { gap: space[1] },
-  lastSpinRow: { flexDirection: 'row', alignItems: 'center', gap: space[2] },
-  pocketBadge: { minWidth: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', paddingHorizontal: space[2] },
-  pocketBadgeText: { fontFamily: fonts.uiSemiBold, ...type.body, color: palette.onImage },
-  lastSpinText: { fontFamily: fonts.uiSemiBold, ...type.body, color: palette.foreground },
   summary: { gap: 2 },
   summaryTitle: { fontFamily: fonts.uiSemiBold, ...type.body, color: palette.foreground },
   summaryText: { fontFamily: fonts.ui, ...type.caption, color: palette.mutedForeground },

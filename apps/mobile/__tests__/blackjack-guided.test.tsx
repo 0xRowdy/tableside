@@ -45,6 +45,8 @@ async function betAndDeal() {
   await screen.findByLabelText('Status Your turn');
 }
 
+const openDetails = () => fireEvent.press(screen.getByRole('button', { name: 'Table details' }));
+
 function everythingSpoken(): string {
   return JSON.stringify(screen.toJSON()) + announcements.join(' ');
 }
@@ -59,11 +61,14 @@ describe('guided blackjack', () => {
     await setWindow(390, 844, 1);
   });
 
-  it('starts basic strategy from setup; the strategy strip shows adherence apart from the balance, and no answer shows before you act', async () => {
+  it('starts basic strategy from setup; Table details shows adherence apart from the balance, and no answer shows before you act', async () => {
     await startGuided('Basic strategy');
-    expect(screen.getByText('Guided · Basic strategy')).toBeOnTheScreen();
-    expect(screen.getByLabelText('Strategy adherence: No strategy decisions yet. Departures 0.')).toBeOnTheScreen();
+    expect(screen.getByRole('header', { name: 'Blackjack · Guided' })).toBeOnTheScreen();
     expect(screen.queryByTestId('count-panel')).toBeNull();
+    await openDetails();
+    expect(screen.getByLabelText('Strategy: Basic strategy')).toBeOnTheScreen();
+    expect(screen.getByLabelText('Strategy adherence: No strategy decisions yet. Departures 0.')).toBeOnTheScreen();
+    await fireEvent.press(screen.getByRole('button', { name: 'Close' }));
 
     await betAndDeal();
     expect(everythingSpoken()).not.toMatch(/stands on|Take it back|6 of spades|6♠|Ace of diamonds/);
@@ -96,6 +101,7 @@ describe('guided blackjack', () => {
     await waitFor(() => expect(screen.getByLabelText('Status Settled automatically')).toBeOnTheScreen());
     expect(announcements.join(' ')).toContain('Recorded once in Departures as taken back.');
     expect(announcements).toContain('You win 25. Balance 1,025.');
+    await openDetails();
     expect(screen.getByLabelText('Strategy adherence: Followed 0 of 1 decision. Departures 1.')).toBeOnTheScreen();
   });
 
@@ -109,7 +115,8 @@ describe('guided blackjack', () => {
     await fireEvent.press(panel.getByRole('button', { name: 'Keep my hit' }));
 
     await waitFor(() => expect(screen.getByLabelText('Status Settled automatically')).toBeOnTheScreen());
-    expect(screen.getByText('Guided · Basic strategy')).toBeOnTheScreen();
+    await openDetails();
+    expect(screen.getByLabelText('Strategy: Basic strategy')).toBeOnTheScreen();
     expect(screen.getByLabelText('Strategy adherence: Followed 0 of 1 decision. Departures 1.')).toBeOnTheScreen();
     expect(screen.getByRole('button', { name: 'Stop strategy' })).toBeEnabled();
   });
@@ -130,8 +137,8 @@ describe('guided blackjack', () => {
 
   it('basic with deviations supplies the count from exposed cards before the deal and at each decision', async () => {
     await startGuided('Basic with deviations');
+    expect(screen.getByLabelText('True count 0')).toBeOnTheScreen();
     const before = within(screen.getByTestId('count-panel'));
-    expect(before.getByText('True count 0')).toBeOnTheScreen();
     expect(before.getByText('Running 0 · 6 decks left · 0 ÷ 6 = 0')).toBeOnTheScreen();
     expect(before.getByText(/^Deviation at this count: /)).toBeOnTheScreen();
     expect(before.getByText(/^Next: /)).toBeOnTheScreen();

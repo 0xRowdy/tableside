@@ -56,6 +56,7 @@ describe('practice funding', () => {
   it('offers a rebuy prefilled with the buy-in and adds it to the session, announcing the new balance', async () => {
     await startSession();
 
+    await fireEvent.press(screen.getByRole('button', { name: 'Table details' }));
     await fireEvent.press(screen.getByRole('button', { name: 'Rebuy' }));
 
     expect(await screen.findByRole('header', { name: 'Rebuy' })).toBeOnTheScreen();
@@ -76,6 +77,7 @@ describe('practice funding', () => {
 
   it('cancels a rebuy without adding anything', async () => {
     await startSession();
+    await fireEvent.press(screen.getByRole('button', { name: 'Table details' }));
     await fireEvent.press(screen.getByRole('button', { name: 'Rebuy' }));
 
     await fireEvent.press(await screen.findByRole('button', { name: 'Cancel' }));
@@ -86,6 +88,7 @@ describe('practice funding', () => {
 
   it('refuses a rebuy past the funding limit, keeps the amount, and lets the player change it to the room left', async () => {
     await startSession('999,997,000');
+    await fireEvent.press(screen.getByRole('button', { name: 'Table details' }));
     await fireEvent.press(screen.getByRole('button', { name: 'Rebuy' }));
     await fireEvent.changeText(amountField(), '5000');
 
@@ -112,6 +115,7 @@ describe('practice funding', () => {
     await tap('25', /^Red,/);
 
     expect(announcements).toContain("Your balance can't cover that. Nothing was placed. You can rebuy to add chips.");
+    await fireEvent.press(screen.getByRole('button', { name: 'Table details' }));
     await fireEvent.press(screen.getByRole('button', { name: 'Rebuy' }));
     await fireEvent.press(await screen.findByRole('button', { name: 'Add 20 to this session' }));
     expect(await screen.findByLabelText('Session balance 40')).toBeOnTheScreen();
@@ -123,6 +127,7 @@ describe('practice funding', () => {
     await startSession();
     await tap('100', /^Black,/, 4);
     await spin('600');
+    await fireEvent.press(screen.getByRole('button', { name: 'Table details' }));
     await fireEvent.press(screen.getByRole('button', { name: 'Rebuy' }));
     await fireEvent.press(await screen.findByRole('button', { name: 'Add 1,000 to this session' }));
     await screen.findByLabelText('Session balance 1,600');
@@ -148,6 +153,7 @@ describe('practice funding', () => {
     const { width, height, fontScale } = Dimensions.get('window');
     try {
       await setWindow(390, 844, 1);
+      await fireEvent.press(screen.getByRole('button', { name: 'Table details' }));
       await fireEvent.press(screen.getByRole('button', { name: 'Rebuy' }));
       const sheet = within(await screen.findByTestId('rebuy-sheet'));
       for (const control of [...sheet.getAllByRole('button'), amountField()]) {

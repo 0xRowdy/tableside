@@ -17,7 +17,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ChallengeExercise, exerciseHints } from '@/counting/ChallengeExercise';
 import { ScreenHints } from '@/lessons/FirstUseHints';
 import { PresentationSwitch, TABLE_HINTS } from '@/play/bet-selector/Presentation';
-import { TableTopBar } from '@/play/TableChrome';
+import { TableButtons } from '@/play/TableChrome';
 import { alwaysAllowed } from '@/practice/adapters';
 import { FakeClock, entropyFromWords, PI_WORDS } from '@/practice/testing/substitutes';
 import { plentyAllowance } from '@/training/allowance';
@@ -238,7 +238,7 @@ describe('the count-entry hint on the true-count exercise (S3-06 zAatf)', () => 
 describe('the bet selector hint (S1-04 XjwQc)', () => {
   const table = (
     <>
-      <TableTopBar title="Blackjack" subtitle="6 decks" canEnd onEnd={() => undefined} />
+      <TableButtons canEnd onEnd={() => undefined} />
       <PresentationSwitch value="table" onChange={() => undefined} />
     </>
   );

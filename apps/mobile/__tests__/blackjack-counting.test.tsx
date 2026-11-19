@@ -55,6 +55,9 @@ async function bet25AndDeal() {
 
 const everythingSpoken = () => JSON.stringify(screen.toJSON()) + announcements.join(' ');
 
+const openDetails = () => fireEvent.press(screen.getByRole('button', { name: 'Table details' }));
+const closeDetails = () => fireEvent.press(screen.getByRole('button', { name: 'Close' }));
+
 describe('blackjack counting modes', () => {
   beforeAll(async () => {
     await renderRouter('./src/app', { initialUrl: '/' });
@@ -98,7 +101,10 @@ describe('blackjack counting modes', () => {
 
   it('counting with basic hides the count; play is assessed, and adherence shows only the play when the bets are your own', async () => {
     await start('Counting with basic', false);
-    expect(screen.getByText('Guided · Counting with basic')).toBeOnTheScreen();
+    await openDetails();
+    expect(screen.getByLabelText('Strategy: Counting with basic')).toBeOnTheScreen();
+    expect(everythingSpoken()).not.toMatch(/[Tt]rue count|Running/);
+    await closeDetails();
     expect(screen.queryByTestId('count-panel')).toBeNull();
     await bet25AndDeal();
     await screen.findByLabelText('Status Your turn');
@@ -107,15 +113,18 @@ describe('blackjack counting modes', () => {
 
     await fireEvent.press(screen.getByRole('button', { name: 'Stand' }));
     await waitFor(() => expect(screen.getByLabelText('Status Settled automatically')).toBeOnTheScreen());
+    await openDetails();
     expect(screen.getByLabelText('Strategy adherence: Followed 1 of 1 decision. Departures 0.')).toBeOnTheScreen();
     expect(everythingSpoken()).not.toMatch(/[Tt]rue count/);
   });
 
   it('with the schedule a bet off it pauses before the deal; retry sets the scheduled bet; betting and playing adherence stay apart', async () => {
     await start('Counting with deviations', true);
-    expect(screen.getByText('Guided · Counting with deviations · bet schedule')).toBeOnTheScreen();
+    await openDetails();
+    expect(screen.getByLabelText('Strategy: Counting with deviations · bet schedule')).toBeOnTheScreen();
     expect(screen.getByLabelText('Strategy adherence: Playing: no strategy decisions yet · Betting: no strategy rounds yet. Departures 0.')).toBeOnTheScreen();
     expect(everythingSpoken()).not.toMatch(/[Tt]rue count|bet schedule bets|Take it back/);
+    await closeDetails();
 
     await bet25AndDeal();
     const panel = within(await screen.findByTestId('correction-panel'));
@@ -136,6 +145,7 @@ describe('blackjack counting modes', () => {
     expect(screen.queryByTestId('count-panel')).toBeNull();
     await fireEvent.press(screen.getByRole('button', { name: 'Stand' }));
     await waitFor(() => expect(screen.getByLabelText('Status Settled automatically')).toBeOnTheScreen());
+    await openDetails();
     expect(
       screen.getByLabelText('Strategy adherence: Playing: followed 1 of 1 decision · Betting: followed 0 of 1 round. Departures 1.'),
     ).toBeOnTheScreen();

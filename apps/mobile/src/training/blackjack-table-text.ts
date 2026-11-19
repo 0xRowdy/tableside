@@ -61,7 +61,7 @@ export function tableSubtitle(variant: ChallengeVariant, table: Pick<TableView, 
   return [variantText, SEAT_TEXT[table.seat], presetText(table.rules.dealer, table.rules.lateSurrender), `${table.rules.penetration}%`, ...(table.rules.extraPlayers > 0 ? [players(table.rules.extraPlayers)] : []), `N = ${table.interval}`].join(' · ');
 }
 
-export const edgeText = (rules: TableView['rules']) => `Edge with basic strategy: ${blackjackHouseEdge(blackjackPreset(rules.dealer, rules.lateSurrender)).percent}% (this preset)`;
+export const edgePercent = (rules: TableView['rules']) => `${blackjackHouseEdge(blackjackPreset(rules.dealer, rules.lateSurrender)).percent}%`;
 
 export const YOUR_SEAT = 'Your seat';
 export const SIMULATED = 'Simulated';
@@ -88,8 +88,9 @@ export const STATUS_TEXT: Record<TableStatus, string> = {
   betting: 'Choose your bet',
 };
 
-export const decksText = (table: Pick<TableView, 'decks' | 'step'>) => (table.step === 'shuffle' ? `Decks remaining: ${table.decks}` : `${table.decks} decks left`);
 export const DEALER = 'DEALER';
+// Spec 3 S3-07 J1nPeT
+export const DECKS_LABEL = 'Decks left';
 export const seatName = (seat: number) => `Seat ${seat}`;
 
 const ACTION_TEXT: Record<BlackjackAction | 'insure', string> = { hit: 'Hit', stand: 'Stand', double: 'Double', split: 'Split', surrender: 'Surrender', 'decline-insurance': 'No insurance', insure: 'Insured' };

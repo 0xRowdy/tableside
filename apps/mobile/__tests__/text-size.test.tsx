@@ -1,12 +1,13 @@
 // docs/decisions/text-size-type-floor.md; Spec 2 Amendment 10 §2–3; S1-12 I886X, S2-16 Np7f0
 import type { AccountGate } from '@tableside/account';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
 import { renderRouter } from 'expo-router/testing-library';
+import { Dimensions } from 'react-native';
 
 import { SIGNED_IN } from '@/account/testing/fake-account';
 import { Segmented } from '@/components/Segmented';
 import type { MemorySettingsStorage } from '@/feedback/testing/substitutes';
-import { StatStrip } from '@/play/TableChrome';
+import { SummaryRow } from '@/play/TableChrome';
 import { parseTextSize, TextSizeSetting } from '@/theme/text-size';
 import { textScale, typeRamp } from '@/theme/tokens';
 import { TextSizeProvider } from '@/theme/type';
@@ -146,15 +147,22 @@ describe('first run, step 0 (S2-16)', () => {
 describe('reflow at Larger (Spec 1 Amendment 12 §5–6)', () => {
   const at = (step: string) => ({ read: async () => `{"step":"${step}"}`, write: async () => {} });
 
-  it('turns the session strip into key-value rows at Larger only', async () => {
-    const strip = <StatStrip stats={[{ label: 'Session balance', spoken: 'Session balance', value: '1,000' }]} status="Bets working" />;
-    await render(<TextSizeProvider storage={at('large')}>{strip}</TextSizeProvider>);
-    await waitFor(() => expect(screen.getByText('1,000')).toHaveStyle({ fontSize: typeRamp.large.heading }));
+  it('keeps the summary row one row at Larger, and turns it into key-value rows at the largest system text', async () => {
+    const strip = <SummaryRow stats={[{ label: 'Session balance', spoken: 'Session balance', value: '1,000' }]} onOpen={() => {}} />;
+    const window = Dimensions.get('window');
+    const display = Dimensions.get('screen');
+    await act(() => Dimensions.set({ window: { ...window, fontScale: 1 }, screen: { ...display, fontScale: 1 } }));
+    await render(<TextSizeProvider storage={at('larger')}>{strip}</TextSizeProvider>);
+    await waitFor(() => expect(screen.getByText('1,000')).toHaveStyle({ fontSize: typeRamp.larger.heading }));
     expect(screen.getByTestId('stat-strip')).not.toHaveStyle({ flexDirection: 'column' });
+    expect(screen.queryByText('Table details')).toBeNull();
     await cleanup();
 
+    await act(() => Dimensions.set({ window: { ...window, fontScale: 2 }, screen: { ...display, fontScale: 2 } }));
     await render(<TextSizeProvider storage={at('larger')}>{strip}</TextSizeProvider>);
     await waitFor(() => expect(screen.getByTestId('stat-strip')).toHaveStyle({ flexDirection: 'column' }));
+    expect(screen.getByText('Table details')).toBeOnTheScreen();
+    await act(() => Dimensions.set({ window, screen: display }));
   });
 
   it('gives every segment a 48-point target', async () => {

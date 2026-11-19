@@ -67,6 +67,9 @@ function everything(): string {
   return [...texts, ...announcements].join('\n');
 }
 
+const openDetails = () => fireEvent.press(screen.getByRole('button', { name: 'Table details' }));
+const closeDetails = () => fireEvent.press(screen.getByRole('button', { name: 'Close' }));
+
 describe('guided craps practice', () => {
   beforeAll(async () => {
     await renderRouter('./src/app', { initialUrl: '/' });
@@ -98,7 +101,9 @@ describe('guided craps practice', () => {
 
   it('holds a departing bet before the roll and restates the table at the largest text size', async () => {
     await startGuided('Pass with odds');
-    expect(screen.getByText('Guided · Pass with odds · cycle 1')).toBeOnTheScreen();
+    await openDetails();
+    expect(screen.getByLabelText('Strategy: Pass with odds · cycle 1')).toBeOnTheScreen();
+    await closeDetails();
     await setBet(/^Pass line and/, 'Pass line', '10');
     await roll();
     announced('The point is 8. Puck ON.');
@@ -130,7 +135,9 @@ describe('guided craps practice', () => {
     await startGuided('Press-and-collect 6 and 8', '20');
     await roll();
     announced('The point is 8. Puck ON.');
+    await openDetails();
     expect(screen.getByLabelText(/Strategy adherence: Followed 1 of 1 roll\./)).toBeOnTheScreen();
+    await closeDetails();
 
     await setBet(/^Place,/, 'Place 6', '12');
     await roll();
@@ -163,18 +170,21 @@ describe('guided craps practice', () => {
     expect(StyleSheet.flatten(screen.getByTestId('table-columns').props.style)).toMatchObject({ flexDirection: 'row' });
     expect(within(screen.getByTestId('cycle-panel')).getByRole('button', { name: 'Keep playing without the strategy' })).toBeEnabled();
     await fireEvent.press(within(screen.getByTestId('cycle-panel')).getByRole('button', { name: 'Keep playing without the strategy' }));
-    await waitFor(() => expect(screen.getByText('Strategy stopped · playing on your own')).toBeOnTheScreen());
+    await waitFor(() => expect(screen.getByRole('header', { name: 'Craps' })).toBeOnTheScreen());
+    await openDetails();
+    expect(screen.getByText('Strategy stopped · playing on your own')).toBeOnTheScreen();
   });
 
   it('Stop strategy says a committed pass line is never refunded, then the dice settle it on their own', async () => {
     await startGuided('Pass with odds');
     await setBet(/^Pass line and/, 'Pass line', '10');
     await roll();
+    await openDetails();
     await fireEvent.press(screen.getByRole('button', { name: 'Stop strategy' }));
     expect(screen.getByLabelText(/^3\. Committed wagers settle automatically\. Pass line 10 can't be taken down or refunded\. The dice roll on their own to settle them\./)).toBeOnTheScreen();
     const buttons = screen.getAllByRole('button', { name: 'Stop strategy' });
     await fireEvent.press(buttons[buttons.length - 1] as (typeof buttons)[number]);
-    await waitFor(() => expect(screen.getByText('Strategy stopped · playing on your own')).toBeOnTheScreen());
+    await waitFor(() => expect(screen.getByRole('header', { name: 'Craps' })).toBeOnTheScreen());
     announced('The dice roll on their own to settle Pass line 10. No new bets.');
     expect(screen.getByLabelText('Session balance 1,010')).toBeOnTheScreen();
     expect(screen.queryByLabelText('Pass line 10, ON, committed')).toBeNull();

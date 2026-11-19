@@ -39,7 +39,7 @@ describe('a pinned blackjack strategy revision', () => {
     await renderRouter('./src/app', { initialUrl: '/play?game=blackjack' });
     await fireEvent.press(await screen.findByRole('button', { name: 'Resume session' }));
     const panel = within(await screen.findByTestId('count-panel'));
-    expect(panel.getByText('True count 0')).toBeOnTheScreen();
+    expect(screen.getByLabelText('True count 0')).toBeOnTheScreen();
     expect(panel.queryByText(/^Next: /)).toBeNull();
   }, 180_000);
 });

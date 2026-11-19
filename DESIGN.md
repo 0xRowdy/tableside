@@ -219,7 +219,7 @@ A dark, low-chroma green neutral ramp with a single brass accent, plus a separat
 
 ### Neutral
 - **After-Hours Green** (`background`): the room. Every screen's ground and the backdrop the table sits in.
-- **Card Table** (`card`): the first step up: cards, the tab bar, the session strip, banners.
+- **Card Table** (`card`): the first step up: cards, the tab bar, the table summary row, banners.
 - **Lamplit Panel** (`popover`): sheets, dialogs and the coaching panel, one step above cards.
 - **Deep Baize** (`muted`): tracks and wells: the segmented control's trough, progress tracks, switch-off, device badges.
 - **Felt Shadow** (`secondary`): secondary buttons, status tags, the selected tab's pill, icon circles and answer choices.
@@ -296,9 +296,9 @@ Numbers are Inter Bold, never serif, except the session result's headline figure
 
 A single scrolling column. `Screen` gives every page the After-Hours Green ground, safe-area insets plus a 24px side gutter, 16px gaps between blocks, and 32px bottom padding. The spacing scale is 4, 8, 12, 16, 24, 32, 48, 64; inner card padding is 16px, compact rows 12px.
 
-Home is the exception: three full-bleed game cards stacked edge to edge with 2px seams, each filling its share of the height, and side by side when the window is wide. Tables are their own composition: a top bar, a phase stepper, a session strip, the felt, and the chip rack below.
+Home is the exception: three full-bleed game cards stacked edge to edge with 2px seams, each filling its share of the height, and side by side when the window is wide. Tables are their own composition: a top bar with phase bars, one summary row, the felt, and the actions pinned above the tab bar (see `docs/decisions/table-chrome-summary-row.md`).
 
-Every screen supports portrait and landscape on phones and tablets. Controls reflow vertically at large text sizes and in narrow windows instead of shrinking. At the Larger step, the table top bar wraps its title and rules, the session strip becomes key-value rows, blackjack actions go two per row, and paired buttons stack full width. Sheets turn full screen once the font scale passes 1.5×. Touch targets are at least 48×48 (`MIN_TOUCH_TARGET`) on both platforms, including segments, table action buttons and keypad keys; chip slots are 56.
+Every screen supports portrait and landscape on phones and tablets. Controls reflow vertically at large text sizes and in narrow windows instead of shrinking. At the Larger step, the table top bar wraps its title and status, blackjack actions go two per row, and paired buttons stack full width. The table summary row turns into key-value rows once the system font scale passes 1.35, and table actions unpin when they'd leave less than 120 pt of felt. Sheets turn full screen once the font scale passes 1.5×. Touch targets are at least 48×48 (`MIN_TOUCH_TARGET`) on both platforms, including segments, table action buttons and keypad keys; chip slots are 56.
 
 The persistent bottom tab bar is the only global navigation: one row at every text size, hidden on pre-account and locked screens and under sheets.
 
@@ -349,7 +349,7 @@ Quiet, wide and pill-shaped.
 
 ### Navigation
 - **Tab bar:** five tabs (Home, Play, Counting, Saved, More) on Card Table with a hairline top border. Community is the first row in More and has a Community button in the Home header. Each tab has a 22px Lucide icon over an Inter Medium `tab` (12) label, which stays 12 at every text step. Selected: the icon sits in a 56×30 Felt Shadow pill with a 1.5px Rail Brass outline, the icon turns brass, and the label turns Linen Bold. The iOS Large Content Viewer, or a long-press on Android, shows a big preview at large text sizes.
-- **Table top bar:** Inter SemiBold `body` title, Smoke `secondary` rules line, round 48px icon buttons. The title and rules wrap instead of truncating. Below it, a phase stepper of 3px bars fills with Rail Brass as the turn advances.
+- **Table top bar:** Inter SemiBold `body` title (game and mode), a Linen `secondary` status line, round 48px icon buttons. The title and status wrap instead of truncating. Below it, unlabelled 3px phase bars fill with Rail Brass as the turn advances.
 
 ### Game card (signature)
 Full-bleed photograph, a scrim band fading up from the bottom, a sentence-case `label` summary line, a Fraunces `display-card` title in white, and a 44px Rail Brass circle with an arrow. This is the one place photography appears.
@@ -360,7 +360,7 @@ Marcus speaks on paper: a Coach Paper card with 16px corners and a 1px Coach Blu
 ### Table pieces
 - **Chip rack:** Walnut Rail panel with 48px round chips in denomination colors; the selected chip gets a 2px Rail Brass ring and a check mark.
 - **Playing cards:** Card Face with four-color suits; empty card spots are dashed Chalk outlines on the felt. Cards don't grow with the text step; the layout picks the size. Table hands are Standard (58×82), and the card being counted is always Large (120×168), so it's never the smallest thing on screen.
-- **Session strip:** `label` captions over `heading` values, with a status tag on the right. At Larger it becomes key-value rows.
+- **Summary row:** up to three `label` captions over `heading` values and a chevron button; the whole row opens the Table details sheet (rules, house edge, guided strategy, Rebuy, counting aid). It becomes key-value rows with a labelled "Table details" row at large system text.
 - **Count keypad:** 48px-minimum keys with `key` digits, a `figure` readout, and Skip and Submit below.
 - **Bet spots:** Chalk boundary on felt; wagered spots get a 3px Card Face outline.
 - **Status tag:** Felt Shadow pill with an icon and Inter Bold `label` Linen text.

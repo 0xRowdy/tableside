@@ -22,6 +22,7 @@ import {
   type CorrectionCopy,
   type DecisionUnit,
 } from './coaching-text';
+import { DetailsRow, DetailsSection } from './TableChrome';
 import { formatSigned, formatUnits, speakSigned } from './units';
 
 export interface TableNow {
@@ -31,7 +32,8 @@ export interface TableNow {
   readonly cards?: readonly string[];
 }
 
-export function GuidedStrip({
+// Spec 1 S1-04 iIMaW; S5-11 p44ug; docs/decisions/table-chrome-summary-row.md
+export function GuidedDetails({
   strategy,
   canStop,
   onStop,
@@ -46,24 +48,21 @@ export function GuidedStrip({
 }) {
   const styles = useStyles();
   const cycle = strategy.overrideEndsCycle ? ` · cycle ${strategy.cycle.number}` : '';
-  const status = strategy.status === 'stopped' ? 'Strategy stopped · playing on your own' : `Guided · ${strategy.name}${detail === null ? '' : ` · ${detail}`}${cycle}`;
+  const stopped = strategy.status === 'stopped';
   return (
-    <View style={styles.strip} testID="guided-strip">
-      <Text maxFontSizeMultiplier={textScale.body} style={styles.stripTitle}>{status}</Text>
-      <View
-        accessible
-        accessibilityLabel={`Strategy adherence: ${adherenceText(strategy.adherence, unit)}. Departures ${strategy.adherence.departures}.`}
-        style={styles.adherence}
-      >
-        <Text maxFontSizeMultiplier={textScale.body} style={styles.stripLabel}>Adherence</Text>
-        <Text maxFontSizeMultiplier={textScale.body} style={styles.stripText}>
-          {adherenceText(strategy.adherence, unit)} · Departures {strategy.adherence.departures}
-        </Text>
+    <DetailsSection label="Guided practice">
+      <DetailsRow label="Strategy" value={`${strategy.name}${detail === null ? '' : ` · ${detail}`}${cycle}`} detail={stopped ? 'Strategy stopped · playing on your own' : undefined} />
+      <View accessible accessibilityLabel={`Strategy adherence: ${adherenceText(strategy.adherence, unit)}. Departures ${strategy.adherence.departures}.`} testID="guided-adherence">
+        <DetailsRow label="Adherence" value={adherenceText(strategy.adherence, unit)} />
+        <DetailsRow label="Departures" value={String(strategy.adherence.departures)} />
       </View>
-      {strategy.status !== 'stopped' && (
-        <Button label="Stop strategy" variant="secondary" hint="Asks first. Your practice session stays open." disabled={!canStop} onPress={onStop} />
+      {!stopped && (
+        <View style={styles.stop}>
+          <Button label="Stop strategy" variant="secondary" stretch disabled={!canStop} onPress={onStop} />
+          <Text maxFontSizeMultiplier={textScale.body} style={styles.stopHint}>Asks first. Your practice session stays open.</Text>
+        </View>
       )}
-    </View>
+    </DetailsSection>
   );
 }
 
@@ -317,11 +316,9 @@ export function StopStrategyDialog({
 }
 
 const useStyles = makeStyles((type) => ({
-  strip: { gap: space[2], marginHorizontal: space[4], marginTop: space[2], padding: space[3], borderRadius: radius.lg, backgroundColor: palette.card },
-  stripTitle: { fontFamily: fonts.uiSemiBold, ...type.label, color: palette.foreground },
+  stop: { gap: space[1], paddingTop: space[3] },
+  stopHint: { fontFamily: fonts.ui, ...type.secondary, color: palette.mutedForeground },
   stripLabel: { fontFamily: fonts.uiSemiBold, ...type.label, color: palette.mutedForeground },
-  stripText: { fontFamily: fonts.ui, ...type.secondary, color: palette.foreground },
-  adherence: { gap: 1 },
   panel: { gap: space[3], padding: space[4], borderRadius: radius.lg, backgroundColor: palette.popover, borderWidth: 1, borderColor: palette.primary },
   coach: { fontFamily: fonts.uiMedium, ...type.secondary, color: palette.mutedForeground },
   kicker: { fontFamily: fonts.uiSemiBold, ...type.label, color: palette.primary },

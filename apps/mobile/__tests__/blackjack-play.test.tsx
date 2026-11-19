@@ -95,9 +95,10 @@ describe('blackjack free play', () => {
 
     await fireEvent.press(screen.getByRole('button', { name: 'Start free play' }));
 
-    expect(await screen.findByText('6 decks · H17 · no LS · 10–1,000')).toBeOnTheScreen();
-    expect(screen.getByText('DEALER HITS SOFT 17')).toBeOnTheScreen();
-    expect(screen.getByText(/Penetration 60%/)).toBeOnTheScreen();
+    expect(await screen.findByText('DEALER HITS SOFT 17')).toBeOnTheScreen();
+    await fireEvent.press(screen.getByRole('button', { name: 'Table details' }));
+    expect(screen.getByLabelText('With basic strategy: 0.62%. For this preset: 6 decks, dealer hits soft 17, no surrender.')).toBeOnTheScreen();
+    for (const row of ['Decks: 6', 'Dealer: Hits soft 17', 'Late surrender: Not offered', 'Bets: 10–1,000', 'Penetration: 60%']) expect(screen.getByLabelText(row)).toBeOnTheScreen();
   });
 
   it('shows the dealer area, shoe, hand and actions with balance, wagers and phase', async () => {
@@ -214,6 +215,7 @@ describe('blackjack free play', () => {
 
   it('offers a rebuy between rounds, counted as funding', async () => {
     await startSession();
+    await fireEvent.press(screen.getByRole('button', { name: 'Table details' }));
     await fireEvent.press(screen.getByRole('button', { name: 'Rebuy' }));
     await fireEvent.press(await screen.findByRole('button', { name: /^Add / }));
 

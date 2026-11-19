@@ -93,7 +93,10 @@ describe('craps free play', () => {
     expect(screen.getByRole('radio', { name: '2 and 12 double' })).toBeChecked();
     expect(screen.getByText(/^Field 5\.56%/)).toBeOnTheScreen();
     await fireEvent.press(screen.getByRole('button', { name: 'Start free play' }));
-    expect(await screen.findByText(/field 12 pays 2:1/)).toBeOnTheScreen();
+    await fireEvent.press(await screen.findByRole('button', { name: 'Table details' }));
+    expect(screen.getByLabelText('Field 12 pays: 2 to 1')).toBeOnTheScreen();
+    expect(screen.getByLabelText('Pass and come: 1.41%')).toBeOnTheScreen();
+    expect(screen.getByLabelText("Don't pass and don't come: 1.36%")).toBeOnTheScreen();
   });
 
   it('starts on a come-out roll with the puck off, and offers only the pass line bets', async () => {
