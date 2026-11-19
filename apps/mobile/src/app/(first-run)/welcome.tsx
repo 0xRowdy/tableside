@@ -4,6 +4,7 @@ import type { CodeIntent } from '@tableside/account';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ArrowRight, Mail, Wifi } from 'lucide-react-native';
+import { Redirect } from 'expo-router';
 import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
@@ -12,6 +13,7 @@ import { PROVIDERS } from '@/account/providers';
 import { useProviderSignIn, useSignInFlow } from '@/account/sign-in-flow';
 import { findGame } from '@/games';
 import { palette, radius } from '@/theme/tokens';
+import { useTextSize } from '@/theme/type';
 
 const INTENTS: readonly { value: CodeIntent; label: string }[] = [
   { value: 'create', label: "I'm new here" },
@@ -24,6 +26,10 @@ export default function Welcome() {
   const flow = useSignInFlow();
   const [intent, setIntent] = useState<CodeIntent>('sign-in');
   const signIn = useProviderSignIn();
+  const { chosen } = useTextSize();
+
+  // Spec 2 Amendment 10 §2
+  if (!chosen) return <Redirect href="/text-size" />;
 
   return (
     <FirstRunScreen

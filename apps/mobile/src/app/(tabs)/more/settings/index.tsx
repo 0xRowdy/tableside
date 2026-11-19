@@ -1,16 +1,19 @@
 import { router } from 'expo-router';
-import { CircleUser, GraduationCap, Volume2 } from 'lucide-react-native';
+import { ALargeSmall, CircleUser, GraduationCap, Volume2 } from 'lucide-react-native';
 
 import { methodsSummary } from '@/account/account-text';
 import { useAccountOverview } from '@/account/use-account-overview';
 import { useFeedbackSettings } from '@/feedback/FeedbackProvider';
 import { Group, ListRow, SettingsScreen } from '@/settings/SettingsParts';
 import { soundAndHapticsSummary } from '@/settings/summary';
+import { TEXT_STEP_TEXT } from '@/settings/TextSizeChoices';
+import { useTextSize } from '@/theme/type';
 import { LEARNING_DETAIL, LEARNING_TITLE } from '@/training/lesson-text';
 
 // TODO(spec 5)
 export default function SettingsIndex() {
   const { current } = useFeedbackSettings();
+  const { step } = useTextSize();
   const overview = useAccountOverview();
   const summary = overview?.summary;
   const accountDetail =
@@ -27,6 +30,8 @@ export default function SettingsIndex() {
           detail={soundAndHapticsSummary(current)}
           onPress={() => router.navigate('/more/settings/sound-and-haptics')}
         />
+        {/* Spec 1 Amendment 12 §3 */}
+        <ListRow icon={ALargeSmall} title="Text size" detail={TEXT_STEP_TEXT[step].title} onPress={() => router.navigate('/more/settings/text-size')} />
         {/* Spec 3 Amendment 1 D; #143 */}
         <ListRow icon={GraduationCap} title={LEARNING_TITLE} detail={LEARNING_DETAIL} onPress={() => router.navigate('/more/settings/learning')} />
       </Group>

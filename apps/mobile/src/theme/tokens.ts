@@ -151,6 +151,9 @@ export const essentialPairs: readonly {
   { use: 'failing record label', kind: 'text', foreground: 'destructive', background: 'card' },
   { use: 'banner action', kind: 'text', foreground: 'primary', background: 'card' },
   { use: 'progress fill on its track', kind: 'graphic', foreground: 'primary', background: 'muted' },
+  { use: 'selected text size option detail', kind: 'text', foreground: 'mutedForeground', background: 'secondary' },
+  { use: 'selected text size option outline and icon', kind: 'graphic', foreground: 'primary', background: 'secondary' },
+  { use: 'Home Community button label and icon', kind: 'text', foreground: 'foreground', background: 'secondary' },
 ];
 
 export const space = { 1: 4, 2: 8, 3: 12, 4: 16, 6: 24, 8: 32, 12: 48, 16: 64 } as const;
