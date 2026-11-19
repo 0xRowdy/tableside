@@ -345,11 +345,12 @@ Quiet, wide and pill-shaped.
 - A full-width row (at least 64px) with a bold title and a Smoke detail line, and a custom 52×32 switch. On: Rail Brass track, Brass Shadow knob with a brass check. Off: Deep Baize track, Control Edge border, Smoke knob.
 
 ### Sheets and dialogs
-- Bottom sheet on Lamplit Panel with 16px top corners, a Control Edge grabber, a Fraunces 22px title and a 48px round close button on Felt Shadow. Slides up; becomes full screen at large text.
+- Bottom sheet on Lamplit Panel with 16px top corners, a Control Edge grabber, a Fraunces 22px title and a 48px round close button on Felt Shadow. Slides up; becomes full screen at large text, padded clear of the status bar and home indicator.
 
 ### Navigation
 - **Tab bar:** five tabs (Home, Play, Counting, Saved, More) on Card Table with a hairline top border. Community is the first row in More and has a Community button in the Home header. Each tab has a 22px Lucide icon over an Inter Medium `tab` (12) label, which stays 12 at every text step. Selected: the icon sits in a 56×30 Felt Shadow pill with a 1.5px Rail Brass outline, the icon turns brass, and the label turns Linen Bold. The iOS Large Content Viewer, or a long-press on Android, shows a big preview at large text sizes.
-- **Table top bar:** Inter SemiBold `body` title (game and mode), a Linen `secondary` status line, round 48px icon buttons. The title and status wrap instead of truncating. Below it, unlabelled 3px phase bars fill with Rail Brass as the turn advances.
+- **Table top bar:** Inter SemiBold `body` title (game and mode), a Linen `secondary` status line, round 48px icon buttons. Help (an icon over its `label`, always present) sits left of End session and opens the Help sheet: the game's lessons, the screen's hints and a line saying a lesson suspends the session. The title and status wrap instead of truncating. Below it, unlabelled 3px phase bars fill with Rail Brass as the turn advances.
+- **Hub sections:** a top-level screen made of parts (Counting: Lessons, Challenges, Records) names each part with a 22px Lucide icon and an Inter Bold `heading` title on the ground, not inside a card. Cards inside a section keep their own `heading` titles. See `docs/decisions/lessons-entry-points.md`.
 
 ### Game card (signature)
 Full-bleed photograph, a scrim band fading up from the bottom, a sentence-case `label` summary line, a Fraunces `display-card` title in white, and a 44px Rail Brass circle with an arrow. This is the one place photography appears.
