@@ -3699,7 +3699,7 @@
                   "id": "NMdv9",
                   "name": "Note",
                   "fill": "$--muted-foreground",
-                  "content": "4-pt grid · radius sm 6 / md 10 / lg 16 / pill · minimum tap target 44 × 44",
+                  "content": "4-pt grid · radius sm 6 / md 10 / lg 16 / pill · minimum tap target 48 × 48",
                   "fontFamily": "$--font-ui",
                   "fontSize": 13,
                   "fontWeight": "normal"
@@ -3853,7 +3853,7 @@
                   "id": "K8XQN",
                   "name": "Button/Table",
                   "reusable": true,
-                  "height": 44,
+                  "height": 48,
                   "fill": "$--felt-ink-80",
                   "cornerRadius": "$--radius-md",
                   "stroke": "$--felt-line",
@@ -5188,7 +5188,7 @@
                               "width": "fill_container",
                               "content": "Hi-Lo with Illustrious 18",
                               "fontFamily": "$--font-ui",
-                              "fontSize": 16,
+                              "fontSize": "$--text-body",
                               "fontWeight": "600"
                             },
                             {
@@ -5200,7 +5200,7 @@
                               "width": "fill_container",
                               "content": "Blackjack · 6 decks · S17 · late surrender",
                               "fontFamily": "$--font-ui",
-                              "fontSize": 12,
+                              "fontSize": "$--text-caption",
                               "fontWeight": "normal"
                             }
                           ]
@@ -5217,7 +5217,7 @@
                       "content": "Basic strategy plus the 18 index plays that matter most.",
                       "lineHeight": 1.45,
                       "fontFamily": "$--font-ui",
-                      "fontSize": 14,
+                      "fontSize": "$--text-secondary",
                       "fontWeight": "normal"
                     },
                     {
@@ -5255,7 +5255,7 @@
                               "content": "318 players practiced this in the last 30 days",
                               "lineHeight": 1.35,
                               "fontFamily": "$--font-ui",
-                              "fontSize": 12,
+                              "fontSize": "$--text-caption",
                               "fontWeight": "500"
                             }
                           ]
@@ -5287,7 +5287,7 @@
                               "content": "4.2 usefulness · 4.0 clarity · 57 ratings",
                               "lineHeight": 1.35,
                               "fontFamily": "$--font-ui",
-                              "fontSize": 12,
+                              "fontSize": "$--text-caption",
                               "fontWeight": "500"
                             }
                           ]
@@ -5319,7 +5319,7 @@
                               "content": "Evidence for this profile: comparison-eligible",
                               "lineHeight": 1.35,
                               "fontFamily": "$--font-ui",
-                              "fontSize": 12,
+                              "fontSize": "$--text-caption",
                               "fontWeight": "500"
                             }
                           ]
@@ -5364,7 +5364,7 @@
                           "width": "fill_container",
                           "content": "by Dana K.",
                           "fontFamily": "$--font-ui",
-                          "fontSize": 12,
+                          "fontSize": "$--text-caption",
                           "fontWeight": "600"
                         },
                         {
@@ -5391,7 +5391,7 @@
                               "fill": "$--muted-foreground",
                               "content": "Revision 3",
                               "fontFamily": "$--font-ui",
-                              "fontSize": 11,
+                              "fontSize": "$--text-caption",
                               "fontWeight": "500"
                             }
                           ]
@@ -7076,7 +7076,7 @@
                       "width": "fill_container",
                       "content": "Label",
                       "fontFamily": "$--font-ui",
-                      "fontSize": 13,
+                      "fontSize": "$--text-label",
                       "fontWeight": "600"
                     },
                     {
@@ -7105,7 +7105,7 @@
                           "width": "fill_container",
                           "content": "1,000",
                           "fontFamily": "$--font-ui",
-                          "fontSize": 17,
+                          "fontSize": "$--text-body",
                           "fontWeight": "600"
                         },
                         {
@@ -7115,7 +7115,7 @@
                           "fill": "$--muted-foreground",
                           "content": "units",
                           "fontFamily": "$--font-ui",
-                          "fontSize": 14,
+                          "fontSize": "$--text-secondary",
                           "fontWeight": "normal"
                         }
                       ]
@@ -7130,7 +7130,7 @@
                       "content": "Helper text",
                       "lineHeight": 1.4,
                       "fontFamily": "$--font-ui",
-                      "fontSize": 12.5,
+                      "fontSize": "$--text-secondary",
                       "fontWeight": "normal"
                     },
                     {
@@ -7163,7 +7163,7 @@
                           "content": "Error message",
                           "lineHeight": 1.4,
                           "fontFamily": "$--font-ui",
-                          "fontSize": 13,
+                          "fontSize": "$--text-label",
                           "fontWeight": "600"
                         }
                       ]
@@ -7222,7 +7222,7 @@
                           "content": "75%",
                           "textAlign": "center",
                           "fontFamily": "$--font-ui",
-                          "fontSize": 18,
+                          "fontSize": "$--text-heading",
                           "fontWeight": "700"
                         },
                         {
@@ -7236,7 +7236,7 @@
                           "lineHeight": 1.3,
                           "textAlign": "center",
                           "fontFamily": "$--font-ui",
-                          "fontSize": 12,
+                          "fontSize": "$--text-caption",
                           "fontWeight": "normal"
                         }
                       ]
@@ -7459,7 +7459,7 @@
                       "fill": "$--background",
                       "content": "1",
                       "fontFamily": "$--font-ui",
-                      "fontSize": 12,
+                      "fontSize": "$--text-caption",
                       "fontWeight": "800"
                     }
                   ]
@@ -7717,7 +7717,7 @@
                           "content": "Place 6",
                           "lineHeight": 1.3,
                           "fontFamily": "$--font-ui",
-                          "fontSize": 15,
+                          "fontSize": "$--text-secondary",
                           "fontWeight": "600"
                         },
                         {
@@ -7730,7 +7730,7 @@
                           "content": "Pays 7:6 · 10–1,000 in 6s",
                           "lineHeight": 1.35,
                           "fontFamily": "$--font-ui",
-                          "fontSize": 12.5,
+                          "fontSize": "$--text-caption",
                           "fontWeight": "normal"
                         }
                       ]
@@ -7742,7 +7742,7 @@
                       "fill": "$--foreground",
                       "content": "—",
                       "fontFamily": "$--font-ui",
-                      "fontSize": 15,
+                      "fontSize": "$--text-secondary",
                       "fontWeight": "700"
                     }
                   ]
