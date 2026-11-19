@@ -3,7 +3,7 @@
 import type { ChallengeEntry, ChallengeView, LearnFeedback, PlayChoice, TableHandView, TableView } from '@tableside/engine';
 import { ArrowRight, Ban, ChevronsRight, CircleDot, Coins, Hand, Info, Layers, Shuffle, Wallet } from 'lucide-react-native';
 import { useState, type ReactNode } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 
 import { Button } from '@/components/Button';
 import { PlayingCard } from '@/counting/CardChoices';
@@ -13,6 +13,7 @@ import { CorrectionPanel } from '@/play/Guidance';
 import { formatUnits } from '@/play/units';
 import { BlackjackFeltRules, FaceDownCard, FeltBadge, PhaseStepper, StatStrip, type PhaseStep } from '@/play/TableChrome';
 import { fonts, palette, radius, space, textScale } from '@/theme/tokens';
+import { makeStyles } from '@/theme/type';
 import { conversionText } from '@/training/blackjack-conversion-text';
 import {
   ATTEMPT_BALANCE,
@@ -115,6 +116,7 @@ function phaseSteps(table: TableView): PhaseStep[] {
 
 // Spec 3 S3-07 v82z3, heGUV
 export function TableProgress({ view, table, timer }: { view: ChallengeView; table: TableView; timer: ReactNode }) {
+  const styles = useStyles();
   return (
     <>
       <PhaseStepper steps={phaseSteps(table)} />
@@ -146,6 +148,7 @@ export function TableBody({
   onCommand: (command: LearnerCommand) => void;
   onInputRejected: () => void;
 }) {
+  const styles = useStyles();
   const feedback = view.variant === 'learn' ? view.feedback : null;
   const entered = view.variant === 'check' ? view.entered : null;
   return (
@@ -214,6 +217,7 @@ function CheckpointPanel({
   onCommand: (command: LearnerCommand) => void;
   onInputRejected: () => void;
 }) {
+  const styles = useStyles();
   const prompt = table.prompt as NonNullable<TableView['prompt']>;
   const answering = ready && view.legalCommands.includes('answer');
   const pairs = prompt.timing !== 'after-round';
@@ -258,6 +262,7 @@ function CheckpointPanel({
 
 // Spec 3 S3-07 E3Gbeh, kLgWV; User stories 37, 38
 function DecisionPanel({ view, table, ready, onCommand }: { view: ChallengeView; table: TableView; ready: boolean; onCommand: (command: LearnerCommand) => void }) {
+  const styles = useStyles();
   const decision = table.decision as NonNullable<TableView['decision']>;
   const [dismissed, setDismissed] = useState(false);
   const enabled = ready && view.legalCommands.includes('play');
@@ -328,6 +333,7 @@ function DecisionPanel({ view, table, ready, onCommand }: { view: ChallengeView;
 
 // Spec 3 Play challenge funding; S3-07 fiCRg, qvatd; Amendment 1 C4; #139
 function BetPanel({ view, table, ready, onCommand }: { view: ChallengeView; table: TableView; ready: boolean; onCommand: (command: LearnerCommand) => void }) {
+  const styles = useStyles();
   const bet = table.bet as NonNullable<TableView['bet']>;
   const [confirming, setConfirming] = useState<string | null>(null);
   const enabled = ready && view.legalCommands.includes('bet');
@@ -395,6 +401,7 @@ function TableCoach({
   enabled: boolean;
   onCommand: (command: LearnerCommand) => void;
 }) {
+  const styles = useStyles();
   const { explanation } = feedback;
   const running = explanation.kind === 'table-running';
   const headline = running ? runningHeadline(explanation.count) : `The true count is ${signed(feedback.reference)}.`;
@@ -441,6 +448,7 @@ function TableCoach({
 }
 
 function ShufflePanel({ table, enabled, onContinue }: { table: TableView; enabled: boolean; onContinue: () => void }) {
+  const styles = useStyles();
   return (
     <>
       <Text maxFontSizeMultiplier={textScale.body} style={styles.kicker}>
@@ -459,6 +467,7 @@ function ShufflePanel({ table, enabled, onContinue }: { table: TableView; enable
 
 // Spec 3 Screens › Exercise (table on the 04a–04d layout)
 function Felt({ table }: { table: TableView }) {
+  const styles = useStyles();
   const others = table.seats.filter((seat) => !seat.learner);
   const learner = table.seats.find((seat) => seat.learner);
   return (
@@ -498,6 +507,7 @@ function Felt({ table }: { table: TableView }) {
 }
 
 function SeatHand({ hand, seat }: { hand: TableHandView; seat: TableView['seat'] }) {
+  const styles = useStyles();
   return (
     <View style={styles.handRow}>
       {hand.action && (
@@ -516,35 +526,35 @@ function SeatHand({ hand, seat }: { hand: TableHandView; seat: TableView['seat']
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((type) => ({
   timer: { paddingHorizontal: space[4], paddingTop: space[1], alignItems: 'flex-end' },
   felt: { gap: space[3], padding: space[4], borderRadius: radius.lg, backgroundColor: palette.felt, alignItems: 'center', minHeight: 280 },
   decks: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: space[1], paddingVertical: space[1], paddingHorizontal: space[3], borderRadius: radius.pill, backgroundColor: palette.feltDeep },
-  decksText: { fontFamily: fonts.uiBold, fontSize: 14, color: palette.feltText },
-  feltLabel: { fontFamily: fonts.uiBold, fontSize: 11, letterSpacing: 0.5, color: palette.feltText },
+  decksText: { fontFamily: fonts.uiSemiBold, ...type.body, color: palette.feltText },
+  feltLabel: { fontFamily: fonts.uiSemiBold, ...type.label, color: palette.feltText },
   handRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center', gap: space[2] },
-  seatLabel: { fontFamily: fonts.uiBold, fontSize: 12, color: palette.feltText },
+  seatLabel: { fontFamily: fonts.uiSemiBold, ...type.label, color: palette.feltText },
   action: { flexDirection: 'row', alignItems: 'center', gap: space[1], paddingVertical: space[1], paddingHorizontal: space[3], borderRadius: radius.pill, backgroundColor: palette.primary },
-  actionText: { fontFamily: fonts.uiBold, fontSize: 14, color: palette.primaryForeground },
+  actionText: { fontFamily: fonts.uiSemiBold, ...type.body, color: palette.primaryForeground },
   panel: { gap: space[3] },
-  kicker: { fontFamily: fonts.uiBold, fontSize: 12, letterSpacing: 0.6, color: palette.mutedForeground },
-  panelTitle: { fontFamily: fonts.display, fontSize: 22, color: palette.foreground },
-  checkpointTitle: { fontFamily: fonts.uiBold, fontSize: 17, color: palette.foreground },
-  panelText: { fontFamily: fonts.ui, fontSize: 15, lineHeight: 21, color: palette.mutedForeground },
+  kicker: { fontFamily: fonts.uiSemiBold, ...type.label, color: palette.mutedForeground },
+  panelTitle: { fontFamily: fonts.display, ...type.headline, color: palette.foreground },
+  checkpointTitle: { fontFamily: fonts.uiSemiBold, ...type.body, color: palette.foreground },
+  panelText: { fontFamily: fonts.ui, ...type.secondary, color: palette.mutedForeground },
   recorded: { flexDirection: 'row', alignItems: 'center', gap: space[2], paddingVertical: space[3], paddingHorizontal: space[4], borderRadius: radius.md, borderWidth: 1, borderColor: palette.controlBorder, backgroundColor: palette.card },
-  recordedText: { flex: 1, fontFamily: fonts.ui, fontSize: 14, color: palette.foreground },
+  recordedText: { flex: 1, fontFamily: fonts.ui, ...type.body, color: palette.foreground },
   coach: { gap: space[3] - 2, paddingTop: space[4], paddingHorizontal: space[4], paddingBottom: space[4], borderRadius: radius.lg, borderWidth: 1, borderColor: palette.coachAccent, backgroundColor: palette.coach },
   coachHead: { flexDirection: 'row', alignItems: 'flex-start', gap: space[3] - 2 },
   who: { flex: 1 },
-  coachName: { fontFamily: fonts.uiBold, fontSize: 13, color: palette.ink },
-  coachKicker: { fontFamily: fonts.uiBold, fontSize: 10, letterSpacing: 0.5, color: palette.coachAccent },
-  headline: { fontFamily: fonts.uiBold, fontSize: 17, color: palette.ink },
-  detail: { fontFamily: fonts.ui, fontSize: 14, lineHeight: 20, color: palette.inkMuted },
+  coachName: { fontFamily: fonts.uiSemiBold, ...type.label, color: palette.ink },
+  coachKicker: { fontFamily: fonts.uiSemiBold, ...type.label, color: palette.coachAccent },
+  headline: { fontFamily: fonts.uiSemiBold, ...type.body, color: palette.ink },
+  detail: { fontFamily: fonts.ui, ...type.body, color: palette.inkMuted },
   coachActions: { flexDirection: 'row', flexWrap: 'wrap', gap: space[2] },
   pressed: { opacity: 0.8 },
   moves: { flexDirection: 'row', flexWrap: 'wrap', gap: space[2] },
   move: { flexGrow: 1, flexBasis: '30%' },
   refused: { gap: space[2], padding: space[4], borderRadius: radius.lg, borderWidth: 1, borderColor: palette.controlBorder, backgroundColor: palette.card },
   refusedHead: { flexDirection: 'row', alignItems: 'center', gap: space[2] },
-  refusedText: { fontFamily: fonts.ui, fontSize: 15, lineHeight: 21, color: palette.foreground },
-});
+  refusedText: { fontFamily: fonts.ui, ...type.body, color: palette.foreground },
+}))

@@ -2,11 +2,12 @@
 
 import { Check, ChevronLeft, CircleAlert, ExternalLink, type LucideProps } from 'lucide-react-native';
 import { forwardRef, type ComponentRef, type ReactNode } from 'react';
-import { Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions, type TextInputProps } from 'react-native';
+import { Linking, Pressable, ScrollView, Text, TextInput, View, useWindowDimensions, type TextInputProps } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/theme/tokens';
+import { makeStyles } from '@/theme/type';
 
 import { WEB_PAGES } from './web-pages';
 
@@ -29,6 +30,7 @@ export function FirstRunScreen({
   lead?: ReactNode;
   children?: ReactNode;
 }) {
+  const styles = useStyles();
   const insets = useSafeAreaInsets();
   return (
     <ScrollView
@@ -69,6 +71,7 @@ export function FirstRunScreen({
 }
 
 function BackButton({ onPress }: { onPress: () => void }) {
+  const styles = useStyles();
   const { focused, focusProps } = useKeyboardFocus();
   return (
     <Pressable accessibilityRole="button" accessibilityLabel="Back" onPress={onPress} {...focusProps} style={[styles.back, focused && styles.focused]}>
@@ -78,6 +81,7 @@ function BackButton({ onPress }: { onPress: () => void }) {
 }
 
 export function Body({ children }: { children: ReactNode }) {
+  const styles = useStyles();
   return (
     <Text maxFontSizeMultiplier={textScale.body} style={styles.body}>
       {children}
@@ -86,6 +90,7 @@ export function Body({ children }: { children: ReactNode }) {
 }
 
 export function Status({ children }: { children: ReactNode }) {
+  const styles = useStyles();
   return (
     <Text accessibilityLiveRegion="polite" maxFontSizeMultiplier={textScale.body} style={styles.body}>
       {children}
@@ -95,6 +100,7 @@ export function Status({ children }: { children: ReactNode }) {
 
 export const Field = forwardRef<ComponentRef<typeof TextInput>, { label: string; problem?: boolean } & Omit<TextInputProps, 'accessibilityLabel' | 'style'>>(
   function Field({ label, problem = false, ...input }, ref) {
+  const styles = useStyles();
     const { focused, focusProps } = useKeyboardFocus(input);
     return (
       <View style={styles.fieldBlock}>
@@ -150,6 +156,7 @@ export function CodeField({
 }
 
 export function InlineMessage({ children, testID }: { children: ReactNode; testID?: string }) {
+  const styles = useStyles();
   return (
     <View style={styles.message} testID={testID}>
       <CircleAlert color={palette.destructive} size={16} />
@@ -173,6 +180,7 @@ export function ChoiceRow({
   selected: boolean;
   onPress: () => void;
 }) {
+  const styles = useStyles();
   const { focused, focusProps } = useKeyboardFocus();
   return (
     <Pressable
@@ -199,6 +207,7 @@ export function ChoiceRow({
 }
 
 export function ChoiceGroup({ label, testID, children }: { label: string; testID?: string; children: ReactNode }) {
+  const styles = useStyles();
   return (
     <View accessibilityRole="radiogroup" accessibilityLabel={label} testID={testID} style={styles.choices}>
       {children}
@@ -207,11 +216,13 @@ export function ChoiceGroup({ label, testID, children }: { label: string; testID
 }
 
 export function Actions({ children }: { children: ReactNode }) {
+  const styles = useStyles();
   return <View style={styles.actions}>{children}</View>;
 }
 
 // Spec 2 Amendment 9 §1
 export function SupportLinks() {
+  const styles = useStyles();
   return (
     <View style={styles.supportLinks}>
       <View style={styles.supportRow}>
@@ -239,6 +250,7 @@ export function MethodButton({
   variant?: 'primary' | 'secondary' | 'ghost';
   disabled?: boolean;
 }) {
+  const styles = useStyles();
   const { focused, focusProps } = useKeyboardFocus();
   const color = variant === 'primary' ? palette.primaryForeground : palette.foreground;
   return (
@@ -267,6 +279,7 @@ export function MethodButton({
 }
 
 export function Footnote({ icon: Icon, children }: { icon?: Glyph; children: ReactNode }) {
+  const styles = useStyles();
   return (
     <View style={styles.footnote}>
       {Icon && <Icon color={palette.mutedForeground} size={16} />}
@@ -278,6 +291,7 @@ export function Footnote({ icon: Icon, children }: { icon?: Glyph; children: Rea
 }
 
 function WebLink({ label, url }: { label: string; url: string }) {
+  const styles = useStyles();
   const { focused, focusProps } = useKeyboardFocus();
   return (
     <Pressable
@@ -307,6 +321,7 @@ export function IntentSwitch<T extends string>({
   value: T;
   onChange: (value: T) => void;
 }) {
+  const styles = useStyles();
   const { fontScale } = useWindowDimensions();
   const stacked = fontScale >= 1.3;
   return (
@@ -319,6 +334,7 @@ export function IntentSwitch<T extends string>({
 }
 
 function IntentSegment({ label, selected, onPress }: { label: string; selected: boolean; onPress: () => void }) {
+  const styles = useStyles();
   const { focused, focusProps } = useKeyboardFocus();
   return (
     <Pressable
@@ -338,6 +354,7 @@ function IntentSegment({ label, selected, onPress }: { label: string; selected: 
 }
 
 export function LinkButton({ label, onPress }: { label: string; onPress: () => void }) {
+  const styles = useStyles();
   const { focused, focusProps } = useKeyboardFocus();
   return (
     <Pressable accessibilityRole="button" onPress={onPress} {...focusProps} style={[styles.link, focused && styles.focused]}>
@@ -348,14 +365,14 @@ export function LinkButton({ label, onPress }: { label: string; onPress: () => v
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((type) => ({
   screen: { flex: 1, backgroundColor: palette.background },
   content: { flexGrow: 1, gap: space[4] },
   back: { width: MIN_TOUCH_TARGET, height: MIN_TOUCH_TARGET, marginLeft: -space[3], alignItems: 'center', justifyContent: 'center', borderRadius: radius.pill, borderWidth: 2, borderColor: palette.transparent },
-  title: { fontFamily: fonts.display, fontSize: 30, color: palette.foreground },
-  body: { fontFamily: fonts.ui, fontSize: 16, lineHeight: 24, color: palette.mutedForeground },
+  title: { fontFamily: fonts.display, ...type.display, color: palette.foreground },
+  body: { fontFamily: fonts.ui, ...type.body, color: palette.mutedForeground },
   fieldBlock: { gap: space[2] },
-  fieldLabel: { fontFamily: fonts.uiMedium, fontSize: 14, color: palette.foreground },
+  fieldLabel: { fontFamily: fonts.uiMedium, ...type.body, color: palette.foreground },
   field: {
     minHeight: MIN_TOUCH_TARGET,
     paddingHorizontal: space[4],
@@ -365,13 +382,13 @@ const styles = StyleSheet.create({
     borderColor: palette.controlBorder,
     backgroundColor: palette.background,
     fontFamily: fonts.ui,
-    fontSize: 16,
+    ...type.body,
     color: palette.foreground,
   },
   fieldProblem: { borderColor: palette.destructive },
   focused: { borderColor: palette.ring },
   message: { flexDirection: 'row', gap: space[2], alignItems: 'flex-start' },
-  messageText: { flex: 1, fontFamily: fonts.ui, fontSize: 14, lineHeight: 20, color: palette.destructive },
+  messageText: { flex: 1, fontFamily: fonts.ui, ...type.body, color: palette.destructive },
   choices: { gap: space[2] },
   choice: {
     minHeight: MIN_TOUCH_TARGET,
@@ -390,20 +407,20 @@ const styles = StyleSheet.create({
   radioSelected: { borderColor: palette.primary },
   radioDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: palette.primary },
   choiceText: { flex: 1, gap: 2 },
-  choiceLabel: { fontFamily: fonts.uiMedium, fontSize: 16, color: palette.foreground },
-  choiceDetail: { fontFamily: fonts.ui, fontSize: 13, color: palette.mutedForeground },
+  choiceLabel: { fontFamily: fonts.uiMedium, ...type.body, color: palette.foreground },
+  choiceDetail: { fontFamily: fonts.ui, ...type.secondary, color: palette.mutedForeground },
   actions: { gap: space[3], marginTop: space[2] },
   link: { minHeight: MIN_TOUCH_TARGET, justifyContent: 'center', alignSelf: 'flex-start', borderRadius: radius.sm, borderWidth: 2, borderColor: palette.transparent, paddingHorizontal: space[1] },
-  linkText: { fontFamily: fonts.uiBold, fontSize: 16, color: palette.primary },
+  linkText: { fontFamily: fonts.uiSemiBold, ...type.body, color: palette.primary },
   supportLinks: { gap: space[1], paddingTop: space[2] },
   supportRow: { flexDirection: 'row', flexWrap: 'wrap', columnGap: space[4] + space[1], rowGap: space[1] },
   webLink: { flexDirection: 'row', alignItems: 'center', gap: space[1] },
-  webLinkText: { flexShrink: 1, fontFamily: fonts.uiBold, fontSize: 14, color: palette.primary },
-  supportNote: { fontFamily: fonts.ui, fontSize: 12, lineHeight: 17, color: palette.mutedForeground },
+  webLinkText: { flexShrink: 1, fontFamily: fonts.uiSemiBold, ...type.body, color: palette.primary },
+  supportNote: { fontFamily: fonts.ui, ...type.caption, color: palette.mutedForeground },
   bar: { flexDirection: 'row', alignItems: 'center', gap: space[1] },
   barTitles: { flex: 1, gap: 1 },
-  barTitle: { fontFamily: fonts.uiBold, fontSize: 17, color: palette.foreground },
-  barDetail: { fontFamily: fonts.ui, fontSize: 12, color: palette.mutedForeground },
+  barTitle: { fontFamily: fonts.uiSemiBold, ...type.body, color: palette.foreground },
+  barDetail: { fontFamily: fonts.ui, ...type.caption, color: palette.mutedForeground },
   method: {
     minHeight: MIN_TOUCH_TARGET,
     flexDirection: 'row',
@@ -419,11 +436,11 @@ const styles = StyleSheet.create({
   },
   methodPrimary: { backgroundColor: palette.primary, borderColor: palette.primary },
   methodGhost: { backgroundColor: palette.transparent, borderColor: palette.transparent },
-  methodLabel: { flexShrink: 1, fontFamily: fonts.uiBold, fontSize: 15, textAlign: 'center' },
+  methodLabel: { flexShrink: 1, fontFamily: fonts.uiSemiBold, ...type.body, textAlign: 'center' },
   pressed: { opacity: 0.8 },
   disabled: { opacity: 0.4 },
   footnote: { flexDirection: 'row', alignItems: 'flex-start', gap: space[2] },
-  footnoteText: { flex: 1, fontFamily: fonts.ui, fontSize: 12.5, lineHeight: 18, color: palette.mutedForeground },
+  footnoteText: { flex: 1, fontFamily: fonts.ui, ...type.secondary, color: palette.mutedForeground },
   switch: { flexDirection: 'row', gap: space[1], padding: space[1], borderRadius: 12, borderWidth: 1, borderColor: palette.controlBorder, backgroundColor: palette.muted },
   switchStacked: { flexDirection: 'column' },
   segment: {
@@ -439,6 +456,6 @@ const styles = StyleSheet.create({
     borderColor: palette.transparent,
   },
   segmentSelected: { backgroundColor: palette.primary },
-  segmentLabel: { flexShrink: 1, fontFamily: fonts.uiBold, fontSize: 14, color: palette.foreground, textAlign: 'center' },
+  segmentLabel: { flexShrink: 1, fontFamily: fonts.uiSemiBold, ...type.body, color: palette.foreground, textAlign: 'center' },
   segmentLabelSelected: { color: palette.primaryForeground },
-});
+}))

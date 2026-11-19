@@ -3,11 +3,12 @@
 import { FUNDING_CEILING, type DomainFact, type PermittedView } from '@tableside/engine';
 import { X } from 'lucide-react-native';
 import { useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
+import { Modal, Pressable, ScrollView, Text, TextInput, useWindowDimensions, View } from 'react-native';
 
 import { Button } from '@/components/Button';
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/theme/tokens';
+import { makeStyles } from '@/theme/type';
 
 import { formatUnits, sumUnits, wholeUnits } from './units';
 
@@ -40,6 +41,7 @@ export function RebuySheet({
   onAdd: (amount: string) => void;
   onClose: () => void;
 }) {
+  const styles = useStyles();
   const { fontScale } = useWindowDimensions();
   const fullScreen = fontScale > FULL_SCREEN_FONT_SCALE;
   const [draft, setDraft] = useState(formatUnits(funding.buyIn));
@@ -148,6 +150,7 @@ export function RebuySheet({
 }
 
 function CloseButton({ onPress }: { onPress: () => void }) {
+  const styles = useStyles();
   const { focused, focusProps } = useKeyboardFocus();
   return (
     <Pressable
@@ -162,17 +165,17 @@ function CloseButton({ onPress }: { onPress: () => void }) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((type) => ({
   scrim: { flex: 1, justifyContent: 'flex-end', backgroundColor: palette.scrim },
   scrimFull: { justifyContent: 'flex-start' },
   sheet: { maxHeight: '90%', borderTopLeftRadius: radius.lg, borderTopRightRadius: radius.lg, backgroundColor: palette.popover },
   sheetFull: { flexGrow: 1, maxHeight: '100%', borderRadius: 0 },
   content: { gap: space[4], padding: space[6] },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space[2] },
-  title: { flex: 1, fontFamily: fonts.display, fontSize: 22, color: palette.foreground },
-  text: { fontFamily: fonts.ui, fontSize: 14, lineHeight: 20, color: palette.mutedForeground },
+  title: { flex: 1, fontFamily: fonts.display, ...type.headline, color: palette.foreground },
+  text: { fontFamily: fonts.ui, ...type.secondary, color: palette.mutedForeground },
   section: { gap: space[1] },
-  fieldLabel: { fontFamily: fonts.uiMedium, fontSize: 13, color: palette.foreground },
+  fieldLabel: { fontFamily: fonts.uiMedium, ...type.secondary, color: palette.foreground },
   field: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -184,14 +187,14 @@ const styles = StyleSheet.create({
     backgroundColor: palette.card,
   },
   fieldError: { borderColor: palette.destructive, borderWidth: 2 },
-  input: { flex: 1, minHeight: MIN_TOUCH_TARGET, fontFamily: fonts.uiMedium, fontSize: 17, color: palette.foreground },
-  unit: { fontFamily: fonts.ui, fontSize: 14, color: palette.mutedForeground },
-  help: { fontFamily: fonts.ui, fontSize: 13, color: palette.mutedForeground },
-  error: { fontFamily: fonts.uiMedium, fontSize: 13, color: palette.destructive },
+  input: { flex: 1, minHeight: MIN_TOUCH_TARGET, fontFamily: fonts.uiMedium, ...type.body, color: palette.foreground },
+  unit: { fontFamily: fonts.ui, ...type.secondary, color: palette.mutedForeground },
+  help: { fontFamily: fonts.ui, ...type.secondary, color: palette.mutedForeground },
+  error: { fontFamily: fonts.uiMedium, ...type.secondary, color: palette.destructive },
   ledger: { gap: space[2] },
   kv: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: space[2] },
-  muted: { fontFamily: fonts.ui, fontSize: 14, color: palette.mutedForeground },
-  kvValue: { fontFamily: fonts.uiMedium, fontSize: 15, color: palette.foreground },
+  muted: { fontFamily: fonts.ui, ...type.secondary, color: palette.mutedForeground },
+  kvValue: { fontFamily: fonts.uiMedium, ...type.body, color: palette.foreground },
   close: {
     minWidth: MIN_TOUCH_TARGET,
     minHeight: MIN_TOUCH_TARGET,
@@ -202,4 +205,4 @@ const styles = StyleSheet.create({
     borderColor: palette.transparent,
   },
   focused: { borderColor: palette.ring },
-});
+}))

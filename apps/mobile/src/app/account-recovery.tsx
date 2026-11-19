@@ -3,17 +3,19 @@
 import { Redirect, router } from 'expo-router';
 import { HardDriveDownload, LogOut, RotateCw, TriangleAlert, UserRound } from 'lucide-react-native';
 import { useState } from 'react';
-import { Platform, StyleSheet, Text, View } from 'react-native';
+import { Platform, Text, View } from 'react-native';
 
 import { deviceName } from '@/account/account-text';
 import { useAccount } from '@/account/AccountProvider';
 import { Actions, Body, FirstRunScreen, SupportLinks } from '@/account/FirstRunParts';
 import { Button } from '@/components/Button';
 import { fonts, palette, radius, textScale } from '@/theme/tokens';
+import { makeStyles } from '@/theme/type';
 
 const STORE = Platform.OS === 'ios' ? 'the App Store' : 'Google Play';
 
 export default function AccountRecovery() {
+  const styles = useStyles();
   const { gate, service } = useAccount();
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -84,6 +86,7 @@ export default function AccountRecovery() {
 }
 
 function StateIcon() {
+  const styles = useStyles();
   return (
     <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={styles.icon}>
       <TriangleAlert color={palette.warning} size={30} />
@@ -91,7 +94,7 @@ function StateIcon() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((type) => ({
   icon: { width: 64, height: 64, borderRadius: radius.lg, alignItems: 'center', justifyContent: 'center', backgroundColor: palette.secondary },
-  failed: { fontFamily: fonts.ui, fontSize: 15, lineHeight: 22, color: palette.destructive },
-});
+  failed: { fontFamily: fonts.ui, ...type.body, color: palette.destructive },
+}))

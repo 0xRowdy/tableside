@@ -3,10 +3,11 @@
 import type { GameId } from '@tableside/engine';
 import { router } from 'expo-router';
 import { BookOpen, ChevronRight, GraduationCap, type LucideIcon } from 'lucide-react-native';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/theme/tokens';
+import { makeStyles } from '@/theme/type';
 import { NOT_READY_HINT } from '@/training/challenge-text';
 import { LEARN_THIS_GAME, LEARN_THIS_GAME_DETAIL, lessonCount } from '@/training/lesson-text';
 import { useLessons } from '@/training/TrainingProvider';
@@ -42,6 +43,7 @@ export function LearnRow({
   disabled?: boolean;
   onPress: () => void;
 }) {
+  const styles = useStyles();
   const { focused, focusProps } = useKeyboardFocus();
   return (
     <Pressable
@@ -94,6 +96,7 @@ export function TextLink({
   hint?: string;
   onPress: () => void;
 }) {
+  const styles = useStyles();
   const { focused, focusProps } = useKeyboardFocus();
   return (
     <Pressable
@@ -114,7 +117,7 @@ export function TextLink({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((type) => ({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -129,13 +132,13 @@ const styles = StyleSheet.create({
   },
   lead: { width: 36, height: 36, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', backgroundColor: palette.secondary },
   text: { flex: 1, gap: 2 },
-  title: { fontFamily: fonts.uiBold, fontSize: 15, lineHeight: 21, color: palette.foreground },
-  detail: { fontFamily: fonts.ui, fontSize: 13, lineHeight: 18, color: palette.mutedForeground },
+  title: { fontFamily: fonts.uiSemiBold, ...type.body, color: palette.foreground },
+  detail: { fontFamily: fonts.ui, ...type.secondary, color: palette.mutedForeground },
   link: { flexDirection: 'row', alignItems: 'center', gap: space[2] + 2, minHeight: MIN_TOUCH_TARGET, borderRadius: radius.md, borderWidth: 2, borderColor: palette.transparent },
-  linkText: { flexShrink: 1, fontFamily: fonts.uiBold, fontSize: 15, color: palette.primary },
+  linkText: { flexShrink: 1, fontFamily: fonts.uiSemiBold, ...type.body, color: palette.primary },
   linkPlain: { color: palette.foreground },
-  count: { fontFamily: fonts.ui, fontSize: 14, color: palette.mutedForeground },
+  count: { fontFamily: fonts.ui, ...type.secondary, color: palette.mutedForeground },
   pressed: { opacity: 0.8 },
   disabled: { opacity: 0.4 },
   focused: { borderColor: palette.ring, borderWidth: 2 },
-});
+}))

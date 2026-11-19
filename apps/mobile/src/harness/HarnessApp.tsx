@@ -7,6 +7,7 @@ import { Platform, StyleSheet, Text, View } from 'react-native';
 import { useLoaded } from '@/hooks/use-loaded';
 import { sleep } from '@/practice/app-adapters';
 import { palette } from '@/theme/tokens';
+import { typeScale } from '@/theme/type';
 
 const REPORT_URL = process.env.EXPO_PUBLIC_ENGINE_HARNESS_URL;
 
@@ -66,5 +67,5 @@ export function HarnessApp() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, justifyContent: 'center', padding: 24, backgroundColor: palette.background },
-  text: { color: palette.foreground, fontSize: 16, lineHeight: 24 },
+  text: { color: palette.foreground, ...typeScale('standard').body },
 });

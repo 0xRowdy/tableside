@@ -1,13 +1,15 @@
 import { ChevronLeft, ChevronRight, Volume1, Volume2, type LucideIcon } from 'lucide-react-native';
 import { useState, type ReactNode } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View, type GestureResponderEvent } from 'react-native';
+import { Pressable, ScrollView, Text, View, type GestureResponderEvent } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
 import { volumeText } from '@/settings/summary';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/theme/tokens';
+import { makeStyles } from '@/theme/type';
 
 export function SettingsScreen({ title, back, children }: { title: string; back?: { label: string; onPress: () => void }; children: ReactNode }) {
+  const styles = useStyles();
   const insets = useSafeAreaInsets();
   return (
     <ScrollView
@@ -34,6 +36,7 @@ export function SettingsScreen({ title, back, children }: { title: string; back?
 }
 
 export function BackButton({ label, onPress }: { label: string; onPress: () => void }) {
+  const styles = useStyles();
   const { focused, focusProps } = useKeyboardFocus();
   return (
     <Pressable
@@ -49,6 +52,7 @@ export function BackButton({ label, onPress }: { label: string; onPress: () => v
 }
 
 export function Group({ children }: { children: ReactNode }) {
+  const styles = useStyles();
   return <View style={styles.group}>{children}</View>;
 }
 
@@ -69,6 +73,7 @@ export function ListRow({
   chevron?: boolean;
   onPress?: () => void;
 }) {
+  const styles = useStyles();
   const { focused, focusProps } = useKeyboardFocus();
   const content = (
     <>
@@ -113,6 +118,7 @@ function spoken(parts: readonly (string | undefined)[]): string {
 }
 
 export function GroupLabel({ children }: { children: string }) {
+  const styles = useStyles();
   return (
     <Text accessibilityRole="header" maxFontSizeMultiplier={textScale.body} style={styles.groupLabel}>
       {children}
@@ -121,6 +127,7 @@ export function GroupLabel({ children }: { children: string }) {
 }
 
 export function Note({ children }: { children: string }) {
+  const styles = useStyles();
   return (
     <Text maxFontSizeMultiplier={textScale.body} style={styles.note}>
       {children}
@@ -131,6 +138,7 @@ export function Note({ children }: { children: string }) {
 const STEP = 10;
 
 export function VolumeSlider({ label, value, onChange, help }: { label: string; value: number; onChange: (value: number) => void; help: string }) {
+  const styles = useStyles();
   const [trackWidth, setTrackWidth] = useState(0);
   const { focused, focusProps } = useKeyboardFocus();
   const valueText = volumeText(value);
@@ -177,6 +185,7 @@ export function VolumeSlider({ label, value, onChange, help }: { label: string; 
 }
 
 function StepButton({ icon: Icon, label, disabled, onPress }: { icon: LucideIcon; label: string; disabled: boolean; onPress: () => void }) {
+  const styles = useStyles();
   const { focused, focusProps } = useKeyboardFocus();
   return (
     <Pressable
@@ -193,30 +202,30 @@ function StepButton({ icon: Icon, label, disabled, onPress }: { icon: LucideIcon
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((type) => ({
   screen: { flex: 1, backgroundColor: palette.background },
   header: { flexDirection: 'row', alignItems: 'center', gap: space[1], minHeight: 56, paddingLeft: space[1], paddingRight: space[2] },
   headerTopLevel: { paddingLeft: space[6] - space[1] },
   back: { width: MIN_TOUCH_TARGET, minHeight: MIN_TOUCH_TARGET, alignItems: 'center', justifyContent: 'center', borderRadius: radius.md, borderWidth: 2, borderColor: palette.transparent },
   titles: { flex: 1, gap: 1, paddingVertical: space[1] },
-  topTitle: { fontFamily: fonts.uiBold, fontSize: 22, color: palette.foreground },
-  title: { fontFamily: fonts.uiBold, fontSize: 17, color: palette.foreground },
-  parent: { fontFamily: fonts.ui, fontSize: 12, color: palette.mutedForeground },
+  topTitle: { fontFamily: fonts.uiBold, ...type.heading, color: palette.foreground },
+  title: { fontFamily: fonts.uiSemiBold, ...type.body, color: palette.foreground },
+  parent: { fontFamily: fonts.ui, ...type.caption, color: palette.mutedForeground },
   body: { gap: space[4], paddingTop: space[2], paddingHorizontal: space[6] - space[1] },
   group: { borderRadius: radius.lg, borderWidth: 1, borderColor: palette.border, backgroundColor: palette.card, overflow: 'hidden' },
   row: { flexDirection: 'row', alignItems: 'center', gap: space[3], minHeight: 64, paddingVertical: space[3], paddingHorizontal: space[4], borderWidth: 2, borderColor: palette.transparent },
   pressed: { backgroundColor: palette.secondary },
   lead: { width: 36, height: 36, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', backgroundColor: palette.secondary },
   rowText: { flex: 1, gap: 2 },
-  rowTitle: { fontFamily: fonts.uiBold, fontSize: 15, lineHeight: 21, color: palette.foreground },
-  rowDetail: { fontFamily: fonts.ui, fontSize: 13, lineHeight: 18, color: palette.mutedForeground },
-  rowValue: { fontFamily: fonts.ui, fontSize: 14, color: palette.mutedForeground },
+  rowTitle: { fontFamily: fonts.uiSemiBold, ...type.body, color: palette.foreground },
+  rowDetail: { fontFamily: fonts.ui, ...type.secondary, color: palette.mutedForeground },
+  rowValue: { fontFamily: fonts.ui, ...type.secondary, color: palette.mutedForeground },
   destructive: { color: palette.destructive },
-  groupLabel: { fontFamily: fonts.uiBold, fontSize: 12, letterSpacing: 0.6, color: palette.mutedForeground, marginBottom: -space[2] },
-  note: { fontFamily: fonts.ui, fontSize: 13, lineHeight: 20, color: palette.mutedForeground },
+  groupLabel: { fontFamily: fonts.uiSemiBold, ...type.label, color: palette.mutedForeground, marginBottom: -space[2] },
+  note: { fontFamily: fonts.ui, ...type.secondary, color: palette.mutedForeground },
   sliderBlock: { gap: space[3] - 2, padding: space[4] },
   sliderHead: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: space[2] },
-  sliderValue: { fontFamily: fonts.uiBold, fontSize: 15, color: palette.foreground },
+  sliderValue: { fontFamily: fonts.uiSemiBold, ...type.body, color: palette.foreground },
   muted: { color: palette.mutedForeground },
   sliderRow: { flexDirection: 'row', alignItems: 'center', gap: space[2] },
   stepButton: {
@@ -235,4 +244,4 @@ const styles = StyleSheet.create({
   filled: { height: 6, backgroundColor: palette.primary },
   thumb: { position: 'absolute', width: 28, height: 28, marginLeft: -14, borderRadius: 14, backgroundColor: palette.foreground },
   focused: { borderColor: palette.ring },
-});
+}))

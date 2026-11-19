@@ -3,12 +3,13 @@
 import { BLACKJACK_LIMITS, BLACKJACK_PRESETS, DEFAULT_BLACKJACK_PRESET, type TableOptions } from '@tableside/definitions';
 import { MAX_CHECKPOINT_INTERVAL, MAX_OTHER_PLAYERS, PENETRATIONS } from '@tableside/engine';
 import { Eye, Hand } from 'lucide-react-native';
-import { StyleSheet, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 
 import { SwitchRow } from '@/components/SwitchRow';
 import { AmountField, ChoiceGroup, Help, Section, Stepper } from '@/play/setup/SetupParts';
 import { withoutGrouping } from '@/play/units';
 import { fonts, palette, radius, space, textScale } from '@/theme/tokens';
+import { makeStyles } from '@/theme/type';
 import {
   BASE_WAGER,
   BET_SCHEDULE_DETAIL,
@@ -43,6 +44,7 @@ import {
 import { tableFundingProblems } from '@/training/service';
 
 export function TableSetupOptions({ options, onChange }: { options: TableOptions; onChange: (options: TableOptions) => void }) {
+  const styles = useStyles();
   const set = (change: Partial<TableOptions>) => onChange({ ...options, ...change });
   const step = PENETRATIONS.indexOf(options.penetration);
   return (
@@ -131,6 +133,7 @@ export function TableSetupOptions({ options, onChange }: { options: TableOptions
 
 // Spec 3 Play challenge funding › Starting balance; S3-02 FkMDw, Al6Pw
 function Betting({ options, onChange }: { options: TableOptions; onChange: (change: Partial<TableOptions>) => void }) {
+  const styles = useStyles();
   const { min, max } = BLACKJACK_LIMITS.initial;
   const problems = tableFundingProblems(options);
   const problemFor = (field: 'base-wager' | 'starting-balance') => {
@@ -162,10 +165,10 @@ function Betting({ options, onChange }: { options: TableOptions; onChange: (chan
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((type) => ({
   card: { borderRadius: radius.lg, borderWidth: 1, borderColor: palette.border, backgroundColor: palette.card, overflow: 'hidden' },
   notice: { flexDirection: 'row', gap: space[3], padding: space[4], borderRadius: radius.lg, borderLeftWidth: 4, borderLeftColor: palette.coachAccent, backgroundColor: palette.card },
   noticeText: { flex: 1, gap: space[1] },
-  noticeTitle: { fontFamily: fonts.uiBold, fontSize: 15, color: palette.foreground },
-  noticeDetail: { fontFamily: fonts.ui, fontSize: 14, lineHeight: 20, color: palette.mutedForeground },
-});
+  noticeTitle: { fontFamily: fonts.uiSemiBold, ...type.body, color: palette.foreground },
+  noticeDetail: { fontFamily: fonts.ui, ...type.secondary, color: palette.mutedForeground },
+}))

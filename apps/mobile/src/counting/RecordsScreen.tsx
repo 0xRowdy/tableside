@@ -4,12 +4,13 @@ import { CHALLENGE_LESSONS } from '@tableside/definitions';
 import type { AssistanceClass, AttemptEndingReason, ChallengeAttemptRecord } from '@tableside/engine';
 import { CircleAlert, CircleCheckBig, CircleStop, CloudOff, Flag, type LucideIcon } from 'lucide-react-native';
 import { useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 
 import { Segmented } from '@/components/Segmented';
 import { useLoaded } from '@/hooks/use-loaded';
 import { Group, GroupLabel, ListRow, Note, SettingsScreen } from '@/settings/SettingsParts';
 import { fonts, palette, radius, space, textScale } from '@/theme/tokens';
+import { makeStyles } from '@/theme/type';
 import { COUNTING_TITLE } from '@/training/challenge-text';
 import { attemptIdentity, offersReview, type GroupProgress, type Progress } from '@/training/progress';
 import { earningAttempts, milestoneLine } from '@/training/readiness-text';
@@ -111,6 +112,7 @@ export function RecordsScreen({
 }
 
 function GroupCard({ group }: { group: GroupProgress }) {
+  const styles = useStyles();
   const stats = [...bestText(group), ...(group.key.assistanceClass === 'unassisted-check' ? [fastestText(group)] : [])];
   const milestone = milestoneLine(group);
   return (
@@ -139,6 +141,7 @@ function GroupCard({ group }: { group: GroupProgress }) {
 }
 
 function Stat({ stat }: { stat: StatText }) {
+  const styles = useStyles();
   return (
     <View style={styles.stat}>
       <Text maxFontSizeMultiplier={textScale.body} style={styles.statLabel}>
@@ -151,14 +154,14 @@ function Stat({ stat }: { stat: StatText }) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((type) => ({
   card: { gap: space[2], padding: space[4], borderRadius: radius.lg, borderWidth: 1, borderColor: palette.border, backgroundColor: palette.card },
-  title: { fontFamily: fonts.uiBold, fontSize: 16, color: palette.foreground },
-  settings: { fontFamily: fonts.ui, fontSize: 13, lineHeight: 19, color: palette.mutedForeground },
+  title: { fontFamily: fonts.uiSemiBold, ...type.body, color: palette.foreground },
+  settings: { fontFamily: fonts.ui, ...type.secondary, color: palette.mutedForeground },
   stats: { flexDirection: 'row', flexWrap: 'wrap', gap: space[2] },
   stat: { flexGrow: 1, flexBasis: 140, gap: 2 },
-  statLabel: { fontFamily: fonts.ui, fontSize: 12, color: palette.mutedForeground },
+  statLabel: { fontFamily: fonts.ui, ...type.caption, color: palette.mutedForeground },
   milestone: { flexDirection: 'row', alignItems: 'center', gap: space[1] + 2 },
-  milestoneText: { flex: 1, fontFamily: fonts.ui, fontSize: 13, color: palette.foreground },
-  statValue: { fontFamily: fonts.uiBold, fontSize: 16, color: palette.foreground },
-});
+  milestoneText: { flex: 1, fontFamily: fonts.ui, ...type.secondary, color: palette.foreground },
+  statValue: { fontFamily: fonts.uiSemiBold, ...type.body, color: palette.foreground },
+}))

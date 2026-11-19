@@ -1,8 +1,9 @@
 import { Check } from 'lucide-react-native';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
 import { fonts, MIN_TOUCH_TARGET, palette, space, textScale } from '@/theme/tokens';
+import { makeStyles } from '@/theme/type';
 
 // docs/decisions/mobile-device-support-accessibility.md Q1–Q9
 export function SwitchRow({
@@ -18,6 +19,7 @@ export function SwitchRow({
   onChange: (value: boolean) => void;
   disabled?: boolean;
 }) {
+  const styles = useStyles();
   const { focused, focusProps } = useKeyboardFocus();
   return (
     <Pressable
@@ -41,11 +43,11 @@ export function SwitchRow({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((type) => ({
   switchRow: { flexDirection: 'row', alignItems: 'center', gap: space[4], minHeight: MIN_TOUCH_TARGET + 16, paddingVertical: space[3], paddingHorizontal: space[4], borderWidth: 2, borderColor: palette.transparent },
   rowText: { flex: 1, gap: 2 },
-  rowTitle: { fontFamily: fonts.uiBold, fontSize: 15, lineHeight: 21, color: palette.foreground },
-  rowDetail: { fontFamily: fonts.ui, fontSize: 13, lineHeight: 18, color: palette.mutedForeground },
+  rowTitle: { fontFamily: fonts.uiSemiBold, ...type.body, color: palette.foreground },
+  rowDetail: { fontFamily: fonts.ui, ...type.secondary, color: palette.mutedForeground },
   switch: { width: 52, height: 32, borderRadius: 16, padding: 3, justifyContent: 'center' },
   switchOn: { backgroundColor: palette.primary, alignItems: 'flex-end' },
   switchOff: { backgroundColor: palette.muted, borderWidth: 1.5, borderColor: palette.controlBorder, alignItems: 'flex-start' },
@@ -54,4 +56,4 @@ const styles = StyleSheet.create({
   knobOff: { width: 23, height: 23, backgroundColor: palette.mutedForeground },
   disabled: { opacity: 0.4 },
   focused: { borderColor: palette.ring },
-});
+}))

@@ -2,11 +2,12 @@
 
 import type { SignInMethod, SignInMethodEntry } from '@tableside/account';
 import { ChevronRight, Lock, Mail, Pencil, Users, X } from 'lucide-react-native';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 
 import { Button } from '@/components/Button';
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
 import { fonts, palette, radius, space, textScale } from '@/theme/tokens';
+import { makeStyles } from '@/theme/type';
 
 import { LinkButton } from './FirstRunParts';
 import { methodDetail, methodName } from './method-text';
@@ -29,6 +30,7 @@ export function MethodCard({
   onChangeEmail?: () => void;
   disabled: boolean;
 }) {
+  const styles = useStyles();
   const name = methodName(entry.method);
   const detail = methodDetail(entry);
   return (
@@ -63,6 +65,7 @@ export function MethodCard({
 }
 
 export function AddMethodRow({ method, detail, onPress, disabled }: { method: SignInMethod; detail: string; onPress: () => void; disabled: boolean }) {
+  const styles = useStyles();
   const { focused, focusProps } = useKeyboardFocus();
   const name = methodName(method);
   return (
@@ -102,6 +105,7 @@ export function Banner({
   children: string;
   action?: { readonly label: string; readonly onPress: () => void };
 }) {
+  const styles = useStyles();
   const Icon = tone === 'last-method' ? Lock : Users;
   return (
     <View style={styles.banner}>
@@ -119,13 +123,13 @@ export function Banner({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((type) => ({
   card: { gap: space[3] - 2, padding: space[4], borderRadius: radius.lg, borderWidth: 1, borderColor: palette.border, backgroundColor: palette.card },
   head: { flexDirection: 'row', alignItems: 'center', gap: space[3] },
   lead: { width: 36, height: 36, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', backgroundColor: palette.secondary },
   text: { flex: 1, gap: 2 },
-  title: { fontFamily: fonts.uiBold, fontSize: 15, lineHeight: 21, color: palette.foreground },
-  detail: { fontFamily: fonts.ui, fontSize: 13, lineHeight: 18, color: palette.mutedForeground },
+  title: { fontFamily: fonts.uiSemiBold, ...type.body, color: palette.foreground },
+  detail: { fontFamily: fonts.ui, ...type.secondary, color: palette.mutedForeground },
   actions: { flexDirection: 'row', flexWrap: 'wrap', gap: space[2] },
   action: { flexGrow: 1, flexBasis: 140 },
   addRow: {
@@ -142,5 +146,5 @@ const styles = StyleSheet.create({
   focused: { borderColor: palette.ring },
   banner: { flexDirection: 'row', gap: space[3], padding: space[3] + 2, borderRadius: radius.lg, borderWidth: 1, borderColor: palette.border, backgroundColor: palette.card },
   bannerText: { flex: 1, gap: space[1] },
-  bannerTitle: { fontFamily: fonts.uiBold, fontSize: 14, color: palette.foreground },
-});
+  bannerTitle: { fontFamily: fonts.uiSemiBold, ...type.body, color: palette.foreground },
+}))

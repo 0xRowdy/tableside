@@ -3,12 +3,13 @@
 import { CHALLENGE_LESSONS } from '@tableside/definitions';
 import { CHALLENGE_VARIANTS, type ChallengeCategory, type ChallengeVariant } from '@tableside/engine';
 import { CircleDashed, ClipboardCheck, Compass, Flag, GraduationCap, Trophy, type LucideIcon } from 'lucide-react-native';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
 import { LessonLink } from '@/lessons/LessonEntries';
 import { Group, ListRow, Note, SettingsScreen } from '@/settings/SettingsParts';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/theme/tokens';
+import { makeStyles } from '@/theme/type';
 import { CATEGORY_TEXT, COUNTING_TITLE, NOT_READY_HINT, RECOMMENDATIONS_NOTE, SUGGESTED_ORDER_LABEL, variantLabel, type AllowanceCopy } from '@/training/challenge-text';
 import { lessonLinkLabel } from '@/training/lesson-text';
 import type { Progress } from '@/training/progress';
@@ -38,6 +39,7 @@ export function CountingHome({
   onChoose: (setup: ChallengeSetup) => void;
   onOpenRecords: () => void;
 }) {
+  const styles = useStyles();
   // Spec 5 S5-17 j3UhJ
   const elsewhere = allowance?.standing === 'elsewhere' ? allowance.setup.text : null;
   return (
@@ -83,6 +85,7 @@ function CategoryCard({
   onOpenLesson: (lesson: string) => void;
   onChoose: (setup: ChallengeSetup) => void;
 }) {
+  const styles = useStyles();
   const text = CATEGORY_TEXT[entry.category];
   const recommendation = progress?.recommendation.category === entry.category ? progress.recommendation : null;
   const status = categoryStatus(entry.category, progress);
@@ -156,6 +159,7 @@ function VariantButton({
   elsewhere: string | null;
   onChoose: (setup: ChallengeSetup) => void;
 }) {
+  const styles = useStyles();
   const { focused, focusProps } = useKeyboardFocus();
   const label = variantLabel(variant);
   const enabled = ready && !elsewhere;
@@ -186,20 +190,20 @@ function VariantButton({
   );
 }
 
-const styles = StyleSheet.create({
-  label: { fontFamily: fonts.uiBold, fontSize: 12, letterSpacing: 0.6, color: palette.mutedForeground },
+const useStyles = makeStyles((type) => ({
+  label: { fontFamily: fonts.uiSemiBold, ...type.label, color: palette.mutedForeground },
   card: { gap: space[3] - 2, padding: space[4], borderRadius: radius.lg, borderWidth: 1, borderColor: palette.border, backgroundColor: palette.card },
   head: { flexDirection: 'row', alignItems: 'center', gap: space[3] },
   step: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: palette.secondary, borderWidth: 1, borderColor: palette.controlBorder },
-  stepText: { fontFamily: fonts.uiBold, fontSize: 15, color: palette.foreground },
-  title: { flex: 1, fontFamily: fonts.uiBold, fontSize: 18, color: palette.foreground },
-  description: { fontFamily: fonts.ui, fontSize: 14, lineHeight: 20, color: palette.mutedForeground },
+  stepText: { fontFamily: fonts.uiSemiBold, ...type.body, color: palette.foreground },
+  title: { flex: 1, fontFamily: fonts.uiBold, ...type.heading, color: palette.foreground },
+  description: { fontFamily: fonts.ui, ...type.secondary, color: palette.mutedForeground },
   recommended: { gap: space[1], paddingVertical: space[3] - 2, paddingHorizontal: space[3], borderRadius: radius.md, borderWidth: 1, borderColor: palette.primary, backgroundColor: palette.secondary },
   badge: { flexDirection: 'row', alignItems: 'center', gap: space[1] + 2 },
-  badgeText: { fontFamily: fonts.uiBold, fontSize: 12, letterSpacing: 0.6, color: palette.primary },
-  reason: { fontFamily: fonts.ui, fontSize: 13, lineHeight: 19, color: palette.foreground },
+  badgeText: { fontFamily: fonts.uiSemiBold, ...type.label, color: palette.primary },
+  reason: { fontFamily: fonts.ui, ...type.secondary, color: palette.foreground },
   status: { flexDirection: 'row', alignItems: 'flex-start', gap: space[1] + 2 },
-  statusText: { flex: 1, fontFamily: fonts.ui, fontSize: 13, lineHeight: 18, color: palette.mutedForeground },
+  statusText: { flex: 1, fontFamily: fonts.ui, ...type.secondary, color: palette.mutedForeground },
   statusEarned: { color: palette.foreground },
   actions: { flexDirection: 'row', flexWrap: 'wrap', gap: space[3] - 2 },
   variant: {
@@ -217,10 +221,10 @@ const styles = StyleSheet.create({
     borderColor: palette.controlBorder,
     backgroundColor: palette.secondary,
   },
-  variantText: { fontFamily: fonts.uiBold, fontSize: 15, color: palette.foreground },
+  variantText: { fontFamily: fonts.uiSemiBold, ...type.body, color: palette.foreground },
   variantElsewhere: { flexBasis: '100%' },
-  elsewhereText: { flex: 1, fontFamily: fonts.uiBold, fontSize: 12, lineHeight: 16, textAlign: 'center', color: palette.foreground },
+  elsewhereText: { flex: 1, fontFamily: fonts.uiSemiBold, ...type.label, textAlign: 'center', color: palette.foreground },
   pressed: { opacity: 0.8 },
   disabled: { opacity: 0.4 },
   focused: { borderColor: palette.ring, borderWidth: 2 },
-});
+}))

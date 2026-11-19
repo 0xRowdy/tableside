@@ -1,10 +1,11 @@
 // Spec 1 S1-09
 
 import type { GameId, PermittedView, Wager } from '@tableside/engine';
-import { Modal, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Modal, ScrollView, Text, View } from 'react-native';
 
 import { Button } from '@/components/Button';
 import { fonts, palette, radius, space, textScale } from '@/theme/tokens';
+import { makeStyles } from '@/theme/type';
 
 import { GAME_WORDS } from './game-words';
 import { formatUnits } from './units';
@@ -31,6 +32,7 @@ export function EndSessionDialog({
   cancelLabel?: string;
   switchTo?: GameId;
 }) {
+  const styles = useStyles();
   const currentGameName = view.game;
   const nextGameName = switchTo;
   const words = GAME_WORDS[view.game];
@@ -77,12 +79,12 @@ export function EndSessionDialog({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((type) => ({
   scrim: { flex: 1, backgroundColor: palette.scrim },
   dialogScroll: { flexGrow: 1, justifyContent: 'center', padding: space[4] },
   dialog: { gap: space[3], padding: space[6], borderRadius: radius.lg, backgroundColor: palette.popover },
-  dialogTitle: { fontFamily: fonts.display, fontSize: 24, color: palette.foreground },
-  dialogText: { fontFamily: fonts.ui, fontSize: 14, color: palette.mutedForeground },
+  dialogTitle: { fontFamily: fonts.display, ...type.headline, color: palette.foreground },
+  dialogText: { fontFamily: fonts.ui, ...type.secondary, color: palette.mutedForeground },
   dialogStep: { gap: 2 },
-  dialogStepTitle: { fontFamily: fonts.uiMedium, fontSize: 15, color: palette.foreground },
-});
+  dialogStepTitle: { fontFamily: fonts.uiMedium, ...type.body, color: palette.foreground },
+}))

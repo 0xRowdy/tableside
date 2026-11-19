@@ -6,7 +6,7 @@ import type { HintId } from '@tableside/definitions';
 import type { ChallengeCategory, ChallengeEntry, ChallengePacing, ChallengeView, ConversionItem, CountRange, LearnFeedback } from '@tableside/engine';
 import { CircleCheck, CircleDot, CircleHelp, CirclePause, CircleX, Info, Pause, SkipForward, Timer, type LucideIcon } from 'lucide-react-native';
 import { useState } from 'react';
-import { Platform, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Platform, Pressable, ScrollView, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/Button';
@@ -17,6 +17,7 @@ import { FirstUseHint, useReopenHints } from '@/lessons/FirstUseHints';
 import { signed } from '@/play/blackjack-text';
 import { SaveFailedBanner } from '@/play/TableChrome';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/theme/tokens';
+import { makeStyles } from '@/theme/type';
 import { HelpSheet, HoldSheet, WarningNote } from './AttemptSheets';
 import { CountAid } from './CountAid';
 import { CoachButton } from './CoachButton';
@@ -105,6 +106,7 @@ export function ChallengeExercise({
   lesson?: LessonEntry;
   onOpenLesson?: (id: string) => void;
 }) {
+  const styles = useStyles();
   const insets = useSafeAreaInsets();
   const [helping, setHelping] = useState(false);
   const reopenHints = useReopenHints();
@@ -199,6 +201,7 @@ export function ChallengeExercise({
 }
 
 function HeaderButton({ label, hint, icon: Icon, enabled, onPress }: { label: string; hint?: string; icon: LucideIcon; enabled: boolean; onPress: () => void }) {
+  const styles = useStyles();
   const { focused, focusProps } = useKeyboardFocus();
   return (
     <Pressable
@@ -221,6 +224,7 @@ function HeaderButton({ label, hint, icon: Icon, enabled, onPress }: { label: st
 
 // Spec 3 Attempt lifecycle › Performance timer; S3-04 qdnQm
 function PerformanceTime({ timer, performanceMs }: { timer: PerformanceTimer; performanceMs: () => number | null }) {
+  const styles = useStyles();
   const [, setTick] = useState(0);
   usePolling(() => setTick((tick) => tick + 1), TIMER_TICK_MS, timer.since !== null);
   const ms = performanceMs() ?? timer.ms;
@@ -252,6 +256,7 @@ function CountingBody({
   onCommand: (command: LearnerCommand) => void;
   onInputRejected: () => void;
 }) {
+  const styles = useStyles();
   const { width, height, fontScale } = useWindowDimensions();
   const sideBySide = width > height && fontScale <= SIDE_BY_SIDE_MAX_FONT_SCALE;
   const feedback = view.variant === 'learn' ? view.feedback : null;
@@ -308,6 +313,7 @@ function CountingBody({
 
 // Spec 3 S3-04 qmDou; #136
 function PaceWaiting() {
+  const styles = useStyles();
   return (
     <View style={styles.pace}>
       <CirclePause color={palette.foreground} size={14} />
@@ -336,6 +342,7 @@ function ConversionBody({
   onInputRejected: () => void;
   onLesson: (() => void) | null;
 }) {
+  const styles = useStyles();
   const { width, height, fontScale } = useWindowDimensions();
   const sideBySide = width > height && fontScale <= SIDE_BY_SIDE_MAX_FONT_SCALE;
   const feedback = view.variant === 'learn' ? view.feedback : null;
@@ -386,6 +393,7 @@ function ConversionNote({
   onCommand: (command: LearnerCommand) => void;
   onLesson: (() => void) | null;
 }) {
+  const styles = useStyles();
   const text = feedbackText(feedback, 0);
   return (
     <View style={styles.coach} accessibilityLiveRegion="polite" testID="coach-note">
@@ -415,6 +423,7 @@ function ConversionNote({
 }
 
 function GivenValues({ question }: { question: ConversionItem }) {
+  const styles = useStyles();
   return (
     <View style={styles.given} testID="given-values">
       <Given label={GIVEN_RUNNING_COUNT} value={signed(question.running)} spoken={spokenValue(question.running)} />
@@ -424,6 +433,7 @@ function GivenValues({ question }: { question: ConversionItem }) {
 }
 
 function Given({ label, value, spoken }: { label: string; value: string; spoken: string }) {
+  const styles = useStyles();
   return (
     <View accessible accessibilityLabel={`${label}, ${spoken}`} style={styles.givenTile}>
       <Text maxFontSizeMultiplier={textScale.body} style={styles.givenLabel}>
@@ -438,6 +448,7 @@ function Given({ label, value, spoken }: { label: string; value: string; spoken:
 
 // Spec 3 Learn, Check and assistance › Answer accepted
 function RecordedNotice({ entered, category }: { entered: ChallengeEntry; category: ChallengeCategory }) {
+  const styles = useStyles();
   return (
     <View style={styles.recorded} accessibilityLiveRegion="polite" testID="recorded-notice">
       <CircleDot color={palette.foreground} size={18} />
@@ -461,6 +472,7 @@ function CoachNote({
   enabled: boolean;
   onCommand: (command: LearnerCommand) => void;
 }) {
+  const styles = useStyles();
   const text = feedbackText(feedback, position);
   const KindIcon = feedback.correct ? CircleCheck : CircleX;
   const kindColor = feedback.correct ? palette.ink : palette.mistakeInk;
@@ -491,24 +503,24 @@ function CoachNote({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((type) => ({
   screen: { flex: 1, backgroundColor: palette.background },
   header: { flexDirection: 'row', alignItems: 'center', gap: space[2], minHeight: 60, paddingHorizontal: space[4], paddingVertical: space[1] },
   titles: { flex: 1, gap: 2 },
   headerButton: { minWidth: MIN_TOUCH_TARGET, minHeight: MIN_TOUCH_TARGET, alignItems: 'center', justifyContent: 'center', gap: 2, paddingHorizontal: space[1], borderRadius: radius.md, borderWidth: 2, borderColor: palette.transparent },
-  headerButtonText: { fontFamily: fonts.uiBold, fontSize: 11, color: palette.mutedForeground },
+  headerButtonText: { fontFamily: fonts.uiSemiBold, ...type.label, color: palette.mutedForeground },
   disabled: { opacity: 0.4 },
   progressRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space[2] },
   timer: { flexDirection: 'row', alignItems: 'center', gap: space[1] },
-  timerText: { fontFamily: fonts.uiBold, fontSize: 13, color: palette.mutedForeground, fontVariant: ['tabular-nums'] },
-  title: { fontFamily: fonts.uiBold, fontSize: 17, color: palette.foreground },
-  subtitle: { fontFamily: fonts.ui, fontSize: 13, color: palette.mutedForeground },
+  timerText: { fontFamily: fonts.uiSemiBold, ...type.label, color: palette.mutedForeground, fontVariant: ['tabular-nums'] },
+  title: { fontFamily: fonts.uiSemiBold, ...type.body, color: palette.foreground },
+  subtitle: { fontFamily: fonts.ui, ...type.secondary, color: palette.mutedForeground },
   progress: { gap: space[1] + 2, paddingHorizontal: space[4], paddingTop: space[1] + 2, paddingBottom: space[3] - 2 },
-  progressText: { fontFamily: fonts.uiBold, fontSize: 13, color: palette.foreground },
+  progressText: { fontFamily: fonts.uiSemiBold, ...type.label, color: palette.foreground },
   track: { height: 6, borderRadius: 3, backgroundColor: palette.muted, overflow: 'hidden' },
   fill: { height: 6, borderRadius: 3, backgroundColor: palette.primary },
   body: { gap: space[4], paddingHorizontal: space[4], paddingTop: space[3] },
-  prompt: { fontFamily: fonts.uiBold, fontSize: 18, color: palette.foreground, textAlign: 'center' },
+  prompt: { fontFamily: fonts.uiBold, ...type.heading, color: palette.foreground, textAlign: 'center' },
   countPrompt: { gap: space[1] },
   columns: { gap: space[4] },
   column: { gap: space[4] },
@@ -518,24 +530,24 @@ const styles = StyleSheet.create({
   promptBeside: { flex: 1 },
   start: { textAlign: 'left' },
   pace: { flexDirection: 'row', alignSelf: 'flex-start', alignItems: 'center', gap: space[1] + 2, paddingVertical: space[1] + 2, paddingHorizontal: 10, borderRadius: radius.pill, backgroundColor: palette.muted },
-  paceText: { fontFamily: fonts.ui, fontSize: 13, color: palette.foreground },
-  checkpointKicker: { fontFamily: fonts.uiBold, fontSize: 14, color: palette.mutedForeground, textAlign: 'center' },
-  keep: { fontFamily: fonts.ui, fontSize: 15, lineHeight: 21, color: palette.mutedForeground, textAlign: 'center' },
+  paceText: { fontFamily: fonts.ui, ...type.secondary, color: palette.foreground },
+  checkpointKicker: { fontFamily: fonts.uiSemiBold, ...type.body, color: palette.mutedForeground, textAlign: 'center' },
+  keep: { fontFamily: fonts.ui, ...type.secondary, color: palette.mutedForeground, textAlign: 'center' },
   choices: { flexDirection: 'row', gap: space[3] - 2 },
   given: { flexDirection: 'row', gap: space[3] - 2 },
   givenTile: { flex: 1, gap: space[1], paddingVertical: space[4], paddingHorizontal: space[4], borderRadius: radius.lg, borderWidth: 1, borderColor: palette.border, backgroundColor: palette.card },
-  givenLabel: { fontFamily: fonts.ui, fontSize: 13, color: palette.mutedForeground },
-  givenValue: { fontFamily: fonts.uiBold, fontSize: 34, color: palette.foreground },
+  givenLabel: { fontFamily: fonts.ui, ...type.secondary, color: palette.mutedForeground },
+  givenValue: { fontFamily: fonts.uiBold, ...type.figure, color: palette.foreground },
   recorded: { flexDirection: 'row', alignItems: 'center', gap: space[2], paddingVertical: space[3], paddingHorizontal: space[4], borderRadius: radius.md, borderWidth: 1, borderColor: palette.controlBorder, backgroundColor: palette.card },
-  recordedText: { flex: 1, fontFamily: fonts.ui, fontSize: 14, color: palette.foreground },
+  recordedText: { flex: 1, fontFamily: fonts.ui, ...type.body, color: palette.foreground },
   coach: { gap: space[3] - 2, paddingTop: space[4], paddingHorizontal: space[4], paddingBottom: space[4], borderRadius: radius.lg, borderWidth: 1, borderColor: palette.coachAccent, backgroundColor: palette.coach },
   coachHead: { flexDirection: 'row', alignItems: 'flex-start', gap: space[3] - 2 },
   who: { flex: 1 },
-  coachName: { fontFamily: fonts.uiBold, fontSize: 13, color: palette.ink },
-  kicker: { fontFamily: fonts.uiBold, fontSize: 10, letterSpacing: 0.5 },
-  headline: { fontFamily: fonts.uiBold, fontSize: 17, color: palette.ink },
-  detail: { fontFamily: fonts.ui, fontSize: 14, lineHeight: 20, color: palette.inkMuted },
+  coachName: { fontFamily: fonts.uiSemiBold, ...type.label, color: palette.ink },
+  kicker: { fontFamily: fonts.uiSemiBold, ...type.label },
+  headline: { fontFamily: fonts.uiSemiBold, ...type.body, color: palette.ink },
+  detail: { fontFamily: fonts.ui, ...type.body, color: palette.inkMuted },
   coachActions: { flexDirection: 'row', flexWrap: 'wrap', gap: space[2] },
   pressed: { opacity: 0.8 },
   focused: { borderColor: palette.ring, borderWidth: 2 },
-});
+}))

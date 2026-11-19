@@ -2,11 +2,12 @@
 
 import type { ChallengeAttemptRecord } from '@tableside/engine';
 import { BookOpen, CircleAlert, CircleCheckBig, Coins, Divide, Flag, GraduationCap, Hash, Info, ListChecks, RotateCcw, Spade, Square, Trophy, type LucideIcon } from 'lucide-react-native';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/Button';
 import { fonts, palette, radius, space, textScale } from '@/theme/tokens';
+import { makeStyles } from '@/theme/type';
 import { BETTING_ADHERENCE, bettingTested, financeValues, FINANCES_LABEL, FINANCES_NOTE, NO_BET_SCHEDULE, resultsSubtitle } from '@/training/blackjack-table-text';
 import {
   ASSISTED_NOTE,
@@ -81,6 +82,7 @@ export function ChallengeResults({
   onOpenLesson: (id: string) => void;
   onPracticeLearn: () => void;
 }) {
+  const styles = useStyles();
   const insets = useSafeAreaInsets();
   const { groupKey } = record;
   const ending = endingText(record, position, explanation);
@@ -224,6 +226,7 @@ export function ChallengeResults({
 
 // Spec 3 S3-08 CEb6T, nXGFk
 function ReadinessBox({ title, detail, pill }: { title: string; detail: string; pill: string | null }) {
+  const styles = useStyles();
   return (
     <View accessible accessibilityLabel={[`${title}.`, detail, pill && `${pill}.`].filter(Boolean).join(' ')} style={[styles.box, styles.earned]}>
       <Flag color={palette.primary} size={24} />
@@ -249,6 +252,7 @@ function ReadinessBox({ title, detail, pill }: { title: string; detail: string; 
 
 // Spec 3 S3-08 liAfT, CEb6T
 function PersonalBestBox({ title, detail, fastest }: { title: string; detail: string; fastest: string | null }) {
+  const styles = useStyles();
   return (
     <View accessible accessibilityLabel={[`${title}.`, detail, fastest && `${fastest}.`].filter(Boolean).join(' ')} style={[styles.box, styles.earned]}>
       <Flag color={palette.primary} size={24} />
@@ -272,11 +276,11 @@ function PersonalBestBox({ title, detail, fastest }: { title: string; detail: st
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((type) => ({
   screen: { flex: 1, backgroundColor: palette.background },
   header: { gap: 1, minHeight: 56, justifyContent: 'center', paddingHorizontal: space[6] - space[1], paddingVertical: space[1] },
-  title: { fontFamily: fonts.uiBold, fontSize: 17, color: palette.foreground },
-  subtitle: { fontFamily: fonts.ui, fontSize: 12, color: palette.mutedForeground },
+  title: { fontFamily: fonts.uiSemiBold, ...type.body, color: palette.foreground },
+  subtitle: { fontFamily: fonts.ui, ...type.caption, color: palette.mutedForeground },
   body: { gap: space[4], paddingTop: space[2], paddingHorizontal: space[4] },
   box: { flexDirection: 'row', gap: space[3], padding: space[4], borderRadius: radius.lg, borderWidth: 1, borderColor: palette.controlBorder, backgroundColor: palette.card },
   alert: { borderWidth: 2, borderColor: palette.warning },
@@ -294,23 +298,23 @@ const styles = StyleSheet.create({
     borderColor: palette.primary,
     backgroundColor: palette.secondary,
   },
-  badgeText: { fontFamily: fonts.uiBold, fontSize: 13, color: palette.foreground },
+  badgeText: { fontFamily: fonts.uiSemiBold, ...type.label, color: palette.foreground },
   boxText: { flex: 1, gap: space[1] },
-  boxTitle: { fontFamily: fonts.uiBold, fontSize: 17, color: palette.foreground },
-  boxDetail: { fontFamily: fonts.ui, fontSize: 14, lineHeight: 20, color: palette.mutedForeground },
-  label: { fontFamily: fonts.uiBold, fontSize: 12, letterSpacing: 0.6, color: palette.mutedForeground },
+  boxTitle: { fontFamily: fonts.uiSemiBold, ...type.body, color: palette.foreground },
+  boxDetail: { fontFamily: fonts.ui, ...type.secondary, color: palette.mutedForeground },
+  label: { fontFamily: fonts.uiSemiBold, ...type.label, color: palette.mutedForeground },
   group: { borderRadius: radius.lg, borderWidth: 1, borderColor: palette.border, backgroundColor: palette.card, overflow: 'hidden' },
   row: { flexDirection: 'row', alignItems: 'center', gap: space[3], minHeight: 64, paddingVertical: space[3], paddingHorizontal: space[4] },
   rowDivider: { borderTopWidth: 1, borderTopColor: palette.border },
   lead: { width: 36, height: 36, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', backgroundColor: palette.secondary },
   rowText: { flex: 1, gap: 2 },
-  rowTitle: { fontFamily: fonts.uiBold, fontSize: 15, color: palette.foreground },
-  rowDetail: { fontFamily: fonts.ui, fontSize: 13, color: palette.mutedForeground },
-  score: { fontFamily: fonts.uiBold, fontSize: 14, color: palette.mutedForeground },
-  note: { fontFamily: fonts.ui, fontSize: 13, lineHeight: 19, color: palette.mutedForeground },
+  rowTitle: { fontFamily: fonts.uiSemiBold, ...type.body, color: palette.foreground },
+  rowDetail: { fontFamily: fonts.ui, ...type.secondary, color: palette.mutedForeground },
+  score: { fontFamily: fonts.uiSemiBold, ...type.body, color: palette.mutedForeground },
+  note: { fontFamily: fonts.ui, ...type.secondary, color: palette.mutedForeground },
   finances: { gap: space[3], padding: space[4] },
   financeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: space[4] },
   financeItem: { flexGrow: 1, flexBasis: 80, gap: 2 },
-  financeLabel: { fontFamily: fonts.ui, fontSize: 13, color: palette.mutedForeground },
-  financeValue: { fontFamily: fonts.uiBold, fontSize: 22, color: palette.foreground },
-});
+  financeLabel: { fontFamily: fonts.ui, ...type.secondary, color: palette.mutedForeground },
+  financeValue: { fontFamily: fonts.uiBold, ...type.heading, color: palette.foreground },
+}))

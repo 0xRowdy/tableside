@@ -4,13 +4,14 @@ import { QUARANTINE_LIST } from '@tableside/definitions';
 import { isPlayCorrection, quarantineStatus, type QuarantineList, type StrategyDeparture } from '@tableside/engine';
 import { CircleCheck, Info, TriangleAlert } from 'lucide-react-native';
 import { useState, type ReactNode } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 
 import { Button } from '@/components/Button';
 import { Screen } from '@/components/Screen';
 import { useAnnouncement } from '@/hooks/use-accessibility';
 import type { CompletedPracticeSession } from '@/practice/store';
 import { fonts, palette, radius, space, textScale } from '@/theme/tokens';
+import { makeStyles } from '@/theme/type';
 
 import { cardShort } from './blackjack-coaching';
 import { moveText } from './blackjack-text';
@@ -66,6 +67,7 @@ export function SessionResult({
   actions: ReactNode;
   quarantine?: QuarantineList;
 }) {
+  const styles = useStyles();
   useAnnouncement(
     `Session result. ${outcomeWord(record.netResult)}, net result ${speakSigned(record.netResult)}. Final cash-out ${formatUnits(record.finalCashOut)}. Max drawdown ${formatUnits(record.maxDrawdown)}.`,
   );
@@ -166,6 +168,7 @@ const MEASURES = [
 ] as const;
 
 function Guidance({ record, guidance }: { record: CompletedPracticeSession; guidance: NonNullable<CompletedPracticeSession['guidance']> }) {
+  const styles = useStyles();
   const [showAll, setShowAll] = useState(false);
   const { departures } = guidance;
   const shown = showAll ? departures : departures.slice(0, FIRST_DEPARTURES);
@@ -231,29 +234,29 @@ function Guidance({ record, guidance }: { record: CompletedPracticeSession; guid
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((type) => ({
   titles: { gap: 2 },
-  title: { fontFamily: fonts.display, fontSize: 30, color: palette.foreground },
-  subtitle: { fontFamily: fonts.ui, fontSize: 14, color: palette.mutedForeground },
+  title: { fontFamily: fonts.display, ...type.display, color: palette.foreground },
+  subtitle: { fontFamily: fonts.ui, ...type.secondary, color: palette.mutedForeground },
   banner: { flexDirection: 'row', gap: space[3], padding: space[4], borderRadius: radius.lg, backgroundColor: palette.card },
   bannerText: { flex: 1, gap: 2 },
-  bannerTitle: { fontFamily: fonts.uiBold, fontSize: 14, color: palette.foreground },
-  label: { fontFamily: fonts.uiBold, fontSize: 12, letterSpacing: 0.5, color: palette.mutedForeground },
-  muted: { fontFamily: fonts.ui, fontSize: 14, color: palette.mutedForeground },
+  bannerTitle: { fontFamily: fonts.uiSemiBold, ...type.body, color: palette.foreground },
+  label: { fontFamily: fonts.uiSemiBold, ...type.label, color: palette.mutedForeground },
+  muted: { fontFamily: fonts.ui, ...type.secondary, color: palette.mutedForeground },
   stats: { flexDirection: 'row', flexWrap: 'wrap', gap: space[3] },
   stat: { flexGrow: 1, flexBasis: 140, gap: space[1], padding: space[4], borderRadius: radius.lg, backgroundColor: palette.card },
-  statValue: { fontFamily: fonts.display, fontSize: 28, color: palette.foreground },
+  statValue: { fontFamily: fonts.display, ...type.headline, color: palette.foreground },
   ledger: { gap: space[2], padding: space[4], borderRadius: radius.lg, backgroundColor: palette.card },
   kv: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: space[2] },
-  kvValue: { fontFamily: fonts.uiMedium, fontSize: 15, color: palette.foreground },
-  kvTotal: { fontFamily: fonts.uiBold, fontSize: 15, color: palette.foreground },
+  kvValue: { fontFamily: fonts.uiMedium, ...type.body, color: palette.foreground },
+  kvTotal: { fontFamily: fonts.uiSemiBold, ...type.body, color: palette.foreground },
   divider: { height: 1, backgroundColor: palette.border },
   entryDivider: { marginBottom: space[2] },
   entry: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: space[2] },
   entryText: { flexGrow: 1, flexShrink: 1, flexBasis: 180, gap: 2 },
   tag: {
     fontFamily: fonts.uiMedium,
-    fontSize: 13,
+    ...type.secondary,
     color: palette.foreground,
     backgroundColor: palette.secondary,
     borderRadius: radius.pill,
@@ -263,4 +266,4 @@ const styles = StyleSheet.create({
   },
   note: { flexDirection: 'row', gap: space[2], alignItems: 'flex-start' },
   noteText: { flex: 1 },
-});
+}))

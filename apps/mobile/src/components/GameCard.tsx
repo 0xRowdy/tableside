@@ -6,6 +6,7 @@ import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } fro
 import type { LaunchGame } from '@/games';
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
 import { fonts, palette, space, textScale } from '@/theme/tokens';
+import { makeStyles } from '@/theme/type';
 
 export function GameCard({
   game,
@@ -18,6 +19,7 @@ export function GameCard({
   style?: StyleProp<ViewStyle>;
   contentInset?: { left: number; right: number };
 }) {
+  const styles = useStyles();
   const { focused, focusProps } = useKeyboardFocus();
   return (
     <Pressable
@@ -47,20 +49,18 @@ export function GameCard({
 
 const CONTENT_PADDING = space[6] - 4;
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((type) => ({
   card: { overflow: 'hidden', justifyContent: 'flex-end', backgroundColor: palette.card },
   pressed: { opacity: 0.85 },
   content: { padding: CONTENT_PADDING, gap: space[1], backgroundColor: palette.scrim },
   fade: { position: 'absolute', left: 0, right: 0, bottom: '100%', height: space[16] },
   summary: {
-    fontFamily: fonts.uiBold,
-    fontSize: 11,
-    letterSpacing: 1,
-    textTransform: 'uppercase',
+    fontFamily: fonts.uiSemiBold,
+    ...type.label,
     color: palette.onImage,
   },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: space[3] },
-  title: { flex: 1, fontFamily: fonts.display, fontSize: 34, lineHeight: 38, color: palette.onImage },
+  title: { flex: 1, fontFamily: fonts.display, ...type.displayCard, color: palette.onImage },
   go: {
     width: 44,
     height: 44,
@@ -70,4 +70,4 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   focusRing: { position: 'absolute', inset: 0, borderWidth: 3, borderColor: palette.ring },
-});
+}))

@@ -2,11 +2,12 @@
 
 import type { StrategyDefinition, TableCompatibility, TableRequirement } from '@tableside/engine';
 import { useState, type ReactNode } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 
 import { Button } from '@/components/Button';
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/theme/tokens';
+import { makeStyles } from '@/theme/type';
 
 import { betsText, type CoachWords } from '../coaching-text';
 import { formatUnits } from '../units';
@@ -42,6 +43,7 @@ export function StrategyPicker({
   tableParts: string;
   children?: ReactNode;
 }) {
+  const styles = useStyles();
   const [customizeNote, setCustomizeNote] = useState<string | null>(null);
   const choose = (next: StrategyDefinition) => {
     onChoose(next);
@@ -91,6 +93,7 @@ export function StrategyPicker({
 }
 
 function StrategyChoice({ definition, selected, onPress }: { definition: StrategyDefinition; selected: boolean; onPress: () => void }) {
+  const styles = useStyles();
   const { focused, focusProps } = useKeyboardFocus();
   return (
     <Pressable
@@ -111,11 +114,11 @@ function StrategyChoice({ definition, selected, onPress }: { definition: Strateg
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((type) => ({
   section: { gap: space[2] },
-  label: { fontFamily: fonts.uiBold, fontSize: 12, letterSpacing: 0.5, color: palette.mutedForeground },
-  value: { fontFamily: fonts.uiMedium, fontSize: 15, color: palette.foreground },
-  help: { fontFamily: fonts.ui, fontSize: 13, color: palette.mutedForeground },
+  label: { fontFamily: fonts.uiSemiBold, ...type.label, color: palette.mutedForeground },
+  value: { fontFamily: fonts.uiMedium, ...type.body, color: palette.foreground },
+  help: { fontFamily: fonts.ui, ...type.secondary, color: palette.mutedForeground },
   strategies: { gap: space[2] },
   choice: {
     flexGrow: 1,
@@ -133,4 +136,4 @@ const styles = StyleSheet.create({
   choiceSelected: { borderColor: palette.primary, borderWidth: 2 },
   choiceFocused: { borderColor: palette.ring, borderWidth: 2 },
   incompatible: { gap: space[2], padding: space[4], borderRadius: radius.lg, borderWidth: 2, borderColor: palette.destructive, backgroundColor: palette.card },
-});
+}))

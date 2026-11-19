@@ -3,7 +3,7 @@ import { PLAY_CHECK_WITHHELD_MODES, type BlackjackMode } from '@tableside/defini
 import { router } from 'expo-router';
 import { ArrowLeft, CircleStop } from 'lucide-react-native';
 import { useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 
 import { NavButton } from '@/lessons/LessonParts';
 import { attemptHref } from '@/lessons/routes';
@@ -11,6 +11,7 @@ import { NEEDS_UPDATE } from '@/training/challenge-text';
 import { END_TO_PRACTICE, ENDING_ABANDONS, PRACTICE_AFTER_ATTEMPT, practiceHeldText, RETURN_TO_ATTEMPT } from '@/training/lesson-text';
 import { useInstructionWithheld, useTraining } from '@/training/TrainingProvider';
 import { fonts, palette, space, textScale } from '@/theme/tokens';
+import { makeStyles } from '@/theme/type';
 
 export function useModeWithheld(mode: BlackjackMode | null): boolean | undefined {
   const withheld = useInstructionWithheld();
@@ -19,6 +20,7 @@ export function useModeWithheld(mode: BlackjackMode | null): boolean | undefined
 }
 
 export function PracticeHold({ mode }: { mode: BlackjackMode }) {
+  const styles = useStyles();
   const { service, snapshot } = useTraining();
   const withheld = useInstructionWithheld();
   const [busy, setBusy] = useState(false);
@@ -55,10 +57,10 @@ export function PracticeHold({ mode }: { mode: BlackjackMode }) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((type) => ({
   hold: { gap: space[4] },
-  heading: { fontFamily: fonts.display, fontSize: 22, lineHeight: 28, color: palette.foreground },
-  text: { fontFamily: fonts.ui, fontSize: 15, lineHeight: 23, color: palette.mutedForeground },
-  alert: { fontFamily: fonts.ui, fontSize: 14, lineHeight: 20, color: palette.warning },
-  footnote: { fontFamily: fonts.ui, fontSize: 13, lineHeight: 20, color: palette.mutedForeground },
-});
+  heading: { fontFamily: fonts.display, ...type.headline, color: palette.foreground },
+  text: { fontFamily: fonts.ui, ...type.secondary, color: palette.mutedForeground },
+  alert: { fontFamily: fonts.ui, ...type.body, color: palette.warning },
+  footnote: { fontFamily: fonts.ui, ...type.secondary, color: palette.mutedForeground },
+}))

@@ -1,7 +1,7 @@
 import type { DomainFact, PermittedView } from '@tableside/engine';
 import { CircleStop } from 'lucide-react-native';
 import type { ReactNode } from 'react';
-import { AccessibilityInfo, Pressable, StyleSheet, Text, View } from 'react-native';
+import { AccessibilityInfo, Pressable, Text, View } from 'react-native';
 
 import { Button } from '@/components/Button';
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
@@ -11,7 +11,8 @@ import { HelpButton } from '@/lessons/FirstUseHints';
 import type { SetupTerms } from '@/practice/adapters';
 import { SAVE_RETRY_MS, type AccessStop, type ActiveSnapshot, type PracticeController, type PracticeSnapshot, type Suspension } from '@/practice/controller';
 import { usePractice } from '@/practice/PracticeProvider';
-import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale, type ColorToken } from '@/theme/tokens';
+import { fonts, MIN_TOUCH_TARGET, objectType, palette, radius, space, textScale, type ColorToken } from '@/theme/tokens';
+import { makeStyles } from '@/theme/type';
 
 import { EndSessionDialog } from './EndSessionDialog';
 import { StopStrategyDialog } from './Guidance';
@@ -29,6 +30,7 @@ export function TableTopBar({
   canEnd: boolean;
   onEnd: () => void;
 }) {
+  const styles = useStyles();
   const { focused, focusProps } = useKeyboardFocus();
   return (
     <View style={styles.topBar}>
@@ -63,6 +65,7 @@ export interface PhaseStep {
 }
 
 export function PhaseStepper({ steps }: { steps: readonly PhaseStep[] }) {
+  const styles = useStyles();
   return (
     <View style={styles.stepper} testID="phase-stepper">
       {steps.map((step, index) => (
@@ -99,6 +102,7 @@ export function SessionStrip({ balance, onTable, status }: { balance: string; on
 
 // Spec 3 S3-07 v82z3
 export function StatStrip({ stats, status }: { stats: readonly { readonly label: string; readonly spoken: string; readonly value: string }[]; status: string }) {
+  const styles = useStyles();
   return (
     <View style={styles.strip}>
       {stats.map((stat) => (
@@ -116,6 +120,7 @@ export function StatStrip({ stats, status }: { stats: readonly { readonly label:
 
 // Spec 1 Amendment 4 D
 export function AllowanceLine({ game }: { game: string }) {
+  const styles = useStyles();
   const { controller } = usePractice();
   const allowance: SetupTerms['allowance'] = useLoaded((practice, id) => practice.setupTerms(id), controller, game)?.allowance ?? null;
   if (!allowance) return null;
@@ -134,6 +139,7 @@ export const CONTENT_REMOVED = 'Strategy removed — settling existing bets';
 const CONTENT_REMOVED_REASON = 'Removed after a validated legal or privacy request.';
 
 export function TableBanner({ title, text, testID, children }: { title: string; text: string; testID?: string; children?: ReactNode }) {
+  const styles = useStyles();
   return (
     <View style={styles.banner} testID={testID}>
       <Text accessibilityRole="alert" maxFontSizeMultiplier={textScale.body} style={styles.bannerTitle}>{title}</Text>
@@ -207,6 +213,7 @@ export const CHIPS: readonly { value: string; label: string; color: ColorToken; 
 ];
 
 export function ChipRack({ chip, onChoose, from = '1', spot = 'a spot' }: { chip: string; onChoose: (value: string) => void; from?: string; spot?: string }) {
+  const styles = useStyles();
   const chips = CHIPS.slice(CHIPS.findIndex((option) => option.value === from));
   return (
     <View style={styles.rack}>
@@ -223,6 +230,7 @@ export function ChipRack({ chip, onChoose, from = '1', spot = 'a spot' }: { chip
 }
 
 function Chip({ option, selected, onPress }: { option: (typeof CHIPS)[number]; selected: boolean; onPress: () => void }) {
+  const styles = useStyles();
   const { focused, focusProps } = useKeyboardFocus();
   return (
     <Pressable
@@ -254,6 +262,7 @@ export function EndingSteps({
   lead?: string | null;
   footer: string;
 }) {
+  const styles = useStyles();
   const returned = sumUnits(...facts.flatMap((fact) => (fact.kind === 'wager-returned' ? [fact.amount] : [])));
   const steps = [
     { title: 'Removable wagers returned', detail: returned !== '0' ? `+${formatUnits(returned)} to your balance` : noneReturned, state: 'done' },
@@ -324,6 +333,7 @@ export function TableDialogs({
 
 // Spec 1 S1-04; Spec 3 S3-07 v82z3
 export function BlackjackFeltRules({ dealer }: { dealer: 'S17' | 'H17' }) {
+  const styles = useStyles();
   return (
     <View style={styles.feltRules}>
       <Text maxFontSizeMultiplier={textScale.display} style={styles.pays}>BLACKJACK PAYS 3 TO 2</Text>
@@ -335,6 +345,7 @@ export function BlackjackFeltRules({ dealer }: { dealer: 'S17' | 'H17' }) {
 }
 
 export function FeltBadge({ text }: { text: string }) {
+  const styles = useStyles();
   return (
     <View style={styles.feltBadge}>
       <Text maxFontSizeMultiplier={textScale.body} style={styles.feltBadgeText}>{text}</Text>
@@ -343,6 +354,7 @@ export function FeltBadge({ text }: { text: string }) {
 }
 
 export function FaceDownCard() {
+  const styles = useStyles();
   return (
     <View accessible accessibilityLabel="Face-down card" style={styles.cardBack}>
       <View style={styles.cardBackField} />
@@ -350,21 +362,21 @@ export function FaceDownCard() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((type) => ({
   feltRules: { alignItems: 'center', gap: 2 },
-  pays: { fontFamily: fonts.display, fontSize: 18, color: palette.feltText, textAlign: 'center' },
-  dealerRule: { fontFamily: fonts.uiMedium, fontSize: 10, letterSpacing: 0.5, color: palette.feltText, textAlign: 'center' },
+  pays: { fontFamily: fonts.display, ...type.headline, color: palette.feltText, textAlign: 'center' },
+  dealerRule: { fontFamily: fonts.uiMedium, ...type.caption, letterSpacing: 0.5, color: palette.feltText, textAlign: 'center' },
   feltBadge: { paddingHorizontal: space[2], paddingVertical: 3, borderRadius: radius.pill, backgroundColor: palette.feltDeep },
-  feltBadgeText: { fontFamily: fonts.uiBold, fontSize: 13, color: palette.feltText },
+  feltBadgeText: { fontFamily: fonts.uiSemiBold, ...type.label, color: palette.feltText },
   cardBack: { width: 56, minHeight: 80, padding: 4, borderRadius: radius.sm, backgroundColor: palette.cardFace },
   cardBackField: { flex: 1, borderRadius: 4, backgroundColor: palette.chip5 },
   banner: { margin: space[4], padding: space[4], gap: space[2], borderRadius: radius.lg, backgroundColor: palette.card, borderWidth: 1, borderColor: palette.destructive },
-  bannerTitle: { fontFamily: fonts.uiBold, fontSize: 14, color: palette.foreground },
-  bannerText: { fontFamily: fonts.ui, fontSize: 13, color: palette.mutedForeground },
+  bannerTitle: { fontFamily: fonts.uiSemiBold, ...type.body, color: palette.foreground },
+  bannerText: { fontFamily: fonts.ui, ...type.secondary, color: palette.mutedForeground },
   topBar: { flexDirection: 'row', alignItems: 'center', gap: space[1], paddingLeft: space[4], paddingRight: space[2] },
   titles: { flex: 1, gap: 1, paddingVertical: space[1] },
-  title: { fontFamily: fonts.uiBold, fontSize: 16, color: palette.foreground },
-  subtitle: { fontFamily: fonts.ui, fontSize: 12, color: palette.mutedForeground },
+  title: { fontFamily: fonts.uiSemiBold, ...type.body, color: palette.foreground },
+  subtitle: { fontFamily: fonts.ui, ...type.caption, color: palette.mutedForeground },
   iconButton: {
     minWidth: MIN_TOUCH_TARGET,
     minHeight: MIN_TOUCH_TARGET,
@@ -380,7 +392,7 @@ const styles = StyleSheet.create({
   step: { flex: 1, gap: 5 },
   stepBar: { height: 3, borderRadius: 2, backgroundColor: palette.border },
   stepBarReached: { backgroundColor: palette.primary },
-  stepText: { fontFamily: fonts.uiMedium, fontSize: 11, color: palette.mutedForeground },
+  stepText: { fontFamily: fonts.uiMedium, ...type.caption, color: palette.mutedForeground },
   stepTextCurrent: { fontFamily: fonts.uiBold, color: palette.foreground },
   strip: {
     flexDirection: 'row',
@@ -392,8 +404,8 @@ const styles = StyleSheet.create({
     backgroundColor: palette.card,
   },
   stat: { gap: 1 },
-  statLabel: { fontFamily: fonts.uiBold, fontSize: 10, color: palette.mutedForeground, letterSpacing: 0.5 },
-  statValue: { fontFamily: fonts.uiBold, fontSize: 16, color: palette.foreground },
+  statLabel: { fontFamily: fonts.uiSemiBold, ...type.label, color: palette.mutedForeground },
+  statValue: { fontFamily: fonts.uiSemiBold, ...type.body, color: palette.foreground },
   statusTag: {
     marginLeft: 'auto',
     paddingHorizontal: 10,
@@ -401,7 +413,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     backgroundColor: palette.secondary,
   },
-  statusText: { fontFamily: fonts.uiBold, fontSize: 12, color: palette.foreground },
+  statusText: { fontFamily: fonts.uiSemiBold, ...type.label, color: palette.foreground },
   allowance: { gap: 1, paddingHorizontal: space[4], paddingVertical: space[1], backgroundColor: palette.card },
   rack: { gap: space[2], padding: space[3], borderRadius: radius.lg, backgroundColor: palette.rail },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: space[1] },
@@ -416,14 +428,14 @@ const styles = StyleSheet.create({
   },
   chipSelected: { borderColor: palette.primary },
   chip: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
-  chipText: { fontFamily: fonts.uiBold, fontSize: 15 },
-  chipCheck: { position: 'absolute', top: -2, right: -2, fontFamily: fonts.uiBold, fontSize: 12, color: palette.primary },
-  rackCaption: { fontFamily: fonts.ui, fontSize: 12, color: palette.foreground },
+  chipText: { fontFamily: fonts.uiBold, fontSize: objectType.chipValue },
+  chipCheck: { position: 'absolute', top: -2, right: -2, fontFamily: fonts.uiSemiBold, ...type.label, color: palette.primary },
+  rackCaption: { fontFamily: fonts.ui, ...type.caption, color: palette.foreground },
   ending: { gap: space[3], padding: space[4] },
-  endingTitle: { fontFamily: fonts.display, fontSize: 24, color: palette.foreground },
+  endingTitle: { fontFamily: fonts.display, ...type.headline, color: palette.foreground },
   endingStep: { gap: 2 },
-  endingStepTitle: { fontFamily: fonts.uiMedium, fontSize: 15, color: palette.foreground },
-  endingStepDetail: { fontFamily: fonts.ui, fontSize: 13, color: palette.mutedForeground },
+  endingStepTitle: { fontFamily: fonts.uiMedium, ...type.body, color: palette.foreground },
+  endingStepDetail: { fontFamily: fonts.ui, ...type.secondary, color: palette.mutedForeground },
   muted: { color: palette.mutedForeground },
-  allowanceText: { fontFamily: fonts.uiMedium, fontSize: 13, color: palette.foreground },
-});
+  allowanceText: { fontFamily: fonts.uiMedium, ...type.secondary, color: palette.foreground },
+}))

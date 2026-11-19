@@ -3,7 +3,7 @@
 
 import type { LessonHandoff, LessonSource, PublishedNote } from '@tableside/definitions';
 import { ArrowLeft, ArrowRight, ChevronRight, GraduationCap, Play, RefreshCcw, RotateCcw, Shuffle, Spade, SquarePlay, type LucideIcon } from 'lucide-react-native';
-import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Linking, Pressable, ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Sheet, SheetText } from '@/components/Sheet';
@@ -12,6 +12,7 @@ import { TextLink } from '@/lessons/LessonEntries';
 import { NavButton } from '@/lessons/LessonParts';
 import { BackButton } from '@/settings/SettingsParts';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/theme/tokens';
+import { makeStyles } from '@/theme/type';
 import type { AllowanceCopy } from '@/training/challenge-text';
 import {
   BACK,
@@ -73,6 +74,7 @@ export function LessonPlayer({
   handoffSheet: HandoffSheet | null;
   actions: LessonActions;
 }) {
+  const styles = useStyles();
   const insets = useSafeAreaInsets();
   const steps = stepCount(view);
   const authored = view.steps[view.step - 1];
@@ -172,6 +174,7 @@ function HandoffLink({ handoff, disabled, onPress }: { handoff: LessonHandoff; d
 
 // Spec 3 S3-13 ZBpF3
 function HandoffOption({ handoff, detail, disabled, onPress }: { handoff: LessonHandoff; detail: string; disabled: boolean; onPress: () => void }) {
+  const styles = useStyles();
   const { focused, focusProps } = useKeyboardFocus();
   const label = handoffLabel(handoff);
   const Icon = SHEET_ICON[handoff.kind];
@@ -202,6 +205,7 @@ function HandoffOption({ handoff, detail, disabled, onPress }: { handoff: Lesson
 }
 
 function ChangeNotice({ notice }: { notice: NonNullable<LessonView['notice']> }) {
+  const styles = useStyles();
   const text = noticeText(notice);
   return (
     <View style={styles.notice}>
@@ -220,6 +224,7 @@ function ChangeNotice({ notice }: { notice: NonNullable<LessonView['notice']> })
 
 // Spec 3 S3-12 l8pMS; Amendment 1 B2; Amendment 2 §3 (lesson player); #152
 function PublishedNoteBox({ note }: { note: PublishedNote }) {
+  const styles = useStyles();
   return (
     <View style={styles.publishedNote}>
       <Text accessibilityRole="header" maxFontSizeMultiplier={textScale.body} style={styles.publishedTitle}>
@@ -237,6 +242,7 @@ function PublishedNoteBox({ note }: { note: PublishedNote }) {
 
 // Spec 3 Amendment 1 C11
 function StepSource({ source }: { source: LessonSource }) {
+  const styles = useStyles();
   const { focused, focusProps } = useKeyboardFocus();
   const label = sourceText(source.citation);
   const { url } = source;
@@ -264,6 +270,7 @@ function StepSource({ source }: { source: LessonSource }) {
 
 // Spec 3 S3-12 l8pMS; #144
 function ExampleLink({ disabled, onPress }: { disabled: boolean; onPress: () => void }) {
+  const styles = useStyles();
   const { focused, focusProps } = useKeyboardFocus();
   return (
     <Pressable
@@ -285,6 +292,7 @@ function ExampleLink({ disabled, onPress }: { disabled: boolean; onPress: () => 
 
 // Spec 3 S3-12 hGHha; Amendment 1 C11
 function Credits({ sources }: { sources: readonly LessonSource[] }) {
+  const styles = useStyles();
   return (
     <View style={styles.credits}>
       <Text accessibilityRole="header" maxFontSizeMultiplier={textScale.body} style={styles.creditsHeading}>
@@ -307,6 +315,7 @@ function Credits({ sources }: { sources: readonly LessonSource[] }) {
 }
 
 function CreditLink({ citation, url }: { citation: string; url: string }) {
+  const styles = useStyles();
   const { focused, focusProps } = useKeyboardFocus();
   return (
     <Pressable
@@ -324,6 +333,7 @@ function CreditLink({ citation, url }: { citation: string; url: string }) {
 }
 
 function IconButton({ icon: Icon, label, disabled, onPress }: { icon: LucideIcon; label: string; disabled: boolean; onPress: () => void }) {
+  const styles = useStyles();
   const { focused, focusProps } = useKeyboardFocus();
   return (
     <Pressable
@@ -340,12 +350,12 @@ function IconButton({ icon: Icon, label, disabled, onPress }: { icon: LucideIcon
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((type) => ({
   screen: { flex: 1, backgroundColor: palette.background },
   header: { flexDirection: 'row', alignItems: 'center', gap: space[1], minHeight: 56, paddingLeft: space[1], paddingRight: space[2] },
   titles: { flex: 1, gap: 1, paddingVertical: space[1] },
-  title: { fontFamily: fonts.uiBold, fontSize: 17, color: palette.foreground },
-  kind: { fontFamily: fonts.ui, fontSize: 12, color: palette.mutedForeground },
+  title: { fontFamily: fonts.uiSemiBold, ...type.body, color: palette.foreground },
+  kind: { fontFamily: fonts.ui, ...type.caption, color: palette.mutedForeground },
   iconButton: { width: MIN_TOUCH_TARGET, minHeight: MIN_TOUCH_TARGET, alignItems: 'center', justifyContent: 'center', borderRadius: radius.md, borderWidth: 2, borderColor: palette.transparent },
   body: { gap: space[4], paddingTop: space[2], paddingHorizontal: space[6] - space[1] },
   notice: {
@@ -358,19 +368,19 @@ const styles = StyleSheet.create({
     backgroundColor: palette.card,
   },
   noticeText: { flex: 1, gap: space[1] },
-  noticeTitle: { fontFamily: fonts.uiBold, fontSize: 15, color: palette.foreground },
-  noticeBody: { fontFamily: fonts.ui, fontSize: 14, lineHeight: 20, color: palette.mutedForeground },
+  noticeTitle: { fontFamily: fonts.uiSemiBold, ...type.body, color: palette.foreground },
+  noticeBody: { fontFamily: fonts.ui, ...type.secondary, color: palette.mutedForeground },
   progress: { gap: space[2] - 2 },
-  stepText: { fontFamily: fonts.uiBold, fontSize: 13, color: palette.mutedForeground },
+  stepText: { fontFamily: fonts.uiSemiBold, ...type.label, color: palette.mutedForeground },
   segments: { flexDirection: 'row', gap: space[1] },
   segment: { flex: 1, height: 6, borderRadius: 3, backgroundColor: palette.muted },
   segmentDone: { backgroundColor: palette.primary },
-  heading: { fontFamily: fonts.display, fontSize: 26, lineHeight: 32, color: palette.foreground },
-  paragraph: { fontFamily: fonts.ui, fontSize: 16, lineHeight: 25, color: palette.foreground },
+  heading: { fontFamily: fonts.display, ...type.headline, color: palette.foreground },
+  paragraph: { fontFamily: fonts.ui, ...type.body, color: palette.foreground },
   publishedNote: { gap: space[2] - 2, padding: space[4], borderRadius: radius.lg, borderWidth: 1, borderColor: palette.controlBorder, backgroundColor: palette.card },
-  publishedTitle: { fontFamily: fonts.uiBold, fontSize: 14, lineHeight: 22, color: palette.foreground },
-  publishedText: { fontFamily: fonts.ui, fontSize: 14, lineHeight: 22, color: palette.mutedForeground },
-  source: { fontFamily: fonts.ui, fontSize: 13, lineHeight: 19, color: palette.primary },
+  publishedTitle: { fontFamily: fonts.uiSemiBold, ...type.body, color: palette.foreground },
+  publishedText: { fontFamily: fonts.ui, ...type.secondary, color: palette.mutedForeground },
+  source: { fontFamily: fonts.ui, ...type.secondary, color: palette.primary },
   sourceLink: { minHeight: MIN_TOUCH_TARGET, justifyContent: 'center', borderRadius: radius.sm, borderWidth: 2, borderColor: palette.transparent },
   exampleLink: {
     flexDirection: 'row',
@@ -394,18 +404,18 @@ const styles = StyleSheet.create({
     backgroundColor: palette.card,
   },
   optionText: { flex: 1, gap: 2 },
-  optionTitle: { fontFamily: fonts.uiBold, fontSize: 16, lineHeight: 24, color: palette.foreground },
-  optionDetail: { fontFamily: fonts.ui, fontSize: 13, lineHeight: 18, color: palette.mutedForeground },
+  optionTitle: { fontFamily: fonts.uiSemiBold, ...type.body, color: palette.foreground },
+  optionDetail: { fontFamily: fonts.ui, ...type.secondary, color: palette.mutedForeground },
   credits: { gap: space[2] - 2, padding: space[4], borderRadius: radius.lg, borderWidth: 1, borderColor: palette.controlBorder, backgroundColor: palette.card },
-  creditsHeading: { fontFamily: fonts.uiBold, fontSize: 14, lineHeight: 22, color: palette.foreground },
+  creditsHeading: { fontFamily: fonts.uiSemiBold, ...type.body, color: palette.foreground },
   creditLink: { justifyContent: 'center', minHeight: MIN_TOUCH_TARGET, borderRadius: radius.md, borderWidth: 2, borderColor: palette.transparent },
-  credit: { fontFamily: fonts.ui, fontSize: 14, lineHeight: 20, color: palette.foreground },
+  credit: { fontFamily: fonts.ui, ...type.body, color: palette.foreground },
   creditLinked: { color: palette.primary, textDecorationLine: 'underline' },
-  creditsNote: { fontFamily: fonts.ui, fontSize: 12.5, lineHeight: 18, color: palette.mutedForeground },
-  exampleLabel: { flexShrink: 1, fontFamily: fonts.uiBold, fontSize: 15, color: palette.primary },
-  alert: { fontFamily: fonts.ui, fontSize: 14, lineHeight: 20, color: palette.destructive },
+  creditsNote: { fontFamily: fonts.ui, ...type.secondary, color: palette.mutedForeground },
+  exampleLabel: { flexShrink: 1, fontFamily: fonts.uiSemiBold, ...type.body, color: palette.primary },
+  alert: { fontFamily: fonts.ui, ...type.body, color: palette.destructive },
   nav: { flexDirection: 'row', flexWrap: 'wrap', gap: space[2] + 2, paddingTop: space[2] },
   pressed: { opacity: 0.8 },
   disabled: { opacity: 0.4 },
   focused: { borderColor: palette.ring, borderWidth: 2 },
-});
+}))

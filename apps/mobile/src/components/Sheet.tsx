@@ -1,13 +1,15 @@
 import { X } from 'lucide-react-native';
 import type { ReactNode } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Modal, Pressable, ScrollView, Text, useWindowDimensions, View } from 'react-native';
 
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/theme/tokens';
+import { makeStyles } from '@/theme/type';
 
 const FULL_SCREEN_FONT_SCALE = 1.5;
 
 export function Sheet({ title, onClose, testID, children }: { title: string; onClose: () => void; testID?: string; children: ReactNode }) {
+  const styles = useStyles();
   const { fontScale } = useWindowDimensions();
   const fullScreen = fontScale > FULL_SCREEN_FONT_SCALE;
   return (
@@ -31,6 +33,7 @@ export function Sheet({ title, onClose, testID, children }: { title: string; onC
 }
 
 export function SheetText({ children, small = false }: { children: ReactNode; small?: boolean }) {
+  const styles = useStyles();
   return (
     <Text maxFontSizeMultiplier={textScale.body} style={small ? styles.note : styles.text}>
       {children}
@@ -39,6 +42,7 @@ export function SheetText({ children, small = false }: { children: ReactNode; sm
 }
 
 function CloseButton({ onPress }: { onPress: () => void }) {
+  const styles = useStyles();
   const { focused, focusProps } = useKeyboardFocus();
   return (
     <Pressable accessibilityRole="button" accessibilityLabel="Close" onPress={onPress} {...focusProps} style={[styles.close, focused && styles.focused]}>
@@ -47,7 +51,7 @@ function CloseButton({ onPress }: { onPress: () => void }) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((type) => ({
   scrim: { flex: 1, justifyContent: 'flex-end', backgroundColor: palette.scrim },
   scrimFull: { justifyContent: 'flex-start' },
   sheet: { maxHeight: '90%', borderTopLeftRadius: radius.lg, borderTopRightRadius: radius.lg, backgroundColor: palette.popover },
@@ -55,9 +59,9 @@ const styles = StyleSheet.create({
   content: { gap: space[3] + 2, paddingHorizontal: space[6] - space[1], paddingBottom: space[4] },
   grabber: { alignSelf: 'center', width: 40, height: 5, marginTop: space[3], borderRadius: 3, backgroundColor: palette.controlBorder },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space[2] },
-  title: { flex: 1, fontFamily: fonts.display, fontSize: 22, color: palette.foreground },
-  text: { fontFamily: fonts.ui, fontSize: 14, lineHeight: 20, color: palette.mutedForeground },
-  note: { fontFamily: fonts.ui, fontSize: 13, lineHeight: 19, color: palette.mutedForeground },
+  title: { flex: 1, fontFamily: fonts.display, ...type.headline, color: palette.foreground },
+  text: { fontFamily: fonts.ui, ...type.secondary, color: palette.mutedForeground },
+  note: { fontFamily: fonts.ui, ...type.secondary, color: palette.mutedForeground },
   close: {
     minWidth: MIN_TOUCH_TARGET,
     minHeight: MIN_TOUCH_TARGET,
@@ -69,4 +73,4 @@ const styles = StyleSheet.create({
     backgroundColor: palette.secondary,
   },
   focused: { borderColor: palette.ring },
-});
+}))

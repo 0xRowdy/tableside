@@ -1,10 +1,11 @@
 // Spec 1 S1-05
 
 import type { CycleTurn, PendingStrategyAction, StrategyView } from '@tableside/engine';
-import { Modal, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Modal, ScrollView, Text, View } from 'react-native';
 
 import { Button } from '@/components/Button';
 import { fonts, palette, radius, space, textScale } from '@/theme/tokens';
+import { makeStyles } from '@/theme/type';
 
 import {
   adherenceText,
@@ -43,6 +44,7 @@ export function GuidedStrip({
   detail?: string | null;
   unit?: DecisionUnit;
 }) {
+  const styles = useStyles();
   const cycle = strategy.overrideEndsCycle ? ` · cycle ${strategy.cycle.number}` : '';
   const status = strategy.status === 'stopped' ? 'Strategy stopped · playing on your own' : `Guided · ${strategy.name}${detail === null ? '' : ` · ${detail}`}${cycle}`;
   return (
@@ -66,6 +68,7 @@ export function GuidedStrip({
 }
 
 function CorrectionBody({ copy, busy, onRetry, onOverride }: { copy: CorrectionCopy; busy: boolean; onRetry: () => void; onOverride: () => void }) {
+  const styles = useStyles();
   return (
     <>
       <Text maxFontSizeMultiplier={textScale.body} style={styles.coach}>{copy.coach}</Text>
@@ -107,6 +110,7 @@ export function CorrectionPanel(props: {
   onRetry: () => void;
   onOverride: () => void;
 }) {
+  const styles = useStyles();
   const { table, fullScreen } = props;
   if (!fullScreen || table === null) {
     return (
@@ -164,6 +168,7 @@ export function CycleResultPanel({
   onPlayOn?: () => void;
   words?: CoachWords;
 }) {
+  const styles = useStyles();
   const { cycle } = strategy;
   return (
     <View style={styles.panel} testID="cycle-panel">
@@ -237,6 +242,7 @@ export function PendingPanel({
   onStop: () => void;
   words?: CoachWords;
 }) {
+  const styles = useStyles();
   const paid = pendingPaidNote(pending, words);
   return (
     <View style={styles.panel} testID="pending-panel">
@@ -278,6 +284,7 @@ export function StopStrategyDialog({
   onCancel: () => void;
   onConfirm: () => void;
 }) {
+  const styles = useStyles();
   const steps = [
     { title: 'No new strategy bets', detail: 'Nothing more is placed for you' },
     { title: 'Removable wagers come back', detail: removable },
@@ -309,21 +316,21 @@ export function StopStrategyDialog({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((type) => ({
   strip: { gap: space[2], marginHorizontal: space[4], marginTop: space[2], padding: space[3], borderRadius: radius.lg, backgroundColor: palette.card },
-  stripTitle: { fontFamily: fonts.uiBold, fontSize: 13, color: palette.foreground },
-  stripLabel: { fontFamily: fonts.uiBold, fontSize: 10, letterSpacing: 0.5, color: palette.mutedForeground },
-  stripText: { fontFamily: fonts.ui, fontSize: 13, color: palette.foreground },
+  stripTitle: { fontFamily: fonts.uiSemiBold, ...type.label, color: palette.foreground },
+  stripLabel: { fontFamily: fonts.uiSemiBold, ...type.label, color: palette.mutedForeground },
+  stripText: { fontFamily: fonts.ui, ...type.secondary, color: palette.foreground },
   adherence: { gap: 1 },
   panel: { gap: space[3], padding: space[4], borderRadius: radius.lg, backgroundColor: palette.popover, borderWidth: 1, borderColor: palette.primary },
-  coach: { fontFamily: fonts.uiMedium, fontSize: 13, color: palette.mutedForeground },
-  kicker: { fontFamily: fonts.uiBold, fontSize: 12, letterSpacing: 0.5, color: palette.primary },
-  headline: { fontFamily: fonts.display, fontSize: 22, color: palette.foreground },
-  body: { fontFamily: fonts.ui, fontSize: 14, lineHeight: 20, color: palette.foreground },
-  note: { fontFamily: fonts.ui, fontSize: 13, color: palette.mutedForeground },
+  coach: { fontFamily: fonts.uiMedium, ...type.secondary, color: palette.mutedForeground },
+  kicker: { fontFamily: fonts.uiSemiBold, ...type.label, color: palette.primary },
+  headline: { fontFamily: fonts.display, ...type.headline, color: palette.foreground },
+  body: { fontFamily: fonts.ui, ...type.body, color: palette.foreground },
+  note: { fontFamily: fonts.ui, ...type.secondary, color: palette.mutedForeground },
   fallback: { padding: space[3], borderRadius: radius.md, borderWidth: 1, borderColor: palette.border, backgroundColor: palette.card },
   why: { gap: space[1], paddingTop: space[2], borderTopWidth: 1, borderTopColor: palette.border },
-  whyTitle: { fontFamily: fonts.uiBold, fontSize: 13, color: palette.foreground },
+  whyTitle: { fontFamily: fonts.uiSemiBold, ...type.label, color: palette.foreground },
   fullScreen: { flex: 1, backgroundColor: palette.background },
   fullScreenContent: { flexGrow: 1, padding: space[4] },
   fullScreenInner: { gap: space[3] },
@@ -332,12 +339,12 @@ const styles = StyleSheet.create({
   dialogScroll: { flexGrow: 1, justifyContent: 'center', padding: space[4] },
   dialog: { gap: space[3], padding: space[6], borderRadius: radius.lg, backgroundColor: palette.popover },
   step: { gap: 2 },
-  stepTitle: { fontFamily: fonts.uiMedium, fontSize: 15, color: palette.foreground },
-  badge: { alignSelf: 'flex-start', paddingHorizontal: space[2], paddingVertical: 2, borderRadius: radius.pill, backgroundColor: palette.secondary, fontFamily: fonts.uiMedium, fontSize: 12, color: palette.foreground },
+  stepTitle: { fontFamily: fonts.uiMedium, ...type.body, color: palette.foreground },
+  badge: { alignSelf: 'flex-start', paddingHorizontal: space[2], paddingVertical: 2, borderRadius: radius.pill, backgroundColor: palette.secondary, fontFamily: fonts.uiMedium, ...type.caption, color: palette.foreground },
   stats: { flexDirection: 'row', flexWrap: 'wrap', gap: space[3] },
   stat: { flexGrow: 1, flexBasis: 140, gap: 2, padding: space[3], borderRadius: radius.md, backgroundColor: palette.card },
-  statLabel: { fontFamily: fonts.uiMedium, fontSize: 13, color: palette.mutedForeground },
-  statValue: { fontFamily: fonts.uiBold, fontSize: 24, color: palette.foreground },
+  statLabel: { fontFamily: fonts.uiMedium, ...type.secondary, color: palette.mutedForeground },
+  statValue: { fontFamily: fonts.uiBold, ...type.heading, color: palette.foreground },
   turn: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: space[2], paddingVertical: space[1] },
   turnText: { flexShrink: 1, gap: 2 },
-});
+}))

@@ -3,7 +3,7 @@
 
 import { CHALLENGE_VARIANTS, type ChallengeVariant } from '@tableside/engine';
 import { BookOpen, CircleAlert, Play } from 'lucide-react-native';
-import { StyleSheet, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 
 import { Button } from '@/components/Button';
 import { Segmented } from '@/components/Segmented';
@@ -11,6 +11,7 @@ import { SwitchRow } from '@/components/SwitchRow';
 import { LearnRow } from '@/lessons/LessonEntries';
 import { SettingsScreen } from '@/settings/SettingsParts';
 import { fonts, palette, radius, space, textScale } from '@/theme/tokens';
+import { makeStyles } from '@/theme/type';
 import {
   CATEGORY_TEXT,
   COUNTING_TITLE,
@@ -62,6 +63,7 @@ export function ChallengeSetupScreen({
   onStart: () => void;
   onBack: () => void;
 }) {
+  const styles = useStyles();
   const text = CATEGORY_TEXT[entry.category];
   // Spec 3 Play challenge funding › Starting balance; S3-02 Al6Pw; #139
   const funding = setup.table ? tableFundingProblems(setup.table) : [];
@@ -155,13 +157,13 @@ export function ChallengeSetupScreen({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((type) => ({
   section: { gap: space[3] - 2 },
-  label: { fontFamily: fonts.uiBold, fontSize: 12, letterSpacing: 0.6, color: palette.mutedForeground },
-  help: { fontFamily: fonts.ui, fontSize: 13, lineHeight: 19, color: palette.mutedForeground },
+  label: { fontFamily: fonts.uiSemiBold, ...type.label, color: palette.mutedForeground },
+  help: { fontFamily: fonts.ui, ...type.secondary, color: palette.mutedForeground },
   banner: { flexDirection: 'row', gap: space[3], padding: space[4], borderRadius: radius.md, borderWidth: 1, borderColor: palette.controlBorder, backgroundColor: palette.card },
   problem: { borderColor: palette.destructive },
   bannerBody: { flex: 1, gap: space[1] },
-  bannerText: { flex: 1, fontFamily: fonts.uiBold, fontSize: 14, lineHeight: 20, color: palette.foreground },
+  bannerText: { flex: 1, fontFamily: fonts.uiSemiBold, ...type.body, color: palette.foreground },
   card: { borderRadius: radius.md, borderWidth: 1, borderColor: palette.border, backgroundColor: palette.card, overflow: 'hidden' },
-});
+}))

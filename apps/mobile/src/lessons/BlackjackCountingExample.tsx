@@ -1,11 +1,12 @@
 // Spec 3 S3-12 aJV2y; Lessons › Structure (worked examples); Amendment 2 §3; #153
 import type { ConversionExample, CountingExample, RunningCountExample, ScriptedChoice, TableCountExample } from '@tableside/definitions';
 import type { ChallengeCard } from '@tableside/engine';
-import { StyleSheet, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 
 import { Choice, PlayingCard } from '@/counting/CardChoices';
 import { signed } from '@/play/blackjack-text';
 import { fonts, palette, radius, space, textScale } from '@/theme/tokens';
+import { makeStyles } from '@/theme/type';
 import {
   conversionExampleText,
   GIVEN_DECKS,
@@ -34,6 +35,7 @@ interface Props<Example> {
 }
 
 function Given({ label, value }: { label: string; value: string }) {
+  const styles = useStyles();
   return (
     <View accessible accessibilityLabel={`${label}: ${value}`} style={styles.given}>
       <Text maxFontSizeMultiplier={textScale.body} style={styles.givenLabel}>
@@ -47,6 +49,7 @@ function Given({ label, value }: { label: string; value: string }) {
 }
 
 function Choices({ choices, picked, onPick, choiceState }: Omit<Props<unknown>, 'example'> & { choices: readonly ScriptedChoice<number, unknown>[] }) {
+  const styles = useStyles();
   return (
     <View style={styles.choices}>
       {choices.map(({ answer, response: { correct } }, index) => (
@@ -57,6 +60,7 @@ function Choices({ choices, picked, onPick, choiceState }: Omit<Props<unknown>, 
 }
 
 function Prompt({ text }: { text: string }) {
+  const styles = useStyles();
   return (
     <Text maxFontSizeMultiplier={textScale.display} style={styles.prompt}>
       {text}
@@ -65,6 +69,7 @@ function Prompt({ text }: { text: string }) {
 }
 
 function Conversion(props: Props<ConversionExample>) {
+  const styles = useStyles();
   const { example } = props;
   return (
     <>
@@ -79,6 +84,7 @@ function Conversion(props: Props<ConversionExample>) {
 }
 
 function RunningCount(props: Props<RunningCountExample>) {
+  const styles = useStyles();
   const { example } = props;
   return (
     <>
@@ -93,6 +99,7 @@ function RunningCount(props: Props<RunningCountExample>) {
 }
 
 function Hand({ label, cards }: { label: string; cards: readonly ChallengeCard[] }) {
+  const styles = useStyles();
   return (
     <View style={styles.hand}>
       <Text accessibilityRole="header" maxFontSizeMultiplier={textScale.body} style={styles.givenLabel}>
@@ -108,6 +115,7 @@ function Hand({ label, cards }: { label: string; cards: readonly ChallengeCard[]
 }
 
 function TableCount(props: Props<TableCountExample>) {
+  const styles = useStyles();
   const { example } = props;
   const explanation = example.choices[0]!.response.explanation;
   return (
@@ -146,15 +154,15 @@ export function countingAnswer(example: CountingExample, picked: number): Script
   return { headline: runningHeadline(explanation.count), detail: tableRunningText(explanation, 'after-round'), note };
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((type) => ({
   givens: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: space[2] + 2 },
   given: { flexGrow: 1, flexBasis: 150, gap: space[1], paddingVertical: space[3], paddingHorizontal: space[4], borderRadius: radius.lg, borderWidth: 1, borderColor: palette.border, backgroundColor: palette.card },
-  givenLabel: { fontFamily: fonts.ui, fontSize: 13, color: palette.mutedForeground },
-  givenValue: { fontFamily: fonts.uiBold, fontSize: 30, color: palette.foreground },
-  prompt: { fontFamily: fonts.uiBold, fontSize: 18, color: palette.foreground },
+  givenLabel: { fontFamily: fonts.ui, ...type.secondary, color: palette.mutedForeground },
+  givenValue: { fontFamily: fonts.uiBold, ...type.figure, color: palette.foreground },
+  prompt: { fontFamily: fonts.uiBold, ...type.heading, color: palette.foreground },
   choices: { flexDirection: 'row', flexWrap: 'wrap', gap: space[3] - 2 },
-  lead: { fontFamily: fonts.ui, fontSize: 15, lineHeight: 22, color: palette.foreground },
+  lead: { fontFamily: fonts.ui, ...type.body, color: palette.foreground },
   table: { gap: space[3], padding: space[4], borderRadius: radius.lg, borderWidth: 1, borderColor: palette.border, backgroundColor: palette.card },
   hand: { gap: space[2] },
   cards: { flexDirection: 'row', flexWrap: 'wrap', gap: space[2] },
-});
+}))

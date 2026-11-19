@@ -3,7 +3,7 @@
 import { crapsHouseEdge } from '@tableside/definitions';
 import { CRAPS_POINTS, isPlayCorrection, type CrapsPermittedView as PermittedView, type CycleTurn } from '@tableside/engine';
 import { useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Pressable, ScrollView, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/Button';
@@ -12,6 +12,7 @@ import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
 import type { ActivePracticeSnapshot } from '@/practice/controller';
 import { usePractice } from '@/practice/PracticeProvider';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/theme/tokens';
+import { makeStyles } from '@/theme/type';
 
 import { BetSelector } from './bet-selector/BetSelector';
 import { draftAmountText, EMPTY_DRAFT, findChoice, isDraftPending, type BetDraft } from './bet-selector/catalog';
@@ -51,6 +52,7 @@ function describeTurn(turn: CycleTurn, index: number): TurnWords {
 }
 
 export function CrapsTable({ snapshot }: { snapshot: ActiveSnapshot }) {
+  const styles = useStyles();
   const { controller } = usePractice();
   const insets = useSafeAreaInsets();
   const { width, height, fontScale } = useWindowDimensions();
@@ -324,6 +326,7 @@ function Felt({
   stakeOn: (target: string) => string | undefined;
   onSpot: (target: string) => void;
 }) {
+  const styles = useStyles();
   const { point } = view.table;
   const payout = (target: string) => view.table.placements.find((p) => p.target === target)?.payout.replace(':', ' to ');
   return (
@@ -409,6 +412,7 @@ function Spot({
   disabled: boolean;
   onPress: () => void;
 }) {
+  const styles = useStyles();
   const { focused, focusProps } = useKeyboardFocus();
   return (
     <Pressable
@@ -447,6 +451,7 @@ function WagerList({
   onAddOdds: (target: string) => void;
   onRemove: (target: string) => void;
 }) {
+  const styles = useStyles();
   return (
     <View style={styles.list}>
       <Text accessibilityRole="header" maxFontSizeMultiplier={textScale.body} style={styles.sectionLabel}>
@@ -496,32 +501,32 @@ function WagerList({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((type) => ({
   screen: { flex: 1, backgroundColor: palette.background },
-  edge: { fontFamily: fonts.ui, fontSize: 12, color: palette.mutedForeground, paddingHorizontal: space[4] },
+  edge: { fontFamily: fonts.ui, ...type.caption, color: palette.mutedForeground, paddingHorizontal: space[4] },
   columns: { gap: space[3], paddingTop: space[2] },
   columnsSideBySide: { flexDirection: 'row', alignItems: 'flex-start' },
   column: { flex: 1 },
   tableView: { gap: space[3] },
   controls: { gap: space[3], paddingHorizontal: space[4] },
-  message: { fontFamily: fonts.uiMedium, fontSize: 15, lineHeight: 21, color: palette.foreground },
-  sectionLabel: { fontFamily: fonts.uiBold, fontSize: 10, letterSpacing: 0.5, color: palette.mutedForeground },
-  muted: { fontFamily: fonts.ui, fontSize: 13, color: palette.mutedForeground },
+  message: { fontFamily: fonts.uiMedium, ...type.body, color: palette.foreground },
+  sectionLabel: { fontFamily: fonts.uiSemiBold, ...type.label, color: palette.mutedForeground },
+  muted: { fontFamily: fonts.ui, ...type.secondary, color: palette.mutedForeground },
   felt: { gap: space[2], padding: space[3], marginHorizontal: space[2], borderRadius: radius.lg, backgroundColor: palette.feltDeep },
   rollRow: { flexDirection: 'row', alignItems: 'center', gap: space[3] },
   puck: { minWidth: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', backgroundColor: palette.pocketBlack, borderWidth: 2, borderColor: palette.foreground },
   puckOn: { backgroundColor: palette.chip1 },
-  puckText: { fontFamily: fonts.uiBold, fontSize: 13, color: palette.onImage },
+  puckText: { fontFamily: fonts.uiSemiBold, ...type.label, color: palette.onImage },
   puckTextOn: { color: palette.ink },
   rollText: { flex: 1, gap: 2 },
-  rollTitle: { fontFamily: fonts.display, fontSize: 22, color: palette.onImage },
-  rollDetail: { fontFamily: fonts.uiMedium, fontSize: 13, color: palette.onImage },
+  rollTitle: { fontFamily: fonts.display, ...type.headline, color: palette.onImage },
+  rollDetail: { fontFamily: fonts.uiMedium, ...type.secondary, color: palette.onImage },
   boxes: { flexDirection: 'row', flexWrap: 'wrap', gap: 2 },
   box: { flexGrow: 1, flexBasis: 48, minHeight: MIN_TOUCH_TARGET, alignItems: 'center', justifyContent: 'center', padding: space[1], borderRadius: radius.sm, borderWidth: 2, borderColor: palette.transparent, backgroundColor: palette.felt },
   boxPoint: { borderColor: palette.foreground },
-  boxText: { fontFamily: fonts.uiBold, fontSize: 16, color: palette.onImage },
-  boxPuck: { fontFamily: fonts.uiBold, fontSize: 11, color: palette.ink, backgroundColor: palette.chip1, paddingHorizontal: 4, borderRadius: radius.pill },
-  boxBet: { fontFamily: fonts.uiMedium, fontSize: 11, color: palette.onImage },
+  boxText: { fontFamily: fonts.uiSemiBold, ...type.body, color: palette.onImage },
+  boxPuck: { fontFamily: fonts.uiSemiBold, ...type.label, color: palette.ink, backgroundColor: palette.chip1, paddingHorizontal: 4, borderRadius: radius.pill },
+  boxBet: { fontFamily: fonts.uiMedium, ...type.caption, color: palette.onImage },
   spot: {
     minHeight: MIN_TOUCH_TARGET,
     minWidth: MIN_TOUCH_TARGET,
@@ -538,11 +543,11 @@ const styles = StyleSheet.create({
   },
   spotWagered: { borderColor: palette.foreground },
   spotFocused: { borderColor: palette.ring },
-  spotText: { fontFamily: fonts.uiBold, fontSize: 15, color: palette.onImage },
+  spotText: { fontFamily: fonts.uiSemiBold, ...type.body, color: palette.onImage },
   marker: { minWidth: 26, paddingHorizontal: 6, borderRadius: radius.pill, backgroundColor: palette.chip1, alignItems: 'center' },
-  markerText: { fontFamily: fonts.uiBold, fontSize: 11, color: palette.ink },
+  markerText: { fontFamily: fonts.uiSemiBold, ...type.label, color: palette.ink },
   list: { gap: space[2] },
   row: { gap: space[1], padding: space[3], borderRadius: radius.lg, backgroundColor: palette.card },
   rowHeader: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: space[2] },
-  rowTitle: { fontFamily: fonts.uiBold, fontSize: 15, color: palette.foreground },
-});
+  rowTitle: { fontFamily: fonts.uiSemiBold, ...type.body, color: palette.foreground },
+}))

@@ -17,12 +17,13 @@ import {
   type LucideIcon,
 } from 'lucide-react-native';
 import { useMemo, useSyncExternalStore } from 'react';
-import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, Text, View } from 'react-native';
 
 import { findGame } from '@/games';
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
 import { Group, Note, SettingsScreen } from '@/settings/SettingsParts';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale, type ColorToken } from '@/theme/tokens';
+import { makeStyles } from '@/theme/type';
 
 export interface SyncStatusScreenProps {
   readonly sync: AccountSync;
@@ -266,6 +267,7 @@ const ROW_STATE: Record<UploadStatus['state'], { label: string; tone: ColorToken
 };
 
 function UploadRow({ upload, now, first }: { upload: UploadStatus; now: number; first: boolean }) {
+  const styles = useStyles();
   const title = titleOf(upload);
   const detail = detailOf(upload, now);
   const state = ROW_STATE[upload.state];
@@ -327,6 +329,7 @@ function ago(then: number, now: number): string {
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null;
 
 function Card({ icon: Icon, tone, title, body }: { icon: LucideIcon; tone: ColorToken; title: string; body: string }) {
+  const styles = useStyles();
   return (
     <View style={styles.card}>
       <View style={styles.cardLead}>
@@ -365,6 +368,7 @@ function Banner({
   preview?: boolean;
   testID?: string;
 }) {
+  const styles = useStyles();
   return (
     <View testID={testID} style={[styles.banner, { borderColor: palette[tone] }]}>
       <Icon color={palette[tone]} size={20} />
@@ -392,6 +396,7 @@ function Banner({
 }
 
 function TextAction({ label, onPress }: { label: string; onPress: () => void }) {
+  const styles = useStyles();
   const { focused, focusProps } = useKeyboardFocus();
   return (
     <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={onPress} {...focusProps} style={[styles.textAction, focused && styles.focused]}>
@@ -403,6 +408,7 @@ function TextAction({ label, onPress }: { label: string; onPress: () => void }) 
 }
 
 function SecondaryButton({ icon: Icon, label, onPress }: { icon: LucideIcon; label: string; onPress: () => void }) {
+  const styles = useStyles();
   const { focused, focusProps } = useKeyboardFocus();
   return (
     <Pressable
@@ -421,6 +427,7 @@ function SecondaryButton({ icon: Icon, label, onPress }: { icon: LucideIcon; lab
 }
 
 function Progress({ label, fraction }: { label: string; fraction: number }) {
+  const styles = useStyles();
   const percent = percentOf(fraction);
   return (
     <View
@@ -444,6 +451,7 @@ function Progress({ label, fraction }: { label: string; fraction: number }) {
 }
 
 function SectionLabel({ children }: { children: string }) {
+  const styles = useStyles();
   return (
     <Text accessibilityRole="header" maxFontSizeMultiplier={textScale.body} style={styles.section}>
       {children}
@@ -451,7 +459,7 @@ function SectionLabel({ children }: { children: string }) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((type) => ({
   card: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -464,21 +472,21 @@ const styles = StyleSheet.create({
   },
   cardLead: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: palette.secondary },
   cardText: { flex: 1, gap: 3 },
-  cardTitle: { fontFamily: fonts.uiBold, fontSize: 17, lineHeight: 23, color: palette.foreground },
-  muted: { fontFamily: fonts.ui, fontSize: 13, lineHeight: 19, color: palette.mutedForeground },
+  cardTitle: { fontFamily: fonts.uiSemiBold, ...type.body, color: palette.foreground },
+  muted: { fontFamily: fonts.ui, ...type.secondary, color: palette.mutedForeground },
   banner: { flexDirection: 'row', alignItems: 'flex-start', gap: space[3], padding: 14, borderRadius: 12, borderWidth: 1, backgroundColor: palette.card },
   bannerText: { flex: 1, gap: space[1] },
-  bannerTitle: { fontFamily: fonts.uiBold, fontSize: 14, lineHeight: 20, color: palette.foreground },
+  bannerTitle: { fontFamily: fonts.uiSemiBold, ...type.body, color: palette.foreground },
   textAction: { alignSelf: 'flex-start', minHeight: 44, justifyContent: 'center', borderRadius: radius.sm, borderWidth: 2, borderColor: palette.transparent },
-  actionLabel: { fontFamily: fonts.uiBold, fontSize: 14, color: palette.primary },
-  previewAction: { fontFamily: fonts.uiBold, fontSize: 14, lineHeight: 44, color: palette.mutedForeground },
-  section: { fontFamily: fonts.uiBold, fontSize: 12, letterSpacing: 0.6, textTransform: 'uppercase', color: palette.mutedForeground },
+  actionLabel: { fontFamily: fonts.uiSemiBold, ...type.body, color: palette.primary },
+  previewAction: { fontFamily: fonts.uiSemiBold, ...type.body, color: palette.mutedForeground },
+  section: { fontFamily: fonts.uiSemiBold, ...type.label, color: palette.mutedForeground },
   row: { flexDirection: 'row', alignItems: 'center', gap: space[3], minHeight: 64, paddingVertical: space[3], paddingHorizontal: space[4] },
   rowDivider: { borderTopWidth: 1, borderTopColor: palette.border },
   rowLead: { width: 36, height: 36, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', backgroundColor: palette.secondary },
   rowText: { flex: 1, gap: 2 },
-  rowTitle: { fontFamily: fonts.uiBold, fontSize: 15, lineHeight: 21, color: palette.foreground },
-  rowState: { fontFamily: fonts.ui, fontSize: 14 },
+  rowTitle: { fontFamily: fonts.uiSemiBold, ...type.body, color: palette.foreground },
+  rowState: { fontFamily: fonts.ui, ...type.body },
   secondary: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -492,13 +500,13 @@ const styles = StyleSheet.create({
     borderColor: palette.controlBorder,
     backgroundColor: palette.secondary,
   },
-  secondaryLabel: { fontFamily: fonts.uiBold, fontSize: 15, color: palette.foreground },
+  secondaryLabel: { fontFamily: fonts.uiSemiBold, ...type.body, color: palette.foreground },
   pressed: { opacity: 0.8 },
   focused: { borderColor: palette.ring },
   progress: { gap: 6 },
   progressLabels: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: space[2] },
-  progressLabel: { fontFamily: fonts.uiBold, fontSize: 13, color: palette.foreground },
-  progressValue: { fontFamily: fonts.uiBold, fontSize: 13, color: palette.foreground },
+  progressLabel: { fontFamily: fonts.uiSemiBold, ...type.label, color: palette.foreground },
+  progressValue: { fontFamily: fonts.uiSemiBold, ...type.label, color: palette.foreground },
   track: { height: 8, borderRadius: 4, borderWidth: 1, borderColor: palette.controlBorder, backgroundColor: palette.muted, overflow: 'hidden' },
   fill: { height: '100%', borderRadius: 4, backgroundColor: palette.primary },
-});
+}))

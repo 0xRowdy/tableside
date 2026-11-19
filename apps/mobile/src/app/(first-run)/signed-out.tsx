@@ -2,7 +2,7 @@
 
 import { Redirect, router } from 'expo-router';
 import { LogIn, LogOut } from 'lucide-react-native';
-import { StyleSheet, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 
 import { deviceName } from '@/account/account-text';
 import { useAccount } from '@/account/AccountProvider';
@@ -10,8 +10,10 @@ import { Actions, Body, FirstRunScreen, SupportLinks } from '@/account/FirstRunP
 import { useSignInFlow } from '@/account/sign-in-flow';
 import { Button } from '@/components/Button';
 import { fonts, palette, radius, textScale } from '@/theme/tokens';
+import { makeStyles } from '@/theme/type';
 
 export default function SignedOut() {
+  const styles = useStyles();
   const { gate } = useAccount();
   const flow = useSignInFlow();
   if (gate.state !== 'signed-out') return <Redirect href="/" />;
@@ -34,6 +36,7 @@ export default function SignedOut() {
 }
 
 function SignedOutIcon() {
+  const styles = useStyles();
   return (
     <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={styles.icon}>
       <LogOut color={palette.mutedForeground} size={30} />
@@ -41,7 +44,7 @@ function SignedOutIcon() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((type) => ({
   icon: { width: 64, height: 64, borderRadius: radius.lg, alignItems: 'center', justifyContent: 'center', backgroundColor: palette.secondary },
-  note: { fontFamily: fonts.ui, fontSize: 13, lineHeight: 19, color: palette.mutedForeground },
-});
+  note: { fontFamily: fonts.ui, ...type.secondary, color: palette.mutedForeground },
+}))

@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { ScrollView, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/Button';
@@ -13,12 +13,14 @@ import { GAME_WORDS, modeText } from '@/play/game-words';
 import { capitalize } from '@/play/units';
 import { usePractice } from '@/practice/PracticeProvider';
 import { fonts, palette, space, textScale } from '@/theme/tokens';
+import { makeStyles } from '@/theme/type';
 import { useLearning } from '@/training/TrainingProvider';
 
 const SIDE_BY_SIDE_MAX_FONT_SCALE = 1.35;
 const MIN_CARD_HEIGHT = 188;
 
 export default function Home() {
+  const styles = useStyles();
   const insets = useSafeAreaInsets();
   const { width, height, fontScale } = useWindowDimensions();
   const sideBySide = width > height && fontScale <= SIDE_BY_SIDE_MAX_FONT_SCALE;
@@ -71,15 +73,15 @@ export default function Home() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((type) => ({
   screen: { flex: 1, backgroundColor: palette.background },
   content: { flexGrow: 1 },
   header: { paddingBottom: space[3], gap: 2 },
-  title: { fontFamily: fonts.display, fontSize: 30, color: palette.foreground },
-  subtitle: { fontFamily: fonts.ui, fontSize: 14, color: palette.mutedForeground },
+  title: { fontFamily: fonts.display, ...type.display, color: palette.foreground },
+  subtitle: { fontFamily: fonts.ui, ...type.secondary, color: palette.mutedForeground },
   cards: { flex: 1, gap: 2 },
   cardsSideBySide: { flexDirection: 'row' },
   card: { flex: 1, minHeight: MIN_CARD_HEIGHT },
   suspended: { marginBottom: space[3] },
   startHere: { marginBottom: space[3] },
-});
+}))
