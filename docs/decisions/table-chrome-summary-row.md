@@ -27,10 +27,12 @@ In `design/Tableside.pen`. The replaced frames are renamed `[Superseded] … rep
 
 The owner asked for a ruling, and this is it. The house edge leaves the always-visible chrome and becomes the first section of Table details after any guided or count sections, worded as before. A table still shows it, one tap away, and setup still shows it before play. The rules move into the sheet with it, because neither changes during a session. Per-bet edges stay where the bet is chosen: the craps Bet list, and roulette's "Edge … on this bet". The 2026-10-18 ruling that tables show the house edge stands; only its placement changes.
 
-## Spec amendments to post
+## Spec amendments
+
+Posted 2026-11-19 as spec 1 Amendment 13, spec 3 Amendment 7 and spec 5 Amendment 9.
 
 | Spec | Amendment |
 | --- | --- |
-| [#51](https://github.com/0xRowdy/tableside/issues/51) spec 1 | S1-04: the table chrome follows the rules above. The house edge and the rules move to Table details. Rebuy moves to Table details; the contextual rebuy prompts (S1-08) are unchanged. |
-| [#53](https://github.com/0xRowdy/tableside/issues/53) spec 3 | S3-07: Decks left moves from the felt into the summary row. Show running count moves from under the keypad to Table details, with the same copy and warning. |
-| [#55](https://github.com/0xRowdy/tableside/issues/55) spec 5 | S5-11: the allowance line becomes the summary row's third figure. The full sentence goes in Table details. Time still counts only active phases. |
+| [#51](https://github.com/0xRowdy/tableside/issues/51) spec 1 A13 | S1-04: the table chrome follows the rules above. The house edge and the rules move to Table details. Rebuy moves to Table details; the contextual rebuy prompts (S1-08) are unchanged. |
+| [#53](https://github.com/0xRowdy/tableside/issues/53) spec 3 A7 | S3-07: Decks left moves from the felt into the summary row. Show running count moves from under the keypad to Table details, with the same copy and warning. |
+| [#55](https://github.com/0xRowdy/tableside/issues/55) spec 5 A9 | S5-11: the allowance line becomes the summary row's third figure. The full sentence goes in Table details. Time still counts only active phases. |
