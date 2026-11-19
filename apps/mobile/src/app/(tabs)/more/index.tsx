@@ -13,7 +13,7 @@ export default function More() {
         <ListRow icon={Users} title="Community" detail="Strategies shared by other players" onPress={() => router.navigate('/more/community')} />
       </Group>
       <Group>
-        <ListRow icon={Settings} title="Settings" detail="Account, sound & haptics, learning" onPress={() => router.navigate('/more/settings')} />
+        <ListRow icon={Settings} title="Settings" detail="Account, sound & haptics, text size, learning" onPress={() => router.navigate('/more/settings')} />
       </Group>
     </SettingsScreen>
   );

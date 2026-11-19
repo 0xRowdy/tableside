@@ -50,9 +50,12 @@ function Segment<T extends string>({ option, selected, onPress }: { option: Segm
 }
 
 const useStyles = makeStyles((type) => ({
-  segmented: { flexDirection: 'row', gap: space[1], padding: space[1], borderRadius: radius.md, borderWidth: 1, borderColor: palette.controlBorder, backgroundColor: palette.muted },
+  segmented: { flexDirection: 'row', flexWrap: 'wrap', gap: space[1], padding: space[1], borderRadius: radius.md, borderWidth: 1, borderColor: palette.controlBorder, backgroundColor: palette.muted },
   segment: {
-    flex: 1,
+    flexGrow: 1,
+    flexShrink: 0,
+    flexBasis: 'auto',
+    maxWidth: '100%',
     minHeight: MIN_TOUCH_TARGET,
     flexDirection: 'row',
     alignItems: 'center',
