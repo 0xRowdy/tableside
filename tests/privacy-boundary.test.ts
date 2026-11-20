@@ -135,7 +135,8 @@ describe('challenge and lesson code', () => {
         'apps/mobile/src/lessons/WorkedExample.tsx',
         'packages/engine/src/challenge.ts',
         'packages/definitions/src/lessons.ts',
-        'apps/mobile/src/app/(tabs)/counting.tsx',
+        'apps/mobile/src/app/(tabs)/counting/index.tsx',
+        'apps/mobile/src/app/(tabs)/counting/lessons/[lesson].tsx',
       ]),
     );
     const uses: string[] = [];

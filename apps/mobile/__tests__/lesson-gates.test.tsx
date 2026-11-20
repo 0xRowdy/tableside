@@ -52,7 +52,7 @@ const header = (name: string | RegExp) => screen.findByRole('header', { name });
 const button = (name: string | RegExp) => screen.getByRole('button', { name });
 
 async function openCatalog() {
-  await renderRouter('./src/app', { initialUrl: '/more/settings/learning/lessons' });
+  await renderRouter('./src/app', { initialUrl: '/counting/lessons' });
   await header('Lessons');
   await screen.findByRole('button', { name: /^App orientation\b/ });
 }

@@ -1,39 +1,19 @@
-// Spec 3 Amendment 1 D, C7; Lessons › Entry points; Settings › Learning NvGyZ; #143, #146
+// Spec 3 Amendment 1 D, C7; Settings › Learning OEkKV; #146; docs/decisions/lessons-entry-points.md
 import { router } from 'expo-router';
-import { Library, Lightbulb } from 'lucide-react-native';
+import { BookOpen, Lightbulb } from 'lucide-react-native';
 import { AccessibilityInfo } from 'react-native';
 
 import { SwitchRow } from '@/components/SwitchRow';
 import { Group, GroupLabel, ListRow, Note, SettingsScreen } from '@/settings/SettingsParts';
-import {
-  CATALOG_ROW,
-  catalogSummary,
-  FINDING_LESSONS,
-  HINTS_AGAIN,
-  HINTS_LABEL,
-  HINTS_AGAIN_DETAIL,
-  HINTS_RESET,
-  LEARNING_NOTE,
-  LEARNING_TITLE,
-  LESSONS_LABEL,
-  START_HERE_SETTING,
-  startHereDetail,
-} from '@/training/lesson-text';
-import { useLearning, useLessons } from '@/training/TrainingProvider';
+import { HINTS_AGAIN, HINTS_AGAIN_DETAIL, HINTS_LABEL, HINTS_RESET, LEARNING_NOTE, LEARNING_TITLE, LESSONS_ON_COUNTING, START_HERE_SETTING, startHereDetail } from '@/training/lesson-text';
+import { useLearning } from '@/training/TrainingProvider';
 
 export default function Learning() {
-  const { lessons } = useLessons();
   const { service, learning } = useLearning();
   return (
     <SettingsScreen title={LEARNING_TITLE} back={{ label: 'Settings', onPress: () => router.dismissTo('/more/settings') }}>
-      <GroupLabel>{LESSONS_LABEL}</GroupLabel>
       <Group>
-        <ListRow
-          icon={Library}
-          title={CATALOG_ROW}
-          detail={lessons ? catalogSummary(lessons) : FINDING_LESSONS}
-          onPress={() => router.navigate('/more/settings/learning/lessons')}
-        />
+        <ListRow icon={BookOpen} title={LESSONS_ON_COUNTING} onPress={() => router.navigate('/counting')} />
       </Group>
       <Group>
         <SwitchRow

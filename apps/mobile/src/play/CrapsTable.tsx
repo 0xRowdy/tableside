@@ -129,7 +129,7 @@ export function CrapsTable({ snapshot }: { snapshot: ActiveSnapshot }) {
         { label: 'Session balance', spoken: 'Session balance', value: formatUnits(view.balance) },
         { label: 'On table', spoken: 'On table', value: formatUnits(totalOnTable(view)) },
       ]}
-      buttons={<TableButtons canEnd={legal('request-stop')} onEnd={() => setConfirming(true)} />}
+      buttons={<TableButtons game="craps" canEnd={legal('request-stop')} onEnd={() => setConfirming(true)} />}
       allowance={allowance}
       details={(close) => (
         <>

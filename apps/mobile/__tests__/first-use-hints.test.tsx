@@ -14,6 +14,7 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react-
 import type { ReactNode } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { HelpSheet } from '@/counting/AttemptSheets';
 import { ChallengeExercise, exerciseHints } from '@/counting/ChallengeExercise';
 import { ScreenHints } from '@/lessons/FirstUseHints';
 import { PresentationSwitch, TABLE_HINTS } from '@/play/bet-selector/Presentation';
@@ -146,7 +147,7 @@ describe('first-use hints on the running-count exercise', () => {
     expect(events.announcements).toEqual([]);
   });
 
-  it('stay dismissed on this device, and Help shows the screen’s hints again', async () => {
+  it('stay dismissed on this device, and Help’s hints row shows the screen’s hints again (zxRJD)', async () => {
     await mount(EXERCISE_HINTS, exercise(readChallengeView(attempt(nexts(12)))));
     await press('Got it, hide the Count entry hint');
     expect(screen.queryByTestId('first-use-hint-count-entry')).toBeNull();
@@ -158,6 +159,9 @@ describe('first-use hints on the running-count exercise', () => {
     expect(screen.queryByTestId('first-use-hint-show-count')).toBeNull();
 
     await press('Help');
+    expect(screen.queryByTestId('first-use-hint-count-entry')).toBeNull();
+    await press("Show this screen's hints again. The count entry and show running count hints show again here.");
+    expect(screen.queryByTestId('attempt-help')).toBeNull();
     expect(screen.getByTestId('first-use-hint-count-entry')).toBeOnTheScreen();
     expect(screen.getByTestId('first-use-hint-show-count')).toBeOnTheScreen();
     expect(sent).toEqual([]);
@@ -182,6 +186,7 @@ describe('first-use hints on the running-count exercise', () => {
     await press('Help');
     expect(screen.getByTestId('attempt-help')).toBeOnTheScreen();
     expect(screen.queryAllByTestId(/^first-use-hint-/)).toEqual([]);
+    expect(screen.queryByRole('button', { name: /^Show this screen's hints again/ })).toBeNull();
   });
 
   it('show the count-entry hint only where a count is asked for', async () => {
@@ -224,6 +229,7 @@ describe('the count-entry hint on the true-count exercise (S3-06 zAatf)', () => 
     await press('Got it, hide the Count entry hint');
     expect(screen.queryByTestId('first-use-hint-count-entry')).toBeNull();
     await press('Help');
+    await press("Show this screen's hints again. The count entry hint shows again here.");
     expect(screen.getByTestId('first-use-hint-count-entry')).toBeOnTheScreen();
   });
 
@@ -238,7 +244,7 @@ describe('the count-entry hint on the true-count exercise (S3-06 zAatf)', () => 
 describe('the bet selector hint (S1-04 XjwQc)', () => {
   const table = (
     <>
-      <TableButtons canEnd onEnd={() => undefined} />
+      <TableButtons game="blackjack" canEnd onEnd={() => undefined} />
       <PresentationSwitch value="table" onChange={() => undefined} />
     </>
   );
@@ -253,15 +259,47 @@ describe('the bet selector hint (S1-04 XjwQc)', () => {
     expect(screen.queryByTestId('first-use-hint-bet-selector')).toBeNull();
 
     await press('Help');
+    expect(screen.getByTestId('table-help')).toBeOnTheScreen();
+    await press("Show this screen's hints again. The bet list hint shows again here.");
+    expect(screen.queryByTestId('table-help')).toBeNull();
     expect(screen.getByTestId('first-use-hint-bet-selector')).toBeOnTheScreen();
   });
 
-  it('is absent, with no Help, where a screen offers no hints', async () => {
+  // docs/decisions/lessons-entry-points.md; S1-04 qylNY
+  it('keeps Help where a screen offers no hints, with the game’s lessons and no hints row', async () => {
+    await mount([], table);
+    expect(screen.queryByTestId('first-use-hint-bet-selector')).toBeNull();
+    await press('Help');
+    expect(await screen.findByRole('button', { name: 'All blackjack lessons. 10' })).toBeOnTheScreen();
+    expect(screen.getByRole('button', { name: /^Start with Blackjack basics\. Hands, the table, betting, turn order and settlement · 6 short steps$/ })).toBeOnTheScreen();
+    expect(screen.queryByRole('button', { name: /^Show this screen's hints again/ })).toBeNull();
+  });
+});
+
+// docs/decisions/lessons-entry-points.md; S3-07 zxRJD
+describe('Help inside a Check attempt', () => {
+  it('keeps operational help and the hints row, says lessons open after the attempt, and links to no lesson', async () => {
+    let shown = 0;
+    let closed = 0;
     await cleanup();
     await render(
-      <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 0, left: 0, right: 0, bottom: 0 } }}>{table}</SafeAreaProvider>,
+      <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 0, left: 0, right: 0, bottom: 0 } }}>
+        <HelpSheet
+          view={{ variant: 'check', countRange: { min: -99, max: 99 }, countAid: true, table: { seat: 'play' } } as never}
+          hints={['count-entry']}
+          onShowHints={() => void shown++}
+          onClose={() => void closed++}
+        />
+      </SafeAreaProvider>,
     );
-    expect(screen.queryByTestId('first-use-hint-bet-selector')).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Help' })).toBeNull();
+    expect(screen.getByRole('header', { name: 'How this check works' })).toBeOnTheScreen();
+    expect(screen.getByText('Lessons open after this attempt')).toBeOnTheScreen();
+    expect(
+      screen.getByText('The counting lessons, the blackjack mode lessons and the bet-schedule lesson wait until this attempt ends, so help never gives away an answer. Every other lesson stays open.'),
+    ).toBeOnTheScreen();
+    expect(screen.queryAllByRole('link')).toEqual([]);
+    expect(screen.queryByRole('button', { name: /lesson/i })).toBeNull();
+    await press("Show this screen's hints again. The count entry hint shows again here.");
+    expect([shown, closed]).toEqual([1, 1]);
   });
 });

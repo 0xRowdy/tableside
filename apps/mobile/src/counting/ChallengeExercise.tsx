@@ -13,7 +13,7 @@ import { Button } from '@/components/Button';
 import { Choice, PlayingCard } from '@/counting/CardChoices';
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
 import { usePolling } from '@/hooks/use-polling';
-import { FirstUseHint, useReopenHints } from '@/lessons/FirstUseHints';
+import { FirstUseHint, useScreenHints } from '@/lessons/FirstUseHints';
 import { signed } from '@/play/blackjack-text';
 import { DetailsRow, DetailsSection, SaveFailedBanner, TableHeader, TableLayout } from '@/play/TableChrome';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/theme/tokens';
@@ -109,7 +109,7 @@ export function ChallengeExercise({
   const styles = useStyles();
   const insets = useSafeAreaInsets();
   const [helping, setHelping] = useState(false);
-  const reopenHints = useReopenHints();
+  const screenHints = useScreenHints();
   const held = hold?.reached ?? false;
   const ready = !busy && !saveFailed && !held;
   const answering = view.legalCommands.includes('answer') && ready;
@@ -122,16 +122,13 @@ export function ChallengeExercise({
       hint={HELP_HINT}
       icon={CircleHelp}
       enabled
-      onPress={() => {
-        reopenHints();
-        setHelping(true);
-      }}
+      onPress={() => setHelping(true)}
     />
   );
   const sheets = (
     <>
       {hold?.reached && !helping && <HoldSheet hold={hold} context={{ variant: view.variant, position: view.position, pacing, reader: screenReaderName(Platform.OS), play: view.table?.seat === 'play' }} busy={busy} onResume={onResume} onEnd={onEnd} onClose={onLeave} />}
-      {helping && <HelpSheet view={view} onClose={() => setHelping(false)} />}
+      {helping && <HelpSheet view={view} hints={screenHints.ids} onShowHints={screenHints.reopen} onClose={() => setHelping(false)} />}
     </>
   );
   if (view.table) {

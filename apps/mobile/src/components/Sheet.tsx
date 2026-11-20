@@ -1,6 +1,7 @@
 import { X } from 'lucide-react-native';
 import type { ReactNode } from 'react';
 import { Modal, Pressable, ScrollView, Text, useWindowDimensions, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/theme/tokens';
@@ -12,10 +13,11 @@ export function Sheet({ title, onClose, testID, children }: { title: string; onC
   const styles = useStyles();
   const { fontScale } = useWindowDimensions();
   const fullScreen = fontScale > FULL_SCREEN_FONT_SCALE;
+  const insets = useSafeAreaInsets();
   return (
     <Modal visible transparent animationType="slide" onRequestClose={onClose} supportedOrientations={['portrait', 'landscape']}>
       <View style={[styles.scrim, fullScreen && styles.scrimFull]}>
-        <View accessibilityViewIsModal style={[styles.sheet, fullScreen && styles.sheetFull]}>
+        <View accessibilityViewIsModal style={[styles.sheet, fullScreen && styles.sheetFull, fullScreen && { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
           <ScrollView testID={testID} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
             <View style={styles.grabber} />
             <View style={styles.header}>

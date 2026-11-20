@@ -199,7 +199,7 @@ describe('first-run order', () => {
 });
 
 describe('teaching never bypasses the first run', () => {
-  it.each(['/more/settings/learning', '/more/settings/learning/lessons', '/more/settings/learning/lessons/app-orientation', '/counting'])(
+  it.each(['/more/settings/learning', '/counting', '/counting/lessons', '/counting/lessons/app-orientation'])(
     'opening %s on a fresh installation lands on Welcome',
     async (initialUrl) => {
       await openWelcome(initialUrl);
@@ -208,7 +208,7 @@ describe('teaching never bypasses the first run', () => {
 
   it('a signed-in account without its offline game is asked for it before any lesson', async () => {
     launch.stored = { state: 'active', accountId: FAKE_ACCOUNT_ID, eligibility: '18+' };
-    await renderRouter('./src/app', { initialUrl: '/more/settings/learning/lessons/app-orientation' });
+    await renderRouter('./src/app', { initialUrl: '/counting/lessons/app-orientation' });
     await step('Choose your offline game');
   });
 

@@ -79,6 +79,7 @@ describe('the Training service lessons', () => {
       steps: 4,
       access: { kind: 'available' },
       status: { kind: 'not-started' },
+      lastActive: null,
     });
     expect(catalog.filter((entry) => entry.steps !== null).map((entry) => entry.id)).toEqual([
       ORIENTATION,
@@ -155,6 +156,19 @@ describe('the Training service lessons', () => {
     expect(await statusOf(service)).toEqual({ kind: 'in-progress', step: 2 });
   });
 
+  // Counting hub and table Help offer the lesson opened most recently; docs/decisions/lessons-entry-points.md
+  it('ranks lessons by their latest progress event, in acceptance order', async () => {
+    const { service } = setup();
+    await service.stepForward(ORIENTATION, 1);
+    await service.stepForward('blackjack-basics', 1);
+    await service.stepForward(ORIENTATION, 2);
+    const catalog = await service.listLessons();
+    const active = (id: string) => catalog.find((entry) => entry.id === id)!.lastActive;
+    expect(active(ORIENTATION)).toBeGreaterThan(active('blackjack-basics')!);
+    expect(active('blackjack-basics')).not.toBeNull();
+    expect(active('card-values')).toBeNull();
+  });
+
   it('resumes where the learner left off, offering Resume or Restart, after the app restarts', async () => {
     const first = setup();
     await first.service.stepForward(ORIENTATION, 1);
@@ -201,6 +215,7 @@ describe('the Training service lessons', () => {
       steps: 4,
       access: { kind: 'available' },
       status: { kind: 'completed' },
+      lastActive: 3,
     });
     expect(await statusOf(service, 'blackjack-basics')).toEqual({ kind: 'not-started' });
     expect(await service.openLesson(ORIENTATION)).toMatchObject({ step: 1, prompt: null, notice: null });

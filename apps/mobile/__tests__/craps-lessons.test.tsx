@@ -42,7 +42,7 @@ describe('craps lessons', () => {
   }, 180_000);
 
   it('press-and-collect: the worked example replays two hits on 6 and answers with the press', async () => {
-    await renderRouter('./src/app', { initialUrl: '/more/settings/learning/lessons/press-and-collect-6-8' });
+    await renderRouter('./src/app', { initialUrl: '/counting/lessons/press-and-collect-6-8' });
     await header('Press-and-collect 6 and 8 (capped)');
     expect(screen.getByText('Lesson · Craps')).toBeOnTheScreen();
     await fireEvent.press(button('Next'));
@@ -62,7 +62,7 @@ describe('craps lessons', () => {
   });
 
   it('end each strategy lesson with practice handoffs, then the Sources step with its exact credits', async () => {
-    await renderRouter('./src/app', { initialUrl: '/more/settings/learning/lessons/three-point-molly' });
+    await renderRouter('./src/app', { initialUrl: '/counting/lessons/three-point-molly' });
     await header('Three-point Molly (bounded)');
     for (const heading of ['Add come bets, up to two', 'When numbers hit', 'Seven-out, limits and stopping', "Stakes change. The house edge doesn't."]) {
       await fireEvent.press(button('Next'));

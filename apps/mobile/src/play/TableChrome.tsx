@@ -1,4 +1,4 @@
-import type { DomainFact, PermittedView } from '@tableside/engine';
+import type { DomainFact, GameId, PermittedView } from '@tableside/engine';
 import { ChevronDown, CircleStop } from 'lucide-react-native';
 import { useState, type ReactNode } from 'react';
 import { AccessibilityInfo, Pressable, ScrollView, Text, useWindowDimensions, View, type LayoutChangeEvent } from 'react-native';
@@ -91,12 +91,12 @@ export function TableHeader({
   );
 }
 
-export function TableButtons({ canEnd, onEnd }: { canEnd: boolean; onEnd: () => void }) {
+export function TableButtons({ game, canEnd, onEnd }: { game: GameId; canEnd: boolean; onEnd: () => void }) {
   const styles = useStyles();
   const { focused, focusProps } = useKeyboardFocus();
   return (
     <>
-      <HelpButton />
+      <HelpButton game={game} />
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="End session"
