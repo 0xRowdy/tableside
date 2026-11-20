@@ -50,7 +50,7 @@ Annotations: `XMYAW` hub, `NVWuf` table Help, `c9I918` Check attempt, `KD0BU` ba
 
 ## Spec amendments
 
-Drafted 2026-11-19 and not posted yet.
+Posted 2026-11-19: [spec 3 A8](https://github.com/0xRowdy/tableside/issues/53#issuecomment-7028520148), [spec 1 A14](https://github.com/0xRowdy/tableside/issues/51#issuecomment-7028520461).
 
 | Spec | Amendment |
 | --- | --- |
