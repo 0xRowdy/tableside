@@ -79,8 +79,8 @@ describe('the Counting tab', () => {
     expect(screen.getByRole('button', { name: 'Learn: Card values' })).toBeEnabled();
     expect(screen.getByRole('button', { name: 'Check: Card values' })).toBeEnabled();
     // Spec 3 S3-01 GV4tz
-    expect(within(screen.getByRole('button', { name: 'Learn: Card values' })).getByText('Feedback as you go')).toBeOnTheScreen();
-    expect(within(screen.getByRole('button', { name: 'Check: Card values' })).getByText('Feedback at the end')).toBeOnTheScreen();
+    expect(within(screen.getByRole('button', { name: 'Learn: Card values' })).getByText('Feedback\nas you go')).toBeOnTheScreen();
+    expect(within(screen.getByRole('button', { name: 'Check: Card values' })).getByText('Feedback\nat the end')).toBeOnTheScreen();
     expect(screen.getByRole('button', { name: 'Check: Card values' })).toHaveProp('accessibilityHint', 'Feedback at the end');
     expect(screen.getByRole('button', { name: 'Learn: Running count' })).toBeEnabled();
     expect(screen.getByRole('button', { name: 'Check: Running count' })).toBeEnabled();

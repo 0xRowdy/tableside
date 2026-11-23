@@ -209,7 +209,7 @@ function VariantButton({
             </Text>
           </View>
           <Text maxFontSizeMultiplier={textScale.body} style={styles.variantDetail}>
-            {VARIANT_DETAIL[variant]}
+            {stacked ? VARIANT_DETAIL[variant] : VARIANT_DETAIL[variant].replace(' ', '\n')}
           </Text>
         </>
       )}
