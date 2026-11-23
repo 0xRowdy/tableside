@@ -1,29 +1,16 @@
-// Spec 3 S3-01 PDCaD, RqPCB, S3-02 buD2R; spec 5 S5-17 j3UhJ; #150
+// Spec 3 S3-01 GV4tz, RqPCB, S3-02 Ufuiu; spec 5 S5-17 j3UhJ; #150, #55
 
 import { CircleSlash, Smartphone, Ticket } from 'lucide-react-native';
-import { useState } from 'react';
 import { Text, View } from 'react-native';
 
-import { LinkButton } from '@/play/setup/SetupParts';
 import { fonts, palette, radius, space, textScale } from '@/theme/tokens';
 import { makeStyles } from '@/theme/type';
-import { ALLOWANCE_ACTION_LABEL, ARRIVES_LATER, type AllowanceAction, type AllowanceCopy } from '@/training/challenge-text';
+import type { AllowanceCopy } from '@/training/challenge-text';
 
 const ICON = { premium: Ticket, available: Ticket, 'used-up': CircleSlash, elsewhere: Smartphone } as const;
 
-export function AllowanceBanner({
-  standing,
-  title,
-  detail = null,
-  action,
-}: {
-  standing: AllowanceCopy['standing'];
-  title: string;
-  detail?: string | null;
-  action: AllowanceAction | null;
-}) {
+export function AllowanceBanner({ standing, title, detail = null }: { standing: AllowanceCopy['standing']; title: string; detail?: string | null }) {
   const styles = useStyles();
-  const [showArrivesLater, setShowArrivesLater] = useState(false);
   const usedUp = standing === 'used-up';
   const Icon = ICON[standing];
   return (
@@ -36,12 +23,6 @@ export function AllowanceBanner({
         {detail && (
           <Text maxFontSizeMultiplier={textScale.body} style={styles.detail}>
             {detail}
-          </Text>
-        )}
-        {action && <LinkButton label={ALLOWANCE_ACTION_LABEL[action]} onPress={() => setShowArrivesLater(true)} />}
-        {action && showArrivesLater && (
-          <Text accessibilityRole="alert" maxFontSizeMultiplier={textScale.body} style={styles.detail}>
-            {ARRIVES_LATER[action]}
           </Text>
         )}
       </View>

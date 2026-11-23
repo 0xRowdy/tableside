@@ -71,7 +71,8 @@ export function categoryStatus(category: ChallengeCategory, progress: Progress |
 const bestScore = (group: GroupProgress) => scoreText(group.bests[0]?.result ?? null);
 
 // Spec 3 S3-08 CEb6T, nXGFk
-export const BELOW_THRESHOLD = 'Below 95% this time. That restarts the streak for these settings.';
+// Spec 3 S3-08 cfKTT
+export const BELOW_THRESHOLD = 'Below 95% this time, so your run of Checks at 95% or better starts over.';
 
 export const MILESTONE_EARNED = 'Readiness milestone earned';
 

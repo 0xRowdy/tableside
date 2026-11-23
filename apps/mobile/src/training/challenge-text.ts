@@ -1,6 +1,6 @@
 // Spec 3 S3-01 to S3-09; S5-17 j3UhJ; #158, #132, #150, #133, #134, #136, #137
 
-import { runningCountDrift, type AssistanceClass, type ChallengeAttemptRecord, type ChallengeCategory, type ChallengeEntry, type ChallengeMetric, type ChallengePacing, type ChallengeVariant, type ChallengeView, type ConversionReview, type CountRange, type HiLoExplanation, type HiLoValue, type LearnFeedback, type MetricResult, type ReviewFact, type RunningCountReview, type TableBetReview, type TableDecisionReview } from '@tableside/engine';
+import { CATEGORY_METRIC, runningCountDrift, type AssistanceClass, type ChallengeAttemptRecord, type ChallengeCategory, type ChallengeEntry, type ChallengeMetric, type ChallengePacing, type ChallengeVariant, type ChallengeView, type ConversionReview, type CountRange, type HiLoExplanation, type HiLoValue, type LearnFeedback, type MetricResult, type ReviewFact, type RunningCountReview, type TableBetReview, type TableDecisionReview } from '@tableside/engine';
 
 import { cardName, rankName, signed } from '../play/blackjack-text';
 import { conversionText, decksText } from './blackjack-conversion-text';
@@ -35,26 +35,35 @@ export const SUGGESTED_ORDER_LABEL = 'Suggested order · all four available now'
 export const RECOMMENDATIONS_NOTE = 'Recommendations use your accuracy only, never speed or winnings. Nothing here is locked.';
 export const NOT_READY_HINT = 'Not available in this version yet.';
 
-export const VARIANT_LABEL = 'Variant';
+// Spec 3 S3-02 Ufuiu; docs/decisions/clarify-challenge-vocabulary.md
+export const VARIANT_LABEL = 'Feedback';
+// Spec 3 S3-01 GV4tz
+export const VARIANT_DETAIL: Record<ChallengeVariant, string> = { learn: 'Feedback as you go', check: 'Feedback at the end' };
 export const WHAT_YOU_DO_LABEL = 'What you’ll do';
 export const startLabel = (variant: ChallengeVariant) => `Start ${variantLabel(variant)} attempt`;
 export const FINDING_ATTEMPT = 'Finding your counting attempt…';
 
-export const VARIANT_HELP = "Check holds all feedback until the end. Learn tells you after each answer whether it's right, explains it and lets you retry.";
-export const WHAT_YOU_DO: Partial<Record<ChallengeCategory, string>> = {
-  'card-values': '20 cards covering every rank, one at a time. Choose +1, 0 or −1 for each. Only your first answer to each card is scored.',
-  'running-count':
-    '52 cards from a shuffled six-deck shoe, starting at zero. Learn asks for the count after every card; Check asks after cards 13, 26, 39 and 52. Only your first answer at each point is scored.',
-  conversion: '10 questions. Each gives a running count and the decks remaining; enter the true count. Only your first answer to each question is scored.',
+// Spec 3 S3-02 Ufuiu
+export const VARIANT_HELP: Record<ChallengeVariant, string> = {
+  learn: "Learn shows after each answer whether it's right, explains it and lets you retry.",
+  check: 'Check holds all feedback until the end; two Checks in a row at 95% or better earn a readiness milestone.',
 };
+export function whatYouDo(category: ChallengeCategory, variant: ChallengeVariant): string | null {
+  if (category === 'card-values') return '20 cards covering every rank, one at a time. Choose +1, 0 or −1 for each. Only your first answer to each card is scored.';
+  if (category === 'conversion') return '10 questions. Each gives a running count and the decks remaining; enter the true count. Only your first answer to each question is scored.';
+  if (category !== 'running-count') return null;
+  const shoe = '52 cards from a shuffled six-deck shoe, starting at zero.';
+  return variant === 'check'
+    ? `${shoe} In Check you enter the running count at four checkpoints: after cards 13, 26, 39 and 52.`
+    : `${shoe} In Learn you enter the running count after every card; only your first answer to each is scored.`;
+}
 
 // Spec 3 Amendment 4 §2–3; spec 5 Amendment 1 E, Amendment 7 §4
-export type AllowanceAction = 'see-premium' | 'offline-and-allowance';
-
+// docs/decisions/clarify-challenge-vocabulary.md; #55
 export interface AllowanceCopy {
   readonly standing: 'premium' | 'available' | 'used-up' | 'elsewhere';
-  readonly banner: { readonly title: string; readonly detail: string | null; readonly action: AllowanceAction | null };
-  readonly setup: { readonly text: string; readonly action: AllowanceAction | null };
+  readonly banner: { readonly title: string; readonly detail: string | null };
+  readonly setup: { readonly text: string };
   readonly results: string;
   // Spec 3 S3-08 nXGFk; #141
   readonly practice: string;
@@ -63,11 +72,6 @@ export interface AllowanceCopy {
 // Spec 3 Training service interface › Start attempt
 export const startWaits = (copy: AllowanceCopy | undefined) => copy?.standing === 'used-up' || copy?.standing === 'elsewhere';
 
-export const ALLOWANCE_ACTION_LABEL: Record<AllowanceAction, string> = { 'see-premium': 'See premium', 'offline-and-allowance': 'Offline & allowance' };
-export const ARRIVES_LATER: Record<AllowanceAction, string> = {
-  'see-premium': 'Plans arrive in a later update.',
-  'offline-and-allowance': 'Offline & allowance arrives in a later update.',
-};
 
 const UNLIMITED = 'Unlimited challenges (premium)';
 const RETRY_STARTS_FRESH = 'Retry starts a fresh attempt.';
@@ -90,18 +94,18 @@ export function resetTimeText(instant: number, timeZone: string): string {
 
 export function allowanceCopy(allowance: ChallengeAllowance): AllowanceCopy {
   if (allowance.kind === 'premium') {
-    return { standing: 'premium', banner: { title: UNLIMITED, detail: null, action: null }, setup: { text: UNLIMITED, action: null }, results: `${UNLIMITED}. ${RETRY_STARTS_FRESH}`, practice: `${UNLIMITED}. ${LESSONS_FREE}` };
+    return { standing: 'premium', banner: { title: UNLIMITED, detail: null }, setup: { text: UNLIMITED }, results: `${UNLIMITED}. ${RETRY_STARTS_FRESH}`, practice: `${UNLIMITED}. ${LESSONS_FREE}` };
   }
   const { amount, left, resetsAt, timeZone, allowanceDevice } = allowance;
   if (!allowanceDevice.here) {
     const where = `Today's challenge attempts are on ${allowanceDevice.name}.`;
-    const moveHere = 'Move them here in More › Settings › Offline & allowance.';
+    const there = 'Start challenges there; lessons and your records stay open here.';
     return {
       standing: 'elsewhere',
-      banner: { title: where, detail: moveHere, action: 'offline-and-allowance' },
-      setup: { text: `${where} ${moveHere}`, action: null },
-      results: `${where} ${moveHere}`,
-      practice: `${where} ${moveHere}`,
+      banner: { title: where, detail: there },
+      setup: { text: `${where} ${there}` },
+      results: `${where} ${there}`,
+      practice: `${where} ${there}`,
     };
   }
   const reset = resetTimeText(resetsAt, timeZone);
@@ -109,8 +113,8 @@ export function allowanceCopy(allowance: ChallengeAllowance): AllowanceCopy {
     const usedUp = `You've used today's ${amount} challenge ${attempts(amount)}. They reset at ${reset}.`;
     return {
       standing: 'used-up',
-      banner: { title: 'No challenge attempts left today', detail: `${usedUp} Lessons, worked examples and your records stay open.`, action: 'see-premium' },
-      setup: { text: usedUp, action: 'see-premium' },
+      banner: { title: 'No challenge attempts left today', detail: `${usedUp} Lessons, worked examples and your records stay open.` },
+      setup: { text: usedUp },
       results: usedUp,
       practice: `${usedUp} ${LESSONS_FREE}`,
     };
@@ -119,10 +123,9 @@ export function allowanceCopy(allowance: ChallengeAllowance): AllowanceCopy {
     standing: 'available',
     banner: {
       title: `${left} of ${amount} challenge ${attempts(amount)} left today · resets at ${reset}`,
-      detail: "Starting an attempt uses one. Resuming one, showing the count and lessons don't.",
-      action: 'see-premium',
+      detail: "Starting a challenge uses one attempt; resuming it, showing the count and opening lessons don't.",
     },
-    setup: { text: `Starting uses 1 of your ${left} ${attempts(left)} left today. Resuming doesn't use another.`, action: null },
+    setup: { text: `Starting uses 1 of your ${left} ${attempts(left)} left today. Resuming doesn't use another.` },
     results: `${left} ${attempts(left)} left today. ${RETRY_STARTS_FRESH}`,
     practice: `Learn uses 1 of your ${left} ${attempts(left)} left today. ${LESSONS_FREE}`,
   };
@@ -221,6 +224,18 @@ export const CHOICE_TAG = { 'your-answer': 'Your answer', 'your-pick': 'Your pic
 export const CARD_PROMPT = "What's this card's Hi-Lo value?";
 export const SKIP_LABEL = 'Skip (counts as incorrect)';
 
+// Spec 3 S3-05 UKfJA, YLGVK; docs/decisions/clarify-challenge-vocabulary.md
+export type SkipItem = 'card' | 'count' | 'question';
+export function skipConfirmText(item: SkipItem) {
+  return {
+    title: `Skip this ${item}?`,
+    lead: `A skipped ${item} is scored as incorrect, and you can't go back to it.`,
+    detail: item === 'card' ? null : "Going back keeps what you've typed.",
+    keep: 'Keep counting',
+    skip: 'Skip and score as incorrect',
+  } as const;
+}
+
 // Spec 3 S3-04 qdnQm
 export const COUNT_LABEL = 'Running count';
 export const COUNT_SKIP = 'Skip';
@@ -267,15 +282,15 @@ export const toggleSign = (text: string) => (text.startsWith('−') ? `+${text.s
 // Spec 3 Learn, Check and assistance › Show/hide running count; S3-04 qdnQm, S3-05 EDnGd
 export const SHOW_COUNT = 'Show running count';
 export function countAidDetail(variant: ChallengeVariant, revealed: boolean, showing: boolean): string {
-  if (showing) return variant === 'check' ? 'Showing. This attempt is marked assisted.' : 'Showing. Learn notes that you showed it.';
+  if (showing) return variant === 'check' ? 'Showing. This attempt is recorded as assisted.' : 'Showing. Learn notes that you showed it.';
   if (variant === 'learn') return 'Hidden. Learn notes whether you showed it.';
-  return revealed ? 'Hidden. This attempt is already marked assisted; showing it again changes nothing.' : 'Hidden. Showing it marks this whole attempt assisted, permanently.';
+  return revealed ? 'Hidden. This attempt is already recorded as assisted; showing it again changes nothing.' : 'Hidden. Showing it records this attempt as assisted for good.';
 }
+// Spec 3 S3-05 y6lY1o
 export const REVEAL_WARNING = {
   title: 'Show the running count?',
-  lead: "Showing it marks this whole attempt as assisted, permanently. Hiding it again won't undo that.",
-  detail:
-    "Assisted attempts still get full results, but they're kept apart from unassisted records and can't count toward a readiness milestone. Showing the count doesn't use another attempt.",
+  lead: 'This attempt will be recorded as assisted, even if you hide the count again.',
+  detail: "Assisted attempts keep their full results in their own records but can't earn a readiness milestone, and showing the count doesn't use another attempt.",
   keep: 'Keep it hidden',
   show: 'Show count and mark assisted',
 } as const;
@@ -349,6 +364,15 @@ export const RESULT_ROWS: readonly { readonly metric: ChallengeMetric; readonly 
   // Spec 3 S3-08 e5MASr; #138
   { metric: 'playing-adherence', title: 'Playing adherence', tested: (total) => `${total} ${total === 1 ? 'decision' : 'decisions'}` },
 ];
+
+// Spec 3 S3-08 cfKTT
+export function rightText(record: Pick<ChallengeAttemptRecord, 'groupKey' | 'metrics'>): string | null {
+  const { category, variant } = record.groupKey;
+  const metric = CATEGORY_METRIC[category];
+  const result = record.metrics[metric];
+  const row = RESULT_ROWS.find((item) => item.metric === metric);
+  return result && row ? `You got ${result.correct} of ${row.tested(result.total, variant, category)} right.` : null;
+}
 
 // Spec 3 S3-08 cX5Gc
 export const resultRows = (metrics: Readonly<Record<ChallengeMetric, MetricResult | null>>) => [...RESULT_ROWS].sort((a, b) => Number(metrics[b.metric] !== null) - Number(metrics[a.metric] !== null));
@@ -435,7 +459,7 @@ export function driftText(review: readonly ReviewFact[], variant: ChallengeVaria
 // Spec 3 S3-02 buD2R; Attempt lifecycle › Performance timer; #135
 export const TIMING_LABEL = 'Timing';
 export const TIME_THIS = 'Time this attempt';
-export const TIME_THIS_DETAIL = 'Optional. Only perfect, unassisted, uninterrupted timed Check attempts set a fastest time.';
+export const TIME_THIS_DETAIL = 'Only a perfect Check with no pauses and the count kept hidden sets a fastest time.';
 
 // Spec 3 S3-04 qdnQm, S3-05 r5pCx, qGARl
 export const PAUSE_LABEL = 'Pause';

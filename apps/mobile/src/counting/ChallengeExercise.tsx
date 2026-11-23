@@ -22,6 +22,7 @@ import { HelpSheet, HoldSheet, WarningNote } from './AttemptSheets';
 import { CountAid, CountAidSwitch, CountAidValue, useCountAid } from './CountAid';
 import { CoachButton } from './CoachButton';
 import { CountEntry } from './CountEntry';
+import { useSkipConfirm } from './SkipConfirm';
 import { TableFelt, TablePanel, tableChrome } from './TableExercise';
 import { edgePercent, tableSubtitle } from '@/training/blackjack-table-text';
 import { decksText } from '@/training/blackjack-conversion-text';
@@ -113,6 +114,8 @@ export function ChallengeExercise({
   const held = hold?.reached ?? false;
   const ready = !busy && !saveFailed && !held;
   const answering = view.legalCommands.includes('answer') && ready;
+  // Spec 3 S3-05 UKfJA
+  const cardSkip = useSkipConfirm('card', answering, () => onCommand({ kind: 'skip' }));
   const feedback = view.variant === 'learn' ? view.feedback : null;
   const entered = view.variant === 'check' ? view.entered : null;
   const timerNode = timer && <PerformanceTime timer={timer} performanceMs={performanceMs} />;
@@ -129,6 +132,7 @@ export function ChallengeExercise({
     <>
       {hold?.reached && !helping && <HoldSheet hold={hold} context={{ variant: view.variant, position: view.position, pacing, reader: screenReaderName(Platform.OS), play: view.table?.seat === 'play' }} busy={busy} onResume={onResume} onEnd={onEnd} onClose={onLeave} />}
       {helping && <HelpSheet view={view} hints={screenHints.ids} onShowHints={screenHints.reopen} onClose={() => setHelping(false)} />}
+      {cardSkip.sheet}
     </>
   );
   if (view.table) {
@@ -210,7 +214,7 @@ export function ChallengeExercise({
                 <Choice key={value} label={signed(value)} spoken={spokenValue(value)} state={choiceState(value, feedback, entered)} enabled={answering} onPress={() => onCommand({ kind: 'answer', value })} />
               ))}
             </View>
-            {view.legalCommands.includes('skip') && <Button label={SKIP_LABEL} icon={SkipForward} variant="outline" stretch disabled={!answering} onPress={() => onCommand({ kind: 'skip' })} />}
+            {view.legalCommands.includes('skip') && <Button label={SKIP_LABEL} icon={SkipForward} variant="outline" stretch disabled={!answering} onPress={cardSkip.ask} />}
             {view.phase === 'recorded' && entered !== null && <RecordedNotice entered={entered} category={view.category} />}
             {feedback && <CoachNote feedback={feedback} position={view.position} canRetry={view.legalCommands.includes('retry-item')} enabled={ready} onCommand={onCommand} />}
           </>
@@ -452,6 +456,7 @@ function ConversionBody({
             <CountEntry
               key={view.position}
               label={TRUE_COUNT_LABEL}
+              item="question"
               range={range}
               enabled={answering}
               onSubmit={(value) => onCommand({ kind: 'answer', value })}

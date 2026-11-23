@@ -1,10 +1,9 @@
 // Spec 1 S1-02, Spec 4 S4-13
 
 import type { StrategyDefinition, TableCompatibility, TableRequirement } from '@tableside/engine';
-import { useState, type ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { Pressable, Text, View } from 'react-native';
 
-import { Button } from '@/components/Button';
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/theme/tokens';
 import { makeStyles } from '@/theme/type';
@@ -44,17 +43,12 @@ export function StrategyPicker({
   children?: ReactNode;
 }) {
   const styles = useStyles();
-  const [customizeNote, setCustomizeNote] = useState<string | null>(null);
-  const choose = (next: StrategyDefinition) => {
-    onChoose(next);
-    setCustomizeNote(null);
-  };
   return (
     <View style={styles.section}>
       <Text maxFontSizeMultiplier={textScale.body} style={styles.label}>STRATEGY</Text>
       <View accessibilityRole="radiogroup" accessibilityLabel="Strategy" style={styles.strategies}>
         {builtIns.map((option) => (
-          <StrategyChoice key={option.id} definition={option} selected={selected.id === option.id} onPress={() => choose(option)} />
+          <StrategyChoice key={option.id} definition={option} selected={selected.id === option.id} onPress={() => onChoose(option)} />
         ))}
       </View>
       {children}
@@ -64,7 +58,7 @@ export function StrategyPicker({
       ) : (
         <View accessibilityRole="radiogroup" accessibilityLabel="My strategies" style={styles.strategies}>
           {myStrategies.map((option) => (
-            <StrategyChoice key={option.id} definition={option} selected={selected.id === option.id} onPress={() => choose(option)} />
+            <StrategyChoice key={option.id} definition={option} selected={selected.id === option.id} onPress={() => onChoose(option)} />
           ))}
         </View>
       )}
@@ -79,13 +73,8 @@ export function StrategyPicker({
             </Text>
           ))}
           <Text maxFontSizeMultiplier={textScale.body} style={styles.help}>Tableside won&apos;t change a strategy&apos;s amounts for you.</Text>
-          <Text maxFontSizeMultiplier={textScale.body} style={styles.help}>Choose a compatible table ({tableParts}) or another strategy, or:</Text>
-          <Button label="Customize a copy for this table" variant="secondary" stretch onPress={() => setCustomizeNote(selected.id)} />
-          {customizeNote === selected.id && (
-            <Text accessibilityRole="alert" maxFontSizeMultiplier={textScale.body} style={styles.help}>
-              The strategy builder arrives in a later update. It will make your own private copy declared for this table, with the same amounts until you choose new ones.
-            </Text>
-          )}
+          {/* docs/decisions/clarify-challenge-vocabulary.md; #54 */}
+          <Text maxFontSizeMultiplier={textScale.body} style={styles.help}>Choose a compatible table ({tableParts}) or another strategy.</Text>
         </View>
       )}
     </View>

@@ -46,6 +46,12 @@ const answerFor = (card: string) => HI_LO[card.split(' of ')[0]!]!;
 const wrongFor = (card: string) => (answerFor(card) === 'plus 1' ? 'minus 1' : 'plus 1');
 const cues = () => (jest.requireMock('@/feedback/device-ports') as { latest: SubstituteFeedbackPorts }).latest.sound.played.map((play) => play.cue);
 
+// docs/decisions/clarify-challenge-vocabulary.md
+async function skip(name: string) {
+  await fireEvent.press(screen.getByRole('button', { name }));
+  await fireEvent.press(screen.getByRole('button', { name: 'Skip and score as incorrect' }));
+}
+
 async function openSetup() {
   await renderRouter('./src/app', { initialUrl: '/counting' });
   await screen.findByRole('header', { name: 'Counting' });
@@ -72,6 +78,10 @@ describe('the Counting tab', () => {
     expect(screen.getByText('20 cards covering every rank. Answer +1, 0 or −1 for each.')).toBeOnTheScreen();
     expect(screen.getByRole('button', { name: 'Learn: Card values' })).toBeEnabled();
     expect(screen.getByRole('button', { name: 'Check: Card values' })).toBeEnabled();
+    // Spec 3 S3-01 GV4tz
+    expect(within(screen.getByRole('button', { name: 'Learn: Card values' })).getByText('Feedback as you go')).toBeOnTheScreen();
+    expect(within(screen.getByRole('button', { name: 'Check: Card values' })).getByText('Feedback at the end')).toBeOnTheScreen();
+    expect(screen.getByRole('button', { name: 'Check: Card values' })).toHaveProp('accessibilityHint', 'Feedback at the end');
     expect(screen.getByRole('button', { name: 'Learn: Running count' })).toBeEnabled();
     expect(screen.getByRole('button', { name: 'Check: Running count' })).toBeEnabled();
     expect(screen.getByRole('button', { name: 'Learn: True-count conversion' })).toBeEnabled();
@@ -89,8 +99,9 @@ describe('the Counting tab', () => {
     it('shows attempts left and the actual reset instant in the allowance timezone', async () => {
       await openTab(MOUNTAIN_FREE);
       expect(await screen.findByText('4 of 5 challenge attempts left today · resets at 12:00 AM Mountain Time')).toBeOnTheScreen();
-      expect(screen.getByText("Starting an attempt uses one. Resuming one, showing the count and lessons don't.")).toBeOnTheScreen();
-      expect(screen.getByRole('button', { name: 'See premium' })).toBeOnTheScreen();
+      expect(screen.getByText("Starting a challenge uses one attempt; resuming it, showing the count and opening lessons don't.")).toBeOnTheScreen();
+      // docs/decisions/clarify-challenge-vocabulary.md; #55
+      expect(screen.queryByRole('button', { name: 'See premium' })).toBeNull();
       expect(screen.queryByText(/tomorrow/)).toBeNull();
     });
 
@@ -105,8 +116,8 @@ describe('the Counting tab', () => {
       expect(
         screen.getByText("You've used today's 5 challenge attempts. They reset at 12:00 AM Mountain Time. Lessons, worked examples and your records stay open."),
       ).toBeOnTheScreen();
-      await fireEvent.press(screen.getByRole('button', { name: 'See premium' }));
-      expect(screen.getByRole('alert')).toHaveTextContent('Plans arrive in a later update.');
+      expect(screen.queryByRole('button', { name: 'See premium' })).toBeNull();
+      expect(screen.queryByText(/later update/)).toBeNull();
       expect(screen.getByRole('button', { name: 'Learn: Card values' })).toBeEnabled();
     });
 
@@ -120,13 +131,13 @@ describe('the Counting tab', () => {
       mockAllowance = { ...MOUNTAIN_FREE, left: 0 };
       await openSetup();
       expect(await screen.findByText("You've used today's 5 challenge attempts. They reset at 12:00 AM Mountain Time.")).toBeOnTheScreen();
-      expect(screen.getByRole('button', { name: 'See premium' })).toBeOnTheScreen();
+      expect(screen.queryByRole('button', { name: 'See premium' })).toBeNull();
       expect(screen.getByRole('button', { name: 'Start Learn attempt' })).toBeDisabled();
       await cleanup();
 
       mockAllowance = { ...MOUNTAIN_FREE, allowanceDevice: { here: false, name: 'iPad' } };
       await openSetup();
-      expect(await screen.findByText("Today's challenge attempts are on iPad. Move them here in More › Settings › Offline & allowance.")).toBeOnTheScreen();
+      expect(await screen.findByText("Today's challenge attempts are on iPad. Start challenges there; lessons and your records stay open here.")).toBeOnTheScreen();
       expect(screen.getByRole('button', { name: 'Start Learn attempt' })).toBeDisabled();
       await cleanup();
 
@@ -147,12 +158,14 @@ describe('the Counting tab', () => {
     it('names the allowance device when today’s attempts are on another device (S5-17 j3UhJ)', async () => {
       await openTab({ ...MOUNTAIN_FREE, allowanceDevice: { here: false, name: 'iPad' } });
       expect(await screen.findByText("Today's challenge attempts are on iPad.")).toBeOnTheScreen();
-      expect(screen.getByText('Move them here in More › Settings › Offline & allowance.')).toBeOnTheScreen();
-      expect(screen.getByRole('button', { name: 'Offline & allowance' })).toBeOnTheScreen();
+      expect(screen.getByText('Start challenges there; lessons and your records stay open here.')).toBeOnTheScreen();
+      // docs/decisions/clarify-challenge-vocabulary.md; #55
+      expect(screen.queryByRole('button', { name: 'Offline & allowance' })).toBeNull();
+      expect(screen.queryByText(/Settings/)).toBeNull();
       expect(screen.queryByRole('button', { name: 'See premium' })).toBeNull();
       const check = screen.getByRole('button', { name: 'Check: Card values' });
       expect(check).toBeDisabled();
-      expect(within(check).getByText("Today's challenge attempts are on iPad. Move them here in More › Settings › Offline & allowance.")).toBeOnTheScreen();
+      expect(within(check).getByText("Today's challenge attempts are on iPad. Start challenges there; lessons and your records stay open here.")).toBeOnTheScreen();
       expect(within(screen.getByRole('button', { name: 'Learn: Card values' })).getByText('Learn')).toBeOnTheScreen();
       expect(screen.queryByText(/attempts left/)).toBeNull();
     });
@@ -160,10 +173,16 @@ describe('the Counting tab', () => {
 
   it('sets up a card-values Learn attempt with the charge notice before anything starts', async () => {
     await openSetup();
-    const variant = within(screen.getByLabelText('Variant'));
+    const variant = within(screen.getByLabelText('Feedback'));
+    expect(screen.getByText('Feedback')).toBeOnTheScreen();
     expect(variant.getByRole('radio', { name: 'Learn', checked: true })).toBeOnTheScreen();
     expect(variant.getByRole('radio', { name: 'Check' })).toBeEnabled();
-    expect(screen.getByText(/Learn tells you after each answer whether it's right/)).toBeOnTheScreen();
+    // Spec 3 S3-02 Ufuiu
+    expect(screen.getByText("Learn shows after each answer whether it's right, explains it and lets you retry.")).toBeOnTheScreen();
+    await fireEvent.press(variant.getByRole('radio', { name: 'Check' }));
+    expect(screen.getByText('Check holds all feedback until the end; two Checks in a row at 95% or better earn a readiness milestone.')).toBeOnTheScreen();
+    expect(screen.queryByText(/Learn shows after each answer/)).toBeNull();
+    await fireEvent.press(variant.getByRole('radio', { name: 'Learn' }));
     expect(await screen.findByText("Starting uses 1 of your 4 attempts left today. Resuming doesn't use another.")).toBeOnTheScreen();
     expect(mockStore && (await (mockStore as { findUnfinishedAttempt(): Promise<unknown> }).findUnfinishedAttempt())).toBeNull();
     expect(screen.getByRole('button', { name: 'Start Learn attempt' })).toBeEnabled();
@@ -214,7 +233,7 @@ describe('the Counting tab', () => {
 
   it('runs a Check attempt: every entry is recorded alike with cue 10, nothing is marked until results, and the review lists every card', async () => {
     await openSetup();
-    await fireEvent.press(within(screen.getByLabelText('Variant')).getByRole('radio', { name: 'Check' }));
+    await fireEvent.press(within(screen.getByLabelText('Feedback')).getByRole('radio', { name: 'Check' }));
     await fireEvent.press(screen.getByRole('button', { name: 'Start Check attempt' }));
     await screen.findByText('Card 1 of 20');
     expect(screen.getByText('Check · self-paced')).toBeOnTheScreen();
@@ -224,7 +243,7 @@ describe('the Counting tab', () => {
       await screen.findByText(`Card ${card} of 20`);
       const shown = shownCard();
       cards.push(shown);
-      if (card === 3) await fireEvent.press(screen.getByRole('button', { name: 'Skip (counts as incorrect)' }));
+      if (card === 3) await skip('Skip (counts as incorrect)');
       else await fireEvent.press(screen.getByRole('button', { name: card === 2 ? wrongFor(shown) : answerFor(shown) }));
       expect(screen.queryByTestId('coach-note')).toBeNull();
       expect(screen.queryByText(/Correct|Your answer|Not quite/)).toBeNull();
@@ -264,7 +283,7 @@ describe('the Counting tab', () => {
       await fireEvent.press(screen.getByRole('button', { name: 'Next card' }));
     }
     await screen.findByRole('header', { name: 'Results' });
-    expect(await screen.findByText("When you're ready, try Check: it holds every answer until the end. Today's challenge attempts are on iPad. Move them here in More › Settings › Offline & allowance.")).toBeOnTheScreen();
+    expect(await screen.findByText("When you're ready, try Check: it holds every answer until the end. Today's challenge attempts are on iPad. Start challenges there; lessons and your records stay open here.")).toBeOnTheScreen();
     expect(screen.getByRole('button', { name: 'Retry with new cards' })).toBeDisabled();
   });
 
@@ -298,8 +317,14 @@ describe('the Counting tab', () => {
       await screen.findByRole('header', { name: 'Counting' });
       await fireEvent.press(screen.getByRole('button', { name: `${variant}: Running count` }));
       await screen.findByRole('header', { name: 'Running count' });
-      expect(screen.getByText(/Learn asks for the count after every card; Check asks after cards 13, 26, 39 and 52/)).toBeOnTheScreen();
-      await fireEvent.press(within(screen.getByLabelText('Variant')).getByRole('radio', { name: variant }));
+      expect(
+        screen.getByText(
+          variant === 'Check'
+            ? '52 cards from a shuffled six-deck shoe, starting at zero. In Check you enter the running count at four checkpoints: after cards 13, 26, 39 and 52.'
+            : '52 cards from a shuffled six-deck shoe, starting at zero. In Learn you enter the running count after every card; only your first answer to each is scored.',
+        ),
+      ).toBeOnTheScreen();
+      await fireEvent.press(within(screen.getByLabelText('Feedback')).getByRole('radio', { name: variant }));
       await fireEvent.press(screen.getByRole('button', { name: `Start ${variant} attempt` }));
       await screen.findByText(variant === 'Check' ? 'Card 1 of 52 · checkpoint 1 of 4' : 'Card 1 of 52');
     }
@@ -333,7 +358,7 @@ describe('the Counting tab', () => {
           expect(cues().slice(before)).toEqual(['input-rejected']);
           expect(screen.getByText('Card 13 of 52 · checkpoint 1 of 4')).toBeOnTheScreen();
           await enterCount(count);
-        } else if (card === 52) await fireEvent.press(screen.getByRole('button', { name: 'Skip' }));
+        } else if (card === 52) await skip('Skip');
         else await enterCount(count + 2);
         expect(screen.queryByText(/Correct|Off by|Match/)).toBeNull();
       }
@@ -408,7 +433,7 @@ describe('the Counting tab', () => {
       await fireEvent.press(screen.getByRole('button', { name: `${variant}: True-count conversion` }));
       await screen.findByRole('header', { name: 'True-count conversion' });
       expect(screen.getByText('10 questions. Each gives a running count and the decks remaining; enter the true count. Only your first answer to each question is scored.')).toBeOnTheScreen();
-      await fireEvent.press(within(screen.getByLabelText('Variant')).getByRole('radio', { name: variant }));
+      await fireEvent.press(within(screen.getByLabelText('Feedback')).getByRole('radio', { name: variant }));
       await fireEvent.press(screen.getByRole('button', { name: `Start ${variant} attempt` }));
       await screen.findByText('Question 1 of 10');
     }
@@ -428,7 +453,7 @@ describe('the Counting tab', () => {
           expect(cues().slice(before)).toEqual(['input-rejected']);
         }
         if (question === 2) await enterTrueCount(trueCount + 1);
-        else if (question === 10) await fireEvent.press(screen.getByRole('button', { name: 'Skip' }));
+        else if (question === 10) await skip('Skip');
         else await enterTrueCount(trueCount);
         expect(screen.queryByText(/Correct|Off by|Match|truncat/)).toBeNull();
       }
@@ -548,7 +573,7 @@ describe('the Counting tab', () => {
     it('sets up Play with deviations and runs a Check attempt: illegal moves refused with cue 9, no feedback, playing adherence on the results, decisions in the review', async () => {
       await openTable('Check');
       await fireEvent.press(within(screen.getByLabelText('Who plays your seat')).getByRole('radio', { name: 'Play' }));
-      expect(screen.getByText('Check holds all feedback until the end. Illegal moves are still refused straight away.')).toBeOnTheScreen();
+      expect(screen.getByText("Check holds all feedback until the end; a move that isn't allowed is still refused straight away.")).toBeOnTheScreen();
       expect(screen.getByText('Counting mode')).toBeOnTheScreen();
       await fireEvent.press(within(screen.getByLabelText('Counting mode')).getByRole('radio', { name: 'With deviations' }));
       await fireEvent.press(screen.getByRole('button', { name: 'Start Check attempt' }));

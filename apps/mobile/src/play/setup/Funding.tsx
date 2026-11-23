@@ -95,7 +95,6 @@ export function FundingSection({
             title={terms.allowance?.title ?? 'Training bankroll'}
             text={terms.allowance?.text ?? `${formatUnits(training.available)} training units available.`}
             detail="Your whole training bankroll funds this session, so there's no buy-in and no rebuys. What's left when the session ends goes back to today's training bankroll."
-            seePremium={terms.seePremium}
           />
           {inline && <InlineProblem>{inline}</InlineProblem>}
         </Section>
@@ -112,7 +111,7 @@ export function FundingSection({
           />
         </Section>
       )}
-      {!training && terms.allowance && <AllowanceCard title={terms.allowance.title} text={terms.allowance.text} seePremium={terms.seePremium} />}
+      {!training && terms.allowance && <AllowanceCard title={terms.allowance.title} text={terms.allowance.text} />}
       {refused && <InlineProblem alert>{refused}</InlineProblem>}
       {short && opening && <Shortfall opening={opening} training={training !== null} onRaise={() => change(formatUnits(opening.amount))} />}
     </View>

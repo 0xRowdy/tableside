@@ -1,17 +1,17 @@
-// Spec 3 S3-01 u8a0o, rwwOU, RqPCB; spec 5 S5-17 j3UhJ; #158, #150, #145, #140, #141
+// Spec 3 S3-01 GV4tz, h9v8xG, j0xoWQ, RqPCB; spec 5 S5-17 j3UhJ; #158, #150, #145, #140, #141
 
 import { CHALLENGE_LESSONS } from '@tableside/definitions';
 import { CHALLENGE_VARIANTS, type ChallengeCategory, type ChallengeVariant } from '@tableside/engine';
 import { CircleDashed, ClipboardCheck, Compass, Flag, GraduationCap, Target, Trophy, type LucideIcon } from 'lucide-react-native';
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, Text, useWindowDimensions, View } from 'react-native';
 
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
 import { LessonLink } from '@/lessons/LessonEntries';
 import { LessonsSection, SectionHead } from '@/lessons/LessonsCard';
 import { Group, ListRow, Note, SettingsScreen } from '@/settings/SettingsParts';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/theme/tokens';
-import { makeStyles } from '@/theme/type';
-import { CATEGORY_TEXT, COUNTING_TITLE, NOT_READY_HINT, RECOMMENDATIONS_NOTE, SUGGESTED_ORDER_LABEL, variantLabel, type AllowanceCopy } from '@/training/challenge-text';
+import { makeStyles, useTextStep } from '@/theme/type';
+import { CATEGORY_TEXT, COUNTING_TITLE, NOT_READY_HINT, RECOMMENDATIONS_NOTE, SUGGESTED_ORDER_LABEL, VARIANT_DETAIL, variantLabel, type AllowanceCopy } from '@/training/challenge-text';
 import { CHALLENGES_SECTION, lessonLinkLabel } from '@/training/lesson-text';
 import type { Progress } from '@/training/progress';
 import { categoryStatus, RECOMMENDED_BADGE, recommendationText, recommendedLabel } from '@/training/readiness-text';
@@ -21,6 +21,8 @@ import type { CatalogEntry, ChallengeSetup, LessonEntry } from '@/training/servi
 import { AllowanceBanner } from './AllowanceBanner';
 
 const VARIANT_ICON: Record<ChallengeVariant, LucideIcon> = { learn: GraduationCap, check: ClipboardCheck };
+// Spec 3 S3-01 j0xoWQ; DESIGN.md Layout
+const STACKED_VARIANT_FONT_SCALE = 1.3;
 
 export function CountingHome({
   catalog,
@@ -105,6 +107,8 @@ function CategoryCard({
   const recommendation = progress?.recommendation.category === entry.category ? progress.recommendation : null;
   const status = categoryStatus(entry.category, progress);
   const StatusIcon = status.earned ? Flag : CircleDashed;
+  const textStep = useTextStep();
+  const stacked = useWindowDimensions().fontScale > STACKED_VARIANT_FONT_SCALE || textStep === 'larger';
   return (
     <View style={styles.card}>
       <View style={styles.head}>
@@ -150,6 +154,7 @@ function CategoryCard({
             icon={VARIANT_ICON[variant]}
             ready={entry.ready.includes(variant)}
             elsewhere={variant === 'check' ? elsewhere : null}
+            stacked={stacked}
             onChoose={onChoose}
           />
         ))}
@@ -165,6 +170,7 @@ function VariantButton({
   icon: Icon,
   ready,
   elsewhere,
+  stacked,
   onChoose,
 }: {
   category: ChallengeCategory;
@@ -172,6 +178,7 @@ function VariantButton({
   icon: LucideIcon;
   ready: boolean;
   elsewhere: string | null;
+  stacked: boolean;
   onChoose: (setup: ChallengeSetup) => void;
 }) {
   const styles = useStyles();
@@ -182,12 +189,12 @@ function VariantButton({
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={`${label}: ${CATEGORY_TEXT[category].title}`}
-      accessibilityHint={elsewhere ?? (ready ? undefined : NOT_READY_HINT)}
+      accessibilityHint={elsewhere ?? (ready ? VARIANT_DETAIL[variant] : NOT_READY_HINT)}
       accessibilityState={{ disabled: !enabled }}
       disabled={!enabled}
       onPress={() => onChoose({ category, variant })}
       {...focusProps}
-      style={({ pressed }) => [styles.variant, elsewhere !== null && styles.variantElsewhere, pressed && styles.pressed, !ready && elsewhere === null && styles.disabled, focused && styles.focused]}
+      style={({ pressed }) => [styles.variant, (elsewhere !== null || stacked) && styles.variantFull, pressed && styles.pressed, !ready && elsewhere === null && styles.disabled, focused && styles.focused]}
     >
       {elsewhere ? (
         <Text maxFontSizeMultiplier={textScale.body} style={styles.elsewhereText}>
@@ -195,9 +202,14 @@ function VariantButton({
         </Text>
       ) : (
         <>
-          <Icon color={palette.foreground} size={18} />
-          <Text maxFontSizeMultiplier={textScale.body} style={styles.variantText}>
-            {label}
+          <View style={styles.variantName}>
+            <Icon color={palette.foreground} size={18} />
+            <Text maxFontSizeMultiplier={textScale.body} style={styles.variantText}>
+              {label}
+            </Text>
+          </View>
+          <Text maxFontSizeMultiplier={textScale.body} style={styles.variantDetail}>
+            {VARIANT_DETAIL[variant]}
           </Text>
         </>
       )}
@@ -229,19 +241,20 @@ const useStyles = makeStyles((type) => ({
     flexGrow: 1,
     flexBasis: 120,
     minHeight: MIN_TOUCH_TARGET,
-    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: space[2],
-    paddingHorizontal: space[4],
-    paddingVertical: space[3],
+    gap: space[1],
+    paddingHorizontal: space[3],
+    paddingVertical: space[3] - 2,
     borderRadius: radius.md,
     borderWidth: 1,
     borderColor: palette.controlBorder,
     backgroundColor: palette.secondary,
   },
+  variantName: { flexDirection: 'row', alignItems: 'center', gap: space[2] },
   variantText: { fontFamily: fonts.uiSemiBold, ...type.body, color: palette.foreground },
-  variantElsewhere: { flexBasis: '100%' },
+  variantDetail: { fontFamily: fonts.ui, ...type.secondary, textAlign: 'center', color: palette.foreground },
+  variantFull: { flexBasis: '100%' },
   elsewhereText: { flex: 1, fontFamily: fonts.uiSemiBold, ...type.label, textAlign: 'center', color: palette.foreground },
   pressed: { opacity: 0.8 },
   disabled: { opacity: 0.4 },

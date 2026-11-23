@@ -133,7 +133,7 @@ describe('the attempt lifecycle on screen', () => {
     sheet = within(await screen.findByTestId('unfinished-attempt'));
     await fireEvent.press(sheet.getByRole('button', { name: 'End it, then set up Running count' }));
     await screen.findByRole('header', { name: 'Running count' });
-    expect(within(screen.getByLabelText('Variant')).getByRole('radio', { name: 'Check', checked: true })).toBeOnTheScreen();
+    expect(within(screen.getByLabelText('Feedback')).getByRole('radio', { name: 'Check', checked: true })).toBeOnTheScreen();
     expect(screen.queryByRole('header', { name: 'Results' })).toBeNull();
   });
 

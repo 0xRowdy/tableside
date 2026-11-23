@@ -1,4 +1,5 @@
-// Spec 3 S3-02 buD2R, ZreSb, Al6Pw, Amendment 4 §2–3; Lessons › Entry points
+// Spec 3 S3-02 Ufuiu, FWQoO, NonMz, Al6Pw, Amendment 4 §2–3; Lessons › Entry points
+// docs/decisions/clarify-challenge-vocabulary.md
 // #158, #150, #145, #135, #136, #140, #137, #139
 
 import { CHALLENGE_VARIANTS, type ChallengeVariant } from '@tableside/engine';
@@ -29,7 +30,7 @@ import {
   VARIANT_LABEL,
   VARIANT_HELP,
   variantLabel,
-  WHAT_YOU_DO,
+  whatYouDo,
   WHAT_YOU_DO_LABEL,
   type AllowanceCopy,
 } from '@/training/challenge-text';
@@ -68,6 +69,7 @@ export function ChallengeSetupScreen({
   // Spec 3 Play challenge funding › Starting balance; S3-02 Al6Pw; #139
   const funding = setup.table ? tableFundingProblems(setup.table) : [];
   const short = funding.some((diagnostic) => diagnostic.problem === 'short');
+  const doing = whatYouDo(entry.category, setup.variant);
   return (
     <SettingsScreen title={text.title} back={{ label: COUNTING_TITLE, onPress: onBack }}>
       {funding.length > 0 && (
@@ -88,7 +90,7 @@ export function ChallengeSetupScreen({
           {VARIANT_LABEL}
         </Text>
         <Segmented
-          label="Variant"
+          label={VARIANT_LABEL}
           options={CHALLENGE_VARIANTS.map((variant: ChallengeVariant) => {
             const ready = entry.ready.includes(variant);
             return { value: variant, label: variantLabel(variant), disabled: !ready, hint: ready ? undefined : NOT_READY_HINT };
@@ -97,7 +99,7 @@ export function ChallengeSetupScreen({
           onSelect={(variant) => onChange({ ...setup, variant })}
         />
         <Text maxFontSizeMultiplier={textScale.body} style={styles.help}>
-          {setup.table?.seat === 'play' && setup.variant === 'check' ? CHECK_PLAY_HELP : VARIANT_HELP}
+          {setup.table?.seat === 'play' && setup.variant === 'check' ? CHECK_PLAY_HELP : VARIANT_HELP[setup.variant]}
         </Text>
       </View>
       {setup.table && <TableSetupOptions options={setup.table} onChange={(table) => onChange({ ...setup, table })} />}
@@ -127,18 +129,18 @@ export function ChallengeSetupScreen({
           <SwitchRow title={TIME_THIS} detail={TIME_THIS_DETAIL} value={setup.timed === true} onChange={(timed) => onChange({ ...setup, timed })} />
         </View>
       </View>
-      {WHAT_YOU_DO[entry.category] && (
+      {doing && (
         <View style={styles.section}>
           <Text maxFontSizeMultiplier={textScale.body} style={styles.label}>
             {WHAT_YOU_DO_LABEL}
           </Text>
           <Text maxFontSizeMultiplier={textScale.body} style={styles.help}>
-            {WHAT_YOU_DO[entry.category]}
+            {doing}
           </Text>
         </View>
       )}
       {lesson && <LearnRow icon={BookOpen} title={LEARN_THIS_SKILL} detail={learnThisSkillDetail(lesson)} disabled={lesson.steps === null} onPress={() => onOpenLesson(lesson.id)} />}
-      {allowance && <AllowanceBanner standing={allowance.standing} title={allowance.setup.text} action={allowance.setup.action} />}
+      {allowance && <AllowanceBanner standing={allowance.standing} title={allowance.setup.text} />}
       {problem && (
         <View style={[styles.banner, styles.problem]}>
           <CircleAlert color={palette.destructive} size={20} />

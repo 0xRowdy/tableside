@@ -26,6 +26,7 @@ import {
   scoreText,
   spokenScore,
   startWaits,
+  rightText,
   variantLabel,
   type AllowanceCopy,
 } from '@/training/challenge-text';
@@ -91,7 +92,9 @@ export function ChallengeResults({
   // Spec 3 Comparison groups (Milestones); #141
   const { readiness } = earned;
   const reviewSuggested = readiness?.kind === 'kept';
-  const detail = [ending.detail, belowReadinessThreshold(record) ? BELOW_THRESHOLD : null].filter(Boolean).join(' ');
+  // Spec 3 S3-08 cfKTT
+  const below = belowReadinessThreshold(record);
+  const detail = [below ? rightText(record) : null, ending.detail].filter(Boolean).join(' ');
   const note = reviewSuggested
     ? practiceNote(allowance)
     : [completed ? resultsNote(groupKey.variant, allowance) : (allowance?.results ?? ''), readiness?.kind === 'earned' && readiness.next ? nextOnPath(readiness.next) : null]
@@ -169,6 +172,11 @@ export function ChallengeResults({
             );
           })}
         </View>
+        {below && (
+          <Text maxFontSizeMultiplier={textScale.body} style={styles.note}>
+            {BELOW_THRESHOLD}
+          </Text>
+        )}
         {record.finances && (
           <>
             <Text maxFontSizeMultiplier={textScale.body} style={styles.label}>

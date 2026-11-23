@@ -264,7 +264,7 @@ describe('session setup', () => {
   });
 
   describe('incompatible strategy', () => {
-    it('is checked against the edited limits, naming the requirement, with a third choice to customize a copy', async () => {
+    it('is checked against the edited limits, naming the requirement, with no link to the unbuilt builder', async () => {
       await open('roulette', 'Roulette');
       await fireEvent.press(screen.getByRole('radio', { name: 'Guided practice' }));
       await fireEvent.changeText(field('Outside bets minimum, in units'), '25');
@@ -273,8 +273,9 @@ describe('session setup', () => {
       expect(screen.getByText("Flat even-money bets 10 on Red. This table's minimum for that bet is 25, so a 10 bet isn't allowed.")).toBeOnTheScreen();
       expect(screen.getByText("Above the strategy's 10 bets.")).toBeOnTheScreen();
       expect(start('Start guided practice')).toBeDisabled();
-      await fireEvent.press(screen.getByRole('button', { name: 'Customize a copy for this table' }));
-      expect(screen.getByText(/The strategy builder arrives in a later update/)).toBeOnTheScreen();
+      expect(screen.getByText(/^Choose a compatible table \(.+\) or another strategy\.$/)).toBeOnTheScreen();
+      // docs/decisions/clarify-challenge-vocabulary.md; #54
+      expect(screen.queryByRole('button', { name: 'Customize a copy for this table' })).toBeNull();
 
       await fireEvent.changeText(field('Outside bets minimum, in units'), '10');
       expect(screen.queryByTestId('strategy-incompatible')).toBeNull();
@@ -293,7 +294,8 @@ describe('session setup', () => {
       await screen.findByText('500 training units available. Resets daily; no top-ups.');
       expect(screen.queryByLabelText('Starting chips for this session, in units')).toBeNull();
       expect(screen.getByText(/there's no buy-in and no rebuys/)).toBeOnTheScreen();
-      expect(screen.getByRole('button', { name: 'See premium' })).toBeOnTheScreen();
+      // docs/decisions/clarify-challenge-vocabulary.md; #55
+      expect(screen.queryByRole('button', { name: 'See premium' })).toBeNull();
       await fireEvent.press(start());
       expect(await screen.findByLabelText('Session balance 500')).toBeOnTheScreen();
     });

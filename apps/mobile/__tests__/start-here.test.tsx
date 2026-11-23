@@ -139,7 +139,7 @@ describe('a running-count Check from the Counting tab', () => {
     await screen.findByRole('header', { name: 'Counting' });
     await fireEvent.press(screen.getByRole('button', { name: 'Check: Running count' }));
     await screen.findByRole('header', { name: 'Running count' });
-    await fireEvent.press(within(screen.getByLabelText('Variant')).getByRole('radio', { name: 'Check' }));
+    await fireEvent.press(within(screen.getByLabelText('Feedback')).getByRole('radio', { name: 'Check' }));
     await fireEvent.press(screen.getByRole('button', { name: 'Start Check attempt' }));
     await screen.findByText('Card 1 of 52 · checkpoint 1 of 4');
 

@@ -9,8 +9,8 @@ const copy = (subject: Lesson) => subject.content!.steps.flatMap((step) => [step
 describe.each(['app-orientation', 'building-a-strategy'])('the %s lesson', (id) => {
   const subject = lesson(id);
 
-  it('is written at version 1 with no material change, and passes build-time validation', () => {
-    expect(subject.content).toMatchObject({ version: 1, materialVersion: 1, change: null, workedExample: null });
+  it('has no worked example and passes build-time validation', () => {
+    expect(subject.content).toMatchObject({ workedExample: null });
     expect(lessonProblems([subject])).toEqual([]);
   });
 
@@ -35,6 +35,21 @@ describe.each(['app-orientation', 'building-a-strategy'])('the %s lesson', (id) 
 describe('App orientation', () => {
   const orientation = lesson('app-orientation');
 
+  // Spec 3 Amendment 1 C10; docs/decisions/lessons-entry-points.md; #167
+  it('orients the learner to five tabs, lessons on the Counting tab and table Help, as a material version 2', () => {
+    const content = orientation.content!;
+    expect([content.version, content.materialVersion]).toEqual([2, 2]);
+    expect(content.change).toMatch(/Counting tab/);
+    const [tabs, help] = content.steps;
+    expect(tabs!.paragraphs[0]).toMatch(/^Five tabs sit along the bottom of the screen\./);
+    expect(tabs!.paragraphs[0]).toMatch(/Counting holds every lesson, the four counting challenges and your challenge records\./);
+    expect(tabs!.paragraphs[0]).toMatch(/More holds Community/);
+    const where = help!.paragraphs[1]!;
+    for (const place of ['Counting tab', 'Help at the top of every table', 'Learn this game', 'Start here card', 'beside each counting challenge', 'More › Settings › Learning holds the Start here switch and the hint settings'])
+      expect(where).toContain(place);
+    expect(where).not.toMatch(/Every lesson, this one included, is in More › Settings/);
+  });
+
   it('covers navigation, help, and practice vs casino records', () => {
     expect(orientation.summary).toBe('Tabs, help, practice vs casino records');
     expect(orientation.content!.steps.map((step) => step.heading)).toEqual([
@@ -46,7 +61,7 @@ describe('App orientation', () => {
   });
 
   // Spec 1 Presentation, navigation and screens
-  it('names all six tabs', () => {
+  it('names the five tabs and Community under More', () => {
     const [navigation] = orientation.content!.steps;
     for (const tab of ['Home', 'Play', 'Counting', 'Community', 'Saved', 'More']) expect(navigation!.paragraphs.join(' ')).toContain(tab);
   });
@@ -63,6 +78,10 @@ describe('App orientation', () => {
 
 describe('Builder', () => {
   const builder = lesson('building-a-strategy');
+
+  it('is written at version 1 with no material change', () => {
+    expect(builder.content).toMatchObject({ version: 1, materialVersion: 1, change: null });
+  });
 
   it('covers conditions, wagers and amounts, explanations, conflicts, fallbacks and stopping', () => {
     expect(builder).toMatchObject({ title: 'Building a strategy', section: 'builder', summary: 'Conditions, amounts, conflicts, fallbacks, stopping' });

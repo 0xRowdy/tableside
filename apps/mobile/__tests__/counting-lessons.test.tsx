@@ -145,7 +145,7 @@ describe('counting lessons', () => {
     await header('Practice what you learned');
     await fireEvent.press(button(new RegExp(`^Learn challenge · ${challenge}\\.`)));
     expect(await header(challenge)).toBeOnTheScreen();
-    expect(within(screen.getByLabelText('Variant')).getByRole('radio', { name: 'Learn' })).toBeChecked();
+    expect(within(screen.getByLabelText('Feedback')).getByRole('radio', { name: 'Learn' })).toBeChecked();
     if (challenge === 'Table counting') expect(within(screen.getByLabelText('Who plays your seat')).getByRole('radio', { name: 'Observe' })).toBeChecked();
     expect(screen.getByRole('button', { name: 'Start Learn attempt' })).toBeEnabled();
     expect([await store().findUnfinishedAttempt(), await store().readAttemptRecords()]).toEqual([null, []]);

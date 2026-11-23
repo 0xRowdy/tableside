@@ -103,7 +103,7 @@ describe('Records & history', () => {
     expect(await screen.findByLabelText('Running count, 52 cards · self-paced. Best 4 of 4. Fastest 03:41')).toBeOnTheScreen();
     expect(screen.getByLabelText('Running count, 52 cards · 2 s pace. Best 3 of 4. Fastest — (needs a perfect run)')).toBeOnTheScreen();
     expect(screen.getByLabelText('Running count, 52 cards · 1 s pace. Best — (no completed attempt yet). Fastest —')).toBeOnTheScreen();
-    expect(screen.getByText('Records only compare attempts with identical settings. Speed counts only for perfect, unassisted, uninterrupted, timed Check attempts.')).toBeOnTheScreen();
+    expect(screen.getByText('Records compare only attempts with the same settings; a fastest time needs a perfect, timed Check with no pauses and the count kept hidden.')).toBeOnTheScreen();
   });
 
   it('switches to assisted Check and Learn bests, which have no fastest', async () => {

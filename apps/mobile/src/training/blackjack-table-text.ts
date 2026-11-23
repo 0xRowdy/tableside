@@ -184,7 +184,7 @@ export const COUNTING_MODE = 'Counting mode';
 export const WITH_BASIC = 'With basic';
 export const WITH_DEVIATIONS = 'With deviations';
 export const MODE_HELP = 'With deviations also asks for the true count at each count-dependent decision.';
-export const CHECK_PLAY_HELP = 'Check holds all feedback until the end. Illegal moves are still refused straight away.';
+export const CHECK_PLAY_HELP = "Check holds all feedback until the end; a move that isn't allowed is still refused straight away.";
 export const PLAY_NOTICE = {
   title: 'A balance just for this attempt',
   detail: 'You bet from this attempt’s own balance and make every playing decision. Your scores are counting, playing and, with the bet schedule, betting accuracy; winnings never count.',

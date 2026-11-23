@@ -23,7 +23,7 @@ export const bestsLabel = (assistance: AssistanceClass) => `Personal bests · ${
 export const noGroups = (assistance: AssistanceClass) => `No ${CLASS_NAME[assistance]} attempts yet.`;
 export const HISTORY_LABEL = 'Attempt history';
 export const NO_HISTORY = 'No attempts yet.';
-export const RECORDS_NOTE = 'Records only compare attempts with identical settings. Speed counts only for perfect, unassisted, uninterrupted, timed Check attempts.';
+export const RECORDS_NOTE = 'Records compare only attempts with the same settings; a fastest time needs a perfect, timed Check with no pauses and the count kept hidden.';
 
 const RECORD_TITLE: Record<ChallengeCategory, string> = { 'card-values': 'Card values', 'running-count': 'Running count', conversion: 'Conversion', table: 'Table counting' };
 const ITEMS: Record<Exclude<ChallengeCategory, 'table'>, string> = { 'card-values': 'cards', 'running-count': 'cards', conversion: 'questions' };
