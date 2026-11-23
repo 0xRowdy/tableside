@@ -169,7 +169,7 @@ The moment a challenge attempt uses its one allowance charge: committed together
 A counting challenge that provides immediate explanations and retries. Its accuracy preserves the learner's first answer even after correction.
 
 **Check variant**:
-A counting challenge that withholds correctness feedback until the end, except for a reference count the learner explicitly chooses to reveal. Its results are kept separate from Learn results.
+A counting challenge that withholds correctness feedback until the end, except for a reference count the learner explicitly chooses to reveal. Its results are kept separate from Learn results. On screen, the choice between Learn and Check is labelled "Feedback".
 
 **Assisted attempt**:
 A challenge attempt that provides learning aids revealing the answer, including a Check attempt in which the learner shows the reference running count. Hiding the aid again does not restore unassisted status.

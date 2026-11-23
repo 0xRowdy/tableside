@@ -351,6 +351,7 @@ Quiet, wide and pill-shaped.
 - **Tab bar:** five tabs (Home, Play, Counting, Saved, More) on Card Table with a hairline top border. Community is the first row in More and has a Community button in the Home header. Each tab has a 22px Lucide icon over an Inter Medium `tab` (12) label, which stays 12 at every text step. Selected: the icon sits in a 56×30 Felt Shadow pill with a 1.5px Rail Brass outline, the icon turns brass, and the label turns Linen Bold. The iOS Large Content Viewer, or a long-press on Android, shows a big preview at large text sizes.
 - **Table top bar:** Inter SemiBold `body` title (game and mode), a Linen `secondary` status line, round 48px icon buttons. Help (an icon over its `label`, always present) sits left of End session and opens the Help sheet: the game's lessons, the screen's hints and a line saying a lesson suspends the session. The title and status wrap instead of truncating. Below it, unlabelled 3px phase bars fill with Rail Brass as the turn advances.
 - **Hub sections:** a top-level screen made of parts (Counting: Lessons, Challenges, Records) names each part with a 22px Lucide icon and an Inter Bold `heading` title on the ground, not inside a card. Cards inside a section keep their own `heading` titles. See `docs/decisions/lessons-entry-points.md`.
+- **Challenge card choices:** the Learn and Check buttons show the icon and name over a Linen `secondary` line that says when feedback comes ("Feedback as you go", "Feedback at the end"). They stack full width at Larger. See `docs/decisions/clarify-challenge-vocabulary.md`.
 
 ### Game card (signature)
 Full-bleed photograph, a scrim band fading up from the bottom, a sentence-case `label` summary line, a Fraunces `display-card` title in white, and a 44px Rail Brass circle with an arrow. This is the one place photography appears.
@@ -362,7 +363,7 @@ Marcus speaks on paper: a Coach Paper card with 16px corners and a 1px Coach Blu
 - **Chip rack:** Walnut Rail panel with 48px round chips in denomination colors; the selected chip gets a 2px Rail Brass ring and a check mark.
 - **Playing cards:** Card Face with four-color suits; empty card spots are dashed Chalk outlines on the felt. Cards don't grow with the text step; the layout picks the size. Table hands are Standard (58×82), and the card being counted is always Large (120×168), so it's never the smallest thing on screen.
 - **Summary row:** up to three `label` captions over `heading` values and a chevron button; the whole row opens the Table details sheet (rules, house edge, guided strategy, Rebuy, counting aid). It becomes key-value rows with a labelled "Table details" row at large system text.
-- **Count keypad:** 48px-minimum keys with `key` digits, a `figure` readout, and Skip and Submit below.
+- **Count keypad:** 48px-minimum keys with `key` digits and a `figure` readout. Below them, Submit fills the row and Skip is a compact outline button. Every Skip opens "Skip this count?" (Keep counting, then Skip and score as incorrect) before anything is scored.
 - **Bet spots:** Chalk boundary on felt; wagered spots get a 3px Card Face outline.
 - **Status tag:** Felt Shadow pill with an icon and Inter Bold `label` Linen text.
 
@@ -377,6 +378,8 @@ Marcus speaks on paper: a Coach Paper card with 16px corners and a 1px Coach Blu
 - **Do** give every `Text` a ramp role and a `maxFontSizeMultiplier`, and let layouts reflow at large sizes.
 - **Do** check every screen at Standard with the phone at its default text size, and again at Larger with the largest system size.
 - **Do** keep numbers in Inter Bold and say them plainly. Practice, simulation and casino figures sit in visibly separate places.
+- **Do** say what a choice means on the choice itself, keep each note to one plain sentence, and lead a result with what went right. A reset or a slip comes after the scores.
+- **Do** ask before an action that scores or records something the player can't take back. Name the action and its consequence on both buttons.
 
 ### Don't:
 - **Don't** drift toward generic fintech: no cold white or blue-gray cards, no stock chart styling, no white backgrounds outside the coach note and card faces.
@@ -387,3 +390,4 @@ Marcus speaks on paper: a Coach Paper card with 16px corners and a 1px Coach Blu
 - **Don't** go below 12, use all-caps kickers, or put must-read text in Smoke.
 - **Don't** use pure black or pure white on chrome; Pure White is only for text over photos and on chips and pockets.
 - **Don't** add a light theme or ad-hoc hex values; new colors are named tokens in `tokens.ts`.
+- **Don't** ship a link to a screen that doesn't exist yet. Hide it until the screen lands; no "arrives in a later update" placeholders.
