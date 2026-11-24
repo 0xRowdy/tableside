@@ -1,4 +1,4 @@
-// Spec 3 Testing Decisions › Seam 3; S3-01 PDCaD, S3-08 CEb6T, nXGFk (Amendment 2 §3), S3-10 OVKkc; #141
+// Spec 3 Testing Decisions › Seam 3; S3-01 PDCaD, S3-08 CEb6T, cfKTT (Amendment 2 §3), S3-10 Yy2He; #141
 
 import { cleanup, fireEvent, screen, within } from '@testing-library/react-native';
 import type { ChallengeAttemptRecord, ChallengeGroupKey } from '@tableside/engine';
@@ -138,11 +138,17 @@ describe('readiness on screen', () => {
     expect(screen.getByLabelText('Card values · Check. Yesterday · unassisted · Local, not synced yet. 20 / 20')).toBeOnTheScreen();
   });
 
-  it('Results (nXGFk): a later Check below 95% keeps the milestone and suggests Learn and the lesson', async () => {
+  it('Results (cfKTT): a later Check below 95% keeps the milestone and suggests Learn and the lesson', async () => {
     seed(perfectCardValues('first', Date.UTC(2026, 9, 17, 18)), perfectCardValues('second', Date.UTC(2026, 9, 18, 18)));
     await openCounting();
     await runCardValuesCheck([1, 2]);
-    expect(screen.getByText('Below 95% this time. That restarts the streak for these settings.')).toBeOnTheScreen();
+    // Spec 3 S3-08 cfKTT
+    expect(screen.getByText('You got 18 of 20 cards right.')).toBeOnTheScreen();
+    const note = 'Below 95% this time, so your run of Checks at 95% or better starts over.';
+    expect(screen.getByText(note)).toBeOnTheScreen();
+    const texts = screen.getAllByText(/./).map((node) => String(node.props.children));
+    expect(texts.indexOf(note)).toBeGreaterThan(texts.indexOf('Skill scores · first answers'));
+    expect(texts.indexOf('You got 18 of 20 cards right.')).toBeLessThan(texts.indexOf('Skill scores · first answers'));
     expect(
       screen.getByLabelText(
         'Your milestone stays earned. You earned the card-value readiness milestone at these settings on 18 Oct 2026. A slip never takes it away. To brush up: a Learn round, or the card values lesson.',
@@ -155,7 +161,7 @@ describe('readiness on screen', () => {
 
     await fireEvent.press(screen.getByRole('button', { name: 'Practice in Learn' }));
     await screen.findByRole('header', { name: 'Card values' });
-    expect(within(screen.getByLabelText('Variant')).getByRole('radio', { name: 'Learn' })).toBeChecked();
+    expect(within(screen.getByLabelText('Feedback')).getByRole('radio', { name: 'Learn' })).toBeChecked();
     expect(screen.getByRole('button', { name: 'Start Learn attempt' })).toBeOnTheScreen();
   });
 });

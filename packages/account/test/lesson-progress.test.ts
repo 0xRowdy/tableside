@@ -132,13 +132,13 @@ describe('the lesson bookmark', () => {
 // Spec 3 Lessons › Progress, Amendment 1 C10
 describe('a material lesson change', () => {
   it('keeps the earlier completion in history on every device', async () => {
+    const orientationAt = (version: number, change: string | null) =>
+      LESSONS.map((lesson) => (lesson.id === ORIENTATION ? { ...lesson, content: { ...lesson.content!, version, materialVersion: version, change } } : lesson));
     const { phone, tablet } = await twoDevices('material');
-    await (await phone.training()).completeLesson(ORIENTATION);
+    await (await phone.training({ lessons: orientationAt(1, null) })).completeLesson(ORIENTATION);
     await synced(phone, tablet);
 
-    const changed = LESSONS.map((lesson) =>
-      lesson.id === ORIENTATION ? { ...lesson, content: { ...lesson.content!, version: 2, materialVersion: 2, change: 'help moved' } } : lesson,
-    );
+    const changed = orientationAt(2, 'help moved');
     expect(await statusOn(tablet, ORIENTATION, changed)).toEqual({ kind: 'completed-earlier-version' });
     const service = await tablet.training({ lessons: changed });
     expect(await service.openLesson(ORIENTATION)).toMatchObject({ step: 1, notice: { kind: 'after-completion', change: 'help moved' } });

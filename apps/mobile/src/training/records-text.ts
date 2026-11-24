@@ -1,4 +1,4 @@
-// Spec 3 S3-10 OVKkc (Amendment 2 §3), S3-01 PDCaD, S3-08 liAfT, CEb6T; Comparison groups; #140, #136
+// Spec 3 S3-10 Yy2He (Amendment 2 §3), S3-01 PDCaD, S3-08 liAfT, CEb6T; Comparison groups; #140, #136
 
 import { CHALLENGE_CONTENT } from '@tableside/definitions';
 import type { AssistanceClass, AttemptEndingReason, ChallengeAttemptSummary, ChallengeCategory, ChallengeGroupKey, ChallengeMetric } from '@tableside/engine';
@@ -23,7 +23,7 @@ export const bestsLabel = (assistance: AssistanceClass) => `Personal bests · ${
 export const noGroups = (assistance: AssistanceClass) => `No ${CLASS_NAME[assistance]} attempts yet.`;
 export const HISTORY_LABEL = 'Attempt history';
 export const NO_HISTORY = 'No attempts yet.';
-export const RECORDS_NOTE = 'Records only compare attempts with identical settings. Speed counts only for perfect, unassisted, uninterrupted, timed Check attempts.';
+export const RECORDS_NOTE = 'Records compare only attempts with the same settings; a fastest time needs a perfect, timed Check with no pauses and the count kept hidden.';
 
 const RECORD_TITLE: Record<ChallengeCategory, string> = { 'card-values': 'Card values', 'running-count': 'Running count', conversion: 'Conversion', table: 'Table counting' };
 const ITEMS: Record<Exclude<ChallengeCategory, 'table'>, string> = { 'card-values': 'cards', 'running-count': 'cards', conversion: 'questions' };
@@ -46,7 +46,7 @@ function versionText(key: Pick<ChallengeGroupKey, 'category' | 'content' | 'refe
   return parts.length > 0 ? parts.join(' · ') : null;
 }
 
-// Spec 3 S3-10 OVKkc; #137
+// Spec 3 S3-10 Yy2He; #137
 export function settingsText(key: ChallengeGroupKey): string {
   const settings = key.table ? tableSettingsText(key.table) : [`${key.length} ${ITEMS[key.category as Exclude<ChallengeCategory, 'table'>]}`, pacingLabel(key.pacing)].join(' · ');
   return [settings, key.variant === 'learn' && key.countRevealed ? 'count shown' : null, versionText(key)].filter(Boolean).join(' · ');
@@ -60,7 +60,7 @@ export interface StatText {
   readonly spoken: string;
 }
 
-// Spec 3 S3-10 OVKkc
+// Spec 3 S3-10 Yy2He
 export function bestText(group: GroupProgress): readonly StatText[] {
   if (!group.completed) return [{ label: 'Best', value: '— (no completed attempt yet)', spoken: '— (no completed attempt yet)' }];
   return group.bests.map((best) => ({
@@ -104,7 +104,7 @@ function whenText(at: number, now: number): string {
 // Spec 3 Amendment 1 C8; #142
 export const REVIEW_UNAVAILABLE = "This attempt's review isn't on this device yet. Try again when you're online.";
 
-// Spec 3 S3-10 OVKkc (attempt history)
+// Spec 3 S3-10 Yy2He (attempt history)
 export function historyText({ record, local }: ProgressAttempt, now: number, earnedMilestone: boolean): { readonly title: string; readonly detail: string; readonly value: string } {
   const { groupKey: key } = record;
   const completed = record.endingReason === 'completed';

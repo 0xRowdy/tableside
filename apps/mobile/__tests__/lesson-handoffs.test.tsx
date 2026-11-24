@@ -1,4 +1,4 @@
-// Spec 3 Seam 3; Lessons › Handoff, Entry points; Amendment 1 C12; pX6CV, ZBpF3, PDCaD, buD2R, FxxAj; #145
+// Spec 3 Seam 3; Lessons › Handoff, Entry points; Amendment 1 C12; pX6CV, ZBpF3, PDCaD, Ufuiu, FxxAj; #145
 
 import type { Lesson, LessonContent, LessonHandoff } from '@tableside/definitions';
 import { cleanup, fireEvent, screen, within } from '@testing-library/react-native';
@@ -225,7 +225,7 @@ describe('lesson entry points', () => {
     expect(screen.getByText('Step 1 of 2')).toBeOnTheScreen();
   });
 
-  it("challenge setup offers its category's lesson as Learn this skill (buD2R)", async () => {
+  it("challenge setup offers its category's lesson as Learn this skill (Ufuiu)", async () => {
     await renderRouter('./src/app', { initialUrl: '/counting?category=card-values' });
     await header('Card values');
     await fireEvent.press(await screen.findByRole('button', { name: 'Learn this skill. Card values lesson · 2 short steps' }));

@@ -11,7 +11,7 @@ import {
   type ChallengeVariant,
   type ChallengeView,
 } from '@tableside/engine';
-import { cleanup, render, screen, within } from '@testing-library/react-native';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { ChallengeExercise } from '@/counting/ChallengeExercise';
@@ -91,6 +91,12 @@ describe('Check information hiding on the card-values exercise', () => {
     expect(within(screen.getByTestId('recorded-notice')).getByText('Answer recorded. Next card in a moment.')).toBeOnTheScreen();
     expect(screen.queryByRole('button', { name: 'Skip (counts as incorrect)' })).toBeNull();
     expect(screen.queryByTestId('coach-note')).toBeNull();
+
+    await present(readChallengeView(attempt('check', 1)));
+    await fireEvent.press(screen.getByRole('button', { name: 'Skip (counts as incorrect)' }));
+    expect(screen.getByRole('header', { name: 'Skip this card?' })).toBeOnTheScreen();
+    expect(screen.getByText("A skipped card is scored as incorrect, and you can't go back to it.")).toBeOnTheScreen();
+    expect(screen.queryByText("Going back keeps what you've typed.")).toBeNull();
 
     await present(readChallengeView(attempt('check', 1, [{ kind: 'skip' }])));
     expect(screen.getByText('Skip recorded. Next card in a moment.')).toBeOnTheScreen();

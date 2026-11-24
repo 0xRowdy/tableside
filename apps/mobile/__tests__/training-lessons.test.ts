@@ -26,9 +26,13 @@ const refusingAccess = (asked: string[]): AccessSupervisor => ({
   gameAccess: alwaysAllowed.gameAccess,
 });
 
-function revised(content: Partial<NonNullable<Lesson['content']>>): readonly Lesson[] {
-  return LESSONS.map((lesson) => (lesson.id === ORIENTATION ? { ...lesson, content: { ...lesson.content!, ...content } } : lesson));
-}
+const withOrientation = (lessons: readonly Lesson[], content: Partial<NonNullable<Lesson['content']>>): readonly Lesson[] =>
+  lessons.map((lesson) => (lesson.id === ORIENTATION ? { ...lesson, content: { ...lesson.content!, ...content } } : lesson));
+
+// Spec 3 Amendment 1 C10
+const AT_VERSION_1 = withOrientation(LESSONS, { version: 1, materialVersion: 1, change: null });
+
+const revised = (content: Partial<NonNullable<Lesson['content']>>) => withOrientation(AT_VERSION_1, content);
 
 let services = 0;
 
@@ -55,7 +59,7 @@ function setup(options: { store?: MemoryTrainingStore; lessons?: readonly Lesson
       quarantine: EMPTY_QUARANTINE_LIST,
       speech: NO_SCREEN_READER,
     },
-    options.lessons ? { lessons: options.lessons } : {},
+    { lessons: options.lessons ?? AT_VERSION_1 },
   );
   return { service, store, asked };
 }
@@ -110,7 +114,7 @@ describe('the Training service lessons', () => {
   });
 
   it('lists an unwritten lesson without steps and refuses to open it', async () => {
-    const { service } = setup({ lessons: LESSONS.map((lesson) => (lesson.id === 'card-values' ? { ...lesson, content: null } : lesson)) });
+    const { service } = setup({ lessons: AT_VERSION_1.map((lesson) => (lesson.id === 'card-values' ? { ...lesson, content: null } : lesson)) });
     const catalog = await service.listLessons();
     expect(catalog[6]).toMatchObject({ id: 'card-values', section: 'blackjack', steps: null, status: { kind: 'not-started' } });
     await expect(service.openLesson('card-values')).rejects.toThrow(/not available/);
@@ -126,7 +130,7 @@ describe('the Training service lessons', () => {
 
   // Spec 3 Lessons › Structure (worked examples); #144
   it("serves the lesson's worked-example script, asking nothing of access or the allowance; leaving the example moves on past its step", async () => {
-    const { service, store, asked } = setup({ lessons: withWorkedExample(LESSONS) });
+    const { service, store, asked } = setup({ lessons: withWorkedExample(AT_VERSION_1) });
     expect((await service.openLesson(ORIENTATION)).example).toEqual(FIVE_OF_HEARTS);
     expect((await setup().service.openLesson(ORIENTATION)).example).toBeNull();
     expect(await service.stepForward(ORIENTATION, FIVE_OF_HEARTS.step)).toMatchObject({ step: 3, example: FIVE_OF_HEARTS });

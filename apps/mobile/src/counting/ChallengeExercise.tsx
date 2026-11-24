@@ -1,4 +1,4 @@
-// Spec 3 S3-03 P4WjR, drVnR, BFdJT, S3-04 qdnQm, S3-05 EDnGd, r5pCx, T9sCI
+// Spec 3 S3-03 P4WjR, drVnR, BFdJT, S3-04 Y8m0IQ, S3-05 y6lY1o, r5pCx, T9sCI
 // Spec 3 S3-06 C53yTW, zAatf, Qv1An, S3-07; S3-04 qmDou; S3-05 qGARl
 // #158, #132, #133, #134, #135, #146, #136, #137
 
@@ -22,6 +22,7 @@ import { HelpSheet, HoldSheet, WarningNote } from './AttemptSheets';
 import { CountAid, CountAidSwitch, CountAidValue, useCountAid } from './CountAid';
 import { CoachButton } from './CoachButton';
 import { CountEntry } from './CountEntry';
+import { useSkipConfirm } from './SkipConfirm';
 import { TableFelt, TablePanel, tableChrome } from './TableExercise';
 import { edgePercent, tableSubtitle } from '@/training/blackjack-table-text';
 import { decksText } from '@/training/blackjack-conversion-text';
@@ -113,6 +114,8 @@ export function ChallengeExercise({
   const held = hold?.reached ?? false;
   const ready = !busy && !saveFailed && !held;
   const answering = view.legalCommands.includes('answer') && ready;
+  // Spec 3 S3-05 UKfJA
+  const cardSkip = useSkipConfirm('card', answering, () => onCommand({ kind: 'skip' }));
   const feedback = view.variant === 'learn' ? view.feedback : null;
   const entered = view.variant === 'check' ? view.entered : null;
   const timerNode = timer && <PerformanceTime timer={timer} performanceMs={performanceMs} />;
@@ -129,6 +132,7 @@ export function ChallengeExercise({
     <>
       {hold?.reached && !helping && <HoldSheet hold={hold} context={{ variant: view.variant, position: view.position, pacing, reader: screenReaderName(Platform.OS), play: view.table?.seat === 'play' }} busy={busy} onResume={onResume} onEnd={onEnd} onClose={onLeave} />}
       {helping && <HelpSheet view={view} hints={screenHints.ids} onShowHints={screenHints.reopen} onClose={() => setHelping(false)} />}
+      {cardSkip.sheet}
     </>
   );
   if (view.table) {
@@ -210,7 +214,7 @@ export function ChallengeExercise({
                 <Choice key={value} label={signed(value)} spoken={spokenValue(value)} state={choiceState(value, feedback, entered)} enabled={answering} onPress={() => onCommand({ kind: 'answer', value })} />
               ))}
             </View>
-            {view.legalCommands.includes('skip') && <Button label={SKIP_LABEL} icon={SkipForward} variant="outline" stretch disabled={!answering} onPress={() => onCommand({ kind: 'skip' })} />}
+            {view.legalCommands.includes('skip') && <Button label={SKIP_LABEL} icon={SkipForward} variant="outline" stretch disabled={!answering} onPress={cardSkip.ask} />}
             {view.phase === 'recorded' && entered !== null && <RecordedNotice entered={entered} category={view.category} />}
             {feedback && <CoachNote feedback={feedback} position={view.position} canRetry={view.legalCommands.includes('retry-item')} enabled={ready} onCommand={onCommand} />}
           </>
@@ -309,7 +313,7 @@ function HeaderButton({ label, hint, icon: Icon, enabled, onPress }: { label: st
   );
 }
 
-// Spec 3 Attempt lifecycle › Performance timer; S3-04 qdnQm
+// Spec 3 Attempt lifecycle › Performance timer; S3-04 Y8m0IQ
 function PerformanceTime({ timer, performanceMs }: { timer: PerformanceTimer; performanceMs: () => number | null }) {
   const styles = useStyles();
   const [, setTick] = useState(0);
@@ -325,7 +329,7 @@ function PerformanceTime({ timer, performanceMs }: { timer: PerformanceTimer; pe
   );
 }
 
-// Spec 3 S3-04 qdnQm, uGcdq, l3UjHq
+// Spec 3 S3-04 Y8m0IQ, uGcdq, l3UjHq
 function CountingBody({
   view,
   range,
@@ -452,6 +456,7 @@ function ConversionBody({
             <CountEntry
               key={view.position}
               label={TRUE_COUNT_LABEL}
+              item="question"
               range={range}
               enabled={answering}
               onSubmit={(value) => onCommand({ kind: 'answer', value })}

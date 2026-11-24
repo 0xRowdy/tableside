@@ -1,4 +1,4 @@
-// docs/decisions/lessons-entry-points.md; S3-01 u8a0o, rwwOU; S3-11 klT0u, f6mxz; Settings › Learning OEkKV; S1-04 qylNY
+// docs/decisions/lessons-entry-points.md; S3-01 GV4tz, h9v8xG; S3-11 klT0u, f6mxz; Settings › Learning OEkKV; S1-04 qylNY
 import { act, cleanup, fireEvent, screen, within } from '@testing-library/react-native';
 import { renderRouter } from 'expo-router/testing-library';
 

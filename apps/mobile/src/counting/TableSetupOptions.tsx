@@ -1,4 +1,4 @@
-// Spec 3 S3-02 ZreSb, FkMDw, Al6Pw; User stories 27, 28; Play challenge funding; #137, #138, #139
+// Spec 3 S3-02 NonMz, FWQoO, Al6Pw; User stories 27, 28; Play challenge funding; #137, #138, #139
 
 import { BLACKJACK_LIMITS, BLACKJACK_PRESETS, DEFAULT_BLACKJACK_PRESET, type TableOptions } from '@tableside/definitions';
 import { MAX_CHECKPOINT_INTERVAL, MAX_OTHER_PLAYERS, PENETRATIONS } from '@tableside/engine';
@@ -131,7 +131,7 @@ export function TableSetupOptions({ options, onChange }: { options: TableOptions
   );
 }
 
-// Spec 3 Play challenge funding › Starting balance; S3-02 FkMDw, Al6Pw
+// Spec 3 Play challenge funding › Starting balance; S3-02 FWQoO, Al6Pw
 function Betting({ options, onChange }: { options: TableOptions; onChange: (change: Partial<TableOptions>) => void }) {
   const styles = useStyles();
   const { min, max } = BLACKJACK_LIMITS.initial;

@@ -1,4 +1,4 @@
-// Spec 3 S3-01 PDCaD, S3-08 CEb6T, nXGFk, S3-10 OVKkc; Comparison groups; #141
+// Spec 3 S3-01 PDCaD, S3-08 CEb6T, cfKTT, S3-10 Yy2He; Comparison groups; #141
 
 import type { ChallengeCategory, ChallengeGroupKey } from '@tableside/engine';
 
@@ -10,7 +10,7 @@ import { attemptIdentity, setsPersonalBest, type AttemptEarned, type GroupProgre
 
 const lowerFirst = (text: string) => text.charAt(0).toLowerCase() + text.slice(1);
 
-// Spec 3 S3-01 PDCaD, S3-08 CEb6T, nXGFk
+// Spec 3 S3-01 PDCaD, S3-08 CEb6T, cfKTT
 const READINESS_WORDS: Record<ChallengeCategory, { readonly milestone: string; readonly accuracy: string; readonly lesson: string }> = {
   'card-values': { milestone: 'card-values', accuracy: 'card-value', lesson: 'card values' },
   'running-count': { milestone: 'running-count', accuracy: 'running-count', lesson: 'running count' },
@@ -70,8 +70,8 @@ export function categoryStatus(category: ChallengeCategory, progress: Progress |
 
 const bestScore = (group: GroupProgress) => scoreText(group.bests[0]?.result ?? null);
 
-// Spec 3 S3-08 CEb6T, nXGFk
-export const BELOW_THRESHOLD = 'Below 95% this time. That restarts the streak for these settings.';
+// Spec 3 S3-08 CEb6T, cfKTT
+export const BELOW_THRESHOLD = 'Below 95% this time, so your run of Checks at 95% or better starts over.';
 
 export const MILESTONE_EARNED = 'Readiness milestone earned';
 
@@ -94,10 +94,10 @@ export const PRACTICE_IN_LEARN = 'Practice in Learn';
 
 export const nextOnPath = (next: ChallengeCategory) => `Next on the suggested path: ${lowerFirst(CATEGORY_TEXT[next].title)}.`;
 
-// Spec 3 S3-08 nXGFk
+// Spec 3 S3-08 cfKTT
 export const practiceNote = (allowance: AllowanceCopy | undefined) => allowance?.practice ?? '';
 
-// Spec 3 S3-10 OVKkc
+// Spec 3 S3-10 Yy2He
 export const milestoneLine = (group: GroupProgress) => (group.milestone ? `Readiness milestone · earned ${dayText(group.milestone.earnedAt)}` : null);
 
 export const MILESTONE_HISTORY = 'milestone earned (2 in a row)';

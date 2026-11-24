@@ -1,4 +1,4 @@
-// Spec 3 Lessons › Entry points; S1-02 FxxAj, S3-02 buD2R, S3-01 PDCaD; #145
+// Spec 3 Lessons › Entry points; S1-02 FxxAj, S3-02 Ufuiu, S3-01 PDCaD; #145
 
 import type { GameId } from '@tableside/engine';
 import { router } from 'expo-router';

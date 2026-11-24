@@ -38,7 +38,7 @@ export type StartProblem = 'invalid-setup' | 'access-denied' | 'access-uncertain
 // Spec 3 S3-03 BFdJT
 export const RECORDED_MS = 800;
 
-// Spec 3 Attempt lifecycle › Automatic pacing; S3-02 buD2R; #136
+// Spec 3 Attempt lifecycle › Automatic pacing; S3-02 Ufuiu; #136
 export const PACE_SECONDS: Readonly<Record<ChallengePacing, number | null>> = { 'self-paced': null, '3s': 3, '2s': 2, '1s': 1 };
 
 // Spec 3 Training service interface › Submit command; #138

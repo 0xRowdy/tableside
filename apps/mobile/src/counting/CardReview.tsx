@@ -1,4 +1,4 @@
-// Spec 3 S3-09 h0MsKr, VToCp, S3-10 OVKkc; Scoring and review; #132, #133, #134, #140, #138, #139
+// Spec 3 S3-09 h0MsKr, VToCp, S3-10 Yy2He; Scoring and review; #132, #133, #134, #140, #138, #139
 
 import { CATEGORY_METRIC, type ChallengeAttemptRecord } from '@tableside/engine';
 import { BookOpen, CircleCheckBig, CircleX, Lightbulb, Shuffle, SkipForward, TrendingUp } from 'lucide-react-native';

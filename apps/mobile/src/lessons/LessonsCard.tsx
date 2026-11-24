@@ -1,4 +1,4 @@
-// docs/decisions/lessons-entry-points.md; S3-01 u8a0o, rwwOU, cplrc
+// docs/decisions/lessons-entry-points.md; S3-01 GV4tz, h9v8xG, j0xoWQ
 
 import { BookOpen, ChevronRight, Library, Play, type LucideIcon } from 'lucide-react-native';
 import { Pressable, Text, useWindowDimensions, View } from 'react-native';

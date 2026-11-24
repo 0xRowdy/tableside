@@ -1,4 +1,4 @@
-// Spec 3 Testing Decisions › Seam 3; S3-10 OVKkc (Amendment 2 §3), S3-01 PDCaD, S3-08 liAfT; #140, #137
+// Spec 3 Testing Decisions › Seam 3; S3-10 Yy2He (Amendment 2 §3), S3-01 PDCaD, S3-08 liAfT; #140, #137
 
 import { cleanup, fireEvent, screen, within } from '@testing-library/react-native';
 import type { ChallengeAttemptRecord } from '@tableside/engine';
@@ -79,7 +79,7 @@ describe('Records & history', () => {
     await cleanup();
   }, 180_000);
 
-  it('shows a table group by its seat and settings, with a best for each count it tests (S3-10 OVKkc)', async () => {
+  it('shows a table group by its seat and settings, with a best for each count it tests (S3-10 Yy2He)', async () => {
     const { TABLE_OBSERVE_CHECK } = jest.requireActual('@/training/testing/attempt-records') as typeof import('@/training/testing/attempt-records');
     const table = TABLE_OBSERVE_CHECK.table as NonNullable<typeof TABLE_OBSERVE_CHECK.table>;
     seed({ id: 'observe', key: { ...TABLE_OBSERVE_CHECK, table: { ...table, dealer: 'H17', lateSurrender: false, penetration: 60, extraPlayers: 2, checkpointInterval: 3 } }, scores: { 'running-count': [3, 4], 'true-count': [4, 4] }, endedAt: MOCK_NOW - 60_000 });
@@ -103,7 +103,7 @@ describe('Records & history', () => {
     expect(await screen.findByLabelText('Running count, 52 cards · self-paced. Best 4 of 4. Fastest 03:41')).toBeOnTheScreen();
     expect(screen.getByLabelText('Running count, 52 cards · 2 s pace. Best 3 of 4. Fastest — (needs a perfect run)')).toBeOnTheScreen();
     expect(screen.getByLabelText('Running count, 52 cards · 1 s pace. Best — (no completed attempt yet). Fastest —')).toBeOnTheScreen();
-    expect(screen.getByText('Records only compare attempts with identical settings. Speed counts only for perfect, unassisted, uninterrupted, timed Check attempts.')).toBeOnTheScreen();
+    expect(screen.getByText('Records compare only attempts with the same settings; a fastest time needs a perfect, timed Check with no pauses and the count kept hidden.')).toBeOnTheScreen();
   });
 
   it('switches to assisted Check and Learn bests, which have no fastest', async () => {

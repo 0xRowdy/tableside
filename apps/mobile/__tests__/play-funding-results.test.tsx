@@ -1,4 +1,4 @@
-// Spec 3 Play challenge funding (#20) › Insufficient funds ending, Results; S3-08 ValDZ, e5MASr, S3-09, S3-10 OVKkc; Amendment 2 §3; #139
+// Spec 3 Play challenge funding (#20) › Insufficient funds ending, Results; S3-08 ValDZ, e5MASr, S3-09, S3-10 Yy2He; Amendment 2 §3; #139
 import { render, screen } from '@testing-library/react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 

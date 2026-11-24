@@ -1,4 +1,4 @@
-// Spec 3 Learn, Check and assistance, Seam 3; S3-04 qdnQm, l3UjHq, S3-05 EDnGd, S3-06 C53yTW; #133
+// Spec 3 Learn, Check and assistance, Seam 3; S3-04 Y8m0IQ, l3UjHq, S3-05 y6lY1o, S3-06 C53yTW; #133
 
 import { CHALLENGE_CONTENT } from '@tableside/definitions';
 import {
@@ -83,7 +83,7 @@ async function present(view: ChallengeView) {
 const press = (name: string) => fireEvent.press(screen.getByRole('button', { name }));
 
 describe('the running-count exercise', () => {
-  it('shows cards between Check checkpoints with Next card and the hidden count, then asks at the checkpoint (S3-04 qdnQm)', async () => {
+  it('shows cards between Check checkpoints with Next card and the hidden count, then asks at the checkpoint (S3-04 Y8m0IQ)', async () => {
     await present(readChallengeView(attempt('check', 1, nexts(4))));
     expect(screen.getByText('Card 5 of 52 · checkpoint 1 of 4')).toBeOnTheScreen();
     expect(screen.getByText('Keep the count. Checkpoint 1 comes after card 13.')).toBeOnTheScreen();
@@ -92,7 +92,7 @@ describe('the running-count exercise', () => {
     expect(sent).toEqual([{ kind: 'next-item' }]);
     const toggle = screen.getByRole('switch', { name: 'Show running count' });
     expect(toggle).not.toBeChecked();
-    expect(screen.getByText('Hidden. Showing it marks this whole attempt assisted, permanently.')).toBeOnTheScreen();
+    expect(screen.getByText('Hidden. Showing it records this attempt as assisted for good.')).toBeOnTheScreen();
 
     await present(readChallengeView(attempt('check', 1, nexts(12))));
     expect(screen.getByText('Card 13 of 52 · checkpoint 1 of 4')).toBeOnTheScreen();
@@ -118,9 +118,26 @@ describe('the running-count exercise', () => {
     await fireEvent(screen.getByLabelText('Running count'), 'submitEditing');
     expect(sent).toEqual([{ kind: 'answer', value: 7 }]);
 
+  });
+
+  // Spec 3 S3-05 UKfJA; docs/decisions/clarify-challenge-vocabulary.md
+  it('asks before a skip is scored; going back keeps the typed count and skips nothing', async () => {
     await present(readChallengeView(attempt('check', 1, nexts(12))));
+    await press('4');
     await press('Skip');
+    expect(sent).toEqual([]);
+    expect(screen.getByRole('header', { name: 'Skip this count?' })).toBeOnTheScreen();
+    expect(screen.getByText("A skipped count is scored as incorrect, and you can't go back to it.")).toBeOnTheScreen();
+    expect(screen.getByText("Going back keeps what you've typed.")).toBeOnTheScreen();
+    await press('Keep counting');
+    expect(sent).toEqual([]);
+    expect(screen.queryByText('Skip this count?')).toBeNull();
+    expect(screen.getByLabelText('Running count')).toHaveDisplayValue('4');
+
+    await press('Skip');
+    await press('Skip and score as incorrect');
     expect(sent).toEqual([{ kind: 'skip' }]);
+    expect(screen.queryByText('Skip this count?')).toBeNull();
   });
 
   it('rejects malformed counts locally with cue 9 and a neutral message, submitting nothing (S3-06 C53yTW)', async () => {
@@ -144,14 +161,14 @@ describe('the running-count exercise', () => {
     expect(screen.queryByRole('alert')).toBeNull();
   });
 
-  it('Check: the first reveal asks first, then is the reveal command; hiding and showing again send nothing and play no cue (S3-05 EDnGd)', async () => {
+  it('Check: the first reveal asks first, then is the reveal command; hiding and showing again send nothing and play no cue (S3-05 y6lY1o)', async () => {
     await present(readChallengeView(attempt('check', 1, [...nexts(12), { kind: 'answer', value: 0 }, ...nexts(8)])));
     await fireEvent.press(screen.getByRole('switch', { name: 'Show running count' }));
     expect(screen.getByRole('header', { name: 'Show the running count?' })).toBeOnTheScreen();
-    expect(screen.getByText("Showing it marks this whole attempt as assisted, permanently. Hiding it again won't undo that.")).toBeOnTheScreen();
+    expect(screen.getByText('This attempt will be recorded as assisted, even if you hide the count again.')).toBeOnTheScreen();
     expect(
       screen.getByText(
-        "Assisted attempts still get full results, but they're kept apart from unassisted records and can't count toward a readiness milestone. Showing the count doesn't use another attempt.",
+        "Assisted attempts keep their full results in their own records but can't earn a readiness milestone, and showing the count doesn't use another attempt.",
       ),
     ).toBeOnTheScreen();
     await press('Keep it hidden');
@@ -170,7 +187,7 @@ describe('the running-count exercise', () => {
     expect(screen.getByRole('switch', { name: 'Show running count' })).toBeChecked();
     await fireEvent.press(screen.getByRole('switch', { name: 'Show running count' }));
     expect(screen.queryByTestId('count-aid')).toBeNull();
-    expect(screen.getByText('Hidden. This attempt is already marked assisted; showing it again changes nothing.')).toBeOnTheScreen();
+    expect(screen.getByText('Hidden. This attempt is already recorded as assisted; showing it again changes nothing.')).toBeOnTheScreen();
     expect(screen.queryByRole('header', { name: 'Show the running count?' })).toBeNull();
     expect(sent).toEqual([]);
     expect(events.announcements).toEqual([]);

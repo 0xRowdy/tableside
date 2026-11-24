@@ -120,6 +120,10 @@ describe('the true-count conversion exercise', () => {
     expect(screen.getByLabelText('Running count, plus 5')).toHaveTextContent('Running count+5');
     expect(screen.getByLabelText('Decks remaining, 1.5')).toHaveTextContent('Decks remaining1.5');
     await press('Skip');
+    expect(sent).toEqual([]);
+    expect(screen.getByRole('header', { name: 'Skip this question?' })).toBeOnTheScreen();
+    expect(screen.getByText("A skipped question is scored as incorrect, and you can't go back to it.")).toBeOnTheScreen();
+    await press('Skip and score as incorrect');
     expect(sent).toEqual([{ kind: 'skip' }]);
   });
 

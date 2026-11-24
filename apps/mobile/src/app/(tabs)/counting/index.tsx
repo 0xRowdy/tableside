@@ -50,7 +50,7 @@ export default function Counting() {
   const openLesson = (lesson: string) => router.navigate(lessonHref(lesson));
   // docs/decisions/lessons-entry-points.md
   const lessonsProps = { onOpenCatalog: () => router.navigate(lessonsHref()), onReturnToAttempt: () => router.navigate(attemptHref) };
-  // Spec 3 S3-10 OVKkc
+  // Spec 3 S3-10 Yy2He
   const openRecords = () => router.setParams({ records: '1' });
   const recordsScreen = records === '1' && <RecordsScreen service={service} lessons={lessons} onOpenLesson={openLesson} onBack={() => router.setParams({ records: undefined })} />;
 
@@ -152,7 +152,7 @@ export default function Counting() {
           onReview={() => setReviewing(snapshot.record.attemptId)}
           allowance={allowance}
           onRetry={() => void service.retry()}
-          // Spec 3 S3-08 nXGFk; #141
+          // Spec 3 S3-08 cfKTT; #141
           lesson={lessons?.find((lesson) => lesson.id === CHALLENGE_LESSONS[snapshot.record.groupKey.category])}
           onOpenLesson={openLesson}
           onPracticeLearn={() => {

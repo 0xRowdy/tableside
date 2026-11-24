@@ -1,4 +1,4 @@
-// Spec 3 Testing Decisions › Seam 3 (spoken pacing, information hiding); S3-02 buD2R, S3-04 qmDou, S3-05 qGARl; #136
+// Spec 3 Testing Decisions › Seam 3 (spoken pacing, information hiding); S3-02 Ufuiu, S3-04 qmDou, S3-05 qGARl; #136
 
 import { cleanup, fireEvent, screen, within } from '@testing-library/react-native';
 import { renderRouter } from 'expo-router/testing-library';
@@ -68,7 +68,7 @@ describe('automatic and spoken pacing on screen', () => {
 
   afterEach(() => jest.restoreAllMocks());
 
-  it('offers the card pace on running-count setup (buD2R), self-paced by default', async () => {
+  it('offers the card pace on running-count setup (Ufuiu), self-paced by default', async () => {
     await openRunningCount('Check');
     const pace = within(screen.getByLabelText('Card pace'));
     expect(pace.getAllByRole('radio').map((radio) => [radio.props.accessibilityLabel, radio.props.accessibilityState.checked])).toEqual([

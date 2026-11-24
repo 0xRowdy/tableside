@@ -1,4 +1,4 @@
-// Spec 3 S3-07, S3-02 ZreSb, FkMDw, S3-09 VToCp; #137, #138
+// Spec 3 S3-07, S3-02 NonMz, FWQoO, S3-09 VToCp; #137, #138
 
 import { blackjackHouseEdge, blackjackPreset, type BlackjackPreset } from '@tableside/definitions';
 import {
@@ -30,7 +30,7 @@ import { formatSigned, formatUnits, halfUnits } from '../play/units';
 const presetText = (dealer: 'S17' | 'H17', lateSurrender: boolean) => `${dealer} ${lateSurrender ? 'LS' : 'no LS'}`;
 const players = (count: number) => `${count} ${count === 1 ? 'player' : 'players'}`;
 
-// Spec 3 S3-10 OVKkc
+// Spec 3 S3-10 Yy2He
 export const tableGroupTitle = (table: TableGroupKey) => `Table counting · ${table.seat === 'observe' ? 'Observe' : 'Play'}`;
 export const tableSettingsText = (table: TableGroupKey) =>
   [
@@ -45,7 +45,7 @@ export const tableSettingsText = (table: TableGroupKey) =>
     ...(table.startingBalance === null ? [] : [`balance ${formatUnits(table.startingBalance)}`]),
   ].join(' · ');
 
-// Spec 3 S3-02 FkMDw, S3-07 qRHlC
+// Spec 3 S3-02 FWQoO, S3-07 qRHlC
 const MODE_TEXT = { basic: 'with basic', deviations: 'with deviations' } as const;
 const SEAT_TEXT = { observe: 'Observe', play: 'Play' } as const;
 
@@ -179,18 +179,18 @@ export const RETRY_WITH_NEW_SHOE = 'Retry with a new shoe';
 // Spec 3 S3-08 e5MASr
 export const completedRounds = (rounds: number) => `${rounds} of ${rounds} rounds`;
 
-// Spec 3 S3-02 FkMDw; #138
+// Spec 3 S3-02 FWQoO; #138
 export const COUNTING_MODE = 'Counting mode';
 export const WITH_BASIC = 'With basic';
 export const WITH_DEVIATIONS = 'With deviations';
 export const MODE_HELP = 'With deviations also asks for the true count at each count-dependent decision.';
-export const CHECK_PLAY_HELP = 'Check holds all feedback until the end. Illegal moves are still refused straight away.';
+export const CHECK_PLAY_HELP = "Check holds all feedback until the end; a move that isn't allowed is still refused straight away.";
 export const PLAY_NOTICE = {
   title: 'A balance just for this attempt',
   detail: 'You bet from this attempt’s own balance and make every playing decision. Your scores are counting, playing and, with the bet schedule, betting accuracy; winnings never count.',
 } as const;
 
-// Spec 3 Play challenge funding (#20); S3-02 FkMDw, Al6Pw; #139
+// Spec 3 Play challenge funding (#20); S3-02 FWQoO, Al6Pw; #139
 export const BETTING = 'Betting';
 export const BET_SCHEDULE_TITLE = 'Hi-Lo bet schedule';
 export const BET_SCHEDULE_DETAIL = '1 / 2 / 4 / 6 / 8 units by true count. Scored separately from play and counting.';
@@ -387,7 +387,7 @@ export function attributionText(fact: TableDecisionReview): string | null {
   return `Right policy, wrong count: in round ${fact.round} you entered a true count of ${signed(fact.entered)}, and at ${signed(fact.entered)} ${what} is the right play. The miss came from the count, not the strategy. Both still count as errors.`;
 }
 
-// Spec 3 S3-02 ZreSb
+// Spec 3 S3-02 NonMz
 export const WHO_PLAYS = 'Who plays your seat';
 export const OBSERVE = 'Observe';
 export const PLAY = 'Play';

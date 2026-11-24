@@ -80,7 +80,7 @@ export type TrainingSnapshot =
 export type { LearnerCommand, StartProblem };
 
 
-// Spec 3 Challenge content › Table; S3-02 ZreSb, FkMDw; #138
+// Spec 3 Challenge content › Table; S3-02 NonMz, FWQoO; #138
 function isTableOptions(value: unknown): value is TableOptions {
   if (!hasExactKeys(value, Object.keys(DEFAULT_TABLE_SETUP))) return false;
   const whole = (n: unknown, min: number, max: number) => Number.isInteger(n) && (n as number) >= min && (n as number) <= max;
@@ -275,7 +275,7 @@ export class TrainingService {
     return (await this.adapters.store.loadAttempt(attemptId))?.record ?? null;
   }
 
-  // Spec 3 Comparison groups, records and progression; S3-10 OVKkc; #140
+  // Spec 3 Comparison groups, records and progression; S3-10 Yy2He; #140
   now = (): number => this.adapters.clock.now();
 
   async progress(): Promise<Progress> {

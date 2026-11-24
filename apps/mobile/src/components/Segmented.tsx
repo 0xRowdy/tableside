@@ -1,4 +1,4 @@
-// Spec 3 S3-02 buD2R, S3-10 OVKkc; #158, #140, #136
+// Spec 3 S3-02 Ufuiu, S3-10 Yy2He; #158, #140, #136
 
 import { Check } from 'lucide-react-native';
 import { Pressable, Text, View } from 'react-native';

@@ -8,14 +8,15 @@ export const APP_ORIENTATION: Lesson = {
   section: 'app',
   game: null,
   content: {
-    version: 1,
-    materialVersion: 1,
-    change: null,
+    // Spec 3 Amendment 1 C10; #167
+    version: 2,
+    materialVersion: 2,
+    change: 'Lessons moved to the Counting tab and open from Help on every table, so the tabs and help steps are new.',
     steps: [
       {
         heading: 'Find your way around',
         paragraphs: [
-          'Six tabs sit along the bottom of the screen. Home has the three games: blackjack, standard craps and roulette. Play opens your current table, or game setup when nothing is running. Counting holds the four counting challenges. Community holds strategies other players publish. Saved keeps your practice and casino sessions. More holds your strategies, Settings and support.',
+          'Five tabs sit along the bottom of the screen. Home has the three games: blackjack, standard craps and roulette. Play opens your current table, or game setup when nothing is running. Counting holds every lesson, the four counting challenges and your challenge records. Saved keeps your practice and casino sessions. More holds Community, your strategies, Settings and support.',
           'Leaving a table for another tab keeps your practice session exactly where it was, and coming back picks it up again. Only stopping, resetting or switching games ends it.',
           'There is no set order. Open the tabs, games and lessons in whatever order suits you.',
         ],
@@ -24,7 +25,7 @@ export const APP_ORIENTATION: Lesson = {
         heading: 'Help when you need it',
         paragraphs: [
           'The first time you meet an unfamiliar control, such as the bet selector or count entry, a short hint explains it. Dismiss it and it stays dismissed on this device.',
-          "Each game's setup offers Learn this game, and the Counting tab has a lesson beside each challenge. Every lesson, this one included, is in More › Settings › Learning, where you can also bring back the hints and the Start here card. Lessons never use challenge attempts or allowance.",
+          "Every lesson, this one included, is on the Counting tab. A lesson also opens from Help at the top of every table, which can bring back that screen's hints too; from Learn this game in each game's setup; from the Start here card on Home; and beside each counting challenge. More › Settings › Learning holds the Start here switch and the hint settings. Lessons never use a challenge attempt or your daily guided practice.",
           'During a Check attempt, help with entering answers, skipping, pausing and the show-count toggle stays open. The counting lessons, and for a Play Check the four blackjack mode lessons and the bet-schedule lesson, wait until the attempt ends.',
         ],
       },

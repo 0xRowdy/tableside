@@ -1,4 +1,4 @@
-// Spec 3 S3-08 liAfT, CEb6T, nXGFk, cX5Gc, UXrpw, ValDZ, e5MASr; #158, #132, #135, #140, #141, #139
+// Spec 3 S3-08 liAfT, CEb6T, cfKTT, cX5Gc, UXrpw, ValDZ, e5MASr; #158, #132, #135, #140, #141, #139
 
 import type { ChallengeAttemptRecord } from '@tableside/engine';
 import { BookOpen, CircleAlert, CircleCheckBig, Coins, Divide, Flag, GraduationCap, Hash, Info, ListChecks, RotateCcw, Spade, Square, Trophy, type LucideIcon } from 'lucide-react-native';
@@ -26,6 +26,7 @@ import {
   scoreText,
   spokenScore,
   startWaits,
+  rightText,
   variantLabel,
   type AllowanceCopy,
 } from '@/training/challenge-text';
@@ -77,7 +78,7 @@ export function ChallengeResults({
   allowance: AllowanceCopy | undefined;
   onRetry: () => void;
   onReview: () => void;
-  // Spec 3 S3-08 nXGFk
+  // Spec 3 S3-08 cfKTT
   lesson: LessonEntry | undefined;
   onOpenLesson: (id: string) => void;
   onPracticeLearn: () => void;
@@ -91,7 +92,9 @@ export function ChallengeResults({
   // Spec 3 Comparison groups (Milestones); #141
   const { readiness } = earned;
   const reviewSuggested = readiness?.kind === 'kept';
-  const detail = [ending.detail, belowReadinessThreshold(record) ? BELOW_THRESHOLD : null].filter(Boolean).join(' ');
+  // Spec 3 S3-08 cfKTT
+  const below = belowReadinessThreshold(record);
+  const detail = [below ? rightText(record) : null, ending.detail].filter(Boolean).join(' ');
   const note = reviewSuggested
     ? practiceNote(allowance)
     : [completed ? resultsNote(groupKey.variant, allowance) : (allowance?.results ?? ''), readiness?.kind === 'earned' && readiness.next ? nextOnPath(readiness.next) : null]
@@ -169,6 +172,11 @@ export function ChallengeResults({
             );
           })}
         </View>
+        {below && (
+          <Text maxFontSizeMultiplier={textScale.body} style={styles.note}>
+            {BELOW_THRESHOLD}
+          </Text>
+        )}
         {record.finances && (
           <>
             <Text maxFontSizeMultiplier={textScale.body} style={styles.label}>
@@ -224,7 +232,7 @@ export function ChallengeResults({
   );
 }
 
-// Spec 3 S3-08 CEb6T, nXGFk
+// Spec 3 S3-08 CEb6T, cfKTT
 function ReadinessBox({ title, detail, pill }: { title: string; detail: string; pill: string | null }) {
   const styles = useStyles();
   return (

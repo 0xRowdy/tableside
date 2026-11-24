@@ -1,4 +1,5 @@
-// Spec 3 S3-04 qdnQm, S3-06 C53yTW, Qv1An, S3-07 xjtSW; Malformed input; #133, #134, #137
+// Spec 3 S3-04 Y8m0IQ, S3-05 UKfJA, S3-06 C53yTW, Qv1An, S3-07 xjtSW; Malformed input
+// #133, #134, #137; docs/decisions/clarify-challenge-vocabulary.md
 
 import { CornerDownLeft, Delete, Info, SkipForward } from 'lucide-react-native';
 import type { CountRange } from '@tableside/engine';
@@ -9,7 +10,9 @@ import { Button } from '@/components/Button';
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/theme/tokens';
 import { makeStyles } from '@/theme/type';
-import { CHANGE_SIGN, COUNT_SKIP, COUNT_SKIP_HINT, countProblemText, DELETE_DIGIT, parseCount, SUBMIT, toggleSign, type CountProblem } from '@/training/challenge-text';
+import { CHANGE_SIGN, COUNT_SKIP, COUNT_SKIP_HINT, countProblemText, DELETE_DIGIT, parseCount, SUBMIT, toggleSign, type CountProblem, type SkipItem } from '@/training/challenge-text';
+
+import { useSkipConfirm } from './SkipConfirm';
 
 const DIGITS = ['1', '2', '3', '4', '5', '6', '7', '8', '9'];
 
@@ -22,6 +25,7 @@ export function CountEntry({
   onRejected,
   next,
   submitLabel = SUBMIT,
+  item = 'count',
 }: {
   label: string;
   range: CountRange;
@@ -31,11 +35,13 @@ export function CountEntry({
   onRejected: () => void;
   next?: { readonly label: string; readonly enabled: boolean; readonly onPress: () => void };
   submitLabel?: string;
+  item?: Exclude<SkipItem, 'card'>;
 }) {
   const styles = useStyles();
   const [text, setText] = useState('');
   const [problem, setProblem] = useState<CountProblem | null>(null);
   const { focused, focusProps } = useKeyboardFocus();
+  const skip = useSkipConfirm(item, enabled, onSkip);
   const edit = (next: string) => {
     setText(next.replace(/-/g, '−'));
     setProblem(null);
@@ -86,9 +92,7 @@ export function CountEntry({
         <Key label={<Delete color={palette.foreground} size={24} />} accessibilityLabel={DELETE_DIGIT} enabled={enabled} onPress={() => edit(text.slice(0, -1))} />
       </View>
       <View style={styles.actions}>
-        <View style={styles.action}>
-          <Button label={COUNT_SKIP} hint={COUNT_SKIP_HINT} icon={SkipForward} variant="outline" stretch disabled={!enabled} onPress={onSkip} />
-        </View>
+        <Button label={COUNT_SKIP} hint={COUNT_SKIP_HINT} icon={SkipForward} variant="outline" disabled={!enabled} onPress={skip.ask} />
         <View style={styles.action}>
           {next ? (
             <Button label={next.label} icon={CornerDownLeft} stretch disabled={!next.enabled} onPress={next.onPress} />
@@ -97,6 +101,7 @@ export function CountEntry({
           )}
         </View>
       </View>
+      {skip.sheet}
     </View>
   );
 }

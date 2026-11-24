@@ -176,7 +176,7 @@ describe('lessons', () => {
     await cleanup();
 
     const orientation = actualLessons()[0]!;
-    servedLessons()[0] = { ...orientation, content: { ...orientation.content!, version: 2, materialVersion: 2, change: 'the Saved tab was described' } };
+    servedLessons()[0] = { ...orientation, content: { ...orientation.content!, version: orientation.content!.version + 1, materialVersion: orientation.content!.materialVersion + 1, change: 'the Saved tab was described' } };
     await openCatalog();
     await fireEvent.press(await screen.findByRole('button', { name: 'App orientation. Completed (earlier version) · restart · Tabs, help, practice vs casino records' }));
     await header('App orientation');

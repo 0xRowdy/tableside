@@ -1,4 +1,4 @@
-// Spec 3 Testing Decisions › Seam 3; S3-01 Uq05w, S3-02 buD2R, S3-05 r5pCx, T9sCI, S3-08 UXrpw; #135
+// Spec 3 Testing Decisions › Seam 3; S3-01 Uq05w, S3-02 Ufuiu, S3-05 r5pCx, T9sCI, S3-08 UXrpw; #135
 
 import { cleanup, fireEvent, screen, within } from '@testing-library/react-native';
 import { renderRouter } from 'expo-router/testing-library';
@@ -133,7 +133,7 @@ describe('the attempt lifecycle on screen', () => {
     sheet = within(await screen.findByTestId('unfinished-attempt'));
     await fireEvent.press(sheet.getByRole('button', { name: 'End it, then set up Running count' }));
     await screen.findByRole('header', { name: 'Running count' });
-    expect(within(screen.getByLabelText('Variant')).getByRole('radio', { name: 'Check', checked: true })).toBeOnTheScreen();
+    expect(within(screen.getByLabelText('Feedback')).getByRole('radio', { name: 'Check', checked: true })).toBeOnTheScreen();
     expect(screen.queryByRole('header', { name: 'Results' })).toBeNull();
   });
 
@@ -150,7 +150,7 @@ describe('the attempt lifecycle on screen', () => {
     expect(screen.getByText('Card 2 of 20')).toBeOnTheScreen();
   });
 
-  it('times an attempt when timing is on (buD2R, CEb6T), leaving out pauses', async () => {
+  it('times an attempt when timing is on (Ufuiu, CEb6T), leaving out pauses', async () => {
     await startCardValues('Check', { timed: true });
     expect(screen.getByText('Check · self-paced · timed')).toBeOnTheScreen();
     expect(screen.getByLabelText(/^Timed: 0 minutes/)).toBeOnTheScreen();

@@ -1,7 +1,7 @@
 // Spec 1 S1-02, Spec 5 S5-10
 
 import { CircleAlert, ChevronLeft, Minus, Plus } from 'lucide-react-native';
-import { forwardRef, useState, type ComponentRef, type ReactNode } from 'react';
+import { forwardRef, type ComponentRef, type ReactNode } from 'react';
 import { Pressable, Text, TextInput, View, type AccessibilityActionEvent } from 'react-native';
 
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
@@ -300,9 +300,9 @@ export function LinkButton({ label, onPress }: { label: string; onPress: () => v
   );
 }
 
-export function AllowanceCard({ title, text, detail, seePremium }: { title: string; text: string; detail?: string; seePremium: boolean }) {
+// docs/decisions/clarify-challenge-vocabulary.md; #55
+export function AllowanceCard({ title, text, detail }: { title: string; text: string; detail?: string }) {
   const styles = useStyles();
-  const [premiumNote, setPremiumNote] = useState(false);
   return (
     <View style={styles.allowance} testID="allowance-line">
       <Text maxFontSizeMultiplier={textScale.body} style={styles.label}>
@@ -312,12 +312,6 @@ export function AllowanceCard({ title, text, detail, seePremium }: { title: stri
         {text}
       </Text>
       {detail !== undefined && <Help>{detail}</Help>}
-      {seePremium && <LinkButton label="See premium" onPress={() => setPremiumNote(true)} />}
-      {premiumNote && (
-        <Text accessibilityRole="alert" maxFontSizeMultiplier={textScale.body} style={styles.help}>
-          Plans arrive in a later update.
-        </Text>
-      )}
     </View>
   );
 }

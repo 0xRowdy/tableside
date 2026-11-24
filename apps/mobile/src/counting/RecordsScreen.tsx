@@ -1,4 +1,4 @@
-// Spec 3 S3-10 OVKkc (Amendment 2 §3); Comparison groups, records and progression; #140, #141
+// Spec 3 S3-10 Yy2He (Amendment 2 §3); Comparison groups, records and progression; #140, #141
 
 import { CHALLENGE_LESSONS } from '@tableside/definitions';
 import type { AssistanceClass, AttemptEndingReason, ChallengeAttemptRecord } from '@tableside/engine';

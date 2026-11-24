@@ -40,7 +40,7 @@ export interface TableContent {
   readonly reference: VersionedIdentity;
 }
 
-// Spec 3 S3-02 ZreSb
+// Spec 3 S3-02 NonMz
 export interface ObserveSetup {
   readonly seat: 'observe';
   readonly rules: BlackjackRuleSet;
@@ -48,14 +48,14 @@ export interface ObserveSetup {
   readonly interval: number;
 }
 
-// Spec 3 Play challenge funding (#20) › Starting balance; S3-02 FkMDw; #139
+// Spec 3 Play challenge funding (#20) › Starting balance; S3-02 FWQoO; #139
 export interface PlayFunding {
   readonly betSchedule: boolean;
   readonly baseWager: string;
   readonly startingBalance: string;
 }
 
-// Spec 3 User stories 28; S3-02 FkMDw; #138, #139
+// Spec 3 User stories 28; S3-02 FWQoO; #138, #139
 export interface PlaySetup extends PlayFunding {
   readonly seat: 'play';
   readonly rules: BlackjackRuleSet;
