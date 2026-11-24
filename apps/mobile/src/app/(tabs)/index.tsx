@@ -15,13 +15,11 @@ import { capitalize } from '@/play/units';
 import { usePractice } from '@/practice/PracticeProvider';
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/theme/tokens';
-import { makeStyles, useTextStep } from '@/theme/type';
+import { makeStyles, useStackedLayout } from '@/theme/type';
 import { useLearning } from '@/training/TrainingProvider';
 
 const SIDE_BY_SIDE_MAX_FONT_SCALE = 1.35;
 const MIN_CARD_HEIGHT = 188;
-const STACKED_HEADER_FONT_SCALE = 1.3;
-
 function CommunityEntry() {
   const styles = useStyles();
   const { focused, focusProps } = useKeyboardFocus();
@@ -43,11 +41,10 @@ function CommunityEntry() {
 
 export default function Home() {
   const styles = useStyles();
-  const textStep = useTextStep();
   const insets = useSafeAreaInsets();
   const { width, height, fontScale } = useWindowDimensions();
   const sideBySide = width > height && fontScale <= SIDE_BY_SIDE_MAX_FONT_SCALE;
-  const stacked = fontScale > STACKED_HEADER_FONT_SCALE || textStep === 'larger';
+  const stacked = useStackedLayout();
   const { snapshot } = usePractice();
   const suspended = snapshot.status === 'active' && snapshot.suspension?.reached ? snapshot : null;
   const words = suspended ? GAME_WORDS[suspended.view.game] : null;

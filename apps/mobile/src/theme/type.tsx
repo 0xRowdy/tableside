@@ -1,6 +1,6 @@
 // docs/decisions/text-size-type-floor.md; DESIGN.md Typography
 import { createContext, useContext, useState, useSyncExternalStore, type ReactNode } from 'react';
-import { StyleSheet } from 'react-native';
+import { StyleSheet, useWindowDimensions } from 'react-native';
 
 import { useLoaded } from '@/hooks/use-loaded';
 
@@ -52,6 +52,13 @@ export function TextSizeProvider({ children, storage }: { children: ReactNode; s
 }
 
 export const useTextStep = (): TextStep => useContext(StepContext);
+
+const STACKED_FONT_SCALE = 1.3;
+
+export function useStackedLayout(): boolean {
+  const step = useTextStep();
+  return useWindowDimensions().fontScale > STACKED_FONT_SCALE || step === 'larger';
+}
 
 export function useTextSize(): TextSizeState & { choose: (step: TextStep) => Promise<void> } {
   const setting = useContext(SettingContext);

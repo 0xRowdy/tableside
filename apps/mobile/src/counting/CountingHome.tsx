@@ -3,14 +3,14 @@
 import { CHALLENGE_LESSONS } from '@tableside/definitions';
 import { CHALLENGE_VARIANTS, type ChallengeCategory, type ChallengeVariant } from '@tableside/engine';
 import { CircleDashed, ClipboardCheck, Compass, Flag, GraduationCap, Target, Trophy, type LucideIcon } from 'lucide-react-native';
-import { Pressable, Text, useWindowDimensions, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
 import { LessonLink } from '@/lessons/LessonEntries';
 import { LessonsSection, SectionHead } from '@/lessons/LessonsCard';
 import { Group, ListRow, Note, SettingsScreen } from '@/settings/SettingsParts';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/theme/tokens';
-import { makeStyles, useTextStep } from '@/theme/type';
+import { makeStyles, useStackedLayout } from '@/theme/type';
 import { CATEGORY_TEXT, COUNTING_TITLE, NOT_READY_HINT, RECOMMENDATIONS_NOTE, SUGGESTED_ORDER_LABEL, VARIANT_DETAIL, variantLabel, type AllowanceCopy } from '@/training/challenge-text';
 import { CHALLENGES_SECTION, lessonLinkLabel } from '@/training/lesson-text';
 import type { Progress } from '@/training/progress';
@@ -21,9 +21,6 @@ import type { CatalogEntry, ChallengeSetup, LessonEntry } from '@/training/servi
 import { AllowanceBanner } from './AllowanceBanner';
 
 const VARIANT_ICON: Record<ChallengeVariant, LucideIcon> = { learn: GraduationCap, check: ClipboardCheck };
-// Spec 3 S3-01 j0xoWQ; DESIGN.md Layout
-const STACKED_VARIANT_FONT_SCALE = 1.3;
-
 export function CountingHome({
   catalog,
   allowance,
@@ -107,8 +104,8 @@ function CategoryCard({
   const recommendation = progress?.recommendation.category === entry.category ? progress.recommendation : null;
   const status = categoryStatus(entry.category, progress);
   const StatusIcon = status.earned ? Flag : CircleDashed;
-  const textStep = useTextStep();
-  const stacked = useWindowDimensions().fontScale > STACKED_VARIANT_FONT_SCALE || textStep === 'larger';
+  // Spec 3 S3-01 j0xoWQ
+  const stacked = useStackedLayout();
   return (
     <View style={styles.card}>
       <View style={styles.head}>
