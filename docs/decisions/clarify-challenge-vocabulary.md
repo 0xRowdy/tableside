@@ -47,7 +47,7 @@ Owner ruling under spec 3 Amendment 1 C10: this is a **material change**. Anyone
 
 ## Spec amendments
 
-Drafts, not posted.
+Posted 2026-11-23: [spec 3 A9](https://github.com/0xRowdy/tableside/issues/53#issuecomment-7122667829), [spec 5 A10](https://github.com/0xRowdy/tableside/issues/55#issuecomment-7122668167), [spec 1 A15](https://github.com/0xRowdy/tableside/issues/51#issuecomment-7122668557).
 
 | Spec | Amendment |
 | --- | --- |
