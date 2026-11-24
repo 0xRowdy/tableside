@@ -62,8 +62,12 @@ const listLessonsOf = (service: TrainingService) => service.listLessons();
 export function useLessons(): { readonly service: TrainingService; readonly lessons: readonly LessonEntry[] | undefined } {
   const service = useContext(TrainingContext);
   if (!service) throw new Error('useLessons needs a TrainingProvider');
+  return { service, lessons: useLessonsOf(service) };
+}
+
+export function useLessonsOf(service: TrainingService): readonly LessonEntry[] | undefined {
   const revision = useSyncExternalStore(service.subscribe, service.lessonRevision);
-  return { service, lessons: useReloaded(revision, listLessonsOf, service) };
+  return useReloaded(revision, listLessonsOf, service);
 }
 
 // Spec 3 Lessons › Access, Check protection; Amendments 3 and 5; #149

@@ -1,4 +1,4 @@
-// Spec 3 Testing Decisions › Seam 3; S3-11 sVqX1, S3-12 l8pMS and aJV2y, S3-13 JJl51 and Fvlgc, Settings › Learning NvGyZ; Amendment 1 B4, D; #143, #144, #151
+// Spec 3 Testing Decisions › Seam 3; S3-11 klT0u, S3-12 l8pMS and aJV2y, S3-13 JJl51 and Fvlgc; Amendment 1 B4, D; #143, #144, #151; docs/decisions/lessons-entry-points.md
 
 import { act, cleanup, fireEvent, screen, within } from '@testing-library/react-native';
 import { renderRouter } from 'expo-router/testing-library';
@@ -58,8 +58,8 @@ const header = (name: string | RegExp) => screen.findByRole('header', { name });
 const button = (name: string | RegExp) => screen.getByRole('button', { name });
 
 async function openCatalog() {
-  await renderRouter('./src/app', { initialUrl: '/more/settings/learning' });
-  await fireEvent.press(await screen.findByRole('button', { name: /^Lesson catalog\b/ }));
+  await renderRouter('./src/app', { initialUrl: '/counting' });
+  await fireEvent.press(await screen.findByRole('button', { name: /^All 24 lessons\b/ }));
   await header('Lessons');
 }
 
@@ -83,16 +83,10 @@ describe('lessons', () => {
     await cleanup();
   }, 180_000);
 
-  it('are reached from More → Settings → Learning, which summarizes the catalog, keeping the tab bar on More', async () => {
-    await renderRouter('./src/app', { initialUrl: '/more' });
-    await fireEvent.press(await screen.findByRole('button', { name: /^Settings\b/ }));
-    await fireEvent.press(await screen.findByRole('button', { name: 'Learning. Lessons' }));
-    expect(await header('Learning')).toBeOnTheScreen();
-    expect(button('Back to Settings')).toBeOnTheScreen();
-    expect(screen.getByRole('header', { name: 'Lessons' })).toBeOnTheScreen();
-    expect(await screen.findByRole('button', { name: 'Lesson catalog. 24 lessons · 0 completed · 0 in progress' })).toBeOnTheScreen();
-    expect(screen.getByText("Lessons never score you, award anything or lock anything. They're available to every account, including when today's challenge attempts are used up. Start here and hint settings stay on this device.")).toBeOnTheScreen();
-    expect(within(screen.getByTestId('tab-bar')).getByRole('tab', { name: 'More', selected: true })).toBeOnTheScreen();
+  it('are reached from the top of the Counting tab, keeping the tab bar on Counting', async () => {
+    await openCatalog();
+    expect(button('Back to Counting')).toBeOnTheScreen();
+    expect(within(screen.getByTestId('tab-bar')).getByRole('tab', { name: 'Counting', selected: true })).toBeOnTheScreen();
   });
 
   it('list all 24 in their five groups, in any order, with App orientation open to start', async () => {
@@ -149,8 +143,8 @@ describe('lessons', () => {
     await fireEvent.press(button('Back to lessons'));
 
     expect(await screen.findByRole('button', { name: 'App orientation. Completed · Tabs, help, practice vs casino records' })).toBeOnTheScreen();
-    await fireEvent.press(button('Back to Learning'));
-    expect(await screen.findByRole('button', { name: 'Lesson catalog. 24 lessons · 1 completed · 0 in progress' })).toBeOnTheScreen();
+    await fireEvent.press(button('Back to Counting'));
+    expect(await screen.findByRole('button', { name: 'All 24 lessons. 1 completed' })).toBeOnTheScreen();
   });
 
   it('restart from step 1, from the resume sheet or the header, keeping the lesson', async () => {
@@ -271,7 +265,7 @@ describe('lessons', () => {
     expect(await header('Plays that kick in when the count drops')).toBeOnTheScreen();
   });
 
-  it('are silent: the Learning screen, catalog and lesson text play no cue or haptic', async () => {
+  it('are silent: the catalog and lesson text play no cue or haptic', async () => {
     await openOrientation();
     await fireEvent.press(button('Next'));
     await fireEvent.press(await screen.findByRole('button', { name: 'Restart lesson' }));

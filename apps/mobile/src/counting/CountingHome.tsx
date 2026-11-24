@@ -1,17 +1,18 @@
-// Spec 3 S3-01 PDCaD, RqPCB; spec 5 S5-17 j3UhJ; Lessons › Entry points; #158, #150, #145, #140, #141
+// Spec 3 S3-01 u8a0o, rwwOU, RqPCB; spec 5 S5-17 j3UhJ; #158, #150, #145, #140, #141
 
 import { CHALLENGE_LESSONS } from '@tableside/definitions';
 import { CHALLENGE_VARIANTS, type ChallengeCategory, type ChallengeVariant } from '@tableside/engine';
-import { CircleDashed, ClipboardCheck, Compass, Flag, GraduationCap, Trophy, type LucideIcon } from 'lucide-react-native';
+import { CircleDashed, ClipboardCheck, Compass, Flag, GraduationCap, Target, Trophy, type LucideIcon } from 'lucide-react-native';
 import { Pressable, Text, View } from 'react-native';
 
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
 import { LessonLink } from '@/lessons/LessonEntries';
+import { LessonsSection, SectionHead } from '@/lessons/LessonsCard';
 import { Group, ListRow, Note, SettingsScreen } from '@/settings/SettingsParts';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/theme/tokens';
 import { makeStyles } from '@/theme/type';
 import { CATEGORY_TEXT, COUNTING_TITLE, NOT_READY_HINT, RECOMMENDATIONS_NOTE, SUGGESTED_ORDER_LABEL, variantLabel, type AllowanceCopy } from '@/training/challenge-text';
-import { lessonLinkLabel } from '@/training/lesson-text';
+import { CHALLENGES_SECTION, lessonLinkLabel } from '@/training/lesson-text';
 import type { Progress } from '@/training/progress';
 import { categoryStatus, RECOMMENDED_BADGE, recommendationText, recommendedLabel } from '@/training/readiness-text';
 import { RECORDS_ROW } from '@/training/records-text';
@@ -27,6 +28,8 @@ export function CountingHome({
   progress,
   lessons,
   onOpenLesson,
+  onOpenCatalog,
+  onReturnToAttempt,
   onChoose,
   onOpenRecords,
 }: {
@@ -36,6 +39,8 @@ export function CountingHome({
   progress: Progress | undefined;
   lessons: readonly LessonEntry[] | undefined;
   onOpenLesson: (lesson: string) => void;
+  onOpenCatalog: () => void;
+  onReturnToAttempt: () => void;
   onChoose: (setup: ChallengeSetup) => void;
   onOpenRecords: () => void;
 }) {
@@ -44,26 +49,36 @@ export function CountingHome({
   const elsewhere = allowance?.standing === 'elsewhere' ? allowance.setup.text : null;
   return (
     <SettingsScreen title={COUNTING_TITLE}>
-      {allowance && <AllowanceBanner standing={allowance.standing} {...allowance.banner} />}
-      <Text maxFontSizeMultiplier={textScale.body} style={styles.label}>
-        {SUGGESTED_ORDER_LABEL}
-      </Text>
-      {catalog.map((entry, index) => (
-        <CategoryCard
-          key={entry.category}
-          step={index + 1}
-          entry={entry}
-          progress={progress}
-          elsewhere={elsewhere}
-          lesson={lessons?.find((lesson) => lesson.id === CHALLENGE_LESSONS[entry.category])}
-          onOpenLesson={onOpenLesson}
-          onChoose={onChoose}
-        />
-      ))}
-      <Group>
-        <ListRow icon={Trophy} title={RECORDS_ROW.title} detail={RECORDS_ROW.detail} onPress={onOpenRecords} />
-      </Group>
-      <Note>{RECOMMENDATIONS_NOTE}</Note>
+      <View style={styles.sections}>
+        <LessonsSection lessons={lessons} onOpenLesson={onOpenLesson} onOpenCatalog={onOpenCatalog} onReturnToAttempt={onReturnToAttempt} />
+        <View style={styles.challenges}>
+          <View style={styles.challengesHead}>
+            <SectionHead icon={Target} title={CHALLENGES_SECTION} />
+            <Text maxFontSizeMultiplier={textScale.body} style={styles.label}>
+              {SUGGESTED_ORDER_LABEL}
+            </Text>
+          </View>
+          {allowance && <AllowanceBanner standing={allowance.standing} {...allowance.banner} />}
+          {catalog.map((entry, index) => (
+            <CategoryCard
+              key={entry.category}
+              step={index + 1}
+              entry={entry}
+              progress={progress}
+              elsewhere={elsewhere}
+              lesson={lessons?.find((lesson) => lesson.id === CHALLENGE_LESSONS[entry.category])}
+              onOpenLesson={onOpenLesson}
+              onChoose={onChoose}
+            />
+          ))}
+        </View>
+        <View style={styles.records}>
+          <Group>
+            <ListRow icon={Trophy} title={RECORDS_ROW.title} detail={RECORDS_ROW.detail} onPress={onOpenRecords} />
+          </Group>
+          <Note>{RECOMMENDATIONS_NOTE}</Note>
+        </View>
+      </View>
     </SettingsScreen>
   );
 }
@@ -139,7 +154,7 @@ function CategoryCard({
           />
         ))}
       </View>
-      <LessonLink label={lessonLinkLabel(entry.category)} ready={lesson !== undefined && lesson.steps !== null} onPress={() => onOpenLesson(CHALLENGE_LESSONS[entry.category])} />
+      <LessonLink accent={false} label={lessonLinkLabel(entry.category)} ready={lesson !== undefined && lesson.steps !== null} onPress={() => onOpenLesson(CHALLENGE_LESSONS[entry.category])} />
     </View>
   );
 }
@@ -191,6 +206,10 @@ function VariantButton({
 }
 
 const useStyles = makeStyles((type) => ({
+  sections: { gap: space[8] },
+  challenges: { gap: space[4] },
+  challengesHead: { gap: space[1] },
+  records: { gap: space[3] },
   label: { fontFamily: fonts.uiSemiBold, ...type.label, color: palette.mutedForeground },
   card: { gap: space[3] - 2, padding: space[4], borderRadius: radius.lg, borderWidth: 1, borderColor: palette.border, backgroundColor: palette.card },
   head: { flexDirection: 'row', alignItems: 'center', gap: space[3] },

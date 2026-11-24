@@ -503,6 +503,9 @@ export const turnBoundaryText = (hold: AttemptHold) => `${hold.reason ?? CANT_CO
 // Spec 3 Amendment 1 A2; #138
 const withheldLessons = (play: boolean) => (play ? 'The four counting lessons, the four blackjack mode lessons and the bet-schedule lesson are' : 'The four counting lessons are');
 
+// docs/decisions/lessons-entry-points.md; S3-07 zxRJD
+export const LESSONS_AFTER_ATTEMPT = 'Lessons open after this attempt';
+
 // Spec 3 S3-05 T9sCI; Learn, Check and assistance (operational help)
 export function helpText(view: Pick<ChallengeView, 'variant' | 'countRange' | 'countAid' | 'table'>): {
   readonly title: string;

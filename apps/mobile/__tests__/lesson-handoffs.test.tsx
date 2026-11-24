@@ -88,7 +88,7 @@ const radio = (name: string) => screen.getByRole('radio', { name });
 const store = () => mockStore as import('@/training/memory-store').MemoryTrainingStore;
 
 async function finalStep(lesson: string, title: string) {
-  await renderRouter('./src/app', { initialUrl: `/more/settings/learning/lessons/${lesson}` });
+  await renderRouter('./src/app', { initialUrl: `/counting/lessons/${lesson}` });
   await header(title);
   await fireEvent.press(button('Next'));
   await header('Practice it');
@@ -111,7 +111,7 @@ describe('lesson handoffs', () => {
   }, 180_000);
 
   it('the final step offers each handoff after the explanation (pX6CV); earlier steps offer none', async () => {
-    await renderRouter('./src/app', { initialUrl: '/more/settings/learning/lessons/capped-martingale' });
+    await renderRouter('./src/app', { initialUrl: '/counting/lessons/capped-martingale' });
     await header('Capped Martingale');
     expect(screen.queryByRole('link', { name: /^Guided practice/ })).toBeNull();
     await fireEvent.press(button('Next'));
@@ -129,11 +129,11 @@ describe('lesson handoffs', () => {
     expect(button('Start guided practice')).toBeOnTheScreen();
     await expectNothingStarted();
 
-    await fireEvent.press(within(screen.getByTestId('tab-bar')).getByRole('tab', { name: 'More' }));
-    expect(await screen.findByRole('button', { name: /^Capped Martingale\. Completed/ })).toBeOnTheScreen();
+    await fireEvent.press(within(screen.getByTestId('tab-bar')).getByRole('tab', { name: 'Counting' }));
+    expect(await screen.findByRole('button', { name: 'All 24 lessons. 1 completed' })).toBeOnTheScreen();
   });
 
-  it('Finish opens "Practice what you learned" with each option and what starting it uses (ZBpF3); Back to lessons leaves', async () => {
+  it('Finish opens "Practice what you learned" with each option and what starting it uses (ZBpF3); Back to Counting leaves', async () => {
     await finalStep('card-values', 'Card values');
     await fireEvent.press(button('Finish'));
     expect(await header('Practice what you learned')).toBeOnTheScreen();
@@ -142,8 +142,8 @@ describe('lesson handoffs', () => {
     expect(screen.getByRole('button', { name: 'Guided practice · Blackjack, counting with deviations. Uses guided-practice allowance once you start.' })).toBeOnTheScreen();
     expect(screen.getByRole('button', { name: 'Free play · Blackjack. Opens blackjack setup.' })).toBeOnTheScreen();
 
-    await fireEvent.press(button('Back to lessons'));
-    expect(await screen.findByRole('button', { name: /^Card values\. Completed/ })).toBeOnTheScreen();
+    await fireEvent.press(screen.getAllByRole('button', { name: 'Back to Counting' }).at(-1)!);
+    expect(await screen.findByRole('button', { name: 'All 24 lessons. 1 completed' })).toBeOnTheScreen();
     await expectNothingStarted();
   });
 
@@ -175,7 +175,7 @@ describe('lesson handoffs', () => {
 
   // #53
   it('the bet-schedule lesson opens blackjack guided practice with its counting mode and the schedule on', async () => {
-    await renderRouter('./src/app', { initialUrl: '/more/settings/learning/lessons/bet-schedule' });
+    await renderRouter('./src/app', { initialUrl: '/counting/lessons/bet-schedule' });
     await header('Bet schedule');
     for (let more = 0; more < 3; more++) await fireEvent.press(button('Next'));
     await fireEvent.press(await screen.findByRole('link', { name: 'Guided practice · Blackjack, counting with deviations, bet schedule on' }));
@@ -189,9 +189,9 @@ describe('lesson handoffs', () => {
     await finalStep('card-values', 'Card values');
     await fireEvent.press(screen.getByRole('link', { name: 'Guided practice · Blackjack, counting with deviations' }));
     await header('Blackjack');
-    await fireEvent.press(within(screen.getByTestId('tab-bar')).getByRole('tab', { name: 'More' }));
-    await fireEvent.press(await screen.findByRole('button', { name: /^Card values\. Completed/ }));
-    await header('Card values');
+    await fireEvent.press(within(screen.getByTestId('tab-bar')).getByRole('tab', { name: 'Counting' }));
+    await fireEvent.press(await screen.findByRole('link', { name: 'Lesson: card values' }));
+    await screen.findByText('Lesson · Blackjack');
     await fireEvent.press(button('Next'));
     await fireEvent.press(await screen.findByRole('link', { name: 'Free play · Blackjack' }));
     expect(await screen.findByText('New session · free play')).toBeOnTheScreen();
@@ -243,7 +243,7 @@ describe('lesson entry points', () => {
     await fireEvent.press(await screen.findByRole('button', { name: `Learn this game. ${detail}` }));
     await header('Lessons');
     expect(screen.getAllByRole('header').map((item) => item.props.children)).toEqual(['Lessons', section]);
-    expect(button('Back to Learning')).toBeOnTheScreen();
+    expect(button(`Back to ${title} setup`)).toBeOnTheScreen();
   });
 
   it("a lesson opened from a game's lessons returns to them", async () => {

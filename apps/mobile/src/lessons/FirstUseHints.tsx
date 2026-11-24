@@ -1,5 +1,6 @@
-// Spec 3 Lessons › Structure (First-use hints), Information hiding (hint content); S1-04 XjwQc; #146
+// Spec 3 Lessons › Structure (First-use hints), Information hiding; S1-04 XjwQc, qylNY; #146
 import { HINTS, type HintId } from '@tableside/definitions';
+import type { GameId } from '@tableside/engine';
 import { CircleHelp } from 'lucide-react-native';
 import { createContext, useContext, useState, type ReactNode } from 'react';
 import { Pressable, Text, View } from 'react-native';
@@ -11,8 +12,11 @@ import { gotItLabel, HELP_HINT, HELP_LABEL, hintKicker, GOT_IT, REREAD_FROM_HELP
 import type { TrainingService } from '@/training/service';
 import { useLearningOf } from '@/training/TrainingProvider';
 
+import { TableHelpSheet } from './HelpSheet';
+
 interface ScreenHintState {
-  readonly any: boolean;
+  readonly service: TrainingService;
+  readonly ids: readonly HintId[];
   shows(id: HintId): boolean;
   dismiss(id: HintId): void;
   reopen(): void;
@@ -25,7 +29,8 @@ export function ScreenHints({ service, ids, children }: { service: TrainingServi
   const [reopened, setReopened] = useState<ReadonlySet<HintId>>(new Set());
   const [closed, setClosed] = useState<ReadonlySet<HintId>>(new Set());
   const state: ScreenHintState = {
-    any: ids.length > 0,
+    service,
+    ids,
     shows: (id) => ids.includes(id) && (reopened.has(id) || (learning !== undefined && learning.unseenHints.includes(id) && !closed.has(id))),
     dismiss: (id) => {
       setReopened((open) => new Set([...open].filter((other) => other !== id)));
@@ -74,31 +79,36 @@ export function FirstUseHint({ id }: { id: HintId }) {
   );
 }
 
-// #135
-export function useReopenHints(): () => void {
+// docs/decisions/lessons-entry-points.md; #135
+export function useScreenHints(): { readonly ids: readonly HintId[]; readonly reopen: () => void } {
   const hints = useContext(ScreenHintContext);
-  return () => hints?.reopen();
+  return { ids: hints?.ids ?? [], reopen: () => hints?.reopen() };
 }
 
-export function HelpButton() {
+// Spec 1 S1-04 qylNY; docs/decisions/lessons-entry-points.md
+export function HelpButton({ game }: { game: GameId }) {
   const styles = useStyles();
   const hints = useContext(ScreenHintContext);
+  const [open, setOpen] = useState(false);
   const { focused, focusProps } = useKeyboardFocus();
-  if (!hints?.any) return null;
+  if (!hints) return null;
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={HELP_LABEL}
-      accessibilityHint={HELP_HINT}
-      onPress={hints.reopen}
-      {...focusProps}
-      style={({ pressed }) => [styles.help, pressed && styles.pressed, focused && styles.focused]}
-    >
-      <CircleHelp color={palette.foreground} size={22} />
-      <Text maxFontSizeMultiplier={textScale.body} style={styles.helpText}>
-        {HELP_LABEL}
-      </Text>
-    </Pressable>
+    <>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={HELP_LABEL}
+        accessibilityHint={HELP_HINT}
+        onPress={() => setOpen(true)}
+        {...focusProps}
+        style={({ pressed }) => [styles.help, pressed && styles.pressed, focused && styles.focused]}
+      >
+        <CircleHelp color={palette.foreground} size={22} />
+        <Text maxFontSizeMultiplier={textScale.body} style={styles.helpText}>
+          {HELP_LABEL}
+        </Text>
+      </Pressable>
+      {open && <TableHelpSheet game={game} service={hints.service} hints={hints.ids} onShowHints={hints.reopen} onClose={() => setOpen(false)} />}
+    </>
   );
 }
 

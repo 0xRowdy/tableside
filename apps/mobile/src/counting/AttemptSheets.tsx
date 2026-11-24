@@ -1,14 +1,16 @@
 // Spec 3 S3-05 r5pCx, T9sCI, qGARl; S3-01 Uq05w; Attempt lifecycle; #135, #136
 
+import type { HintId } from '@tableside/definitions';
 import type { ChallengeCategory, ChallengeView } from '@tableside/engine';
 import { BookOpen, CircleAlert, CircleStop, Eye, Hand, Keyboard, Pause, Play, SkipForward, type LucideIcon } from 'lucide-react-native';
 import { Text, View } from 'react-native';
 
 import { Button } from '@/components/Button';
 import { Sheet, SheetText } from '@/components/Sheet';
+import { HintsAgainRow } from '@/lessons/HelpSheet';
 import { fonts, palette, radius, space, textScale } from '@/theme/tokens';
 import { makeStyles } from '@/theme/type';
-import { END_ATTEMPT, helpText, holdText, RESUME_LABEL, unfinishedText, type HoldContext } from '@/training/challenge-text';
+import { END_ATTEMPT, helpText, holdText, LESSONS_AFTER_ATTEMPT, RESUME_LABEL, unfinishedText, type HoldContext } from '@/training/challenge-text';
 import type { AttemptHold } from '@/training/controller';
 
 export function HoldSheet({
@@ -59,8 +61,18 @@ export function WarningNote({ text }: { text: string }) {
 
 const HELP_ICON: Record<'enter' | 'skip' | 'pause' | 'count' | 'moves', LucideIcon> = { enter: Keyboard, skip: SkipForward, pause: Pause, count: Eye, moves: Hand };
 
-// Spec 3 Learn, Check and assistance (operational help only)
-export function HelpSheet({ view, onClose }: { view: Pick<ChallengeView, 'variant' | 'countRange' | 'countAid' | 'table'>; onClose: () => void }) {
+// Spec 3 Learn, Check and assistance (operational help); S3-07 zxRJD
+export function HelpSheet({
+  view,
+  hints,
+  onShowHints,
+  onClose,
+}: {
+  view: Pick<ChallengeView, 'variant' | 'countRange' | 'countAid' | 'table'>;
+  hints: readonly HintId[];
+  onShowHints: () => void;
+  onClose: () => void;
+}) {
   const styles = useStyles();
   const text = helpText(view);
   return (
@@ -81,12 +93,26 @@ export function HelpSheet({ view, onClose }: { view: Pick<ChallengeView, 'varian
           </View>
         );
       })}
+      {hints.length > 0 && (
+        <HintsAgainRow
+          ids={hints}
+          onPress={() => {
+            onShowHints();
+            onClose();
+          }}
+        />
+      )}
       {text.lessons && (
         <View style={styles.box}>
           <BookOpen color={palette.foreground} size={20} />
-          <Text maxFontSizeMultiplier={textScale.body} style={styles.boxText}>
-            {text.lessons}
-          </Text>
+          <View style={styles.boxBody}>
+            <Text maxFontSizeMultiplier={textScale.body} style={styles.boxTitle}>
+              {LESSONS_AFTER_ATTEMPT}
+            </Text>
+            <Text maxFontSizeMultiplier={textScale.body} style={styles.boxText}>
+              {text.lessons}
+            </Text>
+          </View>
         </View>
       )}
       <Button label={text.back} stretch onPress={onClose} />
@@ -133,5 +159,7 @@ const useStyles = makeStyles((type) => ({
   rowTitle: { fontFamily: fonts.uiSemiBold, ...type.body, color: palette.foreground },
   rowDetail: { fontFamily: fonts.ui, ...type.secondary, color: palette.mutedForeground },
   box: { flexDirection: 'row', gap: space[3], padding: space[4], borderRadius: radius.lg, borderWidth: 1, borderColor: palette.controlBorder },
-  boxText: { flex: 1, fontFamily: fonts.ui, ...type.body, color: palette.foreground },
+  boxBody: { flex: 1, gap: space[1] },
+  boxTitle: { fontFamily: fonts.uiSemiBold, ...type.body, color: palette.foreground },
+  boxText: { fontFamily: fonts.ui, ...type.secondary, color: palette.foreground },
 }));

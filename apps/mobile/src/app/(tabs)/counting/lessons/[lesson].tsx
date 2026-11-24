@@ -1,5 +1,5 @@
 // Spec 3 S3-12 l8pMS, aJV2y, pX6CV, JsXMJ, S3-13 JJl51, Fvlgc, ZBpF3, S3-14 SUUN4
-// #143, #144, #145, #149
+// #143, #144, #145, #149; docs/decisions/lessons-entry-points.md
 import type { LessonHandoff } from '@tableside/definitions';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
@@ -10,7 +10,7 @@ import { EXAMPLE_CUES } from '@/feedback/training-cues';
 import { useLoaded } from '@/hooks/use-loaded';
 import { LessonPlayer } from '@/lessons/LessonPlayer';
 import { LessonGate } from '@/lessons/LessonGate';
-import { attemptHref, handoffHref, lessonsHref } from '@/lessons/routes';
+import { attemptHref, handoffHref, lessonsBack, lessonsHref, placeOf } from '@/lessons/routes';
 import { WorkedExample } from '@/lessons/WorkedExample';
 import { allowanceCopy, NEEDS_UPDATE, NOT_READY_HINT, type AllowanceCopy } from '@/training/challenge-text';
 import { LESSONS_TITLE, OPENING_LESSON } from '@/training/lesson-text';
@@ -25,7 +25,7 @@ const allowanceOf = async (service: TrainingService, sheet: boolean): Promise<Al
   sheet ? service.allowance().then(allowanceCopy, () => undefined) : undefined;
 
 export default function LessonScreen() {
-  const { lesson = '', section } = useLocalSearchParams<{ lesson: string; section?: string }>();
+  const { lesson = '', ...params } = useLocalSearchParams<{ lesson: string; section?: string; from?: string; all?: string; catalog?: string }>();
   const { service, snapshot } = useTraining();
   const feedback = useFeedback();
   const access = useLessonAccess(lesson);
@@ -39,7 +39,8 @@ export default function LessonScreen() {
   const [trying, setTrying] = useState(false);
   const view = latest?.id === lesson ? latest : opened;
 
-  const leave = () => router.dismissTo(lessonsHref(section));
+  const back = params.catalog === '1' ? { label: LESSONS_TITLE, onPress: () => router.dismissTo(lessonsHref(placeOf(params))) } : lessonsBack(params);
+  const leave = back.onPress;
   const about = service.aboutLesson(lesson);
 
   if (access === null || opened === null || !about) return <Placeholder title={LESSONS_TITLE} message={NOT_READY_HINT} />;
@@ -48,7 +49,7 @@ export default function LessonScreen() {
       <LessonGate
         lesson={about}
         access={access}
-        back={LESSONS_TITLE}
+        back={back.label}
         busy={busy}
         canEnd={snapshot.status === 'active'}
         endBlocked={snapshot.status === 'needs-update' ? NEEDS_UPDATE : snapshot.status === 'active' ? (snapshot.hold?.endBlocked ?? null) : null}
@@ -79,7 +80,7 @@ export default function LessonScreen() {
   // Spec 3 Lessons › Structure (Handoff)
   const handOff = (handoff: LessonHandoff) => {
     const open = () => {
-      leave();
+      router.dismissTo('/counting');
       router.navigate(handoffHref(handoff));
     };
     if (sheet) open();
@@ -105,7 +106,7 @@ export default function LessonScreen() {
   return (
     <LessonPlayer
       view={view}
-      back={LESSONS_TITLE}
+      back={back.label}
       busy={busy}
       saveFailed={saveFailed}
       handoffSheet={sheet ? { allowance } : null}

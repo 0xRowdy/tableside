@@ -13,7 +13,7 @@ import { makeStyles } from '@/theme/type';
 import {
   AFTER_THIS_ATTEMPT,
   afterCheckText,
-  BACK_TO_LESSONS,
+  backTo,
   END_TO_VIEW,
   ENDING_ABANDONS,
   lessonKind,
@@ -78,7 +78,7 @@ export function LessonGate({
         </Body>
       ) : (
         <Body heading={NEEDS_CONNECTION_TITLE} text={needsConnectionText(access)} footnote={offlineLessonsText(access.offlineGame)} alert={null}>
-          <NavButton icon={ArrowLeft} label={BACK_TO_LESSONS} primary block disabled={false} onPress={onLeave} />
+          <NavButton icon={ArrowLeft} label={backTo(back)} primary block disabled={false} onPress={onLeave} />
         </Body>
       )}
     </ScrollView>

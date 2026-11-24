@@ -64,7 +64,7 @@ const header = (name: string | RegExp) => screen.findByRole('header', { name });
 const button = (name: string | RegExp) => screen.getByRole('button', { name });
 
 async function openLesson() {
-  await renderRouter('./src/app', { initialUrl: '/more/settings/learning/lessons/pass-with-odds' });
+  await renderRouter('./src/app', { initialUrl: '/counting/lessons/pass-with-odds' });
   await header('Pass with odds');
 }
 
@@ -116,7 +116,7 @@ describe('lesson sources (hGHha)', () => {
     await header('Sources');
     await cleanup();
 
-    await renderRouter('./src/app', { initialUrl: '/more/settings/learning/lessons' });
+    await renderRouter('./src/app', { initialUrl: '/counting/lessons' });
     expect(await screen.findByRole('button', { name: /^Pass with odds\. In progress · Step 3 of 3/ })).toBeOnTheScreen();
     await fireEvent.press(button(/^Pass with odds\b/));
     expect(await screen.findByText('You stopped at step 3 of 3.')).toBeOnTheScreen();
