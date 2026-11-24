@@ -1,4 +1,4 @@
-// Spec 3 Learn, Check and assistance, Seam 3; S3-04 qdnQm, l3UjHq, S3-05 EDnGd, S3-06 C53yTW; #133
+// Spec 3 Learn, Check and assistance, Seam 3; S3-04 Y8m0IQ, l3UjHq, S3-05 y6lY1o, S3-06 C53yTW; #133
 
 import { CHALLENGE_CONTENT } from '@tableside/definitions';
 import {
@@ -83,7 +83,7 @@ async function present(view: ChallengeView) {
 const press = (name: string) => fireEvent.press(screen.getByRole('button', { name }));
 
 describe('the running-count exercise', () => {
-  it('shows cards between Check checkpoints with Next card and the hidden count, then asks at the checkpoint (S3-04 qdnQm)', async () => {
+  it('shows cards between Check checkpoints with Next card and the hidden count, then asks at the checkpoint (S3-04 Y8m0IQ)', async () => {
     await present(readChallengeView(attempt('check', 1, nexts(4))));
     expect(screen.getByText('Card 5 of 52 · checkpoint 1 of 4')).toBeOnTheScreen();
     expect(screen.getByText('Keep the count. Checkpoint 1 comes after card 13.')).toBeOnTheScreen();
@@ -161,7 +161,7 @@ describe('the running-count exercise', () => {
     expect(screen.queryByRole('alert')).toBeNull();
   });
 
-  it('Check: the first reveal asks first, then is the reveal command; hiding and showing again send nothing and play no cue (S3-05 EDnGd)', async () => {
+  it('Check: the first reveal asks first, then is the reveal command; hiding and showing again send nothing and play no cue (S3-05 y6lY1o)', async () => {
     await present(readChallengeView(attempt('check', 1, [...nexts(12), { kind: 'answer', value: 0 }, ...nexts(8)])));
     await fireEvent.press(screen.getByRole('switch', { name: 'Show running count' }));
     expect(screen.getByRole('header', { name: 'Show the running count?' })).toBeOnTheScreen();

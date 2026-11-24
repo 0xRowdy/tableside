@@ -1,4 +1,4 @@
-// Spec 3 Testing Decisions › Seam 3; S3-01 PDCaD, S3-08 CEb6T, nXGFk (Amendment 2 §3), S3-10 OVKkc; #141
+// Spec 3 Testing Decisions › Seam 3; S3-01 PDCaD, S3-08 CEb6T, cfKTT (Amendment 2 §3), S3-10 Yy2He; #141
 
 import { cleanup, fireEvent, screen, within } from '@testing-library/react-native';
 import type { ChallengeAttemptRecord, ChallengeGroupKey } from '@tableside/engine';
@@ -138,7 +138,7 @@ describe('readiness on screen', () => {
     expect(screen.getByLabelText('Card values · Check. Yesterday · unassisted · Local, not synced yet. 20 / 20')).toBeOnTheScreen();
   });
 
-  it('Results (nXGFk): a later Check below 95% keeps the milestone and suggests Learn and the lesson', async () => {
+  it('Results (cfKTT): a later Check below 95% keeps the milestone and suggests Learn and the lesson', async () => {
     seed(perfectCardValues('first', Date.UTC(2026, 9, 17, 18)), perfectCardValues('second', Date.UTC(2026, 9, 18, 18)));
     await openCounting();
     await runCardValuesCheck([1, 2]);

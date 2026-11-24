@@ -1,4 +1,4 @@
-// Spec 3 Testing Decisions › Seam 3; S3-01 PDCaD, S3-02 buD2R, S3-03 P4WjR, drVnR, BFdJT, S3-04 qdnQm, S3-05 EDnGd, S3-06 C53yTW, zAatf, Qv1An, S3-08 liAfT, CEb6T, cX5Gc, S3-09 h0MsKr, S3-02 ZreSb, S3-07 v82z3; #158, #132, #133, #134, #137
+// Spec 3 Testing Decisions › Seam 3; S3-01 PDCaD, S3-02 Ufuiu, S3-03 P4WjR, drVnR, BFdJT, S3-04 Y8m0IQ, S3-05 y6lY1o, S3-06 C53yTW, zAatf, Qv1An, S3-08 liAfT, CEb6T, cX5Gc, S3-09 h0MsKr, S3-02 NonMz, S3-07 v82z3; #158, #132, #133, #134, #137
 
 import { cleanup, fireEvent, screen, within } from '@testing-library/react-native';
 import { renderRouter } from 'expo-router/testing-library';
@@ -498,7 +498,7 @@ describe('the Counting tab', () => {
     });
   });
 
-  // Spec 3 Challenge content › Table, Count checkpoints (table); S3-02 ZreSb, S3-07, S3-08 e5MASr
+  // Spec 3 Challenge content › Table, Count checkpoints (table); S3-02 NonMz, S3-07, S3-08 e5MASr
   describe('table counting', () => {
     async function openTable(variant: 'Learn' | 'Check') {
       await renderRouter('./src/app', { initialUrl: '/counting' });
@@ -507,7 +507,7 @@ describe('the Counting tab', () => {
       await screen.findByRole('header', { name: 'Table counting' });
     }
 
-    it('sets up Observe with the rule preset, penetration, extra players and N, and starts on those settings (S3-02 ZreSb)', async () => {
+    it('sets up Observe with the rule preset, penetration, extra players and N, and starts on those settings (S3-02 NonMz)', async () => {
       await openTable('Check');
       expect(screen.getByText('Who plays your seat')).toBeOnTheScreen();
       const seat = within(screen.getByLabelText('Who plays your seat'));
@@ -569,7 +569,7 @@ describe('the Counting tab', () => {
       expect(screen.getByLabelText('Setup. Check · Observe · S17 LS · 75% · N = 10')).toBeOnTheScreen();
     });
 
-    // Spec 3 User stories 28, 37, 38; S3-02 FkMDw, S3-07 kLgWV, S3-08 e5MASr, S3-09 VToCp; #138
+    // Spec 3 User stories 28, 37, 38; S3-02 FWQoO, S3-07 kLgWV, S3-08 e5MASr, S3-09 VToCp; #138
     it('sets up Play with deviations and runs a Check attempt: illegal moves refused with cue 9, no feedback, playing adherence on the results, decisions in the review', async () => {
       await openTable('Check');
       await fireEvent.press(within(screen.getByLabelText('Who plays your seat')).getByRole('radio', { name: 'Play' }));
@@ -622,7 +622,7 @@ describe('the Counting tab', () => {
       expect(screen.getAllByText(/^Round \d+ · /).length).toBeGreaterThan(0);
     });
 
-    // Spec 3 Play challenge funding (#20); S3-02 FkMDw, Al6Pw, S3-07 fiCRg, qvatd, S3-08 ValDZ, e5MASr; #139
+    // Spec 3 Play challenge funding (#20); S3-02 FWQoO, Al6Pw, S3-07 fiCRg, qvatd, S3-08 ValDZ, e5MASr; #139
     it('explains a starting balance that can\'t cover the opening wager with nothing started, then runs a funded Check with the bet schedule to results with challenge finances', async () => {
       await openTable('Check');
       await fireEvent.press(within(screen.getByLabelText('Who plays your seat')).getByRole('radio', { name: 'Play' }));

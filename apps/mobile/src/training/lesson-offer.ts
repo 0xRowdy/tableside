@@ -1,4 +1,4 @@
-// docs/decisions/lessons-entry-points.md; S3-01 u8a0o, rwwOU; S1-04 qylNY
+// docs/decisions/lessons-entry-points.md; S3-01 GV4tz, h9v8xG; S1-04 qylNY
 import { CHALLENGE_LESSONS } from '@tableside/definitions';
 import type { GameId } from '@tableside/engine';
 

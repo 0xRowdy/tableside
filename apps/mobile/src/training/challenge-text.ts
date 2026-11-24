@@ -65,7 +65,7 @@ export interface AllowanceCopy {
   readonly banner: { readonly title: string; readonly detail: string | null };
   readonly setup: { readonly text: string };
   readonly results: string;
-  // Spec 3 S3-08 nXGFk; #141
+  // Spec 3 S3-08 cfKTT; #141
   readonly practice: string;
 }
 
@@ -140,7 +140,7 @@ export const START_PROBLEM: Record<StartProblem, string> = {
 
 export const variantLabel = (variant: ChallengeVariant) => (variant === 'learn' ? 'Learn' : 'Check');
 
-// Spec 3 S3-02 buD2R, S3-04 qmDou, S3-05 qGARl; Attempt lifecycle › Automatic pacing; #136
+// Spec 3 S3-02 Ufuiu, S3-04 qmDou, S3-05 qGARl; Attempt lifecycle › Automatic pacing; #136
 export const PACE_LABEL = 'Card pace';
 export const PACE_GROUP = 'Card pace';
 export function paceOption(pacing: ChallengePacing): { readonly label: string; readonly spoken: string } {
@@ -158,7 +158,7 @@ export const progressText = (position: number, length: number) => `Card ${positi
 // Spec 3 S3-06 zAatf
 export const questionProgress = (position: number, length: number) => `Question ${position} of ${length}`;
 
-// Spec 3 S3-04 qdnQm
+// Spec 3 S3-04 Y8m0IQ
 export const checkpointOf = (view: Pick<ChallengeView, 'checkpoints' | 'position'>) => {
   const index = view.checkpoints?.findIndex((card) => card >= view.position) ?? -1;
   return view.checkpoints && index >= 0 ? { number: index + 1, of: view.checkpoints.length, card: view.checkpoints[index] as number } : null;
@@ -236,7 +236,7 @@ export function skipConfirmText(item: SkipItem) {
   } as const;
 }
 
-// Spec 3 S3-04 qdnQm
+// Spec 3 S3-04 Y8m0IQ
 export const COUNT_LABEL = 'Running count';
 export const COUNT_SKIP = 'Skip';
 export const COUNT_SKIP_HINT = 'Counts as incorrect';
@@ -279,7 +279,7 @@ export const countProblemText = (problem: CountProblem, range: CountRange) =>
 
 export const toggleSign = (text: string) => (text.startsWith('−') ? `+${text.slice(1)}` : text.startsWith('+') ? text.slice(1) : `−${text}`);
 
-// Spec 3 Learn, Check and assistance › Show/hide running count; S3-04 qdnQm, S3-05 EDnGd
+// Spec 3 Learn, Check and assistance › Show/hide running count; S3-04 Y8m0IQ, S3-05 y6lY1o
 export const SHOW_COUNT = 'Show running count';
 export function countAidDetail(variant: ChallengeVariant, revealed: boolean, showing: boolean): string {
   if (showing) return variant === 'check' ? 'Showing. This attempt is recorded as assisted.' : 'Showing. Learn notes that you showed it.';
@@ -456,12 +456,12 @@ export function driftText(review: readonly ReviewFact[], variant: ChallengeVaria
   return `From checkpoint ${drift.from} on, your count ran ${amount} ${drift.error > 0 ? 'above' : 'below'} the reference. One early miss likely carried through. Each checkpoint still counts as its own error.`;
 }
 
-// Spec 3 S3-02 buD2R; Attempt lifecycle › Performance timer; #135
+// Spec 3 S3-02 Ufuiu; Attempt lifecycle › Performance timer; #135
 export const TIMING_LABEL = 'Timing';
 export const TIME_THIS = 'Time this attempt';
 export const TIME_THIS_DETAIL = 'Only a perfect Check with no pauses and the count kept hidden sets a fastest time.';
 
-// Spec 3 S3-04 qdnQm, S3-05 r5pCx, qGARl
+// Spec 3 S3-04 Y8m0IQ, S3-05 r5pCx, qGARl
 export const PAUSE_LABEL = 'Pause';
 
 export const exerciseSubtitle = (variant: ChallengeVariant, pacing: ChallengePacing, timed: boolean, hold: AttemptHold | null) =>

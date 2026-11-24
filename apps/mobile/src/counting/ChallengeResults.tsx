@@ -1,4 +1,4 @@
-// Spec 3 S3-08 liAfT, CEb6T, nXGFk, cX5Gc, UXrpw, ValDZ, e5MASr; #158, #132, #135, #140, #141, #139
+// Spec 3 S3-08 liAfT, CEb6T, cfKTT, cX5Gc, UXrpw, ValDZ, e5MASr; #158, #132, #135, #140, #141, #139
 
 import type { ChallengeAttemptRecord } from '@tableside/engine';
 import { BookOpen, CircleAlert, CircleCheckBig, Coins, Divide, Flag, GraduationCap, Hash, Info, ListChecks, RotateCcw, Spade, Square, Trophy, type LucideIcon } from 'lucide-react-native';
@@ -78,7 +78,7 @@ export function ChallengeResults({
   allowance: AllowanceCopy | undefined;
   onRetry: () => void;
   onReview: () => void;
-  // Spec 3 S3-08 nXGFk
+  // Spec 3 S3-08 cfKTT
   lesson: LessonEntry | undefined;
   onOpenLesson: (id: string) => void;
   onPracticeLearn: () => void;
@@ -232,7 +232,7 @@ export function ChallengeResults({
   );
 }
 
-// Spec 3 S3-08 CEb6T, nXGFk
+// Spec 3 S3-08 CEb6T, cfKTT
 function ReadinessBox({ title, detail, pill }: { title: string; detail: string; pill: string | null }) {
   const styles = useStyles();
   return (

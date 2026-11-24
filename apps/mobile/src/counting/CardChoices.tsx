@@ -1,4 +1,4 @@
-// Spec 3 S3-03 P4WjR, drVnR, BFdJT, S3-04 qdnQm; S3-12 aJV2y; #158, #132, #144, #133
+// Spec 3 S3-03 P4WjR, drVnR, BFdJT, S3-04 Y8m0IQ; S3-12 aJV2y; #158, #132, #144, #133
 
 import type { ChallengeCard } from '@tableside/engine';
 import { Check, CircleDot, X } from 'lucide-react-native';

@@ -55,7 +55,7 @@ export const SUSPENDS_SESSION = "Opening a lesson suspends this session. It's sa
 export const gameLessonsLabel = (game: GameId) => `${capitalizeFirst(GAME_WORDS[game].name)} lessons`;
 export const allGameLessons = (game: GameId) => `All ${GAME_WORDS[game].name} lessons`;
 
-// docs/decisions/lessons-entry-points.md; S3-01 u8a0o, rwwOU
+// docs/decisions/lessons-entry-points.md; S3-01 GV4tz, h9v8xG
 export const LESSONS_SECTION = 'Lessons';
 export const CHALLENGES_SECTION = 'Challenges';
 export const LESSONS_SECTION_NOTE = '24 short lessons, open in any order. They never use challenge attempts.';
@@ -250,7 +250,7 @@ export function handoffDetail(handoff: LessonHandoff, allowance: AllowanceCopy |
   }
 }
 
-// Spec 3 Lessons › Entry points; S3-01 PDCaD, S3-02 buD2R, S1-02 FxxAj
+// Spec 3 Lessons › Entry points; S3-01 PDCaD, S3-02 Ufuiu, S1-02 FxxAj
 export const lessonLinkLabel = (category: ChallengeCategory) => `Lesson: ${lowerFirst(CATEGORY_TEXT[category].title)}`;
 export const LEARN_THIS_SKILL = 'Learn this skill';
 export const learnThisSkillDetail = (lesson: LessonEntry) =>

@@ -32,7 +32,7 @@ export const CHALLENGE_CONTENT: Readonly<Record<ChallengeCategory, ChallengeCont
   table: TABLE_CONTENT,
 };
 
-// Spec 3 User stories 27, 28; S3-02 ZreSb, FkMDw
+// Spec 3 User stories 27, 28; S3-02 NonMz, FWQoO
 export interface TableOptions extends PlayFunding {
   readonly seat: 'observe' | 'play';
   readonly preset: BlackjackPreset;

@@ -1,4 +1,4 @@
-// Spec 3 Learn, Check and assistance › Show/hide running count; S3-04 qdnQm, S3-05 EDnGd; #133
+// Spec 3 Learn, Check and assistance › Show/hide running count; S3-04 Y8m0IQ, S3-05 y6lY1o; #133
 
 import type { ChallengeVariant, RunningCountAid } from '@tableside/engine';
 import { Eye } from 'lucide-react-native';

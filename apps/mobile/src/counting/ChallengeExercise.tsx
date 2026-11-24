@@ -1,4 +1,4 @@
-// Spec 3 S3-03 P4WjR, drVnR, BFdJT, S3-04 qdnQm, S3-05 EDnGd, r5pCx, T9sCI
+// Spec 3 S3-03 P4WjR, drVnR, BFdJT, S3-04 Y8m0IQ, S3-05 y6lY1o, r5pCx, T9sCI
 // Spec 3 S3-06 C53yTW, zAatf, Qv1An, S3-07; S3-04 qmDou; S3-05 qGARl
 // #158, #132, #133, #134, #135, #146, #136, #137
 
@@ -313,7 +313,7 @@ function HeaderButton({ label, hint, icon: Icon, enabled, onPress }: { label: st
   );
 }
 
-// Spec 3 Attempt lifecycle › Performance timer; S3-04 qdnQm
+// Spec 3 Attempt lifecycle › Performance timer; S3-04 Y8m0IQ
 function PerformanceTime({ timer, performanceMs }: { timer: PerformanceTimer; performanceMs: () => number | null }) {
   const styles = useStyles();
   const [, setTick] = useState(0);
@@ -329,7 +329,7 @@ function PerformanceTime({ timer, performanceMs }: { timer: PerformanceTimer; pe
   );
 }
 
-// Spec 3 S3-04 qdnQm, uGcdq, l3UjHq
+// Spec 3 S3-04 Y8m0IQ, uGcdq, l3UjHq
 function CountingBody({
   view,
   range,

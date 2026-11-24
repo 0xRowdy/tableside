@@ -1,4 +1,4 @@
-// docs/decisions/lessons-entry-points.md; Counting hub u8a0o, rwwOU; table Help qylNY
+// docs/decisions/lessons-entry-points.md; Counting hub GV4tz, h9v8xG; table Help qylNY
 import type { LessonEntry } from '@/training/service';
 import { countingLessonOffer, gameLessonOffer } from '@/training/lesson-offer';
 import type { LessonStatus } from '@/training/lesson-progress';
