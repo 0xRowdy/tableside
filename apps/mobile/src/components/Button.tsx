@@ -2,6 +2,7 @@ import type { LucideIcon } from 'lucide-react-native';
 import { Pressable, Text } from 'react-native';
 
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
+import { pressStyle } from '@/theme/press';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/theme/tokens';
 import { makeStyles } from '@/theme/type';
 
@@ -42,7 +43,7 @@ export function Button({
         variant === 'ghost' && styles.ghost,
         variant === 'outline' && styles.outline,
         stretch && styles.stretch,
-        pressed && styles.pressed,
+        pressed && (variant === 'primary' ? pressStyle.brass : variant === 'outline' ? pressStyle.feltShadow : pressStyle.edgeless),
         disabled && styles.disabled,
         focused && styles.focused,
       ]}
@@ -75,7 +76,6 @@ const useStyles = makeStyles((type) => ({
   // Spec 3 S3-03 drVnR, S3-08 liAfT
   outline: { minHeight: 52, paddingHorizontal: space[6] - space[1], borderRadius: radius.md, borderWidth: 1, borderColor: palette.controlBorder },
   stretch: { alignSelf: 'stretch' },
-  pressed: { opacity: 0.8 },
   disabled: { opacity: 0.4 },
   focused: { borderColor: palette.foreground },
   label: { flexShrink: 1, fontFamily: fonts.uiSemiBold, ...type.body, color: palette.primaryForeground, textAlign: 'center' },

@@ -1,4 +1,4 @@
-// Spec 3 S3-08 liAfT, CEb6T, cfKTT, cX5Gc, UXrpw, ValDZ, e5MASr; #158, #132, #135, #140, #141, #139
+// Spec 3 S3-08 liAfT, ipoWU, cfKTT, cX5Gc, UXrpw, ValDZ, e5MASr; #158, #132, #135, #140, #141, #139
 
 import type { ChallengeAttemptRecord } from '@tableside/engine';
 import { BookOpen, CircleAlert, CircleCheckBig, Coins, Divide, Flag, GraduationCap, Hash, Info, ListChecks, RotateCcw, Spade, Square, Trophy, type LucideIcon } from 'lucide-react-native';
@@ -139,11 +139,11 @@ export function ChallengeResults({
           </View>
         )}
         {readiness?.kind === 'earned' ? (
-          <ReadinessBox title={MILESTONE_EARNED} detail={milestoneDetail(groupKey)} pill={milestonePill(earned)} />
+          <ReadinessBox title={MILESTONE_EARNED} detail={milestoneDetail(groupKey)} pill={milestonePill(earned)} earned />
         ) : (
           setsPersonalBest(earned) && <PersonalBestBox {...personalBestText(groupKey, earned)} />
         )}
-        {readiness?.kind === 'kept' && <ReadinessBox title={MILESTONE_KEPT} detail={keptDetail(groupKey, readiness.earnedAt)} pill={null} />}
+        {readiness?.kind === 'kept' && <ReadinessBox title={MILESTONE_KEPT} detail={keptDetail(groupKey, readiness.earnedAt)} pill={null} earned={false} />}
         <Text maxFontSizeMultiplier={textScale.body} style={styles.label}>
           {SCORES_LABEL}
         </Text>
@@ -232,12 +232,12 @@ export function ChallengeResults({
   );
 }
 
-// Spec 3 S3-08 CEb6T, cfKTT
-function ReadinessBox({ title, detail, pill }: { title: string; detail: string; pill: string | null }) {
+// Spec 3 S3-08 ipoWU, cfKTT
+function ReadinessBox({ title, detail, pill, earned }: { title: string; detail: string; pill: string | null; earned: boolean }) {
   const styles = useStyles();
   return (
-    <View accessible accessibilityLabel={[`${title}.`, detail, pill && `${pill}.`].filter(Boolean).join(' ')} style={[styles.box, styles.earned]}>
-      <Flag color={palette.primary} size={24} />
+    <View accessible accessibilityLabel={[`${title}.`, detail, pill && `${pill}.`].filter(Boolean).join(' ')} style={[styles.box, styles.earned, earned && styles.milestone]}>
+      {earned ? <MilestoneSeal /> : <Flag color={palette.primary} size={24} />}
       <View style={styles.boxText}>
         <Text maxFontSizeMultiplier={textScale.body} style={styles.boxTitle}>
           {title}
@@ -246,8 +246,8 @@ function ReadinessBox({ title, detail, pill }: { title: string; detail: string; 
           {detail}
         </Text>
         {pill && (
-          <View style={styles.badge}>
-            <Trophy color={palette.primary} size={14} />
+          <View style={[styles.badge, styles.milestoneBadge]}>
+            <Trophy color={palette.foreground} size={14} />
             <Text maxFontSizeMultiplier={textScale.body} style={styles.badgeText}>
               {pill}
             </Text>
@@ -258,7 +258,19 @@ function ReadinessBox({ title, detail, pill }: { title: string; detail: string; 
   );
 }
 
-// Spec 3 S3-08 liAfT, CEb6T
+// Spec 3 S3-08 ipoWU; docs/decisions/press-feedback.md
+function MilestoneSeal() {
+  const styles = useStyles();
+  return (
+    <View testID="milestone-seal" style={styles.seal}>
+      <View style={styles.sealRim}>
+        <Flag color={palette.primaryForeground} size={18} />
+      </View>
+    </View>
+  );
+}
+
+// Spec 3 S3-08 liAfT
 function PersonalBestBox({ title, detail, fastest }: { title: string; detail: string; fastest: string | null }) {
   const styles = useStyles();
   return (
@@ -293,6 +305,10 @@ const useStyles = makeStyles((type) => ({
   box: { flexDirection: 'row', gap: space[3], padding: space[4], borderRadius: radius.lg, borderWidth: 1, borderColor: palette.controlBorder, backgroundColor: palette.card },
   alert: { borderWidth: 2, borderColor: palette.warning },
   earned: { borderColor: palette.primary },
+  milestone: { backgroundColor: palette.popover },
+  seal: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: palette.primary },
+  sealRim: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: palette.primaryForeground },
+  milestoneBadge: { borderColor: palette.controlBorder },
   badge: {
     alignSelf: 'flex-start',
     flexDirection: 'row',
@@ -301,12 +317,12 @@ const useStyles = makeStyles((type) => ({
     marginTop: space[1],
     paddingVertical: space[1],
     paddingHorizontal: 10,
-    borderRadius: radius.pill,
+    borderRadius: radius.lg,
     borderWidth: 1,
     borderColor: palette.primary,
     backgroundColor: palette.secondary,
   },
-  badgeText: { fontFamily: fonts.uiSemiBold, ...type.label, color: palette.foreground },
+  badgeText: { flexShrink: 1, fontFamily: fonts.uiSemiBold, ...type.label, color: palette.foreground },
   boxText: { flex: 1, gap: space[1] },
   boxTitle: { fontFamily: fonts.uiSemiBold, ...type.body, color: palette.foreground },
   boxDetail: { fontFamily: fonts.ui, ...type.secondary, color: palette.mutedForeground },

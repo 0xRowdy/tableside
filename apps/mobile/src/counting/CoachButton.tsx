@@ -3,6 +3,7 @@
 import { Pressable, Text } from 'react-native';
 
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
+import { pressStyle } from '@/theme/press';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/theme/tokens';
 import { makeStyles } from '@/theme/type';
 
@@ -16,7 +17,7 @@ export function CoachButton({ label, primary = false, enabled, onPress }: { labe
       disabled={!enabled}
       onPress={onPress}
       {...focusProps}
-      style={({ pressed }) => [styles.button, primary ? styles.primary : styles.secondary, pressed && styles.pressed, focused && styles.focused]}
+      style={({ pressed }) => [styles.button, primary ? styles.primary : styles.secondary, pressed && (primary ? pressStyle.ink : pressStyle.paper), focused && styles.focused]}
     >
       <Text maxFontSizeMultiplier={textScale.body} style={[styles.text, primary && styles.primaryText]}>
         {label}
@@ -32,5 +33,4 @@ const useStyles = makeStyles((type) => ({
   text: { fontFamily: fonts.uiSemiBold, ...type.body, color: palette.ink },
   primaryText: { color: palette.coach },
   focused: { borderColor: palette.coachAccent },
-  pressed: { opacity: 0.8 },
 }));

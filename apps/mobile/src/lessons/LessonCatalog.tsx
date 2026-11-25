@@ -6,6 +6,7 @@ import { Pressable, Text, View } from 'react-native';
 
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
 import { Group, GroupLabel, Note, SettingsScreen } from '@/settings/SettingsParts';
+import { pressStyle } from '@/theme/press';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/theme/tokens';
 import { makeStyles } from '@/theme/type';
 import { NOT_READY_HINT } from '@/training/challenge-text';
@@ -85,7 +86,7 @@ function LessonRow({ lesson, first, onOpen }: { lesson: LessonEntry; first: bool
       disabled={!ready}
       onPress={() => onOpen(lesson.id)}
       {...focusProps}
-      style={({ pressed }) => [styles.row, !first && styles.divided, pressed && styles.pressed, focused && styles.focused]}
+      style={({ pressed }) => [styles.row, !first && styles.divided, pressed && pressStyle.row, focused && styles.focused]}
     >
       <View style={[styles.lead, held && styles.held]}>
         <Icon color={lesson.status.kind === 'not-started' && !held ? palette.mutedForeground : palette.foreground} size={18} />
@@ -116,7 +117,7 @@ function FilterRow({ filter }: { filter: CatalogFilter }) {
         accessibilityLabel={showAllLabel(filter.total)}
         onPress={filter.onShowAll}
         {...focusProps}
-        style={({ pressed }) => [styles.showAll, pressed && styles.pressed, focused && styles.focused]}
+        style={({ pressed }) => [styles.showAll, pressed && pressStyle.row, focused && styles.focused]}
       >
         <Text maxFontSizeMultiplier={textScale.body} style={styles.title}>
           {SHOW_ALL}
@@ -156,7 +157,6 @@ const useStyles = makeStyles((type) => ({
   section: { gap: space[6] - 2 },
   row: { flexDirection: 'row', alignItems: 'center', gap: space[3], minHeight: 60, paddingVertical: space[2] + 2, paddingHorizontal: space[4], borderWidth: 2, borderColor: palette.transparent },
   divided: { borderTopWidth: 1, borderTopColor: palette.border },
-  pressed: { backgroundColor: palette.secondary },
   focused: { borderColor: palette.ring },
   lead: { width: 36, height: 36, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', backgroundColor: palette.secondary },
   text: { flex: 1, gap: 2 },

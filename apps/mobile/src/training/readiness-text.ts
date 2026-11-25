@@ -1,4 +1,4 @@
-// Spec 3 S3-01 PDCaD, S3-08 CEb6T, cfKTT, S3-10 Yy2He; Comparison groups; #141
+// Spec 3 S3-01 PDCaD, S3-08 ipoWU, cfKTT, S3-10 Yy2He; Comparison groups; #141
 
 import type { ChallengeCategory, ChallengeGroupKey } from '@tableside/engine';
 
@@ -10,7 +10,7 @@ import { attemptIdentity, setsPersonalBest, type AttemptEarned, type GroupProgre
 
 const lowerFirst = (text: string) => text.charAt(0).toLowerCase() + text.slice(1);
 
-// Spec 3 S3-01 PDCaD, S3-08 CEb6T, cfKTT
+// Spec 3 S3-01 PDCaD, S3-08 ipoWU, cfKTT
 const READINESS_WORDS: Record<ChallengeCategory, { readonly milestone: string; readonly accuracy: string; readonly lesson: string }> = {
   'card-values': { milestone: 'card-values', accuracy: 'card-value', lesson: 'card values' },
   'running-count': { milestone: 'running-count', accuracy: 'running-count', lesson: 'running count' },
@@ -70,7 +70,7 @@ export function categoryStatus(category: ChallengeCategory, progress: Progress |
 
 const bestScore = (group: GroupProgress) => scoreText(group.bests[0]?.result ?? null);
 
-// Spec 3 S3-08 CEb6T, cfKTT
+// Spec 3 S3-08 ipoWU, cfKTT
 export const BELOW_THRESHOLD = 'Below 95% this time, so your run of Checks at 95% or better starts over.';
 
 export const MILESTONE_EARNED = 'Readiness milestone earned';
@@ -78,7 +78,7 @@ export const MILESTONE_EARNED = 'Readiness milestone earned';
 export const milestoneDetail = (key: Pick<ChallengeGroupKey, 'category'>) =>
   `Two unassisted Check attempts in a row at 95% or better, at these settings, on this device. It describes your ${READINESS_WORDS[key.category].accuracy} accuracy at these settings only.`;
 
-// Spec 3 S3-08 CEb6T
+// Spec 3 S3-08 ipoWU
 export function milestonePill(earned: AttemptEarned): string | null {
   if (!setsPersonalBest(earned)) return null;
   return ['New personal best', earned.fastest === null ? null : `fastest ${timerText(earned.fastest)}`].filter(Boolean).join(' · ');

@@ -1,10 +1,11 @@
-// Spec 3 Testing Decisions › Seam 3; S3-01 PDCaD, S3-08 CEb6T, cfKTT (Amendment 2 §3), S3-10 Yy2He; #141
+// Spec 3 Testing Decisions › Seam 3; S3-01 PDCaD, S3-08 ipoWU, cfKTT (Amendment 2 §3), S3-10 Yy2He; #141
 
 import { cleanup, fireEvent, screen, within } from '@testing-library/react-native';
 import type { ChallengeAttemptRecord, ChallengeGroupKey } from '@tableside/engine';
 import { renderRouter } from 'expo-router/testing-library';
 
 import type { SubstituteFeedbackPorts } from '@/feedback/testing/substitutes';
+import { palette } from '@/theme/tokens';
 import type { MemoryTrainingStore } from '@/training/memory-store';
 import type { AttemptFixture } from '@/training/testing/attempt-records';
 
@@ -118,7 +119,7 @@ describe('readiness on screen', () => {
     expect(screen.getAllByText('Not tried yet')).toHaveLength(2);
   });
 
-  it('Results (CEb6T): the Check that earns the milestone shows it with cue 16, the next step on the path, and Records lists it', async () => {
+  it('Results (ipoWU): the Check that earns the milestone shows it on Lamplit Panel with a brass seal, with cue 16, the next step on the path, and Records lists it', async () => {
     seed(perfectCardValues('first', MOCK_NOW - DAY));
     await openCounting();
     await runCardValuesCheck([]);
@@ -126,6 +127,8 @@ describe('readiness on screen', () => {
       'Readiness milestone earned. Two unassisted Check attempts in a row at 95% or better, at these settings, on this device. It describes your card-value accuracy at these settings only.',
     );
     expect(within(box).getByText('Readiness milestone earned')).toBeOnTheScreen();
+    expect(within(box).getByTestId('milestone-seal')).toBeOnTheScreen();
+    expect(box).toHaveStyle({ backgroundColor: palette.popover, borderColor: palette.primary });
     expect(screen.queryByText('New personal best')).toBeNull();
     expect(cues().slice(-2)).toEqual(['attempt-ended', 'milestone']);
     expect(await screen.findByText('5 attempts left today. Retry starts a fresh attempt. Next on the suggested path: running count.')).toBeOnTheScreen();
@@ -149,11 +152,11 @@ describe('readiness on screen', () => {
     const texts = screen.getAllByText(/./).map((node) => String(node.props.children));
     expect(texts.indexOf(note)).toBeGreaterThan(texts.indexOf('Skill scores · first answers'));
     expect(texts.indexOf('You got 18 of 20 cards right.')).toBeLessThan(texts.indexOf('Skill scores · first answers'));
-    expect(
-      screen.getByLabelText(
-        'Your milestone stays earned. You earned the card-value readiness milestone at these settings on 18 Oct 2026. A slip never takes it away. To brush up: a Learn round, or the card values lesson.',
-      ),
-    ).toBeOnTheScreen();
+    const kept = screen.getByLabelText(
+      'Your milestone stays earned. You earned the card-value readiness milestone at these settings on 18 Oct 2026. A slip never takes it away. To brush up: a Learn round, or the card values lesson.',
+    );
+    expect(within(kept).queryByTestId('milestone-seal')).toBeNull();
+    expect(kept).toHaveStyle({ backgroundColor: palette.card });
     expect(cues()).not.toContain('milestone');
     expect(screen.getByRole('button', { name: 'Review cards' })).toBeOnTheScreen();
     expect(screen.getByRole('button', { name: 'Open the card values lesson' })).toBeOnTheScreen();

@@ -1,4 +1,4 @@
-// Spec 3 Testing Decisions › Seam 3; S3-01 PDCaD, S3-02 Ufuiu, S3-03 P4WjR, drVnR, BFdJT, S3-04 Y8m0IQ, S3-05 y6lY1o, S3-06 C53yTW, zAatf, Qv1An, S3-08 liAfT, CEb6T, cX5Gc, S3-09 h0MsKr, S3-02 NonMz, S3-07 v82z3; #158, #132, #133, #134, #137
+// Spec 3 Testing Decisions › Seam 3; S3-01 PDCaD, S3-02 Ufuiu, S3-03 P4WjR, drVnR, BFdJT, S3-04 Y8m0IQ, S3-05 y6lY1o, S3-06 C53yTW, zAatf, Qv1An, S3-08 liAfT, ipoWU, cX5Gc, S3-09 h0MsKr, S3-02 NonMz, S3-07 v82z3; #158, #132, #133, #134, #137
 
 import { cleanup, fireEvent, screen, within } from '@testing-library/react-native';
 import { renderRouter } from 'expo-router/testing-library';

@@ -6,6 +6,7 @@ import { Pressable, Text, View } from 'react-native';
 
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
 import { cardName, cardRank, SUIT_GLYPH } from '@/play/blackjack-text';
+import { pressStyle } from '@/theme/press';
 import { fonts, objectType, palette, radius, space, textScale } from '@/theme/tokens';
 import { makeStyles } from '@/theme/type';
 import { CHOICE_TAG, type ChoiceState } from '@/training/challenge-text';
@@ -50,7 +51,7 @@ export function Choice({ label, spoken, wide = false, state, enabled, onPress }:
       disabled={!enabled}
       onPress={onPress}
       {...focusProps}
-      style={({ pressed }) => [styles.choice, wide && styles.wide, { borderColor: tone }, state !== null && styles.choiceMarked, pressed && styles.pressed, focused && styles.focused]}
+      style={({ pressed }) => [styles.choice, wide && styles.wide, { borderColor: tone }, state !== null && styles.choiceMarked, pressed && pressStyle.feltShadow, focused && styles.focused]}
     >
       <Text maxFontSizeMultiplier={textScale.body} style={[styles.choiceValue, wide && styles.wideValue]}>
         {label}
@@ -94,6 +95,5 @@ const useStyles = makeStyles((type) => ({
   choiceValue: { fontFamily: fonts.uiBold, ...type.figure, color: palette.foreground },
   tag: { flexDirection: 'row', alignItems: 'center', gap: space[1] },
   tagText: { fontFamily: fonts.uiBold, ...type.label },
-  pressed: { opacity: 0.8 },
   focused: { borderColor: palette.ring, borderWidth: 2 },
 }));

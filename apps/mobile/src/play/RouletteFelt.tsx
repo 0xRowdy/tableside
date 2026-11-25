@@ -9,6 +9,7 @@ import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale, type ColorT
 import { makeStyles } from '@/theme/type';
 
 import { formatUnits, ORDINAL, POCKET_TOKEN, pocketColor, spokenPayout, targetName, wheelZeros } from './roulette-text';
+import { PressShade } from './TableChrome';
 
 const ROW_GAP = 2;
 const ROWS = Array.from({ length: 12 }, (_, row) => [row * 3 + 1, row * 3 + 2, row * 3 + 3]);
@@ -154,14 +155,19 @@ function Spot({
       {...focusProps}
       style={[styles.spot, { backgroundColor: palette[color] }, (marker !== undefined || covered) && styles.spotMarked, focused && styles.focused, style]}
     >
-      <Text maxFontSizeMultiplier={textScale.body} style={styles.spotText}>{label}</Text>
-      {caption !== undefined && <Text maxFontSizeMultiplier={textScale.body} style={styles.spotCaption}>{caption}</Text>}
-      {marker !== undefined && (
-        <View style={styles.marker}>
-          <Text maxFontSizeMultiplier={textScale.body} style={styles.markerText}>{formatUnits(marker)}</Text>
-        </View>
+      {({ pressed }) => (
+        <>
+          <PressShade pressed={pressed} corner={radius.sm} />
+          <Text maxFontSizeMultiplier={textScale.body} style={styles.spotText}>{label}</Text>
+          {caption !== undefined && <Text maxFontSizeMultiplier={textScale.body} style={styles.spotCaption}>{caption}</Text>}
+          {marker !== undefined && (
+            <View style={styles.marker}>
+              <Text maxFontSizeMultiplier={textScale.body} style={styles.markerText}>{formatUnits(marker)}</Text>
+            </View>
+          )}
+          {marker === undefined && covered && <Text maxFontSizeMultiplier={textScale.body} style={styles.spotCaption}>{'•'}</Text>}
+        </>
       )}
-      {marker === undefined && covered && <Text maxFontSizeMultiplier={textScale.body} style={styles.spotCaption}>{'•'}</Text>}
     </Pressable>
   );
 }

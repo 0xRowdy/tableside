@@ -16,6 +16,7 @@ import { usePolling } from '@/hooks/use-polling';
 import { FirstUseHint, useScreenHints } from '@/lessons/FirstUseHints';
 import { signed } from '@/play/blackjack-text';
 import { DetailsRow, DetailsSection, SaveFailedBanner, TableHeader, TableLayout } from '@/play/TableChrome';
+import { pressStyle } from '@/theme/press';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/theme/tokens';
 import { makeStyles } from '@/theme/type';
 import { HelpSheet, HoldSheet, WarningNote } from './AttemptSheets';
@@ -303,7 +304,7 @@ function HeaderButton({ label, hint, icon: Icon, enabled, onPress }: { label: st
       disabled={!enabled}
       onPress={onPress}
       {...focusProps}
-      style={({ pressed }) => [styles.headerButton, pressed && styles.pressed, focused && styles.focused, !enabled && styles.disabled]}
+      style={({ pressed }) => [styles.headerButton, pressed && pressStyle.row, focused && styles.focused, !enabled && styles.disabled]}
     >
       <Icon color={palette.foreground} size={24} />
       <Text maxFontSizeMultiplier={textScale.body} style={styles.headerButtonText}>
@@ -642,6 +643,5 @@ const useStyles = makeStyles((type) => ({
   headline: { fontFamily: fonts.uiSemiBold, ...type.body, color: palette.ink },
   detail: { fontFamily: fonts.ui, ...type.body, color: palette.inkMuted },
   coachActions: { flexDirection: 'row', flexWrap: 'wrap', gap: space[2] },
-  pressed: { opacity: 0.8 },
   focused: { borderColor: palette.ring, borderWidth: 2 },
 }));

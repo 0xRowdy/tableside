@@ -150,7 +150,7 @@ describe('the attempt lifecycle on screen', () => {
     expect(screen.getByText('Card 2 of 20')).toBeOnTheScreen();
   });
 
-  it('times an attempt when timing is on (Ufuiu, CEb6T), leaving out pauses', async () => {
+  it('times an attempt when timing is on (Ufuiu, ipoWU), leaving out pauses', async () => {
     await startCardValues('Check', { timed: true });
     expect(screen.getByText('Check · self-paced · timed')).toBeOnTheScreen();
     expect(screen.getByLabelText(/^Timed: 0 minutes/)).toBeOnTheScreen();

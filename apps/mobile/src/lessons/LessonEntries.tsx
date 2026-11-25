@@ -6,6 +6,7 @@ import { BookOpen, ChevronRight, GraduationCap, type LucideIcon } from 'lucide-r
 import { Pressable, Text, View } from 'react-native';
 
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
+import { pressStyle } from '@/theme/press';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/theme/tokens';
 import { makeStyles } from '@/theme/type';
 import { NOT_READY_HINT } from '@/training/challenge-text';
@@ -54,7 +55,7 @@ export function LearnRow({
       disabled={disabled}
       onPress={onPress}
       {...focusProps}
-      style={({ pressed }) => [styles.row, pressed && styles.pressed, disabled && styles.disabled, focused && styles.focused]}
+      style={({ pressed }) => [styles.row, pressed && pressStyle.row, disabled && styles.disabled, focused && styles.focused]}
     >
       <View style={styles.lead}>
         <Icon color={palette.foreground} size={18} />
@@ -107,7 +108,7 @@ export function TextLink({
       disabled={disabled}
       onPress={onPress}
       {...focusProps}
-      style={({ pressed }) => [styles.link, pressed && styles.pressed, disabled && styles.disabled, focused && styles.focused]}
+      style={({ pressed }) => [styles.link, pressed && pressStyle.row, disabled && styles.disabled, focused && styles.focused]}
     >
       {Icon && <Icon color={accent ? palette.primary : palette.foreground} size={18} />}
       <Text maxFontSizeMultiplier={textScale.body} style={[styles.linkText, !accent && styles.linkPlain]}>
@@ -138,7 +139,6 @@ const useStyles = makeStyles((type) => ({
   linkText: { flexShrink: 1, fontFamily: fonts.uiSemiBold, ...type.body, color: palette.primary },
   linkPlain: { color: palette.foreground },
   count: { fontFamily: fonts.ui, ...type.secondary, color: palette.mutedForeground },
-  pressed: { opacity: 0.8 },
   disabled: { opacity: 0.4 },
   focused: { borderColor: palette.ring, borderWidth: 2 },
 }));

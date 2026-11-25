@@ -3,6 +3,7 @@ import { ArrowRight, GraduationCap, X } from 'lucide-react-native';
 import { AccessibilityInfo, Pressable, Text, View } from 'react-native';
 
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
+import { pressStyle } from '@/theme/press';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/theme/tokens';
 import { makeStyles } from '@/theme/type';
 import { START_HERE } from '@/training/lesson-text';
@@ -28,7 +29,7 @@ export function StartHereCard({ onOpen, onDismiss }: { onOpen: () => void; onDis
           accessibilityLabel={START_HERE.open}
           onPress={onOpen}
           {...open.focusProps}
-          style={({ pressed }) => [styles.open, pressed && styles.pressed, open.focused && styles.focused]}
+          style={({ pressed }) => [styles.open, pressed && pressStyle.row, open.focused && styles.focused]}
         >
           <Text maxFontSizeMultiplier={textScale.body} style={styles.openText}>
             {START_HERE.open}
@@ -44,7 +45,7 @@ export function StartHereCard({ onOpen, onDismiss }: { onOpen: () => void; onDis
           AccessibilityInfo.announceForAccessibility(START_HERE.dismissed);
         }}
         {...dismiss.focusProps}
-        style={({ pressed }) => [styles.dismiss, pressed && styles.pressed, dismiss.focused && styles.focused]}
+        style={({ pressed }) => [styles.dismiss, pressed && pressStyle.row, dismiss.focused && styles.focused]}
       >
         <X color={palette.foreground} size={22} />
       </Pressable>
@@ -73,6 +74,5 @@ const useStyles = makeStyles((type) => ({
   open: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', gap: 6, minHeight: MIN_TOUCH_TARGET, borderRadius: radius.md, borderWidth: 2, borderColor: palette.transparent },
   openText: { fontFamily: fonts.uiSemiBold, ...type.body, color: palette.primary },
   dismiss: { width: 48, height: 48, alignItems: 'center', justifyContent: 'center', borderRadius: radius.md, borderWidth: 2, borderColor: palette.transparent },
-  pressed: { opacity: 0.8 },
   focused: { borderColor: palette.ring },
 }));

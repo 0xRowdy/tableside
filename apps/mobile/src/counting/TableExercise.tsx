@@ -533,7 +533,6 @@ const useStyles = makeStyles((type) => ({
   headline: { fontFamily: fonts.uiSemiBold, ...type.body, color: palette.ink },
   detail: { fontFamily: fonts.ui, ...type.body, color: palette.inkMuted },
   coachActions: { flexDirection: 'row', flexWrap: 'wrap', gap: space[2] },
-  pressed: { opacity: 0.8 },
   moves: { flexDirection: 'row', flexWrap: 'wrap', gap: space[2] },
   move: { flexGrow: 1, flexBasis: '30%' },
   refused: { gap: space[2], padding: space[4], borderRadius: radius.lg, borderWidth: 1, borderColor: palette.controlBorder, backgroundColor: palette.card },

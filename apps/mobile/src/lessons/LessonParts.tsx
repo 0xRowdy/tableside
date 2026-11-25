@@ -4,6 +4,7 @@ import type { LucideIcon } from 'lucide-react-native';
 import { Pressable, Text } from 'react-native';
 
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
+import { pressStyle } from '@/theme/press';
 import { fonts, palette, radius, space, textScale } from '@/theme/tokens';
 import { makeStyles } from '@/theme/type';
 
@@ -34,7 +35,7 @@ export function NavButton({
       disabled={disabled}
       onPress={onPress}
       {...focusProps}
-      style={({ pressed }) => [styles.navButton, block && styles.block, primary && styles.navPrimary, quiet && styles.navQuiet, pressed && styles.pressed, disabled && styles.disabled, focused && styles.focused]}
+      style={({ pressed }) => [styles.navButton, block && styles.block, primary && styles.navPrimary, quiet && styles.navQuiet, pressed && (primary ? pressStyle.brass : quiet ? pressStyle.edgeless : pressStyle.feltShadow), disabled && styles.disabled, focused && styles.focused]}
     >
       {Icon && <Icon color={primary ? palette.primaryForeground : palette.foreground} size={18} />}
       <Text maxFontSizeMultiplier={textScale.body} style={[styles.navLabel, primary && styles.navPrimaryLabel]}>
@@ -65,7 +66,6 @@ const useStyles = makeStyles((type) => ({
   navLabel: { flexShrink: 1, fontFamily: fonts.uiSemiBold, ...type.body, color: palette.foreground, textAlign: 'center' },
   navPrimaryLabel: { color: palette.primaryForeground },
   navQuiet: { borderColor: palette.transparent, backgroundColor: palette.transparent },
-  pressed: { opacity: 0.8 },
   disabled: { opacity: 0.4 },
   focused: { borderColor: palette.ring, borderWidth: 2 },
 }));

@@ -6,6 +6,7 @@ import { createContext, useContext, useState, type ReactNode } from 'react';
 import { Pressable, Text, View } from 'react-native';
 
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
+import { pressStyle } from '@/theme/press';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/theme/tokens';
 import { makeStyles } from '@/theme/type';
 import { gotItLabel, HELP_HINT, HELP_LABEL, hintKicker, GOT_IT, REREAD_FROM_HELP } from '@/training/lesson-text';
@@ -68,7 +69,7 @@ export function FirstUseHint({ id }: { id: HintId }) {
           accessibilityLabel={gotItLabel(hint.name)}
           onPress={() => hints.dismiss(id)}
           {...focusProps}
-          style={({ pressed }) => [styles.gotIt, pressed && styles.pressed, focused && styles.focused]}
+          style={({ pressed }) => [styles.gotIt, pressed && pressStyle.row, focused && styles.focused]}
         >
           <Text maxFontSizeMultiplier={textScale.body} style={styles.gotItText}>
             {GOT_IT}
@@ -100,7 +101,7 @@ export function HelpButton({ game }: { game: GameId }) {
         accessibilityHint={HELP_HINT}
         onPress={() => setOpen(true)}
         {...focusProps}
-        style={({ pressed }) => [styles.help, pressed && styles.pressed, focused && styles.focused]}
+        style={({ pressed }) => [styles.help, pressed && pressStyle.row, focused && styles.focused]}
       >
         <CircleHelp color={palette.foreground} size={22} />
         <Text maxFontSizeMultiplier={textScale.body} style={styles.helpText}>
@@ -122,6 +123,5 @@ const useStyles = makeStyles((type) => ({
   gotItText: { fontFamily: fonts.uiSemiBold, ...type.body, color: palette.foreground },
   help: { minWidth: 56, minHeight: 52, alignItems: 'center', justifyContent: 'center', gap: 2, paddingHorizontal: space[1], borderRadius: 10, borderWidth: 2, borderColor: palette.transparent },
   helpText: { fontFamily: fonts.uiSemiBold, ...type.label, color: palette.foreground },
-  pressed: { opacity: 0.8 },
   focused: { borderColor: palette.ring },
 }));

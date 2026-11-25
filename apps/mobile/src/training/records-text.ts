@@ -1,4 +1,4 @@
-// Spec 3 S3-10 Yy2He (Amendment 2 §3), S3-01 PDCaD, S3-08 liAfT, CEb6T; Comparison groups; #140, #136
+// Spec 3 S3-10 Yy2He (Amendment 2 §3), S3-01 PDCaD, S3-08 liAfT, ipoWU; Comparison groups; #140, #136
 
 import { CHALLENGE_CONTENT } from '@tableside/definitions';
 import type { AssistanceClass, AttemptEndingReason, ChallengeAttemptSummary, ChallengeCategory, ChallengeGroupKey, ChallengeMetric } from '@tableside/engine';
@@ -127,7 +127,7 @@ function historyValue(record: Pick<ChallengeAttemptSummary, 'endingReason' | 'me
   return tested.length === 1 ? scoreText(tested[0]!) : 'Completed';
 }
 
-// Spec 3 S3-08 liAfT, CEb6T
+// Spec 3 S3-08 liAfT, ipoWU
 export function personalBestText(key: Pick<ChallengeGroupKey, 'assistanceClass'>, earned: AttemptEarned): { readonly title: string; readonly detail: string; readonly fastest: string | null } {
   return {
     title: NEW_BEST[key.assistanceClass],

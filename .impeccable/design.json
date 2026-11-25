@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-11-19T02:12:46+00:00",
+  "generatedAt": "2026-11-24T00:00:00+00:00",
   "title": "Design System: Tableside",
   "extensions": {
     "colorMeta": {
@@ -633,6 +633,26 @@
           "#FAAF9B",
           "#FFDFD0"
         ]
+      },
+      "primaryPressed": {
+        "role": "primaryPressed",
+        "displayName": "Seated Brass",
+        "canonical": "#B08B45"
+      },
+      "coachPressed": {
+        "role": "coachPressed",
+        "displayName": "Pressed Paper",
+        "canonical": "#E8E0CC"
+      },
+      "inkPressed": {
+        "role": "inkPressed",
+        "displayName": "Pressed Ink",
+        "canonical": "#3A332A"
+      },
+      "pressShade": {
+        "role": "pressShade",
+        "displayName": "Press Shade",
+        "canonical": "#00000059"
       }
     },
     "typographyMeta": {
@@ -685,8 +705,8 @@
     "motion": [
       {
         "name": "press-feedback",
-        "value": "opacity 0.8 while pressed (0.85 on game cards)",
-        "purpose": "The only press response; no scale or bounce."
+        "value": "none: a press is an instant colour change (pressStyle, PressShade); 0.85 opacity on game cards for now",
+        "purpose": "A press seats the control in its material; no scale, bounce, fade or animation. See docs/decisions/press-feedback.md."
       },
       {
         "name": "sheet-enter",
@@ -719,7 +739,7 @@
       "refersTo": "button-primary",
       "description": "The one Rail Brass action on a view.",
       "html": "<button class=\"ds-btn-primary\">Start practice</button>",
-      "css": ".ds-btn-primary { display:inline-flex; align-items:center; justify-content:center; gap:8px; min-height:48px; padding:12px 24px; border-radius:999px; border:2px solid transparent; font-family: Inter, system-ui, sans-serif; font-weight:600; font-size:17px; cursor:pointer; transition: opacity .12s; background:#D4AE62; color:#1A1406; border-color:#D4AE62; } .ds-btn-primary:active { opacity:.8; } .ds-btn-primary:focus-visible { outline:none; border-color:#F3EFE6; } .ds-btn-primary:disabled { opacity:.4; }"
+      "css": ".ds-btn-primary { display:inline-flex; align-items:center; justify-content:center; gap:8px; min-height:48px; padding:12px 24px; border-radius:999px; border:2px solid transparent; font-family: Inter, system-ui, sans-serif; font-weight:600; font-size:17px; cursor:pointer; background:#D4AE62; color:#1A1406; border-color:#D4AE62; } .ds-btn-primary:active { background:#B08B45; border-color:#B08B45; } .ds-btn-primary:focus-visible { outline:none; border-color:#F3EFE6; } .ds-btn-primary:disabled { opacity:.4; }"
     },
     {
       "name": "Secondary Button",
@@ -727,7 +747,7 @@
       "refersTo": "button-secondary",
       "description": "Supporting actions on Felt Shadow.",
       "html": "<button class=\"ds-btn-secondary\">View rules</button>",
-      "css": ".ds-btn-secondary { display:inline-flex; align-items:center; justify-content:center; gap:8px; min-height:48px; padding:12px 24px; border-radius:999px; border:2px solid transparent; font-family: Inter, system-ui, sans-serif; font-weight:600; font-size:17px; cursor:pointer; transition: opacity .12s; background:#26312C; color:#F3EFE6; border-color:#26312C; } .ds-btn-secondary:active { opacity:.8; } .ds-btn-secondary:focus-visible { outline:none; border-color:#F3EFE6; }"
+      "css": ".ds-btn-secondary { display:inline-flex; align-items:center; justify-content:center; gap:8px; min-height:48px; padding:12px 24px; border-radius:999px; border:2px solid transparent; font-family: Inter, system-ui, sans-serif; font-weight:600; font-size:17px; cursor:pointer; background:#26312C; color:#F3EFE6; border-color:#26312C; } .ds-btn-secondary:active { background:#1E2723; border-color:#6E7B74; } .ds-btn-secondary:focus-visible { outline:none; border-color:#F3EFE6; }"
     },
     {
       "name": "Outline Choice",
@@ -735,7 +755,7 @@
       "refersTo": "button-outline",
       "description": "List-like choices: 10px corners, Control Edge border.",
       "html": "<button class=\"ds-btn-outline\">Running count</button>",
-      "css": ".ds-btn-outline { display:flex; align-items:center; justify-content:center; min-height:52px; padding:12px 20px; border-radius:10px; border:1px solid #6E7B74; background:transparent; color:#F3EFE6; font-family: Inter, system-ui, sans-serif; font-weight:600; font-size:15px; cursor:pointer; } .ds-btn-outline:active { opacity:.8; } .ds-btn-outline:focus-visible { outline:2px solid #D4AE62; outline-offset:2px; }"
+      "css": ".ds-btn-outline { display:flex; align-items:center; justify-content:center; min-height:52px; padding:12px 20px; border-radius:10px; border:1px solid #6E7B74; background:transparent; color:#F3EFE6; font-family: Inter, system-ui, sans-serif; font-weight:600; font-size:15px; cursor:pointer; } .ds-btn-outline:active { background:#1E2723; } .ds-btn-outline:focus-visible { outline:2px solid #D4AE62; outline-offset:2px; }"
     },
     {
       "name": "Segmented Control",
@@ -850,6 +870,11 @@
         "name": "The Lamplight Rule",
         "body": "A surface is raised by making it lighter, never by casting a shadow. Something that needs to come forward moves up one tonal step (card → popover) or gets a Control Edge border.",
         "section": "elevation"
+      },
+      {
+        "name": "The Seated Press Rule",
+        "body": "A press darkens a control into its material and never fades it. Opacity means one thing: 40% is unavailable, and an unavailable control gives no press response. Keyboard focus keeps its own border, so a press never reads as focus.",
+        "section": "elevation"
       }
     ],
     "dos": [
@@ -860,12 +885,16 @@
       "Do reserve a transparent 2px border on every focusable control so the focus ring doesn't shift the layout.",
       "Do give every `Text` a ramp role and a `maxFontSizeMultiplier`, and let layouts reflow at large sizes.",
       "Do keep numbers in Inter Bold and say them plainly. Practice, simulation and casino figures sit in visibly separate places.",
-      "Do check every screen at Standard with the phone at its default text size, and again at Larger with the largest system size."
+      "Do check every screen at Standard with the phone at its default text size, and again at Larger with the largest system size.",
+      "Do show a press with pressStyle or PressShade: the control settles into its material and its label stays full strength.",
+      "Do mark an earned readiness milestone with the brass seal on Lamplit Panel (S3-08 ipoWU); a personal best keeps its own box."
     ],
     "donts": [
       "Don't drift toward generic fintech: no cold white or blue-gray cards, no stock chart styling, no white backgrounds outside the coach note and card faces.",
       "Don't build sportsbook dashboards: no dense tickers, no red/green money coloring across a screen, no urgency banners or countdowns.",
       "Don't add shadows or elevation; use the next tonal step.",
+      "Don't use opacity, scale or motion for a press. Opacity is for unavailable controls only.",
+      "Don't celebrate: no confetti, bursts, glows or new sounds for a milestone, and nothing that rewards a net win.",
       "Don't use felt, rail, chip or pocket colors in app chrome.",
       "Don't set body text, buttons, labels or inputs in Fraunces.",
       "Don't go below 12, use all-caps kickers, or put must-read text in Smoke.",
