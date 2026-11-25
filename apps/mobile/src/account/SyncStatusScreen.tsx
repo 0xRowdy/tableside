@@ -22,6 +22,7 @@ import { Platform, Pressable, Text, View } from 'react-native';
 import { findGame } from '@/games';
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
 import { Group, Note, SettingsScreen } from '@/settings/SettingsParts';
+import { pressStyle } from '@/theme/press';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale, type ColorToken } from '@/theme/tokens';
 import { makeStyles } from '@/theme/type';
 
@@ -416,7 +417,7 @@ function SecondaryButton({ icon: Icon, label, onPress }: { icon: LucideIcon; lab
       accessibilityLabel={label}
       onPress={onPress}
       {...focusProps}
-      style={({ pressed }) => [styles.secondary, pressed && styles.pressed, focused && styles.focused]}
+      style={({ pressed }) => [styles.secondary, pressed && pressStyle.feltShadow, focused && styles.focused]}
     >
       <Icon color={palette.foreground} size={18} />
       <Text maxFontSizeMultiplier={textScale.body} style={styles.secondaryLabel}>
@@ -501,7 +502,6 @@ const useStyles = makeStyles((type) => ({
     backgroundColor: palette.secondary,
   },
   secondaryLabel: { fontFamily: fonts.uiSemiBold, ...type.body, color: palette.foreground },
-  pressed: { opacity: 0.8 },
   focused: { borderColor: palette.ring },
   progress: { gap: 6 },
   progressLabels: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: space[2] },

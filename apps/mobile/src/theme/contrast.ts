@@ -9,6 +9,13 @@ function parse(hex: string): { rgb: Rgb; alpha: number } {
 const over = (top: Rgb, alpha: number, bottom: Rgb): Rgb =>
   [0, 1, 2].map((i) => top[i]! * alpha + bottom[i]! * (1 - alpha)) as Rgb;
 
+const hex = (rgb: Rgb) => `#${rgb.map((c) => Math.round(c * 255).toString(16).padStart(2, '0').toUpperCase()).join('')}`;
+
+export function composite(top: string, bottom: string): string {
+  const upper = parse(top);
+  return hex(over(upper.rgb, upper.alpha, parse(bottom).rgb));
+}
+
 function luminance([r, g, b]: Rgb): number {
   const linear = (c: number) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
   return 0.2126 * linear(r) + 0.7152 * linear(g) + 0.0722 * linear(b);

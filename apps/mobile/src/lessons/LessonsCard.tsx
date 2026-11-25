@@ -5,6 +5,7 @@ import { Pressable, Text, useWindowDimensions, View } from 'react-native';
 
 import { Button } from '@/components/Button';
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
+import { pressStyle } from '@/theme/press';
 import { fonts, palette, radius, space, textScale } from '@/theme/tokens';
 import { makeStyles } from '@/theme/type';
 import { countingLessonOffer, type LessonOffer } from '@/training/lesson-offer';
@@ -121,7 +122,7 @@ function AllLessons({ count, completed, onPress }: { count: number; completed: n
       accessibilityLabel={value ? `${label}. ${value}` : label}
       onPress={onPress}
       {...focusProps}
-      style={({ pressed }) => [styles.all, pressed && styles.pressed, focused && styles.focused]}
+      style={({ pressed }) => [styles.all, pressed && pressStyle.row, focused && styles.focused]}
     >
       <Library color={palette.foreground} size={20} />
       <View style={[styles.allText, !stacked && styles.allTextRow]}>
@@ -159,6 +160,5 @@ const useStyles = makeStyles((type) => ({
   allTextRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', columnGap: space[3] },
   allLabel: { flexShrink: 1, fontFamily: fonts.uiSemiBold, ...type.body, color: palette.foreground },
   value: { fontFamily: fonts.ui, ...type.secondary, color: palette.mutedForeground },
-  pressed: { opacity: 0.8 },
   focused: { borderColor: palette.ring },
 }));

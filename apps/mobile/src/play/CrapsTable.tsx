@@ -37,6 +37,7 @@ import {
   TurnBoundaryBanner,
   useTableAllowance,
   useTableAnnouncements,
+  PressShade,
   type PhaseStep,
 } from './TableChrome';
 
@@ -452,11 +453,16 @@ function Spot({
       {...focusProps}
       style={[styles.spot, wager !== undefined && styles.spotWagered, focused && styles.spotFocused]}
     >
-      <Text maxFontSizeMultiplier={textScale.body} style={styles.spotText}>{label}</Text>
-      {wager !== undefined && (
-        <View style={styles.marker}>
-          <Text maxFontSizeMultiplier={textScale.body} style={styles.markerText}>{wager}</Text>
-        </View>
+      {({ pressed }) => (
+        <>
+          <PressShade pressed={pressed} corner={radius.sm} />
+          <Text maxFontSizeMultiplier={textScale.body} style={styles.spotText}>{label}</Text>
+          {wager !== undefined && (
+            <View style={styles.marker}>
+              <Text maxFontSizeMultiplier={textScale.body} style={styles.markerText}>{wager}</Text>
+            </View>
+          )}
+        </>
       )}
     </Pressable>
   );

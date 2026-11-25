@@ -1,7 +1,7 @@
 import type { DomainFact, GameId, PermittedView } from '@tableside/engine';
 import { ChevronDown, CircleStop } from 'lucide-react-native';
 import { useState, type ReactNode } from 'react';
-import { AccessibilityInfo, Pressable, ScrollView, Text, useWindowDimensions, View, type LayoutChangeEvent } from 'react-native';
+import { AccessibilityInfo, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View, type LayoutChangeEvent } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/Button';
@@ -13,6 +13,7 @@ import { HelpButton } from '@/lessons/FirstUseHints';
 import type { SetupTerms } from '@/practice/adapters';
 import { SAVE_RETRY_MS, type AccessStop, type ActiveSnapshot, type PracticeController, type PracticeSnapshot, type Suspension } from '@/practice/controller';
 import { usePractice } from '@/practice/PracticeProvider';
+import { pressStyle } from '@/theme/press';
 import { fonts, MIN_TOUCH_TARGET, objectType, palette, radius, space, textScale, type ColorToken } from '@/theme/tokens';
 import { makeStyles } from '@/theme/type';
 
@@ -156,7 +157,7 @@ function DetailsButton({ labelled, onPress }: { labelled: boolean; onPress: () =
       accessibilityHint="Rules, house edge and the rest of this table's details."
       onPress={onPress}
       {...focusProps}
-      style={({ pressed }) => [labelled ? styles.detailsRow : styles.detailsButton, pressed && styles.pressed, focused && styles.focused]}
+      style={({ pressed }) => [labelled ? styles.detailsRow : styles.detailsButton, pressed && pressStyle.row, focused && styles.focused]}
     >
       {labelled && (
         <Text maxFontSizeMultiplier={textScale.body} style={styles.detailsText}>
@@ -353,12 +354,22 @@ function Chip({ option, selected, onPress }: { option: (typeof CHIPS)[number]; s
       {...focusProps}
       style={[styles.chipSlot, selected && styles.chipSelected, focused && styles.focused]}
     >
-      <View style={[styles.chip, { backgroundColor: palette[option.color] }]}>
-        <Text maxFontSizeMultiplier={textScale.display} style={[styles.chipText, { color: palette[option.ink] }]}>{option.label}</Text>
-      </View>
-      {selected && <Text maxFontSizeMultiplier={textScale.display} style={styles.chipCheck}>{'✓'}</Text>}
+      {({ pressed }) => (
+        <>
+          <PressShade pressed={pressed} corner={radius.pill} />
+          <View style={[styles.chip, { backgroundColor: palette[option.color] }]}>
+            <Text maxFontSizeMultiplier={textScale.display} style={[styles.chipText, { color: palette[option.ink] }]}>{option.label}</Text>
+          </View>
+          {selected && <Text maxFontSizeMultiplier={textScale.display} style={styles.chipCheck}>{'✓'}</Text>}
+        </>
+      )}
     </Pressable>
   );
+}
+
+// docs/decisions/press-feedback.md; design/Tableside.pen RsrEO
+export function PressShade({ pressed, corner }: { pressed: boolean; corner: number }) {
+  return pressed ? <View testID="press-shade" style={[StyleSheet.absoluteFill, { pointerEvents: 'none', borderRadius: corner, backgroundColor: palette.pressShade }]} /> : null;
 }
 
 export function EndingSteps({
@@ -500,7 +511,6 @@ const useStyles = makeStyles((type) => ({
   },
   focused: { borderColor: palette.ring },
   disabled: { opacity: 0.4 },
-  pressed: { opacity: 0.8 },
   flex: { flex: 1 },
   fill: { flex: 1 },
   bars: { flexDirection: 'row', gap: space[2], paddingHorizontal: space[4], paddingTop: space[1], paddingBottom: space[2] },

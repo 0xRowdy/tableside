@@ -6,6 +6,7 @@ import { Linking, Pressable, ScrollView, Text, TextInput, View, useWindowDimensi
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
+import { pressStyle } from '@/theme/press';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/theme/tokens';
 import { makeStyles } from '@/theme/type';
 
@@ -265,7 +266,7 @@ export function MethodButton({
         styles.method,
         variant === 'primary' && styles.methodPrimary,
         variant === 'ghost' && styles.methodGhost,
-        pressed && styles.pressed,
+        pressed && (variant === 'primary' ? pressStyle.brass : variant === 'ghost' ? pressStyle.edgeless : pressStyle.feltShadow),
         disabled && styles.disabled,
         focused && styles.focused,
       ]}
@@ -437,7 +438,6 @@ const useStyles = makeStyles((type) => ({
   methodPrimary: { backgroundColor: palette.primary, borderColor: palette.primary },
   methodGhost: { backgroundColor: palette.transparent, borderColor: palette.transparent },
   methodLabel: { flexShrink: 1, fontFamily: fonts.uiSemiBold, ...type.body, textAlign: 'center' },
-  pressed: { opacity: 0.8 },
   disabled: { opacity: 0.4 },
   footnote: { flexDirection: 'row', alignItems: 'flex-start', gap: space[2] },
   footnoteText: { flex: 1, fontFamily: fonts.ui, ...type.secondary, color: palette.mutedForeground },

@@ -9,6 +9,7 @@ import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
 import { LessonLink } from '@/lessons/LessonEntries';
 import { LessonsSection, SectionHead } from '@/lessons/LessonsCard';
 import { Group, ListRow, Note, SettingsScreen } from '@/settings/SettingsParts';
+import { pressStyle } from '@/theme/press';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/theme/tokens';
 import { makeStyles, useStackedLayout } from '@/theme/type';
 import { CATEGORY_TEXT, COUNTING_TITLE, NOT_READY_HINT, RECOMMENDATIONS_NOTE, SUGGESTED_ORDER_LABEL, VARIANT_DETAIL, variantLabel, type AllowanceCopy } from '@/training/challenge-text';
@@ -191,7 +192,7 @@ function VariantButton({
       disabled={!enabled}
       onPress={() => onChoose({ category, variant })}
       {...focusProps}
-      style={({ pressed }) => [styles.variant, (elsewhere !== null || stacked) && styles.variantFull, pressed && styles.pressed, !ready && elsewhere === null && styles.disabled, focused && styles.focused]}
+      style={({ pressed }) => [styles.variant, (elsewhere !== null || stacked) && styles.variantFull, pressed && pressStyle.feltShadow, !ready && elsewhere === null && styles.disabled, focused && styles.focused]}
     >
       {elsewhere ? (
         <Text maxFontSizeMultiplier={textScale.body} style={styles.elsewhereText}>
@@ -253,7 +254,6 @@ const useStyles = makeStyles((type) => ({
   variantDetail: { fontFamily: fonts.ui, ...type.secondary, textAlign: 'center', color: palette.foreground },
   variantFull: { flexBasis: '100%' },
   elsewhereText: { flex: 1, fontFamily: fonts.uiSemiBold, ...type.label, textAlign: 'center', color: palette.foreground },
-  pressed: { opacity: 0.8 },
   disabled: { opacity: 0.4 },
   focused: { borderColor: palette.ring, borderWidth: 2 },
 }));

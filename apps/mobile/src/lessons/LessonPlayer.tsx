@@ -11,6 +11,7 @@ import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
 import { TextLink } from '@/lessons/LessonEntries';
 import { NavButton } from '@/lessons/LessonParts';
 import { BackButton } from '@/settings/SettingsParts';
+import { pressStyle } from '@/theme/press';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/theme/tokens';
 import { makeStyles } from '@/theme/type';
 import type { AllowanceCopy } from '@/training/challenge-text';
@@ -186,7 +187,7 @@ function HandoffOption({ handoff, detail, disabled, onPress }: { handoff: Lesson
       disabled={disabled}
       onPress={onPress}
       {...focusProps}
-      style={({ pressed }) => [styles.option, pressed && styles.pressed, disabled && styles.disabled, focused && styles.focused]}
+      style={({ pressed }) => [styles.option, pressed && pressStyle.row, disabled && styles.disabled, focused && styles.focused]}
     >
       <Icon color={palette.foreground} size={22} />
       <View style={styles.optionText}>
@@ -259,7 +260,7 @@ function StepSource({ source }: { source: LessonSource }) {
       accessibilityLabel={label}
       onPress={() => void Linking.openURL(url)}
       {...focusProps}
-      style={({ pressed }) => [styles.sourceLink, pressed && styles.pressed, focused && styles.focused]}
+      style={({ pressed }) => [styles.sourceLink, pressed && pressStyle.row, focused && styles.focused]}
     >
       <Text maxFontSizeMultiplier={textScale.body} style={styles.source}>
         {label}
@@ -280,7 +281,7 @@ function ExampleLink({ disabled, onPress }: { disabled: boolean; onPress: () => 
       disabled={disabled}
       onPress={onPress}
       {...focusProps}
-      style={({ pressed }) => [styles.exampleLink, pressed && styles.pressed, focused && styles.focused]}
+      style={({ pressed }) => [styles.exampleLink, pressed && pressStyle.row, focused && styles.focused]}
     >
       <SquarePlay color={palette.primary} size={18} />
       <Text maxFontSizeMultiplier={textScale.body} style={styles.exampleLabel}>
@@ -323,7 +324,7 @@ function CreditLink({ citation, url }: { citation: string; url: string }) {
       accessibilityLabel={citation}
       onPress={() => void Linking.openURL(url)}
       {...focusProps}
-      style={({ pressed }) => [styles.creditLink, pressed && styles.pressed, focused && styles.focused]}
+      style={({ pressed }) => [styles.creditLink, pressed && pressStyle.row, focused && styles.focused]}
     >
       <Text maxFontSizeMultiplier={textScale.body} style={[styles.credit, styles.creditLinked]}>
         {citation}
@@ -415,7 +416,6 @@ const useStyles = makeStyles((type) => ({
   exampleLabel: { flexShrink: 1, fontFamily: fonts.uiSemiBold, ...type.body, color: palette.primary },
   alert: { fontFamily: fonts.ui, ...type.body, color: palette.destructive },
   nav: { flexDirection: 'row', flexWrap: 'wrap', gap: space[2] + 2, paddingTop: space[2] },
-  pressed: { opacity: 0.8 },
   disabled: { opacity: 0.4 },
   focused: { borderColor: palette.ring, borderWidth: 2 },
 }));

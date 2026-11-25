@@ -4,6 +4,7 @@ import { Pressable, Text, View } from 'react-native';
 
 import { PlayingCard } from '@/counting/CardChoices';
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
+import { pressStyle } from '@/theme/press';
 import { fonts, palette, radius, space, textScale, TEXT_STEPS, type TextStep } from '@/theme/tokens';
 import { makeStyles } from '@/theme/type';
 
@@ -76,7 +77,7 @@ function Option({ step, selected, onPress }: { step: TextStep; selected: boolean
       accessibilityState={{ checked: selected }}
       onPress={onPress}
       {...focusProps}
-      style={({ pressed }) => [styles.option, selected && styles.optionSelected, pressed && styles.pressed, focused && styles.focused]}
+      style={({ pressed }) => [styles.option, selected && styles.optionSelected, pressed && (selected ? pressStyle.feltShadow : pressStyle.row), focused && styles.focused]}
     >
       <Icon color={selected ? palette.primary : palette.mutedForeground} size={24} />
       <View style={styles.optionText}>
@@ -136,6 +137,5 @@ const useStyles = makeStyles((type) => ({
   optionTitle: { fontFamily: fonts.uiSemiBold, ...type.body, color: palette.foreground },
   optionDetail: { fontFamily: fonts.ui, ...type.secondary, color: palette.mutedForeground },
   selected: { fontFamily: fonts.uiSemiBold, ...type.label, color: palette.foreground },
-  pressed: { opacity: 0.8 },
   focused: { borderColor: palette.foreground },
 }));

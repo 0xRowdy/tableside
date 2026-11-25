@@ -8,6 +8,7 @@ import { Button } from '@/components/Button';
 import { SwitchRow } from '@/components/SwitchRow';
 import { useMoveFocus } from '@/hooks/use-accessibility';
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
+import { pressStyle } from '@/theme/press';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/theme/tokens';
 import { makeStyles } from '@/theme/type';
 
@@ -456,7 +457,7 @@ function Row({
       accessibilityValue={value === undefined ? undefined : { text: value }}
       onPress={onPress}
       {...focusProps}
-      style={({ pressed }) => [styles.row, compact && styles.rowCompact, pressed && styles.pressed, focused && styles.focused]}
+      style={({ pressed }) => [styles.row, compact && styles.rowCompact, pressed && pressStyle.row, focused && styles.focused]}
     >
       {children}
     </Pressable>
@@ -494,7 +495,7 @@ function SmallButton({ label, spoken, onPress, disabled = false }: { label: stri
       disabled={disabled}
       onPress={onPress}
       {...focusProps}
-      style={({ pressed }) => [styles.small, pressed && styles.pressed, disabled && styles.disabled, focused && styles.focused]}
+      style={({ pressed }) => [styles.small, pressed && pressStyle.feltShadow, disabled && styles.disabled, focused && styles.focused]}
     >
       <Text maxFontSizeMultiplier={textScale.body} style={styles.smallText}>{label}</Text>
     </Pressable>
@@ -526,7 +527,6 @@ const useStyles = makeStyles((type) => ({
   rowDetail: { fontFamily: fonts.ui, ...type.secondary, color: palette.mutedForeground },
   rowValue: { fontFamily: fonts.uiSemiBold, ...type.body, color: palette.foreground },
   editorTitle: { fontFamily: fonts.display, ...type.headline, color: palette.foreground },
-  pressed: { opacity: 0.8 },
   disabled: { opacity: 0.4 },
   focused: { borderColor: palette.ring },
   choices: { flexDirection: 'row', flexWrap: 'wrap', gap: space[2] },

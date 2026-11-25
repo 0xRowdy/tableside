@@ -6,6 +6,7 @@ import { Pressable, Text, View } from 'react-native';
 
 import { Button } from '@/components/Button';
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
+import { pressStyle } from '@/theme/press';
 import { fonts, palette, radius, space, textScale } from '@/theme/tokens';
 import { makeStyles } from '@/theme/type';
 
@@ -76,7 +77,7 @@ export function AddMethodRow({ method, detail, onPress, disabled }: { method: Si
       disabled={disabled}
       onPress={onPress}
       {...focusProps}
-      style={({ pressed }) => [styles.addRow, pressed && styles.pressed, focused && styles.focused]}
+      style={({ pressed }) => [styles.addRow, pressed && pressStyle.row, focused && styles.focused]}
     >
       <View style={styles.lead}>
         <MethodIcon method={method} />
@@ -142,7 +143,6 @@ const useStyles = makeStyles((type) => ({
     borderWidth: 2,
     borderColor: palette.transparent,
   },
-  pressed: { backgroundColor: palette.secondary },
   focused: { borderColor: palette.ring },
   banner: { flexDirection: 'row', gap: space[3], padding: space[3] + 2, borderRadius: radius.lg, borderWidth: 1, borderColor: palette.border, backgroundColor: palette.card },
   bannerText: { flex: 1, gap: space[1] },

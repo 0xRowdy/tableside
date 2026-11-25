@@ -44,6 +44,10 @@ colors:
   coachAccent: "#2563C8"
   mistake: "#E07A5F"
   mistakeInk: "#B4472C"
+  primaryPressed: "#B08B45"
+  coachPressed: "#E8E0CC"
+  inkPressed: "#3A332A"
+  pressShade: "#00000059"
 typography:
   display:
     fontFamily: "Fraunces (Fraunces_400Regular)"
@@ -216,6 +220,7 @@ A dark, low-chroma green neutral ramp with a single brass accent, plus a separat
 
 ### Primary
 - **Rail Brass** (`primary`, also `ring`): the primary button fill, the selected segment, the selected tab's icon and outline, switch-on, progress fills, banner actions and the keyboard focus ring. Text on it is **Brass Shadow** (`primaryForeground`), a near-black brown.
+- **Seated Brass** (`primaryPressed`): a primary button while it is held. Never at rest.
 
 ### Neutral
 - **After-Hours Green** (`background`): the room. Every screen's ground and the backdrop the table sits in.
@@ -244,7 +249,7 @@ These belong to the table, never to the chrome.
 - Roulette pockets (`pocketRed`, `pocketBlack`, `pocketGreen`) with white numbers.
 
 ### Coaching paper
-- **Coach Paper** (`coach`) with **Ink** (`ink`) and **Faded Ink** (`inkMuted`): Marcus's note card, the only light surface in the chrome. **Coach Blue** (`coachAccent`) outlines it and labels the kicker. **Correction Red Ink** (`mistakeInk`) marks a wrong answer on the paper.
+- **Coach Paper** (`coach`) with **Ink** (`ink`) and **Faded Ink** (`inkMuted`): Marcus's note card, the only light surface in the chrome. **Coach Blue** (`coachAccent`) outlines it and labels the kicker. **Correction Red Ink** (`mistakeInk`) marks a wrong answer on the paper. **Pressed Paper** (`coachPressed`) and **Pressed Ink** (`inkPressed`) show his actions while they are held.
 
 ### Named Rules
 **The One Brass Rule.** Rail Brass marks the primary action, the current selection, progress and focus. It is never a background wash, a decorative border or a heading color. If two things on a screen are gold, one of them is wrong (focus rings excepted).
@@ -306,8 +311,12 @@ The persistent bottom tab bar is the only global navigation: one row at every te
 
 Tableside is flat. There are no shadows or elevation values anywhere in the app. Depth comes from tonal steps: background → card → popover, each slightly lighter green, with Felt Shadow and Deep Baize for inset or tinted pieces. Modals sit on a 70% black scrim. The only gradient fades a game card's photo into its scrim band so the text stays legible.
 
+A press goes the other way: the held control settles into its material. Brass goes to Seated Brass; Felt Shadow controls and pill buttons with no edge go to Deep Baize, and a control with no edge shows its Control Edge while held; rows, links and icon buttons take Felt Shadow; Marcus's actions take Pressed Paper and Pressed Ink. On the table, a piece darkens under **Press Shade** (`pressShade`, black at 35%) laid over its own color and under its label: bet spots, craps and roulette spots shade their face, and a chip shades its slot on the rail, not its face. The change is instant: nothing scales, moves or animates. In code it is `pressStyle` (`apps/mobile/src/theme/press.ts`) and `PressShade` (`apps/mobile/src/play/TableChrome.tsx`); see `docs/decisions/press-feedback.md`.
+
 ### Named Rules
 **The Lamplight Rule.** A surface is raised by making it lighter, never by casting a shadow. Something that needs to come forward moves up one tonal step (card → popover) or gets a Control Edge border.
+
+**The Seated Press Rule.** A press darkens a control into its material and never fades it. Opacity means one thing: 40% is unavailable, and an unavailable control gives no press response. Keyboard focus keeps its own border, so a press never reads as focus.
 
 ## Shapes
 
@@ -324,7 +333,7 @@ Quiet, wide and pill-shaped.
 - **Secondary:** Felt Shadow fill, Linen label. **Ghost:** transparent, Linen label.
 - **Outline:** the exception to the pill: 10px corners, 52px tall, 1px Control Edge border, `secondary` label. Used for list-like choices.
 - **Long labels wrap** onto two lines rather than shrink. Two buttons that don't fit side by side stack full width, primary first.
-- **States:** pressed drops to 80% opacity; disabled 40%; keyboard focus turns the reserved 2px border Linen. No scale or bounce.
+- **States:** pressed seats the button: primary goes to Seated Brass, secondary and ghost go to Deep Baize and show their Control Edge, outline goes to Deep Baize. Unavailable is 40% with no press response. Keyboard focus turns the reserved 2px border Linen and wins over a press's edge. No scale, bounce or fade.
 
 ### Segmented control
 - A Deep Baize trough with a Control Edge border, 10px corners and 4px padding. Each segment is at least 48px tall, with a `secondary` 600 label. A long label sizes its segment to the content.
@@ -360,11 +369,11 @@ Full-bleed photograph, a scrim band fading up from the bottom, a sentence-case `
 Marcus speaks on paper: a Coach Paper card with 16px corners and a 1px Coach Blue border, Ink text, a Coach Blue sentence-case kicker, an Inter Bold `heading` headline, `body` text and Faded Ink detail. Its two actions stack full width when they don't fit side by side. Its primary action inverts to Ink with Coach Paper text. A wrong answer is marked in Correction Red Ink with an icon. It is the only light surface on a dark screen, so coaching reads as a separate voice from the game.
 
 ### Table pieces
-- **Chip rack:** Walnut Rail panel with 48px round chips in denomination colors; the selected chip gets a 2px Rail Brass ring and a check mark.
+- **Chip rack:** Walnut Rail panel with 48px round chips in denomination colors; the selected chip gets a 2px Rail Brass ring and a check mark. A held chip shades its slot under Press Shade and keeps its face.
 - **Playing cards:** Card Face with four-color suits; empty card spots are dashed Chalk outlines on the felt. Cards don't grow with the text step; the layout picks the size. Table hands are Standard (58×82), and the card being counted is always Large (120×168), so it's never the smallest thing on screen.
 - **Summary row:** up to three `label` captions over `heading` values and a chevron button; the whole row opens the Table details sheet (rules, house edge, guided strategy, Rebuy, counting aid). It becomes key-value rows with a labelled "Table details" row at large system text.
 - **Count keypad:** 48px-minimum keys with `key` digits and a `figure` readout. Below them, Submit fills the row and Skip is a compact outline button. Every Skip opens "Skip this count?" (Keep counting, then Skip and score as incorrect) before anything is scored.
-- **Bet spots:** Chalk boundary on felt; wagered spots get a 3px Card Face outline.
+- **Bet spots:** Chalk boundary on felt; wagered spots get a 3px Card Face outline. A held spot darkens under Press Shade; its boundary and marker stay as they are.
 - **Status tag:** Felt Shadow pill with an icon and Inter Bold `label` Linen text.
 
 ## Do's and Don'ts
@@ -380,11 +389,15 @@ Marcus speaks on paper: a Coach Paper card with 16px corners and a 1px Coach Blu
 - **Do** keep numbers in Inter Bold and say them plainly. Practice, simulation and casino figures sit in visibly separate places.
 - **Do** say what a choice means on the choice itself, keep each note to one plain sentence, and lead a result with what went right. A reset or a slip comes after the scores.
 - **Do** ask before an action that scores or records something the player can't take back. Name the action and its consequence on both buttons.
+- **Do** show a press with `pressStyle` or `PressShade`: the control settles into its material and its label stays full strength.
+- **Do** mark an earned readiness milestone with the brass seal on Lamplit Panel (S3-08 `ipoWU`); a personal best keeps its own box.
 
 ### Don't:
 - **Don't** drift toward generic fintech: no cold white or blue-gray cards, no stock chart styling, no white backgrounds outside the coach note and card faces.
 - **Don't** build sportsbook dashboards: no dense tickers, no red/green money coloring across a screen, no urgency banners or countdowns.
 - **Don't** add shadows or elevation; use the next tonal step.
+- **Don't** use opacity, scale or motion for a press. Opacity is for unavailable controls only.
+- **Don't** celebrate: no confetti, bursts, glows or new sounds for a milestone, and nothing that rewards a net win.
 - **Don't** use felt, rail, chip or pocket colors in app chrome.
 - **Don't** set body text, buttons, labels or inputs in Fraunces.
 - **Don't** go below 12, use all-caps kickers, or put must-read text in Smoke.

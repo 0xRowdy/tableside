@@ -313,7 +313,7 @@ export const COMPLETED: Record<ChallengeVariant, { readonly title: string; reado
     detail: 'Learn scores your first answer to each card, even when you corrected it afterwards. Learn attempts never count toward a readiness milestone.',
     note: "When you're ready, try Check: it holds every answer until the end.",
   },
-  // Spec 3 S3-08 CEb6T
+  // Spec 3 S3-08 ipoWU
   check: { title: 'Completed · unassisted', detail: null, note: null },
 };
 
@@ -577,7 +577,7 @@ export function unfinishedText(view: Pick<ChallengeView, 'category' | 'variant' 
   };
 }
 
-// Spec 3 S3-08 UXrpw, CEb6T; Attempt lifecycle › Phases (ending reasons), Amendment 1 C3
+// Spec 3 S3-08 UXrpw, ipoWU; Attempt lifecycle › Phases (ending reasons), Amendment 1 C3
 export function endingText(
   record: Pick<ChallengeAttemptRecord, 'endingReason' | 'groupKey' | 'assistanceStep' | 'interrupted' | 'performanceMs'>,
   position: number,

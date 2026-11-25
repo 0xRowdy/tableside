@@ -14,6 +14,7 @@ import { GAME_WORDS, modeText } from '@/play/game-words';
 import { capitalize } from '@/play/units';
 import { usePractice } from '@/practice/PracticeProvider';
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
+import { pressStyle } from '@/theme/press';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/theme/tokens';
 import { makeStyles, useStackedLayout } from '@/theme/type';
 import { useLearning } from '@/training/TrainingProvider';
@@ -29,7 +30,7 @@ function CommunityEntry() {
       accessibilityLabel="Community"
       onPress={() => router.navigate('/more/community')}
       {...focusProps}
-      style={({ pressed }) => [styles.community, pressed && styles.pressed, focused && styles.focused]}
+      style={({ pressed }) => [styles.community, pressed && pressStyle.edgeless, focused && styles.focused]}
     >
       <Users color={palette.foreground} size={18} />
       <Text maxFontSizeMultiplier={textScale.body} style={styles.communityLabel}>
@@ -116,7 +117,6 @@ const useStyles = makeStyles((type) => ({
     backgroundColor: palette.secondary,
   },
   communityLabel: { fontFamily: fonts.uiSemiBold, ...type.secondary, color: palette.foreground },
-  pressed: { opacity: 0.8 },
   focused: { borderColor: palette.foreground },
   title: { fontFamily: fonts.display, ...type.display, color: palette.foreground },
   subtitle: { fontFamily: fonts.ui, ...type.secondary, color: palette.mutedForeground },

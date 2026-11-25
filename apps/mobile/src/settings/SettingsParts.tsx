@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
 import { volumeText } from '@/settings/summary';
+import { pressStyle } from '@/theme/press';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/theme/tokens';
 import { makeStyles } from '@/theme/type';
 
@@ -105,7 +106,7 @@ export function ListRow({
       accessibilityLabel={spoken([title, detail, value])}
       onPress={onPress}
       {...focusProps}
-      style={({ pressed }) => [styles.row, pressed && styles.pressed, focused && styles.focused]}
+      style={({ pressed }) => [styles.row, pressed && pressStyle.row, focused && styles.focused]}
     >
       {content}
     </Pressable>
@@ -214,7 +215,6 @@ const useStyles = makeStyles((type) => ({
   body: { gap: space[4], paddingTop: space[2], paddingHorizontal: space[6] - space[1] },
   group: { borderRadius: radius.lg, borderWidth: 1, borderColor: palette.border, backgroundColor: palette.card, overflow: 'hidden' },
   row: { flexDirection: 'row', alignItems: 'center', gap: space[3], minHeight: 64, paddingVertical: space[3], paddingHorizontal: space[4], borderWidth: 2, borderColor: palette.transparent },
-  pressed: { backgroundColor: palette.secondary },
   lead: { width: 36, height: 36, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', backgroundColor: palette.secondary },
   rowText: { flex: 1, gap: 2 },
   rowTitle: { fontFamily: fonts.uiSemiBold, ...type.body, color: palette.foreground },

@@ -68,6 +68,7 @@ import {
   TurnBoundaryBanner,
   useTableAllowance,
   useTableAnnouncements,
+  PressShade,
   type PhaseStep,
 } from './TableChrome';
 import { capitalize, formatSigned, formatUnits, halfUnits, sumUnits, totalOnTable } from './units';
@@ -520,8 +521,13 @@ function BetSpot({ wager, chip, disabled, onPress, committed }: { wager: string 
       {...focusProps}
       style={[styles.betSpot, wager !== undefined && styles.betSpotWagered, focused && styles.focused]}
     >
-      <Text maxFontSizeMultiplier={textScale.body} style={styles.betSpotText}>{wager ? formatUnits(wager) : 'BET'}</Text>
-      {committed && <Text maxFontSizeMultiplier={textScale.body} style={styles.betSpotState}>IN PLAY</Text>}
+      {({ pressed }) => (
+        <>
+          <PressShade pressed={pressed} corner={radius.pill} />
+          <Text maxFontSizeMultiplier={textScale.body} style={styles.betSpotText}>{wager ? formatUnits(wager) : 'BET'}</Text>
+          {committed && <Text maxFontSizeMultiplier={textScale.body} style={styles.betSpotState}>IN PLAY</Text>}
+        </>
+      )}
     </Pressable>
   );
 }

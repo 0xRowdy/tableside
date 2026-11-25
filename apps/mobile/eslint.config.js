@@ -16,10 +16,30 @@ const EFFECT_ALTERNATIVES =
 const TYPE_RAMP =
   'Text sizes come from the type ramp (docs/decisions/text-size-type-floor.md): build styles with makeStyles((type) => ({ title: { ...type.body } })) or useType(role) from src/theme/type.tsx. Card and chip glyphs use objectType in src/theme/tokens.ts.';
 
+const PRESS_FEEDBACK =
+  'Press feedback comes from pressStyle in src/theme/press.ts (docs/decisions/press-feedback.md): pressed && pressStyle.brass, feltShadow, edgeless, row, paper or ink. Table pieces render PressShade from src/play/TableChrome.tsx. Opacity is reserved for unavailable controls.';
+const PRESS_FEEDBACK_TO_MOVE = ['src/components/GameCard.tsx'];
+
 const effects = ['useEffect', 'useLayoutEffect', 'useInsertionEffect'];
 
 const TIMER_ALTERNATIVES =
   'Product code takes timers from a port: usePolling (src/hooks) to repeat work while a condition holds, or a sleep/after/every port injected from a platform adapter (clock.sleep in src/practice/app-adapters.ts, appDevicePorts in src/account/device-ports.ts). Fix the timing at its source rather than working around it.';
+
+const SYNTAX = [
+  {
+    selector: "CallExpression[callee.name='BigInt']",
+    message: 'Money in the app goes through src/play/units.ts: use or add a helper there instead of calling BigInt.',
+  },
+  {
+    selector: "Property[key.name='fontSize'][value.type='Literal']",
+    message: TYPE_RAMP,
+  },
+  {
+    selector: "CallExpression[callee.name='useFollow'][arguments.0.type=/^(ArrowFunctionExpression|FunctionExpression)$/]",
+    message:
+      'useFollow takes a named follow function declared outside the component, like followAccountGate(service, controller), so the subscription is testable without React and its arguments are its whole input. An inline function here is a useEffect under another name.',
+  },
+];
 
 module.exports = defineConfig([
   expoConfig,
@@ -39,25 +59,12 @@ module.exports = defineConfig([
   },
   {
     files: ['src/**/*.{ts,tsx}'],
-    ignores: ['src/play/units.ts'],
-    rules: {
-      'no-restricted-syntax': [
-        'error',
-        {
-          selector: "CallExpression[callee.name='BigInt']",
-          message: 'Money in the app goes through src/play/units.ts: use or add a helper there instead of calling BigInt.',
-        },
-        {
-          selector: "Property[key.name='fontSize'][value.type='Literal']",
-          message: TYPE_RAMP,
-        },
-        {
-          selector: "CallExpression[callee.name='useFollow'][arguments.0.type=/^(ArrowFunctionExpression|FunctionExpression)$/]",
-          message:
-            'useFollow takes a named follow function declared outside the component, like followAccountGate(service, controller), so the subscription is testable without React and its arguments are its whole input. An inline function here is a useEffect under another name.',
-        },
-      ],
-    },
+    ignores: ['src/play/units.ts', ...PRESS_FEEDBACK_TO_MOVE],
+    rules: { 'no-restricted-syntax': ['error', ...SYNTAX, { selector: "Property[key.name='pressed'][value.type='ObjectExpression']", message: PRESS_FEEDBACK }] },
+  },
+  {
+    files: PRESS_FEEDBACK_TO_MOVE,
+    rules: { 'no-restricted-syntax': ['error', ...SYNTAX] },
   },
   {
     files: ['src/**/*.{ts,tsx}'],

@@ -8,6 +8,7 @@ import { Pressable, Text, TextInput, View } from 'react-native';
 
 import { Button } from '@/components/Button';
 import { useKeyboardFocus } from '@/hooks/use-keyboard-focus';
+import { pressStyle } from '@/theme/press';
 import { fonts, MIN_TOUCH_TARGET, palette, radius, space, textScale } from '@/theme/tokens';
 import { makeStyles } from '@/theme/type';
 import { CHANGE_SIGN, COUNT_SKIP, COUNT_SKIP_HINT, countProblemText, DELETE_DIGIT, parseCount, SUBMIT, toggleSign, type CountProblem, type SkipItem } from '@/training/challenge-text';
@@ -117,7 +118,7 @@ function Key({ label, accessibilityLabel, enabled, onPress }: { label: ReactNode
       disabled={!enabled}
       onPress={onPress}
       {...focusProps}
-      style={({ pressed }) => [styles.key, pressed && styles.pressed, focused && styles.keyFocused]}
+      style={({ pressed }) => [styles.key, pressed && pressStyle.feltShadow, focused && styles.keyFocused]}
     >
       {typeof label === 'string' ? (
         <Text maxFontSizeMultiplier={textScale.body} style={styles.keyText}>
@@ -164,5 +165,4 @@ const useStyles = makeStyles((type) => ({
   keyText: { fontFamily: fonts.uiSemiBold, ...type.key, color: palette.foreground },
   actions: { flexDirection: 'row', gap: space[3] - 2 },
   action: { flex: 1 },
-  pressed: { opacity: 0.8 },
 }));

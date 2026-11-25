@@ -9,6 +9,7 @@ These are historical records. The MVP specs ([#51](https://github.com/0xRowdy/ta
 - **Type and text size** (`mobile-device-support-accessibility.md`): defaults are tuned for older eyes. There's a 12pt floor, a role ramp, and a per-installation Text size setting (Standard, Large, Larger) that multiplies with the system size. See [`text-size-type-floor.md`](text-size-type-floor.md).
 - **Table chrome:** one summary row with a Table details sheet, and actions pinned to the bottom. The house edge and rules sit in the sheet. See [`table-chrome-summary-row.md`](table-chrome-summary-row.md).
 - **Challenge vocabulary:** setup labels the Learn/Check choice "Feedback", every Skip asks first, and links to unbuilt screens are hidden. See [`clarify-challenge-vocabulary.md`](clarify-challenge-vocabulary.md).
+- **Press feedback:** a press darkens a control into its material instead of fading it to 80%, table pieces darken under Press Shade, and an earned readiness milestone carries a brass seal. See [`press-feedback.md`](press-feedback.md).
 - **First-run order and age** (`prelaunch-age-eligibility.md`, `authentication-account-lifecycle.md`): age is asked on Create only; Sign in never asks it. See spec 2 Amendment 3.
 - **Backend:** Supabase was re-checked against Convex and retained on 2026-10-19 (see [#21](https://github.com/0xRowdy/tableside/issues/21)).
 

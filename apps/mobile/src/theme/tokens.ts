@@ -42,6 +42,11 @@ export const palette = {
   inkMuted: '#5E574B',
   mistake: '#E07A5F',
   mistakeInk: '#B4472C',
+  // docs/decisions/press-feedback.md
+  primaryPressed: '#B08B45',
+  coachPressed: '#E8E0CC',
+  inkPressed: '#3A332A',
+  pressShade: '#00000059',
 } as const;
 
 export type ColorToken = keyof typeof palette;
@@ -55,6 +60,7 @@ export const essentialPairs: readonly {
   kind: 'text' | 'graphic';
   foreground: ColorToken;
   background: ColorToken;
+  underPressShade?: true;
 }[] = [
   { use: 'body text', kind: 'text', foreground: 'foreground', background: 'background' },
   { use: 'secondary text', kind: 'text', foreground: 'mutedForeground', background: 'background' },
@@ -154,6 +160,29 @@ export const essentialPairs: readonly {
   { use: 'selected text size option detail', kind: 'text', foreground: 'mutedForeground', background: 'secondary' },
   { use: 'selected text size option outline and icon', kind: 'graphic', foreground: 'primary', background: 'secondary' },
   { use: 'Home Community button label and icon', kind: 'text', foreground: 'foreground', background: 'secondary' },
+  // docs/decisions/press-feedback.md
+  { use: 'pressed primary button label', kind: 'text', foreground: 'primaryForeground', background: 'primaryPressed' },
+  { use: 'pressed primary button on screens', kind: 'graphic', foreground: 'primaryPressed', background: 'background' },
+  { use: 'pressed primary button on a card', kind: 'graphic', foreground: 'primaryPressed', background: 'card' },
+  { use: 'pressed primary button in a sheet', kind: 'graphic', foreground: 'primaryPressed', background: 'popover' },
+  { use: 'pressed link and icon button label', kind: 'text', foreground: 'primary', background: 'secondary' },
+  { use: 'pressed control label', kind: 'text', foreground: 'foreground', background: 'muted' },
+  { use: 'pressed control focus ring', kind: 'graphic', foreground: 'ring', background: 'muted' },
+  { use: 'pressed coach note primary action', kind: 'text', foreground: 'coach', background: 'inkPressed' },
+  { use: 'pressed coach note outline action', kind: 'text', foreground: 'ink', background: 'coachPressed' },
+  { use: 'pressed coach note outline edge', kind: 'graphic', foreground: 'inkMuted', background: 'coachPressed' },
+  { use: 'pressed coach note focus border', kind: 'graphic', foreground: 'coachAccent', background: 'coachPressed' },
+  { use: 'pressed bet spot text and boundary', kind: 'text', foreground: 'feltText', background: 'feltDeep', underPressShade: true },
+  { use: 'pressed craps spot label', kind: 'text', foreground: 'onImage', background: 'felt', underPressShade: true },
+  { use: 'pressed red pocket number', kind: 'text', foreground: 'onImage', background: 'pocketRed', underPressShade: true },
+  { use: 'pressed black pocket number', kind: 'text', foreground: 'onImage', background: 'pocketBlack', underPressShade: true },
+  { use: 'pressed zero pocket number', kind: 'text', foreground: 'onImage', background: 'pocketGreen', underPressShade: true },
+  { use: 'focused control ring on pressed felt', kind: 'graphic', foreground: 'ring', background: 'felt', underPressShade: true },
+  { use: 'focused chip ring on a pressed slot', kind: 'graphic', foreground: 'ring', background: 'rail', underPressShade: true },
+  { use: 'milestone seal rim and flag', kind: 'graphic', foreground: 'primaryForeground', background: 'primary' },
+  { use: 'milestone seal on its panel', kind: 'graphic', foreground: 'primary', background: 'popover' },
+  { use: 'milestone panel text', kind: 'text', foreground: 'foreground', background: 'popover' },
+  { use: 'milestone pill edge on its panel', kind: 'graphic', foreground: 'controlBorder', background: 'popover' },
 ];
 
 export const space = { 1: 4, 2: 8, 3: 12, 4: 16, 6: 24, 8: 32, 12: 48, 16: 64 } as const;
