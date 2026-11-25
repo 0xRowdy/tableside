@@ -164,6 +164,8 @@ export const essentialPairs: readonly {
   { use: 'pressed primary button label', kind: 'text', foreground: 'primaryForeground', background: 'primaryPressed' },
   { use: 'pressed primary button on screens', kind: 'graphic', foreground: 'primaryPressed', background: 'background' },
   { use: 'pressed primary button on a card', kind: 'graphic', foreground: 'primaryPressed', background: 'card' },
+  { use: 'pressed primary button in a sheet', kind: 'graphic', foreground: 'primaryPressed', background: 'popover' },
+  { use: 'pressed link and icon button label', kind: 'text', foreground: 'primary', background: 'secondary' },
   { use: 'pressed control label', kind: 'text', foreground: 'foreground', background: 'muted' },
   { use: 'pressed control focus ring', kind: 'graphic', foreground: 'ring', background: 'muted' },
   { use: 'pressed coach note primary action', kind: 'text', foreground: 'coach', background: 'inkPressed' },

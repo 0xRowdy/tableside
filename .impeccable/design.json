@@ -705,7 +705,7 @@
     "motion": [
       {
         "name": "press-feedback",
-        "value": "none: a press is an instant colour change (pressStyle, PressShade); 0.85 opacity on game cards for now",
+        "value": "none: a press is an instant color change (pressStyle, PressShade); 0.85 opacity on game cards for now",
         "purpose": "A press seats the control in its material; no scale, bounce, fade or animation. See docs/decisions/press-feedback.md."
       },
       {

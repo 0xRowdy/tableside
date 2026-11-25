@@ -139,11 +139,11 @@ export function ChallengeResults({
           </View>
         )}
         {readiness?.kind === 'earned' ? (
-          <ReadinessBox title={MILESTONE_EARNED} detail={milestoneDetail(groupKey)} pill={milestonePill(earned)} earned />
+          <ReadinessBox title={MILESTONE_EARNED} detail={milestoneDetail(groupKey)} pill={milestonePill(earned)} kind="earned" />
         ) : (
           setsPersonalBest(earned) && <PersonalBestBox {...personalBestText(groupKey, earned)} />
         )}
-        {readiness?.kind === 'kept' && <ReadinessBox title={MILESTONE_KEPT} detail={keptDetail(groupKey, readiness.earnedAt)} pill={null} earned={false} />}
+        {readiness?.kind === 'kept' && <ReadinessBox title={MILESTONE_KEPT} detail={keptDetail(groupKey, readiness.earnedAt)} pill={null} kind="kept" />}
         <Text maxFontSizeMultiplier={textScale.body} style={styles.label}>
           {SCORES_LABEL}
         </Text>
@@ -233,11 +233,11 @@ export function ChallengeResults({
 }
 
 // Spec 3 S3-08 ipoWU, cfKTT
-function ReadinessBox({ title, detail, pill, earned }: { title: string; detail: string; pill: string | null; earned: boolean }) {
+function ReadinessBox({ title, detail, pill, kind }: { title: string; detail: string; pill: string | null; kind: 'earned' | 'kept' }) {
   const styles = useStyles();
   return (
-    <View accessible accessibilityLabel={[`${title}.`, detail, pill && `${pill}.`].filter(Boolean).join(' ')} style={[styles.box, styles.earned, earned && styles.milestone]}>
-      {earned ? <MilestoneSeal /> : <Flag color={palette.primary} size={24} />}
+    <View accessible accessibilityLabel={[`${title}.`, detail, pill && `${pill}.`].filter(Boolean).join(' ')} style={[styles.box, styles.earned, kind === 'earned' && styles.milestone]}>
+      {kind === 'earned' ? <MilestoneSeal /> : <Flag color={palette.primary} size={24} />}
       <View style={styles.boxText}>
         <Text maxFontSizeMultiplier={textScale.body} style={styles.boxTitle}>
           {title}
