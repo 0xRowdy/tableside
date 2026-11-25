@@ -273,6 +273,26 @@ describe('blackjack free play', () => {
     }
   });
 
+  // docs/decisions/press-feedback.md rules 2 and 4; design/Tableside.pen RsrEO
+  it('shades an open bet spot while held, and an in-play spot neither responds nor dims', async () => {
+    const touch = {
+      nativeEvent: { touches: [], changedTouches: [], identifier: 1, locationX: 0, locationY: 0, pageX: 0, pageY: 0, timestamp: 0 },
+      persist: () => undefined,
+      currentTarget: { measure: () => undefined },
+    };
+    await startSession();
+
+    await act(async () => void fireEvent(betSpot(), 'responderGrant', touch));
+    expect(within(betSpot()).getByTestId('press-shade')).toBeOnTheScreen();
+    await act(async () => void fireEvent(betSpot(), 'responderRelease', touch));
+    await waitFor(() => expect(within(betSpot()).queryByTestId('press-shade')).toBeNull());
+
+    await betAndDeal();
+    await act(async () => void fireEvent(betSpot(), 'responderGrant', touch));
+    expect(within(betSpot()).queryByTestId('press-shade')).toBeNull();
+    expect(StyleSheet.flatten(betSpot().props.style).opacity).toBeUndefined();
+  });
+
   it('offers insurance against an ace before the peek; it settles on its own and surrender is still offered after it', async () => {
     mockAdapters.words = INSURANCE;
     await startSession();
